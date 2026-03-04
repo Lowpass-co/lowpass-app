@@ -1,0 +1,122 @@
+@import "tailwindcss";
+
+/* ============================================
+   LOWPASS — Global Styles & Design Tokens
+   Brand: #FF4500 (orange accent)
+   Palette: White/Dark with orange highlights
+   ============================================ */
+
+@theme inline {
+  /* Brand colours */
+  --color-lp-orange: #FF4500;
+  --color-lp-orange-hover: #E63E00;
+  --color-lp-orange-light: #FF6A33;
+  --color-lp-orange-subtle: rgba(255, 69, 0, 0.1);
+  --color-lp-orange-subtle-hover: rgba(255, 69, 0, 0.15);
+
+  /* Light mode surfaces */
+  --color-lp-bg: #FFFFFF;
+  --color-lp-bg-secondary: #F9FAFB;
+  --color-lp-bg-tertiary: #F3F4F6;
+  --color-lp-surface: #FFFFFF;
+  --color-lp-surface-hover: #F9FAFB;
+  --color-lp-border: #E5E7EB;
+  --color-lp-border-light: #F3F4F6;
+
+  /* Light mode text */
+  --color-lp-text: #111827;
+  --color-lp-text-secondary: #6B7280;
+  --color-lp-text-tertiary: #9CA3AF;
+  --color-lp-text-inverse: #FFFFFF;
+
+  /* Status colours */
+  --color-lp-success: #10B981;
+  --color-lp-warning: #F59E0B;
+  --color-lp-error: #EF4444;
+  --color-lp-info: #3B82F6;
+
+  /* Advance status colours */
+  --color-lp-status-not-started: #9CA3AF;
+  --color-lp-status-in-progress: #3B82F6;
+  --color-lp-status-complete: #10B981;
+  --color-lp-status-needs-review: #F59E0B;
+
+  /* Day type colours (matching Daysheets style) */
+  --color-lp-day-show: #10B981;
+  --color-lp-day-off: #6B7280;
+  --color-lp-day-travel: #3B82F6;
+  --color-lp-day-rehearsal: #8B5CF6;
+  --color-lp-day-press: #EC4899;
+  --color-lp-day-radio: #F59E0B;
+  --color-lp-day-tv: #EF4444;
+  --color-lp-day-festival: #FF4500;
+
+  /* Sizing */
+  --sidebar-width: 260px;
+  --sidebar-collapsed-width: 72px;
+  --header-height: 64px;
+
+  /* Fonts */
+  --font-sans: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: var(--font-geist-mono), "SF Mono", "Fira Code", monospace;
+}
+
+/* ============================================
+   Dark Mode Overrides
+   ============================================ */
+.dark {
+  --color-lp-bg: #0F0F0F;
+  --color-lp-bg-secondary: #1A1A1A;
+  --color-lp-bg-tertiary: #252525;
+  --color-lp-surface: #1A1A1A;
+  --color-lp-surface-hover: #252525;
+  --color-lp-border: #2E2E2E;
+  --color-lp-border-light: #252525;
+
+  --color-lp-text: #F5F5F5;
+  --color-lp-text-secondary: #A3A3A3;
+  --color-lp-text-tertiary: #737373;
+  --color-lp-text-inverse: #0F0F0F;
+}
+
+/* ============================================
+   Base Styles
+   ============================================ */
+body {
+  background: var(--color-lp-bg);
+  color: var(--color-lp-text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-lp-border);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-lp-text-tertiary);
+}
+
+/* Focus ring — uses orange accent */
+*:focus-visible {
+  outline: 2px solid var(--color-lp-orange);
+  outline-offset: 2px;
+}
+
+/* Selection */
+::selection {
+  background: var(--color-lp-orange-subtle);
+  color: var(--color-lp-text);
+}
