@@ -1,0 +1,10 @@
+<svg width="240" height="140" viewBox="0 0 240 140" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- "Low" text - top row -->
+  <text x="8" y="55" font-family="'Inter', 'Helvetica Neue', Arial, sans-serif" font-size="58" font-weight="500" fill="#FF4500" letter-spacing="-0.5">Low</text>
+  <!-- Horizontal line extending from the base of "Low" to the right -->
+  <line x1="8" y1="64" x2="192" y2="64" stroke="#FF4500" stroke-width="3.5"/>
+  <!-- Diagonal line (backslash) from end of horizontal line down -->
+  <line x1="192" y1="64" x2="228" y2="128" stroke="#FF4500" stroke-width="3.5"/>
+  <!-- "pass" text - bottom row -->
+  <text x="8" y="126" font-family="'Inter', 'Helvetica Neue', Arial, sans-serif" font-size="58" font-weight="500" fill="#FF4500" letter-spacing="-0.5">pass</text>
+</svg>

@@ -89,7 +89,7 @@ export default function LoginPage() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="adam@lowpass.co"
+              placeholder="you@example.com"
               required
               className={cn(
                 'mt-1.5 w-full rounded-lg border border-lp-border bg-lp-surface px-3.5 py-2.5',
