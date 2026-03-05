@@ -28,6 +28,7 @@ import {
   ChevronRight,
   Plus,
   LogOut,
+  ClipboardList,
 } from 'lucide-react';
 import { LowpassLogo } from '@/components/common/LowpassLogo';
 import { useAuth } from '@/hooks/useAuth';
@@ -56,6 +57,7 @@ const navGroups: NavGroup[] = [
     title: 'Tour Management',
     items: [
       { label: 'Tours', href: '/tours', icon: Map },
+      { label: 'Advance', href: '/advance', icon: ClipboardList },
       { label: 'Calendar', href: '/calendar', icon: Calendar },
     ],
   },
@@ -75,9 +77,20 @@ const navGroups: NavGroup[] = [
   },
 ];
 
+const SIDEBAR_COLLAPSED_KEY = 'lp-sidebar-collapsed';
+
 export function Sidebar() {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
+
+  useEffect(() => {
+    const saved = localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
+    if (saved === 'true') setCollapsed(true);
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(collapsed));
+  }, [collapsed]);
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const { user, signOut } = useAuth();
   const lastDisplay = useRef({ name: '', email: '' });

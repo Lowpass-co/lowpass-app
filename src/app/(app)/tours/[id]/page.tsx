@@ -9,6 +9,8 @@ import { notFound } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { formatDate } from '@/lib/utils';
 import { RoutingEditor } from '@/components/routing/RoutingEditor';
+import { TourDetailToasts } from './TourDetailToasts';
+import { TourAdvanceSummary } from './TourAdvanceSummary';
 import { ArrowLeft } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -21,10 +23,13 @@ const statusColors: Record<string, string> = {
 
 export default async function TourDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ toast?: string }>;
 }) {
   const { id } = await params;
+  const { toast } = await searchParams;
   const supabase = await createServerSupabaseClient();
   const { data: tour, error } = await supabase
     .from('tours')
@@ -39,7 +44,13 @@ export default async function TourDetailPage({
     notFound();
   }
 
+  const { count: routingCount } = await supabase
+    .from('routing')
+    .select('*', { count: 'exact', head: true })
+    .eq('tour_id', id);
+
   const artistName = tour.artist?.name ?? '—';
+  const routingEmpty = (routingCount ?? 0) === 0;
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -75,7 +86,7 @@ export default async function TourDetailPage({
               {tour.status}
             </span>
             <Link
-              href={`/tours/${id}/edit`}
+              href={`/tours/create?edit=${id}`}
               className="rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-sm font-medium text-lp-text hover:bg-lp-surface-hover"
             >
               Edit tour
@@ -86,12 +97,17 @@ export default async function TourDetailPage({
 
       <div>
         <h2 className="mb-4 text-lg font-semibold text-lp-text">Routing</h2>
-        <RoutingEditor
-          tourId={tour.id}
-          startDate={tour.start_date}
-          endDate={tour.end_date}
-        />
+        <TourDetailToasts toast={toast} routingEmpty={routingEmpty}>
+          <RoutingEditor
+            tourId={tour.id}
+            startDate={tour.start_date}
+            endDate={tour.end_date}
+            initialCustomDayTypes={(tour as { custom_day_types?: string[] }).custom_day_types ?? []}
+          />
+        </TourDetailToasts>
       </div>
+
+      <TourAdvanceSummary tourId={tour.id} />
     </div>
   );
 }

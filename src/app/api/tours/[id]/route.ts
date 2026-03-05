@@ -47,8 +47,9 @@ export async function PATCH(
   const { id } = await params;
   const body = await request.json();
   const allowed = [
-    'name', 'start_date', 'end_date', 'continent', 'currency',
+    'artist_id', 'name', 'start_date', 'end_date', 'continent', 'currency',
     'principal_count', 'band_count', 'crew_count', 'status', 'notes',
+    'custom_day_types', 'default_advance_template_id',
   ];
   const updates: Record<string, unknown> = {};
   for (const key of allowed) {
@@ -72,4 +73,23 @@ export async function PATCH(
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
   return NextResponse.json(data);
+}
+
+export async function DELETE(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const supabase = await createServerSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const { id } = await params;
+  const { error } = await supabase.from('tours').delete().eq('id', id);
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  return new NextResponse(null, { status: 204 });
 }

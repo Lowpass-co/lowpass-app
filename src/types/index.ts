@@ -98,7 +98,7 @@ export interface ArtistBranding {
 }
 
 export type TourStatus = 'planning' | 'active' | 'completed' | 'archived';
-export type Continent = 'US' | 'UK' | 'EU' | 'AUS' | 'ASIA' | 'OTHER';
+export type Continent = 'GLOBAL' | 'US' | 'UK' | 'EU' | 'AUS' | 'ASIA' | 'OTHER';
 
 export interface Tour {
   id: string;

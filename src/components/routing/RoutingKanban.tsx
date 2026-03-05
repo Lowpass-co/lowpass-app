@@ -6,12 +6,11 @@
 
 'use client';
 
-import { getDayTypeLabel, getDayTypeColor } from '@/lib/utils';
-import type { DayType } from '@/types';
+import { getDayTypeLabel, getDayTypeColor, parseRoutingDate } from '@/lib/utils';
 import type { RoutingRow } from './RoutingGrid';
 import { cn } from '@/lib/utils';
 
-const DAY_TYPES: DayType[] = [
+const PRESET_ORDER: string[] = [
   'show',
   'off',
   'travel',
@@ -22,18 +21,26 @@ const DAY_TYPES: DayType[] = [
   'festival',
 ];
 
+function columnOrder(keys: string[]): string[] {
+  const unset = keys.filter((k) => k === '');
+  const preset = PRESET_ORDER.filter((k) => keys.includes(k));
+  const other = keys.filter((k) => k !== '' && !PRESET_ORDER.includes(k)).sort();
+  return [...unset, ...preset, ...other];
+}
+
 export function RoutingKanban({ rows }: { rows: RoutingRow[] }) {
-  const byType = new Map<DayType, RoutingRow[]>();
-  for (const dt of DAY_TYPES) byType.set(dt, []);
+  const byType = new Map<string, RoutingRow[]>();
   for (const row of rows) {
-    const list = byType.get(row.day_type) ?? [];
+    const key = row.day_type ?? '';
+    const list = byType.get(key) ?? [];
     list.push(row);
-    byType.set(row.day_type, list);
+    byType.set(key, list);
   }
+  const columnKeys = columnOrder([...byType.keys()]);
 
   return (
     <div className="flex gap-4 overflow-x-auto pb-4">
-      {DAY_TYPES.map((dayType) => {
+      {columnKeys.map((dayType) => {
         const items = byType.get(dayType) ?? [];
         const colors = getDayTypeColor(dayType);
         return (
@@ -48,7 +55,7 @@ export function RoutingKanban({ rows }: { rows: RoutingRow[] }) {
                 colors.text
               )}
             >
-              {getDayTypeLabel(dayType)}
+              {dayType === '' ? 'Day type' : getDayTypeLabel(dayType)}
               <span className="ml-2 text-xs font-normal opacity-80">({items.length})</span>
             </div>
             <div className="space-y-2 p-2">
@@ -58,7 +65,7 @@ export function RoutingKanban({ rows }: { rows: RoutingRow[] }) {
                   className="rounded-lg border border-lp-border bg-lp-surface p-3 text-sm"
                 >
                   <div className="font-medium text-lp-text">
-                    {new Date(row.date + 'Z').toLocaleDateString('en-GB', {
+                    {parseRoutingDate(row.date).toLocaleDateString('en-GB', {
                       weekday: 'short',
                       day: '2-digit',
                       month: 'short',

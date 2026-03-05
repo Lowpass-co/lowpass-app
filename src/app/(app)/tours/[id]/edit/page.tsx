@@ -19,7 +19,10 @@ export default async function TourEditPage({
   const supabase = await createServerSupabaseClient();
   const { data: tour, error } = await supabase
     .from('tours')
-    .select('*')
+    .select(`
+      *,
+      artist:artists(*)
+    `)
     .eq('id', id)
     .single();
 

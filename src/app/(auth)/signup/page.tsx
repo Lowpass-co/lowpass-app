@@ -102,7 +102,7 @@ export default function SignupPage() {
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="Adam Rowley"
+              placeholder="Jane Smith"
               required
               className={cn(
                 'mt-1.5 w-full rounded-lg border border-lp-border bg-lp-surface px-3.5 py-2.5',
@@ -122,7 +122,7 @@ export default function SignupPage() {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="adam@lowpass.co"
+              placeholder="you@example.com"
               required
               className={cn(
                 'mt-1.5 w-full rounded-lg border border-lp-border bg-lp-surface px-3.5 py-2.5',

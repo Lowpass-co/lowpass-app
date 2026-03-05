@@ -45,6 +45,15 @@ export function formatDateWithDay(dateString: string): string {
 }
 
 /**
+ * Parse a YYYY-MM-DD date string for routing/calendar display.
+ * Uses noon local to avoid DST edge cases; safe for display.
+ */
+export function parseRoutingDate(dateStr: string): Date {
+  if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return new Date(NaN);
+  return new Date(dateStr + 'T12:00:00');
+}
+
+/**
  * Format currency amounts.
  * Handles GBP, USD, EUR, and AUD.
  */
@@ -80,16 +89,32 @@ export function getDayTypeLabel(dayType: string): string {
     travel: 'Travel Day',
     rehearsal: 'Rehearsal',
     press: 'Press Day',
-    radio: 'Radio Day',
+    radio: 'Radio performance',
     tv: 'TV Performance',
     festival: 'Festival',
   };
   return labels[dayType] || dayType;
 }
 
+/** Extra palette for custom day types (assigned deterministically by hash) */
+const CUSTOM_DAY_TYPE_COLORS: { bg: string; text: string; dot: string }[] = [
+  { bg: 'bg-cyan-500/10', text: 'text-cyan-600 dark:text-cyan-400', dot: 'bg-cyan-500' },
+  { bg: 'bg-teal-500/10', text: 'text-teal-600 dark:text-teal-400', dot: 'bg-teal-500' },
+  { bg: 'bg-lime-500/10', text: 'text-lime-600 dark:text-lime-400', dot: 'bg-lime-500' },
+  { bg: 'bg-indigo-500/10', text: 'text-indigo-600 dark:text-indigo-400', dot: 'bg-indigo-500' },
+  { bg: 'bg-fuchsia-500/10', text: 'text-fuchsia-600 dark:text-fuchsia-400', dot: 'bg-fuchsia-500' },
+  { bg: 'bg-slate-500/10', text: 'text-slate-600 dark:text-slate-400', dot: 'bg-slate-500' },
+];
+
+function hashString(s: string): number {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h << 5) - h + s.charCodeAt(i) | 0;
+  return Math.abs(h);
+}
+
 /**
  * Get the colour class for a day type.
- * Returns Tailwind class names for background and text.
+ * Preset types use fixed colours; custom types get a deterministic colour from the palette.
  */
 export function getDayTypeColor(dayType: string): { bg: string; text: string; dot: string } {
   const colors: Record<string, { bg: string; text: string; dot: string }> = {
@@ -102,7 +127,9 @@ export function getDayTypeColor(dayType: string): { bg: string; text: string; do
     tv: { bg: 'bg-red-500/10', text: 'text-red-600 dark:text-red-400', dot: 'bg-red-500' },
     festival: { bg: 'bg-lp-orange/10', text: 'text-lp-orange', dot: 'bg-lp-orange' },
   };
-  return colors[dayType] || { bg: 'bg-gray-500/10', text: 'text-gray-500', dot: 'bg-gray-500' };
+  if (colors[dayType]) return colors[dayType];
+  const idx = hashString(dayType) % CUSTOM_DAY_TYPE_COLORS.length;
+  return CUSTOM_DAY_TYPE_COLORS[idx];
 }
 
 /**
@@ -145,4 +172,62 @@ export function isStale(dateString: string, thresholdMonths: number = 6): boolea
   const threshold = new Date();
   threshold.setMonth(threshold.getMonth() - thresholdMonths);
   return date < threshold;
+}
+
+/**
+ * Generate points along a great-circle arc between two coordinates.
+ * Simpler than turn-by-turn, not a straight line — curved on the map.
+ * Returns array of [lat, lng] for n segments (n+1 points).
+ */
+export function greatCirclePoints(
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number,
+  segments: number = 24
+): [number, number][] {
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const toDeg = (r: number) => (r * 180) / Math.PI;
+  const φ1 = toRad(lat1);
+  const λ1 = toRad(lng1);
+  const φ2 = toRad(lat2);
+  const λ2 = toRad(lng2);
+  const d = 2 * Math.asin(Math.sqrt(
+    Math.sin((φ1 - φ2) / 2) ** 2 + Math.cos(φ1) * Math.cos(φ2) * Math.sin((λ1 - λ2) / 2) ** 2
+  ));
+  const points: [number, number][] = [];
+  for (let i = 0; i <= segments; i++) {
+    const f = i / segments;
+    const A = Math.sin((1 - f) * d) / Math.sin(d);
+    const B = Math.sin(f * d) / Math.sin(d);
+    const x = A * Math.cos(φ1) * Math.cos(λ1) + B * Math.cos(φ2) * Math.cos(λ2);
+    const y = A * Math.cos(φ1) * Math.sin(λ1) + B * Math.cos(φ2) * Math.sin(λ2);
+    const z = A * Math.sin(φ1) + B * Math.sin(φ2);
+    const φi = Math.atan2(z, Math.sqrt(x * x + y * y));
+    const λi = Math.atan2(y, x);
+    points.push([toDeg(φi), toDeg(λi)]);
+  }
+  return points;
+}
+
+/**
+ * Great-circle distance between two points in miles (Haversine).
+ */
+export function distanceMiles(
+  lat1: number,
+  lng1: number,
+  lat2: number,
+  lng2: number
+): number {
+  const R = 3959; // Earth radius in miles
+  const toRad = (d: number) => (d * Math.PI) / 180;
+  const φ1 = toRad(lat1);
+  const φ2 = toRad(lat2);
+  const Δφ = toRad(lat2 - lat1);
+  const Δλ = toRad(lng2 - lng1);
+  const a =
+    Math.sin(Δφ / 2) ** 2 +
+    Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
 }

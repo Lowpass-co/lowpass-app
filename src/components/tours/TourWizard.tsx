@@ -7,15 +7,18 @@
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft } from 'lucide-react';
+import { ChevronDown, Info } from 'lucide-react';
 import type { Artist } from '@/types';
 import type { Continent } from '@/types';
-import { ArtistNewBlock, type NewArtistPayload } from '@/components/artists/ArtistNewBlock';
+import { ArtistNewBlock, ArtistLogoField, type NewArtistPayload } from '@/components/artists/ArtistNewBlock';
+import { ArtistPreviewCard } from '@/components/artists/ArtistPreviewCard';
+import { SlidingToggle } from '@/components/ui/SlidingToggle';
 
 const CONTINENTS: { value: Continent; label: string }[] = [
+  { value: 'GLOBAL', label: 'Global' },
   { value: 'US', label: 'US' },
   { value: 'UK', label: 'UK' },
   { value: 'EU', label: 'EU' },
@@ -31,24 +34,76 @@ const CURRENCIES = [
   { value: 'AUD', label: 'A$ AUD' },
 ];
 
-export function TourWizard() {
+interface TourWizardProps {
+  initialTourId?: string;
+}
+
+export function TourWizard({ initialTourId }: TourWizardProps) {
   const router = useRouter();
   const [artists, setArtists] = useState<Artist[]>([]);
   const [loadingArtists, setLoadingArtists] = useState(true);
+  const [loadingTour, setLoadingTour] = useState(!!initialTourId);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const [artistChoice, setArtistChoice] = useState<'existing' | 'new'>('existing');
   const [artistId, setArtistId] = useState('');
+  const [existingArtistLogoOverrides, setExistingArtistLogoOverrides] = useState<Record<string, string>>({});
   const [newArtistPayload, setNewArtistPayload] = useState<NewArtistPayload>({ name: '' });
   const [name, setName] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [continent, setContinent] = useState<Continent>('UK');
+  const [currencyInfoOpen, setCurrencyInfoOpen] = useState(false);
+  const currencyInfoRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const close = (e: MouseEvent) => {
+      if (currencyInfoRef.current && !currencyInfoRef.current.contains(e.target as Node)) setCurrencyInfoOpen(false);
+    };
+    document.addEventListener('click', close);
+    return () => document.removeEventListener('click', close);
+  }, []);
   const [currency, setCurrency] = useState('GBP');
-  const [principalCount, setPrincipalCount] = useState(0);
-  const [bandCount, setBandCount] = useState(0);
-  const [crewCount, setCrewCount] = useState(0);
+  const [principalCount, setPrincipalCount] = useState('0');
+  const [bandCount, setBandCount] = useState('0');
+  const [crewCount, setCrewCount] = useState('0');
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    if (!initialTourId) return;
+    fetch(`/api/tours/${initialTourId}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((tour: { artist_id?: string; artist?: Artist; name?: string; start_date?: string; end_date?: string; continent?: Continent; currency?: string; principal_count?: number; band_count?: number; crew_count?: number } | null) => {
+        if (!tour) {
+          setLoadingTour(false);
+          return;
+        }
+        setArtistId(tour.artist_id ?? '');
+        setArtistChoice('existing');
+        setName(tour.name ?? '');
+        setStartDate(tour.start_date ?? '');
+        setEndDate(tour.end_date ?? '');
+        setContinent((tour.continent as Continent) ?? 'UK');
+        setCurrency(tour.currency ?? 'GBP');
+        setPrincipalCount(String(tour.principal_count ?? 0));
+        setBandCount(String(tour.band_count ?? 0));
+        setCrewCount(String(tour.crew_count ?? 0));
+        setLoadingTour(false);
+      })
+      .catch(() => setLoadingTour(false));
+  }, [initialTourId]);
+
+  function validate(): Record<string, string> {
+    const err: Record<string, string> = {};
+    if (!name.trim()) err.name = 'Tour name is required';
+    else if (name.trim().length < 2) err.name = 'Tour name must be at least 2 characters';
+    if (artistChoice === 'existing' && !artistId) err.artist = 'Select an artist';
+    if (artistChoice === 'new' && !newArtistPayload.name.trim()) err.artist = 'Enter artist name';
+    if (startDate && endDate && startDate > endDate) err.dates = 'Start date must be before or equal to end date';
+    if (!currency) err.currency = 'Select a currency';
+    return err;
+  }
 
   useEffect(() => {
     fetch('/api/artists')
@@ -63,13 +118,19 @@ export function TourWizard() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    const validationErrors = validate();
+    if (Object.keys(validationErrors).length > 0) {
+      setErrors(validationErrors);
+      return;
+    }
+    setErrors({});
     setSubmitting(true);
 
     try {
       let resolvedArtistId = artistId;
       if (artistChoice === 'new') {
         if (!newArtistPayload.name.trim()) {
-          setError('Enter artist name');
+          setErrors((prev) => ({ ...prev, artist: 'Enter artist name' }));
           setSubmitting(false);
           return;
         }
@@ -94,40 +155,77 @@ export function TourWizard() {
         const newArtist = await createRes.json();
         resolvedArtistId = newArtist.id;
       } else if (!resolvedArtistId) {
-        setError('Select an artist');
         setSubmitting(false);
         return;
+      }
+
+      // If existing artist and logo was changed, persist it
+      if (artistChoice === 'existing' && resolvedArtistId) {
+        const selected = artists.find((a) => a.id === resolvedArtistId);
+        const branding = selected?.branding ?? {};
+        const logoOverride = existingArtistLogoOverrides[resolvedArtistId];
+        const logoToSave = logoOverride ?? branding.logo_url;
+        if (logoOverride !== undefined && logoToSave !== branding.logo_url) {
+          await fetch(`/api/artists/${resolvedArtistId}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ logo_url: logoToSave ?? null }),
+          });
+        }
       }
 
       if (!name.trim() || !startDate || !endDate) {
-        setError('Name and dates are required');
         setSubmitting(false);
         return;
       }
 
-      const tourRes = await fetch('/api/tours', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          artist_id: resolvedArtistId,
-          name: name.trim(),
-          start_date: startDate,
-          end_date: endDate,
-          continent,
-          currency,
-          principal_count: principalCount,
-          band_count: bandCount,
-          crew_count: crewCount,
-        }),
-      });
-
-      if (!tourRes.ok) {
-        const err = await tourRes.json();
-        throw new Error(err.error || 'Failed to create tour');
+      const tourId = initialTourId;
+      if (tourId) {
+        const tourRes = await fetch(`/api/tours/${tourId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            artist_id: resolvedArtistId,
+            name: name.trim(),
+            start_date: startDate,
+            end_date: endDate,
+            continent,
+            currency,
+            principal_count: parseInt(principalCount, 10) || 0,
+            band_count: parseInt(bandCount, 10) || 0,
+            crew_count: parseInt(crewCount, 10) || 0,
+          }),
+        });
+        if (!tourRes.ok) {
+          const err = await tourRes.json();
+          throw new Error(err.error || 'Failed to update tour');
+        }
+        router.push(`/tours/${tourId}?toast=tour_updated`);
+        router.refresh();
+      } else {
+        const tourRes = await fetch('/api/tours', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            artist_id: resolvedArtistId,
+            name: name.trim(),
+            start_date: startDate,
+            end_date: endDate,
+            continent,
+            currency,
+            principal_count: parseInt(principalCount, 10) || 0,
+            band_count: parseInt(bandCount, 10) || 0,
+            crew_count: parseInt(crewCount, 10) || 0,
+          }),
+        });
+        if (!tourRes.ok) {
+          const err = await tourRes.json();
+          throw new Error(err.error || 'Failed to create tour');
+        }
+        const tour = await tourRes.json();
+        router.push(`/tours/${tour.id}?toast=tour_created`);
+        router.refresh();
       }
-      const tour = await tourRes.json();
-      router.push(`/tours/${tour.id}`);
-      router.refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');
       setSubmitting(false);
@@ -135,109 +233,122 @@ export function TourWizard() {
   };
 
   return (
-    <form onSubmit={handleSubmit} className="mx-auto max-w-xl space-y-6">
-      <div className="flex items-center gap-4">
-        <Link
-          href="/tours"
-          className="flex items-center gap-1 text-sm text-lp-text-secondary hover:text-lp-text"
-        >
-          <ArrowLeft size={16} />
-          Back
-        </Link>
-      </div>
-
+    <form onSubmit={handleSubmit} className="space-y-10">
+      {loadingTour && (
+        <p className="text-sm text-lp-text-tertiary">Loading tour…</p>
+      )}
       {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-950/50 dark:text-red-400">
+        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-950/50 dark:text-red-400">
           {error}
         </div>
       )}
 
-      <div className="space-y-4">
-        <h2 className="text-lg font-semibold text-lp-text">Artist</h2>
-        <div className="flex gap-4">
-          <label className="flex items-center gap-2">
-            <input
-              type="radio"
-              name="artistChoice"
-              checked={artistChoice === 'existing'}
-              onChange={() => setArtistChoice('existing')}
-              className="text-lp-orange focus:ring-lp-orange"
-            />
-            <span className="text-sm text-lp-text">Existing</span>
-          </label>
-          <label className="flex items-center gap-2">
-            <input
-              type="radio"
-              name="artistChoice"
-              checked={artistChoice === 'new'}
-              onChange={() => setArtistChoice('new')}
-              className="text-lp-orange focus:ring-lp-orange"
-            />
-            <span className="text-sm text-lp-text">New artist</span>
-          </label>
-        </div>
-        {artistChoice === 'existing' ? (
-          <select
-            value={artistId}
-            onChange={(e) => setArtistId(e.target.value)}
-            className="w-full rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange"
-            required={artistChoice === 'existing'}
-            disabled={loadingArtists}
-          >
-            <option value="">Select artist…</option>
-            {artists.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <ArtistNewBlock value={newArtistPayload} onChange={setNewArtistPayload} />
-        )}
-      </div>
+      <section className="space-y-5">
+        <h2 className="text-sm font-medium uppercase tracking-wider text-lp-text-tertiary">
+          Artist
+        </h2>
+        <SlidingToggle
+          value={artistChoice}
+          onChange={(v) => setArtistChoice(v)}
+          options={['existing', 'new']}
+          labels={['Existing artist', 'New artist']}
+        />
 
-      <div className="space-y-4">
-        <h2 className="text-lg font-semibold text-lp-text">Tour details</h2>
+        {artistChoice === 'existing' && (
+          <div className="space-y-4">
+            <div className="relative">
+              <select
+                value={artistId}
+                onChange={(e) => { setArtistId(e.target.value); setErrors((prev) => ({ ...prev, artist: '' })); }}
+                className={`w-full appearance-none rounded-xl border bg-lp-surface px-4 py-3 pr-11 text-lp-text focus:outline-none focus:ring-2 focus:ring-lp-orange/20 ${errors.artist ? 'border-red-500 focus:border-red-500' : 'border-lp-border focus:border-lp-orange'}`}
+                required
+                disabled={loadingArtists}
+              >
+                <option value="">Select an artist</option>
+                {artists.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-lp-text-tertiary" />
+            </div>
+            {errors.artist && <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.artist}</p>}
+            {artistId && (() => {
+              const selected = artists.find((a) => a.id === artistId);
+              if (!selected) return null;
+              const branding = (selected as Artist & { branding?: { logo_url?: string } }).branding ?? {};
+              const displayImage = selected.spotify_image_url ?? branding.logo_url;
+              const logoUrl = existingArtistLogoOverrides[artistId] ?? branding.logo_url;
+              return (
+                <div className="mt-4 space-y-6">
+                  <ArtistPreviewCard
+                    imageUrl={displayImage}
+                    name={selected.name}
+                    viaLabel={selected.spotify_id ? 'Via Spotify' : undefined}
+                    onChangeArtist={() => setArtistId('')}
+                  />
+                  <ArtistLogoField
+                    logoUrl={logoUrl}
+                    onChange={(url) => setExistingArtistLogoOverrides((prev) => ({ ...prev, [artistId]: url }))}
+                  />
+                </div>
+              );
+            })()}
+          </div>
+        )}
+
+        {artistChoice === 'new' && (
+          <ArtistNewBlock value={newArtistPayload} onChange={(p) => { setNewArtistPayload(p); if (p.name.trim()) setErrors((prev) => ({ ...prev, artist: '' })); }} />
+        )}
+      </section>
+
+      <section className="space-y-5">
+        <h2 className="text-xs font-medium uppercase tracking-wide text-lp-text-tertiary">
+          Tour details
+        </h2>
         <div>
-          <label className="mb-1 block text-sm font-medium text-lp-text-secondary">Tour name</label>
+          <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-lp-text-tertiary">Tour name</label>
           <input
             type="text"
             value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Summer Tour 2026"
-            className="w-full rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-lp-text placeholder:text-lp-text-tertiary focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange"
+            onChange={(e) => { setName(e.target.value); setErrors((prev) => ({ ...prev, name: '' })); }}
+            placeholder="e.g. Summer 2026"
+            className={`h-11 w-full rounded-lg border bg-lp-surface/50 px-3.5 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:outline-none focus:ring-2 focus:ring-lp-orange/20 ${errors.name ? 'border-red-500 focus:border-red-500' : 'border-lp-border focus:border-lp-orange'}`}
             required
           />
+          {errors.name && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{errors.name}</p>}
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="mb-1 block text-sm font-medium text-lp-text-secondary">Start date</label>
+            <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-lp-text-tertiary">Start date</label>
             <input
               type="date"
               value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
-              className="w-full rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange"
+              onChange={(e) => { setStartDate(e.target.value); setErrors((prev) => ({ ...prev, dates: '' })); }}
+              className={`h-11 w-full rounded-lg border bg-lp-surface/50 px-3.5 text-sm text-lp-text focus:outline-none focus:ring-2 focus:ring-lp-orange/20 ${errors.dates ? 'border-red-500 focus:border-red-500' : 'border-lp-border focus:border-lp-orange'}`}
               required
             />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-lp-text-secondary">End date</label>
+            <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-lp-text-tertiary">End date</label>
             <input
               type="date"
               value={endDate}
-              onChange={(e) => setEndDate(e.target.value)}
-              className="w-full rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange"
+              onChange={(e) => { setEndDate(e.target.value); setErrors((prev) => ({ ...prev, dates: '' })); }}
+              className={`h-11 w-full rounded-lg border bg-lp-surface/50 px-3.5 text-sm text-lp-text focus:outline-none focus:ring-2 focus:ring-lp-orange/20 ${errors.dates ? 'border-red-500 focus:border-red-500' : 'border-lp-border focus:border-lp-orange'}`}
               required
             />
           </div>
+          {errors.dates && <p className="col-span-2 mt-1 text-xs text-red-600 dark:text-red-400">{errors.dates}</p>}
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="mb-1 block text-sm font-medium text-lp-text-secondary">Continent</label>
+            <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-lp-text-tertiary">Continent</label>
             <select
               value={continent}
               onChange={(e) => setContinent(e.target.value as Continent)}
-              className="w-full rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange"
+              className="h-11 w-full rounded-lg border border-lp-border bg-lp-surface/50 px-3.5 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-2 focus:ring-lp-orange/20"
             >
               {CONTINENTS.map((c) => (
                 <option key={c.value} value={c.value}>{c.label}</option>
@@ -245,63 +356,96 @@ export function TourWizard() {
             </select>
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-lp-text-secondary">Currency</label>
+            <label className="mb-1.5 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-lp-text-tertiary">
+              Currency
+              <span className="relative" ref={currencyInfoRef}>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setCurrencyInfoOpen((o) => !o); }}
+                  className="rounded p-0.5 text-lp-text-tertiary hover:text-lp-text-secondary focus:outline-none focus:ring-2 focus:ring-lp-orange/20"
+                  aria-label="Currency info"
+                >
+                  <Info className="h-3.5 w-3.5" />
+                </button>
+                {currencyInfoOpen && (
+                  <div
+                    className="absolute left-0 top-full z-10 mt-1 w-72 rounded-lg border border-lp-border bg-lp-surface p-3 text-xs text-lp-text-secondary shadow-lg"
+                    onMouseLeave={() => setCurrencyInfoOpen(false)}
+                  >
+                    Primary currency for budgeting. The app will convert expenses entered in other currencies into this primary currency in real time.
+                  </div>
+                )}
+              </span>
+            </label>
             <select
               value={currency}
-              onChange={(e) => setCurrency(e.target.value)}
-              className="w-full rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange"
+              onChange={(e) => { setCurrency(e.target.value); setErrors((prev) => ({ ...prev, currency: '' })); }}
+              className={`h-11 w-full rounded-lg border bg-lp-surface/50 px-3.5 text-sm text-lp-text focus:outline-none focus:ring-2 focus:ring-lp-orange/20 ${errors.currency ? 'border-red-500 focus:border-red-500' : 'border-lp-border focus:border-lp-orange'}`}
             >
               {CURRENCIES.map((c) => (
                 <option key={c.value} value={c.value}>{c.label}</option>
               ))}
             </select>
+            {errors.currency && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{errors.currency}</p>}
           </div>
         </div>
         <div className="grid grid-cols-3 gap-4">
           <div>
-            <label className="mb-1 block text-sm font-medium text-lp-text-secondary">Principal artists</label>
+            <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-lp-text-tertiary">Principal artists</label>
             <input
-              type="number"
-              min={0}
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
               value={principalCount}
-              onChange={(e) => setPrincipalCount(parseInt(e.target.value, 10) || 0)}
-              className="w-full rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange"
+              onChange={(e) => {
+                const v = e.target.value.replace(/\D/g, '');
+                setPrincipalCount(v);
+              }}
+              className="h-11 w-20 rounded-lg border border-lp-border bg-lp-surface/50 px-3 py-2 text-center text-lg tabular-nums text-lp-text focus:border-lp-orange focus:outline-none focus:ring-2 focus:ring-lp-orange/20 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
             />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-lp-text-secondary">Band members</label>
+            <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-lp-text-tertiary">Band members</label>
             <input
-              type="number"
-              min={0}
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
               value={bandCount}
-              onChange={(e) => setBandCount(parseInt(e.target.value, 10) || 0)}
-              className="w-full rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange"
+              onChange={(e) => {
+                const v = e.target.value.replace(/\D/g, '');
+                setBandCount(v);
+              }}
+              className="h-11 w-20 rounded-lg border border-lp-border bg-lp-surface/50 px-3 py-2 text-center text-lg tabular-nums text-lp-text focus:border-lp-orange focus:outline-none focus:ring-2 focus:ring-lp-orange/20 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
             />
           </div>
           <div>
-            <label className="mb-1 block text-sm font-medium text-lp-text-secondary">Crew</label>
+            <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-lp-text-tertiary">Crew</label>
             <input
-              type="number"
-              min={0}
+              type="text"
+              inputMode="numeric"
+              pattern="[0-9]*"
               value={crewCount}
-              onChange={(e) => setCrewCount(parseInt(e.target.value, 10) || 0)}
-              className="w-full rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange"
+              onChange={(e) => {
+                const v = e.target.value.replace(/\D/g, '');
+                setCrewCount(v);
+              }}
+              className="h-11 w-20 rounded-lg border border-lp-border bg-lp-surface/50 px-3 py-2 text-center text-lg tabular-nums text-lp-text focus:border-lp-orange focus:outline-none focus:ring-2 focus:ring-lp-orange/20 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
             />
           </div>
         </div>
-      </div>
+      </section>
 
-      <div className="flex gap-3 pt-2">
+      <div className="flex gap-3 pt-4">
         <button
           type="submit"
-          disabled={submitting}
-          className="rounded-lg bg-lp-orange px-4 py-2.5 text-sm font-medium text-white hover:bg-lp-orange-hover disabled:opacity-50"
+          disabled={submitting || loadingTour}
+          className="rounded-xl bg-lp-orange px-6 py-3 text-sm font-medium text-white hover:bg-lp-orange-hover disabled:opacity-50 transition-colors"
         >
-          {submitting ? 'Creating…' : 'Create tour'}
+          {submitting ? (initialTourId ? 'Saving…' : 'Creating…') : (initialTourId ? 'Save changes' : 'Create tour')}
         </button>
         <Link
           href="/tours"
-          className="rounded-lg border border-lp-border bg-lp-surface px-4 py-2.5 text-sm font-medium text-lp-text hover:bg-lp-surface-hover"
+          className="rounded-xl border border-lp-border bg-lp-surface px-6 py-3 text-sm font-medium text-lp-text hover:bg-lp-surface-hover transition-colors"
         >
           Cancel
         </Link>

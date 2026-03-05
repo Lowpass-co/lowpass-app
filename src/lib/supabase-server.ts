@@ -6,8 +6,17 @@
    Uses cookies for session management.
    ============================================ */
 
+import { createClient } from '@supabase/supabase-js';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
+
+/** Service role client — bypasses RLS. Use only for token-based public access (e.g. calendar feed). */
+export function createServiceSupabaseClient() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !key) throw new Error('Missing SUPABASE_SERVICE_ROLE_KEY');
+  return createClient(url, key);
+}
 
 export async function createServerSupabaseClient() {
   const cookieStore = await cookies();

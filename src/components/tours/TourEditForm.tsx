@@ -7,11 +7,13 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import type { Tour } from '@/types';
 import type { Continent } from '@/types';
+
+type LayoutTemplate = { id: string; name: string; sections: unknown[] };
 
 const CONTINENTS: { value: Continent; label: string }[] = [
   { value: 'US', label: 'US' },
@@ -50,6 +52,17 @@ export function TourEditForm({ tour }: { tour: Tour }) {
   const [crewCount, setCrewCount] = useState(tour.crew_count);
   const [status, setStatus] = useState(tour.status);
   const [notes, setNotes] = useState(tour.notes ?? '');
+  const [defaultAdvanceTemplateId, setDefaultAdvanceTemplateId] = useState<string>(
+    (tour as { default_advance_template_id?: string }).default_advance_template_id ?? ''
+  );
+  const [layoutTemplates, setLayoutTemplates] = useState<LayoutTemplate[]>([]);
+
+  useEffect(() => {
+    fetch('/api/advance/layout-templates')
+      .then((r) => (r.ok ? r.json() : { templates: [] }))
+      .then((j) => setLayoutTemplates(j.templates ?? []))
+      .catch(() => setLayoutTemplates([]));
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -70,6 +83,7 @@ export function TourEditForm({ tour }: { tour: Tour }) {
           crew_count: crewCount,
           status,
           notes: notes.trim() || null,
+          default_advance_template_id: defaultAdvanceTemplateId || null,
         }),
       });
       if (!res.ok) {
@@ -193,6 +207,22 @@ export function TourEditForm({ tour }: { tour: Tour }) {
             <option key={s.value} value={s.value}>{s.label}</option>
           ))}
         </select>
+      </div>
+      <div>
+        <label className="mb-1 block text-sm font-medium text-lp-text-secondary">Default advance template</label>
+        <select
+          value={defaultAdvanceTemplateId}
+          onChange={(e) => setDefaultAdvanceTemplateId(e.target.value)}
+          className="w-full rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange"
+        >
+          <option value="">None</option>
+          {layoutTemplates.map((t) => (
+            <option key={t.id} value={t.id}>{t.name}</option>
+          ))}
+        </select>
+        <p className="mt-0.5 text-xs text-lp-text-tertiary">
+          New advances for this tour will use this section layout by default.
+        </p>
       </div>
       <div>
         <label className="mb-1 block text-sm font-medium text-lp-text-secondary">Notes</label>

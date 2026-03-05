@@ -8,25 +8,45 @@
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 
-export async function GET() {
+export async function GET(request: Request) {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { data, error } = await supabase
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('workspace_id')
+    .eq('id', user.id)
+    .single();
+
+  if (!profile?.workspace_id) {
+    return NextResponse.json({ error: 'No workspace' }, { status: 403 });
+  }
+
+  const { searchParams } = new URL(request.url);
+  const page = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10));
+  const limit = Math.min(100, Math.max(1, parseInt(searchParams.get('limit') ?? '20', 10)));
+  const from = (page - 1) * limit;
+  const to = from + limit - 1;
+
+  const { data, error, count } = await supabase
     .from('tours')
-    .select(`
-      *,
-      artist:artists(*)
-    `)
-    .order('start_date', { ascending: false });
+    .select('*, artist:artists(*)', { count: 'exact' })
+    .eq('workspace_id', profile.workspace_id)
+    .order('start_date', { ascending: false })
+    .range(from, to);
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  return NextResponse.json(data);
+  return NextResponse.json({
+    tours: data ?? [],
+    total: count ?? 0,
+    page,
+    limit,
+  });
 }
 
 export async function POST(request: Request) {

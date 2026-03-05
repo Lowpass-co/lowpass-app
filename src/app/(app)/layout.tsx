@@ -13,6 +13,8 @@
 import { useState } from 'react';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Header } from '@/components/layout/Header';
+import { ErrorBoundary } from '@/components/common/ErrorBoundary';
+import { ToastProvider } from '@/components/ui/Toast';
 import { cn } from '@/lib/utils';
 
 export default function AppLayout({
@@ -23,9 +25,11 @@ export default function AppLayout({
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-lp-bg">
-      {/* Sidebar — fixed on desktop, overlay on mobile */}
-      <Sidebar />
+    <ErrorBoundary>
+      <ToastProvider>
+      <div className="min-h-screen bg-lp-bg">
+        {/* Sidebar — fixed on desktop, overlay on mobile */}
+        <Sidebar />
 
       {/* Mobile overlay */}
       {mobileMenuOpen && (
@@ -43,5 +47,7 @@ export default function AppLayout({
         </main>
       </div>
     </div>
+      </ToastProvider>
+    </ErrorBoundary>
   );
 }
