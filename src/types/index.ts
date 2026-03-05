@@ -81,12 +81,18 @@ export interface Artist {
   workspace_id: string;
   name: string;
   slug: string;
+  spotify_id?: string;
+  spotify_image_url?: string;
+  spotify_banner_url?: string;
   branding: ArtistBranding;
   created_at: string;
 }
 
 export interface ArtistBranding {
+  /** Logo URL for exports (not Spotify profile pic) */
   logo_url?: string;
+  /** Custom banner image (overrides Spotify banner if set) */
+  banner_url?: string;
   primary_color?: string;
   secondary_color?: string;
 }
@@ -103,6 +109,7 @@ export interface Tour {
   end_date: string;
   continent: Continent;
   currency: string;
+  principal_count: number;
   band_count: number;
   crew_count: number;
   status: TourStatus;

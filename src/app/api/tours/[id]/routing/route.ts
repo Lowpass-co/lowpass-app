@@ -1,0 +1,93 @@
+/* ============================================
+   LOWPASS — Tour Routing API
+
+   GET: List routing dates for a tour
+   POST: Upsert routing (replace all dates in range)
+   ============================================ */
+
+import { NextResponse } from 'next/server';
+import { createServerSupabaseClient } from '@/lib/supabase-server';
+
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const supabase = await createServerSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const { id: tourId } = await params;
+  const { data, error } = await supabase
+    .from('routing')
+    .select('*')
+    .eq('tour_id', tourId)
+    .order('date');
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  return NextResponse.json(data ?? []);
+}
+
+export async function POST(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const supabase = await createServerSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const { id: tourId } = await params;
+
+  // Verify tour exists and user has access (RLS will block if not)
+  const { data: tour, error: tourError } = await supabase
+    .from('tours')
+    .select('id, start_date, end_date')
+    .eq('id', tourId)
+    .single();
+
+  if (tourError || !tour) {
+    return NextResponse.json({ error: 'Tour not found' }, { status: 404 });
+  }
+
+  const body = await request.json();
+  const rows = Array.isArray(body.dates) ? body.dates : body;
+  if (!Array.isArray(rows) || rows.length === 0) {
+    return NextResponse.json({ error: 'dates array is required' }, { status: 400 });
+  }
+
+  // Delete existing routing for this tour, then insert new rows
+  const { error: deleteError } = await supabase
+    .from('routing')
+    .delete()
+    .eq('tour_id', tourId);
+
+  if (deleteError) {
+    return NextResponse.json({ error: deleteError.message }, { status: 500 });
+  }
+
+  const insertRows = rows.map((r: { date: string; day_type?: string; city?: string; venue_id?: string; venue_name?: string; notes?: string }, i: number) => ({
+    tour_id: tourId,
+    date: r.date,
+    day_type: r.day_type ?? 'show',
+    city: r.city ?? '',
+    venue_id: r.venue_id || null,
+    venue_name: r.venue_name || null,
+    notes: r.notes || null,
+    sequence: i,
+  }));
+
+  const { data: inserted, error: insertError } = await supabase
+    .from('routing')
+    .insert(insertRows)
+    .select();
+
+  if (insertError) {
+    return NextResponse.json({ error: insertError.message }, { status: 500 });
+  }
+  return NextResponse.json(inserted ?? []);
+}

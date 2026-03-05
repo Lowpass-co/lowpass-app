@@ -13,7 +13,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -27,8 +27,10 @@ import {
   ChevronLeft,
   ChevronRight,
   Plus,
+  LogOut,
 } from 'lucide-react';
 import { LowpassLogo } from '@/components/common/LowpassLogo';
+import { useAuth } from '@/hooks/useAuth';
 import { cn } from '@/lib/utils';
 
 interface NavItem {
@@ -76,6 +78,21 @@ const navGroups: NavGroup[] = [
 export function Sidebar() {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const { user, signOut } = useAuth();
+  const lastDisplay = useRef({ name: '', email: '' });
+
+  useEffect(() => {
+    if (user?.email) {
+      lastDisplay.current = {
+        name: user.user_metadata?.name ?? user.email ?? '',
+        email: user.email ?? '',
+      };
+    }
+  }, [user]);
+
+  const displayName = user?.user_metadata?.name ?? user?.email ?? lastDisplay.current.name;
+  const displayEmail = user?.email ?? lastDisplay.current.email;
 
   return (
     <aside
@@ -88,7 +105,7 @@ export function Sidebar() {
     >
       {/* Logo + collapse toggle */}
       <div className="flex h-16 items-center justify-between px-4 border-b border-lp-border">
-        <LowpassLogo size="sm" showText={!collapsed} />
+        <LowpassLogo size="sm" />
         <button
           onClick={() => setCollapsed(!collapsed)}
           className={cn(
@@ -165,26 +182,57 @@ export function Sidebar() {
         ))}
       </nav>
 
-      {/* User section at bottom */}
+      {/* User section at bottom — click to reveal Log out */}
       <div className="border-t border-lp-border px-3 py-3">
-        <div
+        <button
+          type="button"
+          onClick={() => setUserMenuOpen((open) => !open)}
           className={cn(
-            'flex items-center gap-3 rounded-lg px-3 py-2',
-            'text-lp-text-secondary hover:bg-lp-surface-hover',
-            'cursor-pointer transition-colors',
+            'flex w-full items-center gap-3 rounded-lg px-3 py-2',
+            'text-lp-text-secondary hover:bg-lp-surface-hover transition-colors',
+            'text-left',
             collapsed && 'justify-center px-0'
           )}
+          aria-expanded={userMenuOpen}
+          aria-label={userMenuOpen ? 'Close menu' : 'Open user menu'}
         >
-          {/* Avatar placeholder */}
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-lp-orange text-sm font-bold text-white">
-            A
+            {(displayEmail || user?.email)?.charAt(0).toUpperCase() ?? '?'}
           </div>
           {!collapsed && (
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium text-lp-text">Adam Rowley</p>
-              <p className="truncate text-xs text-lp-text-tertiary">Tour Manager</p>
+              <p className="truncate text-sm font-medium text-lp-text">
+                {displayName || '…'}
+              </p>
+              {displayEmail && (
+                <p className="truncate text-xs text-lp-text-tertiary">
+                  {displayEmail}
+                </p>
+              )}
             </div>
           )}
+        </button>
+        <div
+          className={cn(
+            'grid transition-[grid-template-rows] duration-200 ease-out',
+            userMenuOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]'
+          )}
+        >
+          <div className="overflow-hidden">
+            <button
+              type="button"
+              onClick={() => signOut()}
+              className={cn(
+                'flex w-full items-center gap-3 rounded-lg px-3 py-2.5 mt-1 text-sm font-medium',
+                'text-lp-text-secondary hover:text-lp-text hover:bg-lp-surface-hover',
+                'transition-colors',
+                collapsed && 'justify-center px-0'
+              )}
+            >
+              <LogOut size={20} />
+              {!collapsed && <span>Log out</span>}
+            </button>
+          </div>
         </div>
       </div>
     </aside>
