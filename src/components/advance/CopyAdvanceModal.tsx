@@ -156,11 +156,11 @@ export function CopyAdvanceModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 transition-opacity duration-150"
       onClick={onClose}
     >
       <div
-        className="w-full max-w-lg rounded-xl border border-lp-border bg-lp-surface shadow-xl"
+        className="w-full max-w-lg rounded-xl border border-lp-border bg-lp-surface shadow-xl animate-scale-in"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="border-b border-lp-border px-6 py-4">
@@ -310,7 +310,7 @@ export function CopyAdvanceModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-xl border border-lp-border px-4 py-2 text-sm font-medium text-lp-text hover:bg-lp-surface-hover"
+            className="btn-transition rounded-xl border border-lp-border px-4 py-2 text-sm font-medium text-lp-text hover:bg-lp-surface-hover"
           >
             Cancel
           </button>
@@ -318,7 +318,7 @@ export function CopyAdvanceModal({
             type="button"
             onClick={handlePrimary}
             disabled={!sourceId || targetIds.size === 0 || (!copySections && !copyData) || submitting}
-            className="rounded-xl bg-lp-orange px-4 py-2 text-sm font-medium text-white hover:bg-lp-orange-hover disabled:opacity-50"
+            className="btn-transition btn-primary-press rounded-xl bg-lp-orange px-4 py-2 text-sm font-medium text-white hover:bg-lp-orange-hover disabled:opacity-50"
           >
             {submitting
               ? 'Copying...'

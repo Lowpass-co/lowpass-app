@@ -96,9 +96,9 @@ export async function POST(request: Request) {
       end_date,
       continent: continent || 'UK',
       currency: currency || 'GBP',
-      principal_count: Number(principal_count) ?? 0,
-      band_count: Number(band_count) ?? 0,
-      crew_count: Number(crew_count) ?? 0,
+      principal_count: Number(principal_count) || 0,
+      band_count: Number(band_count) || 0,
+      crew_count: Number(crew_count) || 0,
       status: 'planning',
     })
     .select(`

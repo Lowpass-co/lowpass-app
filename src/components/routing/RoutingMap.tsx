@@ -84,6 +84,13 @@ export function RoutingMap({ rows, primaryTransit, onSelectDate }: RoutingMapPro
     setIsDark(document.documentElement.classList.contains('dark'));
   }, []);
 
+  // Cleanup hover timeout on unmount to prevent memory leak
+  useEffect(() => {
+    return () => {
+      if (hoverTimeoutRef.current) clearTimeout(hoverTimeoutRef.current);
+    };
+  }, []);
+
   // Geocode rows missing lat/lng (batch); parse API/row values as numbers and reject NaN
   useEffect(() => {
     const next = new Map<number, { lat: number; lng: number }>();

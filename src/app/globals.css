@@ -99,6 +99,13 @@
 }
 
 /* ============================================
+   Universal smooth transitions (macOS/iOS feel)
+   ============================================ */
+* {
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ============================================
    Base Styles
    ============================================ */
 body {
@@ -145,11 +152,133 @@ body {
   font-family: var(--font-display);
 }
 
-/* Tour card dropdown menu — smooth fade in */
+/* ============================================
+   Animation keyframes & utility classes
+   Use for page/content transitions, lists, modals.
+   ============================================ */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.95); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes slideOutLeft {
+  from { opacity: 1; transform: translateX(0); }
+  to { opacity: 0; transform: translateX(-20px); }
+}
+@keyframes pageIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes toastEnter {
+  from { opacity: 0; transform: translateX(100%); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes toastExit {
+  from { opacity: 1; transform: translateX(0); }
+  to { opacity: 0; transform: translateX(100%); }
+}
+
+.animate-fade-in { animation: fadeIn 200ms ease-out forwards; }
+.animate-fade-out { animation: fadeOut 200ms ease-in forwards; }
+.animate-slide-up { animation: slideUp 200ms ease-out forwards; }
+.animate-slide-down { animation: slideDown 200ms ease-out forwards; }
+.animate-scale-in { animation: scaleIn 150ms ease-out forwards; }
+.animate-slide-out-left { animation: slideOutLeft 200ms ease-in forwards; }
+.animate-page-in { animation: pageIn 200ms ease-out forwards; }
+.animate-toast-enter { animation: toastEnter 250ms ease-out forwards; }
+.animate-toast-exit { animation: toastExit 200ms ease-in forwards; }
+
+/* Modal backdrop */
+.modal-backdrop {
+  transition: opacity 150ms ease-out;
+}
+.modal-backdrop.modal-backdrop-enter {
+  opacity: 0;
+}
+.modal-backdrop.modal-backdrop-enter-active {
+  opacity: 0.5;
+}
+
+/* Modal panel: open 150ms, close 100ms (use .animate-scale-in for open) */
+.animate-modal-close {
+  animation: fadeOut 100ms ease-in forwards;
+}
+.animate-modal-close .modal-panel {
+  animation: scaleOut 100ms ease-in forwards;
+}
+@keyframes scaleOut {
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0; transform: scale(0.95); }
+}
+
+/* Accordion: use grid-template-rows 0fr → 1fr + content fade */
+.accordion-grid {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 250ms ease-out;
+}
+.accordion-grid.accordion-grid-open {
+  grid-template-rows: 1fr;
+}
+.accordion-grid > * {
+  min-height: 0;
+  overflow: hidden;
+}
+.accordion-content-inner {
+  opacity: 0;
+  transition: opacity 200ms ease-out 50ms;
+}
+.accordion-grid-open .accordion-content-inner {
+  opacity: 1;
+}
+
+/* Buttons: base transition */
+.btn-transition {
+  transition: color 150ms, background-color 150ms, border-color 150ms, box-shadow 150ms, transform 150ms;
+}
+.btn-primary-press:active {
+  transform: scale(0.98);
+}
+.btn-elevated:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+.dark .btn-elevated:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+/* Cards: hover lift */
+.card-hover {
+  transition: transform 150ms ease-out, box-shadow 150ms ease-out;
+}
+.card-hover:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+}
+.dark .card-hover:hover {
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+
+/* Tour card dropdown & context menu — scale + fade (align with scaleIn) */
 @keyframes fadeInMenu {
   from {
     opacity: 0;
-    transform: scale(0.96);
+    transform: scale(0.95);
   }
   to {
     opacity: 1;
@@ -159,6 +288,23 @@ body {
 
 .tour-card-menu {
   animation: fadeInMenu 0.15s ease-out;
+}
+
+.context-menu-dropdown {
+  animation: scaleIn 0.15s ease-out;
+}
+
+/* Delete confirm button — shake when clicked while disabled */
+@keyframes shakeDisabled {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-4px); }
+  40% { transform: translateX(4px); }
+  60% { transform: translateX(-2px); }
+  80% { transform: translateX(2px); }
+}
+
+.animate-shake-disabled {
+  animation: shakeDisabled 0.4s ease-in-out;
 }
 
 /* Delete option — angry shake on hover */
@@ -176,20 +322,9 @@ body {
   animation: angryShake 0.5s ease-in-out;
 }
 
-/* Toast slide-in */
-@keyframes slideInRight {
-  from {
-    opacity: 0;
-    transform: translateX(1rem);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-
+/* Legacy toast class (prefer .animate-toast-enter) */
 .toast-enter {
-  animation: slideInRight 0.25s ease-out;
+  animation: toastEnter 0.25s ease-out;
 }
 
 /* Leaflet popup dark theme overrides */

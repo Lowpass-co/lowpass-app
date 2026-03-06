@@ -16,6 +16,10 @@ export interface VenuePlaceResult {
   country?: string;
   latitude?: number;
   longitude?: number;
+  website?: string;
+  phone?: string;
+  rating?: number;
+  capacity?: number | null;
 }
 
 export function VenueAutocomplete({
@@ -128,6 +132,10 @@ export function VenueAutocomplete({
         country: d.country,
         latitude: d.latitude,
         longitude: d.longitude,
+        website: d.website,
+        phone: d.phone,
+        rating: d.rating,
+        capacity: null,
       });
     } catch (err) {
       if ((err as Error).name === 'AbortError') return;

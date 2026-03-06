@@ -243,12 +243,29 @@ export async function POST(
     }
   }
 
-  const normalizedSections = sectionsToUse.map((s) => ({
+  let normalizedSections = sectionsToUse.map((s) => ({
     template_id: s.template_id ?? '',
     label: s.label ?? '',
     fields: Array.isArray(s.fields) ? s.fields : [],
     order: typeof s.order === 'number' ? s.order : 0,
   }));
+
+  const hasKeyContacts = normalizedSections.some((s) => s.label === 'Key Contacts');
+  if (!hasKeyContacts) {
+    const { data: keyContactsTemplate } = await supabase
+      .from('advance_templates')
+      .select('id')
+      .eq('name', 'Key Contacts')
+      .is('workspace_id', null)
+      .limit(1)
+      .maybeSingle();
+    if (keyContactsTemplate?.id) {
+      normalizedSections = [
+        { template_id: keyContactsTemplate.id, label: 'Key Contacts', fields: [], order: 0 },
+        ...normalizedSections.map((s, i) => ({ ...s, order: i + 1 })),
+      ];
+    }
+  }
 
   let formConfigId: string;
 

@@ -75,3 +75,37 @@ export async function PATCH(
   }
   return NextResponse.json(data);
 }
+
+export async function DELETE(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const supabase = await createServerSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const { id } = await params;
+
+  const { count, error: countErr } = await supabase
+    .from('tours')
+    .select('*', { count: 'exact', head: true })
+    .eq('artist_id', id);
+
+  if (countErr) {
+    return NextResponse.json({ error: countErr.message }, { status: 500 });
+  }
+  if (count != null && count > 0) {
+    return NextResponse.json(
+      { error: 'Cannot delete artist while tours are linked. Remove or reassign tours first.' },
+      { status: 409 }
+    );
+  }
+
+  const { error } = await supabase.from('artists').delete().eq('id', id);
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  return new NextResponse(null, { status: 204 });
+}

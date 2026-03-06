@@ -68,7 +68,7 @@ export default async function ToursPage({
         </div>
         <Link
           href="/tours/create"
-          className="flex items-center gap-2 rounded-lg bg-lp-orange px-4 py-2.5 text-sm font-medium text-white hover:bg-lp-orange-hover transition-colors"
+          className="btn-transition btn-primary-press flex items-center gap-2 rounded-lg bg-lp-orange px-4 py-2.5 text-sm font-medium text-white hover:bg-lp-orange-hover"
         >
           <Plus size={16} />
           New Tour
@@ -98,8 +98,8 @@ export default async function ToursPage({
       ) : (
         <>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {tours.map((tour) => (
-              <TourCard key={tour.id} tour={tour} />
+            {tours.map((tour, index) => (
+              <TourCard key={tour.id} tour={tour} index={index} />
             ))}
           </div>
           <ToursPagination total={total} page={page} limit={DEFAULT_LIMIT} />

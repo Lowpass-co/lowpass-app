@@ -2,7 +2,7 @@
    LOWPASS — Tour Card (Kanban style)
 
    Compact card with artist, name, dates, status.
-   Three-dots menu: Open, Delete (with confirm).
+   Context menu: Edit tour, Rename tour, Delete tour.
    ============================================ */
 
 'use client';
@@ -10,10 +10,13 @@
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowRight, MoreVertical, Trash2, ExternalLink } from 'lucide-react';
+import { ArrowRight, Pencil, Trash2, ExternalLink } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 import type { Tour } from '@/types';
 import { cn } from '@/lib/utils';
+import { ContextMenu } from '@/components/ui/ContextMenu';
+import { DeleteConfirmationModal } from '@/components/ui/DeleteConfirmationModal';
+import { useToast } from '@/components/ui/Toast';
 
 const statusColors: Record<string, string> = {
   planning: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
@@ -22,39 +25,27 @@ const statusColors: Record<string, string> = {
   archived: 'bg-gray-500/10 text-gray-400',
 };
 
-const CONFIRM_WORD = 'delete';
-
-export function TourCard({ tour }: { tour: Tour }) {
+export function TourCard({ tour, onDeleted, index = 0 }: { tour: Tour; onDeleted?: () => void; index?: number }) {
   const router = useRouter();
+  const { showToast } = useToast();
   const artistName = tour.artist?.name ?? '—';
   const statusClass = statusColors[tour.status] ?? statusColors.planning;
 
-  const [menuOpen, setMenuOpen] = useState(false);
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
-  const [deleteInput, setDeleteInput] = useState('');
-  const [deleting, setDeleting] = useState(false);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deletingFade, setDeletingFade] = useState(false);
+  const [isRenaming, setIsRenaming] = useState(false);
+  const [editName, setEditName] = useState(tour.name);
+  const [savingName, setSavingName] = useState(false);
   const [advancePercent, setAdvancePercent] = useState<number | null>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
-  const confirmInputRef = useRef<HTMLInputElement>(null);
+  const renameInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const close = (e: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setMenuOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', close);
-    return () => document.removeEventListener('mousedown', close);
-  }, []);
+    setEditName(tour.name);
+  }, [tour.name]);
 
   useEffect(() => {
-    if (deleteConfirmOpen) {
-      setDeleteInput('');
-      setDeleteError(null);
-      setTimeout(() => confirmInputRef.current?.focus(), 50);
-    }
-  }, [deleteConfirmOpen]);
+    if (isRenaming) setTimeout(() => renameInputRef.current?.focus(), 50);
+  }, [isRenaming]);
 
   useEffect(() => {
     let cancelled = false;
@@ -75,79 +66,93 @@ export function TourCard({ tour }: { tour: Tour }) {
     return () => { cancelled = true; };
   }, [tour.id]);
 
-  const handleDeleteConfirm = async () => {
-    if (deleteInput.trim().toLowerCase() !== CONFIRM_WORD) {
-      setDeleteError(`Type "${CONFIRM_WORD}" to confirm`);
+  const saveRename = async () => {
+    const name = editName.trim();
+    if (!name || name === tour.name) {
+      setIsRenaming(false);
+      setEditName(tour.name);
       return;
     }
-    setDeleting(true);
-    setDeleteError(null);
+    setSavingName(true);
     try {
-      const res = await fetch(`/api/tours/${tour.id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/tours/${tour.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || 'Failed to delete tour');
+        throw new Error(data.error ?? 'Failed to rename');
       }
-      setDeleteConfirmOpen(false);
-      router.push('/tours');
+      showToast('Tour renamed');
+      setIsRenaming(false);
       router.refresh();
-    } catch (err) {
-      setDeleteError(err instanceof Error ? err.message : 'Failed to delete tour');
+    } catch {
+      setEditName(tour.name);
+      setIsRenaming(false);
     } finally {
-      setDeleting(false);
+      setSavingName(false);
     }
   };
 
+  const contextMenuItems = [
+    {
+      label: 'Edit tour',
+      icon: Pencil,
+      onClick: () => router.push(`/tours/${tour.id}/edit`),
+    },
+    {
+      label: 'Rename tour',
+      icon: ExternalLink,
+      onClick: () => setIsRenaming(true),
+    },
+    {
+      label: 'Delete tour',
+      icon: Trash2,
+      variant: 'danger' as const,
+      onClick: () => setDeleteOpen(true),
+    },
+  ];
+
   return (
     <>
-      <div className="group relative flex flex-col rounded-xl border border-lp-border bg-lp-surface p-5 transition-all hover:border-lp-orange/30 hover:bg-lp-surface-hover">
-        <div className="absolute right-3 top-3 z-10" ref={menuRef}>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              setMenuOpen((o) => !o);
-            }}
-            className="flex h-8 w-8 items-center justify-center rounded-lg text-lp-text-tertiary transition-colors hover:bg-lp-bg-tertiary hover:text-lp-text"
-            aria-label="Tour options"
-          >
-            <MoreVertical size={18} />
-          </button>
-
-          {menuOpen && (
-            <div
-              className="tour-card-menu absolute right-0 top-full z-20 mt-1 min-w-[180px] overflow-hidden rounded-xl border border-lp-border bg-lp-surface py-1 shadow-lg"
-            >
-              <Link
-                href={`/tours/${tour.id}`}
-                onClick={() => setMenuOpen(false)}
-                className="flex items-center gap-2 px-3 py-2.5 text-sm text-lp-text transition-colors hover:bg-lp-orange/10 hover:text-lp-orange"
-              >
-                <ExternalLink size={14} />
-                Open tour
-              </Link>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.preventDefault();
-                  setMenuOpen(false);
-                  setDeleteConfirmOpen(true);
-                }}
-                className="tour-card-delete-option flex w-full items-center gap-2 px-3 py-2.5 text-left text-sm font-medium text-red-600 transition-colors hover:bg-red-500/10 hover:text-red-600 dark:text-red-400 dark:hover:bg-red-500/10 dark:hover:text-red-400"
-              >
-                <Trash2 size={14} />
-                Delete tour
-              </button>
-            </div>
-          )}
+      <div
+        className={cn(
+          'group relative flex flex-col rounded-xl border border-lp-border bg-lp-surface p-5 card-hover hover:border-lp-orange/30 hover:bg-lp-surface-hover',
+          !deletingFade && 'animate-slide-up',
+          deletingFade && 'animate-slide-out-left'
+        )}
+        style={!deletingFade ? { animationDelay: `${index * 30}ms` } : undefined}
+      >
+        <div className="absolute right-3 top-3 z-10" onClick={(e) => e.stopPropagation()}>
+          <ContextMenu items={contextMenuItems} align="right" />
         </div>
 
         <Link href={`/tours/${tour.id}`} className="flex min-w-0 flex-1 flex-col">
           <div className="flex items-start justify-between gap-3 pr-8">
             <div className="min-w-0 flex-1 space-y-1">
               <p className="text-sm font-medium text-lp-text-tertiary">{artistName}</p>
-              <h3 className="font-semibold text-lp-text">{tour.name}</h3>
+              {isRenaming ? (
+                <input
+                  ref={renameInputRef}
+                  type="text"
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  onBlur={saveRename}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') saveRename();
+                    if (e.key === 'Escape') {
+                      setEditName(tour.name);
+                      setIsRenaming(false);
+                    }
+                  }}
+                  disabled={savingName}
+                  onClick={(e) => e.preventDefault()}
+                  className="w-full rounded-lg border border-lp-border bg-lp-surface px-2 py-1 text-base font-semibold text-lp-text focus:border-lp-orange focus:outline-none focus:ring-2 focus:ring-lp-orange/20"
+                />
+              ) : (
+                <h3 className="font-semibold text-lp-text">{tour.name}</h3>
+              )}
               <p className="text-sm text-lp-text-secondary">
                 {formatDate(tour.start_date)} – {formatDate(tour.end_date)}
               </p>
@@ -176,12 +181,7 @@ export function TourCard({ tour }: { tour: Tour }) {
                   <span className="text-xs font-medium text-lp-text">{advancePercent}%</span>
                 </Link>
               )}
-              <span
-                className={cn(
-                  'rounded-full px-2.5 py-0.5 text-xs font-medium',
-                  statusClass
-                )}
-              >
+              <span className={cn('rounded-full px-2.5 py-0.5 text-xs font-medium', statusClass)}>
                 {tour.status}
               </span>
             </div>
@@ -195,65 +195,27 @@ export function TourCard({ tour }: { tour: Tour }) {
         </Link>
       </div>
 
-      {deleteConfirmOpen && (
-        <div
-          className="fixed inset-0 z-[3000] flex items-center justify-center bg-black/50 p-4"
-          onClick={() => !deleting && setDeleteConfirmOpen(false)}
-        >
-          <div
-            className="w-full max-w-md rounded-xl border border-lp-border bg-lp-surface p-6 shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <h3 className="text-lg font-semibold text-lp-text">Delete this tour?</h3>
-            <p className="mt-2 text-sm text-lp-text-secondary">
-              <strong className="text-lp-text">{tour.name}</strong> will be permanently deleted. All routing, advance data, and links to this tour will be removed. This cannot be undone.
-            </p>
-            <p className="mt-4 text-sm font-medium text-lp-text">To confirm:</p>
-            <ol className="mt-1 list-decimal space-y-0.5 pl-4 text-sm text-lp-text-secondary">
-              <li>Type the word <kbd className="rounded border border-lp-border bg-lp-bg-tertiary px-1.5 py-0.5 font-mono text-xs">{CONFIRM_WORD}</kbd> in the box below.</li>
-              <li>Press Enter or click &quot;Delete tour&quot;.</li>
-            </ol>
-            <input
-              ref={confirmInputRef}
-              type="text"
-              value={deleteInput}
-              onChange={(e) => {
-                setDeleteInput(e.target.value);
-                setDeleteError(null);
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleDeleteConfirm();
-                if (e.key === 'Escape') setDeleteConfirmOpen(false);
-              }}
-              placeholder={`Type "${CONFIRM_WORD}"`}
-              disabled={deleting}
-              className="mt-3 w-full rounded-lg border border-lp-border bg-lp-surface px-3 py-2.5 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:border-lp-orange focus:outline-none focus:ring-2 focus:ring-lp-orange/20 disabled:opacity-50"
-              autoComplete="off"
-            />
-            {deleteError && (
-              <p className="mt-2 text-sm text-red-600 dark:text-red-400">{deleteError}</p>
-            )}
-            <div className="mt-6 flex gap-3">
-              <button
-                type="button"
-                onClick={() => !deleting && setDeleteConfirmOpen(false)}
-                disabled={deleting}
-                className="rounded-lg border border-lp-border bg-lp-surface px-4 py-2.5 text-sm font-medium text-lp-text hover:bg-lp-surface-hover disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={handleDeleteConfirm}
-                disabled={deleting || deleteInput.trim().toLowerCase() !== CONFIRM_WORD}
-                className="rounded-lg bg-red-600 px-4 py-2.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50 dark:bg-red-600 dark:hover:bg-red-700"
-              >
-                {deleting ? 'Deleting…' : 'Delete tour'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+      <DeleteConfirmationModal
+        open={deleteOpen}
+        itemName={tour.name}
+        onClose={() => setDeleteOpen(false)}
+        onConfirm={async () => {
+          const res = await fetch(`/api/tours/${tour.id}`, { method: 'DELETE' });
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            throw new Error(data.error ?? 'Failed to delete tour');
+          }
+          showToast('Tour deleted');
+        }}
+        onDeleted={() => {
+          setDeletingFade(true);
+          setTimeout(() => {
+            router.push('/tours');
+            router.refresh();
+            onDeleted?.();
+          }, 200);
+        }}
+      />
     </>
   );
 }

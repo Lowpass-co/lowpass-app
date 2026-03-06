@@ -7,11 +7,14 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { parseRoutingDate, distanceMiles, getAdvanceStatusInfo } from '@/lib/utils';
 import { DayTypeCombobox } from './DayTypeCombobox';
 import { VenueAutocomplete } from './VenueAutocomplete';
 import Link from 'next/link';
-import { Bus, Car, ChevronDown, Plane, Trash2 } from 'lucide-react';
+import { Bus, Car, ChevronDown, Plane, Trash2, ExternalLink, Eraser } from 'lucide-react';
+import { ContextMenu } from '@/components/ui/ContextMenu';
+import { DeleteConfirmationModal } from '@/components/ui/DeleteConfirmationModal';
 import type { PrimaryTransit } from './RoutingMap';
 import { cn } from '@/lib/utils';
 
@@ -23,6 +26,9 @@ export interface RoutingRow {
   city: string;
   address?: string;
   venue_name?: string;
+  venue_website?: string;
+  venue_phone?: string;
+  venue_capacity?: number;
   notes?: string;
   latitude?: number;
   longitude?: number;
@@ -235,6 +241,7 @@ export function RoutingGrid({
   onAddCustomDayType,
   tourId,
   advanceByDate = {},
+  onDeleteRow,
 }: {
   rows: RoutingRow[];
   onChange: (rows: RoutingRow[]) => void;
@@ -244,6 +251,7 @@ export function RoutingGrid({
   onAddCustomDayType?: (newType: string) => void;
   tourId?: string;
   advanceByDate?: Record<string, { routing_id: string; status: string }>;
+  onDeleteRow?: (index: number) => void;
 }) {
   return (
     <div className="overflow-x-auto rounded-xl border border-lp-border">
@@ -256,109 +264,156 @@ export function RoutingGrid({
             <th className="px-4 py-3 text-left font-medium text-lp-text-secondary">Address</th>
             <th className="px-4 py-3 text-left font-medium text-lp-text-secondary">Notes</th>
             <th className="px-4 py-3 text-left font-medium text-lp-text-secondary">Travel</th>
-            <th className="w-10 px-2 py-3" aria-label="Clear day" />
+            <th className="w-10 px-2 py-3" aria-label="Actions" />
           </tr>
         </thead>
         <tbody>
           {rows.map((row, i) => (
-              <tr
+              <RoutingRowWithMenu
                 key={row.date}
-                data-routing-date={row.date}
-                className="border-b border-lp-border last:border-0 hover:bg-lp-surface-hover"
-              >
-                <td className="px-4 py-2.5 font-medium text-lp-text">
-                  {parseRoutingDate(row.date).toLocaleDateString('en-GB', {
-                    weekday: 'short',
-                    day: '2-digit',
-                    month: 'short',
-                  })}
-                </td>
-                <td className="px-4 py-2.5 pl-5">
-                  <div className="flex items-center gap-0">
-                    <DayTypeCombobox
-                      value={row.day_type}
-                      onChange={(v) => updateRow(i, { day_type: v })}
-                      customTypes={customDayTypes}
-                      onAddCustomType={onAddCustomDayType}
-                      placeholder="Day type"
-                      className="min-w-[140px]"
-                    />
-                    <AdvanceDot tourId={tourId} row={row} advanceByDate={advanceByDate} />
-                  </div>
-                </td>
-                <td className="px-4 py-2.5">
-                  <VenueAutocomplete
-                    value={row.venue_name ?? ''}
-                    onChange={(venue_name) => updateRow(i, { venue_name })}
-                    onPlaceSelect={(result) =>
-                      updateRow(i, {
-                        venue_name: result.venue_name,
-                        address: result.address,
-                        city: result.city ?? row.city,
-                        latitude: result.latitude,
-                        longitude: result.longitude,
-                      })
-                    }
-                    placeholder="Venue"
-                  />
-                </td>
-                <td className="px-4 py-2.5">
-                  <input
-                    type="text"
-                    value={row.address ?? row.city}
-                    onChange={(e) => updateRow(i, { address: e.target.value })}
-                    placeholder="Address"
-                    className="w-full min-w-[100px] rounded-xl border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:border-lp-orange focus:outline-none focus:ring-2 focus:ring-lp-orange/20"
-                  />
-                </td>
-                <td className="px-4 py-2.5">
-                  <input
-                    type="text"
-                    value={row.notes ?? ''}
-                    onChange={(e) => updateRow(i, { notes: e.target.value })}
-                    placeholder="Notes"
-                    className="w-full min-w-[120px] rounded-xl border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:border-lp-orange focus:outline-none focus:ring-2 focus:ring-lp-orange/20"
-                  />
-                </td>
-                <td className="px-4 py-2.5">
-                  {i < rows.length - 1 ? (
-                    <TravelCell
-                      row={row}
-                      nextRow={rows[i + 1]}
-                      primaryTransit={primaryTransit}
-                      transportToNext={row.transport_to_next ?? 'default'}
-                      onSelectMode={(mode) => updateRow(i, { transport_to_next: mode })}
-                    />
-                  ) : (
-                    <span className="text-lp-text-tertiary">—</span>
-                  )}
-                </td>
-                <td className="w-10 px-2 py-2.5">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      updateRow(i, {
-                        day_type: '',
-                        city: '',
-                        address: '',
-                        venue_name: '',
-                        notes: '',
-                        latitude: undefined,
-                        longitude: undefined,
-                        transport_to_next: 'default',
-                      })
-                    }
-                    className="rounded p-1.5 text-lp-text-tertiary hover:bg-lp-bg-tertiary hover:text-lp-text"
-                    title="Clear day"
-                    aria-label="Clear day"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </td>
-              </tr>
+                row={row}
+                nextRow={rows[i + 1]}
+                rowIndex={i}
+                tourId={tourId}
+                advanceByDate={advanceByDate}
+                updateRow={updateRow}
+                onDeleteRow={onDeleteRow}
+                primaryTransit={primaryTransit}
+                customDayTypes={customDayTypes}
+                onAddCustomDayType={onAddCustomDayType}
+                rowsLength={rows.length}
+              />
           ))}
         </tbody>
       </table>
     </div>
   );
+}
+
+function RoutingRowWithMenu({
+  row,
+  nextRow,
+  rowIndex,
+  tourId,
+  advanceByDate,
+  updateRow,
+  onDeleteRow,
+  primaryTransit,
+  customDayTypes,
+  onAddCustomDayType,
+  rowsLength,
+}: {
+  row: RoutingRow;
+  nextRow?: RoutingRow;
+  rowIndex: number;
+  tourId?: string;
+  advanceByDate: Record<string, { routing_id: string; status: string }>;
+  updateRow: (index: number, updates: Partial<RoutingRow>) => void;
+  onDeleteRow?: (index: number) => void;
+  primaryTransit: PrimaryTransit;
+  customDayTypes?: string[];
+  onAddCustomDayType?: (newType: string) => void;
+  rowsLength: number;
+}) {
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const advanceInfo = advanceByDate[row.date];
+  const menuItems = [
+    { label: 'Clear day', icon: Eraser, onClick: () => updateRow(rowIndex, { day_type: '', city: '', address: '', venue_name: '', venue_website: '', venue_phone: '', venue_capacity: undefined, notes: '', latitude: undefined, longitude: undefined, transport_to_next: 'default' }) },
+    ...(tourId && advanceInfo?.routing_id ? [{ label: 'Open advance', icon: ExternalLink, onClick: () => window.location.assign(`/tours/${tourId}/advance/${advanceInfo.routing_id}`) }] : []),
+    ...(onDeleteRow && rowsLength > 1 ? [{ label: 'Delete day', icon: Trash2, variant: 'danger' as const, onClick: () => setDeleteOpen(true) }] : []),
+  ].filter(Boolean) as { label: string; icon: typeof Eraser; onClick: () => void; variant?: 'danger' }[];
+
+  return (
+    <>
+      <tr data-routing-date={row.date} className="border-b border-lp-border last:border-0 hover:bg-lp-surface-hover animate-slide-up transition-colors duration-150" style={{ animationDelay: `${rowIndex * 30}ms` }}>
+        <td className="px-4 py-2.5 font-medium text-lp-text">
+          {parseRoutingDate(row.date).toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short' })}
+        </td>
+        <td className="px-4 py-2.5 pl-5">
+          <div className="flex items-center gap-0">
+            <DayTypeCombobox
+              value={row.day_type}
+              onChange={(v) => updateRow(rowIndex, { day_type: v })}
+              customTypes={customDayTypes}
+              onAddCustomType={onAddCustomDayType}
+              placeholder="Day type"
+              className="min-w-[140px]"
+            />
+            <AdvanceDot tourId={tourId} row={row} advanceByDate={advanceByDate} />
+          </div>
+        </td>
+        <td className="px-4 py-2.5">
+          <VenueAutocomplete
+            value={row.venue_name ?? ''}
+            onChange={(venue_name) => updateRow(rowIndex, { venue_name })}
+            onPlaceSelect={(result) =>
+              updateRow(rowIndex, {
+                venue_name: result.venue_name,
+                address: result.address,
+                city: result.city ?? row.city,
+                latitude: result.latitude,
+                longitude: result.longitude,
+                venue_website: result.website,
+                venue_phone: result.phone,
+                venue_capacity: result.capacity ?? undefined,
+              })
+            }
+            placeholder="Venue"
+          />
+        </td>
+        <td className="px-4 py-2.5">
+          <input
+            type="text"
+            value={row.address ?? row.city}
+            onChange={(e) => updateRow(rowIndex, { address: e.target.value })}
+            placeholder="Address"
+            className="w-full min-w-[100px] rounded-xl border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:border-lp-orange focus:outline-none focus:ring-2 focus:ring-lp-orange/20"
+          />
+        </td>
+        <td className="px-4 py-2.5">
+          <input
+            type="text"
+            value={row.notes ?? ''}
+            onChange={(e) => updateRow(rowIndex, { notes: e.target.value })}
+            placeholder="Notes"
+            className="w-full min-w-[120px] rounded-xl border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:border-lp-orange focus:outline-none focus:ring-2 focus:ring-lp-orange/20"
+          />
+        </td>
+        <td className="px-4 py-2.5">
+          {nextRow ? (
+            <TravelCell
+              row={row}
+              nextRow={nextRow}
+              primaryTransit={primaryTransit}
+              transportToNext={row.transport_to_next ?? 'default'}
+              onSelectMode={(mode) => updateRow(rowIndex, { transport_to_next: mode })}
+            />
+          ) : (
+            <span className="text-lp-text-tertiary">—</span>
+          )}
+        </td>
+        <td className="w-10 px-2 py-2.5">
+          <ContextMenu items={menuItems} align="right" />
+        </td>
+      </tr>
+      {onDeleteRow &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <DeleteConfirmationModal
+            open={deleteOpen}
+            itemName={dateLabel(row.date)}
+            onClose={() => setDeleteOpen(false)}
+            onConfirm={async () => {
+              onDeleteRow(rowIndex);
+              setDeleteOpen(false);
+            }}
+          />,
+          document.body
+        )}
+    </>
+  );
+}
+
+function dateLabel(date: string): string {
+  return parseRoutingDate(date).toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short' });
 }

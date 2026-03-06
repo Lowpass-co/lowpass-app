@@ -25,7 +25,7 @@ export async function GET(request: Request) {
     headers: {
       'Content-Type': 'application/json',
       'X-Goog-Api-Key': key,
-      'X-Goog-FieldMask': 'displayName,formattedAddress,addressComponents,location',
+      'X-Goog-FieldMask': 'displayName,formattedAddress,addressComponents,location,websiteUri,internationalPhoneNumber,rating,currentOpeningHours',
     },
   });
 
@@ -44,6 +44,14 @@ export async function GET(request: Request) {
       longText?: string;
       shortText?: string;
     }>;
+    websiteUri?: string;
+    internationalPhoneNumber?: string;
+    rating?: number;
+    currentOpeningHours?: {
+      weekdayDescriptions?: string[];
+      periods?: unknown[];
+      openNow?: boolean;
+    };
   };
 
   let locality: string | undefined;
@@ -55,6 +63,13 @@ export async function GET(request: Request) {
     if (types.includes('country')) country = text;
   }
 
+  const openingHours = data.currentOpeningHours
+    ? {
+        weekdayDescriptions: data.currentOpeningHours.weekdayDescriptions ?? [],
+        openNow: data.currentOpeningHours.openNow,
+      }
+    : undefined;
+
   return NextResponse.json({
     displayName: data.displayName?.text ?? '',
     formattedAddress: data.formattedAddress ?? '',
@@ -62,5 +77,9 @@ export async function GET(request: Request) {
     country,
     latitude: data.location?.latitude,
     longitude: data.location?.longitude,
+    website: data.websiteUri ?? undefined,
+    phone: data.internationalPhoneNumber ?? undefined,
+    rating: data.rating != null ? data.rating : undefined,
+    opening_hours: openingHours,
   });
 }

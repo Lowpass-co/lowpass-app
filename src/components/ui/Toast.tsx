@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useCallback, useContext, useState } from 'react';
+import { createContext, useCallback, useContext, useRef, useState } from 'react';
 import { cn } from '@/lib/utils';
 
 type ToastType = 'success' | 'error';
@@ -9,6 +9,7 @@ interface ToastItem {
   id: number;
   message: string;
   type: ToastType;
+  exiting?: boolean;
 }
 
 interface ToastContextValue {
@@ -33,30 +34,32 @@ const AUTO_DISMISS_MS = 3000;
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<ToastItem[]>([]);
-  const [nextId, setNextId] = useState(0);
+  const nextIdRef = useRef(0);
 
   const showToast = useCallback((message: string, type: ToastType = 'success') => {
-    const id = nextId;
-    setNextId((n) => n + 1);
+    const id = nextIdRef.current++;
     setToasts((prev) => [...prev, { id, message, type }]);
     setTimeout(() => {
-      setToasts((prev) => prev.filter((t) => t.id !== id));
+      setToasts((prev) => prev.map((t) => (t.id === id ? { ...t, exiting: true } : t)));
+      setTimeout(() => {
+        setToasts((prev) => prev.filter((t) => t.id !== id));
+      }, 200);
     }, AUTO_DISMISS_MS);
-  }, [nextId]);
+  }, []);
 
   return (
     <ToastContext.Provider value={{ showToast }}>
       {children}
       <div
-        className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-2"
+        className="fixed bottom-6 right-6 z-[9999] flex flex-col gap-2 transition-[gap] duration-200"
         aria-live="polite"
       >
         {toasts.map((t) => (
           <div
             key={t.id}
             className={cn(
-              'flex items-center rounded-lg border px-4 py-3 text-sm font-medium shadow-lg transition-all duration-300 ease-out',
-              'toast-enter',
+              'flex items-center rounded-lg border px-4 py-3 text-sm font-medium shadow-lg',
+              t.exiting ? 'animate-toast-exit' : 'animate-toast-enter',
               t.type === 'success' &&
                 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/80 dark:text-emerald-200',
               t.type === 'error' &&

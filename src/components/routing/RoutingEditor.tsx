@@ -34,7 +34,7 @@ function dateRange(start: string, end: string): string[] {
 function buildInitialRows(
   startDate: string,
   endDate: string,
-  existing: { date: string; day_type: string; city: string; address?: string; venue_name?: string; notes?: string; latitude?: number; longitude?: number; transport_to_next?: string }[]
+  existing: { date: string; day_type: string; city: string; address?: string; venue_name?: string; venue_website?: string; venue_phone?: string; venue_capacity?: number; notes?: string; latitude?: number; longitude?: number; transport_to_next?: string }[]
 ): RoutingRow[] {
   const byDate = new Map(existing.map((r) => [r.date, r]));
   return dateRange(startDate, endDate).map((date) => {
@@ -48,6 +48,9 @@ function buildInitialRows(
       city: ex?.city ?? '',
       address: ex?.address ?? '',
       venue_name: ex?.venue_name ?? '',
+      venue_website: ex?.venue_website,
+      venue_phone: ex?.venue_phone,
+      venue_capacity: ex?.venue_capacity,
       notes: ex?.notes ?? '',
       latitude: ex?.latitude,
       longitude: ex?.longitude,
@@ -178,6 +181,9 @@ export function RoutingEditor({
             city: r.city,
             address: r.address || null,
             venue_name: r.venue_name || null,
+            venue_website: r.venue_website || null,
+            venue_phone: r.venue_phone || null,
+            venue_capacity: r.venue_capacity ?? null,
             notes: r.notes || null,
             latitude: r.latitude ?? null,
             longitude: r.longitude ?? null,
@@ -381,6 +387,11 @@ export function RoutingEditor({
               onAddCustomDayType={handleAddCustomDayType}
               tourId={tourId}
               advanceByDate={advanceByDate}
+              onDeleteRow={(index) => {
+                hasUserEditedRef.current = true;
+                setSaveError(null);
+                setRows((prev) => prev.filter((_, i) => i !== index));
+              }}
             />
           </div>
         </>

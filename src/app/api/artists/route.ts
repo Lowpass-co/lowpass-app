@@ -16,9 +16,20 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('workspace_id')
+    .eq('id', user.id)
+    .single();
+
+  if (!profile?.workspace_id) {
+    return NextResponse.json({ error: 'No workspace' }, { status: 403 });
+  }
+
   const { data, error } = await supabase
     .from('artists')
     .select('*')
+    .eq('workspace_id', profile.workspace_id)
     .order('name');
 
   if (error) {

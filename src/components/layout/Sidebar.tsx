@@ -112,7 +112,7 @@ export function Sidebar() {
       className={cn(
         'fixed inset-y-0 left-0 z-30 flex flex-col',
         'bg-lp-surface border-r border-lp-border',
-        'transition-all duration-200 ease-in-out',
+        'transition-[width] duration-200 ease-in-out',
         collapsed ? 'w-[72px]' : 'w-[260px]'
       )}
     >
@@ -140,7 +140,7 @@ export function Sidebar() {
           className={cn(
             'flex items-center gap-2 rounded-lg px-3 py-2.5',
             'bg-lp-orange text-white font-medium text-sm',
-            'hover:bg-lp-orange-hover transition-colors',
+            'hover:bg-lp-orange-hover btn-transition btn-primary-press',
             collapsed && 'justify-center px-0'
           )}
         >
@@ -162,7 +162,12 @@ export function Sidebar() {
 
             {/* Group items */}
             {group.items.map((item) => {
-              const isActive = pathname === item.href || pathname?.startsWith(item.href + '/');
+              const isActive =
+                item.href === '/advance'
+                  ? pathname?.includes('/advance')
+                  : item.href === '/tours'
+                    ? pathname?.startsWith('/tours') && !pathname?.includes('/advance')
+                    : pathname === item.href || pathname?.startsWith(item.href + '/');
               const Icon = item.icon;
 
               return (

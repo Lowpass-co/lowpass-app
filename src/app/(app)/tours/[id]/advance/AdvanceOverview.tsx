@@ -16,10 +16,15 @@ import {
   Search,
   ArrowRight,
   Loader2,
+  CheckCircle2,
+  Trash2,
+  ExternalLink,
 } from 'lucide-react';
 import { parseRoutingDate, getDayTypeLabel, getDayTypeColor, getAdvanceStatusInfo, cn } from '@/lib/utils';
 import { useToast } from '@/components/ui/Toast';
 import { CopyAdvanceModal } from '@/components/advance/CopyAdvanceModal';
+import { ContextMenu } from '@/components/ui/ContextMenu';
+import { DeleteConfirmationModal } from '@/components/ui/DeleteConfirmationModal';
 
 export type AdvanceSection = {
   template_id: string;
@@ -65,11 +70,15 @@ export function AdvanceOverview({
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [copyModalOpen, setCopyModalOpen] = useState(false);
+  const [copySourceRoutingId, setCopySourceRoutingId] = useState<string | null>(null);
   const [templateModalOpen, setTemplateModalOpen] = useState(false);
 
   const copyFromUrl = initialCopyRoutingId ?? searchParams.get('copy');
   useEffect(() => {
-    if (copyFromUrl && dates.length > 0) setCopyModalOpen(true);
+    if (copyFromUrl && dates.length > 0) {
+      setCopySourceRoutingId(copyFromUrl);
+      setCopyModalOpen(true);
+    }
   }, [copyFromUrl, dates.length]);
   const [formTemplates, setFormTemplates] = useState<FormTemplate[]>([]);
   const [formTemplatesLoading, setFormTemplatesLoading] = useState(false);
@@ -227,7 +236,20 @@ export function AdvanceOverview({
       ) : (
         <ul className="space-y-2">
           {filteredDates.map((item) => (
-            <ShowRow key={item.routing_id} tourId={tourId} item={item} />
+            <ShowRow
+              key={item.routing_id}
+              tourId={tourId}
+              item={item}
+              onOpenCopyModal={(routingId) => {
+                setCopySourceRoutingId(routingId);
+                setCopyModalOpen(true);
+              }}
+              onDeleted={() => {
+                fetch(`/api/tours/${tourId}/advance`)
+                  .then((r) => r.json())
+                  .then((j) => setDates(j.dates ?? []));
+              }}
+            />
           ))}
         </ul>
       )}
@@ -257,10 +279,11 @@ export function AdvanceOverview({
       <CopyAdvanceModal
         tourId={tourId}
         dates={dates}
-        initialSourceRoutingId={copyFromUrl ?? undefined}
+        initialSourceRoutingId={copySourceRoutingId ?? copyFromUrl ?? undefined}
         open={copyModalOpen}
         onClose={() => {
           setCopyModalOpen(false);
+          setCopySourceRoutingId(null);
           if (copyFromUrl) router.replace(`/tours/${tourId}/advance`, { scroll: false });
         }}
         onSuccess={(copiedCount) => {
@@ -291,8 +314,23 @@ export function AdvanceOverview({
   );
 }
 
-function ShowRow({ tourId, item }: { tourId: string; item: AdvanceDateItem }) {
+function ShowRow({
+  tourId,
+  item,
+  onOpenCopyModal,
+  onDeleted,
+}: {
+  tourId: string;
+  item: AdvanceDateItem;
+  onOpenCopyModal?: (routingId: string) => void;
+  onDeleted?: () => void;
+}) {
   const router = useRouter();
+  const { showToast } = useToast();
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deletingFade, setDeletingFade] = useState(false);
+  const [markingComplete, setMarkingComplete] = useState(false);
+
   const dateLabel = parseRoutingDate(item.date).toLocaleDateString('en-GB', {
     weekday: 'short',
     day: '2-digit',
@@ -307,15 +345,58 @@ function ShowRow({ tourId, item }: { tourId: string; item: AdvanceDateItem }) {
     return n + (sectionStatuses[key]?.status === 'complete' ? 1 : 0);
   }, 0) ?? 0;
   const statusInfo = hasAdvance ? getAdvanceStatusInfo(item.advance!.status) : getAdvanceStatusInfo('not_started');
+  const isComplete = item.advance?.status === 'complete';
+  const rowLabel = [dateLabel, item.venue_name || item.city || '—'].filter(Boolean).join(' — ') || 'this advance';
 
   const handleClick = (e: React.MouseEvent) => {
     const target = e.target as HTMLElement;
-    if (target.closest('button') || target.closest('a')) return;
+    if (target.closest('button') || target.closest('a') || target.closest('[data-context-menu]')) return;
     router.push(`/tours/${tourId}/advance/${item.routing_id}`);
   };
 
+  const menuItems = [
+    {
+      label: 'Open advance',
+      icon: ExternalLink,
+      onClick: () => router.push(`/tours/${tourId}/advance/${item.routing_id}`),
+    },
+    ...(onOpenCopyModal
+      ? [{ label: 'Copy advance...', icon: Copy, onClick: () => onOpenCopyModal(item.routing_id) }]
+      : []),
+    ...(hasAdvance && !isComplete
+      ? [{
+          label: 'Mark as complete',
+          icon: CheckCircle2,
+          onClick: async () => {
+            setMarkingComplete(true);
+            try {
+              const res = await fetch(`/api/tours/${tourId}/advance/${item.routing_id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: 'complete' }),
+              });
+              if (res.ok) {
+                showToast('Marked as complete');
+                router.refresh();
+              }
+            } finally {
+              setMarkingComplete(false);
+            }
+          },
+        }]
+      : []),
+    ...(hasAdvance
+      ? [{
+          label: 'Delete advance',
+          icon: Trash2,
+          variant: 'danger' as const,
+          onClick: () => setDeleteOpen(true),
+        }]
+      : []),
+  ].filter(Boolean) as { label: string; icon: typeof ExternalLink; onClick: () => void; variant?: 'danger' }[];
+
   return (
-    <li>
+    <li className={cn(deletingFade && 'opacity-0 bg-red-500/10 transition-all duration-200')}>
       <div
         role="button"
         tabIndex={0}
@@ -381,8 +462,29 @@ function ShowRow({ tourId, item }: { tourId: string; item: AdvanceDateItem }) {
             </>
           )}
         </div>
+        <div data-context-menu className="shrink-0" onClick={(e) => e.stopPropagation()}>
+          <ContextMenu items={menuItems} align="right" />
+        </div>
         <ChevronRight className="h-4 w-4 shrink-0 text-lp-text-tertiary" />
       </div>
+
+      <DeleteConfirmationModal
+        open={deleteOpen}
+        itemName={rowLabel}
+        onClose={() => setDeleteOpen(false)}
+        onConfirm={async () => {
+          const res = await fetch(`/api/tours/${tourId}/advance/${item.routing_id}`, { method: 'DELETE' });
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            throw new Error(data.error ?? 'Failed to delete advance');
+          }
+          showToast('Advance deleted');
+        }}
+        onDeleted={() => {
+          setDeletingFade(true);
+          setTimeout(() => onDeleted?.(), 200);
+        }}
+      />
     </li>
   );
 }

@@ -36,10 +36,13 @@ export function SlidingToggle<T extends string>({
         className
       )}
     >
-      {/* Sliding pill — slides between left and right */}
+      {/* Sliding pill — spring-like ease, 250ms */}
       <div
-        className="absolute top-1 bottom-1 w-[calc(50%-6px)] rounded-lg bg-lp-orange transition-[left] duration-200 ease-out"
-        style={{ left: isLeft ? 4 : 'calc(50% + 2px)' }}
+        className="absolute top-1 bottom-1 w-[calc(50%-6px)] rounded-lg bg-lp-orange"
+        style={{
+          left: isLeft ? 4 : 'calc(50% + 2px)',
+          transition: 'left 250ms cubic-bezier(0.34, 1.56, 0.64, 1)',
+        }}
       />
       <button
         type="button"

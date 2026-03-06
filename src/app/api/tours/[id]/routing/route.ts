@@ -70,7 +70,7 @@ export async function POST(
     return NextResponse.json({ error: deleteError.message }, { status: 500 });
   }
 
-  const insertRows = rows.map((r: { date: string; day_type?: string; city?: string; address?: string; venue_id?: string; venue_name?: string; notes?: string; latitude?: number; longitude?: number; transport_to_next?: string }, i: number) => ({
+  const insertRows = rows.map((r: { date: string; day_type?: string; city?: string; address?: string; venue_id?: string; venue_name?: string; venue_website?: string; venue_phone?: string; venue_capacity?: number | null; notes?: string; latitude?: number; longitude?: number; transport_to_next?: string }, i: number) => ({
     tour_id: tourId,
     date: r.date,
     day_type: r.day_type ?? '',
@@ -78,6 +78,9 @@ export async function POST(
     address: r.address ?? '',
     venue_id: r.venue_id || null,
     venue_name: r.venue_name || null,
+    venue_website: r.venue_website || null,
+    venue_phone: r.venue_phone || null,
+    venue_capacity: r.venue_capacity ?? null,
     notes: r.notes || null,
     latitude: r.latitude ?? null,
     longitude: r.longitude ?? null,

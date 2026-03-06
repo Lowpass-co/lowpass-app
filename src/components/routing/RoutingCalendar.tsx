@@ -286,6 +286,9 @@ export function RoutingCalendar({
                       city: result.city ?? editingRow.city,
                       latitude: result.latitude,
                       longitude: result.longitude,
+                      venue_website: result.website,
+                      venue_phone: result.phone,
+                      venue_capacity: result.capacity ?? undefined,
                     })
                   }
                   placeholder="Venue"
