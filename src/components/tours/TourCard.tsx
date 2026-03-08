@@ -10,7 +10,7 @@
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowRight, Pencil, Trash2, ExternalLink } from 'lucide-react';
+import { ArrowRight, Pencil, Type, Trash2 } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 import type { Tour } from '@/types';
 import { cn } from '@/lib/utils';
@@ -103,7 +103,7 @@ export function TourCard({ tour, onDeleted, index = 0 }: { tour: Tour; onDeleted
     },
     {
       label: 'Rename tour',
-      icon: ExternalLink,
+      icon: Type,
       onClick: () => setIsRenaming(true),
     },
     {
@@ -118,9 +118,9 @@ export function TourCard({ tour, onDeleted, index = 0 }: { tour: Tour; onDeleted
     <>
       <div
         className={cn(
-          'group relative flex flex-col rounded-xl border border-lp-border bg-lp-surface p-5 card-hover hover:border-lp-orange/30 hover:bg-lp-surface-hover',
+          'group relative flex flex-col rounded-xl border border-lp-border bg-lp-surface p-5 card-hover hover:border-lp-orange/30 hover:bg-lp-surface-hover transition-all duration-300',
           !deletingFade && 'animate-slide-up',
-          deletingFade && 'animate-slide-out-left'
+          deletingFade && 'opacity-0 scale-95 -translate-y-2 pointer-events-none'
         )}
         style={!deletingFade ? { animationDelay: `${index * 30}ms` } : undefined}
       >
@@ -213,7 +213,7 @@ export function TourCard({ tour, onDeleted, index = 0 }: { tour: Tour; onDeleted
             router.push('/tours');
             router.refresh();
             onDeleted?.();
-          }, 200);
+          }, 300);
         }}
       />
     </>

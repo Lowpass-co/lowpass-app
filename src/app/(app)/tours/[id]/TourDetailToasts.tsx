@@ -17,9 +17,11 @@ export function TourDetailToasts({
   const pathname = usePathname();
   const { showToast } = useToast();
   const routingRef = useRef<HTMLDivElement>(null);
+  const toastShownRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!toast) return;
+    if (!toast || toastShownRef.current === toast) return;
+    toastShownRef.current = toast;
     if (toast === 'tour_created') {
       showToast('Tour created! Now add your routing.');
       if (routingEmpty && routingRef.current) {

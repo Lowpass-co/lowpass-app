@@ -85,7 +85,28 @@ export async function DELETE(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('workspace_id')
+    .eq('id', user.id)
+    .single();
+
+  if (!profile?.workspace_id) {
+    return NextResponse.json({ error: 'No workspace' }, { status: 403 });
+  }
+
   const { id } = await params;
+  const { data: tour } = await supabase
+    .from('tours')
+    .select('id')
+    .eq('id', id)
+    .eq('workspace_id', profile.workspace_id)
+    .single();
+
+  if (!tour) {
+    return NextResponse.json({ error: 'Tour not found' }, { status: 404 });
+  }
+
   const { error } = await supabase.from('tours').delete().eq('id', id);
 
   if (error) {

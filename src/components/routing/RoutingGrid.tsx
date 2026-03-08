@@ -6,13 +6,12 @@
 
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, Fragment } from 'react';
 import { createPortal } from 'react-dom';
-import { parseRoutingDate, distanceMiles, getAdvanceStatusInfo } from '@/lib/utils';
-import { DayTypeCombobox } from './DayTypeCombobox';
+import { parseRoutingDate, distanceMiles, formatRoutingDateShort } from '@/lib/utils';
+import { DayTypePills } from './DayTypePills';
 import { VenueAutocomplete } from './VenueAutocomplete';
-import Link from 'next/link';
-import { Bus, Car, ChevronDown, Plane, Trash2, ExternalLink, Eraser } from 'lucide-react';
+import { Bus, Car, Plane, Trash2, ExternalLink, Eraser } from 'lucide-react';
 import { ContextMenu } from '@/components/ui/ContextMenu';
 import { DeleteConfirmationModal } from '@/components/ui/DeleteConfirmationModal';
 import type { PrimaryTransit } from './RoutingMap';
@@ -71,37 +70,65 @@ function travelColor(hours: number, miles: number): string {
   return 'text-emerald-600 dark:text-emerald-400';
 }
 
-function TravelCell({
+/** Transport mode pill buttons for the Travel column. */
+function TransportPills({
+  transportToNext,
+  onSelectMode,
+}: {
+  transportToNext: TransportToNext;
+  onSelectMode: (mode: TransportToNext) => void;
+}) {
+  const modes: { mode: TransportToNext; icon: typeof Bus; label: string }[] = [
+    { mode: 'default', icon: Bus, label: 'Default' },
+    { mode: 'drive', icon: Car, label: 'Drive' },
+    { mode: 'fly', icon: Plane, label: 'Fly' },
+  ];
+  return (
+    <div className="flex items-center gap-1 flex-wrap">
+      {modes.map(({ mode, icon: Icon, label }) => {
+        const selected = transportToNext === mode;
+        return (
+          <button
+            key={mode}
+            type="button"
+            onClick={() => onSelectMode(mode)}
+            aria-label={label}
+            className={cn(
+              'rounded-full p-1.5 transition-all duration-200 border cursor-pointer',
+              selected
+                ? 'bg-lp-accent text-white border-transparent ring-2 ring-lp-accent/50'
+                : 'bg-lp-surface-hover text-lp-text-secondary border-lp-border hover:border-lp-border-light'
+            )}
+            style={{ transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)' }}
+          >
+            <Icon className="h-3.5 w-3.5" />
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Compact travel distance/time box for the dedicated row between date rows. */
+function TravelBox({
   row,
   nextRow,
   primaryTransit,
   transportToNext,
-  onSelectMode,
 }: {
   row: RoutingRow;
   nextRow: RoutingRow;
   primaryTransit: PrimaryTransit;
   transportToNext: TransportToNext;
-  onSelectMode: (mode: TransportToNext) => void;
 }) {
-  const [open, setOpen] = useState(false);
   const [driveHours, setDriveHours] = useState<number | null>(null);
   const [driveLoading, setDriveLoading] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
 
   const hasCoords = row.latitude != null && row.longitude != null && nextRow.latitude != null && nextRow.longitude != null;
   const useGoogleDrive =
     hasCoords &&
     (transportToNext === 'default' || transportToNext === 'drive') &&
     (primaryTransit === 'car' || primaryTransit === 'bus_van' || primaryTransit === 'bus_trailer');
-
-  useEffect(() => {
-    const close = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener('mousedown', close);
-    return () => document.removeEventListener('mousedown', close);
-  }, []);
 
   useEffect(() => {
     if (!useGoogleDrive) {
@@ -123,10 +150,7 @@ function TravelCell({
 
   if (!hasCoords) {
     return (
-      <span className="flex items-center gap-1 text-lp-text-tertiary">
-        <Car className="h-3.5 w-3.5" />
-        —
-      </span>
+      <span className="inline-flex items-center gap-1 text-lp-text-tertiary text-sm">—</span>
     );
   }
 
@@ -150,85 +174,22 @@ function TravelCell({
   const showLoading = useGoogleDrive && driveLoading;
 
   return (
-    <div ref={ref} className="relative flex items-center gap-1">
+    <button
+      type="button"
+      className="inline-flex items-center gap-2 rounded-lg border border-lp-border bg-lp-surface px-2 py-1 text-sm hover:bg-lp-surface-hover hover:border-lp-border-light transition-colors cursor-pointer"
+      style={{ transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)' }}
+    >
       <Icon className={cn('h-3.5 w-3.5 shrink-0', colorClass)} />
       {showLoading ? (
         <span className="text-lp-text-tertiary">…</span>
       ) : (
-        <span className={cn('font-medium', colorClass)}>{formatHours(hours)}</span>
+        <>
+          <span className={cn('font-medium', colorClass)}>{formatHours(hours)}</span>
+          <span className="text-lp-text-tertiary">·</span>
+          <span className="text-lp-text-secondary">{Math.round(miles)} mi</span>
+        </>
       )}
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className={cn('rounded p-0.5 transition-colors', colorClass, 'hover:opacity-80')}
-        aria-label="Change transport mode"
-      >
-        <ChevronDown className="h-3.5 w-3.5" />
-      </button>
-      {open && (
-        <ul className="absolute left-0 top-full z-20 mt-1 min-w-[100px] rounded-xl border border-lp-border bg-lp-surface py-1 shadow-lg">
-          {(['default', 'drive', 'fly'] as const).map((mode) => (
-            <li key={mode}>
-              <button
-                type="button"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => {
-                  onSelectMode(mode);
-                  setOpen(false);
-                }}
-                className="w-full px-3 py-1.5 text-left text-sm hover:bg-lp-surface-hover"
-              >
-                {mode === 'default' ? 'Default' : mode === 'drive' ? 'Drive' : 'Fly'}
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
-
-const SHOW_DAY_TYPES = ['show', 'festival'];
-
-const ADVANCE_DOT: Record<string, string> = {
-  not_started: 'bg-gray-400',
-  in_progress: 'bg-blue-500',
-  complete: 'bg-emerald-500',
-  needs_review: 'bg-amber-500',
-};
-
-function AdvanceDot({
-  tourId,
-  row,
-  advanceByDate,
-}: {
-  tourId: string | undefined;
-  row: RoutingRow;
-  advanceByDate: Record<string, { routing_id: string; status: string }>;
-}) {
-  if (!SHOW_DAY_TYPES.includes(row.day_type)) return null;
-  const info = advanceByDate[row.date];
-  const status = info?.status ?? 'not_started';
-  const dotClass = ADVANCE_DOT[status] ?? 'bg-gray-400';
-  const title = getAdvanceStatusInfo(status).label;
-  if (info?.routing_id && tourId) {
-    return (
-      <Link
-        href={`/tours/${tourId}/advance/${info.routing_id}`}
-        className="ml-1.5 inline-flex shrink-0 items-center rounded p-0.5 hover:bg-lp-bg-tertiary"
-        title={`Advance: ${title}`}
-        aria-label={`Advance ${title}`}
-      >
-        <span className={cn('h-2 w-2 rounded-full', dotClass)} />
-      </Link>
-    );
-  }
-  return (
-    <span
-      className={cn('ml-1.5 inline-block h-2 w-2 shrink-0 rounded-full', dotClass)}
-      title={title}
-      aria-label={title}
-    />
+    </button>
   );
 }
 
@@ -268,22 +229,38 @@ export function RoutingGrid({
           </tr>
         </thead>
         <tbody>
-          {rows.map((row, i) => (
-              <RoutingRowWithMenu
-                key={row.date}
-                row={row}
-                nextRow={rows[i + 1]}
-                rowIndex={i}
-                tourId={tourId}
-                advanceByDate={advanceByDate}
-                updateRow={updateRow}
-                onDeleteRow={onDeleteRow}
-                primaryTransit={primaryTransit}
-                customDayTypes={customDayTypes}
-                onAddCustomDayType={onAddCustomDayType}
-                rowsLength={rows.length}
-              />
-          ))}
+          {rows.map((row, i) => {
+            const nextRow = rows[i + 1];
+            return (
+              <Fragment key={row.date}>
+                <RoutingRowWithMenu
+                  row={row}
+                  nextRow={nextRow}
+                  rowIndex={i}
+                  tourId={tourId}
+                  advanceByDate={advanceByDate}
+                  updateRow={updateRow}
+                  onDeleteRow={onDeleteRow}
+                  primaryTransit={primaryTransit}
+                  customDayTypes={customDayTypes}
+                  onAddCustomDayType={onAddCustomDayType}
+                  rowsLength={rows.length}
+                />
+                {nextRow && (
+                  <tr className="border-b border-lp-border bg-lp-bg-secondary/50">
+                    <td colSpan={7} className="px-4 py-1.5 align-middle">
+                      <TravelBox
+                        row={row}
+                        nextRow={nextRow}
+                        primaryTransit={primaryTransit}
+                        transportToNext={row.transport_to_next ?? 'default'}
+                      />
+                    </td>
+                  </tr>
+                )}
+              </Fragment>
+            );
+          })}
         </tbody>
       </table>
     </div>
@@ -325,22 +302,16 @@ function RoutingRowWithMenu({
 
   return (
     <>
-      <tr data-routing-date={row.date} className="border-b border-lp-border last:border-0 hover:bg-lp-surface-hover animate-slide-up transition-colors duration-150" style={{ animationDelay: `${rowIndex * 30}ms` }}>
-        <td className="px-4 py-2.5 font-medium text-lp-text">
-          {parseRoutingDate(row.date).toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short' })}
+      <tr data-routing-date={row.date} className="relative border-b border-lp-border last:border-0 hover:bg-lp-surface-hover animate-slide-up transition-colors duration-150" style={{ animationDelay: `${rowIndex * 30}ms` }}>
+        <td className="px-4 py-2.5 whitespace-nowrap text-sm font-medium text-lp-text">
+          {formatRoutingDateShort(row.date)}
         </td>
-        <td className="px-4 py-2.5 pl-5">
-          <div className="flex items-center gap-0">
-            <DayTypeCombobox
-              value={row.day_type}
-              onChange={(v) => updateRow(rowIndex, { day_type: v })}
-              customTypes={customDayTypes}
-              onAddCustomType={onAddCustomDayType}
-              placeholder="Day type"
-              className="min-w-[140px]"
-            />
-            <AdvanceDot tourId={tourId} row={row} advanceByDate={advanceByDate} />
-          </div>
+        <td className="px-4 py-2.5">
+          <DayTypePills
+            value={row.day_type ?? ''}
+            onChange={(v) => updateRow(rowIndex, { day_type: v })}
+            customTypes={customDayTypes}
+          />
         </td>
         <td className="px-4 py-2.5">
           <VenueAutocomplete
@@ -381,10 +352,7 @@ function RoutingRowWithMenu({
         </td>
         <td className="px-4 py-2.5">
           {nextRow ? (
-            <TravelCell
-              row={row}
-              nextRow={nextRow}
-              primaryTransit={primaryTransit}
+            <TransportPills
               transportToNext={row.transport_to_next ?? 'default'}
               onSelectMode={(mode) => updateRow(rowIndex, { transport_to_next: mode })}
             />

@@ -10,12 +10,14 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ChevronDown, Info } from 'lucide-react';
+import { Info } from 'lucide-react';
 import type { Artist } from '@/types';
 import type { Continent } from '@/types';
 import { ArtistNewBlock, ArtistLogoField, type NewArtistPayload } from '@/components/artists/ArtistNewBlock';
 import { ArtistPreviewCard } from '@/components/artists/ArtistPreviewCard';
 import { SlidingToggle } from '@/components/ui/SlidingToggle';
+import { StyledSelect } from '@/components/ui/StyledSelect';
+import { cn } from '@/lib/utils';
 
 const CONTINENTS: { value: Continent; label: string }[] = [
   { value: 'GLOBAL', label: 'Global' },
@@ -53,7 +55,7 @@ export function TourWizard({ initialTourId }: TourWizardProps) {
   const [name, setName] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  const [continent, setContinent] = useState<Continent>('UK');
+  const [continents, setContinents] = useState<Continent[]>(['UK']);
   const [currencyInfoOpen, setCurrencyInfoOpen] = useState(false);
   const currencyInfoRef = useRef<HTMLDivElement>(null);
 
@@ -84,7 +86,8 @@ export function TourWizard({ initialTourId }: TourWizardProps) {
         setName(tour.name ?? '');
         setStartDate(tour.start_date ?? '');
         setEndDate(tour.end_date ?? '');
-        setContinent((tour.continent as Continent) ?? 'UK');
+        const c = tour.continent;
+        setContinents(typeof c === 'string' && c ? c.split(',').filter(Boolean) as Continent[] : ['UK']);
         setCurrency(tour.currency ?? 'GBP');
         setPrincipalCount(String(tour.principal_count ?? 0));
         setBandCount(String(tour.band_count ?? 0));
@@ -189,7 +192,7 @@ export function TourWizard({ initialTourId }: TourWizardProps) {
             name: name.trim(),
             start_date: startDate,
             end_date: endDate,
-            continent,
+            continent: continents.length ? continents.join(',') : 'UK',
             currency,
             principal_count: parseInt(principalCount, 10) || 0,
             band_count: parseInt(bandCount, 10) || 0,
@@ -211,7 +214,7 @@ export function TourWizard({ initialTourId }: TourWizardProps) {
             name: name.trim(),
             start_date: startDate,
             end_date: endDate,
-            continent,
+            continent: continents.length ? continents.join(',') : 'UK',
             currency,
             principal_count: parseInt(principalCount, 10) || 0,
             band_count: parseInt(bandCount, 10) || 0,
@@ -256,23 +259,14 @@ export function TourWizard({ initialTourId }: TourWizardProps) {
 
         {artistChoice === 'existing' && (
           <div className="space-y-4">
-            <div className="relative">
-              <select
-                value={artistId}
-                onChange={(e) => { setArtistId(e.target.value); setErrors((prev) => ({ ...prev, artist: '' })); }}
-                className={`w-full appearance-none rounded-xl border bg-lp-surface px-4 py-3 pr-11 text-lp-text focus:outline-none focus:ring-2 focus:ring-lp-orange/20 ${errors.artist ? 'border-red-500 focus:border-red-500' : 'border-lp-border focus:border-lp-orange'}`}
-                required
-                disabled={loadingArtists}
-              >
-                <option value="">Select an artist</option>
-                {artists.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.name}
-                  </option>
-                ))}
-              </select>
-              <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-lp-text-tertiary" />
-            </div>
+            <StyledSelect
+              value={artistId}
+              onChange={(v) => { setArtistId(v); setErrors((prev) => ({ ...prev, artist: '' })); }}
+              options={artists.map((a) => ({ value: a.id, label: a.name ?? '—' }))}
+              placeholder="Select an artist"
+              disabled={loadingArtists}
+              error={!!errors.artist}
+            />
             {errors.artist && <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.artist}</p>}
             {artistId && (() => {
               const selected = artists.find((a) => a.id === artistId);
@@ -345,15 +339,30 @@ export function TourWizard({ initialTourId }: TourWizardProps) {
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-lp-text-tertiary">Continent</label>
-            <select
-              value={continent}
-              onChange={(e) => setContinent(e.target.value as Continent)}
-              className="h-11 w-full rounded-lg border border-lp-border bg-lp-surface/50 px-3.5 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-2 focus:ring-lp-orange/20"
-            >
-              {CONTINENTS.map((c) => (
-                <option key={c.value} value={c.value}>{c.label}</option>
-              ))}
-            </select>
+            <div className="flex flex-wrap gap-2">
+              {CONTINENTS.map((c) => {
+                const selected = continents.includes(c.value);
+                return (
+                  <button
+                    key={c.value}
+                    type="button"
+                    onClick={() => {
+                      setContinents((prev) =>
+                        selected ? prev.filter((x) => x !== c.value) : [...prev, c.value]
+                      );
+                    }}
+                    className={cn(
+                      'rounded-full px-3 py-1.5 text-sm font-medium transition-colors',
+                      selected
+                        ? 'bg-lp-orange text-white hover:bg-lp-orange-hover'
+                        : 'border border-lp-border bg-lp-surface-hover text-lp-text-secondary hover:bg-lp-surface hover:text-lp-text'
+                    )}
+                  >
+                    {c.label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
           <div>
             <label className="mb-1.5 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-lp-text-tertiary">
@@ -377,15 +386,13 @@ export function TourWizard({ initialTourId }: TourWizardProps) {
                 )}
               </span>
             </label>
-            <select
+            <StyledSelect
               value={currency}
-              onChange={(e) => { setCurrency(e.target.value); setErrors((prev) => ({ ...prev, currency: '' })); }}
-              className={`h-11 w-full rounded-lg border bg-lp-surface/50 px-3.5 text-sm text-lp-text focus:outline-none focus:ring-2 focus:ring-lp-orange/20 ${errors.currency ? 'border-red-500 focus:border-red-500' : 'border-lp-border focus:border-lp-orange'}`}
-            >
-              {CURRENCIES.map((c) => (
-                <option key={c.value} value={c.value}>{c.label}</option>
-              ))}
-            </select>
+              onChange={(v) => { setCurrency(v); setErrors((prev) => ({ ...prev, currency: '' })); }}
+              options={CURRENCIES.map((c) => ({ value: c.value, label: c.label }))}
+              placeholder="Select currency"
+              error={!!errors.currency}
+            />
             {errors.currency && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{errors.currency}</p>}
           </div>
         </div>

@@ -341,9 +341,14 @@ function ShowRow({
   const sectionCount = item.advance?.sections?.length ?? 0;
   const sectionStatuses = item.advance?.section_statuses ?? {};
   const completeCount = item.advance?.sections?.reduce((n, sec) => {
-    const key = sec.template_id ?? sec.label;
+    const key = (sec as { template_id?: string }).template_id ?? (sec as { label?: string }).label;
     return n + (sectionStatuses[key]?.status === 'complete' ? 1 : 0);
   }, 0) ?? 0;
+  const inProgressCount = item.advance?.sections?.reduce((n, sec) => {
+    const key = (sec as { template_id?: string }).template_id ?? (sec as { label?: string }).label;
+    return n + (sectionStatuses[key]?.status === 'in_progress' ? 1 : 0);
+  }, 0) ?? 0;
+  const notStartedCount = Math.max(0, sectionCount - completeCount - inProgressCount);
   const statusInfo = hasAdvance ? getAdvanceStatusInfo(item.advance!.status) : getAdvanceStatusInfo('not_started');
   const isComplete = item.advance?.status === 'complete';
   const rowLabel = [dateLabel, item.venue_name || item.city || '—'].filter(Boolean).join(' — ') || 'this advance';
@@ -445,7 +450,7 @@ function ShowRow({
           ) : (
             <>
               <div className="flex items-center gap-2">
-                <ProgressRing value={completeCount} max={sectionCount} />
+                <ProgressRing complete={completeCount} inProgress={inProgressCount} notStarted={notStartedCount} max={sectionCount} />
                 <span className="text-xs text-lp-text-secondary">
                   {completeCount}/{sectionCount}
                 </span>
@@ -489,14 +494,21 @@ function ShowRow({
   );
 }
 
-function ProgressRing({ value, max }: { value: number; max: number }) {
-  const pct = max > 0 ? value / max : 0;
+function ProgressRing({
+  complete,
+  inProgress,
+  notStarted,
+  max,
+}: { complete: number; inProgress: number; notStarted: number; max: number }) {
   const radius = 14;
   const stroke = 3;
   const circumference = 2 * Math.PI * (radius - stroke / 2);
-  const offset = circumference * (1 - pct);
+  const total = max > 0 ? max : 1;
+  const grayLen = (notStarted / total) * circumference;
+  const blueLen = (inProgress / total) * circumference;
+  const orangeLen = (complete / total) * circumference;
   return (
-    <svg width={28} height={28} className="-rotate-90">
+    <svg width={28} height={28} className="-rotate-90" style={{ transition: 'cubic-bezier(0.4, 0, 0.2, 1)' }}>
       <circle
         cx={14}
         cy={14}
@@ -504,7 +516,10 @@ function ProgressRing({ value, max }: { value: number; max: number }) {
         fill="none"
         stroke="currentColor"
         strokeWidth={stroke}
-        className="text-lp-bg-tertiary"
+        className="text-gray-500/60"
+        strokeDasharray={`${grayLen} ${circumference - grayLen}`}
+        strokeDashoffset={-(blueLen + orangeLen)}
+        strokeLinecap="round"
       />
       <circle
         cx={14}
@@ -513,10 +528,22 @@ function ProgressRing({ value, max }: { value: number; max: number }) {
         fill="none"
         stroke="currentColor"
         strokeWidth={stroke}
-        strokeDasharray={circumference}
-        strokeDashoffset={offset}
+        className="text-blue-500/30"
+        strokeDasharray={`${blueLen} ${circumference - blueLen}`}
+        strokeDashoffset={0}
         strokeLinecap="round"
-        className="text-lp-orange transition-all duration-300"
+      />
+      <circle
+        cx={14}
+        cy={14}
+        r={radius - stroke / 2}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={stroke}
+        className="text-lp-orange"
+        strokeDasharray={`${orangeLen} ${circumference - orangeLen}`}
+        strokeDashoffset={-blueLen}
+        strokeLinecap="round"
       />
     </svg>
   );
@@ -581,7 +608,7 @@ function ApplyTemplateModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/60 p-4"
       onClick={onClose}
     >
       <div

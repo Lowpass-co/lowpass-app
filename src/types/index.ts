@@ -400,3 +400,243 @@ export interface BugReport {
   created_at: string;
   updated_at: string;
 }
+
+// ---- Budget System ----
+
+export type BudgetCategory =
+  | 'hotels' | 'flights'
+  | 'transport_bus' | 'transport_taxis' | 'transport_fuel'
+  | 'transport_parking' | 'transport_misc' | 'transport_agent'
+  | 'prod_audio' | 'prod_lighting' | 'prod_freight'
+  | 'prod_equipment' | 'prod_programming' | 'prod_set_wardrobe' | 'prod_misc';
+
+export type PaymentMethod = 'card' | 'cash' | 'bank_transfer' | 'company_card';
+export type SettlementStatus = 'pending' | 'day_of_complete' | 'reconciled';
+export type PersonType = 'crew' | 'band' | 'principal';
+export type RoomType = 'SGL' | 'DBL (A)' | 'DBL (B)' | 'DBL (C)' | 'DBL (D)' | '-' | 'N/A';
+export type RateType = 'day_rate' | 'split_rate';
+export type DayStatus = 'show' | 'off_travel' | 'rehearsal' | 'no_tour';
+export type CommissionBasis = 'gross' | 'net' | 'gross_merch' | 'net_merch' | 'gross_minus_tax';
+
+export interface BudgetSettings {
+  id: string;
+  tour_id: string;
+  workspace_id: string;
+  currency_home: string;
+  currency_tour: string;
+  exchange_rate: number | null;
+  exchange_rate_updated_at: string | null;
+  insurance_pct: number;
+  contingency_pct: number;
+  accountancy_pct: number;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BudgetCommission {
+  id: string;
+  tour_id: string;
+  workspace_id: string;
+  label: string;
+  percentage: number;
+  basis: CommissionBasis;
+  notes: string | null;
+  order_index: number;
+  created_at: string;
+}
+
+export interface BudgetIncome {
+  id: string;
+  routing_id: string;
+  workspace_id: string;
+  pre_tax_guarantee: number;
+  withholding_pct: number;
+  post_tax_guarantee: number;
+  pre_tax_overage: number;
+  post_tax_overage: number;
+  merch_income: number;
+  vip_income: number;
+  drop_count: number | null;
+  actual_guarantee: number | null;
+  actual_overage: number | null;
+  actual_merch: number | null;
+  actual_vip: number | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  // Joined
+  routing?: { date: string; venue_name: string; city: string; day_type: string };
+}
+
+export interface BudgetLineItem {
+  id: string;
+  tour_id: string;
+  workspace_id: string;
+  category: BudgetCategory;
+  label: string;
+  quantity: number;
+  proposed_cost: number;
+  actual_cost: number;
+  currency: string | null;
+  receipt_id: string | null;
+  routing_id: string | null;
+  notes: string | null;
+  order_index: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PersonnelRate {
+  id: string;
+  tour_id: string;
+  workspace_id: string;
+  person_name: string;
+  role: string | null;
+  person_type: PersonType;
+  rate_type: RateType;
+  show_rate: number;
+  off_rate: number;
+  rehearsal_rate: number;
+  per_diem: number;
+  advance_fee: number;
+  commission: number;
+  commission_note: string | null;
+  base_rate_note: string | null;
+  order_index: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PayrollEntry {
+  id: string;
+  tour_id: string;
+  workspace_id: string;
+  personnel_id: string;
+  week_start: string;
+  day_statuses: Record<string, DayStatus>;
+  advance_fee: number;
+  total_fee: number;
+  total_per_diem: number;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  // Joined
+  personnel?: PersonnelRate;
+}
+
+export interface RoomingGridEntry {
+  id: string;
+  tour_id: string;
+  workspace_id: string;
+  person_name: string;
+  role: string | null;
+  routing_id: string;
+  room_type: RoomType;
+  created_at: string;
+  // Joined
+  routing?: { date: string; venue_name: string; city: string };
+}
+
+export interface HotelBooking {
+  id: string;
+  tour_id: string;
+  workspace_id: string;
+  hotel_name: string;
+  address: string | null;
+  phone: string | null;
+  cancellation_policy: string | null;
+  distance_to_venue: string | null;
+  distance_to_airport: string | null;
+  city: string | null;
+  check_in_date: string | null;
+  check_out_date: string | null;
+  created_at: string;
+  updated_at: string;
+  // Joined
+  room_assignments?: HotelRoomAssignment[];
+}
+
+export interface HotelRoomAssignment {
+  id: string;
+  hotel_booking_id: string;
+  workspace_id: string;
+  person_name: string;
+  check_in: string | null;
+  check_out: string | null;
+  nights: number;
+  room_type: string | null;
+  room_number: string | null;
+  confirmation: string | null;
+  rate_per_night: number;
+  notes: string | null;
+  created_at: string;
+}
+
+export interface FlightBooking {
+  id: string;
+  tour_id: string;
+  workspace_id: string;
+  person_name: string;
+  role: string | null;
+  origin_code: string | null;
+  destination_code: string | null;
+  proposed_cost: number;
+  actual_cost: number;
+  airline: string | null;
+  flight_number: string | null;
+  confirmation: string | null;
+  departure_date: string | null;
+  departure_time: string | null;
+  leg_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ExpenseReceipt {
+  id: string;
+  tour_id: string;
+  workspace_id: string;
+  receipt_number: string;
+  date: string | null;
+  vendor: string | null;
+  category: string | null;
+  description: string | null;
+  payment_method: PaymentMethod;
+  cost_tour_currency: number;
+  cost_home_currency: number;
+  receipt_file_url: string | null;
+  in_budget: boolean;
+  linked_line_item_id: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Settlement {
+  id: string;
+  routing_id: string;
+  workspace_id: string;
+  status: SettlementStatus;
+  day_of_guarantee: number | null;
+  day_of_overage: number | null;
+  day_of_merch: number | null;
+  day_of_deductions: number | null;
+  day_of_net: number | null;
+  day_of_signed_by: string | null;
+  day_of_notes: string | null;
+  day_of_file_url: string | null;
+  reconciled_guarantee: number | null;
+  reconciled_overage: number | null;
+  reconciled_merch: number | null;
+  reconciled_deductions: number | null;
+  reconciled_net: number | null;
+  reconciled_notes: string | null;
+  reconciled_at: string | null;
+  deal_memo_text: string | null;
+  deal_memo_file_url: string | null;
+  created_at: string;
+  updated_at: string;
+  // Joined
+  routing?: { date: string; venue_name: string; city: string };
+}

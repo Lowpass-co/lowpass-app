@@ -86,21 +86,26 @@ export async function DELETE(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  const { id } = await params;
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('workspace_id')
+    .eq('id', user.id)
+    .single();
 
-  const { count, error: countErr } = await supabase
-    .from('tours')
-    .select('*', { count: 'exact', head: true })
-    .eq('artist_id', id);
-
-  if (countErr) {
-    return NextResponse.json({ error: countErr.message }, { status: 500 });
+  if (!profile?.workspace_id) {
+    return NextResponse.json({ error: 'No workspace' }, { status: 403 });
   }
-  if (count != null && count > 0) {
-    return NextResponse.json(
-      { error: 'Cannot delete artist while tours are linked. Remove or reassign tours first.' },
-      { status: 409 }
-    );
+
+  const { id } = await params;
+  const { data: artist } = await supabase
+    .from('artists')
+    .select('id')
+    .eq('id', id)
+    .eq('workspace_id', profile.workspace_id)
+    .single();
+
+  if (!artist) {
+    return NextResponse.json({ error: 'Artist not found' }, { status: 404 });
   }
 
   const { error } = await supabase.from('artists').delete().eq('id', id);

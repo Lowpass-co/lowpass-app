@@ -1,26 +1,17 @@
 /* ============================================
    LOWPASS — Tours List Page
 
-   Kanban-style cards for all tours in workspace.
-   Pagination via URL ?page=1&limit=20.
+   Scrollable grid of all tours in workspace.
    ============================================ */
 
 import { Plus } from 'lucide-react';
 import Link from 'next/link';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { TourCard } from '@/components/tours/TourCard';
-import { ToursPagination } from '@/components/tours/ToursPagination';
 
-const DEFAULT_LIMIT = 20;
+const TOURS_LIMIT = 200;
 
-export default async function ToursPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ page?: string }>;
-}) {
-  const params = await searchParams;
-  const page = Math.max(1, parseInt(params?.page ?? '1', 10) || 1);
-
+export default async function ToursPage() {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
@@ -45,23 +36,23 @@ export default async function ToursPage({
     );
   }
 
-  const from = (page - 1) * DEFAULT_LIMIT;
-  const to = from + DEFAULT_LIMIT - 1;
-
-  const { data: tours, error, count } = await supabase
+  const { data: tours, error } = await supabase
     .from('tours')
-    .select('*, artist:artists(*)', { count: 'exact' })
+    .select('*, artist:artists(*)')
     .eq('workspace_id', profile.workspace_id)
     .order('start_date', { ascending: false })
-    .range(from, to);
+    .limit(TOURS_LIMIT);
 
-  const total = count ?? 0;
+  const total = tours?.length ?? 0;
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-lp-text">Tours</h1>
+          <div className="flex items-baseline gap-2">
+            <span className="text-2xl font-bold text-lp-text">{total}</span>
+            <span className="text-lp-text-secondary">Tours</span>
+          </div>
           <p className="mt-1 text-sm text-lp-text-secondary">
             Manage your tours, routing, and advance progress.
           </p>
@@ -96,14 +87,11 @@ export default async function ToursPage({
           </div>
         </div>
       ) : (
-        <>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {tours.map((tour, index) => (
-              <TourCard key={tour.id} tour={tour} index={index} />
-            ))}
-          </div>
-          <ToursPagination total={total} page={page} limit={DEFAULT_LIMIT} />
-        </>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {tours.map((tour, index) => (
+            <TourCard key={tour.id} tour={tour} index={index} />
+          ))}
+        </div>
       )}
     </div>
   );

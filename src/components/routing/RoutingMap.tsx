@@ -38,6 +38,26 @@ const ROUTE_COLORS = {
 
 export type PrimaryTransit = 'bus_van' | 'bus_trailer' | 'car' | 'flight';
 
+type TransportToNext = 'default' | 'drive' | 'fly';
+
+function transportIconEmoji(transportToNext: TransportToNext, primaryTransit: PrimaryTransit): string {
+  if (transportToNext === 'fly') return '✈️';
+  if (transportToNext === 'drive') return '🚗';
+  if (primaryTransit === 'flight') return '✈️';
+  if (primaryTransit === 'car') return '🚗';
+  return '🚐';
+}
+
+function createTransportDivIcon(transportToNext: TransportToNext, primaryTransit: PrimaryTransit): L.DivIcon {
+  const emoji = transportIconEmoji(transportToNext, primaryTransit);
+  return L.divIcon({
+    html: `<div style="width:24px;height:24px;border-radius:9999px;background:white;box-shadow:0 1px 3px rgba(0,0,0,0.2);display:flex;align-items:center;justify-content:center;font-size:12px;line-height:1">${emoji}</div>`,
+    iconSize: [24, 24],
+    iconAnchor: [12, 12],
+    className: 'transport-midpoint-icon',
+  });
+}
+
 interface RoutingMapProps {
   rows: RoutingRow[];
   primaryTransit: PrimaryTransit;
@@ -260,10 +280,12 @@ export function RoutingMap({ rows, primaryTransit, onSelectDate }: RoutingMapPro
             if (!Number.isFinite(lat1) || !Number.isFinite(lng1) || !Number.isFinite(lat2) || !Number.isFinite(lng2)) {
               return null;
             }
-            const mode = p.row.transport_to_next ?? 'default';
+            const mode = (p.row.transport_to_next ?? 'default') as TransportToNext;
             const color = ROUTE_COLORS[mode] ?? ROUTE_COLORS.default;
             const isFly = mode === 'fly';
             const arc = greatCirclePoints(lat1, lng1, lat2, lng2, 20);
+            const midIdx = Math.floor(arc.length / 2);
+            const midpoint = arc[midIdx];
             const isHover = hoverLeg === p.i;
             const legKey = `leg-${p.row.date}-${next.row.date}`;
 
@@ -288,6 +310,13 @@ export function RoutingMap({ rows, primaryTransit, onSelectDate }: RoutingMapPro
                     dashArray: isFly ? '8,8' : undefined,
                   }}
                 />
+                {midpoint && (
+                  <Marker
+                    position={midpoint}
+                    icon={createTransportDivIcon(mode, primaryTransit)}
+                    zIndexOffset={100}
+                  />
+                )}
               </Fragment>
             );
           })}

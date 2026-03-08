@@ -11,6 +11,7 @@ export function DeleteConfirmationModal({
   onClose,
   onConfirm,
   onDeleted,
+  description,
 }: {
   open: boolean;
   itemName: string;
@@ -18,6 +19,8 @@ export function DeleteConfirmationModal({
   onConfirm: () => Promise<void>;
   /** Called after successful delete (before closing). Use to apply red fade-out on the item. */
   onDeleted?: () => void;
+  /** Optional extra line (e.g. "This will not delete tours associated with this artist.") */
+  description?: string;
 }) {
   const [confirmInput, setConfirmInput] = useState('');
   const [deleting, setDeleting] = useState(false);
@@ -75,6 +78,7 @@ export function DeleteConfirmationModal({
       >
         <h3 className="text-lg font-semibold text-lp-text">Delete {itemName}?</h3>
         <p className="mt-2 text-sm text-lp-text-secondary">This action cannot be undone.</p>
+        {description && <p className="mt-1 text-sm text-lp-text-secondary">{description}</p>}
         <p className="mt-3 text-sm font-medium text-lp-text">Type DELETE to confirm</p>
         <input
           ref={inputRef}

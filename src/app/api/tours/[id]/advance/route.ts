@@ -79,7 +79,10 @@ export async function GET(
 
   const routing = all
     ? routingRows ?? []
-    : (routingRows ?? []).filter((r) => SHOW_DAY_TYPES.includes(r.day_type ?? ''));
+    : (routingRows ?? []).filter((r) => {
+        const types = (r.day_type ?? '').split(',').map((s: string) => s.trim()).filter(Boolean);
+        return SHOW_DAY_TYPES.some((t) => types.includes(t));
+      });
 
   if (routing.length === 0) {
     return NextResponse.json({ dates: [] });
@@ -191,7 +194,7 @@ export async function POST(
     return NextResponse.json({
       template: {
         id: inserted.id,
-        name: inserted.template_label ?? inserted.name,
+        name: inserted.template_label,
         sections: inserted.sections ?? [],
       },
     });

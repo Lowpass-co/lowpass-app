@@ -108,7 +108,7 @@ export async function POST(
 
   return NextResponse.json({
     id: created.id,
-    name: created.template_label ?? created.name,
+    name: created.template_label,
     sections: created.sections ?? [],
   });
 }

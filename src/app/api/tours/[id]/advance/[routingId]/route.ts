@@ -18,7 +18,7 @@ async function ensureAuth() {
 async function ensureTourAccess(supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>, tourId: string) {
   const { data: tour } = await supabase
     .from('tours')
-    .select('id, currency, default_advance_template_id')
+    .select('id, currency, default_advance_template_id, principal_count, band_count, crew_count')
     .eq('id', tourId)
     .single();
   return tour ?? null;
@@ -52,7 +52,7 @@ export async function GET(
 
   const { data: instance } = await supabase
     .from('advance_instances')
-    .select('id, status, section_statuses, data, form_config_id, flags')
+    .select('id, status, section_statuses, data, form_config_id, flags, last_updated_at, last_updated_by_id')
     .eq('routing_id', routingId)
     .maybeSingle();
 
@@ -75,6 +75,9 @@ export async function GET(
     data: Record<string, Record<string, unknown>>;
     sections: { template_id: string; label: string; fields: unknown[]; order: number }[];
     flags: AdvanceFlagItem[];
+    last_updated_at?: string | null;
+    last_updated_by_id?: string | null;
+    last_updated_by_name?: string | null;
   } | null = null;
 
   if (instance) {
@@ -84,6 +87,13 @@ export async function GET(
       .eq('id', instance.form_config_id)
       .single();
 
+    const inst = instance as { last_updated_by_id?: string | null };
+    let last_updated_by_name: string | null = null;
+    if (inst.last_updated_by_id) {
+      const { data: profile } = await supabase.from('profiles').select('name').eq('id', inst.last_updated_by_id).single();
+      last_updated_by_name = (profile as { name?: string | null })?.name ?? null;
+    }
+
     advance = {
       instance_id: instance.id,
       status: instance.status ?? 'not_started',
@@ -91,6 +101,9 @@ export async function GET(
       data: (instance.data as Record<string, Record<string, unknown>>) ?? {},
       sections: (config?.sections as { template_id: string; label: string; fields: unknown[]; order: number }[]) ?? [],
       flags: (instance.flags as AdvanceFlagItem[]) ?? [],
+      last_updated_at: (instance as { last_updated_at?: string | null }).last_updated_at ?? null,
+      last_updated_by_id: inst.last_updated_by_id ?? null,
+      last_updated_by_name,
     };
 
     // Pre-fill Venue Info section from routing (venue_name, address, venue_website, venue_capacity)
@@ -133,6 +146,9 @@ export async function GET(
     tour: {
       currency: (tour as { currency?: string }).currency ?? 'GBP',
       default_advance_template_id: (tour as { default_advance_template_id?: string }).default_advance_template_id ?? null,
+      principal_count: (tour as { principal_count?: number }).principal_count ?? 0,
+      band_count: (tour as { band_count?: number }).band_count ?? 0,
+      crew_count: (tour as { crew_count?: number }).crew_count ?? 0,
     },
     advance,
   });
@@ -283,7 +299,13 @@ export async function PATCH(
     return NextResponse.json({ error: updateErr.message }, { status: 500 });
   }
 
-  return NextResponse.json(updated);
+  const out = updated as { last_updated_by_id?: string | null; last_updated_at?: string | null };
+  let last_updated_by_name: string | null = null;
+  if (out.last_updated_by_id) {
+    const { data: profile } = await supabase.from('profiles').select('name').eq('id', out.last_updated_by_id).single();
+    last_updated_by_name = (profile as { name?: string | null })?.name ?? null;
+  }
+  return NextResponse.json({ ...out, last_updated_by_name });
 }
 
 export async function DELETE(

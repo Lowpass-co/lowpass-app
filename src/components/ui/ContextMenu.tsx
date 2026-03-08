@@ -55,7 +55,7 @@ export function ContextMenu({
       {open && (
         <div
           className={cn(
-            'absolute z-50 mt-1 min-w-[180px] overflow-hidden rounded-xl border border-lp-border bg-lp-surface py-1 shadow-xl animate-scale-in',
+            'absolute z-[200] mt-1 min-w-[180px] overflow-hidden rounded-xl border border-lp-border bg-lp-surface py-1 shadow-xl animate-scale-in',
             align === 'right' ? 'right-0' : 'left-0'
           )}
         >
@@ -77,7 +77,7 @@ export function ContextMenu({
                 className={cn(
                   'flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed',
                   isDanger
-                    ? 'text-red-500 hover:bg-red-500/10'
+                    ? 'text-red-500 hover:bg-red-500/10 tour-card-delete-option'
                     : 'text-lp-text hover:bg-lp-surface-hover'
                 )}
               >

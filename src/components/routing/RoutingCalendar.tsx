@@ -8,7 +8,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { getDayTypeColor, getDayTypeLabel, parseRoutingDate } from '@/lib/utils';
+import { getDayTypeColor, getDayTypeLabel, parseRoutingDate, firstDayType, dayTypesInclude } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 import { DayTypeCombobox } from './DayTypeCombobox';
 import { VenueAutocomplete } from './VenueAutocomplete';
@@ -142,9 +142,9 @@ export function RoutingCalendar({
 
             const monthDates = weeks.flat().filter((d): d is string => d != null && allDates.includes(d));
             const monthRows = monthDates.map((d) => byDate.get(d)).filter(Boolean) as RoutingRow[];
-            const showCount = monthRows.filter((r) => r.day_type === 'show').length;
-            const offCount = monthRows.filter((r) => r.day_type === 'off').length;
-            const travelCount = monthRows.filter((r) => r.day_type === 'travel').length;
+            const showCount = monthRows.filter((r) => dayTypesInclude(r.day_type ?? '', 'show')).length;
+            const offCount = monthRows.filter((r) => dayTypesInclude(r.day_type ?? '', 'off')).length;
+            const travelCount = monthRows.filter((r) => dayTypesInclude(r.day_type ?? '', 'travel')).length;
             const countParts = [
               showCount > 0 && `${showCount} show${showCount !== 1 ? 's' : ''}`,
               offCount > 0 && `${offCount} off`,
@@ -189,7 +189,8 @@ export function RoutingCalendar({
                       const row = byDate.get(dateStr);
                       const inRange = allDates.includes(dateStr);
                       const assigned = row && isAssigned(row);
-                      const colors = row && assigned && row.day_type ? getDayTypeColor(row.day_type) : null;
+                      const primaryType = row ? firstDayType(row.day_type ?? '') : '';
+                      const colors = row && assigned && primaryType ? getDayTypeColor(primaryType) : null;
                       const isToday = dateStr === todayStr();
                       const isFocused = focusedDate === dateStr;
                       return (
@@ -224,7 +225,7 @@ export function RoutingCalendar({
                                   colors?.text
                                 )}
                               >
-                                {getDayTypeLabel(row.day_type).replace(/\s*Day$/, '').replace(/^Day\s+/, '').replace(/\s*performance$/i, '')}
+                                {getDayTypeLabel(primaryType).replace(/\s*Day$/, '').replace(/^Day\s+/, '').replace(/\s*performance$/i, '')}
                               </span>
                               {(row.venue_name || row.city) && (
                                 <div className="truncate text-[10px] text-lp-text-secondary">
@@ -246,7 +247,7 @@ export function RoutingCalendar({
 
       {editingDate != null && editingRow && rowIndex >= 0 && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3"
+          className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/40 p-3"
           onClick={() => setEditingDate(null)}
         >
           <div

@@ -156,7 +156,7 @@ export function CopyAdvanceModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 transition-opacity duration-150"
+      className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/60 p-4 transition-opacity duration-150"
       onClick={onClose}
     >
       <div

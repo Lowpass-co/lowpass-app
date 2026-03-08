@@ -7,7 +7,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
-import { formatDate } from '@/lib/utils';
+import { formatTourDateRange } from '@/lib/utils';
 import { RoutingEditor } from '@/components/routing/RoutingEditor';
 import { TourDetailToasts } from './TourDetailToasts';
 import { TourAdvanceSummary } from './TourAdvanceSummary';
@@ -67,10 +67,10 @@ export default async function TourDetailPage({
       <div className="rounded-xl border border-lp-border bg-lp-surface p-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <p className="text-sm font-medium text-lp-text-tertiary">{artistName}</p>
-            <h1 className="text-2xl font-bold text-lp-text">{tour.name}</h1>
+            <h1 className="text-xl font-bold text-lp-text">{artistName}</h1>
+            <p className="text-lg text-lp-text-secondary">{tour.name}</p>
             <p className="mt-1 text-sm text-lp-text-secondary">
-              {formatDate(tour.start_date)} – {formatDate(tour.end_date)}
+              {formatTourDateRange(tour.start_date, tour.end_date)}
             </p>
             <p className="mt-1 text-xs text-lp-text-tertiary">
               {tour.principal_count ?? 0} principals · {tour.band_count} band · {tour.crew_count} crew · {tour.continent} · {tour.currency}

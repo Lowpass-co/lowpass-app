@@ -18,6 +18,7 @@ import {
   X,
   Save,
   Copy,
+  Download,
   LayoutTemplate,
   MessageSquarePlus,
   Flag,
@@ -133,7 +134,7 @@ const ICON_MAP: Record<string, React.ComponentType<{ className?: string; size?: 
   bookmark: Bookmark,
   tag: Tag,
   hash: Hash,
-  link: Link,
+  link: LinkIcon,
   paperclip: Paperclip,
   folder: Folder,
 };
@@ -235,7 +236,38 @@ export type ContactRow = {
   notes?: string;
 };
 
+export type AdvanceDocument = {
+  id: string;
+  url: string;
+  filename: string;
+  content_type?: string;
+  uploaded_at: string;
+  uploaded_by?: string;
+  visible_to?: string[];
+};
+
 const KEY_CONTACTS_LABEL = 'Key Contacts';
+const IMPORTANT_DOCUMENTS_KEY = 'important_documents';
+const RIDER_LABEL = 'Rider';
+const FLIGHTS_LABEL = 'Flights';
+const SETTLEMENT_LABEL = 'Settlement';
+const PARKING_ACCESS_LABEL = 'Parking & Access';
+
+/** Section-specific contact role presets. Plus "Custom Contact" in UI for free text. */
+const SECTION_CONTACT_ROLES: Record<string, string[]> = {
+  'Production': ['Production Manager', 'Stage Manager', 'Head of Audio', 'Head of Lighting', 'Head of Video', 'Backline Tech'],
+  'Catering': ['Catering Manager', 'Dietary Contact'],
+  'Transport': ['Transport Coordinator', 'Driver', 'Flight Coordinator'],
+  'Venue': ['Venue Manager', 'Box Office', 'Security Chief', 'Promoter Rep'],
+  'Hospitality': ['Hotel Contact', 'Runner'],
+};
+const DEFAULT_CONTACT_ROLES = ['Promoter', 'Venue Rep', 'Production Manager', 'Tour Manager', 'Security', 'Hospitality', 'Transport', 'Other'];
+
+function getContactRolesForSection(sectionLabel: string): string[] {
+  const roles = SECTION_CONTACT_ROLES[sectionLabel];
+  if (roles) return [...roles, 'Custom Contact'];
+  return [...DEFAULT_CONTACT_ROLES, 'Custom Contact'];
+}
 
 const CONTACT_ROLES = [
   'Promoter',
@@ -277,7 +309,7 @@ export type AdvanceFlag = {
 
 type PageData = {
   routing: { id: string; date: string; venue_name: string | null; city: string; day_type: string; address?: string | null; venue_website?: string | null; venue_phone?: string | null; venue_capacity?: number | null; latitude?: number | null; longitude?: number | null };
-  tour: { currency: string };
+  tour: { currency: string; principal_count?: number; band_count?: number; crew_count?: number };
   advance: {
     instance_id: string;
     status: string;
@@ -312,6 +344,9 @@ export function AdvanceSectionBuilder({
   const [error, setError] = useState(false);
   const [setupMode, setSetupMode] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [autosaveStatus, setAutosaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const [conflictWarning, setConflictWarning] = useState<string | null>(null);
+  const autosaveRetryRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -372,6 +407,9 @@ export function AdvanceSectionBuilder({
           }
         }}
         showSaveButton={!showSetup && !!data.advance}
+        autosaveStatus={autosaveStatus}
+        conflictWarning={conflictWarning}
+        onAutosaveRetry={() => autosaveRetryRef.current?.()}
       />
       {showSetup ? (
         <SetupMode
@@ -395,10 +433,19 @@ export function AdvanceSectionBuilder({
           routingId={routingId}
           currentUserId={user?.id ?? null}
           currency={data.tour.currency}
+          tourPersonnelCounts={{
+            principal_count: (data.tour as { principal_count?: number }).principal_count ?? 0,
+            band_count: (data.tour as { band_count?: number }).band_count ?? 0,
+            crew_count: (data.tour as { crew_count?: number }).crew_count ?? 0,
+          }}
           venueName={data.routing.venue_name ?? null}
           venueLat={data.routing.latitude ?? undefined}
           venueLng={data.routing.longitude ?? undefined}
           advance={data.advance!}
+          initialLastUpdatedAt={(data.advance as { last_updated_at?: string | null })?.last_updated_at ?? null}
+          onAutosaveStatusChange={setAutosaveStatus}
+          onConflictWarning={setConflictWarning}
+          autosaveRetryRef={autosaveRetryRef}
           onUpdate={(patch) => {
             setData((prev) => {
               if (!prev?.advance) return prev;
@@ -439,6 +486,9 @@ function Header({
   saving,
   onSave,
   showSaveButton,
+  autosaveStatus,
+  conflictWarning,
+  onAutosaveRetry,
 }: {
   tourId: string;
   routing: PageData['routing'];
@@ -446,6 +496,9 @@ function Header({
   saving: boolean;
   onSave: () => void;
   showSaveButton?: boolean;
+  autosaveStatus?: 'idle' | 'saving' | 'saved' | 'error';
+  conflictWarning?: string | null;
+  onAutosaveRetry?: () => void;
 }) {
   const dateLabel = parseRoutingDate(routing.date).toLocaleDateString('en-GB', {
     weekday: 'short',
@@ -481,17 +534,43 @@ function Header({
             {statusInfo.label}
           </span>
         </div>
-        {showSaveButton && (
-          <button
-            type="button"
-            onClick={onSave}
-            disabled={saving}
-            className="btn-transition btn-primary-press flex items-center gap-2 rounded-xl bg-lp-orange px-4 py-2 text-sm font-medium text-white hover:bg-lp-orange-hover disabled:opacity-50"
-          >
-            {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-            Save
-          </button>
-        )}
+        <div className="flex flex-wrap items-center gap-3">
+          {conflictWarning && (
+            <p className="text-xs text-amber-600 dark:text-amber-400" title={conflictWarning}>
+              {conflictWarning}
+            </p>
+          )}
+          {autosaveStatus === 'saving' && (
+            <span className="flex items-center gap-1.5 text-sm text-lp-text-tertiary">
+              <Loader2 size={14} className="animate-spin" />
+              Saving...
+            </span>
+          )}
+          {autosaveStatus === 'saved' && (
+            <span className="text-sm text-emerald-600 dark:text-emerald-400 transition-opacity duration-300" style={{ transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)' }}>
+              Saved ✓
+            </span>
+          )}
+          {autosaveStatus === 'error' && (
+            <span className="flex items-center gap-2 text-sm text-red-500">
+              Error saving
+              <button type="button" onClick={onAutosaveRetry} className="rounded border border-red-500/50 px-2 py-0.5 text-xs font-medium hover:bg-red-500/10">
+                Retry
+              </button>
+            </span>
+          )}
+          {showSaveButton && (
+            <button
+              type="button"
+              onClick={onSave}
+              disabled={saving}
+              className="btn-transition btn-primary-press flex items-center gap-2 rounded-xl bg-lp-orange px-4 py-2 text-sm font-medium text-white hover:bg-lp-orange-hover disabled:opacity-50"
+            >
+              {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+              Save
+            </button>
+          )}
+        </div>
       </div>
     </>
   );
@@ -602,6 +681,29 @@ function SetupMode({
         return next.map((sec, i) => ({ ...sec, order: i }));
       }
       return [...prev.map((s, i) => ({ ...s, order: i })), { template_id: t.id, label: t.name, fields, order: prev.length }];
+    });
+  }, []);
+
+  const removeAllFields = useCallback((t: ApiTemplate) => {
+    setSections((prev) => {
+      const idx = prev.findIndex((s) => s.template_id === t.id);
+      if (idx < 0) return prev;
+      return prev.filter((_, i) => i !== idx).map((s, i) => ({ ...s, order: i }));
+    });
+  }, []);
+
+  const removeFieldByTemplateAndFieldId = useCallback((templateId: string, fieldId: string) => {
+    setSections((prev) => {
+      const secIdx = prev.findIndex((s) => s.template_id === templateId);
+      if (secIdx < 0) return prev;
+      const sec = prev[secIdx];
+      const fieldIdx = (sec.fields ?? []).findIndex((f) => f.id === fieldId);
+      if (fieldIdx < 0) return prev;
+      const newFields = (sec.fields ?? []).filter((_, i) => i !== fieldIdx);
+      if (newFields.length === 0) {
+        return prev.filter((_, i) => i !== secIdx).map((s, i) => ({ ...s, order: i }));
+      }
+      return prev.map((s, i) => (i === secIdx ? { ...s, fields: newFields } : s)).map((s, i) => ({ ...s, order: i }));
     });
   }, []);
 
@@ -761,76 +863,35 @@ function SetupMode({
                 const fields = t.fields ?? [];
                 return (
                   <li key={t.id} className="rounded-lg border border-lp-border overflow-hidden">
-                    <div className="flex items-center gap-2 bg-lp-bg-secondary px-3 py-2">
-                      <button type="button" onClick={() => setExpandedLibrary((s) => { const n = new Set(s); if (n.has(t.id)) n.delete(t.id); else n.add(t.id); return n; })} className="shrink-0 text-lp-text-tertiary hover:text-lp-text">
-                        {expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                      </button>
+                    <div
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setExpandedLibrary((s) => { const n = new Set(s); if (n.has(t.id)) n.delete(t.id); else n.add(t.id); return n; })}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpandedLibrary((s) => { const n = new Set(s); if (n.has(t.id)) n.delete(t.id); else n.add(t.id); return n; }); } }}
+                      className="flex items-center gap-2 bg-lp-bg-secondary px-3 py-2 cursor-pointer hover:bg-lp-bg-tertiary transition-colors"
+                    >
+                      <span className={cn('shrink-0 text-lp-text-tertiary transition-transform duration-200', expanded && 'rotate-180')}>
+                        <ChevronDown size={16} />
+                      </span>
                       <SectionIcon icon={t.icon} />
                       <span className="flex-1 text-sm font-medium text-lp-text">{t.name}</span>
-                      <button type="button" onClick={() => addAllFields(t)} disabled={fields.length === 0} className="shrink-0 rounded p-1.5 text-lp-text hover:bg-lp-surface-hover disabled:opacity-50" title="Add all questions">
-                        <Plus size={16} />
-                      </button>
-                      {allAdded && <Check size={16} className="shrink-0 text-[#FF4500]" />}
-                    </div>
-                    {expanded && (
-                      <ul className="border-t border-lp-border bg-lp-surface py-1">
-                        {(fields as FieldDef[]).map((f) => {
-                          const added = isFieldAdded(t.id, f.id);
-                          return (
-                            <li key={f.id} className="group">
-                              <button
-                                type="button"
-                                draggable
-                                onDragStart={(e) => { e.dataTransfer.setData('application/json', JSON.stringify({ templateId: t.id, field: f })); e.dataTransfer.effectAllowed = 'copy'; setDragGhost(e, f.label); setDragState({ type: 'field', templateId: t.id, field: f }); }}
-                                onDragEnd={() => setDragState(null)}
-                                onClick={() => { if (!added) { addField(t, f); setLastAddedKey(`${t.id}-${f.id}`); setTimeout(() => setLastAddedKey(null), 200); } }}
-                                className={cn(
-                                  'flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors',
-                                  added ? 'bg-[#FF4500]/10 text-lp-text border-l border-[#FF4500]' : 'hover:bg-lp-surface-hover text-lp-text',
-                                  !added && 'cursor-pointer'
-                                )}
-                              >
-                                <FieldTypeIcon type={f.type} />
-                                <span className="flex-1 truncate">{f.label}</span>
-                                {added && <Check size={14} className="shrink-0 text-[#FF4500]" />}
-                              </button>
-                            </li>
-                          );
-                        })}
-                        <li>
-                          <button type="button" onClick={() => { setCustomFieldContext({ templateId: t.id, templateName: t.name }); setCustomFieldOpen(true); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-lp-text-tertiary hover:bg-lp-surface-hover hover:text-lp-text">
-                            <span className="inline-flex h-6 w-6 items-center justify-center rounded border border-dashed border-lp-border text-xs">+</span>
-                            Custom field
-                          </button>
-                        </li>
-                      </ul>
-                    )}
-                  </li>
-                );
-              })}
-              <li className="pt-2">
-                <p className="mb-1.5 px-1 text-xs font-medium text-lp-text-tertiary">Custom</p>
-                {templates.filter((t) => t.workspace_id).map((t) => {
-                  const expanded = expandedLibrary.has(t.id);
-                  const allAdded = isSectionFullyAdded(t);
-                  const fields = t.fields ?? [];
-                  return (
-                    <li key={t.id} className="rounded-lg border border-lp-border overflow-hidden mb-1">
-                      <div className="flex items-center gap-2 bg-lp-bg-secondary px-3 py-2">
-                        <button type="button" onClick={() => setExpandedLibrary((s) => { const n = new Set(s); if (n.has(t.id)) n.delete(t.id); else n.add(t.id); return n; })} className="shrink-0 text-lp-text-tertiary hover:text-lp-text">
-                          {expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                        </button>
-                        <SectionIcon icon={t.icon} />
-                        <span className="flex-1 text-sm font-medium text-lp-text">{t.name}</span>
-                        <button type="button" onClick={() => addAllFields(t)} disabled={fields.length === 0} className="shrink-0 rounded p-1.5 text-lp-text hover:bg-lp-surface-hover disabled:opacity-50" title="Add all questions">
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); if (allAdded) removeAllFields(t); else addAllFields(t); }}
+                        disabled={fields.length === 0}
+                        className="relative shrink-0 h-7 w-7 rounded p-1.5 text-lp-text hover:bg-lp-surface-hover disabled:opacity-50 flex items-center justify-center"
+                        title={allAdded ? 'Remove all from advance' : 'Add all questions'}
+                      >
+                        <span className={cn('absolute inset-0 flex items-center justify-center transition-all duration-200', allAdded ? 'opacity-0 scale-75' : 'opacity-100 scale-100')}>
                           <Plus size={16} />
-                        </button>
-                        {allAdded && <Check size={16} className="shrink-0 text-[#FF4500]" />}
-                        <button type="button" onClick={(e) => { e.stopPropagation(); setTemplateToDelete(t); }} className="shrink-0 rounded p-1.5 text-lp-text-tertiary hover:bg-red-500/10 hover:text-red-500" title="Delete section">
-                          <X size={16} />
-                        </button>
-                      </div>
-                      {expanded && (
+                        </span>
+                        <span className={cn('absolute inset-0 flex items-center justify-center transition-all duration-200 text-lp-accent', allAdded ? 'opacity-100 scale-100' : 'opacity-0 scale-75')}>
+                          <Check size={16} />
+                        </span>
+                      </button>
+                    </div>
+                    <div className={cn('grid transition-[grid-template-rows] duration-300 ease-out', expanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')} style={{ transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)' }}>
+                      <div className="min-h-0 overflow-hidden">
                         <ul className="border-t border-lp-border bg-lp-surface py-1">
                           {(fields as FieldDef[]).map((f) => {
                             const added = isFieldAdded(t.id, f.id);
@@ -841,16 +902,18 @@ function SetupMode({
                                   draggable
                                   onDragStart={(e) => { e.dataTransfer.setData('application/json', JSON.stringify({ templateId: t.id, field: f })); e.dataTransfer.effectAllowed = 'copy'; setDragGhost(e, f.label); setDragState({ type: 'field', templateId: t.id, field: f }); }}
                                   onDragEnd={() => setDragState(null)}
-                                  onClick={() => { if (!added) { addField(t, f); setLastAddedKey(`${t.id}-${f.id}`); setTimeout(() => setLastAddedKey(null), 200); } }}
+                                  onClick={() => {
+                                    if (added) removeFieldByTemplateAndFieldId(t.id, f.id);
+                                    else { addField(t, f); setLastAddedKey(`${t.id}-${f.id}`); setTimeout(() => setLastAddedKey(null), 200); }
+                                  }}
                                   className={cn(
-                                    'flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors',
-                                    added ? 'bg-[#FF4500]/10 text-lp-text border-l border-[#FF4500]' : 'hover:bg-lp-surface-hover text-lp-text',
-                                    !added && 'cursor-pointer'
+                                    'flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors cursor-pointer',
+                                    added ? 'bg-lp-accent/10 text-lp-accent border-l-2 border-lp-accent' : 'hover:bg-lp-surface-hover text-lp-text',
                                   )}
                                 >
                                   <FieldTypeIcon type={f.type} />
                                   <span className="flex-1 truncate">{f.label}</span>
-                                  {added && <Check size={14} className="shrink-0 text-[#FF4500]" />}
+                                  {added && <Check size={14} className="shrink-0 text-lp-accent" />}
                                 </button>
                               </li>
                             );
@@ -862,7 +925,86 @@ function SetupMode({
                             </button>
                           </li>
                         </ul>
-                      )}
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
+              <li className="pt-2">
+                <p className="mb-1.5 px-1 text-xs font-medium text-lp-text-tertiary">Custom</p>
+                {templates.filter((t) => t.workspace_id).map((t) => {
+                  const expanded = expandedLibrary.has(t.id);
+                  const allAdded = isSectionFullyAdded(t);
+                  const fields = t.fields ?? [];
+                  return (
+                    <li key={t.id} className="rounded-lg border border-lp-border overflow-hidden mb-1">
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => setExpandedLibrary((s) => { const n = new Set(s); if (n.has(t.id)) n.delete(t.id); else n.add(t.id); return n; })}
+                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpandedLibrary((s) => { const n = new Set(s); if (n.has(t.id)) n.delete(t.id); else n.add(t.id); return n; }); } }}
+                        className="flex items-center gap-2 bg-lp-bg-secondary px-3 py-2 cursor-pointer hover:bg-lp-bg-tertiary transition-colors"
+                      >
+                        <span className={cn('shrink-0 text-lp-text-tertiary transition-transform duration-200', expanded && 'rotate-180')}>
+                          <ChevronDown size={16} />
+                        </span>
+                        <SectionIcon icon={t.icon} />
+                        <span className="flex-1 text-sm font-medium text-lp-text">{t.name}</span>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); if (allAdded) removeAllFields(t); else addAllFields(t); }}
+                          disabled={fields.length === 0}
+                          className="relative shrink-0 h-7 w-7 rounded p-1.5 text-lp-text hover:bg-lp-surface-hover disabled:opacity-50 flex items-center justify-center"
+                          title={allAdded ? 'Remove all from advance' : 'Add all questions'}
+                        >
+                          <span className={cn('absolute inset-0 flex items-center justify-center transition-all duration-200', allAdded ? 'opacity-0 scale-75' : 'opacity-100 scale-100')}>
+                            <Plus size={16} />
+                          </span>
+                          <span className={cn('absolute inset-0 flex items-center justify-center transition-all duration-200 text-lp-accent', allAdded ? 'opacity-100 scale-100' : 'opacity-0 scale-75')}>
+                            <Check size={16} />
+                          </span>
+                        </button>
+                        <button type="button" onClick={(e) => { e.stopPropagation(); setTemplateToDelete(t); }} className="shrink-0 rounded p-1.5 text-lp-text-tertiary hover:bg-red-500/10 hover:text-red-500" title="Delete section">
+                          <X size={16} />
+                        </button>
+                      </div>
+                      <div className={cn('grid transition-[grid-template-rows] duration-300 ease-out', expanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')} style={{ transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)' }}>
+                        <div className="min-h-0 overflow-hidden">
+                          <ul className="border-t border-lp-border bg-lp-surface py-1">
+                            {(fields as FieldDef[]).map((f) => {
+                              const added = isFieldAdded(t.id, f.id);
+                              return (
+                                <li key={f.id} className="group">
+                                  <button
+                                    type="button"
+                                    draggable
+                                    onDragStart={(e) => { e.dataTransfer.setData('application/json', JSON.stringify({ templateId: t.id, field: f })); e.dataTransfer.effectAllowed = 'copy'; setDragGhost(e, f.label); setDragState({ type: 'field', templateId: t.id, field: f }); }}
+                                    onDragEnd={() => setDragState(null)}
+                                    onClick={() => {
+                                      if (added) removeFieldByTemplateAndFieldId(t.id, f.id);
+                                      else { addField(t, f); setLastAddedKey(`${t.id}-${f.id}`); setTimeout(() => setLastAddedKey(null), 200); }
+                                    }}
+                                    className={cn(
+                                      'flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors cursor-pointer',
+                                      added ? 'bg-lp-accent/10 text-lp-accent border-l-2 border-lp-accent' : 'hover:bg-lp-surface-hover text-lp-text',
+                                    )}
+                                  >
+                                    <FieldTypeIcon type={f.type} />
+                                    <span className="flex-1 truncate">{f.label}</span>
+                                    {added && <Check size={14} className="shrink-0 text-lp-accent" />}
+                                  </button>
+                                </li>
+                              );
+                            })}
+                            <li>
+                              <button type="button" onClick={() => { setCustomFieldContext({ templateId: t.id, templateName: t.name }); setCustomFieldOpen(true); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-lp-text-tertiary hover:bg-lp-surface-hover hover:text-lp-text">
+                                <span className="inline-flex h-6 w-6 items-center justify-center rounded border border-dashed border-lp-border text-xs">+</span>
+                                Custom field
+                              </button>
+                            </li>
+                          </ul>
+                        </div>
+                      </div>
                     </li>
                   );
                 })}
@@ -923,22 +1065,30 @@ function SetupMode({
                 }}
               >
                 {dropTarget && dragState?.type === 'section' && typeof dropTarget === 'object' && !('fieldIndex' in dropTarget) && dropTarget.sectionIndex === secIdx && (
-                  <div className="absolute left-0 right-0 top-0 h-0.5 bg-[#FF4500] opacity-80 z-10 rounded-t-lg" />
+                  <div className="absolute left-0 right-0 top-0 h-0.5 bg-lp-accent opacity-80 z-10 rounded-t-lg" />
                 )}
-                <div className="flex items-center gap-2 bg-lp-bg-secondary px-3 py-2">
-                  <button type="button" onClick={() => setExpandedRight((s) => { const n = new Set(s); if (n.has(secIdx)) n.delete(secIdx); else n.add(secIdx); return n; })} className="shrink-0 text-lp-text-tertiary hover:text-lp-text">
-                    {expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                  </button>
+                <div
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setExpandedRight((s) => { const n = new Set(s); if (n.has(secIdx)) n.delete(secIdx); else n.add(secIdx); return n; })}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpandedRight((s) => { const n = new Set(s); if (n.has(secIdx)) n.delete(secIdx); else n.add(secIdx); return n; }); } }}
+                  className="flex items-center gap-2 bg-lp-bg-secondary px-3 py-2 cursor-pointer hover:bg-lp-bg-tertiary transition-colors"
+                >
+                  <span className={cn('shrink-0 text-lp-text-tertiary transition-transform duration-200', expanded && 'rotate-180')}>
+                    <ChevronDown size={16} />
+                  </span>
                   <GripVertical className="shrink-0 cursor-grab text-lp-text-tertiary active:cursor-grabbing" />
                   <SectionIcon icon={template?.icon ?? sec.template_id === CUSTOM_SECTION_ID ? 'clipboard' : undefined} />
                   <span className="flex-1 text-sm font-medium text-lp-text">{sec.label}</span>
                 </div>
-                {expanded && (
-                  <ul className="border-t border-lp-border bg-lp-surface py-1">
-                    {fields.map((f, fieldIdx) => (
-                      <li
-                        key={f.id}
-                        className={cn('relative flex items-center gap-2 px-3 py-2 group transition-all duration-200', removingField === `${secIdx}-${fieldIdx}` && 'opacity-0', lastAddedKey === `${sec.template_id}-${f.id}` && 'bg-[#FF4500]/25')}
+                <div className={cn('grid transition-[grid-template-rows] duration-300 ease-out', expanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')} style={{ transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)' }}>
+                  <div className="min-h-0 overflow-hidden">
+                    <ul className="border-t border-lp-border bg-lp-surface py-1">
+                      {fields.map((f, fieldIdx) => (
+                        <li
+                          key={f.id}
+                          className={cn('relative flex items-center gap-2 px-3 py-2 group transition-all duration-300', removingField === `${secIdx}-${fieldIdx}` && 'opacity-0', lastAddedKey === `${sec.template_id}-${f.id}` && 'bg-lp-accent/25')}
+                          style={{ transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)' }}
                         draggable
                         onDragStart={(e) => { e.stopPropagation(); e.dataTransfer.setData('application/json', JSON.stringify({ type: 'field', sectionIndex: secIdx, fieldIndex: fieldIdx })); setDragGhost(e, f.label); setDragState({ type: 'field', sectionIndex: secIdx, fieldIndex: fieldIdx, field: f }); }}
                         onDragEnd={() => { setDragState(null); setDropTarget(null); }}
@@ -957,7 +1107,7 @@ function SetupMode({
                         }}
                       >
                         {dropTarget && 'fieldIndex' in dropTarget && dropTarget.sectionIndex === secIdx && dropTarget.fieldIndex === fieldIdx && (
-                          <div className="absolute left-0 right-0 top-0 h-0.5 bg-[#FF4500] opacity-80 z-10" />
+                          <div className="absolute left-0 right-0 top-0 h-0.5 bg-lp-accent opacity-80 z-10" />
                         )}
                         <GripVertical className="shrink-0 cursor-grab text-lp-text-tertiary active:cursor-grabbing" />
                         <FieldTypeIcon type={f.type} />
@@ -967,8 +1117,9 @@ function SetupMode({
                         </button>
                       </li>
                     ))}
-                  </ul>
-                )}
+                    </ul>
+                  </div>
+                </div>
               </div>
             );
           })}
@@ -994,7 +1145,7 @@ function SetupMode({
 
       {/* Modals: Apply template, Save as template */}
       {applyTemplateOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 transition-opacity duration-150" onClick={() => setApplyTemplateOpen(false)}>
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/60 p-4 transition-opacity duration-150" onClick={() => setApplyTemplateOpen(false)}>
           <div className="w-full max-w-md rounded-xl border border-lp-border bg-lp-surface p-6 shadow-xl animate-scale-in" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-semibold text-lp-text">Apply template</h3>
             <p className="mt-1 text-sm text-lp-text-secondary">Replace this show&apos;s sections with a saved layout.</p>
@@ -1023,7 +1174,7 @@ function SetupMode({
       )}
 
       {saveAsTemplateOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 transition-opacity duration-150" onClick={() => setSaveAsTemplateOpen(false)}>
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/60 p-4 transition-opacity duration-150" onClick={() => setSaveAsTemplateOpen(false)}>
           <div className="w-full max-w-sm rounded-xl border border-lp-border bg-lp-surface p-6 shadow-xl animate-scale-in" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-semibold text-lp-text">Save as template</h3>
             <p className="mt-1 text-sm text-lp-text-secondary">Give this layout a name to reuse on other shows.</p>
@@ -1054,7 +1205,7 @@ function SetupMode({
 
       {/* Delete custom section confirmation */}
       {templateToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 transition-opacity duration-150" onClick={() => setTemplateToDelete(null)}>
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/60 p-4 transition-opacity duration-150" onClick={() => setTemplateToDelete(null)}>
           <div className="w-full max-w-sm rounded-xl border border-lp-border bg-lp-surface p-6 shadow-xl animate-scale-in" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-semibold text-lp-text">Delete section?</h3>
             <p className="mt-1 text-sm text-lp-text-secondary">Delete section &quot;{templateToDelete.name}&quot;? This cannot be undone.</p>
@@ -1068,6 +1219,64 @@ function SetupMode({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function DropdownOptionsEditor({ value, onChange }: { value: string; onChange: (s: string) => void }) {
+  const parts = value ? value.split(',').map((s) => s.trim()) : [];
+  const rows = parts.length && parts[parts.length - 1] === '' ? parts : [...parts, ''];
+  const update = (next: string[]) => {
+    onChange(next.join(', '));
+  };
+  const setRow = (index: number, v: string) => {
+    const next = [...rows];
+    next[index] = v;
+    if (index === rows.length - 1 && v.trim() !== '') next.push('');
+    update(next);
+  };
+  const removeRow = (index: number) => {
+    const next = rows.filter((_, i) => i !== index);
+    update(next.length ? next : ['']);
+  };
+  const addRow = () => {
+    update([...rows, '']);
+  };
+  return (
+    <div className="mt-3 space-y-2">
+      <label className="block text-xs font-medium text-lp-text-tertiary">Options</label>
+      <div className="rounded-lg border border-lp-border bg-lp-surface overflow-hidden">
+        {rows.map((row, index) => (
+          <div key={index} className="flex items-center gap-2 border-b border-lp-border last:border-b-0 px-2 py-1.5">
+            <GripVertical className="h-4 w-4 shrink-0 cursor-grab text-lp-text-tertiary" />
+            <input
+              type="text"
+              value={row}
+              onChange={(e) => setRow(index, e.target.value)}
+              placeholder="Option value"
+              className="flex-1 min-w-0 rounded-md border border-lp-border bg-lp-surface px-2.5 py-1.5 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:border-lp-orange focus:outline-none"
+            />
+            <button
+              type="button"
+              onClick={() => removeRow(index)}
+              className="shrink-0 rounded p-1.5 text-lp-text-tertiary hover:bg-lp-surface-hover hover:text-red-500"
+              aria-label="Remove option"
+            >
+              <X size={14} />
+            </button>
+          </div>
+        ))}
+        <div className="p-2">
+          <button
+            type="button"
+            onClick={addRow}
+            className="flex w-full items-center justify-center gap-1.5 rounded-md border border-dashed border-lp-border py-2 text-sm font-medium text-lp-text-tertiary hover:bg-lp-surface-hover hover:text-lp-text"
+          >
+            <Plus size={14} />
+            Add option
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1121,7 +1330,7 @@ function CustomFieldModal({ onClose, onAdd }: { onClose: () => void; onAdd: (fie
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 transition-opacity duration-150" onClick={onClose}>
+    <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/60 p-4 transition-opacity duration-150" onClick={onClose}>
       <div className="w-full max-w-md rounded-xl border border-lp-border bg-lp-surface p-6 shadow-xl animate-scale-in" onClick={(e) => e.stopPropagation()}>
         <h3 className="text-lg font-semibold text-lp-text">Custom field</h3>
         <p className="mt-1 text-sm text-lp-text-secondary">Field label, type, and options.</p>
@@ -1161,15 +1370,30 @@ function CustomFieldModal({ onClose, onAdd }: { onClose: () => void; onAdd: (fie
             </div>
           )}
         </div>
-        <div className="mt-3 flex items-center gap-2">
-          <SlidingToggle value={required ? 'true' : 'false'} onChange={(v) => setRequired(v === 'true')} options={['false', 'true']} labels={['Optional', 'Required']} className="w-28" />
-          <span className="text-xs text-lp-text-tertiary">Required</span>
+        <div className="mt-3 flex items-center justify-between gap-3">
+          <span className="text-sm text-lp-text-secondary">{required ? 'Required' : 'Optional'}</span>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={required}
+            onClick={() => setRequired((r) => !r)}
+            className={cn(
+              'relative h-6 w-11 shrink-0 rounded-full transition-colors duration-200',
+              required ? 'bg-lp-accent' : 'bg-lp-border'
+            )}
+            style={{ transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)' }}
+          >
+            <span
+              className={cn(
+                'absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-200',
+                required && 'translate-x-5'
+              )}
+              style={{ transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)' }}
+            />
+          </button>
         </div>
         {type === 'select' && (
-          <>
-            <label className="mt-3 block text-xs font-medium text-lp-text-tertiary">Options</label>
-            <input type="text" value={optionsStr} onChange={(e) => setOptionsStr(e.target.value)} placeholder="Comma-separated values" className="mt-1 w-full rounded-xl border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:border-lp-orange focus:outline-none focus:ring-2 focus:ring-lp-orange/20" />
-          </>
+          <DropdownOptionsEditor value={optionsStr} onChange={setOptionsStr} />
         )}
         {type === 'slider' && (
           <div className="mt-3 grid grid-cols-3 gap-2">
@@ -1207,7 +1431,7 @@ function CustomSectionModal({ onClose, onAdd }: { onClose: () => void; onAdd: (n
     setDescription('');
   };
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 transition-opacity duration-150" onClick={onClose}>
+    <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/60 p-4 transition-opacity duration-150" onClick={onClose}>
       <div className="w-full max-w-md rounded-xl border border-lp-border bg-lp-surface p-6 shadow-xl animate-scale-in" onClick={(e) => e.stopPropagation()}>
         <h3 className="text-lg font-semibold text-lp-text">Custom section</h3>
         <p className="mt-1 text-sm text-lp-text-secondary">Section name, icon, and optional description.</p>
@@ -1244,15 +1468,25 @@ function CustomSectionModal({ onClose, onAdd }: { onClose: () => void; onAdd: (n
 
 // ----- FILL MODE -----
 
+function formatAdvanceDateTime(iso: string): string {
+  const d = new Date(iso);
+  return d.toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' }) + ' ' + d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+}
+
 function FillMode({
   tourId,
   routingId,
   currentUserId,
   currency,
+  tourPersonnelCounts,
   venueName,
   venueLat,
   venueLng,
   advance,
+  initialLastUpdatedAt,
+  onAutosaveStatusChange,
+  onConflictWarning,
+  autosaveRetryRef,
   onUpdate,
   onEditSections,
   onCopyToOther,
@@ -1262,10 +1496,15 @@ function FillMode({
   routingId: string;
   currentUserId: string | null;
   currency: string;
+  tourPersonnelCounts?: { principal_count: number; band_count: number; crew_count: number };
   venueName: string | null;
   venueLat?: number;
   venueLng?: number;
   advance: NonNullable<PageData['advance']>;
+  initialLastUpdatedAt?: string | null;
+  onAutosaveStatusChange?: (status: 'idle' | 'saving' | 'saved' | 'error') => void;
+  onConflictWarning?: (msg: string | null) => void;
+  autosaveRetryRef?: React.MutableRefObject<(() => void) | null>;
   onUpdate: (patch: Partial<NonNullable<PageData['advance']>>) => void;
   onEditSections: () => void;
   onCopyToOther: () => void;
@@ -1274,6 +1513,26 @@ function FillMode({
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const patchRef = useRef<{ data?: AdvanceData; section_statuses?: SectionStatuses; status?: string; flags?: AdvanceFlag[] }>({});
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [workspaceMembers, setWorkspaceMembers] = useState<{ id: string; name: string | null; avatar_url?: string | null }[]>([]);
+  const initialLastUpdatedAtRef = useRef(initialLastUpdatedAt ?? null);
+  if (initialLastUpdatedAt != null) initialLastUpdatedAtRef.current = initialLastUpdatedAt;
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/workspace/members')
+      .then((r) => (r.ok ? r.json() : { members: [] }))
+      .then((j) => { if (!cancelled) setWorkspaceMembers(j.members ?? []); })
+      .catch(() => { if (!cancelled) setWorkspaceMembers([]); });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Cleanup debounce timer on unmount to prevent memory leak
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
+
   const flags = advance.flags ?? [];
 
   const toggleSection = (templateId: string) => {
@@ -1291,16 +1550,42 @@ function FillMode({
     flushPatch({ section_statuses: next });
   };
 
+  const setSectionAssigned = (templateId: string, userId: string | null) => {
+    const next = { ...advance.section_statuses, [templateId]: { ...advance.section_statuses[templateId], assigned_to: userId ?? undefined } };
+    onUpdate({ section_statuses: next });
+    flushPatch({ section_statuses: next });
+  };
+
   const flushPatch = useCallback((override?: { data?: AdvanceData; section_statuses?: SectionStatuses; status?: string; flags?: AdvanceFlag[] }) => {
     const payload = { ...patchRef.current, ...override };
     if (Object.keys(payload).length === 0) return;
     patchRef.current = {};
+    onAutosaveStatusChange?.('saving');
     fetch(`/api/tours/${tourId}/advance/${routingId}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
-    }).then(() => { /* optional: toast */ });
-  }, [tourId, routingId]);
+    })
+      .then(async (res) => {
+        if (!res.ok) {
+          onAutosaveStatusChange?.('error');
+          return;
+        }
+        const body = await res.json().catch(() => ({}));
+        onAutosaveStatusChange?.('saved');
+        const serverUpdated = body.last_updated_at as string | undefined;
+        const initial = initialLastUpdatedAtRef.current;
+        if (serverUpdated && initial && serverUpdated > initial) {
+          const name = body.last_updated_by_name ?? 'someone';
+          const time = formatAdvanceDateTime(serverUpdated);
+          onConflictWarning?.(`This advance was updated by ${name} at ${time}`);
+        }
+        setTimeout(() => onAutosaveStatusChange?.('idle'), 3000);
+      })
+      .catch(() => onAutosaveStatusChange?.('error'));
+  }, [tourId, routingId, onAutosaveStatusChange, onConflictWarning]);
+
+  if (autosaveRetryRef) autosaveRetryRef.current = () => flushPatch();
 
   const updateFlags = useCallback((nextFlags: AdvanceFlag[]) => {
     onUpdate({ flags: nextFlags });
@@ -1313,15 +1598,19 @@ function FillMode({
     debounceRef.current = setTimeout(() => {
       debounceRef.current = null;
       flushPatch();
-    }, 400);
+    }, 2000);
   }, [flushPatch]);
 
-  const contactsList = (advance.data as Record<string, unknown>).contacts as ContactRow[] | undefined;
-  const contacts = Array.isArray(contactsList) ? contactsList : [];
+  const getSectionContacts = useCallback((templateId: string): ContactRow[] => {
+    const sectionData = advance.data[templateId] as Record<string, unknown> | undefined;
+    const list = sectionData?.contacts;
+    return Array.isArray(list) ? (list as ContactRow[]) : [];
+  }, [advance.data]);
 
-  const setContacts = useCallback(
-    (nextContacts: ContactRow[]) => {
-      const nextData = { ...advance.data, contacts: nextContacts };
+  const setSectionContacts = useCallback(
+    (templateId: string, nextContacts: ContactRow[]) => {
+      const current = (advance.data[templateId] ?? {}) as Record<string, unknown>;
+      const nextData = { ...advance.data, [templateId]: { ...current, contacts: nextContacts } } as unknown as AdvanceData;
       onUpdate({ data: nextData });
       patchRef.current = { ...patchRef.current, data: nextData };
       debouncedFlush();
@@ -1354,32 +1643,113 @@ function FillMode({
     debouncedFlush();
   };
 
-  const sortedSections = [...advance.sections].sort((a, b) => {
-    const aFirst = a.label === KEY_CONTACTS_LABEL ? -1 : 0;
-    const bFirst = b.label === KEY_CONTACTS_LABEL ? -1 : 0;
-    return aFirst - bFirst;
+  const [showSettlement, setShowSettlement] = useState(false);
+  const settlementSection = advance.sections.find((s) => s.label === SETTLEMENT_LABEL);
+  const mainSections = advance.sections.filter((s) => s.label !== SETTLEMENT_LABEL);
+  const sortedSections = [...mainSections].sort((a, b) => {
+    if (a.label === RIDER_LABEL) return -1;
+    if (b.label === RIDER_LABEL) return 1;
+    if (a.label === KEY_CONTACTS_LABEL) return -1;
+    if (b.label === KEY_CONTACTS_LABEL) return 1;
+    return 0;
   });
+
+  const importantDocuments = (() => {
+    const data = advance.data[IMPORTANT_DOCUMENTS_KEY] as { documents?: AdvanceDocument[] } | undefined;
+    return Array.isArray(data?.documents) ? data.documents : [];
+  })();
+  const setImportantDocuments = (docs: AdvanceDocument[]) => {
+    setFieldValue(IMPORTANT_DOCUMENTS_KEY, 'documents', docs);
+  };
 
   return (
     <div className="flex gap-8">
       <div className="min-w-0 flex-1 space-y-4">
+        <ImportantDocumentsCard
+          instanceId={advance.instance_id}
+          documents={importantDocuments}
+          onDocumentsChange={setImportantDocuments}
+          currentUserId={currentUserId}
+        />
         {sortedSections.map((section, index) => (
-          <div key={section.template_id} className="animate-slide-up" style={{ animationDelay: `${index * 30}ms` }}>
-          {section.label === KEY_CONTACTS_LABEL ? (
+          <div key={section.template_id} id={`section-${section.template_id}`} className="animate-slide-up scroll-mt-24" style={{ animationDelay: `${index * 30}ms` }}>
+          {section.label === RIDER_LABEL ? (
+            <RiderCard
+              section={section}
+              data={advance.data[section.template_id] ?? {}}
+              sectionStatus={advance.section_statuses[section.template_id]?.status ?? 'not_started'}
+              sectionFlags={flags.filter((f) => f.section_id === section.template_id && !f.resolved)}
+              expanded={expandedIds.has(section.template_id)}
+              onToggle={() => toggleSection(section.template_id)}
+              onSetSectionStatus={(status) => setSectionStatus(section.template_id, status)}
+              onSetSectionAssigned={(userId) => setSectionAssigned(section.template_id, userId)}
+              onFieldChange={(fieldId, value) => setFieldValue(section.template_id, fieldId, value)}
+              onFlagsChange={updateFlags}
+              allFlags={flags}
+              currentUserId={currentUserId}
+              onRemoveSection={onRemoveSection}
+              assignedTo={advance.section_statuses[section.template_id]?.assigned_to}
+              workspaceMembers={workspaceMembers}
+              currency={currency}
+            />
+          ) : section.label === FLIGHTS_LABEL ? (
+            <FlightsSectionCard
+              instanceId={advance.instance_id}
+              section={section}
+              data={advance.data[section.template_id] ?? {}}
+              sectionStatus={advance.section_statuses[section.template_id]?.status ?? 'not_started'}
+              sectionFlags={flags.filter((f) => f.section_id === section.template_id && !f.resolved)}
+              expanded={expandedIds.has(section.template_id)}
+              onToggle={() => toggleSection(section.template_id)}
+              onSetSectionStatus={(status) => setSectionStatus(section.template_id, status)}
+              onSetSectionAssigned={(userId) => setSectionAssigned(section.template_id, userId)}
+              onFlightsChange={(flights) => setFieldValue(section.template_id, 'flights', flights)}
+              onFlagsChange={updateFlags}
+              allFlags={flags}
+              currentUserId={currentUserId}
+              onRemoveSection={onRemoveSection}
+              assignedTo={advance.section_statuses[section.template_id]?.assigned_to}
+              workspaceMembers={workspaceMembers}
+              tourPersonnelCounts={tourPersonnelCounts}
+            />
+          ) : section.label === PARKING_ACCESS_LABEL ? (
+            <ParkingAccessCard
+              instanceId={advance.instance_id}
+              section={section}
+              data={advance.data[section.template_id] ?? {}}
+              sectionStatus={advance.section_statuses[section.template_id]?.status ?? 'not_started'}
+              sectionFlags={flags.filter((f) => f.section_id === section.template_id && !f.resolved)}
+              expanded={expandedIds.has(section.template_id)}
+              onToggle={() => toggleSection(section.template_id)}
+              onSetSectionStatus={(status) => setSectionStatus(section.template_id, status)}
+              onSetSectionAssigned={(userId) => setSectionAssigned(section.template_id, userId)}
+              onFieldChange={(fieldId, value) => setFieldValue(section.template_id, fieldId, value)}
+              onFlagsChange={updateFlags}
+              allFlags={flags}
+              currentUserId={currentUserId}
+              onRemoveSection={onRemoveSection}
+              assignedTo={advance.section_statuses[section.template_id]?.assigned_to}
+              workspaceMembers={workspaceMembers}
+            />
+          ) : section.label === KEY_CONTACTS_LABEL ? (
             <KeyContactsCard
               section={section}
-              contacts={contacts}
+              contacts={getSectionContacts(section.template_id)}
               venueName={venueName}
               sectionStatus={advance.section_statuses[section.template_id]?.status ?? 'not_started'}
               sectionFlags={flags.filter((f) => f.section_id === section.template_id && !f.resolved)}
               expanded={expandedIds.has(section.template_id)}
               onToggle={() => toggleSection(section.template_id)}
               onSetSectionStatus={(status) => setSectionStatus(section.template_id, status)}
-              onContactsChange={setContacts}
+              onSetSectionAssigned={(userId) => setSectionAssigned(section.template_id, userId)}
+              onContactsChange={(next) => setSectionContacts(section.template_id, next)}
               onFlagsChange={updateFlags}
               allFlags={flags}
               currentUserId={currentUserId}
               onRemoveSection={onRemoveSection}
+              contactRoles={getContactRolesForSection(section.label)}
+              assignedTo={advance.section_statuses[section.template_id]?.assigned_to}
+              workspaceMembers={workspaceMembers}
             />
           ) : (
             <SectionCard
@@ -1393,6 +1763,7 @@ function FillMode({
               expanded={expandedIds.has(section.template_id)}
               onToggle={() => toggleSection(section.template_id)}
               onSetSectionStatus={(status) => setSectionStatus(section.template_id, status)}
+              onSetSectionAssigned={(userId) => setSectionAssigned(section.template_id, userId)}
               onFieldChange={(fieldId, value) => setFieldValue(section.template_id, fieldId, value)}
               onFlagsChange={updateFlags}
               allFlags={flags}
@@ -1400,17 +1771,48 @@ function FillMode({
               onRemoveSection={onRemoveSection}
               venueLat={venueLat}
               venueLng={venueLng}
+              venueName={venueName}
+              sectionContacts={getSectionContacts(section.template_id)}
+              onSectionContactsChange={(next) => setSectionContacts(section.template_id, next)}
+              sectionContactRoles={getContactRolesForSection(section.label)}
+              assignedTo={advance.section_statuses[section.template_id]?.assigned_to}
+              workspaceMembers={workspaceMembers}
             />
           )}
           </div>
         ))}
+        {settlementSection && (
+          <div className="space-y-3 rounded-xl border border-lp-border bg-lp-surface/50 p-4">
+            <button
+              type="button"
+              onClick={() => setShowSettlement((v) => !v)}
+              className="flex w-full items-center justify-between rounded-lg border border-lp-border px-4 py-2.5 text-sm font-medium text-lp-text hover:bg-lp-surface-hover transition-colors duration-200"
+              style={{ transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)' }}
+            >
+              Show Settlement
+              {showSettlement ? <ChevronDown size={18} className="rotate-180" /> : <ChevronRight size={18} />}
+            </button>
+            {showSettlement && (
+              <>
+                <p className="text-sm text-lp-text-tertiary">Settlement data will be integrated with Budget in a future update.</p>
+                <SettlementBlock
+                  section={settlementSection}
+                  data={advance.data[settlementSection.template_id] ?? {}}
+                  instanceId={advance.instance_id}
+                  currency={currency}
+                  onFieldChange={(fieldId, value) => setFieldValue(settlementSection.template_id, fieldId, value)}
+                />
+              </>
+            )}
+          </div>
+        )}
       </div>
 
       <aside className="w-56 shrink-0">
         <div className="sticky top-24 rounded-xl border border-lp-border bg-lp-surface p-4">
           <p className="mb-3 text-xs font-medium text-lp-text-tertiary">Sections</p>
           <ul className="space-y-1.5">
-            {advance.sections.map((sec) => {
+            {sortedSections.map((sec) => {
               const status = advance.section_statuses[sec.template_id]?.status ?? 'not_started';
               const dot = status === 'complete' ? 'bg-emerald-500' : status === 'in_progress' ? 'bg-blue-500' : status === 'needs_review' ? 'bg-amber-500' : 'bg-gray-500';
               return (
@@ -1426,6 +1828,18 @@ function FillMode({
                 </li>
               );
             })}
+            {settlementSection && (
+              <li>
+                <button
+                  type="button"
+                  onClick={() => setShowSettlement((v) => !v)}
+                  className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-lp-text-tertiary hover:bg-lp-surface-hover hover:text-lp-text"
+                >
+                  <span className={cn('h-2 w-2 shrink-0 rounded-full', showSettlement ? 'bg-lp-orange/50' : 'bg-gray-500')} />
+                  <span className="truncate">Settlement</span>
+                </button>
+              </li>
+            )}
           </ul>
           <div className="mt-4 space-y-2 border-t border-lp-border pt-4">
             <button
@@ -1469,11 +1883,15 @@ function KeyContactsCard({
   expanded,
   onToggle,
   onSetSectionStatus,
+  onSetSectionAssigned,
   onContactsChange,
   onFlagsChange,
   allFlags,
   currentUserId,
   onRemoveSection,
+  contactRoles,
+  assignedTo,
+  workspaceMembers = [],
 }: {
   section: SectionDef;
   contacts: ContactRow[];
@@ -1483,23 +1901,27 @@ function KeyContactsCard({
   expanded: boolean;
   onToggle: () => void;
   onSetSectionStatus: (status: string) => void;
+  onSetSectionAssigned?: (userId: string | null) => void;
   onContactsChange: (contacts: ContactRow[]) => void;
   onFlagsChange: (nextFlags: AdvanceFlag[]) => void;
   allFlags: AdvanceFlag[];
   currentUserId: string | null;
   onRemoveSection?: (templateId: string) => void | Promise<void>;
+  contactRoles?: string[];
+  assignedTo?: string;
+  workspaceMembers?: WorkspaceMember[];
 }) {
+  const roles = contactRoles ?? [...CONTACT_ROLES];
   const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false);
   const menuItems = [
     { label: 'Mark section complete', icon: CheckCircle2, onClick: () => onSetSectionStatus('complete') },
-    { label: 'Assign to...', icon: UserPlus, onClick: () => {} },
     ...(onRemoveSection ? [{ label: 'Remove section', icon: Trash2, variant: 'danger' as const, onClick: () => setRemoveConfirmOpen(true) }] : []),
   ].filter(Boolean) as { label: string; icon: typeof CheckCircle2; onClick: () => void; variant?: 'danger' }[];
 
   const addRow = () => {
     onContactsChange([
       ...contacts,
-      { first_name: '', last_name: '', role: '', venue_name: venueName ?? undefined },
+      { first_name: '', last_name: '', role: '', phone: '', email: '', venue_name: venueName ?? undefined, notes: '' },
     ]);
   };
   const removeRow = (index: number) => {
@@ -1515,7 +1937,7 @@ function KeyContactsCard({
         role="button"
         tabIndex={0}
         onClick={onToggle}
-        onKeyDown={(e) => e.key === 'Enter' && onToggle()}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle(); } }}
         className="flex w-full items-center gap-4 px-4 py-3 text-left hover:bg-lp-surface-hover cursor-pointer transition-colors duration-100"
       >
         <SectionIcon icon="users" />
@@ -1528,6 +1950,16 @@ function KeyContactsCard({
           onSelectStatus={onSetSectionStatus}
           onClick={(e) => e.stopPropagation()}
         />
+        {onSetSectionAssigned && workspaceMembers.length > 0 ? (
+          <AssignDropdown
+            assignedTo={assignedTo}
+            members={workspaceMembers}
+            onSelect={onSetSectionAssigned}
+            onClick={(e) => e.stopPropagation()}
+          />
+        ) : assignedTo ? (
+          <span className="text-sm text-lp-text-tertiary truncate max-w-[120px]">{workspaceMembers.find((m) => m.id === assignedTo)?.name ?? 'Assigned'}</span>
+        ) : null}
         {expanded ? <ChevronDown size={18} className="text-lp-text-tertiary shrink-0" /> : <ChevronRight size={18} className="text-lp-text-tertiary shrink-0" />}
       </div>
       <div className={cn('grid transition-[grid-template-rows] duration-200 ease-out', expanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')}>
@@ -1540,6 +1972,7 @@ function KeyContactsCard({
                 venueName={venueName}
                 onUpdate={(patch) => updateRow(index, patch)}
                 onRemove={() => removeRow(index)}
+                contactRoles={roles}
               />
             ))}
             <button
@@ -1568,20 +2001,866 @@ function KeyContactsCard({
   );
 }
 
+// ----- Rider section (at top, type dropdown + status) -----
+
+const RIDER_TYPES = ['Technical Rider', 'Hospitality Rider', 'Hotel Rider'] as const;
+const RIDER_STATUSES = ['Sent', 'Received', 'Confirmed'] as const;
+
+function RiderCard({
+  section,
+  data,
+  sectionStatus,
+  sectionFlags,
+  expanded,
+  onToggle,
+  onSetSectionStatus,
+  onSetSectionAssigned,
+  onFieldChange,
+  onFlagsChange,
+  allFlags,
+  currentUserId,
+  onRemoveSection,
+  assignedTo,
+  workspaceMembers = [],
+  currency = 'GBP',
+}: {
+  section: SectionDef;
+  data: Record<string, unknown>;
+  sectionStatus: string;
+  sectionFlags: AdvanceFlag[];
+  expanded: boolean;
+  onToggle: () => void;
+  onSetSectionStatus: (status: string) => void;
+  onSetSectionAssigned?: (userId: string | null) => void;
+  onFieldChange: (fieldId: string, value: unknown) => void;
+  onFlagsChange: (nextFlags: AdvanceFlag[]) => void;
+  allFlags: AdvanceFlag[];
+  currentUserId: string | null;
+  onRemoveSection?: (templateId: string) => void | Promise<void>;
+  assignedTo?: string;
+  workspaceMembers?: WorkspaceMember[];
+  currency?: string;
+}) {
+  const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false);
+  const riderType = (data.rider_type as string) || RIDER_TYPES[0];
+  const riderStatus = (data.rider_status as string) || '';
+  const [typeDropdownOpen, setTypeDropdownOpen] = useState(false);
+  const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
+  const typeRef = useRef<HTMLDivElement>(null);
+  const statusRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!typeDropdownOpen) return;
+    const close = (e: MouseEvent) => { if (typeRef.current?.contains(e.target as Node)) return; setTypeDropdownOpen(false); };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [typeDropdownOpen]);
+  useEffect(() => {
+    if (!statusDropdownOpen) return;
+    const close = (e: MouseEvent) => { if (statusRef.current?.contains(e.target as Node)) return; setStatusDropdownOpen(false); };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [statusDropdownOpen]);
+  const menuItems = [
+    { label: 'Mark section complete', icon: CheckCircle2, onClick: () => onSetSectionStatus('complete') },
+    ...(onRemoveSection ? [{ label: 'Remove section', icon: Trash2, variant: 'danger' as const, onClick: () => setRemoveConfirmOpen(true) }] : []),
+  ].filter(Boolean) as { label: string; icon: typeof CheckCircle2; onClick: () => void; variant?: 'danger' }[];
+  return (
+    <div className="rounded-xl border border-lp-border bg-lp-surface overflow-hidden card-hover">
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={onToggle}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle(); } }}
+        className="flex w-full items-center gap-4 px-4 py-3 text-left hover:bg-lp-surface-hover cursor-pointer transition-colors duration-200"
+        style={{ transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)' }}
+      >
+        <FileText size={20} className="text-lp-text-tertiary shrink-0" />
+        <span className="flex-1 font-medium text-lp-text">{section.label}</span>
+        <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
+          <ContextMenu items={menuItems} align="right" />
+        </div>
+        <StatusDropdown sectionStatus={sectionStatus} onSelectStatus={onSetSectionStatus} onClick={(e) => e.stopPropagation()} />
+        {onSetSectionAssigned && workspaceMembers.length > 0 ? (
+          <AssignDropdown assignedTo={assignedTo} members={workspaceMembers} onSelect={onSetSectionAssigned} onClick={(e) => e.stopPropagation()} />
+        ) : assignedTo ? (
+          <span className="text-sm text-lp-text-tertiary truncate max-w-[120px]">{workspaceMembers.find((m) => m.id === assignedTo)?.name ?? 'Assigned'}</span>
+        ) : null}
+        {expanded ? <ChevronDown size={18} className="text-lp-text-tertiary shrink-0" /> : <ChevronRight size={18} className="text-lp-text-tertiary shrink-0" />}
+      </div>
+      <div className={cn('grid transition-[grid-template-rows] duration-200 ease-out', expanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')} style={{ transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)' }}>
+        <div className="min-h-0 overflow-hidden">
+          <div className={cn('border-t border-lp-border px-4 py-4 space-y-4 transition-opacity duration-200', expanded ? 'opacity-100 delay-50' : 'opacity-0 delay-0')}>
+            <div className="flex flex-wrap items-center gap-4">
+              <div className="relative z-[100]" ref={typeRef}>
+                <span className="mb-1 block text-sm font-medium text-lp-text">Rider type</span>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setTypeDropdownOpen((o) => !o); }}
+                  className="flex items-center gap-2 rounded-xl border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text hover:bg-lp-surface-hover min-w-[180px]"
+                >
+                  <span className="flex-1 text-left">{riderType}</span>
+                  <ChevronDown size={16} className={cn('shrink-0 transition-transform', typeDropdownOpen && 'rotate-180')} />
+                </button>
+                {typeDropdownOpen && (
+                  <div className="absolute left-0 top-full z-[100] mt-1 min-w-[180px] rounded-xl border border-lp-border bg-lp-surface py-1 shadow-lg">
+                    {RIDER_TYPES.map((t) => (
+                      <button key={t} type="button" onClick={() => { onFieldChange('rider_type', t); setTypeDropdownOpen(false); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-lp-text hover:bg-lp-surface-hover">
+                        {t}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="relative z-[100]" ref={statusRef}>
+                <span className="mb-1 block text-sm font-medium text-lp-text">Status</span>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setStatusDropdownOpen((o) => !o); }}
+                  className={cn(
+                    'flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium min-w-[140px] transition-colors',
+                    riderStatus === 'Confirmed' ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' :
+                    riderStatus === 'Received' ? 'border-blue-500/50 bg-blue-500/10 text-blue-600 dark:text-blue-400' :
+                    riderStatus === 'Sent' ? 'border-amber-500/50 bg-amber-500/10 text-amber-600 dark:text-amber-400' :
+                    'border-lp-border bg-lp-surface text-lp-text hover:bg-lp-surface-hover'
+                  )}
+                >
+                  <span className="flex-1 text-left">{riderStatus || 'Not set'}</span>
+                  <ChevronDown size={16} className={cn('shrink-0 transition-transform', statusDropdownOpen && 'rotate-180')} />
+                </button>
+                {statusDropdownOpen && (
+                  <div className="absolute left-0 top-full z-[100] mt-1 min-w-[140px] rounded-xl border border-lp-border bg-lp-surface py-1 shadow-lg">
+                    {RIDER_STATUSES.map((s) => (
+                      <button key={s} type="button" onClick={() => { onFieldChange('rider_status', s); setStatusDropdownOpen(false); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-lp-text hover:bg-lp-surface-hover">
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+            {(section.fields ?? []).map((field) => (
+              <FieldRenderer
+                key={field.id}
+                field={field}
+                value={data[field.id]}
+                currency={currency}
+                onChange={(v) => onFieldChange(field.id, v)}
+                instanceId={undefined}
+              />
+            ))}
+          </div>
+        </div>
+      </div>
+      {onRemoveSection && (
+        <DeleteConfirmationModal open={removeConfirmOpen} itemName={section.label} onClose={() => setRemoveConfirmOpen(false)} onConfirm={async () => { await onRemoveSection(section.template_id); setRemoveConfirmOpen(false); }} />
+      )}
+    </div>
+  );
+}
+
+// ----- Flights section (multiple flight cards) -----
+
+export type FlightEntry = {
+  id: string;
+  departure_city: string;
+  arrival_city: string;
+  date: string;
+  time: string;
+  airline: string;
+  flight_number: string;
+  confirmation_code: string;
+  personnel_ids: string[];
+};
+
+function buildTourPersonnelList(counts: { principal_count: number; band_count: number; crew_count: number }): { id: string; label: string }[] {
+  const list: { id: string; label: string }[] = [];
+  let i = 0;
+  for (let p = 0; p < (counts.principal_count ?? 0); p++) {
+    i++;
+    list.push({ id: `principal_${i}`, label: `Principal ${i}` });
+  }
+  for (let b = 0; b < (counts.band_count ?? 0); b++) {
+    i++;
+    list.push({ id: `band_${i}`, label: `Band ${i}` });
+  }
+  for (let c = 0; c < (counts.crew_count ?? 0); c++) {
+    i++;
+    list.push({ id: `crew_${i}`, label: `Crew ${i}` });
+  }
+  return list;
+}
+
+function FlightsSectionCard({
+  instanceId,
+  section,
+  data,
+  sectionStatus,
+  sectionFlags,
+  expanded,
+  onToggle,
+  onSetSectionStatus,
+  onSetSectionAssigned,
+  onFlightsChange,
+  onFlagsChange,
+  allFlags,
+  currentUserId,
+  onRemoveSection,
+  assignedTo,
+  workspaceMembers = [],
+  tourPersonnelCounts,
+}: {
+  instanceId: string;
+  section: SectionDef;
+  data: Record<string, unknown>;
+  sectionStatus: string;
+  sectionFlags: AdvanceFlag[];
+  expanded: boolean;
+  onToggle: () => void;
+  onSetSectionStatus: (status: string) => void;
+  onSetSectionAssigned?: (userId: string | null) => void;
+  onFlightsChange: (flights: FlightEntry[]) => void;
+  onFlagsChange: (nextFlags: AdvanceFlag[]) => void;
+  allFlags: AdvanceFlag[];
+  currentUserId: string | null;
+  onRemoveSection?: (templateId: string) => void | Promise<void>;
+  assignedTo?: string;
+  workspaceMembers?: WorkspaceMember[];
+  tourPersonnelCounts?: { principal_count: number; band_count: number; crew_count: number };
+}) {
+  const rawFlights = Array.isArray(data.flights) ? (data.flights as (Partial<FlightEntry> & { id?: string })[]) : [];
+  const flights: FlightEntry[] = rawFlights.map((f) => ({
+    id: f.id ?? crypto.randomUUID(),
+    departure_city: f.departure_city ?? '',
+    arrival_city: f.arrival_city ?? '',
+    date: f.date ?? '',
+    time: f.time ?? '',
+    airline: f.airline ?? '',
+    flight_number: f.flight_number ?? '',
+    confirmation_code: f.confirmation_code ?? '',
+    personnel_ids: Array.isArray(f.personnel_ids) ? f.personnel_ids : [],
+  }));
+  const personnelOptions = buildTourPersonnelList(tourPersonnelCounts ?? { principal_count: 0, band_count: 0, crew_count: 0 });
+  const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false);
+  const [personnelDropdownOpen, setPersonnelDropdownOpen] = useState<string | null>(null);
+  const addFlight = () => {
+    onFlightsChange([
+      ...flights,
+      { id: crypto.randomUUID(), departure_city: '', arrival_city: '', date: '', time: '', airline: '', flight_number: '', confirmation_code: '', personnel_ids: [] },
+    ]);
+  };
+  const updateFlight = (index: number, patch: Partial<FlightEntry>) => {
+    const next = flights.map((f, i) => (i === index ? { ...f, ...patch } : f));
+    onFlightsChange(next);
+  };
+  const removeFlight = (index: number) => {
+    onFlightsChange(flights.filter((_, i) => i !== index));
+  };
+  const menuItems = [
+    { label: 'Mark section complete', icon: CheckCircle2, onClick: () => onSetSectionStatus('complete') },
+    ...(onRemoveSection ? [{ label: 'Remove section', icon: Trash2, variant: 'danger' as const, onClick: () => setRemoveConfirmOpen(true) }] : []),
+  ].filter(Boolean) as { label: string; icon: typeof CheckCircle2; onClick: () => void; variant?: 'danger' }[];
+  return (
+    <div className="rounded-xl border border-lp-border bg-lp-surface overflow-hidden card-hover">
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={onToggle}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle(); } }}
+        className="flex w-full items-center gap-4 px-4 py-3 text-left hover:bg-lp-surface-hover cursor-pointer transition-colors duration-200"
+        style={{ transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)' }}
+      >
+        <Plane size={20} className="text-lp-text-tertiary shrink-0" />
+        <span className="flex-1 font-medium text-lp-text">{section.label}</span>
+        <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
+          <ContextMenu items={menuItems} align="right" />
+        </div>
+        <StatusDropdown sectionStatus={sectionStatus} onSelectStatus={onSetSectionStatus} onClick={(e) => e.stopPropagation()} />
+        {onSetSectionAssigned && workspaceMembers.length > 0 ? (
+          <AssignDropdown assignedTo={assignedTo} members={workspaceMembers} onSelect={onSetSectionAssigned} onClick={(e) => e.stopPropagation()} />
+        ) : null}
+        {expanded ? <ChevronDown size={18} className="text-lp-text-tertiary shrink-0" /> : <ChevronRight size={18} className="text-lp-text-tertiary shrink-0" />}
+      </div>
+      <div className={cn('grid transition-[grid-template-rows] duration-200 ease-out', expanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')} style={{ transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)' }}>
+        <div className="min-h-0 overflow-hidden">
+          <div className={cn('border-t border-lp-border px-4 py-4 space-y-4 transition-opacity duration-200', expanded ? 'opacity-100 delay-50' : 'opacity-0 delay-0')}>
+            {flights.map((flight, index) => (
+              <div key={flight.id} className="rounded-xl border border-lp-border bg-lp-surface-hover/50 p-4 space-y-3">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium text-lp-text-tertiary">Flight {index + 1}</span>
+                  <button type="button" onClick={() => removeFlight(index)} className="rounded p-1.5 text-lp-text-tertiary hover:bg-red-500/10 hover:text-red-500" aria-label="Remove flight"><X size={18} /></button>
+                </div>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-lp-text-tertiary">Departure city</label>
+                    <input type="text" value={flight.departure_city} onChange={(e) => updateFlight(index, { departure_city: e.target.value })} placeholder="City" className="w-full rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:border-lp-orange focus:outline-none" />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-lp-text-tertiary">Arrival city</label>
+                    <input type="text" value={flight.arrival_city} onChange={(e) => updateFlight(index, { arrival_city: e.target.value })} placeholder="City" className="w-full rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:border-lp-orange focus:outline-none" />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-lp-text-tertiary">Date</label>
+                    <input type="date" value={flight.date} onChange={(e) => updateFlight(index, { date: e.target.value })} className="w-full rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text focus:border-lp-orange focus:outline-none" />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-lp-text-tertiary">Time</label>
+                    <input type="time" value={flight.time} onChange={(e) => updateFlight(index, { time: e.target.value })} className="w-full rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text focus:border-lp-orange focus:outline-none" />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-lp-text-tertiary">Airline</label>
+                    <input type="text" value={flight.airline} onChange={(e) => updateFlight(index, { airline: e.target.value })} placeholder="Airline" className="w-full rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:border-lp-orange focus:outline-none" />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-xs font-medium text-lp-text-tertiary">Flight number</label>
+                    <input type="text" value={flight.flight_number} onChange={(e) => updateFlight(index, { flight_number: e.target.value })} placeholder="e.g. BA123" className="w-full rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:border-lp-orange focus:outline-none" />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="mb-1 block text-xs font-medium text-lp-text-tertiary">Confirmation code</label>
+                    <input type="text" value={flight.confirmation_code} onChange={(e) => updateFlight(index, { confirmation_code: e.target.value })} placeholder="Booking ref" className="w-full rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:border-lp-orange focus:outline-none" />
+                  </div>
+                </div>
+                <div className="relative z-[100]">
+                  <span className="mb-1 block text-xs font-medium text-lp-text-tertiary">Personnel on this flight</span>
+                  <PersonnelMultiSelect
+                    options={personnelOptions}
+                    selectedIds={flight.personnel_ids ?? []}
+                    onChange={(ids) => updateFlight(index, { personnel_ids: ids })}
+                    openKey={personnelDropdownOpen}
+                    onOpenChange={setPersonnelDropdownOpen}
+                    instanceId={flight.id}
+                  />
+                </div>
+              </div>
+            ))}
+            <button type="button" onClick={addFlight} className="flex items-center gap-2 rounded-lg border border-dashed border-lp-border px-4 py-2.5 text-sm font-medium text-lp-text-tertiary hover:bg-lp-surface-hover hover:text-lp-text transition-colors duration-200" style={{ transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)' }}>
+              <Plus size={16} />
+              Add another flight
+            </button>
+          </div>
+        </div>
+      </div>
+      {onRemoveSection && (
+        <DeleteConfirmationModal open={removeConfirmOpen} itemName={section.label} onClose={() => setRemoveConfirmOpen(false)} onConfirm={async () => { await onRemoveSection(section.template_id); setRemoveConfirmOpen(false); }} />
+      )}
+    </div>
+  );
+}
+
+function PersonnelMultiSelect({
+  options,
+  selectedIds,
+  onChange,
+  openKey,
+  onOpenChange,
+  instanceId,
+}: {
+  options: { id: string; label: string }[];
+  selectedIds: string[];
+  onChange: (ids: string[]) => void;
+  openKey: string | null;
+  onOpenChange: (id: string | null) => void;
+  instanceId: string;
+}) {
+  const open = openKey === instanceId;
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => { if (ref.current?.contains(e.target as Node)) return; onOpenChange(null); };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [open, onOpenChange]);
+  const toggle = (id: string) => {
+    if (selectedIds.includes(id)) onChange(selectedIds.filter((x) => x !== id));
+    else onChange([...selectedIds, id]);
+  };
+  const label = selectedIds.length ? selectedIds.map((id) => options.find((o) => o.id === id)?.label ?? id).join(', ') : 'Select personnel...';
+  return (
+    <div className="relative" ref={ref}>
+      <button
+        type="button"
+        onClick={() => onOpenChange(open ? null : instanceId)}
+        className="flex w-full items-center justify-between rounded-xl border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text hover:bg-lp-surface-hover"
+      >
+        <span className={cn('truncate', !selectedIds.length && 'text-lp-text-tertiary')}>{label}</span>
+        <ChevronDown size={16} className={cn('shrink-0 transition-transform', open && 'rotate-180')} />
+      </button>
+      {open && (
+        <div className="absolute left-0 right-0 top-full z-[100] mt-1 max-h-48 overflow-y-auto rounded-xl border border-lp-border bg-lp-surface py-1 shadow-lg">
+          {options.map((opt) => (
+            <label key={opt.id} className="flex cursor-pointer items-center gap-2 px-3 py-2 hover:bg-lp-surface-hover">
+              <input type="checkbox" checked={selectedIds.includes(opt.id)} onChange={() => toggle(opt.id)} className="rounded border-lp-border text-lp-orange focus:ring-lp-orange" />
+              <span className="text-sm text-lp-text">{opt.label}</span>
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ----- Settlement (collapsible block with Deal Memo) -----
+
+function SettlementBlock({
+  section,
+  data,
+  instanceId,
+  currency = 'GBP',
+  onFieldChange,
+}: {
+  section: SectionDef;
+  data: Record<string, unknown>;
+  instanceId: string;
+  currency?: string;
+  onFieldChange: (fieldId: string, value: unknown) => void;
+}) {
+  const dealMemoFile = data.deal_memo_file as string | undefined;
+  const dealMemoText = (data.deal_memo_text as string) ?? '';
+  return (
+    <div className="space-y-4 rounded-xl border border-lp-border bg-lp-surface p-4">
+      <div>
+        <label className="mb-1 block text-sm font-medium text-lp-text">Deal Memo</label>
+        <p className="mb-2 text-xs text-lp-text-tertiary">Upload a file or paste text below.</p>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+          <FileUploadField value={dealMemoFile ?? ''} onChange={(v) => onFieldChange('deal_memo_file', v)} instanceId={instanceId} fieldId="deal_memo_file" />
+          <div className="min-w-0 flex-1">
+            <textarea
+              value={dealMemoText}
+              onChange={(e) => onFieldChange('deal_memo_text', e.target.value)}
+              placeholder="Or paste deal memo text here..."
+              rows={4}
+              className="w-full rounded-xl border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:border-lp-orange focus:outline-none focus:ring-2 focus:ring-lp-orange/20"
+            />
+          </div>
+        </div>
+        {dealMemoFile && (
+          <p className="mt-2 text-sm text-lp-text-secondary">
+            File attached. <a href={dealMemoFile} target="_blank" rel="noopener noreferrer" className="text-lp-orange hover:underline">View file</a>
+          </p>
+        )}
+      </div>
+      {(section.fields ?? []).filter((f) => f.id !== 'deal_memo_file' && f.id !== 'deal_memo_text').map((field) => (
+        <FieldRenderer key={field.id} field={field} value={data[field.id]} currency={currency} onChange={(v) => onFieldChange(field.id, v)} instanceId={instanceId} />
+      ))}
+    </div>
+  );
+}
+
+// ----- Parking & Access (under Transport in template) -----
+
+function ParkingAccessCard({
+  instanceId,
+  section,
+  data,
+  sectionStatus,
+  sectionFlags,
+  expanded,
+  onToggle,
+  onSetSectionStatus,
+  onSetSectionAssigned,
+  onFieldChange,
+  onFlagsChange,
+  allFlags,
+  currentUserId,
+  onRemoveSection,
+  assignedTo,
+  workspaceMembers = [],
+}: {
+  instanceId: string;
+  section: SectionDef;
+  data: Record<string, unknown>;
+  sectionStatus: string;
+  sectionFlags: AdvanceFlag[];
+  expanded: boolean;
+  onToggle: () => void;
+  onSetSectionStatus: (status: string) => void;
+  onSetSectionAssigned?: (userId: string | null) => void;
+  onFieldChange: (fieldId: string, value: unknown) => void;
+  onFlagsChange: (nextFlags: AdvanceFlag[]) => void;
+  allFlags: AdvanceFlag[];
+  currentUserId: string | null;
+  onRemoveSection?: (templateId: string) => void | Promise<void>;
+  assignedTo?: string;
+  workspaceMembers?: WorkspaceMember[];
+}) {
+  const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false);
+  const parkingLocation = (data.parking_location as string) ?? '';
+  const parkingInstructions = (data.parking_instructions as string) ?? '';
+  const accessNotes = (data.access_notes as string) ?? '';
+  const parkingMapUrl = (data.parking_map as string) ?? '';
+  const parkingMapContentType = (data.parking_map_content_type as string) ?? '';
+  const isPdf = parkingMapContentType === 'application/pdf' || (parkingMapUrl && parkingMapUrl.toLowerCase().endsWith('.pdf'));
+  const menuItems = [
+    { label: 'Mark section complete', icon: CheckCircle2, onClick: () => onSetSectionStatus('complete') },
+    ...(onRemoveSection ? [{ label: 'Remove section', icon: Trash2, variant: 'danger' as const, onClick: () => setRemoveConfirmOpen(true) }] : []),
+  ].filter(Boolean) as { label: string; icon: typeof CheckCircle2; onClick: () => void; variant?: 'danger' }[];
+  return (
+    <div className="rounded-xl border border-lp-border bg-lp-surface overflow-hidden card-hover">
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={onToggle}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle(); } }}
+        className="flex w-full items-center gap-4 px-4 py-3 text-left hover:bg-lp-surface-hover cursor-pointer transition-colors duration-200"
+        style={{ transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)' }}
+      >
+        <Car size={20} className="text-lp-text-tertiary shrink-0" />
+        <span className="flex-1 font-medium text-lp-text">{section.label}</span>
+        <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
+          <ContextMenu items={menuItems} align="right" />
+        </div>
+        <StatusDropdown sectionStatus={sectionStatus} onSelectStatus={onSetSectionStatus} onClick={(e) => e.stopPropagation()} />
+        {onSetSectionAssigned && workspaceMembers.length > 0 ? (
+          <AssignDropdown assignedTo={assignedTo} members={workspaceMembers} onSelect={onSetSectionAssigned} onClick={(e) => e.stopPropagation()} />
+        ) : null}
+        {expanded ? <ChevronDown size={18} className="text-lp-text-tertiary shrink-0" /> : <ChevronRight size={18} className="text-lp-text-tertiary shrink-0" />}
+      </div>
+      <div className={cn('grid transition-[grid-template-rows] duration-200 ease-out', expanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')} style={{ transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)' }}>
+        <div className="min-h-0 overflow-hidden">
+          <div className={cn('border-t border-lp-border px-4 py-4 space-y-4 transition-opacity duration-200', expanded ? 'opacity-100 delay-50' : 'opacity-0 delay-0')}>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-lp-text">Parking location</label>
+              <input
+                type="text"
+                value={parkingLocation}
+                onChange={(e) => onFieldChange('parking_location', e.target.value)}
+                placeholder="Address or description"
+                className="w-full rounded-xl border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:border-lp-orange focus:outline-none focus:ring-2 focus:ring-lp-orange/20"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-lp-text">Parking instructions</label>
+              <textarea
+                rows={3}
+                value={parkingInstructions}
+                onChange={(e) => onFieldChange('parking_instructions', e.target.value)}
+                placeholder="Where to park, load-in route..."
+                className="w-full rounded-xl border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:border-lp-orange focus:outline-none focus:ring-2 focus:ring-lp-orange/20"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-lp-text">Access notes</label>
+              <textarea
+                rows={2}
+                value={accessNotes}
+                onChange={(e) => onFieldChange('access_notes', e.target.value)}
+                placeholder="Gate codes, access times..."
+                className="w-full rounded-xl border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:border-lp-orange focus:outline-none focus:ring-2 focus:ring-lp-orange/20"
+              />
+            </div>
+            <div>
+              <label className="mb-1 block text-sm font-medium text-lp-text">Parking map</label>
+              <p className="mb-2 text-xs text-lp-text-tertiary">Upload image or PDF. Images display inline; PDFs show a thumbnail you can click to open.</p>
+              <FileUploadField
+                value={parkingMapUrl}
+                onChange={(v) => onFieldChange('parking_map', v)}
+                instanceId={instanceId}
+                fieldId="parking_map"
+              />
+              {parkingMapUrl && (
+                <div className="mt-3">
+                  {isPdf ? (
+                    <a href={parkingMapUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-lg border border-lp-border bg-lp-surface-hover px-4 py-2 text-sm text-lp-text hover:bg-lp-surface">
+                      <FileText size={18} />
+                      Parking map (PDF) — click to open
+                    </a>
+                  ) : (
+                    <div className="relative max-w-md rounded-lg border border-lp-border overflow-hidden bg-lp-bg-secondary">
+                      <img src={parkingMapUrl} alt="Parking map" className="w-full h-auto object-contain max-h-80" />
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+      {onRemoveSection && (
+        <DeleteConfirmationModal open={removeConfirmOpen} itemName={section.label} onClose={() => setRemoveConfirmOpen(false)} onConfirm={async () => { await onRemoveSection(section.template_id); setRemoveConfirmOpen(false); }} />
+      )}
+    </div>
+  );
+}
+
+// ----- Important Documents (always at top) -----
+
+function ImportantDocumentsCard({
+  instanceId,
+  documents,
+  onDocumentsChange,
+  currentUserId,
+}: {
+  instanceId: string;
+  documents: AdvanceDocument[];
+  onDocumentsChange: (docs: AdvanceDocument[]) => void;
+  currentUserId: string | null;
+}) {
+  const [uploading, setUploading] = useState(false);
+  const [dragOver, setDragOver] = useState(false);
+  const [viewerDoc, setViewerDoc] = useState<AdvanceDocument | null>(null);
+  const [manageAccessDoc, setManageAccessDoc] = useState<AdvanceDocument | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const uploadFile = async (file: File) => {
+    const allowed = ['application/pdf', 'image/jpeg', 'image/png', 'image/gif'];
+    if (!allowed.includes(file.type)) return;
+    if (file.size > 10 * 1024 * 1024) return;
+    setUploading(true);
+    try {
+      const form = new FormData();
+      form.set('file', file);
+      form.set('advance_instance_id', instanceId);
+      form.set('field_id', 'documents');
+      const res = await fetch('/api/upload/advance-file', { method: 'POST', body: form });
+      if (!res.ok) throw new Error('Upload failed');
+      const { url } = await res.json();
+      const doc: AdvanceDocument = {
+        id: crypto.randomUUID(),
+        url,
+        filename: file.name,
+        content_type: file.type,
+        uploaded_at: new Date().toISOString(),
+        uploaded_by: currentUserId ?? undefined,
+        visible_to: [],
+      };
+      onDocumentsChange([...documents, doc]);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const removeDoc = (id: string) => {
+    onDocumentsChange(documents.filter((d) => d.id !== id));
+    if (viewerDoc?.id === id) setViewerDoc(null);
+    if (manageAccessDoc?.id === id) setManageAccessDoc(null);
+  };
+
+  const updateDoc = (id: string, patch: Partial<AdvanceDocument>) => {
+    onDocumentsChange(documents.map((d) => (d.id === id ? { ...d, ...patch } : d)));
+    if (manageAccessDoc?.id === id) setManageAccessDoc((d) => (d ? { ...d, ...patch } : null));
+  };
+
+  const docIcon = (doc: AdvanceDocument) => {
+    const t = doc.content_type ?? '';
+    if (t.includes('pdf')) return <FileText size={18} className="shrink-0 text-red-500" />;
+    if (t.includes('image')) return <FileText size={18} className="shrink-0 text-blue-500" />;
+    return <FileText size={18} className="shrink-0 text-lp-text-secondary" />;
+  };
+
+  const formatDate = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+
+  return (
+    <div className="rounded-xl border border-lp-border bg-lp-surface overflow-hidden card-hover">
+      <div className="flex items-center gap-4 px-4 py-3 border-b border-lp-border">
+        <Folder size={20} className="text-lp-text-secondary shrink-0" />
+        <span className="font-medium text-lp-text">Important Documents</span>
+      </div>
+      <div className="p-4 space-y-4">
+        <div
+          onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragOver(false);
+            const f = e.dataTransfer.files[0];
+            if (f) uploadFile(f);
+          }}
+          onClick={() => fileInputRef.current?.click()}
+          className={cn(
+            'rounded-xl border-2 border-dashed border-lp-border p-6 text-center transition-all cursor-pointer',
+            dragOver && 'border-lp-accent bg-lp-accent/5',
+            uploading && 'opacity-60 pointer-events-none'
+          )}
+        >
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".pdf,image/jpeg,image/png,image/gif"
+            className="hidden"
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) { uploadFile(f); e.target.value = ''; } }}
+          />
+          {uploading ? (
+            <p className="text-sm text-lp-text-secondary flex items-center justify-center gap-2"><Loader2 size={16} className="animate-spin" /> Uploading…</p>
+          ) : (
+            <p className="text-sm text-lp-text-secondary">Drag and drop or click to upload (PDF, JPEG, PNG, GIF — max 10MB)</p>
+          )}
+        </div>
+        {documents.length > 0 && (
+          <ul className="space-y-2">
+            {documents.map((doc) => (
+              <li key={doc.id} className="rounded-xl border border-lp-border bg-lp-surface p-3 hover:border-lp-accent/30 transition-all">
+                <div className="flex items-center gap-3">
+                  {docIcon(doc)}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-lp-text truncate">{doc.filename}</p>
+                    <p className="text-xs text-lp-text-tertiary">{formatDate(doc.uploaded_at)}{doc.uploaded_by ? ` · Uploaded by user` : ''}</p>
+                  </div>
+                  <ContextMenu
+                    items={[
+                      { label: 'View', icon: FileText, onClick: () => setViewerDoc(doc) },
+                      { label: 'Download', icon: Download, onClick: () => window.open(doc.url, '_blank') },
+                      { label: 'Delete', icon: Trash2, variant: 'danger', onClick: () => removeDoc(doc.id) },
+                      { label: 'Manage Access', icon: UserPlus, onClick: () => setManageAccessDoc(doc) },
+                    ]}
+                    align="right"
+                  />
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+      {viewerDoc && (
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/70 p-4" onClick={() => setViewerDoc(null)}>
+          <div className="bg-lp-surface rounded-xl border border-lp-border max-w-4xl max-h-[90vh] w-full overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-4 py-2 border-b border-lp-border">
+              <span className="font-medium text-lp-text truncate">{viewerDoc.filename}</span>
+              <button type="button" onClick={() => setViewerDoc(null)} className="rounded p-1 text-lp-text-tertiary hover:bg-lp-surface-hover"><X size={20} /></button>
+            </div>
+            <div className="flex-1 min-h-0 overflow-auto p-4">
+              {viewerDoc.content_type?.startsWith('image/') ? (
+                <img src={viewerDoc.url} alt={viewerDoc.filename} className="max-w-full h-auto" />
+              ) : viewerDoc.content_type === 'application/pdf' ? (
+                <iframe src={viewerDoc.url} title={viewerDoc.filename} className="w-full h-[80vh] rounded-lg border border-lp-border" />
+              ) : (
+                <a href={viewerDoc.url} target="_blank" rel="noreferrer" className="text-lp-accent hover:underline">Download file</a>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+      {manageAccessDoc && (
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/70 p-4" onClick={() => setManageAccessDoc(null)}>
+          <div className="bg-lp-surface rounded-xl border border-lp-border max-w-md w-full p-4" onClick={(e) => e.stopPropagation()}>
+            <h3 className="font-semibold text-lp-text">Manage Access</h3>
+            <p className="text-sm text-lp-text-secondary mt-1">Visible to all by default. Assign roles or people to restrict.</p>
+            <p className="text-xs text-lp-text-tertiary mt-2">Coming soon: role/person picker.</p>
+            <div className="mt-4 flex justify-end">
+              <button type="button" onClick={() => setManageAccessDoc(null)} className="rounded-xl border border-lp-border px-4 py-2 text-sm text-lp-text hover:bg-lp-surface-hover">Close</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function RoleDropdown({
+  value,
+  options,
+  placeholder,
+  onChange,
+  className = '',
+}: {
+  value: string;
+  options: string[];
+  placeholder: string;
+  onChange: (value: string) => void;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const displayVal = value || placeholder;
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => { if (ref.current?.contains(e.target as Node)) return; setOpen(false); };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [open]);
+  return (
+    <div className={cn('relative z-[100]', className)} ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center justify-between rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text hover:bg-lp-surface-hover transition-colors duration-200"
+        style={{ transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)' }}
+      >
+        <span className={cn('truncate', !value && 'text-lp-text-tertiary')}>{displayVal}</span>
+        <ChevronDown size={14} className={cn('shrink-0 ml-1 transition-transform', open && 'rotate-180')} />
+      </button>
+      {open && (
+        <div className="absolute left-0 right-0 top-full z-[100] mt-1 max-h-48 overflow-y-auto rounded-xl border border-lp-border bg-lp-surface py-1 shadow-lg">
+          {options.map((r) => (
+            <button
+              key={r}
+              type="button"
+              onClick={() => { onChange(r === 'Custom Contact' ? '' : r); setOpen(false); }}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-lp-text hover:bg-lp-surface-hover"
+            >
+              {r}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SelectDropdown({
+  value,
+  options,
+  placeholder,
+  onChange,
+  className = '',
+}: {
+  value: string;
+  options: string[];
+  placeholder: string;
+  onChange: (value: string) => void;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const displayVal = value || placeholder;
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => { if (ref.current?.contains(e.target as Node)) return; setOpen(false); };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [open]);
+  return (
+    <div className={cn('relative z-[100]', className)} ref={ref}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className={cn('flex w-full items-center justify-between rounded-xl border bg-lp-surface px-3 py-2 text-sm text-lp-text hover:bg-lp-surface-hover transition-colors duration-200 border-lp-border focus:outline-none focus:ring-2 focus:ring-lp-orange/20', !value && 'text-lp-text-tertiary')}
+        style={{ transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)' }}
+      >
+        <span className="truncate">{displayVal}</span>
+        <ChevronDown size={14} className={cn('shrink-0 ml-1 transition-transform', open && 'rotate-180')} />
+      </button>
+      {open && (
+        <div className="absolute left-0 right-0 top-full z-[100] mt-1 max-h-48 overflow-y-auto rounded-xl border border-lp-border bg-lp-surface py-1 shadow-lg">
+          <button type="button" onClick={() => { onChange(''); setOpen(false); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-lp-text-tertiary hover:bg-lp-surface-hover">
+            {placeholder}
+          </button>
+          {options.map((opt) => (
+            <button key={opt} type="button" onClick={() => { onChange(opt); setOpen(false); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-lp-text hover:bg-lp-surface-hover">
+              {opt}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function KeyContactRow({
   row,
   venueName,
   onUpdate,
   onRemove,
+  contactRoles = [...CONTACT_ROLES],
 }: {
   row: ContactRow;
   venueName: string | null;
   onUpdate: (patch: Partial<ContactRow>) => void;
   onRemove: () => void;
+  contactRoles?: string[];
 }) {
   const [nameQuery, setNameQuery] = useState('');
   const [suggestions, setSuggestions] = useState<ContactRow[]>([]);
   const [suggestOpen, setSuggestOpen] = useState(false);
+  const [savingToBook, setSavingToBook] = useState(false);
   const suggestRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -1590,13 +2869,60 @@ function KeyContactRow({
       return;
     }
     const t = setTimeout(() => {
-      fetch(`/api/contacts?search=${encodeURIComponent(nameQuery.trim())}`)
+      fetch(`/api/contacts/search?q=${encodeURIComponent(nameQuery.trim())}`)
         .then((r) => r.ok ? r.json() : { contacts: [] })
         .then((j) => setSuggestions((j.contacts ?? []).slice(0, 8)))
         .catch(() => setSuggestions([]));
     }, 200);
     return () => clearTimeout(t);
   }, [nameQuery]);
+
+  const saveToContactBook = async () => {
+    if (!(row.first_name ?? '').trim()) return;
+    setSavingToBook(true);
+    try {
+      if (row.id) {
+        const res = await fetch('/api/contacts', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: row.id,
+            first_name: row.first_name ?? '',
+            last_name: row.last_name ?? '',
+            phone: row.phone ?? undefined,
+            email: row.email ?? undefined,
+            role: row.role ?? undefined,
+            venue_name: row.venue_name ?? undefined,
+            notes: row.notes ?? undefined,
+          }),
+        });
+        if (res.ok) {
+          const contact = await res.json();
+          onUpdate({ ...contact });
+        }
+      } else {
+        const res = await fetch('/api/contacts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            first_name: (row.first_name ?? '').trim(),
+            last_name: (row.last_name ?? '').trim(),
+            phone: row.phone ?? undefined,
+            email: row.email ?? undefined,
+            role: row.role ?? undefined,
+            venue_name: row.venue_name ?? undefined,
+            notes: row.notes ?? undefined,
+          }),
+        });
+        if (res.ok) {
+          const contact = await res.json();
+          onUpdate({ id: contact.id, ...contact });
+        }
+      }
+    } finally {
+      setSavingToBook(false);
+    }
+  };
 
   useEffect(() => {
     if (!suggestOpen) return;
@@ -1669,16 +2995,24 @@ function KeyContactRow({
           placeholder="Email"
           className="flex-1 min-w-[140px] rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:border-lp-orange focus:outline-none"
         />
-        <select
-          value={row.role}
-          onChange={(e) => onUpdate({ role: e.target.value })}
-          className="rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text focus:border-lp-orange focus:outline-none min-w-[140px]"
-        >
-          <option value="">Role</option>
-          {CONTACT_ROLES.map((r) => (
-            <option key={r} value={r}>{r}</option>
-          ))}
-        </select>
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          <RoleDropdown
+            value={row.role}
+            options={contactRoles}
+            placeholder={contactRoles.includes('Custom Contact') ? 'Custom Contact' : 'Role'}
+            onChange={(v) => onUpdate({ role: v })}
+            className="min-w-[140px]"
+          />
+          {!contactRoles.includes(row.role) && row.role !== '' && (
+            <input
+              type="text"
+              value={row.role}
+              onChange={(e) => onUpdate({ role: e.target.value })}
+              placeholder="Custom role"
+              className="flex-1 min-w-[100px] rounded-lg border border-lp-border bg-lp-surface px-2 py-2 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:border-lp-orange focus:outline-none"
+            />
+          )}
+        </div>
         <input
           type="text"
           value={row.venue_name ?? venueName ?? ''}
@@ -1693,6 +3027,23 @@ function KeyContactRow({
           aria-label="Remove contact"
         >
           <X size={18} />
+        </button>
+      </div>
+      <input
+        type="text"
+        value={row.notes ?? ''}
+        onChange={(e) => onUpdate({ notes: e.target.value })}
+        placeholder="Notes"
+        className="w-full rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:border-lp-orange focus:outline-none"
+      />
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={saveToContactBook}
+          disabled={savingToBook || !(row.first_name ?? '').trim()}
+          className="rounded-lg border border-lp-border px-3 py-1.5 text-xs font-medium text-lp-text hover:bg-lp-surface-hover disabled:opacity-50"
+        >
+          {savingToBook ? 'Saving…' : row.id ? 'Update in contact book' : 'Save to contact book'}
         </button>
       </div>
     </div>
@@ -1738,7 +3089,7 @@ function StatusDropdown({
         <ChevronDown size={12} className="shrink-0 opacity-70" />
       </button>
       {open && (
-        <div className="absolute left-0 top-full z-50 mt-1 min-w-[140px] rounded-xl border border-lp-border bg-lp-surface py-1 shadow-lg">
+        <div className="absolute left-0 top-full z-[100] mt-1 min-w-[140px] rounded-xl border border-lp-border bg-lp-surface py-1 shadow-lg">
           {STATUS_OPTIONS.map((opt) => (
             <button
               key={opt.value}
@@ -1756,6 +3107,85 @@ function StatusDropdown({
   );
 }
 
+type WorkspaceMember = { id: string; name: string | null; avatar_url?: string | null };
+
+function AssignDropdown({
+  assignedTo,
+  members,
+  onSelect,
+  onClick,
+}: {
+  assignedTo: string | undefined;
+  members: WorkspaceMember[];
+  onSelect: (userId: string | null) => void;
+  onClick: (e: React.MouseEvent) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const assigned = members.find((m) => m.id === assignedTo);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => {
+      if (ref.current?.contains(e.target as Node)) return;
+      setOpen(false);
+    };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [open]);
+
+  return (
+    <div className="relative z-[100]" ref={ref} onClick={onClick}>
+      <button
+        type="button"
+        onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); }}
+        className="flex items-center gap-2 rounded-lg border border-lp-border px-2.5 py-1.5 text-sm text-lp-text hover:bg-lp-surface-hover transition-colors duration-200"
+        style={{ transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)' }}
+      >
+        {assigned ? (
+          <>
+            <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-lp-orange/20 text-xs font-medium text-lp-orange">
+              {(assigned.name ?? '?').charAt(0).toUpperCase()}
+            </span>
+            <span className="max-w-[100px] truncate">{assigned.name ?? 'Unknown'}</span>
+            <ChevronDown size={14} className="shrink-0 text-lp-text-tertiary" />
+          </>
+        ) : (
+          <>
+            <span className="text-lp-text-tertiary">Assign</span>
+            <span className="text-lp-orange">→</span>
+          </>
+        )}
+      </button>
+      {open && (
+        <div className="absolute left-0 top-full z-[100] mt-1 min-w-[180px] max-h-[240px] overflow-y-auto rounded-xl border border-lp-border bg-lp-surface py-1 shadow-lg">
+          {members.map((m) => (
+            <button
+              key={m.id}
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onSelect(m.id); setOpen(false); }}
+              className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-lp-text hover:bg-lp-surface-hover"
+            >
+              <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-lp-orange/20 text-xs font-medium text-lp-orange">
+                {(m.name ?? '?').charAt(0).toUpperCase()}
+              </span>
+              <span className="truncate">{m.name ?? 'Unknown'}</span>
+            </button>
+          ))}
+          {assignedTo && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onSelect(null); setOpen(false); }}
+              className="flex w-full items-center gap-2 border-t border-lp-border px-3 py-2 text-left text-sm text-lp-text-tertiary hover:bg-lp-surface-hover hover:text-lp-text"
+            >
+              Unassign
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SectionCard({
   instanceId,
   section,
@@ -1766,6 +3196,7 @@ function SectionCard({
   expanded,
   onToggle,
   onSetSectionStatus,
+  onSetSectionAssigned,
   onFieldChange,
   onFlagsChange,
   allFlags,
@@ -1773,6 +3204,12 @@ function SectionCard({
   onRemoveSection,
   venueLat,
   venueLng,
+  venueName = null,
+  sectionContacts = [],
+  onSectionContactsChange,
+  sectionContactRoles = [...DEFAULT_CONTACT_ROLES, 'Custom Contact'],
+  assignedTo,
+  workspaceMembers = [],
 }: {
   instanceId: string;
   section: SectionDef;
@@ -1783,6 +3220,7 @@ function SectionCard({
   expanded: boolean;
   onToggle: () => void;
   onSetSectionStatus: (status: string) => void;
+  onSetSectionAssigned?: (userId: string | null) => void;
   onFieldChange: (fieldId: string, value: unknown) => void;
   onFlagsChange: (nextFlags: AdvanceFlag[]) => void;
   allFlags: AdvanceFlag[];
@@ -1790,6 +3228,12 @@ function SectionCard({
   onRemoveSection?: (templateId: string) => void | Promise<void>;
   venueLat?: number;
   venueLng?: number;
+  venueName?: string | null;
+  sectionContacts?: ContactRow[];
+  onSectionContactsChange?: (contacts: ContactRow[]) => void;
+  sectionContactRoles?: string[];
+  assignedTo?: string;
+  workspaceMembers?: WorkspaceMember[];
 }) {
   const [flagDropdownOpen, setFlagDropdownOpen] = useState(false);
   const [flagTypeInput, setFlagTypeInput] = useState<'issue' | 'question' | 'blocker' | null>(null);
@@ -1810,7 +3254,6 @@ function SectionCard({
 
   const menuItems = [
     { label: 'Mark section complete', icon: CheckCircle2, onClick: () => onSetSectionStatus('complete') },
-    { label: 'Assign to...', icon: UserPlus, onClick: () => {} },
     ...(onRemoveSection ? [{ label: 'Remove section', icon: Trash2, variant: 'danger' as const, onClick: () => setRemoveConfirmOpen(true) }] : []),
   ].filter(Boolean) as { label: string; icon: typeof CheckCircle2; onClick: () => void; variant?: 'danger' }[];
 
@@ -1861,7 +3304,7 @@ function SectionCard({
         role="button"
         tabIndex={0}
         onClick={onToggle}
-        onKeyDown={(e) => e.key === 'Enter' && onToggle()}
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle(); } }}
         className="flex w-full items-center gap-4 px-4 py-3 text-left hover:bg-lp-surface-hover cursor-pointer transition-colors duration-100"
       >
         <SectionIcon />
@@ -1894,7 +3337,7 @@ function SectionCard({
             <ChevronDown size={14} className={cn('transition-transform', flagDropdownOpen && 'rotate-180')} />
           </button>
           {flagDropdownOpen && (
-            <div className="absolute right-0 top-full z-50 mt-1 w-56 rounded-xl border border-lp-border bg-lp-surface py-2 shadow-lg">
+            <div className="absolute right-0 top-full z-[100] mt-1 w-56 rounded-xl border border-lp-border bg-lp-surface py-2 shadow-lg">
               {!flagTypeInput ? (
                 <>
                   <button type="button" onClick={() => setFlagTypeInput('issue')} className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-amber-600 dark:text-amber-400 hover:bg-amber-500/10">
@@ -1934,7 +3377,18 @@ function SectionCard({
           onSelectStatus={onSetSectionStatus}
           onClick={(e) => e.stopPropagation()}
         />
-        <span className="text-sm text-lp-text-tertiary">Unassigned</span>
+        {onSetSectionAssigned && workspaceMembers.length > 0 ? (
+          <AssignDropdown
+            assignedTo={assignedTo}
+            members={workspaceMembers}
+            onSelect={onSetSectionAssigned}
+            onClick={(e) => e.stopPropagation()}
+          />
+        ) : assignedTo ? (
+          <span className="text-sm text-lp-text-tertiary truncate max-w-[120px]">{workspaceMembers.find((m) => m.id === assignedTo)?.name ?? 'Assigned'}</span>
+        ) : (
+          <span className="text-sm text-lp-text-tertiary">Unassigned</span>
+        )}
         {expanded ? <ChevronDown size={18} className="text-lp-text-tertiary shrink-0" /> : <ChevronRight size={18} className="text-lp-text-tertiary shrink-0" />}
       </div>
       <div className={cn('grid transition-[grid-template-rows] duration-200 ease-out', expanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')}>
@@ -1964,6 +3418,34 @@ function SectionCard({
                   placeholder="Dimensions, location, setup notes..."
                   className="w-full rounded-xl border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:border-lp-orange focus:outline-none focus:ring-2 focus:ring-lp-orange/20"
                 />
+              </div>
+            )}
+            {onSectionContactsChange && (
+              <div className="border-t border-lp-border pt-4 mt-2">
+                <h4 className="text-sm font-medium text-lp-text mb-3">Key Contacts</h4>
+                <div className="space-y-3">
+                  {sectionContacts.map((row, index) => (
+                    <KeyContactRow
+                      key={index}
+                      row={row}
+                      venueName={venueName}
+                      onUpdate={(patch) => {
+                        const next = sectionContacts.map((c, i) => (i === index ? { ...c, ...patch } : c));
+                        onSectionContactsChange(next);
+                      }}
+                      onRemove={() => onSectionContactsChange(sectionContacts.filter((_, i) => i !== index))}
+                      contactRoles={sectionContactRoles}
+                    />
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => onSectionContactsChange([...sectionContacts, { first_name: '', last_name: '', role: '', phone: '', email: '', venue_name: venueName ?? undefined, notes: '' }])}
+                    className="flex items-center gap-2 rounded-lg border border-dashed border-lp-border px-4 py-2.5 text-sm font-medium text-lp-text-tertiary hover:bg-lp-surface-hover hover:text-lp-text"
+                  >
+                    <Plus size={16} />
+                    Add contact
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -2418,23 +3900,21 @@ function FieldRenderer({
           />
         </div>
       );
-    case 'select':
+    case 'select': {
+      const options = (field.options ?? []) as string[];
       return (
         <div>
           {label}
-          <select
+          <SelectDropdown
             value={strVal}
-            onChange={(e) => onChange(e.target.value)}
-            onBlur={(e) => onChange(e.target.value)}
-            className={inputClass}
-          >
-            <option value="">Select...</option>
-            {(field.options ?? []).map((opt) => (
-              <option key={opt} value={opt}>{opt}</option>
-            ))}
-          </select>
+            options={options}
+            placeholder="Select..."
+            onChange={(v) => onChange(v)}
+            className="w-full"
+          />
         </div>
       );
+    }
     case 'time':
       return (
         <div>
@@ -2493,39 +3973,30 @@ function FieldRenderer({
         </div>
       );
     case 'contact': {
-      const obj = (value as Record<string, string>) ?? {};
-      const name = obj.name ?? '';
+      const obj = (value as Record<string, string | undefined>) ?? {};
+      const first_name = obj.first_name ?? '';
+      const last_name = obj.last_name ?? '';
+      const role = obj.role ?? '';
       const phone = obj.phone ?? '';
       const email = obj.email ?? '';
+      const venue_name = obj.venue_name ?? '';
+      const notes = obj.notes ?? '';
       return (
         <div className="space-y-2">
           {label}
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-            <input
-              type="text"
-              placeholder="Name"
-              value={name}
-              onChange={(e) => onChange({ ...obj, name: e.target.value })}
-              onBlur={(e) => onChange({ ...obj, name: e.target.value })}
-              className={inputClass}
-            />
-            <input
-              type="tel"
-              placeholder="Phone"
-              value={phone}
-              onChange={(e) => onChange({ ...obj, phone: e.target.value })}
-              onBlur={(e) => onChange({ ...obj, phone: e.target.value })}
-              className={inputClass}
-            />
-            <input
-              type="email"
-              placeholder="Email"
-              value={email}
-              onChange={(e) => onChange({ ...obj, email: e.target.value })}
-              onBlur={(e) => onChange({ ...obj, email: e.target.value })}
-              className={inputClass}
-            />
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <input type="text" placeholder="First name" value={first_name} onChange={(e) => onChange({ ...obj, first_name: e.target.value })} onBlur={(e) => onChange({ ...obj, first_name: e.target.value })} className={inputClass} />
+            <input type="text" placeholder="Last name" value={last_name} onChange={(e) => onChange({ ...obj, last_name: e.target.value })} onBlur={(e) => onChange({ ...obj, last_name: e.target.value })} className={inputClass} />
           </div>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <div className="relative z-[100]">
+              <RoleDropdown value={role} options={[...DEFAULT_CONTACT_ROLES, 'Custom Contact']} placeholder="Role" onChange={(v) => onChange({ ...obj, role: v })} />
+            </div>
+            <input type="tel" placeholder="Phone" value={phone} onChange={(e) => onChange({ ...obj, phone: e.target.value })} onBlur={(e) => onChange({ ...obj, phone: e.target.value })} className={inputClass} />
+            <input type="email" placeholder="Email" value={email} onChange={(e) => onChange({ ...obj, email: e.target.value })} onBlur={(e) => onChange({ ...obj, email: e.target.value })} className={inputClass} />
+            <input type="text" placeholder="Venue name" value={venue_name} onChange={(e) => onChange({ ...obj, venue_name: e.target.value })} onBlur={(e) => onChange({ ...obj, venue_name: e.target.value })} className={inputClass} />
+          </div>
+          <textarea rows={2} placeholder="Notes" value={notes} onChange={(e) => onChange({ ...obj, notes: e.target.value })} onBlur={(e) => onChange({ ...obj, notes: e.target.value })} className={inputClass} />
         </div>
       );
     }

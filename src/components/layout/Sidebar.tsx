@@ -29,6 +29,9 @@ import {
   Plus,
   LogOut,
   ClipboardList,
+  Music,
+  DollarSign,
+  Bed,
 } from 'lucide-react';
 import { LowpassLogo } from '@/components/common/LowpassLogo';
 import { useAuth } from '@/hooks/useAuth';
@@ -62,8 +65,16 @@ const navGroups: NavGroup[] = [
     ],
   },
   {
+    title: 'Finance',
+    items: [
+      { label: 'Budget', href: '/budget', icon: DollarSign },
+      { label: 'Rooming', href: '/rooming', icon: Bed },
+    ],
+  },
+  {
     title: 'Data',
     items: [
+      { label: 'Artists', href: '/artists', icon: Music },
       { label: 'Personnel', href: '/personnel', icon: Users },
       { label: 'Venues', href: '/venues', icon: Building2 },
     ],
@@ -167,7 +178,11 @@ export function Sidebar() {
                   ? pathname?.includes('/advance')
                   : item.href === '/tours'
                     ? pathname?.startsWith('/tours') && !pathname?.includes('/advance')
-                    : pathname === item.href || pathname?.startsWith(item.href + '/');
+                    : item.href === '/budget'
+                      ? pathname?.startsWith('/budget')
+                      : item.href === '/rooming'
+                        ? pathname?.startsWith('/rooming')
+                        : pathname === item.href || pathname?.startsWith(item.href + '/');
               const Icon = item.icon;
 
               return (

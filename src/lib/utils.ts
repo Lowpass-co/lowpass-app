@@ -45,6 +45,32 @@ export function formatDateWithDay(dateString: string): string {
 }
 
 /**
+ * Format for routing grid: "Mon 6 Mar 2026" — three-letter month, single line.
+ */
+export function formatRoutingDateShort(dateString: string): string {
+  const date = parseRoutingDate(dateString);
+  if (Number.isNaN(date.getTime())) return dateString;
+  return date.toLocaleDateString('en-GB', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+/**
+ * Format tour date range: "6 Mar – 20 Apr 2026" (three-letter months, no numeric).
+ */
+export function formatTourDateRange(startDate: string, endDate: string): string {
+  const start = parseRoutingDate(startDate);
+  const end = parseRoutingDate(endDate);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) return `${startDate} – ${endDate}`;
+  const startStr = start.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+  const endStr = end.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  return `${startStr} – ${endStr}`;
+}
+
+/**
  * Parse a YYYY-MM-DD date string for routing/calendar display.
  * Uses noon local to avoid DST edge cases; safe for display.
  */
@@ -77,6 +103,23 @@ export function formatCurrency(amount: number, currency: string = 'GBP'): string
  */
 export function generateLpId(sequence: number): string {
   return `LP-${String(sequence).padStart(5, '0')}`;
+}
+
+/** Parse day_type (may be comma-separated) into array of single types. */
+export function parseDayTypes(value: string): string[] {
+  if (!value || !value.trim()) return [];
+  return value.split(',').map((s) => s.trim()).filter(Boolean);
+}
+
+/** First day type when value is comma-separated (for display). */
+export function firstDayType(value: string): string {
+  const types = parseDayTypes(value);
+  return types[0] ?? '';
+}
+
+/** Whether day_type string includes a given type. */
+export function dayTypesInclude(value: string, type: string): boolean {
+  return parseDayTypes(value).includes(type);
 }
 
 /**

@@ -10,7 +10,6 @@ import {
   ClipboardCheck,
   AlertTriangle,
   Clock,
-  ArrowRight,
   Plus,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -18,6 +17,8 @@ import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { formatDate } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 import type { Tour } from '@/types';
+import { DashboardTourCard } from '@/components/dashboard/DashboardTourCard';
+import { DashboardAdvanceNeeds } from '@/components/dashboard/DashboardAdvanceNeeds';
 
 
 export default async function DashboardPage() {
@@ -74,13 +75,7 @@ export default async function DashboardPage() {
     .order('start_date', { ascending: true })
     .limit(10);
 
-  // Total artists
-  const { count: artistsCount } = await supabase
-    .from('artists')
-    .select('*', { count: 'exact', head: true })
-    .eq('workspace_id', profile.workspace_id);
-
-  // Active tour ids for upcoming shows
+  // Active tour ids for upcoming shows and shows-to-advance
   const { data: activeTours } = await supabase
     .from('tours')
     .select('id')
@@ -89,25 +84,60 @@ export default async function DashboardPage() {
 
   const activeTourIds = (activeTours ?? []).map((t) => t.id);
 
-  // Upcoming shows: routing where tour in active, day_type = show, date >= today, limit 5
-  let upcomingShows: { date: string; venue_name: string | null; city: string; tour_name: string; tour_id: string }[] = [];
+  // Shows to advance: routing dates in next 30 days with advance instance status !== 'complete'
+  const in30Days = new Date();
+  in30Days.setDate(in30Days.getDate() + 30);
+  const in30DaysStr = in30Days.toISOString().slice(0, 10);
+  let showsToAdvanceCount = 0;
+  if (activeTourIds.length > 0) {
+    const { data: routingIn30 } = await supabase
+      .from('routing')
+      .select('id, day_type')
+      .in('tour_id', activeTourIds)
+      .gte('date', today)
+      .lte('date', in30DaysStr);
+    const showDayTypes = ['show', 'festival'];
+    const routingRowsFiltered = (routingIn30 ?? []).filter((r: { day_type?: string }) => {
+      const types = (r.day_type ?? '').split(',').map((s: string) => s.trim());
+      return showDayTypes.some((t) => types.includes(t));
+    });
+    const routingIds = routingRowsFiltered.map((r: { id: string }) => r.id);
+    if (routingIds.length > 0) {
+      const { data: instances } = await supabase
+        .from('advance_instances')
+        .select('id, status')
+        .in('routing_id', routingIds);
+      showsToAdvanceCount = (instances ?? []).filter((i: { status: string }) => i.status !== 'complete').length;
+    }
+  }
+
+  // Upcoming shows: routing where tour in active, day_type = show, date >= today, limit 5 (include id for advance link)
+  let upcomingShows: { date: string; venue_name: string | null; city: string; tour_name: string; tour_id: string; routing_id: string }[] = [];
   if (activeTourIds.length > 0) {
     const { data: routingRows } = await supabase
       .from('routing')
-      .select('date, venue_name, city, tour_id, tours(name)')
+      .select('id, date, venue_name, city, tour_id, day_type, tours(name)')
       .in('tour_id', activeTourIds)
-      .eq('day_type', 'show')
       .gte('date', today)
       .order('date', { ascending: true })
-      .limit(5);
+      .limit(20);
 
-    upcomingShows = (routingRows ?? []).map((r: { date: string; venue_name: string | null; city: string; tour_id: string; tours: { name: string } | null }) => ({
-      date: r.date,
-      venue_name: r.venue_name ?? null,
-      city: r.city ?? '',
-      tour_name: (r.tours as { name: string } | null)?.name ?? '—',
-      tour_id: r.tour_id,
-    }));
+    const showTypes = ['show', 'festival'];
+    const rows = (routingRows ?? []).filter((r: { day_type?: string }) => {
+      const types = (r.day_type ?? '').split(',').map((s: string) => s.trim());
+      return showTypes.some((t) => types.includes(t));
+    }).slice(0, 5);
+    upcomingShows = rows.map((r: { id: string; date: string; venue_name: string | null; city: string; tour_id: string; tours: { name: string } | { name: string }[] | null }) => {
+      const tour = Array.isArray(r.tours) ? r.tours[0] : r.tours;
+      return {
+        date: r.date,
+        venue_name: r.venue_name ?? null,
+        city: r.city ?? '',
+        tour_name: tour?.name ?? '—',
+        tour_id: r.tour_id,
+        routing_id: r.id,
+      };
+    });
   }
 
   // List of active tours for the left column (with artist)
@@ -236,6 +266,7 @@ export default async function DashboardPage() {
         </div>
 
         <div className="space-y-4">
+          <DashboardAdvanceNeeds />
           <h2 className="text-base font-semibold text-lp-text">Upcoming Shows</h2>
           {upcomingShows.length === 0 ? (
             <div className="rounded-xl border border-lp-border bg-lp-surface p-6 text-center">
@@ -252,7 +283,7 @@ export default async function DashboardPage() {
               {upcomingShows.map((show) => (
                 <Link
                   key={`${show.tour_id}-${show.date}`}
-                  href={`/tours/${show.tour_id}`}
+                  href={`/tours/${show.tour_id}/advance/${show.routing_id}`}
                   className="block rounded-lg border border-lp-border bg-lp-surface p-3 transition-colors hover:bg-lp-surface-hover"
                 >
                   <p className="font-medium text-lp-text">
@@ -264,20 +295,18 @@ export default async function DashboardPage() {
             </div>
           )}
 
-          <div className="rounded-xl border border-lp-border bg-lp-surface p-4">
+          <Link
+            href="/advance"
+            className="block rounded-xl border border-lp-border bg-lp-surface p-4 transition-colors hover:bg-lp-surface-hover"
+          >
             <p className="text-xs font-medium uppercase tracking-wide text-lp-text-tertiary">
-              Total Artists
+              Shows to Advance
             </p>
-            <p className="mt-1 text-xl font-bold text-lp-text">{artistsCount ?? 0}</p>
-            {artistsCount === 0 && (
-              <Link
-                href="/tours/create"
-                className="mt-2 inline-block text-xs font-medium text-lp-orange hover:text-lp-orange-hover"
-              >
-                Add artists via a tour
-              </Link>
-            )}
-          </div>
+            <p className="mt-1 text-2xl font-bold text-lp-text">{showsToAdvanceCount}</p>
+            <p className="mt-0.5 text-xs text-lp-text-tertiary">
+              In next 30 days, not complete
+            </p>
+          </Link>
         </div>
       </div>
     </div>
@@ -329,40 +358,3 @@ function StatCard({
   );
 }
 
-function DashboardTourCard({ tour }: { tour: Tour }) {
-  const statusColors: Record<string, string> = {
-    planning: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
-    active: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
-    completed: 'bg-gray-500/10 text-gray-500',
-    archived: 'bg-gray-500/10 text-gray-400',
-  };
-  const artistName = tour.artist?.name ?? '—';
-
-  return (
-    <Link
-      href={`/tours/${tour.id}`}
-      className="group flex items-center justify-between rounded-xl border border-lp-border bg-lp-surface p-5 hover:border-lp-orange/30 hover:bg-lp-surface-hover transition-all"
-    >
-      <div className="space-y-2">
-        <div className="flex items-center gap-3">
-          <h3 className="font-semibold text-lp-text">{artistName}</h3>
-          <span
-            className={cn(
-              'rounded-full px-2.5 py-0.5 text-xs font-medium',
-              statusColors[tour.status] ?? statusColors.planning
-            )}
-          >
-            {tour.status}
-          </span>
-        </div>
-        <p className="text-sm text-lp-text-secondary">{tour.name}</p>
-        <div className="flex items-center gap-4 text-xs text-lp-text-tertiary">
-          <span>
-            {formatDate(tour.start_date)} – {formatDate(tour.end_date)}
-          </span>
-        </div>
-      </div>
-      <ArrowRight size={16} className="text-lp-text-tertiary group-hover:text-lp-orange transition-colors" />
-    </Link>
-  );
-}

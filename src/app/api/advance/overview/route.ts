@@ -60,13 +60,26 @@ export async function GET() {
     routingByTour.set(r.tour_id, list);
   });
 
-  let instances: { id: string; routing_id: string; status: string; flags: unknown }[] = [];
+  let instances: { id: string; routing_id: string; status: string; flags: unknown; section_statuses: Record<string, { status: string }> | null; form_config_id: string | null }[] = [];
   if (routingIds.length > 0) {
     const { data: inst } = await supabase
       .from('advance_instances')
-      .select('id, routing_id, status, flags')
+      .select('id, routing_id, status, flags, section_statuses, form_config_id')
       .in('routing_id', routingIds);
     instances = (inst ?? []) as typeof instances;
+  }
+
+  const configIds = [...new Set(instances.map((i) => i.form_config_id).filter(Boolean))] as string[];
+  const configSectionsCount = new Map<string, number>();
+  if (configIds.length > 0) {
+    const { data: configs } = await supabase
+      .from('advance_form_configs')
+      .select('id, sections')
+      .in('id', configIds);
+    for (const c of configs ?? []) {
+      const sections = (c.sections as unknown[]) ?? [];
+      configSectionsCount.set(c.id, sections.length);
+    }
   }
 
   const instanceByRoutingId = new Map(instances.map((i) => [i.routing_id, i]));
@@ -85,8 +98,14 @@ export async function GET() {
     const rows = routingByTour.get(tour.id) ?? [];
     const totalShows = rows.length;
     let completeCount = 0;
+    const showCompletionPcts: number[] = [];
     for (const row of rows) {
       const inst = instanceByRoutingId.get(row.id);
+      const sectionStatuses = (inst?.section_statuses ?? {}) as Record<string, { status: string }>;
+      const totalSections = inst?.form_config_id ? (configSectionsCount.get(inst.form_config_id) ?? 0) : 0;
+      const sectionComplete = Object.values(sectionStatuses).filter((s) => s?.status === 'complete').length;
+      const showPct = totalSections > 0 ? (sectionComplete / totalSections) * 100 : 0;
+      showCompletionPcts.push(showPct);
       if (inst?.status === 'complete') completeCount++;
       const date = new Date(row.date);
       const hasUnresolvedFlags = Array.isArray(inst?.flags) && (inst.flags as FlagItem[]).some((f) => !f.resolved);
@@ -116,7 +135,9 @@ export async function GET() {
         });
       }
     }
-    const percent = totalShows > 0 ? Math.round((completeCount / totalShows) * 100) : 0;
+    const percent = showCompletionPcts.length > 0
+      ? Math.round(showCompletionPcts.reduce((a, b) => a + b, 0) / showCompletionPcts.length)
+      : 0;
     tourStats.push({
       tour_id: tour.id,
       tour_name: tour.name,

@@ -7,7 +7,8 @@
 
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 
 export interface VenuePlaceResult {
   venue_name: string;
@@ -92,9 +93,24 @@ export function VenueAutocomplete({
     };
   }, [query]);
 
+  const [dropdownRect, setDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null);
+  const dropdownRef = useRef<HTMLUListElement | null>(null);
+
+  useLayoutEffect(() => {
+    if (open && suggestions.length > 0 && containerRef.current) {
+      const input = containerRef.current.querySelector('input');
+      const rect = input?.getBoundingClientRect();
+      if (rect) setDropdownRect({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+    } else {
+      setDropdownRect(null);
+    }
+  }, [open, suggestions.length]);
+
   useEffect(() => {
     const close = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (containerRef.current?.contains(target) || dropdownRef.current?.contains(target)) return;
+      setOpen(false);
     };
     document.addEventListener('mousedown', close);
     return () => document.removeEventListener('mousedown', close);
@@ -143,6 +159,11 @@ export function VenueAutocomplete({
     }
   };
 
+  const listRefCallback = (el: HTMLUListElement | null) => {
+    listRef.current = el;
+    dropdownRef.current = el;
+  };
+
   return (
     <div ref={containerRef} className={`relative ${className ?? ''}`}>
       <input
@@ -171,7 +192,6 @@ export function VenueAutocomplete({
           }
           if (e.key === 'Tab') {
             selectByIndex(highlightedIndex);
-            // allow default so focus moves to next field
             return;
           }
         }}
@@ -206,27 +226,30 @@ export function VenueAutocomplete({
           …
         </span>
       )}
-      {open && suggestions.length > 0 && (
-        <ul
-          ref={listRef}
-          className="absolute left-0 right-0 top-full z-20 mt-1 max-h-52 overflow-y-auto rounded-xl border border-lp-border bg-lp-surface py-1 shadow-lg"
-          role="listbox"
-        >
-          {suggestions.map((s, i) => (
-            <li key={s.placeId} role="option" aria-selected={i === highlightedIndex}>
-              <button
-                type="button"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => handleSelect(s.placeId, s.text)}
-                onMouseEnter={() => setHighlightedIndex(i)}
-                className={`w-full px-3 py-2 text-left text-sm text-lp-text hover:bg-lp-surface-hover ${i === highlightedIndex ? 'bg-lp-surface-hover' : ''}`}
-              >
-                {s.text}
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
+      {open && suggestions.length > 0 && dropdownRect && typeof document !== 'undefined' &&
+        createPortal(
+          <ul
+            ref={listRefCallback}
+            role="listbox"
+            className="fixed z-[100] max-h-52 overflow-y-auto rounded-xl border border-lp-border bg-lp-surface py-1 shadow-lg"
+            style={{ top: dropdownRect.top, left: dropdownRect.left, width: dropdownRect.width, minWidth: 200 }}
+          >
+            {suggestions.map((s, i) => (
+              <li key={s.placeId} role="option" aria-selected={i === highlightedIndex}>
+                <button
+                  type="button"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => handleSelect(s.placeId, s.text)}
+                  onMouseEnter={() => setHighlightedIndex(i)}
+                  className={`w-full px-3 py-2 text-left text-sm text-lp-text hover:bg-lp-surface-hover ${i === highlightedIndex ? 'bg-lp-surface-hover' : ''}`}
+                >
+                  {s.text}
+                </button>
+              </li>
+            ))}
+          </ul>,
+          document.body
+        )}
     </div>
   );
 }

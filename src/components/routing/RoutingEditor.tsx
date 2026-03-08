@@ -10,7 +10,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { LayoutGrid, Calendar, MapPin, Download, Copy, Check, X } from 'lucide-react';
+import { LayoutGrid, Calendar, MapPin, Download, Copy, Check, X, ClipboardCheck, Calculator, LayoutDashboard } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
 import { RoutingGrid, type RoutingRow } from './RoutingGrid';
 import { RoutingCalendar } from './RoutingCalendar';
@@ -19,6 +19,64 @@ import type { PrimaryTransit } from './RoutingMap';
 const RoutingMap = dynamic(() => import('./RoutingMap').then((m) => m.RoutingMap), { ssr: false });
 
 type ViewMode = 'grid' | 'calendar' | 'map';
+
+function AfterSaveModal({ tourId, onClose }: { tourId: string; onClose: () => void }) {
+  const advanceDesc = 'Create or edit advance sheets for this tour.';
+  const budgetDesc = 'Estimate costs and build the tour budget.';
+  const dashboardDesc = 'Back to your overview and tour list.';
+  return (
+    <div
+      className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/50 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md rounded-xl border border-lp-border bg-lp-surface p-6 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="text-lg font-semibold text-lp-text mb-1">What next?</h3>
+        <p className="text-sm text-lp-text-secondary mb-4">Choose where to go after saving routing.</p>
+        <div className="space-y-3">
+          <Link
+            href={`/tours/${tourId}/advance`}
+            onClick={onClose}
+            className="flex items-start gap-3 w-full rounded-xl border border-lp-border bg-lp-surface-hover p-4 text-left hover:border-lp-accent transition-all"
+            style={{ transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)' }}
+          >
+            <ClipboardCheck className="h-5 w-5 shrink-0 text-lp-accent" />
+            <div>
+              <div className="font-medium text-lp-text">Build the Advance</div>
+              <div className="text-sm text-lp-text-secondary mt-0.5">{advanceDesc}</div>
+            </div>
+          </Link>
+          <Link
+            href={`/budget?tour_id=${tourId}`}
+            onClick={onClose}
+            className="flex items-start gap-3 w-full rounded-xl border border-lp-border bg-lp-surface-hover p-4 text-left hover:border-lp-accent transition-all"
+            style={{ transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)' }}
+          >
+            <Calculator className="h-5 w-5 shrink-0 text-lp-text-secondary" />
+            <div>
+              <div className="font-medium text-lp-text">Build the Budget</div>
+              <div className="text-sm text-lp-text-secondary mt-0.5">{budgetDesc}</div>
+            </div>
+          </Link>
+          <Link
+            href="/dashboard"
+            onClick={onClose}
+            className="flex items-start gap-3 w-full rounded-xl border border-lp-border bg-lp-surface-hover p-4 text-left hover:border-lp-accent transition-all"
+            style={{ transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)' }}
+          >
+            <LayoutDashboard className="h-5 w-5 shrink-0 text-lp-text-secondary" />
+            <div>
+              <div className="font-medium text-lp-text">Return to Dashboard</div>
+              <div className="text-sm text-lp-text-secondary mt-0.5">{dashboardDesc}</div>
+            </div>
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function dateRange(start: string, end: string): string[] {
   const out: string[] = [];
@@ -218,24 +276,10 @@ export function RoutingEditor({
         </div>
       )}
       {afterSaveMenuOpen && (
-        <div className="rounded-xl border border-lp-border bg-lp-surface px-4 py-3 text-sm shadow-sm">
-          <p className="mb-2 font-medium text-lp-text">What next?</p>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => setAfterSaveMenuOpen(false)}
-              className="rounded-lg border border-lp-border bg-lp-surface px-3 py-1.5 text-lp-text hover:bg-lp-surface-hover"
-            >
-              Stay on this page
-            </button>
-            <Link
-              href="/tours"
-              className="rounded-lg bg-lp-orange px-3 py-1.5 text-white hover:bg-lp-orange-hover"
-            >
-              Return to tours
-            </Link>
-          </div>
-        </div>
+        <AfterSaveModal
+          tourId={tourId}
+          onClose={() => setAfterSaveMenuOpen(false)}
+        />
       )}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex rounded-lg border border-lp-border p-1">

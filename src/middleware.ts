@@ -16,12 +16,13 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     /*
-     * Match all routes except:
+     * Match page routes only — skip:
      * - _next/static (static files)
      * - _next/image (image optimization)
      * - favicon.ico
      * - public files (images, icons, etc.)
+     * - API routes (they handle their own auth via createServerSupabaseClient)
      */
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|api/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 };

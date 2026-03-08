@@ -1,0 +1,149 @@
+/* ============================================
+   LOWPASS — Budget Settings API
+
+   GET: Fetch budget_settings for a tour (?tour_id=uuid).
+        Auto-creates with defaults if none exist.
+   POST: Create/update settings (upsert on tour_id).
+   ============================================ */
+
+import { NextResponse } from 'next/server';
+import { createServerSupabaseClient } from '@/lib/supabase-server';
+
+export async function GET(request: Request) {
+  const supabase = await createServerSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('workspace_id')
+    .eq('id', user.id)
+    .single();
+
+  if (!profile?.workspace_id) {
+    return NextResponse.json({ error: 'No workspace' }, { status: 403 });
+  }
+
+  const { searchParams } = new URL(request.url);
+  const tourId = searchParams.get('tour_id');
+  if (!tourId) {
+    return NextResponse.json({ error: 'tour_id is required' }, { status: 400 });
+  }
+
+  const { data: settings, error: fetchError } = await supabase
+    .from('budget_settings')
+    .select('*')
+    .eq('workspace_id', profile.workspace_id)
+    .eq('tour_id', tourId)
+    .maybeSingle();
+
+  if (fetchError) {
+    return NextResponse.json({ error: fetchError.message }, { status: 500 });
+  }
+
+  if (settings) {
+    return NextResponse.json(settings);
+  }
+
+  const { data: tour } = await supabase
+    .from('tours')
+    .select('id, workspace_id')
+    .eq('id', tourId)
+    .eq('workspace_id', profile.workspace_id)
+    .single();
+
+  if (!tour) {
+    return NextResponse.json({ error: 'Tour not found' }, { status: 404 });
+  }
+
+  const { data: created, error: insertError } = await supabase
+    .from('budget_settings')
+    .insert({
+      tour_id: tourId,
+      workspace_id: profile.workspace_id,
+      currency_home: 'GBP',
+      currency_tour: 'USD',
+      insurance_pct: 0.03,
+      contingency_pct: 0.02,
+      accountancy_pct: 0,
+    })
+    .select()
+    .single();
+
+  if (insertError) {
+    return NextResponse.json({ error: insertError.message }, { status: 500 });
+  }
+  return NextResponse.json(created);
+}
+
+export async function POST(request: Request) {
+  const supabase = await createServerSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('workspace_id')
+    .eq('id', user.id)
+    .single();
+
+  if (!profile?.workspace_id) {
+    return NextResponse.json({ error: 'No workspace' }, { status: 403 });
+  }
+
+  const body = await request.json();
+  const {
+    tour_id,
+    currency_home,
+    currency_tour,
+    exchange_rate,
+    insurance_pct,
+    contingency_pct,
+    accountancy_pct,
+    notes,
+  } = body;
+
+  if (!tour_id) {
+    return NextResponse.json({ error: 'tour_id is required' }, { status: 400 });
+  }
+
+  const { data: tour } = await supabase
+    .from('tours')
+    .select('id')
+    .eq('id', tour_id)
+    .eq('workspace_id', profile.workspace_id)
+    .single();
+
+  if (!tour) {
+    return NextResponse.json({ error: 'Tour not found' }, { status: 404 });
+  }
+
+  const payload: Record<string, unknown> = {
+    tour_id,
+    workspace_id: profile.workspace_id,
+    updated_at: new Date().toISOString(),
+  };
+  if (currency_home !== undefined) payload.currency_home = currency_home;
+  if (currency_tour !== undefined) payload.currency_tour = currency_tour;
+  if (exchange_rate !== undefined) payload.exchange_rate = exchange_rate;
+  if (exchange_rate !== undefined) payload.exchange_rate_updated_at = new Date().toISOString();
+  if (insurance_pct !== undefined) payload.insurance_pct = insurance_pct;
+  if (contingency_pct !== undefined) payload.contingency_pct = contingency_pct;
+  if (accountancy_pct !== undefined) payload.accountancy_pct = accountancy_pct;
+  if (notes !== undefined) payload.notes = notes;
+
+  const { data, error } = await supabase
+    .from('budget_settings')
+    .upsert(payload, { onConflict: 'tour_id' })
+    .select()
+    .single();
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  return NextResponse.json(data);
+}
