@@ -66,8 +66,8 @@ export default function LoginPage() {
           <div className="flex justify-center">
             <LowpassLogo size="lg" />
           </div>
-          <p className="mt-3 text-sm text-lp-text-secondary">
-            Tour management, simplified.
+          <p className="mt-3 text-sm text-white mr-auto" style={{ fontFamily: 'Montserrat, sans-serif' }}>
+            Tour Management. Simplified.
           </p>
         </div>
 
