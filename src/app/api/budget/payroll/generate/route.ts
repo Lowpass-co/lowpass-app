@@ -184,7 +184,7 @@ export async function POST(request: Request) {
             workspace_id: profile.workspace_id,
             personnel_id: person.id,
             week_start: weekStart,
-            day_statuses,
+            day_statuses: dayStatuses,
             advance_fee: advanceFee,
             total_fee,
             total_per_diem,

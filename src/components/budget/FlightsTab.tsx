@@ -9,7 +9,7 @@ import { DeleteConfirmationModal } from '@/components/ui/DeleteConfirmationModal
 /** Math spec §9: variance_pct = ((actual - proposed) / proposed) × 100; ≤0% green, 0–5% amber, >5% red. Proposed=0 → "—" or "N/A". */
 function varianceDisplay(proposed: number, actual: number): { text: string; className: string } {
   const p = Number(proposed) || 0;
-  const a = actual != null && actual !== '' ? Number(actual) : null;
+  const a = actual != null ? Number(actual) : null;
   if (p === 0 && (a === null || a === 0)) return { text: '—', className: 'text-lp-text-tertiary' };
   if (p === 0 && a !== null) return { text: 'N/A', className: 'text-lp-text-tertiary' };
   const diff = (a ?? 0) - p;
@@ -531,7 +531,7 @@ export function FlightsTab({ tourId }: { tourId: string }) {
         open={!!deleteModal}
         itemName={deleteModal?.name ?? 'Flight'}
         onClose={() => setDeleteModal(null)}
-        onConfirm={async () => deleteModal && deleteFlight(deleteModal.id)}
+        onConfirm={async () => { if (deleteModal) await deleteFlight(deleteModal.id); }}
       />
     </div>
   );

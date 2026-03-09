@@ -643,7 +643,7 @@ export function CommissionsTab({ tourId }: { tourId: string }) {
         open={!!deleteModal}
         itemName={deleteModal?.label ?? ''}
         onClose={() => setDeleteModal(null)}
-        onConfirm={async () => deleteModal && deleteCommission(deleteModal.id)}
+        onConfirm={async () => { if (deleteModal) await deleteCommission(deleteModal.id); }}
       />
     </div>
   );

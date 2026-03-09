@@ -23,7 +23,6 @@ export interface InlineCurrencyCellProps {
 const CURRENCY_FORMAT: Intl.NumberFormatOptions = {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
-  locale: 'en-GB',
 };
 
 /**

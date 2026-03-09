@@ -457,7 +457,7 @@ export function TransportationTab({ tourId }: { tourId: string }) {
         open={!!deleteModal}
         itemName={deleteModal?.label ?? ''}
         onClose={() => setDeleteModal(null)}
-        onConfirm={async () => deleteModal && deleteItem(deleteModal.id)}
+        onConfirm={async () => { if (deleteModal) await deleteItem(deleteModal.id); }}
       />
     </div>
   );

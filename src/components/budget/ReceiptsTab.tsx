@@ -396,7 +396,7 @@ export function ReceiptsTab({ tourId }: { tourId: string }) {
         <span className="text-lp-text-tertiary">(Only receipts with In Budget = Yes)</span>
       </div>
 
-      <DeleteConfirmationModal open={!!deleteModal} itemName={deleteModal?.label ?? ''} onClose={() => setDeleteModal(null)} onConfirm={async () => deleteModal && deleteReceipt(deleteModal.id)} />
+      <DeleteConfirmationModal open={!!deleteModal} itemName={deleteModal?.label ?? ''} onClose={() => setDeleteModal(null)} onConfirm={async () => { if (deleteModal) await deleteReceipt(deleteModal.id); }} />
     </div>
   );
 }

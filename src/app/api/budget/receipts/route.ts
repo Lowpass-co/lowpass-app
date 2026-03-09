@@ -144,7 +144,7 @@ export async function POST(request: Request) {
     .insert({
       tour_id,
       workspace_id: profile.workspace_id,
-      receipt_number,
+      receipt_number: receiptNumber,
       date: body.date ?? null,
       vendor: body.vendor ?? null,
       category: body.category ?? null,
