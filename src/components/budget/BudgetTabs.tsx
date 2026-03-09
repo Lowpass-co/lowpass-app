@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Suspense } from 'react';
 import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { BUDGET_TABS } from './budget-tabs';
 
 const SummaryTab = dynamic(() => import('@/components/budget/SummaryTab').then(m => ({ default: m.SummaryTab })), { ssr: false });
 const IncomeTab = dynamic(() => import('@/components/budget/IncomeTab').then(m => ({ default: m.IncomeTab })), { ssr: false });
@@ -17,20 +18,6 @@ const ProductionTab = dynamic(() => import('@/components/budget/ProductionTab').
 const CommissionsTab = dynamic(() => import('@/components/budget/CommissionsTab').then(m => ({ default: m.CommissionsTab })), { ssr: false });
 const ReceiptsTab = dynamic(() => import('@/components/budget/ReceiptsTab').then(m => ({ default: m.ReceiptsTab })), { ssr: false });
 const SettlementTab = dynamic(() => import('@/components/budget/SettlementTab').then(m => ({ default: m.SettlementTab })), { ssr: false });
-
-export const BUDGET_TABS = [
-  { id: 'summary', label: 'Summary' },
-  { id: 'income', label: 'Routing & Income' },
-  { id: 'salaries', label: 'Salaries & Per Diem' },
-  { id: 'payroll', label: 'Payroll' },
-  { id: 'hotels', label: 'Hotels' },
-  { id: 'flights', label: 'Flights' },
-  { id: 'transport', label: 'Transportation' },
-  { id: 'production', label: 'Production & Misc' },
-  { id: 'receipts', label: 'Expense Receipts' },
-  { id: 'commissions', label: 'Commissions' },
-  { id: 'settlement', label: 'Settlement' },
-] as const;
 
 function TabLoader() {
   return (

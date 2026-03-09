@@ -4,9 +4,8 @@
 
 import { Suspense } from 'react';
 import { BudgetTourSelector } from '@/components/budget/BudgetTourSelector';
-import { BudgetTabs, BUDGET_TABS } from '@/components/budget/BudgetTabs';
-
-type TabId = (typeof BUDGET_TABS)[number]['id'];
+import { BudgetTabs } from '@/components/budget/BudgetTabs';
+import { BUDGET_TABS, TabId } from '@/components/budget/budget-tabs';
 
 export default async function BudgetPage({
   searchParams,
@@ -15,7 +14,7 @@ export default async function BudgetPage({
 }) {
   const params = await searchParams;
   const tourId = params.tour_id ?? null;
-  const tab = (params.tab as TabId) ?? 'summary';
+  const tab = (params.tab as TabId | undefined) ?? 'summary';
   const validTab = BUDGET_TABS.some((t) => t.id === tab) ? tab : 'summary';
 
   return (
