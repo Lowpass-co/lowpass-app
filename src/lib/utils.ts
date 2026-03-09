@@ -238,6 +238,10 @@ export function greatCirclePoints(
   const d = 2 * Math.asin(Math.sqrt(
     Math.sin((φ1 - φ2) / 2) ** 2 + Math.cos(φ1) * Math.cos(φ2) * Math.sin((λ1 - λ2) / 2) ** 2
   ));
+  // Same point (or nearly so) — avoid division by zero in slerp
+  if (Math.abs(d) < 1e-10) {
+    return [[lat1, lng1], [lat2, lng2]];
+  }
   const points: [number, number][] = [];
   for (let i = 0; i <= segments; i++) {
     const f = i / segments;

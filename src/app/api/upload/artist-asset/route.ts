@@ -59,6 +59,7 @@ export async function POST(request: Request) {
     });
 
   if (error) {
+    console.error('[artist-asset upload] Supabase storage error:', error);
     if (error.message?.includes('Bucket not found')) {
       return NextResponse.json(
         { error: 'Storage bucket "artist-assets" not found. Create it in Supabase Dashboard → Storage.' },
