@@ -66,7 +66,7 @@ export default function LoginPage() {
         if (first) { ctx!.moveTo(p.sx, p.sy); first = false; } else ctx!.lineTo(p.sx, p.sy);
       }
       ctx!.strokeStyle = 'rgba(255,80,0,0.18)';
-      ctx!.lineWidth = 1.7;
+      ctx!.lineWidth = 2.2;
       ctx!.stroke();
     }
 
@@ -78,7 +78,7 @@ export default function LoginPage() {
         if (first) { ctx!.moveTo(p.sx, p.sy); first = false; } else ctx!.lineTo(p.sx, p.sy);
       }
       ctx!.strokeStyle = 'rgba(255,80,0,0.14)';
-      ctx!.lineWidth = 1.7;
+      ctx!.lineWidth = 2.2;
       ctx!.stroke();
     }
 
@@ -108,7 +108,7 @@ export default function LoginPage() {
       ctx!.beginPath();
       ctx!.arc(cx, cy, R, 0, Math.PI * 2);
       ctx!.strokeStyle = 'rgba(255,80,0,0.22)';
-      ctx!.lineWidth = 1.7;
+      ctx!.lineWidth = 2.2;
       ctx!.stroke();
       const vig = ctx!.createRadialGradient(cx, cy, R * 0.3, cx, cy, R * 1.5);
       vig.addColorStop(0, 'rgba(10,10,10,0)');
