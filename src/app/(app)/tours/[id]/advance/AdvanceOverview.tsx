@@ -342,10 +342,12 @@ function ShowRow({
   const sectionStatuses = item.advance?.section_statuses ?? {};
   const completeCount = item.advance?.sections?.reduce((n, sec) => {
     const key = (sec as { template_id?: string }).template_id ?? (sec as { label?: string }).label;
+    if (!key) return n;
     return n + (sectionStatuses[key]?.status === 'complete' ? 1 : 0);
   }, 0) ?? 0;
   const inProgressCount = item.advance?.sections?.reduce((n, sec) => {
     const key = (sec as { template_id?: string }).template_id ?? (sec as { label?: string }).label;
+    if (!key) return n;
     return n + (sectionStatuses[key]?.status === 'in_progress' ? 1 : 0);
   }, 0) ?? 0;
   const notStartedCount = Math.max(0, sectionCount - completeCount - inProgressCount);
