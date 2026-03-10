@@ -12,6 +12,7 @@ import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { LayoutGrid, Calendar, MapPin, Download, Copy, Check, X, ClipboardCheck, Calculator, LayoutDashboard } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
+import { StyledSelect } from '@/components/ui/StyledSelect';
 import { RoutingGrid, type RoutingRow } from './RoutingGrid';
 import { RoutingCalendar } from './RoutingCalendar';
 import type { PrimaryTransit } from './RoutingMap';
@@ -39,10 +40,10 @@ function AfterSaveModal({ tourId, onClose }: { tourId: string; onClose: () => vo
           <Link
             href={`/tours/${tourId}/advance`}
             onClick={onClose}
-            className="flex items-start gap-3 w-full rounded-xl border border-lp-border bg-lp-surface-hover p-4 text-left hover:border-lp-accent transition-all"
+            className="flex items-start gap-3 w-full rounded-xl border border-lp-border bg-lp-surface-hover p-4 text-left hover:border-lp-accent transition-all group"
             style={{ transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)' }}
           >
-            <ClipboardCheck className="h-5 w-5 shrink-0 text-lp-accent" />
+            <ClipboardCheck className="h-5 w-5 shrink-0 text-lp-text-tertiary group-hover:text-lp-orange transition-colors" />
             <div>
               <div className="font-medium text-lp-text">Build the Advance</div>
               <div className="text-sm text-lp-text-secondary mt-0.5">{advanceDesc}</div>
@@ -51,10 +52,10 @@ function AfterSaveModal({ tourId, onClose }: { tourId: string; onClose: () => vo
           <Link
             href={`/budget?tour_id=${tourId}`}
             onClick={onClose}
-            className="flex items-start gap-3 w-full rounded-xl border border-lp-border bg-lp-surface-hover p-4 text-left hover:border-lp-accent transition-all"
+            className="flex items-start gap-3 w-full rounded-xl border border-lp-border bg-lp-surface-hover p-4 text-left hover:border-lp-accent transition-all group"
             style={{ transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)' }}
           >
-            <Calculator className="h-5 w-5 shrink-0 text-lp-text-secondary" />
+            <Calculator className="h-5 w-5 shrink-0 text-lp-text-tertiary group-hover:text-lp-orange transition-colors" />
             <div>
               <div className="font-medium text-lp-text">Build the Budget</div>
               <div className="text-sm text-lp-text-secondary mt-0.5">{budgetDesc}</div>
@@ -63,10 +64,10 @@ function AfterSaveModal({ tourId, onClose }: { tourId: string; onClose: () => vo
           <Link
             href="/dashboard"
             onClick={onClose}
-            className="flex items-start gap-3 w-full rounded-xl border border-lp-border bg-lp-surface-hover p-4 text-left hover:border-lp-accent transition-all"
+            className="flex items-start gap-3 w-full rounded-xl border border-lp-border bg-lp-surface-hover p-4 text-left hover:border-lp-accent transition-all group"
             style={{ transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)' }}
           >
-            <LayoutDashboard className="h-5 w-5 shrink-0 text-lp-text-secondary" />
+            <LayoutDashboard className="h-5 w-5 shrink-0 text-lp-text-tertiary group-hover:text-lp-orange transition-colors" />
             <div>
               <div className="font-medium text-lp-text">Return to Dashboard</div>
               <div className="text-sm text-lp-text-secondary mt-0.5">{dashboardDesc}</div>
@@ -410,16 +411,18 @@ export function RoutingEditor({
         <>
           <div className="flex flex-wrap items-center gap-4">
             <span className="text-sm font-medium text-lp-text-secondary">Primary mode of transit</span>
-            <select
+            <StyledSelect<PrimaryTransit>
               value={primaryTransit}
-              onChange={(e) => setPrimaryTransit(e.target.value as PrimaryTransit)}
-              className="rounded-xl border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-2 focus:ring-lp-orange/20"
-            >
-              <option value="bus_van">Bus / Van (60 mph)</option>
-              <option value="bus_trailer">Bus + Trailer (55 mph)</option>
-              <option value="car">Car (Google drive time)</option>
-              <option value="flight">Flight (est. time)</option>
-            </select>
+              onChange={(v) => setPrimaryTransit(v)}
+              options={[
+                { value: 'bus_van', label: 'Bus (0.8× drive time)' },
+                { value: 'van', label: 'Van (0.9× drive time)' },
+                { value: 'bus_trailer', label: 'Bus + Trailer (0.85× drive time)' },
+                { value: 'car', label: 'Car (Google drive time)' },
+                { value: 'flight', label: 'Flight (est. time)' },
+              ]}
+              placeholder="Select transit"
+            />
           </div>
           <div ref={gridWrapperRef}>
             <RoutingGrid

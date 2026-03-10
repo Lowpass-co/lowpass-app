@@ -176,6 +176,9 @@ export function ArtistNewBlock({
     };
   }, [source, searchQuery, value.spotify_id]);
 
+  const [cardJustSelected, setCardJustSelected] = useState(false);
+  const [cardAnimateIn, setCardAnimateIn] = useState(false);
+
   const selectSpotify = (a: SpotifyResult) => {
     onChange({
       ...value,
@@ -187,7 +190,21 @@ export function ArtistNewBlock({
     setSearchResults([]);
     setSearchFocused(false);
     inputRef.current?.blur();
+    setCardJustSelected(true);
+    setCardAnimateIn(false);
   };
+
+  useEffect(() => {
+    if (!cardJustSelected || !value.spotify_id) return;
+    const start = requestAnimationFrame(() => {
+      requestAnimationFrame(() => setCardAnimateIn(true));
+    });
+    const t = setTimeout(() => setCardJustSelected(false), 400);
+    return () => {
+      cancelAnimationFrame(start);
+      clearTimeout(t);
+    };
+  }, [cardJustSelected, value.spotify_id]);
 
   const clearSelection = () => {
     clearSpotifySelection();
@@ -207,12 +224,19 @@ export function ArtistNewBlock({
         <>
           {/* STATE 2: Artist selected — hide search, show compact card only */}
           {value.spotify_id ? (
-            <ArtistPreviewCard
-              imageUrl={value.spotify_image_url}
-              name={value.name || 'Artist'}
-              viaLabel="Via Spotify"
-              onChangeArtist={clearSelection}
-            />
+            <div
+              className={cn(
+                'transition-all duration-300 ease-out',
+                cardJustSelected && !cardAnimateIn ? 'translate-y-4 opacity-0' : 'translate-y-0 opacity-100'
+              )}
+            >
+              <ArtistPreviewCard
+                imageUrl={value.spotify_image_url}
+                name={value.name || 'Artist'}
+                viaLabel="Via Spotify"
+                onChangeArtist={clearSelection}
+              />
+            </div>
           ) : (
             /* STATE 1: Search — input + dropdown list (max 5, 40x40 images, list style) */
             <div className="relative">

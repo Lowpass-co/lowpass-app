@@ -11,7 +11,7 @@
 import { useState, useEffect, useRef, Fragment } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
-import { parseRoutingDate, getDayTypeLabel, getDayTypeColor } from '@/lib/utils';
+import { parseRoutingDate, getDayTypeLabel, getDayTypeColor, firstDayType } from '@/lib/utils';
 import { greatCirclePoints } from '@/lib/utils';
 import type { RoutingRow } from './RoutingGrid';
 import { cn } from '@/lib/utils';
@@ -36,24 +36,25 @@ const ROUTE_COLORS = {
   fly: '#a855f7',       // violet-500
 } as const;
 
-export type PrimaryTransit = 'bus_van' | 'bus_trailer' | 'car' | 'flight';
+export type PrimaryTransit = 'bus_van' | 'van' | 'bus_trailer' | 'car' | 'flight';
 
 type TransportToNext = 'default' | 'drive' | 'fly';
 
-function transportIconEmoji(transportToNext: TransportToNext, primaryTransit: PrimaryTransit): string {
-  if (transportToNext === 'fly') return '✈️';
-  if (transportToNext === 'drive') return '🚗';
-  if (primaryTransit === 'flight') return '✈️';
-  if (primaryTransit === 'car') return '🚗';
-  return '🚐';
+/** Icon shape labels for transport (iconic, not emoji). */
+function transportIconLabel(transportToNext: TransportToNext, primaryTransit: PrimaryTransit): string {
+  if (transportToNext === 'fly' || primaryTransit === 'flight') return 'FLY';
+  if (transportToNext === 'drive' || primaryTransit === 'car') return 'DRV';
+  if (primaryTransit === 'van') return 'VAN';
+  if (primaryTransit === 'bus_trailer') return 'B+T';
+  return 'BUS';
 }
 
 function createTransportDivIcon(transportToNext: TransportToNext, primaryTransit: PrimaryTransit): L.DivIcon {
-  const emoji = transportIconEmoji(transportToNext, primaryTransit);
+  const label = transportIconLabel(transportToNext, primaryTransit);
   return L.divIcon({
-    html: `<div style="width:24px;height:24px;border-radius:9999px;background:white;box-shadow:0 1px 3px rgba(0,0,0,0.2);display:flex;align-items:center;justify-content:center;font-size:12px;line-height:1">${emoji}</div>`,
-    iconSize: [24, 24],
-    iconAnchor: [12, 12],
+    html: `<div style="width:28px;height:28px;border-radius:6px;background:white;box-shadow:0 1px 3px rgba(0,0,0,0.2);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;letter-spacing:0.02em;color:#374151">${label}</div>`,
+    iconSize: [28, 28],
+    iconAnchor: [14, 14],
     className: 'transport-midpoint-icon',
   });
 }
@@ -64,10 +65,13 @@ interface RoutingMapProps {
   onSelectDate: (date: string) => void;
 }
 
-function FitBounds({ points }: { points: [number, number][] }) {
+/** Fit bounds only once when points first become available, so user zoom is not overridden. */
+function FitBoundsOnce({ points }: { points: [number, number][] }) {
   const map = useMap();
+  const hasFitted = useRef(false);
   useEffect(() => {
-    if (points.length === 0) return;
+    if (points.length === 0 || hasFitted.current) return;
+    hasFitted.current = true;
     if (points.length === 1) {
       map.setView(points[0], 10);
       return;
@@ -228,17 +232,27 @@ export function RoutingMap({ rows, primaryTransit, onSelectDate }: RoutingMapPro
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
           url={isDark ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png' : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png'}
         />
-        {boundsPoints.length > 0 && <FitBounds points={boundsPoints} />}
+        {boundsPoints.length > 0 && <FitBoundsOnce points={boundsPoints} />}
 
         {pointsWithCoords.map(({ row, i, coord }) => {
           const parsedDate = parseRoutingDate(row.date);
           const dateFormatted = parsedDate.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
-          const dayTypeColors = row.day_type ? getDayTypeColor(row.day_type) : null;
+          const dateShort = parsedDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
+          const dayTypeColors = row.day_type ? getDayTypeColor(firstDayType(row.day_type)) : null;
+          const markerIcon = L.divIcon({
+            html: `<div class="flex flex-col items-center" style="transform: translate(-50%,-100%)">
+              <span style="font-size:10px;font-weight:600;white-space:nowrap;color:var(--lp-text);background:white;padding:2px 5px;border-radius:4px;box-shadow:0 1px 2px rgba(0,0,0,0.15);margin-bottom:2px">${dateShort}</span>
+              <img src="https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png" alt="" style="width:25px;height:41px" />
+            </div>`,
+            iconSize: [60, 50],
+            iconAnchor: [12, 41],
+            className: 'border-0 bg-transparent',
+          });
           return (
             <Marker
               key={row.date}
               position={[coord.lat, coord.lng]}
-              icon={defaultIcon ?? undefined}
+              icon={markerIcon}
             >
               <Popup>
                 <div style={{ minWidth: '180px' }}>

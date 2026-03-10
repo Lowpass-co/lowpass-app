@@ -23,6 +23,7 @@ export type AdvanceDateItem = {
   day_type: string;
   city: string;
   venue_name: string | null;
+  address?: string | null;
   advance: {
     instance_id: string;
     status: string;
@@ -69,7 +70,7 @@ export async function GET(
 
   const { data: routingRows, error: routingError } = await supabase
     .from('routing')
-    .select('id, date, day_type, city, venue_name')
+    .select('id, date, day_type, city, venue_name, address')
     .eq('tour_id', tourId)
     .order('date');
 
@@ -124,6 +125,7 @@ export async function GET(
       day_type: r.day_type ?? '',
       city: r.city ?? '',
       venue_name: r.venue_name ?? null,
+      address: (r as { address?: string | null }).address ?? null,
       advance: instance
         ? {
             instance_id: instance.id,

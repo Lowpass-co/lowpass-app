@@ -64,17 +64,21 @@ export default async function TourDetailPage({
         </Link>
       </div>
 
-      <div className="rounded-xl border border-lp-border bg-lp-surface p-6">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h1 className="text-xl font-bold text-lp-text">{artistName}</h1>
-            <p className="text-lg text-lp-text-secondary">{tour.name}</p>
-            <p className="mt-1 text-sm text-lp-text-secondary">
-              {formatTourDateRange(tour.start_date, tour.end_date)}
-            </p>
-            <p className="mt-1 text-xs text-lp-text-tertiary">
+      <div className="rounded-xl border border-lp-border bg-lp-surface px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
+            <span className="text-lp-text-tertiary uppercase tracking-wider">Artist</span>
+            <span className="font-semibold text-lp-text">{artistName}</span>
+            <span className="text-lp-text-tertiary/60" aria-hidden>|</span>
+            <span className="text-lp-text-tertiary uppercase tracking-wider">Tour</span>
+            <span className="text-lp-text">{tour.name}</span>
+            <span className="text-lp-text-tertiary/60" aria-hidden>|</span>
+            <span className="text-lp-text-tertiary uppercase tracking-wider">Dates</span>
+            <span className="text-lp-text">{formatTourDateRange(tour.start_date, tour.end_date)}</span>
+            <span className="text-lp-text-tertiary/60" aria-hidden>|</span>
+            <span className="text-xs text-lp-text-tertiary">
               {tour.principal_count ?? 0} principals · {tour.band_count} band · {tour.crew_count} crew · {tour.continent} · {tour.currency}
-            </p>
+            </span>
           </div>
           <div className="flex items-center gap-2">
             <span
@@ -87,7 +91,7 @@ export default async function TourDetailPage({
             </span>
             <Link
               href={`/tours/create?edit=${id}`}
-              className="rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-sm font-medium text-lp-text hover:bg-lp-surface-hover"
+              className="rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-sm font-medium text-lp-text hover:bg-lp-surface-hover hover:border-lp-orange hover:text-lp-orange transition-colors"
             >
               Edit tour
             </Link>

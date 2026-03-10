@@ -21,6 +21,10 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [forgotSent, setForgotSent] = useState(false);
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [transitioning, setTransitioning] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   // Animated globe
@@ -131,8 +135,24 @@ export default function LoginPage() {
     setError(null);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) { setError(error.message); setLoading(false); return; }
-    router.push('/dashboard');
-    router.refresh();
+    setTransitioning(true);
+    setTimeout(() => {
+      router.push('/dashboard');
+      router.refresh();
+    }, 420);
+  };
+
+  const handleForgotPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email.trim()) { setError('Enter your email to reset password.'); return; }
+    setForgotLoading(true);
+    setError(null);
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: `${window.location.origin}/auth/callback`,
+    });
+    setForgotLoading(false);
+    if (error) { setError(error.message); return; }
+    setForgotSent(true);
   };
 
   const handleGoogleLogin = async () => {
@@ -154,8 +174,35 @@ export default function LoginPage() {
         style={{ background: 'linear-gradient(to right, rgba(10,10,10,0) 25%, rgba(10,10,10,0.75) 55%, rgba(10,10,10,0.97) 100%)', zIndex: 1 }}
       />
 
+      {/* Zoom-out transition overlay (after successful login) */}
+      <div
+        className={cn(
+          'pointer-events-none fixed inset-0 z-50 flex items-center justify-center',
+          'transition-all duration-[400ms] ease-out'
+        )}
+        style={{
+          opacity: transitioning ? 1 : 0,
+          visibility: transitioning ? 'visible' : 'hidden',
+          background: '#0a0a0a',
+        }}
+      >
+        <div
+          className="h-full w-full transition-transform duration-[400ms] ease-out"
+          style={{
+            transform: transitioning ? 'scale(1.15)' : 'scale(0.98)',
+            background: 'radial-gradient(ellipse at center, rgba(255,70,0,0.12) 0%, #0a0a0a 70%)',
+          }}
+        />
+      </div>
+
       {/* Content layer */}
-      <div className="absolute inset-0 flex" style={{ zIndex: 10 }}>
+      <div
+        className={cn(
+          'absolute inset-0 flex transition-all duration-300 ease-out',
+          transitioning && 'scale-95 opacity-0'
+        )}
+        style={{ zIndex: 10 }}
+      >
 
         {/* Logo + strapline */}
         <div className="flex w-[45%] shrink-0 flex-col items-center justify-center px-16">
@@ -167,9 +214,76 @@ export default function LoginPage() {
           </p>
         </div>
 
-        {/* Login form */}
+        {/* Login form or Forgot password */}
         <main className="flex flex-1 flex-col items-center justify-center px-6">
         <div className="w-full max-w-[400px]">
+          {showForgotPassword ? (
+            <>
+              <h2 className="mb-8 text-2xl font-medium text-white">Reset password</h2>
+              {forgotSent ? (
+                <div className="rounded-lg border border-[#27272a] bg-[#18181b] px-4 py-6 text-sm" style={{ color: '#e4e4e7' }}>
+                  <p className="font-medium">Check your email</p>
+                  <p className="mt-2 text-[#71717a]">
+                    We sent a reset link to <strong>{email}</strong>. Click the link to set a new password.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => { setShowForgotPassword(false); setForgotSent(false); }}
+                    className="mt-4 text-sm font-medium transition-colors hover:underline"
+                    style={{ color: '#ff5500' }}
+                  >
+                    Back to sign in
+                  </button>
+                </div>
+              ) : (
+                <>
+                  {error && (
+                    <div className="mb-5 rounded-lg border border-red-800 bg-red-950/50 px-4 py-3 text-sm text-red-400">
+                      {error}
+                    </div>
+                  )}
+                  <form onSubmit={handleForgotPassword} className="space-y-5">
+                    <div className="space-y-2">
+                      <label htmlFor="forgot-email" className="block text-[13px] font-medium" style={{ color: '#e4e4e7' }}>Email</label>
+                      <input
+                        id="forgot-email"
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="you@example.com"
+                        required
+                        className={cn(
+                          'w-full rounded-md px-4 py-3 text-sm text-white placeholder:text-[#71717a]',
+                          'border border-[#27272a] bg-[#18181b]',
+                          'focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange',
+                          'transition-colors duration-200'
+                        )}
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        type="submit"
+                        disabled={forgotLoading}
+                        className="flex-1 rounded-md py-3 text-sm font-medium text-white transition-colors duration-200 disabled:opacity-60"
+                        style={{ background: '#ff5500' }}
+                      >
+                        {forgotLoading ? 'Sending…' : 'Send reset link'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setShowForgotPassword(false); setError(null); }}
+                        className="rounded-md border border-[#27272a] bg-[#18181b] px-4 py-3 text-sm font-medium transition-colors hover:bg-[#27272a]"
+                        style={{ color: '#e4e4e7' }}
+                      >
+                        Back
+                      </button>
+                    </div>
+                  </form>
+                </>
+              )}
+            </>
+          ) : (
+            <>
           <h2 className="mb-8 text-2xl font-medium text-white">Sign in</h2>
 
           {error && (
@@ -200,7 +314,14 @@ export default function LoginPage() {
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <label htmlFor="password" className="text-[13px] font-medium" style={{ color: '#e4e4e7' }}>Password</label>
-                <span className="text-[12px]" style={{ color: '#71717a' }}>Forgot?</span>
+                <button
+                  type="button"
+                  onClick={() => setShowForgotPassword(true)}
+                  className="text-[12px] transition-colors hover:underline"
+                  style={{ color: '#ff5500' }}
+                >
+                  Forgot?
+                </button>
               </div>
               <input
                 id="password"
@@ -256,6 +377,8 @@ export default function LoginPage() {
               Sign up
             </Link>
           </p>
+            </>
+          )}
         </div>
         </main>
 

@@ -73,7 +73,7 @@ import {
   User,
   Sliders,
 } from 'lucide-react';
-import { parseRoutingDate, getDayTypeLabel, getDayTypeColor, getAdvanceStatusInfo, cn } from '@/lib/utils';
+import { parseRoutingDate, getDayTypeLabel, getDayTypeColor, getAdvanceStatusInfo, firstDayType, dayTypesInclude, cn } from '@/lib/utils';
 import { SlidingToggle } from '@/components/ui/SlidingToggle';
 import { ContextMenu } from '@/components/ui/ContextMenu';
 import { DeleteConfirmationModal } from '@/components/ui/DeleteConfirmationModal';
@@ -305,6 +305,15 @@ export type AdvanceFlag = {
   resolved_at?: string;
 };
 
+// ----- Date strip item (from GET /api/tours/[id]/advance?all=true) -----
+type AdvanceDateItem = {
+  routing_id: string;
+  date: string;
+  day_type: string;
+  city: string;
+  venue_name: string | null;
+};
+
 // ----- Data shape from GET /api/tours/[id]/advance/[routingId] -----
 
 type PageData = {
@@ -340,6 +349,7 @@ export function AdvanceSectionBuilder({
   const router = useRouter();
   const { user } = useAuth();
   const [data, setData] = useState<PageData | null>(null);
+  const [allDates, setAllDates] = useState<AdvanceDateItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [setupMode, setSetupMode] = useState(false);
@@ -361,13 +371,34 @@ export function AdvanceSectionBuilder({
     return () => { cancelled = true; };
   }, [tourId, routingId]);
 
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/tours/${tourId}/advance?all=true`)
+      .then((r) => (r.ok ? r.json() : { dates: [] }))
+      .then((j) => { if (!cancelled) setAllDates(j.dates ?? []); })
+      .catch(() => { if (!cancelled) setAllDates([]); });
+    return () => { cancelled = true; };
+  }, [tourId]);
+
   const hasSections = data?.advance?.sections?.length ? true : false;
   const showSetup = setupMode || !hasSections;
+
+  const [contentVisible, setContentVisible] = useState(false);
+  useEffect(() => {
+    if (!loading && data) {
+      const t = requestAnimationFrame(() => requestAnimationFrame(() => setContentVisible(true)));
+      return () => cancelAnimationFrame(t);
+    }
+    if (loading) setContentVisible(false);
+  }, [loading, data]);
 
   if (loading) {
     return (
       <div className="flex min-h-[40vh] items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-lp-text-tertiary" />
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="h-8 w-8 animate-spin text-lp-text-tertiary" />
+          <p className="text-sm text-lp-text-tertiary">Loading advance…</p>
+        </div>
       </div>
     );
   }
@@ -382,8 +413,8 @@ export function AdvanceSectionBuilder({
     );
   }
 
-  return (
-    <div className="space-y-6">
+  const mainContent = (
+    <>
       <Header
         tourId={tourId}
         routing={data.routing}
@@ -475,6 +506,55 @@ export function AdvanceSectionBuilder({
           }}
         />
       )}
+    </>
+  );
+
+  return (
+    <div className={cn('transition-opacity duration-300', contentVisible ? 'opacity-100' : 'opacity-0')}>
+      {allDates.length > 0 ? (
+        <div className="flex gap-6">
+          <AdvanceDateStrip tourId={tourId} routingId={routingId} dates={allDates} />
+          <div className="flex-1 min-w-0 space-y-6">{mainContent}</div>
+        </div>
+      ) : (
+        <div className="space-y-6">{mainContent}</div>
+      )}
+    </div>
+  );
+}
+
+function AdvanceDateStrip({ tourId, routingId, dates }: { tourId: string; routingId: string; dates: AdvanceDateItem[] }) {
+  const router = useRouter();
+  return (
+    <div className="shrink-0 w-36 flex flex-col rounded-xl border border-lp-border bg-lp-surface overflow-hidden">
+      <div className="border-b border-lp-border px-3 py-2 text-xs font-semibold uppercase tracking-wide text-lp-text-tertiary">Dates</div>
+      <div className="min-h-0 flex-1 overflow-y-auto p-2 space-y-0.5">
+        {dates.map((item) => {
+          const isCurrent = item.routing_id === routingId;
+          const isShow = dayTypesInclude(item.day_type ?? '', 'show') || dayTypesInclude(item.day_type ?? '', 'festival');
+          const primaryType = firstDayType(item.day_type ?? '');
+          const colors = primaryType ? getDayTypeColor(primaryType) : null;
+          const dateLabel = parseRoutingDate(item.date).toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short' });
+          return (
+            <button
+              key={item.routing_id}
+              type="button"
+              onClick={() => router.push(`/tours/${tourId}/advance/${item.routing_id}`)}
+              className={cn(
+                'w-full rounded-lg px-2.5 py-2 text-left text-xs transition-colors',
+                isCurrent
+                  ? 'bg-lp-orange text-white font-medium'
+                  : 'text-lp-text hover:bg-lp-surface-hover',
+                colors && !isCurrent && [colors.bg, colors.text].join(' ')
+              )}
+            >
+              <div className="font-medium">{dateLabel}</div>
+              {isShow && item.venue_name && <div className={cn('truncate mt-0.5', isCurrent ? 'text-white/90' : 'text-lp-text-tertiary')}>{item.venue_name}</div>}
+              {!isShow && primaryType && <div className={cn('truncate mt-0.5', isCurrent ? 'text-white/90' : 'text-lp-text-tertiary')}>{getDayTypeLabel(primaryType)}</div>}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -615,6 +695,7 @@ function SetupMode({
   const [dropTarget, setDropTarget] = useState<{ sectionIndex: number; fieldIndex: number } | { sectionIndex: number } | null>(null);
   const [removingField, setRemovingField] = useState<string | null>(null);
   const [lastAddedKey, setLastAddedKey] = useState<string | null>(null);
+  const [lastAddedTemplateId, setLastAddedTemplateId] = useState<string | null>(null);
 
   const fetchTemplates = useCallback(() => {
     fetch('/api/advance/templates')
@@ -642,6 +723,14 @@ function SetupMode({
     return () => { cancelled = true; };
   }, [defaultAdvanceTemplateId, currentSections.length]);
 
+  useEffect(() => {
+    if (!lastAddedTemplateId) return;
+    const idx = sections.findIndex((s) => s.template_id === lastAddedTemplateId);
+    if (idx >= 0) setExpandedRight(new Set([idx]));
+    const t = setTimeout(() => setLastAddedTemplateId(null), 150);
+    return () => clearTimeout(t);
+  }, [sections, lastAddedTemplateId]);
+
   const isFieldAdded = useCallback((templateId: string, fieldId: string) => {
     return sections.some((s) => s.template_id === templateId && (s.fields ?? []).some((f) => f.id === fieldId));
   }, [sections]);
@@ -653,6 +742,7 @@ function SetupMode({
   }, [isFieldAdded]);
 
   const addField = useCallback((t: ApiTemplate, field: FieldDef) => {
+    setLastAddedTemplateId(t.id);
     setSections((prev) => {
       const existing = prev.findIndex((s) => s.template_id === t.id);
       const clone = { ...field };
@@ -669,6 +759,7 @@ function SetupMode({
   const addAllFields = useCallback((t: ApiTemplate) => {
     const fields = (t.fields ?? []).map((f) => ({ ...f }));
     if (fields.length === 0) return;
+    setLastAddedTemplateId(t.id);
     setSections((prev) => {
       const existing = prev.findIndex((s) => s.template_id === t.id);
       if (existing >= 0) {
@@ -911,25 +1002,26 @@ function SetupMode({
                                     added ? 'bg-lp-accent/10 text-lp-accent border-l-2 border-lp-accent' : 'hover:bg-lp-surface-hover text-lp-text',
                                   )}
                                 >
-                                  <FieldTypeIcon type={f.type} />
-                                  <span className="flex-1 truncate">{f.label}</span>
-                                  {added && <Check size={14} className="shrink-0 text-lp-accent" />}
-                                </button>
-                              </li>
-                            );
-                          })}
-                          <li>
-                            <button type="button" onClick={() => { setCustomFieldContext({ templateId: t.id, templateName: t.name }); setCustomFieldOpen(true); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-lp-text-tertiary hover:bg-lp-surface-hover hover:text-lp-text">
-                              <span className="inline-flex h-6 w-6 items-center justify-center rounded border border-dashed border-lp-border text-xs">+</span>
-                              Custom field
-                            </button>
-                          </li>
-                        </ul>
+                                    <FieldTypeIcon type={f.type} />
+                                    <span className="flex-1 truncate">{f.label}</span>
+                                    <span className={cn('shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium', (f.required ?? false) ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300' : 'text-lp-text-tertiary')}>{(f.required ?? false) ? 'Required' : 'Optional'}</span>
+                                    {added && <Check size={14} className="shrink-0 text-lp-accent" />}
+                                  </button>
+                                </li>
+                              );
+                            })}
+                            <li>
+                              <button type="button" onClick={() => { setCustomFieldContext({ templateId: t.id, templateName: t.name }); setCustomFieldOpen(true); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-lp-text-tertiary hover:bg-lp-surface-hover hover:text-lp-text">
+                                <span className="inline-flex h-6 w-6 items-center justify-center rounded border border-dashed border-lp-border text-xs">+</span>
+                                Custom field
+                              </button>
+                            </li>
+                          </ul>
+                        </div>
                       </div>
-                    </div>
-                  </li>
-                );
-              })}
+                    </li>
+                  );
+                })}
               <li className="pt-2">
                 <p className="mb-1.5 px-1 text-xs font-medium text-lp-text-tertiary">Custom</p>
                 {templates.filter((t) => t.workspace_id).map((t) => {
@@ -991,6 +1083,7 @@ function SetupMode({
                                   >
                                     <FieldTypeIcon type={f.type} />
                                     <span className="flex-1 truncate">{f.label}</span>
+                                    <span className={cn('shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium', (f.required ?? false) ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300' : 'text-lp-text-tertiary')}>{(f.required ?? false) ? 'Required' : 'Optional'}</span>
                                     {added && <Check size={14} className="shrink-0 text-lp-accent" />}
                                   </button>
                                 </li>
@@ -1021,8 +1114,8 @@ function SetupMode({
       <div className="flex flex-col rounded-xl border border-lp-border bg-lp-surface">
         <h3 className="border-b border-lp-border px-4 py-3 text-sm font-semibold text-lp-text">This show&apos;s advance</h3>
         <div
-          className="min-h-0 flex-1 overflow-y-auto p-3 space-y-3"
-          onDragOver={(e) => e.preventDefault()}
+          className={cn('min-h-0 flex-1 overflow-y-auto p-3 space-y-3 transition-colors duration-150', dragState?.type === 'field' && 'bg-lp-orange/5')}
+          onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; }}
           onDrop={(e) => {
             e.preventDefault();
             const raw = e.dataTransfer.getData('application/json');
@@ -1065,7 +1158,7 @@ function SetupMode({
                 }}
               >
                 {dropTarget && dragState?.type === 'section' && typeof dropTarget === 'object' && !('fieldIndex' in dropTarget) && dropTarget.sectionIndex === secIdx && (
-                  <div className="absolute left-0 right-0 top-0 h-0.5 bg-lp-accent opacity-80 z-10 rounded-t-lg" />
+                  <div className="absolute left-0 right-0 top-0 h-1 bg-lp-orange rounded-t-lg z-10 shadow-sm" aria-hidden />
                 )}
                 <div
                   role="button"
@@ -1107,11 +1200,12 @@ function SetupMode({
                         }}
                       >
                         {dropTarget && 'fieldIndex' in dropTarget && dropTarget.sectionIndex === secIdx && dropTarget.fieldIndex === fieldIdx && (
-                          <div className="absolute left-0 right-0 top-0 h-0.5 bg-lp-accent opacity-80 z-10" />
+                          <div className="absolute left-0 right-0 top-0 h-1 bg-lp-orange z-10 rounded" aria-hidden />
                         )}
                         <GripVertical className="shrink-0 cursor-grab text-lp-text-tertiary active:cursor-grabbing" />
                         <FieldTypeIcon type={f.type} />
                         <span className="flex-1 truncate text-sm text-lp-text">{f.label}</span>
+                        <span className={cn('shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium', (f.required ?? false) ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300' : 'bg-lp-bg-tertiary text-lp-text-tertiary')}>{(f.required ?? false) ? 'Required' : 'Optional'}</span>
                         <button type="button" onClick={() => removeField(secIdx, fieldIdx)} className="shrink-0 rounded p-1 text-lp-text-tertiary hover:bg-lp-bg-tertiary hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
                           <X size={14} />
                         </button>
@@ -1123,8 +1217,13 @@ function SetupMode({
               </div>
             );
           })}
-          {sections.length === 0 && (
+          {sections.length === 0 && !dragState?.type && (
             <p className="py-8 text-center text-sm text-lp-text-tertiary">Add questions from the Template Library (left).</p>
+          )}
+          {dragState?.type === 'field' && (
+            <div className="rounded-xl border-2 border-dashed border-lp-orange bg-lp-orange/10 py-6 text-center text-sm font-medium text-lp-orange">
+              Drop here to add to this show&apos;s advance
+            </div>
           )}
         </div>
         <div className="border-t border-lp-border p-3 flex flex-wrap gap-2">
@@ -1544,6 +1643,21 @@ function FillMode({
     });
   };
 
+  // Expand section when navigating with hash #section-<template_id> (e.g. from Needs Attention)
+  useEffect(() => {
+    const hash = typeof window !== 'undefined' ? window.location.hash.slice(1) : '';
+    const match = hash.match(/^section-(.+)$/);
+    if (!match) return;
+    const sectionId = match[1];
+    const exists = advance.sections.some((s) => s.template_id === sectionId);
+    if (!exists) return;
+    setExpandedIds((prev) => new Set(prev).add(sectionId));
+    requestAnimationFrame(() => {
+      const el = document.getElementById(`section-${sectionId}`);
+      el?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }, [advance.sections]);
+
   const setSectionStatus = (templateId: string, status: string) => {
     const next = { ...advance.section_statuses, [templateId]: { ...advance.section_statuses[templateId], status } };
     onUpdate({ section_statuses: next });
@@ -1647,10 +1761,10 @@ function FillMode({
   const settlementSection = advance.sections.find((s) => s.label === SETTLEMENT_LABEL);
   const mainSections = advance.sections.filter((s) => s.label !== SETTLEMENT_LABEL);
   const sortedSections = [...mainSections].sort((a, b) => {
-    if (a.label === RIDER_LABEL) return -1;
-    if (b.label === RIDER_LABEL) return 1;
     if (a.label === KEY_CONTACTS_LABEL) return -1;
     if (b.label === KEY_CONTACTS_LABEL) return 1;
+    if (a.label === RIDER_LABEL) return -1;
+    if (b.label === RIDER_LABEL) return 1;
     return 0;
   });
 

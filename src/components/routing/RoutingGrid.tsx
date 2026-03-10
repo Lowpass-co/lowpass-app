@@ -9,7 +9,7 @@
 import { useState, useRef, useEffect, Fragment } from 'react';
 import { createPortal } from 'react-dom';
 import { parseRoutingDate, distanceMiles, formatRoutingDateShort } from '@/lib/utils';
-import { DayTypePills } from './DayTypePills';
+import { DayTypeDropdown } from './DayTypeDropdown';
 import { VenueAutocomplete } from './VenueAutocomplete';
 import { Bus, Car, Plane, Trash2, ExternalLink, Eraser } from 'lucide-react';
 import { ContextMenu } from '@/components/ui/ContextMenu';
@@ -36,15 +36,17 @@ export interface RoutingRow {
 
 const PRIMARY_SPEED_MPH: Record<PrimaryTransit, number> = {
   bus_van: 60,
+  van: 58,
   bus_trailer: 55,
   car: 55,
   flight: 500, // estimated flight speed for great-circle distance
 };
 
-/** Multiply Google drive time by this: bus 1.7x, bus+trailer 1.6x (longer than car). Car uses drive time as-is. */
+/** Multiply Google drive time: bus 0.8x, van 0.9x (shorter than car). Car uses drive time as-is. In future: use legal driver framework per territory (e.g. EU 24/45hr breaks). */
 const DRIVE_TIME_MULTIPLIER: Record<PrimaryTransit, number | null> = {
-  bus_van: 1.7,
-  bus_trailer: 1.6,
+  bus_van: 0.8,
+  van: 0.9,
+  bus_trailer: 0.85,
   car: 1,
   flight: null, // uses flight estimate, not drive time
 };
@@ -63,9 +65,9 @@ function formatHours(hours: number): string {
   return m ? `${h}h ${m}m` : `${h}h`;
 }
 
+/** Red only if over 10h or over 450 miles. */
 function travelColor(hours: number, miles: number): string {
-  if (miles > 450) return 'text-red-600 dark:text-red-400';
-  if (hours >= 8) return 'text-red-600 dark:text-red-400';
+  if (hours > 10 || miles > 450) return 'text-red-600 dark:text-red-400';
   if (hours >= 5) return 'text-amber-600 dark:text-amber-400';
   return 'text-emerald-600 dark:text-emerald-400';
 }
@@ -307,7 +309,7 @@ function RoutingRowWithMenu({
           {formatRoutingDateShort(row.date)}
         </td>
         <td className="px-4 py-2.5">
-          <DayTypePills
+          <DayTypeDropdown
             value={row.day_type ?? ''}
             onChange={(v) => updateRow(rowIndex, { day_type: v })}
             customTypes={customDayTypes}

@@ -20,7 +20,7 @@ import {
   Trash2,
   ExternalLink,
 } from 'lucide-react';
-import { parseRoutingDate, getDayTypeLabel, getDayTypeColor, getAdvanceStatusInfo, cn } from '@/lib/utils';
+import { parseRoutingDate, getDayTypeLabel, getDayTypeColor, getAdvanceStatusInfo, firstDayType, dayTypesInclude, cn } from '@/lib/utils';
 import { useToast } from '@/components/ui/Toast';
 import { CopyAdvanceModal } from '@/components/advance/CopyAdvanceModal';
 import { ContextMenu } from '@/components/ui/ContextMenu';
@@ -39,6 +39,7 @@ export type AdvanceDateItem = {
   day_type: string;
   city: string;
   venue_name: string | null;
+  address?: string | null;
   advance: {
     instance_id: string;
     status: string;
@@ -86,7 +87,7 @@ export function AdvanceOverview({
   useEffect(() => {
     let cancelled = false;
     async function fetchAdvance() {
-      const res = await fetch(`/api/tours/${tourId}/advance`);
+      const res = await fetch(`/api/tours/${tourId}/advance?all=true`);
       if (!res.ok) {
         if (!cancelled) setDates([]);
         return;
@@ -112,11 +113,10 @@ export function AdvanceOverview({
     }
     if (searchQuery.trim()) {
       const q = searchQuery.trim().toLowerCase();
-      list = list.filter(
-        (d) =>
-          (d.venue_name ?? '').toLowerCase().includes(q) ||
-          (d.city ?? '').toLowerCase().includes(q)
-      );
+      list = list.filter((d) => {
+        const full = [d.venue_name, d.city, d.address].filter(Boolean).join(' ').toLowerCase();
+        return full.includes(q);
+      });
     }
     return list;
   }, [dates, statusFilter, searchQuery]);
@@ -139,6 +139,14 @@ export function AdvanceOverview({
 
   const progressPercent = totalSections > 0 ? Math.round((completeSections / totalSections) * 100) : 0;
 
+  const showDatesCount = useMemo(
+    () => dates.filter((d) => dayTypesInclude(d.day_type ?? '', 'show') || dayTypesInclude(d.day_type ?? '', 'festival')).length,
+    [dates]
+  );
+  const completeCount = useMemo(() => dates.filter((d) => d.advance?.status === 'complete').length, [dates]);
+  const inProgressCount = useMemo(() => dates.filter((d) => d.advance?.status === 'in_progress').length, [dates]);
+  const notStartedCount = useMemo(() => dates.filter((d) => !d.advance || d.advance.status === 'not_started').length, [dates]);
+
   const openCopyModal = () => setCopyModalOpen(true);
   const openTemplateModal = () => {
     setTemplateModalOpen(true);
@@ -157,15 +165,43 @@ export function AdvanceOverview({
         <div className="rounded-xl border border-lp-border bg-lp-surface p-4">
           <div className="mb-2 flex items-center justify-between text-sm">
             <span className="text-lp-text-secondary">Tour advance progress</span>
-            <span className="font-medium text-lp-text">
-              {completeSections} of {totalSections} sections complete
-            </span>
+            {totalSections === 0 ? (
+              <span className="italic text-lp-text-tertiary">Add a section to track progress</span>
+            ) : (
+              <span className="font-medium text-lp-text">
+                {completeSections} of {totalSections} sections complete
+              </span>
+            )}
           </div>
-          <div className="h-2 w-full overflow-hidden rounded-full bg-lp-bg-tertiary">
-            <div
-              className="h-full rounded-full bg-lp-orange transition-all duration-300"
-              style={{ width: `${progressPercent}%` }}
-            />
+          {totalSections > 0 && (
+            <div className="h-2 w-full overflow-hidden rounded-full bg-lp-bg-tertiary">
+              <div
+                className="h-full rounded-full bg-lp-orange transition-all duration-300"
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Summary cards */}
+      {dates.length > 0 && (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="rounded-xl border border-lp-border bg-lp-surface p-3">
+            <p className="text-xs font-medium uppercase tracking-wide text-lp-text-tertiary">Show dates</p>
+            <p className="mt-0.5 text-xl font-bold text-lp-text">{showDatesCount}</p>
+          </div>
+          <div className="rounded-xl border border-lp-border bg-lp-surface p-3">
+            <p className="text-xs font-medium uppercase tracking-wide text-lp-text-tertiary">Complete</p>
+            <p className="mt-0.5 text-xl font-bold text-lp-status-complete">{completeCount}</p>
+          </div>
+          <div className="rounded-xl border border-lp-border bg-lp-surface p-3">
+            <p className="text-xs font-medium uppercase tracking-wide text-lp-text-tertiary">In progress</p>
+            <p className="mt-0.5 text-xl font-bold text-lp-status-in-progress">{inProgressCount}</p>
+          </div>
+          <div className="rounded-xl border border-lp-border bg-lp-surface p-3">
+            <p className="text-xs font-medium uppercase tracking-wide text-lp-text-tertiary">Not started</p>
+            <p className="mt-0.5 text-xl font-bold text-lp-text">{notStartedCount}</p>
           </div>
         </div>
       )}
@@ -202,7 +238,7 @@ export function AdvanceOverview({
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-lp-text-tertiary" />
             <input
               type="text"
-              placeholder="Search venue or city..."
+              placeholder="Search venue, city or full address..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full rounded-xl border border-lp-border bg-lp-surface py-2 pl-9 pr-3 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:border-lp-orange focus:outline-none focus:ring-2 focus:ring-lp-orange/20"
@@ -235,22 +271,32 @@ export function AdvanceOverview({
         </div>
       ) : (
         <ul className="space-y-2">
-          {filteredDates.map((item) => (
-            <ShowRow
-              key={item.routing_id}
-              tourId={tourId}
-              item={item}
-              onOpenCopyModal={(routingId) => {
-                setCopySourceRoutingId(routingId);
-                setCopyModalOpen(true);
-              }}
-              onDeleted={() => {
-                fetch(`/api/tours/${tourId}/advance`)
-                  .then((r) => r.json())
-                  .then((j) => setDates(j.dates ?? []));
-              }}
-            />
-          ))}
+          {filteredDates.map((item) => {
+            const isShowDay = dayTypesInclude(item.day_type ?? '', 'show') || dayTypesInclude(item.day_type ?? '', 'festival');
+            if (isShowDay) {
+              return (
+                <ShowRow
+                  key={item.routing_id}
+                  tourId={tourId}
+                  item={item}
+                  onOpenCopyModal={(routingId) => {
+                    setCopySourceRoutingId(routingId);
+                    setCopyModalOpen(true);
+                  }}
+                  onDeleted={() => {
+                    fetch(`/api/tours/${tourId}/advance?all=true`).then((r) => r.json()).then((j) => setDates(j.dates ?? []));
+                  }}
+                />
+              );
+            }
+            return (
+              <DayOffPill
+                key={item.routing_id}
+                tourId={tourId}
+                item={item}
+              />
+            );
+          })}
         </ul>
       )}
 
@@ -288,7 +334,7 @@ export function AdvanceOverview({
         }}
         onSuccess={(copiedCount) => {
           showToast(`Advance copied to ${copiedCount} show${copiedCount !== 1 ? 's' : ''}`);
-          fetch(`/api/tours/${tourId}/advance`)
+          fetch(`/api/tours/${tourId}/advance?all=true`)
             .then((r) => r.json())
             .then((j) => setDates(j.dates ?? []));
         }}
@@ -304,13 +350,39 @@ export function AdvanceOverview({
           onDone={() => {
             setTemplateModalOpen(false);
             router.refresh();
-            fetch(`/api/tours/${tourId}/advance`)
+            fetch(`/api/tours/${tourId}/advance?all=true`)
               .then((r) => r.json())
               .then((j) => setDates(j.dates ?? []));
           }}
         />
       )}
     </div>
+  );
+}
+
+/** Small pill for day off / travel etc. between show cards. Still links to advance for that date. */
+function DayOffPill({ tourId, item }: { tourId: string; item: AdvanceDateItem }) {
+  const router = useRouter();
+  const dateLabel = parseRoutingDate(item.date).toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short' });
+  const primaryType = firstDayType(item.day_type ?? '');
+  const colors = primaryType ? getDayTypeColor(primaryType) : null;
+  return (
+    <li>
+      <button
+        type="button"
+        onClick={() => router.push(`/tours/${tourId}/advance/${item.routing_id}`)}
+        className={cn(
+          'w-full rounded-lg border border-lp-border/60 bg-lp-surface/60 py-2 px-3 text-left text-sm transition-colors hover:border-lp-border hover:bg-lp-surface-hover flex items-center gap-3',
+          colors && [colors.bg, colors.text, 'border-transparent'].join(' ')
+        )}
+      >
+        <span className="shrink-0 w-20 text-xs font-medium text-lp-text-tertiary">{dateLabel}</span>
+        <span className="text-xs font-medium">
+          {primaryType ? getDayTypeLabel(primaryType) : '—'}
+          {item.city ? ` · ${item.city}` : ''}
+        </span>
+      </button>
+    </li>
   );
 }
 

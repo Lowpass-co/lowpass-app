@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import { parseRoutingDate } from '@/lib/utils';
 import { AlertTriangle, Loader2 } from 'lucide-react';
@@ -21,6 +21,39 @@ type SuggestionItem = {
   importance_badge: 'High' | 'Medium';
 };
 
+/** Group by show (routing), then by section; High risk items first in a separate block */
+function groupSuggestions(suggestions: SuggestionItem[]) {
+  const high = suggestions.filter((s) => s.importance_badge === 'High');
+  const rest = suggestions.filter((s) => s.importance_badge !== 'High');
+  const byShow = new Map<string, SuggestionItem[]>();
+  for (const s of rest) {
+    const key = s.routing_id;
+    if (!byShow.has(key)) byShow.set(key, []);
+    byShow.get(key)!.push(s);
+  }
+  const highByShow = new Map<string, SuggestionItem[]>();
+  for (const s of high) {
+    const key = s.routing_id;
+    if (!highByShow.has(key)) highByShow.set(key, []);
+    highByShow.get(key)!.push(s);
+  }
+  return { highByShow, byShow, highItems: high };
+}
+
+/** Within one show, group by section and format "Section | field1, field2, …" */
+function groupBySection(items: SuggestionItem[]) {
+  const bySection = new Map<string, string[]>();
+  for (const s of items) {
+    if (!bySection.has(s.section_label)) bySection.set(s.section_label, []);
+    bySection.get(s.section_label)!.push(s.field_label);
+  }
+  return Array.from(bySection.entries()).map(([label, fields]) => ({
+    section_label: label,
+    field_labels: fields,
+    first: items.find((i) => i.section_label === label)!,
+  }));
+}
+
 export function DashboardAdvanceNeeds() {
   const [suggestions, setSuggestions] = useState<SuggestionItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -28,10 +61,12 @@ export function DashboardAdvanceNeeds() {
   useEffect(() => {
     fetch('/api/advance/suggestions')
       .then((r) => (r.ok ? r.json() : { suggestions: [] }))
-      .then((j) => setSuggestions((j.suggestions ?? []).slice(0, 5)))
+      .then((j) => setSuggestions((j.suggestions ?? []).slice(0, 40)))
       .catch(() => setSuggestions([]))
       .finally(() => setLoading(false));
   }, []);
+
+  const { highByShow, byShow, highItems } = useMemo(() => groupSuggestions(suggestions), [suggestions]);
 
   if (loading) {
     return (
@@ -63,6 +98,40 @@ export function DashboardAdvanceNeeds() {
     );
   }
 
+  const formatShowDate = (date: string) =>
+    parseRoutingDate(date).toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short' });
+
+  const renderShowBlock = (
+    routingId: string,
+    tourId: string,
+    date: string,
+    venueName: string | null,
+    city: string,
+    groups: { section_label: string; field_labels: string[]; first: SuggestionItem }[],
+    isHighRisk: boolean
+  ) => {
+    const showTitle = `${formatShowDate(date)} · ${venueName || city || '—'}`;
+    return (
+      <div key={routingId} className="space-y-1.5">
+        <div className="font-medium text-lp-text text-[13px]">{showTitle}</div>
+        {groups.map((g) => (
+          <Link
+            key={g.first.section_id}
+            href={`/tours/${tourId}/advance/${routingId}#section-${g.first.section_id}`}
+            className={cn(
+              'block rounded-lg border p-2 text-sm transition-colors duration-200 hover:bg-lp-surface-hover',
+              isHighRisk ? 'border-amber-500/40 bg-amber-500/5' : 'border-lp-border'
+            )}
+          >
+            <span className="text-lp-text-secondary">
+              {g.section_label} · {g.field_labels.join(', ')}
+            </span>
+          </Link>
+        ))}
+      </div>
+    );
+  };
+
   return (
     <div className="rounded-xl border border-lp-border bg-lp-surface p-4">
       <h2 className="mb-3 flex items-center gap-2 text-base font-semibold text-lp-text">
@@ -72,32 +141,45 @@ export function DashboardAdvanceNeeds() {
       <p className="mb-3 text-xs text-lp-text-tertiary">
         Urgent unfilled advance items (next 30 days)
       </p>
-      <ul className="space-y-2">
-        {suggestions.map((s, i) => (
-          <li key={`${s.routing_id}-${s.section_id}-${s.field_id}-${i}`}>
-            <Link
-              href={`/tours/${s.tour_id}/advance/${s.routing_id}#section-${s.section_id}`}
-              className="block rounded-lg border border-lp-border p-2 text-sm hover:bg-lp-surface-hover transition-colors duration-200"
-              style={{ transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)' }}
-            >
-              <div className="font-medium text-lp-text">
-                {parseRoutingDate(s.date).toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short' })}
-                {' · '}
-                {s.venue_name || s.city || '—'}
-              </div>
-              <div className="mt-0.5 text-xs text-lp-text-secondary">{s.field_label}</div>
-              <span
-                className={cn(
-                  'mt-1 inline-block rounded px-1.5 py-0.5 text-xs font-medium',
-                  s.importance_badge === 'High' ? 'bg-amber-500/20 text-amber-700 dark:text-amber-400' : 'bg-blue-500/20 text-blue-700 dark:text-blue-400'
-                )}
-              >
-                {s.importance_badge}
-              </span>
-            </Link>
-          </li>
-        ))}
-      </ul>
+      <div className="space-y-4 max-h-[420px] overflow-y-auto">
+        {highItems.length > 0 && (
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-amber-600 dark:text-amber-400">
+              High risk
+            </p>
+            <div className="space-y-3">
+              {Array.from(highByShow.entries()).map(([routingId, items]) => {
+                const s = items[0];
+                const groups = groupBySection(items);
+                return renderShowBlock(
+                  routingId,
+                  s.tour_id,
+                  s.date,
+                  s.venue_name,
+                  s.city,
+                  groups,
+                  true
+                );
+              })}
+            </div>
+          </div>
+        )}
+        <div className="space-y-3">
+          {Array.from(byShow.entries()).map(([routingId, items]) => {
+            const s = items[0];
+            const groups = groupBySection(items);
+            return renderShowBlock(
+              routingId,
+              s.tour_id,
+              s.date,
+              s.venue_name,
+              s.city,
+              groups,
+              false
+            );
+          })}
+        </div>
+      </div>
       <Link href="/advance" className="mt-3 inline-block text-sm font-medium text-lp-orange hover:text-lp-orange-hover">
         View all on advance →
       </Link>

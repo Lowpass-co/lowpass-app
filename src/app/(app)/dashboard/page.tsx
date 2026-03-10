@@ -8,7 +8,7 @@
 import {
   Map,
   ClipboardCheck,
-  AlertTriangle,
+  Calendar,
   Clock,
   Plus,
 } from 'lucide-react';
@@ -64,17 +64,6 @@ export default async function DashboardPage() {
     .eq('workspace_id', profile.workspace_id)
     .in('status', ['planning', 'active']);
 
-  // Tours needing attention: start_date within 14 days, status = planning
-  const { data: needingAttention } = await supabase
-    .from('tours')
-    .select('id, name, start_date')
-    .eq('workspace_id', profile.workspace_id)
-    .eq('status', 'planning')
-    .gte('start_date', today)
-    .lte('start_date', in14DaysStr)
-    .order('start_date', { ascending: true })
-    .limit(10);
-
   // Active tour ids for upcoming shows and shows-to-advance
   const { data: activeTours } = await supabase
     .from('tours')
@@ -84,11 +73,13 @@ export default async function DashboardPage() {
 
   const activeTourIds = (activeTours ?? []).map((t) => t.id);
 
-  // Shows to advance: routing dates in next 30 days with advance instance status !== 'complete'
+  // Shows to advance: routing dates in next 30 days — total show days and completed count for progress
   const in30Days = new Date();
   in30Days.setDate(in30Days.getDate() + 30);
   const in30DaysStr = in30Days.toISOString().slice(0, 10);
-  let showsToAdvanceCount = 0;
+  const showDayTypes = ['show', 'festival'];
+  let showsToAdvanceTotal = 0;
+  let showsToAdvanceComplete = 0;
   if (activeTourIds.length > 0) {
     const { data: routingIn30 } = await supabase
       .from('routing')
@@ -96,19 +87,39 @@ export default async function DashboardPage() {
       .in('tour_id', activeTourIds)
       .gte('date', today)
       .lte('date', in30DaysStr);
-    const showDayTypes = ['show', 'festival'];
     const routingRowsFiltered = (routingIn30 ?? []).filter((r: { day_type?: string }) => {
       const types = (r.day_type ?? '').split(',').map((s: string) => s.trim());
       return showDayTypes.some((t) => types.includes(t));
     });
     const routingIds = routingRowsFiltered.map((r: { id: string }) => r.id);
+    showsToAdvanceTotal = routingIds.length;
     if (routingIds.length > 0) {
       const { data: instances } = await supabase
         .from('advance_instances')
         .select('id, status')
         .in('routing_id', routingIds);
-      showsToAdvanceCount = (instances ?? []).filter((i: { status: string }) => i.status !== 'complete').length;
+      showsToAdvanceComplete = (instances ?? []).filter((i: { status: string }) => i.status === 'complete').length;
     }
+  }
+  const showsToAdvanceCount = showsToAdvanceTotal - showsToAdvanceComplete;
+  const advanceProgressPercent = showsToAdvanceTotal > 0 ? Math.round((showsToAdvanceComplete / showsToAdvanceTotal) * 100) : 0;
+
+  // Shows this week (replacement for "Tours needing attention")
+  let showsThisWeekCount = 0;
+  if (activeTourIds.length > 0) {
+    const in7Days = new Date();
+    in7Days.setDate(in7Days.getDate() + 7);
+    const in7DaysStr = in7Days.toISOString().slice(0, 10);
+    const { data: routingWeek } = await supabase
+      .from('routing')
+      .select('id, day_type')
+      .in('tour_id', activeTourIds)
+      .gte('date', today)
+      .lte('date', in7DaysStr);
+    showsThisWeekCount = (routingWeek ?? []).filter((r: { day_type?: string }) => {
+      const types = (r.day_type ?? '').split(',').map((s: string) => s.trim());
+      return showDayTypes.some((t) => types.includes(t));
+    }).length;
   }
 
   // Upcoming shows: routing where tour in active, day_type = show, date >= today, limit 5 (include id for advance link)
@@ -154,6 +165,9 @@ export default async function DashboardPage() {
   const activeCount =
     (toursList ?? []).filter((t) => t.status === 'active').length;
   const nextShow = upcomingShows[0];
+  const nextShowDays = nextShow
+    ? Math.ceil((new Date(nextShow.date).getTime() - new Date().setHours(0, 0, 0, 0)) / (24 * 60 * 60 * 1000))
+    : null;
 
   return (
     <div className="mx-auto max-w-6xl space-y-8">
@@ -203,31 +217,37 @@ export default async function DashboardPage() {
           empty={activeToursCount === 0}
           emptyCta="Create your first tour"
           emptyHref="/tours/create"
+          href={activeToursCount && activeToursCount > 0 ? '/tours' : undefined}
         />
         <StatCard
           icon={ClipboardCheck}
           label="Shows Advanced"
-          value="—"
-          detail="Coming soon"
-          accentColor="text-lp-text-tertiary"
+          value={showsToAdvanceTotal === 0 ? '—' : `${showsToAdvanceComplete} of ${showsToAdvanceTotal}`}
+          detail={
+            showsToAdvanceTotal === 0
+              ? 'No shows in next 30 days'
+              : `${advanceProgressPercent}% complete · ${showsToAdvanceCount} to go`
+          }
+          progress={showsToAdvanceTotal > 0 ? advanceProgressPercent : undefined}
+          href={showsToAdvanceTotal > 0 ? '/advance' : undefined}
         />
         <StatCard
-          icon={AlertTriangle}
-          label="Tours Needing Attention"
-          value={String(needingAttention?.length ?? 0)}
+          icon={Calendar}
+          label="Shows This Week"
+          value={String(showsThisWeekCount)}
           detail={
-            (needingAttention?.length ?? 0) === 0
-              ? 'None'
-              : 'Start within 14 days, still planning'
+            showsThisWeekCount === 0
+              ? 'No show days in next 7 days'
+              : 'Show days in next 7 days'
           }
-          accentColor={(needingAttention?.length ?? 0) > 0 ? 'text-amber-500' : undefined}
+          href={showsThisWeekCount > 0 ? '/advance' : undefined}
         />
         <StatCard
           icon={Clock}
           label="Next Show"
           value={
             nextShow
-              ? formatDate(nextShow.date)
+              ? (nextShowDays != null ? `${formatDate(nextShow.date)} (${nextShowDays} days)` : formatDate(nextShow.date))
               : '—'
           }
           detail={
@@ -238,6 +258,7 @@ export default async function DashboardPage() {
           empty={!nextShow}
           emptyCta="View tours"
           emptyHref="/tours"
+          href={nextShow ? `/tours/${nextShow.tour_id}/advance` : undefined}
         />
       </div>
 
@@ -324,6 +345,8 @@ function StatCard({
   empty,
   emptyCta,
   emptyHref,
+  href,
+  progress,
 }: {
   icon: React.ElementType;
   label: string;
@@ -333,20 +356,30 @@ function StatCard({
   empty?: boolean;
   emptyCta?: string;
   emptyHref?: string;
+  href?: string;
+  progress?: number;
 }) {
-  return (
-    <div className="rounded-xl border border-lp-border bg-lp-surface p-5">
+  const content = (
+    <>
       <div className="flex items-center gap-3">
-        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-lp-bg-tertiary">
+        <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-lp-bg-tertiary shrink-0">
           <Icon size={20} className="text-lp-text-secondary" />
         </div>
-        <div>
+        <div className="min-w-0">
           <p className="text-xs font-medium uppercase tracking-wide text-lp-text-tertiary">{label}</p>
-          <p className={cn('text-xl font-bold', accentColor || 'text-lp-text')}>{value}</p>
+          <p className={cn('text-xl font-bold truncate', accentColor || 'text-lp-text')}>{value}</p>
         </div>
       </div>
+      {progress != null && (
+        <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-lp-bg-tertiary">
+          <div
+            className="h-full rounded-full bg-lp-orange transition-all duration-300"
+            style={{ width: `${Math.min(100, Math.max(0, progress))}%` }}
+          />
+        </div>
+      )}
       <p className="mt-3 text-xs text-lp-text-tertiary">{detail}</p>
-      {empty && emptyCta && emptyHref && (
+      {empty && emptyCta && emptyHref && !href && (
         <Link
           href={emptyHref}
           className="mt-2 inline-block text-xs font-medium text-lp-orange hover:text-lp-orange-hover"
@@ -354,7 +387,17 @@ function StatCard({
           {emptyCta}
         </Link>
       )}
-    </div>
+    </>
   );
+  const className = 'rounded-xl border border-lp-border bg-lp-surface p-5 block transition-colors hover:bg-lp-surface-hover';
+  const linkHref = href ?? (empty && emptyHref ? emptyHref : undefined);
+  if (linkHref) {
+    return (
+      <Link href={linkHref} className={className}>
+        {content}
+      </Link>
+    );
+  }
+  return <div className={className}>{content}</div>;
 }
 

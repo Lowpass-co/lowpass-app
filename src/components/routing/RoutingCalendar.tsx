@@ -142,7 +142,7 @@ export function RoutingCalendar({
 
             const monthDates = weeks.flat().filter((d): d is string => d != null && allDates.includes(d));
             const monthRows = monthDates.map((d) => byDate.get(d)).filter(Boolean) as RoutingRow[];
-            const showCount = monthRows.filter((r) => dayTypesInclude(r.day_type ?? '', 'show')).length;
+            const showCount = monthRows.filter((r) => dayTypesInclude(r.day_type ?? '', 'show') || dayTypesInclude(r.day_type ?? '', 'festival')).length;
             const offCount = monthRows.filter((r) => dayTypesInclude(r.day_type ?? '', 'off')).length;
             const travelCount = monthRows.filter((r) => dayTypesInclude(r.day_type ?? '', 'travel')).length;
             const countParts = [

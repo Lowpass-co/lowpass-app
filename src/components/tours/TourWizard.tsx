@@ -10,7 +10,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Info } from 'lucide-react';
+import { Info, ChevronDown, Check } from 'lucide-react';
 import type { Artist } from '@/types';
 import type { Continent } from '@/types';
 import { ArtistNewBlock, ArtistLogoField, type NewArtistPayload } from '@/components/artists/ArtistNewBlock';
@@ -71,6 +71,27 @@ export function TourWizard({ initialTourId }: TourWizardProps) {
   const [bandCount, setBandCount] = useState('0');
   const [crewCount, setCrewCount] = useState('0');
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [dateToast, setDateToast] = useState<string | null>(null);
+  const dateToastRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!dateToast) return;
+    if (dateToastRef.current) clearTimeout(dateToastRef.current);
+    dateToastRef.current = setTimeout(() => setDateToast(null), 5000);
+    return () => {
+      if (dateToastRef.current) clearTimeout(dateToastRef.current);
+    };
+  }, [dateToast]);
+
+  const validateDates = (start: string, end: string): string | null => {
+    if (!start || !end) return null;
+    if (end < start) return 'End date cannot be before start date';
+    const startMs = new Date(start).getTime();
+    const endMs = new Date(end).getTime();
+    const days = Math.ceil((endMs - startMs) / (24 * 60 * 60 * 1000));
+    if (days > 365) return 'Tour length cannot exceed 365 days';
+    return null;
+  };
 
   useEffect(() => {
     if (!initialTourId) return;
@@ -103,7 +124,8 @@ export function TourWizard({ initialTourId }: TourWizardProps) {
     else if (name.trim().length < 2) err.name = 'Tour name must be at least 2 characters';
     if (artistChoice === 'existing' && !artistId) err.artist = 'Select an artist';
     if (artistChoice === 'new' && !newArtistPayload.name.trim()) err.artist = 'Enter artist name';
-    if (startDate && endDate && startDate > endDate) err.dates = 'Start date must be before or equal to end date';
+    const dateErr = validateDates(startDate, endDate);
+    if (dateErr) err.dates = dateErr;
     if (!currency) err.currency = 'Select a currency';
     return err;
   }
@@ -319,7 +341,14 @@ export function TourWizard({ initialTourId }: TourWizardProps) {
             <input
               type="date"
               value={startDate}
-              onChange={(e) => { setStartDate(e.target.value); setErrors((prev) => ({ ...prev, dates: '' })); }}
+              onChange={(e) => {
+                const v = e.target.value;
+                setStartDate(v);
+                setErrors((prev) => ({ ...prev, dates: '' }));
+                const msg = validateDates(v, endDate);
+                if (msg) setDateToast(msg);
+                else setDateToast(null);
+              }}
               className={`h-11 w-full rounded-lg border bg-lp-surface/50 px-3.5 text-sm text-lp-text focus:outline-none focus:ring-2 focus:ring-lp-orange/20 ${errors.dates ? 'border-red-500 focus:border-red-500' : 'border-lp-border focus:border-lp-orange'}`}
               required
             />
@@ -329,41 +358,34 @@ export function TourWizard({ initialTourId }: TourWizardProps) {
             <input
               type="date"
               value={endDate}
-              onChange={(e) => { setEndDate(e.target.value); setErrors((prev) => ({ ...prev, dates: '' })); }}
+              onChange={(e) => {
+                const v = e.target.value;
+                setEndDate(v);
+                setErrors((prev) => ({ ...prev, dates: '' }));
+                const msg = validateDates(startDate, v);
+                if (msg) setDateToast(msg);
+                else setDateToast(null);
+              }}
               className={`h-11 w-full rounded-lg border bg-lp-surface/50 px-3.5 text-sm text-lp-text focus:outline-none focus:ring-2 focus:ring-lp-orange/20 ${errors.dates ? 'border-red-500 focus:border-red-500' : 'border-lp-border focus:border-lp-orange'}`}
               required
             />
           </div>
           {errors.dates && <p className="col-span-2 mt-1 text-xs text-red-600 dark:text-red-400">{errors.dates}</p>}
+          {dateToast && !errors.dates && (
+            <div
+              className="col-span-2 mt-1 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400 transition-opacity duration-300"
+              onMouseEnter={() => { if (dateToastRef.current) clearTimeout(dateToastRef.current); dateToastRef.current = null; }}
+            >
+              {dateToast}
+            </div>
+          )}
         </div>
         <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-lp-text-tertiary">Continent</label>
-            <div className="flex flex-wrap gap-2">
-              {CONTINENTS.map((c) => {
-                const selected = continents.includes(c.value);
-                return (
-                  <button
-                    key={c.value}
-                    type="button"
-                    onClick={() => {
-                      setContinents((prev) =>
-                        selected ? prev.filter((x) => x !== c.value) : [...prev, c.value]
-                      );
-                    }}
-                    className={cn(
-                      'rounded-full px-3 py-1.5 text-sm font-medium transition-colors',
-                      selected
-                        ? 'bg-lp-orange text-white hover:bg-lp-orange-hover'
-                        : 'border border-lp-border bg-lp-surface-hover text-lp-text-secondary hover:bg-lp-surface hover:text-lp-text'
-                    )}
-                  >
-                    {c.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
+          <ContinentMultiSelect
+            continents={continents}
+            onChange={setContinents}
+            options={CONTINENTS}
+          />
           <div>
             <label className="mb-1.5 flex items-center gap-1.5 text-xs font-medium uppercase tracking-wide text-lp-text-tertiary">
               Currency
@@ -396,48 +418,51 @@ export function TourWizard({ initialTourId }: TourWizardProps) {
             {errors.currency && <p className="mt-1 text-xs text-red-600 dark:text-red-400">{errors.currency}</p>}
           </div>
         </div>
-        <div className="grid grid-cols-3 gap-4">
-          <div>
-            <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-lp-text-tertiary">Principal artists</label>
-            <input
-              type="text"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              value={principalCount}
-              onChange={(e) => {
-                const v = e.target.value.replace(/\D/g, '');
-                setPrincipalCount(v);
-              }}
-              className="h-11 w-20 rounded-lg border border-lp-border bg-lp-surface/50 px-3 py-2 text-center text-lg tabular-nums text-lp-text focus:border-lp-orange focus:outline-none focus:ring-2 focus:ring-lp-orange/20 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-            />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-lp-text-tertiary">Band members</label>
-            <input
-              type="text"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              value={bandCount}
-              onChange={(e) => {
-                const v = e.target.value.replace(/\D/g, '');
-                setBandCount(v);
-              }}
-              className="h-11 w-20 rounded-lg border border-lp-border bg-lp-surface/50 px-3 py-2 text-center text-lg tabular-nums text-lp-text focus:border-lp-orange focus:outline-none focus:ring-2 focus:ring-lp-orange/20 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-            />
-          </div>
-          <div>
-            <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-lp-text-tertiary">Crew</label>
-            <input
-              type="text"
-              inputMode="numeric"
-              pattern="[0-9]*"
-              value={crewCount}
-              onChange={(e) => {
-                const v = e.target.value.replace(/\D/g, '');
-                setCrewCount(v);
-              }}
-              className="h-11 w-20 rounded-lg border border-lp-border bg-lp-surface/50 px-3 py-2 text-center text-lg tabular-nums text-lp-text focus:border-lp-orange focus:outline-none focus:ring-2 focus:ring-lp-orange/20 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-            />
+        <div className="flex flex-col items-center">
+          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-lp-text-tertiary">Principal artists / Band / Crew</p>
+          <div className="flex items-end justify-center gap-6">
+            <div className="flex flex-col items-center">
+              <label className="mb-1.5 text-xs font-medium text-lp-text-tertiary">Principal</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                value={principalCount}
+                onChange={(e) => {
+                  const v = e.target.value.replace(/\D/g, '');
+                  setPrincipalCount(v);
+                }}
+                className="h-11 w-20 rounded-lg border border-lp-border bg-lp-surface/50 px-3 py-2 text-center text-lg tabular-nums text-lp-text focus:border-lp-orange focus:outline-none focus:ring-2 focus:ring-lp-orange/20 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+              />
+            </div>
+            <div className="flex flex-col items-center">
+              <label className="mb-1.5 text-xs font-medium text-lp-text-tertiary">Band</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                value={bandCount}
+                onChange={(e) => {
+                  const v = e.target.value.replace(/\D/g, '');
+                  setBandCount(v);
+                }}
+                className="h-11 w-20 rounded-lg border border-lp-border bg-lp-surface/50 px-3 py-2 text-center text-lg tabular-nums text-lp-text focus:border-lp-orange focus:outline-none focus:ring-2 focus:ring-lp-orange/20 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+              />
+            </div>
+            <div className="flex flex-col items-center">
+              <label className="mb-1.5 text-xs font-medium text-lp-text-tertiary">Crew</label>
+              <input
+                type="text"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                value={crewCount}
+                onChange={(e) => {
+                  const v = e.target.value.replace(/\D/g, '');
+                  setCrewCount(v);
+                }}
+                className="h-11 w-20 rounded-lg border border-lp-border bg-lp-surface/50 px-3 py-2 text-center text-lg tabular-nums text-lp-text focus:border-lp-orange focus:outline-none focus:ring-2 focus:ring-lp-orange/20 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+              />
+            </div>
           </div>
         </div>
       </section>
@@ -458,5 +483,89 @@ export function TourWizard({ initialTourId }: TourWizardProps) {
         </Link>
       </div>
     </form>
+  );
+}
+
+function ContinentMultiSelect({
+  continents,
+  onChange,
+  options,
+}: {
+  continents: Continent[];
+  onChange: (c: Continent[]) => void;
+  options: { value: Continent; label: string }[];
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => {
+      if (ref.current?.contains(e.target as Node)) return;
+      setOpen(false);
+    };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [open]);
+
+  const displayLabel =
+    continents.length === 0
+      ? 'Select territories'
+      : continents.includes('GLOBAL')
+        ? 'Global'
+        : options.filter((o) => continents.includes(o.value)).map((o) => o.label).join(', ');
+
+  const toggle = (value: Continent) => {
+    if (value === 'GLOBAL') {
+      onChange(['GLOBAL']);
+      return;
+    }
+    const next = continents.filter((c) => c !== 'GLOBAL');
+    if (next.includes(value)) {
+      const n = next.filter((c) => c !== value);
+      onChange(n.length ? n : ['UK']);
+    } else {
+      onChange([...next, value]);
+    }
+  };
+
+  return (
+    <div className="relative" ref={ref}>
+      <label className="mb-1.5 block text-xs font-medium uppercase tracking-wide text-lp-text-tertiary">
+        Continent / territories
+      </label>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className={cn(
+          'flex h-11 w-full items-center justify-between rounded-xl border bg-lp-surface px-4 py-2.5 text-left text-sm text-lp-text transition-all duration-150',
+          open && 'ring-2 ring-lp-orange/20',
+          'border-lp-border focus:border-lp-orange'
+        )}
+      >
+        <span className={continents.length ? '' : 'text-lp-text-tertiary'}>{displayLabel}</span>
+        <ChevronDown size={16} className={cn('shrink-0 text-lp-text-tertiary transition-transform duration-150', open && 'rotate-180')} />
+      </button>
+      {open && (
+        <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-56 overflow-y-auto rounded-xl border border-lp-border bg-lp-surface py-1 shadow-xl">
+          {options.map((opt) => {
+            const selected = continents.includes(opt.value);
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => toggle(opt.value)}
+                className={cn(
+                  'flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left text-sm transition-colors',
+                  selected ? 'bg-lp-orange/10 text-lp-text' : 'text-lp-text hover:bg-lp-surface-hover'
+                )}
+              >
+                <span>{opt.label}</span>
+                {selected && <Check size={16} className="shrink-0 text-lp-orange" />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
