@@ -19,14 +19,7 @@ export default async function BudgetPage({
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-lp-text">Budget</h1>
-        <p className="mt-1 text-sm text-lp-text-secondary">
-          Income, expenses, and P&L by tour.
-        </p>
-      </div>
-
-      <Suspense fallback={<div className="h-20 rounded-xl border border-lp-border bg-lp-surface animate-pulse" />}>
+      <Suspense fallback={<div className="h-16 animate-pulse" />}>
         <BudgetTourSelector basePath="/budget" defaultTab="summary" />
       </Suspense>
 

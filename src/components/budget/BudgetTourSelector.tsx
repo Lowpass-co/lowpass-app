@@ -18,11 +18,8 @@ type Tour = {
 };
 
 type BudgetTourSelectorProps = {
-  /** Base path for navigation (e.g. /budget or /rooming) */
   basePath?: string;
-  /** Optional tab param to preserve when changing tour */
   tabParam?: string;
-  /** Optional default tab when no tab in URL */
   defaultTab?: string;
   className?: string;
 };
@@ -75,53 +72,44 @@ export function BudgetTourSelector({
     setDropdownOpen(false);
   };
 
-  if (loading) {
-    return (
-      <div
-        className={cn(
-          'flex items-center gap-2 rounded-xl border border-lp-border bg-lp-surface px-4 py-3 text-lp-text-secondary',
-          className
-        )}
-      >
-        <Loader2 className="h-4 w-4 animate-spin" />
-        <span className="text-sm">Loading tours…</span>
-      </div>
-    );
-  }
-
   return (
-    <div
-      className={cn(
-        'rounded-xl border border-lp-border bg-lp-surface p-4',
-        className
-      )}
-    >
-      <label className="block text-xs font-medium uppercase tracking-wider text-lp-text-tertiary">
-        Tour
-      </label>
-      <div className="relative mt-1.5">
+    <div className={cn('flex items-start justify-between gap-4', className)}>
+      {/* Left: SELECT TOUR trigger + large tour name heading */}
+      <div className="relative min-w-0">
         <button
           type="button"
           onClick={() => setDropdownOpen((o) => !o)}
-          className={cn(
-            'flex w-full items-center justify-between gap-2 rounded-lg border border-lp-border bg-lp-bg px-3 py-2.5 text-left text-sm',
-            'text-lp-text hover:bg-lp-surface-hover transition-colors',
-            'min-h-[40px]'
-          )}
+          className="flex items-center gap-1 mb-1 group"
           aria-expanded={dropdownOpen}
           aria-haspopup="listbox"
-          aria-label="Select tour"
         >
-          <span className="truncate">
-            {displayTour
-              ? `${displayTour.artist?.name ?? '—'} — ${displayTour.name} (${formatTourDateRange(displayTour.start_date, displayTour.end_date)})`
-              : 'Select a tour…'}
+          <span
+            className="text-[10px] font-semibold uppercase tracking-widest transition-colors"
+            style={{ color: dropdownOpen ? '#FF4500' : 'rgba(255,255,255,0.4)' }}
+          >
+            Select Tour
           </span>
           <ChevronDown
-            size={18}
-            className={cn('shrink-0 text-lp-text-tertiary', dropdownOpen && 'rotate-180')}
+            size={11}
+            className={cn('transition-transform', dropdownOpen && 'rotate-180')}
+            style={{ color: dropdownOpen ? '#FF4500' : 'rgba(255,255,255,0.4)' }}
           />
         </button>
+
+        {loading ? (
+          <div className="flex items-center gap-2 text-lp-text-secondary">
+            <Loader2 className="h-5 w-5 animate-spin" />
+            <span className="text-2xl font-bold">Loading…</span>
+          </div>
+        ) : (
+          <h1 className="text-[2.4rem] font-bold leading-none tracking-tight text-lp-text truncate max-w-[640px]">
+            {displayTour
+              ? displayTour.name
+              : <span className="text-lp-text-tertiary text-2xl font-medium">Select a tour above</span>}
+          </h1>
+        )}
+
+        {/* Dropdown */}
         {dropdownOpen && (
           <>
             <div
@@ -130,11 +118,11 @@ export function BudgetTourSelector({
               onClick={() => setDropdownOpen(false)}
             />
             <ul
-              className="absolute left-0 right-0 top-full z-20 mt-1 max-h-64 overflow-auto rounded-lg border border-lp-border bg-lp-surface py-1 shadow-lg"
+              className="absolute left-0 top-full z-20 mt-2 w-[480px] max-h-64 overflow-auto rounded-lg border border-lp-border bg-lp-surface py-1 shadow-xl"
               role="listbox"
             >
               {tours.length === 0 ? (
-                <li className="px-3 py-2 text-sm text-lp-text-tertiary">No tours found</li>
+                <li className="px-4 py-2.5 text-sm text-lp-text-tertiary">No tours found</li>
               ) : (
                 tours.map((tour) => (
                   <li
@@ -143,13 +131,17 @@ export function BudgetTourSelector({
                     aria-selected={tour.id === displayTourId}
                     onClick={() => handleSelectTour(tour)}
                     className={cn(
-                      'cursor-pointer px-3 py-2 text-sm',
+                      'cursor-pointer px-4 py-2.5 text-sm transition-colors',
                       tour.id === displayTourId
-                        ? 'bg-lp-orange-subtle text-lp-orange'
+                        ? 'text-lp-orange bg-lp-orange/5'
                         : 'text-lp-text hover:bg-lp-surface-hover'
                     )}
                   >
-                    {tour.artist?.name ?? '—'} — {tour.name} ({formatTourDateRange(tour.start_date, tour.end_date)})
+                    <span className="font-medium">{tour.name}</span>
+                    <span className="ml-2 text-lp-text-tertiary text-xs">
+                      {tour.artist?.name ? `${tour.artist.name} · ` : ''}
+                      {formatTourDateRange(tour.start_date, tour.end_date)}
+                    </span>
                   </li>
                 ))
               )}
@@ -157,11 +149,7 @@ export function BudgetTourSelector({
           </>
         )}
       </div>
-      {displayTour && (
-        <p className="mt-2 text-xs text-lp-text-tertiary">
-          Currency: {displayTour.currency}
-        </p>
-      )}
+
     </div>
   );
 }

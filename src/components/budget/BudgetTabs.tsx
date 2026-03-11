@@ -48,7 +48,7 @@ export function BudgetTabs({ tourId, activeTab }: { tourId: string; activeTab: s
 
   return (
     <>
-      <nav className="flex gap-1 overflow-x-auto border-b border-lp-border pb-px" aria-label="Budget sections">
+      <nav className="flex gap-0 overflow-x-auto border-b border-lp-border" aria-label="Budget sections">
         {BUDGET_TABS.map((tab) => {
           const isActive = activeTab === tab.id;
           return (
@@ -56,10 +56,10 @@ export function BudgetTabs({ tourId, activeTab }: { tourId: string; activeTab: s
               key={tab.id}
               href={`/budget?tour_id=${tourId}&tab=${tab.id}`}
               className={cn(
-                'shrink-0 rounded-t-lg px-4 py-2.5 text-sm font-medium transition-colors',
+                'shrink-0 px-4 py-3 text-[11px] font-semibold tracking-widest uppercase transition-colors border-b-2',
                 isActive
-                  ? 'bg-lp-surface border border-lp-border border-b-transparent -mb-px text-lp-orange'
-                  : 'text-lp-text-secondary hover:text-lp-text hover:bg-lp-surface-hover'
+                  ? 'border-lp-orange text-white'
+                  : 'border-transparent text-lp-text-tertiary hover:text-lp-text-secondary hover:border-lp-border'
               )}
             >
               {tab.label}
