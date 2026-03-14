@@ -1,8 +1,8 @@
 /* ============================================
-   LOWPASS — Sidebar Navigation (Variant)
+   LOWPASS — Sidebar Navigation
 
-   Dark gradient sidebar with text-only nav,
-   orange dot active indicator, and square avatar footer.
+   Light mode: Figma design (white bg, gray nav, orange accents).
+   Dark mode: Inverted theme (dark bg, light text, same orange accents).
    ============================================ */
 
 'use client';
@@ -105,113 +105,60 @@ export function Sidebar() {
 
   return (
     <aside
-      style={{ background: 'linear-gradient(to top, #000000 0%, #000000 45%, #1D0900 100%)' }}
       className={cn(
-        'fixed inset-y-0 left-0 z-30 flex flex-col',
-        'border-r border-white/5',
-        'transition-[width] duration-200 ease-in-out',
+        'fixed inset-y-0 left-0 z-30 flex flex-col transition-[width] duration-200 ease-in-out',
         collapsed ? 'w-[72px]' : 'w-[260px]'
       )}
+      style={{
+        backgroundColor: 'var(--lp-sidebar-bg)',
+        borderRightWidth: '1px',
+        borderRightColor: 'var(--lp-sidebar-border)',
+      }}
     >
-      {/* Decorative orange watermark — subtle SVG lines */}
-      {!collapsed && (
-        <div className="pointer-events-none absolute inset-0 overflow-hidden" style={{ zIndex: 0 }}>
-          <svg
-            width="260"
-            height="638"
-            viewBox="0 0 260 638"
-            fill="none"
-            className="absolute top-0 left-0"
-          >
-            <defs>
-              <filter id="sb-glow" x="-300%" y="-300%" width="700%" height="700%">
-                <feGaussianBlur in="SourceGraphic" stdDeviation="6" result="blur" />
-              </filter>
-            </defs>
-
-            {/*
-              Logo geometry starting from the bottom of the header divider (y=64).
-              Vertical hugs left edge: (4,64)→(4,340).
-              Horizontal: (4,340)→(200,340). Diagonal: (200,340)→(260,620).
-            */}
-            <polyline
-              points="4,64 4,438 200,438 260,638"
-              stroke="#FF4500"
-              strokeWidth="1.5"
-              strokeLinejoin="miter"
-              fill="none"
-              opacity="0.24"
-            />
-
-            {/* Flare — outer glow */}
-            <circle r="12" fill="#FF4500" opacity="0.17" filter="url(#sb-glow)">
-              <animateMotion
-                dur="9s"
-                repeatCount="indefinite"
-                calcMode="paced"
-                path="M4,64 L4,438 L200,438 L260,638"
-              />
-            </circle>
-
-            {/* Flare — bright white core */}
-            <circle r="2.5" fill="white" opacity="0.77">
-              <animateMotion
-                dur="9s"
-                repeatCount="indefinite"
-                calcMode="paced"
-                path="M4,64 L4,438 L200,438 L260,638"
-              />
-            </circle>
-          </svg>
-        </div>
-      )}
-
       {/* Content layer */}
       <div className="relative flex h-full flex-col" style={{ zIndex: 1 }}>
 
         {/* Wordmark + collapse toggle */}
-        <div className="flex h-16 items-center justify-between px-5 border-b border-white/5">
+        <div
+          className="flex h-16 items-center justify-between px-5"
+          style={{ borderBottom: '1px solid var(--lp-sidebar-border)' }}
+        >
           {!collapsed ? (
-            <span style={{
-              color: '#FF4500',
-              fontWeight: 700,
-              fontSize: '13px',
-              letterSpacing: '0.22em',
-              fontFamily: 'inherit',
-            }}>
+            <span
+              className="bg-[var(--lp-sidebar-bg)] pr-2 font-extrabold tracking-[0.2em] text-[13px]"
+              style={{ color: '#FF4500' }}
+            >
               LOWPASS
             </span>
           ) : (
-            <span style={{ color: '#FF4500', fontWeight: 700, fontSize: '13px', letterSpacing: '0.1em' }}>
+            <span className="font-extrabold text-[13px] tracking-[0.1em]" style={{ color: '#FF4500' }}>
               LP
             </span>
           )}
           <button
             onClick={() => setCollapsed(!collapsed)}
             className={cn(
-              'flex h-6 w-6 items-center justify-center rounded',
-              'transition-colors',
+              'flex h-6 w-6 items-center justify-center rounded transition-colors',
               collapsed && 'mx-auto'
             )}
-            style={{ color: 'rgba(255,255,255,0.25)' }}
+            style={{ color: '#FF4500' }}
             aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
           >
-            {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+            {collapsed ? <ChevronRight size={14} strokeWidth={2.5} /> : <ChevronLeft size={14} strokeWidth={2.5} />}
           </button>
         </div>
 
-        {/* New Tour button — outline style */}
+        {/* New Tour button — outline (Figma). Hover: light → white text, dark → black text. */}
         <div className="px-4 pt-5 pb-3">
           <Link
             href="/tours/create"
             className={cn(
-              'flex items-center justify-center rounded-md py-2.5 text-xs font-semibold tracking-widest',
-              'transition-colors hover:bg-lp-orange/10',
+              'flex items-center justify-center rounded-lg py-2.5 text-xs font-bold tracking-widest transition-colors duration-200',
+              'text-lp-orange hover:bg-lp-orange hover:text-white dark:hover:text-black',
               collapsed ? 'px-2' : 'px-3'
             )}
             style={{
-              border: '1px solid rgba(255,69,0,0.6)',
-              color: '#FF4500',
+              border: '1px solid #FF4500',
               letterSpacing: '0.15em',
             }}
           >
@@ -219,79 +166,105 @@ export function Sidebar() {
           </Link>
         </div>
 
-        {/* Navigation — text only, no icons */}
-        <nav className="flex-1 overflow-y-auto px-4 py-2">
+        {/* Navigation */}
+        <nav className="sidebar-scroll flex-1 overflow-y-auto px-4 pb-6">
+          <style>{`
+            .sidebar-scroll::-webkit-scrollbar { width: 4px; }
+            .sidebar-scroll::-webkit-scrollbar-track { background: transparent; }
+            .sidebar-scroll::-webkit-scrollbar-thumb {
+              background-color: var(--lp-sidebar-border);
+              border-radius: 10px;
+            }
+            .sidebar-scroll:hover::-webkit-scrollbar-thumb {
+              background-color: var(--lp-sidebar-text-muted);
+            }
+          `}</style>
           {navGroups.map((group, groupIndex) => (
-            <div key={groupIndex} className="mb-6">
+            <div key={groupIndex} className="mt-8 first:mt-2">
               {group.title && !collapsed && (
-                <p
-                  className="mb-2 text-[11px] font-bold uppercase tracking-widest"
-                  style={{
-                    color: 'rgba(255,255,255,0.8)',
-                    textShadow: '0 0 12px #000, 0 0 20px #000, 0 1px 3px #000',
-                  }}
+                <h3
+                  className="mb-3 px-3 text-xs font-extrabold uppercase tracking-wider"
+                  style={{ color: 'var(--lp-sidebar-text-heading)' }}
                 >
                   {group.title}
-                </p>
+                </h3>
               )}
 
-              {group.items.map((item) => {
-                const isActive =
-                  item.href === '/advance'
-                    ? pathname?.includes('/advance')
-                    : item.href === '/tours'
-                      ? pathname?.startsWith('/tours') && !pathname?.includes('/advance')
-                      : item.href === '/budget'
-                        ? pathname?.startsWith('/budget')
-                        : item.href === '/rooming'
-                          ? pathname?.startsWith('/rooming')
-                          : pathname === item.href || pathname?.startsWith(item.href + '/');
+              <div className="space-y-0.5">
+                {group.items.map((item) => {
+                  const isActive =
+                    item.href === '/advance'
+                      ? pathname?.includes('/advance')
+                      : item.href === '/tours'
+                        ? pathname?.startsWith('/tours') && !pathname?.includes('/advance')
+                        : item.href === '/budget'
+                          ? pathname?.startsWith('/budget')
+                          : item.href === '/rooming'
+                            ? pathname?.startsWith('/rooming')
+                            : pathname === item.href || pathname?.startsWith(item.href + '/');
 
-                const Icon = item.icon;
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    title={collapsed ? item.label : undefined}
-                    className={cn(
-                      'group flex items-center gap-2.5 py-1.5 transition-colors duration-100 rounded-md',
-                      !collapsed && 'px-2 -mx-2',
-                      collapsed && 'justify-center',
-                      isActive
-                        ? 'bg-lp-orange/[0.08]'
-                        : 'hover:bg-lp-orange/[0.05]'
-                    )}
-                    style={{
-                      color: isActive ? '#ffffff' : 'rgba(255,255,255,0.35)',
-                    }}
-                  >
-                    {/* Active → bullet dot; Inactive → icon */}
-                    {isActive ? (
-                      <span
-                        className="h-1.5 w-1.5 shrink-0 rounded-full"
-                        style={{ background: '#FF4500' }}
-                      />
-                    ) : (
-                      <Icon
-                        size={15}
-                        className="shrink-0 transition-colors duration-100"
-                        style={{ color: 'rgba(255,69,0,0.45)' }}
-                      />
-                    )}
-                    {!collapsed && (
-                      <span className={cn('flex-1 uppercase tracking-wider text-xs', isActive && 'font-semibold')}>
-                        {item.label}
-                      </span>
-                    )}
-                  </Link>
-                );
-              })}
+                  const Icon = item.icon;
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      title={collapsed ? item.label : undefined}
+                      className={cn(
+                        'group flex items-center gap-3 rounded-md px-3 py-2 transition-colors',
+                        'hover:bg-[var(--lp-sidebar-hover-bg)]',
+                        collapsed && 'justify-center px-2'
+                      )}
+                      style={{
+                        backgroundColor: isActive ? 'var(--lp-sidebar-active-bg)' : 'transparent',
+                        color: isActive ? '#FF4500' : 'var(--lp-sidebar-text)',
+                      }}
+                    >
+                      {isActive ? (
+                        <svg
+                          className="h-4 w-4 shrink-0"
+                          viewBox="0 0 14 14"
+                          fill="none"
+                          stroke="#FF4500"
+                          strokeWidth="1.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          aria-hidden
+                        >
+                          <path d="M 2 0 L 2 6 L 8 6 L 14 12" />
+                        </svg>
+                      ) : (
+                        <Icon
+                          size={20}
+                          className="shrink-0 transition-colors group-hover:[color:var(--lp-sidebar-text-heading)]"
+                          style={{ color: 'var(--lp-sidebar-icon)' }}
+                        />
+                      )}
+                      {!collapsed && (
+                        <span
+                          className={cn(
+                            'flex-1 text-[11px] font-semibold uppercase tracking-wide',
+                            isActive && 'font-bold'
+                          )}
+                        >
+                          {item.label}
+                        </span>
+                      )}
+                    </Link>
+                  );
+                })}
+              </div>
             </div>
           ))}
         </nav>
 
-        {/* Footer — square avatar + name + logout */}
-        <div className="border-t border-white/5 px-4 py-4">
+        {/* Footer — avatar + name (Figma) */}
+        <div
+          className="border-t px-4 py-4"
+          style={{
+            borderTopColor: 'var(--lp-sidebar-border)',
+            backgroundColor: 'var(--lp-sidebar-bg)',
+          }}
+        >
           <button
             type="button"
             onClick={() => setUserMenuOpen((open) => !open)}
@@ -301,20 +274,25 @@ export function Sidebar() {
             )}
             aria-expanded={userMenuOpen}
           >
-            {/* Square avatar */}
             <div
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded text-xs font-bold text-white"
-              style={{ background: '#FF4500' }}
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-xs font-bold text-white shadow-sm"
+              style={{ backgroundColor: '#FF4500', boxShadow: '0 1px 2px 0 rgba(255, 69, 0, 0.3)' }}
             >
               {initials}
             </div>
             {!collapsed && (
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium" style={{ color: 'rgba(255,255,255,0.85)' }}>
+                <p
+                  className="truncate text-[13px] font-semibold leading-tight"
+                  style={{ color: 'var(--lp-sidebar-text-heading)' }}
+                >
                   {displayName || '…'}
                 </p>
                 {displayEmail && (
-                  <p className="truncate text-xs" style={{ color: 'rgba(255,255,255,0.3)' }}>
+                  <p
+                    className="truncate text-[11px]"
+                    style={{ color: 'var(--lp-sidebar-text-muted)' }}
+                  >
                     {displayEmail}
                   </p>
                 )}
@@ -334,11 +312,10 @@ export function Sidebar() {
                 type="button"
                 onClick={() => signOut()}
                 className={cn(
-                  'flex w-full items-center gap-2.5 rounded py-2 mt-2 text-xs font-medium',
-                  'transition-colors',
+                  'flex w-full items-center gap-2.5 px-4 py-2 text-xs font-medium transition-colors',
                   collapsed && 'justify-center'
                 )}
-                style={{ color: 'rgba(255,255,255,0.35)' }}
+                style={{ color: 'var(--lp-sidebar-text-muted)' }}
               >
                 <LogOut size={14} />
                 {!collapsed && <span style={{ letterSpacing: '0.05em' }}>Log out</span>}
@@ -346,7 +323,6 @@ export function Sidebar() {
             </div>
           </div>
         </div>
-
       </div>
     </aside>
   );
