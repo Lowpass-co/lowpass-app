@@ -2,13 +2,16 @@
    LOWPASS — Rooming Page
 
    Tour selector + tabs: Master Grid, Per-Hotel Sheets.
+   When no tour selected: same landing design as Budget (Select Tour Rooming).
    ============================================ */
 
 import Link from 'next/link';
 import { Suspense } from 'react';
+import { BudgetTourLanding } from '@/components/budget/BudgetTourLanding';
 import { BudgetTourSelector } from '@/components/budget/BudgetTourSelector';
 import { cn } from '@/lib/utils';
 
+const ROOMING_STORAGE_KEY = 'lowpass_selected_rooming_tour';
 const ROOMING_TABS = [
   { id: 'grid', label: 'Master Grid' },
   { id: 'hotels', label: 'Per-Hotel Sheets' },
@@ -72,6 +75,19 @@ export default async function RoomingPage({
   const tab = (params.tab as TabId) ?? 'grid';
   const validTab = ROOMING_TABS.some((t) => t.id === tab) ? tab : 'grid';
 
+  if (!tourId) {
+    return (
+      <div className="-mx-6 -my-6 flex h-[calc(100vh-4rem)] flex-col">
+        <BudgetTourLanding
+          title="Select Tour Rooming"
+          storageKey={ROOMING_STORAGE_KEY}
+          basePath="/rooming"
+          defaultTab="grid"
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto max-w-6xl space-y-6">
       <div>
@@ -82,16 +98,14 @@ export default async function RoomingPage({
       </div>
 
       <Suspense fallback={<div className="h-20 rounded-xl border border-lp-border bg-lp-surface animate-pulse" />}>
-        <BudgetTourSelector basePath="/rooming" defaultTab="grid" />
+        <BudgetTourSelector
+          basePath="/rooming"
+          defaultTab="grid"
+          storageKey={ROOMING_STORAGE_KEY}
+        />
       </Suspense>
 
-      {tourId ? (
-        <RoomingTabs tourId={tourId} activeTab={validTab} />
-      ) : (
-        <div className="rounded-xl border border-lp-border bg-lp-surface p-8 text-center">
-          <p className="text-lp-text-secondary">Select a tour above to view rooming.</p>
-        </div>
-      )}
+      <RoomingTabs tourId={tourId} activeTab={validTab} />
     </div>
   );
 }
