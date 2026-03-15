@@ -5,7 +5,13 @@ import { useRouter } from 'next/navigation';
 import { Search, ChevronDown, Loader2, Filter } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-const STORAGE_KEY = 'lowpass_selected_budget_tour';
+import { loadRecentTourIds, pushRecentTourId, RECENT_DISPLAY } from './budget-recent';
+import {
+  loadRecentTourIds as loadRecentTourIdsRooming,
+  pushRecentTourId as pushRecentTourIdRooming,
+} from './rooming-recent';
+
+const BUDGET_STORAGE_KEY = 'lowpass_selected_budget_tour';
 const ITEM_ANGLE_STEP = 0.16;
 const ARC_RADIUS = 550;
 const LERP = 0.08;
@@ -26,17 +32,35 @@ function normalizeDistance(rawDistance: number, total: number): number {
   return distance;
 }
 
-export function BudgetTourLanding() {
+export type TourLandingOptions = {
+  /** Page title, e.g. "Select Tour Budget" or "Select Tour Rooming" */
+  title?: string;
+  /** localStorage key for selected tour id */
+  storageKey?: string;
+  /** Base path for redirect, e.g. "/budget" or "/rooming" */
+  basePath?: string;
+  /** Tab param for redirect, e.g. "summary" or "grid" */
+  defaultTab?: string;
+};
+
+const DEFAULT_OPTIONS: Required<TourLandingOptions> = {
+  title: 'Select Tour Budget',
+  storageKey: BUDGET_STORAGE_KEY,
+  basePath: '/budget',
+  defaultTab: 'summary',
+};
+
+export function BudgetTourLanding(options: TourLandingOptions = {}) {
+  const { title, storageKey, basePath, defaultTab } = { ...DEFAULT_OPTIONS, ...options };
   const router = useRouter();
   const [tours, setTours] = useState<Tour[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterArtistId, setFilterArtistId] = useState<string | null>(null);
   const [filterStatus, setFilterStatus] = useState<string>('');
-  const [filterDateFrom, setFilterDateFrom] = useState<string>('');
-  const [filterDateTo, setFilterDateTo] = useState<string>('');
   const [targetScroll, setTargetScroll] = useState(0);
   const [hintVisible, setHintVisible] = useState(true);
+  const [recentTourIds, setRecentTourIds] = useState<string[]>([]);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const listContainerRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef<number>(0);
@@ -55,6 +79,16 @@ export function BudgetTourLanding() {
   useEffect(() => {
     fetchTours();
   }, [fetchTours]);
+
+  useEffect(() => {
+    setRecentTourIds(
+      basePath === '/budget'
+        ? loadRecentTourIds()
+        : basePath === '/rooming'
+          ? loadRecentTourIdsRooming()
+          : []
+    );
+  }, [basePath]);
 
   // Refetch when user returns to tab (e.g. after adding a tour elsewhere) so list stays in sync
   useEffect(() => {
@@ -77,6 +111,12 @@ export function BudgetTourLanding() {
     return out;
   }, [tours]);
 
+  const recentlyVisitedTours = useMemo(() => {
+    if ((basePath !== '/budget' && basePath !== '/rooming') || recentTourIds.length === 0) return [];
+    const byId = new Map(tours.map((t) => [t.id, t]));
+    return recentTourIds.map((id) => byId.get(id)).filter((t): t is Tour => t != null).slice(0, RECENT_DISPLAY);
+  }, [basePath, recentTourIds, tours]);
+
   const filteredTours = useMemo(() => {
     let list = tours;
     const q = searchQuery.trim().toLowerCase();
@@ -93,14 +133,8 @@ export function BudgetTourLanding() {
     if (filterStatus) {
       list = list.filter((t) => (t.status ?? '') === filterStatus);
     }
-    if (filterDateFrom) {
-      list = list.filter((t) => t.start_date >= filterDateFrom);
-    }
-    if (filterDateTo) {
-      list = list.filter((t) => t.start_date <= filterDateTo);
-    }
     return list;
-  }, [tours, searchQuery, filterArtistId, filterStatus, filterDateFrom, filterDateTo]);
+  }, [tours, searchQuery, filterArtistId, filterStatus]);
   const totalItems = Math.max(1, filteredTours.length);
   const hasSearchNoResults = searchQuery.trim() && filteredTours.length === 0;
   const isArcVisible = !loading && tours.length > 0 && !hasSearchNoResults;
@@ -111,10 +145,17 @@ export function BudgetTourLanding() {
 
   const handleSelectTour = useCallback(
     (tour: Tour) => {
-      localStorage.setItem(STORAGE_KEY, tour.id);
-      router.push(`/budget?tour_id=${tour.id}&tab=summary`);
+      localStorage.setItem(storageKey, tour.id);
+      if (basePath === '/budget') {
+        pushRecentTourId(tour.id);
+        setRecentTourIds(loadRecentTourIds());
+      } else if (basePath === '/rooming') {
+        pushRecentTourIdRooming(tour.id);
+        setRecentTourIds(loadRecentTourIdsRooming());
+      }
+      router.push(`${basePath}?tour_id=${tour.id}&tab=${defaultTab}`);
     },
-    [router]
+    [router, storageKey, basePath, defaultTab]
   );
 
   // Search: when user types, snap arc to first filtered result (index 0 in filtered list)
@@ -288,12 +329,12 @@ export function BudgetTourLanding() {
   if (hasSearchNoResults) {
     return (
       <div className="relative flex flex-1 flex-col overflow-hidden bg-lp-bg">
-        <div className="absolute left-1/2 top-[28%] z-40 flex w-full max-w-md -translate-x-1/2 flex-col items-center">
-          <h1 className="whitespace-nowrap text-5xl font-extrabold tracking-tight text-lp-orange md:text-6xl">
-            Select Tour Budget
+        <div className="absolute left-[12%] top-1/2 z-40 flex -translate-y-1/2 flex-col pointer-events-none">
+          <h1 className="whitespace-nowrap text-6xl font-extrabold tracking-tight text-lp-orange">
+            {title}
           </h1>
-          <div className="pointer-events-auto mt-6 w-full">
-            <div className="flex w-full items-center overflow-hidden rounded-full border-2 border-lp-orange bg-lp-surface shadow-sm shadow-lp-orange/20">
+          <div className="pointer-events-auto ml-[84px] mt-8">
+            <div className="flex w-80 items-center overflow-hidden rounded-full border-2 border-lp-orange bg-lp-surface shadow-sm shadow-lp-orange/20">
               <input
                 type="text"
                 placeholder="Search tours or artist..."
@@ -321,99 +362,104 @@ export function BudgetTourLanding() {
       className="relative flex flex-1 flex-col overflow-hidden bg-lp-bg"
       id="scroll-wrapper"
     >
-      {/* Centered header: title + search + filters — does not overlap arc list */}
-      <div className="absolute left-1/2 top-[18%] z-40 flex w-full max-w-2xl -translate-x-1/2 flex-col items-center pointer-events-none">
-        <div className="pointer-events-auto flex w-full flex-col items-center">
-          <h1 className="whitespace-nowrap text-5xl font-extrabold tracking-tight text-lp-orange md:text-6xl">
-            Select Tour Budget
+      {/* Left: title + search + filters — bounded so nothing intersects the tour list (arc at 52%) */}
+      <div className="absolute left-[12%] right-[52%] top-1/2 z-40 flex -translate-y-1/2 flex-col pointer-events-none min-w-0">
+        <div className="flex items-center space-x-5 min-w-0">
+          <h1 className="whitespace-nowrap text-5xl font-extrabold tracking-tight text-lp-orange md:text-6xl shrink-0">
+            {title}
           </h1>
-          <div className="mt-6 w-full max-w-md">
-            <div className="flex w-full items-center overflow-hidden rounded-full border-2 border-lp-orange bg-lp-surface shadow-sm shadow-lp-orange/20 transition-all duration-300 focus-within:border-lp-orange focus-within:shadow-lp-orange/30">
-              <input
-                type="text"
-                id="search-input"
-                placeholder="Search tours or artist..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full flex-1 bg-transparent px-5 py-3.5 text-sm font-medium text-lp-text placeholder:text-lp-text-tertiary focus:outline-none"
-                aria-label="Search tours"
-              />
+        </div>
+        <div className="pointer-events-auto ml-0 mt-6 max-w-[320px]">
+          <div className="flex w-full max-w-[320px] items-center overflow-hidden rounded-full border-2 border-lp-orange bg-lp-surface shadow-sm shadow-lp-orange/20 transition-all duration-300 focus-within:border-lp-orange focus-within:shadow-lp-orange/30">
+            <input
+              type="text"
+              id="search-input"
+              placeholder="Search tours or artist..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full flex-1 bg-transparent px-5 py-3.5 text-sm font-medium text-lp-text placeholder:text-lp-text-tertiary focus:outline-none"
+              aria-label="Search tours"
+            />
+            <button
+              type="button"
+              className="px-5 py-3.5 text-lp-text-tertiary transition-colors hover:text-lp-orange"
+              aria-label="Search"
+            >
+              <Search className="h-5 w-5" strokeWidth={2.5} />
+            </button>
+          </div>
+        </div>
+        {/* Filters — wrap within left column so they never overlap the tour list */}
+        <div className="pointer-events-auto mt-4 flex flex-col gap-3 max-w-[320px]">
+          {distinctArtists.length > 0 && (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="flex items-center gap-1 text-xs font-medium text-lp-text-tertiary shrink-0">
+                <Filter className="h-3.5 w-3.5" /> Artist
+              </span>
               <button
                 type="button"
-                className="px-5 py-3.5 text-lp-text-tertiary transition-colors hover:text-lp-orange"
-                aria-label="Search"
+                onClick={() => setFilterArtistId(null)}
+                className={cn(
+                  'rounded-full px-2.5 py-1 text-xs font-medium transition-colors shrink-0',
+                  !filterArtistId
+                    ? 'bg-lp-orange text-white'
+                    : 'bg-lp-bg-tertiary text-lp-text-secondary hover:bg-lp-surface-hover'
+                )}
               >
-                <Search className="h-5 w-5" strokeWidth={2.5} />
+                All
               </button>
-            </div>
-          </div>
-          {/* Filters */}
-          <div className="mt-4 flex w-full max-w-md flex-wrap items-center gap-3">
-            {distinctArtists.length > 0 && (
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className="flex items-center gap-1 text-xs font-medium text-lp-text-tertiary">
-                  <Filter className="h-3.5 w-3.5" /> Artist
-                </span>
+              {distinctArtists.map((a) => (
                 <button
+                  key={a.id}
                   type="button"
-                  onClick={() => setFilterArtistId(null)}
+                  onClick={() => setFilterArtistId((id) => (id === a.id ? null : a.id))}
                   className={cn(
-                    'rounded-full px-2.5 py-1 text-xs font-medium transition-colors',
-                    !filterArtistId
+                    'rounded-full px-2.5 py-1 text-xs font-medium transition-colors truncate max-w-[120px] shrink-0',
+                    filterArtistId === a.id
                       ? 'bg-lp-orange text-white'
                       : 'bg-lp-bg-tertiary text-lp-text-secondary hover:bg-lp-surface-hover'
                   )}
+                  title={a.name}
                 >
-                  All
+                  {a.name}
                 </button>
-                {distinctArtists.map((a) => (
-                  <button
-                    key={a.id}
-                    type="button"
-                    onClick={() => setFilterArtistId((id) => (id === a.id ? null : a.id))}
-                    className={cn(
-                      'rounded-full px-2.5 py-1 text-xs font-medium transition-colors truncate max-w-[120px]',
-                      filterArtistId === a.id
-                        ? 'bg-lp-orange text-white'
-                        : 'bg-lp-bg-tertiary text-lp-text-secondary hover:bg-lp-surface-hover'
-                    )}
-                    title={a.name}
-                  >
-                    {a.name}
-                  </button>
-                ))}
-              </div>
-            )}
-            <div className="flex items-center gap-2">
-              <select
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
-                className="rounded-lg border border-lp-border bg-lp-surface px-2.5 py-1.5 text-xs font-medium text-lp-text focus:outline-none focus:ring-2 focus:ring-lp-orange/50"
-                aria-label="Filter by status"
-              >
-                {statusOptions.map((o) => (
-                  <option key={o.value || 'all'} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-              <input
-                type="date"
-                value={filterDateFrom}
-                onChange={(e) => setFilterDateFrom(e.target.value)}
-                placeholder="From"
-                className="w-32 rounded-lg border border-lp-border bg-lp-surface px-2.5 py-1.5 text-xs text-lp-text focus:outline-none focus:ring-2 focus:ring-lp-orange/50"
-                aria-label="From date"
-              />
-              <input
-                type="date"
-                value={filterDateTo}
-                onChange={(e) => setFilterDateTo(e.target.value)}
-                className="w-32 rounded-lg border border-lp-border bg-lp-surface px-2.5 py-1.5 text-xs text-lp-text focus:outline-none focus:ring-2 focus:ring-lp-orange/50"
-                aria-label="To date"
-              />
+              ))}
             </div>
+          )}
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="rounded-lg border border-lp-border bg-lp-surface px-2.5 py-1.5 text-xs font-medium text-lp-text focus:outline-none focus:ring-2 focus:ring-lp-orange/50 shrink-0"
+              aria-label="Filter by status"
+            >
+              {statusOptions.map((o) => (
+                <option key={o.value || 'all'} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
           </div>
+          {(basePath === '/budget' || basePath === '/rooming') && recentlyVisitedTours.length > 0 && (
+            <div className="pt-2 border-t border-lp-border">
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-lp-text-tertiary mb-1.5">
+                Recently visited
+              </p>
+              <ul className="space-y-1">
+                {recentlyVisitedTours.map((tour) => (
+                  <li key={tour.id}>
+                    <button
+                      type="button"
+                      onClick={() => handleSelectTour(tour)}
+                      className="w-full text-left px-2 py-1.5 rounded-lg text-sm text-lp-text hover:bg-lp-surface-hover truncate"
+                    >
+                      {tour.name}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       </div>
 

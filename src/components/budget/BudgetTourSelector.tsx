@@ -1,12 +1,15 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { ChevronDown, Loader2 } from 'lucide-react';
 import { formatTourDateRange } from '@/lib/utils';
 import { cn } from '@/lib/utils';
+import { pushRecentTourId } from './budget-recent';
+import { pushRecentTourId as pushRecentTourIdRooming } from './rooming-recent';
 
-const STORAGE_KEY = 'lowpass_selected_budget_tour';
+const BUDGET_STORAGE_KEY = 'lowpass_selected_budget_tour';
 
 type Tour = {
   id: string;
@@ -22,6 +25,8 @@ type BudgetTourSelectorProps = {
   tabParam?: string;
   defaultTab?: string;
   className?: string;
+  /** localStorage key for selected tour (e.g. budget vs rooming) */
+  storageKey?: string;
 };
 
 export function BudgetTourSelector({
@@ -29,6 +34,7 @@ export function BudgetTourSelector({
   tabParam,
   defaultTab,
   className,
+  storageKey = BUDGET_STORAGE_KEY,
 }: BudgetTourSelectorProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -38,9 +44,11 @@ export function BudgetTourSelector({
   const [tours, setTours] = useState<Tour[]>([]);
   const [loading, setLoading] = useState(true);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [dropdownRect, setDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   const selectedTour = tours.find((t) => t.id === tourIdFromUrl) ?? null;
-  const displayTourId = tourIdFromUrl ?? (typeof window !== 'undefined' ? localStorage.getItem(STORAGE_KEY) : null);
+  const displayTourId = tourIdFromUrl ?? (typeof window !== 'undefined' ? localStorage.getItem(storageKey) : null);
   const displayTour = tours.find((t) => t.id === displayTourId) ?? selectedTour;
 
   const buildUrl = useCallback(
@@ -62,21 +70,44 @@ export function BudgetTourSelector({
       .finally(() => setLoading(false));
   }, []);
 
+  // Record tour in "recently visited" when viewing budget or rooming (from selector, calendar, etc.)
+  useEffect(() => {
+    if (!tourIdFromUrl) return;
+    if (basePath === '/budget') pushRecentTourId(tourIdFromUrl);
+    else if (basePath === '/rooming') pushRecentTourIdRooming(tourIdFromUrl);
+  }, [basePath, tourIdFromUrl]);
+
   const handleSelectTour = (tour: Tour) => {
     if (tour.id === tourIdFromUrl) {
       setDropdownOpen(false);
       return;
     }
-    localStorage.setItem(STORAGE_KEY, tour.id);
+    localStorage.setItem(storageKey, tour.id);
+    if (basePath === '/budget') pushRecentTourId(tour.id);
+    else if (basePath === '/rooming') pushRecentTourIdRooming(tour.id);
     router.push(buildUrl(tour.id));
     setDropdownOpen(false);
   };
+
+  useLayoutEffect(() => {
+    if (!dropdownOpen || !triggerRef.current) {
+      setDropdownRect(null);
+      return;
+    }
+    const rect = triggerRef.current.getBoundingClientRect();
+    setDropdownRect({
+      top: rect.bottom + 8,
+      left: rect.left,
+      width: 480,
+    });
+  }, [dropdownOpen]);
 
   return (
     <div className={cn('flex items-start justify-between gap-4', className)}>
       {/* Left: SELECT TOUR trigger + large tour name heading */}
       <div className="relative min-w-0">
         <button
+          ref={triggerRef}
           type="button"
           onClick={() => setDropdownOpen((o) => !o)}
           className="flex items-center gap-1 mb-1 group"
@@ -109,45 +140,50 @@ export function BudgetTourSelector({
           </h1>
         )}
 
-        {/* Dropdown */}
-        {dropdownOpen && (
-          <>
-            <div
-              className="fixed inset-0 z-10"
-              aria-hidden
-              onClick={() => setDropdownOpen(false)}
-            />
-            <ul
-              className="lp-dashboard-glass-card absolute left-0 top-full z-20 mt-2 w-[480px] max-h-64 overflow-auto rounded-lg border border-lp-border py-1 shadow-xl"
-              role="listbox"
-            >
-              {tours.length === 0 ? (
-                <li className="px-4 py-2.5 text-sm text-lp-text-tertiary">No tours found</li>
-              ) : (
-                tours.map((tour) => (
-                  <li
-                    key={tour.id}
-                    role="option"
-                    aria-selected={tour.id === displayTourId}
-                    onClick={() => handleSelectTour(tour)}
-                    className={cn(
-                      'cursor-pointer px-4 py-2.5 text-sm transition-colors',
-                      tour.id === displayTourId
-                        ? 'text-lp-orange bg-lp-orange/5'
-                        : 'text-lp-text hover:bg-lp-surface-hover'
-                    )}
-                  >
-                    <span className="font-medium">{tour.name}</span>
-                    <span className="ml-2 text-lp-text-tertiary text-xs">
-                      {tour.artist?.name ? `${tour.artist.name} · ` : ''}
-                      {formatTourDateRange(tour.start_date, tour.end_date)}
-                    </span>
-                  </li>
-                ))
-              )}
-            </ul>
-          </>
-        )}
+        {/* Dropdown — portaled to body with high z-index so it always appears above tabs and page content */}
+        {dropdownOpen &&
+          dropdownRect &&
+          typeof document !== 'undefined' &&
+          createPortal(
+            <div className="fixed inset-0 z-[9999] pointer-events-none" aria-hidden={!dropdownOpen}>
+              <div
+                className="absolute inset-0 pointer-events-auto"
+                aria-hidden
+                onClick={() => setDropdownOpen(false)}
+              />
+              <ul
+                className="lp-dashboard-glass-card absolute w-[480px] max-h-64 overflow-auto rounded-lg border border-lp-border py-1 shadow-xl pointer-events-auto z-10"
+                style={{ top: dropdownRect.top, left: dropdownRect.left }}
+                role="listbox"
+              >
+                {tours.length === 0 ? (
+                  <li className="px-4 py-2.5 text-sm text-lp-text-tertiary">No tours found</li>
+                ) : (
+                  tours.map((tour) => (
+                    <li
+                      key={tour.id}
+                      role="option"
+                      aria-selected={tour.id === displayTourId}
+                      onClick={() => handleSelectTour(tour)}
+                      className={cn(
+                        'cursor-pointer px-4 py-2.5 text-sm transition-colors',
+                        tour.id === displayTourId
+                          ? 'text-lp-orange bg-lp-orange/5'
+                          : 'text-lp-text hover:bg-lp-surface-hover'
+                      )}
+                    >
+                      <span className="font-medium">{tour.name}</span>
+                      <span className="ml-2 text-lp-text-tertiary text-xs">
+                        {tour.artist?.name ? `${tour.artist.name} · ` : ''}
+                        {formatTourDateRange(tour.start_date, tour.end_date)}
+                      </span>
+                    </li>
+                  ))
+                )}
+              </ul>
+            </div>,
+            document.body
+          )}
       </div>
 
     </div>
