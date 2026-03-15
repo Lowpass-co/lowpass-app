@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useLayoutEffect } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronUp, ChevronDown, Minus, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -26,6 +26,34 @@ const HIGHLIGHT_OPTIONS: { id: HighlightId; label: string }[] = [
 
 const MIN_SLOTS = 1;
 const MAX_SLOTS = 6;
+const STORAGE_KEY = 'lowpass_dashboard_highlights';
+
+const DEFAULT_SLOTS: HighlightId[] = ['active_tours', 'shows_this_year', 'artists'];
+
+function loadSlotsFromStorage(): HighlightId[] | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed) || parsed.length < MIN_SLOTS || parsed.length > MAX_SLOTS) return null;
+    const validIds = new Set(HIGHLIGHT_OPTIONS.map((o) => o.id));
+    const filtered = parsed.filter((id): id is HighlightId => typeof id === 'string' && validIds.has(id as HighlightId));
+    if (filtered.length < MIN_SLOTS) return null;
+    return filtered.slice(0, MAX_SLOTS);
+  } catch {
+    return null;
+  }
+}
+
+function saveSlotsToStorage(slots: HighlightId[]) {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(slots));
+  } catch {
+    // ignore
+  }
+}
 
 type DashboardHighlightsProps = {
   activeToursCount: number;
@@ -59,12 +87,17 @@ export function DashboardHighlights({
   totalRoutingDays = 0,
   touringDaysThisYear = 0,
 }: DashboardHighlightsProps) {
-  const [slots, setSlots] = useState<HighlightId[]>(['active_tours', 'shows_this_year', 'artists']);
+  const [slots, setSlots] = useState<HighlightId[]>(() => loadSlotsFromStorage() ?? DEFAULT_SLOTS);
   const [openIndex, setOpenIndex] = useState<number | null>(null);
-  const [dropdownRect, setDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [dropdownRect, setDropdownRect] = useState<{ top: number; left: number; width: number; maxHeight: number } | null>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const cardRefs = useRef<(HTMLDivElement | null)[]>([]);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Persist slots whenever they change
+  useEffect(() => {
+    saveSlotsToStorage(slots);
+  }, [slots]);
 
   const props = {
     activeToursCount,
@@ -76,19 +109,37 @@ export function DashboardHighlights({
     touringDaysThisYear,
   };
 
+  const updateDropdownRect = useCallback(() => {
+    if (openIndex === null) return;
+    const el = cardRefs.current[openIndex];
+    if (el && typeof window !== 'undefined') {
+      const rect = el.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom - 24;
+      const maxHeight = Math.min(280, Math.max(120, spaceBelow));
+      setDropdownRect({ top: rect.bottom + 4, left: rect.left, width: rect.width, maxHeight });
+    } else {
+      setDropdownRect(null);
+    }
+  }, [openIndex]);
+
   useLayoutEffect(() => {
     if (openIndex === null) {
       setDropdownRect(null);
       return;
     }
-    const el = cardRefs.current[openIndex];
-    if (el) {
-      const rect = el.getBoundingClientRect();
-      setDropdownRect({ top: rect.bottom + 4, left: rect.left, width: rect.width });
-    } else {
-      setDropdownRect(null);
-    }
-  }, [openIndex]);
+    updateDropdownRect();
+  }, [openIndex, updateDropdownRect]);
+
+  // Keep dropdown anchored to the card when the page scrolls or resizes
+  useEffect(() => {
+    if (openIndex === null) return;
+    window.addEventListener('scroll', updateDropdownRect, true);
+    window.addEventListener('resize', updateDropdownRect);
+    return () => {
+      window.removeEventListener('scroll', updateDropdownRect, true);
+      window.removeEventListener('resize', updateDropdownRect);
+    };
+  }, [openIndex, updateDropdownRect]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -134,7 +185,10 @@ export function DashboardHighlights({
               <div className="flex items-center gap-0.5">
                 <button
                   type="button"
-                  onClick={() => setOpenIndex(isOpen ? null : index)}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setOpenIndex(isOpen ? null : index);
+                  }}
                   className="rounded-lg p-1 text-lp-text-tertiary transition-colors hover:bg-lp-surface-hover hover:text-lp-orange"
                   aria-label="Change highlight"
                   aria-expanded={isOpen}
@@ -176,29 +230,37 @@ export function DashboardHighlights({
         createPortal(
           <div
             ref={dropdownRef}
-            className="lp-dropdown-layer fixed max-h-64 overflow-y-auto rounded-xl border border-lp-border bg-lp-surface py-1 shadow-lg"
-            style={{ top: dropdownRect.top, left: dropdownRect.left, width: dropdownRect.width, minWidth: 200 }}
+            className="lp-dropdown-layer fixed overflow-hidden rounded-xl border border-lp-border bg-lp-surface py-1 shadow-lg flex flex-col"
+            style={{
+              top: dropdownRect.top,
+              left: dropdownRect.left,
+              width: dropdownRect.width,
+              minWidth: 200,
+              maxHeight: dropdownRect.maxHeight,
+            }}
           >
-            {HIGHLIGHT_OPTIONS.map((opt) => (
-              <button
-                key={opt.id}
-                type="button"
-                onClick={() => {
-                  const next = [...slots];
-                  next[openIndex] = opt.id;
-                  setSlots(next);
-                  setOpenIndex(null);
-                }}
-                className={cn(
-                  'w-full px-4 py-2 text-left text-sm font-medium transition-colors',
-                  opt.id === slots[openIndex]
-                    ? 'bg-lp-orange/10 text-lp-orange'
-                    : 'text-lp-text hover:bg-lp-surface-hover'
-                )}
-              >
-                {opt.label}
-              </button>
-            ))}
+            <div className="overflow-y-auto overscroll-contain py-0.5" style={{ maxHeight: dropdownRect.maxHeight - 8 }}>
+              {HIGHLIGHT_OPTIONS.map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => {
+                    const next = [...slots];
+                    next[openIndex] = opt.id;
+                    setSlots(next);
+                    setOpenIndex(null);
+                  }}
+                  className={cn(
+                    'w-full px-4 py-2 text-left text-sm font-medium transition-colors shrink-0',
+                    opt.id === slots[openIndex]
+                      ? 'bg-lp-orange/10 text-lp-orange'
+                      : 'text-lp-text hover:bg-lp-surface-hover'
+                  )}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
           </div>,
           document.body
         )}

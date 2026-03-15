@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ExternalLink, Loader2, Music, ChevronRight, ChevronLeft } from 'lucide-react';
+import { ExternalLink, Loader2, Music } from 'lucide-react';
 
 type SpotifyReleaseItem = {
   id: string;
@@ -12,10 +12,26 @@ type SpotifyReleaseItem = {
   type: string;
 };
 
+function formatReleaseDate(dateStr: string): string {
+  if (!dateStr) return '';
+  const [y, m, d] = dateStr.split('-');
+  if (!y) return dateStr;
+  const month = m ? new Date(Number(y), Number(m) - 1, 1).toLocaleDateString('en-GB', { month: 'short' }) : '';
+  if (d && m) return `${Number(d)} ${month} ${y}`;
+  if (m) return `${month} ${y}`;
+  return y;
+}
+
+function formatReleaseType(type: string): string {
+  const t = (type || 'album').toLowerCase();
+  if (t === 'single') return 'Single';
+  if (t === 'compilation') return 'EP';
+  return 'Album';
+}
+
 export function SpotifyReleasesPanel() {
   const [releases, setReleases] = useState<SpotifyReleaseItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => {
     fetch('/api/artists/spotify-releases')
@@ -25,40 +41,13 @@ export function SpotifyReleasesPanel() {
       .finally(() => setLoading(false));
   }, []);
 
-  if (collapsed) {
-    return (
-      <aside className="flex w-12 shrink-0 flex-col items-center rounded-xl border border-lp-border bg-lp-surface py-3">
-        <button
-          type="button"
-          onClick={() => setCollapsed(false)}
-          className="flex items-center gap-1 text-xs font-medium text-lp-text-tertiary hover:text-lp-text"
-          aria-label="Expand new releases"
-        >
-          <Music className="h-4 w-4" />
-          <ChevronLeft className="h-3.5 w-3.5" />
-        </button>
-        <span className="mt-2 -rotate-90 origin-center whitespace-nowrap text-[10px] font-semibold uppercase tracking-wider text-lp-text-tertiary">
-          New releases
-        </span>
-      </aside>
-    );
-  }
-
   return (
     <aside className="w-72 shrink-0 rounded-xl border border-lp-border bg-lp-surface overflow-hidden flex flex-col max-h-[calc(100vh-12rem)]">
-      <div className="flex items-center justify-between border-b border-lp-border px-4 py-3">
+      <div className="border-b border-lp-border px-4 py-3">
         <h2 className="text-sm font-semibold text-lp-text flex items-center gap-2">
           <Music className="h-4 w-4 text-lp-orange" />
-          New releases
+          New Releases
         </h2>
-        <button
-          type="button"
-          onClick={() => setCollapsed(true)}
-          className="p-1 text-lp-text-tertiary hover:text-lp-text rounded"
-          aria-label="Collapse panel"
-        >
-          <ChevronRight className="h-4 w-4" />
-        </button>
       </div>
       <div className="flex-1 overflow-y-auto p-2">
         {loading ? (
@@ -83,9 +72,15 @@ export function SpotifyReleasesPanel() {
                     <span className="block truncate text-sm font-medium text-lp-text group-hover:text-lp-orange">
                       {r.name}
                     </span>
-                    {r.artist_name && (
-                      <span className="block truncate text-xs text-lp-text-secondary">{r.artist_name}</span>
-                    )}
+                    <span className="flex items-center gap-2 mt-0.5 flex-wrap">
+                      {r.artist_name && (
+                        <span className="truncate text-xs text-lp-text-secondary">{r.artist_name}</span>
+                      )}
+                      {r.release_date && (
+                        <span className="text-xs text-lp-text-tertiary">{formatReleaseDate(r.release_date)}</span>
+                      )}
+                      <span className="text-xs text-lp-text-tertiary">{formatReleaseType(r.type)}</span>
+                    </span>
                   </span>
                   <ExternalLink className="h-3.5 w-3.5 shrink-0 text-lp-text-tertiary mt-0.5" />
                 </a>
