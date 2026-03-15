@@ -7,7 +7,7 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
-import { formatTourDateRange } from '@/lib/utils';
+import { formatTourDateRange, capitaliseStatus } from '@/lib/utils';
 import { RoutingEditor } from '@/components/routing/RoutingEditor';
 import { TourDetailToasts } from './TourDetailToasts';
 import { TourAdvanceSummary } from './TourAdvanceSummary';
@@ -87,7 +87,7 @@ export default async function TourDetailPage({
                 statusColors[tour.status] ?? statusColors.planning
               )}
             >
-              {tour.status}
+              {capitaliseStatus(tour.status)}
             </span>
             <Link
               href={`/tours/create?edit=${id}`}

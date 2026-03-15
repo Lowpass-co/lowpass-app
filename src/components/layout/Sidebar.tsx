@@ -85,6 +85,7 @@ export function Sidebar() {
   }, [collapsed]);
 
   const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [profile, setProfile] = useState<{ name: string; email?: string; avatar_url?: string | null; job_title?: string | null } | null>(null);
   const { user, signOut } = useAuth();
   const lastDisplay = useRef({ name: '', email: '' });
 
@@ -97,8 +98,18 @@ export function Sidebar() {
     }
   }, [user]);
 
-  const displayName = user?.user_metadata?.name ?? user?.email ?? lastDisplay.current.name;
-  const displayEmail = user?.email ?? lastDisplay.current.email;
+  useEffect(() => {
+    if (!user) return;
+    fetch('/api/profile')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => data && setProfile({ name: data.name, email: data.email, avatar_url: data.avatar_url, job_title: data.job_title }))
+      .catch(() => {});
+  }, [user?.id]);
+
+  const displayName = profile?.name ?? user?.user_metadata?.name ?? user?.email ?? lastDisplay.current.name;
+  const displayEmail = profile?.email ?? user?.email ?? lastDisplay.current.email;
+  const avatarUrl = profile?.avatar_url ?? null;
+  const jobTitle = profile?.job_title ?? null;
   const initials = displayName
     ? displayName.split(' ').map((w: string) => w[0]).slice(0, 2).join('').toUpperCase()
     : (displayEmail?.charAt(0).toUpperCase() ?? '?');
@@ -257,7 +268,7 @@ export function Sidebar() {
           ))}
         </nav>
 
-        {/* Footer — avatar + name (Figma) */}
+        {/* Footer — avatar + name (link to profile) */}
         <div
           className="border-t px-4 py-4"
           style={{
@@ -265,20 +276,22 @@ export function Sidebar() {
             backgroundColor: 'var(--lp-sidebar-bg)',
           }}
         >
-          <button
-            type="button"
-            onClick={() => setUserMenuOpen((open) => !open)}
+          <Link
+            href="/profile"
             className={cn(
               'flex w-full items-center gap-3 text-left transition-colors',
               collapsed && 'justify-center'
             )}
-            aria-expanded={userMenuOpen}
           >
             <div
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-xs font-bold text-white shadow-sm"
-              style={{ backgroundColor: '#FF4500', boxShadow: '0 1px 2px 0 rgba(255, 69, 0, 0.3)' }}
+              className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md text-xs font-bold text-white shadow-sm"
+              style={{ backgroundColor: avatarUrl ? 'transparent' : '#FF4500', boxShadow: avatarUrl ? 'none' : '0 1px 2px 0 rgba(255, 69, 0, 0.3)' }}
             >
-              {initials}
+              {avatarUrl ? (
+                <img src={avatarUrl} alt="" className="h-full w-full object-cover" />
+              ) : (
+                initials
+              )}
             </div>
             {!collapsed && (
               <div className="min-w-0 flex-1">
@@ -296,8 +309,33 @@ export function Sidebar() {
                     {displayEmail}
                   </p>
                 )}
+                {jobTitle && (
+                  <p
+                    className="truncate text-[11px] mt-0.5"
+                    style={{ color: 'var(--lp-sidebar-text-muted)' }}
+                  >
+                    {jobTitle}
+                  </p>
+                )}
               </div>
             )}
+          </Link>
+          <button
+            type="button"
+            onClick={() => setUserMenuOpen((open) => !open)}
+            className={cn(
+              'flex w-full items-center gap-2 px-0 py-1.5 text-xs font-medium transition-colors mt-1 hover:opacity-80',
+              collapsed && 'justify-center'
+            )}
+            style={{ color: 'var(--lp-sidebar-text-muted)' }}
+            aria-expanded={userMenuOpen}
+            aria-label={userMenuOpen ? 'Close account menu' : 'Open account menu'}
+          >
+            {!collapsed && <span style={{ letterSpacing: '0.05em' }}>Account</span>}
+            <ChevronRight
+              size={14}
+              className={cn('shrink-0 transition-transform', userMenuOpen && 'rotate-90')}
+            />
           </button>
 
           {/* Logout — animated expand */}

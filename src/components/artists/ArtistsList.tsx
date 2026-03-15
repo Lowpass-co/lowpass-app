@@ -71,8 +71,14 @@ export function ArtistsList({ artists: initialArtists }: { artists: Artist[] }) 
             </div>
             <Link href={`/artists/${artist.id}`} className="flex min-w-0 flex-1 flex-col pr-10">
               <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-lp-bg-tertiary">
-                  <Music size={24} className="text-lp-text-tertiary" />
+                <div className="flex h-12 w-12 shrink-0 overflow-hidden rounded-lg bg-lp-bg-tertiary">
+                  {artist.spotify_image_url ? (
+                    <img src={artist.spotify_image_url} alt="" className="h-full w-full object-cover" />
+                  ) : (
+                    <span className="flex h-full w-full items-center justify-center">
+                      <Music size={24} className="text-lp-text-tertiary" />
+                    </span>
+                  )}
                 </div>
                 <h3 className="font-semibold text-lp-text truncate">{artist.name ?? '—'}</h3>
               </div>

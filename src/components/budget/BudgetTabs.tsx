@@ -21,10 +21,38 @@ const SettlementTab = dynamic(() => import('@/components/budget/SettlementTab').
 
 function TabLoader() {
   return (
-    <div className="flex items-center gap-2 rounded-xl border border-lp-border bg-lp-surface p-8 text-lp-text-secondary">
+    <div className="lp-dashboard-glass-card flex items-center gap-2 rounded-xl p-8 text-lp-text-secondary">
       <Loader2 className="h-5 w-5 animate-spin" />
       Loading…
     </div>
+  );
+}
+
+/** Vertical tab list for the right column (sticky) */
+export function BudgetTabsNav({ tourId, activeTab }: { tourId: string; activeTab: string }) {
+  return (
+    <nav
+      className="lp-dashboard-glass-card sticky top-24 flex flex-col gap-0.5 rounded-2xl border border-lp-border p-2"
+      aria-label="Budget sections"
+    >
+      {BUDGET_TABS.map((tab) => {
+        const isActive = activeTab === tab.id;
+        return (
+          <Link
+            key={tab.id}
+            href={`/budget?tour_id=${tourId}&tab=${tab.id}`}
+            className={cn(
+              'rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors',
+              isActive
+                ? 'bg-lp-orange text-white'
+                : 'text-lp-text-tertiary hover:bg-lp-surface-hover hover:text-lp-text'
+            )}
+          >
+            {tab.label}
+          </Link>
+        );
+      })}
+    </nav>
   );
 }
 
@@ -47,31 +75,12 @@ export function BudgetTabs({ tourId, activeTab }: { tourId: string; activeTab: s
   };
 
   return (
-    <>
-      <nav className="flex gap-0 overflow-x-auto border-b border-lp-border" aria-label="Budget sections">
-        {BUDGET_TABS.map((tab) => {
-          const isActive = activeTab === tab.id;
-          return (
-            <Link
-              key={tab.id}
-              href={`/budget?tour_id=${tourId}&tab=${tab.id}`}
-              className={cn(
-                'shrink-0 px-4 py-3 text-[11px] font-semibold tracking-widest uppercase transition-colors border-b-2',
-                isActive
-                  ? 'border-lp-orange text-white'
-                  : 'border-transparent text-lp-text-tertiary hover:text-lp-text-secondary hover:border-lp-border'
-              )}
-            >
-              {tab.label}
-            </Link>
-          );
-        })}
-      </nav>
+    <div className="lp-dashboard-glass-card overflow-hidden rounded-2xl border border-lp-border">
       <Suspense fallback={<TabLoader />}>
-        <div className="mt-4">
+        <div className="p-6">
           {tabContent()}
         </div>
       </Suspense>
-    </>
+    </div>
   );
 }

@@ -118,7 +118,7 @@ export function BudgetTourSelector({
               onClick={() => setDropdownOpen(false)}
             />
             <ul
-              className="absolute left-0 top-full z-20 mt-2 w-[480px] max-h-64 overflow-auto rounded-lg border border-lp-border bg-lp-surface py-1 shadow-xl"
+              className="lp-dashboard-glass-card absolute left-0 top-full z-20 mt-2 w-[480px] max-h-64 overflow-auto rounded-lg border border-lp-border py-1 shadow-xl"
               role="listbox"
             >
               {tours.length === 0 ? (

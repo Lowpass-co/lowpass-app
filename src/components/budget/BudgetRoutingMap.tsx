@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { greatCirclePoints } from '@/lib/utils';
@@ -14,10 +14,13 @@ export type MapRow = {
   day_type: string;
 };
 
+/** Fit bounds only once when points first become available so user pan/zoom is not overwritten. */
 function FitBounds({ points }: { points: [number, number][] }) {
   const map = useMap();
+  const hasFitted = useRef(false);
   useEffect(() => {
-    if (points.length === 0) return;
+    if (points.length === 0 || hasFitted.current) return;
+    hasFitted.current = true;
     if (points.length === 1) {
       map.setView(points[0], 8);
       return;
@@ -112,6 +115,7 @@ export function BudgetRoutingMap({ rows }: { rows: MapRow[] }) {
         style={{ height: '100%' }}
         zoomControl={true}
         scrollWheelZoom={true}
+        dragging={true}
         attributionControl={false}
       >
         <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />

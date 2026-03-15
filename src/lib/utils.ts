@@ -17,6 +17,12 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
 
+/** Capitalise tour status for display (e.g. "planning" → "Planning"). */
+export function capitaliseStatus(s: string): string {
+  if (!s) return s;
+  return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+}
+
 /**
  * Format a date string for display.
  * Uses DD/MM/YY format (UK style, since Adam is UK-based).

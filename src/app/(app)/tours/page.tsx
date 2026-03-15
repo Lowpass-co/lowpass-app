@@ -7,7 +7,8 @@
 import { Plus } from 'lucide-react';
 import Link from 'next/link';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
-import { TourCard } from '@/components/tours/TourCard';
+import { ToursListWithFilters } from '@/components/tours/ToursListWithFilters';
+import type { Tour } from '@/types';
 
 const TOURS_LIMIT = 200;
 
@@ -87,11 +88,7 @@ export default async function ToursPage() {
           </div>
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {tours.map((tour, index) => (
-            <TourCard key={tour.id} tour={tour} index={index} />
-          ))}
-        </div>
+        <ToursListWithFilters tours={(tours ?? []) as Tour[]} />
       )}
     </div>
   );

@@ -235,8 +235,9 @@ export default function AdvanceOverviewPage() {
             ) : suggestions.length === 0 ? (
               <p className="py-4 text-sm text-lp-text-tertiary">Nothing urgent. Good job!</p>
             ) : (
-              <ul className="space-y-2">
-                {suggestions.map((s, i) => (
+              <div className="max-h-[320px] overflow-y-auto">
+                <ul className="space-y-2">
+                  {suggestions.map((s, i) => (
                   <li key={`${s.routing_id}-${s.section_id}-${s.field_id}-${i}`}>
                     <button
                       type="button"
@@ -260,8 +261,9 @@ export default function AdvanceOverviewPage() {
                       </span>
                     </button>
                   </li>
-                ))}
-              </ul>
+                  ))}
+                </ul>
+              </div>
             )}
             {inlineEditSuggestion && (
               <InlineAdvanceEditModal

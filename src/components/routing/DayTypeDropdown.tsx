@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { ChevronDown } from 'lucide-react';
 import { getDayTypeLabel, getDayTypeColor, parseDayTypes } from '@/lib/utils';
 import type { DayType } from '@/types';
@@ -31,14 +32,26 @@ export function DayTypeDropdown({
   customTypes?: string[];
 }) {
   const [open, setOpen] = useState(false);
+  const [dropdownRect, setDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null);
   const ref = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
   const selected = parseDayTypes(value);
   const allTypes = [...PRESET_DAY_TYPES, ...customTypes.filter((c) => !PRESET_DAY_TYPES.includes(c as DayType))];
+
+  useLayoutEffect(() => {
+    if (open && ref.current) {
+      const rect = ref.current.getBoundingClientRect();
+      setDropdownRect({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+    } else {
+      setDropdownRect(null);
+    }
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
     const close = (e: MouseEvent) => {
-      if (ref.current?.contains(e.target as Node)) return;
+      const target = e.target as Node;
+      if (ref.current?.contains(target) || dropdownRef.current?.contains(target)) return;
       setOpen(false);
     };
     document.addEventListener('mousedown', close);
@@ -75,31 +88,39 @@ export function DayTypeDropdown({
         </span>
         <ChevronDown size={14} className={cn('shrink-0 text-lp-text-tertiary transition-transform duration-150', open && 'rotate-180')} />
       </button>
-      {open && (
-        <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-64 overflow-y-auto rounded-xl border border-lp-border bg-lp-surface py-2 shadow-xl">
-          <div className="flex flex-wrap gap-1.5 px-2">
-            {allTypes.map((type) => {
-              const isSelected = selected.includes(type);
-              const colors = getDayTypeColor(type);
-              return (
-                <button
-                  key={type}
-                  type="button"
-                  onClick={() => toggle(type)}
-                  className={cn(
-                    'rounded-full px-2.5 py-1 text-xs font-medium cursor-pointer transition-all duration-200',
-                    isSelected
-                      ? [colors.bg, colors.text, 'ring-2 ring-lp-accent/50 border-transparent']
-                      : 'bg-lp-surface-hover text-lp-text-secondary border border-lp-border hover:border-lp-border-light'
-                  )}
-                >
-                  {getDayTypeLabel(type)}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
+      {open &&
+        dropdownRect &&
+        typeof document !== 'undefined' &&
+        createPortal(
+          <div
+            ref={dropdownRef}
+            className="lp-dropdown-layer fixed max-h-64 overflow-y-auto rounded-xl border border-lp-border bg-lp-surface py-2 shadow-xl"
+            style={{ top: dropdownRect.top, left: dropdownRect.left, width: dropdownRect.width, minWidth: 140 }}
+          >
+            <div className="flex flex-wrap gap-1.5 px-2">
+              {allTypes.map((type) => {
+                const isSelected = selected.includes(type);
+                const colors = getDayTypeColor(type);
+                return (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => toggle(type)}
+                    className={cn(
+                      'rounded-full px-2.5 py-1 text-xs font-medium cursor-pointer transition-all duration-200',
+                      isSelected
+                        ? [colors.bg, colors.text, 'ring-2 ring-lp-accent/50 border-transparent']
+                        : 'bg-lp-surface-hover text-lp-text-secondary border border-lp-border hover:border-lp-border-light'
+                    )}
+                  >
+                    {getDayTypeLabel(type)}
+                  </button>
+                );
+              })}
+            </div>
+          </div>,
+          document.body
+        )}
     </div>
   );
 }

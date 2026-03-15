@@ -231,7 +231,7 @@ export function VenueAutocomplete({
           <ul
             ref={listRefCallback}
             role="listbox"
-            className="fixed z-[100] max-h-52 overflow-y-auto rounded-xl border border-lp-border bg-lp-surface py-1 shadow-lg"
+            className="lp-dropdown-layer fixed max-h-52 overflow-y-auto rounded-xl border border-lp-border bg-lp-surface py-1 shadow-lg"
             style={{ top: dropdownRect.top, left: dropdownRect.left, width: dropdownRect.width, minWidth: 200 }}
           >
             {suggestions.map((s, i) => (

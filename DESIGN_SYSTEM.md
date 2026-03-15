@@ -34,6 +34,12 @@ Complete design system for Lowpass tour management application. Dark mode will b
 - **Border Default**: `#E5E6EE` - Standard borders
 - **Border Light**: `rgba(51, 42, 28, 0.60)` - Subtle borders
 
+### Dashboard (main content area only)
+The dashboard content area uses a full-bleed gradient and frosted cards; sidebar and header are unchanged.
+
+- **Light:** `--lp-dashboard-bg`: soft gradient (e.g. light orange → pink/purple); `--lp-dashboard-card-bg`: semi-transparent white; `--lp-dashboard-card-border`: light gray. Cards use `backdrop-blur` so the gradient shows through.
+- **Dark:** `--lp-dashboard-bg`: dark base with orange/red gradient; `--lp-dashboard-card-bg`: semi-transparent dark; `--lp-dashboard-card-border`: subtle orange. Same frosted card treatment.
+
 ---
 
 ## 🔤 Typography

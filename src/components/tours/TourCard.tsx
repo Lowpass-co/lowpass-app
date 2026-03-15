@@ -11,7 +11,7 @@ import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowRight, Pencil, Type, Trash2 } from 'lucide-react';
-import { formatDate } from '@/lib/utils';
+import { formatDate, capitaliseStatus } from '@/lib/utils';
 import type { Tour } from '@/types';
 import { cn } from '@/lib/utils';
 import { ContextMenu } from '@/components/ui/ContextMenu';
@@ -182,7 +182,7 @@ export function TourCard({ tour, onDeleted, index = 0 }: { tour: Tour; onDeleted
                 </Link>
               )}
               <span className={cn('rounded-full px-2.5 py-0.5 text-xs font-medium', statusClass)}>
-                {tour.status}
+                {capitaliseStatus(tour.status)}
               </span>
             </div>
           </div>

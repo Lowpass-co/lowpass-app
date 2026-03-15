@@ -94,6 +94,27 @@
   --lp-sidebar-icon: #FF4500;
   --lp-sidebar-icon-active: #FF4500;
   --lp-sidebar-decor-stroke: rgba(255, 69, 0, 0.2);
+
+  /* Dashboard — light (gradient + glass cards; match Figma mockup) */
+  --lp-dashboard-bg: linear-gradient(135deg, #ffe8e0 0%, #fce4ec 45%, #f0e6ff 100%);
+  --lp-dashboard-card-bg: rgba(255, 255, 255, 0.52);
+  --lp-dashboard-card-border: rgba(255, 255, 255, 0.85);
+  --lp-dashboard-card-shadow: 0 4px 24px rgba(0, 0, 0, 0.06), 0 0 0 1px rgba(255, 255, 255, 0.5) inset;
+  --lp-dashboard-blur: 20px;
+}
+
+/* Dropdowns / popovers — render above sidebar, header, and card stacking contexts */
+.lp-dropdown-layer {
+  z-index: 1000;
+}
+
+/* Dashboard glass cards — forced so UI matches Figma mockup (translucent + frosted + glassy border) */
+.lp-dashboard-glass .lp-dashboard-glass-card {
+  background: var(--lp-dashboard-card-bg) !important;
+  -webkit-backdrop-filter: blur(var(--lp-dashboard-blur));
+  backdrop-filter: blur(var(--lp-dashboard-blur));
+  border: 1px solid var(--lp-dashboard-card-border) !important;
+  box-shadow: var(--lp-dashboard-card-shadow);
 }
 
 .dark {
@@ -120,6 +141,13 @@
   --lp-sidebar-icon: rgba(255, 69, 0, 0.5);
   --lp-sidebar-icon-active: #FF4500;
   --lp-sidebar-decor-stroke: rgba(255, 69, 0, 0.24);
+
+  /* Dashboard — dark (gradient + glass cards) */
+  --lp-dashboard-bg: linear-gradient(135deg, #0F0F0F 0%, #1a0a0a 40%, #2d1510 100%);
+  --lp-dashboard-card-bg: rgba(26, 26, 26, 0.55);
+  --lp-dashboard-card-border: rgba(255, 255, 255, 0.12);
+  --lp-dashboard-card-shadow: 0 4px 24px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.06) inset;
+  --lp-dashboard-blur: 20px;
 }
 
 /* ============================================

@@ -410,13 +410,14 @@ export function IncomeTab({ tourId }: { tourId: string }) {
 
           <tbody>
             {allRows.map((row) => {
-              const date = row.routing.date
-                ? parseRoutingDate(row.routing.date).toLocaleDateString('en-GB', {
-                    day: 'numeric',
-                    month: 'short',
-                    year: 'numeric',
-                  })
-                : '—';
+              const date =
+                row.routing?.date
+                  ? parseRoutingDate(row.routing.date).toLocaleDateString('en-GB', {
+                      day: 'numeric',
+                      month: 'short',
+                      year: 'numeric',
+                    })
+                  : '—';
               const isDirty = !!localEdits[row.routing_id];
               const isSaving = savingId === row.routing_id;
 

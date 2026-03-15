@@ -239,7 +239,7 @@ export function DayTypeCombobox({
         createPortal(
           <div
             ref={dropdownRef}
-            className="z-[100] max-h-56 overflow-y-auto rounded-xl border border-lp-border bg-lp-surface py-1 shadow-lg"
+            className="lp-dropdown-layer max-h-56 overflow-y-auto rounded-xl border border-lp-border bg-lp-surface py-1 shadow-lg"
             style={{
               position: 'fixed',
               top: dropdownRect.top + 4,

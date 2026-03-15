@@ -4,9 +4,9 @@
    List workspace artists with Edit / Delete.
    ============================================ */
 
-import Link from 'next/link';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { ArtistsList } from '@/components/artists/ArtistsList';
+import { SpotifyReleasesPanel } from '@/components/artists/SpotifyReleasesPanel';
 
 export default async function ArtistsPage() {
   const supabase = await createServerSupabaseClient();
@@ -40,17 +40,19 @@ export default async function ArtistsPage() {
     .order('name');
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-lp-text">Artists</h1>
-          <p className="mt-1 text-sm text-lp-text-secondary">
-            Artists in your workspace. Add or edit from tours.
-          </p>
+    <div className="mx-auto flex max-w-7xl gap-8">
+      <div className="min-w-0 flex-1 space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-lp-text">Artists</h1>
+            <p className="mt-1 text-sm text-lp-text-secondary">
+              Artists in your workspace. Add or edit from tours.
+            </p>
+          </div>
         </div>
+        <ArtistsList artists={artists ?? []} />
       </div>
-
-      <ArtistsList artists={artists ?? []} />
+      <SpotifyReleasesPanel />
     </div>
   );
 }
