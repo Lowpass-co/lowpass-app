@@ -24,6 +24,19 @@ export function capitaliseStatus(s: string): string {
 }
 
 /**
+ * Display name in title case (e.g. "john doe" → "John Doe").
+ * Fixes lowercase display bug for user names.
+ */
+export function toTitleCase(s: string | null | undefined): string {
+  if (!s || !s.trim()) return '';
+  return s
+    .trim()
+    .split(/\s+/)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ');
+}
+
+/**
  * Format a date string for display.
  * Uses DD/MM/YY format (UK style, since Adam is UK-based).
  */

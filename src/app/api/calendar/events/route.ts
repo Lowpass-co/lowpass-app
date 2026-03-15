@@ -77,7 +77,11 @@ export async function GET() {
 
   return NextResponse.json({
     events,
-    tours: tours.map((t) => ({ id: t.id, name: (t as { name?: string }).name ?? '—', artist_name: (Array.isArray(t.artist) ? t.artist[0] : t.artist) as { name?: string } | null })),
+    tours: tours.map((t) => {
+      const artist = Array.isArray(t.artist) ? t.artist[0] : t.artist;
+      const artistName = (artist as { name?: string })?.name ?? null;
+      return { id: t.id, name: (t as { name?: string }).name ?? '—', artist_name: artistName };
+    }),
     artists,
   });
 }

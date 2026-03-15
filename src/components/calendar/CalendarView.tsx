@@ -226,8 +226,13 @@ export function CalendarView() {
                 <p className="font-semibold text-lp-text">
                   {new Date(selectedEvent.date + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' })}
                 </p>
-                <p className="text-sm text-lp-text-secondary">{selectedEvent.venue_name || selectedEvent.city || '—'}</p>
-                <p className="text-xs text-lp-text-tertiary mt-0.5">{selectedEvent.artist_name} · {selectedEvent.tour_name}</p>
+                <p className="text-sm text-lp-text-secondary">
+                  {selectedEvent.venue_name && selectedEvent.city ? `${selectedEvent.venue_name}, ${selectedEvent.city}` : selectedEvent.venue_name || selectedEvent.city || '—'}
+                </p>
+                <p className="text-xs text-lp-text-tertiary mt-0.5">
+                  Tour: {selectedEvent.tour_name}
+                  {selectedEvent.artist_name && selectedEvent.artist_name !== '—' ? ` · ${selectedEvent.artist_name}` : ''}
+                </p>
               </div>
               <button type="button" onClick={() => setSelectedEvent(null)} className="rounded p-1 text-lp-text-tertiary hover:bg-lp-bg-tertiary">
                 <X size={18} />

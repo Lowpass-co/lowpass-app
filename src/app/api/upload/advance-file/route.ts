@@ -93,5 +93,64 @@ export async function POST(request: Request) {
   }
 
   const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(data.path);
-  return NextResponse.json({ url: urlData.publicUrl });
+  return NextResponse.json({ url: urlData.publicUrl, path: data.path });
+}
+
+async function getWorkspaceId(supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>) {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+  const { data: profile } = await supabase.from('profiles').select('workspace_id').eq('id', user.id).single();
+  return profile?.workspace_id ?? null;
+}
+
+/** GET: List files for an advance instance (query: advance_instance_id). Returns { files: { path, name, created_at, url }[] } */
+export async function GET(request: Request) {
+  const supabase = await createServerSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const workspaceId = await getWorkspaceId(supabase);
+  if (!workspaceId) return NextResponse.json({ error: 'No workspace' }, { status: 403 });
+
+  const { searchParams } = new URL(request.url);
+  const advanceInstanceId = searchParams.get('advance_instance_id')?.trim();
+  if (!advanceInstanceId) return NextResponse.json({ error: 'advance_instance_id required' }, { status: 400 });
+
+  const prefix = `${workspaceId}/${advanceInstanceId}/documents/`;
+  const { data: list, error } = await supabase.storage.from(BUCKET).list(prefix, { limit: 500 });
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  const files = (list ?? [])
+    .filter((f) => f.name && (f.id != null || f.metadata))
+    .map((f) => {
+      const path = `${prefix}${f.name}`;
+      const url = supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl;
+      const created_at = (f as { created_at?: string }).created_at ?? (f as { updated_at?: string }).updated_at ?? null;
+      return { path, name: f.name, created_at, url };
+    });
+
+  return NextResponse.json({ files });
+}
+
+/** DELETE: Remove one file (body: { path: string }) */
+export async function DELETE(request: Request) {
+  const supabase = await createServerSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const workspaceId = await getWorkspaceId(supabase);
+  if (!workspaceId) return NextResponse.json({ error: 'No workspace' }, { status: 403 });
+
+  let body: { path?: string };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
+  }
+  const path = typeof body.path === 'string' ? body.path.trim() : '';
+  if (!path || !path.startsWith(workspaceId + '/')) return NextResponse.json({ error: 'Invalid path' }, { status: 400 });
+
+  const { error: delError } = await supabase.storage.from(BUCKET).remove([path]);
+  if (delError) return NextResponse.json({ error: delError.message }, { status: 500 });
+  return new Response(null, { status: 204 });
 }

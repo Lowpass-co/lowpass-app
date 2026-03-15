@@ -16,9 +16,11 @@ export type ContextMenuItem = {
 export function ContextMenu({
   items,
   align = 'right',
+  onBeforeOpen,
 }: {
   items: ContextMenuItem[];
   align?: 'left' | 'right';
+  onBeforeOpen?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [menuRect, setMenuRect] = useState<{ top: number; left: number; width: number } | null>(null);
@@ -59,6 +61,7 @@ export function ContextMenu({
         onClick={(e) => {
           e.preventDefault();
           e.stopPropagation();
+          if (!open) onBeforeOpen?.();
           setOpen((o) => !o);
         }}
         className="flex h-8 w-8 items-center justify-center rounded-lg text-lp-text-tertiary transition-colors hover:bg-lp-surface-hover hover:text-lp-text"

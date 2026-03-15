@@ -6,7 +6,7 @@
    Fetches advance data, filters, progress, modals.
    ============================================ */
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -73,6 +73,7 @@ export function AdvanceOverview({
   const [copyModalOpen, setCopyModalOpen] = useState(false);
   const [copySourceRoutingId, setCopySourceRoutingId] = useState<string | null>(null);
   const [templateModalOpen, setTemplateModalOpen] = useState(false);
+  const [dayOffNotesItem, setDayOffNotesItem] = useState<AdvanceDateItem | null>(null);
 
   const copyFromUrl = initialCopyRoutingId ?? searchParams.get('copy');
   useEffect(() => {
@@ -294,6 +295,7 @@ export function AdvanceOverview({
                 key={item.routing_id}
                 tourId={tourId}
                 item={item}
+                onOpenNotes={() => setDayOffNotesItem(item)}
               />
             );
           })}
@@ -356,33 +358,150 @@ export function AdvanceOverview({
           }}
         />
       )}
+
+      {dayOffNotesItem && (
+        <DayOffNotesModal
+          tourId={tourId}
+          item={dayOffNotesItem}
+          onClose={() => setDayOffNotesItem(null)}
+          onSaved={() => {
+            setDayOffNotesItem(null);
+            fetch(`/api/tours/${tourId}/advance?all=true`)
+              .then((r) => r.json())
+              .then((j) => setDates(j.dates ?? []));
+          }}
+        />
+      )}
     </div>
   );
 }
 
-/** Small pill for day off / travel etc. between show cards. Still links to advance for that date. */
-function DayOffPill({ tourId, item }: { tourId: string; item: AdvanceDateItem }) {
-  const router = useRouter();
+/** Small, subtle pill for day off / travel. Opens notes modal (not full advance builder). */
+function DayOffPill({ tourId, item, onOpenNotes }: { tourId: string; item: AdvanceDateItem; onOpenNotes: () => void }) {
   const dateLabel = parseRoutingDate(item.date).toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short' });
-  const primaryType = firstDayType(item.day_type ?? '');
-  const colors = primaryType ? getDayTypeColor(primaryType) : null;
+  const isTravel = dayTypesInclude(item.day_type ?? '', 'travel');
+  const label = isTravel ? 'Travel' : 'Day Off';
   return (
     <li>
       <button
         type="button"
-        onClick={() => router.push(`/tours/${tourId}/advance/${item.routing_id}`)}
-        className={cn(
-          'w-full rounded-lg border border-lp-border/60 bg-lp-surface/60 py-2 px-3 text-left text-sm transition-colors hover:border-lp-border hover:bg-lp-surface-hover flex items-center gap-3',
-          colors && [colors.bg, colors.text, 'border-transparent'].join(' ')
-        )}
+        onClick={onOpenNotes}
+        className="w-full rounded-lg border border-lp-border/50 bg-lp-surface/50 py-1.5 px-3 text-left text-xs text-lp-text-tertiary hover:bg-lp-surface-hover hover:text-lp-text-secondary transition-colors flex items-center gap-2"
       >
-        <span className="shrink-0 w-20 text-xs font-medium text-lp-text-tertiary">{dateLabel}</span>
-        <span className="text-xs font-medium">
-          {primaryType ? getDayTypeLabel(primaryType) : '—'}
-          {item.city ? ` · ${item.city}` : ''}
-        </span>
+        <span className="shrink-0 w-20">{dateLabel}</span>
+        <span>{label}{item.city ? ` · ${item.city}` : ''}</span>
       </button>
     </li>
+  );
+}
+
+/** Modal to add/edit a note for a day-off or travel date. Does not open full advance builder. */
+function DayOffNotesModal({
+  tourId,
+  item,
+  onClose,
+  onSaved,
+}: {
+  tourId: string;
+  item: AdvanceDateItem;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [notes, setNotes] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [hasInstance, setHasInstance] = useState(false);
+  const existingDataRef = useRef<Record<string, unknown>>({});
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    fetch(`/api/tours/${tourId}/advance/${item.routing_id}`)
+      .then((r) => {
+        if (r.ok) return r.json();
+        if (r.status === 404) return null;
+        throw new Error('Failed to load');
+      })
+      .then((data) => {
+        if (cancelled) return;
+        if (data?.advance?.data) {
+          setHasInstance(true);
+          existingDataRef.current = (data.advance.data as Record<string, unknown>) ?? {};
+          const dayOffNotes = (existingDataRef.current.day_off_notes as string) ?? '';
+          setNotes(dayOffNotes);
+        } else {
+          setHasInstance(false);
+          setNotes('');
+        }
+      })
+      .catch(() => { if (!cancelled) setError('Could not load advance'); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [tourId, item.routing_id]);
+
+  const handleSave = async () => {
+    setSaving(true);
+    setError(null);
+    try {
+      if (!hasInstance) {
+        const createRes = await fetch(`/api/tours/${tourId}/advance`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ routing_id: item.routing_id, sections: [] }),
+        });
+        if (!createRes.ok) throw new Error('Could not create advance');
+        setHasInstance(true);
+      }
+      const nextData = { ...existingDataRef.current, day_off_notes: notes };
+      const patchRes = await fetch(`/api/tours/${tourId}/advance/${item.routing_id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: nextData }),
+      });
+      if (!patchRes.ok) throw new Error('Could not save note');
+      onSaved();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not save');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const dateLabel = parseRoutingDate(item.date).toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short' });
+  const isTravel = dayTypesInclude(item.day_type ?? '', 'travel');
+  const typeLabel = isTravel ? 'Travel' : 'Day Off';
+
+  return (
+    <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+      <div className="w-full max-w-md rounded-xl border border-lp-border bg-lp-surface p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <h3 className="text-base font-semibold text-lp-text">Advance note — {typeLabel}</h3>
+        <p className="mt-1 text-sm text-lp-text-tertiary">{dateLabel}{item.city ? ` · ${item.city}` : ''}</p>
+        {loading ? (
+          <p className="mt-4 text-sm text-lp-text-tertiary">Loading…</p>
+        ) : (
+          <>
+            <textarea
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Add a note for this date…"
+              rows={4}
+              className="mt-4 w-full rounded-xl border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:border-lp-orange focus:outline-none focus:ring-2 focus:ring-lp-orange/20"
+            />
+            {error && <p className="mt-2 text-sm text-red-500">{error}</p>}
+            <div className="mt-4 flex justify-end gap-2">
+              <button type="button" onClick={onClose} className="rounded-xl border border-lp-border px-4 py-2 text-sm font-medium text-lp-text hover:bg-lp-surface-hover">
+                Cancel
+              </button>
+              <button type="button" onClick={handleSave} disabled={saving} className="rounded-xl bg-lp-orange px-4 py-2 text-sm font-medium text-white hover:bg-lp-orange-hover disabled:opacity-50">
+                {saving ? 'Saving…' : 'Save note'}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
   );
 }
 

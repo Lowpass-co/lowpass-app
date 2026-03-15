@@ -22,9 +22,17 @@ export async function GET() {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  const workspaceId = await getWorkspaceId(supabase);
+  if (!workspaceId) {
+    return NextResponse.json({ templates: [] });
+  }
+
   const { data: templates, error } = await supabase
     .from('advance_templates')
-    .select('id, name, description, icon, fields, suggested_for_day_types, workspace_id')
+    .select('id, name, description, icon, fields, suggested_for_day_types, workspace_id, sort_order, tm_only')
+    .or(`workspace_id.is.null,workspace_id.eq.${workspaceId}`)
+    .order('workspace_id', { ascending: true, nullsFirst: true })
+    .order('sort_order', { ascending: true, nullsFirst: false })
     .order('name');
 
   if (error) {

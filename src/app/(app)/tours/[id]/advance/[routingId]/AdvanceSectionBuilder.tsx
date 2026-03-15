@@ -6,7 +6,7 @@
    SETUP: two-panel section picker + reorder. FILL: accordion form with fields.
    ============================================ */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, Fragment, createContext, useContext } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -72,6 +72,7 @@ import {
   Upload,
   User,
   Sliders,
+  Lock,
 } from 'lucide-react';
 import { parseRoutingDate, getDayTypeLabel, getDayTypeColor, getAdvanceStatusInfo, firstDayType, dayTypesInclude, cn } from '@/lib/utils';
 import { SlidingToggle } from '@/components/ui/SlidingToggle';
@@ -223,7 +224,26 @@ type SectionDef = {
   label: string;
   fields: FieldDef[];
   order: number;
+  tm_only?: boolean;
 };
+
+/** Sort fields so contact-type fields appear first (for display order only). */
+function sortFieldsContactsFirst(fields: FieldDef[]): FieldDef[] {
+  return [...fields].sort((a, b) =>
+    a.type === 'contact' ? (b.type === 'contact' ? 0 : -1) : b.type === 'contact' ? 1 : 0
+  );
+}
+
+/** For Hospitality section: contacts first, then rider_status (Hospitality Rider Status), then rest. */
+function sortHospitalityFieldsFirst(fields: FieldDef[]): FieldDef[] {
+  return [...fields].sort((a, b) => {
+    if (a.type === 'contact') return b.type === 'contact' ? 0 : -1;
+    if (b.type === 'contact') return 1;
+    if (a.id === 'rider_status') return b.id === 'rider_status' ? 0 : -1;
+    if (b.id === 'rider_status') return 1;
+    return 0;
+  });
+}
 
 export type ContactRow = {
   id?: string;
@@ -239,6 +259,7 @@ export type ContactRow = {
 export type AdvanceDocument = {
   id: string;
   url: string;
+  path?: string;
   filename: string;
   content_type?: string;
   uploaded_at: string;
@@ -288,6 +309,7 @@ type ApiTemplate = {
   fields: FieldDef[];
   suggested_for_day_types?: string[];
   workspace_id?: string | null;
+  sort_order?: number;
 };
 
 type AdvanceData = Record<string, Record<string, unknown>>;
@@ -339,6 +361,17 @@ type AdvanceComment = {
   created_at: string;
 };
 
+/** Used so the most recently opened dropdown in the advance form renders on top. */
+const AdvanceDropdownZContext = createContext<() => number>(() => 1000);
+function AdvanceDropdownZProvider({ children }: { children: React.ReactNode }) {
+  const nextRef = useRef(1000);
+  const getZIndex = useCallback(() => {
+    nextRef.current += 1;
+    return nextRef.current;
+  }, []);
+  return <AdvanceDropdownZContext.Provider value={getZIndex}>{children}</AdvanceDropdownZContext.Provider>;
+}
+
 export function AdvanceSectionBuilder({
   tourId,
   routingId,
@@ -357,6 +390,12 @@ export function AdvanceSectionBuilder({
   const [autosaveStatus, setAutosaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [conflictWarning, setConflictWarning] = useState<string | null>(null);
   const autosaveRetryRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    if (autosaveStatus !== 'saved') return;
+    const t = setTimeout(() => setAutosaveStatus('idle'), 2500);
+    return () => clearTimeout(t);
+  }, [autosaveStatus]);
 
   useEffect(() => {
     let cancelled = false;
@@ -462,6 +501,7 @@ export function AdvanceSectionBuilder({
         <FillMode
           tourId={tourId}
           routingId={routingId}
+          artistName={(data.tour as { artist_name?: string | null })?.artist_name ?? null}
           currentUserId={user?.id ?? null}
           currency={data.tour.currency}
           tourPersonnelCounts={{
@@ -512,7 +552,7 @@ export function AdvanceSectionBuilder({
   return (
     <div className={cn('transition-opacity duration-300', contentVisible ? 'opacity-100' : 'opacity-0')}>
       {allDates.length > 0 ? (
-        <div className="flex gap-6">
+        <div className="flex gap-4">
           <AdvanceDateStrip tourId={tourId} routingId={routingId} dates={allDates} />
           <div className="flex-1 min-w-0 space-y-6">{mainContent}</div>
         </div>
@@ -525,32 +565,32 @@ export function AdvanceSectionBuilder({
 
 function AdvanceDateStrip({ tourId, routingId, dates }: { tourId: string; routingId: string; dates: AdvanceDateItem[] }) {
   const router = useRouter();
+  const cityAbbrev = (city: string) => (city ? (city.length > 4 ? city.slice(0, 4) : city) : '');
   return (
-    <div className="shrink-0 w-36 flex flex-col rounded-xl border border-lp-border bg-lp-surface overflow-hidden">
-      <div className="border-b border-lp-border px-3 py-2 text-xs font-semibold uppercase tracking-wide text-lp-text-tertiary">Dates</div>
-      <div className="min-h-0 flex-1 overflow-y-auto p-2 space-y-0.5">
+    <div className="hidden md:flex shrink-0 w-16 flex-col rounded-xl border border-lp-border bg-lp-surface overflow-hidden">
+      <div className="border-b border-lp-border px-1.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-lp-text-tertiary text-center">Dates</div>
+      <div className="min-h-0 flex-1 overflow-y-auto p-1.5 space-y-0.5">
         {dates.map((item) => {
           const isCurrent = item.routing_id === routingId;
-          const isShow = dayTypesInclude(item.day_type ?? '', 'show') || dayTypesInclude(item.day_type ?? '', 'festival');
           const primaryType = firstDayType(item.day_type ?? '');
           const colors = primaryType ? getDayTypeColor(primaryType) : null;
-          const dateLabel = parseRoutingDate(item.date).toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short' });
+          const dateLabel = parseRoutingDate(item.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+          const abbrev = cityAbbrev(item.city ?? '');
           return (
             <button
               key={item.routing_id}
               type="button"
               onClick={() => router.push(`/tours/${tourId}/advance/${item.routing_id}`)}
               className={cn(
-                'w-full rounded-lg px-2.5 py-2 text-left text-xs transition-colors',
+                'w-full rounded-md px-1.5 py-1.5 text-left text-[11px] transition-colors',
                 isCurrent
                   ? 'bg-lp-orange text-white font-medium'
                   : 'text-lp-text hover:bg-lp-surface-hover',
                 colors && !isCurrent && [colors.bg, colors.text].join(' ')
               )}
             >
-              <div className="font-medium">{dateLabel}</div>
-              {isShow && item.venue_name && <div className={cn('truncate mt-0.5', isCurrent ? 'text-white/90' : 'text-lp-text-tertiary')}>{item.venue_name}</div>}
-              {!isShow && primaryType && <div className={cn('truncate mt-0.5', isCurrent ? 'text-white/90' : 'text-lp-text-tertiary')}>{getDayTypeLabel(primaryType)}</div>}
+              <div className="font-medium leading-tight">{dateLabel}</div>
+              {abbrev && <div className={cn('truncate mt-0.5 leading-tight', isCurrent ? 'text-white/90' : 'text-lp-text-tertiary')}>{abbrev}</div>}
             </button>
           );
         })}
@@ -616,29 +656,31 @@ function Header({
         </div>
         <div className="flex flex-wrap items-center gap-3">
           {conflictWarning && (
-            <p className="text-xs text-amber-600 dark:text-amber-400" title={conflictWarning}>
+            <p className="text-xs text-amber-600 dark:text-amber-400 shrink-0" title={conflictWarning}>
               {conflictWarning}
             </p>
           )}
-          {autosaveStatus === 'saving' && (
-            <span className="flex items-center gap-1.5 text-sm text-lp-text-tertiary">
-              <Loader2 size={14} className="animate-spin" />
-              Saving...
-            </span>
-          )}
-          {autosaveStatus === 'saved' && (
-            <span className="text-sm text-emerald-600 dark:text-emerald-400 transition-opacity duration-300" style={{ transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)' }}>
-              Saved ✓
-            </span>
-          )}
-          {autosaveStatus === 'error' && (
-            <span className="flex items-center gap-2 text-sm text-red-500">
-              Error saving
-              <button type="button" onClick={onAutosaveRetry} className="rounded border border-red-500/50 px-2 py-0.5 text-xs font-medium hover:bg-red-500/10">
-                Retry
-              </button>
-            </span>
-          )}
+          <span className="inline-flex min-w-[7rem] items-center overflow-hidden">
+            {autosaveStatus === 'saving' && (
+              <span className="flex items-center gap-1.5 text-sm text-lp-text-tertiary">
+                <Loader2 size={14} className="animate-spin shrink-0" />
+                Saving...
+              </span>
+            )}
+            {autosaveStatus === 'saved' && (
+              <span className="inline-flex items-center text-sm text-emerald-600 dark:text-emerald-400 animate-slide-in-left">
+                Saved ✓
+              </span>
+            )}
+            {autosaveStatus === 'error' && (
+              <span className="flex items-center gap-2 text-sm text-red-500">
+                Error saving
+                <button type="button" onClick={onAutosaveRetry} className="rounded border border-red-500/50 px-2 py-0.5 text-xs font-medium hover:bg-red-500/10 shrink-0">
+                  Retry
+                </button>
+              </span>
+            )}
+          </span>
           {showSaveButton && (
             <button
               type="button"
@@ -691,8 +733,12 @@ function SetupMode({
   const [customFieldContext, setCustomFieldContext] = useState<{ templateId: string; templateName: string } | 'standalone' | null>(null);
   const [templateToDelete, setTemplateToDelete] = useState<ApiTemplate | null>(null);
   const [deletingTemplate, setDeletingTemplate] = useState(false);
+  const [fieldToDeleteFromLibrary, setFieldToDeleteFromLibrary] = useState<{ template: ApiTemplate; field: FieldDef } | null>(null);
+  const [deletingFieldFromLibrary, setDeletingFieldFromLibrary] = useState(false);
   const [dragState, setDragState] = useState<{ type: 'section' | 'field'; sectionIndex?: number; fieldIndex?: number; templateId?: string; field?: FieldDef } | null>(null);
   const [dropTarget, setDropTarget] = useState<{ sectionIndex: number; fieldIndex: number } | { sectionIndex: number } | null>(null);
+  const [libraryDragId, setLibraryDragId] = useState<string | null>(null);
+  const [libraryDropIndex, setLibraryDropIndex] = useState<number | null>(null);
   const [removingField, setRemovingField] = useState<string | null>(null);
   const [lastAddedKey, setLastAddedKey] = useState<string | null>(null);
   const [lastAddedTemplateId, setLastAddedTemplateId] = useState<string | null>(null);
@@ -856,10 +902,10 @@ function SetupMode({
 
   const saveAsTemplate = async () => {
     if (!templateName.trim()) return;
-    const res = await fetch(`/api/tours/${tourId}/advance`, {
+    const res = await fetch('/api/advance/layout-templates', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ is_template: true, template_label: templateName.trim(), sections }),
+      body: JSON.stringify({ template_label: templateName.trim(), sections }),
     });
     if (res.ok) {
       setSaveAsTemplateOpen(false);
@@ -883,11 +929,30 @@ function SetupMode({
   };
 
   const handleAddCustomField = async (field: FieldDef) => {
-    const templateId = customFieldContext === 'standalone' ? CUSTOM_SECTION_ID : (customFieldContext?.templateId ?? CUSTOM_SECTION_ID);
-    const templateName = customFieldContext === 'standalone' ? 'Custom' : (customFieldContext?.templateName ?? 'Custom');
+    const clone = { ...field };
+    if (customFieldContext === 'standalone') {
+      try {
+        const res = await fetch('/api/advance/templates', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: 'Custom', icon: 'clipboard', description: '', fields: [clone] }),
+        });
+        if (!res.ok) return;
+        const created = await res.json();
+        const newId = created.id ?? created.template_id;
+        if (newId) {
+          setSections((prev) => [...prev.map((s, i) => ({ ...s, order: i })), { template_id: newId, label: 'Custom', fields: [clone], order: prev.length }]);
+          fetchTemplates();
+        }
+      } catch (_) { /* ignore */ }
+      setCustomFieldOpen(false);
+      setCustomFieldContext(null);
+      return;
+    }
+    const templateId = customFieldContext?.templateId ?? CUSTOM_SECTION_ID;
+    const templateName = customFieldContext?.templateName ?? 'Custom';
     setSections((prev) => {
       const existing = prev.findIndex((s) => s.template_id === templateId);
-      const clone = { ...field };
       if (existing >= 0) {
         const next = prev.map((s, i) => (i === existing ? { ...s, fields: [...(s.fields ?? []), clone] } : s));
         return next.map((sec, i) => ({ ...sec, order: i }));
@@ -912,6 +977,28 @@ function SetupMode({
     setCustomFieldContext(null);
   };
 
+  const handleDeleteFieldFromLibrary = async () => {
+    if (!fieldToDeleteFromLibrary) return;
+    const { template: t, field: f } = fieldToDeleteFromLibrary;
+    setDeletingFieldFromLibrary(true);
+    try {
+      const currentFields = (t.fields ?? []) as FieldDef[];
+      const updatedFields = currentFields.filter((x) => x.id !== f.id);
+      const res = await fetch(`/api/advance/templates/${t.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: updatedFields }),
+      });
+      if (res.ok) {
+        removeFieldByTemplateAndFieldId(t.id, f.id);
+        fetchTemplates();
+        setFieldToDeleteFromLibrary(null);
+      }
+    } finally {
+      setDeletingFieldFromLibrary(false);
+    }
+  };
+
   const handleAddCustomSection = async (name: string, icon: string, description: string) => {
     const res = await fetch('/api/advance/templates', {
       method: 'POST',
@@ -930,6 +1017,7 @@ function SetupMode({
     try {
       const res = await fetch(`/api/advance/templates/${templateToDelete.id}`, { method: 'DELETE' });
       if (res.ok) {
+        setSections((prev) => prev.filter((s) => s.template_id !== templateToDelete.id));
         fetchTemplates();
         setTemplateToDelete(null);
       }
@@ -937,6 +1025,22 @@ function SetupMode({
       setDeletingTemplate(false);
     }
   };
+
+  const workspaceTemplates = templates.filter((t) => t.workspace_id);
+  const handleLibraryReorder = useCallback(async (dragId: string, dropIndex: number) => {
+    const from = workspaceTemplates.findIndex((t) => t.id === dragId);
+    if (from < 0 || from === dropIndex) return;
+    const reordered = [...workspaceTemplates];
+    const [removed] = reordered.splice(from, 1);
+    reordered.splice(dropIndex, 0, removed);
+    const order = reordered.map((t) => t.id);
+    const res = await fetch('/api/advance/templates/reorder', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ order }),
+    });
+    if (res.ok) fetchTemplates();
+  }, [workspaceTemplates, fetchTemplates]);
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
@@ -1024,12 +1128,29 @@ function SetupMode({
                 })}
               <li className="pt-2">
                 <p className="mb-1.5 px-1 text-xs font-medium text-lp-text-tertiary">Custom</p>
-                {templates.filter((t) => t.workspace_id).map((t) => {
+                {workspaceTemplates.map((t, libIdx) => {
                   const expanded = expandedLibrary.has(t.id);
                   const allAdded = isSectionFullyAdded(t);
                   const fields = t.fields ?? [];
+                  const isDraggingLib = libraryDragId === t.id;
+                  const isDropTarget = libraryDropIndex === libIdx;
                   return (
-                    <li key={t.id} className="rounded-lg border border-lp-border overflow-hidden mb-1">
+                    <li
+                      key={t.id}
+                      className={cn(
+                        'rounded-lg border border-lp-border overflow-hidden mb-1 transition-all duration-200',
+                        isDraggingLib && 'opacity-60 scale-[0.98]',
+                        isDropTarget && libraryDragId && libraryDragId !== t.id && 'ring-2 ring-lp-orange ring-inset',
+                      )}
+                      onDragOver={(e) => { e.preventDefault(); if (libraryDragId && libraryDragId !== t.id) setLibraryDropIndex(libIdx); }}
+                      onDragLeave={() => setLibraryDropIndex(null)}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        if (libraryDragId && libraryDropIndex !== null) handleLibraryReorder(libraryDragId, libraryDropIndex);
+                        setLibraryDragId(null);
+                        setLibraryDropIndex(null);
+                      }}
+                    >
                       <div
                         role="button"
                         tabIndex={0}
@@ -1037,11 +1158,25 @@ function SetupMode({
                         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpandedLibrary((s) => { const n = new Set(s); if (n.has(t.id)) n.delete(t.id); else n.add(t.id); return n; }); } }}
                         className="flex items-center gap-2 bg-lp-bg-secondary px-3 py-2 cursor-pointer hover:bg-lp-bg-tertiary transition-colors"
                       >
+                        <span
+                          draggable
+                          onDragStart={(e) => { e.stopPropagation(); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', t.id); setLibraryDragId(t.id); setLibraryDropIndex(null); }}
+                          onDragEnd={() => { setLibraryDragId(null); setLibraryDropIndex(null); }}
+                          className="shrink-0 cursor-grab active:cursor-grabbing text-lp-text-tertiary hover:text-lp-text touch-none"
+                          title="Drag to reorder"
+                        >
+                          <GripVertical size={16} />
+                        </span>
                         <span className={cn('shrink-0 text-lp-text-tertiary transition-transform duration-200', expanded && 'rotate-180')}>
                           <ChevronDown size={16} />
                         </span>
                         <SectionIcon icon={t.icon} />
-                        <span className="flex-1 text-sm font-medium text-lp-text">{t.name}</span>
+                        <div className="flex-1 min-w-0">
+                          <span className="text-sm font-medium text-lp-text">{t.name}</span>
+                          {(t.description as string | undefined)?.trim() && (
+                            <p className="mt-0.5 text-xs text-lp-text-tertiary line-clamp-1">{t.description}</p>
+                          )}
+                        </div>
                         <button
                           type="button"
                           onClick={(e) => { e.stopPropagation(); if (allAdded) removeAllFields(t); else addAllFields(t); }}
@@ -1066,7 +1201,7 @@ function SetupMode({
                             {(fields as FieldDef[]).map((f) => {
                               const added = isFieldAdded(t.id, f.id);
                               return (
-                                <li key={f.id} className="group">
+                                <li key={f.id} className="group flex items-center gap-0">
                                   <button
                                     type="button"
                                     draggable
@@ -1077,20 +1212,30 @@ function SetupMode({
                                       else { addField(t, f); setLastAddedKey(`${t.id}-${f.id}`); setTimeout(() => setLastAddedKey(null), 200); }
                                     }}
                                     className={cn(
-                                      'flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors cursor-pointer',
+                                      'flex flex-1 min-w-0 items-center gap-2 px-3 py-2 text-left text-sm transition-colors cursor-pointer',
                                       added ? 'bg-lp-accent/10 text-lp-accent border-l-2 border-lp-accent' : 'hover:bg-lp-surface-hover text-lp-text',
                                     )}
                                   >
                                     <FieldTypeIcon type={f.type} />
                                     <span className="flex-1 truncate">{f.label}</span>
                                     <span className={cn('shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium', (f.required ?? false) ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300' : 'text-lp-text-tertiary')}>{(f.required ?? false) ? 'Required' : 'Optional'}</span>
-                                    {added && <Check size={14} className="shrink-0 text-lp-accent" />}
+                                    {added ? <Check size={14} className="shrink-0 text-lp-accent" /> : null}
                                   </button>
+                                  {t.workspace_id && !added && (
+                                    <button
+                                      type="button"
+                                      onClick={(e) => { e.stopPropagation(); setFieldToDeleteFromLibrary({ template: t, field: f }); }}
+                                      className="shrink-0 rounded p-1.5 text-lp-text-tertiary hover:bg-red-500/10 hover:text-red-500"
+                                      title="Delete this advance field?"
+                                    >
+                                      <X size={14} />
+                                    </button>
+                                  )}
                                 </li>
                               );
                             })}
                             <li>
-                              <button type="button" onClick={() => { setCustomFieldContext({ templateId: t.id, templateName: t.name }); setCustomFieldOpen(true); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-lp-text-tertiary hover:bg-lp-surface-hover hover:text-lp-text">
+                              <button type="button" onClick={(e) => { e.stopPropagation(); setCustomFieldContext({ templateId: t.id, templateName: t.name }); setCustomFieldOpen(true); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-lp-text-tertiary hover:bg-lp-surface-hover hover:text-lp-text">
                                 <span className="inline-flex h-6 w-6 items-center justify-center rounded border border-dashed border-lp-border text-xs">+</span>
                                 Custom field
                               </button>
@@ -1124,7 +1269,19 @@ function SetupMode({
               const data = JSON.parse(raw);
               if (data.templateId && data.field) {
                 const t = templates.find((x) => x.id === data.templateId);
-                if (t) { addField(t, data.field); setLastAddedKey(`${t.id}-${data.field.id}`); setTimeout(() => setLastAddedKey(null), 200); }
+                if (t) {
+                  addField(t, data.field);
+                  setLastAddedKey(`${t.id}-${data.field.id}`);
+                  setTimeout(() => setLastAddedKey(null), 200);
+                  // Auto-expand the target section and collapse others (same as click-add)
+                  setTimeout(() => {
+                    setSections((cur) => {
+                      const idx = cur.findIndex((s) => s.template_id === t.id);
+                      if (idx >= 0) setExpandedRight(new Set([idx]));
+                      return cur;
+                    });
+                  }, 50);
+                }
               }
             } catch (_) { /* ignore */ }
             setDragState(null);
@@ -1135,10 +1292,18 @@ function SetupMode({
             const expanded = expandedRight.has(secIdx);
             const template = templates.find((t) => t.id === sec.template_id);
             const fields = sec.fields ?? [];
+            const isDraggingSection = dragState?.type === 'section' && dragState.sectionIndex === secIdx;
+            const isSectionDropTarget = dropTarget && !('fieldIndex' in dropTarget) && dropTarget.sectionIndex === secIdx;
             return (
+              <Fragment key={`${sec.template_id}-${secIdx}`}>
+                {isSectionDropTarget && (
+                  <div className="rounded-lg border-2 border-dashed border-lp-orange bg-lp-orange/10 min-h-[52px] flex items-center justify-center my-0.5 transition-all duration-200" aria-hidden />
+                )}
               <div
-                key={`${sec.template_id}-${secIdx}`}
-                className="rounded-lg border border-lp-border overflow-hidden transition-transform duration-200 ease-out relative"
+                className={cn(
+                  'rounded-lg border border-lp-border overflow-hidden relative transition-all duration-200 ease-out',
+                  isDraggingSection && 'scale-[1.02] shadow-lg opacity-90 z-20'
+                )}
                 draggable
                 onDragStart={(e) => { e.dataTransfer.setData('application/json', JSON.stringify({ type: 'section', sectionIndex: secIdx })); setDragGhost(e, sec.label); setDragState({ type: 'section', sectionIndex: secIdx }); }}
                 onDragEnd={() => { setDragState(null); setDropTarget(null); }}
@@ -1176,45 +1341,55 @@ function SetupMode({
                 </div>
                 <div className={cn('grid transition-[grid-template-rows] duration-300 ease-out', expanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')} style={{ transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)' }}>
                   <div className="min-h-0 overflow-hidden">
-                    <ul className="border-t border-lp-border bg-lp-surface py-1">
-                      {fields.map((f, fieldIdx) => (
-                        <li
-                          key={f.id}
-                          className={cn('relative flex items-center gap-2 px-3 py-2 group transition-all duration-300', removingField === `${secIdx}-${fieldIdx}` && 'opacity-0', lastAddedKey === `${sec.template_id}-${f.id}` && 'bg-lp-accent/25')}
-                          style={{ transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)' }}
-                        draggable
-                        onDragStart={(e) => { e.stopPropagation(); e.dataTransfer.setData('application/json', JSON.stringify({ type: 'field', sectionIndex: secIdx, fieldIndex: fieldIdx })); setDragGhost(e, f.label); setDragState({ type: 'field', sectionIndex: secIdx, fieldIndex: fieldIdx, field: f }); }}
-                        onDragEnd={() => { setDragState(null); setDropTarget(null); }}
-                        onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); if (dragState?.type === 'field' && (dragState.sectionIndex !== secIdx || dragState.fieldIndex !== fieldIdx)) setDropTarget({ sectionIndex: secIdx, fieldIndex: fieldIdx }); }}
-                        onDrop={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          const raw = e.dataTransfer.getData('application/json');
-                          if (!raw) return;
-                          try {
-                            const data = JSON.parse(raw);
-                            if (data.type === 'field' && data.sectionIndex === secIdx && typeof data.fieldIndex === 'number') moveFieldOrder(secIdx, data.fieldIndex, fieldIdx);
-                          } catch (_) { /* ignore */ }
-                          setDragState(null);
-                          setDropTarget(null);
-                        }}
-                      >
-                        {dropTarget && 'fieldIndex' in dropTarget && dropTarget.sectionIndex === secIdx && dropTarget.fieldIndex === fieldIdx && (
-                          <div className="absolute left-0 right-0 top-0 h-1 bg-lp-orange z-10 rounded" aria-hidden />
-                        )}
-                        <GripVertical className="shrink-0 cursor-grab text-lp-text-tertiary active:cursor-grabbing" />
-                        <FieldTypeIcon type={f.type} />
-                        <span className="flex-1 truncate text-sm text-lp-text">{f.label}</span>
-                        <span className={cn('shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium', (f.required ?? false) ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300' : 'bg-lp-bg-tertiary text-lp-text-tertiary')}>{(f.required ?? false) ? 'Required' : 'Optional'}</span>
-                        <button type="button" onClick={() => removeField(secIdx, fieldIdx)} className="shrink-0 rounded p-1 text-lp-text-tertiary hover:bg-lp-bg-tertiary hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <X size={14} />
-                        </button>
-                      </li>
-                    ))}
+                    <ul className="border-t border-lp-border bg-lp-surface py-1 transition-all duration-200">
+                      {fields.map((f, fieldIdx) => {
+                        const isDraggingField = dragState?.type === 'field' && dragState.sectionIndex === secIdx && dragState.fieldIndex === fieldIdx;
+                        const isDropTarget = dropTarget && 'fieldIndex' in dropTarget && dropTarget.sectionIndex === secIdx && dropTarget.fieldIndex === fieldIdx;
+                        return (
+                          <Fragment key={f.id}>
+                            {isDropTarget && (
+                              <li className="mx-2 my-0.5 h-10 rounded border-2 border-dashed border-lp-orange bg-lp-orange/10 flex items-center px-3 transition-all duration-200" aria-hidden />
+                            )}
+                            <li
+                              className={cn(
+                                'relative flex items-center gap-2 px-3 py-2 group transition-all duration-200 ease-out',
+                                removingField === `${secIdx}-${fieldIdx}` && 'opacity-0',
+                                lastAddedKey === `${sec.template_id}-${f.id}` && 'bg-lp-accent/25',
+                                isDraggingField && 'scale-105 shadow-md opacity-90 z-10 rounded-md'
+                              )}
+                              draggable
+                              onDragStart={(e) => { e.stopPropagation(); e.dataTransfer.setData('application/json', JSON.stringify({ type: 'field', sectionIndex: secIdx, fieldIndex: fieldIdx })); setDragGhost(e, f.label); setDragState({ type: 'field', sectionIndex: secIdx, fieldIndex: fieldIdx, field: f }); }}
+                              onDragEnd={() => { setDragState(null); setDropTarget(null); }}
+                              onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); if (dragState?.type === 'field' && (dragState.sectionIndex !== secIdx || dragState.fieldIndex !== fieldIdx)) setDropTarget({ sectionIndex: secIdx, fieldIndex: fieldIdx }); }}
+                              onDrop={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                const raw = e.dataTransfer.getData('application/json');
+                                if (!raw) return;
+                                try {
+                                  const data = JSON.parse(raw);
+                                  if (data.type === 'field' && data.sectionIndex === secIdx && typeof data.fieldIndex === 'number') moveFieldOrder(secIdx, data.fieldIndex, fieldIdx);
+                                } catch (_) { /* ignore */ }
+                                setDragState(null);
+                                setDropTarget(null);
+                              }}
+                            >
+                              <GripVertical className="shrink-0 cursor-grab text-lp-text-tertiary active:cursor-grabbing" />
+                              <FieldTypeIcon type={f.type} />
+                              <span className="flex-1 truncate text-sm text-lp-text">{f.label}</span>
+                              <span className={cn('shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium', (f.required ?? false) ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300' : 'bg-lp-bg-tertiary text-lp-text-tertiary')}>{(f.required ?? false) ? 'Required' : 'Optional'}</span>
+                              <button type="button" onClick={() => removeField(secIdx, fieldIdx)} className="shrink-0 rounded p-1 text-lp-text-tertiary hover:bg-lp-bg-tertiary hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
+                                <X size={14} />
+                              </button>
+                            </li>
+                          </Fragment>
+                        );
+                      })}
                     </ul>
                   </div>
                 </div>
               </div>
+              </Fragment>
             );
           })}
           {sections.length === 0 && !dragState?.type && (
@@ -1312,6 +1487,22 @@ function SetupMode({
               <button type="button" onClick={() => setTemplateToDelete(null)} className="rounded-xl border border-lp-border px-4 py-2 text-sm text-lp-text hover:bg-lp-surface-hover">Cancel</button>
               <button type="button" onClick={handleDeleteCustomSection} disabled={deletingTemplate} className="rounded-xl bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50 flex items-center gap-2">
                 {deletingTemplate && <Loader2 size={14} className="animate-spin" />}
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {fieldToDeleteFromLibrary && (
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/60 p-4" onClick={() => setFieldToDeleteFromLibrary(null)}>
+          <div className="w-full max-w-sm rounded-xl border border-lp-border bg-lp-surface p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-lp-text">Delete this advance field?</h3>
+            <p className="mt-1 text-sm text-lp-text-secondary">Remove &quot;{fieldToDeleteFromLibrary.field.label}&quot; from the library and from this show&apos;s advance.</p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button type="button" onClick={() => setFieldToDeleteFromLibrary(null)} className="rounded-xl border border-lp-border px-4 py-2 text-sm text-lp-text hover:bg-lp-surface-hover">Cancel</button>
+              <button type="button" onClick={handleDeleteFieldFromLibrary} disabled={deletingFieldFromLibrary} className="rounded-xl bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50 flex items-center gap-2">
+                {deletingFieldFromLibrary && <Loader2 size={14} className="animate-spin" />}
                 Delete
               </button>
             </div>
@@ -1469,27 +1660,30 @@ function CustomFieldModal({ onClose, onAdd }: { onClose: () => void; onAdd: (fie
             </div>
           )}
         </div>
-        <div className="mt-3 flex items-center justify-between gap-3">
-          <span className="text-sm text-lp-text-secondary">{required ? 'Required' : 'Optional'}</span>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={required}
-            onClick={() => setRequired((r) => !r)}
-            className={cn(
-              'relative h-6 w-11 shrink-0 rounded-full transition-colors duration-200',
-              required ? 'bg-lp-accent' : 'bg-lp-border'
-            )}
-            style={{ transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)' }}
-          >
-            <span
+        <div className="mt-3">
+          <p className="mb-1.5 text-xs font-medium text-lp-text-tertiary">Required</p>
+          <div className="inline-flex rounded-lg border border-lp-border bg-lp-bg-secondary p-0.5">
+            <button
+              type="button"
+              onClick={() => setRequired(false)}
               className={cn(
-                'absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-transform duration-200',
-                required && 'translate-x-5'
+                'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+                !required ? 'bg-lp-orange text-white' : 'text-lp-text-secondary hover:text-lp-text'
               )}
-              style={{ transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)' }}
-            />
-          </button>
+            >
+              Optional
+            </button>
+            <button
+              type="button"
+              onClick={() => setRequired(true)}
+              className={cn(
+                'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+                required ? 'bg-lp-orange text-white' : 'text-lp-text-secondary hover:text-lp-text'
+              )}
+            >
+              Required
+            </button>
+          </div>
         </div>
         {type === 'select' && (
           <DropdownOptionsEditor value={optionsStr} onChange={setOptionsStr} />
@@ -1575,6 +1769,7 @@ function formatAdvanceDateTime(iso: string): string {
 function FillMode({
   tourId,
   routingId,
+  artistName = null,
   currentUserId,
   currency,
   tourPersonnelCounts,
@@ -1593,6 +1788,7 @@ function FillMode({
 }: {
   tourId: string;
   routingId: string;
+  artistName?: string | null;
   currentUserId: string | null;
   currency: string;
   tourPersonnelCounts?: { principal_count: number; band_count: number; crew_count: number };
@@ -1757,8 +1953,16 @@ function FillMode({
     debouncedFlush();
   };
 
-  const [showSettlement, setShowSettlement] = useState(false);
-  const settlementSection = advance.sections.find((s) => s.label === SETTLEMENT_LABEL);
+  const setSectionData = useCallback(
+    (templateId: string, newData: Record<string, unknown>) => {
+      const nextData = { ...advance.data, [templateId]: newData };
+      onUpdate({ data: nextData });
+      patchRef.current = { ...patchRef.current, data: nextData };
+      flushPatch({ data: nextData });
+    },
+    [advance.data, onUpdate, flushPatch]
+  );
+
   const mainSections = advance.sections.filter((s) => s.label !== SETTLEMENT_LABEL);
   const sortedSections = [...mainSections].sort((a, b) => {
     if (a.label === KEY_CONTACTS_LABEL) return -1;
@@ -1773,10 +1977,18 @@ function FillMode({
     return Array.isArray(data?.documents) ? data.documents : [];
   })();
   const setImportantDocuments = (docs: AdvanceDocument[]) => {
+    if (docs.length >= 1 && importantDocuments.length === 0) {
+      const hasImportant = advance.sections.some((s) => s.label === 'Important Documents' || s.template_id === IMPORTANT_DOCUMENTS_KEY);
+      if (!hasImportant) {
+        const newSection = { template_id: IMPORTANT_DOCUMENTS_KEY, label: 'Important Documents', fields: [] as FieldDef[], order: advance.sections.length };
+        onUpdate({ sections: [...advance.sections.map((s, i) => ({ ...s, order: i })), newSection] });
+      }
+    }
     setFieldValue(IMPORTANT_DOCUMENTS_KEY, 'documents', docs);
   };
 
   return (
+    <AdvanceDropdownZProvider>
     <div className="flex gap-8">
       <div className="min-w-0 flex-1 space-y-4">
         <ImportantDocumentsCard
@@ -1891,35 +2103,14 @@ function FillMode({
               sectionContactRoles={getContactRolesForSection(section.label)}
               assignedTo={advance.section_statuses[section.template_id]?.assigned_to}
               workspaceMembers={workspaceMembers}
+              artistName={artistName}
+              tourId={tourId}
+              routingId={routingId}
+              onReplaceSectionData={setSectionData}
             />
           )}
           </div>
         ))}
-        {settlementSection && (
-          <div className="space-y-3 rounded-xl border border-lp-border bg-lp-surface/50 p-4">
-            <button
-              type="button"
-              onClick={() => setShowSettlement((v) => !v)}
-              className="flex w-full items-center justify-between rounded-lg border border-lp-border px-4 py-2.5 text-sm font-medium text-lp-text hover:bg-lp-surface-hover transition-colors duration-200"
-              style={{ transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)' }}
-            >
-              Show Settlement
-              {showSettlement ? <ChevronDown size={18} className="rotate-180" /> : <ChevronRight size={18} />}
-            </button>
-            {showSettlement && (
-              <>
-                <p className="text-sm text-lp-text-tertiary">Settlement data will be integrated with Budget in a future update.</p>
-                <SettlementBlock
-                  section={settlementSection}
-                  data={advance.data[settlementSection.template_id] ?? {}}
-                  instanceId={advance.instance_id}
-                  currency={currency}
-                  onFieldChange={(fieldId, value) => setFieldValue(settlementSection.template_id, fieldId, value)}
-                />
-              </>
-            )}
-          </div>
-        )}
       </div>
 
       <aside className="w-56 shrink-0">
@@ -1942,18 +2133,6 @@ function FillMode({
                 </li>
               );
             })}
-            {settlementSection && (
-              <li>
-                <button
-                  type="button"
-                  onClick={() => setShowSettlement((v) => !v)}
-                  className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-lp-text-tertiary hover:bg-lp-surface-hover hover:text-lp-text"
-                >
-                  <span className={cn('h-2 w-2 shrink-0 rounded-full', showSettlement ? 'bg-lp-orange/50' : 'bg-gray-500')} />
-                  <span className="truncate">Settlement</span>
-                </button>
-              </li>
-            )}
           </ul>
           <div className="mt-4 space-y-2 border-t border-lp-border pt-4">
             <button
@@ -1976,6 +2155,7 @@ function FillMode({
         </div>
       </aside>
     </div>
+    </AdvanceDropdownZProvider>
   );
 }
 
@@ -2032,10 +2212,11 @@ function KeyContactsCard({
     ...(onRemoveSection ? [{ label: 'Remove section', icon: Trash2, variant: 'danger' as const, onClick: () => setRemoveConfirmOpen(true) }] : []),
   ].filter(Boolean) as { label: string; icon: typeof CheckCircle2; onClick: () => void; variant?: 'danger' }[];
 
+  const defaultRole = section.label.replace(/\s+Contact$/i, '') || section.label;
   const addRow = () => {
     onContactsChange([
       ...contacts,
-      { first_name: '', last_name: '', role: '', phone: '', email: '', venue_name: venueName ?? undefined, notes: '' },
+      { first_name: '', last_name: '', role: defaultRole, phone: '', email: '', venue_name: venueName ?? undefined, notes: '' },
     ]);
   };
   const removeRow = (index: number) => {
@@ -2056,20 +2237,20 @@ function KeyContactsCard({
       >
         <SectionIcon icon="users" />
         <span className="flex-1 font-medium text-lp-text">{section.label}</span>
-        <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
-          <ContextMenu items={menuItems} align="right" />
+        <div className="shrink-0" onClick={(e) => { e.stopPropagation(); if (!expanded) onToggle(); }}>
+          <ContextMenu items={menuItems} align="right" onBeforeOpen={() => { if (!expanded) onToggle(); }} />
         </div>
         <StatusDropdown
           sectionStatus={sectionStatus}
           onSelectStatus={onSetSectionStatus}
-          onClick={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); if (!expanded) onToggle(); }}
         />
         {onSetSectionAssigned && workspaceMembers.length > 0 ? (
           <AssignDropdown
             assignedTo={assignedTo}
             members={workspaceMembers}
             onSelect={onSetSectionAssigned}
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); if (!expanded) onToggle(); }}
           />
         ) : assignedTo ? (
           <span className="text-sm text-lp-text-tertiary truncate max-w-[120px]">{workspaceMembers.find((m) => m.id === assignedTo)?.name ?? 'Assigned'}</span>
@@ -2087,6 +2268,7 @@ function KeyContactsCard({
                 onUpdate={(patch) => updateRow(index, patch)}
                 onRemove={() => removeRow(index)}
                 contactRoles={roles}
+                defaultRole={defaultRole}
               />
             ))}
             <button
@@ -2190,12 +2372,12 @@ function RiderCard({
       >
         <FileText size={20} className="text-lp-text-tertiary shrink-0" />
         <span className="flex-1 font-medium text-lp-text">{section.label}</span>
-        <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
-          <ContextMenu items={menuItems} align="right" />
+        <div className="shrink-0" onClick={(e) => { e.stopPropagation(); if (!expanded) onToggle(); }}>
+          <ContextMenu items={menuItems} align="right" onBeforeOpen={() => { if (!expanded) onToggle(); }} />
         </div>
-        <StatusDropdown sectionStatus={sectionStatus} onSelectStatus={onSetSectionStatus} onClick={(e) => e.stopPropagation()} />
+        <StatusDropdown sectionStatus={sectionStatus} onSelectStatus={onSetSectionStatus} onClick={(e) => { e.stopPropagation(); if (!expanded) onToggle(); }} />
         {onSetSectionAssigned && workspaceMembers.length > 0 ? (
-          <AssignDropdown assignedTo={assignedTo} members={workspaceMembers} onSelect={onSetSectionAssigned} onClick={(e) => e.stopPropagation()} />
+          <AssignDropdown assignedTo={assignedTo} members={workspaceMembers} onSelect={onSetSectionAssigned} onClick={(e) => { e.stopPropagation(); if (!expanded) onToggle(); }} />
         ) : assignedTo ? (
           <span className="text-sm text-lp-text-tertiary truncate max-w-[120px]">{workspaceMembers.find((m) => m.id === assignedTo)?.name ?? 'Assigned'}</span>
         ) : null}
@@ -2252,7 +2434,7 @@ function RiderCard({
                 )}
               </div>
             </div>
-            {(section.fields ?? []).map((field) => (
+            {sortFieldsContactsFirst(section.fields ?? []).map((field) => (
               <FieldRenderer
                 key={field.id}
                 field={field}
@@ -2356,6 +2538,12 @@ function FlightsSectionCard({
   const personnelOptions = buildTourPersonnelList(tourPersonnelCounts ?? { principal_count: 0, band_count: 0, crew_count: 0 });
   const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false);
   const [personnelDropdownOpen, setPersonnelDropdownOpen] = useState<string | null>(null);
+
+  const EMPTY_FLIGHT: FlightEntry = { id: '', departure_city: '', arrival_city: '', date: '', time: '', airline: '', flight_number: '', confirmation_code: '', personnel_ids: [] };
+  const hasKeyFlightFields = (f: FlightEntry) => !!(f.departure_city?.trim() || f.arrival_city?.trim() || f.airline?.trim() || f.flight_number?.trim() || f.confirmation_code?.trim());
+  const displayFlights = flights.length > 0 ? flights : [EMPTY_FLIGHT];
+  const showAddFlightButton = displayFlights.some(hasKeyFlightFields);
+
   const addFlight = () => {
     onFlightsChange([
       ...flights,
@@ -2363,10 +2551,18 @@ function FlightsSectionCard({
     ]);
   };
   const updateFlight = (index: number, patch: Partial<FlightEntry>) => {
+    if (flights.length === 0 && index === 0) {
+      onFlightsChange([{ ...EMPTY_FLIGHT, id: crypto.randomUUID(), ...patch }]);
+      return;
+    }
     const next = flights.map((f, i) => (i === index ? { ...f, ...patch } : f));
     onFlightsChange(next);
   };
   const removeFlight = (index: number) => {
+    if (flights.length <= 1) {
+      onFlightsChange([]);
+      return;
+    }
     onFlightsChange(flights.filter((_, i) => i !== index));
   };
   const menuItems = [
@@ -2385,23 +2581,25 @@ function FlightsSectionCard({
       >
         <Plane size={20} className="text-lp-text-tertiary shrink-0" />
         <span className="flex-1 font-medium text-lp-text">{section.label}</span>
-        <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
-          <ContextMenu items={menuItems} align="right" />
+        <div className="shrink-0" onClick={(e) => { e.stopPropagation(); if (!expanded) onToggle(); }}>
+          <ContextMenu items={menuItems} align="right" onBeforeOpen={() => { if (!expanded) onToggle(); }} />
         </div>
-        <StatusDropdown sectionStatus={sectionStatus} onSelectStatus={onSetSectionStatus} onClick={(e) => e.stopPropagation()} />
+        <StatusDropdown sectionStatus={sectionStatus} onSelectStatus={onSetSectionStatus} onClick={(e) => { e.stopPropagation(); if (!expanded) onToggle(); }} />
         {onSetSectionAssigned && workspaceMembers.length > 0 ? (
-          <AssignDropdown assignedTo={assignedTo} members={workspaceMembers} onSelect={onSetSectionAssigned} onClick={(e) => e.stopPropagation()} />
+          <AssignDropdown assignedTo={assignedTo} members={workspaceMembers} onSelect={onSetSectionAssigned} onClick={(e) => { e.stopPropagation(); if (!expanded) onToggle(); }} />
         ) : null}
         {expanded ? <ChevronDown size={18} className="text-lp-text-tertiary shrink-0" /> : <ChevronRight size={18} className="text-lp-text-tertiary shrink-0" />}
       </div>
       <div className={cn('grid transition-[grid-template-rows] duration-200 ease-out', expanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')} style={{ transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)' }}>
         <div className="min-h-0 overflow-hidden">
           <div className={cn('border-t border-lp-border px-4 py-4 space-y-4 transition-opacity duration-200', expanded ? 'opacity-100 delay-50' : 'opacity-0 delay-0')}>
-            {flights.map((flight, index) => (
-              <div key={flight.id} className="rounded-xl border border-lp-border bg-lp-surface-hover/50 p-4 space-y-3">
+            {displayFlights.map((flight, index) => (
+              <div key={flight.id || 'draft'} className="rounded-xl border border-lp-border bg-lp-surface-hover/50 p-4 space-y-3">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm font-medium text-lp-text-tertiary">Flight {index + 1}</span>
-                  <button type="button" onClick={() => removeFlight(index)} className="rounded p-1.5 text-lp-text-tertiary hover:bg-red-500/10 hover:text-red-500" aria-label="Remove flight"><X size={18} /></button>
+                  {flights.length > 0 && (
+                    <button type="button" onClick={() => removeFlight(index)} className="rounded p-1.5 text-lp-text-tertiary hover:bg-red-500/10 hover:text-red-500" aria-label="Remove flight"><X size={18} /></button>
+                  )}
                 </div>
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                   <div>
@@ -2441,15 +2639,17 @@ function FlightsSectionCard({
                     onChange={(ids) => updateFlight(index, { personnel_ids: ids })}
                     openKey={personnelDropdownOpen}
                     onOpenChange={setPersonnelDropdownOpen}
-                    instanceId={flight.id}
+                    instanceId={flight.id || 'draft'}
                   />
                 </div>
               </div>
             ))}
-            <button type="button" onClick={addFlight} className="flex items-center gap-2 rounded-lg border border-dashed border-lp-border px-4 py-2.5 text-sm font-medium text-lp-text-tertiary hover:bg-lp-surface-hover hover:text-lp-text transition-colors duration-200" style={{ transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)' }}>
-              <Plus size={16} />
-              Add another flight
-            </button>
+            {showAddFlightButton && (
+              <button type="button" onClick={addFlight} className="flex items-center gap-2 rounded-lg border border-dashed border-lp-border px-4 py-2.5 text-sm font-medium text-lp-text-tertiary hover:bg-lp-surface-hover hover:text-lp-text transition-colors duration-200" style={{ transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)' }}>
+                <Plus size={16} />
+                {flights.length === 0 ? 'Add flight' : 'Add another flight'}
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -2477,9 +2677,10 @@ function PersonnelMultiSelect({
 }) {
   const open = openKey === instanceId;
   const ref = useRef<HTMLDivElement>(null);
+  const [search, setSearch] = useState('');
   useEffect(() => {
     if (!open) return;
-    const close = (e: MouseEvent) => { if (ref.current?.contains(e.target as Node)) return; onOpenChange(null); };
+    const close = (e: MouseEvent) => { if (ref.current?.contains(e.target as Node)) return; onOpenChange(null); setSearch(''); };
     document.addEventListener('mousedown', close);
     return () => document.removeEventListener('mousedown', close);
   }, [open, onOpenChange]);
@@ -2487,28 +2688,213 @@ function PersonnelMultiSelect({
     if (selectedIds.includes(id)) onChange(selectedIds.filter((x) => x !== id));
     else onChange([...selectedIds, id]);
   };
-  const label = selectedIds.length ? selectedIds.map((id) => options.find((o) => o.id === id)?.label ?? id).join(', ') : 'Select personnel...';
+  const searchLower = search.trim().toLowerCase();
+  const filteredOptions = searchLower
+    ? options.filter((o) => o.label.toLowerCase().includes(searchLower))
+    : options;
+  const selectedLabels = selectedIds.map((id) => options.find((o) => o.id === id)?.label ?? id);
   return (
     <div className="relative" ref={ref}>
       <button
         type="button"
         onClick={() => onOpenChange(open ? null : instanceId)}
-        className="flex w-full items-center justify-between rounded-xl border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text hover:bg-lp-surface-hover"
+        className={cn(
+          'flex min-h-[42px] w-full flex-wrap items-center gap-2 rounded-xl border border-lp-border bg-lp-surface px-3 py-2 text-left text-sm text-lp-text hover:bg-lp-surface-hover focus:outline-none focus:ring-2 focus:ring-lp-orange/20',
+          !selectedIds.length && 'text-lp-text-tertiary'
+        )}
       >
-        <span className={cn('truncate', !selectedIds.length && 'text-lp-text-tertiary')}>{label}</span>
-        <ChevronDown size={16} className={cn('shrink-0 transition-transform', open && 'rotate-180')} />
+        {selectedIds.length > 0 ? (
+          <>
+            {selectedLabels.map((label, i) => (
+              <span
+                key={selectedIds[i]}
+                className="inline-flex items-center gap-1 rounded-full bg-lp-orange/15 px-2.5 py-0.5 text-xs font-medium text-lp-orange"
+              >
+                {label}
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); onChange(selectedIds.filter((_, j) => j !== i)); }}
+                  className="rounded-full hover:bg-lp-orange/30 p-0.5"
+                  aria-label="Remove"
+                >
+                  <X size={12} />
+                </button>
+              </span>
+            ))}
+          </>
+        ) : (
+          <span>Select personnel...</span>
+        )}
+        <ChevronDown size={16} className={cn('ml-auto shrink-0 transition-transform', open && 'rotate-180')} />
       </button>
       {open && (
-        <div className="absolute left-0 right-0 top-full z-[100] mt-1 max-h-48 overflow-y-auto rounded-xl border border-lp-border bg-lp-surface py-1 shadow-lg">
-          {options.map((opt) => (
-            <label key={opt.id} className="flex cursor-pointer items-center gap-2 px-3 py-2 hover:bg-lp-surface-hover">
-              <input type="checkbox" checked={selectedIds.includes(opt.id)} onChange={() => toggle(opt.id)} className="rounded border-lp-border text-lp-orange focus:ring-lp-orange" />
-              <span className="text-sm text-lp-text">{opt.label}</span>
-            </label>
-          ))}
+        <div className="absolute left-0 right-0 top-full z-[100] mt-1 max-h-56 overflow-hidden rounded-xl border border-lp-border bg-lp-surface shadow-lg">
+          <div className="border-b border-lp-border p-2">
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search..."
+              className="w-full rounded-lg border border-lp-border bg-lp-bg-secondary px-3 py-2 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:border-lp-orange focus:outline-none"
+            />
+          </div>
+          <div className="max-h-40 overflow-y-auto py-1">
+            {filteredOptions.length === 0 ? (
+              <p className="px-3 py-2 text-sm text-lp-text-tertiary">No matches</p>
+            ) : (
+              filteredOptions.map((opt) => (
+                <label key={opt.id} className="flex cursor-pointer items-center gap-2 px-3 py-2 hover:bg-lp-surface-hover">
+                  <input type="checkbox" checked={selectedIds.includes(opt.id)} onChange={() => toggle(opt.id)} className="rounded border-lp-border text-lp-orange focus:ring-lp-orange" />
+                  <span className="text-sm text-lp-text">{opt.label}</span>
+                </label>
+              ))
+            )}
+          </div>
         </div>
       )}
     </div>
+  );
+}
+
+// ----- Deal Info: Upload deal memo + AI extract + review -----
+
+const DEAL_MEMO_DOC_TYPES = ['Deal Memo', 'Tech Rider', 'Flight Ticket', 'Hotel Confirmation', 'Other'] as const;
+
+function DealInfoUploadBlock({ onFieldChange }: { onFieldChange: (fieldId: string, value: unknown) => void }) {
+  const [open, setOpen] = useState(false);
+  const [step, setStep] = useState<1 | 2>(1);
+  const [documentType, setDocumentType] = useState<string>(DEAL_MEMO_DOC_TYPES[0]);
+  const [files, setFiles] = useState<File[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [review, setReview] = useState<Record<string, string>>({});
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const onExtract = async () => {
+    if (files.length === 0) return;
+    setError(null);
+    setLoading(true);
+    try {
+      const form = new FormData();
+      form.set('document_type', documentType);
+      files.forEach((f) => form.append('files', f));
+      const res = await fetch('/api/advance/extract-deal-memo', { method: 'POST', body: form });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(j.error ?? 'Extraction failed');
+        return;
+      }
+      const ext = (j.extracted ?? {}) as Record<string, string | null | undefined>;
+      setReview({
+        guarantee: ext.guarantee ?? '',
+        guest_list: ext.guest_list ?? '',
+        transport_from_promoter: ext.transport_from_promoter ?? '',
+        backline_provisions: ext.backline_provisions ?? '',
+        deal_notes: [ext.notes, ext.key_contacts, ext.show_date, ext.venue].filter(Boolean).join('\n\n'),
+      });
+      setStep(2);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const onApply = () => {
+    Object.entries(review).forEach(([id, value]) => onFieldChange(id, value || undefined));
+    setOpen(false);
+    setStep(1);
+    setFiles([]);
+    setReview({});
+  };
+
+  const onClose = () => {
+    setOpen(false);
+    setStep(1);
+    setFiles([]);
+    setError(null);
+    setReview({});
+  };
+
+  return (
+    <>
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="flex items-center gap-2 rounded-lg border border-lp-border px-3 py-2 text-sm font-medium text-lp-text hover:bg-lp-surface-hover"
+      >
+        <Upload size={16} />
+        Upload deal memo
+      </button>
+      {open && (
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
+          <div className="w-full max-w-lg rounded-xl border border-lp-border bg-lp-surface p-6 shadow-xl max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-lp-text">
+              {step === 1 ? 'Upload deal memo' : 'Review extracted data'}
+            </h3>
+            {step === 1 && (
+              <>
+                <p className="mt-1 text-sm text-lp-text-secondary">Choose document type and add file(s). All files in this batch must be the same type.</p>
+                <div className="mt-4 space-y-4">
+                  <div>
+                    <label className="block text-xs font-medium text-lp-text-tertiary mb-1">Document type</label>
+                    <select
+                      value={documentType}
+                      onChange={(e) => setDocumentType(e.target.value)}
+                      className="w-full rounded-xl border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text focus:border-lp-orange focus:outline-none"
+                    >
+                      {DEAL_MEMO_DOC_TYPES.map((t) => (
+                        <option key={t} value={t}>{t}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-lp-text-tertiary mb-1">Files (PDF or image)</label>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept=".pdf,image/jpeg,image/png,image/gif,image/webp"
+                      multiple
+                      onChange={(e) => setFiles(Array.from(e.target.files ?? []))}
+                      className="w-full text-sm text-lp-text"
+                    />
+                    {files.length > 0 && <p className="mt-1 text-xs text-lp-text-tertiary">{files.length} file(s) selected</p>}
+                  </div>
+                </div>
+                {error && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{error}</p>}
+                <div className="mt-4 flex justify-end gap-2">
+                  <button type="button" onClick={onClose} className="rounded-xl border border-lp-border px-4 py-2 text-sm text-lp-text hover:bg-lp-surface-hover">Cancel</button>
+                  <button type="button" onClick={onExtract} disabled={loading || files.length === 0} className="rounded-xl bg-lp-orange px-4 py-2 text-sm font-medium text-white hover:bg-lp-orange-hover disabled:opacity-50">
+                    {loading ? 'Extracting…' : 'Extract'}
+                  </button>
+                </div>
+              </>
+            )}
+            {step === 2 && (
+              <>
+                <p className="mt-1 text-sm text-lp-text-secondary">Edit below and apply to fill the Deal Info section.</p>
+                <div className="mt-4 space-y-3">
+                  {(['guarantee', 'guest_list', 'transport_from_promoter', 'backline_provisions', 'deal_notes'] as const).map((id) => (
+                    <div key={id}>
+                      <label className="block text-xs font-medium text-lp-text-tertiary mb-1">{id.replace(/_/g, ' ')}</label>
+                      <textarea
+                        value={review[id] ?? ''}
+                        onChange={(e) => setReview((r) => ({ ...r, [id]: e.target.value }))}
+                        rows={id === 'deal_notes' ? 3 : 1}
+                        className="w-full rounded-xl border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:border-lp-orange focus:outline-none"
+                      />
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-4 flex justify-end gap-2">
+                  <button type="button" onClick={() => setStep(1)} className="rounded-xl border border-lp-border px-4 py-2 text-sm text-lp-text hover:bg-lp-surface-hover">Back</button>
+                  <button type="button" onClick={onApply} className="rounded-xl bg-lp-orange px-4 py-2 text-sm font-medium text-white hover:bg-lp-orange-hover">Apply to form</button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -2552,7 +2938,7 @@ function SettlementBlock({
           </p>
         )}
       </div>
-      {(section.fields ?? []).filter((f) => f.id !== 'deal_memo_file' && f.id !== 'deal_memo_text').map((field) => (
+      {sortFieldsContactsFirst((section.fields ?? []).filter((f) => f.id !== 'deal_memo_file' && f.id !== 'deal_memo_text')).map((field) => (
         <FieldRenderer key={field.id} field={field} value={data[field.id]} currency={currency} onChange={(v) => onFieldChange(field.id, v)} instanceId={instanceId} />
       ))}
     </div>
@@ -2619,12 +3005,12 @@ function ParkingAccessCard({
       >
         <Car size={20} className="text-lp-text-tertiary shrink-0" />
         <span className="flex-1 font-medium text-lp-text">{section.label}</span>
-        <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
-          <ContextMenu items={menuItems} align="right" />
+        <div className="shrink-0" onClick={(e) => { e.stopPropagation(); if (!expanded) onToggle(); }}>
+          <ContextMenu items={menuItems} align="right" onBeforeOpen={() => { if (!expanded) onToggle(); }} />
         </div>
-        <StatusDropdown sectionStatus={sectionStatus} onSelectStatus={onSetSectionStatus} onClick={(e) => e.stopPropagation()} />
+        <StatusDropdown sectionStatus={sectionStatus} onSelectStatus={onSetSectionStatus} onClick={(e) => { e.stopPropagation(); if (!expanded) onToggle(); }} />
         {onSetSectionAssigned && workspaceMembers.length > 0 ? (
-          <AssignDropdown assignedTo={assignedTo} members={workspaceMembers} onSelect={onSetSectionAssigned} onClick={(e) => e.stopPropagation()} />
+          <AssignDropdown assignedTo={assignedTo} members={workspaceMembers} onSelect={onSetSectionAssigned} onClick={(e) => { e.stopPropagation(); if (!expanded) onToggle(); }} />
         ) : null}
         {expanded ? <ChevronDown size={18} className="text-lp-text-tertiary shrink-0" /> : <ChevronRight size={18} className="text-lp-text-tertiary shrink-0" />}
       </div>
@@ -2709,10 +3095,43 @@ function ImportantDocumentsCard({
   currentUserId: string | null;
 }) {
   const [uploading, setUploading] = useState(false);
+  const [loadingList, setLoadingList] = useState(true);
   const [dragOver, setDragOver] = useState(false);
   const [viewerDoc, setViewerDoc] = useState<AdvanceDocument | null>(null);
   const [manageAccessDoc, setManageAccessDoc] = useState<AdvanceDocument | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [storageFiles, setStorageFiles] = useState<{ path: string; name: string; created_at: string | null; url: string }[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/upload/advance-file?advance_instance_id=${encodeURIComponent(instanceId)}`)
+      .then((r) => (r.ok ? r.json() : { files: [] }))
+      .then((j) => {
+        if (!cancelled) setStorageFiles(j.files ?? []);
+      })
+      .finally(() => { if (!cancelled) setLoadingList(false); });
+    return () => { cancelled = true; };
+  }, [instanceId]);
+
+  const displayDocs = (() => {
+    const byPath = new Map(documents.filter((d) => d.path).map((d) => [d.path!, d]));
+    const byUrl = new Map(documents.map((d) => [d.url, d]));
+    return storageFiles.map((f) => {
+      const existing = byPath.get(f.path) ?? byUrl.get(f.url);
+      const uploadedAt = existing?.uploaded_at ?? f.created_at ?? new Date().toISOString();
+      const filename = existing?.filename ?? f.name;
+      return {
+        id: existing?.id ?? f.path,
+        path: f.path,
+        url: f.url,
+        filename,
+        content_type: existing?.content_type,
+        uploaded_at: uploadedAt,
+        uploaded_by: existing?.uploaded_by,
+        visible_to: existing?.visible_to,
+      } as AdvanceDocument;
+    });
+  })();
 
   const uploadFile = async (file: File) => {
     const allowed = ['application/pdf', 'image/jpeg', 'image/png', 'image/gif'];
@@ -2726,10 +3145,11 @@ function ImportantDocumentsCard({
       form.set('field_id', 'documents');
       const res = await fetch('/api/upload/advance-file', { method: 'POST', body: form });
       if (!res.ok) throw new Error('Upload failed');
-      const { url } = await res.json();
+      const { url, path } = await res.json();
       const doc: AdvanceDocument = {
         id: crypto.randomUUID(),
         url,
+        path: path ?? undefined,
         filename: file.name,
         content_type: file.type,
         uploaded_at: new Date().toISOString(),
@@ -2737,15 +3157,22 @@ function ImportantDocumentsCard({
         visible_to: [],
       };
       onDocumentsChange([...documents, doc]);
+      setStorageFiles((prev) => [...prev, { path: path ?? '', name: file.name, created_at: doc.uploaded_at, url }]);
     } finally {
       setUploading(false);
     }
   };
 
-  const removeDoc = (id: string) => {
-    onDocumentsChange(documents.filter((d) => d.id !== id));
-    if (viewerDoc?.id === id) setViewerDoc(null);
-    if (manageAccessDoc?.id === id) setManageAccessDoc(null);
+  const removeDoc = async (doc: AdvanceDocument) => {
+    if (doc.path) {
+      try {
+        await fetch('/api/upload/advance-file', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ path: doc.path }) });
+      } catch (_) { /* ignore */ }
+      setStorageFiles((prev) => prev.filter((f) => f.path !== doc.path));
+    }
+    onDocumentsChange(documents.filter((d) => d.id !== doc.id && d.url !== doc.url));
+    if (viewerDoc?.id === doc.id || viewerDoc?.url === doc.url) setViewerDoc(null);
+    if (manageAccessDoc?.id === doc.id || manageAccessDoc?.url === doc.url) setManageAccessDoc(null);
   };
 
   const updateDoc = (id: string, patch: Partial<AdvanceDocument>) => {
@@ -2763,7 +3190,7 @@ function ImportantDocumentsCard({
   const formatDate = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 
   return (
-    <div className="rounded-xl border border-lp-border bg-lp-surface overflow-hidden card-hover">
+    <div className="rounded-xl border border-lp-border border-l-4 border-l-[var(--color-lp-success)] bg-lp-surface overflow-hidden card-hover">
       <div className="flex items-center gap-4 px-4 py-3 border-b border-lp-border">
         <Folder size={20} className="text-lp-text-secondary shrink-0" />
         <span className="font-medium text-lp-text">Important Documents</span>
@@ -2798,30 +3225,30 @@ function ImportantDocumentsCard({
             <p className="text-sm text-lp-text-secondary">Drag and drop or click to upload (PDF, JPEG, PNG, GIF — max 10MB)</p>
           )}
         </div>
-        {documents.length > 0 && (
+        {loadingList ? (
+          <p className="text-sm text-lp-text-tertiary flex items-center gap-2"><Loader2 size={14} className="animate-spin" /> Loading documents…</p>
+        ) : displayDocs.length > 0 ? (
           <ul className="space-y-2">
-            {documents.map((doc) => (
-              <li key={doc.id} className="rounded-xl border border-lp-border bg-lp-surface p-3 hover:border-lp-accent/30 transition-all">
-                <div className="flex items-center gap-3">
-                  {docIcon(doc)}
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-medium text-lp-text truncate">{doc.filename}</p>
-                    <p className="text-xs text-lp-text-tertiary">{formatDate(doc.uploaded_at)}{doc.uploaded_by ? ` · Uploaded by user` : ''}</p>
-                  </div>
-                  <ContextMenu
-                    items={[
-                      { label: 'View', icon: FileText, onClick: () => setViewerDoc(doc) },
-                      { label: 'Download', icon: Download, onClick: () => window.open(doc.url, '_blank') },
-                      { label: 'Delete', icon: Trash2, variant: 'danger', onClick: () => removeDoc(doc.id) },
-                      { label: 'Manage Access', icon: UserPlus, onClick: () => setManageAccessDoc(doc) },
-                    ]}
-                    align="right"
-                  />
+            {displayDocs.map((doc) => (
+              <li key={doc.id} className="rounded-lg border border-lp-border bg-lp-bg-secondary p-3 flex items-center gap-3">
+                {docIcon(doc)}
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-lp-text truncate">{doc.filename}</p>
+                  <p className="text-xs text-lp-text-tertiary">{formatDate(doc.uploaded_at)}</p>
                 </div>
+                <a href={doc.url} target="_blank" rel="noreferrer" className="shrink-0 text-sm font-medium text-lp-orange hover:text-lp-orange-hover">Download</a>
+                <button type="button" onClick={() => removeDoc(doc)} className="shrink-0 rounded p-1.5 text-lp-text-tertiary hover:bg-red-500/10 hover:text-red-500" title="Delete"><Trash2 size={16} /></button>
+                <ContextMenu
+                  items={[
+                    { label: 'View', icon: FileText, onClick: () => setViewerDoc(doc) },
+                    { label: 'Manage Access', icon: UserPlus, onClick: () => setManageAccessDoc(doc) },
+                  ]}
+                  align="right"
+                />
               </li>
             ))}
           </ul>
-        )}
+        ) : null}
       </div>
       {viewerDoc && (
         <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/70 p-4" onClick={() => setViewerDoc(null)}>
@@ -2872,8 +3299,13 @@ function RoleDropdown({
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const [panelZ, setPanelZ] = useState(1000);
   const ref = useRef<HTMLDivElement>(null);
+  const getZIndex = useContext(AdvanceDropdownZContext);
   const displayVal = value || placeholder;
+  useEffect(() => {
+    if (open) setPanelZ(getZIndex());
+  }, [open, getZIndex]);
   useEffect(() => {
     if (!open) return;
     const close = (e: MouseEvent) => { if (ref.current?.contains(e.target as Node)) return; setOpen(false); };
@@ -2881,7 +3313,7 @@ function RoleDropdown({
     return () => document.removeEventListener('mousedown', close);
   }, [open]);
   return (
-    <div className={cn('relative z-[100]', className)} ref={ref}>
+    <div className={cn('relative', className)} ref={ref} style={{ zIndex: open ? panelZ : undefined }}>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
@@ -2892,7 +3324,7 @@ function RoleDropdown({
         <ChevronDown size={14} className={cn('shrink-0 ml-1 transition-transform', open && 'rotate-180')} />
       </button>
       {open && (
-        <div className="absolute left-0 right-0 top-full z-[100] mt-1 max-h-48 overflow-y-auto rounded-xl border border-lp-border bg-lp-surface py-1 shadow-lg">
+        <div className="absolute left-0 right-0 top-full mt-1 max-h-48 overflow-y-auto rounded-xl border border-lp-border bg-lp-surface py-1 shadow-lg" style={{ zIndex: panelZ }}>
           {options.map((r) => (
             <button
               key={r}
@@ -2923,8 +3355,13 @@ function SelectDropdown({
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
+  const [panelZ, setPanelZ] = useState(1000);
   const ref = useRef<HTMLDivElement>(null);
+  const getZIndex = useContext(AdvanceDropdownZContext);
   const displayVal = value || placeholder;
+  useEffect(() => {
+    if (open) setPanelZ(getZIndex());
+  }, [open, getZIndex]);
   useEffect(() => {
     if (!open) return;
     const close = (e: MouseEvent) => { if (ref.current?.contains(e.target as Node)) return; setOpen(false); };
@@ -2932,7 +3369,7 @@ function SelectDropdown({
     return () => document.removeEventListener('mousedown', close);
   }, [open]);
   return (
-    <div className={cn('relative z-[100]', className)} ref={ref}>
+    <div className={cn('relative', className)} ref={ref} style={{ zIndex: open ? panelZ : undefined }}>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
@@ -2943,7 +3380,7 @@ function SelectDropdown({
         <ChevronDown size={14} className={cn('shrink-0 ml-1 transition-transform', open && 'rotate-180')} />
       </button>
       {open && (
-        <div className="absolute left-0 right-0 top-full z-[100] mt-1 max-h-48 overflow-y-auto rounded-xl border border-lp-border bg-lp-surface py-1 shadow-lg">
+        <div className="absolute left-0 right-0 top-full mt-1 max-h-48 overflow-y-auto rounded-xl border border-lp-border bg-lp-surface py-1 shadow-lg" style={{ zIndex: panelZ }}>
           <button type="button" onClick={() => { onChange(''); setOpen(false); }} className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-lp-text-tertiary hover:bg-lp-surface-hover">
             {placeholder}
           </button>
@@ -2958,18 +3395,343 @@ function SelectDropdown({
   );
 }
 
+/** Dropdown with "+ Add option" and user-wide options from API; each option has ✕ delete (with confirm). */
+function AddableSelectDropdown({
+  kind,
+  value,
+  defaultOptions,
+  onChange,
+  className = '',
+}: {
+  kind: string;
+  value: string;
+  defaultOptions: string[];
+  onChange: (value: string) => void;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [panelZ, setPanelZ] = useState(1000);
+  const [addInput, setAddInput] = useState('');
+  const [userOptions, setUserOptions] = useState<{ id: string; label: string }[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [optionToDelete, setOptionToDelete] = useState<{ id: string; label: string } | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const getZIndex = useContext(AdvanceDropdownZContext);
+
+  const fetchOptions = useCallback(() => {
+    setLoading(true);
+    fetch(`/api/advance/options?kind=${encodeURIComponent(kind)}`)
+      .then((r) => (r.ok ? r.json() : { options: [] }))
+      .then((j) => setUserOptions(j.options ?? []))
+      .finally(() => setLoading(false));
+  }, [kind]);
+
+  useEffect(() => {
+    fetchOptions();
+  }, [fetchOptions]);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => { if (ref.current?.contains(e.target as Node)) return; setOpen(false); setAddInput(''); };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [open]);
+
+  const allLabels = [...defaultOptions];
+  const seen = new Set(defaultOptions.map((s) => s.toLowerCase()));
+  userOptions.forEach((o) => {
+    if (!seen.has(o.label.toLowerCase())) {
+      seen.add(o.label.toLowerCase());
+      allLabels.push(o.label);
+    }
+  });
+
+  const displayVal = value || '+ Add option';
+
+  const addOption = async () => {
+    const label = addInput.trim();
+    if (!label) return;
+    setLoading(true);
+    try {
+      const res = await fetch('/api/advance/options', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ kind, label }),
+      });
+      if (res.ok) {
+        const created = await res.json();
+        setUserOptions((prev) => [...prev, { id: created.id, label: created.label }]);
+        onChange(created.label);
+        setAddInput('');
+        setOpen(false);
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const deleteOption = async () => {
+    if (!optionToDelete) return;
+    setDeleting(true);
+    try {
+      const res = await fetch(`/api/advance/options/${optionToDelete.id}`, { method: 'DELETE' });
+      if (res.ok) {
+        setUserOptions((prev) => prev.filter((o) => o.id !== optionToDelete.id));
+        if (value === optionToDelete.label) onChange('');
+        setOptionToDelete(null);
+      }
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+  const isUserOption = (label: string) => userOptions.some((o) => o.label === label);
+  const getUserOptionId = (label: string) => userOptions.find((o) => o.label === label)?.id;
+  useEffect(() => {
+    if (open) setPanelZ(getZIndex());
+  }, [open, getZIndex]);
+
+  return (
+    <div className={cn('relative', className)} ref={ref} style={{ zIndex: open ? panelZ : undefined }}>
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className={cn('flex w-full items-center justify-between rounded-xl border bg-lp-surface px-3 py-2 text-sm text-lp-text hover:bg-lp-surface-hover transition-colors duration-200 border-lp-border focus:outline-none focus:ring-2 focus:ring-lp-orange/20', !value && 'text-lp-text-tertiary')}
+      >
+        <span className="truncate">{displayVal}</span>
+        <ChevronDown size={14} className={cn('shrink-0 ml-1 transition-transform', open && 'rotate-180')} />
+      </button>
+      {open && (
+        <div className="absolute left-0 right-0 top-full mt-1 min-w-[200px] max-h-64 overflow-y-auto rounded-xl border border-lp-border bg-lp-surface py-1 shadow-lg" style={{ zIndex: panelZ }}>
+          <div className="px-2 pb-1 border-b border-lp-border">
+            <input
+              type="text"
+              value={addInput}
+              onChange={(e) => setAddInput(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addOption(); } }}
+              placeholder="Type new option..."
+              className="w-full rounded-lg border border-lp-border bg-lp-bg-secondary px-3 py-2 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:border-lp-orange focus:outline-none"
+              autoFocus
+            />
+            <button type="button" onClick={addOption} disabled={!addInput.trim() || loading} className="mt-1.5 w-full rounded-lg bg-lp-orange px-3 py-1.5 text-sm font-medium text-white hover:bg-lp-orange-hover disabled:opacity-50">
+              Add
+            </button>
+          </div>
+          <div className="py-1">
+            {allLabels.map((label) => (
+              <div key={label} className="flex items-center gap-1 group">
+                <button
+                  type="button"
+                  onClick={() => { onChange(label); setOpen(false); }}
+                  className="flex-1 min-w-0 px-3 py-2 text-left text-sm text-lp-text hover:bg-lp-surface-hover truncate"
+                >
+                  {label}
+                </button>
+                {isUserOption(label) && (
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); setOptionToDelete({ id: getUserOptionId(label)!, label }); }}
+                    className="shrink-0 rounded p-1.5 text-lp-text-tertiary hover:bg-red-500/10 hover:text-red-500 opacity-0 group-hover:opacity-100"
+                    title="Delete this option"
+                  >
+                    <X size={14} />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      {optionToDelete && (
+        <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/60 p-4" onClick={() => setOptionToDelete(null)}>
+          <div className="w-full max-w-sm rounded-xl border border-lp-border bg-lp-surface p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-lg font-semibold text-lp-text">Delete this option?</h3>
+            <p className="mt-1 text-sm text-lp-text-secondary">&quot;{optionToDelete.label}&quot; will be removed from the list.</p>
+            <div className="mt-4 flex justify-end gap-2">
+              <button type="button" onClick={() => setOptionToDelete(null)} className="rounded-xl border border-lp-border px-4 py-2 text-sm text-lp-text hover:bg-lp-surface-hover">Cancel</button>
+              <button type="button" onClick={deleteOption} disabled={deleting} className="rounded-xl bg-red-600 px-4 py-2 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50 flex items-center gap-2">
+                {deleting && <Loader2 size={14} className="animate-spin" />}
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+const MEAL_TYPE_PRESETS = ['Breakfast', 'Lunch', 'Dinner', 'Catering', 'Buyout'] as const;
+
+function MealTimesBlock({
+  value,
+  onChange,
+}: {
+  value: unknown;
+  onChange: (meals: { id: string; type: string; time: string }[]) => void;
+}) {
+  const parsed = (() => {
+    if (Array.isArray(value)) return value as { id?: string; type?: string; time?: string }[];
+    if (typeof value === 'string' && value.trim()) return [];
+    return [];
+  })();
+  const meals = parsed.map((m) => ({
+    id: typeof m.id === 'string' ? m.id : crypto.randomUUID(),
+    type: typeof m.type === 'string' ? m.type : '',
+    time: typeof m.time === 'string' ? m.time : '',
+  }));
+
+  const setMeals = (next: { id: string; type: string; time: string }[]) => {
+    onChange(next);
+  };
+
+  const addMeal = () => {
+    setMeals([...meals, { id: crypto.randomUUID(), type: '', time: '' }]);
+  };
+
+  const updateMeal = (index: number, patch: Partial<{ type: string; time: string }>) => {
+    setMeals(meals.map((m, i) => (i === index ? { ...m, ...patch } : m)));
+  };
+
+  const removeMeal = (index: number) => {
+    setMeals(meals.filter((_, i) => i !== index));
+  };
+
+  return (
+    <div>
+      <label className="mb-1 block text-sm font-medium text-lp-text">Meal times</label>
+      <p className="mb-2 text-xs text-lp-text-tertiary">Meals can be used in the show schedule.</p>
+      <div className="space-y-2">
+        {meals.map((m, index) => (
+          <div key={m.id} className="flex flex-wrap items-center gap-2">
+            <div className="min-w-[140px] flex-1">
+              <AddableSelectDropdown
+                kind="meal_type"
+                value={m.type}
+                defaultOptions={[...MEAL_TYPE_PRESETS]}
+                onChange={(v) => updateMeal(index, { type: v })}
+                className="w-full"
+              />
+            </div>
+            <input
+              type="time"
+              value={m.time}
+              onChange={(e) => updateMeal(index, { time: e.target.value })}
+              className="rounded-xl border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-2 focus:ring-lp-orange/20"
+            />
+            <button type="button" onClick={() => removeMeal(index)} className="shrink-0 rounded p-1.5 text-lp-text-tertiary hover:bg-red-500/10 hover:text-red-500" title="Remove meal">
+              <X size={16} />
+            </button>
+          </div>
+        ))}
+        <button type="button" onClick={addMeal} className="flex items-center gap-2 rounded-lg border border-dashed border-lp-border px-3 py-2 text-sm font-medium text-lp-text-tertiary hover:bg-lp-surface-hover hover:text-lp-text">
+          <Plus size={16} />
+          Add meal
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Role input with free text + autocomplete from workspace contact_role options; saves new roles to API. */
+function RoleCombobox({
+  value,
+  onChange,
+  defaultRole,
+  className = '',
+}: {
+  value: string;
+  onChange: (v: string) => void;
+  defaultRole?: string;
+  className?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [panelZ, setPanelZ] = useState(1000);
+  const [roleOptions, setRoleOptions] = useState<string[]>([]);
+  const ref = useRef<HTMLDivElement>(null);
+  const displayValue = value || defaultRole || '';
+
+  useEffect(() => {
+    fetch('/api/advance/options?kind=contact_role')
+      .then((r) => (r.ok ? r.json() : { options: [] }))
+      .then((j) => setRoleOptions((j.options ?? []).map((o: { label: string }) => o.label)));
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => { if (ref.current?.contains(e.target as Node)) return; setOpen(false); };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [open]);
+
+  const saveNewRole = (label: string) => {
+    if (!label.trim() || roleOptions.includes(label.trim())) return;
+    fetch('/api/advance/options', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind: 'contact_role', label: label.trim() }),
+    })
+      .then((r) => r.ok ? r.json() : null)
+      .then((created) => { if (created?.label) setRoleOptions((prev) => [...prev, created.label]); });
+  };
+
+  const filtered = displayValue.trim()
+    ? roleOptions.filter((r) => r.toLowerCase().includes(displayValue.toLowerCase()))
+    : roleOptions;
+  const getZIndex = useContext(AdvanceDropdownZContext);
+  useEffect(() => {
+    if (open) setPanelZ(getZIndex());
+  }, [open, getZIndex]);
+
+  return (
+    <div className={cn('relative isolate', className)} ref={ref} style={{ zIndex: open ? panelZ : undefined }}>
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        onFocus={() => setOpen(true)}
+        onBlur={() => { if (value.trim() && !roleOptions.includes(value.trim())) saveNewRole(value.trim()); setTimeout(() => setOpen(false), 150); }}
+        placeholder={defaultRole ? `Role (e.g. ${defaultRole})` : 'Role'}
+        className="w-full rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:border-lp-orange focus:outline-none"
+      />
+      {open && (filtered.length > 0 || value.trim()) && (
+        <div className="absolute left-0 right-0 top-full mt-1 max-h-40 overflow-y-auto rounded-lg border border-lp-border bg-lp-surface py-1 shadow-lg" style={{ zIndex: panelZ }}>
+          {value.trim() && !roleOptions.includes(value.trim()) && (
+            <button
+              type="button"
+              onClick={() => { onChange(value.trim()); saveNewRole(value.trim()); setOpen(false); }}
+              className="w-full px-3 py-2 text-left text-sm text-lp-orange hover:bg-lp-surface-hover"
+            >
+              Use &quot;{value.trim()}&quot;
+            </button>
+          )}
+          {filtered.map((r) => (
+            <button key={r} type="button" onClick={() => { onChange(r); setOpen(false); }} className="w-full px-3 py-2 text-left text-sm text-lp-text hover:bg-lp-surface-hover">
+              {r}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function KeyContactRow({
   row,
   venueName,
   onUpdate,
   onRemove,
   contactRoles = [...CONTACT_ROLES],
+  defaultRole,
 }: {
   row: ContactRow;
   venueName: string | null;
   onUpdate: (patch: Partial<ContactRow>) => void;
   onRemove: () => void;
   contactRoles?: string[];
+  /** Pre-fill role when contact is in a section (e.g. "Hospitality" from "Hospitality Contact"). Editable. */
+  defaultRole?: string;
 }) {
   const [nameQuery, setNameQuery] = useState('');
   const [suggestions, setSuggestions] = useState<ContactRow[]>([]);
@@ -2983,7 +3745,7 @@ function KeyContactRow({
       return;
     }
     const t = setTimeout(() => {
-      fetch(`/api/contacts/search?q=${encodeURIComponent(nameQuery.trim())}`)
+      fetch(`/api/contacts/search?q=${encodeURIComponent(nameQuery)}`)
         .then((r) => r.ok ? r.json() : { contacts: [] })
         .then((j) => setSuggestions((j.contacts ?? []).slice(0, 8)))
         .catch(() => setSuggestions([]));
@@ -3055,7 +3817,7 @@ function KeyContactRow({
         <div className="relative flex-1 min-w-[180px]" ref={suggestRef}>
           <input
             type="text"
-            value={displayName || nameQuery}
+            value={nameQuery !== '' ? nameQuery : displayName}
             onChange={(e) => {
               const v = e.target.value;
               setNameQuery(v);
@@ -3097,8 +3859,12 @@ function KeyContactRow({
         </div>
         <input
           type="text"
+          inputMode="tel"
           value={row.phone ?? ''}
-          onChange={(e) => onUpdate({ phone: e.target.value })}
+          onChange={(e) => {
+            const v = e.target.value.replace(/[^\d\s+\-()]/g, '');
+            onUpdate({ phone: v });
+          }}
           placeholder="Phone"
           className="w-36 rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:border-lp-orange focus:outline-none"
         />
@@ -3109,23 +3875,13 @@ function KeyContactRow({
           placeholder="Email"
           className="flex-1 min-w-[140px] rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:border-lp-orange focus:outline-none"
         />
-        <div className="flex items-center gap-2 min-w-0 flex-1">
-          <RoleDropdown
-            value={row.role}
-            options={contactRoles}
-            placeholder={contactRoles.includes('Custom Contact') ? 'Custom Contact' : 'Role'}
+        <div className="flex items-center gap-2 min-w-0 flex-1 min-w-[140px]">
+          <RoleCombobox
+            value={row.role ?? ''}
             onChange={(v) => onUpdate({ role: v })}
-            className="min-w-[140px]"
+            defaultRole={defaultRole}
+            className="min-w-[140px] flex-1"
           />
-          {!contactRoles.includes(row.role) && row.role !== '' && (
-            <input
-              type="text"
-              value={row.role}
-              onChange={(e) => onUpdate({ role: e.target.value })}
-              placeholder="Custom role"
-              className="flex-1 min-w-[100px] rounded-lg border border-lp-border bg-lp-surface px-2 py-2 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:border-lp-orange focus:outline-none"
-            />
-          )}
         </div>
         <input
           type="text"
@@ -3174,9 +3930,14 @@ function StatusDropdown({
   onClick: (e: React.MouseEvent) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [panelZ, setPanelZ] = useState(1000);
   const ref = useRef<HTMLDivElement>(null);
+  const getZIndex = useContext(AdvanceDropdownZContext);
   const statusInfo = getAdvanceStatusInfo(sectionStatus);
 
+  useEffect(() => {
+    if (open) setPanelZ(getZIndex());
+  }, [open, getZIndex]);
   useEffect(() => {
     if (!open) return;
     const close = (e: MouseEvent) => {
@@ -3188,7 +3949,7 @@ function StatusDropdown({
   }, [open]);
 
   return (
-    <div className="relative" ref={ref} onClick={onClick}>
+    <div className="relative" ref={ref} onClick={onClick} style={{ zIndex: open ? panelZ : undefined }}>
       <button
         type="button"
         onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); }}
@@ -3203,7 +3964,7 @@ function StatusDropdown({
         <ChevronDown size={12} className="shrink-0 opacity-70" />
       </button>
       {open && (
-        <div className="absolute left-0 top-full z-[100] mt-1 min-w-[140px] rounded-xl border border-lp-border bg-lp-surface py-1 shadow-lg">
+        <div className="absolute left-0 top-full mt-1 min-w-[140px] rounded-xl border border-lp-border bg-lp-surface py-1 shadow-lg" style={{ zIndex: panelZ }}>
           {STATUS_OPTIONS.map((opt) => (
             <button
               key={opt.value}
@@ -3235,8 +3996,13 @@ function AssignDropdown({
   onClick: (e: React.MouseEvent) => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [panelZ, setPanelZ] = useState(1000);
   const ref = useRef<HTMLDivElement>(null);
+  const getZIndex = useContext(AdvanceDropdownZContext);
   const assigned = members.find((m) => m.id === assignedTo);
+  useEffect(() => {
+    if (open) setPanelZ(getZIndex());
+  }, [open, getZIndex]);
   useEffect(() => {
     if (!open) return;
     const close = (e: MouseEvent) => {
@@ -3248,7 +4014,7 @@ function AssignDropdown({
   }, [open]);
 
   return (
-    <div className="relative z-[100]" ref={ref} onClick={onClick}>
+    <div className="relative" ref={ref} onClick={onClick} style={{ zIndex: open ? panelZ : undefined }}>
       <button
         type="button"
         onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); }}
@@ -3271,7 +4037,7 @@ function AssignDropdown({
         )}
       </button>
       {open && (
-        <div className="absolute left-0 top-full z-[100] mt-1 min-w-[180px] max-h-[240px] overflow-y-auto rounded-xl border border-lp-border bg-lp-surface py-1 shadow-lg">
+        <div className="absolute left-0 top-full mt-1 min-w-[180px] max-h-[240px] overflow-y-auto rounded-xl border border-lp-border bg-lp-surface py-1 shadow-lg" style={{ zIndex: panelZ }}>
           {members.map((m) => (
             <button
               key={m.id}
@@ -3324,6 +4090,10 @@ function SectionCard({
   sectionContactRoles = [...DEFAULT_CONTACT_ROLES, 'Custom Contact'],
   assignedTo,
   workspaceMembers = [],
+  artistName = null,
+  tourId,
+  routingId,
+  onReplaceSectionData,
 }: {
   instanceId: string;
   section: SectionDef;
@@ -3348,8 +4118,18 @@ function SectionCard({
   sectionContactRoles?: string[];
   assignedTo?: string;
   workspaceMembers?: WorkspaceMember[];
+  artistName?: string | null;
+  tourId?: string;
+  routingId?: string;
+  onReplaceSectionData?: (templateId: string, data: Record<string, unknown>) => void;
 }) {
   const [flagDropdownOpen, setFlagDropdownOpen] = useState(false);
+  const [scheduleTemplates, setScheduleTemplates] = useState<{ id: string; name: string; scope: 'user' | 'tour'; items: Record<string, unknown> }[]>([]);
+  const [scheduleLoadOpen, setScheduleLoadOpen] = useState(false);
+  const [scheduleSaveOpen, setScheduleSaveOpen] = useState(false);
+  const [scheduleSaveName, setScheduleSaveName] = useState('');
+  const [scheduleSaveScope, setScheduleSaveScope] = useState<'user' | 'tour'>('user');
+  const scheduleLoadRef = useRef<HTMLDivElement>(null);
   const [flagTypeInput, setFlagTypeInput] = useState<'issue' | 'question' | 'blocker' | null>(null);
   const [flagMessage, setFlagMessage] = useState('');
   const [commentsOpen, setCommentsOpen] = useState(false);
@@ -3383,6 +4163,23 @@ function SectionCard({
     return () => document.removeEventListener('mousedown', close);
   }, [flagDropdownOpen]);
 
+  useEffect(() => {
+    if (section.label !== 'Schedule' || !tourId) return;
+    fetch(`/api/advance/schedule-templates?tourId=${encodeURIComponent(tourId)}`)
+      .then((r) => (r.ok ? r.json() : { templates: [] }))
+      .then((j) => setScheduleTemplates((j.templates ?? []).map((t: { id: string; name: string; scope: string; items?: Record<string, unknown> }) => ({ id: t.id, name: t.name, scope: t.scope === 'tour' ? 'tour' as const : 'user' as const, items: t.items ?? {} }))));
+  }, [section.label, tourId]);
+
+  useEffect(() => {
+    if (!scheduleLoadOpen) return;
+    const close = (e: MouseEvent) => {
+      if (scheduleLoadRef.current?.contains(e.target as Node)) return;
+      setScheduleLoadOpen(false);
+    };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [scheduleLoadOpen]);
+
   const addFlag = (type: 'issue' | 'question' | 'blocker') => {
     if (!currentUserId || !flagMessage.trim()) return;
     const next: AdvanceFlag = {
@@ -3413,7 +4210,7 @@ function SectionCard({
 
   return (
     <>
-    <div className="rounded-xl border border-lp-border bg-lp-surface overflow-hidden card-hover">
+    <div className="rounded-xl border border-lp-border bg-lp-surface overflow-visible card-hover">
       <div
         role="button"
         tabIndex={0}
@@ -3423,8 +4220,13 @@ function SectionCard({
       >
         <SectionIcon />
         <span className="flex-1 font-medium text-lp-text">{section.label}</span>
+        {section.tm_only && (
+          <span className="shrink-0 text-lp-text-tertiary" title="TM view only">
+            <Lock className="h-4 w-4" />
+          </span>
+        )}
         {sectionFlags.length > 0 && (
-          <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-center gap-1.5" onClick={(e) => { e.stopPropagation(); if (!expanded) onToggle(); }}>
             {sectionFlags.map((f) => (
               <button
                 key={f.id}
@@ -3438,10 +4240,10 @@ function SectionCard({
             ))}
           </div>
         )}
-        <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
-          <ContextMenu items={menuItems} align="right" />
+        <div className="shrink-0" onClick={(e) => { e.stopPropagation(); if (!expanded) onToggle(); }}>
+          <ContextMenu items={menuItems} align="right" onBeforeOpen={() => { if (!expanded) onToggle(); }} />
         </div>
-        <div className="relative z-[100]" ref={flagDropdownRef} onClick={(e) => e.stopPropagation()}>
+        <div className="relative z-[200]" ref={flagDropdownRef} onClick={(e) => { e.stopPropagation(); if (!expanded) onToggle(); }}>
           <button
             type="button"
             onClick={(e) => { e.stopPropagation(); setFlagDropdownOpen((o) => !o); }}
@@ -3451,7 +4253,7 @@ function SectionCard({
             <ChevronDown size={14} className={cn('transition-transform', flagDropdownOpen && 'rotate-180')} />
           </button>
           {flagDropdownOpen && (
-            <div className="absolute right-0 top-full z-[100] mt-1 w-56 rounded-xl border border-lp-border bg-lp-surface py-2 shadow-lg">
+            <div className="absolute right-0 top-full z-[200] mt-1 w-56 rounded-xl border border-lp-border bg-lp-surface py-2 shadow-lg">
               {!flagTypeInput ? (
                 <>
                   <button type="button" onClick={() => setFlagTypeInput('issue')} className="flex w-full items-center gap-2 px-4 py-2 text-left text-sm text-amber-600 dark:text-amber-400 hover:bg-amber-500/10">
@@ -3489,14 +4291,14 @@ function SectionCard({
         <StatusDropdown
           sectionStatus={sectionStatus}
           onSelectStatus={onSetSectionStatus}
-          onClick={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); if (!expanded) onToggle(); }}
         />
         {onSetSectionAssigned && workspaceMembers.length > 0 ? (
           <AssignDropdown
             assignedTo={assignedTo}
             members={workspaceMembers}
             onSelect={onSetSectionAssigned}
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) => { e.stopPropagation(); if (!expanded) onToggle(); }}
           />
         ) : assignedTo ? (
           <span className="text-sm text-lp-text-tertiary truncate max-w-[120px]">{workspaceMembers.find((m) => m.id === assignedTo)?.name ?? 'Assigned'}</span>
@@ -3508,20 +4310,166 @@ function SectionCard({
       <div className={cn('grid transition-[grid-template-rows] duration-200 ease-out', expanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')}>
         <div className="min-h-0 overflow-hidden">
           <div className={cn('border-t border-lp-border px-4 py-4 space-y-4 transition-opacity duration-200', expanded ? 'opacity-100 delay-50' : 'opacity-0 delay-0')}>
-            {(section.fields ?? []).map((field) => (
-              <FieldRenderer
-                key={field.id}
-                field={field}
-                value={data[field.id]}
-                currency={currency}
-                onChange={(v) => onFieldChange(field.id, v)}
-                onAuxChange={(auxId, v) => onFieldChange(auxId, v)}
-                venueLat={venueLat}
-                venueLng={venueLng}
-                searchableLocalType={searchableLocalType(field.id)}
-                instanceId={instanceId}
-              />
-            ))}
+            {section.label === 'Schedule' && tourId && (
+              <div className="flex flex-wrap items-center gap-2 pb-2 border-b border-lp-border">
+                <div className="relative" ref={scheduleLoadRef}>
+                  <button
+                    type="button"
+                    onClick={() => setScheduleLoadOpen((o) => !o)}
+                    className="flex items-center gap-2 rounded-lg border border-lp-border px-3 py-2 text-sm text-lp-text hover:bg-lp-surface-hover"
+                  >
+                    Load template
+                    <ChevronDown size={14} className={cn('transition-transform', scheduleLoadOpen && 'rotate-180')} />
+                  </button>
+                  {scheduleLoadOpen && (
+                    <ul className="absolute left-0 top-full z-[200] mt-1 min-w-[200px] max-h-56 overflow-y-auto rounded-xl border border-lp-border bg-lp-surface py-1 shadow-lg">
+                      {scheduleTemplates.length === 0 ? (
+                        <li className="px-3 py-2 text-sm text-lp-text-tertiary">No templates saved</li>
+                      ) : (
+                        scheduleTemplates.map((t) => (
+                          <li key={t.id}>
+                            <button
+                              type="button"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => {
+                                onReplaceSectionData?.(section.template_id, t.items);
+                                setScheduleLoadOpen(false);
+                              }}
+                              className="w-full px-3 py-2 text-left text-sm text-lp-text hover:bg-lp-surface-hover flex items-center justify-between gap-2"
+                            >
+                              <span className="truncate">{t.name}</span>
+                              <span className="shrink-0 text-xs text-lp-text-tertiary">{t.scope === 'tour' ? 'This tour' : 'All tours'}</span>
+                            </button>
+                          </li>
+                        ))
+                      )}
+                    </ul>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setScheduleSaveOpen(true); setScheduleSaveName(''); setScheduleSaveScope('user'); }}
+                  className="flex items-center gap-2 rounded-lg border border-lp-border px-3 py-2 text-sm text-lp-text hover:bg-lp-surface-hover"
+                >
+                  <LayoutTemplate size={14} />
+                  Save as template
+                </button>
+              </div>
+            )}
+            {section.label === 'Deal Info' && (
+              <div className="flex flex-wrap items-center gap-2 pb-2 border-b border-lp-border">
+                <DealInfoUploadBlock onFieldChange={(fieldId, value) => onFieldChange(fieldId, value)} />
+              </div>
+            )}
+            {scheduleSaveOpen && section.label === 'Schedule' && (
+              <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/60 p-4" onClick={() => setScheduleSaveOpen(false)}>
+                <div className="w-full max-w-sm rounded-xl border border-lp-border bg-lp-surface p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
+                  <h3 className="text-lg font-semibold text-lp-text">Save schedule as template</h3>
+                  <input
+                    type="text"
+                    value={scheduleSaveName}
+                    onChange={(e) => setScheduleSaveName(e.target.value)}
+                    placeholder="Template name"
+                    className="mt-4 w-full rounded-xl border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:border-lp-orange focus:outline-none"
+                  />
+                  <div className="mt-3 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setScheduleSaveScope('user')}
+                      className={cn('flex-1 rounded-lg border px-3 py-2 text-sm font-medium', scheduleSaveScope === 'user' ? 'border-lp-orange bg-lp-orange/10 text-lp-orange' : 'border-lp-border text-lp-text hover:bg-lp-surface-hover')}
+                    >
+                      All tours
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setScheduleSaveScope('tour')}
+                      className={cn('flex-1 rounded-lg border px-3 py-2 text-sm font-medium', scheduleSaveScope === 'tour' ? 'border-lp-orange bg-lp-orange/10 text-lp-orange' : 'border-lp-border text-lp-text hover:bg-lp-surface-hover')}
+                    >
+                      This tour only
+                    </button>
+                  </div>
+                  <div className="mt-4 flex justify-end gap-2">
+                    <button type="button" onClick={() => setScheduleSaveOpen(false)} className="rounded-xl border border-lp-border px-4 py-2 text-sm text-lp-text hover:bg-lp-surface-hover">Cancel</button>
+                    <button
+                      type="button"
+                      disabled={!scheduleSaveName.trim()}
+                      onClick={async () => {
+                        if (!scheduleSaveName.trim()) return;
+                        const res = await fetch('/api/advance/schedule-templates', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            name: scheduleSaveName.trim(),
+                            scope: scheduleSaveScope,
+                            tourId: scheduleSaveScope === 'tour' ? tourId : undefined,
+                            sectionTemplateId: section.template_id,
+                            items: data,
+                          }),
+                        });
+                        if (res.ok) {
+                          const j = await res.json();
+                          setScheduleTemplates((prev) => [...prev, { id: j.id, name: j.name, scope: j.scope, items: j.items ?? {} }]);
+                          setScheduleSaveOpen(false);
+                        }
+                      }}
+                      className="rounded-xl bg-lp-orange px-4 py-2 text-sm font-medium text-white hover:bg-lp-orange-hover disabled:opacity-50"
+                    >
+                      Save
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+            {(section.label === 'Hospitality' ? sortHospitalityFieldsFirst(section.fields ?? []) : sortFieldsContactsFirst(section.fields ?? [])).map((field) =>
+              section.label === 'Hospitality' && field.id === 'meal_times' ? (
+                <MealTimesBlock
+                  key={field.id}
+                  value={data[field.id]}
+                  onChange={(meals) => onFieldChange(field.id, meals)}
+                />
+              ) : section.label === 'Transport' && field.id === 'drive_distance' ? (
+                <div key={field.id}>
+                  <label className="mb-1 block text-sm font-medium text-lp-text">Drive Distance</label>
+                  <input
+                    type="text"
+                    value={(data.drive_distance as string) ?? ''}
+                    onChange={(e) => {
+                      onFieldChange('drive_distance', e.target.value);
+                      onFieldChange('drive_distance_source', 'custom');
+                    }}
+                    placeholder="e.g. 245 miles / 4h 15m"
+                    className="w-full rounded-xl border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:border-lp-orange focus:outline-none focus:ring-2 focus:ring-lp-orange/20"
+                  />
+                  <p className="mt-1 text-xs text-lp-text-tertiary">
+                    {data.drive_distance_source === 'routing' ? 'From routing' : 'Custom'}
+                  </p>
+                </div>
+              ) : (
+                <FieldRenderer
+                  key={field.id}
+                  field={field}
+                  value={data[field.id]}
+                  currency={currency}
+                  onChange={(v) => onFieldChange(field.id, v)}
+                  onAuxChange={(auxId, v) => onFieldChange(auxId, v)}
+                  venueLat={venueLat}
+                  venueLng={venueLng}
+                  searchableLocalType={searchableLocalType(field.id)}
+                  instanceId={instanceId}
+                  overrideLabel={
+                    section.label === 'Hospitality' && field.id === 'rider_status'
+                      ? 'Hospitality Rider Status'
+                      : section.label === 'Schedule' && field.id === 'headliner_soundcheck' && artistName
+                        ? `${artistName} Soundcheck`
+                        : section.label === 'Schedule' && field.id === 'headliner_set' && artistName
+                          ? `${artistName} Set`
+                          : undefined
+                  }
+                  labelIcon={section.label === 'Schedule' && field.id === 'changeover' ? <Clock size={18} className="text-lp-text-tertiary shrink-0" /> : undefined}
+                  hideRequiredIndicator={section.label === 'Schedule' || (section.label === 'Production' && field.id === 'production_contact')}
+                />
+              )
+            )}
             {section.label === 'Merch' && (data['merch_table_provided'] === true || data['merch_table_provided'] === 'Yes') && (
               <div>
                 <label className="mb-1 block text-sm font-medium text-lp-text">Table/Display Details</label>
@@ -3549,11 +4497,12 @@ function SectionCard({
                       }}
                       onRemove={() => onSectionContactsChange(sectionContacts.filter((_, i) => i !== index))}
                       contactRoles={sectionContactRoles}
+                      defaultRole={section.label.replace(/\s+Contact$/i, '') || section.label}
                     />
                   ))}
                   <button
                     type="button"
-                    onClick={() => onSectionContactsChange([...sectionContacts, { first_name: '', last_name: '', role: '', phone: '', email: '', venue_name: venueName ?? undefined, notes: '' }])}
+                    onClick={() => onSectionContactsChange([...sectionContacts, { first_name: '', last_name: '', role: section.label.replace(/\s+Contact$/i, '') || section.label, phone: '', email: '', venue_name: venueName ?? undefined, notes: '' }])}
                     className="flex items-center gap-2 rounded-lg border border-dashed border-lp-border px-4 py-2.5 text-sm font-medium text-lp-text-tertiary hover:bg-lp-surface-hover hover:text-lp-text"
                   >
                     <Plus size={16} />
@@ -3740,13 +4689,19 @@ function LocalSearchableField({
   onAuxChange?: (fieldId: string, value: unknown) => void;
 }) {
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [badgePopoverOpen, setBadgePopoverOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState<Array<{ name: string; address: string; mapsUri?: string; distance?: number }>>([]);
+  const [autoFilledFromGoogle, setAutoFilledFromGoogle] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  const selectingRef = useRef(false);
 
   useEffect(() => {
     const close = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) setDropdownOpen(false);
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false);
+        setBadgePopoverOpen(false);
+      }
     };
     document.addEventListener('mousedown', close);
     return () => document.removeEventListener('mousedown', close);
@@ -3755,11 +4710,23 @@ function LocalSearchableField({
   const runSearch = () => {
     setLoading(true);
     setDropdownOpen(false);
+    setBadgePopoverOpen(false);
     fetch(`/api/places/nearby?lat=${encodeURIComponent(venueLat)}&lng=${encodeURIComponent(venueLng)}&type=${encodeURIComponent(searchType)}`)
       .then((r) => r.json())
       .then((data) => {
-        setResults(data.results ?? []);
-        setDropdownOpen(true);
+        const list = data.results ?? [];
+        setResults(list);
+        if (list.length > 0) {
+          const first = list[0];
+          const display = first.address ? `${first.name} — ${first.address}` : first.name;
+          selectingRef.current = true;
+          onChange(display);
+          if (onAuxChange && first.mapsUri) onAuxChange(field.id + '_maps_uri', first.mapsUri);
+          setAutoFilledFromGoogle(true);
+          setDropdownOpen(false);
+        } else {
+          setDropdownOpen(true);
+        }
       })
       .catch(() => setResults([]))
       .finally(() => setLoading(false));
@@ -3767,36 +4734,82 @@ function LocalSearchableField({
 
   const selectResult = (name: string, address: string, mapsUri?: string) => {
     const display = address ? `${name} — ${address}` : name;
+    selectingRef.current = true;
     onChange(display);
     if (onAuxChange && mapsUri) onAuxChange(field.id + '_maps_uri', mapsUri);
     setDropdownOpen(false);
+    setBadgePopoverOpen(false);
+  };
+
+  const handleInputChange = (v: string) => {
+    setAutoFilledFromGoogle(false);
+    onChange(v);
+  };
+
+  const handleBlur = (e: React.FocusEvent<HTMLInputElement>) => {
+    if (selectingRef.current) {
+      selectingRef.current = false;
+      return;
+    }
+    onChange(e.target.value);
   };
 
   return (
     <div ref={containerRef} className="relative">
       {label}
-      <div className="relative">
-        <input
-          type="text"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          onBlur={(e) => onChange(e.target.value)}
-          placeholder={field.placeholder as string}
-          className={cn(inputClass, 'pr-10')}
-        />
-        <button
-          type="button"
-          onClick={runSearch}
-          disabled={loading}
-          className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-lp-text-tertiary hover:bg-lp-surface-hover hover:text-lp-text disabled:opacity-50"
-          title="Search nearby"
-          aria-label="Search nearby"
-        >
-          {loading ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
-        </button>
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="relative flex-1 min-w-[200px]">
+          <input
+            type="text"
+            value={value}
+            onChange={(e) => handleInputChange(e.target.value)}
+            onBlur={handleBlur}
+            placeholder={field.placeholder as string}
+            className={cn(inputClass, 'pr-10')}
+          />
+          <button
+            type="button"
+            onClick={runSearch}
+            disabled={loading}
+            className="absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-lp-text-tertiary hover:bg-lp-surface-hover hover:text-lp-text disabled:opacity-50"
+            title="Search nearby"
+            aria-label="Search nearby"
+          >
+            {loading ? <Loader2 size={16} className="animate-spin" /> : <Search size={16} />}
+          </button>
+        </div>
+        {autoFilledFromGoogle && results.length > 0 && (
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setBadgePopoverOpen((o) => !o)}
+              className="rounded-md border border-lp-border bg-lp-bg-secondary px-2 py-1 text-xs font-medium text-lp-text-tertiary hover:bg-lp-surface-hover hover:text-lp-text"
+            >
+              Auto-filled from Google
+            </button>
+            {badgePopoverOpen && (
+              <ul className="absolute left-0 top-full z-[300] mt-1 min-w-[220px] max-h-52 overflow-y-auto rounded-xl border border-lp-border bg-lp-surface py-1 shadow-lg">
+                {results.map((r, i) => (
+                  <li key={i}>
+                    <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => selectResult(r.name, r.address, r.mapsUri)}
+                      className="w-full px-3 py-2 text-left text-sm text-lp-text hover:bg-lp-surface-hover"
+                    >
+                      <span className="block font-medium">{r.name}</span>
+                      {r.address && <span className="block truncate text-xs text-lp-text-secondary">{r.address}</span>}
+                      {r.distance != null && <span className="block text-xs text-lp-text-tertiary">{formatDistance(r.distance)}</span>}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
       </div>
       {dropdownOpen && results.length > 0 && (
-        <ul className="absolute left-0 right-0 top-full z-20 mt-1 max-h-52 overflow-y-auto rounded-xl border border-lp-border bg-lp-surface py-1 shadow-lg">
+        <ul className="absolute left-0 right-0 top-full z-[300] mt-1 max-h-52 overflow-y-auto rounded-xl border border-lp-border bg-lp-surface py-1 shadow-lg">
           {results.map((r, i) => (
             <li key={i}>
               <button
@@ -3944,6 +4957,9 @@ function FieldRenderer({
   venueLng,
   searchableLocalType,
   instanceId,
+  overrideLabel,
+  labelIcon,
+  hideRequiredIndicator,
 }: {
   field: FieldDef;
   value: unknown;
@@ -3954,6 +4970,11 @@ function FieldRenderer({
   venueLng?: number;
   searchableLocalType?: 'hospital' | 'pharmacy' | 'laundromat' | 'gym' | null;
   instanceId?: string;
+  overrideLabel?: string;
+  /** When set (e.g. Schedule changeover), show icon instead of text label. */
+  labelIcon?: React.ReactNode;
+  /** When true (e.g. Schedule section), do not show required asterisk. */
+  hideRequiredIndicator?: boolean;
 }) {
   const required = field.required ?? false;
   const strVal = value != null ? String(value) : '';
@@ -3963,10 +4984,11 @@ function FieldRenderer({
     hasError ? 'border-red-500/50 focus:border-red-500' : 'border-lp-border focus:border-lp-orange'
   );
 
+  const displayLabel = overrideLabel ?? field.label;
   const label = (
-    <label className="mb-1 block text-sm font-medium text-lp-text">
-      {field.label}
-      {required && <span className="text-red-500"> *</span>}
+    <label className="mb-1 flex items-center gap-2 text-sm font-medium text-lp-text" aria-label={typeof displayLabel === 'string' ? displayLabel : field.label}>
+      {labelIcon ?? displayLabel}
+      {!hideRequiredIndicator && required && <span className="text-red-500"> *</span>}
     </label>
   );
 
@@ -4016,16 +5038,27 @@ function FieldRenderer({
       );
     case 'select': {
       const options = (field.options ?? []) as string[];
+      const useAddable = field.id === 'catering_buyout' || field.id === 'rider_status';
       return (
         <div>
           {label}
-          <SelectDropdown
-            value={strVal}
-            options={options}
-            placeholder="Select..."
-            onChange={(v) => onChange(v)}
-            className="w-full"
-          />
+          {useAddable ? (
+            <AddableSelectDropdown
+              kind={field.id}
+              value={strVal}
+              defaultOptions={options}
+              onChange={(v) => onChange(v)}
+              className="w-full"
+            />
+          ) : (
+            <SelectDropdown
+              value={strVal}
+              options={options}
+              placeholder="Select..."
+              onChange={(v) => onChange(v)}
+              className="w-full"
+            />
+          )}
         </div>
       );
     }
@@ -4106,7 +5139,7 @@ function FieldRenderer({
             <div className="relative z-[100]">
               <RoleDropdown value={role} options={[...DEFAULT_CONTACT_ROLES, 'Custom Contact']} placeholder="Role" onChange={(v) => onChange({ ...obj, role: v })} />
             </div>
-            <input type="tel" placeholder="Phone" value={phone} onChange={(e) => onChange({ ...obj, phone: e.target.value })} onBlur={(e) => onChange({ ...obj, phone: e.target.value })} className={inputClass} />
+            <input type="tel" placeholder="Phone" value={phone} onChange={(e) => { const v = e.target.value.replace(/[^0-9+\-() ]/g, ''); onChange({ ...obj, phone: v }); }} onBlur={(e) => { const v = e.target.value.replace(/[^0-9+\-() ]/g, ''); onChange({ ...obj, phone: v }); }} className={inputClass} />
             <input type="email" placeholder="Email" value={email} onChange={(e) => onChange({ ...obj, email: e.target.value })} onBlur={(e) => onChange({ ...obj, email: e.target.value })} className={inputClass} />
             <input type="text" placeholder="Venue name" value={venue_name} onChange={(e) => onChange({ ...obj, venue_name: e.target.value })} onBlur={(e) => onChange({ ...obj, venue_name: e.target.value })} className={inputClass} />
           </div>

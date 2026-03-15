@@ -1,7 +1,7 @@
 /* ============================================
    LOWPASS — Profile Page
 
-   Edit profile: avatar, name, job title, contact.
+   Edit profile: avatar, name, job title, contact, passport (optional), day/per diem rates.
    ============================================ */
 
 'use client';
@@ -18,6 +18,9 @@ type Profile = {
   avatar_url: string | null;
   job_title: string | null;
   phone: string | null;
+  has_passport?: boolean;
+  day_rate: number | null;
+  per_diem_rate: number | null;
 };
 
 export default function ProfilePage() {
@@ -31,6 +34,11 @@ export default function ProfilePage() {
   const [name, setName] = useState('');
   const [jobTitle, setJobTitle] = useState('');
   const [phone, setPhone] = useState('');
+  const [passport, setPassport] = useState('');
+  const [passportClear, setPassportClear] = useState(false);
+  const [passportEditing, setPassportEditing] = useState(false);
+  const [dayRate, setDayRate] = useState<string | number>('');
+  const [perDiemRate, setPerDiemRate] = useState<string | number>('');
 
   useEffect(() => {
     fetch('/api/profile')
@@ -40,6 +48,8 @@ export default function ProfilePage() {
         setName(data.name ?? '');
         setJobTitle(data.job_title ?? '');
         setPhone(data.phone ?? '');
+        setDayRate(data.day_rate ?? '');
+        setPerDiemRate(data.per_diem_rate ?? '');
       })
       .catch(() => showToast('Could not load profile', 'error'))
       .finally(() => setLoading(false));
@@ -47,14 +57,26 @@ export default function ProfilePage() {
 
   const handleSave = () => {
     setSaving(true);
+    const body: Record<string, unknown> = {
+      name,
+      job_title: jobTitle || null,
+      phone: phone || null,
+      day_rate: dayRate === '' ? null : Number(dayRate),
+      per_diem_rate: perDiemRate === '' ? null : Number(perDiemRate),
+    };
+    if (passportClear) body.passport_encrypted = null;
+    else if (passport.trim()) body.passport_encrypted = passport.trim();
     fetch('/api/profile', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ name, job_title: jobTitle || null, phone: phone || null }),
+      body: JSON.stringify(body),
     })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error('Save failed'))))
       .then((data) => {
         setProfile((p) => (p ? { ...p, ...data } : p));
+        setPassport('');
+        setPassportClear(false);
+        setPassportEditing(false);
         showToast('Profile saved');
       })
       .catch(() => showToast('Failed to save profile', 'error'))
@@ -70,16 +92,8 @@ export default function ProfilePage() {
     fetch('/api/profile/avatar', { method: 'POST', body: formData })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error('Upload failed'))))
       .then((data) => {
-        const url = data.url as string;
-        return fetch('/api/profile', {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ avatar_url: url }),
-        });
-      })
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('Update failed'))))
-      .then((data) => {
-        setProfile((p) => (p ? { ...p, avatar_url: data.avatar_url } : p));
+        const url = (data.avatar_url ?? data.url) as string;
+        setProfile((p) => (p ? { ...p, avatar_url: url } : p));
         showToast('Photo updated');
       })
       .catch(() => showToast('Failed to update photo', 'error'))
@@ -126,7 +140,7 @@ export default function ProfilePage() {
       <div>
         <h1 className="text-2xl font-bold text-lp-text">Profile</h1>
         <p className="mt-1 text-sm text-lp-text-secondary">
-          Update your photo, name, job title, and contact details.
+          Update your photo, name, job title, contact details, and rates.
         </p>
       </div>
 
@@ -166,9 +180,7 @@ export default function ProfilePage() {
         </div>
 
         <div>
-          <label htmlFor="profile-name" className="block text-sm font-medium text-lp-text mb-1.5">
-            Name
-          </label>
+          <label htmlFor="profile-name" className="block text-sm font-medium text-lp-text mb-1.5">Name</label>
           <input
             id="profile-name"
             type="text"
@@ -179,9 +191,7 @@ export default function ProfilePage() {
           />
         </div>
         <div>
-          <label htmlFor="profile-email" className="block text-sm font-medium text-lp-text mb-1.5">
-            Email
-          </label>
+          <label htmlFor="profile-email" className="block text-sm font-medium text-lp-text mb-1.5">Email</label>
           <input
             id="profile-email"
             type="text"
@@ -192,9 +202,7 @@ export default function ProfilePage() {
           <p className="text-xs text-lp-text-tertiary mt-1">Email is managed by your sign-in provider.</p>
         </div>
         <div>
-          <label htmlFor="profile-job" className="block text-sm font-medium text-lp-text mb-1.5">
-            Job title
-          </label>
+          <label htmlFor="profile-job" className="block text-sm font-medium text-lp-text mb-1.5">Job title</label>
           <input
             id="profile-job"
             type="text"
@@ -205,9 +213,7 @@ export default function ProfilePage() {
           />
         </div>
         <div>
-          <label htmlFor="profile-phone" className="block text-sm font-medium text-lp-text mb-1.5">
-            Phone
-          </label>
+          <label htmlFor="profile-phone" className="block text-sm font-medium text-lp-text mb-1.5">Phone</label>
           <input
             id="profile-phone"
             type="tel"
@@ -217,6 +223,55 @@ export default function ProfilePage() {
             placeholder="+44 …"
           />
         </div>
+
+        <div>
+          <label className="block text-sm font-medium text-lp-text mb-1.5">Passport number (optional)</label>
+          {profile.has_passport && !passportClear && !passportEditing ? (
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-sm text-lp-text-tertiary">••••••••</span>
+              <button type="button" onClick={() => setPassportClear(true)} className="text-xs text-lp-orange hover:underline">Clear</button>
+              <span className="text-lp-text-tertiary">or</span>
+              <button type="button" onClick={() => { setPassport(''); setPassportEditing(true); }} className="text-xs text-lp-orange hover:underline">Change</button>
+            </div>
+          ) : (
+            <input
+              type="password"
+              value={passport}
+              onChange={(e) => { setPassport(e.target.value); setPassportClear(false); }}
+              placeholder="Optional – stored encrypted"
+              className="w-full rounded-lg border border-lp-border bg-lp-bg px-3 py-2.5 text-sm text-lp-text focus:outline-none focus:ring-2 focus:ring-lp-orange/50"
+              autoComplete="off"
+            />
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-lp-text mb-1.5">Day rate</label>
+            <input
+              type="number"
+              min={0}
+              step={0.01}
+              value={dayRate}
+              onChange={(e) => setDayRate(e.target.value)}
+              placeholder="0.00"
+              className="w-full rounded-lg border border-lp-border bg-lp-bg px-3 py-2.5 text-sm text-lp-text focus:outline-none focus:ring-2 focus:ring-lp-orange/50"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-lp-text mb-1.5">Per diem rate</label>
+            <input
+              type="number"
+              min={0}
+              step={0.01}
+              value={perDiemRate}
+              onChange={(e) => setPerDiemRate(e.target.value)}
+              placeholder="0.00"
+              className="w-full rounded-lg border border-lp-border bg-lp-bg px-3 py-2.5 text-sm text-lp-text focus:outline-none focus:ring-2 focus:ring-lp-orange/50"
+            />
+          </div>
+        </div>
+
         <div className="pt-2">
           <button
             type="button"

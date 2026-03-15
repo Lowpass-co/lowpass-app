@@ -16,7 +16,7 @@ import {
   DollarSign, Bed, Music, Users, Building2, Settings, Bug,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
-import { cn } from '@/lib/utils';
+import { cn, toTitleCase } from '@/lib/utils';
 
 interface NavItem {
   label: string;
@@ -88,6 +88,7 @@ export function Sidebar() {
   const [profile, setProfile] = useState<{ name: string; email?: string; avatar_url?: string | null; job_title?: string | null } | null>(null);
   const { user, signOut } = useAuth();
   const lastDisplay = useRef({ name: '', email: '' });
+  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (user?.email) {
@@ -99,20 +100,31 @@ export function Sidebar() {
   }, [user]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user?.id) return;
     fetch('/api/profile')
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => data && setProfile({ name: data.name, email: data.email, avatar_url: data.avatar_url, job_title: data.job_title }))
       .catch(() => {});
   }, [user?.id]);
 
-  const displayName = profile?.name ?? user?.user_metadata?.name ?? user?.email ?? lastDisplay.current.name;
+  const rawName = profile?.name ?? user?.user_metadata?.name ?? user?.email ?? lastDisplay.current.name;
+  const displayName = toTitleCase(rawName) || (user?.email ?? lastDisplay.current.email).split('@')[0] || '…';
   const displayEmail = profile?.email ?? user?.email ?? lastDisplay.current.email;
   const avatarUrl = profile?.avatar_url ?? null;
   const jobTitle = profile?.job_title ?? null;
-  const initials = displayName
-    ? displayName.split(' ').map((w: string) => w[0]).slice(0, 2).join('').toUpperCase()
+  const initials = displayName && displayName !== '…'
+    ? displayName.split(/\s+/).map((w: string) => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase()
     : (displayEmail?.charAt(0).toUpperCase() ?? '?');
+
+  useEffect(() => {
+    if (!userMenuOpen) return;
+    const close = (e: MouseEvent) => {
+      if (menuRef.current?.contains(e.target as Node)) return;
+      setUserMenuOpen(false);
+    };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [userMenuOpen]);
 
   return (
     <aside
@@ -268,9 +280,10 @@ export function Sidebar() {
           ))}
         </nav>
 
-        {/* Footer — avatar + name (link to profile) */}
+        {/* Footer — avatar + name (link to profile), Account menu with Log out */}
         <div
-          className="border-t px-4 py-4"
+          className="border-t px-4 py-4 relative"
+          ref={menuRef}
           style={{
             borderTopColor: 'var(--lp-sidebar-border)',
             backgroundColor: 'var(--lp-sidebar-bg)',
@@ -279,7 +292,7 @@ export function Sidebar() {
           <Link
             href="/profile"
             className={cn(
-              'flex w-full items-center gap-3 text-left transition-colors',
+              'flex w-full items-center gap-3 text-left transition-colors rounded-md py-1 -my-1',
               collapsed && 'justify-center'
             )}
           >
@@ -299,7 +312,7 @@ export function Sidebar() {
                   className="truncate text-[13px] font-semibold leading-tight"
                   style={{ color: 'var(--lp-sidebar-text-heading)' }}
                 >
-                  {displayName || '…'}
+                  {displayName}
                 </p>
                 {displayEmail && (
                   <p
@@ -338,7 +351,6 @@ export function Sidebar() {
             />
           </button>
 
-          {/* Logout — animated expand */}
           <div
             className={cn(
               'grid transition-[grid-template-rows] duration-200 ease-out',

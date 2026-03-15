@@ -7,6 +7,7 @@
 
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { distanceMiles } from '@/lib/utils';
 
 async function ensureAuth() {
   const supabase = await createServerSupabaseClient();
@@ -18,7 +19,7 @@ async function ensureAuth() {
 async function ensureTourAccess(supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>, tourId: string) {
   const { data: tour } = await supabase
     .from('tours')
-    .select('id, currency, default_advance_template_id, principal_count, band_count, crew_count')
+    .select('id, currency, default_advance_template_id, principal_count, band_count, crew_count, artist_id')
     .eq('id', tourId)
     .single();
   return tour ?? null;
@@ -73,7 +74,7 @@ export async function GET(
     status: string;
     section_statuses: Record<string, { status: string; assigned_to?: string }>;
     data: Record<string, Record<string, unknown>>;
-    sections: { template_id: string; label: string; fields: unknown[]; order: number }[];
+    sections: { template_id: string; label: string; fields: unknown[]; order: number; tm_only?: boolean }[];
     flags: AdvanceFlagItem[];
     last_updated_at?: string | null;
     last_updated_by_id?: string | null;
@@ -125,6 +126,64 @@ export async function GET(
         },
       };
     }
+
+    // Pre-fill Transport drive_distance from previous routing leg (if not already set)
+    const transportSection = advance.sections.find((sec) =>
+      (sec.fields as { id?: string }[]).some((f) => f.id === 'drive_distance')
+    );
+    if (transportSection && routing) {
+      const tid = transportSection.template_id;
+      const current = advance.data[tid] ?? {};
+      const existingDrive = current.drive_distance;
+      const existingSource = current.drive_distance_source;
+      if (existingDrive === undefined || existingDrive === null || existingDrive === '') {
+        const r = routing as { date?: string; latitude?: number | null; longitude?: number | null };
+        const lat = r.latitude ?? null;
+        const lng = r.longitude ?? null;
+        if (lat != null && lng != null) {
+          const { data: prevRow } = await supabase
+            .from('routing')
+            .select('date, latitude, longitude')
+            .eq('tour_id', tourId)
+            .lt('date', r.date ?? '')
+            .order('date', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          const prev = prevRow as { latitude?: number | null; longitude?: number | null } | null;
+          if (prev?.latitude != null && prev?.longitude != null) {
+            const miles = Math.round(distanceMiles(prev.latitude, prev.longitude, lat, lng));
+            const hours = miles / 50;
+            const hoursStr = hours >= 1 ? `${Math.floor(hours)}h ${Math.round((hours % 1) * 60)}m` : `${Math.round(hours * 60)}m`;
+            const driveLabel = `${miles} mi / ${hoursStr}`;
+            advance.data = {
+              ...advance.data,
+              [tid]: {
+                ...current,
+                drive_distance: driveLabel,
+                drive_distance_source: 'routing',
+              },
+            };
+          }
+        }
+      }
+    }
+
+    // Enrich sections with tm_only from advance_templates (for Deal Info etc.)
+    const templateIds = [...new Set(advance.sections.map((s) => s.template_id).filter(Boolean))];
+    if (templateIds.length > 0) {
+      const { data: tmRows } = await supabase
+        .from('advance_templates')
+        .select('id, tm_only')
+        .in('id', templateIds);
+      const tmOnlyByTemplate = new Map<string, boolean>();
+      (tmRows ?? []).forEach((r: { id: string; tm_only?: boolean }) => {
+        tmOnlyByTemplate.set(r.id, r.tm_only === true);
+      });
+      advance.sections = advance.sections.map((sec) => ({
+        ...sec,
+        tm_only: tmOnlyByTemplate.get(sec.template_id) ?? false,
+      }));
+    }
   }
 
   const routingPayload = {
@@ -141,6 +200,13 @@ export async function GET(
     longitude: (routing as { longitude?: number | null }).longitude,
   };
 
+  let artist_name: string | null = null;
+  const artistId = (tour as { artist_id?: string })?.artist_id;
+  if (artistId) {
+    const { data: artist } = await supabase.from('artists').select('name').eq('id', artistId).single();
+    artist_name = (artist as { name?: string })?.name ?? null;
+  }
+
   return NextResponse.json({
     routing: routingPayload,
     tour: {
@@ -149,6 +215,7 @@ export async function GET(
       principal_count: (tour as { principal_count?: number }).principal_count ?? 0,
       band_count: (tour as { band_count?: number }).band_count ?? 0,
       crew_count: (tour as { crew_count?: number }).crew_count ?? 0,
+      artist_name,
     },
     advance,
   });

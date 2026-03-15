@@ -26,7 +26,7 @@ export async function PATCH(
   }
 
   const { id } = await params;
-  let body: { name?: string; description?: string; icon?: string; fields?: unknown[] };
+  let body: { name?: string; description?: string; icon?: string; fields?: unknown[]; sort_order?: number };
   try {
     body = await request.json();
   } catch {
@@ -38,6 +38,7 @@ export async function PATCH(
   if (body.description !== undefined) updates.description = body.description;
   if (body.icon !== undefined) updates.icon = body.icon;
   if (body.fields !== undefined) updates.fields = body.fields;
+  if (typeof body.sort_order === 'number') updates.sort_order = body.sort_order;
 
   const { data: template, error } = await supabase
     .from('advance_templates')

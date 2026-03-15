@@ -232,6 +232,10 @@ body {
   from { opacity: 1; transform: translateX(0); }
   to { opacity: 0; transform: translateX(-20px); }
 }
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-12px); }
+  to { opacity: 1; transform: translateX(0); }
+}
 @keyframes pageIn {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
@@ -251,6 +255,7 @@ body {
 .animate-slide-down { animation: slideDown 200ms ease-out forwards; }
 .animate-scale-in { animation: scaleIn 150ms ease-out forwards; }
 .animate-slide-out-left { animation: slideOutLeft 200ms ease-in forwards; }
+.animate-slide-in-left { animation: slideInLeft 250ms ease-out forwards; }
 .animate-page-in { animation: pageIn 200ms ease-out forwards; }
 .animate-toast-enter { animation: toastEnter 250ms ease-out forwards; }
 .animate-toast-exit { animation: toastExit 200ms ease-in forwards; }
