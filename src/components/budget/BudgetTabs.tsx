@@ -2,7 +2,7 @@
 
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import { Suspense } from 'react';
+import React, { Suspense } from 'react';
 import { Loader2, DollarSign, LayoutPanelLeft, CreditCard, Hotel, Plane, Bus, Package, Receipt, PercentDiamond, Scale, Route } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BUDGET_TABS } from './budget-tabs';
@@ -61,7 +61,7 @@ function TabLoader() {
   );
 }
 
-const ICONS: Record<string, JSX.Element> = {
+const ICONS: Record<string, React.ReactElement> = {
   summary: <LayoutPanelLeft className="h-4 w-4" />,
   income: <Route className="h-4 w-4" />,
   salaries: <DollarSign className="h-4 w-4" />,

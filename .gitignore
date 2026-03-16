@@ -28,3 +28,6 @@ Thumbs.db
 # editor
 *.swp
 *.swo
+
+# local reference assets (designs, screenshots, ideas — not part of build)
+LP UI/
