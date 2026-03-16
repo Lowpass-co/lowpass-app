@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Fragment } from 'react';
+import { useState, useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -82,28 +82,61 @@ function varianceColor(proposed: number, actual: number): string {
   return 'text-red-500';
 }
 
-/** Three-segment proportional bar (income=teal, expenses=red, overheads=purple) */
-function ThreeSegmentBar({
-  income, expenses, overheads, label,
-}: { income: number; expenses: number; overheads: number; label: string }) {
-  const total = Math.max(income + expenses + overheads, 1);
-  const iPct = (income / total) * 100;
-  const ePct = (expenses / total) * 100;
-  const oPct = (overheads / total) * 100;
+const INCOME_COLOR = '#166534';
+const EXPENSES_COLOR = '#dc2626';
+const OVERHEADS_COLOR = '#6d28d9';
+
+const STANDARD_BAR_HEIGHT = 120;
+const MAX_BAR_HEIGHT = 200;
+
+/** Vertical stacked bar: only filled when totals present; height scales with value; empty = grey placeholder at standard height. */
+function VerticalStackedBar({
+  income: inc,
+  expenses: exp,
+  overheads: oh,
+  label,
+  valueAbove,
+  valueAboveClassName,
+  heightPx,
+  hasData,
+}: {
+  income: number;
+  expenses: number;
+  overheads: number;
+  label: string;
+  valueAbove: string;
+  valueAboveClassName?: string;
+  heightPx: number;
+  hasData: boolean;
+}) {
+  const total = Math.max(inc + exp + oh, 1e-9);
+  const iPct = (inc / total) * 100;
+  const ePct = (exp / total) * 100;
+  const oPct = (oh / total) * 100;
 
   return (
-    <div className="flex items-center gap-3">
-      <span
-        className="shrink-0 text-[10px] font-semibold uppercase tracking-widest w-16 text-right"
-        style={{ color: 'rgba(255,255,255,0.25)' }}
+    <div className="mx-auto flex min-w-0 max-w-[120px] flex-1 flex-col items-center justify-end">
+      <span className={cn('mb-2 text-sm font-semibold tabular-nums', valueAboveClassName ?? 'text-lp-text')}>
+        {valueAbove}
+      </span>
+      <div
+        className="flex w-full flex-col overflow-hidden rounded-t-xl border border-white/15 shadow-[inset_0_1px_0_rgba(255,255,255,0.06),inset_0_-4px_12px_rgba(0,0,0,0.35)]"
+        style={{
+          height: heightPx,
+          background: hasData ? undefined : 'rgba(255,255,255,0.06)',
+        }}
       >
+        {hasData && (
+          <>
+            <div className="w-full shrink-0" style={{ height: `${iPct}%`, background: INCOME_COLOR, minHeight: inc > 0 ? 1 : 0 }} />
+            <div className="w-full shrink-0" style={{ height: `${ePct}%`, background: EXPENSES_COLOR, minHeight: exp > 0 ? 1 : 0 }} />
+            <div className="w-full shrink-0" style={{ height: `${oPct}%`, background: OVERHEADS_COLOR, minHeight: oh > 0 ? 1 : 0 }} />
+          </>
+        )}
+      </div>
+      <span className="mt-2 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">
         {label}
       </span>
-      <div className="flex h-5 flex-1 overflow-hidden rounded-sm gap-px">
-        <div style={{ width: `${oPct}%`, background: '#7c3aed', opacity: 0.85 }} />
-        <div style={{ width: `${ePct}%`, background: '#ef4444', opacity: 0.85 }} />
-        <div style={{ width: `${iPct}%`, background: '#10b981', opacity: 0.9 }} />
-      </div>
     </div>
   );
 }
@@ -182,20 +215,134 @@ function BucketCard({
   );
 }
 
-/** Dot colour for table section headers */
-function sectionDotColor(title: string): string {
-  const t = title.toUpperCase();
-  if (t.includes('INCOME') || t.includes('REVENUE')) return '#10b981';
-  if (t.includes('COMMISSION') || t.includes('OVERHEAD') || t.includes('MANAGEMENT') || t.includes('BOOKING') || t.includes('LEGAL')) return '#a78bfa';
-  if (t.includes('SALARY') || t.includes('SALARIES') || t.includes('PAYROLL')) return '#a78bfa';
-  if (t.includes('HOTEL')) return '#60a5fa';
-  if (t.includes('FLIGHT')) return '#38bdf8';
-  if (t.includes('TRANSPORT')) return '#34d399';
-  if (t.includes('PRODUCTION')) return '#fb923c';
-  return '#ef4444';
+/** Breakdown block: gradient header + table + subtotal row. When fillHeight=false, section sizes to content (no gap below). */
+function BreakdownSection({
+  title,
+  color,
+  sections,
+  currencySymbol = '£',
+  fillHeight = false,
+}: {
+  title: string;
+  color: string;
+  sections: BudgetSummarySection[];
+  currencySymbol?: string;
+  fillHeight?: boolean;
+}) {
+  const lines: { label: string; proposed: number; actual: number; varianceDisplay: string }[] = [];
+  let subtotalProposed = 0;
+  let subtotalActual = 0;
+  for (const s of sections) {
+    for (const l of s.lines) {
+      lines.push({ label: l.label, proposed: l.proposed, actual: l.actual, varianceDisplay: l.varianceDisplay });
+    }
+    if (s.subtotal) {
+      subtotalProposed += s.subtotal.proposed;
+      subtotalActual += s.subtotal.actual;
+    } else {
+      for (const l of s.lines) {
+        subtotalProposed += l.proposed;
+        subtotalActual += l.actual;
+      }
+    }
+  }
+
+  const gridCols = 'grid-cols-[minmax(0,1fr)_3.5rem_3.5rem_4rem]';
+
+  return (
+    <div className={cn('flex min-h-0 flex-col rounded-xl overflow-hidden border border-lp-border/60 bg-lp-surface/50', fillHeight && 'h-full')}>
+      {/* Header: title on left, then gradient line and dot */}
+      <div className="flex shrink-0 items-center gap-2 px-3 py-2 border-b border-lp-border/50" style={{ background: `${color}18` }}>
+        <span className="text-[10px] font-semibold uppercase tracking-widest text-lp-text-secondary shrink-0">
+          {title}
+        </span>
+        <div className="h-1 flex-1 rounded-full opacity-80" style={{ background: color }} />
+        <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: color }} />
+      </div>
+      <div className={cn('min-h-0 overflow-y-auto flex flex-col', fillHeight && 'flex-1')}>
+        <div className={cn('flex flex-col', fillHeight && 'min-h-full')}>
+          {fillHeight ? (
+            <>
+              {/* Grid layout when fillHeight: headers and rows align, body rows spread evenly */}
+              <div className={`grid ${gridCols} shrink-0 border-b border-lp-border/50 px-2 py-1.5 text-[11px] font-semibold text-lp-text-tertiary sticky top-0 z-10 bg-lp-surface/95`}>
+                <span className="text-left">Line item</span>
+                <span className="text-right">Proposed</span>
+                <span className="text-right">Actual</span>
+                <span className="text-right">Variance</span>
+              </div>
+              <div className="flex flex-1 min-h-0 flex-col justify-evenly">
+                {lines.map((row, i) => (
+                  <div key={i} className={`grid ${gridCols} border-b border-lp-border/30 px-2 py-1 text-[11px] items-center gap-0`}>
+                    <span className="min-w-0 text-lp-text-secondary break-words">{row.label}</span>
+                    <span className="text-right tabular-nums text-lp-text-tertiary">{currencySymbol}{fmt(row.proposed)}</span>
+                    <span className="text-right tabular-nums text-lp-text">{currencySymbol}{fmt(row.actual)}</span>
+                    <span className="text-right tabular-nums text-lp-text-tertiary">{row.varianceDisplay}</span>
+                  </div>
+                ))}
+              </div>
+              <div className={`grid ${gridCols} items-center gap-0 border-t border-lp-border/50 px-2 py-2 text-[11px] font-bold shrink-0 sticky bottom-0 z-10`} style={{ background: `${color}22` }}>
+                <span className="text-lp-text-tertiary uppercase tracking-wider">Subtotal</span>
+                <span className="text-right tabular-nums text-lp-text">{currencySymbol}{fmt(subtotalProposed)}</span>
+                <span className="text-right tabular-nums text-lp-text">{currencySymbol}{fmt(subtotalActual)}</span>
+                <span />
+              </div>
+            </>
+          ) : (
+            <>
+              <table className="w-full shrink-0 border-collapse text-[11px] table-fixed min-w-0">
+                <colgroup>
+                  <col className="min-w-0" />
+                  <col className="w-14" />
+                  <col className="w-14" />
+                  <col className="w-16" />
+                </colgroup>
+                <thead className="sticky top-0 z-10 bg-lp-surface/95">
+                  <tr className="border-b border-lp-border/50">
+                    <th className="px-2 py-1.5 text-left font-semibold text-lp-text-tertiary">Line item</th>
+                    <th className="px-2 py-1.5 text-right font-semibold text-lp-text-tertiary">Proposed</th>
+                    <th className="px-2 py-1.5 text-right font-semibold text-lp-text-tertiary">Actual</th>
+                    <th className="px-2 py-1.5 text-right font-semibold text-lp-text-tertiary">Variance</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {lines.map((row, i) => (
+                    <tr key={i} className="border-b border-lp-border/30">
+                      <td className="min-w-0 max-w-[140px] px-2 py-1 text-lp-text-secondary break-words">{row.label}</td>
+                      <td className="px-2 py-1 text-right tabular-nums text-lp-text-tertiary">{currencySymbol}{fmt(row.proposed)}</td>
+                      <td className="px-2 py-1 text-right tabular-nums text-lp-text">{currencySymbol}{fmt(row.actual)}</td>
+                      <td className="px-2 py-1 text-right tabular-nums text-lp-text-tertiary">{row.varianceDisplay}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <div
+                className="sticky bottom-0 z-10 grid grid-cols-[1fr_3.5rem_3.5rem_4rem] items-center gap-0 border-t border-lp-border/50 px-2 py-2 text-[11px] font-bold shrink-0"
+                style={{ background: `${color}22` }}
+              >
+                <span className="text-lp-text-tertiary uppercase tracking-wider">Subtotal</span>
+                <span className="text-right tabular-nums text-lp-text">{currencySymbol}{fmt(subtotalProposed)}</span>
+                <span className="text-right tabular-nums text-lp-text">{currencySymbol}{fmt(subtotalActual)}</span>
+                <span />
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }
 
-export function SummaryTab({ tourId }: { tourId: string }) {
+export function SummaryTab({
+  tourId,
+  breakdownHeading = 'inline',
+  slot,
+}: {
+  tourId: string;
+  /** When 'outside', the page renders the Breakdown heading; omit it here so it aligns with Select Tour */
+  breakdownHeading?: 'inline' | 'outside';
+  /** When 'left' or 'right', render only that column (for split layout) */
+  slot?: 'left' | 'right';
+}) {
   const [loading, setLoading] = useState(true);
   const [sections, setSections] = useState<BudgetSummarySection[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -234,144 +381,136 @@ export function SummaryTab({ tourId }: { tourId: string }) {
   const netActual = income.actual - expenses.actual - overheads.actual;
   const netProposed = income.proposed - expenses.proposed - overheads.proposed;
   const netIsPositive = netActual >= 0;
+  const currencySymbol = '£';
 
-  return (
-    <div className="space-y-6">
+  const proposedTotal = income.proposed + expenses.proposed + overheads.proposed;
+  const actualTotal = income.actual + expenses.actual + overheads.actual;
+  const scaleMax = Math.max(proposedTotal, actualTotal, 1);
+  const hasAnyData = proposedTotal > 0 || actualTotal > 0;
+  const proposedBarHeight = hasAnyData
+    ? Math.round((proposedTotal / scaleMax) * MAX_BAR_HEIGHT) || STANDARD_BAR_HEIGHT
+    : STANDARD_BAR_HEIGHT;
+  const actualBarHeight = hasAnyData
+    ? Math.round((actualTotal / scaleMax) * MAX_BAR_HEIGHT) || STANDARD_BAR_HEIGHT
+    : STANDARD_BAR_HEIGHT;
 
-      {/* Hero block */}
-      <div className="rounded-xl border border-lp-border bg-lp-surface overflow-hidden">
-
-        {/* Net P&L + bar chart */}
-        <div className="px-6 pt-6 pb-5 border-b border-lp-border/60 space-y-5">
-          <div>
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary mb-1">
-              Net Profit / Loss
-            </p>
-            <span
-              className="text-4xl font-bold tracking-tight"
-              style={{ color: netIsPositive ? '#10b981' : '#ef4444' }}
-            >
-              {fmtShort(netActual)}
-            </span>
-            {netProposed !== 0 && (
-              <span className="ml-3 text-sm text-lp-text-tertiary">
-                Actual vs Proposed
-              </span>
-            )}
-          </div>
-
-          {/* Two bars */}
-          <div className="space-y-2.5">
-            <ThreeSegmentBar
-              income={income.proposed}
-              expenses={expenses.proposed}
-              overheads={overheads.proposed}
-              label="Proposed"
-            />
-            <ThreeSegmentBar
-              income={income.actual}
-              expenses={expenses.actual}
-              overheads={overheads.actual}
-              label="Actual"
-            />
-          </div>
-
-          {/* Legend */}
-          <div className="flex items-center gap-6">
-            {([
-              { label: 'Income', color: '#10b981' },
-              { label: 'Expenses', color: '#ef4444' },
-              { label: 'Overheads', color: '#7c3aed' },
-            ] as const).map(({ label, color }) => (
-              <div key={label} className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full" style={{ background: color }} />
-                <span className="text-[10px] text-lp-text-tertiary uppercase tracking-wider">{label}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Three bucket cards */}
-        <div className="grid grid-cols-3 divide-x divide-lp-border/60">
-          <BucketCard label="Income" dot="#10b981" bucket={income} />
-          <BucketCard
-            label="Direct Expenses"
-            dot="#ef4444"
-            bucket={expenses}
-            displayLines={aggregateExpensesLines(expenses.sections)}
-          />
-          <BucketCard label="Overheads" dot="#7c3aed" bucket={overheads} />
-        </div>
+  const leftColumn = (
+    <div className="mt-6 flex min-h-0 flex-1 flex-col rounded-xl border border-lp-border bg-lp-surface/50 p-4">
+      <p className="shrink-0 text-center text-[11px] font-semibold uppercase tracking-[0.2em] text-lp-text">
+        Net Profit / Loss
+      </p>
+      {/* GRAPH SECTION — mid-body: two vertical bar graphs; height scales with max(Proposed, Actual) when data present */}
+      <div className="flex min-h-[140px] flex-1 items-end justify-center gap-6 px-2">
+        <VerticalStackedBar
+          income={income.proposed}
+          expenses={expenses.proposed}
+          overheads={overheads.proposed}
+          label="Proposed"
+          valueAbove={`${currencySymbol}${fmt(income.proposed)}`}
+          heightPx={proposedBarHeight}
+          hasData={proposedTotal > 0}
+        />
+        <VerticalStackedBar
+          income={income.actual}
+          expenses={expenses.actual}
+          overheads={overheads.actual}
+          label="Actual"
+          valueAbove={`${currencySymbol}${fmt(income.actual)}`}
+          valueAboveClassName={netIsPositive ? 'text-emerald-400' : 'text-red-400'}
+          heightPx={actualBarHeight}
+          hasData={actualTotal > 0}
+        />
       </div>
-
-      {/* Detailed P&L table */}
-      <div className="overflow-x-auto rounded-xl border border-lp-border bg-lp-surface">
-        <table className="w-full min-w-[640px] border-collapse text-sm">
+      {/* Totals at bottom of graph section; P/L label white; Actual column green (profit) / red (loss) */}
+      <div className="mt-auto shrink-0 rounded-lg border border-white/10 bg-[color-mix(in_srgb,var(--lp-budget-wrap-bg)_92%,#5c2a2a_8%)] px-3 py-3">
+        <table className="w-full border-collapse text-[11px]">
           <thead>
-            <tr className="border-b border-lp-border">
-              <th className="px-5 py-3 text-left text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Line Item</th>
-              <th className="px-5 py-3 text-right text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary w-36">Proposed</th>
-              <th className="px-5 py-3 text-right text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary w-36">Actual</th>
-              <th className="px-5 py-3 text-right text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary w-28">Variance</th>
+            <tr className="border-b border-white/20">
+              <th className="py-1.5 text-left text-[10px] font-semibold uppercase tracking-wider text-lp-orange">
+                Totals
+              </th>
+              <th className="py-1.5 text-right text-[10px] font-semibold uppercase tracking-wider text-lp-orange">
+                Proposed
+              </th>
+              <th className="py-1.5 text-right text-[10px] font-semibold uppercase tracking-wider text-lp-orange">
+                Actual
+              </th>
             </tr>
           </thead>
-          <tbody>
-            {sections.map((section, idx) => (
-              <Fragment key={idx}>
-                <tr className="border-b border-lp-border/40">
-                  <td colSpan={4} className="px-5 py-2.5">
-                    <div className="flex items-center gap-2">
-                      <span
-                        className="h-2 w-2 rounded-full shrink-0"
-                        style={{ background: sectionDotColor(section.title) }}
-                      />
-                      <span className="text-[10px] font-semibold uppercase tracking-widest text-lp-text-secondary">
-                        {section.title}
-                      </span>
-                    </div>
-                  </td>
-                </tr>
-
-                {section.lines.map((row, lineIdx) => (
-                  <tr
-                    key={`${idx}-${lineIdx}`}
-                    className="border-b border-lp-border/30 hover:bg-lp-surface-hover transition-colors"
-                  >
-                    <td className="px-5 py-2 pl-9 text-lp-text-secondary">{row.label}</td>
-                    <td className="px-5 py-2 text-right tabular-nums text-lp-text-tertiary">
-                      {fmt(row.proposed)}
-                    </td>
-                    <td className="px-5 py-2 text-right tabular-nums text-lp-text font-medium">
-                      {fmt(row.actual)}
-                    </td>
-                    <td className={cn('px-5 py-2 text-right tabular-nums text-xs font-medium', varianceColor(row.proposed, row.actual))}>
-                      {row.varianceDisplay}
-                    </td>
-                  </tr>
-                ))}
-
-                {section.subtotal && (
-                  <tr className="border-b border-lp-border/60">
-                    <td className="px-5 py-2.5 pl-5 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">
-                      {section.subtotal.label}
-                    </td>
-                    <td className="px-5 py-2.5 text-right tabular-nums font-bold text-lp-text">
-                      £{fmt(section.subtotal.proposed)}
-                    </td>
-                    <td className="px-5 py-2.5 text-right tabular-nums font-bold text-lp-text">
-                      £{fmt(section.subtotal.actual)}
-                    </td>
-                    <td className={cn('px-5 py-2.5 text-right tabular-nums font-bold', varianceColor(section.subtotal.proposed, section.subtotal.actual))}>
-                      {section.subtotal.varianceDisplay}
-                    </td>
-                  </tr>
-                )}
-              </Fragment>
-            ))}
+          <tbody className="text-lp-text">
+            <tr className="border-b border-white/15">
+              <td className="py-1.5">Income</td>
+              <td className="py-1.5 text-right tabular-nums">{currencySymbol}{fmt(income.proposed)}</td>
+              <td className="py-1.5 text-right tabular-nums">{currencySymbol}{fmt(income.actual)}</td>
+            </tr>
+            <tr className="border-b border-white/15">
+              <td className="py-1.5">Expenses</td>
+              <td className="py-1.5 text-right tabular-nums">{currencySymbol}{fmt(expenses.proposed)}</td>
+              <td className="py-1.5 text-right tabular-nums">{currencySymbol}{fmt(expenses.actual)}</td>
+            </tr>
+            <tr className="border-t-2 border-white/25">
+              <td className="py-2 font-medium text-white">P / L</td>
+              <td className="py-2 text-right tabular-nums font-medium text-white">{currencySymbol}{fmt(netProposed)}</td>
+              <td
+                className="py-2 text-right tabular-nums font-semibold"
+                style={{ color: netIsPositive ? INCOME_COLOR : EXPENSES_COLOR }}
+              >
+                {currencySymbol}{fmt(netActual)}
+              </td>
+            </tr>
           </tbody>
         </table>
       </div>
+    </div>
+  );
 
+  const rightColumn = (
+    <div className="flex min-h-0 h-full flex-1 flex-col overflow-hidden">
+      {breakdownHeading === 'inline' && (
+        <p className="shrink-0 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">
+          Breakdown
+        </p>
+      )}
+      {/* Income: content height. Direct Expenses: fills middle. Overheads: content height at bottom. A couple of pixels between boxes. */}
+      <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-hidden">
+        <div className="shrink-0 overflow-hidden">
+          <BreakdownSection title="Income" color={INCOME_COLOR} sections={income.sections} currencySymbol={currencySymbol} fillHeight={false} />
+        </div>
+        <div className="min-h-0 flex-1 overflow-hidden">
+          <BreakdownSection title="Direct Expenses" color={EXPENSES_COLOR} sections={expenses.sections} currencySymbol={currencySymbol} fillHeight />
+        </div>
+        <div className="shrink-0 overflow-hidden">
+          <BreakdownSection title="Overheads" color={OVERHEADS_COLOR} sections={overheads.sections} currencySymbol={currencySymbol} fillHeight={false} />
+        </div>
+      </div>
+    </div>
+  );
+
+  if (slot === 'left') return <div className="flex h-full min-h-0 flex-col overflow-hidden">{leftColumn}</div>;
+  if (slot === 'right') {
+    return (
+      <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden pt-2">
+        <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-hidden">
+          <div className="shrink-0 overflow-hidden">
+            <BreakdownSection title="Income" color={INCOME_COLOR} sections={income.sections} currencySymbol={currencySymbol} fillHeight={false} />
+          </div>
+          <div className="min-h-0 flex-1 overflow-hidden">
+            <BreakdownSection title="Direct Expenses" color={EXPENSES_COLOR} sections={expenses.sections} currencySymbol={currencySymbol} fillHeight />
+          </div>
+          <div className="shrink-0 overflow-hidden">
+            <BreakdownSection title="Overheads" color={OVERHEADS_COLOR} sections={overheads.sections} currencySymbol={currencySymbol} fillHeight={false} />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-full min-h-0 flex-col overflow-hidden">
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+        {leftColumn}
+        {rightColumn}
+      </div>
     </div>
   );
 }

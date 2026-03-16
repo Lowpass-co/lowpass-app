@@ -186,29 +186,40 @@ export function SalariesTab({
 
   return (
     <div className="space-y-4">
-      <div className="overflow-x-auto rounded-xl border border-lp-border bg-lp-surface">
-        <table className="w-full min-w-[900px] border-collapse text-sm">
-          <thead>
-            <tr className="border-b border-lp-border bg-lp-bg-tertiary/50">
-              <th className="px-3 py-2 text-left font-semibold text-lp-text">Person</th>
-              <th className="px-3 py-2 text-left font-semibold text-lp-text">Role</th>
-              <th className="px-3 py-2 text-left font-semibold text-lp-text w-24">Type</th>
-              <th className="px-3 py-2 text-left font-semibold text-lp-text w-28">Rate Type</th>
-              <th className="px-3 py-2 text-right font-semibold text-lp-text w-24">Daily Rate</th>
-              <th className="px-3 py-2 text-right font-semibold text-lp-text w-24">Show Rate</th>
-              <th className="px-3 py-2 text-right font-semibold text-lp-text w-24">Off Rate</th>
-              <th className="px-3 py-2 text-right font-semibold text-lp-text w-24">Rehearsal</th>
-              <th className="px-3 py-2 text-right font-semibold text-lp-text w-24">Per Diem</th>
-              <th className="px-3 py-2 text-right font-semibold text-lp-text w-28">Advance Fee</th>
-              <th className="px-3 py-2 text-right font-semibold text-lp-text w-28">Projected Fee</th>
+      <div
+        className="overflow-hidden rounded-xl border shadow-lg"
+        style={{
+          background: 'var(--lp-budget-card-bg)',
+          borderColor: 'var(--lp-budget-card-border)',
+        }}
+      >
+        <div className="h-[3px] w-full bg-gradient-to-r from-lp-orange/80 via-lp-orange to-lp-orange/20" />
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[960px] border-collapse text-sm">
+            <thead>
+              <tr
+                className="border-b"
+                style={{ borderColor: 'var(--lp-budget-card-border)', background: 'var(--lp-budget-card-header)' }}
+              >
+              <th className="sticky left-0 z-10 border-r px-5 py-4 text-left text-[11px] font-semibold uppercase tracking-wider text-[#8a8a8a]" style={{ borderColor: 'var(--lp-budget-card-border)', background: 'var(--lp-budget-card-header)' }}>Person</th>
+              <th className="px-4 py-4 text-left text-[11px] font-semibold uppercase tracking-wider text-[#8a8a8a]">Role</th>
+              <th className="border-r px-4 py-4 text-left text-[11px] font-semibold uppercase tracking-wider text-[#8a8a8a]" style={{ borderColor: 'var(--lp-budget-card-border)' }}>Type</th>
+              <th className="px-4 py-4 text-left text-[11px] font-semibold uppercase tracking-wider text-[#8a8a8a]">Rate Type</th>
+              <th className="px-4 py-4 text-right text-[11px] font-semibold uppercase tracking-wider text-[#8a8a8a]">Daily Rate</th>
+              <th className="px-4 py-4 text-right text-[11px] font-semibold uppercase tracking-wider text-[#8a8a8a]">Show Rate</th>
+              <th className="px-4 py-4 text-right text-[11px] font-semibold uppercase tracking-wider text-[#8a8a8a]">Off Rate</th>
+              <th className="px-4 py-4 text-right text-[11px] font-semibold uppercase tracking-wider text-[#8a8a8a]">Rehearsal</th>
+              <th className="border-r px-4 py-4 text-right text-[11px] font-semibold uppercase tracking-wider text-[#8a8a8a]" style={{ borderColor: 'var(--lp-budget-card-border)' }}>Per Diem</th>
+              <th className="px-4 py-4 text-right text-[11px] font-semibold uppercase tracking-wider text-[#8a8a8a]">Advance Fee</th>
+              <th className="px-5 py-4 text-right text-[11px] font-semibold uppercase tracking-wider text-[#8a8a8a]">Projected Fee</th>
               {showComm && (
-                <th className="px-3 py-2 text-right font-semibold text-lp-text w-20 italic">Comm.</th>
+                <th className="px-4 py-4 text-right text-[11px] font-semibold uppercase tracking-wider text-[#8a8a8a] italic">Comm.</th>
               )}
-              <th className="px-3 py-2 w-24" />
-            </tr>
-          </thead>
-          <tbody>
-            {personnel.map((p) => {
+              <th className="w-24 px-2 py-4" />
+              </tr>
+            </thead>
+            <tbody>
+              {personnel.map((p) => {
               const counts = dayCountsByPerson.get(p.id) ?? {
                 show: 0,
                 off: 0,
@@ -420,40 +431,52 @@ export function SalariesTab({
                 </tr>
               );
             })}
-          </tbody>
-          <tfoot>
-            <tr className="border-t-2 border-lp-border bg-lp-bg-tertiary/30 font-bold">
-              <td colSpan={showComm ? 10 : 9} className="px-3 py-3 text-lp-text">
-                Total Salaries
-              </td>
-              <td className="px-3 py-3 text-right tabular-nums text-lp-text">
+            </tbody>
+          </table>
+        </div>
+        <div
+          className="border-t p-5"
+          style={{ borderColor: 'var(--lp-budget-card-border)', background: 'var(--lp-budget-card-footer)' }}
+        >
+          <div className="ml-auto max-w-[500px] space-y-3">
+            <div className="flex items-center justify-between text-[13px]">
+              <span className="font-medium text-[#888]">Total Salaries</span>
+              <span className="font-mono tabular-nums tracking-wide text-lp-text">
+                <span className="mr-1 text-[#666]">$</span>
                 {totalSalaries.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </td>
-              {showComm && <td />}
-              <td />
-            </tr>
-            <tr className="border-b border-lp-border bg-lp-bg-tertiary/30 font-bold">
-              <td colSpan={showComm ? 10 : 9} className="px-3 py-2 text-lp-text">
-                Total Per Diem
-              </td>
-              <td className="px-3 py-2 text-right tabular-nums text-lp-text">
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-[13px]">
+              <span className="font-medium text-[#888]">Total Per Diem</span>
+              <span className="font-mono tabular-nums tracking-wide text-lp-text">
+                <span className="mr-1 text-[#666]">$</span>
                 {totalPerDiemSum.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </td>
-              {showComm && <td />}
-              <td />
-            </tr>
-            <tr className="border-b border-lp-border bg-lp-bg-tertiary/30 font-bold text-base">
-              <td colSpan={showComm ? 10 : 9} className="px-3 py-3 text-lp-text">
-                Total (Salaries + Per Diem)
-              </td>
-              <td className="px-3 py-3 text-right tabular-nums text-lp-text">
-                {(totalSalaries + totalPerDiemSum).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </td>
-              {showComm && <td />}
-              <td />
-            </tr>
-          </tfoot>
-        </table>
+              </span>
+            </div>
+            <div className="my-3 h-px w-full opacity-30" style={{ background: 'var(--lp-budget-card-border)' }} />
+            <div className="flex items-center justify-between text-[15px]">
+              <span className="font-bold text-lp-text">Total (Salaries + Per Diem)</span>
+              <span className="font-mono font-bold tabular-nums tracking-wide text-lp-orange">
+                <span className="mr-1 text-lp-orange/60">$</span>
+                {(totalSalaries + totalPerDiemSum).toLocaleString('en-GB', {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}
+              </span>
+            </div>
+          </div>
+        </div>
+        <div className="border-t px-4 py-3" style={{ borderColor: 'var(--lp-budget-card-border)' }}>
+          <button
+            type="button"
+            className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-lp-border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-lp-text-tertiary hover:border-lp-orange hover:text-lp-orange"
+          >
+            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-lp-orange/10 text-[10px] text-lp-orange">
+              +
+            </span>
+            Add Member
+          </button>
+        </div>
       </div>
     </div>
   );

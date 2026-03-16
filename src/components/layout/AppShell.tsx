@@ -16,7 +16,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-lp-bg">
+    <div className="flex min-h-screen flex-col bg-lp-bg">
       {/* Sidebar — fixed on desktop, overlay on mobile */}
       <Sidebar />
 
@@ -31,7 +31,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       {/* Main content — offset by sidebar width */}
       <div className={cn('transition-all duration-200 lg:ml-[260px]')}>
         <Header onMenuClick={() => setMobileMenuOpen(!mobileMenuOpen)} />
-        <main className="px-6 py-6">
+        <main className="flex min-h-0 flex-1 flex-col px-6 py-6">
           {children}
         </main>
       </div>

@@ -3,6 +3,7 @@
    ============================================ */
 
 import { Suspense } from 'react';
+import { cn } from '@/lib/utils';
 import { BudgetTourLanding } from '@/components/budget/BudgetTourLanding';
 import { BudgetTourSelector } from '@/components/budget/BudgetTourSelector';
 import { BudgetTabs, BudgetTabsNav } from '@/components/budget/BudgetTabs';
@@ -31,18 +32,63 @@ export default async function BudgetPage({
 
   return (
     <div
-      className="lp-dashboard-glass min-h-[60vh] rounded-2xl p-6 md:p-8"
+      className="h-[calc(100vh-4rem)] px-6 py-6"
       style={{ background: 'var(--lp-dashboard-bg)' }}
     >
-      <div className="mx-auto flex max-w-7xl gap-8">
-        <div className="min-w-0 flex-1 space-y-6">
-          <Suspense fallback={<div className="h-16 animate-pulse" />}>
-            <BudgetTourSelector basePath="/budget" defaultTab="summary" />
-          </Suspense>
-          <BudgetTabs tourId={tourId} activeTab={validTab} />
+      <div
+        className={cn(
+          'mx-auto flex h-full max-w-[1600px] rounded-2xl border shadow-2xl',
+          validTab === 'summary' ? 'px-8 pb-8 pt-0' : 'p-8'
+        )}
+        style={{
+          background: 'var(--lp-budget-wrap-bg)',
+          borderColor: 'var(--lp-budget-wrap-border)',
+        }}
+      >
+        <div className="flex h-full min-w-0 flex-1 flex-col">
+          {validTab === 'summary' ? (
+            <div className="grid h-full min-h-0 flex-1 grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] gap-x-8 gap-y-0" style={{ gridTemplateRows: 'auto 1fr' }}>
+              <div className="min-w-0 pt-8">
+                <Suspense fallback={<div className="h-16 animate-pulse" />}>
+                  <BudgetTourSelector basePath="/budget" defaultTab="summary" constrainTourName />
+                </Suspense>
+              </div>
+              <div className="min-h-0 min-w-0 overflow-auto">
+                <BudgetTabs tourId={tourId} activeTab={validTab} summarySlot="left" />
+              </div>
+              <div className="flex min-h-0 min-w-0 flex-col overflow-hidden" style={{ gridRow: '1 / -1', gridColumn: 2 }}>
+                <p className="shrink-0 pt-8 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Breakdown</p>
+                <div className="min-h-0 flex-1 overflow-hidden">
+                  <BudgetTabs tourId={tourId} activeTab={validTab} summarySlot="right" />
+                </div>
+              </div>
+            </div>
+          ) : (
+            <>
+              <Suspense fallback={<div className="h-16 animate-pulse" />}>
+                <BudgetTourSelector basePath="/budget" defaultTab="summary" />
+              </Suspense>
+              <div className="mt-8 flex h-0 flex-1 gap-8">
+                <div className="min-w-0 flex-1 overflow-auto">
+                  <BudgetTabs tourId={tourId} activeTab={validTab} />
+                </div>
+              </div>
+            </>
+          )}
         </div>
-        <aside className="w-44 shrink-0">
-          <BudgetTabsNav tourId={tourId} activeTab={validTab} />
+        <aside
+          className={cn(
+            'group/nav ml-8 flex w-[52px] shrink-0 transition-[width] duration-300 ease-out hover:w-[240px]',
+            validTab === 'summary' ? 'h-full flex-col pt-8 pb-8' : 'h-full'
+          )}
+        >
+          {validTab === 'summary' ? (
+            <div className="min-h-0 flex-1 flex">
+              <BudgetTabsNav tourId={tourId} activeTab={validTab} />
+            </div>
+          ) : (
+            <BudgetTabsNav tourId={tourId} activeTab={validTab} />
+          )}
         </aside>
       </div>
     </div>

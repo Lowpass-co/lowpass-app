@@ -115,8 +115,16 @@ export function DashboardHighlights({
     if (el && typeof window !== 'undefined') {
       const rect = el.getBoundingClientRect();
       const spaceBelow = window.innerHeight - rect.bottom - 24;
-      const maxHeight = Math.min(280, Math.max(120, spaceBelow));
-      setDropdownRect({ top: rect.bottom + 4, left: rect.left, width: rect.width, maxHeight });
+      const spaceAbove = rect.top - 24;
+      const maxHeight = 260;
+      // Prefer opening above when we're close to the bottom of the viewport
+      if (spaceBelow < 180 && spaceAbove > spaceBelow) {
+        const height = Math.min(maxHeight, Math.max(120, spaceAbove - 16));
+        setDropdownRect({ top: rect.top - height - 4, left: rect.left, width: rect.width, maxHeight: height });
+      } else {
+        const height = Math.min(maxHeight, Math.max(120, spaceBelow));
+        setDropdownRect({ top: rect.bottom + 4, left: rect.left, width: rect.width, maxHeight: height });
+      }
     } else {
       setDropdownRect(null);
     }

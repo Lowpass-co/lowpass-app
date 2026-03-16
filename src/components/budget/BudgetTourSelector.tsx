@@ -27,6 +27,8 @@ type BudgetTourSelectorProps = {
   className?: string;
   /** localStorage key for selected tour (e.g. budget vs rooming) */
   storageKey?: string;
+  /** When true, tour name is constrained so it doesn't run into the Breakdown column */
+  constrainTourName?: boolean;
 };
 
 export function BudgetTourSelector({
@@ -35,6 +37,7 @@ export function BudgetTourSelector({
   defaultTab,
   className,
   storageKey = BUDGET_STORAGE_KEY,
+  constrainTourName = false,
 }: BudgetTourSelectorProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -133,7 +136,12 @@ export function BudgetTourSelector({
             <span className="text-2xl font-bold">Loading…</span>
           </div>
         ) : (
-          <h1 className="text-[2.4rem] font-bold leading-none tracking-tight text-lp-text truncate max-w-[640px]">
+          <h1
+            className={cn(
+              'text-[2.4rem] font-bold leading-none tracking-tight text-lp-text truncate',
+              'max-w-full'
+            )}
+          >
             {displayTour
               ? displayTour.name
               : <span className="text-lp-text-tertiary text-2xl font-medium">Select a tour above</span>}
@@ -152,7 +160,7 @@ export function BudgetTourSelector({
                 onClick={() => setDropdownOpen(false)}
               />
               <ul
-                className="lp-dashboard-glass-card absolute w-[480px] max-h-64 overflow-auto rounded-lg border border-lp-border py-1 shadow-xl pointer-events-auto z-10"
+                className="absolute z-10 w-[480px] max-h-64 overflow-auto rounded-lg border border-lp-border bg-lp-bg py-1 shadow-xl pointer-events-auto"
                 style={{ top: dropdownRect.top, left: dropdownRect.left }}
                 role="listbox"
               >

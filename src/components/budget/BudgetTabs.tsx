@@ -3,21 +3,54 @@
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { Suspense } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, DollarSign, LayoutPanelLeft, CreditCard, Hotel, Plane, Bus, Package, Receipt, PercentDiamond, Scale, Route } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BUDGET_TABS } from './budget-tabs';
 
-const SummaryTab = dynamic(() => import('@/components/budget/SummaryTab').then(m => ({ default: m.SummaryTab })), { ssr: false });
-const IncomeTab = dynamic(() => import('@/components/budget/IncomeTab').then(m => ({ default: m.IncomeTab })), { ssr: false });
-const SalariesTab = dynamic(() => import('@/components/budget/SalariesTab').then(m => ({ default: m.SalariesTab })), { ssr: false });
-const PayrollTab = dynamic(() => import('@/components/budget/PayrollTab').then(m => ({ default: m.PayrollTab })), { ssr: false });
-const HotelsTab = dynamic(() => import('@/components/budget/HotelsTab').then(m => ({ default: m.HotelsTab })), { ssr: false });
-const FlightsTab = dynamic(() => import('@/components/budget/FlightsTab').then(m => ({ default: m.FlightsTab })), { ssr: false });
-const TransportationTab = dynamic(() => import('@/components/budget/TransportationTab').then(m => ({ default: m.TransportationTab })), { ssr: false });
-const ProductionTab = dynamic(() => import('@/components/budget/ProductionTab').then(m => ({ default: m.ProductionTab })), { ssr: false });
-const CommissionsTab = dynamic(() => import('@/components/budget/CommissionsTab').then(m => ({ default: m.CommissionsTab })), { ssr: false });
-const ReceiptsTab = dynamic(() => import('@/components/budget/ReceiptsTab').then(m => ({ default: m.ReceiptsTab })), { ssr: false });
-const SettlementTab = dynamic(() => import('@/components/budget/SettlementTab').then(m => ({ default: m.SettlementTab })), { ssr: false });
+const SummaryTab = dynamic(
+  () => import('@/components/budget/SummaryTab').then((m) => ({ default: m.SummaryTab })),
+  { ssr: false }
+);
+const IncomeTab = dynamic(
+  () => import('@/components/budget/IncomeTab').then((m) => ({ default: m.IncomeTab })),
+  { ssr: false }
+);
+const SalariesTab = dynamic(
+  () => import('@/components/budget/SalariesTab').then((m) => ({ default: m.SalariesTab })),
+  { ssr: false }
+);
+const PayrollTab = dynamic(
+  () => import('@/components/budget/PayrollTab').then((m) => ({ default: m.PayrollTab })),
+  { ssr: false }
+);
+const HotelsTab = dynamic(
+  () => import('@/components/budget/HotelsTab').then((m) => ({ default: m.HotelsTab })),
+  { ssr: false }
+);
+const FlightsTab = dynamic(
+  () => import('@/components/budget/FlightsTab').then((m) => ({ default: m.FlightsTab })),
+  { ssr: false }
+);
+const TransportationTab = dynamic(
+  () => import('@/components/budget/TransportationTab').then((m) => ({ default: m.TransportationTab })),
+  { ssr: false }
+);
+const ProductionTab = dynamic(
+  () => import('@/components/budget/ProductionTab').then((m) => ({ default: m.ProductionTab })),
+  { ssr: false }
+);
+const CommissionsTab = dynamic(
+  () => import('@/components/budget/CommissionsTab').then((m) => ({ default: m.CommissionsTab })),
+  { ssr: false }
+);
+const ReceiptsTab = dynamic(
+  () => import('@/components/budget/ReceiptsTab').then((m) => ({ default: m.ReceiptsTab })),
+  { ssr: false }
+);
+const SettlementTab = dynamic(
+  () => import('@/components/budget/SettlementTab').then((m) => ({ default: m.SettlementTab })),
+  { ssr: false }
+);
 
 function TabLoader() {
   return (
@@ -28,38 +61,83 @@ function TabLoader() {
   );
 }
 
-/** Vertical tab list for the right column (sticky) */
+const ICONS: Record<string, JSX.Element> = {
+  summary: <LayoutPanelLeft className="h-4 w-4" />,
+  income: <Route className="h-4 w-4" />,
+  salaries: <DollarSign className="h-4 w-4" />,
+  payroll: <CreditCard className="h-4 w-4" />,
+  hotels: <Hotel className="h-4 w-4" />,
+  flights: <Plane className="h-4 w-4" />,
+  transport: <Bus className="h-4 w-4" />,
+  production: <Package className="h-4 w-4" />,
+  receipts: <Receipt className="h-4 w-4" />,
+  commissions: <PercentDiamond className="h-4 w-4" />,
+  settlement: <Scale className="h-4 w-4" />,
+};
+
+/** Vertical tab list for the right column (hover-expand). Full-height rail, even spacing. */
 export function BudgetTabsNav({ tourId, activeTab }: { tourId: string; activeTab: string }) {
   return (
-    <nav
-      className="lp-dashboard-glass-card sticky top-24 flex flex-col gap-0.5 rounded-2xl border border-lp-border p-2"
-      aria-label="Budget sections"
-    >
-      {BUDGET_TABS.map((tab) => {
-        const isActive = activeTab === tab.id;
-        return (
-          <Link
-            key={tab.id}
-            href={`/budget?tour_id=${tourId}&tab=${tab.id}`}
-            className={cn(
-              'rounded-lg px-3 py-2.5 text-left text-sm font-medium transition-colors',
-              isActive
-                ? 'bg-lp-orange text-white'
-                : 'text-lp-text-tertiary hover:bg-lp-surface-hover hover:text-lp-text'
-            )}
-          >
-            {tab.label}
-          </Link>
-        );
-      })}
+    <nav className="h-full w-full" aria-label="Budget sections">
+      <div className="flex h-full flex-col overflow-hidden rounded-xl border border-lp-border bg-lp-bg shadow-lg transition-shadow duration-200 ease-out hover:shadow-xl hover:shadow-lp-orange/15">
+        <ul className="flex flex-1 flex-col justify-center gap-5 py-6 text-[13px] font-medium">
+          {BUDGET_TABS.map((tab) => {
+            const isActive = activeTab === tab.id;
+            return (
+              <li key={tab.id} className="flex shrink-0">
+                <Link
+                  href={`/budget?tour_id=${tourId}&tab=${tab.id}`}
+                  className={cn(
+                    'mx-auto flex w-[40px] flex-shrink-0 items-center justify-center gap-1 rounded-lg px-0 py-2 text-sm transition-[width,padding,margin,background-color,color] duration-300 ease-out group-hover/nav:mx-1 group-hover/nav:w-[calc(100%-8px)] group-hover/nav:justify-start group-hover/nav:gap-3 group-hover/nav:px-3',
+                    isActive
+                      ? 'border border-lp-orange bg-lp-orange text-lp-bg shadow-[0_0_0_1px_rgba(249,80,2,0.6)]'
+                      : 'text-lp-text-tertiary hover:bg-lp-surface-hover hover:text-lp-text'
+                  )}
+                >
+                  <span
+                    className={cn(
+                      'flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md text-xs',
+                      isActive ? 'bg-lp-bg text-lp-orange' : 'bg-lp-bg-tertiary/40 text-lp-text-tertiary'
+                    )}
+                  >
+                    {ICONS[tab.id] ?? tab.label.charAt(0)}
+                  </span>
+                  <span className="max-w-0 overflow-hidden whitespace-nowrap text-xs font-medium opacity-0 transition-[max-width,opacity] duration-300 ease-out group-hover/nav:max-w-[200px] group-hover/nav:opacity-100">
+                    {tab.label}
+                  </span>
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
     </nav>
   );
 }
 
-export function BudgetTabs({ tourId, activeTab }: { tourId: string; activeTab: string }) {
+export function BudgetTabs({
+  tourId,
+  activeTab,
+  summaryBreakdownHeading,
+  summarySlot,
+}: {
+  tourId: string;
+  activeTab: string;
+  /** When 'outside', Summary tab omits the Breakdown heading (page renders it in line with Select Tour) */
+  summaryBreakdownHeading?: 'inline' | 'outside';
+  /** When 'left' or 'right', Summary tab renders only that column (for split layout with Breakdown at top) */
+  summarySlot?: 'left' | 'right';
+}) {
   const tabContent = () => {
     switch (activeTab) {
-      case 'summary': return <SummaryTab tourId={tourId} />;
+      case 'summary':
+        return (
+          <SummaryTab
+            tourId={tourId}
+            breakdownHeading={summaryBreakdownHeading ?? 'inline'}
+            slot={summarySlot}
+          />
+        );
       case 'income': return <IncomeTab tourId={tourId} />;
       case 'salaries': return <SalariesTab tourId={tourId} />;
       case 'payroll': return <PayrollTab tourId={tourId} />;
@@ -75,12 +153,8 @@ export function BudgetTabs({ tourId, activeTab }: { tourId: string; activeTab: s
   };
 
   return (
-    <div className="lp-dashboard-glass-card overflow-hidden rounded-2xl border border-lp-border">
-      <Suspense fallback={<TabLoader />}>
-        <div className="p-6">
-          {tabContent()}
-        </div>
-      </Suspense>
-    </div>
+    <Suspense fallback={<TabLoader />}>
+      {tabContent()}
+    </Suspense>
   );
 }

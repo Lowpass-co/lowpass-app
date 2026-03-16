@@ -44,6 +44,12 @@
   --color-lp-status-complete: #10B981;
   --color-lp-status-needs-review: #F59E0B;
 
+  /* Budget page wrapper & inner card (adaptive via --lp-budget-*) */
+  --color-lp-budget-wrap: var(--lp-budget-wrap-bg);
+  --color-lp-budget-wrap-border: var(--lp-budget-wrap-border);
+  --color-lp-budget-card: var(--lp-budget-card-bg);
+  --color-lp-budget-card-border: var(--lp-budget-card-border);
+
   /* Day type colours (matching Daysheets style) */
   --color-lp-day-show: #10B981;
   --color-lp-day-off: #6B7280;
@@ -101,6 +107,15 @@
   --lp-dashboard-card-border: rgba(255, 255, 255, 0.85);
   --lp-dashboard-card-shadow: 0 4px 24px rgba(0, 0, 0, 0.06), 0 0 0 1px rgba(255, 255, 255, 0.5) inset;
   --lp-dashboard-blur: 20px;
+
+  /* Budget page — main content wrapper (light: warm surface) */
+  --lp-budget-wrap-bg: #FAFAF9;
+  --lp-budget-wrap-border: #E7E5E4;
+  /* Budget inner table/card (light) */
+  --lp-budget-card-bg: #F5F5F4;
+  --lp-budget-card-border: #E7E5E4;
+  --lp-budget-card-header: #EBEBEA;
+  --lp-budget-card-footer: #EEEDEC;
 }
 
 /* Dropdowns / popovers — render above sidebar, header, and card stacking contexts */
@@ -148,6 +163,15 @@
   --lp-dashboard-card-border: rgba(255, 255, 255, 0.12);
   --lp-dashboard-card-shadow: 0 4px 24px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.06) inset;
   --lp-dashboard-blur: 20px;
+
+  /* Budget page — main content wrapper (dark: brownish card per variant) */
+  --lp-budget-wrap-bg: #13100e;
+  --lp-budget-wrap-border: #2a221f;
+  /* Budget inner table/card (dark) */
+  --lp-budget-card-bg: #0f0f0f;
+  --lp-budget-card-border: #2a2a2a;
+  --lp-budget-card-header: #141414;
+  --lp-budget-card-footer: #111111;
 }
 
 /* ============================================
