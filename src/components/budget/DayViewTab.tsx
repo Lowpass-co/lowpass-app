@@ -99,14 +99,16 @@ export function DayViewTab({ tourId }: { tourId: string }) {
     setLoading(true);
     try {
       const [routingRes, incomeRes, liRes, tourRes] = await Promise.all([
-        fetch(`/api/routing?tour_id=${encodeURIComponent(tourId)}`),
+        // Reuse the established tour routing API so we always see the same
+        // dates as Salaries/Commissions/Payroll tabs and the Routing editor.
+        fetch(`/api/tours/${encodeURIComponent(tourId)}/routing`),
         fetch(`/api/budget/income?tour_id=${encodeURIComponent(tourId)}`),
         fetch(`/api/budget/line-items?tour_id=${encodeURIComponent(tourId)}`),
         fetch(`/api/tours/${encodeURIComponent(tourId)}`),
       ]);
 
-      const routingJson = routingRes.ok ? await routingRes.json() : { routing: [] };
-      const routingRows: RoutingRow[] = routingJson.routing ?? routingJson ?? [];
+      const routingJson = routingRes.ok ? await routingRes.json() : [];
+      const routingRows: RoutingRow[] = (Array.isArray(routingJson) ? routingJson : []) as RoutingRow[];
       setRouting(routingRows);
 
       const incomeJson = incomeRes.ok ? await incomeRes.json() : { income: [] };
