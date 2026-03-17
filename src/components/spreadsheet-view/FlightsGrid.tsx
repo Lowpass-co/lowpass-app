@@ -153,7 +153,7 @@ export function FlightsGrid({ tourId, currency }: { tourId: string; currency: st
                   <InlineEditCell
                     value={f.departure_date ? f.departure_date.slice(0, 10) : null}
                     type="text"
-                    onSave={async (v) => saveFlight(f.id, 'departure_date', String(v) || null)}
+                    onSave={async (v) => saveFlight(f.id, 'departure_date', String(v) || '')}
                   />
                 </td>
                 <td className="px-2 py-0">

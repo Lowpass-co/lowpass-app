@@ -370,11 +370,11 @@ function AddLineItemForm({
   currency: string;
 }) {
   const [label, setLabel] = useState('');
-  const [category, setCategory] = useState<BudgetCategory>('misc');
+  const [category, setCategory] = useState<BudgetCategory>('prod_misc');
   const [cost, setCost] = useState('');
 
   const categories: BudgetCategory[] = [
-    'misc',
+    'prod_misc',
     'hotels',
     'flights',
     'transport_bus',

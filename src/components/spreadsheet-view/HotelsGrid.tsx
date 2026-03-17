@@ -153,14 +153,14 @@ export function HotelsGrid({ tourId, currency }: { tourId: string; currency: str
                   <InlineEditCell
                     value={h.check_in_date ? h.check_in_date.slice(0, 10) : null}
                     type="text"
-                    onSave={async (v) => saveHotel(h.id, 'check_in_date', String(v) || null)}
+                    onSave={async (v) => saveHotel(h.id, 'check_in_date', String(v) || '')}
                   />
                 </td>
                 <td className="px-2 py-0">
                   <InlineEditCell
                     value={h.check_out_date ? h.check_out_date.slice(0, 10) : null}
                     type="text"
-                    onSave={async (v) => saveHotel(h.id, 'check_out_date', String(v) || null)}
+                    onSave={async (v) => saveHotel(h.id, 'check_out_date', String(v) || '')}
                   />
                 </td>
                 <td className="px-2 py-1 text-sm text-lp-text-secondary text-right font-[tabular-nums]">

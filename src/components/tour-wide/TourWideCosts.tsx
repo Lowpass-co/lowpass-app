@@ -303,7 +303,7 @@ export function TourWideCosts({
                     <li key={i}>{w}</li>
                   ))}
                 </ul>
-              )}
+              ) : null}
             </div>
             <div className="max-h-64 overflow-y-auto p-4">
               <ul className="space-y-2">

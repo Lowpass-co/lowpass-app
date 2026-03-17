@@ -7,7 +7,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { Sidebar } from '@/components/layout/Sidebar';
 import { Header } from '@/components/layout/Header';
 import { cn } from '@/lib/utils';
@@ -17,8 +17,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen flex-col bg-lp-bg">
-      {/* Sidebar — fixed on desktop, overlay on mobile */}
-      <Sidebar />
+      {/* Sidebar — fixed on desktop, overlay on mobile; Suspense for useSearchParams */}
+      <Suspense fallback={<div className="fixed left-0 top-0 z-30 h-full w-[260px] border-r border-lp-border bg-lp-sidebar-bg" style={{ backgroundColor: 'var(--lp-sidebar-bg)' }} />}>
+        <Sidebar />
+      </Suspense>
 
       {/* Mobile overlay */}
       {mobileMenuOpen && (

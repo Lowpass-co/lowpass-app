@@ -93,28 +93,28 @@ export function RoomingHotelSheet({ hotelBooking, roomAssignments: initialAssign
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 rounded-lg border border-lp-border bg-lp-surface/30 p-4">
         <div>
           <p className="text-xs font-bold uppercase tracking-wider text-lp-text-secondary">HOTEL</p>
-          <InlineEditCell value={hotel.hotel_name} type="text" onSave={(v) => saveHotel('hotel_name', String(v))} />
+          <InlineEditCell value={hotel.hotel_name ?? null} type="text" onSave={(v) => saveHotel('hotel_name', String(v))} />
         </div>
         <div>
           <p className="text-xs font-bold uppercase tracking-wider text-lp-text-secondary">Distance to Venue</p>
-          <InlineEditCell value={hotel.distance_to_venue} type="text" onSave={(v) => saveHotel('distance_to_venue', String(v))} />
+          <InlineEditCell value={hotel.distance_to_venue ?? null} type="text" onSave={(v) => saveHotel('distance_to_venue', String(v))} />
         </div>
         <div>
           <p className="text-xs font-bold uppercase tracking-wider text-lp-text-secondary">ADDRESS</p>
-          <InlineEditCell value={hotel.address} type="text" onSave={(v) => saveHotel('address', String(v))} />
+          <InlineEditCell value={hotel.address ?? null} type="text" onSave={(v) => saveHotel('address', String(v))} />
         </div>
         <div>
           <p className="text-xs font-bold uppercase tracking-wider text-lp-text-secondary">Distance to Airport</p>
-          <InlineEditCell value={hotel.distance_to_airport} type="text" onSave={(v) => saveHotel('distance_to_airport', String(v))} />
+          <InlineEditCell value={hotel.distance_to_airport ?? null} type="text" onSave={(v) => saveHotel('distance_to_airport', String(v))} />
         </div>
         <div>
           <p className="text-xs font-bold uppercase tracking-wider text-lp-text-secondary">T</p>
-          <InlineEditCell value={hotel.phone} type="text" onSave={(v) => saveHotel('phone', String(v))} />
+          <InlineEditCell value={hotel.phone ?? null} type="text" onSave={(v) => saveHotel('phone', String(v))} />
         </div>
         <div />
         <div className="md:col-span-2">
           <p className="text-xs font-bold uppercase tracking-wider text-lp-text-secondary">CANCELLATION</p>
-          <InlineEditCell value={hotel.cancellation_policy} type="text" onSave={(v) => saveHotel('cancellation_policy', String(v))} />
+          <InlineEditCell value={hotel.cancellation_policy ?? null} type="text" onSave={(v) => saveHotel('cancellation_policy', String(v))} />
         </div>
       </div>
 
@@ -146,10 +146,10 @@ export function RoomingHotelSheet({ hotelBooking, roomAssignments: initialAssign
                     <InlineEditCell value={a.person_name} type="text" onSave={(v) => saveAssignment(a.id, 'person_name', String(v))} />
                   </td>
                   <td className="border-b border-lp-border/30 px-2 py-0">
-                    <InlineEditCell value={a.check_in ? a.check_in.slice(0, 10) : null} type="text" onSave={(v) => saveAssignment(a.id, 'check_in', String(v) || null)} />
+                    <InlineEditCell value={a.check_in ? a.check_in.slice(0, 10) : null} type="text" onSave={(v) => saveAssignment(a.id, 'check_in', String(v) || '')} />
                   </td>
                   <td className="border-b border-lp-border/30 px-2 py-0">
-                    <InlineEditCell value={a.check_out ? a.check_out.slice(0, 10) : null} type="text" onSave={(v) => saveAssignment(a.id, 'check_out', String(v) || null)} />
+                    <InlineEditCell value={a.check_out ? a.check_out.slice(0, 10) : null} type="text" onSave={(v) => saveAssignment(a.id, 'check_out', String(v) || '')} />
                   </td>
                   <td className="border-b border-lp-border/30 px-2 py-1 text-right font-[tabular-nums]">{nights}</td>
                   <td className="border-b border-lp-border/30 px-2 py-0">

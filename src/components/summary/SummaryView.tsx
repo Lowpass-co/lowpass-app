@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Loader2 } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
 import { BudgetAlerts } from '@/components/summary/BudgetAlerts';
@@ -322,32 +322,39 @@ export function SummaryView({
           <div />
           <span className="text-right font-semibold text-lp-text-tertiary">PROPOSED</span>
           <span className="w-24 text-right font-semibold text-lp-text-tertiary">ACTUAL</span>
-          {expenseRows.map((row) => (
-            <span
-              key={row.label}
-              className={cn(
-                row.isTotal && 'border-t-2 border-lp-border font-bold',
-                row.isNet && 'text-xl font-bold',
-                row.isNet && (row.proposed >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400')
-              )}
-            >
-              {row.label}
-            </span>
-            <span className={cn('text-right text-lp-text', row.isTotal && 'font-bold', row.isNet && 'text-xl font-bold', row.isNet && (row.proposed >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'))}>
-              {row.isNet && row.label === 'NET P&L' ? fmt(row.proposed) : fmt(row.proposed)}
-            </span>
-            <span
-              className={cn(
-                'w-24 text-right',
-                row.actual !== 0 ? 'text-lp-orange' : 'text-lp-text-tertiary',
-                row.isTotal && 'font-bold',
-                row.isNet && 'text-xl font-bold',
-                row.isNet && (row.actual >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400')
-              )}
-            >
-              {row.label === 'Contingency (2%)' ? '—' : row.isNet && row.label === 'NET P&L' ? fmt(row.actual) : row.actual === 0 ? fmt(0) : fmt(row.actual)}
-            </span>
-          ))}
+          {expenseRows.map((row) => {
+            const proposedPositive = row.proposed > -1;
+            const actualPositive = row.actual > -1;
+            const netClass = proposedPositive ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400';
+            const actualNetClass = actualPositive ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400';
+            return (
+              <React.Fragment key={row.label}>
+                <span
+                  className={cn(
+                    row.isTotal && 'border-t-2 border-lp-border font-bold',
+                    row.isNet && 'text-xl font-bold',
+                    row.isNet && netClass
+                  )}
+                >
+                  {row.label}
+                </span>
+                <span className={cn('text-right text-lp-text', row.isTotal && 'font-bold', row.isNet && 'text-xl font-bold', row.isNet && netClass)}>
+                  {row.isNet && row.label === 'NET P&L' ? fmt(row.proposed) : fmt(row.proposed)}
+                </span>
+                <span
+                  className={cn(
+                    'w-24 text-right',
+                    row.actual !== 0 ? 'text-lp-orange' : 'text-lp-text-tertiary',
+                    row.isTotal && 'font-bold',
+                    row.isNet && 'text-xl font-bold',
+                    row.isNet && actualNetClass
+                  )}
+                >
+                  {row.label === 'Contingency (2%)' ? '—' : row.isNet && row.label === 'NET P&L' ? fmt(row.actual) : row.actual === 0 ? fmt(0) : fmt(row.actual)}
+                </span>
+              </React.Fragment>
+            );
+          })}
         </div>
 
         <p className="mt-8 text-xs text-lp-text-tertiary">

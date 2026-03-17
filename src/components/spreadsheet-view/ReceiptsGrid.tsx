@@ -89,7 +89,7 @@ export function ReceiptsGrid({ tourId, currency }: { tourId: string; currency: s
 
   const saveReceipt = useCallback(async (id: string, field: string, value: string | number) => {
     const body: Record<string, unknown> = { id };
-    if (field === 'in_budget') body.in_budget = value === 'true' || value === true;
+    if (field === 'in_budget') body.in_budget = value === 'true';
     else if (field === 'cost_tour') body.cost_tour_currency = value;
     else if (field === 'cost_home') body.cost_home_currency = value;
     else body[field] = value === '' ? null : value;

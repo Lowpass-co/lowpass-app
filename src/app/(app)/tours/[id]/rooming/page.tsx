@@ -36,10 +36,10 @@ export default async function TourRoomingPage({
   ]);
 
   const routingDates = routingRes.data ?? [];
-  const hotelsRaw = hotelsRes.data ?? [];
+  const hotelsRaw = (hotelsRes.data ?? []) as { id: string; hotel_name: string; hotel_room_assignments?: unknown[] }[];
   const personnelRates = ratesRes.data ?? [];
 
-  const hotels = hotelsRaw.map((h: { hotel_room_assignments?: unknown[] }) => ({
+  const hotels = hotelsRaw.map((h) => ({
     ...h,
     room_assignments: h.hotel_room_assignments ?? [],
   }));
