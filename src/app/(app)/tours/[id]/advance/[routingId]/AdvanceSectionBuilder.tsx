@@ -1981,7 +1981,15 @@ function FillMode({
       const hasImportant = advance.sections.some((s) => s.label === 'Important Documents' || s.template_id === IMPORTANT_DOCUMENTS_KEY);
       if (!hasImportant) {
         const newSection = { template_id: IMPORTANT_DOCUMENTS_KEY, label: 'Important Documents', fields: [] as FieldDef[], order: advance.sections.length };
-        onUpdate({ sections: [...advance.sections.map((s, i) => ({ ...s, order: i })), newSection] });
+        const updatedSections = [...advance.sections.map((s, i) => ({ ...s, order: i })), newSection];
+        onUpdate({ sections: updatedSections });
+        fetch(`/api/tours/${tourId}/advance`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ routing_id: routingId, sections: updatedSections }),
+        }).catch((err) => {
+          console.error('Failed to persist Important Documents section:', err);
+        });
       }
     }
     setFieldValue(IMPORTANT_DOCUMENTS_KEY, 'documents', docs);

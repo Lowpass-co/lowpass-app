@@ -11,6 +11,7 @@
 import { AppShell } from '@/components/layout/AppShell';
 import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 import { ToastProvider } from '@/components/ui/Toast';
+import { ArtistTourProvider } from '@/contexts/ArtistTourContext';
 
 export default function AppLayout({
   children,
@@ -20,9 +21,11 @@ export default function AppLayout({
   return (
     <ErrorBoundary>
       <ToastProvider>
-        <AppShell>
-          {children}
-        </AppShell>
+        <ArtistTourProvider>
+          <AppShell>
+            {children}
+          </AppShell>
+        </ArtistTourProvider>
       </ToastProvider>
     </ErrorBoundary>
   );

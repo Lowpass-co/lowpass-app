@@ -89,12 +89,12 @@ export async function GET(request: Request) {
       .select('id, date, day_type')
       .eq('tour_id', tourId),
     supabase
-      .from('budget_personnel_rates')
+      .from('personnel_rates')
       .select('rate_type, show_rate, off_rate, rehearsal_rate, per_diem, advance_fee, commission')
       .eq('workspace_id', wid)
       .eq('tour_id', tourId),
     supabase
-      .from('budget_payroll')
+      .from('payroll_entries')
       .select('total_fee, total_per_diem')
       .eq('tour_id', tourId)
       .eq('workspace_id', wid),
@@ -109,7 +109,7 @@ export async function GET(request: Request) {
       .eq('workspace_id', wid)
       .eq('tour_id', tourId),
     supabase
-      .from('budget_flights')
+      .from('flight_bookings')
       .select('proposed_cost, actual_cost')
       .eq('workspace_id', wid)
       .eq('tour_id', tourId),

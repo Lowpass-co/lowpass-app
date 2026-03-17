@@ -9,21 +9,21 @@
 
 import { useState, useRef, useEffect } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import {
   ChevronLeft, ChevronRight, LogOut,
-  LayoutDashboard, Map, ClipboardList, Calendar,
+  LayoutDashboard, Map, ClipboardList,
   DollarSign, Bed, Music, Users, Building2, Settings, Bug,
+  FileText,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { useArtistTourContext } from '@/contexts/ArtistTourContext';
 import { cn, toTitleCase } from '@/lib/utils';
 
 interface NavItem {
   label: string;
   href: string;
   icon: React.ElementType;
-  badge?: number;
-  adminOnly?: boolean;
 }
 
 interface NavGroup {
@@ -31,49 +31,61 @@ interface NavGroup {
   items: NavItem[];
 }
 
-const navGroups: NavGroup[] = [
-  {
-    items: [
-      { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-    ],
-  },
-  {
-    title: 'Tour Management',
-    items: [
-      { label: 'Tours', href: '/tours', icon: Map },
-      { label: 'Advance', href: '/advance', icon: ClipboardList },
-      { label: 'Calendar', href: '/calendar', icon: Calendar },
-    ],
-  },
-  {
-    title: 'Finance',
-    items: [
-      { label: 'Budget', href: '/budget', icon: DollarSign },
-      { label: 'Rooming', href: '/rooming', icon: Bed },
-    ],
-  },
-  {
-    title: 'Data',
-    items: [
-      { label: 'Artists', href: '/artists', icon: Music },
-      { label: 'Personnel', href: '/personnel', icon: Users },
-      { label: 'Venues', href: '/venues', icon: Building2 },
-    ],
-  },
-  {
-    title: 'Admin',
-    items: [
-      { label: 'Settings', href: '/settings', icon: Settings },
-      { label: 'Bug Reports', href: '/bugs', icon: Bug, adminOnly: true },
-    ],
-  },
-];
-
 const SIDEBAR_COLLAPSED_KEY = 'lp-sidebar-collapsed';
 
 export function Sidebar() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const { selectedTourId } = useArtistTourContext();
   const [collapsed, setCollapsed] = useState(false);
+
+  const baseGroups: NavGroup[] = [
+    { items: [{ label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard }] },
+    {
+      title: 'Data',
+      items: [
+        { label: 'Artists', href: '/artists', icon: Music },
+        { label: 'Personnel', href: '/personnel', icon: Users },
+        { label: 'Venues', href: '/venues', icon: Building2 },
+      ],
+    },
+    {
+      title: 'Admin',
+      items: [
+        { label: 'Settings', href: '/settings', icon: Settings },
+        { label: 'Bug Reports', href: '/bugs', icon: Bug },
+      ],
+    },
+  ];
+
+  const tourGroups: NavGroup[] = selectedTourId
+    ? [
+        {
+          title: 'TOUR',
+          items: [
+            { label: 'Overview', href: `/tours/${selectedTourId}`, icon: Map },
+            { label: 'Routing', href: `/tours/${selectedTourId}`, icon: Map },
+            { label: 'Advance', href: `/tours/${selectedTourId}/advance`, icon: ClipboardList },
+            { label: 'Day View', href: `/tours/${selectedTourId}/day`, icon: FileText },
+            { label: 'Spreadsheet', href: `/tours/${selectedTourId}/sheet`, icon: FileText },
+            { label: 'Summary', href: `/tours/${selectedTourId}/summary`, icon: FileText },
+          ],
+        },
+        {
+          title: 'FINANCE',
+          items: [
+            { label: 'Budget', href: `/budget?tour_id=${selectedTourId}`, icon: DollarSign },
+            { label: 'Tour-Wide', href: `/tours/${selectedTourId}/tour-wide`, icon: DollarSign },
+            { label: 'Payroll', href: `/tours/${selectedTourId}/payroll`, icon: DollarSign },
+            { label: 'Rooming', href: `/tours/${selectedTourId}/rooming`, icon: Bed },
+            { label: 'Settlement', href: `/budget?tour_id=${selectedTourId}&tab=settlement`, icon: DollarSign },
+          ],
+        },
+        ...baseGroups,
+      ]
+    : baseGroups;
+
+  const navGroups = tourGroups;
 
   useEffect(() => {
     const saved = localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
@@ -215,16 +227,17 @@ export function Sidebar() {
 
               <div className="space-y-0.5">
                 {group.items.map((item) => {
+                  const hrefPath = item.href.split('?')[0];
                   const isActive =
-                    item.href === '/advance'
-                      ? pathname?.includes('/advance')
-                      : item.href === '/tours'
-                        ? pathname?.startsWith('/tours') && !pathname?.includes('/advance')
-                        : item.href === '/budget'
-                          ? pathname?.startsWith('/budget')
-                          : item.href === '/rooming'
+                    item.label === 'Settlement'
+                      ? pathname?.startsWith('/budget') && searchParams?.get('tab') === 'settlement'
+                      : item.href.includes('/advance')
+                        ? pathname?.includes('/advance')
+                        : item.href.includes('/budget')
+                          ? pathname?.startsWith('/budget') && searchParams?.get('tab') !== 'settlement'
+                          : item.href.includes('/rooming')
                             ? pathname?.startsWith('/rooming')
-                            : pathname === item.href || pathname?.startsWith(item.href + '/');
+                            : pathname === hrefPath || pathname?.startsWith(hrefPath + '/');
 
                   const Icon = item.icon;
                   return (

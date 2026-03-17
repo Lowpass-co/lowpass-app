@@ -171,6 +171,8 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: 'No workspace' }, { status: 403 });
   }
 
+  const STATUS_VALUES = ['draft', 'quoted', 'approved', 'paid', 'disputed'];
+
   let body: {
     id: string;
     category?: string;
@@ -182,6 +184,9 @@ export async function PATCH(request: Request) {
     routing_id?: string | null;
     notes?: string | null;
     order_index?: number;
+    status?: string;
+    tags?: string[];
+    linked_item_ids?: string[];
   };
   try {
     body = await request.json();
@@ -204,6 +209,14 @@ export async function PATCH(request: Request) {
   if (updates.routing_id !== undefined) payload.routing_id = updates.routing_id;
   if (updates.notes !== undefined) payload.notes = updates.notes;
   if (updates.order_index !== undefined) payload.order_index = updates.order_index;
+  if (updates.status !== undefined) {
+    if (!STATUS_VALUES.includes(updates.status)) {
+      return NextResponse.json({ error: 'status must be one of: draft, quoted, approved, paid, disputed' }, { status: 400 });
+    }
+    payload.status = updates.status;
+  }
+  if (updates.tags !== undefined) payload.tags = Array.isArray(updates.tags) ? updates.tags : [];
+  if (updates.linked_item_ids !== undefined) payload.linked_item_ids = Array.isArray(updates.linked_item_ids) ? updates.linked_item_ids : [];
 
   const { data, error } = await supabase
     .from('budget_line_items')

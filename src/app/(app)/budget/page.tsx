@@ -5,6 +5,7 @@
 import { Suspense } from 'react';
 import { cn } from '@/lib/utils';
 import { BudgetTourLanding } from '@/components/budget/BudgetTourLanding';
+import { BudgetTourRedirect } from '@/components/budget/BudgetTourRedirect';
 import { BudgetTourSelector } from '@/components/budget/BudgetTourSelector';
 import { BudgetTabs, BudgetTabsNav } from '@/components/budget/BudgetTabs';
 import { BUDGET_TABS, TabId } from '@/components/budget/budget-tabs';
@@ -21,12 +22,17 @@ export default async function BudgetPage({
 
   if (!tourId) {
     return (
-      <div
-        className="-mx-6 -my-6 flex h-[calc(100vh-4rem)] flex-col lp-dashboard-glass"
-        style={{ background: 'var(--lp-dashboard-bg)' }}
-      >
-        <BudgetTourLanding />
-      </div>
+      <>
+        <Suspense fallback={null}>
+          <BudgetTourRedirect />
+        </Suspense>
+        <div
+          className="-mx-6 -my-6 flex h-[calc(100vh-4rem)] flex-col lp-dashboard-glass"
+          style={{ background: 'var(--lp-dashboard-bg)' }}
+        >
+          <BudgetTourLanding />
+        </div>
+      </>
     );
   }
 

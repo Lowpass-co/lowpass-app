@@ -99,6 +99,17 @@ export function parseRoutingDate(dateStr: string): Date {
 }
 
 /**
+ * Format for day view card header: "22 MAY" (day + short month uppercase).
+ */
+export function formatDayCardDate(dateString: string): string {
+  const date = parseRoutingDate(dateString);
+  if (Number.isNaN(date.getTime())) return dateString;
+  const day = date.getDate();
+  const month = date.toLocaleDateString('en-GB', { month: 'short' }).toUpperCase();
+  return `${day} ${month}`;
+}
+
+/**
  * Format currency amounts.
  * Handles GBP, USD, EUR, and AUD.
  */

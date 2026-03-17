@@ -9,6 +9,7 @@ import Link from 'next/link';
 import { Suspense } from 'react';
 import { BudgetTourLanding } from '@/components/budget/BudgetTourLanding';
 import { BudgetTourSelector } from '@/components/budget/BudgetTourSelector';
+import { RoomingTourRedirect } from '@/components/rooming/RoomingTourRedirect';
 import { cn } from '@/lib/utils';
 
 const ROOMING_STORAGE_KEY = 'lowpass_selected_rooming_tour';
@@ -77,14 +78,19 @@ export default async function RoomingPage({
 
   if (!tourId) {
     return (
-      <div className="-mx-6 -my-6 flex h-[calc(100vh-4rem)] flex-col">
-        <BudgetTourLanding
-          title="Select Tour Rooming"
-          storageKey={ROOMING_STORAGE_KEY}
-          basePath="/rooming"
-          defaultTab="grid"
-        />
-      </div>
+      <>
+        <Suspense fallback={null}>
+          <RoomingTourRedirect />
+        </Suspense>
+        <div className="-mx-6 -my-6 flex h-[calc(100vh-4rem)] flex-col">
+          <BudgetTourLanding
+            title="Select Tour Rooming"
+            storageKey={ROOMING_STORAGE_KEY}
+            basePath="/rooming"
+            defaultTab="grid"
+          />
+        </div>
+      </>
     );
   }
 
