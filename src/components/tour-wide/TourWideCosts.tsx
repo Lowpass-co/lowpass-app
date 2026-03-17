@@ -297,13 +297,13 @@ export function TourWideCosts({
               {templateModal.summary && (
                 <p className="mt-2 text-sm text-lp-text">{templateModal.summary}</p>
               )}
-              {templateModal.warnings?.length ? (
+              {templateModal.warnings && templateModal.warnings.length > 0 && (
                 <ul className="mt-2 list-disc pl-4 text-xs text-amber-600 dark:text-amber-400">
                   {templateModal.warnings.map((w, i) => (
                     <li key={i}>{w}</li>
                   ))}
                 </ul>
-              ) : null}
+              )}
             </div>
             <div className="max-h-64 overflow-y-auto p-4">
               <ul className="space-y-2">

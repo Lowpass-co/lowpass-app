@@ -14,7 +14,6 @@ import {
   ChevronLeft, ChevronRight, LogOut,
   LayoutDashboard, Map, ClipboardList,
   DollarSign, Bed, Music, Users, Building2, Settings, Bug,
-  FileText,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useArtistTourContext } from '@/contexts/ArtistTourContext';
@@ -24,6 +23,8 @@ interface NavItem {
   label: string;
   href: string;
   icon: React.ElementType;
+  /** Override active detection. 'exact' = pathname must equal href path. 'includes' = pathname includes segment. */
+  activeMode?: 'exact' | 'includes' | 'budget' | 'settlement';
 }
 
 interface NavGroup {
@@ -39,21 +40,33 @@ export function Sidebar() {
   const { selectedTourId } = useArtistTourContext();
   const [collapsed, setCollapsed] = useState(false);
 
+  // Auto-collapse when entering budget, restore when leaving
+  useEffect(() => {
+    if (pathname?.startsWith('/budget')) {
+      setCollapsed(true);
+    }
+  }, [pathname]);
+
+  // Sync sidebar width as CSS variable so AppShell can track it without prop drilling
+  useEffect(() => {
+    document.documentElement.style.setProperty('--sidebar-w', collapsed ? '72px' : '260px');
+  }, [collapsed]);
+
   const baseGroups: NavGroup[] = [
-    { items: [{ label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard }] },
+    { items: [{ label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, activeMode: 'exact' }] },
     {
       title: 'Data',
       items: [
-        { label: 'Artists', href: '/artists', icon: Music },
-        { label: 'Personnel', href: '/personnel', icon: Users },
-        { label: 'Venues', href: '/venues', icon: Building2 },
+        { label: 'Artists', href: '/artists', icon: Music, activeMode: 'exact' },
+        { label: 'Personnel', href: '/personnel', icon: Users, activeMode: 'exact' },
+        { label: 'Venues', href: '/venues', icon: Building2, activeMode: 'exact' },
       ],
     },
     {
       title: 'Admin',
       items: [
-        { label: 'Settings', href: '/settings', icon: Settings },
-        { label: 'Bug Reports', href: '/bugs', icon: Bug },
+        { label: 'Settings', href: '/settings', icon: Settings, activeMode: 'exact' },
+        { label: 'Bug Reports', href: '/bugs', icon: Bug, activeMode: 'exact' },
       ],
     },
   ];
@@ -63,22 +76,17 @@ export function Sidebar() {
         {
           title: 'TOUR',
           items: [
-            { label: 'Overview', href: `/tours/${selectedTourId}`, icon: Map },
-            { label: 'Routing', href: `/tours/${selectedTourId}`, icon: Map },
-            { label: 'Advance', href: `/tours/${selectedTourId}/advance`, icon: ClipboardList },
-            { label: 'Day View', href: `/tours/${selectedTourId}/day`, icon: FileText },
-            { label: 'Spreadsheet', href: `/tours/${selectedTourId}/sheet`, icon: FileText },
-            { label: 'Summary', href: `/tours/${selectedTourId}/summary`, icon: FileText },
+            { label: 'Overview', href: `/tours/${selectedTourId}`, icon: Map, activeMode: 'exact' },
+            { label: 'Advance', href: `/tours/${selectedTourId}/advance`, icon: ClipboardList, activeMode: 'includes' },
           ],
         },
         {
           title: 'FINANCE',
           items: [
-            { label: 'Budget', href: `/budget?tour_id=${selectedTourId}`, icon: DollarSign },
-            { label: 'Tour-Wide', href: `/tours/${selectedTourId}/tour-wide`, icon: DollarSign },
-            { label: 'Payroll', href: `/tours/${selectedTourId}/payroll`, icon: DollarSign },
-            { label: 'Rooming', href: `/tours/${selectedTourId}/rooming`, icon: Bed },
-            { label: 'Settlement', href: `/budget?tour_id=${selectedTourId}&tab=settlement`, icon: DollarSign },
+            { label: 'Budget', href: `/budget?tour_id=${selectedTourId}`, icon: DollarSign, activeMode: 'budget' },
+            { label: 'Payroll', href: `/tours/${selectedTourId}/payroll`, icon: DollarSign, activeMode: 'includes' },
+            { label: 'Rooming', href: `/tours/${selectedTourId}/rooming`, icon: Bed, activeMode: 'includes' },
+            { label: 'Settlement', href: `/budget?tour_id=${selectedTourId}&tab=settlement`, icon: DollarSign, activeMode: 'settlement' },
           ],
         },
         ...baseGroups,
@@ -215,7 +223,7 @@ export function Sidebar() {
             }
           `}</style>
           {navGroups.map((group, groupIndex) => (
-            <div key={groupIndex} className="mt-8 first:mt-2">
+            <div key={group.title ?? `group-${groupIndex}`} className="mt-8 first:mt-2">
               {group.title && !collapsed && (
                 <h3
                   className="mb-3 px-3 text-xs font-extrabold uppercase tracking-wider"
@@ -228,16 +236,15 @@ export function Sidebar() {
               <div className="space-y-0.5">
                 {group.items.map((item) => {
                   const hrefPath = item.href.split('?')[0];
+                  const tab = searchParams?.get('tab');
                   const isActive =
-                    item.label === 'Settlement'
-                      ? pathname?.startsWith('/budget') && searchParams?.get('tab') === 'settlement'
-                      : item.href.includes('/advance')
-                        ? pathname?.includes('/advance')
-                        : item.href.includes('/budget')
-                          ? pathname?.startsWith('/budget') && searchParams?.get('tab') !== 'settlement'
-                          : item.href.includes('/rooming')
-                            ? pathname?.startsWith('/rooming')
-                            : pathname === hrefPath || pathname?.startsWith(hrefPath + '/');
+                    item.activeMode === 'settlement'
+                      ? pathname?.startsWith('/budget') && tab === 'settlement'
+                      : item.activeMode === 'budget'
+                        ? pathname?.startsWith('/budget') && tab !== 'settlement'
+                        : item.activeMode === 'includes'
+                          ? !!pathname?.includes(hrefPath.split('/').pop() ?? '')
+                          : /* exact */ pathname === hrefPath;
 
                   const Icon = item.icon;
                   return (

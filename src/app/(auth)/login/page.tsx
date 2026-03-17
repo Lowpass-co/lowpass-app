@@ -190,7 +190,7 @@ export default function LoginPage() {
           className="h-full w-full transition-transform duration-[400ms] ease-out"
           style={{
             transform: transitioning ? 'scale(1.15)' : 'scale(0.98)',
-            background: 'radial-gradient(ellipse at center, rgba(255,70,0,0.12) 0%, #0a0a0a 70%)',
+            background: '#0a0a0a',
           }}
         />
       </div>

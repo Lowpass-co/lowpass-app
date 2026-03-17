@@ -30,8 +30,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         />
       )}
 
-      {/* Main content — offset by sidebar width */}
-      <div className={cn('transition-all duration-200 lg:ml-[260px]')}>
+      {/* Main content — offset by sidebar width (CSS variable set by Sidebar) */}
+      <div className="transition-[margin-left] duration-200 ease-in-out" style={{ marginLeft: 'var(--sidebar-w, 260px)' }}>
         <Header onMenuClick={() => setMobileMenuOpen(!mobileMenuOpen)} />
         <main className="flex min-h-0 flex-1 flex-col px-6 py-6">
           {children}

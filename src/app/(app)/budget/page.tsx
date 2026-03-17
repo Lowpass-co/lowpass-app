@@ -38,64 +38,66 @@ export default async function BudgetPage({
 
   return (
     <div
-      className="h-[calc(100vh-4rem)] px-6 py-6"
+      className="-mx-6 -my-6 h-[calc(100vh-4rem)] px-0 py-0"
       style={{ background: 'var(--lp-dashboard-bg)' }}
     >
       <div
-        className={cn(
-          'mx-auto flex h-full max-w-[1600px] rounded-2xl border shadow-2xl',
-          validTab === 'summary' ? 'px-8 pb-8 pt-0' : 'p-8'
-        )}
+        className="flex h-full w-full"
         style={{
           background: 'var(--lp-budget-wrap-bg)',
-          borderColor: 'var(--lp-budget-wrap-border)',
         }}
       >
-        <div className="flex h-full min-w-0 flex-1 flex-col">
-          {validTab === 'summary' ? (
-            <div className="grid h-full min-h-0 flex-1 grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] gap-x-8 gap-y-0" style={{ gridTemplateRows: 'auto 1fr' }}>
-              <div className="min-w-0 pt-8">
-                <Suspense fallback={<div className="h-16 animate-pulse" />}>
-                  <BudgetTourSelector basePath="/budget" defaultTab="summary" constrainTourName />
-                </Suspense>
-              </div>
-              <div className="min-h-0 min-w-0 overflow-auto">
-                <BudgetTabs tourId={tourId} activeTab={validTab} summarySlot="left" />
-              </div>
-              <div className="flex min-h-0 min-w-0 flex-col overflow-hidden" style={{ gridRow: '1 / -1', gridColumn: 2 }}>
-                <p className="shrink-0 pt-8 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Breakdown</p>
-                <div className="min-h-0 flex-1 overflow-hidden">
-                  <BudgetTabs tourId={tourId} activeTab={validTab} summarySlot="right" />
-                </div>
-              </div>
-            </div>
-          ) : (
-            <>
-              <Suspense fallback={<div className="h-16 animate-pulse" />}>
-                <BudgetTourSelector basePath="/budget" defaultTab="summary" />
-              </Suspense>
-              <div className="mt-8 flex h-0 flex-1 gap-8">
-                <div className="min-w-0 flex-1 overflow-auto">
-                  <BudgetTabs tourId={tourId} activeTab={validTab} />
-                </div>
-              </div>
-            </>
-          )}
-        </div>
+        {/* LEFT: Budget tab nav — extends visually from the collapsed sidebar */}
         <aside
           className={cn(
-            'group/nav ml-8 flex w-[52px] shrink-0 transition-[width] duration-300 ease-out hover:w-[240px]',
-            validTab === 'summary' ? 'h-full flex-col pt-8 pb-8' : 'h-full'
+            'group/nav flex shrink-0 flex-col border-r transition-[width] duration-300 ease-out',
+            'w-[52px] hover:w-[240px]',
+            validTab === 'summary' ? 'py-8' : 'py-8'
           )}
+          style={{ borderColor: 'var(--lp-budget-wrap-border)', background: 'var(--lp-budget-wrap-bg)' }}
         >
-          {validTab === 'summary' ? (
-            <div className="min-h-0 flex-1 flex">
-              <BudgetTabsNav tourId={tourId} activeTab={validTab} />
-            </div>
-          ) : (
-            <BudgetTabsNav tourId={tourId} activeTab={validTab} />
-          )}
+          <BudgetTabsNav tourId={tourId} activeTab={validTab} leftRail />
         </aside>
+
+        {/* RIGHT: Main budget content */}
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          <div
+            className={cn(
+              'flex h-full min-w-0 flex-1 flex-col',
+              validTab === 'summary' ? 'px-8 pb-8 pt-0' : 'p-8'
+            )}
+          >
+            {validTab === 'summary' ? (
+              <div className="grid h-full min-h-0 flex-1 grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] gap-x-8 gap-y-0" style={{ gridTemplateRows: 'auto 1fr' }}>
+                <div className="min-w-0 pt-8">
+                  <Suspense fallback={<div className="h-16 animate-pulse" />}>
+                    <BudgetTourSelector basePath="/budget" defaultTab="summary" constrainTourName />
+                  </Suspense>
+                </div>
+                <div className="min-h-0 min-w-0 overflow-auto">
+                  <BudgetTabs tourId={tourId} activeTab={validTab} summarySlot="left" />
+                </div>
+                <div className="flex min-h-0 min-w-0 flex-col overflow-hidden" style={{ gridRow: '1 / -1', gridColumn: 2 }}>
+                  <p className="shrink-0 pt-8 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Breakdown</p>
+                  <div className="min-h-0 flex-1 overflow-hidden">
+                    <BudgetTabs tourId={tourId} activeTab={validTab} summarySlot="right" />
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <>
+                <Suspense fallback={<div className="h-16 animate-pulse" />}>
+                  <BudgetTourSelector basePath="/budget" defaultTab="summary" />
+                </Suspense>
+                <div className="mt-8 flex h-0 flex-1 gap-8">
+                  <div className="min-w-0 flex-1 overflow-auto">
+                    <BudgetTabs tourId={tourId} activeTab={validTab} />
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

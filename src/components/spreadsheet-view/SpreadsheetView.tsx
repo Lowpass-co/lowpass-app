@@ -10,7 +10,15 @@ import { TransportGrid } from './TransportGrid';
 import { ProductionGrid } from './ProductionGrid';
 import { ReceiptsGrid } from './ReceiptsGrid';
 import { CommissionsGrid } from './CommissionsGrid';
-import type { SheetTab } from '@/app/(app)/tours/[id]/sheet/page';
+
+export type SheetTab =
+  | 'income'
+  | 'hotels'
+  | 'flights'
+  | 'transport'
+  | 'production'
+  | 'receipts'
+  | 'commissions';
 
 const TABS: { id: SheetTab; label: string }[] = [
   { id: 'income', label: 'Routing & Income' },

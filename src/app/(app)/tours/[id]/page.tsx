@@ -8,7 +8,6 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { formatTourDateRange, capitaliseStatus } from '@/lib/utils';
-import { RoutingEditor } from '@/components/routing/RoutingEditor';
 import { TourDetailToasts } from './TourDetailToasts';
 import { TourAdvanceSummary } from './TourAdvanceSummary';
 import { ArrowLeft } from 'lucide-react';
@@ -44,13 +43,43 @@ export default async function TourDetailPage({
     notFound();
   }
 
-  const { count: routingCount } = await supabase
+  const { data: routingRows } = await supabase
     .from('routing')
-    .select('*', { count: 'exact', head: true })
+    .select('id, date, day_type')
     .eq('tour_id', id);
 
+  const routingCount = (routingRows ?? []).length;
+  const showCount = (routingRows ?? []).filter((r) => r.day_type === 'show' || r.day_type === 'festival').length;
+
+  const showRoutingIds = (routingRows ?? [])
+    .filter((r) => r.day_type === 'show' || r.day_type === 'festival')
+    .map((r) => r.id);
+
+  const { data: completeAdvanceInstances } = showRoutingIds.length
+    ? await supabase
+        .from('advance_instances')
+        .select('id, routing_id, status')
+        .in('routing_id', showRoutingIds)
+        .eq('status', 'complete')
+    : { data: [] as unknown[] };
+
+  const completeAdvanceCount = (completeAdvanceInstances ?? []).length;
+  const advancePercent = showCount > 0 ? Math.round((completeAdvanceCount / showCount) * 100) : 0;
+
   const artistName = tour.artist?.name ?? '—';
-  const routingEmpty = (routingCount ?? 0) === 0;
+  const routingEmpty = routingCount === 0;
+
+  const today = new Date();
+  const start = tour.start_date ? new Date(`${tour.start_date}T12:00:00`) : null;
+  const end = tour.end_date ? new Date(`${tour.end_date}T12:00:00`) : null;
+  const daysUntilStart =
+    start && start.getTime() > today.getTime()
+      ? Math.ceil((start.getTime() - today.getTime()) / (24 * 60 * 60 * 1000))
+      : null;
+  const inProgress =
+    start && end
+      ? today.getTime() >= start.getTime() && today.getTime() <= end.getTime()
+      : false;
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -99,17 +128,53 @@ export default async function TourDetailPage({
         </div>
       </div>
 
-      <div>
-        <h2 className="mb-4 text-lg font-semibold text-lp-text">Routing</h2>
-        <TourDetailToasts toast={toast} routingEmpty={routingEmpty}>
-          <RoutingEditor
-            tourId={tour.id}
-            startDate={tour.start_date}
-            endDate={tour.end_date}
-            initialCustomDayTypes={(tour as { custom_day_types?: string[] }).custom_day_types ?? []}
-          />
-        </TourDetailToasts>
-      </div>
+      <TourDetailToasts toast={toast} routingEmpty={routingEmpty}>
+        <div className="grid gap-4 md:grid-cols-4">
+          <div className="rounded-xl border border-lp-border bg-lp-surface/50 p-4">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Total shows</p>
+            <p className="mt-2 text-2xl tabular-nums font-bold text-lp-text">{showCount}</p>
+          </div>
+          <div className="rounded-xl border border-lp-border bg-lp-surface/50 p-4">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Total days</p>
+            <p className="mt-2 text-2xl tabular-nums font-bold text-lp-text">{routingCount}</p>
+          </div>
+          <div className="rounded-xl border border-lp-border bg-lp-surface/50 p-4">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Advance completion</p>
+            <p className="mt-2 text-2xl tabular-nums font-bold text-lp-text">{advancePercent}%</p>
+            <p className="mt-1 text-xs text-lp-text-tertiary">{completeAdvanceCount} of {showCount} complete</p>
+          </div>
+          <div className="rounded-xl border border-lp-border bg-lp-surface/50 p-4">
+            <p className="text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Starts in</p>
+            <p className="mt-2 text-2xl tabular-nums font-bold text-lp-text">
+              {inProgress ? 'In progress' : (daysUntilStart != null ? `${daysUntilStart}d` : '—')}
+            </p>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-lp-border bg-lp-surface/50 p-4">
+          <p className="mb-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Quick links</p>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href={`/tours/${id}`}
+              className="rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-sm font-medium text-lp-text hover:bg-lp-surface-hover hover:border-lp-orange hover:text-lp-orange transition-colors"
+            >
+              Routing
+            </Link>
+            <Link
+              href={`/tours/${id}/advance`}
+              className="rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-sm font-medium text-lp-text hover:bg-lp-surface-hover hover:border-lp-orange hover:text-lp-orange transition-colors"
+            >
+              Advance
+            </Link>
+            <Link
+              href={`/budget?tour_id=${id}`}
+              className="rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-sm font-medium text-lp-text hover:bg-lp-surface-hover hover:border-lp-orange hover:text-lp-orange transition-colors"
+            >
+              Budget
+            </Link>
+          </div>
+        </div>
+      </TourDetailToasts>
 
       <TourAdvanceSummary tourId={tour.id} />
     </div>

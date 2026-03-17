@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { X, Lightbulb } from 'lucide-react';
+import { X, Lightbulb, Pencil, Trash2 } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { InlineEditCell } from '@/components/spreadsheet-view/InlineEditCell';
 import { cn } from '@/lib/utils';
@@ -70,6 +70,7 @@ interface NoteRow {
   created_by?: string | null;
   created_at: string;
   note_type: string;
+  author?: { id: string; name: string | null; avatar_url: string | null } | null;
 }
 
 export function LineItemDetailPanel({ lineItemId, tourId, onClose }: LineItemDetailPanelProps) {
@@ -80,11 +81,22 @@ export function LineItemDetailPanel({ lineItemId, tourId, onClose }: LineItemDet
   const [loading, setLoading] = useState(false);
   const [tab, setTab] = useState<TabId>('overview');
   const [noteDraft, setNoteDraft] = useState('');
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [editingNoteText, setEditingNoteText] = useState('');
   const [uploading, setUploading] = useState(false);
   const [routingContext, setRoutingContext] = useState<{ date: string; venue_name?: string } | null>(null);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [suggestionsDismissed, setSuggestionsDismissed] = useState<Set<number>>(new Set());
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+
+  const initialsFor = (name: string | null | undefined, fallback: string = '?') => {
+    const n = (name ?? '').trim();
+    if (!n) return fallback;
+    return n.split(/\s+/).map((w) => w[0]).filter(Boolean).slice(0, 2).join('').toUpperCase();
+  };
+
+  const fmtStamp = (iso: string) =>
+    iso ? new Date(iso).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
 
   const fetchDetails = useCallback(async () => {
     if (!lineItemId) return;
@@ -192,6 +204,39 @@ export function LineItemDetailPanel({ lineItemId, tourId, onClose }: LineItemDet
       setNoteDraft('');
     }
   }, [lineItemId, noteDraft]);
+
+  const saveNoteEdit = useCallback(async () => {
+    if (!lineItemId || !editingNoteId) return;
+    const text = editingNoteText.trim();
+    if (!text) return;
+    const optimisticId = editingNoteId;
+    setNotes((prev) => prev.map((n) => (n.id === optimisticId ? { ...n, content: text } : n)));
+    setEditingNoteId(null);
+    setEditingNoteText('');
+    const res = await fetch(`/api/budget/line-items/${lineItemId}/notes`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ noteId: optimisticId, content: text }),
+    });
+    if (res.ok) {
+      const updated = await res.json();
+      setNotes((prev) => prev.map((n) => (n.id === optimisticId ? updated : n)));
+    } else {
+      fetchDetails();
+    }
+  }, [lineItemId, editingNoteId, editingNoteText, fetchDetails]);
+
+  const deleteNote = useCallback(async (noteId: string) => {
+    if (!lineItemId) return;
+    if (!window.confirm('Delete this note?')) return;
+    setNotes((prev) => prev.filter((n) => n.id !== noteId));
+    const res = await fetch(`/api/budget/line-items/${lineItemId}/notes`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ noteId }),
+    });
+    if (!res.ok) fetchDetails();
+  }, [lineItemId, fetchDetails]);
 
   const deleteAttachment = useCallback(async (attachmentId: string) => {
     if (!lineItemId) return;
@@ -327,11 +372,88 @@ export function LineItemDetailPanel({ lineItemId, tourId, onClose }: LineItemDet
                     <h3 className="text-xs font-bold uppercase tracking-wider text-lp-text-secondary mb-2">Notes</h3>
                     <div className="space-y-2">
                       {notes.filter((n) => n.note_type === 'note').map((n) => (
-                        <div key={n.id} className="rounded-lg border border-lp-border/50 bg-lp-surface/30 p-3 text-sm">
-                          <p className="text-lp-text whitespace-pre-wrap">{n.content}</p>
-                          <p className="mt-1 text-xs text-lp-text-secondary">
-                            {n.created_at ? new Date(n.created_at).toLocaleString('en-GB') : ''}
-                          </p>
+                        <div
+                          key={n.id}
+                          className="group rounded-xl border border-lp-border bg-lp-surface/50 p-3 space-y-1.5"
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex items-center gap-2 min-w-0">
+                              <div
+                                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-bold text-white"
+                                style={{ backgroundColor: n.author?.avatar_url ? 'transparent' : '#FF4500' }}
+                              >
+                                {n.author?.avatar_url ? (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img src={n.author.avatar_url} alt="" className="h-7 w-7 rounded-full object-cover" />
+                                ) : (
+                                  initialsFor(n.author?.name ?? null)
+                                )}
+                              </div>
+                              <div className="min-w-0">
+                                <div className="flex items-baseline gap-2">
+                                  <span className="text-[13px] font-semibold text-lp-text truncate">
+                                    {n.author?.name ?? 'Unknown'}
+                                  </span>
+                                  <span className="text-[11px] text-lp-text-tertiary shrink-0">
+                                    {fmtStamp(n.created_at)}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingNoteId(n.id);
+                                  setEditingNoteText(n.content ?? '');
+                                }}
+                                className="rounded p-1 text-lp-text-tertiary hover:text-lp-text"
+                                aria-label="Edit note"
+                              >
+                                <Pencil className="h-4 w-4" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => deleteNote(n.id)}
+                                className="rounded p-1 text-lp-text-tertiary hover:text-red-500"
+                                aria-label="Delete note"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            </div>
+                          </div>
+
+                          {editingNoteId === n.id ? (
+                            <div className="space-y-2">
+                              <textarea
+                                value={editingNoteText}
+                                onChange={(e) => setEditingNoteText(e.target.value)}
+                                rows={3}
+                                className="w-full rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text placeholder:text-lp-text-secondary"
+                              />
+                              <div className="flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={saveNoteEdit}
+                                  disabled={!editingNoteText.trim()}
+                                  className="rounded bg-lp-orange px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+                                >
+                                  Save
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => { setEditingNoteId(null); setEditingNoteText(''); }}
+                                  className="rounded border border-lp-border px-3 py-1.5 text-sm font-medium text-lp-text hover:bg-lp-surface"
+                                >
+                                  Cancel
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <p className="text-[13px] text-lp-text-secondary leading-relaxed whitespace-pre-wrap">
+                              {n.content}
+                            </p>
+                          )}
                         </div>
                       ))}
                     </div>

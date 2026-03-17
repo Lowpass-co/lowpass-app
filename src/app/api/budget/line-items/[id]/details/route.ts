@@ -48,7 +48,26 @@ export async function GET(
   ]);
 
   const attachments = attachmentsRes.data ?? [];
-  const notes = notesRes.data ?? [];
+  const notesRaw = notesRes.data ?? [];
+
+  const createdByIds = [...new Set((notesRaw ?? []).map((n) => (n as { created_by?: string | null }).created_by).filter(Boolean))] as string[];
+  const { data: profilesRaw } = createdByIds.length
+    ? await supabase
+        .from('profiles')
+        .select('id, name, avatar_url')
+        .in('id', createdByIds)
+    : { data: [] as unknown[] };
+  const profiles = (profilesRaw ?? []) as { id: string; name: string | null; avatar_url: string | null }[];
+  const profileById = new Map(profiles.map((p) => [p.id, p]));
+
+  const notes = (notesRaw ?? []).map((n) => {
+    const authorId = (n as { created_by?: string | null }).created_by ?? null;
+    const author = authorId ? profileById.get(authorId) ?? null : null;
+    return {
+      ...n,
+      author: author ? { id: (author as { id: string }).id, name: (author as { name?: string | null }).name ?? null, avatar_url: (author as { avatar_url?: string | null }).avatar_url ?? null } : null,
+    };
+  });
 
   const linkedIds = (lineItem as { linked_item_ids?: string[] }).linked_item_ids ?? [];
   let linkedItems: unknown[] = [];

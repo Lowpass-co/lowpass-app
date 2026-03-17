@@ -261,6 +261,8 @@ export type AdvanceDocument = {
   url: string;
   path?: string;
   filename: string;
+  size?: number;
+  type?: string;
   content_type?: string;
   uploaded_at: string;
   uploaded_by?: string;
@@ -3109,6 +3111,7 @@ function ImportantDocumentsCard({
   const [manageAccessDoc, setManageAccessDoc] = useState<AdvanceDocument | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [storageFiles, setStorageFiles] = useState<{ path: string; name: string; created_at: string | null; url: string }[]>([]);
+  const [pendingFileName, setPendingFileName] = useState('');
 
   useEffect(() => {
     let cancelled = false;
@@ -3154,18 +3157,23 @@ function ImportantDocumentsCard({
       const res = await fetch('/api/upload/advance-file', { method: 'POST', body: form });
       if (!res.ok) throw new Error('Upload failed');
       const { url, path } = await res.json();
+      const base = file.name.replace(/\.[^.]+$/, '');
+      const safeName = (pendingFileName || '').trim() || base || 'File';
       const doc: AdvanceDocument = {
         id: crypto.randomUUID(),
         url,
         path: path ?? undefined,
-        filename: file.name,
+        filename: safeName,
+        size: file.size,
+        type: file.type,
         content_type: file.type,
         uploaded_at: new Date().toISOString(),
         uploaded_by: currentUserId ?? undefined,
         visible_to: [],
       };
       onDocumentsChange([...documents, doc]);
-      setStorageFiles((prev) => [...prev, { path: path ?? '', name: file.name, created_at: doc.uploaded_at, url }]);
+      setStorageFiles((prev) => [...prev, { path: path ?? '', name: safeName, created_at: doc.uploaded_at, url }]);
+      setPendingFileName('');
     } finally {
       setUploading(false);
     }
@@ -3196,6 +3204,15 @@ function ImportantDocumentsCard({
   };
 
   const formatDate = (iso: string) => new Date(iso).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+  const formatBytes = (bytes?: number) => {
+    const b = Number(bytes);
+    if (!Number.isFinite(b) || b <= 0) return '';
+    const kb = b / 1024;
+    const mb = kb / 1024;
+    if (mb >= 1) return `${mb.toFixed(1)} MB`;
+    if (kb >= 1) return `${kb.toFixed(1)} KB`;
+    return `${b.toFixed(0)} B`;
+  };
 
   return (
     <div className="rounded-xl border border-lp-border border-l-4 border-l-[var(--color-lp-success)] bg-lp-surface overflow-hidden card-hover">
@@ -3204,6 +3221,13 @@ function ImportantDocumentsCard({
         <span className="font-medium text-lp-text">Important Documents</span>
       </div>
       <div className="p-4 space-y-4">
+        <input
+          type="text"
+          placeholder="File name (optional)"
+          value={pendingFileName}
+          onChange={(e) => setPendingFileName(e.target.value)}
+          className="w-full rounded-md border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:outline-none focus:ring-1 focus:ring-lp-orange"
+        />
         <div
           onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
           onDragLeave={() => setDragOver(false)}
@@ -3238,11 +3262,13 @@ function ImportantDocumentsCard({
         ) : displayDocs.length > 0 ? (
           <ul className="space-y-2">
             {displayDocs.map((doc) => (
-              <li key={doc.id} className="rounded-lg border border-lp-border bg-lp-bg-secondary p-3 flex items-center gap-3">
+              <li key={doc.id} className="rounded-lg border border-lp-border bg-lp-surface/50 px-3 py-2 flex items-center gap-3">
                 {docIcon(doc)}
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-lp-text truncate">{doc.filename}</p>
-                  <p className="text-xs text-lp-text-tertiary">{formatDate(doc.uploaded_at)}</p>
+                  <p className="text-xs text-lp-text-tertiary">
+                    {[formatBytes(doc.size), formatDate(doc.uploaded_at)].filter(Boolean).join(' · ')}
+                  </p>
                 </div>
                 <a href={doc.url} target="_blank" rel="noreferrer" className="shrink-0 text-sm font-medium text-lp-orange hover:text-lp-orange-hover">Download</a>
                 <button type="button" onClick={() => removeDoc(doc)} className="shrink-0 rounded p-1.5 text-lp-text-tertiary hover:bg-red-500/10 hover:text-red-500" title="Delete"><Trash2 size={16} /></button>

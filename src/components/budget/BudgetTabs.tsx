@@ -3,7 +3,7 @@
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import React, { Suspense } from 'react';
-import { Loader2, DollarSign, LayoutPanelLeft, CreditCard, Hotel, Plane, Bus, Package, Receipt, PercentDiamond, Scale, Route } from 'lucide-react';
+import { Loader2, DollarSign, LayoutPanelLeft, CreditCard, Hotel, Plane, Bus, Package, Receipt, PercentDiamond, Scale, Route, CalendarDays } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { BUDGET_TABS } from './budget-tabs';
 
@@ -51,6 +51,10 @@ const SettlementTab = dynamic(
   () => import('@/components/budget/SettlementTab').then((m) => ({ default: m.SettlementTab })),
   { ssr: false }
 );
+const DayViewTab = dynamic(
+  () => import('@/components/budget/DayViewTab').then((m) => ({ default: m.DayViewTab })),
+  { ssr: false }
+);
 
 function TabLoader() {
   return (
@@ -64,6 +68,7 @@ function TabLoader() {
 const ICONS: Record<string, React.ReactElement> = {
   summary: <LayoutPanelLeft className="h-4 w-4" />,
   income: <Route className="h-4 w-4" />,
+  'day-view': <CalendarDays className="h-4 w-4" />,
   salaries: <DollarSign className="h-4 w-4" />,
   payroll: <CreditCard className="h-4 w-4" />,
   hotels: <Hotel className="h-4 w-4" />,
@@ -75,11 +80,20 @@ const ICONS: Record<string, React.ReactElement> = {
   settlement: <Scale className="h-4 w-4" />,
 };
 
-/** Vertical tab list for the right column (hover-expand). Full-height rail, even spacing. */
-export function BudgetTabsNav({ tourId, activeTab }: { tourId: string; activeTab: string }) {
+/**
+ * Vertical tab list.
+ * - Default: floating card with rounded border/shadow (original right-side rail)
+ * - leftRail: flush full-height strip that extends from the sidebar
+ */
+export function BudgetTabsNav({ tourId, activeTab, leftRail }: { tourId: string; activeTab: string; leftRail?: boolean }) {
   return (
     <nav className="h-full w-full" aria-label="Budget sections">
-      <div className="flex h-full flex-col overflow-hidden rounded-xl border border-lp-border bg-lp-bg shadow-lg transition-shadow duration-200 ease-out hover:shadow-xl hover:shadow-lp-orange/15">
+      <div className={cn(
+        'flex h-full flex-col overflow-hidden',
+        leftRail
+          ? 'bg-transparent'
+          : 'rounded-xl border border-lp-border bg-lp-bg shadow-lg transition-shadow duration-200 ease-out hover:shadow-xl hover:shadow-lp-orange/15'
+      )}>
         <ul className="flex flex-1 flex-col justify-center gap-5 py-6 text-[13px] font-medium">
           {BUDGET_TABS.map((tab) => {
             const isActive = activeTab === tab.id;
@@ -139,6 +153,7 @@ export function BudgetTabs({
           />
         );
       case 'income': return <IncomeTab tourId={tourId} />;
+      case 'day-view': return <DayViewTab tourId={tourId} />;
       case 'salaries': return <SalariesTab tourId={tourId} />;
       case 'payroll': return <PayrollTab tourId={tourId} />;
       case 'hotels': return <HotelsTab tourId={tourId} />;
