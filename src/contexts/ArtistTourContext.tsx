@@ -16,6 +16,8 @@ interface ArtistTourContextType {
   artists: Artist[];
   tours: Tour[];
   isLoading: boolean;
+  /** True once localStorage has been read — prevents artist-picker flashing on load */
+  hydrated: boolean;
 }
 
 const ArtistTourContext = createContext<ArtistTourContextType | null>(null);
@@ -34,6 +36,7 @@ export function ArtistTourProvider({ children }: { children: ReactNode }) {
   const [artists, setArtists] = useState<Artist[]>([]);
   const [tours, setTours] = useState<Tour[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [hydrated, setHydrated] = useState(false);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -41,6 +44,7 @@ export function ArtistTourProvider({ children }: { children: ReactNode }) {
     const t = localStorage.getItem(STORAGE_TOUR);
     if (a) setSelectedArtistIdState(a);
     if (t) setSelectedTourIdState(t);
+    setHydrated(true);
   }, []);
 
   const setSelectedArtistId = useCallback((id: string | null) => {
@@ -107,6 +111,7 @@ export function ArtistTourProvider({ children }: { children: ReactNode }) {
     artists,
     tours,
     isLoading,
+    hydrated,
   };
 
   return (

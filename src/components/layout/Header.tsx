@@ -8,6 +8,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { Bell, Search, Menu, ChevronDown } from 'lucide-react';
 import { DarkModeToggle } from './DarkModeToggle';
 import { useArtistTourContext } from '@/contexts/ArtistTourContext';
@@ -21,6 +22,7 @@ interface HeaderProps {
 }
 
 export function Header({ title, subtitle, onMenuClick }: HeaderProps) {
+  const router = useRouter();
   const {
     selectedArtistId,
     selectedTourId,
@@ -111,7 +113,12 @@ export function Header({ title, subtitle, onMenuClick }: HeaderProps) {
                   <button
                     key={a.id}
                     type="button"
-                    onClick={() => { setSelectedArtistId(a.id); setArtistOpen(false); }}
+                    onClick={() => {
+                      const isSwitch = a.id !== selectedArtistId;
+                      setSelectedArtistId(a.id);
+                      setArtistOpen(false);
+                      if (isSwitch) router.push('/dashboard');
+                    }}
                     className={cn(
                       'flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors',
                       selectedArtistId === a.id

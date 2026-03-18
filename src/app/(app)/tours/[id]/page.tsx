@@ -155,7 +155,7 @@ export default async function TourDetailPage({
           <p className="mb-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Quick links</p>
           <div className="flex flex-wrap gap-2">
             <Link
-              href={`/tours/${id}`}
+              href={`/tours/${id}/routing`}
               className="rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-sm font-medium text-lp-text hover:bg-lp-surface-hover hover:border-lp-orange hover:text-lp-orange transition-colors"
             >
               Routing

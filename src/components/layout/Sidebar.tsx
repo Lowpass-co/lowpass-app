@@ -12,7 +12,7 @@ import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import {
   ChevronLeft, ChevronRight, LogOut,
-  LayoutDashboard, Map, ClipboardList,
+  LayoutDashboard, Map, Route, ClipboardList,
   DollarSign, Bed, Music, Users, Building2, Settings, Bug,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
@@ -77,6 +77,7 @@ export function Sidebar() {
           title: 'TOUR',
           items: [
             { label: 'Overview', href: `/tours/${selectedTourId}`, icon: Map, activeMode: 'exact' },
+            { label: 'Routing', href: `/tours/${selectedTourId}/routing`, icon: Route, activeMode: 'includes' },
             { label: 'Advance', href: `/tours/${selectedTourId}/advance`, icon: ClipboardList, activeMode: 'includes' },
           ],
         },
