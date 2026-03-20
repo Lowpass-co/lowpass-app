@@ -157,9 +157,16 @@
   --lp-sidebar-icon-active: #FF4500;
   --lp-sidebar-decor-stroke: rgba(255, 69, 0, 0.24);
 
-  /* Dashboard — dark (gradient + glass cards) */
-  --lp-dashboard-bg: linear-gradient(135deg, #0F0F0F 0%, #1a0a0a 40%, #2d1510 100%);
-  --lp-dashboard-card-bg: rgba(26, 26, 26, 0.55);
+  /* Dashboard — dark: burnt-orange wash on the left (~30%), then solid black (matches sidebar edge glow) */
+  --lp-dashboard-bg: linear-gradient(
+    90deg,
+    #2e1a12 0%,
+    #140d0a 14%,
+    #060605 26%,
+    #000000 34%,
+    #000000 100%
+  );
+  --lp-dashboard-card-bg: rgba(12, 12, 12, 0.72);
   --lp-dashboard-card-border: rgba(255, 255, 255, 0.12);
   --lp-dashboard-card-shadow: 0 4px 24px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(255, 255, 255, 0.06) inset;
   --lp-dashboard-blur: 20px;
@@ -373,6 +380,11 @@ body {
 
 .context-menu-dropdown {
   animation: scaleIn 0.15s ease-out;
+}
+
+/* Native date/time controls should follow theme in dark mode */
+.lp-native-date-input {
+  color-scheme: dark light;
 }
 
 /* Delete confirm button — shake when clicked while disabled */

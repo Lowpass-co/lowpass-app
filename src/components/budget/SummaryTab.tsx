@@ -33,7 +33,9 @@ function bucketSections(sections: BudgetSummarySection[]): {
   const overheads: BudgetSummarySection[] = [];
 
   for (const s of sections) {
-    const t = s.title.toUpperCase();
+    const t = s.title.toUpperCase().trim();
+    // Roll-up section for APIs (e.g. dashboard snapshot); not a direct-expense category
+    if (t === 'TOTALS') continue;
     if (t.includes('INCOME') || t.includes('REVENUE')) {
       income.push(s);
     } else if (
@@ -89,6 +91,10 @@ const OVERHEADS_COLOR = '#6d28d9';
 const STANDARD_BAR_HEIGHT = 120;
 const MAX_BAR_HEIGHT = 200;
 
+/** Breakdown tables: line item column grows to full width; amount cols have minimum readable width */
+const BREAKDOWN_GRID_COLS =
+  'grid-cols-[minmax(0,1fr)_minmax(16ch,max-content)_minmax(16ch,max-content)_minmax(11ch,max-content)]';
+
 /** Vertical stacked bar: only filled when totals present; height scales with value; empty = grey placeholder at standard height. */
 function VerticalStackedBar({
   income: inc,
@@ -115,8 +121,13 @@ function VerticalStackedBar({
   const oPct = (oh / total) * 100;
 
   return (
-    <div className="mx-auto flex min-w-0 max-w-[120px] flex-1 flex-col items-center justify-end">
-      <span className={cn('mb-2 text-sm font-semibold tabular-nums', valueAboveClassName ?? 'text-lp-text')}>
+    <div className="mx-auto flex min-w-[7rem] max-w-[min(100%,22rem)] flex-1 flex-col items-center justify-end px-0.5">
+      <span
+        className={cn(
+          'mb-2 max-w-full text-center text-sm font-semibold tabular-nums whitespace-nowrap',
+          valueAboveClassName ?? 'text-lp-text'
+        )}
+      >
         {valueAbove}
       </span>
       <div
@@ -247,86 +258,107 @@ function BreakdownSection({
     }
   }
 
-  const gridCols = 'grid-cols-[minmax(0,1fr)_3.5rem_3.5rem_4rem]';
+  /** Opaque-enough footer so scrolled rows never show through at high zoom */
+  const subtotalBg = `color-mix(in srgb, var(--lp-surface) 78%, ${color} 22%)`;
+
+  const columnHeader = (
+    <div
+      className={cn(
+        'grid w-full shrink-0 border-b border-lp-border/50 bg-lp-surface px-2 py-1.5 text-[11px] font-semibold text-lp-text-tertiary',
+        BREAKDOWN_GRID_COLS
+      )}
+    >
+      <span className="min-w-0 text-left">Line item</span>
+      <span className="whitespace-nowrap text-right">Proposed</span>
+      <span className="whitespace-nowrap text-right">Actual</span>
+      <span className="whitespace-nowrap text-right">Variance</span>
+    </div>
+  );
+
+  const rowGrid = (row: (typeof lines)[0], i: number) => (
+    <div
+      key={i}
+      className={cn(
+        'grid w-full items-center gap-x-2 border-b border-lp-border/30 px-2 py-1.5 text-[11px]',
+        BREAKDOWN_GRID_COLS
+      )}
+    >
+      <span className="min-w-0 text-lp-text break-words pr-1">{row.label}</span>
+      <span className="whitespace-nowrap text-right tabular-nums text-lp-text-tertiary">
+        {currencySymbol}
+        {fmt(row.proposed)}
+      </span>
+      <span className="whitespace-nowrap text-right tabular-nums text-lp-text">
+        {currencySymbol}
+        {fmt(row.actual)}
+      </span>
+      <span className="whitespace-nowrap text-right tabular-nums text-lp-text-tertiary">{row.varianceDisplay}</span>
+    </div>
+  );
+
+  const subtotalRow = (
+    <div
+      className={cn(
+        'grid w-full shrink-0 items-center gap-x-2 border-t border-lp-border/60 px-2 py-2.5 text-[11px] font-bold',
+        BREAKDOWN_GRID_COLS
+      )}
+      style={{
+        background: subtotalBg,
+        boxShadow: '0 -8px 16px rgba(0,0,0,0.28)',
+      }}
+    >
+      <span className="min-w-0 text-lp-text-tertiary uppercase tracking-wider">Subtotal</span>
+      <span className="whitespace-nowrap text-right tabular-nums text-lp-text">
+        {currencySymbol}
+        {fmt(subtotalProposed)}
+      </span>
+      <span className="whitespace-nowrap text-right tabular-nums text-lp-text">
+        {currencySymbol}
+        {fmt(subtotalActual)}
+      </span>
+      <span />
+    </div>
+  );
 
   return (
-    <div className={cn('flex min-h-0 flex-col rounded-xl overflow-hidden border border-lp-border/60 bg-lp-surface/50', fillHeight && 'h-full')}>
-      {/* Header: title on left, then gradient line and dot */}
-      <div className="flex shrink-0 items-center gap-2 px-3 py-2 border-b border-lp-border/50" style={{ background: `${color}18` }}>
-        <span className="text-[10px] font-semibold uppercase tracking-widest text-lp-text-secondary shrink-0">
+    <div
+      className={cn(
+        'flex min-h-0 w-full min-w-0 flex-col overflow-hidden rounded-xl border border-lp-border/60 bg-lp-surface',
+        fillHeight && 'h-full'
+      )}
+    >
+      {/* Section title */}
+      <div
+        className="flex shrink-0 items-center gap-2 border-b border-lp-border/50 px-3 py-2"
+        style={{ background: `${color}18` }}
+      >
+        <span className="shrink-0 text-[10px] font-semibold uppercase tracking-widest text-lp-text-secondary">
           {title}
         </span>
-        <div className="h-1 flex-1 rounded-full opacity-80" style={{ background: color }} />
+        <div className="h-1 min-w-0 flex-1 rounded-full opacity-80" style={{ background: color }} />
         <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: color }} />
       </div>
-      <div className={cn('min-h-0 overflow-y-auto flex flex-col', fillHeight && 'flex-1')}>
-        <div className={cn('flex flex-col', fillHeight && 'min-h-full')}>
-          {fillHeight ? (
-            <>
-              {/* Grid layout when fillHeight: headers and rows align, body rows spread evenly */}
-              <div className={`grid ${gridCols} shrink-0 border-b border-lp-border/50 px-2 py-1.5 text-[11px] font-semibold text-lp-text-tertiary sticky top-0 z-10 bg-lp-surface/95`}>
-                <span className="text-left">Line item</span>
-                <span className="text-right">Proposed</span>
-                <span className="text-right">Actual</span>
-                <span className="text-right">Variance</span>
-              </div>
-              <div className="flex flex-1 min-h-0 flex-col justify-evenly">
-                {lines.map((row, i) => (
-                  <div key={i} className={`grid ${gridCols} border-b border-lp-border/30 px-2 py-1 text-[11px] items-center gap-0`}>
-                    <span className="min-w-0 text-lp-text-secondary break-words">{row.label}</span>
-                    <span className="text-right tabular-nums text-lp-text-tertiary">{currencySymbol}{fmt(row.proposed)}</span>
-                    <span className="text-right tabular-nums text-lp-text">{currencySymbol}{fmt(row.actual)}</span>
-                    <span className="text-right tabular-nums text-lp-text-tertiary">{row.varianceDisplay}</span>
-                  </div>
-                ))}
-              </div>
-              <div className={`grid ${gridCols} items-center gap-0 border-t border-lp-border/50 px-2 py-2 text-[11px] font-bold shrink-0 sticky bottom-0 z-10`} style={{ background: `${color}22` }}>
-                <span className="text-lp-text-tertiary uppercase tracking-wider">Subtotal</span>
-                <span className="text-right tabular-nums text-lp-text">{currencySymbol}{fmt(subtotalProposed)}</span>
-                <span className="text-right tabular-nums text-lp-text">{currencySymbol}{fmt(subtotalActual)}</span>
-                <span />
-              </div>
-            </>
-          ) : (
-            <>
-              <table className="w-full shrink-0 border-collapse text-[11px] table-fixed min-w-0">
-                <colgroup>
-                  <col className="min-w-0" />
-                  <col className="w-14" />
-                  <col className="w-14" />
-                  <col className="w-16" />
-                </colgroup>
-                <thead className="sticky top-0 z-10 bg-lp-surface/95">
-                  <tr className="border-b border-lp-border/50">
-                    <th className="px-2 py-1.5 text-left font-semibold text-lp-text-tertiary">Line item</th>
-                    <th className="px-2 py-1.5 text-right font-semibold text-lp-text-tertiary">Proposed</th>
-                    <th className="px-2 py-1.5 text-right font-semibold text-lp-text-tertiary">Actual</th>
-                    <th className="px-2 py-1.5 text-right font-semibold text-lp-text-tertiary">Variance</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {lines.map((row, i) => (
-                    <tr key={i} className="border-b border-lp-border/30">
-                      <td className="min-w-0 max-w-[140px] px-2 py-1 text-lp-text-secondary break-words">{row.label}</td>
-                      <td className="px-2 py-1 text-right tabular-nums text-lp-text-tertiary">{currencySymbol}{fmt(row.proposed)}</td>
-                      <td className="px-2 py-1 text-right tabular-nums text-lp-text">{currencySymbol}{fmt(row.actual)}</td>
-                      <td className="px-2 py-1 text-right tabular-nums text-lp-text-tertiary">{row.varianceDisplay}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <div
-                className="sticky bottom-0 z-10 grid grid-cols-[1fr_3.5rem_3.5rem_4rem] items-center gap-0 border-t border-lp-border/50 px-2 py-2 text-[11px] font-bold shrink-0"
-                style={{ background: `${color}22` }}
-              >
-                <span className="text-lp-text-tertiary uppercase tracking-wider">Subtotal</span>
-                <span className="text-right tabular-nums text-lp-text">{currencySymbol}{fmt(subtotalProposed)}</span>
-                <span className="text-right tabular-nums text-lp-text">{currencySymbol}{fmt(subtotalActual)}</span>
-                <span />
-              </div>
-            </>
+
+      {/* Column header + scrollable body + subtotal (subtotal never inside scroll — avoids overlap at zoom) */}
+      <div className={cn('flex min-h-0 w-full min-w-0 flex-col', fillHeight ? 'min-h-0 flex-1' : '')}>
+        {columnHeader}
+        <div
+          className={cn(
+            'min-h-0 min-w-0 overflow-y-auto overflow-x-auto overscroll-contain',
+            fillHeight ? 'flex min-h-0 flex-1 flex-col' : 'max-h-[min(50vh,26rem)]'
           )}
+        >
+          <div
+            className={cn(
+              'w-full min-w-0',
+              // Direct Expenses: grow to fill middle slot and space rows evenly; scroll when lines exceed area
+              fillHeight && 'flex min-h-0 flex-1 flex-col justify-evenly'
+            )}
+          >
+            {lines.map((row, i) => rowGrid(row, i))}
+          </div>
         </div>
+        {subtotalRow}
       </div>
     </div>
   );
@@ -380,7 +412,8 @@ export function SummaryTab({
   const { income, expenses, overheads } = bucketSections(sections);
   const netActual = income.actual - expenses.actual - overheads.actual;
   const netProposed = income.proposed - expenses.proposed - overheads.proposed;
-  const netIsPositive = netActual >= 0;
+  const actualBeatsProposed = netActual > netProposed;
+  const actualUnderProposed = netActual < netProposed;
   const currencySymbol = '£';
 
   const proposedTotal = income.proposed + expenses.proposed + overheads.proposed;
@@ -400,13 +433,13 @@ export function SummaryTab({
         Net Profit / Loss
       </p>
       {/* GRAPH SECTION — mid-body: two vertical bar graphs; height scales with max(Proposed, Actual) when data present */}
-      <div className="flex min-h-[140px] flex-1 items-end justify-center gap-6 px-2">
+      <div className="flex min-h-[140px] min-w-0 flex-1 items-end justify-center gap-6 overflow-x-auto px-2">
         <VerticalStackedBar
           income={income.proposed}
           expenses={expenses.proposed}
           overheads={overheads.proposed}
           label="Proposed"
-          valueAbove={`${currencySymbol}${fmt(income.proposed)}`}
+          valueAbove={`${currencySymbol}${fmt(netProposed)}`}
           heightPx={proposedBarHeight}
           hasData={proposedTotal > 0}
         />
@@ -415,24 +448,24 @@ export function SummaryTab({
           expenses={expenses.actual}
           overheads={overheads.actual}
           label="Actual"
-          valueAbove={`${currencySymbol}${fmt(income.actual)}`}
-          valueAboveClassName={netIsPositive ? 'text-emerald-400' : 'text-red-400'}
+          valueAbove={`${currencySymbol}${fmt(netActual)}`}
+          valueAboveClassName={actualBeatsProposed ? 'text-emerald-400' : actualUnderProposed ? 'text-red-400' : 'text-lp-text'}
           heightPx={actualBarHeight}
           hasData={actualTotal > 0}
         />
       </div>
       {/* Totals at bottom of graph section; P/L label white; Actual column green (profit) / red (loss) */}
-      <div className="mt-auto shrink-0 rounded-lg border border-white/10 bg-[color-mix(in_srgb,var(--lp-budget-wrap-bg)_92%,#5c2a2a_8%)] px-3 py-3">
-        <table className="w-full border-collapse text-[11px]">
+      <div className="mt-auto min-w-0 shrink-0 overflow-x-auto rounded-lg border border-white/10 bg-[color-mix(in_srgb,var(--lp-budget-wrap-bg)_92%,#5c2a2a_8%)] px-3 py-3">
+        <table className="min-w-max w-full border-collapse text-[11px]">
           <thead>
             <tr className="border-b border-white/20">
               <th className="py-1.5 text-left text-[10px] font-semibold uppercase tracking-wider text-lp-orange">
                 Totals
               </th>
-              <th className="py-1.5 text-right text-[10px] font-semibold uppercase tracking-wider text-lp-orange">
+              <th className="whitespace-nowrap py-1.5 text-right text-[10px] font-semibold uppercase tracking-wider text-lp-orange">
                 Proposed
               </th>
-              <th className="py-1.5 text-right text-[10px] font-semibold uppercase tracking-wider text-lp-orange">
+              <th className="whitespace-nowrap py-1.5 text-right text-[10px] font-semibold uppercase tracking-wider text-lp-orange">
                 Actual
               </th>
             </tr>
@@ -440,22 +473,38 @@ export function SummaryTab({
           <tbody className="text-lp-text">
             <tr className="border-b border-white/15">
               <td className="py-1.5">Income</td>
-              <td className="py-1.5 text-right tabular-nums">{currencySymbol}{fmt(income.proposed)}</td>
-              <td className="py-1.5 text-right tabular-nums">{currencySymbol}{fmt(income.actual)}</td>
+              <td className="whitespace-nowrap py-1.5 text-right tabular-nums">
+                {currencySymbol}
+                {fmt(income.proposed)}
+              </td>
+              <td className="whitespace-nowrap py-1.5 text-right tabular-nums">
+                {currencySymbol}
+                {fmt(income.actual)}
+              </td>
             </tr>
             <tr className="border-b border-white/15">
               <td className="py-1.5">Expenses</td>
-              <td className="py-1.5 text-right tabular-nums">{currencySymbol}{fmt(expenses.proposed)}</td>
-              <td className="py-1.5 text-right tabular-nums">{currencySymbol}{fmt(expenses.actual)}</td>
+              <td className="whitespace-nowrap py-1.5 text-right tabular-nums">
+                {currencySymbol}
+                {fmt(expenses.proposed)}
+              </td>
+              <td className="whitespace-nowrap py-1.5 text-right tabular-nums">
+                {currencySymbol}
+                {fmt(expenses.actual)}
+              </td>
             </tr>
             <tr className="border-t-2 border-white/25">
-              <td className="py-2 font-medium text-white">P / L</td>
-              <td className="py-2 text-right tabular-nums font-medium text-white">{currencySymbol}{fmt(netProposed)}</td>
+              <td className="py-2 font-medium text-lp-text">P / L</td>
+              <td className="whitespace-nowrap py-2 text-right tabular-nums font-medium text-lp-text">
+                {currencySymbol}
+                {fmt(netProposed)}
+              </td>
               <td
-                className="py-2 text-right tabular-nums font-semibold"
-                style={{ color: netIsPositive ? INCOME_COLOR : EXPENSES_COLOR }}
+                className="whitespace-nowrap py-2 text-right tabular-nums font-semibold"
+                style={{ color: actualBeatsProposed ? INCOME_COLOR : actualUnderProposed ? EXPENSES_COLOR : 'var(--lp-text)' }}
               >
-                {currencySymbol}{fmt(netActual)}
+                {currencySymbol}
+                {fmt(netActual)}
               </td>
             </tr>
           </tbody>
@@ -473,13 +522,13 @@ export function SummaryTab({
       )}
       {/* Income: content height. Direct Expenses: fills middle. Overheads: content height at bottom. A couple of pixels between boxes. */}
       <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-hidden">
-        <div className="shrink-0 overflow-hidden">
+        <div className="w-full min-w-0 shrink-0">
           <BreakdownSection title="Income" color={INCOME_COLOR} sections={income.sections} currencySymbol={currencySymbol} fillHeight={false} />
         </div>
-        <div className="min-h-0 flex-1 overflow-hidden">
+        <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
           <BreakdownSection title="Direct Expenses" color={EXPENSES_COLOR} sections={expenses.sections} currencySymbol={currencySymbol} fillHeight />
         </div>
-        <div className="shrink-0 overflow-hidden">
+        <div className="w-full min-w-0 shrink-0">
           <BreakdownSection title="Overheads" color={OVERHEADS_COLOR} sections={overheads.sections} currencySymbol={currencySymbol} fillHeight={false} />
         </div>
       </div>
@@ -491,13 +540,13 @@ export function SummaryTab({
     return (
       <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden pt-2">
         <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-hidden">
-          <div className="shrink-0 overflow-hidden">
+          <div className="w-full min-w-0 shrink-0">
             <BreakdownSection title="Income" color={INCOME_COLOR} sections={income.sections} currencySymbol={currencySymbol} fillHeight={false} />
           </div>
-          <div className="min-h-0 flex-1 overflow-hidden">
+          <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
             <BreakdownSection title="Direct Expenses" color={EXPENSES_COLOR} sections={expenses.sections} currencySymbol={currencySymbol} fillHeight />
           </div>
-          <div className="shrink-0 overflow-hidden">
+          <div className="w-full min-w-0 shrink-0">
             <BreakdownSection title="Overheads" color={OVERHEADS_COLOR} sections={overheads.sections} currencySymbol={currencySymbol} fillHeight={false} />
           </div>
         </div>

@@ -3,9 +3,10 @@
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import React, { Suspense } from 'react';
-import { Loader2, DollarSign, LayoutPanelLeft, CreditCard, Hotel, Plane, Bus, Package, Receipt, PercentDiamond, Scale, Route, CalendarDays } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { BUDGET_TABS } from './budget-tabs';
+import { BUDGET_TABS, type TabId } from './budget-tabs';
+import { BudgetTabIcon } from './budget-tab-icons';
 
 const SummaryTab = dynamic(
   () => import('@/components/budget/SummaryTab').then((m) => ({ default: m.SummaryTab })),
@@ -65,21 +66,6 @@ function TabLoader() {
   );
 }
 
-const ICONS: Record<string, React.ReactElement> = {
-  summary: <LayoutPanelLeft className="h-4 w-4" />,
-  income: <Route className="h-4 w-4" />,
-  'day-view': <CalendarDays className="h-4 w-4" />,
-  salaries: <DollarSign className="h-4 w-4" />,
-  payroll: <CreditCard className="h-4 w-4" />,
-  hotels: <Hotel className="h-4 w-4" />,
-  flights: <Plane className="h-4 w-4" />,
-  transport: <Bus className="h-4 w-4" />,
-  production: <Package className="h-4 w-4" />,
-  receipts: <Receipt className="h-4 w-4" />,
-  commissions: <PercentDiamond className="h-4 w-4" />,
-  settlement: <Scale className="h-4 w-4" />,
-};
-
 /**
  * Vertical tab list.
  * - Default: floating card with rounded border/shadow (original right-side rail)
@@ -114,7 +100,7 @@ export function BudgetTabsNav({ tourId, activeTab, leftRail }: { tourId: string;
                       isActive ? 'bg-lp-bg text-lp-orange' : 'bg-lp-bg-tertiary/40 text-lp-text-tertiary'
                     )}
                   >
-                    {ICONS[tab.id] ?? tab.label.charAt(0)}
+                    <BudgetTabIcon tabId={tab.id as TabId} className="h-4 w-4" />
                   </span>
                   <span className="max-w-0 overflow-hidden whitespace-nowrap text-xs font-medium opacity-0 transition-[max-width,opacity] duration-300 ease-out group-hover/nav:max-w-[200px] group-hover/nav:opacity-100">
                     {tab.label}

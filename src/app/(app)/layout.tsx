@@ -12,7 +12,6 @@ import { AppShell } from '@/components/layout/AppShell';
 import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 import { ToastProvider } from '@/components/ui/Toast';
 import { ArtistTourProvider } from '@/contexts/ArtistTourContext';
-import { ArtistPickerGate } from '@/components/layout/ArtistPickerGate';
 
 export default function AppLayout({
   children,
@@ -23,11 +22,9 @@ export default function AppLayout({
     <ErrorBoundary>
       <ToastProvider>
         <ArtistTourProvider>
-          <ArtistPickerGate>
-            <AppShell>
-              {children}
-            </AppShell>
-          </ArtistPickerGate>
+          <AppShell>
+            {children}
+          </AppShell>
         </ArtistTourProvider>
       </ToastProvider>
     </ErrorBoundary>

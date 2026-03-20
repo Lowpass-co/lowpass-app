@@ -5,6 +5,8 @@ import dynamic from 'next/dynamic';
 import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getDayTypeColor, parseRoutingDate, firstDayType } from '@/lib/utils';
+import { RoutingGrid, type RoutingRow } from '@/components/routing/RoutingGrid';
+import type { PrimaryTransit } from '@/components/routing/RoutingMap';
 
 const BudgetRoutingMap = dynamic(
   () => import('./BudgetRoutingMap').then((m) => ({ default: m.BudgetRoutingMap })),
@@ -120,33 +122,41 @@ function RoutingMiniCalendar({ routingRows }: { routingRows: CalRow[] }) {
   while (cells.length % 7 !== 0) cells.push(null);
 
   const monthLabel = first.toLocaleDateString('en-GB', { month: 'long', year: 'numeric' });
+  const hasMultipleMonths = months.length > 1;
 
   return (
     <div className="flex flex-col h-full">
 
-      {/* Month navigation */}
       <div className="flex items-center justify-between mb-4">
-        <button
-          type="button"
-          onClick={() => setMonthIdx((i) => Math.max(0, i - 1))}
-          disabled={monthIdx === 0}
-          className="flex h-6 w-6 items-center justify-center rounded transition-colors disabled:opacity-20 hover:bg-lp-orange/10"
-          style={{ color: '#FF4500' }}
-        >
-          <ChevronLeft size={14} />
-        </button>
-        <span className="text-xs font-semibold uppercase tracking-widest text-lp-text">
-          {monthLabel}
-        </span>
-        <button
-          type="button"
-          onClick={() => setMonthIdx((i) => Math.min(months.length - 1, i + 1))}
-          disabled={monthIdx >= months.length - 1}
-          className="flex h-6 w-6 items-center justify-center rounded transition-colors disabled:opacity-20 hover:bg-lp-orange/10"
-          style={{ color: '#FF4500' }}
-        >
-          <ChevronRight size={14} />
-        </button>
+        {hasMultipleMonths ? (
+          <>
+            <button
+              type="button"
+              onClick={() => setMonthIdx((i) => Math.max(0, i - 1))}
+              disabled={monthIdx === 0}
+              className="flex h-6 w-6 items-center justify-center rounded transition-colors disabled:opacity-20 hover:bg-lp-orange/10"
+              style={{ color: '#FF4500' }}
+            >
+              <ChevronLeft size={14} />
+            </button>
+            <span className="text-xs font-semibold uppercase tracking-widest text-lp-text">
+              {monthLabel}
+            </span>
+            <button
+              type="button"
+              onClick={() => setMonthIdx((i) => Math.min(months.length - 1, i + 1))}
+              disabled={monthIdx >= months.length - 1}
+              className="flex h-6 w-6 items-center justify-center rounded transition-colors disabled:opacity-20 hover:bg-lp-orange/10"
+              style={{ color: '#FF4500' }}
+            >
+              <ChevronRight size={14} />
+            </button>
+          </>
+        ) : (
+          <span className="mx-auto text-xs font-semibold uppercase tracking-widest text-lp-text">
+            {monthLabel}
+          </span>
+        )}
       </div>
 
       {/* Day of week headers */}
@@ -242,6 +252,10 @@ export function IncomeTab({ tourId }: { tourId: string }) {
   const [localEdits, setLocalEdits] = useState<Record<string, Partial<IncomeRow>>>({});
   const [error, setError] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [activeSubTab, setActiveSubTab] = useState<'routing' | 'income'>('routing');
+  const [routingRows, setRoutingRows] = useState<RoutingRow[]>([]);
+  const [routingSaving, setRoutingSaving] = useState(false);
+  const [primaryTransit, setPrimaryTransit] = useState<PrimaryTransit>('bus_van');
 
   const load = useCallback(() => {
     if (!tourId) return;
@@ -296,6 +310,20 @@ export function IncomeTab({ tourId }: { tourId: string }) {
 
   const allRows = baseRows.map(mergeRow);
 
+  useEffect(() => {
+    setRoutingRows(
+      allRows.map((r) => ({
+        date: r.routing.date,
+        day_type: r.routing.day_type ?? '',
+        city: r.routing.city ?? '',
+        address: r.routing.city ?? '',
+        venue_name: r.routing.venue_name ?? '',
+        notes: r.notes ?? '',
+        transport_to_next: 'default',
+      }))
+    );
+  }, [tourId, allRows.length]);
+
   const handleFieldChange = (routingId: string, field: keyof IncomeRow, value: number | string | null) => {
     setLocalEdits((prev) => ({ ...prev, [routingId]: { ...prev[routingId], [field]: value } }));
   };
@@ -317,16 +345,59 @@ export function IncomeTab({ tourId }: { tourId: string }) {
       }),
     })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error('Save failed'))))
-      .then(() => {
+      .then((saved) => {
         setLocalEdits((prev) => {
           const next = { ...prev };
           delete next[row.routing_id];
           return next;
         });
-        load();
+        setIncomeRows((prev) => {
+          const idx = prev.findIndex((x) => x.routing_id === row.routing_id);
+          const merged = {
+            ...(idx >= 0 ? prev[idx] : row),
+            ...saved,
+            routing: row.routing,
+          } as IncomeRow;
+          if (idx >= 0) {
+            const next = [...prev];
+            next[idx] = merged;
+            return next;
+          }
+          return [...prev, merged];
+        });
+        setRoutingOnly((prev) => prev.filter((r) => r.id !== row.routing_id));
       })
       .catch(() => setError('Failed to save'))
       .finally(() => setSavingId(null));
+  };
+
+  const saveRoutingRows = async () => {
+    setRoutingSaving(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/tours/${tourId}/routing`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          dates: routingRows.map((r) => ({
+            date: r.date,
+            day_type: r.day_type ?? '',
+            city: r.city ?? '',
+            address: r.address ?? '',
+            venue_name: r.venue_name ?? '',
+            notes: r.notes ?? '',
+            latitude: r.latitude ?? null,
+            longitude: r.longitude ?? null,
+            transport_to_next: r.transport_to_next ?? 'default',
+          })),
+        }),
+      });
+      if (!res.ok) throw new Error('Failed to save routing');
+    } catch {
+      setError('Failed to save routing');
+    } finally {
+      setRoutingSaving(false);
+    }
   };
 
   const proposedTotal = allRows.reduce((a, r) => a + r.post_tax_guarantee + r.merch_income + r.vip_income, 0);
@@ -361,35 +432,94 @@ export function IncomeTab({ tourId }: { tourId: string }) {
 
   return (
     <div className="space-y-6">
-
-      {/* ── Top row: Calendar + Map ── */}
-      <div className="grid grid-cols-[280px_1fr] gap-4 h-[320px]">
-
-        {/* Calendar panel */}
-        <div
-          className="rounded-xl border border-lp-border p-5 overflow-hidden"
-          style={{ background: 'rgba(255,255,255,0.03)' }}
-        >
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary mb-4">
-            Routing Overview
-          </p>
-          <div className="h-[calc(100%-28px)]">
-            <RoutingMiniCalendar routingRows={calRows} />
-          </div>
+      <div className="flex items-center justify-between">
+        <div className="flex rounded-lg border border-lp-border p-1">
+          <button
+            type="button"
+            onClick={() => setActiveSubTab('routing')}
+            className={cn(
+              'rounded-md px-3 py-1.5 text-xs font-semibold uppercase tracking-wide',
+              activeSubTab === 'routing' ? 'bg-lp-orange text-white' : 'text-lp-text-secondary hover:bg-lp-surface-hover'
+            )}
+          >
+            Routing
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveSubTab('income')}
+            className={cn(
+              'rounded-md px-3 py-1.5 text-xs font-semibold uppercase tracking-wide',
+              activeSubTab === 'income' ? 'bg-lp-orange text-white' : 'text-lp-text-secondary hover:bg-lp-surface-hover'
+            )}
+          >
+            Income
+          </button>
         </div>
-
-        {/* Map panel */}
-        <div
-          className="rounded-xl border border-lp-border overflow-hidden"
-          style={{ background: 'rgba(255,255,255,0.02)' }}
-        >
-          <BudgetRoutingMap rows={calRows} />
-        </div>
+        {activeSubTab === 'routing' && (
+          <button
+            type="button"
+            onClick={saveRoutingRows}
+            disabled={routingSaving}
+            className="rounded-lg bg-lp-orange px-3 py-2 text-xs font-semibold uppercase tracking-wide text-white hover:bg-lp-orange-hover disabled:opacity-60"
+          >
+            {routingSaving ? 'Saving…' : 'Save routing'}
+          </button>
+        )}
       </div>
 
+      {activeSubTab === 'routing' && (
+        <>
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium text-lp-text-secondary">Primary mode of transit</span>
+            <select
+              value={primaryTransit}
+              onChange={(e) => setPrimaryTransit(e.target.value as PrimaryTransit)}
+              className="rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text"
+            >
+              <option value="bus_van">Bus (0.8× drive time)</option>
+              <option value="van">Van (0.9× drive time)</option>
+              <option value="bus_trailer">Bus + Trailer (0.85× drive time)</option>
+              <option value="car">Car (Google drive time)</option>
+              <option value="flight">Flight (est. time)</option>
+            </select>
+          </div>
+
+          {/* ── Top row: Calendar + Map ── */}
+          <div className="grid grid-cols-[280px_1fr] gap-4 h-[320px]">
+            <div
+              className="rounded-xl border border-lp-border p-5 overflow-hidden"
+              style={{ background: 'rgba(255,255,255,0.03)' }}
+            >
+              <p className="text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary mb-4">
+                Routing Overview
+              </p>
+              <div className="h-[calc(100%-28px)]">
+                <RoutingMiniCalendar routingRows={calRows} />
+              </div>
+            </div>
+            <div
+              className="rounded-xl border border-lp-border overflow-hidden"
+              style={{ background: 'rgba(255,255,255,0.02)' }}
+            >
+              <BudgetRoutingMap rows={calRows} />
+            </div>
+          </div>
+
+          <RoutingGrid
+            rows={routingRows}
+            onChange={setRoutingRows}
+            updateRow={(index, updates) =>
+              setRoutingRows((prev) => prev.map((r, i) => (i === index ? { ...r, ...updates } : r)))
+            }
+            primaryTransit={primaryTransit}
+          />
+        </>
+      )}
+
       {/* ── Income table ── */}
-      <div className="overflow-x-auto rounded-xl border border-lp-border bg-lp-surface">
-        <table className="w-full min-w-[1100px] border-collapse text-sm">
+      {activeSubTab === 'income' && (
+        <div className="overflow-x-auto rounded-xl border border-lp-border bg-lp-surface">
+          <table className="w-full min-w-[max(1100px,max-content)] border-collapse text-sm">
           <thead>
             <tr className="border-b border-lp-border">
               <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Date</th>
@@ -578,7 +708,7 @@ export function IncomeTab({ tourId }: { tourId: string }) {
                   (excl. overages)
                 </span>
               </td>
-              <td className="px-4 py-3 text-right tabular-nums text-sm font-bold text-lp-text">
+              <td className="whitespace-nowrap px-4 py-3 text-right tabular-nums text-sm font-bold text-lp-text">
                 {fmt(proposedTotal)}
               </td>
               <td colSpan={6} />
@@ -601,7 +731,7 @@ export function IncomeTab({ tourId }: { tourId: string }) {
               </td>
               <td
                 colSpan={2}
-                className="px-4 py-3 text-right tabular-nums text-sm font-bold"
+                className="whitespace-nowrap px-4 py-3 text-right tabular-nums text-sm font-bold"
                 style={{ color: '#FF4500' }}
               >
                 {fmt(actualTotal)}
@@ -609,8 +739,9 @@ export function IncomeTab({ tourId }: { tourId: string }) {
               <td colSpan={2} />
             </tr>
           </tfoot>
-        </table>
-      </div>
+          </table>
+        </div>
+      )}
 
       {/* Save indicator */}
       {savingId && (

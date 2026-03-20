@@ -7,13 +7,14 @@
 
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { usePathname, useSearchParams } from 'next/navigation';
 import {
-  ChevronLeft, ChevronRight, LogOut,
-  LayoutDashboard, Map, Route, ClipboardList,
-  DollarSign, Bed, Music, Users, Building2, Settings, Bug,
+  ChevronLeft, ChevronRight, LogOut, ChevronDown, X,
+  LayoutDashboard, ListMusic, ClipboardList, LineChart,
+  Wallet, HandCoins, Bed, FileCheck2, Music, Users, Building2, Settings, Bug,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useArtistTourContext } from '@/contexts/ArtistTourContext';
@@ -24,7 +25,7 @@ interface NavItem {
   href: string;
   icon: React.ElementType;
   /** Override active detection. 'exact' = pathname must equal href path. 'includes' = pathname includes segment. */
-  activeMode?: 'exact' | 'includes' | 'budget' | 'settlement';
+  activeMode?: 'exact' | 'includes' | 'budget' | 'settlement' | 'never' | 'all_advances' | 'tour_advance' | 'rooming' | 'payroll';
 }
 
 interface NavGroup {
@@ -35,25 +36,34 @@ interface NavGroup {
 const SIDEBAR_COLLAPSED_KEY = 'lp-sidebar-collapsed';
 
 export function Sidebar() {
+  const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { selectedTourId } = useArtistTourContext();
-  const [collapsed, setCollapsed] = useState(false);
-
-  // Auto-collapse when entering budget, restore when leaving
-  useEffect(() => {
-    if (pathname?.startsWith('/budget')) {
-      setCollapsed(true);
-    }
-  }, [pathname]);
+  const {
+    selectedArtistId,
+    selectedTourId,
+    selectedArtist,
+    selectedTour,
+    setSelectedArtistId,
+    setSelectedTourId,
+    artists,
+    tours,
+  } = useArtistTourContext();
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true';
+  });
+  const [artistOpen, setArtistOpen] = useState(false);
+  const [tourOpen, setTourOpen] = useState(false);
+  const artistRef = useRef<HTMLDivElement>(null);
+  const tourRef = useRef<HTMLDivElement>(null);
 
   // Sync sidebar width as CSS variable so AppShell can track it without prop drilling
-  useEffect(() => {
+  useLayoutEffect(() => {
     document.documentElement.style.setProperty('--sidebar-w', collapsed ? '72px' : '260px');
   }, [collapsed]);
 
   const baseGroups: NavGroup[] = [
-    { items: [{ label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, activeMode: 'exact' }] },
     {
       title: 'Data',
       items: [
@@ -71,39 +81,49 @@ export function Sidebar() {
     },
   ];
 
-  const tourGroups: NavGroup[] = selectedTourId
-    ? [
-        {
-          title: 'TOUR',
-          items: [
-            { label: 'Overview', href: `/tours/${selectedTourId}`, icon: Map, activeMode: 'exact' },
-            { label: 'Routing', href: `/tours/${selectedTourId}/routing`, icon: Route, activeMode: 'includes' },
-            { label: 'Advance', href: `/tours/${selectedTourId}/advance`, icon: ClipboardList, activeMode: 'includes' },
-          ],
-        },
-        {
-          title: 'FINANCE',
-          items: [
-            { label: 'Budget', href: `/budget?tour_id=${selectedTourId}`, icon: DollarSign, activeMode: 'budget' },
-            { label: 'Payroll', href: `/tours/${selectedTourId}/payroll`, icon: DollarSign, activeMode: 'includes' },
-            { label: 'Rooming', href: `/tours/${selectedTourId}/rooming`, icon: Bed, activeMode: 'includes' },
-            { label: 'Settlement', href: `/budget?tour_id=${selectedTourId}&tab=settlement`, icon: DollarSign, activeMode: 'settlement' },
-          ],
-        },
-        ...baseGroups,
-      ]
-    : baseGroups;
-
-  const navGroups = tourGroups;
-
-  useEffect(() => {
-    const saved = localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
-    if (saved === 'true') setCollapsed(true);
-  }, []);
+  const navGroups: NavGroup[] = [
+    {
+      title: 'OVERVIEW',
+      items: [
+        { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, activeMode: 'exact' },
+        { label: 'All Tours', href: '/tours', icon: ListMusic, activeMode: 'exact' },
+        { label: 'All Advances', href: '/advance', icon: ClipboardList, activeMode: 'all_advances' },
+        { label: 'Performance', href: '/performance', icon: LineChart, activeMode: 'exact' },
+      ],
+    },
+    {
+      title: 'MANAGE',
+      items: [
+        { label: 'Budget', href: selectedTourId ? `/budget?tour_id=${selectedTourId}` : '/budget', icon: Wallet, activeMode: 'budget' },
+        { label: 'Advance', href: selectedTourId ? `/tours/${selectedTourId}/advance` : '/budget', icon: ClipboardList, activeMode: 'tour_advance' },
+        { label: 'Settlement', href: selectedTourId ? `/budget?tour_id=${selectedTourId}&tab=settlement` : '/budget', icon: FileCheck2, activeMode: 'settlement' },
+        { label: 'Rooming', href: selectedTourId ? `/tours/${selectedTourId}/rooming` : '/budget', icon: Bed, activeMode: 'rooming' },
+        { label: 'Payroll', href: selectedTourId ? `/tours/${selectedTourId}/payroll` : '/budget', icon: HandCoins, activeMode: 'payroll' },
+      ],
+    },
+    ...baseGroups,
+  ];
 
   useEffect(() => {
     localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(collapsed));
   }, [collapsed]);
+
+  useEffect(() => {
+    const close = (e: MouseEvent) => {
+      if (artistRef.current?.contains(e.target as Node)) return;
+      if (tourRef.current?.contains(e.target as Node)) return;
+      setArtistOpen(false);
+      setTourOpen(false);
+    };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, []);
+
+  const onManagePage =
+    pathname?.startsWith('/budget') ||
+    pathname?.startsWith('/tours/') ||
+    pathname?.includes('/payroll') ||
+    pathname?.includes('/rooming');
 
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [profile, setProfile] = useState<{ name: string; email?: string; avatar_url?: string | null; job_title?: string | null } | null>(null);
@@ -192,24 +212,6 @@ export function Sidebar() {
           </button>
         </div>
 
-        {/* New Tour button — outline (Figma). Hover: light → white text, dark → black text. */}
-        <div className="px-4 pt-5 pb-3">
-          <Link
-            href="/tours/create"
-            className={cn(
-              'flex items-center justify-center rounded-lg py-2.5 text-xs font-bold tracking-widest transition-colors duration-200',
-              'text-lp-orange hover:bg-lp-orange hover:text-white dark:hover:text-black',
-              collapsed ? 'px-2' : 'px-3'
-            )}
-            style={{
-              border: '1px solid #FF4500',
-              letterSpacing: '0.15em',
-            }}
-          >
-            {collapsed ? '+' : '+ NEW TOUR'}
-          </Link>
-        </div>
-
         {/* Navigation */}
         <nav className="sidebar-scroll flex-1 overflow-y-auto px-4 pb-6">
           <style>{`
@@ -225,7 +227,7 @@ export function Sidebar() {
           `}</style>
           {navGroups.map((group, groupIndex) => (
             <div key={group.title ?? `group-${groupIndex}`} className="mt-8 first:mt-2">
-              {group.title && !collapsed && (
+              {group.title && !collapsed && group.title !== 'MANAGE' && (
                 <h3
                   className="mb-3 px-3 text-xs font-extrabold uppercase tracking-wider"
                   style={{ color: 'var(--lp-sidebar-text-heading)' }}
@@ -234,12 +236,164 @@ export function Sidebar() {
                 </h3>
               )}
 
+              {group.title === 'MANAGE' && !collapsed && (
+                <div className="mb-3 flex items-center justify-between px-3">
+                  <h3
+                    className="text-xs font-extrabold uppercase tracking-wider"
+                    style={{ color: 'var(--lp-sidebar-text-heading)' }}
+                  >
+                    {group.title}
+                  </h3>
+                  <div className="relative h-9 w-9 shrink-0 overflow-visible rounded-full border border-lp-border bg-lp-bg">
+                    <div className="h-full w-full overflow-hidden rounded-full">
+                      {selectedArtist?.spotify_image_url ? (
+                        <img src={selectedArtist.spotify_image_url} alt="" className="h-full w-full object-cover" />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-[10px] font-bold text-lp-text-tertiary">
+                          {(selectedArtist?.name ?? '?').charAt(0).toUpperCase()}
+                        </div>
+                      )}
+                    </div>
+                    {selectedArtistId && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedArtistId(null);
+                          setSelectedTourId(null);
+                          setArtistOpen(false);
+                          setTourOpen(false);
+                          if (onManagePage) router.push('/budget');
+                        }}
+                        className="absolute right-0 top-0 z-30 flex h-4 w-4 -translate-y-1/3 translate-x-1/3 items-center justify-center rounded-full border border-lp-orange bg-lp-bg text-[10px] font-bold leading-none text-lp-orange shadow-sm"
+                        aria-label="Clear selected artist"
+                        title="Clear selected artist"
+                      >
+                        <X size={9} strokeWidth={2.5} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {group.title === 'MANAGE' && !collapsed && (
+                <div className="mb-2 rounded-md bg-transparent px-3 py-0">
+                  <div className="min-w-0">
+                    <div className="relative" ref={artistRef}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setArtistOpen((v) => !v);
+                          setTourOpen(false);
+                        }}
+                        className="flex w-full items-center justify-between gap-1 text-left py-0.5 leading-none"
+                      >
+                        <span className="truncate text-[11px] font-semibold text-[var(--lp-sidebar-text-heading)]">
+                          {selectedArtist?.name ?? 'Select Artist'}
+                        </span>
+                        <ChevronDown size={12} className={cn('shrink-0 text-lp-text-tertiary', artistOpen && 'rotate-180')} />
+                      </button>
+                      {artistOpen && (
+                        <div className="absolute left-0 top-full z-50 mt-1 max-h-56 w-full overflow-y-auto rounded-md border border-lp-border bg-lp-surface py-1 shadow-lg">
+                          {artists.map((a) => (
+                            <button
+                              key={a.id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedArtistId(a.id);
+                                setArtistOpen(false);
+                              }}
+                              className={cn(
+                                'w-full px-2 py-1.5 text-left text-[11px] hover:bg-lp-surface-hover',
+                                selectedArtistId === a.id ? 'text-lp-orange' : 'text-lp-text'
+                              )}
+                            >
+                              <span className="truncate">{a.name}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div className="relative mt-1" ref={tourRef}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setTourOpen((v) => !v);
+                          setArtistOpen(false);
+                        }}
+                        disabled={!selectedArtistId}
+                        className="flex w-full items-center justify-between gap-1 text-left py-0.5 leading-none disabled:opacity-50"
+                      >
+                        <span className="truncate text-[11px] font-semibold text-lp-text-secondary">
+                          {selectedTour?.name ?? 'Select Tour'}
+                        </span>
+                        <ChevronDown size={12} className={cn('shrink-0 text-lp-text-tertiary', tourOpen && 'rotate-180')} />
+                      </button>
+                      {tourOpen && (
+                        <div className="absolute left-0 top-full z-50 mt-1 max-h-56 w-full overflow-y-auto rounded-md border border-lp-border bg-lp-surface py-1 shadow-lg">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedTourId(null);
+                              setTourOpen(false);
+                                if (onManagePage) router.push('/budget');
+                            }}
+                            className="w-full px-2 py-1.5 text-left text-[11px] text-lp-text-secondary hover:bg-lp-surface-hover"
+                          >
+                            Clear tour
+                          </button>
+                          {tours.map((t) => (
+                            <button
+                              key={t.id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedTourId(t.id);
+                                setTourOpen(false);
+                                if (onManagePage) {
+                                  if (pathname?.startsWith('/budget')) {
+                                    const currentTab = searchParams?.get('tab') ?? 'summary';
+                                    router.push(`/budget?tour_id=${t.id}&tab=${currentTab}`);
+                                  } else if (pathname?.includes('/advance')) {
+                                    router.push(`/tours/${t.id}/advance`);
+                                  } else if (pathname?.includes('/rooming')) {
+                                    router.push(`/tours/${t.id}/rooming`);
+                                  } else if (pathname?.includes('/payroll')) {
+                                    router.push(`/tours/${t.id}/payroll`);
+                                  } else {
+                                    router.push(`/budget?tour_id=${t.id}&tab=summary`);
+                                  }
+                                }
+                              }}
+                              className={cn(
+                                'w-full px-2 py-1.5 text-left text-[11px] hover:bg-lp-surface-hover',
+                                selectedTourId === t.id ? 'text-lp-orange' : 'text-lp-text'
+                              )}
+                            >
+                              <span className="truncate">{t.name}</span>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="space-y-0.5">
                 {group.items.map((item) => {
                   const hrefPath = item.href.split('?')[0];
                   const tab = searchParams?.get('tab');
                   const isActive =
-                    item.activeMode === 'settlement'
+                    item.activeMode === 'never'
+                      ? false
+                      : item.activeMode === 'all_advances'
+                        ? pathname === '/advance'
+                        : item.activeMode === 'tour_advance'
+                          ? /^\/tours\/[^/]+\/advance(?:\/|$)/.test(pathname ?? '')
+                          : item.activeMode === 'rooming'
+                            ? (pathname === '/rooming' || /^\/tours\/[^/]+\/rooming(?:\/|$)/.test(pathname ?? ''))
+                            : item.activeMode === 'payroll'
+                              ? /^\/tours\/[^/]+\/payroll(?:\/|$)/.test(pathname ?? '')
+                      : item.activeMode === 'settlement'
                       ? pathname?.startsWith('/budget') && tab === 'settlement'
                       : item.activeMode === 'budget'
                         ? pathname?.startsWith('/budget') && tab !== 'settlement'
@@ -250,7 +404,7 @@ export function Sidebar() {
                   const Icon = item.icon;
                   return (
                     <Link
-                      key={item.href}
+                      key={`${group.title ?? 'base'}-${item.label}-${item.href}`}
                       href={item.href}
                       title={collapsed ? item.label : undefined}
                       className={cn(

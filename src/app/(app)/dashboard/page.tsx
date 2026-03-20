@@ -5,7 +5,6 @@
    upcoming shows, and quick actions.
    ============================================ */
 
-import { Plus } from 'lucide-react';
 import Link from 'next/link';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import type { Tour } from '@/types';
@@ -183,13 +182,6 @@ export default async function DashboardPage() {
               Overview of your active tours and advance progress.
             </p>
           </div>
-          <Link
-            href="/tours/create"
-            className="flex items-center gap-2 rounded-lg bg-lp-orange px-4 py-2.5 text-sm font-medium text-white hover:bg-lp-orange-hover transition-colors"
-          >
-            <Plus size={16} />
-            New Tour
-          </Link>
         </div>
 
         {totalToursCount === 0 && (
@@ -202,7 +194,7 @@ export default async function DashboardPage() {
               href="/tours/create"
               className="mt-4 inline-flex items-center gap-2 rounded-lg bg-lp-orange px-5 py-2.5 text-sm font-medium text-white hover:bg-lp-orange-hover transition-colors"
             >
-              <Plus size={18} />
+              +
               Create your first tour
             </Link>
           </div>

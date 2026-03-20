@@ -76,7 +76,7 @@ export function DashboardTourList({ tours }: { tours: Tour[] }) {
   return (
     <div className="lp-dashboard-glass-card rounded-2xl p-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-base font-semibold text-lp-text">Tours</h2>
+        <h2 className="text-xs font-bold uppercase tracking-wider text-lp-text-tertiary">Tours</h2>
         <div className="flex items-center gap-2">
           <div className="relative">
             <button

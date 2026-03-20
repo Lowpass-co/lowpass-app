@@ -7,7 +7,6 @@
 
 import Link from 'next/link';
 import { Suspense } from 'react';
-import { BudgetTourLanding } from '@/components/budget/BudgetTourLanding';
 import { BudgetTourSelector } from '@/components/budget/BudgetTourSelector';
 import { RoomingTourRedirect } from '@/components/rooming/RoomingTourRedirect';
 import { cn } from '@/lib/utils';
@@ -82,13 +81,13 @@ export default async function RoomingPage({
         <Suspense fallback={null}>
           <RoomingTourRedirect />
         </Suspense>
-        <div className="-mx-6 -my-6 flex h-[calc(100vh-4rem)] flex-col">
-          <BudgetTourLanding
-            title="Select Tour Rooming"
-            storageKey={ROOMING_STORAGE_KEY}
-            basePath="/rooming"
-            defaultTab="grid"
-          />
+        <div className="-mx-6 -my-6 flex h-[calc(100vh-4rem)] items-center justify-center bg-lp-bg p-8">
+          <div className="max-w-md rounded-xl border border-lp-border bg-lp-surface p-6 text-center">
+            <p className="text-lg font-semibold text-lp-text">Select tour to open Rooming</p>
+            <p className="mt-2 text-sm text-lp-text-secondary">
+              Use the Artist and Tour selectors in the Finance section of the sidebar.
+            </p>
+          </div>
         </div>
       </>
     );

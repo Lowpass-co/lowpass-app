@@ -189,7 +189,8 @@ export function FlightsTab({ tourId }: { tourId: string }) {
                 <th className="text-left p-3 font-medium text-lp-text">Role</th>
                 <th className="text-left p-3 font-medium text-lp-text">Origin</th>
                 <th className="text-left p-3 font-medium text-lp-text">Destination</th>
-                <th className="text-left p-3 font-medium text-lp-text">Departure</th>
+                <th className="text-left p-3 font-medium text-lp-text">Departure Date</th>
+                <th className="text-left p-3 font-medium text-lp-text">Departure Time</th>
                 <th className="text-left p-3 font-medium text-lp-text">Airline</th>
                 <th className="text-left p-3 font-medium text-lp-text">Flight #</th>
                 <th className="text-left p-3 font-medium text-lp-text">Leg</th>
@@ -238,13 +239,15 @@ export function FlightsTab({ tourId }: { tourId: string }) {
                   <td className="p-2">
                     <input
                       type="date"
-                      className="rounded border border-lp-border bg-lp-bg px-2 py-1 text-lp-text"
+                      className="lp-native-date-input rounded-lg border border-lp-border bg-lp-bg px-2 py-1 text-lp-text"
                       value={editRow.departure_date ?? ''}
                       onChange={(e) => setEditRow((r) => ({ ...r, departure_date: e.target.value || null }))}
                     />
+                  </td>
+                  <td className="p-2">
                     <input
                       type="time"
-                      className="ml-1 w-20 rounded border border-lp-border bg-lp-bg px-2 py-1 text-lp-text"
+                      className="lp-native-date-input w-24 rounded-lg border border-lp-border bg-lp-bg px-2 py-1 text-lp-text"
                       value={editRow.departure_time ?? ''}
                       onChange={(e) => setEditRow((r) => ({ ...r, departure_time: e.target.value || null }))}
                     />
@@ -369,25 +372,26 @@ export function FlightsTab({ tourId }: { tourId: string }) {
                     </td>
                     <td className="p-3 text-lp-text-secondary whitespace-nowrap">
                       {isEditing ? (
-                        <span className="flex items-center gap-1">
-                          <input
-                            type="date"
-                            className="rounded border border-lp-border bg-lp-bg px-2 py-1 text-lp-text"
-                            value={row.departure_date ?? ''}
-                            onChange={(e) => setEditRow((r) => ({ ...r, departure_date: e.target.value || null }))}
-                          />
-                          <input
-                            type="time"
-                            className="w-20 rounded border border-lp-border bg-lp-bg px-2 py-1 text-lp-text"
-                            value={row.departure_time ?? ''}
-                            onChange={(e) => setEditRow((r) => ({ ...r, departure_time: e.target.value || null }))}
-                          />
-                        </span>
+                        <input
+                          type="date"
+                          className="lp-native-date-input rounded-lg border border-lp-border bg-lp-bg px-2 py-1 text-lp-text"
+                          value={row.departure_date ?? ''}
+                          onChange={(e) => setEditRow((r) => ({ ...r, departure_date: e.target.value || null }))}
+                        />
                       ) : (
-                        <>
-                          {f.departure_date ? formatDate(f.departure_date) : '—'}
-                          {f.departure_time && <span className="ml-1">{formatTime(f.departure_time)}</span>}
-                        </>
+                        <>{f.departure_date ? formatDate(f.departure_date) : '—'}</>
+                      )}
+                    </td>
+                    <td className="p-3 text-lp-text-secondary whitespace-nowrap">
+                      {isEditing ? (
+                        <input
+                          type="time"
+                          className="lp-native-date-input w-24 rounded-lg border border-lp-border bg-lp-bg px-2 py-1 text-lp-text"
+                          value={row.departure_time ?? ''}
+                          onChange={(e) => setEditRow((r) => ({ ...r, departure_time: e.target.value || null }))}
+                        />
+                      ) : (
+                        <>{f.departure_time ? formatTime(f.departure_time) : '—'}</>
                       )}
                     </td>
                     <td className="p-3 text-lp-text-secondary">
