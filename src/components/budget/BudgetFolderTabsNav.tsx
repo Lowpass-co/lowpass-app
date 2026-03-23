@@ -42,7 +42,7 @@ const activeTabUnifiedGradient = `linear-gradient(180deg,
   var(--lp-budget-wrap-bg) 100%)`;
 
 /**
- * Min width so the longest tab label (e.g. “Salaries & Per Diem”) stays on one line
+ * Min width so the longest tab label (e.g. “Salary & Per Diems”) stays on one line
  * at the tab font sizes, including uppercase + tracking. Active `li` and inactive
  * hover use the same numbers so selected vs opened tabs align.
  */
@@ -66,6 +66,10 @@ const INACTIVE_HOVER_W = [
 
 /** Extra hit area below the trapezoid (cursor seam / between-tabs glitch) */
 const TAB_HIT_EXTEND = 'pb-4 -mb-4';
+
+/** Inactive tab open (width, lift, label) — slow + smooth */
+const TAB_OPEN_DURATION = 'duration-[850ms]';
+const TAB_OPEN_EASE = 'ease-[cubic-bezier(0.2,0.85,0.32,1)]';
 
 export function BudgetFolderTabsNav({ tourId, activeTab }: { tourId: string; activeTab: string }) {
   return (
@@ -114,7 +118,9 @@ export function BudgetFolderTabsNav({ tourId, activeTab }: { tourId: string; act
                       : [
                           'items-center border-0 bg-lp-bg-tertiary/80 px-2.5 py-2 text-[#FF4500]',
                           'translate-y-0 justify-center gap-0',
-                          'transition-[transform,background-color] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]',
+                          'transition-[transform,background-color]',
+                          TAB_OPEN_DURATION,
+                          TAB_OPEN_EASE,
                           'group-hover/tab:z-[18] group-hover/tab:-translate-y-1 group-hover/tab:justify-end group-hover/tab:gap-1',
                           'group-hover/tab:bg-lp-bg-tertiary/95',
                           'group-focus-visible/tab:z-[18] group-focus-visible/tab:-translate-y-1 group-focus-visible/tab:justify-end group-focus-visible/tab:gap-1',
@@ -162,7 +168,9 @@ export function BudgetFolderTabsNav({ tourId, activeTab }: { tourId: string; act
                           'relative z-[1] min-h-0 w-full max-w-full shrink-0 overflow-hidden px-0.5 text-center text-[10px] font-semibold leading-tight text-[#FF4500] sm:text-[11px]',
                           'whitespace-nowrap',
                           'max-h-0 opacity-0',
-                          'transition-[max-height,opacity] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)]',
+                          'transition-[max-height,opacity]',
+                          TAB_OPEN_DURATION,
+                          TAB_OPEN_EASE,
                           'group-hover/tab:max-h-[2.75rem] group-hover/tab:py-0.5 group-hover/tab:opacity-100',
                           'group-focus-visible/tab:max-h-[2.75rem] group-focus-visible/tab:py-0.5 group-focus-visible/tab:opacity-100'
                         )}

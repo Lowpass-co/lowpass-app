@@ -3,88 +3,89 @@
 import { useState, useMemo, useRef, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
-import { Plus, ArrowUpDown, Filter } from 'lucide-react';
-import { capitaliseStatus } from '@/lib/utils';
-import type { Tour } from '@/types';
+import { Plus, ArrowUpDown, ChevronDown } from 'lucide-react';
+import type { Tour, TourStatus } from '@/types';
 import { DashboardTourCard } from '@/components/dashboard/DashboardTourCard';
 import { cn } from '@/lib/utils';
 
-type SortOrder = 'date_asc' | 'date_desc';
-type FilterArtist = string;
-type FilterStatus = string;
-type FilterMonth = string;
+type SortOrder = 'date_asc' | 'date_desc' | 'artist_asc' | 'artist_desc';
+
+const STATUS_OPTIONS: { value: '' | TourStatus; label: string }[] = [
+  { value: '', label: 'All' },
+  { value: 'planning', label: 'Planning' },
+  { value: 'active', label: 'Active' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'archived', label: 'Archived' },
+];
+
+function artistSortKey(tour: Tour): string {
+  return (tour.artist?.name ?? tour.name ?? '').trim();
+}
 
 export function DashboardTourList({ tours }: { tours: Tour[] }) {
   const [sortOrder, setSortOrder] = useState<SortOrder>('date_desc');
-  const [filterArtist, setFilterArtist] = useState<FilterArtist>('');
-  const [filterStatus, setFilterStatus] = useState<FilterStatus>('');
-  const [filterMonth, setFilterMonth] = useState<FilterMonth>('');
+  const [statusFilter, setStatusFilter] = useState<'' | TourStatus>('');
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
-  const [filterMenuOpen, setFilterMenuOpen] = useState(false);
+  const [statusMenuOpen, setStatusMenuOpen] = useState(false);
   const [sortMenuRect, setSortMenuRect] = useState<{ top: number; left: number; width: number } | null>(null);
-  const [filterMenuRect, setFilterMenuRect] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [statusMenuRect, setStatusMenuRect] = useState<{ top: number; left: number; width: number } | null>(null);
   const sortButtonRef = useRef<HTMLButtonElement>(null);
-  const filterButtonRef = useRef<HTMLButtonElement>(null);
+  const statusButtonRef = useRef<HTMLButtonElement>(null);
+
+  const dropdownPanelClass =
+    'lp-dropdown-layer fixed min-w-[200px] rounded-xl border border-lp-border bg-lp-surface py-1 shadow-lg';
 
   useLayoutEffect(() => {
     if (sortMenuOpen && sortButtonRef.current) {
       const rect = sortButtonRef.current.getBoundingClientRect();
-      setSortMenuRect({ top: rect.bottom + 4, left: rect.left, width: Math.max(160, rect.width) });
+      setSortMenuRect({ top: rect.bottom + 4, left: rect.left, width: Math.max(200, rect.width) });
     } else setSortMenuRect(null);
   }, [sortMenuOpen]);
 
   useLayoutEffect(() => {
-    if (filterMenuOpen && filterButtonRef.current) {
-      const rect = filterButtonRef.current.getBoundingClientRect();
-      setFilterMenuRect({ top: rect.bottom + 4, left: rect.left, width: Math.max(180, rect.width) });
-    } else setFilterMenuRect(null);
-  }, [filterMenuOpen]);
+    if (statusMenuOpen && statusButtonRef.current) {
+      const rect = statusButtonRef.current.getBoundingClientRect();
+      setStatusMenuRect({ top: rect.bottom + 4, left: rect.left, width: Math.max(200, rect.width) });
+    } else setStatusMenuRect(null);
+  }, [statusMenuOpen]);
 
-  const artists = useMemo(() => {
-    const set = new Set<string>();
-    tours.forEach((t) => t.artist?.name && set.add(t.artist.name));
-    return Array.from(set).sort();
-  }, [tours]);
-
-  const statuses = useMemo(() => {
-    const set = new Set<string>(tours.map((t) => t.status));
-    return Array.from(set).sort();
-  }, [tours]);
-
-  const months = useMemo(() => {
-    const set = new Set<string>();
-    tours.forEach((t) => {
-      const m = t.start_date.slice(0, 7);
-      set.add(m);
-    });
-    return Array.from(set).sort().reverse();
-  }, [tours]);
+  const statusLabel = STATUS_OPTIONS.find((o) => o.value === statusFilter)?.label ?? 'All';
 
   const filteredAndSorted = useMemo(() => {
     let list = [...tours];
-    if (filterArtist) list = list.filter((t) => t.artist?.name === filterArtist);
-    if (filterStatus) list = list.filter((t) => t.status === filterStatus);
-    if (filterMonth) list = list.filter((t) => t.start_date.slice(0, 7) === filterMonth);
+    if (statusFilter) {
+      list = list.filter((t) => t.status === statusFilter);
+    }
     list.sort((a, b) => {
+      if (sortOrder === 'artist_asc' || sortOrder === 'artist_desc') {
+        const na = artistSortKey(a).toLowerCase();
+        const nb = artistSortKey(b).toLowerCase();
+        const cmp = na.localeCompare(nb, 'en', { sensitivity: 'base' });
+        return sortOrder === 'artist_asc' ? cmp : -cmp;
+      }
       const da = a.start_date;
       const db = b.start_date;
       return sortOrder === 'date_asc' ? da.localeCompare(db) : db.localeCompare(da);
     });
     return list;
-  }, [tours, filterArtist, filterStatus, filterMonth, sortOrder]);
+  }, [tours, statusFilter, sortOrder]);
 
   return (
     <div className="lp-dashboard-glass-card rounded-2xl p-5">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-xs font-bold uppercase tracking-wider text-lp-text-tertiary">Tours</h2>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <div className="relative">
             <button
               ref={sortButtonRef}
               type="button"
-              onClick={() => { setFilterMenuOpen(false); setSortMenuOpen((o) => !o); }}
+              onClick={() => {
+                setStatusMenuOpen(false);
+                setSortMenuOpen((o) => !o);
+              }}
               className="flex h-9 w-9 items-center justify-center rounded-lg border border-lp-border bg-lp-surface text-lp-text hover:bg-lp-surface-hover"
-              aria-label="Sort by date"
+              aria-label="Sort tours"
+              aria-expanded={sortMenuOpen}
             >
               <ArrowUpDown size={18} />
             </button>
@@ -95,7 +96,7 @@ export function DashboardTourList({ tours }: { tours: Tour[] }) {
                 <>
                   <div className="lp-dropdown-layer fixed inset-0" aria-hidden onClick={() => setSortMenuOpen(false)} />
                   <div
-                    className="lp-dropdown-layer fixed min-w-[160px] rounded-xl border border-lp-border bg-lp-surface py-1 shadow-lg"
+                    className={dropdownPanelClass}
                     style={{ top: sortMenuRect.top, left: sortMenuRect.left, width: sortMenuRect.width }}
                   >
                     <p className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-lp-text-tertiary">
@@ -103,95 +104,111 @@ export function DashboardTourList({ tours }: { tours: Tour[] }) {
                     </p>
                     <button
                       type="button"
-                      onClick={() => { setSortOrder('date_asc'); setSortMenuOpen(false); }}
+                      onClick={() => {
+                        setSortOrder('date_asc');
+                        setSortMenuOpen(false);
+                      }}
                       className={cn('w-full px-3 py-2 text-left text-sm', sortOrder === 'date_asc' && 'bg-lp-orange/10 text-lp-orange')}
                     >
                       Earliest first
                     </button>
                     <button
                       type="button"
-                      onClick={() => { setSortOrder('date_desc'); setSortMenuOpen(false); }}
+                      onClick={() => {
+                        setSortOrder('date_desc');
+                        setSortMenuOpen(false);
+                      }}
                       className={cn('w-full px-3 py-2 text-left text-sm', sortOrder === 'date_desc' && 'bg-lp-orange/10 text-lp-orange')}
                     >
                       Latest first
+                    </button>
+                    <p className="mt-1 border-t border-lp-border px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-lp-text-tertiary">
+                      Artist
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSortOrder('artist_asc');
+                        setSortMenuOpen(false);
+                      }}
+                      className={cn('w-full px-3 py-2 text-left text-sm', sortOrder === 'artist_asc' && 'bg-lp-orange/10 text-lp-orange')}
+                    >
+                      A–Z
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSortOrder('artist_desc');
+                        setSortMenuOpen(false);
+                      }}
+                      className={cn('w-full px-3 py-2 text-left text-sm', sortOrder === 'artist_desc' && 'bg-lp-orange/10 text-lp-orange')}
+                    >
+                      Z–A
                     </button>
                   </div>
                 </>,
                 document.body
               )}
           </div>
-          <div className="relative">
-            <button
-              ref={filterButtonRef}
-              type="button"
-              onClick={() => { setSortMenuOpen(false); setFilterMenuOpen((o) => !o); }}
-              className="flex h-9 w-9 items-center justify-center rounded-lg border border-lp-border bg-lp-surface text-lp-text hover:bg-lp-surface-hover"
-              aria-label="Filter tours"
-            >
-              <Filter size={18} />
-            </button>
-            {filterMenuOpen &&
-              filterMenuRect &&
-              typeof document !== 'undefined' &&
-              createPortal(
-                <>
-                  <div className="lp-dropdown-layer fixed inset-0" aria-hidden onClick={() => setFilterMenuOpen(false)} />
-                  <div
-                    className="lp-dropdown-layer fixed min-w-[180px] max-h-[70vh] overflow-y-auto rounded-xl border border-lp-border bg-lp-surface py-1 shadow-lg"
-                    style={{ top: filterMenuRect.top, left: filterMenuRect.left, width: filterMenuRect.width }}
-                  >
-                    <p className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-lp-text-tertiary">
-                      Filter by
-                    </p>
-                    {artists.length > 0 && (
-                      <>
-                        <p className="px-3 py-0.5 text-xs text-lp-text-tertiary">Artist</p>
-                        {artists.map((a) => (
-                          <button
-                            key={a}
-                            type="button"
-                            onClick={() => { setFilterArtist((f) => (f === a ? '' : a)); setFilterMenuOpen(false); }}
-                            className={cn('w-full px-3 py-1.5 text-left text-sm', filterArtist === a && 'bg-lp-orange/10 text-lp-orange')}
-                          >
-                            {a}
-                          </button>
-                        ))}
-                      </>
-                    )}
-                    {statuses.length > 0 && (
-                      <>
-                        <p className="px-3 py-0.5 text-xs text-lp-text-tertiary">Status</p>
-                        {statuses.map((s) => (
-                          <button
-                            key={s}
-                            type="button"
-                            onClick={() => { setFilterStatus((f) => (f === s ? '' : s)); setFilterMenuOpen(false); }}
-                            className={cn('w-full px-3 py-1.5 text-left text-sm', filterStatus === s && 'bg-lp-orange/10 text-lp-orange')}
-                          >
-                            {capitaliseStatus(s)}
-                          </button>
-                        ))}
-                      </>
-                    )}
-                    {months.length > 0 && (
-                      <>
-                        <p className="px-3 py-0.5 text-xs text-lp-text-tertiary">Month</p>
-                        {months.map((m) => (
-                          <button
-                            key={m}
-                            type="button"
-                            onClick={() => { setFilterMonth((f) => (f === m ? '' : m)); setFilterMenuOpen(false); }}
-                            className={cn('w-full px-3 py-1.5 text-left text-sm', filterMonth === m && 'bg-lp-orange/10 text-lp-orange')}
-                          >
-                            {m}
-                          </button>
-                        ))}
-                      </>
-                    )}
-                  </div>
-                </>,
-                document.body
-              )}
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-lp-text-tertiary">Status</span>
+            <div className="relative">
+              <button
+                ref={statusButtonRef}
+                type="button"
+                onClick={() => {
+                  setSortMenuOpen(false);
+                  setStatusMenuOpen((o) => !o);
+                }}
+                className={cn(
+                  'flex h-9 min-w-[9.5rem] items-center justify-between gap-2 rounded-lg border border-lp-border bg-lp-surface px-3 text-left text-sm text-lp-text',
+                  'hover:bg-lp-surface-hover focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange'
+                )}
+                aria-label="Filter tours by status"
+                aria-expanded={statusMenuOpen}
+                aria-haspopup="listbox"
+              >
+                <span className="min-w-0 truncate">{statusLabel}</span>
+                <ChevronDown size={16} className={cn('shrink-0 text-lp-text-tertiary transition-transform', statusMenuOpen && 'rotate-180')} />
+              </button>
+              {statusMenuOpen &&
+                statusMenuRect &&
+                typeof document !== 'undefined' &&
+                createPortal(
+                  <>
+                    <div className="lp-dropdown-layer fixed inset-0" aria-hidden onClick={() => setStatusMenuOpen(false)} />
+                    <div
+                      className={dropdownPanelClass}
+                      role="listbox"
+                      aria-label="Status"
+                      style={{ top: statusMenuRect.top, left: statusMenuRect.left, width: statusMenuRect.width }}
+                    >
+                      <p className="px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-lp-text-tertiary">
+                        Status
+                      </p>
+                      {STATUS_OPTIONS.map(({ value, label }) => (
+                        <button
+                          key={value || 'all'}
+                          type="button"
+                          role="option"
+                          aria-selected={statusFilter === value}
+                          onClick={() => {
+                            setStatusFilter(value);
+                            setStatusMenuOpen(false);
+                          }}
+                          className={cn(
+                            'w-full px-3 py-2 text-left text-sm',
+                            statusFilter === value && 'bg-lp-orange/10 text-lp-orange'
+                          )}
+                        >
+                          {label}
+                        </button>
+                      ))}
+                    </div>
+                  </>,
+                  document.body
+                )}
+            </div>
           </div>
         </div>
       </div>
@@ -206,6 +223,10 @@ export function DashboardTourList({ tours }: { tours: Tour[] }) {
             <Plus size={16} />
             Create your first tour
           </Link>
+        </div>
+      ) : filteredAndSorted.length === 0 ? (
+        <div className="mt-4 rounded-xl border border-lp-border/60 bg-lp-surface/40 px-4 py-8 text-center text-sm text-lp-text-secondary">
+          No tours match this status.
         </div>
       ) : (
         <div className="mt-4 space-y-3">

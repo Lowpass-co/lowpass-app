@@ -67,6 +67,42 @@ function fmt(n: number) {
   return n.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+/** P&L display: explicit +/− and £ (graph + tables) */
+function fmtSignedPl(n: number, currencySymbol: string) {
+  const abs = Math.abs(n);
+  const body = `${currencySymbol}${abs.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  if (n > 0) return `+${body}`;
+  if (n < 0) return `−${body}`;
+  return `${currencySymbol}0.00`;
+}
+
+/** Tailwind classes: profit (≥0 green — 0 is break-even) / loss (red) */
+function plTextClass(n: number): string {
+  if (n > 0) return 'text-emerald-600 dark:text-emerald-400';
+  if (n < 0) return 'text-red-600 dark:text-red-400';
+  return 'text-lp-text';
+}
+
+/**
+ * Bar heights for Proposed vs Actual net: higher net = taller bar (e.g. −£5k vs −£8.5k → former is taller).
+ * Maps [min(netP, netA), max(...)] → [STANDARD_BAR_HEIGHT, MAX_BAR_HEIGHT].
+ */
+function netProfitBarHeights(netProposed: number, netActual: number): { proposed: number; actual: number } {
+  const minN = Math.min(netProposed, netActual);
+  const maxN = Math.max(netProposed, netActual);
+  const span = maxN - minN;
+  if (span === 0 || !Number.isFinite(span)) {
+    return { proposed: STANDARD_BAR_HEIGHT, actual: STANDARD_BAR_HEIGHT };
+  }
+  const lo = STANDARD_BAR_HEIGHT;
+  const hi = MAX_BAR_HEIGHT;
+  const t = (v: number) => lo + ((v - minN) / span) * (hi - lo);
+  return {
+    proposed: Math.round(t(netProposed)),
+    actual: Math.round(t(netActual)),
+  };
+}
+
 function fmtShort(n: number) {
   const abs = Math.abs(n);
   const sign = n < 0 ? '-' : n > 0 ? '+' : '';
@@ -157,7 +193,7 @@ type DisplayLine = { label: string; actual: number; proposed: number };
 /** Aggregate expense sections into the three combined display groups */
 function aggregateExpensesLines(sections: BudgetSummarySection[]): DisplayLine[] {
   const groups: { label: string; keywords: string[] }[] = [
-    { label: 'Salaries & Per Diems', keywords: ['SALARY', 'SALARIES', 'PAYROLL', 'PER DIEM', 'PERDIEM'] },
+    { label: 'Salary & Per Diems', keywords: ['SALARY', 'SALARIES', 'PAYROLL', 'PER DIEM', 'PERDIEM'] },
     { label: 'Hotels & Flights',     keywords: ['HOTEL', 'FLIGHT', 'ACCOMMODATION'] },
     { label: 'Transport & Production', keywords: ['TRANSPORT', 'PRODUCTION', 'FREIGHT', 'CARGO'] },
   ];
@@ -412,34 +448,44 @@ export function SummaryTab({
   const { income, expenses, overheads } = bucketSections(sections);
   const netActual = income.actual - expenses.actual - overheads.actual;
   const netProposed = income.proposed - expenses.proposed - overheads.proposed;
-  const actualBeatsProposed = netActual > netProposed;
-  const actualUnderProposed = netActual < netProposed;
+  /** Positive = actual outcome better than proposed (e.g. smaller loss or larger profit). */
+  const netVariance = netActual - netProposed;
   const currencySymbol = '£';
 
   const proposedTotal = income.proposed + expenses.proposed + overheads.proposed;
   const actualTotal = income.actual + expenses.actual + overheads.actual;
-  const scaleMax = Math.max(proposedTotal, actualTotal, 1);
-  const hasAnyData = proposedTotal > 0 || actualTotal > 0;
-  const proposedBarHeight = hasAnyData
-    ? Math.round((proposedTotal / scaleMax) * MAX_BAR_HEIGHT) || STANDARD_BAR_HEIGHT
-    : STANDARD_BAR_HEIGHT;
-  const actualBarHeight = hasAnyData
-    ? Math.round((actualTotal / scaleMax) * MAX_BAR_HEIGHT) || STANDARD_BAR_HEIGHT
-    : STANDARD_BAR_HEIGHT;
+  const { proposed: proposedBarHeight, actual: actualBarHeight } = netProfitBarHeights(
+    netProposed,
+    netActual
+  );
 
   const leftColumn = (
     <div className="mt-6 flex min-h-0 flex-1 flex-col rounded-xl border border-lp-border bg-lp-surface/50 p-4">
-      <p className="shrink-0 text-center text-[11px] font-semibold uppercase tracking-[0.2em] text-lp-text">
-        Net Profit / Loss
-      </p>
-      {/* GRAPH SECTION — mid-body: two vertical bar graphs; height scales with max(Proposed, Actual) when data present */}
+      <div className="flex shrink-0 flex-wrap items-center justify-center gap-x-2 gap-y-1 px-1 text-center">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-lp-text">
+          Net Profit / Loss
+        </p>
+        <span className="text-[11px] font-normal normal-case tracking-normal text-lp-text-tertiary">
+          –
+        </span>
+        <span className="inline-flex flex-wrap items-baseline justify-center gap-x-1.5">
+          <span className={cn('text-[11px] font-semibold tabular-nums tracking-tight', plTextClass(netVariance))}>
+            {fmtSignedPl(netVariance, currencySymbol)}
+          </span>
+          <span className="text-[11px] font-normal italic normal-case tracking-normal text-lp-text-tertiary">
+            variance
+          </span>
+        </span>
+      </div>
+      {/* GRAPH SECTION — bar *heights* reflect net (higher net = taller); stacks still show income/expense/overhead mix */}
       <div className="flex min-h-[140px] min-w-0 flex-1 items-end justify-center gap-6 overflow-x-auto px-2">
         <VerticalStackedBar
           income={income.proposed}
           expenses={expenses.proposed}
           overheads={overheads.proposed}
           label="Proposed"
-          valueAbove={`${currencySymbol}${fmt(netProposed)}`}
+          valueAbove={fmtSignedPl(netProposed, currencySymbol)}
+          valueAboveClassName={plTextClass(netProposed)}
           heightPx={proposedBarHeight}
           hasData={proposedTotal > 0}
         />
@@ -448,8 +494,8 @@ export function SummaryTab({
           expenses={expenses.actual}
           overheads={overheads.actual}
           label="Actual"
-          valueAbove={`${currencySymbol}${fmt(netActual)}`}
-          valueAboveClassName={actualBeatsProposed ? 'text-emerald-400' : actualUnderProposed ? 'text-red-400' : 'text-lp-text'}
+          valueAbove={fmtSignedPl(netActual, currencySymbol)}
+          valueAboveClassName={plTextClass(netActual)}
           heightPx={actualBarHeight}
           hasData={actualTotal > 0}
         />
@@ -495,16 +541,21 @@ export function SummaryTab({
             </tr>
             <tr className="border-t-2 border-white/25">
               <td className="py-2 font-medium text-lp-text">P / L</td>
-              <td className="whitespace-nowrap py-2 text-right tabular-nums font-medium text-lp-text">
-                {currencySymbol}
-                {fmt(netProposed)}
+              <td
+                className={cn(
+                  'whitespace-nowrap py-2 text-right tabular-nums font-medium',
+                  plTextClass(netProposed)
+                )}
+              >
+                {fmtSignedPl(netProposed, currencySymbol)}
               </td>
               <td
-                className="whitespace-nowrap py-2 text-right tabular-nums font-semibold"
-                style={{ color: actualBeatsProposed ? INCOME_COLOR : actualUnderProposed ? EXPENSES_COLOR : 'var(--lp-text)' }}
+                className={cn(
+                  'whitespace-nowrap py-2 text-right tabular-nums font-semibold',
+                  plTextClass(netActual)
+                )}
               >
-                {currencySymbol}
-                {fmt(netActual)}
+                {fmtSignedPl(netActual, currencySymbol)}
               </td>
             </tr>
           </tbody>

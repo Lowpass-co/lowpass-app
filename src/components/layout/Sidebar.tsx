@@ -14,7 +14,7 @@ import { usePathname, useSearchParams } from 'next/navigation';
 import {
   ChevronLeft, ChevronRight, LogOut, ChevronDown, X,
   LayoutDashboard, ListMusic, ClipboardList, LineChart,
-  Wallet, HandCoins, Bed, FileCheck2, Music, Users, Building2, Settings, Bug,
+  Wallet, HandCoins, Bed, FileCheck2, Music, Users, Building2, Settings, Bug, Gauge,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useArtistTourContext } from '@/contexts/ArtistTourContext';
@@ -25,7 +25,17 @@ interface NavItem {
   href: string;
   icon: React.ElementType;
   /** Override active detection. 'exact' = pathname must equal href path. 'includes' = pathname includes segment. */
-  activeMode?: 'exact' | 'includes' | 'budget' | 'settlement' | 'never' | 'all_advances' | 'tour_advance' | 'rooming' | 'payroll';
+  activeMode?:
+    | 'exact'
+    | 'includes'
+    | 'budget'
+    | 'settlement'
+    | 'never'
+    | 'all_advances'
+    | 'tour_advance'
+    | 'tour_overview'
+    | 'rooming'
+    | 'payroll';
 }
 
 interface NavGroup {
@@ -92,8 +102,14 @@ export function Sidebar() {
       ],
     },
     {
-      title: 'MANAGE',
+      title: 'MANAGE TOUR',
       items: [
+        {
+          label: 'Tour Summary',
+          href: selectedTourId ? `/tours/${selectedTourId}/overview` : '/budget',
+          icon: Gauge,
+          activeMode: 'tour_overview',
+        },
         { label: 'Budget', href: selectedTourId ? `/budget?tour_id=${selectedTourId}` : '/budget', icon: Wallet, activeMode: 'budget' },
         { label: 'Advance', href: selectedTourId ? `/tours/${selectedTourId}/advance` : '/budget', icon: ClipboardList, activeMode: 'tour_advance' },
         { label: 'Settlement', href: selectedTourId ? `/budget?tour_id=${selectedTourId}&tab=settlement` : '/budget', icon: FileCheck2, activeMode: 'settlement' },
@@ -227,7 +243,7 @@ export function Sidebar() {
           `}</style>
           {navGroups.map((group, groupIndex) => (
             <div key={group.title ?? `group-${groupIndex}`} className="mt-8 first:mt-2">
-              {group.title && !collapsed && group.title !== 'MANAGE' && (
+              {group.title && !collapsed && group.title !== 'MANAGE TOUR' && (
                 <h3
                   className="mb-3 px-3 text-xs font-extrabold uppercase tracking-wider"
                   style={{ color: 'var(--lp-sidebar-text-heading)' }}
@@ -236,7 +252,7 @@ export function Sidebar() {
                 </h3>
               )}
 
-              {group.title === 'MANAGE' && !collapsed && (
+              {group.title === 'MANAGE TOUR' && !collapsed && (
                 <div className="mb-3 flex items-center justify-between px-3">
                   <h3
                     className="text-xs font-extrabold uppercase tracking-wider"
@@ -275,7 +291,7 @@ export function Sidebar() {
                 </div>
               )}
 
-              {group.title === 'MANAGE' && !collapsed && (
+              {group.title === 'MANAGE TOUR' && !collapsed && (
                 <div className="mb-2 rounded-md bg-transparent px-3 py-0">
                   <div className="min-w-0">
                     <div className="relative" ref={artistRef}>
@@ -313,34 +329,40 @@ export function Sidebar() {
                         </div>
                       )}
                     </div>
-                    <div className="relative mt-1" ref={tourRef}>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setTourOpen((v) => !v);
-                          setArtistOpen(false);
-                        }}
-                        disabled={!selectedArtistId}
-                        className="flex w-full items-center justify-between gap-1 text-left py-0.5 leading-none disabled:opacity-50"
-                      >
-                        <span className="truncate text-[11px] font-semibold text-lp-text-secondary">
-                          {selectedTour?.name ?? 'Select Tour'}
-                        </span>
-                        <ChevronDown size={12} className={cn('shrink-0 text-lp-text-tertiary', tourOpen && 'rotate-180')} />
-                      </button>
-                      {tourOpen && (
-                        <div className="absolute left-0 top-full z-50 mt-1 max-h-56 w-full overflow-y-auto rounded-md border border-lp-border bg-lp-surface py-1 shadow-lg">
+                    <div className="relative mt-1 w-full" ref={tourRef}>
+                      <div className="flex w-full min-w-0 items-center gap-0.5">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setTourOpen((v) => !v);
+                            setArtistOpen(false);
+                          }}
+                          disabled={!selectedArtistId}
+                          className="flex min-w-0 flex-1 items-center justify-between gap-1 py-0.5 text-left leading-none disabled:opacity-50"
+                        >
+                          <span className="truncate text-[11px] font-semibold text-lp-text-secondary">
+                            {selectedTour?.name ?? 'Select Tour'}
+                          </span>
+                          <ChevronDown size={12} className={cn('shrink-0 text-lp-text-tertiary', tourOpen && 'rotate-180')} />
+                        </button>
+                        {selectedTourId && (
                           <button
                             type="button"
                             onClick={() => {
                               setSelectedTourId(null);
                               setTourOpen(false);
-                                if (onManagePage) router.push('/budget');
+                              if (onManagePage) router.push('/budget');
                             }}
-                            className="w-full px-2 py-1.5 text-left text-[11px] text-lp-text-secondary hover:bg-lp-surface-hover"
+                            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-lp-text-tertiary transition-colors hover:bg-lp-surface-hover hover:text-lp-orange"
+                            aria-label="Clear selected tour"
+                            title="Clear tour"
                           >
-                            Clear tour
+                            <X size={14} strokeWidth={2} />
                           </button>
+                        )}
+                      </div>
+                      {tourOpen && (
+                        <div className="absolute left-0 top-full z-50 mt-1 max-h-56 w-full overflow-y-auto rounded-md border border-lp-border bg-lp-surface py-1 shadow-lg">
                           {tours.map((t) => (
                             <button
                               key={t.id}
@@ -352,6 +374,8 @@ export function Sidebar() {
                                   if (pathname?.startsWith('/budget')) {
                                     const currentTab = searchParams?.get('tab') ?? 'summary';
                                     router.push(`/budget?tour_id=${t.id}&tab=${currentTab}`);
+                                  } else if (pathname?.includes('/overview')) {
+                                    router.push(`/tours/${t.id}/overview`);
                                   } else if (pathname?.includes('/advance')) {
                                     router.push(`/tours/${t.id}/advance`);
                                   } else if (pathname?.includes('/rooming')) {
@@ -390,16 +414,19 @@ export function Sidebar() {
                         : item.activeMode === 'tour_advance'
                           ? /^\/tours\/[^/]+\/advance(?:\/|$)/.test(pathname ?? '')
                           : item.activeMode === 'rooming'
-                            ? (pathname === '/rooming' || /^\/tours\/[^/]+\/rooming(?:\/|$)/.test(pathname ?? ''))
+                            ? pathname === '/rooming' ||
+                              /^\/tours\/[^/]+\/rooming(?:\/|$)/.test(pathname ?? '')
                             : item.activeMode === 'payroll'
                               ? /^\/tours\/[^/]+\/payroll(?:\/|$)/.test(pathname ?? '')
-                      : item.activeMode === 'settlement'
-                      ? pathname?.startsWith('/budget') && tab === 'settlement'
-                      : item.activeMode === 'budget'
-                        ? pathname?.startsWith('/budget') && tab !== 'settlement'
-                        : item.activeMode === 'includes'
-                          ? !!pathname?.includes(hrefPath.split('/').pop() ?? '')
-                          : /* exact */ pathname === hrefPath;
+                              : item.activeMode === 'tour_overview'
+                                ? /^\/tours\/[^/]+\/overview(?:\/|$)/.test(pathname ?? '')
+                                : item.activeMode === 'settlement'
+                                  ? pathname?.startsWith('/budget') && tab === 'settlement'
+                                  : item.activeMode === 'budget'
+                                    ? pathname?.startsWith('/budget') && tab !== 'settlement'
+                                    : item.activeMode === 'includes'
+                                      ? !!pathname?.includes(hrefPath.split('/').pop() ?? '')
+                                      : pathname === hrefPath;
 
                   const Icon = item.icon;
                   return (

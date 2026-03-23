@@ -4,7 +4,6 @@ import type { LucideIcon } from 'lucide-react';
 import {
   Bus,
   CalendarDays,
-  CreditCard,
   DollarSign,
   Hotel,
   LayoutPanelLeft,
@@ -23,7 +22,6 @@ export const BUDGET_TAB_ICONS: Record<TabId, LucideIcon> = {
   income: Route,
   'day-view': CalendarDays,
   salaries: DollarSign,
-  payroll: CreditCard,
   hotels: Hotel,
   flights: Plane,
   transport: Bus,

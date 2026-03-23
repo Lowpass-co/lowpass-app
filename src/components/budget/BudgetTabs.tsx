@@ -20,10 +20,6 @@ const SalariesTab = dynamic(
   () => import('@/components/budget/SalariesTab').then((m) => ({ default: m.SalariesTab })),
   { ssr: false }
 );
-const PayrollTab = dynamic(
-  () => import('@/components/budget/PayrollTab').then((m) => ({ default: m.PayrollTab })),
-  { ssr: false }
-);
 const HotelsTab = dynamic(
   () => import('@/components/budget/HotelsTab').then((m) => ({ default: m.HotelsTab })),
   { ssr: false }
@@ -141,7 +137,6 @@ export function BudgetTabs({
       case 'income': return <IncomeTab tourId={tourId} />;
       case 'day-view': return <DayViewTab tourId={tourId} />;
       case 'salaries': return <SalariesTab tourId={tourId} />;
-      case 'payroll': return <PayrollTab tourId={tourId} />;
       case 'hotels': return <HotelsTab tourId={tourId} />;
       case 'flights': return <FlightsTab tourId={tourId} />;
       case 'transport': return <TransportationTab tourId={tourId} />;
