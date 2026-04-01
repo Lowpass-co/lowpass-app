@@ -215,18 +215,18 @@ export function HotelsTab({ tourId }: { tourId: string }) {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-lp-border bg-lp-bg-tertiary">
+              <tr className="border-b border-lp-border">
                 <th className="w-8 p-2" />
-                <th className="text-left p-3 font-medium text-lp-text">Hotel Name</th>
-                <th className="text-left p-3 font-medium text-lp-text">Address</th>
-                <th className="text-left p-3 font-medium text-lp-text">City</th>
-                <th className="text-left p-3 font-medium text-lp-text">Check-in / Check-out</th>
-                <th className="text-left p-3 font-medium text-lp-text">Distance to Venue</th>
-                <th className="text-left p-3 font-medium text-lp-text">Distance to Airport</th>
-                <th className="text-left p-3 font-medium text-lp-text">Cancellation</th>
-                <th className="text-right p-3 font-medium text-lp-text">Room Count</th>
-                <th className="text-right p-3 font-medium text-lp-text">Total Rooms Cost</th>
-                <th className="text-right p-3 font-medium text-lp-text w-32">Actions</th>
+                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Hotel Name</th>
+                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Address</th>
+                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">City</th>
+                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Check-in / Check-out</th>
+                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Distance to Venue</th>
+                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Distance to Airport</th>
+                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Cancellation</th>
+                <th className="text-right p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Room Count</th>
+                <th className="text-right p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Total Rooms Cost</th>
+                <th className="text-right p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary w-32">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -256,7 +256,7 @@ export function HotelsTab({ tourId }: { tourId: string }) {
                       <td className="p-3 text-lp-text">
                         {isEditing ? (
                           <input
-                            className="w-full max-w-[180px] rounded border border-lp-border bg-lp-bg px-2 py-1 text-lp-text"
+                            className="w-full max-w-[180px] rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30"
                             defaultValue={editingHotel?.hotel_name}
                             onBlur={(e) => {
                               const v = e.target.value.trim();
@@ -399,14 +399,14 @@ export function HotelsTab({ tourId }: { tourId: string }) {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-lp-border text-left">
-                    <th className="p-2 font-medium text-lp-text">Person</th>
-                    <th className="p-2 font-medium text-lp-text">Check-in / Check-out</th>
-                    <th className="p-2 font-medium text-lp-text">Nights</th>
-                    <th className="p-2 font-medium text-lp-text">Room Type</th>
-                    <th className="p-2 font-medium text-lp-text">Room #</th>
-                    <th className="p-2 font-medium text-lp-text">Rate/night</th>
-                    <th className="p-2 font-medium text-lp-text">Confirmation</th>
-                    <th className="p-2 font-medium text-lp-text">Notes</th>
+                    <th className="p-2 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Person</th>
+                    <th className="p-2 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Check-in / Check-out</th>
+                    <th className="p-2 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Nights</th>
+                    <th className="p-2 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Room Type</th>
+                    <th className="p-2 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Room #</th>
+                    <th className="p-2 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Rate/night</th>
+                    <th className="p-2 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Confirmation</th>
+                    <th className="p-2 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Notes</th>
                     <th className="p-2 w-24" />
                   </tr>
                 </thead>
@@ -469,7 +469,7 @@ export function HotelsTab({ tourId }: { tourId: string }) {
             <div className="space-y-3">
               <label className="block text-sm font-medium text-lp-text">Person name</label>
               <input
-                className="w-full rounded border border-lp-border bg-lp-bg px-3 py-2 text-lp-text"
+                className="w-full rounded-md border border-lp-border bg-transparent px-3 py-2 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30"
                 value={assignmentForm.person_name ?? ''}
                 onChange={(e) => setAssignmentForm((f) => ({ ...f, person_name: e.target.value }))}
               />
@@ -478,7 +478,7 @@ export function HotelsTab({ tourId }: { tourId: string }) {
                   <label className="block text-sm font-medium text-lp-text">Check-in</label>
                   <input
                     type="date"
-                    className="w-full rounded border border-lp-border bg-lp-bg px-3 py-2 text-lp-text"
+                    className="w-full rounded-md border border-lp-border bg-transparent px-3 py-2 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30"
                     value={assignmentForm.check_in ?? ''}
                     onChange={(e) => setAssignmentForm((f) => ({ ...f, check_in: e.target.value || null }))}
                   />
@@ -487,7 +487,7 @@ export function HotelsTab({ tourId }: { tourId: string }) {
                   <label className="block text-sm font-medium text-lp-text">Check-out</label>
                   <input
                     type="date"
-                    className="w-full rounded border border-lp-border bg-lp-bg px-3 py-2 text-lp-text"
+                    className="w-full rounded-md border border-lp-border bg-transparent px-3 py-2 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30"
                     value={assignmentForm.check_out ?? ''}
                     onChange={(e) => setAssignmentForm((f) => ({ ...f, check_out: e.target.value || null }))}
                   />
@@ -499,7 +499,7 @@ export function HotelsTab({ tourId }: { tourId: string }) {
                   <input
                     type="number"
                     min={0}
-                    className="w-full rounded border border-lp-border bg-lp-bg px-3 py-2 text-lp-text"
+                    className="w-full rounded-md border border-lp-border bg-transparent px-3 py-2 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30"
                     value={assignmentForm.nights ?? 0}
                     onChange={(e) => setAssignmentForm((f) => ({ ...f, nights: parseInt(e.target.value, 10) || 0 }))}
                   />
@@ -510,7 +510,7 @@ export function HotelsTab({ tourId }: { tourId: string }) {
                     type="number"
                     step="0.01"
                     min={0}
-                    className="w-full rounded border border-lp-border bg-lp-bg px-3 py-2 text-lp-text"
+                    className="w-full rounded-md border border-lp-border bg-transparent px-3 py-2 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30"
                     value={assignmentForm.rate_per_night ?? 0}
                     onChange={(e) => setAssignmentForm((f) => ({ ...f, rate_per_night: parseFloat(e.target.value) || 0 }))}
                   />
@@ -519,7 +519,7 @@ export function HotelsTab({ tourId }: { tourId: string }) {
               <div>
                 <label className="block text-sm font-medium text-lp-text">Room type</label>
                 <input
-                  className="w-full rounded border border-lp-border bg-lp-bg px-3 py-2 text-lp-text"
+                  className="w-full rounded-md border border-lp-border bg-transparent px-3 py-2 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30"
                   value={assignmentForm.room_type ?? ''}
                   onChange={(e) => setAssignmentForm((f) => ({ ...f, room_type: e.target.value || null }))}
                   placeholder="e.g. SGL, DBL"
@@ -528,7 +528,7 @@ export function HotelsTab({ tourId }: { tourId: string }) {
               <div>
                 <label className="block text-sm font-medium text-lp-text">Room number</label>
                 <input
-                  className="w-full rounded border border-lp-border bg-lp-bg px-3 py-2 text-lp-text"
+                  className="w-full rounded-md border border-lp-border bg-transparent px-3 py-2 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30"
                   value={assignmentForm.room_number ?? ''}
                   onChange={(e) => setAssignmentForm((f) => ({ ...f, room_number: e.target.value || null }))}
                 />
@@ -536,7 +536,7 @@ export function HotelsTab({ tourId }: { tourId: string }) {
               <div>
                 <label className="block text-sm font-medium text-lp-text">Confirmation #</label>
                 <input
-                  className="w-full rounded border border-lp-border bg-lp-bg px-3 py-2 text-lp-text"
+                  className="w-full rounded-md border border-lp-border bg-transparent px-3 py-2 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30"
                   value={assignmentForm.confirmation ?? ''}
                   onChange={(e) => setAssignmentForm((f) => ({ ...f, confirmation: e.target.value || null }))}
                 />
@@ -544,7 +544,7 @@ export function HotelsTab({ tourId }: { tourId: string }) {
               <div>
                 <label className="block text-sm font-medium text-lp-text">Notes</label>
                 <input
-                  className="w-full rounded border border-lp-border bg-lp-bg px-3 py-2 text-lp-text"
+                  className="w-full rounded-md border border-lp-border bg-transparent px-3 py-2 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30"
                   value={assignmentForm.notes ?? ''}
                   onChange={(e) => setAssignmentForm((f) => ({ ...f, notes: e.target.value || null }))}
                 />
@@ -585,7 +585,7 @@ export function HotelsTab({ tourId }: { tourId: string }) {
             <h4 className="text-lg font-semibold text-lp-text mb-4">Add hotel</h4>
             <label className="block text-sm font-medium text-lp-text mb-2">Hotel name</label>
             <input
-              className="w-full rounded border border-lp-border bg-lp-bg px-3 py-2 text-lp-text mb-4"
+              className="mb-4 w-full rounded-md border border-lp-border bg-transparent px-3 py-2 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30"
               value={newHotelName}
               onChange={(e) => setNewHotelName(e.target.value)}
               placeholder="Hotel name"
