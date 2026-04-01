@@ -186,34 +186,23 @@ export function SalariesTab({
 
   return (
     <div className="space-y-4">
-      <div
-        className="overflow-hidden rounded-xl border shadow-lg"
-        style={{
-          background: 'var(--lp-budget-card-bg)',
-          borderColor: 'var(--lp-budget-card-border)',
-        }}
-      >
-        <div className="h-[3px] w-full bg-gradient-to-r from-lp-orange/80 via-lp-orange to-lp-orange/20" />
-        <div className="overflow-x-auto">
+      <div className="overflow-x-auto rounded-xl border border-lp-border bg-lp-surface">
           <table className="w-full min-w-[960px] border-collapse text-sm">
             <thead>
-              <tr
-                className="border-b"
-                style={{ borderColor: 'var(--lp-budget-card-border)', background: 'var(--lp-budget-card-header)' }}
-              >
-              <th className="sticky left-0 z-10 border-r px-5 py-4 text-left text-[11px] font-semibold uppercase tracking-wider text-[#8a8a8a]" style={{ borderColor: 'var(--lp-budget-card-border)', background: 'var(--lp-budget-card-header)' }}>Person</th>
-              <th className="px-4 py-4 text-left text-[11px] font-semibold uppercase tracking-wider text-[#8a8a8a]">Role</th>
-              <th className="border-r px-4 py-4 text-left text-[11px] font-semibold uppercase tracking-wider text-[#8a8a8a]" style={{ borderColor: 'var(--lp-budget-card-border)' }}>Type</th>
-              <th className="px-4 py-4 text-left text-[11px] font-semibold uppercase tracking-wider text-[#8a8a8a]">Rate Type</th>
-              <th className="px-4 py-4 text-right text-[11px] font-semibold uppercase tracking-wider text-[#8a8a8a]">Daily Rate</th>
-              <th className="px-4 py-4 text-right text-[11px] font-semibold uppercase tracking-wider text-[#8a8a8a]">Show Rate</th>
-              <th className="px-4 py-4 text-right text-[11px] font-semibold uppercase tracking-wider text-[#8a8a8a]">Off Rate</th>
-              <th className="px-4 py-4 text-right text-[11px] font-semibold uppercase tracking-wider text-[#8a8a8a]">Rehearsal</th>
-              <th className="border-r px-4 py-4 text-right text-[11px] font-semibold uppercase tracking-wider text-[#8a8a8a]" style={{ borderColor: 'var(--lp-budget-card-border)' }}>Per Diem</th>
-              <th className="px-4 py-4 text-right text-[11px] font-semibold uppercase tracking-wider text-[#8a8a8a]">Advance Fee</th>
-              <th className="px-5 py-4 text-right text-[11px] font-semibold uppercase tracking-wider text-[#8a8a8a]">Projected Fee</th>
+              <tr className="border-b border-lp-border">
+              <th className="sticky left-0 z-10 border-r border-lp-border bg-lp-surface px-5 py-4 text-left text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Person</th>
+              <th className="px-4 py-4 text-left text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Role</th>
+              <th className="border-r border-lp-border px-4 py-4 text-left text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Type</th>
+              <th className="px-4 py-4 text-left text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Rate Type</th>
+              <th className="px-4 py-4 text-right text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Daily Rate</th>
+              <th className="px-4 py-4 text-right text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Show Rate</th>
+              <th className="px-4 py-4 text-right text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Off Rate</th>
+              <th className="px-4 py-4 text-right text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Rehearsal</th>
+              <th className="border-r border-lp-border px-4 py-4 text-right text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Per Diem</th>
+              <th className="px-4 py-4 text-right text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Advance Fee</th>
+              <th className="px-5 py-4 text-right text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Projected Fee</th>
               {showComm && (
-                <th className="px-4 py-4 text-right text-[11px] font-semibold uppercase tracking-wider text-[#8a8a8a] italic">Comm.</th>
+                <th className="px-4 py-4 text-right text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary italic">Comm.</th>
               )}
               <th className="w-24 px-2 py-4" />
               </tr>
@@ -250,14 +239,14 @@ export function SalariesTab({
               const suggestedAdv = suggestedAdvanceFee(totalTourDays, rateType, Number(form.show_rate) || 0, Number(form.off_rate) || 0);
 
               return (
-                <tr key={p.id} className="border-b border-lp-border/60 hover:bg-lp-bg-tertiary/20">
+                <tr key={p.id} className="border-b border-lp-border/30 hover:bg-lp-surface-hover">
                   <td className="px-3 py-2 text-lp-text font-medium">{p.person_name}</td>
                   <td className="px-3 py-2 text-lp-text-secondary">{p.role ?? '—'}</td>
                   <td className="px-3 py-2 text-lp-text-tertiary capitalize">{p.person_type}</td>
                   <td className="px-3 py-2">
                     {isEditing ? (
                       <select
-                        className="w-full rounded border border-lp-border bg-lp-bg px-2 py-1 text-lp-text"
+                        className="w-full rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30"
                         value={form.rate_type}
                         onChange={(e) => setEditForm((prev) => ({ ...prev, rate_type: e.target.value }))}
                       >
@@ -275,7 +264,7 @@ export function SalariesTab({
                           type="number"
                           step="0.01"
                           min="0"
-                          className="w-full rounded border border-lp-border bg-lp-bg px-2 py-1 text-right tabular-nums"
+                          className="w-full rounded-md border border-lp-border bg-transparent px-2 py-1 text-right text-sm tabular-nums text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30"
                           value={form.off_rate ?? ''}
                           onChange={(e) => setEditForm((prev) => ({ ...prev, off_rate: e.target.value ? Number(e.target.value) : 0 }))}
                         />
@@ -294,7 +283,7 @@ export function SalariesTab({
                           type="number"
                           step="0.01"
                           min="0"
-                          className="w-full rounded border border-lp-border bg-lp-bg px-2 py-1 text-right tabular-nums"
+                          className="w-full rounded-md border border-lp-border bg-transparent px-2 py-1 text-right text-sm tabular-nums text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30"
                           value={form.show_rate ?? ''}
                           onChange={(e) => setEditForm((prev) => ({ ...prev, show_rate: e.target.value ? Number(e.target.value) : 0 }))}
                         />
@@ -312,7 +301,7 @@ export function SalariesTab({
                           type="number"
                           step="0.01"
                           min="0"
-                          className="w-full rounded border border-lp-border bg-lp-bg px-2 py-1 text-right tabular-nums"
+                          className="w-full rounded-md border border-lp-border bg-transparent px-2 py-1 text-right text-sm tabular-nums text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30"
                           value={form.off_rate ?? ''}
                           onChange={(e) => setEditForm((prev) => ({ ...prev, off_rate: e.target.value ? Number(e.target.value) : 0 }))}
                         />
@@ -330,7 +319,7 @@ export function SalariesTab({
                           type="number"
                           step="0.01"
                           min="0"
-                          className="w-full rounded border border-lp-border bg-lp-bg px-2 py-1 text-right tabular-nums"
+                          className="w-full rounded-md border border-lp-border bg-transparent px-2 py-1 text-right text-sm tabular-nums text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30"
                           value={form.rehearsal_rate ?? ''}
                           onChange={(e) => setEditForm((prev) => ({ ...prev, rehearsal_rate: e.target.value ? Number(e.target.value) : 0 }))}
                         />
@@ -347,7 +336,7 @@ export function SalariesTab({
                         type="number"
                         step="0.01"
                         min="0"
-                        className="w-full rounded border border-lp-border bg-lp-bg px-2 py-1 text-right tabular-nums"
+                        className="w-full rounded-md border border-lp-border bg-transparent px-2 py-1 text-right text-sm tabular-nums text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30"
                         value={form.per_diem ?? ''}
                         onChange={(e) => setEditForm((prev) => ({ ...prev, per_diem: e.target.value ? Number(e.target.value) : 0 }))}
                       />
@@ -362,7 +351,7 @@ export function SalariesTab({
                           type="number"
                           step="0.01"
                           min="0"
-                          className="w-20 rounded border border-lp-border bg-lp-bg px-2 py-1 text-right tabular-nums"
+                          className="w-20 rounded-md border border-lp-border bg-transparent px-2 py-1 text-right text-sm tabular-nums text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30"
                           value={form.advance_fee ?? ''}
                           onChange={(e) => setEditForm((prev) => ({ ...prev, advance_fee: e.target.value ? Number(e.target.value) : 0 }))}
                         />
@@ -433,27 +422,23 @@ export function SalariesTab({
             })}
             </tbody>
           </table>
-        </div>
-        <div
-          className="border-t p-5"
-          style={{ borderColor: 'var(--lp-budget-card-border)', background: 'var(--lp-budget-card-footer)' }}
-        >
+        <div className="border-t border-lp-border bg-lp-surface p-5">
           <div className="ml-auto max-w-[500px] space-y-3">
             <div className="flex items-center justify-between text-[13px]">
-              <span className="font-medium text-[#888]">Total Salaries</span>
+              <span className="font-medium text-lp-text-tertiary">Total Salaries</span>
               <span className="font-mono tabular-nums tracking-wide text-lp-text">
-                <span className="mr-1 text-[#666]">$</span>
+                <span className="mr-1 text-lp-text-secondary">$</span>
                 {totalSalaries.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
             </div>
             <div className="flex items-center justify-between text-[13px]">
-              <span className="font-medium text-[#888]">Total Per Diem</span>
+              <span className="font-medium text-lp-text-tertiary">Total Per Diem</span>
               <span className="font-mono tabular-nums tracking-wide text-lp-text">
-                <span className="mr-1 text-[#666]">$</span>
+                <span className="mr-1 text-lp-text-secondary">$</span>
                 {totalPerDiemSum.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
             </div>
-            <div className="my-3 h-px w-full opacity-30" style={{ background: 'var(--lp-budget-card-border)' }} />
+            <div className="my-3 h-px w-full bg-lp-border opacity-60" />
             <div className="flex items-center justify-between text-[15px]">
               <span className="font-bold text-lp-text">Total (Salaries + Per Diem)</span>
               <span className="font-mono font-bold tabular-nums tracking-wide text-lp-orange">
@@ -466,7 +451,7 @@ export function SalariesTab({
             </div>
           </div>
         </div>
-        <div className="border-t px-4 py-3" style={{ borderColor: 'var(--lp-budget-card-border)' }}>
+        <div className="border-t border-lp-border px-4 py-3">
           <button
             type="button"
             className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-lp-border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-lp-text-tertiary hover:border-lp-orange hover:text-lp-orange"
