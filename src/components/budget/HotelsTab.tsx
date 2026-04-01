@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect, useCallback, Fragment } from 'react';
-import { Loader2, Pencil, Trash2, ChevronDown, ChevronRight, Plus, X } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Loader2, Pencil, Trash2, ChevronRight, Plus, X } from 'lucide-react';
+import { useDetailPanel } from '@/contexts/DetailPanelContext';
 import { formatDate } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 import { DeleteConfirmationModal } from '@/components/ui/DeleteConfirmationModal';
@@ -28,6 +29,7 @@ type HotelRoomAssignment = {
 type HotelBooking = {
   id: string;
   tour_id: string;
+  line_item_id?: string | null;
   hotel_name: string;
   address: string | null;
   city: string | null;
@@ -47,12 +49,11 @@ type BudgetLineItem = {
 };
 
 export function HotelsTab({ tourId }: { tourId: string }) {
+  const { openLineItem } = useDetailPanel();
   const [loading, setLoading] = useState(true);
   const [hotels, setHotels] = useState<HotelBooking[]>([]);
   const [lineItems, setLineItems] = useState<BudgetLineItem[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [assignmentsLoading, setAssignmentsLoading] = useState<Record<string, boolean>>({});
   const [editingHotel, setEditingHotel] = useState<HotelBooking | null>(null);
   const [assignmentsModalHotelId, setAssignmentsModalHotelId] = useState<string | null>(null);
   const [assignmentForm, setAssignmentForm] = useState<Partial<HotelRoomAssignment> | null>(null);
@@ -216,7 +217,6 @@ export function HotelsTab({ tourId }: { tourId: string }) {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-lp-border">
-                <th className="w-8 p-2" />
                 <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Hotel Name</th>
                 <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Address</th>
                 <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">City</th>
@@ -233,26 +233,29 @@ export function HotelsTab({ tourId }: { tourId: string }) {
               {hotels.map((hotel) => {
                 const assignments = hotel.room_assignments ?? [];
                 const cost = totalRoomsCost(assignments);
-                const isExpanded = expandedId === hotel.id;
                 const isEditing = editingHotel?.id === hotel.id;
                 return (
-                  <Fragment key={hotel.id}>
-                    <tr
-                      key={hotel.id}
-                      className={cn(
-                        'border-b border-lp-border',
-                        isExpanded && 'bg-lp-bg-tertiary/50'
-                      )}
-                    >
-                      <td className="p-2">
-                        <button
-                          type="button"
-                          onClick={() => setExpandedId(isExpanded ? null : hotel.id)}
-                          className="p-1 text-lp-text-tertiary hover:text-lp-text"
-                        >
-                          {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                        </button>
-                      </td>
+                  <tr
+                    key={hotel.id}
+                    role={!isEditing && hotel.line_item_id ? 'button' : undefined}
+                    tabIndex={!isEditing && hotel.line_item_id ? 0 : undefined}
+                    onClick={(e) => {
+                      if (isEditing) return;
+                      if ((e.target as HTMLElement).closest('button, input, a, label')) return;
+                      if (hotel.line_item_id) openLineItem(hotel.line_item_id);
+                    }}
+                    onKeyDown={(e) => {
+                      if (isEditing || !hotel.line_item_id) return;
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        openLineItem(hotel.line_item_id);
+                      }
+                    }}
+                    className={cn(
+                      'border-b border-lp-border',
+                      !isEditing && hotel.line_item_id && 'cursor-pointer hover:bg-lp-surface-hover'
+                    )}
+                  >
                       <td className="p-3 text-lp-text">
                         {isEditing ? (
                           <input
@@ -289,7 +292,10 @@ export function HotelsTab({ tourId }: { tourId: string }) {
                         <div className="flex items-center justify-end gap-1">
                           <button
                             type="button"
-                            onClick={() => setEditingHotel(isEditing ? null : hotel)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingHotel(isEditing ? null : hotel);
+                            }}
                             className="rounded p-1.5 text-lp-text-tertiary hover:bg-lp-bg-tertiary hover:text-lp-text"
                             title="Edit hotel"
                           >
@@ -297,65 +303,31 @@ export function HotelsTab({ tourId }: { tourId: string }) {
                           </button>
                           <button
                             type="button"
-                            onClick={() => setAssignmentsModalHotelId(hotel.id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setAssignmentsModalHotelId(hotel.id);
+                            }}
                             className="rounded px-2 py-1 text-xs font-medium text-lp-orange hover:bg-lp-orange-subtle"
                           >
                             View Assignments
                           </button>
                           <button
                             type="button"
-                            onClick={() => setDeleteModal({ kind: 'hotel', id: hotel.id, name: hotel.hotel_name })}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeleteModal({ kind: 'hotel', id: hotel.id, name: hotel.hotel_name });
+                            }}
                             className="rounded p-1.5 text-lp-text-tertiary hover:bg-red-500/10 hover:text-red-600"
                             title="Delete hotel"
                           >
                             <Trash2 className="h-4 w-4" />
                           </button>
+                          {hotel.line_item_id ? (
+                            <ChevronRight size={14} className="text-lp-text-tertiary shrink-0 ml-0.5" aria-hidden />
+                          ) : null}
                         </div>
                       </td>
                     </tr>
-                    {isExpanded && (
-                      <tr key={`${hotel.id}-assignments`}>
-                        <td colSpan={11} className="bg-lp-bg-tertiary/30 p-4">
-                          <div className="text-sm">
-                            <div className="font-medium text-lp-text mb-2">Room assignments</div>
-                            {assignments.length === 0 ? (
-                              <p className="text-lp-text-tertiary">No assignments. Use “View Assignments” to add.</p>
-                            ) : (
-                              <ul className="space-y-1">
-                                {assignments.map((a) => (
-                                  <li key={a.id} className="flex items-center gap-4 text-lp-text-secondary">
-                                    <span className="font-medium text-lp-text">{a.person_name}</span>
-                                    {a.check_in && a.check_out && (
-                                      <span>{formatDate(a.check_in)} – {formatDate(a.check_out)}</span>
-                                    )}
-                                    <span>{a.nights} night{a.nights !== 1 ? 's' : ''}</span>
-                                    <span>{a.room_type ?? '—'}</span>
-                                    <span>{a.room_number ?? '—'}</span>
-                                    <span className="tabular-nums">{Number(a.rate_per_night).toLocaleString('en-GB', { minimumFractionDigits: 2 })}/night</span>
-                                    <span>{a.confirmation ?? '—'}</span>
-                                    <button
-                                      type="button"
-                                      onClick={() => setAssignmentForm({ ...a })}
-                                      className="text-lp-orange hover:underline"
-                                    >
-                                      Edit
-                                    </button>
-                                    <button
-                                      type="button"
-                                      onClick={() => setDeleteModal({ kind: 'assignment', id: a.id, name: a.person_name })}
-                                      className="text-red-600 hover:underline"
-                                    >
-                                      Delete
-                                    </button>
-                                  </li>
-                                ))}
-                              </ul>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </Fragment>
                 );
               })}
             </tbody>
