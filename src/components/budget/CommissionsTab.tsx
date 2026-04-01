@@ -376,14 +376,14 @@ export function CommissionsTab({ tourId }: { tourId: string }) {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-lp-border bg-lp-bg-tertiary">
+              <tr className="border-b border-lp-border">
                 <th className="w-16 p-2" />
-                <th className="text-left p-3 font-medium text-lp-text">Label</th>
-                <th className="text-right p-3 font-medium text-lp-text w-24">Percentage</th>
-                <th className="text-left p-3 font-medium text-lp-text">Basis</th>
-                <th className="text-right p-3 font-medium text-lp-text w-32">Calculated (Proposed)</th>
-                <th className="text-right p-3 font-medium text-lp-text w-32">Calculated (Actual)</th>
-                <th className="text-left p-3 font-medium text-lp-text">Notes</th>
+                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Label</th>
+                <th className="text-right p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary w-24">Percentage</th>
+                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Basis</th>
+                <th className="text-right p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary w-32">Calculated (Proposed)</th>
+                <th className="text-right p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary w-32">Calculated (Actual)</th>
+                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Notes</th>
                 <th className="w-28 p-3" />
               </tr>
             </thead>
@@ -393,7 +393,7 @@ export function CommissionsTab({ tourId }: { tourId: string }) {
                   <td className="p-2" />
                   <td className="p-2">
                     <input
-                      className="w-full min-w-[120px] rounded border border-lp-border bg-lp-bg px-2 py-1.5 text-lp-text"
+                      className="w-full min-w-[120px] rounded-md border border-lp-border bg-transparent px-2 py-1.5 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30"
                       value={newRow.label ?? ''}
                       onChange={(e) => setNewRow((r) => ({ ...r, label: e.target.value }))}
                       placeholder="e.g. Management"
@@ -405,7 +405,7 @@ export function CommissionsTab({ tourId }: { tourId: string }) {
                       step="0.1"
                       min={0}
                       max={100}
-                      className="w-full rounded border border-lp-border bg-lp-bg px-2 py-1.5 text-right text-lp-text"
+                      className="w-full rounded-md border border-lp-border bg-transparent px-2 py-1.5 text-right text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30"
                       value={newRow.percentage !== undefined ? Number(newRow.percentage) * 100 : ''}
                       onChange={(e) =>
                         setNewRow((r) => ({ ...r, percentage: parseFloat(e.target.value) / 100 || 0 }))
@@ -441,7 +441,7 @@ export function CommissionsTab({ tourId }: { tourId: string }) {
                   </td>
                   <td className="p-2">
                     <input
-                      className="w-full min-w-[100px] rounded border border-lp-border bg-lp-bg px-2 py-1.5 text-lp-text"
+                      className="w-full min-w-[100px] rounded-md border border-lp-border bg-transparent px-2 py-1.5 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30"
                       value={newRow.notes ?? ''}
                       onChange={(e) => setNewRow((r) => ({ ...r, notes: e.target.value || null }))}
                       placeholder="Notes"
@@ -503,7 +503,7 @@ export function CommissionsTab({ tourId }: { tourId: string }) {
                     <td className="p-3 text-lp-text">
                       {isEditing ? (
                         <input
-                          className="w-full min-w-[120px] rounded border border-lp-border bg-lp-bg px-2 py-1 text-lp-text"
+                          className="w-full min-w-[120px] rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30"
                           value={row.label ?? ''}
                           onChange={(e) => setEditRow((r) => ({ ...r, label: e.target.value }))}
                         />
@@ -519,7 +519,7 @@ export function CommissionsTab({ tourId }: { tourId: string }) {
                             step="0.1"
                             min={0}
                             max={100}
-                            className="w-16 rounded border border-lp-border bg-lp-bg px-2 py-1 text-right text-lp-text"
+                            className="w-16 rounded-md border border-lp-border bg-transparent px-2 py-1 text-right text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30"
                             value={row.percentage !== undefined ? (Number(row.percentage) * 100).toFixed(1) : ''}
                             onChange={(e) =>
                               setEditRow((r) => ({ ...r, percentage: parseFloat(e.target.value) / 100 || 0 }))
@@ -563,7 +563,7 @@ export function CommissionsTab({ tourId }: { tourId: string }) {
                     <td className="p-3 text-lp-text-tertiary max-w-[160px] truncate" title={c.notes ?? undefined}>
                       {isEditing ? (
                         <input
-                          className="w-full rounded border border-lp-border bg-lp-bg px-2 py-1 text-lp-text"
+                          className="w-full rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30"
                           value={row.notes ?? ''}
                           onChange={(e) => setEditRow((r) => ({ ...r, notes: e.target.value || null }))}
                         />
