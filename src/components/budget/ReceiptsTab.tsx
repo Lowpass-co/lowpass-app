@@ -217,22 +217,22 @@ export function ReceiptsTab({ tourId }: { tourId: string }) {
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-4 rounded-xl border border-lp-border bg-lp-surface p-4">
-        <input type="date" className="rounded border border-lp-border bg-lp-bg px-2 py-1.5 text-sm text-lp-text" value={filterDateFrom} onChange={(e) => setFilterDateFrom(e.target.value)} placeholder="From" />
-        <input type="date" className="rounded border border-lp-border bg-lp-bg px-2 py-1.5 text-sm text-lp-text" value={filterDateTo} onChange={(e) => setFilterDateTo(e.target.value)} placeholder="To" />
-        <input type="text" className="rounded border border-lp-border bg-lp-bg px-2 py-1.5 text-sm text-lp-text w-40" value={filterVendor} onChange={(e) => setFilterVendor(e.target.value)} placeholder="Vendor" />
-        <select className="rounded border border-lp-border bg-lp-bg px-2 py-1.5 text-sm text-lp-text" value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)}>
+        <input type="date" className="rounded-md border border-lp-border bg-transparent px-2 py-1.5 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30" value={filterDateFrom} onChange={(e) => setFilterDateFrom(e.target.value)} placeholder="From" />
+        <input type="date" className="rounded-md border border-lp-border bg-transparent px-2 py-1.5 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30" value={filterDateTo} onChange={(e) => setFilterDateTo(e.target.value)} placeholder="To" />
+        <input type="text" className="rounded-md border border-lp-border bg-transparent px-2 py-1.5 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 w-40" value={filterVendor} onChange={(e) => setFilterVendor(e.target.value)} placeholder="Vendor" />
+        <select className="rounded-md border border-lp-border bg-transparent px-2 py-1.5 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30" value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)}>
           <option value="">All categories</option>
           {CATEGORY_OPTIONS.map((c) => (
             <option key={c} value={c}>{c.replace(/_/g, ' ')}</option>
           ))}
         </select>
-        <select className="rounded border border-lp-border bg-lp-bg px-2 py-1.5 text-sm text-lp-text" value={filterPayment} onChange={(e) => setFilterPayment(e.target.value)}>
+        <select className="rounded-md border border-lp-border bg-transparent px-2 py-1.5 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30" value={filterPayment} onChange={(e) => setFilterPayment(e.target.value)}>
           <option value="">All payment</option>
           {PAYMENT_METHODS.map((m) => (
             <option key={m.value} value={m.value}>{m.label}</option>
           ))}
         </select>
-        <select className="rounded border border-lp-border bg-lp-bg px-2 py-1.5 text-sm text-lp-text" value={filterInBudget} onChange={(e) => setFilterInBudget(e.target.value as 'all' | 'yes' | 'no')}>
+        <select className="rounded-md border border-lp-border bg-transparent px-2 py-1.5 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30" value={filterInBudget} onChange={(e) => setFilterInBudget(e.target.value as 'all' | 'yes' | 'no')}>
           <option value="all">In budget: All</option>
           <option value="yes">In budget: Yes</option>
           <option value="no">In budget: No</option>
@@ -243,19 +243,19 @@ export function ReceiptsTab({ tourId }: { tourId: string }) {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-lp-border bg-lp-bg-tertiary">
-                <th className="text-left p-2 font-medium text-lp-text">Receipt #</th>
-                <th className="text-left p-2 font-medium text-lp-text">Date</th>
-                <th className="text-left p-2 font-medium text-lp-text">Vendor</th>
-                <th className="text-left p-2 font-medium text-lp-text">Category</th>
-                <th className="text-left p-2 font-medium text-lp-text">Description</th>
-                <th className="text-left p-2 font-medium text-lp-text">Payment</th>
-                <th className="text-right p-2 font-medium text-lp-text">Cost (Tour)</th>
-                <th className="text-right p-2 font-medium text-lp-text">Cost (Home)</th>
-                <th className="text-left p-2 font-medium text-lp-text">In Budget</th>
-                <th className="text-left p-2 font-medium text-lp-text">Linked Line</th>
-                <th className="text-left p-2 font-medium text-lp-text">Notes</th>
-                <th className="text-left p-2 font-medium text-lp-text">File</th>
+              <tr className="border-b border-lp-border">
+                <th className="text-left p-2 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Receipt #</th>
+                <th className="text-left p-2 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Date</th>
+                <th className="text-left p-2 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Vendor</th>
+                <th className="text-left p-2 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Category</th>
+                <th className="text-left p-2 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Description</th>
+                <th className="text-left p-2 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Payment</th>
+                <th className="text-right p-2 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Cost (Tour)</th>
+                <th className="text-right p-2 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Cost (Home)</th>
+                <th className="text-left p-2 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">In Budget</th>
+                <th className="text-left p-2 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Linked Line</th>
+                <th className="text-left p-2 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Notes</th>
+                <th className="text-left p-2 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">File</th>
                 <th className="w-20 p-2" />
               </tr>
             </thead>
@@ -263,30 +263,30 @@ export function ReceiptsTab({ tourId }: { tourId: string }) {
               {addingNew && (
                 <tr className="border-b border-lp-border bg-lp-orange-subtle/30">
                   <td className="p-2 text-lp-text-tertiary">—</td>
-                  <td className="p-2"><input type="date" className="w-full rounded border border-lp-border bg-lp-bg px-2 py-1 text-lp-text" value={newRow.date ?? ''} onChange={(e) => setNewRow((r) => ({ ...r, date: e.target.value || null }))} /></td>
-                  <td className="p-2"><input className="w-28 rounded border border-lp-border bg-lp-bg px-2 py-1 text-lp-text" value={newRow.vendor ?? ''} onChange={(e) => setNewRow((r) => ({ ...r, vendor: e.target.value || null }))} placeholder="Vendor" /></td>
+                  <td className="p-2"><input type="date" className="w-full rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-lp-text" value={newRow.date ?? ''} onChange={(e) => setNewRow((r) => ({ ...r, date: e.target.value || null }))} /></td>
+                  <td className="p-2"><input className="w-28 rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-lp-text" value={newRow.vendor ?? ''} onChange={(e) => setNewRow((r) => ({ ...r, vendor: e.target.value || null }))} placeholder="Vendor" /></td>
                   <td className="p-2">
-                    <select className="w-full min-w-[100px] rounded border border-lp-border bg-lp-bg px-2 py-1 text-lp-text" value={newRow.category ?? ''} onChange={(e) => setNewRow((r) => ({ ...r, category: e.target.value || null }))}>
+                    <select className="w-full min-w-[100px] rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-lp-text" value={newRow.category ?? ''} onChange={(e) => setNewRow((r) => ({ ...r, category: e.target.value || null }))}>
                       <option value="">—</option>
                       {CATEGORY_OPTIONS.map((c) => (
                         <option key={c} value={c}>{c.replace(/_/g, ' ')}</option>
                       ))}
                     </select>
                   </td>
-                  <td className="p-2"><input className="w-32 rounded border border-lp-border bg-lp-bg px-2 py-1 text-lp-text" value={newRow.description ?? ''} onChange={(e) => setNewRow((r) => ({ ...r, description: e.target.value || null }))} placeholder="Description" /></td>
+                  <td className="p-2"><input className="w-32 rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-lp-text" value={newRow.description ?? ''} onChange={(e) => setNewRow((r) => ({ ...r, description: e.target.value || null }))} placeholder="Description" /></td>
                   <td className="p-2">
-                    <select className="rounded border border-lp-border bg-lp-bg px-2 py-1 text-lp-text" value={newRow.payment_method ?? 'card'} onChange={(e) => setNewRow((r) => ({ ...r, payment_method: e.target.value }))}>
+                    <select className="rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-lp-text" value={newRow.payment_method ?? 'card'} onChange={(e) => setNewRow((r) => ({ ...r, payment_method: e.target.value }))}>
                       {PAYMENT_METHODS.map((m) => (
                         <option key={m.value} value={m.value}>{m.label}</option>
                       ))}
                     </select>
                   </td>
-                  <td className="p-2"><input type="number" step="0.01" className="w-20 rounded border border-lp-border bg-lp-bg px-2 py-1 text-right text-lp-text" value={newRow.cost_tour_currency ?? 0} onChange={(e) => setNewRow((r) => ({ ...r, cost_tour_currency: parseFloat(e.target.value) || 0 }))} /></td>
-                  <td className="p-2"><input type="number" step="0.01" className="w-20 rounded border border-lp-border bg-lp-bg px-2 py-1 text-right text-lp-text text-red-600" value={newRow.cost_home_currency ?? 0} onChange={(e) => setNewRow((r) => ({ ...r, cost_home_currency: parseFloat(e.target.value) || 0 }))} /></td>
+                  <td className="p-2"><input type="number" step="0.01" className="w-20 rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-right text-lp-text" value={newRow.cost_tour_currency ?? 0} onChange={(e) => setNewRow((r) => ({ ...r, cost_tour_currency: parseFloat(e.target.value) || 0 }))} /></td>
+                  <td className="p-2"><input type="number" step="0.01" className="w-20 rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-right text-lp-text text-red-600" value={newRow.cost_home_currency ?? 0} onChange={(e) => setNewRow((r) => ({ ...r, cost_home_currency: parseFloat(e.target.value) || 0 }))} /></td>
                   <td className="p-2"><input type="checkbox" checked={!!newRow.in_budget} onChange={(e) => setNewRow((r) => ({ ...r, in_budget: e.target.checked }))} /></td>
                   <td className="p-2">
                     {newRow.in_budget && (
-                      <select className="min-w-[120px] rounded border border-lp-border bg-lp-bg px-2 py-1 text-lp-text" value={newRow.linked_line_item_id ?? ''} onChange={(e) => setNewRow((r) => ({ ...r, linked_line_item_id: e.target.value || null }))}>
+                      <select className="min-w-[120px] rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-lp-text" value={newRow.linked_line_item_id ?? ''} onChange={(e) => setNewRow((r) => ({ ...r, linked_line_item_id: e.target.value || null }))}>
                         <option value="">—</option>
                         {lineItems.map((li) => (
                           <option key={li.id} value={li.id}>{li.label} ({li.category})</option>
@@ -294,7 +294,7 @@ export function ReceiptsTab({ tourId }: { tourId: string }) {
                       </select>
                     )}
                   </td>
-                  <td className="p-2"><input className="w-24 rounded border border-lp-border bg-lp-bg px-2 py-1 text-lp-text" value={newRow.notes ?? ''} onChange={(e) => setNewRow((r) => ({ ...r, notes: e.target.value || null }))} placeholder="Notes" /></td>
+                  <td className="p-2"><input className="w-24 rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-lp-text" value={newRow.notes ?? ''} onChange={(e) => setNewRow((r) => ({ ...r, notes: e.target.value || null }))} placeholder="Notes" /></td>
                   <td className="p-2">—</td>
                   <td className="p-2">
                     <button type="button" onClick={createReceipt} disabled={saving} className="text-lp-orange hover:underline text-xs">Save</button>
@@ -310,11 +310,11 @@ export function ReceiptsTab({ tourId }: { tourId: string }) {
                 return (
                   <tr key={r.id} className="border-b border-lp-border">
                     <td className="p-2 font-medium text-lp-text">{r.receipt_number}</td>
-                    <td className="p-2 text-lp-text-secondary">{isEditing ? <input type="date" className="rounded border border-lp-border bg-lp-bg px-2 py-1 text-lp-text" value={row.date ?? ''} onChange={(e) => setEditRow((x) => ({ ...x, date: e.target.value || null }))} /> : (r.date ? formatDate(r.date) : '—')}</td>
-                    <td className="p-2 text-lp-text">{isEditing ? <input className="w-28 rounded border border-lp-border bg-lp-bg px-2 py-1 text-lp-text" value={row.vendor ?? ''} onChange={(e) => setEditRow((x) => ({ ...x, vendor: e.target.value || null }))} /> : (r.vendor ?? '—')}</td>
+                    <td className="p-2 text-lp-text-secondary">{isEditing ? <input type="date" className="rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-lp-text" value={row.date ?? ''} onChange={(e) => setEditRow((x) => ({ ...x, date: e.target.value || null }))} /> : (r.date ? formatDate(r.date) : '—')}</td>
+                    <td className="p-2 text-lp-text">{isEditing ? <input className="w-28 rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-lp-text" value={row.vendor ?? ''} onChange={(e) => setEditRow((x) => ({ ...x, vendor: e.target.value || null }))} /> : (r.vendor ?? '—')}</td>
                     <td className="p-2 text-lp-text-secondary">
                       {isEditing ? (
-                        <select className="rounded border border-lp-border bg-lp-bg px-2 py-1 text-lp-text" value={row.category ?? ''} onChange={(e) => setEditRow((x) => ({ ...x, category: e.target.value || null }))}>
+                        <select className="rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-lp-text" value={row.category ?? ''} onChange={(e) => setEditRow((x) => ({ ...x, category: e.target.value || null }))}>
                           <option value="">—</option>
                           {CATEGORY_OPTIONS.map((c) => (
                             <option key={c} value={c}>{c.replace(/_/g, ' ')}</option>
@@ -324,12 +324,12 @@ export function ReceiptsTab({ tourId }: { tourId: string }) {
                         (r.category ?? '—').replace(/_/g, ' ')
                       )}
                     </td>
-                    <td className="p-2 text-lp-text-secondary max-w-[120px] truncate" title={r.description ?? undefined}>{isEditing ? <input className="w-full rounded border border-lp-border bg-lp-bg px-2 py-1 text-lp-text" value={row.description ?? ''} onChange={(e) => setEditRow((x) => ({ ...x, description: e.target.value || null }))} /> : (r.description ?? '—')}</td>
-                    <td className="p-2 text-lp-text-secondary">{isEditing ? <select className="rounded border border-lp-border bg-lp-bg px-2 py-1 text-lp-text" value={row.payment_method ?? 'card'} onChange={(e) => setEditRow((x) => ({ ...x, payment_method: e.target.value }))}>{PAYMENT_METHODS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}</select> : (PAYMENT_METHODS.find((m) => m.value === r.payment_method)?.label ?? r.payment_method)}</td>
-                    <td className="p-2 text-right tabular-nums text-lp-text">{isEditing ? <input type="number" step="0.01" className="w-20 rounded border border-lp-border bg-lp-bg px-2 py-1 text-right text-lp-text" value={row.cost_tour_currency ?? 0} onChange={(e) => setEditRow((x) => ({ ...x, cost_tour_currency: parseFloat(e.target.value) || 0 }))} /> : (Number(r.cost_tour_currency) || 0).toLocaleString('en-GB', { minimumFractionDigits: 2 })}</td>
+                    <td className="p-2 text-lp-text-secondary max-w-[120px] truncate" title={r.description ?? undefined}>{isEditing ? <input className="w-full rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-lp-text" value={row.description ?? ''} onChange={(e) => setEditRow((x) => ({ ...x, description: e.target.value || null }))} /> : (r.description ?? '—')}</td>
+                    <td className="p-2 text-lp-text-secondary">{isEditing ? <select className="rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-lp-text" value={row.payment_method ?? 'card'} onChange={(e) => setEditRow((x) => ({ ...x, payment_method: e.target.value }))}>{PAYMENT_METHODS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}</select> : (PAYMENT_METHODS.find((m) => m.value === r.payment_method)?.label ?? r.payment_method)}</td>
+                    <td className="p-2 text-right tabular-nums text-lp-text">{isEditing ? <input type="number" step="0.01" className="w-20 rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-right text-lp-text" value={row.cost_tour_currency ?? 0} onChange={(e) => setEditRow((x) => ({ ...x, cost_tour_currency: parseFloat(e.target.value) || 0 }))} /> : (Number(r.cost_tour_currency) || 0).toLocaleString('en-GB', { minimumFractionDigits: 2 })}</td>
                     <td className="p-2 text-right tabular-nums">
                       {isEditing ? (
-                        <input type="number" step="0.01" className="w-20 rounded border border-lp-border bg-lp-bg px-2 py-1 text-right text-lp-text text-red-600" value={row.cost_home_currency ?? 0} onChange={(e) => setEditRow((x) => ({ ...x, cost_home_currency: parseFloat(e.target.value) || 0 }))} />
+                        <input type="number" step="0.01" className="w-20 rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-right text-lp-text text-red-600" value={row.cost_home_currency ?? 0} onChange={(e) => setEditRow((x) => ({ ...x, cost_home_currency: parseFloat(e.target.value) || 0 }))} />
                       ) : exchangeRate != null ? (
                         <span className="text-red-600 dark:text-red-400" title={`Converted from ${settings?.currency_tour ?? ''} ${(Number(r.cost_tour_currency) || 0).toLocaleString('en-GB')}`}>
                           {(homeConverted ?? 0).toLocaleString('en-GB', { minimumFractionDigits: 2 })}
@@ -341,7 +341,7 @@ export function ReceiptsTab({ tourId }: { tourId: string }) {
                     <td className="p-2"><input type="checkbox" checked={r.in_budget} onChange={(e) => toggleInBudget(r, e.target.checked)} disabled={saving} /></td>
                     <td className="p-2 text-lp-text-secondary">
                       {r.in_budget && (isEditing ? (
-                        <select className="min-w-[120px] rounded border border-lp-border bg-lp-bg px-2 py-1 text-lp-text" value={row.linked_line_item_id ?? ''} onChange={(e) => setEditRow((x) => ({ ...x, linked_line_item_id: e.target.value || null }))}>
+                        <select className="min-w-[120px] rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-lp-text" value={row.linked_line_item_id ?? ''} onChange={(e) => setEditRow((x) => ({ ...x, linked_line_item_id: e.target.value || null }))}>
                           <option value="">—</option>
                           {lineItems.map((li) => (
                             <option key={li.id} value={li.id}>{li.label}</option>
@@ -351,7 +351,7 @@ export function ReceiptsTab({ tourId }: { tourId: string }) {
                         linkedLabel
                       ))}
                     </td>
-                    <td className="p-2 text-lp-text-tertiary max-w-[100px] truncate" title={r.notes ?? undefined}>{isEditing ? <input className="w-full rounded border border-lp-border bg-lp-bg px-2 py-1 text-lp-text" value={row.notes ?? ''} onChange={(e) => setEditRow((x) => ({ ...x, notes: e.target.value || null }))} /> : (r.notes ?? '—')}</td>
+                    <td className="p-2 text-lp-text-tertiary max-w-[100px] truncate" title={r.notes ?? undefined}>{isEditing ? <input className="w-full rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-lp-text" value={row.notes ?? ''} onChange={(e) => setEditRow((x) => ({ ...x, notes: e.target.value || null }))} /> : (r.notes ?? '—')}</td>
                     <td className="p-2">
                       {r.receipt_file_url ? (
                         <a href={r.receipt_file_url} target="_blank" rel="noopener noreferrer" className="text-lp-orange hover:underline inline-flex items-center gap-1 text-xs"><ExternalLink className="h-3 w-3" /> View</a>
