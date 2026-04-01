@@ -142,7 +142,38 @@ export async function POST(request: Request) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  return NextResponse.json(created);
+
+  const booking = created as { id: string; line_item_id?: string | null };
+
+  const { data: lineItem, error: liError } = await supabase
+    .from('budget_line_items')
+    .insert({
+      tour_id,
+      workspace_id: profile.workspace_id,
+      category: 'hotels',
+      label: hotel_name.trim(),
+      proposed_cost: 0,
+      actual_cost: 0,
+      source_entity_type: 'hotel_booking',
+      source_entity_id: booking.id,
+    })
+    .select('id')
+    .single();
+
+  if (!liError && lineItem) {
+    const { data: updated } = await supabase
+      .from('hotel_bookings')
+      .update({ line_item_id: lineItem.id })
+      .eq('id', booking.id)
+      .select()
+      .single();
+    if (updated) {
+      return NextResponse.json(updated);
+    }
+    booking.line_item_id = lineItem.id;
+  }
+
+  return NextResponse.json(booking);
 }
 
 export async function PATCH(request: Request) {
