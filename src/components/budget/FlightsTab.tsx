@@ -1,7 +1,8 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Loader2, Pencil, Trash2 } from 'lucide-react';
+import { Loader2, Pencil, Trash2, ChevronRight } from 'lucide-react';
+import { useDetailPanel } from '@/contexts/DetailPanelContext';
 import { formatDate } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 import { DeleteConfirmationModal } from '@/components/ui/DeleteConfirmationModal';
@@ -30,6 +31,7 @@ function formatTime(value: string | null): string {
 
 type FlightBooking = {
   id: string;
+  line_item_id?: string | null;
   person_name: string;
   role: string | null;
   origin_code: string | null;
@@ -45,6 +47,7 @@ type FlightBooking = {
 };
 
 export function FlightsTab({ tourId }: { tourId: string }) {
+  const { openLineItem } = useDetailPanel();
   const [loading, setLoading] = useState(true);
   const [flights, setFlights] = useState<FlightBooking[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -325,7 +328,27 @@ export function FlightsTab({ tourId }: { tourId: string }) {
                 const row = isEditing ? (editRow ?? f) : f;
                 const variance = varianceDisplay(Number(f.proposed_cost) || 0, f.actual_cost);
                 return (
-                  <tr key={f.id} className="border-b border-lp-border">
+                  <tr
+                    key={f.id}
+                    role={!isEditing && f.line_item_id ? 'button' : undefined}
+                    tabIndex={!isEditing && f.line_item_id ? 0 : undefined}
+                    onClick={(e) => {
+                      if (isEditing) return;
+                      if ((e.target as HTMLElement).closest('button, input, select, textarea, a, label')) return;
+                      if (f.line_item_id) openLineItem(f.line_item_id);
+                    }}
+                    onKeyDown={(e) => {
+                      if (isEditing || !f.line_item_id) return;
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        openLineItem(f.line_item_id);
+                      }
+                    }}
+                    className={cn(
+                      'border-b border-lp-border',
+                      !isEditing && f.line_item_id && 'cursor-pointer hover:bg-lp-surface-hover'
+                    )}
+                  >
                     <td className="p-3 text-lp-text">
                       {isEditing ? (
                         <input
@@ -475,7 +498,10 @@ export function FlightsTab({ tourId }: { tourId: string }) {
                           <>
                             <button
                               type="button"
-                              onClick={() => editRow && saveFlight(f.id, editRow)}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (editRow) saveFlight(f.id, editRow);
+                              }}
                               disabled={saving}
                               className="text-lp-orange hover:underline text-xs"
                             >
@@ -483,7 +509,11 @@ export function FlightsTab({ tourId }: { tourId: string }) {
                             </button>
                             <button
                               type="button"
-                              onClick={() => { setEditingId(null); setEditRow(null); }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingId(null);
+                                setEditRow(null);
+                              }}
                               className="text-lp-text-tertiary hover:underline text-xs"
                             >
                               Cancel
@@ -493,7 +523,11 @@ export function FlightsTab({ tourId }: { tourId: string }) {
                           <>
                             <button
                               type="button"
-                              onClick={() => { setEditingId(f.id); setEditRow({ ...f }); }}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setEditingId(f.id);
+                                setEditRow({ ...f });
+                              }}
                               className="rounded p-1 text-lp-text-tertiary hover:bg-lp-bg-tertiary hover:text-lp-text"
                               title="Edit"
                             >
@@ -501,12 +535,18 @@ export function FlightsTab({ tourId }: { tourId: string }) {
                             </button>
                             <button
                               type="button"
-                              onClick={() => setDeleteModal({ id: f.id, name: `${f.person_name} ${f.origin_code ?? ''}–${f.destination_code ?? ''}` })}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDeleteModal({ id: f.id, name: `${f.person_name} ${f.origin_code ?? ''}–${f.destination_code ?? ''}` });
+                              }}
                               className="rounded p-1 text-lp-text-tertiary hover:bg-red-500/10 hover:text-red-600"
                               title="Delete"
                             >
                               <Trash2 className="h-4 w-4" />
                             </button>
+                            {f.line_item_id ? (
+                              <ChevronRight size={14} className="text-lp-text-tertiary shrink-0 ml-0.5" aria-hidden />
+                            ) : null}
                           </>
                         )}
                       </div>
