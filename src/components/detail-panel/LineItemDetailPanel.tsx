@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { X, Lightbulb, Pencil, Trash2 } from 'lucide-react';
-import { formatCurrency } from '@/lib/utils';
+import { formatCurrency, formatDate } from '@/lib/utils';
 import { InlineEditCell } from '@/components/spreadsheet-view/InlineEditCell';
 import { cn } from '@/lib/utils';
 
@@ -43,7 +43,7 @@ interface LineItemDetailPanelProps {
   onClose: () => void;
 }
 
-type TabId = 'overview' | 'files' | 'links' | 'history';
+type TabId = 'overview' | 'files' | 'links' | 'history' | 'rooms';
 
 interface LineItemRow {
   id: string;
@@ -53,6 +53,20 @@ interface LineItemRow {
   actual_cost?: number;
   status?: string;
   routing_id?: string | null;
+  source_entity_type?: string | null;
+  source_entity_id?: string | null;
+}
+
+interface HotelRoomAssignmentRow {
+  id: string;
+  person_name: string;
+  room_type: string | null;
+  check_in: string | null;
+  check_out: string | null;
+  nights: number;
+  rate_per_night: number | null;
+  confirmation: string | null;
+  notes: string | null;
 }
 
 interface AttachmentRow {
@@ -88,6 +102,8 @@ export function LineItemDetailPanel({ lineItemId, tourId, onClose }: LineItemDet
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [suggestionsDismissed, setSuggestionsDismissed] = useState<Set<number>>(new Set());
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+  const [rooms, setRooms] = useState<HotelRoomAssignmentRow[]>([]);
+  const [roomsLoading, setRoomsLoading] = useState(false);
 
   const initialsFor = (name: string | null | undefined, fallback: string = '?') => {
     const n = (name ?? '').trim();
@@ -140,6 +156,18 @@ export function LineItemDetailPanel({ lineItemId, tourId, onClose }: LineItemDet
       setSuggestionsDismissed(new Set());
     }
   }, [lineItemId, fetchDetails]);
+
+  useEffect(() => {
+    if (tab !== 'rooms' || lineItem?.source_entity_type !== 'hotel_booking' || !lineItem.source_entity_id) {
+      return;
+    }
+    setRoomsLoading(true);
+    fetch(`/api/budget/hotels/assignments?hotel_booking_id=${lineItem.source_entity_id}`)
+      .then((r) => r.json())
+      .then((data: { assignments?: HotelRoomAssignmentRow[] }) => setRooms(data.assignments ?? []))
+      .catch(() => setRooms([]))
+      .finally(() => setRoomsLoading(false));
+  }, [tab, lineItem?.source_entity_type, lineItem?.source_entity_id]);
 
   const fetchSuggestions = useCallback(async () => {
     if (!lineItemId || !tourId) return;
@@ -289,6 +317,14 @@ export function LineItemDetailPanel({ lineItemId, tourId, onClose }: LineItemDet
 
   if (!lineItemId) return null;
 
+  const panelTabs: TabId[] = [
+    'overview',
+    'files',
+    'links',
+    'history',
+    ...(lineItem?.source_entity_type === 'hotel_booking' ? (['rooms'] as const) : []),
+  ];
+
   const currency = 'GBP';
   const formatter = new Intl.NumberFormat('en-GB', { style: 'currency', currency, minimumFractionDigits: 2 });
 
@@ -350,7 +386,7 @@ export function LineItemDetailPanel({ lineItemId, tourId, onClose }: LineItemDet
             </header>
 
             <nav className="flex border-b border-lp-border/50 text-xs font-semibold">
-              {(['overview', 'files', 'links', 'history'] as const).map((t) => (
+              {panelTabs.map((t) => (
                 <button
                   key={t}
                   type="button"
@@ -360,7 +396,15 @@ export function LineItemDetailPanel({ lineItemId, tourId, onClose }: LineItemDet
                     tab === t ? 'border-b-2 border-lp-orange text-lp-orange' : 'text-lp-text-secondary hover:text-lp-text'
                   )}
                 >
-                  {t === 'overview' ? 'Overview' : t === 'files' ? 'Files' : t === 'links' ? 'Links' : 'History'}
+                  {t === 'overview'
+                    ? 'Overview'
+                    : t === 'files'
+                      ? 'Files'
+                      : t === 'links'
+                        ? 'Links'
+                        : t === 'rooms'
+                          ? 'Rooms'
+                          : 'History'}
                 </button>
               ))}
             </nav>
@@ -587,6 +631,54 @@ export function LineItemDetailPanel({ lineItemId, tourId, onClose }: LineItemDet
                     ))}
                   {notes.filter((n) => ['status_change', 'approval', 'system'].includes(n.note_type)).length === 0 && (
                     <p className="text-sm text-lp-text-secondary">No history yet.</p>
+                  )}
+                </div>
+              )}
+
+              {tab === 'rooms' && (
+                <div className="space-y-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">
+                    Room Assignments
+                  </p>
+                  {roomsLoading ? (
+                    <p className="text-sm text-lp-text-tertiary">Loading…</p>
+                  ) : rooms.length === 0 ? (
+                    <p className="text-sm text-lp-text-tertiary">No rooms assigned yet.</p>
+                  ) : (
+                    <div className="overflow-x-auto rounded-xl border border-lp-border bg-lp-surface">
+                      <table className="w-full text-sm border-collapse">
+                        <thead>
+                          <tr className="border-b border-lp-border">
+                            <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Person</th>
+                            <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Room type</th>
+                            <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Check-in</th>
+                            <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Check-out</th>
+                            <th className="px-3 py-2 text-right text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Nights</th>
+                            <th className="px-3 py-2 text-right text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Rate/night</th>
+                            <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Ref</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {rooms.map((room) => (
+                            <tr key={room.id} className="border-b border-lp-border/30 hover:bg-lp-surface-hover">
+                              <td className="px-3 py-2 text-lp-text">{room.person_name}</td>
+                              <td className="px-3 py-2 text-lp-text-secondary">{room.room_type ?? '—'}</td>
+                              <td className="px-3 py-2 tabular-nums text-lp-text-secondary">
+                                {room.check_in ? formatDate(room.check_in) : '—'}
+                              </td>
+                              <td className="px-3 py-2 tabular-nums text-lp-text-secondary">
+                                {room.check_out ? formatDate(room.check_out) : '—'}
+                              </td>
+                              <td className="px-3 py-2 tabular-nums text-right text-lp-text">{room.nights}</td>
+                              <td className="px-3 py-2 tabular-nums text-right text-lp-text-secondary">
+                                {room.rate_per_night != null ? Number(room.rate_per_night).toFixed(2) : '—'}
+                              </td>
+                              <td className="px-3 py-2 text-lp-text-tertiary text-xs">{room.confirmation ?? '—'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   )}
                 </div>
               )}
