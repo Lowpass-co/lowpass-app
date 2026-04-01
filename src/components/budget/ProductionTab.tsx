@@ -1,8 +1,10 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Loader2, Plus, Pencil, Trash2, ChevronUp, ChevronDown } from 'lucide-react';
+import { Loader2, Plus, Pencil, Trash2, ChevronUp, ChevronDown, ChevronRight } from 'lucide-react';
+import { useDetailPanel } from '@/contexts/DetailPanelContext';
 import { DeleteConfirmationModal } from '@/components/ui/DeleteConfirmationModal';
+import { cn } from '@/lib/utils';
 
 const PROD_CATEGORIES = [
   { value: 'prod_audio', label: 'Audio' },
@@ -41,6 +43,7 @@ function subtotalsByCategory(items: LineItem[], categoryValues: readonly { value
 }
 
 export function ProductionTab({ tourId }: { tourId: string }) {
+  const { openLineItem } = useDetailPanel();
   const [loading, setLoading] = useState(true);
   const [items, setItems] = useState<LineItem[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -294,12 +297,35 @@ export function ProductionTab({ tourId }: { tourId: string }) {
                 const canMoveUp = idx > 0;
                 const canMoveDown = idx >= 0 && idx < sameCategory.length - 1;
                 return (
-                  <tr key={item.id} className="border-b border-lp-border">
+                  <tr
+                    key={item.id}
+                    role={!isEditing ? 'button' : undefined}
+                    tabIndex={!isEditing ? 0 : undefined}
+                    onClick={(e) => {
+                      if (isEditing) return;
+                      if ((e.target as HTMLElement).closest('button, input, select, textarea, a, label')) return;
+                      openLineItem(item.id);
+                    }}
+                    onKeyDown={(e) => {
+                      if (isEditing) return;
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        openLineItem(item.id);
+                      }
+                    }}
+                    className={cn(
+                      'border-b border-lp-border',
+                      !isEditing && 'cursor-pointer hover:bg-lp-surface-hover'
+                    )}
+                  >
                     <td className="p-2">
                       <div className="flex flex-col gap-0.5">
                         <button
                           type="button"
-                          onClick={() => moveItem(item, 'up')}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            moveItem(item, 'up');
+                          }}
                           disabled={saving || !canMoveUp}
                           className="rounded p-0.5 text-lp-text-tertiary hover:bg-lp-bg-tertiary disabled:opacity-30"
                           title="Move up"
@@ -308,7 +334,10 @@ export function ProductionTab({ tourId }: { tourId: string }) {
                         </button>
                         <button
                           type="button"
-                          onClick={() => moveItem(item, 'down')}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            moveItem(item, 'down');
+                          }}
                           disabled={saving || !canMoveDown}
                           className="rounded p-0.5 text-lp-text-tertiary hover:bg-lp-bg-tertiary disabled:opacity-30"
                           title="Move down"
@@ -398,7 +427,10 @@ export function ProductionTab({ tourId }: { tourId: string }) {
                         <div className="flex gap-1">
                           <button
                             type="button"
-                            onClick={() => editRow && saveItem(item.id, editRow)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (editRow) saveItem(item.id, editRow);
+                            }}
                             disabled={saving}
                             className="text-lp-orange hover:underline text-xs"
                           >
@@ -406,7 +438,11 @@ export function ProductionTab({ tourId }: { tourId: string }) {
                           </button>
                           <button
                             type="button"
-                            onClick={() => { setEditingId(null); setEditRow(null); }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingId(null);
+                              setEditRow(null);
+                            }}
                             className="text-lp-text-tertiary hover:underline text-xs"
                           >
                             Cancel
@@ -416,7 +452,11 @@ export function ProductionTab({ tourId }: { tourId: string }) {
                         <div className="flex items-center gap-1">
                           <button
                             type="button"
-                            onClick={() => { setEditingId(item.id); setEditRow({ ...item }); }}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setEditingId(item.id);
+                              setEditRow({ ...item });
+                            }}
                             className="rounded p-1 text-lp-text-tertiary hover:bg-lp-bg-tertiary hover:text-lp-text"
                             title="Edit"
                           >
@@ -424,12 +464,16 @@ export function ProductionTab({ tourId }: { tourId: string }) {
                           </button>
                           <button
                             type="button"
-                            onClick={() => setDeleteModal({ id: item.id, label: item.label })}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeleteModal({ id: item.id, label: item.label });
+                            }}
                             className="rounded p-1 text-lp-text-tertiary hover:bg-red-500/10 hover:text-red-600"
                             title="Delete"
                           >
                             <Trash2 className="h-4 w-4" />
                           </button>
+                          <ChevronRight size={14} className="text-lp-text-tertiary shrink-0 ml-0.5" aria-hidden />
                         </div>
                       )}
                     </td>
