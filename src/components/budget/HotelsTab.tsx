@@ -129,7 +129,6 @@ export function HotelsTab({ tourId }: { tourId: string }) {
       });
       if (!res.ok) throw new Error('Delete failed');
       setDeleteModal(null);
-      setExpandedId((prev) => (prev === id ? null : prev));
       load();
     } catch (e) {
       setError((e as Error)?.message ?? 'Failed to delete');
