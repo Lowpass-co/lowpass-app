@@ -184,20 +184,20 @@ export function FlightsTab({ tourId }: { tourId: string }) {
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-lp-border bg-lp-bg-tertiary">
-                <th className="text-left p-3 font-medium text-lp-text">Person</th>
-                <th className="text-left p-3 font-medium text-lp-text">Role</th>
-                <th className="text-left p-3 font-medium text-lp-text">Origin</th>
-                <th className="text-left p-3 font-medium text-lp-text">Destination</th>
-                <th className="text-left p-3 font-medium text-lp-text">Departure Date</th>
-                <th className="text-left p-3 font-medium text-lp-text">Departure Time</th>
-                <th className="text-left p-3 font-medium text-lp-text">Airline</th>
-                <th className="text-left p-3 font-medium text-lp-text">Flight #</th>
-                <th className="text-left p-3 font-medium text-lp-text">Leg</th>
-                <th className="text-right p-3 font-medium text-lp-text">Proposed</th>
-                <th className="text-right p-3 font-medium text-lp-text">Actual</th>
-                <th className="text-right p-3 font-medium text-lp-text">Variance</th>
-                <th className="text-left p-3 font-medium text-lp-text">Confirmation</th>
+              <tr className="border-b border-lp-border">
+                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Person</th>
+                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Role</th>
+                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Origin</th>
+                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Destination</th>
+                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Departure Date</th>
+                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Departure Time</th>
+                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Airline</th>
+                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Flight #</th>
+                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Leg</th>
+                <th className="text-right p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Proposed</th>
+                <th className="text-right p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Actual</th>
+                <th className="text-right p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Variance</th>
+                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Confirmation</th>
                 <th className="w-24 p-3" />
               </tr>
             </thead>
@@ -206,7 +206,7 @@ export function FlightsTab({ tourId }: { tourId: string }) {
                 <tr className="border-b border-lp-border bg-lp-orange-subtle/30">
                   <td className="p-2">
                     <input
-                      className="w-full min-w-[100px] rounded border border-lp-border bg-lp-bg px-2 py-1 text-lp-text"
+                      className="w-full min-w-[100px] rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-lp-text"
                       value={editRow.person_name ?? ''}
                       onChange={(e) => setEditRow((r) => ({ ...r, person_name: e.target.value }))}
                       placeholder="Name"
@@ -214,7 +214,7 @@ export function FlightsTab({ tourId }: { tourId: string }) {
                   </td>
                   <td className="p-2">
                     <input
-                      className="w-full min-w-[80px] rounded border border-lp-border bg-lp-bg px-2 py-1 text-lp-text"
+                      className="w-full min-w-[80px] rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-lp-text"
                       value={editRow.role ?? ''}
                       onChange={(e) => setEditRow((r) => ({ ...r, role: e.target.value || null }))}
                       placeholder="Role"
@@ -222,7 +222,7 @@ export function FlightsTab({ tourId }: { tourId: string }) {
                   </td>
                   <td className="p-2">
                     <input
-                      className="w-16 rounded border border-lp-border bg-lp-bg px-2 py-1 text-lp-text"
+                      className="w-16 rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-lp-text"
                       value={editRow.origin_code ?? ''}
                       onChange={(e) => setEditRow((r) => ({ ...r, origin_code: e.target.value || null }))}
                       placeholder="LHR"
@@ -230,7 +230,7 @@ export function FlightsTab({ tourId }: { tourId: string }) {
                   </td>
                   <td className="p-2">
                     <input
-                      className="w-16 rounded border border-lp-border bg-lp-bg px-2 py-1 text-lp-text"
+                      className="w-16 rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-lp-text"
                       value={editRow.destination_code ?? ''}
                       onChange={(e) => setEditRow((r) => ({ ...r, destination_code: e.target.value || null }))}
                       placeholder="BNA"
@@ -239,7 +239,7 @@ export function FlightsTab({ tourId }: { tourId: string }) {
                   <td className="p-2">
                     <input
                       type="date"
-                      className="lp-native-date-input rounded-lg border border-lp-border bg-lp-bg px-2 py-1 text-lp-text"
+                      className="lp-native-date-input rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-lp-text"
                       value={editRow.departure_date ?? ''}
                       onChange={(e) => setEditRow((r) => ({ ...r, departure_date: e.target.value || null }))}
                     />
@@ -247,21 +247,21 @@ export function FlightsTab({ tourId }: { tourId: string }) {
                   <td className="p-2">
                     <input
                       type="time"
-                      className="lp-native-date-input w-24 rounded-lg border border-lp-border bg-lp-bg px-2 py-1 text-lp-text"
+                      className="lp-native-date-input w-24 rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30"
                       value={editRow.departure_time ?? ''}
                       onChange={(e) => setEditRow((r) => ({ ...r, departure_time: e.target.value || null }))}
                     />
                   </td>
                   <td className="p-2">
                     <input
-                      className="w-24 rounded border border-lp-border bg-lp-bg px-2 py-1 text-lp-text"
+                      className="w-24 rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-lp-text"
                       value={editRow.airline ?? ''}
                       onChange={(e) => setEditRow((r) => ({ ...r, airline: e.target.value || null }))}
                     />
                   </td>
                   <td className="p-2">
                     <input
-                      className="w-20 rounded border border-lp-border bg-lp-bg px-2 py-1 text-lp-text"
+                      className="w-20 rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-lp-text"
                       value={editRow.flight_number ?? ''}
                       onChange={(e) => setEditRow((r) => ({ ...r, flight_number: e.target.value || null }))}
                     />
@@ -270,7 +270,7 @@ export function FlightsTab({ tourId }: { tourId: string }) {
                     <input
                       type="number"
                       min={1}
-                      className="w-12 rounded border border-lp-border bg-lp-bg px-2 py-1 text-lp-text"
+                      className="w-12 rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-lp-text"
                       value={editRow.leg_order ?? 1}
                       onChange={(e) => setEditRow((r) => ({ ...r, leg_order: parseInt(e.target.value, 10) || 1 }))}
                     />
@@ -279,7 +279,7 @@ export function FlightsTab({ tourId }: { tourId: string }) {
                     <input
                       type="number"
                       step="0.01"
-                      className="w-20 rounded border border-lp-border bg-lp-bg px-2 py-1 text-lp-text text-right"
+                      className="w-20 rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-lp-text text-right"
                       value={editRow.proposed_cost ?? 0}
                       onChange={(e) => setEditRow((r) => ({ ...r, proposed_cost: parseFloat(e.target.value) || 0 }))}
                     />
@@ -288,7 +288,7 @@ export function FlightsTab({ tourId }: { tourId: string }) {
                     <input
                       type="number"
                       step="0.01"
-                      className="w-20 rounded border border-lp-border bg-lp-bg px-2 py-1 text-lp-text text-right"
+                      className="w-20 rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-lp-text text-right"
                       value={editRow.actual_cost ?? 0}
                       onChange={(e) => setEditRow((r) => ({ ...r, actual_cost: parseFloat(e.target.value) || 0 }))}
                     />
@@ -296,7 +296,7 @@ export function FlightsTab({ tourId }: { tourId: string }) {
                   <td className="p-2 text-lp-text-tertiary">—</td>
                   <td className="p-2">
                     <input
-                      className="w-24 rounded border border-lp-border bg-lp-bg px-2 py-1 text-lp-text"
+                      className="w-24 rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-lp-text"
                       value={editRow.confirmation ?? ''}
                       onChange={(e) => setEditRow((r) => ({ ...r, confirmation: e.target.value || null }))}
                     />
@@ -329,7 +329,7 @@ export function FlightsTab({ tourId }: { tourId: string }) {
                     <td className="p-3 text-lp-text">
                       {isEditing ? (
                         <input
-                          className="w-full min-w-[100px] rounded border border-lp-border bg-lp-bg px-2 py-1 text-lp-text"
+                          className="w-full min-w-[100px] rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-lp-text"
                           value={row.person_name ?? ''}
                           onChange={(e) => setEditRow((r) => ({ ...r, person_name: e.target.value }))}
                         />
@@ -340,7 +340,7 @@ export function FlightsTab({ tourId }: { tourId: string }) {
                     <td className="p-3 text-lp-text-secondary">
                       {isEditing ? (
                         <input
-                          className="w-full min-w-[80px] rounded border border-lp-border bg-lp-bg px-2 py-1 text-lp-text"
+                          className="w-full min-w-[80px] rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-lp-text"
                           value={row.role ?? ''}
                           onChange={(e) => setEditRow((r) => ({ ...r, role: e.target.value || null }))}
                         />
@@ -351,7 +351,7 @@ export function FlightsTab({ tourId }: { tourId: string }) {
                     <td className="p-3 text-lp-text-secondary font-mono">
                       {isEditing ? (
                         <input
-                          className="w-16 rounded border border-lp-border bg-lp-bg px-2 py-1 font-mono text-lp-text"
+                          className="w-16 rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 font-mono text-lp-text"
                           value={row.origin_code ?? ''}
                           onChange={(e) => setEditRow((r) => ({ ...r, origin_code: e.target.value || null }))}
                         />
@@ -362,7 +362,7 @@ export function FlightsTab({ tourId }: { tourId: string }) {
                     <td className="p-3 text-lp-text-secondary font-mono">
                       {isEditing ? (
                         <input
-                          className="w-16 rounded border border-lp-border bg-lp-bg px-2 py-1 font-mono text-lp-text"
+                          className="w-16 rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 font-mono text-lp-text"
                           value={row.destination_code ?? ''}
                           onChange={(e) => setEditRow((r) => ({ ...r, destination_code: e.target.value || null }))}
                         />
@@ -374,7 +374,7 @@ export function FlightsTab({ tourId }: { tourId: string }) {
                       {isEditing ? (
                         <input
                           type="date"
-                          className="lp-native-date-input rounded-lg border border-lp-border bg-lp-bg px-2 py-1 text-lp-text"
+                          className="lp-native-date-input rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-lp-text"
                           value={row.departure_date ?? ''}
                           onChange={(e) => setEditRow((r) => ({ ...r, departure_date: e.target.value || null }))}
                         />
@@ -386,7 +386,7 @@ export function FlightsTab({ tourId }: { tourId: string }) {
                       {isEditing ? (
                         <input
                           type="time"
-                          className="lp-native-date-input w-24 rounded-lg border border-lp-border bg-lp-bg px-2 py-1 text-lp-text"
+                          className="lp-native-date-input w-24 rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30"
                           value={row.departure_time ?? ''}
                           onChange={(e) => setEditRow((r) => ({ ...r, departure_time: e.target.value || null }))}
                         />
@@ -397,7 +397,7 @@ export function FlightsTab({ tourId }: { tourId: string }) {
                     <td className="p-3 text-lp-text-secondary">
                       {isEditing ? (
                         <input
-                          className="w-24 rounded border border-lp-border bg-lp-bg px-2 py-1 text-lp-text"
+                          className="w-24 rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-lp-text"
                           value={row.airline ?? ''}
                           onChange={(e) => setEditRow((r) => ({ ...r, airline: e.target.value || null }))}
                         />
@@ -408,7 +408,7 @@ export function FlightsTab({ tourId }: { tourId: string }) {
                     <td className="p-3 text-lp-text-secondary">
                       {isEditing ? (
                         <input
-                          className="w-20 rounded border border-lp-border bg-lp-bg px-2 py-1 text-lp-text"
+                          className="w-20 rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-lp-text"
                           value={row.flight_number ?? ''}
                           onChange={(e) => setEditRow((r) => ({ ...r, flight_number: e.target.value || null }))}
                         />
@@ -421,7 +421,7 @@ export function FlightsTab({ tourId }: { tourId: string }) {
                         <input
                           type="number"
                           min={1}
-                          className="w-12 rounded border border-lp-border bg-lp-bg px-2 py-1 text-lp-text"
+                          className="w-12 rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-lp-text"
                           value={row.leg_order ?? 1}
                           onChange={(e) => setEditRow((r) => ({ ...r, leg_order: parseInt(e.target.value, 10) || 1 }))}
                         />
@@ -434,7 +434,7 @@ export function FlightsTab({ tourId }: { tourId: string }) {
                         <input
                           type="number"
                           step="0.01"
-                          className="w-20 rounded border border-lp-border bg-lp-bg px-2 py-1 text-right text-lp-text"
+                          className="w-20 rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-right text-lp-text"
                           value={row.proposed_cost ?? 0}
                           onChange={(e) => setEditRow((r) => ({ ...r, proposed_cost: parseFloat(e.target.value) || 0 }))}
                         />
@@ -447,7 +447,7 @@ export function FlightsTab({ tourId }: { tourId: string }) {
                         <input
                           type="number"
                           step="0.01"
-                          className="w-20 rounded border border-lp-border bg-lp-bg px-2 py-1 text-right text-lp-text"
+                          className="w-20 rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-right text-lp-text"
                           value={row.actual_cost ?? 0}
                           onChange={(e) => setEditRow((r) => ({ ...r, actual_cost: parseFloat(e.target.value) || 0 }))}
                         />
@@ -461,7 +461,7 @@ export function FlightsTab({ tourId }: { tourId: string }) {
                     <td className="p-3 text-lp-text-secondary">
                       {isEditing ? (
                         <input
-                          className="w-24 rounded border border-lp-border bg-lp-bg px-2 py-1 text-lp-text"
+                          className="w-24 rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-lp-text"
                           value={row.confirmation ?? ''}
                           onChange={(e) => setEditRow((r) => ({ ...r, confirmation: e.target.value || null }))}
                         />
