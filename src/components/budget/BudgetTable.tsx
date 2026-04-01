@@ -26,7 +26,7 @@ export interface BudgetTableProps {
 }
 
 /**
- * Styled table wrapper for budget tabs. Consistent header (bg-lp-bg-tertiary),
+ * Styled table wrapper for budget tabs. Consistent header (border only),
  * border, surface, and overflow. Uses lp-* design tokens for light/dark.
  * Tailwind only.
  */
@@ -48,12 +48,12 @@ export function BudgetTable({
       <div className="overflow-x-auto">
         <table className={cn('w-full text-sm border-collapse', minWidth, tableClassName)}>
           <thead>
-            <tr className="border-b border-lp-border bg-lp-bg-tertiary">
+            <tr className="border-b border-lp-border">
               {columns.map((col, i) => (
                 <th
                   key={i}
                   className={cn(
-                    'px-3 py-3 font-medium text-lp-text',
+                    'px-3 py-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary',
                     col.align === 'right' ? 'text-right' : 'text-left',
                     col.width,
                     col.className
