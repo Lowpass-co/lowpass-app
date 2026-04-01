@@ -141,7 +141,39 @@ export async function POST(request: Request) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  return NextResponse.json(created);
+
+  const flight = created as { id: string; line_item_id?: string | null };
+  const label = `${body.person_name.trim()}: ${body.origin_code ?? ''}→${body.destination_code ?? ''}`;
+
+  const { data: lineItem, error: liError } = await supabase
+    .from('budget_line_items')
+    .insert({
+      tour_id,
+      workspace_id: profile.workspace_id,
+      category: 'flights',
+      label,
+      proposed_cost: Number(body.proposed_cost) || 0,
+      actual_cost: Number(body.actual_cost) || 0,
+      source_entity_type: 'flight_booking',
+      source_entity_id: flight.id,
+    })
+    .select('id')
+    .single();
+
+  if (!liError && lineItem) {
+    const { data: updated } = await supabase
+      .from('flight_bookings')
+      .update({ line_item_id: lineItem.id })
+      .eq('id', flight.id)
+      .select()
+      .single();
+    if (updated) {
+      return NextResponse.json(updated);
+    }
+    flight.line_item_id = lineItem.id;
+  }
+
+  return NextResponse.json(flight);
 }
 
 export async function PATCH(request: Request) {
