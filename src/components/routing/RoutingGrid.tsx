@@ -217,16 +217,28 @@ export function RoutingGrid({
   onDeleteRow?: (index: number) => void;
 }) {
   return (
-    <div className="overflow-x-auto rounded-xl border border-lp-border">
+    <div className="relative z-0 overflow-x-auto rounded-xl border border-lp-border">
       <table className="w-full min-w-[640px] text-sm">
         <thead>
           <tr className="border-b border-lp-border bg-lp-bg-secondary">
-            <th className="px-4 py-3 text-left font-medium text-lp-text-secondary">Date</th>
-            <th className="px-4 py-3 text-left font-medium text-lp-text-secondary">Day type</th>
-            <th className="px-4 py-3 text-left font-medium text-lp-text-secondary">Venue</th>
-            <th className="px-4 py-3 text-left font-medium text-lp-text-secondary">Address</th>
-            <th className="px-4 py-3 text-left font-medium text-lp-text-secondary">Notes</th>
-            <th className="px-4 py-3 text-left font-medium text-lp-text-secondary">Travel</th>
+            <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">
+              Date
+            </th>
+            <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">
+              Day type
+            </th>
+            <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">
+              Venue
+            </th>
+            <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">
+              Address
+            </th>
+            <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">
+              Notes
+            </th>
+            <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">
+              Transport mode
+            </th>
             <th className="w-10 px-2 py-3" aria-label="Actions" />
           </tr>
         </thead>
@@ -304,7 +316,11 @@ function RoutingRowWithMenu({
 
   return (
     <>
-      <tr data-routing-date={row.date} className="relative border-b border-lp-border last:border-0 hover:bg-lp-surface-hover animate-slide-up transition-colors duration-150" style={{ animationDelay: `${rowIndex * 30}ms` }}>
+      <tr
+        data-routing-date={row.date}
+        className="border-b border-lp-border last:border-0 hover:bg-lp-surface-hover animate-fade-in transition-colors duration-150"
+        style={{ animationDelay: `${rowIndex * 30}ms` }}
+      >
         <td className="px-4 py-2.5 whitespace-nowrap text-sm font-medium text-lp-text">
           {formatRoutingDateShort(row.date)}
         </td>

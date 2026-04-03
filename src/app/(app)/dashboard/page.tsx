@@ -170,11 +170,7 @@ export default async function DashboardPage() {
     .limit(10);
 
   return (
-    <div
-      className="lp-dashboard-glass min-h-[60vh] rounded-2xl p-6 md:p-8"
-      style={{ background: 'var(--lp-dashboard-bg)' }}
-    >
-      <div className="mx-auto max-w-7xl space-y-6">
+    <div className="lp-dashboard-glass mx-auto min-h-[60vh] max-w-7xl space-y-6">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-lp-text">Dashboard</h1>
@@ -226,7 +222,6 @@ export default async function DashboardPage() {
             <DashboardAdvanceNeeds />
           </div>
         </div>
-      </div>
     </div>
   );
 }

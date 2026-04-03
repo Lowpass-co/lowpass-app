@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { X, Lightbulb, Pencil, Trash2 } from 'lucide-react';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { InlineEditCell } from '@/components/spreadsheet-view/InlineEditCell';
@@ -98,6 +98,7 @@ export function LineItemDetailPanel({ lineItemId, tourId, onClose }: LineItemDet
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editingNoteText, setEditingNoteText] = useState('');
   const [uploading, setUploading] = useState(false);
+  const filesInputRef = useRef<HTMLInputElement>(null);
   const [routingContext, setRoutingContext] = useState<{ date: string; venue_name?: string } | null>(null);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [suggestionsDismissed, setSuggestionsDismissed] = useState<Set<number>>(new Set());
@@ -276,26 +277,34 @@ export function LineItemDetailPanel({ lineItemId, tourId, onClose }: LineItemDet
     if (res.ok) setAttachments((prev) => prev.filter((a) => a.id !== attachmentId));
   }, [lineItemId]);
 
-  const uploadFile = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!lineItemId || !file) return;
-    setUploading(true);
-    try {
-      const form = new FormData();
-      form.append('file', file);
-      const res = await fetch(`/api/budget/line-items/${lineItemId}/attachments`, {
-        method: 'POST',
-        body: form,
-      });
-      if (res.ok) {
-        const created = await res.json();
-        setAttachments((prev) => [created, ...prev]);
+  const uploadAttachmentFile = useCallback(
+    async (file: File) => {
+      if (!lineItemId || !file) return;
+      setUploading(true);
+      try {
+        const form = new FormData();
+        form.append('file', file);
+        const res = await fetch(`/api/budget/line-items/${lineItemId}/attachments`, {
+          method: 'POST',
+          body: form,
+        });
+        if (res.ok) await fetchDetails();
+      } finally {
+        setUploading(false);
+        if (filesInputRef.current) filesInputRef.current.value = '';
       }
-    } finally {
-      setUploading(false);
+    },
+    [lineItemId, fetchDetails]
+  );
+
+  const onFilesInputChange = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (file) void uploadAttachmentFile(file);
       e.target.value = '';
-    }
-  }, [lineItemId]);
+    },
+    [uploadAttachmentFile]
+  );
 
   const saveLinkedIds = useCallback(async (ids: string[]) => {
     if (!lineItemId) return;
@@ -556,45 +565,69 @@ export function LineItemDetailPanel({ lineItemId, tourId, onClose }: LineItemDet
 
               {tab === 'files' && (
                 <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-2">
-                    {attachments.map((a) => (
-                      <div
-                        key={a.id}
-                        className="flex flex-col rounded-lg border border-lp-border bg-lp-surface/50 p-3"
-                      >
-                        <a
-                          href={a.file_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-sm font-medium text-lp-orange hover:underline truncate"
-                        >
-                          {a.file_name}
-                        </a>
-                        <p className="text-xs text-lp-text-secondary mt-0.5">
-                          {a.file_size_bytes != null ? `${(a.file_size_bytes / 1024).toFixed(1)} KB` : ''} · {a.uploaded_at ? new Date(a.uploaded_at).toLocaleDateString('en-GB') : ''}
-                        </p>
-                        <button
-                          type="button"
-                          onClick={() => deleteAttachment(a.id)}
-                          className="mt-1 text-xs text-lp-text-secondary hover:text-lp-error"
-                        >
-                          × Delete
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                  <label className="block">
-                    <span className="text-lp-orange text-sm font-semibold hover:underline cursor-pointer">
-                      {uploading ? 'Uploading…' : 'Click to upload file'}
-                    </span>
+                  <div
+                    onDragOver={(e) => {
+                      e.preventDefault();
+                      e.dataTransfer.dropEffect = 'copy';
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      const file = e.dataTransfer.files?.[0];
+                      if (file) void uploadAttachmentFile(file);
+                    }}
+                    className="rounded-xl border-2 border-dashed border-lp-border bg-lp-surface/50 px-4 py-6 text-center transition-colors hover:border-lp-orange/45 hover:bg-lp-orange/[0.04]"
+                  >
+                    <button
+                      type="button"
+                      disabled={uploading}
+                      onClick={() => filesInputRef.current?.click()}
+                      className="rounded-lg bg-lp-orange px-4 py-2 text-sm font-semibold text-white hover:bg-lp-orange-hover disabled:opacity-50"
+                    >
+                      {uploading ? 'Uploading…' : 'Upload'}
+                    </button>
                     <input
+                      ref={filesInputRef}
                       type="file"
                       className="sr-only"
                       accept=".pdf,.png,.jpg,.jpeg,.gif,.doc,.docx,.xls,.xlsx"
                       disabled={uploading}
-                      onChange={uploadFile}
+                      onChange={onFilesInputChange}
                     />
-                  </label>
+                    <p className="mt-2 text-xs text-lp-text-secondary">or drag and drop a file here (max 10MB)</p>
+                  </div>
+
+                  {attachments.length === 0 ? (
+                    <p className="text-sm text-lp-text-tertiary">No attachments yet.</p>
+                  ) : (
+                    <ul className="overflow-hidden rounded-xl border border-lp-border">
+                      {attachments.map((a) => (
+                        <li
+                          key={a.id}
+                          className="flex flex-wrap items-center gap-2 border-b border-lp-border px-4 py-3 last:border-b-0 hover:bg-lp-surface-hover/60"
+                        >
+                          <a
+                            href={a.file_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="min-w-0 flex-1 text-sm font-medium text-lp-orange hover:underline"
+                          >
+                            {a.file_name}
+                          </a>
+                          <span className="shrink-0 text-xs text-lp-text-secondary tabular-nums">
+                            {a.file_size_bytes != null ? `${(a.file_size_bytes / 1024).toFixed(1)} KB` : '—'} ·{' '}
+                            {a.uploaded_at ? new Date(a.uploaded_at).toLocaleDateString('en-GB') : '—'}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => deleteAttachment(a.id)}
+                            className="shrink-0 text-xs text-lp-text-tertiary hover:text-lp-error"
+                          >
+                            Delete
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               )}
 
@@ -637,7 +670,7 @@ export function LineItemDetailPanel({ lineItemId, tourId, onClose }: LineItemDet
 
               {tab === 'rooms' && (
                 <div className="space-y-3">
-                  <p className="text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">
+                  <p className="text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">
                     Room Assignments
                   </p>
                   {roomsLoading ? (
@@ -649,13 +682,13 @@ export function LineItemDetailPanel({ lineItemId, tourId, onClose }: LineItemDet
                       <table className="w-full text-sm border-collapse">
                         <thead>
                           <tr className="border-b border-lp-border">
-                            <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Person</th>
-                            <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Room type</th>
-                            <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Check-in</th>
-                            <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Check-out</th>
-                            <th className="px-3 py-2 text-right text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Nights</th>
-                            <th className="px-3 py-2 text-right text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Rate/night</th>
-                            <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Ref</th>
+                            <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Person</th>
+                            <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Room type</th>
+                            <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Check-in</th>
+                            <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Check-out</th>
+                            <th className="px-3 py-2 text-right text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Nights</th>
+                            <th className="px-3 py-2 text-right text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Rate/night</th>
+                            <th className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Ref</th>
                           </tr>
                         </thead>
                         <tbody>

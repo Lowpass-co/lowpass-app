@@ -163,12 +163,12 @@ export function SettlementTab({ tourId }: { tourId: string }) {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-lp-border">
-                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Date</th>
-                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Venue</th>
-                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">City</th>
-                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Status</th>
-                <th className="text-right p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Day-of Net</th>
-                <th className="text-right p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Reconciled Net</th>
+                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Date</th>
+                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Venue</th>
+                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">City</th>
+                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Status</th>
+                <th className="text-right p-3 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Day-of Net</th>
+                <th className="text-right p-3 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Reconciled Net</th>
                 <th className="w-20 p-3" />
               </tr>
             </thead>

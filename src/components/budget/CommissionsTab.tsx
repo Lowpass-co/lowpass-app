@@ -349,8 +349,15 @@ export function CommissionsTab({ tourId }: { tourId: string }) {
       .finally(() => setSaving(false));
   };
 
-  /** Percentage stored as decimal 0.10 = 10%; display as whole number */
-  const pctToDisplay = (pct: number) => (Number(pct) * 100).toFixed(1);
+  /** Percentage stored as decimal 0.10 = 10%; display with one decimal in 0–100 space */
+  const pctToDisplay = (pct: number) => (Math.round(Number(pct) * 1000) / 10).toFixed(1);
+
+  function decimalFromDisplayPctInput(raw: string): number {
+    const v = parseFloat(raw);
+    if (!Number.isFinite(v)) return 0;
+    const clamped = Math.min(100, Math.max(0, Math.round(v * 10) / 10));
+    return clamped / 100;
+  }
 
   if (loading) {
     return (
@@ -370,20 +377,18 @@ export function CommissionsTab({ tourId }: { tourId: string }) {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-lg font-semibold text-lp-text">Commission Rates &amp; Calculations</h2>
-
       <div className="rounded-xl border border-lp-border bg-lp-surface overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-lp-border">
                 <th className="w-16 p-2" />
-                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Label</th>
-                <th className="text-right p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary w-24">Percentage</th>
-                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Basis</th>
-                <th className="text-right p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary w-32">Calculated (Proposed)</th>
-                <th className="text-right p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary w-32">Calculated (Actual)</th>
-                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Notes</th>
+                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Label</th>
+                <th className="text-right p-3 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text w-24">Percentage</th>
+                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Basis</th>
+                <th className="text-right p-3 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text w-32">Calculated (Proposed)</th>
+                <th className="text-right p-3 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text w-32">Calculated (Actual)</th>
+                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Notes</th>
                 <th className="w-28 p-3" />
               </tr>
             </thead>
@@ -400,19 +405,21 @@ export function CommissionsTab({ tourId }: { tourId: string }) {
                     />
                   </td>
                   <td className="p-2">
-                    <input
-                      type="number"
-                      step="0.1"
-                      min={0}
-                      max={100}
-                      className="w-full rounded-md border border-lp-border bg-transparent px-2 py-1.5 text-right text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30"
-                      value={newRow.percentage !== undefined ? Number(newRow.percentage) * 100 : ''}
-                      onChange={(e) =>
-                        setNewRow((r) => ({ ...r, percentage: parseFloat(e.target.value) / 100 || 0 }))
-                      }
-                      placeholder="10"
-                    />
-                    <span className="ml-1 text-lp-text-tertiary">%</span>
+                    <div className="flex items-center justify-end gap-1">
+                      <input
+                        type="number"
+                        step="0.1"
+                        min={0}
+                        max={100}
+                        className="min-w-0 flex-1 max-w-[5.5rem] rounded-md border border-lp-border bg-transparent px-2 py-1.5 text-right text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30"
+                        value={pctToDisplay(newRow.percentage ?? 0)}
+                        onChange={(e) =>
+                          setNewRow((r) => ({ ...r, percentage: decimalFromDisplayPctInput(e.target.value) }))
+                        }
+                        placeholder="10.0"
+                      />
+                      <span className="shrink-0 text-lp-text-tertiary">%</span>
+                    </div>
                   </td>
                   <td className="p-2">
                     <select
@@ -513,19 +520,22 @@ export function CommissionsTab({ tourId }: { tourId: string }) {
                     </td>
                     <td className="p-3 text-right">
                       {isEditing ? (
-                        <span className="flex items-center justify-end gap-1">
+                        <span className="inline-flex items-center justify-end gap-1">
                           <input
                             type="number"
                             step="0.1"
                             min={0}
                             max={100}
-                            className="w-16 rounded-md border border-lp-border bg-transparent px-2 py-1 text-right text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30"
-                            value={row.percentage !== undefined ? (Number(row.percentage) * 100).toFixed(1) : ''}
+                            className="w-16 max-w-full rounded-md border border-lp-border bg-transparent px-2 py-1 text-right text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30"
+                            value={pctToDisplay(Number(row.percentage) || 0)}
                             onChange={(e) =>
-                              setEditRow((r) => ({ ...r, percentage: parseFloat(e.target.value) / 100 || 0 }))
+                              setEditRow((r) => ({
+                                ...r,
+                                percentage: decimalFromDisplayPctInput(e.target.value),
+                              }))
                             }
                           />
-                          <span className="text-lp-text-tertiary">%</span>
+                          <span className="shrink-0 text-lp-text-tertiary">%</span>
                         </span>
                       ) : (
                         <span className="tabular-nums text-lp-text">{pctToDisplay(pct)}%</span>
@@ -630,13 +640,22 @@ export function CommissionsTab({ tourId }: { tourId: string }) {
         </button>
       </div>
 
-      <div className="rounded-xl border border-lp-border bg-lp-surface p-4 flex flex-wrap items-baseline gap-6 text-sm">
-        <span className="font-semibold text-lp-text">
-          Total Commission Amount (Proposed) = {totalProposed.toLocaleString('en-GB', { minimumFractionDigits: 2 })}
-        </span>
-        <span className="font-semibold text-lp-text">
-          Total Commission Amount (Actual) = {totalActual.toLocaleString('en-GB', { minimumFractionDigits: 2 })}
-        </span>
+      <div className="overflow-hidden rounded-xl border border-lp-border bg-lp-surface text-sm">
+        <div className="flex flex-wrap items-baseline justify-between gap-4 border-b border-lp-border px-4 py-3 font-semibold text-lp-text">
+          <span>Total Commission Amount (Proposed)</span>
+          <span className="tabular-nums">
+            {totalProposed.toLocaleString('en-GB', { minimumFractionDigits: 2 })}
+          </span>
+        </div>
+        <div
+          className="flex flex-wrap items-baseline justify-between gap-4 px-4 py-3 font-semibold"
+          style={{ background: 'rgba(255,69,0,0.06)', color: '#FF4500' }}
+        >
+          <span>Total Commission Amount (Actual)</span>
+          <span className="tabular-nums">
+            {totalActual.toLocaleString('en-GB', { minimumFractionDigits: 2 })}
+          </span>
+        </div>
       </div>
 
       <DeleteConfirmationModal

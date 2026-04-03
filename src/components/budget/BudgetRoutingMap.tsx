@@ -47,8 +47,21 @@ const DOT_ICON =
       })
     : null;
 
+const TILE_DARK = 'https://{s}.basemaps.cartocdn.com/dark_nolabels/{z}/{x}/{y}{r}.png';
+const TILE_LIGHT = 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+
 export function BudgetRoutingMap({ rows }: { rows: MapRow[] }) {
   const [coords, setCoords] = useState<Map<number, { lat: number; lng: number }>>(new Map());
+  const [colorSchemeDark, setColorSchemeDark] = useState(false);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const read = () => setColorSchemeDark(root.classList.contains('dark'));
+    read();
+    const obs = new MutationObserver(read);
+    obs.observe(root, { attributes: true, attributeFilter: ['class'] });
+    return () => obs.disconnect();
+  }, []);
 
   useEffect(() => {
     const next = new Map<number, { lat: number; lng: number }>();
@@ -90,13 +103,35 @@ export function BudgetRoutingMap({ rows }: { rows: MapRow[] }) {
     : [20, 0];
 
   return (
-    <div className="relative h-full w-full rounded-xl overflow-hidden">
+    <div className="lp-budget-routing-map relative isolate z-0 h-full w-full overflow-hidden rounded-xl">
       <style>{`
         .lp-budget-route {
           animation: lp-dash-move 25s linear infinite;
         }
         @keyframes lp-dash-move {
           to { stroke-dashoffset: -160; }
+        }
+        .lp-budget-routing-map .leaflet-tile {
+          border-radius: 0;
+        }
+        .lp-budget-routing-map .leaflet-container {
+          background: var(--lp-surface);
+        }
+        html:not(.dark) .lp-budget-routing-map .leaflet-control-zoom a {
+          background-color: #ff4500 !important;
+          color: #ffffff !important;
+          border-color: rgba(255, 255, 255, 0.45) !important;
+          font-weight: 700;
+          line-height: 26px;
+        }
+        html:not(.dark) .lp-budget-routing-map .leaflet-control-zoom a:hover {
+          background-color: #e63e00 !important;
+          color: #ffffff !important;
+        }
+        .dark .lp-budget-routing-map .leaflet-control-zoom a {
+          background-color: rgba(30, 30, 30, 0.92) !important;
+          color: #f5f5f5 !important;
+          border-color: rgba(255, 255, 255, 0.12) !important;
         }
       `}</style>
 
@@ -118,7 +153,13 @@ export function BudgetRoutingMap({ rows }: { rows: MapRow[] }) {
         dragging={true}
         attributionControl={false}
       >
-        <TileLayer url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png" />
+        <TileLayer
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; CARTO'
+          url={colorSchemeDark ? TILE_DARK : TILE_LIGHT}
+          maxZoom={19}
+          maxNativeZoom={19}
+          className={colorSchemeDark ? 'brightness-[1.02] contrast-[1.05]' : 'contrast-[1.03] saturate-[1.02]'}
+        />
         {boundsPoints.length > 0 && <FitBounds points={boundsPoints} />}
 
         {pointsWithIndex.map(({ coord, i }) => (

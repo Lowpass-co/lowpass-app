@@ -18,6 +18,9 @@ const PRESET_DAY_TYPES: DayType[] = [
   'festival',
 ];
 
+// Must roughly match Tailwind `max-h-64` used on the dropdown layer.
+const MAX_DROPDOWN_PX = 256;
+
 function serializeDayTypes(types: string[]): string {
   return types.filter(Boolean).join(', ');
 }
@@ -32,7 +35,9 @@ export function DayTypeDropdown({
   customTypes?: string[];
 }) {
   const [open, setOpen] = useState(false);
-  const [dropdownRect, setDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [dropdownRect, setDropdownRect] = useState<
+    { top: number; left: number; width: number; flipUp: boolean } | null
+  >(null);
   const ref = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const selected = parseDayTypes(value);
@@ -41,7 +46,19 @@ export function DayTypeDropdown({
   useLayoutEffect(() => {
     if (open && ref.current) {
       const rect = ref.current.getBoundingClientRect();
-      setDropdownRect({ top: rect.bottom + 4, left: rect.left, width: rect.width });
+      const downTop = rect.bottom + 4;
+      const spaceBelow = window.innerHeight - downTop;
+
+      // Flip when the dropdown can't fully fit downward. When flipping, we anchor the
+      // dropdown's *bottom* to the select by using `translateY(-100%)` (no gap).
+      const shouldFlipUp = spaceBelow < MAX_DROPDOWN_PX && rect.top - 4 > 8;
+
+      setDropdownRect({
+        top: shouldFlipUp ? rect.top - 4 : downTop,
+        left: rect.left,
+        width: rect.width,
+        flipUp: shouldFlipUp,
+      });
     } else {
       setDropdownRect(null);
     }
@@ -94,8 +111,15 @@ export function DayTypeDropdown({
         createPortal(
           <div
             ref={dropdownRef}
-            className="lp-dropdown-layer fixed max-h-64 overflow-y-auto rounded-xl border border-lp-border bg-lp-surface py-2 shadow-xl"
-            style={{ top: dropdownRect.top, left: dropdownRect.left, width: dropdownRect.width, minWidth: 140 }}
+            className="lp-dropdown-layer fixed z-[70] max-h-64 overflow-y-auto rounded-xl border border-lp-border bg-lp-surface py-2 shadow-xl"
+            style={{
+              top: dropdownRect.top,
+              left: dropdownRect.left,
+              width: dropdownRect.width,
+              minWidth: 140,
+              transform: dropdownRect.flipUp ? 'translateY(-100%)' : undefined,
+              transformOrigin: 'top',
+            }}
           >
             <div className="flex flex-wrap gap-1.5 px-2">
               {allTypes.map((type) => {

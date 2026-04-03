@@ -1,7 +1,6 @@
 export const BUDGET_TABS = [
   { id: 'summary', label: 'Summary' },
   { id: 'income', label: 'Routing & Income' },
-  { id: 'day-view', label: 'Day View' },
   { id: 'commissions', label: 'Commissions' },
   { id: 'salaries', label: 'Salary & Per Diems' },
   { id: 'hotels', label: 'Hotels' },

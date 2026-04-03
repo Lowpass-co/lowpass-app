@@ -53,7 +53,7 @@ export function BudgetTable({
                 <th
                   key={i}
                   className={cn(
-                    'px-3 py-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary',
+                    'px-3 py-3 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text',
                     col.align === 'right' ? 'text-right' : 'text-left',
                     col.width,
                     col.className

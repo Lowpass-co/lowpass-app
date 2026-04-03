@@ -148,6 +148,7 @@ export default async function TourOverviewPage({
 
   return (
     <TourOverviewClient
+      tourId={id}
       artistName={artistName}
       tourName={tour.name as string}
       startDate={(tour.start_date as string) ?? ''}

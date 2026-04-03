@@ -244,18 +244,18 @@ export function ReceiptsTab({ tourId }: { tourId: string }) {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-lp-border">
-                <th className="text-left p-2 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Receipt #</th>
-                <th className="text-left p-2 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Date</th>
-                <th className="text-left p-2 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Vendor</th>
-                <th className="text-left p-2 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Category</th>
-                <th className="text-left p-2 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Description</th>
-                <th className="text-left p-2 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Payment</th>
-                <th className="text-right p-2 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Cost (Tour)</th>
-                <th className="text-right p-2 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Cost (Home)</th>
-                <th className="text-left p-2 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">In Budget</th>
-                <th className="text-left p-2 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Linked Line</th>
-                <th className="text-left p-2 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Notes</th>
-                <th className="text-left p-2 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">File</th>
+                <th className="text-left p-2 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Receipt #</th>
+                <th className="text-left p-2 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Date</th>
+                <th className="text-left p-2 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Vendor</th>
+                <th className="text-left p-2 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Category</th>
+                <th className="text-left p-2 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Description</th>
+                <th className="text-left p-2 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Payment</th>
+                <th className="text-right p-2 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Cost (Tour)</th>
+                <th className="text-right p-2 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Cost (Home)</th>
+                <th className="text-left p-2 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">In Budget</th>
+                <th className="text-left p-2 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Linked Line</th>
+                <th className="text-left p-2 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Notes</th>
+                <th className="text-left p-2 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">File</th>
                 <th className="w-20 p-2" />
               </tr>
             </thead>

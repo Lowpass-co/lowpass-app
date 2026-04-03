@@ -188,19 +188,19 @@ export function FlightsTab({ tourId }: { tourId: string }) {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-lp-border">
-                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Person</th>
-                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Role</th>
-                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Origin</th>
-                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Destination</th>
-                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Departure Date</th>
-                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Departure Time</th>
-                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Airline</th>
-                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Flight #</th>
-                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Leg</th>
-                <th className="text-right p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Proposed</th>
-                <th className="text-right p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Actual</th>
-                <th className="text-right p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Variance</th>
-                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Confirmation</th>
+                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Person</th>
+                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Role</th>
+                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Origin</th>
+                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Destination</th>
+                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Departure Date</th>
+                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Departure Time</th>
+                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Airline</th>
+                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Flight #</th>
+                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Leg</th>
+                <th className="text-right p-3 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Proposed</th>
+                <th className="text-right p-3 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Actual</th>
+                <th className="text-right p-3 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Variance</th>
+                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Confirmation</th>
                 <th className="w-24 p-3" />
               </tr>
             </thead>

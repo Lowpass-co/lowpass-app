@@ -216,16 +216,16 @@ export function HotelsTab({ tourId }: { tourId: string }) {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-lp-border">
-                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Hotel Name</th>
-                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Address</th>
-                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">City</th>
-                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Check-in / Check-out</th>
-                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Distance to Venue</th>
-                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Distance to Airport</th>
-                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Cancellation</th>
-                <th className="text-right p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Room Count</th>
-                <th className="text-right p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Total Rooms Cost</th>
-                <th className="text-right p-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary w-32">Actions</th>
+                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Hotel Name</th>
+                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Address</th>
+                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">City</th>
+                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Check-in / Check-out</th>
+                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Distance to Venue</th>
+                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Distance to Airport</th>
+                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Cancellation</th>
+                <th className="text-right p-3 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Room Count</th>
+                <th className="text-right p-3 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Total Rooms Cost</th>
+                <th className="text-right p-3 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text w-32">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -370,14 +370,14 @@ export function HotelsTab({ tourId }: { tourId: string }) {
               <table className="w-full text-sm">
                 <thead>
                   <tr className="border-b border-lp-border text-left">
-                    <th className="p-2 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Person</th>
-                    <th className="p-2 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Check-in / Check-out</th>
-                    <th className="p-2 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Nights</th>
-                    <th className="p-2 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Room Type</th>
-                    <th className="p-2 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Room #</th>
-                    <th className="p-2 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Rate/night</th>
-                    <th className="p-2 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Confirmation</th>
-                    <th className="p-2 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Notes</th>
+                    <th className="p-2 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Person</th>
+                    <th className="p-2 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Check-in / Check-out</th>
+                    <th className="p-2 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Nights</th>
+                    <th className="p-2 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Room Type</th>
+                    <th className="p-2 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Room #</th>
+                    <th className="p-2 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Rate/night</th>
+                    <th className="p-2 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Confirmation</th>
+                    <th className="p-2 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Notes</th>
                     <th className="p-2 w-24" />
                   </tr>
                 </thead>

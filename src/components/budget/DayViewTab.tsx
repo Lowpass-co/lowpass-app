@@ -257,7 +257,7 @@ export function DayViewTab({ tourId }: { tourId: string }) {
         <div className="grid gap-4 lg:grid-cols-2">
           {/* Left: Advance */}
           <div className="rounded-xl border border-lp-border bg-lp-surface/50 p-4">
-            <div className="mb-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">
+            <div className="mb-3 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">
               Advance
             </div>
             {SHOW_DAY_TYPES.has((selected.day_type ?? '').split(',')[0]?.trim()) ? (
@@ -271,16 +271,16 @@ export function DayViewTab({ tourId }: { tourId: string }) {
 
           {/* Right: Financials */}
           <div className="rounded-xl border border-lp-border bg-lp-surface/50 p-4">
-            <div className="mb-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">
+            <div className="mb-3 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">
               Day financials
             </div>
 
             {/* Income */}
             <div className="mb-6">
-              <div className="mb-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">
+              <div className="mb-3 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">
                 Income
               </div>
-              <div className="sticky top-0 bg-[var(--lp-budget-wrap-bg)] grid grid-cols-[minmax(0,1fr)_3.5rem_3.5rem_4rem] gap-2 text-[11px] font-semibold text-lp-text-tertiary py-2">
+              <div className="sticky top-0 z-[1] bg-lp-surface grid grid-cols-[minmax(0,1fr)_3.5rem_3.5rem_4rem] gap-2 text-[11px] font-semibold lp-table-header-text py-2">
                 <div>Description</div>
                 <div className="text-right">Prop</div>
                 <div className="text-right">Act</div>
@@ -313,10 +313,10 @@ export function DayViewTab({ tourId }: { tourId: string }) {
 
             {/* Expenses */}
             <div>
-              <div className="mb-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">
+              <div className="mb-3 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">
                 Expenses
               </div>
-              <div className="sticky top-0 bg-[var(--lp-budget-wrap-bg)] grid grid-cols-[minmax(0,1fr)_3.5rem_3.5rem_4rem] gap-2 text-[11px] font-semibold text-lp-text-tertiary py-2">
+              <div className="sticky top-0 z-[1] bg-lp-surface grid grid-cols-[minmax(0,1fr)_3.5rem_3.5rem_4rem] gap-2 text-[11px] font-semibold lp-table-header-text py-2">
                 <div>Description</div>
                 <div className="text-right">Prop</div>
                 <div className="text-right">Act</div>
@@ -328,7 +328,7 @@ export function DayViewTab({ tourId }: { tourId: string }) {
                 <div className="space-y-4">
                   {expenseGroups.map((g) => (
                     <div key={g.group}>
-                      <div className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">
+                      <div className="mb-2 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">
                         {g.group}
                       </div>
                       <div className="space-y-1">

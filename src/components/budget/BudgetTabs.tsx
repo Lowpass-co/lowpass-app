@@ -48,10 +48,6 @@ const SettlementTab = dynamic(
   () => import('@/components/budget/SettlementTab').then((m) => ({ default: m.SettlementTab })),
   { ssr: false }
 );
-const DayViewTab = dynamic(
-  () => import('@/components/budget/DayViewTab').then((m) => ({ default: m.DayViewTab })),
-  { ssr: false }
-);
 
 function TabLoader() {
   return (
@@ -135,7 +131,6 @@ export function BudgetTabs({
           />
         );
       case 'income': return <IncomeTab tourId={tourId} />;
-      case 'day-view': return <DayViewTab tourId={tourId} />;
       case 'salaries': return <SalariesTab tourId={tourId} />;
       case 'hotels': return <HotelsTab tourId={tourId} />;
       case 'flights': return <FlightsTab tourId={tourId} />;

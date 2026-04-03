@@ -202,12 +202,12 @@ export function ProductionTab({ tourId }: { tourId: string }) {
             <thead>
               <tr className="border-b border-lp-border bg-lp-bg-tertiary">
                 <th className="w-16 p-2" />
-                <th className="text-left p-3 font-medium text-lp-text">Category</th>
-                <th className="text-left p-3 font-medium text-lp-text">Label / Description</th>
-                <th className="text-right p-3 font-medium text-lp-text w-20">Quantity</th>
-                <th className="text-right p-3 font-medium text-lp-text w-28">Proposed Cost</th>
-                <th className="text-right p-3 font-medium text-lp-text w-28">Actual Cost</th>
-                <th className="text-left p-3 font-medium text-lp-text">Notes</th>
+                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Category</th>
+                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Label / Description</th>
+                <th className="text-right p-3 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text w-20">Quantity</th>
+                <th className="text-right p-3 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text w-28">Proposed Cost</th>
+                <th className="text-right p-3 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text w-28">Actual Cost</th>
+                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Notes</th>
                 <th className="w-28 p-3" />
               </tr>
             </thead>

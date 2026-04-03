@@ -11,7 +11,20 @@ const FOLDER_CLIP =
 /** Active tab: trapezoid + full-width tail below (px) so bleed is one shape, not a second layer */
 const ACTIVE_TAB_BODY_PX = 52;
 const ACTIVE_TAB_TAIL_PX = 14;
-const ACTIVE_TAB_TOTAL_PX = ACTIVE_TAB_BODY_PX + ACTIVE_TAB_TAIL_PX;
+export const ACTIVE_TAB_TOTAL_PX = ACTIVE_TAB_BODY_PX + ACTIVE_TAB_TAIL_PX;
+
+/** Must match budget page sticky header `pt-*` (Tailwind pt-6) */
+export const BUDGET_FOLDER_HEADER_PT = '1.5rem';
+/** Opaque band below folder row — masks scroll “slither” before Routing/Income sub-tabs */
+export const BUDGET_FOLDER_HEADER_PB = '0.75rem';
+
+/**
+ * Scroll offset for Income sub-tabs = header pt + nav ul pt-1 + active tab height + header pb.
+ * Keep in sync with `budget/page.tsx` sticky `<header>` classes.
+ */
+/** −1px overlaps header pb band to remove any hairline between folder row and sub-tabs */
+export const BUDGET_FOLDER_STICKY_STACK_TOP =
+  `calc(${BUDGET_FOLDER_HEADER_PT} + 0.25rem + ${ACTIVE_TAB_TOTAL_PX}px + ${BUDGET_FOLDER_HEADER_PB} - 1px)` as const;
 
 const FOLDER_CLIP_ACTIVE =
   `[clip-path:polygon(4px_0,calc(100%-4px)_0,100%_${ACTIVE_TAB_BODY_PX}px,100%_100%,0_100%,0_${ACTIVE_TAB_BODY_PX}px)]` as const;

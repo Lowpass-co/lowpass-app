@@ -127,9 +127,9 @@ const OVERHEADS_COLOR = '#6d28d9';
 const STANDARD_BAR_HEIGHT = 120;
 const MAX_BAR_HEIGHT = 200;
 
-/** Breakdown tables: line item column grows to full width; amount cols have minimum readable width */
+/** Breakdown tables: line item column uses remaining space; amount cols fixed ch so headers sit left of far-right edge */
 const BREAKDOWN_GRID_COLS =
-  'grid-cols-[minmax(0,1fr)_minmax(16ch,max-content)_minmax(16ch,max-content)_minmax(11ch,max-content)]';
+  'grid-cols-[minmax(0,1.4fr)_minmax(11ch,1fr)_minmax(11ch,1fr)_minmax(9ch,0.9fr)]';
 
 /** Vertical stacked bar: only filled when totals present; height scales with value; empty = grey placeholder at standard height. */
 function VerticalStackedBar({
@@ -181,7 +181,7 @@ function VerticalStackedBar({
           </>
         )}
       </div>
-      <span className="mt-2 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">
+      <span className="mt-2 text-[11px] font-semibold uppercase tracking-wider text-black dark:text-white">
         {label}
       </span>
     </div>
@@ -230,7 +230,7 @@ function BucketCard({
     <div className="flex flex-col px-6 py-5">
       <div className="flex items-center gap-2 mb-3">
         <span className="h-2 w-2 rounded-full shrink-0" style={{ background: dot }} />
-        <span className="text-[10px] font-semibold uppercase tracking-widest text-lp-text-secondary">
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-black dark:text-white">
           {label}
         </span>
       </div>
@@ -248,8 +248,11 @@ function BucketCard({
               <div key={i} className="flex items-baseline justify-between gap-2">
                 <span className="text-xs text-lp-text-tertiary truncate">{l.label}</span>
                 <span
-                  className="text-xs tabular-nums shrink-0"
-                  style={{ color: over ? '#FF4500' : 'rgba(255,255,255,0.65)' }}
+                  className={cn(
+                    'text-xs tabular-nums shrink-0',
+                    over ? '' : 'text-lp-text-secondary dark:text-white/70'
+                  )}
+                  style={over ? { color: '#FF4500' } : undefined}
                 >
                   £{fmt(l.actual)}
                 </span>
@@ -300,14 +303,14 @@ function BreakdownSection({
   const columnHeader = (
     <div
       className={cn(
-        'grid w-full shrink-0 border-b border-lp-border/50 bg-lp-surface px-2 py-1.5 text-[11px] font-semibold text-lp-text-tertiary',
+        'grid w-full shrink-0 border-b border-lp-border/50 bg-lp-surface px-2 py-1.5 text-[11px] font-semibold text-black dark:text-white',
         BREAKDOWN_GRID_COLS
       )}
     >
-      <span className="min-w-0 text-left">Line item</span>
-      <span className="whitespace-nowrap text-right">Proposed</span>
-      <span className="whitespace-nowrap text-right">Actual</span>
-      <span className="whitespace-nowrap text-right">Variance</span>
+      <span className="min-w-0 text-left">Line Item</span>
+      <span className="whitespace-nowrap text-center">Proposed</span>
+      <span className="whitespace-nowrap text-center">Actual</span>
+      <span className="whitespace-nowrap text-center">Variance</span>
     </div>
   );
 
@@ -320,15 +323,15 @@ function BreakdownSection({
       )}
     >
       <span className="min-w-0 text-lp-text break-words pr-1">{row.label}</span>
-      <span className="whitespace-nowrap text-right tabular-nums text-lp-text-tertiary">
+      <span className="whitespace-nowrap text-center tabular-nums text-lp-text-tertiary">
         {currencySymbol}
         {fmt(row.proposed)}
       </span>
-      <span className="whitespace-nowrap text-right tabular-nums text-lp-text">
+      <span className="whitespace-nowrap text-center tabular-nums text-lp-text">
         {currencySymbol}
         {fmt(row.actual)}
       </span>
-      <span className="whitespace-nowrap text-right tabular-nums text-lp-text-tertiary">{row.varianceDisplay}</span>
+      <span className="whitespace-nowrap text-center tabular-nums text-lp-text-tertiary">{row.varianceDisplay}</span>
     </div>
   );
 
@@ -338,17 +341,14 @@ function BreakdownSection({
         'grid w-full shrink-0 items-center gap-x-2 border-t border-lp-border/60 px-2 py-2.5 text-[11px] font-bold',
         BREAKDOWN_GRID_COLS
       )}
-      style={{
-        background: subtotalBg,
-        boxShadow: '0 -8px 16px rgba(0,0,0,0.28)',
-      }}
+      style={{ background: subtotalBg }}
     >
-      <span className="min-w-0 text-lp-text-tertiary uppercase tracking-wider">Subtotal</span>
-      <span className="whitespace-nowrap text-right tabular-nums text-lp-text">
+      <span className="min-w-0 uppercase tracking-wider text-black dark:text-white">Subtotal</span>
+      <span className="whitespace-nowrap text-center tabular-nums text-black dark:text-white">
         {currencySymbol}
         {fmt(subtotalProposed)}
       </span>
-      <span className="whitespace-nowrap text-right tabular-nums text-lp-text">
+      <span className="whitespace-nowrap text-center tabular-nums text-black dark:text-white">
         {currencySymbol}
         {fmt(subtotalActual)}
       </span>
@@ -368,7 +368,7 @@ function BreakdownSection({
         className="flex shrink-0 items-center gap-2 border-b border-lp-border/50 px-3 py-2"
         style={{ background: `${color}18` }}
       >
-        <span className="shrink-0 text-[10px] font-semibold uppercase tracking-widest text-lp-text-secondary">
+        <span className="shrink-0 text-[11px] font-semibold uppercase tracking-wider text-black dark:text-white">
           {title}
         </span>
         <div className="h-1 min-w-0 flex-1 rounded-full opacity-80" style={{ background: color }} />
@@ -501,17 +501,17 @@ export function SummaryTab({
         />
       </div>
       {/* Totals at bottom of graph section; P/L label white; Actual column green (profit) / red (loss) */}
-      <div className="mt-auto min-w-0 shrink-0 overflow-x-auto rounded-lg border border-white/10 bg-[color-mix(in_srgb,var(--lp-budget-wrap-bg)_92%,#5c2a2a_8%)] px-3 py-3">
+      <div className="mt-auto min-w-0 shrink-0 overflow-x-auto rounded-lg border border-lp-border bg-lp-budget-card px-3 py-3 dark:border-white/10">
         <table className="min-w-max w-full border-collapse text-[11px]">
           <thead>
-            <tr className="border-b border-white/20">
-              <th className="py-1.5 text-left text-[10px] font-semibold uppercase tracking-wider text-lp-orange">
+            <tr className="border-b border-white/20 dark:border-white/15">
+              <th className="py-1.5 text-left text-[10px] font-bold uppercase tracking-wider text-black dark:text-white">
                 Totals
               </th>
-              <th className="whitespace-nowrap py-1.5 text-right text-[10px] font-semibold uppercase tracking-wider text-lp-orange">
+              <th className="whitespace-nowrap py-1.5 text-right text-[10px] font-bold uppercase tracking-wider text-black dark:text-white">
                 Proposed
               </th>
-              <th className="whitespace-nowrap py-1.5 text-right text-[10px] font-semibold uppercase tracking-wider text-lp-orange">
+              <th className="whitespace-nowrap py-1.5 text-right text-[10px] font-bold uppercase tracking-wider text-black dark:text-white">
                 Actual
               </th>
             </tr>
@@ -567,7 +567,7 @@ export function SummaryTab({
   const rightColumn = (
     <div className="flex min-h-0 h-full flex-1 flex-col overflow-hidden">
       {breakdownHeading === 'inline' && (
-        <p className="shrink-0 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">
+        <p className="shrink-0 text-[11px] font-semibold uppercase tracking-wider lp-table-header-text">
           Breakdown
         </p>
       )}

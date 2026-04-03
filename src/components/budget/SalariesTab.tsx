@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { Loader2, Pencil, Trash2 } from 'lucide-react';
+import { Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 type DayStatus = 'show' | 'off_travel' | 'rehearsal' | 'no_tour';
@@ -190,19 +190,19 @@ export function SalariesTab({
           <table className="w-full min-w-[960px] border-collapse text-sm">
             <thead>
               <tr className="border-b border-lp-border">
-              <th className="sticky left-0 z-10 border-r border-lp-border bg-lp-surface px-5 py-4 text-left text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Person</th>
-              <th className="px-4 py-4 text-left text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Role</th>
-              <th className="border-r border-lp-border px-4 py-4 text-left text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Type</th>
-              <th className="px-4 py-4 text-left text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Rate Type</th>
-              <th className="px-4 py-4 text-right text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Daily Rate</th>
-              <th className="px-4 py-4 text-right text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Show Rate</th>
-              <th className="px-4 py-4 text-right text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Off Rate</th>
-              <th className="px-4 py-4 text-right text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Rehearsal</th>
-              <th className="border-r border-lp-border px-4 py-4 text-right text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Per Diem</th>
-              <th className="px-4 py-4 text-right text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Advance Fee</th>
-              <th className="px-5 py-4 text-right text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Projected Fee</th>
+              <th className="sticky left-0 z-10 border-r border-lp-border bg-lp-surface px-5 py-4 text-left text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Person</th>
+              <th className="px-4 py-4 text-left text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Role</th>
+              <th className="border-r border-lp-border px-4 py-4 text-left text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Type</th>
+              <th className="px-4 py-4 text-left text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Rate Type</th>
+              <th className="px-4 py-4 text-right text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Daily Rate</th>
+              <th className="px-4 py-4 text-right text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Show Rate</th>
+              <th className="px-4 py-4 text-right text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Off Rate</th>
+              <th className="px-4 py-4 text-right text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Rehearsal</th>
+              <th className="border-r border-lp-border px-4 py-4 text-right text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Per Diem</th>
+              <th className="px-4 py-4 text-right text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Advance Fee</th>
+              <th className="px-5 py-4 text-right text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Projected Fee</th>
               {showComm && (
-                <th className="px-4 py-4 text-right text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary italic">Comm.</th>
+                <th className="px-4 py-4 text-right text-[10px] font-semibold uppercase tracking-widest lp-table-header-text italic">Comm.</th>
               )}
               <th className="w-24 px-2 py-4" />
               </tr>
@@ -454,11 +454,9 @@ export function SalariesTab({
         <div className="border-t border-lp-border px-4 py-3">
           <button
             type="button"
-            className="inline-flex items-center gap-1.5 rounded-full border border-dashed border-lp-border px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-lp-text-tertiary hover:border-lp-orange hover:text-lp-orange"
+            className="flex items-center gap-1 rounded-lg border border-lp-border bg-lp-bg px-3 py-2 text-sm font-medium text-lp-text hover:bg-lp-bg-tertiary"
           >
-            <span className="flex h-4 w-4 items-center justify-center rounded-full bg-lp-orange/10 text-[10px] text-lp-orange">
-              +
-            </span>
+            <Plus className="h-4 w-4" />
             Add Member
           </button>
         </div>
