@@ -12,6 +12,11 @@ import { InventoryModal } from './InventoryModal';
 import { ImportModal } from './ImportModal';
 import { StyledSelect, type StyledSelectOption } from '@/components/ui/StyledSelect';
 import {
+  dayRateFromPurchase,
+  effectiveInventoryDayRate,
+  isDayRateManual,
+} from '@/lib/rental-pricing';
+import {
   CATEGORIES,
   EQUIPMENT_TABLE_MIN_CLASS,
   fmtUSD,
@@ -23,6 +28,15 @@ const INVENTORY_TOOLBAR_CLASS = 'grid w-full min-w-0 grid-cols-[minmax(0,1fr)_10
 /* Shared style for inline edit inputs */
 const INLINE_INPUT =
   'w-full rounded-md border bg-transparent px-2 py-1 text-xs transition-colors outline-none';
+
+/** Matches Lowpass form controls (see AdvanceSectionBuilder, StyledSelect accent) */
+const INVENTORY_CHECKBOX_CLASS = cn(
+  'h-4 w-4 shrink-0 cursor-pointer rounded-md border-2 border-lp-border bg-lp-surface',
+  'text-lp-orange accent-lp-orange',
+  'transition-[border-color,box-shadow] duration-150',
+  'hover:border-lp-orange/50',
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lp-orange/35 focus-visible:ring-offset-0'
+);
 
 interface Props {
   userId: string;
@@ -104,7 +118,43 @@ export function InventoryTab({ userId, inventory, setInventory }: Props) {
   }
 
   function updateDraft(id: string, field: keyof RentalInventoryItem, value: RentalInventoryItem[keyof RentalInventoryItem]) {
-    setDrafts(prev => ({ ...prev, [id]: { ...(prev[id] ?? {}), [field]: value } }));
+    setDrafts((prev) => {
+      const item = inventory.find((i) => i.id === id);
+      if (!item) return prev;
+      const patch: Partial<RentalInventoryItem> = { ...(prev[id] ?? {}), [field]: value };
+
+      if (field === 'day_rate') {
+        patch.day_rate_manual = true;
+      }
+
+      if (field === 'purchase_cost') {
+        const mergedForManual: RentalInventoryItem = { ...item, ...patch };
+        if (!isDayRateManual(mergedForManual)) {
+          const p = typeof value === 'number' && value > 0 ? value : null;
+          patch.day_rate = p != null ? dayRateFromPurchase(p) : null;
+          patch.day_rate_manual = false;
+        }
+      }
+
+      return { ...prev, [id]: patch };
+    });
+  }
+
+  function mergedRow(item: RentalInventoryItem): RentalInventoryItem {
+    return { ...item, ...(drafts[item.id] ?? {}) };
+  }
+
+  function dayRateCellValue(item: RentalInventoryItem): string {
+    const m = mergedRow(item);
+    if (isDayRateManual(m)) {
+      return m.day_rate != null ? String(m.day_rate) : '';
+    }
+    const p = m.purchase_cost;
+    if (p != null && p > 0) {
+      const dr = dayRateFromPurchase(p);
+      return dr != null ? dr.toFixed(2) : '';
+    }
+    return m.day_rate != null ? String(m.day_rate) : '';
   }
 
   function enterEditMode() {
@@ -121,11 +171,25 @@ export function InventoryTab({ userId, inventory, setInventory }: Props) {
     let errors = 0;
     const saved: RentalInventoryItem[] = [];
     for (const id of dirtyIds) {
-      const { error } = await supabase.from('rental_inventory').update(drafts[id]).eq('id', id);
+      const orig = inventory.find((i) => i.id === id)!;
+      const patch: Partial<RentalInventoryItem> = { ...drafts[id] };
+      const merged: RentalInventoryItem = { ...orig, ...patch };
+      if (!isDayRateManual(merged)) {
+        const p = merged.purchase_cost;
+        if (p != null && p > 0) {
+          patch.day_rate = dayRateFromPurchase(p) ?? null;
+        } else {
+          patch.day_rate = null;
+        }
+        patch.day_rate_manual = false;
+      } else {
+        patch.day_rate_manual = true;
+        patch.day_rate = merged.day_rate;
+      }
+      const { error } = await supabase.from('rental_inventory').update(patch).eq('id', id);
       if (error) { errors++; }
       else {
-        const orig = inventory.find(i => i.id === id)!;
-        saved.push({ ...orig, ...drafts[id] });
+        saved.push({ ...orig, ...patch });
       }
     }
     if (errors) alert(`${errors} item${errors !== 1 ? 's' : ''} failed to save.`);
@@ -148,15 +212,34 @@ export function InventoryTab({ userId, inventory, setInventory }: Props) {
       setImgFill({ current: i + 1, total: targets.length, found });
       try {
         const res = await fetch(`/api/equipment/find-image?q=${encodeURIComponent(item.name)}`);
-        const { imageUrl, error } = await res.json();
+        const data = await res.json();
+        const { imageUrl, error, missing, code } = data as {
+          imageUrl?: string | null;
+          error?: string;
+          missing?: string[];
+          code?: string;
+        };
         if (imageUrl) {
           await supabase.from('rental_inventory').update({ image_url: imageUrl }).eq('id', item.id);
           setInventory(inventory.map(inv => inv.id === item.id ? { ...inv, image_url: imageUrl } : inv));
           found++;
           setImgFill({ current: i + 1, total: targets.length, found });
         }
-        if (error?.includes('not configured')) {
-          alert('Google Custom Search is not set up yet.\n\nSee the setup instructions to add GOOGLE_CSE_CX to your .env.local.');
+        if (code === 'CSE_NOT_CONFIGURED' || missing?.length) {
+          alert(
+            [
+              'Google Custom Search is not fully configured on the server.',
+              '',
+              missing?.length
+                ? `Missing env: ${missing.join(', ')}`
+                : error ?? 'Set variables in .env.local',
+              '',
+              'Add GOOGLE_CSE_CX (search engine ID) and ensure your Google API key has the "Custom Search API" enabled in Google Cloud Console.',
+              'You can use GOOGLE_PLACES_API_KEY or set GOOGLE_CUSTOM_SEARCH_API_KEY for image search only.',
+              '',
+              'Restart the dev server after changing .env.local.',
+            ].join('\n')
+          );
           break;
         }
       } catch { /* skip item on network error */ }
@@ -435,8 +518,7 @@ export function InventoryTab({ userId, inventory, setInventory }: Props) {
                         type="checkbox"
                         checked={allFilteredSelected}
                         onChange={toggleSelectAllFiltered}
-                        className="h-3.5 w-3.5 cursor-pointer rounded border align-middle accent-[#FF4500]"
-                        style={{ borderColor: 'var(--lp-border)' }}
+                        className={cn(INVENTORY_CHECKBOX_CLASS, 'align-middle')}
                         title={allFilteredSelected ? 'Deselect all visible' : 'Select all visible'}
                         aria-label="Select all visible rows"
                       />
@@ -479,8 +561,7 @@ export function InventoryTab({ userId, inventory, setInventory }: Props) {
                             checked={selectedIds.has(item.id)}
                             onChange={() => toggleSelect(item.id)}
                             onClick={(e) => e.stopPropagation()}
-                            className="h-3.5 w-3.5 cursor-pointer rounded border align-middle accent-[#FF4500]"
-                            style={{ borderColor: 'var(--lp-border)' }}
+                            className={cn(INVENTORY_CHECKBOX_CLASS, 'align-middle')}
                             aria-label={`Select ${item.name}`}
                           />
                         ) : null}
@@ -611,14 +692,27 @@ export function InventoryTab({ userId, inventory, setInventory }: Props) {
                             type="number" step="0.01" min="0"
                             className={INLINE_INPUT}
                             style={inlineInputStyle}
-                            value={getDraft(item, 'day_rate') ?? ''}
-                            onChange={e => updateDraft(item.id, 'day_rate', e.target.value === '' ? null : parseFloat(e.target.value))}
+                            value={dayRateCellValue(item)}
+                            readOnly={
+                              (() => {
+                                const m = mergedRow(item);
+                                return m.purchase_cost != null && m.purchase_cost > 0 && !isDayRateManual(m);
+                              })()
+                            }
+                            onChange={e =>
+                              updateDraft(
+                                item.id,
+                                'day_rate',
+                                e.target.value === '' ? null : parseFloat(e.target.value)
+                              )
+                            }
                             onFocus={inlineFocusHandlers}
                             onBlur={inlineBlurHandlers}
                           />
                         ) : (
                           <span className="font-semibold" style={{ color: 'var(--lp-text)' }}>
-                            {fmtUSD(item.day_rate)}<span className="text-xs font-normal ml-0.5" style={{ color: 'var(--lp-text-tertiary)' }}>/day</span>
+                            {fmtUSD(effectiveInventoryDayRate(item))}
+                            <span className="text-xs font-normal ml-0.5" style={{ color: 'var(--lp-text-tertiary)' }}>/day</span>
                           </span>
                         )}
                       </td>

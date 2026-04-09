@@ -8,7 +8,10 @@ import { useState, useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 import { createClient } from '@/lib/supabase-client';
 import { StyledSelect, type StyledSelectOption } from '@/components/ui/StyledSelect';
-import { dayRateFromPurchase } from '@/lib/rental-pricing';
+import {
+  dayRateFromPurchase,
+  isDayRateManual,
+} from '@/lib/rental-pricing';
 import { CATEGORIES, type RentalInventoryItem } from './types';
 
 interface Props {
@@ -25,23 +28,22 @@ export function InventoryModal({ userId, editing, onSave, onClose }: Props) {
   const [origin, setOrigin]         = useState(editing?.country_of_origin ?? '');
   const [weightKg, setWeight]       = useState(editing?.weight_kg?.toString() ?? '');
   const [purchaseCost, setPurchase] = useState(editing?.purchase_cost?.toString() ?? '');
+  const [dayRateManual, setDayRateManual] = useState(() =>
+    editing ? isDayRateManual(editing) : false
+  );
   const [dayRate, setDayRate] = useState(() => {
-    if (editing?.purchase_cost != null && editing.purchase_cost > 0) {
-      const d = dayRateFromPurchase(editing.purchase_cost);
-      return d != null ? d.toFixed(2) : (editing.day_rate?.toString() ?? '');
+    if (!editing) return '';
+    if (isDayRateManual(editing)) return editing.day_rate?.toString() ?? '';
+    const p = editing.purchase_cost;
+    if (p != null && p > 0) {
+      const d = dayRateFromPurchase(p);
+      return d != null ? d.toFixed(2) : '';
     }
-    return editing?.day_rate?.toString() ?? '';
+    return editing.day_rate?.toString() ?? '';
   });
   const [imageUrl, setImageUrl]     = useState(editing?.image_url        ?? '');
   const [notes, setNotes]           = useState(editing?.notes            ?? '');
   const [saving, setSaving]         = useState(false);
-  const [rateHint, setRateHint] = useState(() => {
-    if (editing?.purchase_cost != null && editing.purchase_cost > 0) {
-      const d = dayRateFromPurchase(editing.purchase_cost);
-      return d != null ? `$${d.toFixed(2)}/day — 1% of purchase (always)` : '';
-    }
-    return '';
-  });
   const nameRef = useRef<HTMLInputElement>(null);
   const supabase = createClient();
 
@@ -52,31 +54,54 @@ export function InventoryModal({ userId, editing, onSave, onClose }: Props) {
 
   useEffect(() => { nameRef.current?.focus(); }, []);
 
+  const purchaseNum = purchaseCost ? parseFloat(purchaseCost) : NaN;
+  const purchaseOk = !Number.isNaN(purchaseNum) && purchaseNum > 0;
+  const autoDayRate = purchaseOk ? dayRateFromPurchase(purchaseNum) : null;
+  const autoDayRateStr = autoDayRate != null ? autoDayRate.toFixed(2) : '';
+
   function handlePurchaseCostChange(val: string) {
     setPurchase(val);
     const cost = parseFloat(val);
-    if (cost > 0) {
+    if (!dayRateManual && !Number.isNaN(cost) && cost > 0) {
       const dr = dayRateFromPurchase(cost);
-      const sug = dr != null ? dr.toFixed(2) : '';
-      setRateHint(`$${sug}/day — 1% of purchase (always)`);
-      setDayRate(sug);
-    } else {
-      setRateHint('');
+      setDayRate(dr != null ? dr.toFixed(2) : '');
+    } else if (!dayRateManual && (Number.isNaN(cost) || cost <= 0)) {
       setDayRate('');
     }
+  }
+
+  function handleDayRateChange(val: string) {
+    setDayRateManual(true);
+    setDayRate(val);
+  }
+
+  function resetToAutomaticDayRate() {
+    setDayRateManual(false);
+    if (purchaseOk && autoDayRate != null) setDayRate(autoDayRate.toFixed(2));
+    else setDayRate('');
   }
 
   async function handleSave() {
     if (!name.trim()) { nameRef.current?.focus(); return; }
     setSaving(true);
 
-    const purchaseNum = purchaseCost ? parseFloat(purchaseCost) : null;
-    const resolvedDayRate =
-      purchaseNum != null && purchaseNum > 0
-        ? dayRateFromPurchase(purchaseNum)
-        : dayRate
-          ? parseFloat(dayRate)
-          : null;
+    const purchaseResolved =
+      purchaseCost && !Number.isNaN(parseFloat(purchaseCost)) ? parseFloat(purchaseCost) : null;
+
+    let finalDayRate: number | null;
+    let finalManual: boolean;
+    if (dayRateManual) {
+      finalManual = true;
+      finalDayRate = dayRate && !Number.isNaN(parseFloat(dayRate)) ? parseFloat(dayRate) : null;
+    } else {
+      finalManual = false;
+      finalDayRate =
+        purchaseResolved != null && purchaseResolved > 0
+          ? dayRateFromPurchase(purchaseResolved)
+          : dayRate && !Number.isNaN(parseFloat(dayRate))
+            ? parseFloat(dayRate)
+            : null;
+    }
 
     const payload = {
       user_id:           userId,
@@ -85,8 +110,9 @@ export function InventoryModal({ userId, editing, onSave, onClose }: Props) {
       serial_number:     serial.trim() || null,
       country_of_origin: origin.trim() || null,
       weight_kg:         weightKg   ? parseFloat(weightKg)   : null,
-      purchase_cost:     purchaseNum != null && !Number.isNaN(purchaseNum) ? purchaseNum : null,
-      day_rate:          resolvedDayRate != null && !Number.isNaN(resolvedDayRate) ? resolvedDayRate : null,
+      purchase_cost:     purchaseResolved,
+      day_rate:          finalDayRate != null && !Number.isNaN(finalDayRate) ? finalDayRate : null,
+      day_rate_manual:   finalManual,
       image_url:         imageUrl.trim() || null,
       notes:             notes.trim() || null,
     };
@@ -102,6 +128,16 @@ export function InventoryModal({ userId, editing, onSave, onClose }: Props) {
     if (result.error) { alert('Save failed: ' + result.error.message); return; }
     onSave(result.data as RentalInventoryItem);
   }
+
+  const rateHint = purchaseOk
+    ? dayRateManual
+      ? 'Custom day rate (override). Use “Use 1% automatic” to follow purchase again.'
+      : `$${autoDayRateStr}/day — automatic 1% of purchase`
+    : dayRateManual
+      ? 'Custom day rate (no purchase cost — automatic rate unavailable)'
+      : 'Enter purchase cost for automatic 1%/day, or type a day rate to set a custom rate';
+
+  const dayRateReadOnly = purchaseOk && !dayRateManual;
 
   return (
     <div
@@ -156,7 +192,7 @@ export function InventoryModal({ userId, editing, onSave, onClose }: Props) {
             </Field>
           </div>
 
-          {/* Purchase cost + Day rate (1% of purchase when cost > 0) */}
+          {/* Purchase cost + Day rate */}
           <div className="grid grid-cols-2 gap-4">
             <Field label="Purchase / Replacement Cost">
               <div className="relative">
@@ -169,28 +205,30 @@ export function InventoryModal({ userId, editing, onSave, onClose }: Props) {
                 />
               </div>
             </Field>
-            <Field
-              label="Day Rate"
-              hint={
-                rateHint ||
-                (purchaseCost && parseFloat(purchaseCost) > 0
-                  ? 'Locked to 1% of purchase'
-                  : 'Enter a purchase cost, or set a rate manually if cost is unknown')
-              }
-            >
+            <Field label="Day Rate" hint={rateHint}>
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm" style={{ color: 'var(--lp-text-tertiary)' }}>$</span>
                 <input
                   type="number"
                   value={dayRate}
-                  onChange={(e) => setDayRate(e.target.value)}
+                  onChange={(e) => handleDayRateChange(e.target.value)}
                   min="0"
                   step="0.01"
                   placeholder="0.00"
-                  readOnly={!!purchaseCost && !Number.isNaN(parseFloat(purchaseCost)) && parseFloat(purchaseCost) > 0}
+                  readOnly={dayRateReadOnly}
                   className="lp-input pl-6 read-only:cursor-not-allowed read-only:opacity-90"
                 />
               </div>
+              {dayRateManual && purchaseOk && (
+                <button
+                  type="button"
+                  onClick={resetToAutomaticDayRate}
+                  className="mt-1.5 text-xs font-semibold transition-colors hover:opacity-80"
+                  style={{ color: '#FF4500' }}
+                >
+                  Use 1% automatic rate
+                </button>
+              )}
             </Field>
           </div>
 

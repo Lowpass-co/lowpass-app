@@ -13,7 +13,7 @@ import { usePathname, useSearchParams } from 'next/navigation';
 import {
   ChevronLeft, ChevronRight, LogOut,
   LayoutDashboard, ListMusic, ClipboardList, LineChart,
-  Wallet, HandCoins, Bed, FileCheck2, Music, Users, Building2, Settings, Bug, Gauge, Package,
+  Wallet, HandCoins, Bed, FileCheck2, Music, Users, Users2, Building2, Settings, Bug, Gauge, Package,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useArtistTourContext } from '@/contexts/ArtistTourContext';
@@ -35,7 +35,8 @@ interface NavItem {
     | 'tour_advance'
     | 'tour_overview'
     | 'rooming'
-    | 'payroll';
+    | 'payroll'
+    | 'tour_personnel';
 }
 
 interface NavGroup {
@@ -100,6 +101,12 @@ export function Sidebar() {
     },
     { label: 'Budget', href: selectedTourId ? `/budget?tour_id=${selectedTourId}` : '/budget', icon: Wallet, activeMode: 'budget' },
     { label: 'Advance', href: selectedTourId ? `/tours/${selectedTourId}/advance` : '/budget', icon: ClipboardList, activeMode: 'tour_advance' },
+    {
+      label: 'Tour personnel',
+      href: selectedTourId ? `/tours/${selectedTourId}/personnel` : '/budget',
+      icon: Users2,
+      activeMode: 'tour_personnel',
+    },
     { label: 'Settlement', href: selectedTourId ? `/budget?tour_id=${selectedTourId}&tab=settlement` : '/budget', icon: FileCheck2, activeMode: 'settlement' },
     { label: 'Rooming', href: selectedTourId ? `/tours/${selectedTourId}/rooming` : '/budget', icon: Bed, activeMode: 'rooming' },
     { label: 'Payroll', href: selectedTourId ? `/tours/${selectedTourId}/payroll` : '/budget', icon: HandCoins, activeMode: 'payroll' },
@@ -222,6 +229,8 @@ export function Sidebar() {
                         ? pathname === '/advance'
                         : item.activeMode === 'tour_advance'
                           ? /^\/tours\/[^/]+\/advance(?:\/|$)/.test(pathname ?? '')
+                          : item.activeMode === 'tour_personnel'
+                            ? /^\/tours\/[^/]+\/personnel(?:\/|$)/.test(pathname ?? '')
                           : item.activeMode === 'rooming'
                             ? pathname === '/rooming' ||
                               /^\/tours\/[^/]+\/rooming(?:\/|$)/.test(pathname ?? '')
@@ -297,7 +306,7 @@ export function Sidebar() {
                       className="mb-3 px-3 text-xs font-extrabold uppercase tracking-wider"
                       style={{ color: 'var(--lp-sidebar-text-heading)' }}
                     >
-                      Overview
+                      Artist Overview
                     </h3>
                   )}
                   {renderNavLinks(overviewItems, 'overview')}

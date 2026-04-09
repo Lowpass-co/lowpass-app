@@ -5,19 +5,35 @@ import { NextRequest, NextResponse } from 'next/server';
  *
  * Returns the first image URL from Google Custom Search for the given query.
  * Requires:
- *   GOOGLE_PLACES_API_KEY  — your existing Google API key (must have Custom Search API enabled)
- *   GOOGLE_CSE_CX          — Programmable Search Engine ID (create at programmablesearchengine.google.com)
+ *   GOOGLE_CSE_CX — Programmable Search Engine ID (programmablesearchengine.google.com)
+ *   Plus one API key (Custom Search JSON API enabled in Google Cloud):
+ *     GOOGLE_CUSTOM_SEARCH_API_KEY (optional, preferred for this route) or
+ *     GOOGLE_PLACES_API_KEY (reused if custom key not set)
  */
 export async function GET(req: NextRequest) {
   const q = req.nextUrl.searchParams.get('q')?.trim();
   if (!q) return NextResponse.json({ error: 'Missing query' }, { status: 400 });
 
-  const apiKey = process.env.GOOGLE_PLACES_API_KEY;
-  const cx     = process.env.GOOGLE_CSE_CX;
+  const cx = process.env.GOOGLE_CSE_CX?.trim() || '';
+  const apiKey =
+    process.env.GOOGLE_CUSTOM_SEARCH_API_KEY?.trim() ||
+    process.env.GOOGLE_PLACES_API_KEY?.trim() ||
+    '';
 
   if (!apiKey || !cx) {
+    const missing: string[] = [];
+    if (!apiKey) {
+      missing.push('GOOGLE_PLACES_API_KEY or GOOGLE_CUSTOM_SEARCH_API_KEY');
+    }
+    if (!cx) {
+      missing.push('GOOGLE_CSE_CX');
+    }
     return NextResponse.json(
-      { error: 'GOOGLE_PLACES_API_KEY or GOOGLE_CSE_CX not configured.' },
+      {
+        error: 'Google Custom Search is not configured on the server.',
+        missing,
+        code: 'CSE_NOT_CONFIGURED' as const,
+      },
       { status: 500 }
     );
   }

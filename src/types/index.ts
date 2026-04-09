@@ -491,6 +491,8 @@ export interface PersonnelRate {
   id: string;
   tour_id: string;
   workspace_id: string;
+  /** Workspace roster row when added from Personnel; rooming/payroll use person_name. */
+  roster_personnel_id?: string | null;
   person_name: string;
   role: string | null;
   person_type: PersonType;

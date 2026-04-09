@@ -9,6 +9,8 @@ export interface RentalInventoryItem {
   country_of_origin: string | null;
   purchase_cost: number | null;
   day_rate: number | null;
+  /** When false, day_rate is derived as 1% of purchase_cost whenever purchase is set. */
+  day_rate_manual?: boolean | null;
   weight_kg: number | null;
   image_url: string | null;
   notes: string | null;

@@ -126,7 +126,8 @@ export async function POST(request: Request) {
 
   let body: {
     tour_id: string;
-    person_name: string;
+    person_name?: string;
+    roster_personnel_id?: string | null;
     role?: string | null;
     person_type?: string;
     rate_type?: string;
@@ -145,10 +146,50 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { tour_id, person_name } = body;
-  if (!tour_id || !person_name?.trim()) {
+  const { tour_id } = body;
+  if (!tour_id) {
+    return NextResponse.json({ error: 'tour_id is required' }, { status: 400 });
+  }
+
+  let person_name = body.person_name?.trim() ?? '';
+  let roster_personnel_id: string | null = body.roster_personnel_id ?? null;
+
+  if (roster_personnel_id) {
+    const { data: roster } = await supabase
+      .from('personnel')
+      .select('id, name, role, standard_rates')
+      .eq('id', roster_personnel_id)
+      .eq('workspace_id', profile.workspace_id)
+      .single();
+
+    if (!roster) {
+      return NextResponse.json({ error: 'Roster person not found' }, { status: 404 });
+    }
+
+    const { data: dup } = await supabase
+      .from('personnel_rates')
+      .select('id')
+      .eq('tour_id', tour_id)
+      .eq('workspace_id', profile.workspace_id)
+      .eq('roster_personnel_id', roster_personnel_id)
+      .maybeSingle();
+
+    if (dup) {
+      return NextResponse.json({ error: 'This person is already on the tour' }, { status: 409 });
+    }
+
+    const sr = (roster.standard_rates ?? {}) as Record<string, number | string | undefined>;
+    if (!person_name) person_name = roster.name;
+    body.role = body.role ?? roster.role ?? null;
+    if (body.show_rate === undefined) body.show_rate = Number(sr.show_day_rate) || 0;
+    if (body.off_rate === undefined) body.off_rate = Number(sr.off_day_rate) || 0;
+    if (body.rehearsal_rate === undefined) body.rehearsal_rate = Number(sr.travel_day_rate) || 0;
+    if (body.per_diem === undefined) body.per_diem = Number(sr.per_diem_rate) || 0;
+  }
+
+  if (!person_name) {
     return NextResponse.json(
-      { error: 'tour_id and person_name are required' },
+      { error: 'person_name is required (or provide roster_personnel_id)' },
       { status: 400 }
     );
   }
@@ -193,6 +234,7 @@ export async function POST(request: Request) {
     order_index: orderIndex,
     updated_at: new Date().toISOString(),
   };
+  if (roster_personnel_id) payload.roster_personnel_id = roster_personnel_id;
   if (canApprove && body.commission !== undefined) payload.commission = Number(body.commission) || 0;
   if (canApprove && body.commission_note !== undefined) payload.commission_note = body.commission_note ?? null;
 

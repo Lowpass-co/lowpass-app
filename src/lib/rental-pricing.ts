@@ -8,6 +8,35 @@ export function dayRateFromPurchase(purchase: number | null | undefined): number
   return Math.round(purchase * 0.01 * 100) / 100;
 }
 
+export type DayRateManualFields = {
+  day_rate_manual?: boolean | null;
+  purchase_cost: number | null;
+  day_rate: number | null;
+};
+
+/**
+ * True when the user chose a custom day rate (not the automatic 1% of purchase).
+ * Uses DB flag when set; otherwise infers from legacy rows (before day_rate_manual existed).
+ */
+export function isDayRateManual(item: DayRateManualFields): boolean {
+  if (item.day_rate_manual === true) return true;
+  if (item.day_rate_manual === false) return false;
+  const p = item.purchase_cost;
+  if (p == null || !(p > 0)) return item.day_rate != null && item.day_rate > 0;
+  const auto = dayRateFromPurchase(p);
+  if (auto == null) return true;
+  if (item.day_rate == null) return false;
+  return Math.abs(Number(item.day_rate) - auto) > 0.005;
+}
+
+/** Rate used for pricing / display: 1% of purchase when not manual, else stored day_rate. */
+export function effectiveInventoryDayRate(item: DayRateManualFields): number | null {
+  if (isDayRateManual(item)) return item.day_rate;
+  const p = item.purchase_cost;
+  if (p != null && p > 0) return dayRateFromPurchase(p);
+  return item.day_rate;
+}
+
 /**
  * Billable rental days (3-day week): each full 7-day calendar span counts as 3 rental days;
  * leftover days count 1:1. Inclusive of start and end dates.

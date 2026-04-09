@@ -213,8 +213,13 @@ export function ImportModal({ userId, onImported, onClose }: Props) {
       const rawWeight = parseNum(colMap.weight_kg ? row[colMap.weight_kg] : '');
       const purchase = parseNum(colMap.purchase_cost ? row[colMap.purchase_cost] : '');
       const importedDayRate = parseNum(colMap.day_rate ? row[colMap.day_rate] : '');
+      const fromPurchase = dayRateFromPurchase(purchase);
       const dayRate =
-        dayRateFromPurchase(purchase) ?? (importedDayRate != null && importedDayRate > 0 ? importedDayRate : null);
+        fromPurchase ?? (importedDayRate != null && importedDayRate > 0 ? importedDayRate : null);
+      const dayRateManual =
+        !(purchase != null && purchase > 0 && fromPurchase != null) &&
+        importedDayRate != null &&
+        importedDayRate > 0;
       rows.push({
         user_id:           userId,
         name:              nameVal,
@@ -223,6 +228,7 @@ export function ImportModal({ userId, onImported, onClose }: Props) {
         country_of_origin: colMap.country_of_origin ? row[colMap.country_of_origin] || null : null,
         purchase_cost:     purchase,
         day_rate:          dayRate,
+        day_rate_manual:   dayRateManual,
         // Convert lbs → kg (÷ 2.20462) if the source column is in pounds
         weight_kg:         rawWeight === null ? null
                              : weightInLbs ? Math.round((rawWeight / 2.20462) * 100) / 100

@@ -56,6 +56,18 @@ CREATE TABLE IF NOT EXISTS rental_job_items (
 ALTER TABLE rental_inventory ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE;
 ALTER TABLE rental_jobs ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE;
 
+-- Day rate: auto 1% of purchase unless user overrides (app sets day_rate_manual)
+ALTER TABLE rental_inventory ADD COLUMN IF NOT EXISTS day_rate_manual BOOLEAN NOT NULL DEFAULT FALSE;
+UPDATE rental_inventory
+SET day_rate_manual = TRUE
+WHERE purchase_cost IS NOT NULL AND purchase_cost > 0
+  AND day_rate IS NOT NULL
+  AND ABS(day_rate - ROUND((purchase_cost * 0.01)::numeric, 2)) > 0.02;
+UPDATE rental_inventory
+SET day_rate = ROUND((purchase_cost * 0.01)::numeric, 2)
+WHERE day_rate_manual = FALSE
+  AND purchase_cost IS NOT NULL AND purchase_cost > 0;
+
 -- Optional after backfilling NULL user_id rows:
 -- ALTER TABLE rental_inventory ALTER COLUMN user_id SET NOT NULL;
 -- ALTER TABLE rental_jobs ALTER COLUMN user_id SET NOT NULL;

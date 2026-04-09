@@ -167,6 +167,12 @@ export default async function TourDetailPage({
               Advance
             </Link>
             <Link
+              href={`/tours/${id}/personnel`}
+              className="rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-sm font-medium text-lp-text hover:bg-lp-surface-hover hover:border-lp-orange hover:text-lp-orange transition-colors"
+            >
+              Tour personnel
+            </Link>
+            <Link
               href={`/budget?tour_id=${id}`}
               className="rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-sm font-medium text-lp-text hover:bg-lp-surface-hover hover:border-lp-orange hover:text-lp-orange transition-colors"
             >

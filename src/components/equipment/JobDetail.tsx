@@ -7,6 +7,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ArrowLeft, Trash2, Plus } from 'lucide-react';
 import { createClient } from '@/lib/supabase-client';
+import { effectiveInventoryDayRate } from '@/lib/rental-pricing';
 import { StyledSelect, type StyledSelectOption } from '@/components/ui/StyledSelect';
 import {
   STATUS_OPTIONS, calcDays, fmtUSD, fmtDate,
@@ -48,7 +49,7 @@ export function JobDetail({ job, inventory, artists, tours, onBack, onEdit, onDe
     { value: '', label: '— select from inventory —' },
     ...inventory.map((i) => ({
       value: i.id,
-      label: `${i.name}${i.category ? ` (${i.category})` : ''} — ${fmtUSD(i.day_rate)}/day`,
+      label: `${i.name}${i.category ? ` (${i.category})` : ''} — ${fmtUSD(effectiveInventoryDayRate(i))}/day`,
     })),
   ];
 
@@ -74,7 +75,7 @@ export function JobDetail({ job, inventory, artists, tours, onBack, onEdit, onDe
   let subtotal = 0;
   for (const it of jobItems) {
     const inv  = inventory.find(i => i.id === it.inventory_id);
-    const rate = it.day_rate_override ?? inv?.day_rate ?? 0;
+    const rate = it.day_rate_override ?? (inv ? effectiveInventoryDayRate(inv) ?? 0 : 0);
     subtotal  += (it.quantity || 1) * days * rate;
   }
   const dp       = parseFloat(discPct)   || 0;
@@ -257,7 +258,7 @@ export function JobDetail({ job, inventory, artists, tours, onBack, onEdit, onDe
                   <tbody>
                     {jobItems.map((it, idx) => {
                       const inv     = inventory.find(i => i.id === it.inventory_id);
-                      const rate    = it.day_rate_override ?? inv?.day_rate ?? 0;
+                      const rate    = it.day_rate_override ?? (inv ? effectiveInventoryDayRate(inv) ?? 0 : 0);
                       const lineAmt = (it.quantity || 1) * days * rate;
                       return (
                         <tr
