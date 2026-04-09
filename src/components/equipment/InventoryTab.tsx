@@ -9,7 +9,8 @@ import { Plus, Pencil, Trash2, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { createClient } from '@/lib/supabase-client';
 import { InventoryModal } from './InventoryModal';
-import { CATEGORIES, fmtUSD, type RentalInventoryItem } from './types';
+import { StyledSelect, type StyledSelectOption } from '@/components/ui/StyledSelect';
+import { CATEGORIES, EQUIPMENT_TABLE_MIN_CLASS, fmtUSD, type RentalInventoryItem } from './types';
 
 interface Props {
   userId: string;
@@ -24,6 +25,11 @@ export function InventoryTab({ userId, inventory, setInventory }: Props) {
   const [editing, setEditing] = useState<RentalInventoryItem | null>(null);
 
   const supabase = createClient();
+
+  const categoryOptions: StyledSelectOption<string>[] = [
+    { value: '', label: 'All categories' },
+    ...CATEGORIES.map((c) => ({ value: c, label: c })),
+  ];
 
   const filtered = inventory.filter(i => {
     const q = search.toLowerCase();
@@ -71,15 +77,15 @@ export function InventoryTab({ userId, inventory, setInventory }: Props) {
             }}
           />
         </div>
-        <select
-          value={catFilter}
-          onChange={e => setCat(e.target.value)}
-          className="rounded-lg border px-3 py-2 text-sm"
-          style={{ backgroundColor: 'var(--lp-surface)', borderColor: 'var(--lp-border)', color: 'var(--lp-text)' }}
-        >
-          <option value="">All categories</option>
-          {CATEGORIES.map(c => <option key={c}>{c}</option>)}
-        </select>
+        <div className="w-[160px] shrink-0">
+          <StyledSelect
+            size="sm"
+            value={catFilter}
+            onChange={setCat}
+            options={categoryOptions}
+            placeholder="All categories"
+          />
+        </div>
         <span className="ml-auto text-xs" style={{ color: 'var(--lp-text-tertiary)' }}>
           {inventory.length} item{inventory.length !== 1 ? 's' : ''}
         </span>
@@ -96,11 +102,11 @@ export function InventoryTab({ userId, inventory, setInventory }: Props) {
 
       {/* Table */}
       <div
-        className="overflow-hidden rounded-xl border"
+        className={cn('flex flex-col overflow-hidden rounded-xl border', EQUIPMENT_TABLE_MIN_CLASS)}
         style={{ borderColor: 'var(--lp-border)', backgroundColor: 'var(--lp-surface)' }}
       >
         {filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 gap-3">
+          <div className="flex flex-1 flex-col items-center justify-center gap-3 px-4 py-16">
             <div className="text-3xl">📦</div>
             <p className="text-sm font-medium" style={{ color: 'var(--lp-text-secondary)' }}>
               {inventory.length === 0 ? 'No inventory yet' : 'No items match that search'}
@@ -116,7 +122,7 @@ export function InventoryTab({ userId, inventory, setInventory }: Props) {
             )}
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div className="min-h-0 flex-1 overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--lp-border)', backgroundColor: 'var(--lp-bg-secondary)' }}>

@@ -18,6 +18,10 @@ export interface RentalJob {
   user_id: string;
   name: string;
   client_name: string | null;
+  /** Workspace artist (from `artists` table). */
+  artist_id: string | null;
+  /** Workspace tour (from `tours` table). */
+  tour_id: string | null;
   start_date: string | null;
   end_date: string | null;
   discount_percent: number | null;
@@ -25,6 +29,22 @@ export interface RentalJob {
   notes: string | null;
   status: 'draft' | 'confirmed' | 'invoiced' | 'completed';
   created_at: string;
+  /** Populated when listing with Supabase embed `artist:artists(...)` */
+  artist?: { id: string; name: string } | null;
+  /** Populated when listing with Supabase embed `tour:tours(...)` */
+  tour?: { id: string; name: string } | null;
+}
+
+/** Slim rows for job modal / filters (from workspace). */
+export interface EquipmentArtistOption {
+  id: string;
+  name: string;
+}
+
+export interface EquipmentTourOption {
+  id: string;
+  name: string;
+  artist_id: string;
 }
 
 export interface RentalJobItem {
@@ -35,6 +55,9 @@ export interface RentalJobItem {
   day_rate_override: number | null;
   created_at: string;
 }
+
+/** Shared min height for Equipment inventory / jobs table shells (empty + data). */
+export const EQUIPMENT_TABLE_MIN_CLASS = 'min-h-[26rem]';
 
 export const CATEGORIES = [
   'Audio', 'Lighting', 'Video / LED', 'Backline',

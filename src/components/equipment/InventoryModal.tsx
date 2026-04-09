@@ -7,6 +7,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 import { createClient } from '@/lib/supabase-client';
+import { StyledSelect, type StyledSelectOption } from '@/components/ui/StyledSelect';
 import { CATEGORIES, type RentalInventoryItem } from './types';
 
 interface Props {
@@ -30,6 +31,11 @@ export function InventoryModal({ userId, editing, onSave, onClose }: Props) {
   const [rateHint, setRateHint]     = useState('');
   const nameRef = useRef<HTMLInputElement>(null);
   const supabase = createClient();
+
+  const categoryOptions: StyledSelectOption<string>[] = [
+    { value: '', label: '— select —' },
+    ...CATEGORIES.map((c) => ({ value: c, label: c })),
+  ];
 
   useEffect(() => { nameRef.current?.focus(); }, []);
 
@@ -110,10 +116,7 @@ export function InventoryModal({ userId, editing, onSave, onClose }: Props) {
           {/* Category + Serial */}
           <div className="grid grid-cols-2 gap-4">
             <Field label="Category">
-              <select value={category} onChange={e => setCategory(e.target.value)} className="lp-input">
-                <option value="">— select —</option>
-                {CATEGORIES.map(c => <option key={c}>{c}</option>)}
-              </select>
+              <StyledSelect value={category} onChange={setCategory} options={categoryOptions} placeholder="— select —" />
             </Field>
             <Field label="Serial Number">
               <input value={serial} onChange={e => setSerial(e.target.value)} placeholder="SN-00000" className="lp-input" />

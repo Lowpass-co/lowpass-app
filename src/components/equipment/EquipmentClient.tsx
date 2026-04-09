@@ -11,20 +11,37 @@ import { Package, ClipboardList } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { InventoryTab } from './InventoryTab';
 import { JobsTab } from './JobsTab';
-import type { RentalInventoryItem, RentalJob } from './types';
+import type {
+  EquipmentArtistOption,
+  EquipmentTourOption,
+  RentalInventoryItem,
+  RentalJob,
+} from './types';
 
 interface Props {
   userId: string;
+  workspaceId: string | null;
   initialInventory: RentalInventoryItem[];
   initialJobs: RentalJob[];
+  initialArtists: EquipmentArtistOption[];
+  initialTours: EquipmentTourOption[];
 }
 
 type Tab = 'inventory' | 'jobs';
 
-export function EquipmentClient({ userId, initialInventory, initialJobs }: Props) {
+export function EquipmentClient({
+  userId,
+  workspaceId,
+  initialInventory,
+  initialJobs,
+  initialArtists,
+  initialTours,
+}: Props) {
   const [activeTab, setActiveTab] = useState<Tab>('inventory');
   const [inventory, setInventory] = useState<RentalInventoryItem[]>(initialInventory);
   const [jobs, setJobs] = useState<RentalJob[]>(initialJobs);
+  const [artists, setArtists] = useState<EquipmentArtistOption[]>(initialArtists);
+  const [tours, setTours] = useState<EquipmentTourOption[]>(initialTours);
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -43,20 +60,21 @@ export function EquipmentClient({ userId, initialInventory, initialJobs }: Props
         </div>
       </div>
 
-      {/* Tabs */}
+      {/* Tabs — equal-width segments so the control does not resize */}
       <div
-        className="flex gap-1 rounded-lg p-1 w-fit"
+        className="flex w-full max-w-[340px] gap-1 rounded-lg p-1"
         style={{ backgroundColor: 'var(--lp-bg-secondary)', border: '1px solid var(--lp-border)' }}
       >
         {([
-          { id: 'inventory', label: 'Inventory', icon: Package },
-          { id: 'jobs',      label: 'Jobs',      icon: ClipboardList },
-        ] as const).map(({ id, label, icon: Icon }) => (
+          { id: 'inventory' as const, label: 'Inventory', icon: Package },
+          { id: 'jobs' as const, label: 'Jobs', icon: ClipboardList },
+        ]).map(({ id, label, icon: Icon }) => (
           <button
             key={id}
+            type="button"
             onClick={() => setActiveTab(id)}
             className={cn(
-              'flex items-center gap-2 rounded-md px-4 py-2 text-xs font-semibold uppercase tracking-wider transition-all',
+              'flex flex-1 min-w-0 items-center justify-center gap-2 rounded-md px-3 py-2 text-xs font-semibold uppercase tracking-wider transition-all',
               activeTab === id
                 ? 'text-white shadow-sm'
                 : 'hover:opacity-80'
@@ -67,8 +85,8 @@ export function EquipmentClient({ userId, initialInventory, initialJobs }: Props
                 : { color: 'var(--lp-text-secondary)', backgroundColor: 'transparent' }
             }
           >
-            <Icon size={14} />
-            {label}
+            <Icon size={14} className="shrink-0" />
+            <span className="truncate">{label}</span>
           </button>
         ))}
       </div>
@@ -84,9 +102,14 @@ export function EquipmentClient({ userId, initialInventory, initialJobs }: Props
       {activeTab === 'jobs' && (
         <JobsTab
           userId={userId}
+          workspaceId={workspaceId}
           jobs={jobs}
           setJobs={setJobs}
           inventory={inventory}
+          artists={artists}
+          tours={tours}
+          setArtists={setArtists}
+          setTours={setTours}
         />
       )}
     </div>

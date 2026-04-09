@@ -7,21 +7,26 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ArrowLeft, Trash2, Plus } from 'lucide-react';
 import { createClient } from '@/lib/supabase-client';
+import { StyledSelect, type StyledSelectOption } from '@/components/ui/StyledSelect';
 import {
-  STATUS_OPTIONS, STATUS_STYLES, calcDays, fmtUSD, fmtDate,
+  STATUS_OPTIONS, calcDays, fmtUSD, fmtDate,
+  type EquipmentArtistOption,
+  type EquipmentTourOption,
   type RentalJob, type RentalInventoryItem, type RentalJobItem,
 } from './types';
 
 interface Props {
   job: RentalJob;
   inventory: RentalInventoryItem[];
+  artists: EquipmentArtistOption[];
+  tours: EquipmentTourOption[];
   onBack: () => void;
   onEdit: () => void;
   onDelete: () => void;
   onJobUpdated: (job: RentalJob) => void;
 }
 
-export function JobDetail({ job, inventory, onBack, onEdit, onDelete, onJobUpdated }: Props) {
+export function JobDetail({ job, inventory, artists, tours, onBack, onEdit, onDelete, onJobUpdated }: Props) {
   const [jobItems, setJobItems] = useState<RentalJobItem[]>([]);
   const [loading, setLoading]   = useState(true);
 
@@ -38,6 +43,23 @@ export function JobDetail({ job, inventory, onBack, onEdit, onDelete, onJobUpdat
 
   const supabase = createClient();
   const days = calcDays(job.start_date, job.end_date);
+
+  const invSelectOptions: StyledSelectOption<string>[] = [
+    { value: '', label: '— select from inventory —' },
+    ...inventory.map((i) => ({
+      value: i.id,
+      label: `${i.name}${i.category ? ` (${i.category})` : ''} — ${fmtUSD(i.day_rate)}/day`,
+    })),
+  ];
+
+  const statusSelectOptions: StyledSelectOption<RentalJob['status']>[] = STATUS_OPTIONS.map((s) => ({
+    value: s,
+    label: s.charAt(0).toUpperCase() + s.slice(1),
+  }));
+
+  const artistLabel =
+    job.artist?.name ?? artists.find((a) => a.id === job.artist_id)?.name ?? null;
+  const tourLabel = job.tour?.name ?? tours.find((t) => t.id === job.tour_id)?.name ?? null;
 
   const fetchItems = useCallback(async () => {
     setLoading(true);
@@ -103,8 +125,6 @@ export function JobDetail({ job, inventory, onBack, onEdit, onDelete, onJobUpdat
     onJobUpdated({ ...job, status: val as RentalJob['status'] });
   }
 
-  const statusStyle = STATUS_STYLES[status] ?? STATUS_STYLES.draft;
-
   return (
     <div className="space-y-6">
       {/* Back + title row */}
@@ -123,6 +143,8 @@ export function JobDetail({ job, inventory, onBack, onEdit, onDelete, onJobUpdat
           <div>
             <h2 className="text-xl font-bold tracking-tight" style={{ color: 'var(--lp-text)' }}>{job.name}</h2>
             <div className="mt-1.5 flex flex-wrap gap-4 text-sm" style={{ color: 'var(--lp-text-secondary)' }}>
+              {artistLabel && <span>🎤 {artistLabel}</span>}
+              {tourLabel && <span>🗺 {tourLabel}</span>}
               {job.client_name && <span>👤 {job.client_name}</span>}
               <span>📅 {fmtDate(job.start_date)} → {fmtDate(job.end_date)}</span>
               <span>⏱ {days} day{days !== 1 ? 's' : ''}</span>
@@ -161,18 +183,13 @@ export function JobDetail({ job, inventory, onBack, onEdit, onDelete, onJobUpdat
             <div className="flex flex-wrap gap-3 items-end">
               <div className="flex-1 min-w-[180px] space-y-1">
                 <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--lp-text-secondary)' }}>Item</label>
-                <select
-                  value={selInv} onChange={e => setSelInv(e.target.value)}
-                  className="w-full rounded-lg border px-3 py-2 text-sm"
-                  style={{ borderColor: 'var(--lp-border)', backgroundColor: 'var(--lp-surface)', color: 'var(--lp-text)' }}
-                >
-                  <option value="">— select from inventory —</option>
-                  {inventory.map(i => (
-                    <option key={i.id} value={i.id}>
-                      {i.name}{i.category ? ` (${i.category})` : ''} — {fmtUSD(i.day_rate)}/day
-                    </option>
-                  ))}
-                </select>
+                <StyledSelect
+                  value={selInv}
+                  onChange={setSelInv}
+                  options={invSelectOptions}
+                  placeholder="— select from inventory —"
+                  size="sm"
+                />
               </div>
               <div className="w-20 space-y-1">
                 <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--lp-text-secondary)' }}>Qty</label>
@@ -343,18 +360,13 @@ export function JobDetail({ job, inventory, onBack, onEdit, onDelete, onJobUpdat
 
           <div style={{ borderTop: '1px solid var(--lp-border)', paddingTop: '1rem' }}>
             <PricingField label="Status">
-              <select
+              <StyledSelect
                 value={status}
-                onChange={e => handleStatusChange(e.target.value)}
-                className="w-full rounded-lg border px-3 py-2 text-sm font-semibold"
-                style={{
-                  borderColor: 'var(--lp-border)',
-                  backgroundColor: statusStyle.bg,
-                  color: statusStyle.text,
-                }}
-              >
-                {STATUS_OPTIONS.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
+                onChange={(v) => void handleStatusChange(v)}
+                options={statusSelectOptions}
+                placeholder="Status"
+                size="sm"
+              />
             </PricingField>
           </div>
         </div>
