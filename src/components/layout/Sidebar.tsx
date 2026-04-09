@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useArtistTourContext } from '@/contexts/ArtistTourContext';
+import { SidebarTourPicker } from '@/components/layout/SidebarTourPicker';
 import { cn, toTitleCase } from '@/lib/utils';
 
 interface NavItem {
@@ -47,7 +48,7 @@ const SIDEBAR_COLLAPSED_KEY = 'lp-sidebar-collapsed';
 export function Sidebar() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { selectedTourId } = useArtistTourContext();
+  const { selectedTourId, selectedArtistId } = useArtistTourContext();
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
     return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true';
@@ -81,33 +82,27 @@ export function Sidebar() {
     },
   ];
 
-  const navGroups: NavGroup[] = [
+  const artistQuery = selectedArtistId ? `?artist_id=${selectedArtistId}` : '';
+
+  const overviewItems: NavItem[] = [
+    { label: 'Dashboard', href: `/dashboard${artistQuery}`, icon: LayoutDashboard, activeMode: 'exact' },
+    { label: 'All Tours', href: `/tours${artistQuery}`, icon: ListMusic, activeMode: 'exact' },
+    { label: 'Advances', href: `/advance${artistQuery}`, icon: ClipboardList, activeMode: 'all_advances' },
+    { label: 'Performance', href: `/performance${artistQuery}`, icon: LineChart, activeMode: 'exact' },
+  ];
+
+  const tourManagementItems: NavItem[] = [
     {
-      title: 'OVERVIEW',
-      items: [
-        { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, activeMode: 'exact' },
-        { label: 'All Tours', href: '/tours', icon: ListMusic, activeMode: 'exact' },
-        { label: 'All Advances', href: '/advance', icon: ClipboardList, activeMode: 'all_advances' },
-        { label: 'Performance', href: '/performance', icon: LineChart, activeMode: 'exact' },
-      ],
+      label: 'Tour Summary',
+      href: selectedTourId ? `/tours/${selectedTourId}/overview` : '/budget',
+      icon: Gauge,
+      activeMode: 'tour_overview',
     },
-    {
-      title: 'MANAGE TOUR',
-      items: [
-        {
-          label: 'Tour Summary',
-          href: selectedTourId ? `/tours/${selectedTourId}/overview` : '/budget',
-          icon: Gauge,
-          activeMode: 'tour_overview',
-        },
-        { label: 'Budget', href: selectedTourId ? `/budget?tour_id=${selectedTourId}` : '/budget', icon: Wallet, activeMode: 'budget' },
-        { label: 'Advance', href: selectedTourId ? `/tours/${selectedTourId}/advance` : '/budget', icon: ClipboardList, activeMode: 'tour_advance' },
-        { label: 'Settlement', href: selectedTourId ? `/budget?tour_id=${selectedTourId}&tab=settlement` : '/budget', icon: FileCheck2, activeMode: 'settlement' },
-        { label: 'Rooming', href: selectedTourId ? `/tours/${selectedTourId}/rooming` : '/budget', icon: Bed, activeMode: 'rooming' },
-        { label: 'Payroll', href: selectedTourId ? `/tours/${selectedTourId}/payroll` : '/budget', icon: HandCoins, activeMode: 'payroll' },
-      ],
-    },
-    ...baseGroups,
+    { label: 'Budget', href: selectedTourId ? `/budget?tour_id=${selectedTourId}` : '/budget', icon: Wallet, activeMode: 'budget' },
+    { label: 'Advance', href: selectedTourId ? `/tours/${selectedTourId}/advance` : '/budget', icon: ClipboardList, activeMode: 'tour_advance' },
+    { label: 'Settlement', href: selectedTourId ? `/budget?tour_id=${selectedTourId}&tab=settlement` : '/budget', icon: FileCheck2, activeMode: 'settlement' },
+    { label: 'Rooming', href: selectedTourId ? `/tours/${selectedTourId}/rooming` : '/budget', icon: Bed, activeMode: 'rooming' },
+    { label: 'Payroll', href: selectedTourId ? `/tours/${selectedTourId}/payroll` : '/budget', icon: HandCoins, activeMode: 'payroll' },
   ];
 
   useEffect(() => {
@@ -214,19 +209,10 @@ export function Sidebar() {
               background-color: var(--lp-sidebar-text-muted);
             }
           `}</style>
-          {navGroups.map((group, groupIndex) => (
-            <div key={group.title ?? `group-${groupIndex}`} className="mt-8 first:mt-2">
-              {group.title && !collapsed && (
-                <h3
-                  className="mb-3 px-3 text-xs font-extrabold uppercase tracking-wider"
-                  style={{ color: 'var(--lp-sidebar-text-heading)' }}
-                >
-                  {group.title}
-                </h3>
-              )}
-
+          {(() => {
+            const renderNavLinks = (items: NavItem[], groupKey: string) => (
               <div className="space-y-0.5">
-                {group.items.map((item) => {
+                {items.map((item) => {
                   const hrefPath = item.href.split('?')[0];
                   const tab = searchParams?.get('tab');
                   const isActive =
@@ -254,7 +240,7 @@ export function Sidebar() {
                   const Icon = item.icon;
                   return (
                     <Link
-                      key={`${group.title ?? 'base'}-${item.label}-${item.href}`}
+                      key={`${groupKey}-${item.label}-${item.href}`}
                       href={item.href}
                       title={collapsed ? item.label : undefined}
                       className={cn(
@@ -301,8 +287,61 @@ export function Sidebar() {
                   );
                 })}
               </div>
-            </div>
-          ))}
+            );
+
+            return (
+              <>
+                <div className="mt-2">
+                  {!collapsed && (
+                    <h3
+                      className="mb-3 px-3 text-xs font-extrabold uppercase tracking-wider"
+                      style={{ color: 'var(--lp-sidebar-text-heading)' }}
+                    >
+                      Overview
+                    </h3>
+                  )}
+                  {renderNavLinks(overviewItems, 'overview')}
+                </div>
+
+                <div className="mt-8">
+                  {!collapsed && (
+                    <h3
+                      className="mb-3 px-3 text-xs font-extrabold uppercase tracking-wider"
+                      style={{ color: 'var(--lp-sidebar-text-heading)' }}
+                    >
+                      Tour Management
+                    </h3>
+                  )}
+                  {!collapsed && (
+                    <div className="mb-3 px-3">
+                      <p
+                        className="mb-1.5 text-[10px] font-bold uppercase tracking-wider"
+                        style={{ color: 'var(--lp-sidebar-text-muted)' }}
+                      >
+                        Choose Tour
+                      </p>
+                      <SidebarTourPicker />
+                    </div>
+                  )}
+                  {renderNavLinks(tourManagementItems, 'tour-mgmt')}
+                </div>
+
+                {baseGroups.map((group, groupIndex) => (
+                  <div key={group.title ?? `group-${groupIndex}`} className="mt-8">
+                    {group.title && !collapsed && (
+                      <h3
+                        className="mb-3 px-3 text-xs font-extrabold uppercase tracking-wider"
+                        style={{ color: 'var(--lp-sidebar-text-heading)' }}
+                      >
+                        {group.title}
+                      </h3>
+                    )}
+                    {renderNavLinks(group.items, `base-${group.title ?? groupIndex}`)}
+                  </div>
+                ))}
+              </>
+            );
+          })()}
         </nav>
 
         {/* Footer — avatar + name (link to profile), Account menu with Log out */}

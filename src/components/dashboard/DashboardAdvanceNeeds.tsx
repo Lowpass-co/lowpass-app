@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
+import { useArtistTourContext } from '@/contexts/ArtistTourContext';
 import { parseRoutingDate } from '@/lib/utils';
 import { AlertTriangle, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -70,17 +71,23 @@ function buildCarouselItems(suggestions: SuggestionItem[]): { routingId: string;
 }
 
 export function DashboardAdvanceNeeds() {
+  const { selectedArtistId } = useArtistTourContext();
+  const suggestionsQuery = selectedArtistId
+    ? `?artist_id=${encodeURIComponent(selectedArtistId)}`
+    : '';
+
   const [suggestions, setSuggestions] = useState<SuggestionItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [index, setIndex] = useState(0);
 
   useEffect(() => {
-    fetch('/api/advance/suggestions')
+    setLoading(true);
+    fetch(`/api/advance/suggestions${suggestionsQuery}`)
       .then((r) => (r.ok ? r.json() : { suggestions: [] }))
       .then((j) => setSuggestions((j.suggestions ?? []).slice(0, 40)))
       .catch(() => setSuggestions([]))
       .finally(() => setLoading(false));
-  }, []);
+  }, [suggestionsQuery]);
 
   const carouselItems = useMemo(() => buildCarouselItems(suggestions), [suggestions]);
   const total = carouselItems.length;
@@ -116,7 +123,10 @@ export function DashboardAdvanceNeeds() {
           Needs Attention
         </h2>
         <p className="mt-3 text-sm text-lp-text-tertiary">No urgent advance items.</p>
-        <Link href="/advance" className="mt-2 inline-block text-sm font-medium text-lp-orange hover:text-lp-orange-hover">
+        <Link
+          href={selectedArtistId ? `/advance?artist_id=${encodeURIComponent(selectedArtistId)}` : '/advance'}
+          className="mt-2 inline-block text-sm font-medium text-lp-orange hover:text-lp-orange-hover"
+        >
           Open advance →
         </Link>
       </div>
@@ -180,7 +190,10 @@ export function DashboardAdvanceNeeds() {
         </div>
       )}
 
-      <Link href="/advance" className="mt-3 inline-block text-sm font-medium text-lp-orange hover:text-lp-orange-hover">
+      <Link
+        href={selectedArtistId ? `/advance?artist_id=${encodeURIComponent(selectedArtistId)}` : '/advance'}
+        className="mt-3 inline-block text-sm font-medium text-lp-orange hover:text-lp-orange-hover"
+      >
         View all on advance →
       </Link>
     </div>

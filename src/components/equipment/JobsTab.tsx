@@ -284,8 +284,12 @@ export function JobsTab({
                       </td>
                       <td className="px-4 py-2.5 text-xs" style={{ color: 'var(--lp-text-secondary)' }}>
                         <div>{fmtDate(job.start_date)} → {fmtDate(job.end_date)}</div>
-                        <div className="mt-0.5" style={{ color: 'var(--lp-text-tertiary)' }}>
-                          {days} day{days !== 1 ? 's' : ''}
+                        <div
+                          className="mt-0.5"
+                          style={{ color: 'var(--lp-text-tertiary)' }}
+                          title="Billable rental days (3-day-week rule)"
+                        >
+                          {days} billable day{days !== 1 ? 's' : ''}
                         </div>
                       </td>
                       <td className="px-4 py-2.5">

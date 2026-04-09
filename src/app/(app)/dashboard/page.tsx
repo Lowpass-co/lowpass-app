@@ -8,14 +8,21 @@
 import Link from 'next/link';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import type { Tour } from '@/types';
-import { DashboardTourCard } from '@/components/dashboard/DashboardTourCard';
 import { DashboardAdvanceNeeds } from '@/components/dashboard/DashboardAdvanceNeeds';
 import { DashboardHighlights } from '@/components/dashboard/DashboardHighlights';
 import { DashboardUpcoming } from '@/components/dashboard/DashboardUpcoming';
 import { DashboardTourList } from '@/components/dashboard/DashboardTourList';
+import { DashboardArtistGate } from '@/components/dashboard/DashboardArtistGate';
+import { parseWorkspaceArtistId } from '@/lib/artist-scope';
 
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ artist_id?: string }>;
+}) {
+  const { artist_id: artistIdParam } = await searchParams;
+  const artistId = parseWorkspaceArtistId(artistIdParam);
 
-export default async function DashboardPage() {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
@@ -43,31 +50,48 @@ export default async function DashboardPage() {
   const today = new Date().toISOString().slice(0, 10);
 
   // Total tours (for welcome state)
-  const { count: totalToursCount } = await supabase
+  let totalToursQ = supabase
     .from('tours')
     .select('*', { count: 'exact', head: true })
     .eq('workspace_id', profile.workspace_id);
+  if (artistId) totalToursQ = totalToursQ.eq('artist_id', artistId);
+  const { count: totalToursCount } = await totalToursQ;
 
   // Total active tours (planning + active)
-  const { count: activeToursCount } = await supabase
+  let activeToursCountQ = supabase
     .from('tours')
     .select('*', { count: 'exact', head: true })
     .eq('workspace_id', profile.workspace_id)
     .in('status', ['planning', 'active']);
+  if (artistId) activeToursCountQ = activeToursCountQ.eq('artist_id', artistId);
+  const { count: activeToursCount } = await activeToursCountQ;
 
-  // Artists count (workspace)
-  const { count: artistsCount } = await supabase
-    .from('artists')
-    .select('*', { count: 'exact', head: true })
-    .eq('workspace_id', profile.workspace_id);
+  // Artists count: workspace, or 1 when a single artist is scoped
+  let artistsCount: number | null;
+  if (artistId) {
+    const { count: oneArtist } = await supabase
+      .from('artists')
+      .select('*', { count: 'exact', head: true })
+      .eq('workspace_id', profile.workspace_id)
+      .eq('id', artistId);
+    artistsCount = oneArtist ?? 0;
+  } else {
+    const { count: ac } = await supabase
+      .from('artists')
+      .select('*', { count: 'exact', head: true })
+      .eq('workspace_id', profile.workspace_id);
+    artistsCount = ac;
+  }
 
   // Shows this year: routing rows in current year with day_type show/festival, for workspace tours
   const yearStart = `${new Date().getFullYear()}-01-01`;
   const yearEnd = `${new Date().getFullYear()}-12-31`;
-  const { data: workspaceTourIds } = await supabase
+  let workspaceTourIdsQ = supabase
     .from('tours')
     .select('id')
     .eq('workspace_id', profile.workspace_id);
+  if (artistId) workspaceTourIdsQ = workspaceTourIdsQ.eq('artist_id', artistId);
+  const { data: workspaceTourIds } = await workspaceTourIdsQ;
   const allTourIds = (workspaceTourIds ?? []).map((t: { id: string }) => t.id);
   let showsThisYearCount = 0;
   if (allTourIds.length > 0) {
@@ -85,18 +109,22 @@ export default async function DashboardPage() {
   }
 
   // Completed tours count
-  const { count: completedToursCount } = await supabase
+  let completedQ = supabase
     .from('tours')
     .select('*', { count: 'exact', head: true })
     .eq('workspace_id', profile.workspace_id)
     .eq('status', 'completed');
+  if (artistId) completedQ = completedQ.eq('artist_id', artistId);
+  const { count: completedToursCount } = await completedQ;
 
   // Active tour ids for upcoming shows and shows-to-advance
-  const { data: activeTours } = await supabase
+  let activeToursQ = supabase
     .from('tours')
     .select('id')
     .eq('workspace_id', profile.workspace_id)
     .in('status', ['planning', 'active']);
+  if (artistId) activeToursQ = activeToursQ.eq('artist_id', artistId);
+  const { data: activeTours } = await activeToursQ;
 
   const activeTourIds = (activeTours ?? []).map((t) => t.id);
 
@@ -161,21 +189,26 @@ export default async function DashboardPage() {
   }
 
   // List of active tours for the left column (with artist)
-  const { data: toursList } = await supabase
+  let toursListQ = supabase
     .from('tours')
     .select('*, artist:artists(*)')
     .eq('workspace_id', profile.workspace_id)
     .in('status', ['planning', 'active'])
     .order('start_date', { ascending: false })
     .limit(10);
+  if (artistId) toursListQ = toursListQ.eq('artist_id', artistId);
+  const { data: toursList } = await toursListQ;
 
   return (
-    <div className="lp-dashboard-glass mx-auto min-h-[60vh] max-w-7xl space-y-6">
+    <DashboardArtistGate>
+      <div className="lp-dashboard-glass mx-auto min-h-[60vh] max-w-7xl space-y-6">
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-lp-text">Dashboard</h1>
             <p className="mt-1 text-sm text-lp-text-secondary">
-              Overview of your active tours and advance progress.
+              {artistId
+                ? 'Overview of active tours and advance progress for the selected artist.'
+                : 'Overview of your active tours and advance progress.'}
             </p>
           </div>
         </div>
@@ -222,7 +255,8 @@ export default async function DashboardPage() {
             <DashboardAdvanceNeeds />
           </div>
         </div>
-    </div>
+      </div>
+    </DashboardArtistGate>
   );
 }
 

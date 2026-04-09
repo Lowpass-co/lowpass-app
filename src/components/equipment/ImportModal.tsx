@@ -9,6 +9,7 @@ import { useState, useRef, useCallback, DragEvent, ChangeEvent } from 'react';
 import { X, Upload, Link2, ChevronRight, Check, Loader2, AlertCircle } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { createClient } from '@/lib/supabase-client';
+import { dayRateFromPurchase } from '@/lib/rental-pricing';
 import type { RentalInventoryItem } from './types';
 
 /* ─── Types ─────────────────────────────────────────────────────────── */
@@ -210,14 +211,18 @@ export function ImportModal({ userId, onImported, onClose }: Props) {
       const nameVal = colMap.name ? row[colMap.name]?.trim() : '';
       if (!nameVal) { skipped++; continue; }
       const rawWeight = parseNum(colMap.weight_kg ? row[colMap.weight_kg] : '');
+      const purchase = parseNum(colMap.purchase_cost ? row[colMap.purchase_cost] : '');
+      const importedDayRate = parseNum(colMap.day_rate ? row[colMap.day_rate] : '');
+      const dayRate =
+        dayRateFromPurchase(purchase) ?? (importedDayRate != null && importedDayRate > 0 ? importedDayRate : null);
       rows.push({
         user_id:           userId,
         name:              nameVal,
         category:          colMap.category          ? row[colMap.category]          || null : null,
         serial_number:     colMap.serial_number     ? row[colMap.serial_number]     || null : null,
         country_of_origin: colMap.country_of_origin ? row[colMap.country_of_origin] || null : null,
-        purchase_cost:     parseNum(colMap.purchase_cost ? row[colMap.purchase_cost] : ''),
-        day_rate:          parseNum(colMap.day_rate      ? row[colMap.day_rate]      : ''),
+        purchase_cost:     purchase,
+        day_rate:          dayRate,
         // Convert lbs → kg (÷ 2.20462) if the source column is in pounds
         weight_kg:         rawWeight === null ? null
                              : weightInLbs ? Math.round((rawWeight / 2.20462) * 100) / 100
@@ -469,6 +474,12 @@ export function ImportModal({ userId, onImported, onClose }: Props) {
                 </tbody>
               </table>
             </div>
+
+            <p className="text-xs leading-relaxed" style={{ color: 'var(--lp-text-tertiary)' }}>
+              When <strong style={{ color: 'var(--lp-text-secondary)' }}>Purchase Cost</strong> is mapped,{' '}
+              <strong style={{ color: 'var(--lp-text-secondary)' }}>Day Rate</strong> is always set to{' '}
+              <strong style={{ color: '#FF4500' }}>1% of purchase</strong> (the sheet&apos;s day-rate column is ignored for those rows).
+            </p>
 
             {/* Action row */}
             <div className="flex items-center justify-between">

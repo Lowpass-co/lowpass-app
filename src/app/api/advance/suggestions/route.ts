@@ -7,6 +7,7 @@
 
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { parseWorkspaceArtistId } from '@/lib/artist-scope';
 
 const SHOW_DAY_TYPES = ['show', 'festival'];
 
@@ -33,7 +34,9 @@ const DEFAULT_IMPORTANCE = 50;
 const MIN_IMPORTANCE = 50;
 const MAX_ITEMS = 40;
 
-export async function GET() {
+export async function GET(request: Request) {
+  const artistId = parseWorkspaceArtistId(new URL(request.url).searchParams.get('artist_id'));
+
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
@@ -54,10 +57,12 @@ export async function GET() {
   const in30 = new Date(now);
   in30.setDate(in30.getDate() + 30);
 
-  const { data: tours } = await supabase
+  let toursQuery = supabase
     .from('tours')
     .select('id, name, artist:artists(name)')
     .eq('workspace_id', profile.workspace_id);
+  if (artistId) toursQuery = toursQuery.eq('artist_id', artistId);
+  const { data: tours } = await toursQuery;
 
   if (!tours?.length) {
     return NextResponse.json({ suggestions: [] });

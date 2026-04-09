@@ -8,6 +8,7 @@ import { useState, useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 import { createClient } from '@/lib/supabase-client';
 import { StyledSelect, type StyledSelectOption } from '@/components/ui/StyledSelect';
+import { dayRateFromPurchase } from '@/lib/rental-pricing';
 import { CATEGORIES, type RentalInventoryItem } from './types';
 
 interface Props {
@@ -24,11 +25,23 @@ export function InventoryModal({ userId, editing, onSave, onClose }: Props) {
   const [origin, setOrigin]         = useState(editing?.country_of_origin ?? '');
   const [weightKg, setWeight]       = useState(editing?.weight_kg?.toString() ?? '');
   const [purchaseCost, setPurchase] = useState(editing?.purchase_cost?.toString() ?? '');
-  const [dayRate, setDayRate]       = useState(editing?.day_rate?.toString() ?? '');
+  const [dayRate, setDayRate] = useState(() => {
+    if (editing?.purchase_cost != null && editing.purchase_cost > 0) {
+      const d = dayRateFromPurchase(editing.purchase_cost);
+      return d != null ? d.toFixed(2) : (editing.day_rate?.toString() ?? '');
+    }
+    return editing?.day_rate?.toString() ?? '';
+  });
   const [imageUrl, setImageUrl]     = useState(editing?.image_url        ?? '');
   const [notes, setNotes]           = useState(editing?.notes            ?? '');
   const [saving, setSaving]         = useState(false);
-  const [rateHint, setRateHint]     = useState('');
+  const [rateHint, setRateHint] = useState(() => {
+    if (editing?.purchase_cost != null && editing.purchase_cost > 0) {
+      const d = dayRateFromPurchase(editing.purchase_cost);
+      return d != null ? `$${d.toFixed(2)}/day — 1% of purchase (always)` : '';
+    }
+    return '';
+  });
   const nameRef = useRef<HTMLInputElement>(null);
   const supabase = createClient();
 
@@ -43,17 +56,27 @@ export function InventoryModal({ userId, editing, onSave, onClose }: Props) {
     setPurchase(val);
     const cost = parseFloat(val);
     if (cost > 0) {
-      const sug = (cost * 0.01).toFixed(2);
-      setRateHint(`Suggested: $${sug}/day (1% of cost — industry standard)`);
-      if (!dayRate) setDayRate(sug);
+      const dr = dayRateFromPurchase(cost);
+      const sug = dr != null ? dr.toFixed(2) : '';
+      setRateHint(`$${sug}/day — 1% of purchase (always)`);
+      setDayRate(sug);
     } else {
       setRateHint('');
+      setDayRate('');
     }
   }
 
   async function handleSave() {
     if (!name.trim()) { nameRef.current?.focus(); return; }
     setSaving(true);
+
+    const purchaseNum = purchaseCost ? parseFloat(purchaseCost) : null;
+    const resolvedDayRate =
+      purchaseNum != null && purchaseNum > 0
+        ? dayRateFromPurchase(purchaseNum)
+        : dayRate
+          ? parseFloat(dayRate)
+          : null;
 
     const payload = {
       user_id:           userId,
@@ -62,8 +85,8 @@ export function InventoryModal({ userId, editing, onSave, onClose }: Props) {
       serial_number:     serial.trim() || null,
       country_of_origin: origin.trim() || null,
       weight_kg:         weightKg   ? parseFloat(weightKg)   : null,
-      purchase_cost:     purchaseCost ? parseFloat(purchaseCost) : null,
-      day_rate:          dayRate    ? parseFloat(dayRate)    : null,
+      purchase_cost:     purchaseNum != null && !Number.isNaN(purchaseNum) ? purchaseNum : null,
+      day_rate:          resolvedDayRate != null && !Number.isNaN(resolvedDayRate) ? resolvedDayRate : null,
       image_url:         imageUrl.trim() || null,
       notes:             notes.trim() || null,
     };
@@ -133,7 +156,7 @@ export function InventoryModal({ userId, editing, onSave, onClose }: Props) {
             </Field>
           </div>
 
-          {/* Purchase cost + Day rate */}
+          {/* Purchase cost + Day rate (1% of purchase when cost > 0) */}
           <div className="grid grid-cols-2 gap-4">
             <Field label="Purchase / Replacement Cost">
               <div className="relative">
@@ -146,14 +169,26 @@ export function InventoryModal({ userId, editing, onSave, onClose }: Props) {
                 />
               </div>
             </Field>
-            <Field label="Day Rate" hint={rateHint}>
+            <Field
+              label="Day Rate"
+              hint={
+                rateHint ||
+                (purchaseCost && parseFloat(purchaseCost) > 0
+                  ? 'Locked to 1% of purchase'
+                  : 'Enter a purchase cost, or set a rate manually if cost is unknown')
+              }
+            >
               <div className="relative">
                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm" style={{ color: 'var(--lp-text-tertiary)' }}>$</span>
                 <input
-                  type="number" value={dayRate}
-                  onChange={e => setDayRate(e.target.value)}
-                  min="0" step="0.01" placeholder="0.00"
-                  className="lp-input pl-6"
+                  type="number"
+                  value={dayRate}
+                  onChange={(e) => setDayRate(e.target.value)}
+                  min="0"
+                  step="0.01"
+                  placeholder="0.00"
+                  readOnly={!!purchaseCost && !Number.isNaN(parseFloat(purchaseCost)) && parseFloat(purchaseCost) > 0}
+                  className="lp-input pl-6 read-only:cursor-not-allowed read-only:opacity-90"
                 />
               </div>
             </Field>

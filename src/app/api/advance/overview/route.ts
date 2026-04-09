@@ -7,12 +7,15 @@
 
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { parseWorkspaceArtistId } from '@/lib/artist-scope';
 
 const SHOW_DAY_TYPES = ['show', 'festival'];
 
 type FlagItem = { id: string; resolved: boolean; type: string };
 
-export async function GET() {
+export async function GET(request: Request) {
+  const artistId = parseWorkspaceArtistId(new URL(request.url).searchParams.get('artist_id'));
+
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
@@ -29,11 +32,13 @@ export async function GET() {
     return NextResponse.json({ error: 'No workspace' }, { status: 403 });
   }
 
-  const { data: tours, error: toursError } = await supabase
+  let toursQuery = supabase
     .from('tours')
     .select('id, name, start_date, artist:artists(name)')
     .eq('workspace_id', profile.workspace_id)
     .order('start_date', { ascending: false });
+  if (artistId) toursQuery = toursQuery.eq('artist_id', artistId);
+  const { data: tours, error: toursError } = await toursQuery;
 
   if (toursError || !tours?.length) {
     return NextResponse.json({

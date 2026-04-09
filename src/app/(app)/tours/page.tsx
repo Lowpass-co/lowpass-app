@@ -7,12 +7,20 @@
 import { Plus } from 'lucide-react';
 import Link from 'next/link';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { parseWorkspaceArtistId } from '@/lib/artist-scope';
 import { ToursListWithFilters } from '@/components/tours/ToursListWithFilters';
 import type { Tour } from '@/types';
 
 const TOURS_LIMIT = 200;
 
-export default async function ToursPage() {
+export default async function ToursPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ artist_id?: string }>;
+}) {
+  const { artist_id: artistIdParam } = await searchParams;
+  const artistId = parseWorkspaceArtistId(artistIdParam);
+
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
@@ -37,12 +45,14 @@ export default async function ToursPage() {
     );
   }
 
-  const { data: tours, error } = await supabase
+  let toursQuery = supabase
     .from('tours')
     .select('*, artist:artists(*)')
     .eq('workspace_id', profile.workspace_id)
     .order('start_date', { ascending: false })
     .limit(TOURS_LIMIT);
+  if (artistId) toursQuery = toursQuery.eq('artist_id', artistId);
+  const { data: tours, error } = await toursQuery;
 
   const total = tours?.length ?? 0;
 
@@ -55,7 +65,9 @@ export default async function ToursPage() {
             <span className="text-lp-text-secondary">Tours</span>
           </div>
           <p className="mt-1 text-sm text-lp-text-secondary">
-            Manage your tours, routing, and advance progress.
+            {artistId
+              ? 'Tours for the selected artist — routing and advance progress.'
+              : 'Manage your tours, routing, and advance progress.'}
           </p>
         </div>
         <Link

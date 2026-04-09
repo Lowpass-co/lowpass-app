@@ -271,6 +271,7 @@ export function InventoryTab({ userId, inventory, setInventory }: Props) {
 
       {modalOpen && (
         <InventoryModal
+          key={editing?.id ?? 'new'}
           userId={userId}
           editing={editing}
           onSave={onSave}

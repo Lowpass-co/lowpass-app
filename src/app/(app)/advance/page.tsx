@@ -8,6 +8,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { parseRoutingDate, cn } from '@/lib/utils';
 import { ArrowRight, AlertTriangle, Calendar, ClipboardList, Loader2 } from 'lucide-react';
 
@@ -64,6 +65,10 @@ type Overview = {
 };
 
 export default function AdvanceOverviewPage() {
+  const searchParams = useSearchParams();
+  const artistIdInUrl = searchParams.get('artist_id');
+  const advanceApiQuery = artistIdInUrl ? `?artist_id=${encodeURIComponent(artistIdInUrl)}` : '';
+
   const [data, setData] = useState<Overview | null>(null);
   const [suggestions, setSuggestions] = useState<SuggestionItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -71,20 +76,22 @@ export default function AdvanceOverviewPage() {
   const [inlineEditSuggestion, setInlineEditSuggestion] = useState<SuggestionItem | null>(null);
 
   useEffect(() => {
-    fetch('/api/advance/overview')
+    setLoading(true);
+    fetch(`/api/advance/overview${advanceApiQuery}`)
       .then((r) => (r.ok ? r.json() : { tours: [], needsAttention: [], upcoming: [] }))
       .then(setData)
       .catch(() => setData({ tours: [], needsAttention: [], upcoming: [] }))
       .finally(() => setLoading(false));
-  }, []);
+  }, [advanceApiQuery]);
 
   useEffect(() => {
-    fetch('/api/advance/suggestions')
+    setSuggestionsLoading(true);
+    fetch(`/api/advance/suggestions${advanceApiQuery}`)
       .then((r) => (r.ok ? r.json() : { suggestions: [] }))
       .then((j) => setSuggestions(j.suggestions ?? []))
       .catch(() => setSuggestions([]))
       .finally(() => setSuggestionsLoading(false));
-  }, []);
+  }, [advanceApiQuery]);
 
   if (loading) {
     return (
@@ -106,7 +113,9 @@ export default function AdvanceOverviewPage() {
       <div>
         <h1 className="text-2xl font-bold text-lp-text">Advance</h1>
         <p className="mt-1 text-sm text-lp-text-secondary">
-          Cross-tour advance progress and shows needing attention.
+          {advanceApiQuery
+            ? 'Advance progress and shows needing attention for the selected artist.'
+            : 'Cross-tour advance progress and shows needing attention.'}
         </p>
       </div>
 
@@ -271,7 +280,7 @@ export default function AdvanceOverviewPage() {
                 onClose={() => setInlineEditSuggestion(null)}
                 onSaved={() => {
                   setInlineEditSuggestion(null);
-                  fetch('/api/advance/suggestions')
+                  fetch(`/api/advance/suggestions${advanceApiQuery}`)
                     .then((r) => (r.ok ? r.json() : { suggestions: [] }))
                     .then((j) => setSuggestions(j.suggestions ?? []));
                 }}

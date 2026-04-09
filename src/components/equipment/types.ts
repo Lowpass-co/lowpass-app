@@ -1,3 +1,5 @@
+import { calcRentalBillableDays } from '@/lib/rental-pricing';
+
 export interface RentalInventoryItem {
   id: string;
   user_id: string;
@@ -84,10 +86,9 @@ export const STATUS_STYLES: Record<string, { bg: string; text: string }> = {
   completed: { bg: 'rgba(139,92,246,0.12)',  text: '#8B5CF6' },
 };
 
+/** @see calcRentalBillableDays — 3-day-week billable count for job pricing */
 export function calcDays(start: string | null, end: string | null): number {
-  if (!start || !end) return 1;
-  const diff = Math.round((new Date(end).getTime() - new Date(start).getTime()) / 86400000) + 1;
-  return Math.max(1, diff);
+  return calcRentalBillableDays(start, end);
 }
 
 export function fmtUSD(n: number | null | undefined): string {

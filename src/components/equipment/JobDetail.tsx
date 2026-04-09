@@ -147,7 +147,9 @@ export function JobDetail({ job, inventory, artists, tours, onBack, onEdit, onDe
               {tourLabel && <span>🗺 {tourLabel}</span>}
               {job.client_name && <span>👤 {job.client_name}</span>}
               <span>📅 {fmtDate(job.start_date)} → {fmtDate(job.end_date)}</span>
-              <span>⏱ {days} day{days !== 1 ? 's' : ''}</span>
+              <span title="3-day-week billing: each 7 calendar days = 3 billable days">
+                ⏱ {days} billable day{days !== 1 ? 's' : ''}
+              </span>
             </div>
           </div>
           <div className="flex gap-2">
@@ -243,7 +245,7 @@ export function JobDetail({ job, inventory, artists, tours, onBack, onEdit, onDe
                 <table className="w-full text-sm">
                   <thead>
                     <tr style={{ borderBottom: '1px solid var(--lp-border)', backgroundColor: 'var(--lp-bg-secondary)' }}>
-                      {['', 'Item', 'Qty', 'Days', 'Day Rate', 'Subtotal', ''].map((h, i) => (
+                      {['', 'Item', 'Qty', 'Billable days', 'Day Rate', 'Subtotal', ''].map((h, i) => (
                         <th
                           key={i}
                           className="px-4 py-3 text-left text-xs font-extrabold uppercase tracking-wider"
