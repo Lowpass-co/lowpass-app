@@ -5,7 +5,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, Pencil, Trash2, Search, Upload } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, Upload, SquarePen, Check, X as XIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { createClient } from '@/lib/supabase-client';
 import { InventoryModal } from './InventoryModal';
@@ -18,8 +18,11 @@ import {
   type RentalInventoryItem,
 } from './types';
 
-// Wider last column to accommodate Import + Add buttons side-by-side
 const INVENTORY_TOOLBAR_CLASS = 'grid w-full min-w-0 grid-cols-[minmax(0,1fr)_10rem_minmax(5.5rem,auto)_auto] items-center gap-3';
+
+/* Shared style for inline edit inputs */
+const INLINE_INPUT =
+  'w-full rounded-md border bg-transparent px-2 py-1 text-xs transition-colors outline-none';
 
 interface Props {
   userId: string;
@@ -34,6 +37,11 @@ export function InventoryTab({ userId, inventory, setInventory }: Props) {
   const [importOpen, setImport] = useState(false);
   const [editing, setEditing]   = useState<RentalInventoryItem | null>(null);
 
+  /* ── Bulk edit mode ── */
+  const [editMode, setEditMode] = useState(false);
+  const [drafts, setDrafts]     = useState<Record<string, Partial<RentalInventoryItem>>>({});
+  const [saving, setSaving]     = useState(false);
+
   const supabase = createClient();
 
   const categoryOptions: StyledSelectOption<string>[] = [
@@ -43,11 +51,49 @@ export function InventoryTab({ userId, inventory, setInventory }: Props) {
 
   const filtered = inventory.filter(i => {
     const q = search.toLowerCase();
-    const matchQ = !q || (i.name?.toLowerCase().includes(q)) || (i.serial_number?.toLowerCase().includes(q)) || (i.category?.toLowerCase().includes(q));
+    const matchQ = !q || i.name?.toLowerCase().includes(q) || i.serial_number?.toLowerCase().includes(q) || i.category?.toLowerCase().includes(q);
     const matchC = !catFilter || i.category === catFilter;
     return matchQ && matchC;
   });
 
+  const dirtyCount = Object.keys(drafts).length;
+
+  /* ── Helpers ── */
+  function getDraft<K extends keyof RentalInventoryItem>(item: RentalInventoryItem, field: K): RentalInventoryItem[K] {
+    return item.id in drafts && field in (drafts[item.id] ?? {})
+      ? (drafts[item.id] as RentalInventoryItem)[field]
+      : item[field];
+  }
+
+  function updateDraft(id: string, field: keyof RentalInventoryItem, value: RentalInventoryItem[keyof RentalInventoryItem]) {
+    setDrafts(prev => ({ ...prev, [id]: { ...(prev[id] ?? {}), [field]: value } }));
+  }
+
+  function enterEditMode() { setDrafts({}); setEditMode(true); }
+  function cancelEdit()    { setDrafts({}); setEditMode(false); }
+
+  async function saveAll() {
+    const dirtyIds = Object.keys(drafts);
+    if (!dirtyIds.length) { setEditMode(false); return; }
+    setSaving(true);
+    let errors = 0;
+    const saved: RentalInventoryItem[] = [];
+    for (const id of dirtyIds) {
+      const { error } = await supabase.from('rental_inventory').update(drafts[id]).eq('id', id);
+      if (error) { errors++; }
+      else {
+        const orig = inventory.find(i => i.id === id)!;
+        saved.push({ ...orig, ...drafts[id] });
+      }
+    }
+    if (errors) alert(`${errors} item${errors !== 1 ? 's' : ''} failed to save.`);
+    setInventory(inventory.map(item => saved.find(s => s.id === item.id) ?? item));
+    setDrafts({});
+    setSaving(false);
+    setEditMode(false);
+  }
+
+  /* ── Single-item handlers ── */
   function openAdd()  { setEditing(null); setModal(true); }
   function openEdit(item: RentalInventoryItem) { setEditing(item); setModal(true); }
 
@@ -69,65 +115,117 @@ export function InventoryTab({ userId, inventory, setInventory }: Props) {
     setModal(false);
   }
 
+  /* ── Inline input style helpers ── */
+  const inlineInputStyle = {
+    borderColor: 'var(--lp-border)',
+    color: 'var(--lp-text)',
+  };
+  const inlineFocusHandlers = (e: React.FocusEvent<HTMLElement>) => {
+    (e.currentTarget as HTMLElement).style.borderColor = '#FF4500';
+  };
+  const inlineBlurHandlers = (e: React.FocusEvent<HTMLElement>) => {
+    (e.currentTarget as HTMLElement).style.borderColor = 'var(--lp-border)';
+  };
+
   return (
     <div className="flex w-full min-w-0 flex-col gap-4">
-      {/* Controls row */}
-      <div className={INVENTORY_TOOLBAR_CLASS}>
-        <div className="relative min-w-0">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--lp-text-tertiary)' }} />
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search inventory…"
-            className="w-full min-w-0 rounded-lg border py-2 pl-8 pr-3 text-sm"
-            style={{
-              backgroundColor: 'var(--lp-surface)',
-              borderColor: 'var(--lp-border)',
-              color: 'var(--lp-text)',
-            }}
-          />
-        </div>
-        <div className="w-[160px] shrink-0 justify-self-stretch">
-          <StyledSelect
-            size="sm"
-            value={catFilter}
-            onChange={setCat}
-            options={categoryOptions}
-            placeholder="All categories"
-          />
-        </div>
-        <span className="text-right text-xs tabular-nums whitespace-nowrap" style={{ color: 'var(--lp-text-tertiary)' }}>
-          {inventory.length} item{inventory.length !== 1 ? 's' : ''}
-        </span>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setImport(true)}
-            className="flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition-colors"
-            style={{
-              borderColor: 'var(--lp-border)',
-              color: 'var(--lp-text-secondary)',
-              backgroundColor: 'transparent',
-            }}
-            onMouseOver={e => { e.currentTarget.style.borderColor = '#FF4500'; e.currentTarget.style.color = '#FF4500'; }}
-            onMouseOut={e => { e.currentTarget.style.borderColor = 'var(--lp-border)'; e.currentTarget.style.color = 'var(--lp-text-secondary)'; }}
-          >
-            <Upload size={13} strokeWidth={2.5} /> Import
-          </button>
-          <button
-            type="button"
-            onClick={openAdd}
-            className="flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold uppercase tracking-wider text-white transition-colors"
-            style={{ backgroundColor: '#FF4500' }}
-            onMouseOver={e => (e.currentTarget.style.backgroundColor = '#E63E00')}
-            onMouseOut={e => (e.currentTarget.style.backgroundColor = '#FF4500')}
-          >
-            <Plus size={14} strokeWidth={2.5} /> Add Item
-          </button>
-        </div>
-      </div>
 
-      {/* Table */}
+      {/* ── Controls row ── */}
+      {!editMode ? (
+        <div className={INVENTORY_TOOLBAR_CLASS}>
+          <div className="relative min-w-0">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--lp-text-tertiary)' }} />
+            <input
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search inventory…"
+              className="w-full min-w-0 rounded-lg border py-2 pl-8 pr-3 text-sm"
+              style={{ backgroundColor: 'var(--lp-surface)', borderColor: 'var(--lp-border)', color: 'var(--lp-text)' }}
+            />
+          </div>
+          <div className="w-[160px] shrink-0 justify-self-stretch">
+            <StyledSelect size="sm" value={catFilter} onChange={setCat} options={categoryOptions} placeholder="All categories" />
+          </div>
+          <span className="text-right text-xs tabular-nums whitespace-nowrap" style={{ color: 'var(--lp-text-tertiary)' }}>
+            {inventory.length} item{inventory.length !== 1 ? 's' : ''}
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setImport(true)}
+              className="flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition-colors"
+              style={{ borderColor: 'var(--lp-border)', color: 'var(--lp-text-secondary)', backgroundColor: 'transparent' }}
+              onMouseOver={e => { e.currentTarget.style.borderColor = '#FF4500'; e.currentTarget.style.color = '#FF4500'; }}
+              onMouseOut={e => { e.currentTarget.style.borderColor = 'var(--lp-border)'; e.currentTarget.style.color = 'var(--lp-text-secondary)'; }}
+            >
+              <Upload size={13} strokeWidth={2.5} /> Import
+            </button>
+            <button
+              type="button"
+              onClick={enterEditMode}
+              className="flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition-colors"
+              style={{ borderColor: 'var(--lp-border)', color: 'var(--lp-text-secondary)', backgroundColor: 'transparent' }}
+              onMouseOver={e => { e.currentTarget.style.borderColor = '#FF4500'; e.currentTarget.style.color = '#FF4500'; }}
+              onMouseOut={e => { e.currentTarget.style.borderColor = 'var(--lp-border)'; e.currentTarget.style.color = 'var(--lp-text-secondary)'; }}
+            >
+              <SquarePen size={13} strokeWidth={2.5} /> Edit All
+            </button>
+            <button
+              type="button"
+              onClick={openAdd}
+              className="flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold uppercase tracking-wider text-white transition-colors"
+              style={{ backgroundColor: '#FF4500' }}
+              onMouseOver={e => (e.currentTarget.style.backgroundColor = '#E63E00')}
+              onMouseOut={e => (e.currentTarget.style.backgroundColor = '#FF4500')}
+            >
+              <Plus size={14} strokeWidth={2.5} /> Add Item
+            </button>
+          </div>
+        </div>
+      ) : (
+        /* Edit mode toolbar */
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-semibold" style={{ color: 'var(--lp-text)' }}>
+              Editing {filtered.length} item{filtered.length !== 1 ? 's' : ''}
+            </span>
+            {dirtyCount > 0 && (
+              <span
+                className="rounded-full px-2.5 py-0.5 text-xs font-bold"
+                style={{ backgroundColor: 'rgba(255,69,0,0.12)', color: '#FF4500' }}
+              >
+                {dirtyCount} change{dirtyCount !== 1 ? 's' : ''}
+              </span>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <p className="text-xs" style={{ color: 'var(--lp-text-tertiary)' }}>Tab to move between cells</p>
+            <button
+              type="button"
+              onClick={cancelEdit}
+              disabled={saving}
+              className="flex items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition-colors disabled:opacity-50"
+              style={{ borderColor: 'var(--lp-border)', color: 'var(--lp-text-secondary)' }}
+            >
+              <XIcon size={13} /> Cancel
+            </button>
+            <button
+              type="button"
+              onClick={saveAll}
+              disabled={saving || dirtyCount === 0}
+              className="flex items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-bold text-white transition-colors disabled:opacity-40"
+              style={{ backgroundColor: '#FF4500' }}
+              onMouseOver={e => { if (!saving && dirtyCount > 0) e.currentTarget.style.backgroundColor = '#E63E00'; }}
+              onMouseOut={e => (e.currentTarget.style.backgroundColor = '#FF4500')}
+            >
+              <Check size={13} strokeWidth={2.5} />
+              {saving ? 'Saving…' : dirtyCount > 0 ? `Save ${dirtyCount} change${dirtyCount !== 1 ? 's' : ''}` : 'No changes'}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── Table ── */}
       <div
         className={cn('flex flex-col overflow-hidden rounded-xl border', EQUIPMENT_TABLE_MIN_CLASS)}
         style={{ borderColor: 'var(--lp-border)', backgroundColor: 'var(--lp-surface)' }}
@@ -139,11 +237,7 @@ export function InventoryTab({ userId, inventory, setInventory }: Props) {
               {inventory.length === 0 ? 'No inventory yet' : 'No items match that search'}
             </p>
             {inventory.length === 0 && (
-              <button
-                onClick={openAdd}
-                className="mt-1 text-xs font-semibold"
-                style={{ color: '#FF4500' }}
-              >
+              <button onClick={openAdd} className="mt-1 text-xs font-semibold" style={{ color: '#FF4500' }}>
                 Add your first item →
               </button>
             )}
@@ -153,7 +247,7 @@ export function InventoryTab({ userId, inventory, setInventory }: Props) {
             <table className="w-full text-sm">
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--lp-border)', backgroundColor: 'var(--lp-bg-secondary)' }}>
-                  {['', 'Name', 'Category', 'Serial No.', 'Origin', 'Weight', 'Purchase Cost', 'Day Rate', ''].map((h, i) => (
+                  {['', 'Name', 'Category', 'Serial No.', 'Origin', 'Weight (kg)', 'Purchase Cost', 'Day Rate', ''].map((h, i) => (
                     <th
                       key={i}
                       className={cn('px-4 py-3 text-left text-xs font-extrabold uppercase tracking-wider', i === 0 && 'w-14', i === 8 && 'w-20 text-right')}
@@ -165,104 +259,182 @@ export function InventoryTab({ userId, inventory, setInventory }: Props) {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((item, idx) => (
-                  <tr
-                    key={item.id}
-                    className="transition-colors"
-                    style={{ borderBottom: idx < filtered.length - 1 ? '1px solid var(--lp-border-light)' : 'none' }}
-                    onMouseOver={e => (e.currentTarget.style.backgroundColor = 'var(--lp-surface-hover)')}
-                    onMouseOut={e => (e.currentTarget.style.backgroundColor = 'transparent')}
-                  >
-                    {/* Thumbnail */}
-                    <td className="px-4 py-2.5">
-                      {item.image_url ? (
-                        <img
-                          src={item.image_url}
-                          alt=""
-                          className="h-10 w-10 rounded-lg object-cover"
-                          style={{ border: '1px solid var(--lp-border)' }}
-                          onError={e => {
-                            e.currentTarget.style.display = 'none';
-                            (e.currentTarget.nextElementSibling as HTMLElement)!.style.display = 'flex';
-                          }}
-                        />
-                      ) : null}
-                      <div
-                        className="h-10 w-10 rounded-lg items-center justify-center text-base"
-                        style={{ backgroundColor: 'var(--lp-bg-secondary)', display: item.image_url ? 'none' : 'flex', border: '1px solid var(--lp-border)' }}
-                      >
-                        📦
-                      </div>
-                    </td>
-                    {/* Name */}
-                    <td className="px-4 py-2.5">
-                      <div className="font-semibold" style={{ color: 'var(--lp-text)' }}>{item.name}</div>
-                      {item.notes && (
-                        <div className="mt-0.5 text-xs truncate max-w-[220px]" style={{ color: 'var(--lp-text-tertiary)' }}>
-                          {item.notes}
+                {filtered.map((item, idx) => {
+                  const isDirty = item.id in drafts;
+                  return (
+                    <tr
+                      key={item.id}
+                      className="transition-colors"
+                      style={{
+                        borderBottom: idx < filtered.length - 1 ? '1px solid var(--lp-border-light)' : 'none',
+                        backgroundColor: isDirty ? 'rgba(255,69,0,0.03)' : undefined,
+                      }}
+                      onMouseOver={e => { if (!editMode) (e.currentTarget.style.backgroundColor = 'var(--lp-surface-hover)'); }}
+                      onMouseOut={e => { if (!editMode) (e.currentTarget.style.backgroundColor = isDirty ? 'rgba(255,69,0,0.03)' : 'transparent'); }}
+                    >
+                      {/* Thumbnail */}
+                      <td className="px-4 py-2.5">
+                        {item.image_url ? (
+                          <img src={item.image_url} alt="" className="h-10 w-10 rounded-lg object-cover" style={{ border: '1px solid var(--lp-border)' }}
+                            onError={e => { e.currentTarget.style.display = 'none'; (e.currentTarget.nextElementSibling as HTMLElement)!.style.display = 'flex'; }}
+                          />
+                        ) : null}
+                        <div className="h-10 w-10 rounded-lg items-center justify-center text-base"
+                          style={{ backgroundColor: 'var(--lp-bg-secondary)', display: item.image_url ? 'none' : 'flex', border: '1px solid var(--lp-border)' }}>
+                          📦
                         </div>
-                      )}
-                    </td>
-                    {/* Category */}
-                    <td className="px-4 py-2.5">
-                      {item.category ? (
-                        <span
-                          className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium"
-                          style={{ backgroundColor: 'rgba(255,69,0,0.08)', color: '#FF4500' }}
-                        >
-                          {item.category}
-                        </span>
-                      ) : <span style={{ color: 'var(--lp-text-tertiary)' }}>—</span>}
-                    </td>
-                    {/* Serial */}
-                    <td className="px-4 py-2.5 font-mono text-xs" style={{ color: 'var(--lp-text-secondary)' }}>
-                      {item.serial_number || <span style={{ color: 'var(--lp-text-tertiary)' }}>—</span>}
-                    </td>
-                    {/* Origin */}
-                    <td className="px-4 py-2.5 text-sm" style={{ color: 'var(--lp-text-secondary)' }}>
-                      {item.country_of_origin || <span style={{ color: 'var(--lp-text-tertiary)' }}>—</span>}
-                    </td>
-                    {/* Weight */}
-                    <td className="px-4 py-2.5 text-sm" style={{ color: 'var(--lp-text-secondary)' }}>
-                      {item.weight_kg != null ? `${item.weight_kg} kg` : <span style={{ color: 'var(--lp-text-tertiary)' }}>—</span>}
-                    </td>
-                    {/* Purchase cost */}
-                    <td className="px-4 py-2.5 text-sm" style={{ color: 'var(--lp-text-secondary)' }}>
-                      {fmtUSD(item.purchase_cost)}
-                    </td>
-                    {/* Day rate */}
-                    <td className="px-4 py-2.5">
-                      <span className="font-semibold" style={{ color: 'var(--lp-text)' }}>
-                        {fmtUSD(item.day_rate)}<span className="text-xs font-normal ml-0.5" style={{ color: 'var(--lp-text-tertiary)' }}>/day</span>
-                      </span>
-                    </td>
-                    {/* Actions */}
-                    <td className="px-4 py-2.5 text-right">
-                      <div className="flex justify-end gap-1">
-                        <button
-                          onClick={() => openEdit(item)}
-                          className="rounded-md p-1.5 transition-colors"
-                          style={{ color: 'var(--lp-text-tertiary)' }}
-                          onMouseOver={e => (e.currentTarget.style.color = 'var(--lp-text)')}
-                          onMouseOut={e => (e.currentTarget.style.color = 'var(--lp-text-tertiary)')}
-                          title="Edit"
-                        >
-                          <Pencil size={14} />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(item)}
-                          className="rounded-md p-1.5 transition-colors"
-                          style={{ color: 'var(--lp-text-tertiary)' }}
-                          onMouseOver={e => (e.currentTarget.style.color = '#EF4444')}
-                          onMouseOut={e => (e.currentTarget.style.color = 'var(--lp-text-tertiary)')}
-                          title="Delete"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+
+                      {/* Name */}
+                      <td className="px-4 py-2.5 max-w-[200px]">
+                        {editMode ? (
+                          <input
+                            className={INLINE_INPUT}
+                            style={inlineInputStyle}
+                            value={String(getDraft(item, 'name') ?? '')}
+                            onChange={e => updateDraft(item.id, 'name', e.target.value)}
+                            onFocus={inlineFocusHandlers}
+                            onBlur={inlineBlurHandlers}
+                          />
+                        ) : (
+                          <>
+                            <div className="font-semibold" style={{ color: 'var(--lp-text)' }}>{item.name}</div>
+                            {item.notes && <div className="mt-0.5 text-xs truncate max-w-[220px]" style={{ color: 'var(--lp-text-tertiary)' }}>{item.notes}</div>}
+                          </>
+                        )}
+                      </td>
+
+                      {/* Category */}
+                      <td className="px-4 py-2.5">
+                        {editMode ? (
+                          <select
+                            className={INLINE_INPUT}
+                            style={inlineInputStyle}
+                            value={String(getDraft(item, 'category') ?? '')}
+                            onChange={e => updateDraft(item.id, 'category', e.target.value || null)}
+                            onFocus={inlineFocusHandlers}
+                            onBlur={inlineBlurHandlers}
+                          >
+                            <option value="">— none —</option>
+                            {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                          </select>
+                        ) : (
+                          item.category
+                            ? <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium" style={{ backgroundColor: 'rgba(255,69,0,0.08)', color: '#FF4500' }}>{item.category}</span>
+                            : <span style={{ color: 'var(--lp-text-tertiary)' }}>—</span>
+                        )}
+                      </td>
+
+                      {/* Serial */}
+                      <td className="px-4 py-2.5 font-mono text-xs" style={{ color: 'var(--lp-text-secondary)' }}>
+                        {editMode ? (
+                          <input
+                            className={cn(INLINE_INPUT, 'font-mono')}
+                            style={inlineInputStyle}
+                            value={String(getDraft(item, 'serial_number') ?? '')}
+                            onChange={e => updateDraft(item.id, 'serial_number', e.target.value || null)}
+                            onFocus={inlineFocusHandlers}
+                            onBlur={inlineBlurHandlers}
+                          />
+                        ) : (
+                          item.serial_number || <span style={{ color: 'var(--lp-text-tertiary)' }}>—</span>
+                        )}
+                      </td>
+
+                      {/* Origin */}
+                      <td className="px-4 py-2.5 text-sm" style={{ color: 'var(--lp-text-secondary)' }}>
+                        {editMode ? (
+                          <input
+                            className={INLINE_INPUT}
+                            style={inlineInputStyle}
+                            value={String(getDraft(item, 'country_of_origin') ?? '')}
+                            onChange={e => updateDraft(item.id, 'country_of_origin', e.target.value || null)}
+                            onFocus={inlineFocusHandlers}
+                            onBlur={inlineBlurHandlers}
+                          />
+                        ) : (
+                          item.country_of_origin || <span style={{ color: 'var(--lp-text-tertiary)' }}>—</span>
+                        )}
+                      </td>
+
+                      {/* Weight */}
+                      <td className="px-4 py-2.5 text-sm" style={{ color: 'var(--lp-text-secondary)' }}>
+                        {editMode ? (
+                          <input
+                            type="number" step="0.01" min="0"
+                            className={INLINE_INPUT}
+                            style={inlineInputStyle}
+                            value={getDraft(item, 'weight_kg') ?? ''}
+                            onChange={e => updateDraft(item.id, 'weight_kg', e.target.value === '' ? null : parseFloat(e.target.value))}
+                            onFocus={inlineFocusHandlers}
+                            onBlur={inlineBlurHandlers}
+                          />
+                        ) : (
+                          item.weight_kg != null ? `${item.weight_kg} kg` : <span style={{ color: 'var(--lp-text-tertiary)' }}>—</span>
+                        )}
+                      </td>
+
+                      {/* Purchase cost */}
+                      <td className="px-4 py-2.5 text-sm" style={{ color: 'var(--lp-text-secondary)' }}>
+                        {editMode ? (
+                          <input
+                            type="number" step="0.01" min="0"
+                            className={INLINE_INPUT}
+                            style={inlineInputStyle}
+                            value={getDraft(item, 'purchase_cost') ?? ''}
+                            onChange={e => updateDraft(item.id, 'purchase_cost', e.target.value === '' ? null : parseFloat(e.target.value))}
+                            onFocus={inlineFocusHandlers}
+                            onBlur={inlineBlurHandlers}
+                          />
+                        ) : (
+                          fmtUSD(item.purchase_cost)
+                        )}
+                      </td>
+
+                      {/* Day rate */}
+                      <td className="px-4 py-2.5">
+                        {editMode ? (
+                          <input
+                            type="number" step="0.01" min="0"
+                            className={INLINE_INPUT}
+                            style={inlineInputStyle}
+                            value={getDraft(item, 'day_rate') ?? ''}
+                            onChange={e => updateDraft(item.id, 'day_rate', e.target.value === '' ? null : parseFloat(e.target.value))}
+                            onFocus={inlineFocusHandlers}
+                            onBlur={inlineBlurHandlers}
+                          />
+                        ) : (
+                          <span className="font-semibold" style={{ color: 'var(--lp-text)' }}>
+                            {fmtUSD(item.day_rate)}<span className="text-xs font-normal ml-0.5" style={{ color: 'var(--lp-text-tertiary)' }}>/day</span>
+                          </span>
+                        )}
+                      </td>
+
+                      {/* Actions */}
+                      <td className="px-4 py-2.5 text-right">
+                        {!editMode && (
+                          <div className="flex justify-end gap-1">
+                            <button onClick={() => openEdit(item)} className="rounded-md p-1.5 transition-colors" style={{ color: 'var(--lp-text-tertiary)' }}
+                              onMouseOver={e => (e.currentTarget.style.color = 'var(--lp-text)')}
+                              onMouseOut={e => (e.currentTarget.style.color = 'var(--lp-text-tertiary)')}
+                              title="Edit">
+                              <Pencil size={14} />
+                            </button>
+                            <button onClick={() => handleDelete(item)} className="rounded-md p-1.5 transition-colors" style={{ color: 'var(--lp-text-tertiary)' }}
+                              onMouseOver={e => (e.currentTarget.style.color = '#EF4444')}
+                              onMouseOut={e => (e.currentTarget.style.color = 'var(--lp-text-tertiary)')}
+                              title="Delete">
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        )}
+                        {editMode && isDirty && (
+                          <span className="text-xs font-semibold" style={{ color: '#FF4500' }}>●</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
