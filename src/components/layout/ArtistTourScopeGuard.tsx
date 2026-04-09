@@ -37,7 +37,7 @@ export function ArtistTourScopeGuard() {
     if (selectedTourId) {
       const m = pathname.match(TOUR_PATH_RE);
       if (m && m[1] !== selectedTourId) {
-        const suffix = m[2] && m[2].length > 0 ? m[2] : '/overview';
+        const suffix = m[2] && m[2].length > 0 ? m[2] : '';
         router.replace(`/tours/${selectedTourId}${suffix}`);
         return;
       }
@@ -71,17 +71,7 @@ export function ArtistTourScopeGuard() {
         router.replace('/tours');
       }
     }
-  }, [
-    hydrated,
-    isLoading,
-    selectedArtistId,
-    selectedTourId,
-    tours,
-    pathname,
-    router,
-    searchParams,
-    searchKey,
-  ]);
+  }, [hydrated, isLoading, selectedArtistId, selectedTourId, tours, pathname, router, searchKey]);
 
   return null;
 }

@@ -4,11 +4,13 @@ import { useState, useMemo } from 'react';
 import { Search, Filter } from 'lucide-react';
 import { TourCard } from '@/components/tours/TourCard';
 import { capitaliseStatus } from '@/lib/utils';
+import { useArtistTourContext } from '@/contexts/ArtistTourContext';
 import type { Tour } from '@/types';
 
 const STATUS_OPTIONS = ['planning', 'active', 'completed', 'archived'] as const;
 
 export function ToursListWithFilters({ tours }: { tours: Tour[] }) {
+  const { selectedArtistId, selectedArtist } = useArtistTourContext();
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('');
   const [filterArtistId, setFilterArtistId] = useState<string>('');
@@ -27,6 +29,8 @@ export function ToursListWithFilters({ tours }: { tours: Tour[] }) {
     return out;
   }, [tours]);
 
+  const scopedArtistId = selectedArtistId ?? '';
+
   const filteredTours = useMemo(() => {
     let list = tours;
     const q = searchQuery.trim().toLowerCase();
@@ -40,14 +44,22 @@ export function ToursListWithFilters({ tours }: { tours: Tour[] }) {
     if (filterStatus) {
       list = list.filter((t) => t.status === filterStatus);
     }
-    if (filterArtistId) {
-      list = list.filter((t) => t.artist?.id === filterArtistId);
+    const artistKey = scopedArtistId || filterArtistId;
+    if (artistKey) {
+      list = list.filter((t) => t.artist?.id === artistKey);
     }
     return list;
-  }, [tours, searchQuery, filterStatus, filterArtistId]);
+  }, [tours, searchQuery, filterStatus, filterArtistId, scopedArtistId]);
 
   return (
     <div className="space-y-4">
+      {scopedArtistId && (
+        <p className="rounded-lg border border-lp-orange/30 bg-lp-orange/5 px-3 py-2 text-sm text-lp-text-secondary">
+          Showing tours for{' '}
+          <span className="font-semibold text-lp-text">{selectedArtist?.name ?? 'selected artist'}</span>{' '}
+          only. Clear the header artist scope to see every tour.
+        </p>
+      )}
       <div className="flex flex-wrap items-center gap-3">
         <div className="relative flex-1 min-w-[200px] max-w-sm">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-lp-text-tertiary" />
@@ -75,19 +87,28 @@ export function ToursListWithFilters({ tours }: { tours: Tour[] }) {
               </option>
             ))}
           </select>
-          <select
-            value={filterArtistId}
-            onChange={(e) => setFilterArtistId(e.target.value)}
-            className="rounded-lg border border-lp-border bg-lp-bg px-3 py-2 text-sm text-lp-text focus:outline-none focus:ring-2 focus:ring-lp-orange/50 min-w-[140px]"
-            aria-label="Filter by artist"
-          >
-            <option value="">All artists</option>
-            {distinctArtists.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-              </option>
-            ))}
-          </select>
+          {scopedArtistId ? (
+            <div
+              className="flex min-w-[140px] items-center rounded-lg border border-lp-orange/40 bg-lp-orange/5 px-3 py-2 text-sm font-medium text-lp-text"
+              title="Clear the header artist scope to see all tours"
+            >
+              <span className="truncate">{selectedArtist?.name ?? 'Artist scope'}</span>
+            </div>
+          ) : (
+            <select
+              value={filterArtistId}
+              onChange={(e) => setFilterArtistId(e.target.value)}
+              className="min-w-[140px] rounded-lg border border-lp-border bg-lp-bg px-3 py-2 text-sm text-lp-text focus:outline-none focus:ring-2 focus:ring-lp-orange/50"
+              aria-label="Filter by artist"
+            >
+              <option value="">All artists</option>
+              {distinctArtists.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
       </div>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">

@@ -12,6 +12,7 @@ import Link from 'next/link';
 import { Bell, Search, Menu, Plus } from 'lucide-react';
 import { DarkModeToggle } from './DarkModeToggle';
 import { HeaderArtistTourPicker } from './HeaderArtistTourPicker';
+import { useArtistTourContext } from '@/contexts/ArtistTourContext';
 import { cn } from '@/lib/utils';
 
 interface HeaderProps {
@@ -21,8 +22,11 @@ interface HeaderProps {
 }
 
 export function Header({ title, subtitle, onMenuClick }: HeaderProps) {
+  const { selectedArtistId, hydrated } = useArtistTourContext();
+  const compactNewTour = hydrated && !!selectedArtistId;
+
   return (
-    <header className="sticky top-0 z-20 border-b border-lp-border bg-lp-bg/80 px-4 backdrop-blur-sm sm:px-6">
+    <header className="sticky top-0 z-20 overflow-visible border-b border-lp-border bg-lp-bg/80 px-4 backdrop-blur-sm sm:px-6">
       <div className="flex min-h-16 flex-col gap-2 py-2 lg:flex-row lg:items-center lg:justify-between lg:gap-4 lg:py-0">
         {/* Primary row: menu, New Tour, artist/tour scope */}
         <div className="flex min-w-0 flex-1 flex-col gap-2 sm:flex-row sm:items-stretch sm:gap-3">
@@ -38,14 +42,19 @@ export function Header({ title, subtitle, onMenuClick }: HeaderProps) {
 
             <Link
               href="/tours/create"
+              title={compactNewTour ? 'New tour' : undefined}
+              aria-label={compactNewTour ? 'New tour' : undefined}
               className={cn(
-                'flex h-auto min-h-[2.75rem] shrink-0 items-center justify-center gap-1.5 self-stretch rounded-lg border border-lp-orange px-3 py-2 text-xs font-bold tracking-widest',
-                'text-lp-orange hover:bg-lp-orange hover:text-white dark:hover:text-black transition-colors duration-200'
+                'flex shrink-0 items-center justify-center rounded-lg border border-lp-orange text-lp-orange transition-colors duration-200',
+                'hover:bg-lp-orange hover:text-white dark:hover:text-black',
+                compactNewTour
+                  ? 'h-9 w-9'
+                  : 'min-h-[2.75rem] gap-1.5 self-stretch px-3 py-2 text-xs font-bold tracking-widest'
               )}
-              style={{ letterSpacing: '0.12em' }}
+              style={compactNewTour ? undefined : { letterSpacing: '0.12em' }}
             >
-              <Plus size={14} strokeWidth={2.5} className="shrink-0" />
-              <span className="whitespace-nowrap">NEW TOUR</span>
+              <Plus size={compactNewTour ? 18 : 14} strokeWidth={2.5} className="shrink-0" />
+              {!compactNewTour && <span className="whitespace-nowrap">NEW TOUR</span>}
             </Link>
           </div>
 

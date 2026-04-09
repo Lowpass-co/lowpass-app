@@ -11,7 +11,7 @@ import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import {
-  ChevronLeft, ChevronRight, LogOut, ChevronDown, X,
+  ChevronLeft, ChevronRight, LogOut,
   LayoutDashboard, ListMusic, ClipboardList, LineChart,
   Wallet, HandCoins, Bed, FileCheck2, Music, Users, Building2, Settings, Bug, Gauge, Package,
 } from 'lucide-react';

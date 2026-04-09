@@ -34,6 +34,7 @@ export function ArtistTourProvider({ children }: { children: ReactNode }) {
   const [selectedArtistId, setSelectedArtistIdState] = useState<string | null>(null);
   const [selectedTourId, setSelectedTourIdState] = useState<string | null>(null);
   const [artists, setArtists] = useState<Artist[]>([]);
+  const [artistsLoaded, setArtistsLoaded] = useState(false);
   const [tours, setTours] = useState<Tour[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [hydrated, setHydrated] = useState(false);
@@ -72,7 +73,8 @@ export function ArtistTourProvider({ children }: { children: ReactNode }) {
       .then((data) => {
         if (!cancelled && Array.isArray(data)) setArtists(data);
       })
-      .catch(() => { if (!cancelled) setArtists([]); });
+      .catch(() => { if (!cancelled) setArtists([]); })
+      .finally(() => { if (!cancelled) setArtistsLoaded(true); });
     return () => { cancelled = true; };
   }, []);
 
@@ -100,6 +102,21 @@ export function ArtistTourProvider({ children }: { children: ReactNode }) {
 
   const selectedArtist = selectedArtistId ? artists.find((a) => a.id === selectedArtistId) ?? null : null;
   const selectedTour = selectedTourId ? tours.find((t) => t.id === selectedTourId) ?? null : null;
+
+  useEffect(() => {
+    if (!selectedArtistId || !artistsLoaded) return;
+    if (!artists.some((a) => a.id === selectedArtistId)) {
+      setSelectedArtistId(null);
+    }
+  }, [artists, artistsLoaded, selectedArtistId, setSelectedArtistId]);
+
+  useEffect(() => {
+    if (!selectedTourId || !selectedArtistId) return;
+    if (isLoading) return;
+    if (!tours.some((t) => t.id === selectedTourId)) {
+      setSelectedTourId(null);
+    }
+  }, [tours, selectedTourId, selectedArtistId, isLoading, setSelectedTourId]);
 
   const value: ArtistTourContextType = {
     selectedArtistId,
