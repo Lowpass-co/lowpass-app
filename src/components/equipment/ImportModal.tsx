@@ -109,6 +109,12 @@ function parseNum(raw: string): number | null {
   return isNaN(n) ? null : n;
 }
 
+/** Returns true if a column header looks like pounds (lb/lbs) rather than kg */
+function isLbsCol(colName: string): boolean {
+  const low = colName.toLowerCase();
+  return /\blbs?\b/.test(low) && !low.includes('kg');
+}
+
 /* ─── Component ──────────────────────────────────────────────────────── */
 
 interface Props {
@@ -190,20 +196,25 @@ export function ImportModal({ userId, onImported, onClose }: Props) {
     let success = 0, skipped = 0, errors = 0;
 
     // Build insert rows
+    const weightInLbs = colMap.weight_kg ? isLbsCol(colMap.weight_kg) : false;
     const rows: Omit<RentalInventoryItem, 'id' | 'created_at'>[] = [];
     for (const row of parsed.rows) {
       const nameVal = colMap.name ? row[colMap.name]?.trim() : '';
       if (!nameVal) { skipped++; continue; }
+      const rawWeight = parseNum(colMap.weight_kg ? row[colMap.weight_kg] : '');
       rows.push({
         user_id:           userId,
         name:              nameVal,
         category:          colMap.category          ? row[colMap.category]          || null : null,
         serial_number:     colMap.serial_number     ? row[colMap.serial_number]     || null : null,
         country_of_origin: colMap.country_of_origin ? row[colMap.country_of_origin] || null : null,
-        purchase_cost:     parseNum(colMap.purchase_cost     ? row[colMap.purchase_cost]     : ''),
-        day_rate:          parseNum(colMap.day_rate          ? row[colMap.day_rate]          : ''),
-        weight_kg:         parseNum(colMap.weight_kg         ? row[colMap.weight_kg]         : ''),
-        notes:             colMap.notes             ? row[colMap.notes]             || null : null,
+        purchase_cost:     parseNum(colMap.purchase_cost ? row[colMap.purchase_cost] : ''),
+        day_rate:          parseNum(colMap.day_rate      ? row[colMap.day_rate]      : ''),
+        // Convert lbs → kg (÷ 2.20462) if the source column is in pounds
+        weight_kg:         rawWeight === null ? null
+                             : weightInLbs ? Math.round((rawWeight / 2.20462) * 100) / 100
+                             : rawWeight,
+        notes:             colMap.notes ? row[colMap.notes] || null : null,
         image_url:         null,
       });
     }
@@ -393,18 +404,30 @@ export function ImportModal({ userId, onImported, onClose }: Props) {
                   {FIELDS.map(({ key, label, required }, idx) => {
                     const selectedCol = colMap[key];
                     const preview = selectedCol ? (parsed.rows[0]?.[selectedCol] ?? '') : '';
+                    const showLbsBadge = key === 'weight_kg' && selectedCol && isLbsCol(selectedCol);
                     return (
                       <tr
                         key={key}
                         style={{ borderBottom: idx < FIELDS.length - 1 ? '1px solid var(--lp-border-light)' : 'none' }}
                       >
                         <td className="px-4 py-2">
-                          <span className="text-sm font-medium" style={{ color: 'var(--lp-text)' }}>
-                            {label}
-                          </span>
-                          {required && (
-                            <span className="ml-1 text-xs font-bold" style={{ color: '#FF4500' }}>*</span>
-                          )}
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium" style={{ color: 'var(--lp-text)' }}>
+                              {label}
+                            </span>
+                            {required && (
+                              <span className="text-xs font-bold" style={{ color: '#FF4500' }}>*</span>
+                            )}
+                            {showLbsBadge && (
+                              <span
+                                className="rounded-full px-2 py-0.5 text-xs font-semibold"
+                                style={{ backgroundColor: 'rgba(59,130,246,0.1)', color: '#3B82F6' }}
+                                title="Column is in lbs — will be converted to kg automatically"
+                              >
+                                lbs → kg
+                              </span>
+                            )}
+                          </div>
                         </td>
                         <td className="px-4 py-2">
                           <select
