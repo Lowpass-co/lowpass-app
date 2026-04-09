@@ -227,7 +227,10 @@ export function ImportModal({ userId, onImported, onClose }: Props) {
       });
     }
 
-    // Batch insert in chunks of 50
+    // Batch insert in chunks of 50, collect all results before updating UI.
+    // Calling onImported per-batch causes stale closure issues where each batch
+    // overwrites the previous batch's items in the parent state.
+    const allImported: RentalInventoryItem[] = [];
     for (let i = 0; i < rows.length; i += 50) {
       const chunk = rows.slice(i, i + 50);
       const { data, error } = await supabase
@@ -238,9 +241,12 @@ export function ImportModal({ userId, onImported, onClose }: Props) {
         errors += chunk.length;
       } else {
         success += data.length;
-        onImported(data as RentalInventoryItem[]);
+        allImported.push(...(data as RentalInventoryItem[]));
       }
     }
+
+    // Single onImported call with everything — avoids stale closure overwriting
+    if (allImported.length > 0) onImported(allImported);
 
     setImportResult({ success, skipped, errors });
     setStep('done');
