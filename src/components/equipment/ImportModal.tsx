@@ -89,15 +89,23 @@ function parseWorkbook(data: ArrayBuffer | string, type: XLSX.ParsingOptions['ty
   );
   if (headerIdx === -1) return { fileName: '', headers: [], rows: [] };
 
-  const headers = raw[headerIdx]
-    .map(h => String(h).trim())
-    .filter(Boolean);
+  // IMPORTANT: preserve original column indices when skipping empty header cells.
+  // If we just filter+re-index, a merged/empty column in the sheet shifts every
+  // subsequent column by one and maps data to the wrong fields.
+  const rawHeaders = raw[headerIdx].map(h => String(h).trim());
+  const headerMap = rawHeaders
+    .map((h, originalIdx) => ({ h, originalIdx }))
+    .filter(({ h }) => h !== ''); // skip blank header cells but remember where they were
+
+  const headers = headerMap.map(({ h }) => h);
 
   const rows = raw
     .slice(headerIdx + 1)
     .filter(r => r.some(c => String(c).trim() !== '')) // drop fully empty rows
     .map(r =>
-      Object.fromEntries(headers.map((h, i) => [h, String(r[i] ?? '').trim()]))
+      Object.fromEntries(
+        headerMap.map(({ h, originalIdx }) => [h, String(r[originalIdx] ?? '').trim()])
+      )
     );
 
   return { fileName: '', headers, rows };
