@@ -14,6 +14,7 @@ import { JobDetail } from './JobDetail';
 import { cn } from '@/lib/utils';
 import {
   EQUIPMENT_TABLE_MIN_CLASS,
+  EQUIPMENT_TOOLBAR_GRID_CLASS,
   STATUS_OPTIONS,
   STATUS_STYLES,
   calcDays,
@@ -134,23 +135,25 @@ export function JobsTab({
 
   if (activeJob) {
     return (
-      <JobDetail
-        job={activeJob}
-        inventory={inventory}
-        artists={artists}
-        tours={tours}
-        onBack={() => setActiveJob(null)}
-        onEdit={() => openEditJob(activeJob)}
-        onDelete={() => onJobDeleted(activeJob.id)}
-        onJobUpdated={onJobUpdated}
-      />
+      <div className="w-full min-w-0">
+        <JobDetail
+          job={activeJob}
+          inventory={inventory}
+          artists={artists}
+          tours={tours}
+          onBack={() => setActiveJob(null)}
+          onEdit={() => openEditJob(activeJob)}
+          onDelete={() => onJobDeleted(activeJob.id)}
+          onJobUpdated={onJobUpdated}
+        />
+      </div>
     );
   }
 
   return (
-    <>
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative min-w-[180px] flex-1 max-w-xs">
+    <div className="flex w-full min-w-0 flex-col gap-4">
+      <div className={EQUIPMENT_TOOLBAR_GRID_CLASS}>
+        <div className="relative min-w-0">
           <Search
             size={14}
             className="absolute left-3 top-1/2 -translate-y-1/2"
@@ -160,7 +163,7 @@ export function JobsTab({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search jobs…"
-            className="w-full rounded-lg border py-2 pl-8 pr-3 text-sm"
+            className="w-full min-w-0 rounded-lg border py-2 pl-8 pr-3 text-sm"
             style={{
               backgroundColor: 'var(--lp-surface)',
               borderColor: 'var(--lp-border)',
@@ -168,7 +171,7 @@ export function JobsTab({
             }}
           />
         </div>
-        <div className="w-[160px] shrink-0">
+        <div className="w-[160px] shrink-0 justify-self-stretch">
           <StyledSelect
             size="sm"
             value={statusFilter}
@@ -177,13 +180,13 @@ export function JobsTab({
             placeholder="All statuses"
           />
         </div>
-        <span className="ml-auto text-xs" style={{ color: 'var(--lp-text-tertiary)' }}>
+        <span className="text-right text-xs tabular-nums whitespace-nowrap" style={{ color: 'var(--lp-text-tertiary)' }}>
           {jobs.length} job{jobs.length !== 1 ? 's' : ''}
         </span>
         <button
           type="button"
           onClick={openNewJob}
-          className="flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-bold uppercase tracking-wider text-white transition-colors"
+          className="flex w-full min-w-0 items-center justify-center gap-2 rounded-lg px-2 py-2 text-xs font-bold uppercase tracking-wider text-white transition-colors"
           style={{ backgroundColor: '#FF4500' }}
           onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#E63E00')}
           onMouseOut={(e) => (e.currentTarget.style.backgroundColor = '#FF4500')}
@@ -346,6 +349,6 @@ export function JobsTab({
           onClose={() => setModal(false)}
         />
       )}
-    </>
+    </div>
   );
 }

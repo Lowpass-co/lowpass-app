@@ -59,6 +59,17 @@ export interface RentalJobItem {
 /** Shared min height for Equipment inventory / jobs table shells (empty + data). */
 export const EQUIPMENT_TABLE_MIN_CLASS = 'min-h-[26rem]';
 
+/** One fixed content column (max-w-6xl); header, tabs, toolbars, and tables share this width. */
+export const EQUIPMENT_PAGE_SHELL_CLASS =
+  'mx-auto w-full max-w-6xl min-w-0 flex flex-col gap-6';
+
+/**
+ * Toolbar grid: search (flex) | dropdown 160px | count | primary CTA.
+ * Same template on Inventory and Jobs so controls do not shift between tabs or empty/data states.
+ */
+export const EQUIPMENT_TOOLBAR_GRID_CLASS =
+  'grid w-full min-w-0 grid-cols-[minmax(0,1fr)_10rem_minmax(5.5rem,auto)_10rem] items-center gap-3';
+
 export const CATEGORIES = [
   'Audio', 'Lighting', 'Video / LED', 'Backline',
   'Rigging', 'Power', 'Cases', 'Cables', 'Staging', 'Other',

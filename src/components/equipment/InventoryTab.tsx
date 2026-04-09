@@ -10,7 +10,13 @@ import { cn } from '@/lib/utils';
 import { createClient } from '@/lib/supabase-client';
 import { InventoryModal } from './InventoryModal';
 import { StyledSelect, type StyledSelectOption } from '@/components/ui/StyledSelect';
-import { CATEGORIES, EQUIPMENT_TABLE_MIN_CLASS, fmtUSD, type RentalInventoryItem } from './types';
+import {
+  CATEGORIES,
+  EQUIPMENT_TABLE_MIN_CLASS,
+  EQUIPMENT_TOOLBAR_GRID_CLASS,
+  fmtUSD,
+  type RentalInventoryItem,
+} from './types';
 
 interface Props {
   userId: string;
@@ -60,16 +66,16 @@ export function InventoryTab({ userId, inventory, setInventory }: Props) {
   }
 
   return (
-    <>
-      {/* Controls row */}
-      <div className="flex items-center gap-3 flex-wrap">
-        <div className="relative flex-1 min-w-[180px] max-w-xs">
+    <div className="flex w-full min-w-0 flex-col gap-4">
+      {/* Controls row — grid matches Jobs tab */}
+      <div className={EQUIPMENT_TOOLBAR_GRID_CLASS}>
+        <div className="relative min-w-0">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--lp-text-tertiary)' }} />
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Search inventory…"
-            className="w-full rounded-lg border py-2 pl-8 pr-3 text-sm"
+            className="w-full min-w-0 rounded-lg border py-2 pl-8 pr-3 text-sm"
             style={{
               backgroundColor: 'var(--lp-surface)',
               borderColor: 'var(--lp-border)',
@@ -77,7 +83,7 @@ export function InventoryTab({ userId, inventory, setInventory }: Props) {
             }}
           />
         </div>
-        <div className="w-[160px] shrink-0">
+        <div className="w-[160px] shrink-0 justify-self-stretch">
           <StyledSelect
             size="sm"
             value={catFilter}
@@ -86,12 +92,13 @@ export function InventoryTab({ userId, inventory, setInventory }: Props) {
             placeholder="All categories"
           />
         </div>
-        <span className="ml-auto text-xs" style={{ color: 'var(--lp-text-tertiary)' }}>
+        <span className="text-right text-xs tabular-nums whitespace-nowrap" style={{ color: 'var(--lp-text-tertiary)' }}>
           {inventory.length} item{inventory.length !== 1 ? 's' : ''}
         </span>
         <button
+          type="button"
           onClick={openAdd}
-          className="flex items-center gap-2 rounded-lg px-4 py-2 text-xs font-bold uppercase tracking-wider text-white transition-colors"
+          className="flex w-full min-w-0 items-center justify-center gap-2 rounded-lg px-2 py-2 text-xs font-bold uppercase tracking-wider text-white transition-colors"
           style={{ backgroundColor: '#FF4500' }}
           onMouseOver={e => (e.currentTarget.style.backgroundColor = '#E63E00')}
           onMouseOut={e => (e.currentTarget.style.backgroundColor = '#FF4500')}
@@ -250,6 +257,6 @@ export function InventoryTab({ userId, inventory, setInventory }: Props) {
           onClose={() => setModal(false)}
         />
       )}
-    </>
+    </div>
   );
 }

@@ -126,7 +126,7 @@ export function JobDetail({ job, inventory, artists, tours, onBack, onEdit, onDe
   }
 
   return (
-    <div className="space-y-6">
+    <div className="w-full min-w-0 space-y-6">
       {/* Back + title row */}
       <div>
         <button

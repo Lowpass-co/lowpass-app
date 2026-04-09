@@ -11,11 +11,12 @@ import { Package, ClipboardList } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { InventoryTab } from './InventoryTab';
 import { JobsTab } from './JobsTab';
-import type {
-  EquipmentArtistOption,
-  EquipmentTourOption,
-  RentalInventoryItem,
-  RentalJob,
+import {
+  EQUIPMENT_PAGE_SHELL_CLASS,
+  type EquipmentArtistOption,
+  type EquipmentTourOption,
+  type RentalInventoryItem,
+  type RentalJob,
 } from './types';
 
 interface Props {
@@ -44,25 +45,23 @@ export function EquipmentClient({
   const [tours, setTours] = useState<EquipmentTourOption[]>(initialTours);
 
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
-      {/* Page header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <h1
-            className="text-2xl font-bold tracking-tight font-display"
-            style={{ color: 'var(--lp-text)' }}
-          >
-            Equipment
-          </h1>
-          <p className="mt-1 text-sm" style={{ color: 'var(--lp-text-secondary)' }}>
-            Rental inventory and job bookings
-          </p>
-        </div>
-      </div>
+    <div className={EQUIPMENT_PAGE_SHELL_CLASS}>
+      {/* Page header — fixed slot at top of column */}
+      <header className="w-full shrink-0">
+        <h1
+          className="text-2xl font-bold tracking-tight font-display"
+          style={{ color: 'var(--lp-text)' }}
+        >
+          Equipment
+        </h1>
+        <p className="mt-1 text-sm" style={{ color: 'var(--lp-text-secondary)' }}>
+          Rental inventory and job bookings
+        </p>
+      </header>
 
-      {/* Tabs — equal-width segments so the control does not resize */}
+      {/* Tabs — full width of content column; equal-width segments */}
       <div
-        className="flex w-full max-w-[340px] gap-1 rounded-lg p-1"
+        className="flex w-full min-w-0 gap-1 rounded-lg p-1"
         style={{ backgroundColor: 'var(--lp-bg-secondary)', border: '1px solid var(--lp-border)' }}
       >
         {([
@@ -91,7 +90,8 @@ export function EquipmentClient({
         ))}
       </div>
 
-      {/* Tab content */}
+      {/* Tab panels — same width as header/tabs */}
+      <div className="w-full min-w-0">
       {activeTab === 'inventory' && (
         <InventoryTab
           userId={userId}
@@ -112,6 +112,7 @@ export function EquipmentClient({
           setTours={setTours}
         />
       )}
+      </div>
     </div>
   );
 }
