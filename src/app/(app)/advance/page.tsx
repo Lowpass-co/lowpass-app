@@ -6,7 +6,7 @@
 
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { Suspense, useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { parseRoutingDate, cn } from '@/lib/utils';
@@ -64,7 +64,7 @@ type Overview = {
   upcoming: UpcomingItem[];
 };
 
-export default function AdvanceOverviewPage() {
+function AdvanceOverviewContent() {
   const searchParams = useSearchParams();
   const artistIdInUrl = searchParams.get('artist_id');
   const advanceApiQuery = artistIdInUrl ? `?artist_id=${encodeURIComponent(artistIdInUrl)}` : '';
@@ -290,6 +290,23 @@ export default function AdvanceOverviewPage() {
         </aside>
       </div>
     </div>
+  );
+}
+
+export default function AdvanceOverviewPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="mx-auto max-w-4xl">
+          <div className="flex items-center gap-2 text-lp-text-secondary">
+            <Loader2 className="h-5 w-5 animate-spin" />
+            Loading advance overview…
+          </div>
+        </div>
+      }
+    >
+      <AdvanceOverviewContent />
+    </Suspense>
   );
 }
 
