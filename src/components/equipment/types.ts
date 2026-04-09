@@ -1,0 +1,67 @@
+export interface RentalInventoryItem {
+  id: string;
+  user_id: string;
+  name: string;
+  category: string | null;
+  serial_number: string | null;
+  country_of_origin: string | null;
+  purchase_cost: number | null;
+  day_rate: number | null;
+  weight_kg: number | null;
+  image_url: string | null;
+  notes: string | null;
+  created_at: string;
+}
+
+export interface RentalJob {
+  id: string;
+  user_id: string;
+  name: string;
+  client_name: string | null;
+  start_date: string | null;
+  end_date: string | null;
+  discount_percent: number | null;
+  discount_fixed: number | null;
+  notes: string | null;
+  status: 'draft' | 'confirmed' | 'invoiced' | 'completed';
+  created_at: string;
+}
+
+export interface RentalJobItem {
+  id: string;
+  job_id: string;
+  inventory_id: string;
+  quantity: number;
+  day_rate_override: number | null;
+  created_at: string;
+}
+
+export const CATEGORIES = [
+  'Audio', 'Lighting', 'Video / LED', 'Backline',
+  'Rigging', 'Power', 'Cases', 'Cables', 'Staging', 'Other',
+] as const;
+
+export const STATUS_OPTIONS = ['draft', 'confirmed', 'invoiced', 'completed'] as const;
+
+export const STATUS_STYLES: Record<string, { bg: string; text: string }> = {
+  draft:     { bg: 'rgba(107,114,128,0.12)', text: '#6B7280' },
+  confirmed: { bg: 'rgba(16,185,129,0.12)',  text: '#10B981' },
+  invoiced:  { bg: 'rgba(59,130,246,0.12)',  text: '#3B82F6' },
+  completed: { bg: 'rgba(139,92,246,0.12)',  text: '#8B5CF6' },
+};
+
+export function calcDays(start: string | null, end: string | null): number {
+  if (!start || !end) return 1;
+  const diff = Math.round((new Date(end).getTime() - new Date(start).getTime()) / 86400000) + 1;
+  return Math.max(1, diff);
+}
+
+export function fmtUSD(n: number | null | undefined): string {
+  if (n == null) return '—';
+  return '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+export function fmtDate(d: string | null): string {
+  if (!d) return '—';
+  return new Date(d + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+}

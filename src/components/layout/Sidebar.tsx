@@ -14,7 +14,7 @@ import { usePathname, useSearchParams } from 'next/navigation';
 import {
   ChevronLeft, ChevronRight, LogOut, ChevronDown, X,
   LayoutDashboard, ListMusic, ClipboardList, LineChart,
-  Wallet, HandCoins, Bed, FileCheck2, Music, Users, Building2, Settings, Bug, Gauge,
+  Wallet, HandCoins, Bed, FileCheck2, Music, Users, Building2, Settings, Bug, Gauge, Package,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useArtistTourContext } from '@/contexts/ArtistTourContext';
@@ -80,6 +80,12 @@ export function Sidebar() {
         { label: 'Artists', href: '/artists', icon: Music, activeMode: 'exact' },
         { label: 'Personnel', href: '/personnel', icon: Users, activeMode: 'exact' },
         { label: 'Venues', href: '/venues', icon: Building2, activeMode: 'exact' },
+      ],
+    },
+    {
+      title: 'Equipment',
+      items: [
+        { label: 'Rental House', href: '/equipment', icon: Package, activeMode: 'includes' },
       ],
     },
     {
