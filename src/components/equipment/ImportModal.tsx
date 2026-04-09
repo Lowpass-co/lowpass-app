@@ -56,15 +56,23 @@ function match(headers: string[], ...terms: string[]): string {
 }
 
 function autoMap(headers: string[]): ColumnMap {
+  // 'name' takes priority over 'description' for notes field, so map name first
+  const nameCol = match(headers, 'name', 'item', 'description', 'gear', 'equipment', 'title');
   return {
-    name:             match(headers, 'name', 'item', 'description', 'gear', 'equipment', 'title'),
+    name:             nameCol,
     category:         match(headers, 'category', 'type', 'cat', 'class', 'kind'),
     serial_number:    match(headers, 'serial', 'sn', 'serialno', 'serialnum'),
-    country_of_origin:match(headers, 'origin', 'country', 'manufacture', 'mfr', 'madeIn'),
+    country_of_origin:match(headers, 'countryoforigin', 'origin', 'country', 'manufacture', 'mfr', 'madein'),
+    // "VALUE ($)" normalises to "value$" — includes "value" ✓
     purchase_cost:    match(headers, 'purchasecost', 'purchaseprice', 'value', 'cost', 'price'),
     day_rate:         match(headers, 'dayrate', 'dailyrate', 'rentalrate', 'rate', 'daily'),
-    weight_kg:        match(headers, 'weightkg', 'weight', 'kg'),
-    notes:            match(headers, 'notes', 'note', 'comment', 'remarks', 'description'),
+    // "WEIGHT (lb)" and "WEIGHT (kg)" both normalise to include "weight"
+    weight_kg:        match(headers, 'weightkg', 'weight', 'kg', 'lb'),
+    // Only map notes to 'description' if it wasn't already used for name
+    notes:            match(
+      headers.filter(h => h !== nameCol),
+      'notes', 'note', 'comment', 'remarks', 'description'
+    ),
   };
 }
 
@@ -72,11 +80,26 @@ function parseWorkbook(data: ArrayBuffer | string, type: XLSX.ParsingOptions['ty
   const wb = XLSX.read(data, { type });
   const ws = wb.Sheets[wb.SheetNames[0]];
   const raw = XLSX.utils.sheet_to_json<unknown[]>(ws, { header: 1, defval: '' }) as string[][];
-  if (raw.length < 1) return { fileName: '', headers: [], rows: [] };
-  const headers = raw[0].map(h => String(h).trim()).filter(Boolean);
-  const rows = raw.slice(1).map(r =>
-    Object.fromEntries(headers.map((h, i) => [h, String(r[i] ?? '').trim()]))
+  if (!raw.length) return { fileName: '', headers: [], rows: [] };
+
+  // Skip leading blank rows and single-cell title rows (e.g. "EQUIPMENT MANIFEST,,,,,,,")
+  // Find the first row that has at least 2 non-empty cells — that's the real header row.
+  const headerIdx = raw.findIndex(
+    row => row.filter(c => String(c).trim() !== '').length >= 2
   );
+  if (headerIdx === -1) return { fileName: '', headers: [], rows: [] };
+
+  const headers = raw[headerIdx]
+    .map(h => String(h).trim())
+    .filter(Boolean);
+
+  const rows = raw
+    .slice(headerIdx + 1)
+    .filter(r => r.some(c => String(c).trim() !== '')) // drop fully empty rows
+    .map(r =>
+      Object.fromEntries(headers.map((h, i) => [h, String(r[i] ?? '').trim()]))
+    );
+
   return { fileName: '', headers, rows };
 }
 
