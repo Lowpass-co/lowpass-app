@@ -4,8 +4,8 @@
 
 'use client';
 
-import { useState } from 'react';
-import { Plus, Pencil, Trash2, Search, Upload, SquarePen, Check, X as XIcon } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { Plus, Pencil, Trash2, Search, Upload, SquarePen, Check, X as XIcon, ImageIcon, Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { createClient } from '@/lib/supabase-client';
 import { InventoryModal } from './InventoryModal';
@@ -36,11 +36,17 @@ export function InventoryTab({ userId, inventory, setInventory }: Props) {
   const [modalOpen, setModal]   = useState(false);
   const [importOpen, setImport] = useState(false);
   const [editing, setEditing]   = useState<RentalInventoryItem | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const selectAllRef = useRef<HTMLInputElement>(null);
 
   /* ── Bulk edit mode ── */
   const [editMode, setEditMode] = useState(false);
   const [drafts, setDrafts]     = useState<Record<string, Partial<RentalInventoryItem>>>({});
   const [saving, setSaving]     = useState(false);
+
+  /* ── Auto image fill ── */
+  const [imgFill, setImgFill] = useState<{ current: number; total: number; found: number } | null>(null);
+  const imgFillStop = useRef(false);
 
   const supabase = createClient();
 
@@ -58,6 +64,38 @@ export function InventoryTab({ userId, inventory, setInventory }: Props) {
 
   const dirtyCount = Object.keys(drafts).length;
 
+  const selectedFilteredCount = filtered.filter((i) => selectedIds.has(i.id)).length;
+  const allFilteredSelected =
+    filtered.length > 0 && selectedFilteredCount === filtered.length;
+  const someFilteredSelected =
+    selectedFilteredCount > 0 && selectedFilteredCount < filtered.length;
+
+  useEffect(() => {
+    const el = selectAllRef.current;
+    if (el) el.indeterminate = someFilteredSelected;
+  }, [someFilteredSelected]);
+
+  function toggleSelect(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAllFiltered() {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allFilteredSelected) {
+        filtered.forEach((i) => next.delete(i.id));
+      } else {
+        filtered.forEach((i) => next.add(i.id));
+      }
+      return next;
+    });
+  }
+
   /* ── Helpers ── */
   function getDraft<K extends keyof RentalInventoryItem>(item: RentalInventoryItem, field: K): RentalInventoryItem[K] {
     return item.id in drafts && field in (drafts[item.id] ?? {})
@@ -69,7 +107,11 @@ export function InventoryTab({ userId, inventory, setInventory }: Props) {
     setDrafts(prev => ({ ...prev, [id]: { ...(prev[id] ?? {}), [field]: value } }));
   }
 
-  function enterEditMode() { setDrafts({}); setEditMode(true); }
+  function enterEditMode() {
+    setDrafts({});
+    setSelectedIds(new Set());
+    setEditMode(true);
+  }
   function cancelEdit()    { setDrafts({}); setEditMode(false); }
 
   async function saveAll() {
@@ -93,6 +135,35 @@ export function InventoryTab({ userId, inventory, setInventory }: Props) {
     setEditMode(false);
   }
 
+  /* ── Auto image fill ── */
+  async function autoFillImages() {
+    const targets = inventory.filter(i => !i.image_url);
+    if (!targets.length) { alert('All items already have images.'); return; }
+    imgFillStop.current = false;
+    setImgFill({ current: 0, total: targets.length, found: 0 });
+    let found = 0;
+    for (let i = 0; i < targets.length; i++) {
+      if (imgFillStop.current) break;
+      const item = targets[i];
+      setImgFill({ current: i + 1, total: targets.length, found });
+      try {
+        const res = await fetch(`/api/equipment/find-image?q=${encodeURIComponent(item.name)}`);
+        const { imageUrl, error } = await res.json();
+        if (imageUrl) {
+          await supabase.from('rental_inventory').update({ image_url: imageUrl }).eq('id', item.id);
+          setInventory(inventory.map(inv => inv.id === item.id ? { ...inv, image_url: imageUrl } : inv));
+          found++;
+          setImgFill({ current: i + 1, total: targets.length, found });
+        }
+        if (error?.includes('not configured')) {
+          alert('Google Custom Search is not set up yet.\n\nSee the setup instructions to add GOOGLE_CSE_CX to your .env.local.');
+          break;
+        }
+      } catch { /* skip item on network error */ }
+    }
+    setImgFill(null);
+  }
+
   /* ── Single-item handlers ── */
   function openAdd()  { setEditing(null); setModal(true); }
   function openEdit(item: RentalInventoryItem) { setEditing(item); setModal(true); }
@@ -106,6 +177,45 @@ export function InventoryTab({ userId, inventory, setInventory }: Props) {
       return;
     }
     setInventory(inventory.filter(i => i.id !== item.id));
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.delete(item.id);
+      return next;
+    });
+  }
+
+  async function handleBulkDelete() {
+    const ids = Array.from(selectedIds);
+    if (!ids.length) return;
+    if (
+      !confirm(
+        `Delete ${ids.length} selected item${ids.length !== 1 ? 's' : ''}?\n\nItems in use on a job cannot be deleted.`
+      )
+    ) {
+      return;
+    }
+    const deletedIds: string[] = [];
+    let inUse = 0;
+    let otherErr = 0;
+    for (const id of ids) {
+      const { error } = await supabase.from('rental_inventory').delete().eq('id', id);
+      if (!error) deletedIds.push(id);
+      else if (error.code === '23503') inUse++;
+      else otherErr++;
+    }
+    if (deletedIds.length) {
+      setInventory(inventory.filter((i) => !deletedIds.includes(i.id)));
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        deletedIds.forEach((id) => next.delete(id));
+        return next;
+      });
+    }
+    const parts: string[] = [];
+    if (deletedIds.length) parts.push(`${deletedIds.length} deleted`);
+    if (inUse) parts.push(`${inUse} skipped (assigned to a job)`);
+    if (otherErr) parts.push(`${otherErr} failed`);
+    if (parts.length) alert(parts.join('. ') + '.');
   }
 
   function onSave(saved: RentalInventoryItem) {
@@ -148,8 +258,30 @@ export function InventoryTab({ userId, inventory, setInventory }: Props) {
           </div>
           <span className="text-right text-xs tabular-nums whitespace-nowrap" style={{ color: 'var(--lp-text-tertiary)' }}>
             {inventory.length} item{inventory.length !== 1 ? 's' : ''}
+            {selectedIds.size > 0 && (
+              <span className="ml-2 font-semibold" style={{ color: '#FF4500' }}>
+                · {selectedIds.size} selected
+              </span>
+            )}
           </span>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center justify-end gap-2">
+            {selectedIds.size > 0 && (
+              <button
+                type="button"
+                onClick={handleBulkDelete}
+                className="flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition-colors"
+                style={{ borderColor: 'rgba(239,68,68,0.5)', color: '#EF4444', backgroundColor: 'rgba(239,68,68,0.06)' }}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.backgroundColor = 'rgba(239,68,68,0.12)';
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.backgroundColor = 'rgba(239,68,68,0.06)';
+                }}
+              >
+                <Trash2 size={13} strokeWidth={2.5} />
+                Delete {selectedIds.size}
+              </button>
+            )}
             <button
               type="button"
               onClick={() => setImport(true)}
@@ -159,6 +291,19 @@ export function InventoryTab({ userId, inventory, setInventory }: Props) {
               onMouseOut={e => { e.currentTarget.style.borderColor = 'var(--lp-border)'; e.currentTarget.style.color = 'var(--lp-text-secondary)'; }}
             >
               <Upload size={13} strokeWidth={2.5} /> Import
+            </button>
+            <button
+              type="button"
+              onClick={autoFillImages}
+              disabled={!!imgFill}
+              className="flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition-colors disabled:opacity-50"
+              style={{ borderColor: 'var(--lp-border)', color: 'var(--lp-text-secondary)', backgroundColor: 'transparent' }}
+              onMouseOver={e => { if (!imgFill) { e.currentTarget.style.borderColor = '#FF4500'; e.currentTarget.style.color = '#FF4500'; } }}
+              onMouseOut={e => { e.currentTarget.style.borderColor = 'var(--lp-border)'; e.currentTarget.style.color = 'var(--lp-text-secondary)'; }}
+              title="Auto-fill missing product images using Google image search"
+            >
+              {imgFill ? <Loader2 size={13} className="animate-spin" /> : <ImageIcon size={13} strokeWidth={2.5} />}
+              {imgFill ? `${imgFill.current}/${imgFill.total}` : 'Auto Images'}
             </button>
             <button
               type="button"
@@ -225,6 +370,42 @@ export function InventoryTab({ userId, inventory, setInventory }: Props) {
         </div>
       )}
 
+      {/* ── Auto-image progress bar ── */}
+      {imgFill && (
+        <div
+          className="flex items-center gap-3 rounded-xl border px-4 py-2.5"
+          style={{ borderColor: 'var(--lp-border)', backgroundColor: 'var(--lp-bg-secondary)' }}
+        >
+          <Loader2 size={13} className="shrink-0 animate-spin" style={{ color: '#FF4500' }} />
+          <div className="flex flex-1 flex-col gap-1">
+            <div className="flex items-center justify-between text-xs">
+              <span style={{ color: 'var(--lp-text-secondary)' }}>
+                Finding images… {imgFill.current} / {imgFill.total}
+              </span>
+              <span className="font-semibold" style={{ color: '#FF4500' }}>
+                {imgFill.found} found
+              </span>
+            </div>
+            <div className="h-1 w-full overflow-hidden rounded-full" style={{ backgroundColor: 'var(--lp-border)' }}>
+              <div
+                className="h-full rounded-full transition-all duration-300"
+                style={{ width: `${(imgFill.current / imgFill.total) * 100}%`, backgroundColor: '#FF4500' }}
+              />
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => { imgFillStop.current = true; }}
+            className="shrink-0 text-xs font-semibold"
+            style={{ color: 'var(--lp-text-tertiary)' }}
+            onMouseOver={e => (e.currentTarget.style.color = '#EF4444')}
+            onMouseOut={e => (e.currentTarget.style.color = 'var(--lp-text-tertiary)')}
+          >
+            Stop
+          </button>
+        </div>
+      )}
+
       {/* ── Table ── */}
       <div
         className={cn('flex flex-col overflow-hidden rounded-xl border', EQUIPMENT_TABLE_MIN_CLASS)}
@@ -247,10 +428,28 @@ export function InventoryTab({ userId, inventory, setInventory }: Props) {
             <table className="w-full text-sm">
               <thead>
                 <tr style={{ borderBottom: '1px solid var(--lp-border)', backgroundColor: 'var(--lp-bg-secondary)' }}>
-                  {['', 'Name', 'Category', 'Serial No.', 'Origin', 'Weight (kg)', 'Purchase Cost', 'Day Rate', ''].map((h, i) => (
+                  <th className="w-10 px-2 py-3 text-center" style={{ color: 'var(--lp-text-tertiary)' }}>
+                    {!editMode && filtered.length > 0 ? (
+                      <input
+                        ref={selectAllRef}
+                        type="checkbox"
+                        checked={allFilteredSelected}
+                        onChange={toggleSelectAllFiltered}
+                        className="h-3.5 w-3.5 cursor-pointer rounded border align-middle accent-[#FF4500]"
+                        style={{ borderColor: 'var(--lp-border)' }}
+                        title={allFilteredSelected ? 'Deselect all visible' : 'Select all visible'}
+                        aria-label="Select all visible rows"
+                      />
+                    ) : null}
+                  </th>
+                  <th className="w-14 px-4 py-3 text-left text-xs font-extrabold uppercase tracking-wider" style={{ color: 'var(--lp-text-tertiary)' }} />
+                  {(['Name', 'Category', 'Serial No.', 'Origin', 'Weight (kg)', 'Purchase Cost', 'Day Rate', ''] as const).map((h, i) => (
                     <th
-                      key={i}
-                      className={cn('px-4 py-3 text-left text-xs font-extrabold uppercase tracking-wider', i === 0 && 'w-14', i === 8 && 'w-20 text-right')}
+                      key={h || `col-${i}`}
+                      className={cn(
+                        'px-4 py-3 text-left text-xs font-extrabold uppercase tracking-wider',
+                        i === 7 && 'w-20 text-right'
+                      )}
                       style={{ color: 'var(--lp-text-tertiary)' }}
                     >
                       {h}
@@ -272,6 +471,20 @@ export function InventoryTab({ userId, inventory, setInventory }: Props) {
                       onMouseOver={e => { if (!editMode) (e.currentTarget.style.backgroundColor = 'var(--lp-surface-hover)'); }}
                       onMouseOut={e => { if (!editMode) (e.currentTarget.style.backgroundColor = isDirty ? 'rgba(255,69,0,0.03)' : 'transparent'); }}
                     >
+                      {/* Select */}
+                      <td className="w-10 px-2 py-2.5 text-center align-middle">
+                        {!editMode ? (
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.has(item.id)}
+                            onChange={() => toggleSelect(item.id)}
+                            onClick={(e) => e.stopPropagation()}
+                            className="h-3.5 w-3.5 cursor-pointer rounded border align-middle accent-[#FF4500]"
+                            style={{ borderColor: 'var(--lp-border)' }}
+                            aria-label={`Select ${item.name}`}
+                          />
+                        ) : null}
+                      </td>
                       {/* Thumbnail */}
                       <td className="px-4 py-2.5">
                         {item.image_url ? (
