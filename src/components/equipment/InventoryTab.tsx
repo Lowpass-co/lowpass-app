@@ -5,18 +5,21 @@
 'use client';
 
 import { useState } from 'react';
-import { Plus, Pencil, Trash2, Search } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, Upload } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { createClient } from '@/lib/supabase-client';
 import { InventoryModal } from './InventoryModal';
+import { ImportModal } from './ImportModal';
 import { StyledSelect, type StyledSelectOption } from '@/components/ui/StyledSelect';
 import {
   CATEGORIES,
   EQUIPMENT_TABLE_MIN_CLASS,
-  EQUIPMENT_TOOLBAR_GRID_CLASS,
   fmtUSD,
   type RentalInventoryItem,
 } from './types';
+
+// Wider last column to accommodate Import + Add buttons side-by-side
+const INVENTORY_TOOLBAR_CLASS = 'grid w-full min-w-0 grid-cols-[minmax(0,1fr)_10rem_minmax(5.5rem,auto)_auto] items-center gap-3';
 
 interface Props {
   userId: string;
@@ -25,10 +28,11 @@ interface Props {
 }
 
 export function InventoryTab({ userId, inventory, setInventory }: Props) {
-  const [search, setSearch]   = useState('');
-  const [catFilter, setCat]   = useState('');
-  const [modalOpen, setModal] = useState(false);
-  const [editing, setEditing] = useState<RentalInventoryItem | null>(null);
+  const [search, setSearch]     = useState('');
+  const [catFilter, setCat]     = useState('');
+  const [modalOpen, setModal]   = useState(false);
+  const [importOpen, setImport] = useState(false);
+  const [editing, setEditing]   = useState<RentalInventoryItem | null>(null);
 
   const supabase = createClient();
 
@@ -67,8 +71,8 @@ export function InventoryTab({ userId, inventory, setInventory }: Props) {
 
   return (
     <div className="flex w-full min-w-0 flex-col gap-4">
-      {/* Controls row — grid matches Jobs tab */}
-      <div className={EQUIPMENT_TOOLBAR_GRID_CLASS}>
+      {/* Controls row */}
+      <div className={INVENTORY_TOOLBAR_CLASS}>
         <div className="relative min-w-0">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--lp-text-tertiary)' }} />
           <input
@@ -95,16 +99,32 @@ export function InventoryTab({ userId, inventory, setInventory }: Props) {
         <span className="text-right text-xs tabular-nums whitespace-nowrap" style={{ color: 'var(--lp-text-tertiary)' }}>
           {inventory.length} item{inventory.length !== 1 ? 's' : ''}
         </span>
-        <button
-          type="button"
-          onClick={openAdd}
-          className="flex w-full min-w-0 items-center justify-center gap-2 rounded-lg px-2 py-2 text-xs font-bold uppercase tracking-wider text-white transition-colors"
-          style={{ backgroundColor: '#FF4500' }}
-          onMouseOver={e => (e.currentTarget.style.backgroundColor = '#E63E00')}
-          onMouseOut={e => (e.currentTarget.style.backgroundColor = '#FF4500')}
-        >
-          <Plus size={14} strokeWidth={2.5} /> Add Item
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setImport(true)}
+            className="flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition-colors"
+            style={{
+              borderColor: 'var(--lp-border)',
+              color: 'var(--lp-text-secondary)',
+              backgroundColor: 'transparent',
+            }}
+            onMouseOver={e => { e.currentTarget.style.borderColor = '#FF4500'; e.currentTarget.style.color = '#FF4500'; }}
+            onMouseOut={e => { e.currentTarget.style.borderColor = 'var(--lp-border)'; e.currentTarget.style.color = 'var(--lp-text-secondary)'; }}
+          >
+            <Upload size={13} strokeWidth={2.5} /> Import
+          </button>
+          <button
+            type="button"
+            onClick={openAdd}
+            className="flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold uppercase tracking-wider text-white transition-colors"
+            style={{ backgroundColor: '#FF4500' }}
+            onMouseOver={e => (e.currentTarget.style.backgroundColor = '#E63E00')}
+            onMouseOut={e => (e.currentTarget.style.backgroundColor = '#FF4500')}
+          >
+            <Plus size={14} strokeWidth={2.5} /> Add Item
+          </button>
+        </div>
       </div>
 
       {/* Table */}
@@ -255,6 +275,18 @@ export function InventoryTab({ userId, inventory, setInventory }: Props) {
           editing={editing}
           onSave={onSave}
           onClose={() => setModal(false)}
+        />
+      )}
+
+      {importOpen && (
+        <ImportModal
+          userId={userId}
+          onImported={newItems => {
+            setInventory(
+              [...inventory, ...newItems].sort((a, b) => a.name.localeCompare(b.name))
+            );
+          }}
+          onClose={() => setImport(false)}
         />
       )}
     </div>

@@ -9,7 +9,6 @@
 
 import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import { usePathname, useSearchParams } from 'next/navigation';
 import {
   ChevronLeft, ChevronRight, LogOut, ChevronDown, X,
@@ -46,28 +45,13 @@ interface NavGroup {
 const SIDEBAR_COLLAPSED_KEY = 'lp-sidebar-collapsed';
 
 export function Sidebar() {
-  const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const {
-    selectedArtistId,
-    selectedTourId,
-    selectedArtist,
-    selectedTour,
-    setSelectedArtistId,
-    setSelectedTourId,
-    artists,
-    tours,
-  } = useArtistTourContext();
+  const { selectedTourId } = useArtistTourContext();
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
     return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true';
   });
-  const [artistOpen, setArtistOpen] = useState(false);
-  const [tourOpen, setTourOpen] = useState(false);
-  const artistRef = useRef<HTMLDivElement>(null);
-  const tourRef = useRef<HTMLDivElement>(null);
-
   // Sync sidebar width as CSS variable so AppShell can track it without prop drilling
   useLayoutEffect(() => {
     document.documentElement.style.setProperty('--sidebar-w', collapsed ? '72px' : '260px');
@@ -129,23 +113,6 @@ export function Sidebar() {
   useEffect(() => {
     localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(collapsed));
   }, [collapsed]);
-
-  useEffect(() => {
-    const close = (e: MouseEvent) => {
-      if (artistRef.current?.contains(e.target as Node)) return;
-      if (tourRef.current?.contains(e.target as Node)) return;
-      setArtistOpen(false);
-      setTourOpen(false);
-    };
-    document.addEventListener('mousedown', close);
-    return () => document.removeEventListener('mousedown', close);
-  }, []);
-
-  const onManagePage =
-    pathname?.startsWith('/budget') ||
-    pathname?.startsWith('/tours/') ||
-    pathname?.includes('/payroll') ||
-    pathname?.includes('/rooming');
 
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [profile, setProfile] = useState<{ name: string; email?: string; avatar_url?: string | null; job_title?: string | null } | null>(null);
@@ -249,163 +216,13 @@ export function Sidebar() {
           `}</style>
           {navGroups.map((group, groupIndex) => (
             <div key={group.title ?? `group-${groupIndex}`} className="mt-8 first:mt-2">
-              {group.title && !collapsed && group.title !== 'MANAGE TOUR' && (
+              {group.title && !collapsed && (
                 <h3
                   className="mb-3 px-3 text-xs font-extrabold uppercase tracking-wider"
                   style={{ color: 'var(--lp-sidebar-text-heading)' }}
                 >
                   {group.title}
                 </h3>
-              )}
-
-              {group.title === 'MANAGE TOUR' && !collapsed && (
-                <div className="mb-3 flex items-center justify-between px-3">
-                  <h3
-                    className="text-xs font-extrabold uppercase tracking-wider"
-                    style={{ color: 'var(--lp-sidebar-text-heading)' }}
-                  >
-                    {group.title}
-                  </h3>
-                  <div className="relative h-9 w-9 shrink-0 overflow-visible rounded-full border border-lp-border bg-lp-bg">
-                    <div className="h-full w-full overflow-hidden rounded-full">
-                      {selectedArtist?.spotify_image_url ? (
-                        <img src={selectedArtist.spotify_image_url} alt="" className="h-full w-full object-cover" />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center text-[10px] font-bold text-lp-text-tertiary">
-                          {(selectedArtist?.name ?? '?').charAt(0).toUpperCase()}
-                        </div>
-                      )}
-                    </div>
-                    {selectedArtistId && (
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedArtistId(null);
-                          setSelectedTourId(null);
-                          setArtistOpen(false);
-                          setTourOpen(false);
-                          if (onManagePage) router.push('/budget');
-                        }}
-                        className="absolute right-0 top-0 z-30 flex h-4 w-4 -translate-y-1/3 translate-x-1/3 items-center justify-center rounded-full border border-lp-orange bg-lp-bg text-[10px] font-bold leading-none text-lp-orange shadow-sm"
-                        aria-label="Clear selected artist"
-                        title="Clear selected artist"
-                      >
-                        <X size={9} strokeWidth={2.5} />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {group.title === 'MANAGE TOUR' && !collapsed && (
-                <div className="mb-2 rounded-md bg-transparent px-3 py-0">
-                  <div className="min-w-0">
-                    <div className="relative" ref={artistRef}>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setArtistOpen((v) => !v);
-                          setTourOpen(false);
-                        }}
-                        className="flex w-full items-center justify-between gap-1 text-left py-0.5 leading-none"
-                      >
-                        <span className="truncate text-[11px] font-semibold text-[var(--lp-sidebar-text-heading)]">
-                          {selectedArtist?.name ?? 'Select Artist'}
-                        </span>
-                        <ChevronDown size={12} className={cn('shrink-0 text-lp-text-tertiary', artistOpen && 'rotate-180')} />
-                      </button>
-                      {artistOpen && (
-                        <div className="absolute left-0 top-full z-50 mt-1 max-h-56 w-full overflow-y-auto rounded-md border border-lp-border bg-lp-surface py-1 shadow-lg">
-                          {artists.map((a) => (
-                            <button
-                              key={a.id}
-                              type="button"
-                              onClick={() => {
-                                setSelectedArtistId(a.id);
-                                setArtistOpen(false);
-                              }}
-                              className={cn(
-                                'w-full px-2 py-1.5 text-left text-[11px] hover:bg-lp-surface-hover',
-                                selectedArtistId === a.id ? 'text-lp-orange' : 'text-lp-text'
-                              )}
-                            >
-                              <span className="truncate">{a.name}</span>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                    <div className="relative mt-1 w-full" ref={tourRef}>
-                      <div className="flex w-full min-w-0 items-center gap-0.5">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setTourOpen((v) => !v);
-                            setArtistOpen(false);
-                          }}
-                          disabled={!selectedArtistId}
-                          className="flex min-w-0 flex-1 items-center justify-between gap-1 py-0.5 text-left leading-none disabled:opacity-50"
-                        >
-                          <span className="truncate text-[11px] font-semibold text-lp-text-secondary">
-                            {selectedTour?.name ?? 'Select Tour'}
-                          </span>
-                          <ChevronDown size={12} className={cn('shrink-0 text-lp-text-tertiary', tourOpen && 'rotate-180')} />
-                        </button>
-                        {selectedTourId && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSelectedTourId(null);
-                              setTourOpen(false);
-                              if (onManagePage) router.push('/budget');
-                            }}
-                            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-lp-text-tertiary transition-colors hover:bg-lp-surface-hover hover:text-lp-orange"
-                            aria-label="Clear selected tour"
-                            title="Clear tour"
-                          >
-                            <X size={14} strokeWidth={2} />
-                          </button>
-                        )}
-                      </div>
-                      {tourOpen && (
-                        <div className="absolute left-0 top-full z-50 mt-1 max-h-56 w-full overflow-y-auto rounded-md border border-lp-border bg-lp-surface py-1 shadow-lg">
-                          {tours.map((t) => (
-                            <button
-                              key={t.id}
-                              type="button"
-                              onClick={() => {
-                                setSelectedTourId(t.id);
-                                setTourOpen(false);
-                                if (onManagePage) {
-                                  if (pathname?.startsWith('/budget')) {
-                                    const currentTab = searchParams?.get('tab') ?? 'summary';
-                                    router.push(`/budget?tour_id=${t.id}&tab=${currentTab}`);
-                                  } else if (pathname?.includes('/overview')) {
-                                    router.push(`/tours/${t.id}/overview`);
-                                  } else if (pathname?.includes('/advance')) {
-                                    router.push(`/tours/${t.id}/advance`);
-                                  } else if (pathname?.includes('/rooming')) {
-                                    router.push(`/tours/${t.id}/rooming`);
-                                  } else if (pathname?.includes('/payroll')) {
-                                    router.push(`/tours/${t.id}/payroll`);
-                                  } else {
-                                    router.push(`/budget?tour_id=${t.id}&tab=summary`);
-                                  }
-                                }
-                              }}
-                              className={cn(
-                                'w-full px-2 py-1.5 text-left text-[11px] hover:bg-lp-surface-hover',
-                                selectedTourId === t.id ? 'text-lp-orange' : 'text-lp-text'
-                              )}
-                            >
-                              <span className="truncate">{t.name}</span>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </div>
               )}
 
               <div className="space-y-0.5">
