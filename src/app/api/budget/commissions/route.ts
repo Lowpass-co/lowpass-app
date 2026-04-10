@@ -10,6 +10,14 @@
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 
+const BASIS_VALUES = new Set([
+  'gross',
+  'net',
+  'gross_merch',
+  'net_merch',
+  'gross_minus_tax',
+]);
+
 export async function GET(request: Request) {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -174,9 +182,25 @@ export async function PATCH(request: Request) {
   }
 
   const payload: Record<string, unknown> = {};
-  if (updates.label !== undefined) payload.label = updates.label;
+  if (updates.label !== undefined) {
+    const raw = updates.label;
+    if (raw === null || raw === undefined) {
+      return NextResponse.json({ error: 'label cannot be empty' }, { status: 400 });
+    }
+    const trimmed = typeof raw === 'string' ? raw.trim() : String(raw).trim();
+    if (!trimmed) {
+      return NextResponse.json({ error: 'label cannot be empty' }, { status: 400 });
+    }
+    payload.label = trimmed;
+  }
   if (updates.percentage !== undefined) payload.percentage = updates.percentage;
-  if (updates.basis !== undefined) payload.basis = updates.basis;
+  if (updates.basis !== undefined) {
+    const b = typeof updates.basis === 'string' ? updates.basis.trim() : String(updates.basis);
+    if (!BASIS_VALUES.has(b)) {
+      return NextResponse.json({ error: 'Invalid basis' }, { status: 400 });
+    }
+    payload.basis = b;
+  }
   if (updates.notes !== undefined) payload.notes = updates.notes;
   if (updates.order_index !== undefined) payload.order_index = updates.order_index;
 

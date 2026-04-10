@@ -96,21 +96,18 @@ export async function DELETE(
   }
 
   const { id } = await params;
-  const { data: tour } = await supabase
+  const workspaceId = profile.workspace_id;
+  const { data: deleted, error } = await supabase
     .from('tours')
-    .select('id')
+    .delete()
     .eq('id', id)
-    .eq('workspace_id', profile.workspace_id)
-    .single();
-
-  if (!tour) {
-    return NextResponse.json({ error: 'Tour not found' }, { status: 404 });
-  }
-
-  const { error } = await supabase.from('tours').delete().eq('id', id);
-
+    .eq('workspace_id', workspaceId)
+    .select('id');
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  if (!deleted?.length) {
+    return NextResponse.json({ error: 'Tour not found' }, { status: 404 });
   }
   return new NextResponse(null, { status: 204 });
 }

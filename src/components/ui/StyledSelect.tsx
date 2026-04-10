@@ -48,7 +48,19 @@ export function StyledSelect<T extends string>({
       <button
         type="button"
         onClick={() => !disabled && setOpen((o) => !o)}
+        onKeyDown={(e) => {
+          if (disabled) return;
+          if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            setOpen(true);
+          }
+          if (e.key === 'Escape') {
+            setOpen(false);
+          }
+        }}
         disabled={disabled}
+        aria-haspopup="listbox"
+        aria-expanded={open}
         className={cn(
           'flex w-full items-center justify-between text-left transition-all duration-150',
           variant === 'plain'
@@ -91,6 +103,7 @@ export function StyledSelect<T extends string>({
       </button>
       {open && (
         <div
+          role="listbox"
           className={cn(
             'absolute left-0 right-0 top-full z-50 mt-1 max-h-56 overflow-y-auto border border-lp-border bg-lp-surface py-1 shadow-xl animate-scale-in',
             size === 'sm' ? 'rounded-lg' : 'rounded-xl'
@@ -100,6 +113,8 @@ export function StyledSelect<T extends string>({
             <button
               key={opt.value}
               type="button"
+              role="option"
+              aria-selected={opt.value === value}
               onClick={() => {
                 onChange(opt.value);
                 setOpen(false);

@@ -54,6 +54,12 @@ export function ContextMenu({
     return () => document.removeEventListener('keydown', onKey);
   }, []);
 
+  useEffect(() => {
+    if (!open || !menuRef.current) return;
+    const firstButton = menuRef.current.querySelector('button:not(:disabled)') as HTMLButtonElement | null;
+    firstButton?.focus();
+  }, [open]);
+
   return (
     <div className="relative inline-block" ref={ref}>
       <button
@@ -64,8 +70,16 @@ export function ContextMenu({
           if (!open) onBeforeOpen?.();
           setOpen((o) => !o);
         }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            if (!open) onBeforeOpen?.();
+            setOpen((o) => !o);
+          }
+        }}
         className="flex h-8 w-8 items-center justify-center rounded-lg text-lp-text-tertiary transition-colors hover:bg-lp-surface-hover hover:text-lp-text"
         aria-label="Options"
+        aria-expanded={open}
       >
         <MoreVertical size={18} />
       </button>
@@ -77,6 +91,20 @@ export function ContextMenu({
             ref={menuRef}
             className="lp-dropdown-layer fixed min-w-[180px] overflow-hidden rounded-xl border border-lp-border bg-lp-surface py-1 shadow-xl animate-scale-in"
             style={{ top: menuRect.top, left: menuRect.left, width: menuRect.width }}
+            onKeyDown={(e) => {
+              if (!menuRef.current) return;
+              const items = Array.from(menuRef.current.querySelectorAll('button:not(:disabled)')) as HTMLButtonElement[];
+              if (!items.length) return;
+              const active = document.activeElement as HTMLButtonElement | null;
+              const idx = items.findIndex((el) => el === active);
+              if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                items[(idx + 1 + items.length) % items.length]?.focus();
+              } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                items[(idx - 1 + items.length) % items.length]?.focus();
+              }
+            }}
           >
             {items.map((item, i) => {
               const Icon = item.icon;

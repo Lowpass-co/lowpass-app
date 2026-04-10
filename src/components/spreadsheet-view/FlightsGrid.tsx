@@ -103,28 +103,28 @@ export function FlightsGrid({ tourId, currency }: { tourId: string; currency: st
                   i === 0 && 'border-t border-lp-border/50'
                 )}
               >
-                <td className="px-2 py-0">
+                <td className="p-0">
                   <InlineEditCell
                     value={f.person_name}
                     type="text"
                     onSave={async (v) => saveFlight(f.id, 'person_name', String(v))}
                   />
                 </td>
-                <td className="px-2 py-0">
+                <td className="p-0">
                   <InlineEditCell
                     value={f.origin_code}
                     type="text"
                     onSave={async (v) => saveFlight(f.id, 'origin_code', String(v))}
                   />
                 </td>
-                <td className="px-2 py-0">
+                <td className="p-0">
                   <InlineEditCell
                     value={f.destination_code}
                     type="text"
                     onSave={async (v) => saveFlight(f.id, 'destination_code', String(v))}
                   />
                 </td>
-                <td className="px-2 py-0">
+                <td className="p-0">
                   <InlineEditCell
                     value={f.proposed_cost}
                     type="currency"
@@ -133,7 +133,7 @@ export function FlightsGrid({ tourId, currency }: { tourId: string; currency: st
                     align="right"
                   />
                 </td>
-                <td className="px-2 py-0">
+                <td className="p-0">
                   <InlineEditCell
                     value={f.actual_cost}
                     type="currency"
@@ -142,28 +142,28 @@ export function FlightsGrid({ tourId, currency }: { tourId: string; currency: st
                     align="right"
                   />
                 </td>
-                <td className="px-2 py-0">
+                <td className="p-0">
                   <InlineEditCell
                     value={f.departure_date ? f.departure_date.slice(0, 10) : null}
                     type="text"
                     onSave={async (v) => saveFlight(f.id, 'departure_date', String(v) || '')}
                   />
                 </td>
-                <td className="px-2 py-0">
+                <td className="p-0">
                   <InlineEditCell
                     value={f.airline}
                     type="text"
                     onSave={async (v) => saveFlight(f.id, 'airline', String(v))}
                   />
                 </td>
-                <td className="px-2 py-0">
+                <td className="p-0">
                   <InlineEditCell
                     value={f.flight_number}
                     type="text"
                     onSave={async (v) => saveFlight(f.id, 'flight_number', String(v))}
                   />
                 </td>
-                <td className="px-2 py-0">
+                <td className="p-0">
                   <InlineEditCell
                     value={f.leg_order}
                     type="number"

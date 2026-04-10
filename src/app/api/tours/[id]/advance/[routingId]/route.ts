@@ -401,36 +401,17 @@ export async function DELETE(
     return NextResponse.json({ error: 'Routing date not found' }, { status: 404 });
   }
 
-  const { data: instance, error: fetchErr } = await supabase
-    .from('advance_instances')
-    .select('id, form_config_id')
-    .eq('routing_id', routingId)
-    .maybeSingle();
-
-  if (fetchErr) {
-    return NextResponse.json({ error: fetchErr.message }, { status: 500 });
+  const { data: deletedRouting, error: deleteRoutingErr } = await supabase
+    .from('routing')
+    .delete()
+    .eq('id', routingId)
+    .eq('tour_id', tourId)
+    .select('id');
+  if (deleteRoutingErr) {
+    return NextResponse.json({ error: deleteRoutingErr.message }, { status: 500 });
   }
-
-  if (instance) {
-    const { error: deleteInstanceErr } = await supabase
-      .from('advance_instances')
-      .delete()
-      .eq('id', instance.id);
-
-    if (deleteInstanceErr) {
-      return NextResponse.json({ error: deleteInstanceErr.message }, { status: 500 });
-    }
-
-    const configId = (instance as { form_config_id?: string }).form_config_id;
-    if (configId) {
-      const { count } = await supabase
-        .from('advance_instances')
-        .select('*', { count: 'exact', head: true })
-        .eq('form_config_id', configId);
-      if (count != null && count === 0) {
-        await supabase.from('advance_form_configs').delete().eq('id', configId);
-      }
-    }
+  if (!deletedRouting?.length) {
+    return NextResponse.json({ error: 'Routing date not found' }, { status: 404 });
   }
 
   return new NextResponse(null, { status: 204 });

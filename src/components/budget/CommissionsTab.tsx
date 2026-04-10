@@ -286,12 +286,18 @@ export function CommissionsTab({ tourId }: { tourId: string }) {
   };
 
   const saveCommission = async (id: string, payload: Partial<CommissionRow>) => {
+    if (payload.label !== undefined && !String(payload.label).trim()) {
+      setError('Label cannot be empty');
+      return;
+    }
+    const sanitized = { ...payload };
+    if (typeof sanitized.label === 'string') sanitized.label = sanitized.label.trim();
     setSaving(true);
     try {
       const res = await fetch('/api/budget/commissions', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id, ...payload }),
+        body: JSON.stringify({ id, ...sanitized }),
       });
       if (!res.ok) throw new Error('Save failed');
       setEditingId(null);

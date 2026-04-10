@@ -111,18 +111,30 @@ export function InlineEditCell({
 
   const handleSave = async () => {
     if (readOnly) return;
-    setEditing(false);
-    let newVal: string | number = inputValue.trim();
 
-    if (type === 'number') {
-      const cleaned = sanitizeIntegerInput(String(newVal));
-      newVal = cleaned === '' ? 0 : parseInt(cleaned, 10);
-    } else if (type === 'currency' || type === 'percentage') {
-      const raw = String(newVal).replace(/[^0-9.-]/g, '');
-      const n = parseFloat(raw);
-      newVal = Number.isNaN(n) ? 0 : n;
+    // Read select value directly from DOM to avoid stale state during onBlur.
+    let newVal: string | number;
+    if (type === 'select' && inputRef.current instanceof HTMLSelectElement) {
+      newVal = inputRef.current.value;
+    } else {
+      newVal = inputValue.trim();
+      if (type === 'number') {
+        const cleaned = sanitizeIntegerInput(String(newVal));
+        newVal = cleaned === '' ? 0 : parseInt(cleaned, 10);
+      } else if (type === 'currency' || type === 'percentage') {
+        const raw = String(newVal).replace(/[^0-9.-]/g, '');
+        const n = parseFloat(raw);
+        newVal = Number.isNaN(n) ? 0 : n;
+      }
     }
 
+    if (type === 'select' && String(newVal) === String(value ?? '')) {
+      setEditing(false);
+      setInputValue(valueToEditString(value, type));
+      return;
+    }
+
+    setEditing(false);
     setSaving(true);
     setError(false);
     try {
@@ -138,7 +150,7 @@ export function InlineEditCell({
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      handleSave();
+      void handleSave();
     }
     if (e.key === 'Escape') {
       setEditing(false);
@@ -152,14 +164,14 @@ export function InlineEditCell({
     return (
       <span
         className={cn(
-          'inline-flex min-w-0 max-w-full items-baseline gap-1 px-2 py-1.5 text-sm text-lp-text-secondary',
+          'inline-flex min-h-[2.75rem] min-w-0 max-w-full items-center gap-1 px-3 py-2 font-sans text-sm leading-normal text-lp-text-secondary',
           align === 'right' && 'w-full justify-end font-[tabular-nums]',
           className
         )}
       >
         <span>{displayValue}</span>
         {showCurrencyCode && (
-          <span className="shrink-0 text-[9px] font-semibold uppercase tracking-tight text-lp-text-tertiary">
+          <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-lp-text-tertiary">
             {currency}
           </span>
         )}
@@ -169,7 +181,7 @@ export function InlineEditCell({
 
   if (editing) {
     const inputClass =
-      'lp-budget px-2 py-1.5 text-sm border border-lp-orange/35 rounded bg-lp-surface outline-none w-full font-[tabular-nums] focus:border-lp-orange/50 focus:ring-1 focus:ring-lp-orange/15';
+      'lp-budget min-h-[2.75rem] w-full border border-lp-orange/35 bg-lp-surface px-3 py-2 font-sans text-sm leading-normal outline-none font-[tabular-nums] focus:border-lp-orange/50 focus:ring-1 focus:ring-lp-orange/15';
     return (
       <span className={cn('block min-w-0', className)}>
         {type === 'select' ? (
@@ -177,7 +189,7 @@ export function InlineEditCell({
             ref={inputRef as React.RefObject<HTMLSelectElement>}
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
-            onBlur={handleSave}
+            onBlur={() => void handleSave()}
             onKeyDown={handleKeyDown}
             className={cn(inputClass, align === 'right' && 'text-right')}
           >
@@ -200,7 +212,7 @@ export function InlineEditCell({
               else if (type === 'currency' || type === 'percentage') setInputValue(sanitizeDecimalInput(v, true));
               else setInputValue(v);
             }}
-            onBlur={handleSave}
+            onBlur={() => void handleSave()}
             onKeyDown={handleKeyDown}
             placeholder={placeholder}
             className={cn(inputClass, align === 'right' && 'text-right')}
@@ -218,7 +230,7 @@ export function InlineEditCell({
         setInputValue(valueToEditString(value, type));
       }}
       className={cn(
-        'inline-flex min-w-0 w-full cursor-pointer items-baseline gap-1 rounded px-2 py-1.5 text-left text-sm transition-colors',
+        'inline-flex min-h-[2.75rem] min-w-0 w-full cursor-pointer items-center gap-1 px-3 py-2 text-left font-sans text-sm leading-normal transition-colors',
         align === 'right' && 'justify-end font-[tabular-nums]',
         saving && 'opacity-70',
         error && 'bg-red-500/20 animate-pulse',
@@ -233,7 +245,7 @@ export function InlineEditCell({
         <>
           <span>{displayValue}</span>
           {showCurrencyCode && (
-            <span className="shrink-0 text-[9px] font-semibold uppercase tracking-tight text-lp-text-tertiary">
+            <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-lp-text-tertiary">
               {currency}
             </span>
           )}

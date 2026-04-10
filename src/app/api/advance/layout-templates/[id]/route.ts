@@ -15,16 +15,54 @@ export async function DELETE(
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('workspace_id')
+    .eq('id', user.id)
+    .single();
+  if (!profile?.workspace_id) {
+    return NextResponse.json({ error: 'No workspace' }, { status: 403 });
+  }
+
   const { id } = await params;
 
-  const { error } = await supabase
+  const { data: removedWorkspaceTemplate, error: wsErr } = await supabase
+    .from('advance_layout_templates')
+    .delete()
+    .eq('id', id)
+    .eq('workspace_id', profile.workspace_id)
+    .select('id');
+
+  if (wsErr) {
+    return NextResponse.json({ error: wsErr.message }, { status: 500 });
+  }
+  if (removedWorkspaceTemplate?.length) {
+    return new Response(null, { status: 204 });
+  }
+
+  const { data: tours } = await supabase
+    .from('tours')
+    .select('id')
+    .eq('workspace_id', profile.workspace_id);
+  const tourIds = (tours ?? []).map((t) => t.id);
+
+  if (tourIds.length === 0) {
+    return NextResponse.json({ error: 'Template not found' }, { status: 404 });
+  }
+
+  const { data: removedTourTemplate, error: afcErr } = await supabase
     .from('advance_form_configs')
     .delete()
     .eq('id', id)
-    .eq('is_template', true);
+    .eq('is_template', true)
+    .in('tour_id', tourIds)
+    .select('id');
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  if (afcErr) {
+    return NextResponse.json({ error: afcErr.message }, { status: 500 });
+  }
+  if (!removedTourTemplate?.length) {
+    return NextResponse.json({ error: 'Template not found' }, { status: 404 });
   }
 
   return new Response(null, { status: 204 });

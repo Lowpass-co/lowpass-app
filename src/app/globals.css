@@ -138,6 +138,20 @@
   appearance: textfield;
 }
 
+/* Budget / spreadsheet: Geist sans + single scale (14px body, matches dashboard cards) */
+.lp-budget {
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+.lp-budget table {
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
+
 /* Dropdowns / popovers — render above sidebar, header, and card stacking contexts */
 .lp-dropdown-layer {
   z-index: 1000;

@@ -130,22 +130,22 @@ export function BudgetDetailShell({ tourId, activeTab }: { tourId: string; activ
           <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2">
             <Link
               href={`/budget?tour_id=${tourId}&view=overview`}
-              className="text-[11px] text-lp-text-tertiary transition-colors hover:text-lp-orange"
+              className="text-sm text-lp-text-tertiary transition-colors hover:text-lp-orange"
             >
               ← Budget overview
             </Link>
             <div className="hidden h-4 w-px bg-lp-border sm:block" aria-hidden />
             <div className="min-w-0">
-              <h1 className="truncate text-sm font-semibold text-lp-text">
+              <h1 className="truncate text-lg font-semibold tracking-tight text-lp-text">
                 {loadingTour ? '…' : tourName}
               </h1>
-              <p className="text-[10px] text-lp-text-tertiary">
+              <p className="text-sm text-lp-text-secondary">
                 Spreadsheet-style budget · click cells to edit · all figures in tour currency unless noted
               </p>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-            <label className="text-[10px] font-bold uppercase tracking-wider text-lp-table-header-text whitespace-nowrap">
+            <label className="whitespace-nowrap text-xs font-semibold uppercase tracking-wide text-lp-table-header-text">
               Tour currency
             </label>
             <div className="flex items-center gap-2">

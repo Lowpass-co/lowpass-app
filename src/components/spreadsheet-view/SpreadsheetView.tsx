@@ -59,12 +59,26 @@ export function SpreadsheetView({ tourId, tourName, currency, defaultTab }: Spre
         <h1 className="text-xl font-bold text-lp-text">{tourName} — Spreadsheet</h1>
       </div>
 
-      <nav className="flex flex-wrap gap-0 border-b border-lp-border">
+      <nav role="tablist" className="flex flex-wrap gap-0 border-b border-lp-border">
         {TABS.map((t) => (
           <button
             key={t.id}
             type="button"
             onClick={() => setTab(t.id)}
+            role="tab"
+            aria-selected={activeTab === t.id}
+            tabIndex={activeTab === t.id ? 0 : -1}
+            onKeyDown={(e) => {
+              const idx = TABS.findIndex((x) => x.id === t.id);
+              if (idx < 0) return;
+              if (e.key === 'ArrowRight') {
+                e.preventDefault();
+                setTab(TABS[(idx + 1) % TABS.length].id);
+              } else if (e.key === 'ArrowLeft') {
+                e.preventDefault();
+                setTab(TABS[(idx - 1 + TABS.length) % TABS.length].id);
+              }
+            }}
             className={cn(
               'text-xs font-semibold uppercase tracking-wider px-3 py-2 transition-colors',
               activeTab === t.id

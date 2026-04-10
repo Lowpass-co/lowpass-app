@@ -194,41 +194,41 @@ export function IncomeGrid({ tourId, currency }: { tourId: string; currency: str
       columns={COLS}
       footer={
         <>
-          <td colSpan={5} className="px-2 py-2 text-lp-text font-bold">
+          <td colSpan={5} className="font-semibold text-lp-text">
             TOTALS
           </td>
-          <td className="px-2 py-2">
+          <td>
             <SpreadsheetCurrencyAmount amount={totals.pre_tax_guarantee} currency={currency} />
           </td>
-          <td className="px-2 py-2 text-right">—</td>
-          <td className="px-2 py-2">
+          <td className="text-right">—</td>
+          <td>
             <SpreadsheetCurrencyAmount amount={totals.post_tax_guarantee} currency={currency} />
           </td>
-          <td className="px-2 py-2">
+          <td>
             <SpreadsheetCurrencyAmount amount={totals.pre_tax_overage} currency={currency} />
           </td>
-          <td className="px-2 py-2">
+          <td>
             <SpreadsheetCurrencyAmount amount={totals.post_tax_overage} currency={currency} />
           </td>
-          <td className="px-2 py-2">
+          <td>
             <SpreadsheetCurrencyAmount amount={totals.merch_income} currency={currency} />
           </td>
-          <td className="px-2 py-2">
+          <td>
             <SpreadsheetCurrencyAmount amount={totals.vip_income} currency={currency} />
           </td>
-          <td className="px-2 py-2 text-right">—</td>
-          <td className="px-2 py-2">—</td>
+          <td className="text-right">—</td>
+          <td>—</td>
         </>
       }
     >
-      {rows.map((row, idx) => (
+      {rows.map((row) => (
         <tr key={row.routing_id}>
-          <td className="px-2 py-1 text-sm text-lp-text-secondary">{formatDate(row.date)}</td>
-          <td className="px-2 py-1 text-sm text-lp-text-secondary uppercase">{row.day_type}</td>
-          <td className="px-2 py-1 text-sm text-lp-text-secondary">{row.venue_name ?? '—'}</td>
-          <td className="px-2 py-1 text-sm text-lp-text-secondary">{row.city}</td>
-          <td className="px-2 py-1 text-sm text-lp-text-secondary text-right">—</td>
-          <td className="px-2 py-0">
+          <td className="text-lp-text-secondary">{formatDate(row.date)}</td>
+          <td className="text-lp-text-secondary uppercase">{row.day_type}</td>
+          <td className="text-lp-text-secondary">{row.venue_name ?? '—'}</td>
+          <td className="text-lp-text-secondary">{row.city}</td>
+          <td className="text-right text-lp-text-secondary">—</td>
+          <td className="p-0">
             <InlineEditCell
               value={row.pre_tax_guarantee}
               type="currency"
@@ -237,7 +237,7 @@ export function IncomeGrid({ tourId, currency }: { tourId: string; currency: str
               align="right"
             />
           </td>
-          <td className="px-2 py-0">
+          <td className="p-0">
             <InlineEditCell
               value={row.withholding_pct}
               type="percentage"
@@ -245,14 +245,14 @@ export function IncomeGrid({ tourId, currency }: { tourId: string; currency: str
               align="right"
             />
           </td>
-          <td className="px-2 py-1 text-sm text-lp-text-secondary">
+          <td className="text-right text-lp-text-secondary">
             {row.post_tax_guarantee === 0 && row.pre_tax_guarantee === 0 ? (
               '—'
             ) : (
               <SpreadsheetCurrencyAmount amount={postTax(row.pre_tax_guarantee, row.withholding_pct)} currency={currency} />
             )}
           </td>
-          <td className="px-2 py-0">
+          <td className="p-0">
             <InlineEditCell
               value={row.pre_tax_overage}
               type="currency"
@@ -261,14 +261,14 @@ export function IncomeGrid({ tourId, currency }: { tourId: string; currency: str
               align="right"
             />
           </td>
-          <td className="px-2 py-1 text-sm text-lp-text-secondary">
+          <td className="text-right text-lp-text-secondary">
             {row.pre_tax_overage === 0 ? (
               '—'
             ) : (
               <SpreadsheetCurrencyAmount amount={postTax(row.pre_tax_overage, row.withholding_pct)} currency={currency} />
             )}
           </td>
-          <td className="px-2 py-0">
+          <td className="p-0">
             <InlineEditCell
               value={row.merch_income}
               type="currency"
@@ -277,7 +277,7 @@ export function IncomeGrid({ tourId, currency }: { tourId: string; currency: str
               align="right"
             />
           </td>
-          <td className="px-2 py-0">
+          <td className="p-0">
             <InlineEditCell
               value={row.vip_income}
               type="currency"
@@ -286,7 +286,7 @@ export function IncomeGrid({ tourId, currency }: { tourId: string; currency: str
               align="right"
             />
           </td>
-          <td className="px-2 py-0">
+          <td className="p-0">
             <InlineEditCell
               value={row.drop_count}
               type="number"
@@ -294,7 +294,7 @@ export function IncomeGrid({ tourId, currency }: { tourId: string; currency: str
               align="right"
             />
           </td>
-          <td className="px-2 py-0">
+          <td className="p-0">
             <InlineEditCell
               value={row.notes}
               type="text"

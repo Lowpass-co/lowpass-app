@@ -87,16 +87,16 @@ export function TransportGrid({ tourId, currency }: { tourId: string; currency: 
             key={cat}
             className="lp-budget overflow-hidden rounded-md border border-lp-border bg-lp-surface shadow-[inset_0_0_0_1px_var(--lp-border)]"
           >
-            <div className="text-xs font-bold uppercase tracking-wider text-lp-text-secondary px-3 py-2 border-b border-lp-border/50">
+            <div className="border-b border-lp-border/50 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-lp-text-secondary">
               {label}
             </div>
             <table className="w-full border-collapse text-sm tabular-nums">
               <thead>
-                <tr className="border-b-2 border-lp-border bg-lp-bg-tertiary text-xs text-lp-text-secondary dark:bg-lp-bg-secondary">
-                  <th className="border-r border-lp-border px-2 py-2 text-left font-semibold last:border-r-0">Item</th>
-                  <th className="border-r border-lp-border px-2 py-2 text-right font-semibold last:border-r-0">#</th>
-                  <th className="border-r border-lp-border px-2 py-2 text-right font-semibold last:border-r-0">P</th>
-                  <th className="px-2 py-2 text-right font-semibold">A</th>
+                <tr className="border-b-2 border-lp-border bg-lp-bg-tertiary text-xs font-semibold uppercase tracking-wide lp-table-header-text dark:bg-lp-bg-secondary">
+                  <th className="border-r border-lp-border px-3 py-2.5 text-left last:border-r-0">Item</th>
+                  <th className="border-r border-lp-border px-3 py-2.5 text-right last:border-r-0">#</th>
+                  <th className="border-r border-lp-border px-3 py-2.5 text-right last:border-r-0">P</th>
+                  <th className="px-3 py-2.5 text-right">A</th>
                 </tr>
               </thead>
               <tbody>
@@ -105,7 +105,7 @@ export function TransportGrid({ tourId, currency }: { tourId: string; currency: 
                     key={i.id}
                     className="border-b border-lp-border odd:bg-lp-bg-secondary/35 even:bg-transparent dark:odd:bg-white/[0.04]"
                   >
-                    <td className="border-r border-lp-border px-2 py-1.5 align-middle last:border-r-0">
+                    <td className="border-r border-lp-border px-3 py-2.5 align-middle last:border-r-0">
                       <span className="flex items-center gap-1">
                         <button
                           type="button"
@@ -124,7 +124,7 @@ export function TransportGrid({ tourId, currency }: { tourId: string; currency: 
                         </button>
                       </span>
                     </td>
-                    <td className="border-r border-lp-border px-2 py-1.5 text-right align-middle last:border-r-0">
+                    <td className="border-r border-lp-border px-3 py-2.5 text-right align-middle last:border-r-0">
                       <InlineEditCell
                         value={i.quantity}
                         type="number"
@@ -132,7 +132,7 @@ export function TransportGrid({ tourId, currency }: { tourId: string; currency: 
                         align="right"
                       />
                     </td>
-                    <td className="border-r border-lp-border px-2 py-1.5 align-middle last:border-r-0">
+                    <td className="border-r border-lp-border px-3 py-2.5 align-middle last:border-r-0">
                       <InlineEditCell
                         value={i.proposed_cost}
                         type="currency"
@@ -141,7 +141,7 @@ export function TransportGrid({ tourId, currency }: { tourId: string; currency: 
                         align="right"
                       />
                     </td>
-                    <td className="px-2 py-1.5 align-middle">
+                    <td className="px-3 py-2.5 align-middle">
                       <InlineEditCell
                         value={i.actual_cost}
                         type="currency"
@@ -155,22 +155,22 @@ export function TransportGrid({ tourId, currency }: { tourId: string; currency: 
               </tbody>
               <tfoot>
                 <tr className="border-t border-lp-border font-semibold text-lp-text">
-                  <td className="px-2 py-1.5">TOTAL</td>
-                  <td className="px-2 py-1.5" />
-                  <td className="px-2 py-1.5">
+                  <td className="px-3 py-2.5">TOTAL</td>
+                  <td className="px-3 py-2.5" />
+                  <td className="px-3 py-2.5">
                     <SpreadsheetCurrencyAmount amount={totalProposed} currency={currency} />
                   </td>
-                  <td className="px-2 py-1.5">
+                  <td className="px-3 py-2.5">
                     <SpreadsheetCurrencyAmount amount={totalActual} currency={currency} />
                   </td>
                 </tr>
               </tfoot>
             </table>
-            <div className="px-2 py-1.5 border-t border-lp-border/50">
+            <div className="border-t border-lp-border/50 px-3 py-2.5">
               <button
                 type="button"
                 onClick={() => addItem(cat)}
-                className="text-lp-orange text-xs font-semibold hover:underline"
+                className="text-sm font-semibold text-lp-orange hover:underline"
               >
                 + Add
               </button>

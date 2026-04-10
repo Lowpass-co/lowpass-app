@@ -97,20 +97,18 @@ export async function DELETE(
   }
 
   const { id } = await params;
-  const { data: artist } = await supabase
+  const workspaceId = profile.workspace_id;
+  const { data: deleted, error } = await supabase
     .from('artists')
-    .select('id')
+    .delete()
     .eq('id', id)
-    .eq('workspace_id', profile.workspace_id)
-    .single();
-
-  if (!artist) {
-    return NextResponse.json({ error: 'Artist not found' }, { status: 404 });
-  }
-
-  const { error } = await supabase.from('artists').delete().eq('id', id);
+    .eq('workspace_id', workspaceId)
+    .select('id');
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  if (!deleted?.length) {
+    return NextResponse.json({ error: 'Artist not found' }, { status: 404 });
   }
   return new NextResponse(null, { status: 204 });
 }

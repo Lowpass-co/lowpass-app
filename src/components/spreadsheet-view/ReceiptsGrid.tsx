@@ -48,7 +48,7 @@ const IN_BUDGET_OPTIONS = [
 ];
 
 const COLS = [
-  { key: 'receipt_number', label: '#', width: '70px' },
+  { key: 'receipt_number', label: 'Receipt #', width: '88px' },
   { key: 'date', label: 'Date', width: '100px' },
   { key: 'vendor', label: 'Vendor', width: '120px' },
   { key: 'category', label: 'Category', width: '120px' },
@@ -57,7 +57,7 @@ const COLS = [
   { key: 'cost_tour', label: 'Cost (Tour)', width: '100px', align: 'right' as const },
   { key: 'cost_home', label: 'Cost (Home)', width: '100px', align: 'right' as const },
   { key: 'in_budget', label: 'In Budget', width: '80px' },
-  { key: 'linked_line_item_id', label: 'Linked Item', width: '100px' },
+  { key: 'linked_line_item_id', label: 'Linked ID', width: '112px' },
 ];
 
 export function ReceiptsGrid({ tourId, currency }: { tourId: string; currency: string }) {
@@ -197,22 +197,22 @@ export function ReceiptsGrid({ tourId, currency }: { tourId: string; currency: s
               ocrPrefilledIds.has(r.id) && 'bg-orange-500/10'
             )}
           >
-            <td className="px-2 py-1 text-sm text-lp-text-secondary">{r.receipt_number}</td>
-            <td className="px-2 py-0">
+            <td className="text-lp-text-secondary">{r.receipt_number}</td>
+            <td className="p-0">
               <InlineEditCell
                 value={r.date ? r.date.slice(0, 10) : null}
                 type="text"
                 onSave={async (v) => saveReceipt(r.id, 'date', String(v))}
               />
             </td>
-            <td className="px-2 py-0">
+            <td className="p-0">
               <InlineEditCell
                 value={r.vendor}
                 type="text"
                 onSave={async (v) => saveReceipt(r.id, 'vendor', String(v))}
               />
             </td>
-            <td className="px-2 py-0">
+            <td className="p-0">
               <InlineEditCell
                 value={r.category}
                 type="select"
@@ -220,14 +220,14 @@ export function ReceiptsGrid({ tourId, currency }: { tourId: string; currency: s
                 onSave={async (v) => saveReceipt(r.id, 'category', String(v))}
               />
             </td>
-            <td className="px-2 py-0">
+            <td className="p-0">
               <InlineEditCell
                 value={r.description}
                 type="text"
                 onSave={async (v) => saveReceipt(r.id, 'description', String(v))}
               />
             </td>
-            <td className="px-2 py-0">
+            <td className="p-0">
               <InlineEditCell
                 value={r.payment_method}
                 type="select"
@@ -235,7 +235,7 @@ export function ReceiptsGrid({ tourId, currency }: { tourId: string; currency: s
                 onSave={async (v) => saveReceipt(r.id, 'payment_method', String(v))}
               />
             </td>
-            <td className="px-2 py-0">
+            <td className="p-0">
               <InlineEditCell
                 value={r.cost_tour_currency}
                 type="currency"
@@ -244,7 +244,7 @@ export function ReceiptsGrid({ tourId, currency }: { tourId: string; currency: s
                 align="right"
               />
             </td>
-            <td className="px-2 py-0">
+            <td className="p-0">
               <InlineEditCell
                 value={r.cost_home_currency}
                 type="currency"
@@ -253,7 +253,7 @@ export function ReceiptsGrid({ tourId, currency }: { tourId: string; currency: s
                 align="right"
               />
             </td>
-            <td className="px-2 py-0">
+            <td className="p-0">
               <InlineEditCell
                 value={r.in_budget ? 'true' : 'false'}
                 type="select"
@@ -261,9 +261,7 @@ export function ReceiptsGrid({ tourId, currency }: { tourId: string; currency: s
                 onSave={async (v) => saveReceipt(r.id, 'in_budget', v)}
               />
             </td>
-            <td className="px-2 py-1 text-sm text-lp-text-secondary">
-              {r.linked_line_item_id ?? '—'}
-            </td>
+            <td className="font-mono text-xs text-lp-text-secondary">{r.linked_line_item_id ?? '—'}</td>
           </tr>
         ))}
       </GridTable>

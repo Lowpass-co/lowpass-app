@@ -50,6 +50,10 @@ export function CommissionsGrid({ tourId, currency }: { tourId: string; currency
   const saveCommission = useCallback(async (id: string, field: string, value: string | number) => {
     const body: Record<string, unknown> = { id };
     if (field === 'percentage') body.percentage = typeof value === 'number' ? value : parseFloat(String(value));
+    else if (field === 'label') {
+      const t = String(value).trim();
+      body.label = t || 'Commission';
+    }
     else body[field] = value === '' ? null : value;
     const res = await fetch('/api/budget/commissions', {
       method: 'PATCH',
@@ -82,21 +86,21 @@ export function CommissionsGrid({ tourId, currency }: { tourId: string; currency
 
   return (
     <div className="space-y-4">
-      <p className="text-[11px] text-lp-text-secondary">
+      <p className="text-sm text-lp-text-secondary">
         Commission amounts (when shown) use tour currency{' '}
         <span className="font-semibold text-lp-text">{(currency ?? 'GBP').trim().toUpperCase() || 'GBP'}</span>.
       </p>
       <GridTable columns={COLS}>
         {commissions.map((c) => (
           <tr key={c.id}>
-            <td className="px-2 py-0">
+            <td className="p-0">
               <InlineEditCell
                 value={c.label}
                 type="text"
                 onSave={async (v) => saveCommission(c.id, 'label', String(v))}
               />
             </td>
-            <td className="px-2 py-0">
+            <td className="p-0">
               <InlineEditCell
                 value={c.percentage}
                 type="percentage"
@@ -104,7 +108,7 @@ export function CommissionsGrid({ tourId, currency }: { tourId: string; currency
                 align="right"
               />
             </td>
-            <td className="px-2 py-0">
+            <td className="p-0">
               <InlineEditCell
                 value={c.basis}
                 type="select"
@@ -112,13 +116,13 @@ export function CommissionsGrid({ tourId, currency }: { tourId: string; currency
                 onSave={async (v) => saveCommission(c.id, 'basis', String(v))}
               />
             </td>
-            <td className="px-2 py-1 text-sm text-lp-text-secondary text-right font-[tabular-nums]">
+            <td className="text-right text-lp-text-secondary font-[tabular-nums]">
               —
             </td>
-            <td className="px-2 py-1 text-sm text-lp-text-secondary text-right font-[tabular-nums]">
+            <td className="text-right text-lp-text-secondary font-[tabular-nums]">
               —
             </td>
-            <td className="px-2 py-0">
+            <td className="p-0">
               <InlineEditCell
                 value={c.notes}
                 type="text"

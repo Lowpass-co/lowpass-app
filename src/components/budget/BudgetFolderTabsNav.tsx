@@ -159,7 +159,7 @@ export function BudgetFolderTabsNav({ tourId, activeTab }: { tourId: string; act
                       </span>
                       <span
                         className={cn(
-                          'relative z-[1] max-w-full whitespace-nowrap px-0.5 text-center text-[10px] font-semibold leading-tight sm:text-[11px]',
+                          'relative z-[1] max-w-full whitespace-nowrap px-0.5 text-center text-xs font-semibold leading-tight',
                           'text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.22)]',
                           'dark:text-black dark:[text-shadow:0_1px_0_rgba(255,255,255,0.2)]'
                         )}
@@ -178,7 +178,7 @@ export function BudgetFolderTabsNav({ tourId, activeTab }: { tourId: string; act
                       <span
                         aria-hidden
                         className={cn(
-                          'relative z-[1] min-h-0 w-full max-w-full shrink-0 overflow-hidden px-0.5 text-center text-[10px] font-semibold leading-tight text-[#FF4500] sm:text-[11px]',
+                          'relative z-[1] min-h-0 w-full max-w-full shrink-0 overflow-hidden px-0.5 text-center text-xs font-semibold leading-tight text-[#FF4500]',
                           'whitespace-nowrap',
                           'max-h-0 opacity-0',
                           'transition-[max-height,opacity]',
