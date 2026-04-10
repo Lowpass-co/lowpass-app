@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Loader2, ChevronRight, Upload, ExternalLink, X } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 import { cn } from '@/lib/utils';
+import { SpreadsheetCurrencyAmount } from '@/components/spreadsheet-view/SpreadsheetCurrencyAmount';
 
 /** Math spec §12: day_of_net = guarantee + overage + merch - deductions; reconciled_net = same */
 function computeNet(
@@ -45,7 +46,7 @@ type SettlementRow = {
 
 type Row = { routing_id: string; routing: RoutingInfo; settlement: SettlementRow | null };
 
-export function SettlementTab({ tourId }: { tourId: string }) {
+export function SettlementTab({ tourId, currency = 'GBP' }: { tourId: string; currency?: string }) {
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<Row[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -53,6 +54,7 @@ export function SettlementTab({ tourId }: { tourId: string }) {
   const [form, setForm] = useState<SettlementRow | null>(null);
   const [saving, setSaving] = useState(false);
   const [uploadingField, setUploadingField] = useState<string | null>(null);
+  const cc = (currency ?? 'GBP').trim().toUpperCase() || 'GBP';
 
   const load = useCallback(() => {
     if (!tourId) return;
@@ -158,6 +160,9 @@ export function SettlementTab({ tourId }: { tourId: string }) {
 
   return (
     <div className="space-y-6">
+      <p className="text-[11px] text-lp-text-secondary">
+        Net figures use tour currency <span className="font-semibold text-lp-text">{cc}</span>.
+      </p>
       <div className="rounded-xl border border-lp-border bg-lp-surface overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -183,11 +188,11 @@ export function SettlementTab({ tourId }: { tourId: string }) {
                     <td className="p-3 text-lp-text">{row.routing.venue_name ?? '—'}</td>
                     <td className="p-3 text-lp-text-secondary">{row.routing.city ?? '—'}</td>
                     <td className="p-3">{statusBadge(s?.status ?? 'pending')}</td>
-                    <td className="p-3 text-right font-semibold tabular-nums text-lp-text">
-                      {dayNet != null ? dayNet.toLocaleString('en-GB', { minimumFractionDigits: 2 }) : '—'}
+                    <td className="p-3 text-lp-text">
+                      {dayNet != null ? <SpreadsheetCurrencyAmount amount={dayNet} currency={cc} /> : '—'}
                     </td>
-                    <td className="p-3 text-right font-semibold tabular-nums text-lp-text">
-                      {recNet != null ? recNet.toLocaleString('en-GB', { minimumFractionDigits: 2 }) : '—'}
+                    <td className="p-3 text-lp-text">
+                      {recNet != null ? <SpreadsheetCurrencyAmount amount={recNet} currency={cc} /> : '—'}
                     </td>
                     <td className="p-3">
                       <button type="button" onClick={() => openExpand(row)} className="flex items-center gap-1 text-lp-orange hover:underline text-sm font-medium">
@@ -231,7 +236,14 @@ export function SettlementTab({ tourId }: { tourId: string }) {
                 <div><label className="block text-sm font-medium text-lp-text mb-1">Day-of Merch</label><input type="number" step="0.01" className="w-full rounded-md border border-lp-border bg-transparent px-3 py-2 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30" value={form.day_of_merch ?? ''} onChange={(e) => setForm((f) => ({ ...f!, day_of_merch: e.target.value ? parseFloat(e.target.value) : null }))} /></div>
                 <div><label className="block text-sm font-medium text-lp-text mb-1">Day-of Deductions</label><input type="number" step="0.01" className="w-full rounded-md border border-lp-border bg-transparent px-3 py-2 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30" value={form.day_of_deductions ?? ''} onChange={(e) => setForm((f) => ({ ...f!, day_of_deductions: e.target.value ? parseFloat(e.target.value) : null }))} /></div>
               </div>
-              <div><span className="text-sm font-medium text-lp-text">Day-of Net (computed): </span><span className="font-bold text-lp-text">{dayOfNet != null ? dayOfNet.toLocaleString('en-GB', { minimumFractionDigits: 2 }) : '—'}</span></div>
+              <div className="flex flex-wrap items-baseline gap-2">
+                <span className="text-sm font-medium text-lp-text">Day-of Net (computed):</span>
+                {dayOfNet != null ? (
+                  <SpreadsheetCurrencyAmount amount={dayOfNet} currency={cc} justify="start" className="font-bold text-lp-text" />
+                ) : (
+                  <span className="font-bold text-lp-text">—</span>
+                )}
+              </div>
               <div><label className="block text-sm font-medium text-lp-text mb-1">Signed by</label><input type="text" className="w-full rounded-md border border-lp-border bg-transparent px-3 py-2 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30" value={form.day_of_signed_by ?? ''} onChange={(e) => setForm((f) => ({ ...f!, day_of_signed_by: e.target.value || null }))} placeholder="TM initials or name" /></div>
               <div><label className="block text-sm font-medium text-lp-text mb-1">Day-of Notes</label><textarea className="w-full rounded-md border border-lp-border bg-transparent px-3 py-2 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 min-h-[60px]" value={form.day_of_notes ?? ''} onChange={(e) => setForm((f) => ({ ...f!, day_of_notes: e.target.value || null }))} /></div>
               <div><label className="block text-sm font-medium text-lp-text mb-1">Day-of signed sheet</label>{form.day_of_file_url ? <a href={form.day_of_file_url} target="_blank" rel="noopener noreferrer" className="text-lp-orange hover:underline inline-flex items-center gap-1">View <ExternalLink className="h-4 w-4" /></a> : null}<label className="ml-2 inline-flex items-center gap-1 text-sm text-lp-text-tertiary cursor-pointer"><input type="file" accept=".pdf,image/*" className="sr-only" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadFile(expandedId, 'day_of_file', f); e.target.value = ''; }} disabled={!!uploadingField} />{uploadingField === 'day_of_file' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />} Upload</label></div>
@@ -244,7 +256,14 @@ export function SettlementTab({ tourId }: { tourId: string }) {
                 <div><label className="block text-sm font-medium text-lp-text mb-1">Reconciled Merch</label><input type="number" step="0.01" className="w-full rounded-md border border-lp-border bg-transparent px-3 py-2 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30" value={form.reconciled_merch ?? ''} onChange={(e) => setForm((f) => ({ ...f!, reconciled_merch: e.target.value ? parseFloat(e.target.value) : null }))} /></div>
                 <div><label className="block text-sm font-medium text-lp-text mb-1">Reconciled Deductions</label><input type="number" step="0.01" className="w-full rounded-md border border-lp-border bg-transparent px-3 py-2 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30" value={form.reconciled_deductions ?? ''} onChange={(e) => setForm((f) => ({ ...f!, reconciled_deductions: e.target.value ? parseFloat(e.target.value) : null }))} /></div>
               </div>
-              <div><span className="text-sm font-medium text-lp-text">Reconciled Net (computed): </span><span className="font-bold text-lp-text">{reconciledNet != null ? reconciledNet.toLocaleString('en-GB', { minimumFractionDigits: 2 }) : '—'}</span></div>
+              <div className="flex flex-wrap items-baseline gap-2">
+                <span className="text-sm font-medium text-lp-text">Reconciled Net (computed):</span>
+                {reconciledNet != null ? (
+                  <SpreadsheetCurrencyAmount amount={reconciledNet} currency={cc} justify="start" className="font-bold text-lp-text" />
+                ) : (
+                  <span className="font-bold text-lp-text">—</span>
+                )}
+              </div>
               <div><label className="block text-sm font-medium text-lp-text mb-1">Reconciled Notes</label><textarea className="w-full rounded-md border border-lp-border bg-transparent px-3 py-2 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 min-h-[60px]" value={form.reconciled_notes ?? ''} onChange={(e) => setForm((f) => ({ ...f!, reconciled_notes: e.target.value || null }))} /></div>
 
               <hr className="border-lp-border" />

@@ -1,7 +1,5 @@
 'use client';
 
-import { Music } from 'lucide-react';
-
 /** Artist preview card: 128x128 image, name, optional "Via Spotify", and "Change artist" button. Shared by Existing Artist and New Artist (Spotify) tabs. */
 export function ArtistPreviewCard({
   imageUrl,
@@ -14,6 +12,8 @@ export function ArtistPreviewCard({
   viaLabel?: string;
   onChangeArtist: () => void;
 }) {
+  const initial = name.trim().charAt(0).toUpperCase() || '?';
+
   return (
     <div className="rounded-xl bg-lp-bg-secondary overflow-hidden max-w-xs mx-auto">
       {imageUrl ? (
@@ -23,8 +23,8 @@ export function ArtistPreviewCard({
           className="w-full aspect-square object-cover"
         />
       ) : (
-        <div className="w-full aspect-square bg-lp-bg-tertiary flex items-center justify-center">
-          <Music className="w-16 h-16 text-lp-text-muted" />
+        <div className="flex aspect-square w-full items-center justify-center bg-gradient-to-br from-lp-bg-secondary to-lp-bg-tertiary">
+          <span className="text-4xl font-bold text-lp-text-secondary">{initial}</span>
         </div>
       )}
       <div className="p-4 flex flex-col gap-1">

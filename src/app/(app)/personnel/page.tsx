@@ -9,6 +9,8 @@ import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { PersonnelPageClient } from '@/components/personnel/PersonnelPageClient';
 import type { Personnel } from '@/types';
 
+export const dynamic = 'force-dynamic';
+
 export default async function PersonnelPage() {
   const supabase = await createServerSupabaseClient();
   const {

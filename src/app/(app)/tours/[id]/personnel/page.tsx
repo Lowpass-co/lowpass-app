@@ -9,6 +9,8 @@ import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { TourPersonnelClient } from '@/components/personnel/TourPersonnelClient';
 import type { Personnel, PersonnelRate } from '@/types';
 
+export const dynamic = 'force-dynamic';
+
 export default async function TourPersonnelPage({ params }: { params: Promise<{ id: string }> }) {
   const { id: tourId } = await params;
   const supabase = await createServerSupabaseClient();

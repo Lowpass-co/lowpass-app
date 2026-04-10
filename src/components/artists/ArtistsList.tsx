@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Pencil, Trash2, Music } from 'lucide-react';
+import { Pencil, Trash2 } from 'lucide-react';
 import type { Artist } from '@/types';
 import { cn } from '@/lib/utils';
 import { ContextMenu } from '@/components/ui/ContextMenu';
@@ -75,8 +75,8 @@ export function ArtistsList({ artists: initialArtists }: { artists: Artist[] }) 
                   {artist.spotify_image_url ? (
                     <img src={artist.spotify_image_url} alt="" className="h-full w-full object-cover" />
                   ) : (
-                    <span className="flex h-full w-full items-center justify-center">
-                      <Music size={24} className="text-lp-text-tertiary" />
+                    <span className="flex h-full w-full items-center justify-center text-sm font-bold text-lp-text-secondary">
+                      {(artist.name ?? '?').charAt(0).toUpperCase()}
                     </span>
                   )}
                 </div>

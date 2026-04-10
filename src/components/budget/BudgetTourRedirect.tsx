@@ -16,7 +16,7 @@ export function BudgetTourRedirect() {
 
   useEffect(() => {
     if (tourIdFromUrl || !selectedTourId) return;
-    router.replace(`/budget?tour_id=${selectedTourId}&tab=summary`);
+    router.replace(`/budget?tour_id=${selectedTourId}&view=detail&tab=summary`);
   }, [tourIdFromUrl, selectedTourId, router]);
 
   return null;

@@ -9,6 +9,7 @@
    ============================================ */
 
 import { NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { isMissingRosterPersonnelIdColumn } from '@/lib/personnel-schema-fallback';
 import { PERMISSIONS } from '@/types';
@@ -363,14 +364,20 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ error: 'id is required' }, { status: 400 });
   }
 
-  const { error } = await supabase
+  const { data: removed, error } = await supabase
     .from('personnel_rates')
     .delete()
     .eq('id', body.id)
-    .eq('workspace_id', profile.workspace_id);
+    .eq('workspace_id', profile.workspace_id)
+    .select('id, tour_id')
+    .maybeSingle();
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+  if (!removed?.tour_id) {
+    return NextResponse.json({ error: 'Not found or could not remove' }, { status: 404 });
+  }
+  revalidatePath(`/tours/${removed.tour_id}/personnel`);
   return new Response(null, { status: 204 });
 }

@@ -2,9 +2,12 @@
 
 import { useCallback, useMemo, useState } from 'react';
 import { X, Upload } from 'lucide-react';
-import { parseCSV, rowsToObjects } from '@/lib/csv-parse';
 import type { Personnel } from '@/types';
 import type { PersonnelImportPerson } from '@/lib/personnel-import';
+import {
+  analyzePersonnelCsv,
+  rowCellsToImportPerson,
+} from '@/lib/personnel-csv';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/components/ui/Toast';
 
@@ -22,10 +25,12 @@ const FIELD_OPTIONS: { value: string; label: string }[] = [
   { value: 'home_airport', label: 'Home airport' },
   { value: 'dietary_needs', label: 'Dietary' },
   { value: 'merch_size', label: 'Merch size' },
+  { value: 'preferences', label: 'Preferences / notes' },
   { value: 'marital_status', label: 'Marital status' },
   { value: 'sex', label: 'Sex' },
   { value: 'partner_name', label: "Partner's name" },
   { value: 'legal_name', label: 'Legal name' },
+  { value: 'pronouns', label: 'Pronouns' },
   { value: 'nationality', label: 'Nationality' },
   { value: 'date_of_birth', label: 'Date of birth' },
   { value: 'address_line1', label: 'Address line 1' },
@@ -77,106 +82,10 @@ const FIELD_OPTIONS: { value: string; label: string }[] = [
   { value: 'internal_notes', label: 'Internal notes' },
 ];
 
-function guessField(header: string): string {
-  const h = header.trim().toLowerCase().replace(/\s+/g, ' ');
-  if (/^name$|^full name$|^display name$/i.test(header.trim())) return 'name';
-  if (h === 'first name' || h === 'firstname' || h === 'given name') return 'first_name';
-  if (h.includes('middle')) return 'middle_names';
-  if (h === 'last name' || h === 'lastname' || h === 'surname' || h === 'family name') return 'surname';
-  if (h.includes('nick')) return 'nickname';
-  if (h.includes('email')) return 'email';
-  if (h.includes('phone') || h.includes('mobile') || h.includes('tel')) return 'phone';
-  if (h.includes('role') || h.includes('position') || h.includes('job title')) return 'role';
-  if (h.includes('airport')) return 'home_airport';
-  if (h.includes('diet')) return 'dietary_needs';
-  if (h.includes('merch') || h.includes('shirt size') || h.includes('t-shirt')) return 'merch_size';
-  if (h.includes('marital')) return 'marital_status';
-  if (h === 'sex' || h.includes('gender')) return 'sex';
-  if (h.includes('partner')) return 'partner_name';
-  if (h.includes('legal')) return 'legal_name';
-  if (h.includes('nationality') || h.includes('citizen')) return 'nationality';
-  if (h.includes('birth') || h === 'dob') return 'date_of_birth';
-  if (h.includes('address') && (h.includes('first') || h.includes('1') || (h.includes('line') && !h.includes('2'))))
-    return 'address_line1';
-  if (h.includes('address') && (h.includes('second') || h.includes('2'))) return 'address_line2';
-  if (h.includes('city') && !h.includes('capacity')) return 'address_city';
-  if (h.includes('post') && h.includes('code')) return 'address_postcode';
-  if (h === 'country' || h.includes('nation') && h.includes('country')) return 'address_country';
-  if (h.includes('emergency') && h.includes('name')) return 'emergency_name';
-  if (h.includes('emergency') && (h.includes('relation') || h.includes('relation to'))) return 'emergency_relationship';
-  if (h.includes('emergency') && (h.includes('phone') || h.includes('mobile') || h.includes('contact number')))
-    return 'emergency_phone';
-  if (h.includes('emergency') && h.includes('email')) return 'emergency_email';
-  if (h.includes('social security') || h === 'ssn') return 'ssn';
-  if (h.includes('green card')) return 'green_card';
-  if (h.includes('tsa')) return 'tsa_precheck';
-  if (h.includes('aisle') || h.includes('window')) return 'aisle_window';
-  if (h.includes('frequent flyer') || h.includes('ff #')) return 'ff1';
-  if (h.includes('passport') && h.includes('number')) return 'passport_number';
-  if (h.includes('passport') && h.includes('type')) return 'passport_type';
-  if (h.includes('passport') && h.includes('code')) return 'passport_code';
-  if (h.includes('passport') && h.includes('authority')) return 'passport_authority';
-  if (h.includes('place of birth')) return 'passport_place_of_birth';
-  if (h.includes('passport') && h.includes('valid from')) return 'passport_valid_from';
-  if (h.includes('empty pages') && h.includes('dbl')) return 'passport_empty_dbl_pages';
-  if (h.includes('empty pages')) return 'passport_empty_pages';
-  if (h.includes('citizenship')) return 'passport_citizenship';
-  if (h.includes('passport') && (h.includes('expir') || h.endsWith(' expiry'))) return 'passport_expiry';
-  if (h.includes('medicine') && h.includes('allerg')) return 'allergies_medicine';
-  if (h.includes('medical condition')) return 'medical_conditions';
-  if (h.includes('criminal')) return 'criminal_convictions';
-  if (h.includes('insurance') && h.includes('crew')) return 'insurance_crew';
-  if (h.includes('coffee')) return 'coffee_order';
-  if (h.includes('pizza')) return 'pizza_order';
-  if (h.includes('notes for travel') || h.includes('travel notes')) return 'travel_notes';
-  if (h.includes('show') && h.includes('rate')) return 'show_day_rate';
-  if (h.includes('off') && h.includes('rate')) return 'off_day_rate';
-  if (h.includes('travel') || h.includes('rehearsal')) return 'travel_day_rate';
-  if (h.includes('per diem') || h.includes('perdiem')) return 'per_diem_rate';
-  if (h === 'currency') return 'currency';
-  return '__ignore';
-}
-
-function rowToImportPerson(raw: Record<string, string>, mapping: Record<string, string>): PersonnelImportPerson {
-  const acc: Record<string, string | number | undefined> = {};
-  for (const [header, value] of Object.entries(raw)) {
-    const field = mapping[header];
-    if (!field || field === '__ignore') continue;
-    const v = value?.trim() ?? '';
-    if (
-      !v &&
-      field !== 'name' &&
-      field !== 'first_name' &&
-      field !== 'last_name' &&
-      field !== 'middle_names' &&
-      field !== 'surname'
-    ) {
-      continue;
-    }
-    if (
-      field === 'show_day_rate' ||
-      field === 'off_day_rate' ||
-      field === 'per_diem_rate' ||
-      field === 'travel_day_rate'
-    ) {
-      const n = parseFloat(v.replace(/[£$€,\s]/g, ''));
-      acc[field] = Number.isFinite(n) ? n : 0;
-    } else {
-      acc[field] = v;
-    }
-  }
-  let name = String(acc.name ?? '').trim();
-  if (!name) {
-    name = [acc.first_name, acc.middle_names, acc.surname ?? acc.last_name]
-      .filter(Boolean)
-      .map((s) => String(s).trim())
-      .filter(Boolean)
-      .join(' ')
-      .trim();
-  }
-  const out = acc as unknown as PersonnelImportPerson;
-  out.name = name;
-  return out;
+function delimiterLabel(d: ',' | ';' | '\t'): string {
+  if (d === ';') return 'semicolon (;) — common for Excel in EU';
+  if (d === '\t') return 'tab';
+  return 'comma (,)';
 }
 
 export function PersonnelImportModal({
@@ -190,17 +99,19 @@ export function PersonnelImportModal({
 }) {
   const { showToast } = useToast();
   const [step, setStep] = useState<'idle' | 'map' | 'preview'>('idle');
-  const [headers, setHeaders] = useState<string[]>([]);
-  const [objects, setObjects] = useState<Record<string, string>[]>([]);
-  const [mapping, setMapping] = useState<Record<string, string>>({});
+  const [csvText, setCsvText] = useState<string | null>(null);
+  const [headerRowIndex, setHeaderRowIndex] = useState(0);
+  const [mapping, setMapping] = useState<Record<number, string>>({});
   const [people, setPeople] = useState<PersonnelImportPerson[]>([]);
   const [submitting, setSubmitting] = useState(false);
   const [hint, setHint] = useState<string | null>(null);
 
+  const analysis = useMemo(() => (csvText ? analyzePersonnelCsv(csvText, headerRowIndex) : null), [csvText, headerRowIndex]);
+
   const reset = useCallback(() => {
     setStep('idle');
-    setHeaders([]);
-    setObjects([]);
+    setCsvText(null);
+    setHeaderRowIndex(0);
     setMapping({});
     setPeople([]);
     setHint(null);
@@ -211,37 +122,52 @@ export function PersonnelImportModal({
     const reader = new FileReader();
     reader.onload = () => {
       const text = String(reader.result ?? '');
-      const grid = parseCSV(text);
-      if (grid.length < 2) {
-        showToast('Need a header row and at least one data row', 'error');
+      const trimmed = text.trim();
+      if (!trimmed) {
+        showToast('File is empty', 'error');
         return;
       }
-      const hdrs = grid[0]!.map((h) => h.trim());
-      const dataRows = grid.slice(1);
-      const objs = rowsToObjects(hdrs, dataRows);
-      const map: Record<string, string> = {};
-      for (const h of hdrs) {
-        map[h] = guessField(h);
+      const auto = analyzePersonnelCsv(text);
+      if (auto.dataRows.length === 0) {
+        showToast('No data rows after the header — check the header row or add rows below it.', 'error');
+        return;
       }
-      setHeaders(hdrs);
-      setObjects(objs);
-      setMapping(map);
+      setCsvText(text);
+      setHeaderRowIndex(auto.headerRowIndex);
+      setMapping({ ...auto.suggestedMapping });
       setStep('map');
       setHint(
-        'Google Sheets: File → Download → CSV. PDF: export to CSV or copy tables from Preview — native PDF import is not available yet.'
+        `Detected ${delimiterLabel(auto.delimiter)} · ${auto.dataRows.length} data rows · header on row ${auto.headerRowIndex + 1}. ` +
+          'If columns look wrong, change which row is the header. Google Sheets: File → Download → CSV.'
       );
     };
-    reader.readAsText(file);
+    reader.readAsText(file, 'UTF-8');
+  };
+
+  const redetectHeaderRow = () => {
+    if (!csvText) return;
+    const auto = analyzePersonnelCsv(csvText);
+    setHeaderRowIndex(auto.headerRowIndex);
+    setMapping({ ...auto.suggestedMapping });
+    showToast(`Using row ${auto.headerRowIndex + 1} as header`);
+  };
+
+  const onHeaderRowChange = (idx: number) => {
+    if (!csvText) return;
+    setHeaderRowIndex(idx);
+    const next = analyzePersonnelCsv(csvText, idx);
+    setMapping({ ...next.suggestedMapping });
   };
 
   const buildPreview = () => {
+    if (!analysis) return;
     const list: PersonnelImportPerson[] = [];
-    for (const raw of objects) {
-      const p = rowToImportPerson(raw, mapping);
+    for (const row of analysis.dataRows) {
+      const p = rowCellsToImportPerson(row, analysis.colCount, mapping);
       if (p.name?.trim()) list.push(p);
     }
     if (list.length === 0) {
-      showToast('No rows with a name — map a name column or first+last', 'error');
+      showToast('No rows with a name — map a name column or first + last', 'error');
       return;
     }
     setPeople(list);
@@ -271,25 +197,41 @@ export function PersonnelImportModal({
 
   const previewSlice = useMemo(() => people.slice(0, 8), [people]);
 
+  const headerRowOptions = analysis
+    ? Array.from({ length: Math.min(analysis.totalParsedRows, 200) }, (_, i) => i)
+    : [];
+
   if (!open) return null;
 
   return (
     <div className="fixed inset-0 z-[95] flex items-center justify-center p-4">
-      <button type="button" className="absolute inset-0 bg-black/50" aria-label="Close" onClick={() => { reset(); onClose(); }} />
+      <button
+        type="button"
+        className="absolute inset-0 bg-black/50"
+        aria-label="Close"
+        onClick={() => {
+          reset();
+          onClose();
+        }}
+      />
       <div
-        className="relative z-[96] max-h-[90vh] w-full max-w-3xl overflow-hidden rounded-xl border border-lp-border bg-lp-surface shadow-xl flex flex-col"
+        className="relative z-[96] flex max-h-[90vh] w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-lp-border bg-lp-surface shadow-xl"
         role="dialog"
       >
         <div className="flex items-start justify-between gap-4 border-b border-lp-border p-4">
           <div>
             <h2 className="text-lg font-semibold text-lp-text">Import personnel (CSV)</h2>
             <p className="mt-1 text-xs text-lp-text-secondary">
-              Map columns once, then review. For PDFs, convert to CSV or paste into Sheets first.
+              Comma or semicolon separated · UTF-8. We pick the header row automatically; override if your sheet has a title
+              row.
             </p>
           </div>
           <button
             type="button"
-            onClick={() => { reset(); onClose(); }}
+            onClick={() => {
+              reset();
+              onClose();
+            }}
             className="rounded-lg p-1 text-lp-text-tertiary hover:bg-lp-bg-tertiary hover:text-lp-text"
           >
             <X size={20} />
@@ -301,22 +243,82 @@ export function PersonnelImportModal({
             <label className="flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-lp-border bg-lp-bg/50 px-6 py-14 transition-colors hover:border-lp-orange/50">
               <Upload className="mb-2 text-lp-text-tertiary" size={32} />
               <span className="text-sm font-medium text-lp-text">Choose CSV file</span>
-              <span className="mt-1 text-xs text-lp-text-tertiary">UTF-8 · comma-separated · header row</span>
+              <span className="mt-1 text-xs text-lp-text-tertiary">UTF-8 · comma or semicolon · header row</span>
               <input type="file" accept=".csv,text/csv" className="sr-only" onChange={(e) => onFile(e.target.files?.[0] ?? null)} />
             </label>
           )}
 
-          {step === 'map' && (
+          {step === 'map' && analysis && (
             <div className="space-y-4">
               {hint && <p className="rounded-lg bg-lp-bg-tertiary/40 px-3 py-2 text-xs text-lp-text-secondary">{hint}</p>}
-              <p className="text-sm text-lp-text-secondary">Match each column to a field ({objects.length} rows).</p>
+              <div className="flex flex-wrap items-end gap-3">
+                <div>
+                  <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-lp-text-tertiary">
+                    Header row (1-based)
+                  </label>
+                  <select
+                    value={headerRowIndex}
+                    onChange={(e) => onHeaderRowChange(Number(e.target.value))}
+                    className="rounded-lg border border-lp-border bg-lp-bg px-3 py-2 text-sm text-lp-text outline-none focus:border-lp-orange"
+                  >
+                    {headerRowOptions.map((i) => (
+                      <option key={i} value={i}>
+                        Row {i + 1}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <button
+                  type="button"
+                  onClick={redetectHeaderRow}
+                  className="rounded-lg border border-lp-border px-3 py-2 text-xs font-medium text-lp-text hover:bg-lp-surface-hover"
+                >
+                  Re-detect header
+                </button>
+              </div>
+              <p className="text-sm text-lp-text-secondary">
+                Match each column to a field ({analysis.dataRows.length} data rows, {analysis.columns.length} columns).
+              </p>
+              {analysis.dataRows[0] && (
+                <details
+                  open
+                  className="rounded-lg border border-lp-border/80 bg-lp-bg/40 text-sm dark:bg-lp-surface/30"
+                >
+                  <summary className="cursor-pointer list-none px-3 py-2 text-xs font-semibold text-lp-text marker:content-none [&::-webkit-details-marker]:hidden">
+                    <span className="text-lp-orange">▸</span>{' '}
+                    <span className="text-lp-text">First data row</span>
+                    <span className="ml-2 font-normal text-lp-text-secondary">
+                      — if this looks like column titles, move the header row up one.
+                    </span>
+                  </summary>
+                  <div className="max-h-48 overflow-auto border-t border-lp-border/60 px-3 py-2">
+                    <ul className="space-y-1 font-mono text-[11px]">
+                      {analysis.columns.map((col) => {
+                        const raw = analysis.dataRows[0]?.[col.index] ?? '';
+                        const v = raw.replace(/\u00A0/g, ' ').trim();
+                        const show = v.length > 72 ? `${v.slice(0, 72)}…` : v;
+                        return (
+                          <li key={col.index} className="flex gap-2 border-b border-lp-border/30 py-1 last:border-0">
+                            <span className="w-[min(11rem,32%)] shrink-0 truncate text-lp-text-tertiary" title={col.label}>
+                              {col.label}
+                            </span>
+                            <span className="min-w-0 break-all text-lp-text">{show || '—'}</span>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </div>
+                </details>
+              )}
               <div className="space-y-2">
-                {headers.map((h) => (
-                  <div key={h} className="flex flex-wrap items-center gap-2 sm:gap-4">
-                    <span className="min-w-[8rem] truncate text-sm font-medium text-lp-text">{h}</span>
+                {analysis.columns.map((col) => (
+                  <div key={col.index} className="flex flex-wrap items-center gap-2 sm:gap-4">
+                    <span className="min-w-[10rem] max-w-[14rem] truncate text-sm font-medium text-lp-text" title={col.label}>
+                      {col.label}
+                    </span>
                     <select
-                      value={mapping[h] ?? '__ignore'}
-                      onChange={(e) => setMapping((m) => ({ ...m, [h]: e.target.value }))}
+                      value={mapping[col.index] ?? '__ignore'}
+                      onChange={(e) => setMapping((m) => ({ ...m, [col.index]: e.target.value }))}
                       className={cn(
                         'min-w-[12rem] flex-1 rounded-lg border border-lp-border bg-lp-bg px-3 py-2 text-sm text-lp-text outline-none focus:border-lp-orange'
                       )}
@@ -365,17 +367,29 @@ export function PersonnelImportModal({
         <div className="flex justify-end gap-2 border-t border-lp-border p-4">
           {step === 'map' && (
             <>
-              <button type="button" onClick={() => setStep('idle')} className="rounded-lg border border-lp-border px-4 py-2 text-sm text-lp-text hover:bg-lp-surface-hover">
+              <button
+                type="button"
+                onClick={() => setStep('idle')}
+                className="rounded-lg border border-lp-border px-4 py-2 text-sm text-lp-text hover:bg-lp-surface-hover"
+              >
                 Back
               </button>
-              <button type="button" onClick={buildPreview} className="rounded-lg bg-lp-orange px-4 py-2 text-sm font-medium text-white hover:opacity-90">
+              <button
+                type="button"
+                onClick={buildPreview}
+                className="rounded-lg bg-lp-orange px-4 py-2 text-sm font-medium text-white hover:opacity-90"
+              >
                 Review
               </button>
             </>
           )}
           {step === 'preview' && (
             <>
-              <button type="button" onClick={() => setStep('map')} className="rounded-lg border border-lp-border px-4 py-2 text-sm text-lp-text hover:bg-lp-surface-hover">
+              <button
+                type="button"
+                onClick={() => setStep('map')}
+                className="rounded-lg border border-lp-border px-4 py-2 text-sm text-lp-text hover:bg-lp-surface-hover"
+              >
                 Back
               </button>
               <button

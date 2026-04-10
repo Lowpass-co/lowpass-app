@@ -179,12 +179,6 @@ export function ReceiptsGrid({ tourId, currency }: { tourId: string; currency: s
   if (loading) return <div className="text-sm text-lp-text-secondary py-4">Loading…</div>;
   if (error) return <div className="text-sm text-lp-error py-4">{error}</div>;
 
-  const formatter = new Intl.NumberFormat('en-GB', {
-    style: 'currency',
-    currency,
-    minimumFractionDigits: 2,
-  });
-
   return (
     <div className="space-y-4">
       <input
@@ -200,7 +194,6 @@ export function ReceiptsGrid({ tourId, currency }: { tourId: string; currency: s
           <tr
             key={r.id}
             className={cn(
-              'even:bg-lp-surface/30',
               ocrPrefilledIds.has(r.id) && 'bg-orange-500/10'
             )}
           >

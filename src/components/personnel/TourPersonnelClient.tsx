@@ -1,6 +1,7 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Plus, Trash2, UserPlus, X } from 'lucide-react';
 import type { Personnel, PersonnelRate } from '@/types';
@@ -23,14 +24,41 @@ export function TourPersonnelClient({
   initialRoster: Personnel[];
 }) {
   const { showToast } = useToast();
+  const router = useRouter();
   const [rates, setRates] = useState(initialRates);
-  const [roster] = useState(initialRoster);
+  const [roster, setRoster] = useState(initialRoster);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [addingId, setAddingId] = useState<string | null>(null);
   const [removeOpen, setRemoveOpen] = useState<PersonnelRate | null>(null);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [detailRate, setDetailRate] = useState<PersonnelRate | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const selectAllRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setRates(initialRates);
+  }, [tourId, initialRates]);
+
+  useEffect(() => {
+    setRoster(initialRoster);
+  }, [tourId, initialRoster]);
+
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      const valid = new Set(rates.map((r) => r.id));
+      let changed = false;
+      const next = new Set<string>();
+      prev.forEach((id) => {
+        if (valid.has(id)) next.add(id);
+        else changed = true;
+      });
+      if (prev.size !== next.size) changed = true;
+      return changed ? next : prev;
+    });
+  }, [rates]);
 
   const assignedRosterIds = useMemo(
     () => new Set(rates.map((r) => r.roster_personnel_id).filter(Boolean) as string[]),
@@ -41,6 +69,26 @@ export function TourPersonnelClient({
     () => roster.filter((p) => !assignedRosterIds.has(p.id)),
     [roster, assignedRosterIds]
   );
+
+  const allRatesSelected = rates.length > 0 && rates.every((r) => selectedIds.has(r.id));
+  const someRatesSelected = rates.some((r) => selectedIds.has(r.id));
+
+  useEffect(() => {
+    const el = selectAllRef.current;
+    if (el) el.indeterminate = someRatesSelected && !allRatesSelected;
+  }, [someRatesSelected, allRatesSelected]);
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAllRates = () => setSelectedIds(new Set(rates.map((r) => r.id)));
+  const clearSelection = () => setSelectedIds(new Set());
 
   const addFromRoster = async (personnelId: string) => {
     setAddingId(personnelId);
@@ -83,9 +131,47 @@ export function TourPersonnelClient({
       setTimeout(() => {
         setRates((prev) => prev.filter((r) => r.id !== id));
         setRemovingId(null);
+        setSelectedIds((prev) => {
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
+        router.refresh();
       }, 200);
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'Remove failed', 'error');
+    }
+  };
+
+  const confirmBulkRemove = async () => {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    setBulkDeleting(true);
+    try {
+      const res = await fetch('/api/budget/personnel-rates/bulk-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tour_id: tourId, ids }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? 'Remove failed');
+      const gone = new Set((data.deleted_ids as string[] | undefined) ?? ids);
+      setRates((prev) => prev.filter((r) => !gone.has(r.id)));
+      if (detailRate && gone.has(detailRate.id)) {
+        setDetailOpen(false);
+        setDetailRate(null);
+      }
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        gone.forEach((id) => next.delete(id));
+        return next;
+      });
+      showToast(`Removed ${data.deleted ?? gone.size} from tour`);
+      router.refresh();
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Remove failed', 'error');
+    } finally {
+      setBulkDeleting(false);
     }
   };
 
@@ -123,6 +209,42 @@ export function TourPersonnelClient({
         </div>
       </div>
 
+      {rates.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-lp-border bg-lp-surface px-3 py-2.5">
+          <label className="flex cursor-pointer items-center gap-2 text-sm text-lp-text">
+            <input
+              ref={selectAllRef}
+              type="checkbox"
+              checked={allRatesSelected}
+              onChange={(e) => (e.target.checked ? selectAllRates() : clearSelection())}
+              className="h-4 w-4 rounded border-lp-border text-lp-orange focus:ring-2 focus:ring-lp-orange focus:ring-offset-0 focus:ring-offset-lp-surface"
+            />
+            <span>
+              Select all<span className="ml-1 text-lp-text-secondary">({rates.length})</span>
+            </span>
+          </label>
+          {selectedIds.size > 0 ? (
+            <>
+              <span className="text-xs text-lp-text-secondary">{selectedIds.size} selected</span>
+              <button
+                type="button"
+                onClick={() => setBulkDeleteOpen(true)}
+                className="rounded-lg border border-red-500/50 bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-500/20 dark:text-red-300 dark:hover:bg-red-500/15"
+              >
+                Remove from tour
+              </button>
+              <button
+                type="button"
+                onClick={clearSelection}
+                className="text-xs font-medium text-lp-text-tertiary hover:text-lp-text"
+              >
+                Clear
+              </button>
+            </>
+          ) : null}
+        </div>
+      )}
+
       <div className="overflow-hidden rounded-xl border border-lp-border bg-lp-surface">
         {rates.length === 0 ? (
           <div className="px-4 py-14 text-center text-sm text-lp-text-secondary">
@@ -146,6 +268,14 @@ export function TourPersonnelClient({
                   setDetailOpen(true);
                 }}
               >
+                <input
+                  type="checkbox"
+                  checked={selectedIds.has(r.id)}
+                  onChange={() => toggleSelect(r.id)}
+                  onClick={(e) => e.stopPropagation()}
+                  className="h-4 w-4 shrink-0 rounded border-lp-border text-lp-orange focus:ring-2 focus:ring-lp-orange focus:ring-offset-0 focus:ring-offset-lp-surface"
+                  aria-label={`Select ${r.person_name}`}
+                />
                 <div className="h-10 w-0.5 shrink-0 rounded-full bg-lp-border group-hover:bg-lp-orange/60" aria-hidden />
                 <div className="min-w-0 flex-1">
                   <p className="font-medium text-lp-text">{r.person_name}</p>
@@ -251,6 +381,14 @@ export function TourPersonnelClient({
         onClose={() => setRemoveOpen(null)}
         onConfirm={confirmRemove}
         description="Removes this line from tour budget / payroll. Rooming rows that used this name may need a quick check."
+      />
+
+      <DeleteConfirmationModal
+        open={bulkDeleteOpen}
+        itemName={`${selectedIds.size} tour personnel line${selectedIds.size === 1 ? '' : 's'}`}
+        onClose={() => !bulkDeleting && setBulkDeleteOpen(false)}
+        onConfirm={confirmBulkRemove}
+        description="Removes selected people from this tour only (workspace roster is unchanged). Payroll and rooming rows for those names may need a quick check."
       />
     </>
   );

@@ -212,20 +212,29 @@ export function InventoryTab({ userId, inventory, setInventory }: Props) {
       setImgFill({ current: i + 1, total: targets.length, found });
       try {
         const res = await fetch(`/api/equipment/find-image?q=${encodeURIComponent(item.name)}`);
-        const data = await res.json();
-        const { imageUrl, code } = data as {
+        let data: {
           imageUrl?: string | null;
           code?: string;
+          message?: string;
         };
-        // Image search not configured — silently stop, no alert
-        if (code === 'CSE_NOT_CONFIGURED') break;
+        try {
+          data = await res.json();
+        } catch {
+          continue;
+        }
+        const { imageUrl, code } = data;
+        // API returns 200 + code for “not configured” and Google errors — stop batch quietly (no alert)
+        if (code === 'CSE_NOT_CONFIGURED' || code === 'GOOGLE_CSE_ERROR') break;
+        if (!res.ok && code === 'BAD_REQUEST') break;
         if (imageUrl) {
           await supabase.from('rental_inventory').update({ image_url: imageUrl }).eq('id', item.id);
           setInventory(inventory.map(inv => inv.id === item.id ? { ...inv, image_url: imageUrl } : inv));
           found++;
           setImgFill({ current: i + 1, total: targets.length, found });
         }
-      } catch { /* skip item on network error */ }
+      } catch {
+        /* skip item on network error */
+      }
     }
     setImgFill(null);
   }

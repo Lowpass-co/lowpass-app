@@ -5,6 +5,7 @@
    ============================================ */
 
 import { NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 
 async function assertWorkspacePerson(
@@ -113,7 +114,11 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
     return NextResponse.json({ error: check.error }, { status: check.status });
   }
 
-  const { error } = await supabase.from('personnel').delete().eq('id', id);
+  const { data: removed, error } = await supabase.from('personnel').delete().eq('id', id).select('id').maybeSingle();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!removed) {
+    return NextResponse.json({ error: 'Not found or could not delete' }, { status: 404 });
+  }
+  revalidatePath('/personnel');
   return NextResponse.json({ ok: true });
 }

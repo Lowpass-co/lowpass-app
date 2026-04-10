@@ -1,6 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Plus, Trash2, Search, User, Upload } from 'lucide-react';
 import type { Personnel } from '@/types';
@@ -28,12 +29,21 @@ export function PersonnelRosterClient({
   initialOpenPersonnelId?: string | null;
 }) {
   const { showToast } = useToast();
+  const router = useRouter();
   const [rows, setRows] = useState(initial);
   const [search, setSearch] = useState('');
   const [panel, setPanel] = useState<PersonnelPanelState>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState<Personnel | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [bulkDeleting, setBulkDeleting] = useState(false);
+  const selectAllRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setRows(initial);
+  }, [initial]);
 
   useEffect(() => {
     if (!initialOpenPersonnelId) return;
@@ -52,6 +62,41 @@ export function PersonnelRosterClient({
         (p.email ?? '').toLowerCase().includes(q)
     );
   }, [rows, search]);
+
+  const allFilteredSelected =
+    filtered.length > 0 && filtered.every((p) => selectedIds.has(p.id));
+  const someFilteredSelected = filtered.some((p) => selectedIds.has(p.id));
+
+  useEffect(() => {
+    const el = selectAllRef.current;
+    if (el) el.indeterminate = someFilteredSelected && !allFilteredSelected;
+  }, [someFilteredSelected, allFilteredSelected]);
+
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      const ids = new Set(rows.map((r) => r.id));
+      let changed = false;
+      const next = new Set<string>();
+      prev.forEach((id) => {
+        if (ids.has(id)) next.add(id);
+        else changed = true;
+      });
+      if (prev.size !== next.size) changed = true;
+      return changed ? next : prev;
+    });
+  }, [rows]);
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const selectAllFiltered = () => setSelectedIds(new Set(filtered.map((p) => p.id)));
+  const clearSelection = () => setSelectedIds(new Set());
 
   const handleSaved = (row: Personnel, meta?: { source?: 'form' | 'document' }) => {
     setRows((prev) => {
@@ -85,9 +130,39 @@ export function PersonnelRosterClient({
       setTimeout(() => {
         setRows((prev) => prev.filter((p) => p.id !== id));
         setDeletingId(null);
+        router.refresh();
       }, 250);
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Delete failed', 'error');
+    }
+  };
+
+  const handleBulkDeleteConfirm = async () => {
+    const ids = [...selectedIds];
+    if (ids.length === 0) throw new Error('Nothing selected');
+    setBulkDeleting(true);
+    try {
+      const res = await fetch('/api/personnel/bulk-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error ?? 'Delete failed');
+      const gone = new Set((data.deleted_ids as string[] | undefined) ?? ids);
+      setRows((prev) => prev.filter((p) => !gone.has(p.id)));
+      if (panel?.mode === 'edit' && gone.has(panel.id)) setPanel(null);
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        gone.forEach((id) => next.delete(id));
+        return next;
+      });
+      showToast(`Removed ${data.deleted ?? gone.size} from roster`);
+      router.refresh();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Delete failed', 'error');
+    } finally {
+      setBulkDeleting(false);
     }
   };
 
@@ -126,6 +201,43 @@ export function PersonnelRosterClient({
         </div>
       </div>
 
+      {filtered.length > 0 && (
+        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-lp-border bg-lp-surface px-3 py-2.5">
+          <label className="flex cursor-pointer items-center gap-2 text-sm text-lp-text">
+            <input
+              ref={selectAllRef}
+              type="checkbox"
+              checked={allFilteredSelected}
+              onChange={(e) => (e.target.checked ? selectAllFiltered() : clearSelection())}
+              className="h-4 w-4 rounded border-lp-border text-lp-orange focus:ring-2 focus:ring-lp-orange focus:ring-offset-0 focus:ring-offset-lp-surface"
+            />
+            <span>
+              Select all{search.trim() ? ' matching' : ''}
+              <span className="ml-1 text-lp-text-secondary">({filtered.length})</span>
+            </span>
+          </label>
+          {selectedIds.size > 0 ? (
+            <>
+              <span className="text-xs text-lp-text-secondary">{selectedIds.size} selected</span>
+              <button
+                type="button"
+                onClick={() => setBulkDeleteOpen(true)}
+                className="rounded-lg border border-red-500/50 bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-500/20 dark:text-red-300 dark:hover:bg-red-500/15"
+              >
+                Delete selected
+              </button>
+              <button
+                type="button"
+                onClick={clearSelection}
+                className="text-xs font-medium text-lp-text-tertiary hover:text-lp-text"
+              >
+                Clear
+              </button>
+            </>
+          ) : null}
+        </div>
+      )}
+
       <div className="overflow-hidden rounded-xl border border-lp-border bg-lp-surface">
         {filtered.length === 0 ? (
           <div className="px-4 py-16 text-center text-sm text-lp-text-secondary">
@@ -144,6 +256,14 @@ export function PersonnelRosterClient({
                 )}
                 onClick={() => setPanel({ mode: 'edit', id: p.id })}
               >
+                <input
+                  type="checkbox"
+                  checked={selectedIds.has(p.id)}
+                  onChange={() => toggleSelect(p.id)}
+                  onClick={(e) => e.stopPropagation()}
+                  className="mt-1.5 h-4 w-4 shrink-0 rounded border-lp-border text-lp-orange focus:ring-2 focus:ring-lp-orange focus:ring-offset-0 focus:ring-offset-lp-surface"
+                  aria-label={`Select ${p.name}`}
+                />
                 <div className="mt-0.5 h-full w-0.5 shrink-0 rounded-full bg-lp-border group-hover:bg-lp-orange/60" aria-hidden />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
@@ -198,6 +318,14 @@ export function PersonnelRosterClient({
         onClose={() => setDeleteOpen(null)}
         onConfirm={handleDeleteConfirm}
         description="Tour budget lines keep their names and rates; the link back to this roster row is cleared after migration 025."
+      />
+
+      <DeleteConfirmationModal
+        open={bulkDeleteOpen}
+        itemName={`${selectedIds.size} personnel record${selectedIds.size === 1 ? '' : 's'}`}
+        onClose={() => !bulkDeleting && setBulkDeleteOpen(false)}
+        onConfirm={handleBulkDeleteConfirm}
+        description="They will be removed from your workspace roster in Supabase. Tour personnel lines may lose their roster link."
       />
     </>
   );

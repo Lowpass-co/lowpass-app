@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState, Fragment } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { GridTable } from './GridTable';
 import { InlineEditCell } from './InlineEditCell';
-import { cn } from '@/lib/utils';
+import { SpreadsheetCurrencyAmount } from './SpreadsheetCurrencyAmount';
 
 interface RoomAssignment {
   id: string;
@@ -106,12 +106,6 @@ export function HotelsGrid({ tourId, currency }: { tourId: string; currency: str
   if (loading) return <div className="text-sm text-lp-text-secondary py-4">Loading…</div>;
   if (error) return <div className="text-sm text-lp-error py-4">{error}</div>;
 
-  const formatter = new Intl.NumberFormat('en-GB', {
-    style: 'currency',
-    currency,
-    minimumFractionDigits: 2,
-  });
-
   return (
     <div className="space-y-4">
       <GridTable columns={COLS}>
@@ -124,7 +118,7 @@ export function HotelsGrid({ tourId, currency }: { tourId: string; currency: str
           const isExpanded = expandedId === h.id;
           return (
             <Fragment key={h.id}>
-              <tr className={cn('even:bg-lp-surface/30')}>
+              <tr>
                 <td className="px-2 py-1">
                   <button
                     type="button"
@@ -167,11 +161,11 @@ export function HotelsGrid({ tourId, currency }: { tourId: string; currency: str
                   {nights != null ? nights : '—'}
                 </td>
                 <td className="px-2 py-1 text-sm text-lp-text-secondary text-right">{roomCount}</td>
-                <td className="px-2 py-1 text-sm text-right font-[tabular-nums]">
-                  {avgRate != null ? formatter.format(avgRate) : '—'}
+                <td className="px-2 py-1 text-sm">
+                  {avgRate != null ? <SpreadsheetCurrencyAmount amount={avgRate} currency={currency} /> : '—'}
                 </td>
-                <td className="px-2 py-1 text-sm text-right font-[tabular-nums]">
-                  {totalProjected > 0 ? formatter.format(totalProjected) : '—'}
+                <td className="px-2 py-1 text-sm">
+                  {totalProjected > 0 ? <SpreadsheetCurrencyAmount amount={totalProjected} currency={currency} /> : '—'}
                 </td>
                 <td className="px-2 py-1 text-sm text-lp-text-secondary text-right">—</td>
                 <td className="px-2 py-1 text-sm text-lp-text-secondary">
@@ -202,7 +196,9 @@ export function HotelsGrid({ tourId, currency }: { tourId: string; currency: str
                             <td className="py-1">{formatDate(a.check_in)}</td>
                             <td className="py-1">{formatDate(a.check_out)}</td>
                             <td className="py-1 text-right">{a.nights}</td>
-                            <td className="py-1 text-right font-[tabular-nums]">{formatter.format(a.rate_per_night)}</td>
+                            <td className="py-1">
+                              <SpreadsheetCurrencyAmount amount={a.rate_per_night} currency={currency} />
+                            </td>
                             <td className="py-1">{a.confirmation ?? '—'}</td>
                           </tr>
                         ))}

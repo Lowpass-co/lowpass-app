@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { budgetCurrencySymbol } from '@/lib/budget-currency';
 
 /** Single P&L line with proposed, actual, and variance (math spec §9, §14) */
 export interface BudgetSummaryLine {
@@ -404,12 +405,15 @@ export function SummaryTab({
   tourId,
   breakdownHeading = 'inline',
   slot,
+  currency: tourCurrency = 'GBP',
 }: {
   tourId: string;
   /** When 'outside', the page renders the Breakdown heading; omit it here so it aligns with Select Tour */
   breakdownHeading?: 'inline' | 'outside';
   /** When 'left' or 'right', render only that column (for split layout) */
   slot?: 'left' | 'right';
+  /** ISO 4217 — matches tour budget currency (toolbar) */
+  currency?: string;
 }) {
   const [loading, setLoading] = useState(true);
   const [sections, setSections] = useState<BudgetSummarySection[]>([]);
@@ -450,7 +454,8 @@ export function SummaryTab({
   const netProposed = income.proposed - expenses.proposed - overheads.proposed;
   /** Positive = actual outcome better than proposed (e.g. smaller loss or larger profit). */
   const netVariance = netActual - netProposed;
-  const currencySymbol = '£';
+  const currencyCode = (tourCurrency ?? 'GBP').trim().toUpperCase() || 'GBP';
+  const currencySymbol = budgetCurrencySymbol(currencyCode);
 
   const proposedTotal = income.proposed + expenses.proposed + overheads.proposed;
   const actualTotal = income.actual + expenses.actual + overheads.actual;
@@ -607,6 +612,11 @@ export function SummaryTab({
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
+      {slot == null && (
+        <p className="mb-2 shrink-0 text-[10px] font-medium uppercase tracking-wider text-lp-text-tertiary">
+          All amounts in {currencyCode}
+        </p>
+      )}
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
         {leftColumn}
         {rightColumn}

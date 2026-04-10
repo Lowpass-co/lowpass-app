@@ -80,17 +80,15 @@ export function CommissionsGrid({ tourId, currency }: { tourId: string; currency
   if (loading) return <div className="text-sm text-lp-text-secondary py-4">Loading…</div>;
   if (error) return <div className="text-sm text-lp-error py-4">{error}</div>;
 
-  const formatter = new Intl.NumberFormat('en-GB', {
-    style: 'currency',
-    currency,
-    minimumFractionDigits: 2,
-  });
-
   return (
     <div className="space-y-4">
+      <p className="text-[11px] text-lp-text-secondary">
+        Commission amounts (when shown) use tour currency{' '}
+        <span className="font-semibold text-lp-text">{(currency ?? 'GBP').trim().toUpperCase() || 'GBP'}</span>.
+      </p>
       <GridTable columns={COLS}>
         {commissions.map((c) => (
-          <tr key={c.id} className="even:bg-lp-surface/30">
+          <tr key={c.id}>
             <td className="px-2 py-0">
               <InlineEditCell
                 value={c.label}

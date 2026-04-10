@@ -4,10 +4,10 @@
 
 import { Suspense } from 'react';
 import { BudgetTourRedirect } from '@/components/budget/BudgetTourRedirect';
-import { BudgetTabs } from '@/components/budget/BudgetTabs';
 import { BUDGET_TABS, TabId } from '@/components/budget/budget-tabs';
-import { BudgetFolderTabsNav } from '@/components/budget/BudgetFolderTabsNav';
 import { TourBudgetAccordionDynamic } from '@/components/budget/TourBudgetAccordionDynamic';
+import { BudgetDetailShell } from '@/components/budget/BudgetDetailShell';
+import { BudgetOverviewToolbar } from '@/components/budget/BudgetOverviewToolbar';
 
 export default async function BudgetPage({
   searchParams,
@@ -17,7 +17,8 @@ export default async function BudgetPage({
   const params = await searchParams;
   const tourId = params.tour_id ?? null;
   const rawTab = params.tab;
-  const view = params.view ?? 'overview'; // 'overview' = new accordion | 'detail' = old tabs
+  // Default to spreadsheet-style detail; use view=overview for accordion summary.
+  const view = params.view ?? 'detail';
 
   const tab =
     rawTab === 'day-view'
@@ -49,16 +50,19 @@ export default async function BudgetPage({
       <div className="lp-budget -mx-6 -my-6 h-[calc(100vh-4rem)] flex flex-col bg-transparent overflow-hidden">
         {/* Toolbar: title + "Detailed view" toggle */}
         <div
-          className="shrink-0 flex items-center justify-between gap-4 px-6 py-3 border-b border-lp-border/60"
+          className="shrink-0 flex flex-col gap-3 border-b border-lp-border/60 px-6 py-3 sm:flex-row sm:items-center sm:justify-between"
           style={{ background: 'var(--lp-dashboard-bg)' }}
         >
           <h1 className="text-[13px] font-semibold text-lp-text">Budget Overview</h1>
-          <a
-            href={`/budget?tour_id=${tourId}&view=detail&tab=summary`}
-            className="text-[11px] text-lp-text-tertiary hover:text-lp-orange transition-colors"
-          >
-            Detailed view →
-          </a>
+          <div className="flex flex-wrap items-center gap-4">
+            <BudgetOverviewToolbar tourId={tourId} />
+            <a
+              href={`/budget?tour_id=${tourId}&view=detail&tab=summary`}
+              className="text-[11px] text-lp-text-tertiary transition-colors hover:text-lp-orange/80"
+            >
+              Spreadsheet budget →
+            </a>
+          </div>
         </div>
         <div className="flex-1 min-h-0 overflow-hidden">
           <TourBudgetAccordionDynamic tourId={tourId} />
@@ -67,60 +71,10 @@ export default async function BudgetPage({
     );
   }
 
-  // ── Legacy detailed tabs view (view=detail) ───────────────────────────────
+  // ── Spreadsheet-style detail (tabs + grids + tour currency) ────────────────
   return (
-    <div className="lp-budget -mx-6 -my-6 h-[calc(100vh-4rem)] px-0 py-0">
-      <div className="flex h-full w-full flex-col bg-transparent">
-        {/* Back to overview link */}
-        <div
-          className="shrink-0 flex items-center gap-4 px-6 pt-4 pb-2"
-          style={{ background: 'var(--lp-dashboard-bg)' }}
-        >
-          <a
-            href={`/budget?tour_id=${tourId}&view=overview`}
-            className="text-[11px] text-lp-text-tertiary hover:text-lp-orange transition-colors"
-          >
-            ← Budget Overview
-          </a>
-        </div>
-
-        {validTab === 'summary' ? (
-          <>
-            <div className="px-6 pt-2">
-              <BudgetFolderTabsNav tourId={tourId} activeTab={validTab} />
-            </div>
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-8">
-              <div className="grid h-full min-h-0 flex-1 grid-cols-1 gap-x-8 gap-y-0 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
-                <div className="min-h-0 min-w-0 overflow-auto">
-                  <BudgetTabs tourId={tourId} activeTab={validTab} summarySlot="left" />
-                </div>
-                <div className="flex min-h-0 min-w-0 flex-col overflow-hidden" style={{ gridColumn: 2 }}>
-                  <p className="shrink-0 pb-1 text-[11px] font-semibold uppercase tracking-wider text-black dark:text-white">
-                    Breakdown
-                  </p>
-                  <div className="min-h-0 flex-1 overflow-hidden">
-                    <BudgetTabs tourId={tourId} activeTab={validTab} summarySlot="right" />
-                  </div>
-                </div>
-              </div>
-            </div>
-          </>
-        ) : (
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            <div className="min-h-0 flex-1 overflow-auto">
-              <header
-                className="sticky top-0 z-30 shrink-0 px-6 pt-4 pb-3"
-                style={{ background: 'var(--lp-dashboard-bg)' }}
-              >
-                <BudgetFolderTabsNav tourId={tourId} activeTab={validTab} />
-              </header>
-              <div className="px-8 pb-8 pt-0">
-                <BudgetTabs tourId={tourId} activeTab={validTab} />
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
+    <div className="lp-budget -mx-6 -my-6 flex h-[calc(100vh-4rem)] flex-col overflow-hidden bg-transparent">
+      <BudgetDetailShell tourId={tourId} activeTab={validTab} />
     </div>
   );
 }

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { GridTable } from './GridTable';
 import { InlineEditCell } from './InlineEditCell';
-import { cn } from '@/lib/utils';
+import { SpreadsheetCurrencyAmount } from './SpreadsheetCurrencyAmount';
 
 interface IncomeRow {
   routing_id: string;
@@ -189,12 +189,6 @@ export function IncomeGrid({ tourId, currency }: { tourId: string; currency: str
     { pre_tax_guarantee: 0, post_tax_guarantee: 0, pre_tax_overage: 0, post_tax_overage: 0, merch_income: 0, vip_income: 0 }
   );
 
-  const formatter = new Intl.NumberFormat('en-GB', {
-    style: 'currency',
-    currency,
-    minimumFractionDigits: 2,
-  });
-
   return (
     <GridTable
       columns={COLS}
@@ -203,20 +197,32 @@ export function IncomeGrid({ tourId, currency }: { tourId: string; currency: str
           <td colSpan={5} className="px-2 py-2 text-lp-text font-bold">
             TOTALS
           </td>
-          <td className="px-2 py-2 text-right font-[tabular-nums]">{formatter.format(totals.pre_tax_guarantee)}</td>
+          <td className="px-2 py-2">
+            <SpreadsheetCurrencyAmount amount={totals.pre_tax_guarantee} currency={currency} />
+          </td>
           <td className="px-2 py-2 text-right">—</td>
-          <td className="px-2 py-2 text-right font-[tabular-nums]">{formatter.format(totals.post_tax_guarantee)}</td>
-          <td className="px-2 py-2 text-right font-[tabular-nums]">{formatter.format(totals.pre_tax_overage)}</td>
-          <td className="px-2 py-2 text-right font-[tabular-nums]">{formatter.format(totals.post_tax_overage)}</td>
-          <td className="px-2 py-2 text-right font-[tabular-nums]">{formatter.format(totals.merch_income)}</td>
-          <td className="px-2 py-2 text-right font-[tabular-nums]">{formatter.format(totals.vip_income)}</td>
+          <td className="px-2 py-2">
+            <SpreadsheetCurrencyAmount amount={totals.post_tax_guarantee} currency={currency} />
+          </td>
+          <td className="px-2 py-2">
+            <SpreadsheetCurrencyAmount amount={totals.pre_tax_overage} currency={currency} />
+          </td>
+          <td className="px-2 py-2">
+            <SpreadsheetCurrencyAmount amount={totals.post_tax_overage} currency={currency} />
+          </td>
+          <td className="px-2 py-2">
+            <SpreadsheetCurrencyAmount amount={totals.merch_income} currency={currency} />
+          </td>
+          <td className="px-2 py-2">
+            <SpreadsheetCurrencyAmount amount={totals.vip_income} currency={currency} />
+          </td>
           <td className="px-2 py-2 text-right">—</td>
           <td className="px-2 py-2">—</td>
         </>
       }
     >
       {rows.map((row, idx) => (
-        <tr key={row.routing_id} className={cn('even:bg-lp-surface/30')}>
+        <tr key={row.routing_id}>
           <td className="px-2 py-1 text-sm text-lp-text-secondary">{formatDate(row.date)}</td>
           <td className="px-2 py-1 text-sm text-lp-text-secondary uppercase">{row.day_type}</td>
           <td className="px-2 py-1 text-sm text-lp-text-secondary">{row.venue_name ?? '—'}</td>
@@ -239,10 +245,12 @@ export function IncomeGrid({ tourId, currency }: { tourId: string; currency: str
               align="right"
             />
           </td>
-          <td className="px-2 py-1 text-sm text-lp-text-secondary text-right font-[tabular-nums]">
-            {row.post_tax_guarantee === 0 && row.pre_tax_guarantee === 0
-              ? '—'
-              : formatter.format(postTax(row.pre_tax_guarantee, row.withholding_pct))}
+          <td className="px-2 py-1 text-sm text-lp-text-secondary">
+            {row.post_tax_guarantee === 0 && row.pre_tax_guarantee === 0 ? (
+              '—'
+            ) : (
+              <SpreadsheetCurrencyAmount amount={postTax(row.pre_tax_guarantee, row.withholding_pct)} currency={currency} />
+            )}
           </td>
           <td className="px-2 py-0">
             <InlineEditCell
@@ -253,8 +261,12 @@ export function IncomeGrid({ tourId, currency }: { tourId: string; currency: str
               align="right"
             />
           </td>
-          <td className="px-2 py-1 text-sm text-lp-text-secondary text-right font-[tabular-nums]">
-            {row.pre_tax_overage === 0 ? '—' : formatter.format(postTax(row.pre_tax_overage, row.withholding_pct))}
+          <td className="px-2 py-1 text-sm text-lp-text-secondary">
+            {row.pre_tax_overage === 0 ? (
+              '—'
+            ) : (
+              <SpreadsheetCurrencyAmount amount={postTax(row.pre_tax_overage, row.withholding_pct)} currency={currency} />
+            )}
           </td>
           <td className="px-2 py-0">
             <InlineEditCell

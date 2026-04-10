@@ -70,7 +70,7 @@ export function BudgetTabsNav({ tourId, activeTab, leftRail }: { tourId: string;
         'flex h-full flex-col overflow-hidden',
         leftRail
           ? 'bg-transparent'
-          : 'rounded-xl border border-lp-border bg-lp-bg shadow-lg transition-shadow duration-200 ease-out hover:shadow-xl hover:shadow-lp-orange/15'
+          : 'rounded-xl border border-lp-border bg-lp-bg shadow-lg transition-shadow duration-200 ease-out hover:shadow-xl hover:shadow-[0_8px_30px_rgba(255,69,0,0.04)]'
       )}>
         <ul className="flex flex-1 flex-col justify-center gap-5 py-6 text-[13px] font-medium">
           {BUDGET_TABS.map((tab) => {
@@ -82,7 +82,7 @@ export function BudgetTabsNav({ tourId, activeTab, leftRail }: { tourId: string;
                   className={cn(
                     'mx-auto flex w-[40px] flex-shrink-0 items-center justify-center gap-1 rounded-lg px-0 py-2 text-sm transition-[width,padding,margin,background-color,color] duration-300 ease-out group-hover/nav:mx-1 group-hover/nav:w-[calc(100%-8px)] group-hover/nav:justify-start group-hover/nav:gap-3 group-hover/nav:px-3',
                     isActive
-                      ? 'border border-lp-orange bg-lp-orange text-lp-bg shadow-[0_0_0_1px_rgba(249,80,2,0.6)]'
+                      ? 'border border-lp-orange bg-lp-orange text-lp-bg shadow-[0_0_0_1px_rgba(249,80,2,0.14)]'
                       : 'text-lp-text-tertiary hover:bg-lp-surface-hover hover:text-lp-text'
                   )}
                 >

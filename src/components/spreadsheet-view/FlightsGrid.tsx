@@ -91,12 +91,6 @@ export function FlightsGrid({ tourId, currency }: { tourId: string; currency: st
     return acc;
   }, {} as Record<string, FlightRow[]>);
 
-  const formatter = new Intl.NumberFormat('en-GB', {
-    style: 'currency',
-    currency,
-    minimumFractionDigits: 2,
-  });
-
   return (
     <div className="space-y-4">
       <GridTable columns={COLS}>
@@ -106,7 +100,6 @@ export function FlightsGrid({ tourId, currency }: { tourId: string; currency: st
               <tr
                 key={f.id}
                 className={cn(
-                  'even:bg-lp-surface/30',
                   i === 0 && 'border-t border-lp-border/50'
                 )}
               >

@@ -17,6 +17,25 @@ export interface InlineEditCellProps {
 
 const EMPTY = '—';
 
+/** While typing decimals: allow only one `.`, optional leading `-`. */
+function sanitizeDecimalInput(raw: string, allowNegative: boolean): string {
+  let s = raw.replace(/[^\d.-]/g, '');
+  if (!allowNegative) {
+    s = s.replace(/-/g, '');
+  } else {
+    const neg = s.startsWith('-');
+    s = s.replace(/-/g, '');
+    if (neg) s = `-${s}`;
+  }
+  const parts = s.split('.');
+  if (parts.length <= 1) return s;
+  return `${parts[0]}.${parts.slice(1).join('')}`;
+}
+
+function sanitizeIntegerInput(raw: string): string {
+  return raw.replace(/\D/g, '');
+}
+
 function formatDisplay(
   value: string | number | null,
   type: InlineEditCellProps['type'],
@@ -36,7 +55,28 @@ function formatDisplay(
     }).format(Number(value));
   }
   if (type === 'percentage') {
-    return `${Number(value).toFixed(1)}%`;
+    const n = Number(value);
+    if (Number.isNaN(n)) return EMPTY;
+    const t = Math.round(n * 1000) / 1000;
+    const s = t.toFixed(3).replace(/\.?0+$/, '');
+    return `${s}%`;
+  }
+  return String(value);
+}
+
+function valueToEditString(
+  value: string | number | null | undefined,
+  type: InlineEditCellProps['type']
+): string {
+  if (value === null || value === undefined || value === '') return '';
+  if (type === 'text' || type === 'select') return String(value);
+  if (type === 'percentage' || type === 'currency') {
+    const n = Number(value);
+    return Number.isNaN(n) ? '' : String(value);
+  }
+  if (type === 'number') {
+    const n = Number(value);
+    return Number.isNaN(n) ? '' : String(Math.trunc(n));
   }
   return String(value);
 }
@@ -63,7 +103,7 @@ export function InlineEditCell({
   useEffect(() => {
     if (editing && inputRef.current) {
       inputRef.current.focus();
-      if (inputRef.current instanceof HTMLInputElement) {
+      if (inputRef.current instanceof HTMLInputElement && inputRef.current.type === 'text') {
         inputRef.current.select();
       }
     }
@@ -73,11 +113,16 @@ export function InlineEditCell({
     if (readOnly) return;
     setEditing(false);
     let newVal: string | number = inputValue.trim();
-    if (type === 'number' || type === 'currency' || type === 'percentage') {
-      const n = parseFloat(String(newVal).replace(/[^0-9.-]/g, ''));
+
+    if (type === 'number') {
+      const cleaned = sanitizeIntegerInput(String(newVal));
+      newVal = cleaned === '' ? 0 : parseInt(cleaned, 10);
+    } else if (type === 'currency' || type === 'percentage') {
+      const raw = String(newVal).replace(/[^0-9.-]/g, '');
+      const n = parseFloat(raw);
       newVal = Number.isNaN(n) ? 0 : n;
     }
-    const prev = value;
+
     setSaving(true);
     setError(false);
     try {
@@ -97,27 +142,34 @@ export function InlineEditCell({
     }
     if (e.key === 'Escape') {
       setEditing(false);
-      setInputValue(value === null || value === undefined ? '' : String(value));
+      setInputValue(valueToEditString(value, type));
     }
   };
+
+  const showCurrencyCode = type === 'currency' && displayValue !== EMPTY;
 
   if (readOnly) {
     return (
       <span
         className={cn(
-          'px-2 py-1.5 text-sm text-lp-text-secondary',
-          align === 'right' && 'text-right font-[tabular-nums]',
+          'inline-flex min-w-0 max-w-full items-baseline gap-1 px-2 py-1.5 text-sm text-lp-text-secondary',
+          align === 'right' && 'w-full justify-end font-[tabular-nums]',
           className
         )}
       >
-        {displayValue}
+        <span>{displayValue}</span>
+        {showCurrencyCode && (
+          <span className="shrink-0 text-[9px] font-semibold uppercase tracking-tight text-lp-text-tertiary">
+            {currency}
+          </span>
+        )}
       </span>
     );
   }
 
   if (editing) {
     const inputClass =
-      'px-2 py-1 text-sm border border-lp-orange rounded bg-transparent outline-none w-full font-[tabular-nums]';
+      'lp-budget px-2 py-1.5 text-sm border border-lp-orange/35 rounded bg-lp-surface outline-none w-full font-[tabular-nums] focus:border-lp-orange/50 focus:ring-1 focus:ring-lp-orange/15';
     return (
       <span className={cn('block min-w-0', className)}>
         {type === 'select' ? (
@@ -138,10 +190,16 @@ export function InlineEditCell({
         ) : (
           <input
             ref={inputRef as React.RefObject<HTMLInputElement>}
-            type={type === 'currency' || type === 'percentage' ? 'number' : type === 'number' ? 'number' : 'text'}
-            step={type === 'percentage' ? '0.1' : type === 'currency' ? '0.01' : undefined}
+            type="text"
+            inputMode={type === 'number' ? 'numeric' : type === 'text' ? 'text' : 'decimal'}
+            autoComplete="off"
             value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
+            onChange={(e) => {
+              const v = e.target.value;
+              if (type === 'number') setInputValue(sanitizeIntegerInput(v));
+              else if (type === 'currency' || type === 'percentage') setInputValue(sanitizeDecimalInput(v, true));
+              else setInputValue(v);
+            }}
             onBlur={handleSave}
             onKeyDown={handleKeyDown}
             placeholder={placeholder}
@@ -157,25 +215,30 @@ export function InlineEditCell({
       type="button"
       onClick={() => {
         setEditing(true);
-        setInputValue(
-          value === null || value === undefined || value === ''
-            ? ''
-            : type === 'percentage'
-              ? String(Number(value))
-              : String(value)
-        );
+        setInputValue(valueToEditString(value, type));
       }}
       className={cn(
-        'px-2 py-1.5 text-sm cursor-pointer rounded w-full text-left transition-colors',
-        align === 'right' && 'text-right font-[tabular-nums]',
+        'inline-flex min-w-0 w-full cursor-pointer items-baseline gap-1 rounded px-2 py-1.5 text-left text-sm transition-colors',
+        align === 'right' && 'justify-end font-[tabular-nums]',
         saving && 'opacity-70',
         error && 'bg-red-500/20 animate-pulse',
-        !error && 'hover:bg-lp-orange/5',
+        !error && 'hover:bg-lp-orange/[0.04]',
         className
       )}
       title={saving ? 'Saving…' : undefined}
     >
-      {saving ? '…' : displayValue}
+      {saving ? (
+        '…'
+      ) : (
+        <>
+          <span>{displayValue}</span>
+          {showCurrencyCode && (
+            <span className="shrink-0 text-[9px] font-semibold uppercase tracking-tight text-lp-text-tertiary">
+              {currency}
+            </span>
+          )}
+        </>
+      )}
     </button>
   );
 }
