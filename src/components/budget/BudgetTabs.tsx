@@ -78,7 +78,7 @@ export function BudgetTabsNav({ tourId, activeTab, leftRail }: { tourId: string;
             return (
               <li key={tab.id} className="flex shrink-0">
                 <Link
-                  href={`/budget?tour_id=${tourId}&tab=${tab.id}`}
+                  href={`/budget?tour_id=${tourId}&view=detail&tab=${tab.id}`}
                   className={cn(
                     'mx-auto flex w-[40px] flex-shrink-0 items-center justify-center gap-1 rounded-lg px-0 py-2 text-sm transition-[width,padding,margin,background-color,color] duration-300 ease-out group-hover/nav:mx-1 group-hover/nav:w-[calc(100%-8px)] group-hover/nav:justify-start group-hover/nav:gap-3 group-hover/nav:px-3',
                     isActive

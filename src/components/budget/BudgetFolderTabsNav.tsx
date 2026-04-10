@@ -103,7 +103,7 @@ export function BudgetFolderTabsNav({ tourId, activeTab }: { tourId: string; act
               )}
             >
               <Link
-                href={`/budget?tour_id=${tourId}&tab=${tab.id}`}
+                href={`/budget?tour_id=${tourId}&view=detail&tab=${tab.id}`}
                 title={tab.label}
                 aria-current={isActive ? 'page' : undefined}
                 className={cn(

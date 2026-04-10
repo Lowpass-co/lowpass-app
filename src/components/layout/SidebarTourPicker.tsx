@@ -30,12 +30,18 @@ export function SidebarTourPicker() {
 
   function redirectAfterTourSwitch(newTourId: string) {
     if (!onManagePage) {
-      router.push(`/budget?tour_id=${newTourId}&tab=summary`);
+      router.push(`/budget?tour_id=${newTourId}`);
       return;
     }
     if (pathname?.startsWith('/budget')) {
+      // Preserve view=detail if already in detail mode; otherwise go to overview
+      const view = searchParams?.get('view');
       const tab = searchParams?.get('tab') ?? 'summary';
-      router.push(`/budget?tour_id=${newTourId}&tab=${tab}`);
+      if (view === 'detail') {
+        router.push(`/budget?tour_id=${newTourId}&view=detail&tab=${tab}`);
+      } else {
+        router.push(`/budget?tour_id=${newTourId}`);
+      }
     } else if (pathname?.includes('/overview')) {
       router.push(`/tours/${newTourId}/overview`);
     } else if (pathname?.includes('/advance')) {
@@ -45,7 +51,7 @@ export function SidebarTourPicker() {
     } else if (pathname?.includes('/payroll')) {
       router.push(`/tours/${newTourId}/payroll`);
     } else {
-      router.push(`/budget?tour_id=${newTourId}&tab=summary`);
+      router.push(`/budget?tour_id=${newTourId}`);
     }
   }
 
