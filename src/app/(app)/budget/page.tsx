@@ -58,7 +58,7 @@ export default async function BudgetPage({
             <BudgetOverviewToolbar tourId={tourId} />
             <a
               href={`/budget?tour_id=${tourId}&view=detail&tab=summary`}
-              className="text-[11px] text-lp-text-tertiary transition-colors hover:text-lp-orange/80"
+              className="text-[11px] text-lp-text-tertiary hover:text-lp-orange/80"
             >
               Spreadsheet budget →
             </a>

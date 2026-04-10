@@ -908,7 +908,7 @@ export function IncomeTab({ tourId }: { tourId: string }) {
                       className="w-full rounded-md border border-lp-border bg-transparent px-2 py-1 text-right text-xs text-lp-text tabular-nums focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30"
                       value={row.pre_tax_guarantee || ''}
                       onChange={(e) => {
-                        handleFieldChange(row.routing_id, 'pre_tax_guarantee', e.target.value ? Number(e.target.value) : 0);
+                        handleFieldChange(row.routing_id, 'pre_tax_guarantee', e.target.value === '' ? null : Number(e.target.value));
                         scheduleIncomeSave(row.routing_id);
                       }}
                       onBlur={() => {
@@ -928,7 +928,7 @@ export function IncomeTab({ tourId }: { tourId: string }) {
                       className="w-full rounded-md border border-lp-border bg-transparent px-2 py-1 text-right text-xs text-lp-text tabular-nums focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30"
                       value={row.withholding_pct || ''}
                       onChange={(e) => {
-                        handleFieldChange(row.routing_id, 'withholding_pct', e.target.value ? Number(e.target.value) : 0);
+                        handleFieldChange(row.routing_id, 'withholding_pct', e.target.value === '' ? null : Number(e.target.value));
                         scheduleIncomeSave(row.routing_id);
                       }}
                       onBlur={() => {
@@ -952,7 +952,7 @@ export function IncomeTab({ tourId }: { tourId: string }) {
                       className="w-full rounded-md border border-lp-border bg-transparent px-2 py-1 text-right text-xs text-lp-text tabular-nums focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30"
                       value={row.pre_tax_overage || ''}
                       onChange={(e) => {
-                        handleFieldChange(row.routing_id, 'pre_tax_overage', e.target.value ? Number(e.target.value) : 0);
+                        handleFieldChange(row.routing_id, 'pre_tax_overage', e.target.value === '' ? null : Number(e.target.value));
                         scheduleIncomeSave(row.routing_id);
                       }}
                       onBlur={() => {
@@ -976,7 +976,7 @@ export function IncomeTab({ tourId }: { tourId: string }) {
                       className="w-full rounded-md border border-lp-border bg-transparent px-2 py-1 text-right text-xs text-lp-text tabular-nums focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30"
                       value={row.merch_income || ''}
                       onChange={(e) => {
-                        handleFieldChange(row.routing_id, 'merch_income', e.target.value ? Number(e.target.value) : 0);
+                        handleFieldChange(row.routing_id, 'merch_income', e.target.value === '' ? null : Number(e.target.value));
                         scheduleIncomeSave(row.routing_id);
                       }}
                       onBlur={() => {
@@ -995,7 +995,7 @@ export function IncomeTab({ tourId }: { tourId: string }) {
                       className="w-full rounded-md border border-lp-border bg-transparent px-2 py-1 text-right text-xs text-lp-text tabular-nums focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30"
                       value={row.vip_income || ''}
                       onChange={(e) => {
-                        handleFieldChange(row.routing_id, 'vip_income', e.target.value ? Number(e.target.value) : 0);
+                        handleFieldChange(row.routing_id, 'vip_income', e.target.value === '' ? null : Number(e.target.value));
                         scheduleIncomeSave(row.routing_id);
                       }}
                       onBlur={() => {

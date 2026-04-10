@@ -54,7 +54,7 @@ export function InlineEdit({
           type={type}
           value={value}
           onChange={(e) =>
-            onChange(type === 'number' ? (e.target.value === '' ? 0 : parseFloat(e.target.value) || 0) : e.target.value)
+            onChange(type === 'number' ? (e.target.value === '' ? '' : parseFloat(e.target.value)) : e.target.value)
           }
           placeholder={placeholder}
           disabled={disabled}

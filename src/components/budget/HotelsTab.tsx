@@ -417,7 +417,7 @@ export function HotelsTab({ tourId }: { tourId: string }) {
               <div className="mt-4">
                 <button
                   type="button"
-                  onClick={() => setAssignmentForm({ hotel_booking_id: hotel.id, person_name: '', nights: 0, rate_per_night: 0 })}
+                    onClick={() => setAssignmentForm({ hotel_booking_id: hotel.id, person_name: '', nights: undefined, rate_per_night: undefined })}
                   className="flex items-center gap-1 rounded-lg border border-lp-border bg-lp-bg px-3 py-2 text-sm font-medium text-lp-text hover:bg-lp-bg-tertiary"
                 >
                   <Plus className="h-4 w-4" />
@@ -471,8 +471,8 @@ export function HotelsTab({ tourId }: { tourId: string }) {
                     type="number"
                     min={0}
                     className="w-full rounded-md border border-lp-border bg-transparent px-3 py-2 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30"
-                    value={assignmentForm.nights ?? 0}
-                    onChange={(e) => setAssignmentForm((f) => ({ ...f, nights: parseInt(e.target.value, 10) || 0 }))}
+                    value={assignmentForm.nights ?? ''}
+                    onChange={(e) => setAssignmentForm((f) => ({ ...f, nights: e.target.value === '' ? undefined : parseInt(e.target.value, 10) }))}
                   />
                 </div>
                 <div>
@@ -482,8 +482,8 @@ export function HotelsTab({ tourId }: { tourId: string }) {
                     step="0.01"
                     min={0}
                     className="w-full rounded-md border border-lp-border bg-transparent px-3 py-2 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30"
-                    value={assignmentForm.rate_per_night ?? 0}
-                    onChange={(e) => setAssignmentForm((f) => ({ ...f, rate_per_night: parseFloat(e.target.value) || 0 }))}
+                    value={assignmentForm.rate_per_night ?? ''}
+                    onChange={(e) => setAssignmentForm((f) => ({ ...f, rate_per_night: e.target.value === '' ? undefined : parseFloat(e.target.value) }))}
                   />
                 </div>
               </div>

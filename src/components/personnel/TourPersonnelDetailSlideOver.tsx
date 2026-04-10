@@ -32,11 +32,11 @@ export function TourPersonnelDetailSlideOver({
   const [person_name, setPersonName] = useState('');
   const [role, setRole] = useState('');
   const [person_type, setPersonType] = useState<string>('crew');
-  const [show_rate, setShow] = useState(0);
-  const [off_rate, setOff] = useState(0);
-  const [rehearsal_rate, setReh] = useState(0);
-  const [per_diem, setPd] = useState(0);
-  const [advance_fee, setAdv] = useState(0);
+  const [show_rate, setShow] = useState<string>('0');
+  const [off_rate, setOff] = useState<string>('0');
+  const [rehearsal_rate, setReh] = useState<string>('0');
+  const [per_diem, setPd] = useState<string>('0');
+  const [advance_fee, setAdv] = useState<string>('0');
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -44,11 +44,11 @@ export function TourPersonnelDetailSlideOver({
     setPersonName(rate.person_name ?? '');
     setRole(rate.role ?? '');
     setPersonType(rate.person_type ?? 'crew');
-    setShow(Number(rate.show_rate) || 0);
-    setOff(Number(rate.off_rate) || 0);
-    setReh(Number(rate.rehearsal_rate) || 0);
-    setPd(Number(rate.per_diem) || 0);
-    setAdv(Number(rate.advance_fee) || 0);
+    setShow(String(Number(rate.show_rate) || 0));
+    setOff(String(Number(rate.off_rate) || 0));
+    setReh(String(Number(rate.rehearsal_rate) || 0));
+    setPd(String(Number(rate.per_diem) || 0));
+    setAdv(String(Number(rate.advance_fee) || 0));
   }, [rate]);
 
   if (!open || !rate) return null;
@@ -66,11 +66,11 @@ export function TourPersonnelDetailSlideOver({
           person_name: person_name.trim(),
           role: role.trim() || null,
           person_type,
-          show_rate,
-          off_rate,
-          rehearsal_rate,
-          per_diem,
-          advance_fee,
+          show_rate: Number(show_rate || 0),
+          off_rate: Number(off_rate || 0),
+          rehearsal_rate: Number(rehearsal_rate || 0),
+          per_diem: Number(per_diem || 0),
+          advance_fee: Number(advance_fee || 0),
         }),
       });
       const data = await res.json().catch(() => ({}));
@@ -140,23 +140,23 @@ export function TourPersonnelDetailSlideOver({
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-lp-text-tertiary">Show rate</label>
-              <input type="number" min={0} value={show_rate} onChange={(e) => setShow(Number(e.target.value) || 0)} className={IC} />
+              <input type="number" min={0} value={show_rate} onChange={(e) => setShow(e.target.value)} className={IC} />
             </div>
             <div>
               <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-lp-text-tertiary">Off rate</label>
-              <input type="number" min={0} value={off_rate} onChange={(e) => setOff(Number(e.target.value) || 0)} className={IC} />
+              <input type="number" min={0} value={off_rate} onChange={(e) => setOff(e.target.value)} className={IC} />
             </div>
             <div>
               <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-lp-text-tertiary">Travel / rehearsal</label>
-              <input type="number" min={0} value={rehearsal_rate} onChange={(e) => setReh(Number(e.target.value) || 0)} className={IC} />
+              <input type="number" min={0} value={rehearsal_rate} onChange={(e) => setReh(e.target.value)} className={IC} />
             </div>
             <div>
               <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-lp-text-tertiary">Per diem</label>
-              <input type="number" min={0} value={per_diem} onChange={(e) => setPd(Number(e.target.value) || 0)} className={IC} />
+              <input type="number" min={0} value={per_diem} onChange={(e) => setPd(e.target.value)} className={IC} />
             </div>
             <div>
               <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-lp-text-tertiary">Advance fee</label>
-              <input type="number" min={0} value={advance_fee} onChange={(e) => setAdv(Number(e.target.value) || 0)} className={IC} />
+              <input type="number" min={0} value={advance_fee} onChange={(e) => setAdv(e.target.value)} className={IC} />
             </div>
           </div>
 

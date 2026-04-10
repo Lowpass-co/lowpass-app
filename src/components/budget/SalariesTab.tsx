@@ -87,6 +87,13 @@ export function SalariesTab({
   const [savingId, setSavingId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Partial<PersonnelRate>>({});
+  const [addingMember, setAddingMember] = useState(false);
+  const [newMember, setNewMember] = useState({
+    person_name: '',
+    role: '',
+    person_type: 'crew',
+    rate_type: 'day_rate',
+  });
 
   const load = useCallback(() => {
     if (!tourId) return;
@@ -162,6 +169,35 @@ export function SalariesTab({
   const handleUseSuggested = (rateType: string, showRate: number, offRate: number) => {
     const suggested = suggestedAdvanceFee(totalTourDays, rateType, showRate, offRate);
     setEditForm((prev) => ({ ...prev, advance_fee: suggested }));
+  };
+
+  const handleCreateMember = () => {
+    const name = newMember.person_name.trim();
+    if (!name) {
+      setError('Name is required');
+      return;
+    }
+    setSavingId('__new__');
+    setError(null);
+    fetch('/api/budget/personnel-rates', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        tour_id: tourId,
+        person_name: name,
+        role: newMember.role.trim() || null,
+        person_type: newMember.person_type,
+        rate_type: newMember.rate_type,
+      }),
+    })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('Create failed'))))
+      .then(() => {
+        setAddingMember(false);
+        setNewMember({ person_name: '', role: '', person_type: 'crew', rate_type: 'day_rate' });
+        load();
+      })
+      .catch(() => setError('Failed to add member'))
+      .finally(() => setSavingId(null));
   };
 
   let totalSalaries = 0;
@@ -266,7 +302,7 @@ export function SalariesTab({
                           min="0"
                           className="w-full rounded-md border border-lp-border bg-transparent px-2 py-1 text-right text-sm tabular-nums text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30"
                           value={form.off_rate ?? ''}
-                          onChange={(e) => setEditForm((prev) => ({ ...prev, off_rate: e.target.value ? Number(e.target.value) : 0 }))}
+                          onChange={(e) => setEditForm((prev) => ({ ...prev, off_rate: e.target.value === '' ? undefined : Number(e.target.value) }))}
                         />
                       ) : (
                         <span className="tabular-nums text-lp-text">
@@ -285,7 +321,7 @@ export function SalariesTab({
                           min="0"
                           className="w-full rounded-md border border-lp-border bg-transparent px-2 py-1 text-right text-sm tabular-nums text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30"
                           value={form.show_rate ?? ''}
-                          onChange={(e) => setEditForm((prev) => ({ ...prev, show_rate: e.target.value ? Number(e.target.value) : 0 }))}
+                          onChange={(e) => setEditForm((prev) => ({ ...prev, show_rate: e.target.value === '' ? undefined : Number(e.target.value) }))}
                         />
                       ) : (
                         <span className="tabular-nums text-lp-text">{(form.show_rate ?? 0).toLocaleString('en-GB', { minimumFractionDigits: 2 })}</span>
@@ -303,7 +339,7 @@ export function SalariesTab({
                           min="0"
                           className="w-full rounded-md border border-lp-border bg-transparent px-2 py-1 text-right text-sm tabular-nums text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30"
                           value={form.off_rate ?? ''}
-                          onChange={(e) => setEditForm((prev) => ({ ...prev, off_rate: e.target.value ? Number(e.target.value) : 0 }))}
+                          onChange={(e) => setEditForm((prev) => ({ ...prev, off_rate: e.target.value === '' ? undefined : Number(e.target.value) }))}
                         />
                       ) : (
                         <span className="tabular-nums text-lp-text">{(form.off_rate ?? 0).toLocaleString('en-GB', { minimumFractionDigits: 2 })}</span>
@@ -321,7 +357,7 @@ export function SalariesTab({
                           min="0"
                           className="w-full rounded-md border border-lp-border bg-transparent px-2 py-1 text-right text-sm tabular-nums text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30"
                           value={form.rehearsal_rate ?? ''}
-                          onChange={(e) => setEditForm((prev) => ({ ...prev, rehearsal_rate: e.target.value ? Number(e.target.value) : 0 }))}
+                          onChange={(e) => setEditForm((prev) => ({ ...prev, rehearsal_rate: e.target.value === '' ? undefined : Number(e.target.value) }))}
                         />
                       ) : (
                         <span className="tabular-nums text-lp-text">{(form.rehearsal_rate ?? 0).toLocaleString('en-GB', { minimumFractionDigits: 2 })}</span>
@@ -338,7 +374,7 @@ export function SalariesTab({
                         min="0"
                         className="w-full rounded-md border border-lp-border bg-transparent px-2 py-1 text-right text-sm tabular-nums text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30"
                         value={form.per_diem ?? ''}
-                        onChange={(e) => setEditForm((prev) => ({ ...prev, per_diem: e.target.value ? Number(e.target.value) : 0 }))}
+                        onChange={(e) => setEditForm((prev) => ({ ...prev, per_diem: e.target.value === '' ? undefined : Number(e.target.value) }))}
                       />
                     ) : (
                       <span className="tabular-nums text-lp-text">{(form.per_diem ?? 0).toLocaleString('en-GB', { minimumFractionDigits: 2 })}</span>
@@ -353,7 +389,7 @@ export function SalariesTab({
                           min="0"
                           className="w-20 rounded-md border border-lp-border bg-transparent px-2 py-1 text-right text-sm tabular-nums text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30"
                           value={form.advance_fee ?? ''}
-                          onChange={(e) => setEditForm((prev) => ({ ...prev, advance_fee: e.target.value ? Number(e.target.value) : 0 }))}
+                          onChange={(e) => setEditForm((prev) => ({ ...prev, advance_fee: e.target.value === '' ? undefined : Number(e.target.value) }))}
                         />
                         <button
                           type="button"
@@ -452,9 +488,65 @@ export function SalariesTab({
           </div>
         </div>
         <div className="border-t border-lp-border px-4 py-3">
+          {addingMember && (
+            <div className="mb-3 grid gap-2 rounded-lg border border-lp-border bg-lp-bg p-3 sm:grid-cols-4">
+              <input
+                type="text"
+                placeholder="Member name"
+                className="rounded-md border border-lp-border bg-transparent px-2 py-1.5 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30"
+                value={newMember.person_name}
+                onChange={(e) => setNewMember((prev) => ({ ...prev, person_name: e.target.value }))}
+              />
+              <input
+                type="text"
+                placeholder="Role"
+                className="rounded-md border border-lp-border bg-transparent px-2 py-1.5 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30"
+                value={newMember.role}
+                onChange={(e) => setNewMember((prev) => ({ ...prev, role: e.target.value }))}
+              />
+              <select
+                className="rounded-md border border-lp-border bg-transparent px-2 py-1.5 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30"
+                value={newMember.person_type}
+                onChange={(e) => setNewMember((prev) => ({ ...prev, person_type: e.target.value }))}
+              >
+                <option value="principal">Principal</option>
+                <option value="band">Band</option>
+                <option value="crew">Crew</option>
+              </select>
+              <select
+                className="rounded-md border border-lp-border bg-transparent px-2 py-1.5 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30"
+                value={newMember.rate_type}
+                onChange={(e) => setNewMember((prev) => ({ ...prev, rate_type: e.target.value }))}
+              >
+                <option value="day_rate">Day Rate</option>
+                <option value="split_rate">Split Rate</option>
+              </select>
+              <div className="sm:col-span-4 flex justify-end gap-2">
+                <button
+                  type="button"
+                  className="rounded-md border border-lp-border px-3 py-1.5 text-sm text-lp-text hover:bg-lp-bg-tertiary"
+                  onClick={() => {
+                    setAddingMember(false);
+                    setNewMember({ person_name: '', role: '', person_type: 'crew', rate_type: 'day_rate' });
+                  }}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="rounded-md bg-lp-orange px-3 py-1.5 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+                  onClick={handleCreateMember}
+                  disabled={savingId === '__new__' || !newMember.person_name.trim()}
+                >
+                  {savingId === '__new__' ? 'Adding…' : 'Add'}
+                </button>
+              </div>
+            </div>
+          )}
           <button
             type="button"
             className="flex items-center gap-1 rounded-lg border border-lp-border bg-lp-bg px-3 py-2 text-sm font-medium text-lp-text hover:bg-lp-bg-tertiary"
+            onClick={() => setAddingMember(true)}
           >
             <Plus className="h-4 w-4" />
             Add Member

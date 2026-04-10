@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+  <!-- Lowpass wordmark: horizontal + diagonal (slash), scaled for 16px checkbox -->
+  <path
+    d="M5 12h10l6 7"
+    stroke="#ffffff"
+    stroke-width="2.25"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+</svg>

@@ -237,8 +237,8 @@ export function TransportationTab({ tourId }: { tourId: string }) {
                       type="number"
                       min={1}
                       className="w-full rounded border border-lp-border bg-lp-bg px-2 py-1.5 text-right text-lp-text"
-                      value={newRow.quantity ?? 1}
-                      onChange={(e) => setNewRow((r) => ({ ...r, quantity: parseInt(e.target.value, 10) || 1 }))}
+                      value={newRow.quantity ?? ''}
+                      onChange={(e) => setNewRow((r) => ({ ...r, quantity: e.target.value === '' ? undefined : parseInt(e.target.value, 10) }))}
                     />
                   </td>
                   <td className="p-2">
@@ -246,8 +246,8 @@ export function TransportationTab({ tourId }: { tourId: string }) {
                       type="number"
                       step="0.01"
                       className="w-full rounded border border-lp-border bg-lp-bg px-2 py-1.5 text-right text-lp-text"
-                      value={newRow.proposed_cost ?? 0}
-                      onChange={(e) => setNewRow((r) => ({ ...r, proposed_cost: parseFloat(e.target.value) || 0 }))}
+                      value={newRow.proposed_cost ?? ''}
+                      onChange={(e) => setNewRow((r) => ({ ...r, proposed_cost: e.target.value === '' ? undefined : parseFloat(e.target.value) }))}
                     />
                   </td>
                   <td className="p-2">
@@ -255,8 +255,8 @@ export function TransportationTab({ tourId }: { tourId: string }) {
                       type="number"
                       step="0.01"
                       className="w-full rounded border border-lp-border bg-lp-bg px-2 py-1.5 text-right text-lp-text"
-                      value={newRow.actual_cost ?? 0}
-                      onChange={(e) => setNewRow((r) => ({ ...r, actual_cost: parseFloat(e.target.value) || 0 }))}
+                      value={newRow.actual_cost ?? ''}
+                      onChange={(e) => setNewRow((r) => ({ ...r, actual_cost: e.target.value === '' ? undefined : parseFloat(e.target.value) }))}
                     />
                   </td>
                   <td className="p-2">
@@ -372,8 +372,8 @@ export function TransportationTab({ tourId }: { tourId: string }) {
                     </td>
                     <td className="p-3">
                       <InlineEdit
-                        value={row.quantity ?? 1}
-                        onChange={(v) => setEditRow((r) => ({ ...r, quantity: Number(v) || 1 }))}
+                        value={row.quantity ?? ''}
+                        onChange={(v) => setEditRow((r) => ({ ...r, quantity: v === '' ? undefined : Number(v) }))}
                         isEditing={isEditing}
                         displayValue={item.quantity}
                         type="number"

@@ -6,7 +6,7 @@ export interface InlineCurrencyCellProps {
   /** Raw numeric value. Uses Number(value) || 0 for display and input (intentional pattern). */
   value: number | null | undefined;
   /** Called with the new number when user changes the value in edit mode. */
-  onChange: (value: number) => void;
+  onChange: (value: number | null) => void;
   /** Whether the cell is in edit mode. */
   isEditing: boolean;
   /** Optional class for the wrapper. */
@@ -40,7 +40,7 @@ export function InlineCurrencyCell({
   variant = 'default',
   disabled,
 }: InlineCurrencyCellProps) {
-  const num = Number(value) || 0;
+  const num = value == null ? null : Number(value);
 
   if (isEditing) {
     return (
@@ -48,8 +48,8 @@ export function InlineCurrencyCell({
         <input
           type="number"
           step="0.01"
-          value={num}
-          onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
+          value={num ?? ''}
+          onChange={(e) => onChange(e.target.value === '' ? null : parseFloat(e.target.value))}
           disabled={disabled}
           className={cn(
             'rounded border border-lp-border bg-lp-bg px-2 py-1 text-right text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/20',
@@ -69,7 +69,7 @@ export function InlineCurrencyCell({
         className
       )}
     >
-      {num.toLocaleString('en-GB', CURRENCY_FORMAT)}
+      {(num ?? 0).toLocaleString('en-GB', CURRENCY_FORMAT)}
     </span>
   );
 }

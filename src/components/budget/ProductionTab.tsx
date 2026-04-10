@@ -239,8 +239,8 @@ export function ProductionTab({ tourId }: { tourId: string }) {
                       type="number"
                       min={1}
                       className="w-full rounded border border-lp-border bg-lp-bg px-2 py-1.5 text-right text-lp-text"
-                      value={newRow.quantity ?? 1}
-                      onChange={(e) => setNewRow((r) => ({ ...r, quantity: parseInt(e.target.value, 10) || 1 }))}
+                      value={newRow.quantity ?? ''}
+                      onChange={(e) => setNewRow((r) => ({ ...r, quantity: e.target.value === '' ? undefined : parseInt(e.target.value, 10) }))}
                     />
                   </td>
                   <td className="p-2">
@@ -248,8 +248,8 @@ export function ProductionTab({ tourId }: { tourId: string }) {
                       type="number"
                       step="0.01"
                       className="w-full rounded border border-lp-border bg-lp-bg px-2 py-1.5 text-right text-lp-text"
-                      value={newRow.proposed_cost ?? 0}
-                      onChange={(e) => setNewRow((r) => ({ ...r, proposed_cost: parseFloat(e.target.value) || 0 }))}
+                      value={newRow.proposed_cost ?? ''}
+                      onChange={(e) => setNewRow((r) => ({ ...r, proposed_cost: e.target.value === '' ? undefined : parseFloat(e.target.value) }))}
                     />
                   </td>
                   <td className="p-2">
@@ -257,8 +257,8 @@ export function ProductionTab({ tourId }: { tourId: string }) {
                       type="number"
                       step="0.01"
                       className="w-full rounded border border-lp-border bg-lp-bg px-2 py-1.5 text-right text-lp-text"
-                      value={newRow.actual_cost ?? 0}
-                      onChange={(e) => setNewRow((r) => ({ ...r, actual_cost: parseFloat(e.target.value) || 0 }))}
+                      value={newRow.actual_cost ?? ''}
+                      onChange={(e) => setNewRow((r) => ({ ...r, actual_cost: e.target.value === '' ? undefined : parseFloat(e.target.value) }))}
                     />
                   </td>
                   <td className="p-2">
@@ -378,8 +378,8 @@ export function ProductionTab({ tourId }: { tourId: string }) {
                           type="number"
                           min={1}
                           className="w-16 rounded border border-lp-border bg-lp-bg px-2 py-1 text-right text-lp-text"
-                          value={row.quantity ?? 1}
-                          onChange={(e) => setEditRow((r) => ({ ...r, quantity: parseInt(e.target.value, 10) || 1 }))}
+                          value={row.quantity ?? ''}
+                          onChange={(e) => setEditRow((r) => ({ ...r, quantity: e.target.value === '' ? undefined : parseInt(e.target.value, 10) }))}
                         />
                       ) : (
                         item.quantity
@@ -391,8 +391,8 @@ export function ProductionTab({ tourId }: { tourId: string }) {
                           type="number"
                           step="0.01"
                           className="w-24 rounded border border-lp-border bg-lp-bg px-2 py-1 text-right text-lp-text"
-                          value={row.proposed_cost ?? 0}
-                          onChange={(e) => setEditRow((r) => ({ ...r, proposed_cost: parseFloat(e.target.value) || 0 }))}
+                          value={row.proposed_cost ?? ''}
+                          onChange={(e) => setEditRow((r) => ({ ...r, proposed_cost: e.target.value === '' ? undefined : parseFloat(e.target.value) }))}
                         />
                       ) : (
                         (Number(item.proposed_cost) || 0).toLocaleString('en-GB', { minimumFractionDigits: 2 })
@@ -404,8 +404,8 @@ export function ProductionTab({ tourId }: { tourId: string }) {
                           type="number"
                           step="0.01"
                           className="w-24 rounded border border-lp-border bg-lp-bg px-2 py-1 text-right text-lp-text"
-                          value={row.actual_cost ?? 0}
-                          onChange={(e) => setEditRow((r) => ({ ...r, actual_cost: parseFloat(e.target.value) || 0 }))}
+                          value={row.actual_cost ?? ''}
+                          onChange={(e) => setEditRow((r) => ({ ...r, actual_cost: e.target.value === '' ? undefined : parseFloat(e.target.value) }))}
                         />
                       ) : (
                         (Number(item.actual_cost) || 0).toLocaleString('en-GB', { minimumFractionDigits: 2 })

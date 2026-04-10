@@ -274,8 +274,8 @@ export function FlightsTab({ tourId }: { tourId: string }) {
                       type="number"
                       min={1}
                       className="w-12 rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-lp-text"
-                      value={editRow.leg_order ?? 1}
-                      onChange={(e) => setEditRow((r) => ({ ...r, leg_order: parseInt(e.target.value, 10) || 1 }))}
+                      value={editRow.leg_order ?? ''}
+                      onChange={(e) => setEditRow((r) => ({ ...r, leg_order: e.target.value === '' ? undefined : parseInt(e.target.value, 10) }))}
                     />
                   </td>
                   <td className="p-2">
@@ -283,8 +283,8 @@ export function FlightsTab({ tourId }: { tourId: string }) {
                       type="number"
                       step="0.01"
                       className="w-20 rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-lp-text text-right"
-                      value={editRow.proposed_cost ?? 0}
-                      onChange={(e) => setEditRow((r) => ({ ...r, proposed_cost: parseFloat(e.target.value) || 0 }))}
+                      value={editRow.proposed_cost ?? ''}
+                      onChange={(e) => setEditRow((r) => ({ ...r, proposed_cost: e.target.value === '' ? undefined : parseFloat(e.target.value) }))}
                     />
                   </td>
                   <td className="p-2">
@@ -292,8 +292,8 @@ export function FlightsTab({ tourId }: { tourId: string }) {
                       type="number"
                       step="0.01"
                       className="w-20 rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-lp-text text-right"
-                      value={editRow.actual_cost ?? 0}
-                      onChange={(e) => setEditRow((r) => ({ ...r, actual_cost: parseFloat(e.target.value) || 0 }))}
+                      value={editRow.actual_cost ?? ''}
+                      onChange={(e) => setEditRow((r) => ({ ...r, actual_cost: e.target.value === '' ? undefined : parseFloat(e.target.value) }))}
                     />
                   </td>
                   <td className="p-2 text-lp-text-tertiary">—</td>
@@ -445,8 +445,8 @@ export function FlightsTab({ tourId }: { tourId: string }) {
                           type="number"
                           min={1}
                           className="w-12 rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-lp-text"
-                          value={row.leg_order ?? 1}
-                          onChange={(e) => setEditRow((r) => ({ ...r, leg_order: parseInt(e.target.value, 10) || 1 }))}
+                          value={row.leg_order ?? ''}
+                          onChange={(e) => setEditRow((r) => ({ ...r, leg_order: e.target.value === '' ? undefined : parseInt(e.target.value, 10) }))}
                         />
                       ) : (
                         f.leg_order
@@ -458,8 +458,8 @@ export function FlightsTab({ tourId }: { tourId: string }) {
                           type="number"
                           step="0.01"
                           className="w-20 rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-right text-lp-text"
-                          value={row.proposed_cost ?? 0}
-                          onChange={(e) => setEditRow((r) => ({ ...r, proposed_cost: parseFloat(e.target.value) || 0 }))}
+                          value={row.proposed_cost ?? ''}
+                          onChange={(e) => setEditRow((r) => ({ ...r, proposed_cost: e.target.value === '' ? undefined : parseFloat(e.target.value) }))}
                         />
                       ) : (
                         (Number(f.proposed_cost) || 0).toLocaleString('en-GB', { minimumFractionDigits: 2 })
@@ -471,8 +471,8 @@ export function FlightsTab({ tourId }: { tourId: string }) {
                           type="number"
                           step="0.01"
                           className="w-20 rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-right text-lp-text"
-                          value={row.actual_cost ?? 0}
-                          onChange={(e) => setEditRow((r) => ({ ...r, actual_cost: parseFloat(e.target.value) || 0 }))}
+                          value={row.actual_cost ?? ''}
+                          onChange={(e) => setEditRow((r) => ({ ...r, actual_cost: e.target.value === '' ? undefined : parseFloat(e.target.value) }))}
                         />
                       ) : (
                         (f.actual_cost != null ? Number(f.actual_cost) : 0).toLocaleString('en-GB', { minimumFractionDigits: 2 })
