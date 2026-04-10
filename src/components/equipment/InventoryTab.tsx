@@ -213,34 +213,17 @@ export function InventoryTab({ userId, inventory, setInventory }: Props) {
       try {
         const res = await fetch(`/api/equipment/find-image?q=${encodeURIComponent(item.name)}`);
         const data = await res.json();
-        const { imageUrl, error, missing, code } = data as {
+        const { imageUrl, code } = data as {
           imageUrl?: string | null;
-          error?: string;
-          missing?: string[];
           code?: string;
         };
+        // Image search not configured — silently stop, no alert
+        if (code === 'CSE_NOT_CONFIGURED') break;
         if (imageUrl) {
           await supabase.from('rental_inventory').update({ image_url: imageUrl }).eq('id', item.id);
           setInventory(inventory.map(inv => inv.id === item.id ? { ...inv, image_url: imageUrl } : inv));
           found++;
           setImgFill({ current: i + 1, total: targets.length, found });
-        }
-        if (code === 'CSE_NOT_CONFIGURED' || missing?.length) {
-          alert(
-            [
-              'Google Custom Search is not fully configured on the server.',
-              '',
-              missing?.length
-                ? `Missing env: ${missing.join(', ')}`
-                : error ?? 'Set variables in .env.local',
-              '',
-              'Add GOOGLE_CSE_CX (search engine ID) and ensure your Google API key has the "Custom Search API" enabled in Google Cloud Console.',
-              'You can use GOOGLE_PLACES_API_KEY or set GOOGLE_CUSTOM_SEARCH_API_KEY for image search only.',
-              '',
-              'Restart the dev server after changing .env.local.',
-            ].join('\n')
-          );
-          break;
         }
       } catch { /* skip item on network error */ }
     }

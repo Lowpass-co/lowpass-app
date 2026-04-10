@@ -21,20 +21,10 @@ export async function GET(req: NextRequest) {
     '';
 
   if (!apiKey || !cx) {
-    const missing: string[] = [];
-    if (!apiKey) {
-      missing.push('GOOGLE_PLACES_API_KEY or GOOGLE_CUSTOM_SEARCH_API_KEY');
-    }
-    if (!cx) {
-      missing.push('GOOGLE_CSE_CX');
-    }
+    // Not configured — return gracefully so callers can skip silently
     return NextResponse.json(
-      {
-        error: 'Google Custom Search is not configured on the server.',
-        missing,
-        code: 'CSE_NOT_CONFIGURED' as const,
-      },
-      { status: 500 }
+      { imageUrl: null, code: 'CSE_NOT_CONFIGURED' as const },
+      { status: 200 }
     );
   }
 
