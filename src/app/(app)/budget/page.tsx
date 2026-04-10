@@ -7,20 +7,7 @@ import { BudgetTourRedirect } from '@/components/budget/BudgetTourRedirect';
 import { BudgetTabs } from '@/components/budget/BudgetTabs';
 import { BUDGET_TABS, TabId } from '@/components/budget/budget-tabs';
 import { BudgetFolderTabsNav } from '@/components/budget/BudgetFolderTabsNav';
-import dynamic from 'next/dynamic';
-import { Loader2 } from 'lucide-react';
-
-const TourBudgetAccordion = dynamic(
-  () => import('@/components/budget/TourBudgetAccordion').then(m => ({ default: m.TourBudgetAccordion })),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="flex items-center gap-2 p-8 text-lp-text-secondary text-sm">
-        <Loader2 className="h-4 w-4 animate-spin" /> Loading budget…
-      </div>
-    ),
-  }
-);
+import { TourBudgetAccordionDynamic } from '@/components/budget/TourBudgetAccordionDynamic';
 
 export default async function BudgetPage({
   searchParams,
@@ -74,7 +61,7 @@ export default async function BudgetPage({
           </a>
         </div>
         <div className="flex-1 min-h-0 overflow-hidden">
-          <TourBudgetAccordion tourId={tourId} />
+          <TourBudgetAccordionDynamic tourId={tourId} />
         </div>
       </div>
     );

@@ -6,6 +6,10 @@
    schema and are used across all components.
    ============================================ */
 
+import type { PersonnelExtendedProfile } from '@/lib/personnel-extended-profile';
+
+export type { PersonnelExtendedProfile };
+
 // ---- Workspace & Auth ----
 
 export interface Workspace {
@@ -277,6 +281,8 @@ export interface Personnel {
   home_airport?: string;
   dietary_needs?: string;
   passport_info?: PassportInfo;
+  /** Rich profile (address, emergency contact, visa, sizes, etc.) — migration 026. */
+  extended_profile?: PersonnelExtendedProfile;
   standard_rates: PersonnelRates;
   commission_rates?: Record<string, number>;  // territory → percentage (hidden field)
   merch_size?: string;

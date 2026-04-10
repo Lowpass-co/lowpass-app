@@ -15,6 +15,7 @@ export function StyledSelect<T extends string>({
   className,
   error,
   size = 'md',
+  variant = 'default',
 }: {
   value: T;
   onChange: (value: T) => void;
@@ -25,6 +26,8 @@ export function StyledSelect<T extends string>({
   error?: boolean;
   /** `sm` matches compact toolbar filters (e.g. Equipment). */
   size?: 'md' | 'sm';
+  /** `plain` — no field chrome; text + chevron only (e.g. header scope). */
+  variant?: 'default' | 'plain';
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -47,19 +50,43 @@ export function StyledSelect<T extends string>({
         onClick={() => !disabled && setOpen((o) => !o)}
         disabled={disabled}
         className={cn(
-          'flex w-full items-center justify-between border bg-lp-surface text-left text-lp-text transition-all duration-150',
-          size === 'sm'
-            ? 'h-9 rounded-lg px-3 py-2 text-sm'
-            : 'h-11 rounded-xl px-4 py-2.5 text-sm',
-          open && 'ring-2 ring-lp-orange/20',
-          error ? 'border-red-500' : 'border-lp-border focus:border-lp-orange',
-          disabled && 'opacity-50 cursor-not-allowed'
+          'flex w-full items-center justify-between text-left transition-all duration-150',
+          variant === 'plain'
+            ? cn(
+                'gap-1.5 rounded-md border border-transparent bg-transparent px-1 py-0.5 text-base font-normal text-lp-text',
+                'hover:bg-lp-bg-tertiary/60',
+                open && 'bg-lp-bg-tertiary/40 ring-0',
+                error && 'text-red-600 dark:text-red-400',
+                !error && !disabled && 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lp-orange/25'
+              )
+            : cn(
+                'border bg-lp-surface text-lp-text',
+                size === 'sm'
+                  ? 'h-9 rounded-lg px-3 py-2 text-sm'
+                  : 'h-11 rounded-xl px-4 py-2.5 text-sm',
+                open && 'ring-2 ring-lp-orange/20',
+                error ? 'border-red-500' : 'border-lp-border focus:border-lp-orange',
+                disabled && 'cursor-not-allowed opacity-50'
+              ),
+          variant === 'plain' && disabled && 'cursor-not-allowed opacity-50'
         )}
       >
-        <span className={cn('min-w-0 truncate', selected ? '' : 'text-lp-text-tertiary')}>{selected?.label ?? placeholder}</span>
+        <span
+          className={cn(
+            'min-w-0 truncate',
+            selected ? '' : 'font-normal text-lp-text-tertiary',
+            variant === 'plain' && selected && 'text-lp-text'
+          )}
+        >
+          {selected?.label ?? placeholder}
+        </span>
         <ChevronDown
-          size={size === 'sm' ? 14 : 16}
-          className={cn('shrink-0 text-lp-text-tertiary transition-transform duration-150', open && 'rotate-180')}
+          size={variant === 'plain' ? 18 : size === 'sm' ? 14 : 16}
+          className={cn(
+            'shrink-0 text-lp-text-secondary transition-transform duration-150',
+            open && 'rotate-180',
+            variant === 'plain' && 'opacity-80'
+          )}
         />
       </button>
       {open && (

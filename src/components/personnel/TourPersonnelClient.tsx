@@ -2,11 +2,12 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Plus, Trash2, UserPlus } from 'lucide-react';
+import { Plus, Trash2, UserPlus, X } from 'lucide-react';
 import type { Personnel, PersonnelRate } from '@/types';
 import { cn } from '@/lib/utils';
 import { DeleteConfirmationModal } from '@/components/ui/DeleteConfirmationModal';
 import { useToast } from '@/components/ui/Toast';
+import { TourPersonnelDetailSlideOver } from './TourPersonnelDetailSlideOver';
 
 export function TourPersonnelClient({
   tourId,
@@ -28,6 +29,8 @@ export function TourPersonnelClient({
   const [addingId, setAddingId] = useState<string | null>(null);
   const [removeOpen, setRemoveOpen] = useState<PersonnelRate | null>(null);
   const [removingId, setRemovingId] = useState<string | null>(null);
+  const [detailRate, setDetailRate] = useState<PersonnelRate | null>(null);
+  const [detailOpen, setDetailOpen] = useState(false);
 
   const assignedRosterIds = useMemo(
     () => new Set(rates.map((r) => r.roster_personnel_id).filter(Boolean) as string[]),
@@ -92,7 +95,7 @@ export function TourPersonnelClient({
         <div>
           <h1 className="text-2xl font-bold text-lp-text">Tour personnel</h1>
           <p className="mt-1 text-sm text-lp-text-secondary">
-            {tourName} — people on this tour appear in budget, payroll, and rooming ({currency}).
+            {tourName} — people on this tour appear in budget, payroll, and rooming ({currency}). Click a row for details.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -121,118 +124,126 @@ export function TourPersonnelClient({
       </div>
 
       <div className="overflow-hidden rounded-xl border border-lp-border bg-lp-surface">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[640px] text-left text-sm">
-            <thead>
-              <tr className="border-b border-lp-border bg-lp-bg-tertiary/40 text-[10px] font-semibold uppercase tracking-wider text-lp-text-tertiary">
-                <th className="px-4 py-3">Name</th>
-                <th className="px-4 py-3">Role</th>
-                <th className="px-4 py-3">Type</th>
-                <th className="px-4 py-3">Show / off / PD</th>
-                <th className="px-4 py-3">Source</th>
-                <th className="w-12 px-2 py-3" />
-              </tr>
-            </thead>
-            <tbody>
-              {rates.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-4 py-14 text-center text-lp-text-secondary">
-                    No one on this tour yet. Add people from your workspace roster, or add ad-hoc names in{' '}
-                    <Link href={`/budget?tour_id=${tourId}`} className="text-lp-orange hover:underline">
-                      Budget
-                    </Link>
-                    .
-                  </td>
-                </tr>
-              ) : (
-                rates.map((r) => (
-                  <tr
-                    key={r.id}
-                    className={cn(
-                      'border-b border-lp-border/80 hover:bg-lp-surface-hover/80',
-                      removingId === r.id && 'opacity-40'
-                    )}
-                  >
-                    <td className="px-4 py-3 font-medium text-lp-text">{r.person_name}</td>
-                    <td className="max-w-[160px] truncate px-4 py-3 text-lp-text-secondary">
-                      {r.role || '—'}
-                    </td>
-                    <td className="px-4 py-3 text-xs capitalize text-lp-text-secondary">{r.person_type}</td>
-                    <td className="px-4 py-3 text-xs tabular-nums text-lp-text-secondary">
+        {rates.length === 0 ? (
+          <div className="px-4 py-14 text-center text-sm text-lp-text-secondary">
+            No one on this tour yet. Add people from your workspace roster, or add ad-hoc names in{' '}
+            <Link href={`/budget?tour_id=${tourId}`} className="text-lp-orange hover:underline">
+              Budget
+            </Link>
+            .
+          </div>
+        ) : (
+          <ul className="divide-y divide-lp-border">
+            {rates.map((r) => (
+              <li
+                key={r.id}
+                className={cn(
+                  'group flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors hover:bg-lp-surface-hover/80',
+                  removingId === r.id && 'opacity-40'
+                )}
+                onClick={() => {
+                  setDetailRate(r);
+                  setDetailOpen(true);
+                }}
+              >
+                <div className="h-10 w-0.5 shrink-0 rounded-full bg-lp-border group-hover:bg-lp-orange/60" aria-hidden />
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium text-lp-text">{r.person_name}</p>
+                  <p className="mt-0.5 text-xs text-lp-text-secondary">
+                    {(r.role || '—') + ' · '}
+                    <span className="capitalize">{r.person_type}</span>
+                    {' · '}
+                    <span className="tabular-nums">
                       {r.show_rate} / {r.off_rate} / {r.per_diem}
-                    </td>
-                    <td className="px-4 py-3 text-xs text-lp-text-tertiary">
-                      {r.roster_personnel_id ? 'Roster' : 'Manual'}
-                    </td>
-                    <td className="px-2 py-3 text-right">
-                      <button
-                        type="button"
-                        onClick={() => setRemoveOpen(r)}
-                        className="rounded-lg p-2 text-lp-text-tertiary hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400"
-                        title="Remove from tour"
-                      >
-                        <Trash2 size={16} />
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                    </span>
+                    {r.roster_personnel_id ? (
+                      <span className="text-lp-text-tertiary"> · Roster</span>
+                    ) : (
+                      <span className="text-lp-text-tertiary"> · Manual</span>
+                    )}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setRemoveOpen(r);
+                  }}
+                  className="shrink-0 rounded-lg p-2 text-lp-text-tertiary hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400"
+                  title="Remove from tour"
+                >
+                  <Trash2 size={16} />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       <p className="text-xs text-lp-text-tertiary">
-        Editing commission, person type, and detailed rates is done in the budget personnel tab. Workspace roster lives under{' '}
+        Full workspace profiles live under{' '}
         <Link href="/personnel" className="text-lp-orange hover:underline">
           Data → Personnel
         </Link>
-        .
+        . Run SQL migrations 025 and 026 in Supabase so roster links and extended profiles work end-to-end.
       </p>
 
       {pickerOpen && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
-          <button
-            type="button"
-            className="absolute inset-0 bg-black/50"
-            aria-label="Close"
-            onClick={() => setPickerOpen(false)}
-          />
-          <div className="relative z-[81] max-h-[min(80vh,520px)] w-full max-w-md overflow-hidden rounded-xl border border-lp-border bg-lp-surface shadow-xl">
-            <div className="border-b border-lp-border px-4 py-3">
-              <h2 className="font-semibold text-lp-text">Add from workspace roster</h2>
-              <p className="mt-0.5 text-xs text-lp-text-secondary">
-                People already on this tour are hidden.
-              </p>
-            </div>
-            <ul className="max-h-[min(60vh,400px)] overflow-y-auto p-2">
+        <>
+          <div className="fixed inset-0 z-[85] bg-black/20" aria-hidden onClick={() => setPickerOpen(false)} />
+          <div className="fixed top-0 right-0 z-[90] flex h-full w-full flex-col border-l border-lp-border bg-lp-bg shadow-2xl md:w-[min(100vw,420px)]">
+            <header className="flex items-start justify-between gap-3 border-b border-lp-border p-4">
+              <div>
+                <h2 className="text-lg font-bold text-lp-text">Add from roster</h2>
+                <p className="mt-1 text-xs text-lp-text-secondary">People already on this tour are hidden.</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPickerOpen(false)}
+                className="rounded-lg p-1.5 text-lp-text-secondary hover:bg-lp-surface"
+                aria-label="Close"
+              >
+                <X size={20} />
+              </button>
+            </header>
+            <ul className="min-h-0 flex-1 overflow-y-auto divide-y divide-lp-border">
               {availableRoster.map((p) => (
-                <li
-                  key={p.id}
-                  className="flex items-center justify-between gap-3 rounded-lg px-3 py-2 hover:bg-lp-bg-tertiary/60"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate font-medium text-lp-text">{p.name}</p>
-                    <p className="truncate text-xs text-lp-text-tertiary">
-                      {p.lp_id}
-                      {p.role ? ` · ${p.role}` : ''}
-                    </p>
-                  </div>
+                <li key={p.id}>
                   <button
                     type="button"
                     disabled={addingId === p.id}
                     onClick={() => addFromRoster(p.id)}
-                    className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-lp-border px-3 py-1.5 text-xs font-medium text-lp-text hover:border-lp-orange hover:text-lp-orange disabled:opacity-50"
+                    className="flex w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-lp-surface-hover/80 disabled:opacity-50"
                   >
-                    <Plus size={14} />
-                    {addingId === p.id ? 'Adding…' : 'Add'}
+                    <div className="h-8 w-0.5 shrink-0 rounded-full bg-lp-border" aria-hidden />
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-lp-text">{p.name}</p>
+                      <p className="text-xs text-lp-text-tertiary">
+                        {p.lp_id}
+                        {p.role ? ` · ${p.role}` : ''}
+                      </p>
+                    </div>
+                    <span className="shrink-0 text-lp-orange">{addingId === p.id ? '…' : <Plus size={18} />}</span>
                   </button>
                 </li>
               ))}
             </ul>
           </div>
-        </div>
+        </>
       )}
+
+      <TourPersonnelDetailSlideOver
+        open={detailOpen}
+        rate={detailRate}
+        tourId={tourId}
+        onClose={() => {
+          setDetailOpen(false);
+          setDetailRate(null);
+        }}
+        onSaved={(updated) => {
+          setRates((prev) => prev.map((x) => (x.id === updated.id ? updated : x)));
+        }}
+      />
 
       <DeleteConfirmationModal
         open={!!removeOpen}

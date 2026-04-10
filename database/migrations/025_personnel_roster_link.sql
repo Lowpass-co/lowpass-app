@@ -2,6 +2,7 @@
 -- Link personnel_rates (tour) → personnel (workspace roster)
 -- + DELETE policy on personnel
 -- Run in Supabase SQL Editor after prior migrations.
+-- Then run 026_personnel_extended_profile.sql for rich roster fields.
 -- ============================================================
 
 ALTER TABLE personnel_rates

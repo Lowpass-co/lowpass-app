@@ -92,6 +92,15 @@ export async function POST(request: Request) {
       : {}),
   };
 
+  const passport_info =
+    typeof body.passport_info === 'object' && body.passport_info !== null
+      ? body.passport_info
+      : {};
+  const extended_profile =
+    typeof body.extended_profile === 'object' && body.extended_profile !== null
+      ? body.extended_profile
+      : {};
+
   const insert = {
     workspace_id: profile.workspace_id,
     lp_id,
@@ -104,9 +113,21 @@ export async function POST(request: Request) {
     merch_size: body.merch_size != null ? String(body.merch_size).trim() || null : null,
     preferences: body.preferences != null ? String(body.preferences).trim() || null : null,
     standard_rates,
+    passport_info,
+    extended_profile,
   };
 
-  const { data, error } = await supabase.from('personnel').insert(insert).select().single();
+  let { data, error } = await supabase.from('personnel').insert(insert).select().single();
+
+  if (
+    error &&
+    (error.message?.includes('extended_profile') || error.message?.includes('schema cache'))
+  ) {
+    const { extended_profile: _e, ...withoutExt } = insert as typeof insert & { extended_profile?: unknown };
+    const retry = await supabase.from('personnel').insert(withoutExt).select().single();
+    data = retry.data;
+    error = retry.error;
+  }
 
   if (error) {
     if (error.code === '23505') {

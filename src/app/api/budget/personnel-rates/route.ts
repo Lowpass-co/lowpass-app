@@ -10,6 +10,7 @@
 
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { isMissingRosterPersonnelIdColumn } from '@/lib/personnel-schema-fallback';
 import { PERMISSIONS } from '@/types';
 
 const PERSON_TYPE_ORDER: Record<string, number> = {
@@ -153,6 +154,7 @@ export async function POST(request: Request) {
 
   let person_name = body.person_name?.trim() ?? '';
   let roster_personnel_id: string | null = body.roster_personnel_id ?? null;
+  let rosterLinkSupported = true;
 
   if (roster_personnel_id) {
     const { data: roster } = await supabase
@@ -166,7 +168,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Roster person not found' }, { status: 404 });
     }
 
-    const { data: dup } = await supabase
+    const dupRes = await supabase
       .from('personnel_rates')
       .select('id')
       .eq('tour_id', tour_id)
@@ -174,7 +176,11 @@ export async function POST(request: Request) {
       .eq('roster_personnel_id', roster_personnel_id)
       .maybeSingle();
 
-    if (dup) {
+    if (dupRes.error && isMissingRosterPersonnelIdColumn(dupRes.error)) {
+      rosterLinkSupported = false;
+    } else if (dupRes.error) {
+      return NextResponse.json({ error: dupRes.error.message }, { status: 500 });
+    } else if (dupRes.data) {
       return NextResponse.json({ error: 'This person is already on the tour' }, { status: 409 });
     }
 
@@ -234,16 +240,20 @@ export async function POST(request: Request) {
     order_index: orderIndex,
     updated_at: new Date().toISOString(),
   };
-  if (roster_personnel_id) payload.roster_personnel_id = roster_personnel_id;
+  if (roster_personnel_id && rosterLinkSupported) payload.roster_personnel_id = roster_personnel_id;
+
   if (canApprove && body.commission !== undefined) payload.commission = Number(body.commission) || 0;
   if (canApprove && body.commission_note !== undefined) payload.commission_note = body.commission_note ?? null;
 
-  const { data: created, error } = await supabase
-    .from('personnel_rates')
-    .insert(payload)
-    .select()
-    .single();
+  let createdRes = await supabase.from('personnel_rates').insert(payload).select().single();
 
+  if (createdRes.error && isMissingRosterPersonnelIdColumn(createdRes.error) && payload.roster_personnel_id) {
+    const retryPayload = { ...payload };
+    delete retryPayload.roster_personnel_id;
+    createdRes = await supabase.from('personnel_rates').insert(retryPayload).select().single();
+  }
+
+  const { data: created, error } = createdRes;
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

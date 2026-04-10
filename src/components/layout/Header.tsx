@@ -9,7 +9,7 @@
 
 import { Suspense } from 'react';
 import Link from 'next/link';
-import { Bell, Search, Menu, Plus } from 'lucide-react';
+import { Bell, Search, Menu, Plus, ListMusic } from 'lucide-react';
 import { DarkModeToggle } from './DarkModeToggle';
 import { HeaderArtistTourPicker } from './HeaderArtistTourPicker';
 import { useArtistTourContext } from '@/contexts/ArtistTourContext';
@@ -53,7 +53,11 @@ export function Header({ title, subtitle, onMenuClick }: HeaderProps) {
               )}
               style={compactNewTour ? undefined : { letterSpacing: '0.12em' }}
             >
-              <Plus size={compactNewTour ? 18 : 14} strokeWidth={2.5} className="shrink-0" />
+              {compactNewTour ? (
+                <ListMusic size={18} strokeWidth={2} className="shrink-0" />
+              ) : (
+                <Plus size={14} strokeWidth={2.5} className="shrink-0" />
+              )}
               {!compactNewTour && <span className="whitespace-nowrap">NEW TOUR</span>}
             </Link>
           </div>

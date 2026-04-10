@@ -86,6 +86,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     const prev = (row as { standard_rates?: Record<string, unknown> }).standard_rates ?? {};
     updates.standard_rates = { ...prev, ...(body.standard_rates as Record<string, unknown>) };
   }
+  if (body.passport_info !== undefined && typeof body.passport_info === 'object' && body.passport_info) {
+    const prev = (row as { passport_info?: Record<string, unknown> }).passport_info ?? {};
+    updates.passport_info = { ...prev, ...(body.passport_info as Record<string, unknown>) };
+  }
+  if (body.extended_profile !== undefined && typeof body.extended_profile === 'object' && body.extended_profile) {
+    const prev = (row as { extended_profile?: Record<string, unknown> }).extended_profile ?? {};
+    updates.extended_profile = { ...prev, ...(body.extended_profile as Record<string, unknown>) };
+  }
 
   const { data, error } = await supabase.from('personnel').update(updates).eq('id', id).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

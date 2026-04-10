@@ -4,8 +4,9 @@
    LP-IDs, contact, default rates — not tied to an artist.
    ============================================ */
 
+import { Suspense } from 'react';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
-import { PersonnelRosterClient } from '@/components/personnel/PersonnelRosterClient';
+import { PersonnelPageClient } from '@/components/personnel/PersonnelPageClient';
 import type { Personnel } from '@/types';
 
 export default async function PersonnelPage() {
@@ -49,7 +50,13 @@ export default async function PersonnelPage() {
           Workspace roster with LP-IDs. Assign people to each tour from Tour Management → Tour personnel.
         </p>
       </div>
-      <PersonnelRosterClient initial={(personnel ?? []) as Personnel[]} />
+      <Suspense
+        fallback={
+          <div className="h-48 animate-pulse rounded-xl border border-lp-border bg-lp-surface/50" />
+        }
+      >
+        <PersonnelPageClient initial={(personnel ?? []) as Personnel[]} />
+      </Suspense>
     </div>
   );
 }
