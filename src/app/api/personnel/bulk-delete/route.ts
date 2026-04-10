@@ -37,19 +37,44 @@ export async function POST(request: Request) {
   const ids = raw.filter((id): id is string => typeof id === 'string' && id.length > 0);
   if (ids.length === 0) return NextResponse.json({ error: 'No valid ids' }, { status: 400 });
 
-  const { data: removed, error } = await supabase
+  const workspaceId = profile.workspace_id;
+
+  // Resolve IDs that exist in this workspace (avoids trusting DELETE … RETURNING under RLS).
+  const { data: targets, error: selErr } = await supabase
+    .from('personnel')
+    .select('id')
+    .in('id', ids)
+    .eq('workspace_id', workspaceId);
+
+  if (selErr) return NextResponse.json({ error: selErr.message }, { status: 500 });
+
+  const targetIds = (targets ?? []).map((r) => r.id as string);
+  if (targetIds.length === 0) {
+    return NextResponse.json({ error: 'No matching roster rows in your workspace' }, { status: 404 });
+  }
+
+  const { error: delErr } = await supabase
     .from('personnel')
     .delete()
-    .in('id', ids)
-    .eq('workspace_id', profile.workspace_id)
-    .select('id');
+    .in('id', targetIds)
+    .eq('workspace_id', workspaceId);
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (delErr) return NextResponse.json({ error: delErr.message }, { status: 500 });
 
-  const deletedIds = (removed ?? []).map((r) => r.id as string);
-  if (deletedIds.length === 0) {
-    return NextResponse.json({ error: 'No matching roster rows were deleted' }, { status: 404 });
+  const { data: leftover, error: verifyErr } = await supabase
+    .from('personnel')
+    .select('id')
+    .in('id', targetIds)
+    .eq('workspace_id', workspaceId);
+
+  if (verifyErr) return NextResponse.json({ error: verifyErr.message }, { status: 500 });
+  if ((leftover ?? []).length > 0) {
+    return NextResponse.json(
+      { error: 'Some roster rows could not be deleted. Check permissions or linked tour data.' },
+      { status: 409 }
+    );
   }
+
   revalidatePath('/personnel');
-  return NextResponse.json({ deleted: deletedIds.length, deleted_ids: deletedIds });
+  return NextResponse.json({ deleted: targetIds.length, deleted_ids: targetIds });
 }

@@ -211,7 +211,7 @@ export function CopyAdvanceModal({
                 type="checkbox"
                 checked={copySections}
                 onChange={(e) => setCopySections(e.target.checked)}
-                className="rounded border-lp-border text-lp-orange focus:ring-lp-orange"
+                className="lp-checkbox"
               />
               <span className="text-sm text-lp-text">Copy section layout</span>
             </label>
@@ -220,7 +220,7 @@ export function CopyAdvanceModal({
                 type="checkbox"
                 checked={copyData}
                 onChange={(e) => setCopyData(e.target.checked)}
-                className="rounded border-lp-border text-lp-orange focus:ring-lp-orange"
+                className="lp-checkbox"
               />
               <span className="text-sm text-lp-text">Copy filled data</span>
             </label>
@@ -266,7 +266,7 @@ export function CopyAdvanceModal({
                       type="checkbox"
                       checked={targetIds.has(d.routing_id)}
                       onChange={() => toggleTarget(d.routing_id)}
-                      className="rounded border-lp-border text-lp-orange focus:ring-lp-orange"
+                      className="lp-checkbox"
                     />
                     <div className="min-w-0 flex-1">
                       <span className="text-sm font-medium text-lp-text">

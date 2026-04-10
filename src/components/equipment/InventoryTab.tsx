@@ -29,14 +29,8 @@ const INVENTORY_TOOLBAR_CLASS = 'grid w-full min-w-0 grid-cols-[minmax(0,1fr)_10
 const INLINE_INPUT =
   'w-full rounded-md border bg-transparent px-2 py-1 text-xs transition-colors outline-none';
 
-/** Matches Lowpass form controls (see AdvanceSectionBuilder, StyledSelect accent) */
-const INVENTORY_CHECKBOX_CLASS = cn(
-  'h-4 w-4 shrink-0 cursor-pointer rounded-md border-2 border-lp-border bg-lp-surface',
-  'text-lp-orange accent-lp-orange',
-  'transition-[border-color,box-shadow] duration-150',
-  'hover:border-lp-orange/50',
-  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lp-orange/35 focus-visible:ring-offset-0'
-);
+/** Global brand checkbox — see `globals.css` `.lp-checkbox` */
+const INVENTORY_CHECKBOX_CLASS = 'lp-checkbox';
 
 interface Props {
   userId: string;

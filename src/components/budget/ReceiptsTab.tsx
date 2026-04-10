@@ -283,7 +283,7 @@ export function ReceiptsTab({ tourId }: { tourId: string }) {
                   </td>
                   <td className="p-2"><input type="number" step="0.01" className="w-20 rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-right text-lp-text" value={newRow.cost_tour_currency ?? 0} onChange={(e) => setNewRow((r) => ({ ...r, cost_tour_currency: parseFloat(e.target.value) || 0 }))} /></td>
                   <td className="p-2"><input type="number" step="0.01" className="w-20 rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-right text-lp-text text-red-600" value={newRow.cost_home_currency ?? 0} onChange={(e) => setNewRow((r) => ({ ...r, cost_home_currency: parseFloat(e.target.value) || 0 }))} /></td>
-                  <td className="p-2"><input type="checkbox" checked={!!newRow.in_budget} onChange={(e) => setNewRow((r) => ({ ...r, in_budget: e.target.checked }))} /></td>
+                  <td className="p-2"><input type="checkbox" className="lp-checkbox" checked={!!newRow.in_budget} onChange={(e) => setNewRow((r) => ({ ...r, in_budget: e.target.checked }))} /></td>
                   <td className="p-2">
                     {newRow.in_budget && (
                       <select className="min-w-[120px] rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-lp-text" value={newRow.linked_line_item_id ?? ''} onChange={(e) => setNewRow((r) => ({ ...r, linked_line_item_id: e.target.value || null }))}>
@@ -338,7 +338,7 @@ export function ReceiptsTab({ tourId }: { tourId: string }) {
                         (Number(r.cost_home_currency) || 0).toLocaleString('en-GB', { minimumFractionDigits: 2 })
                       )}
                     </td>
-                    <td className="p-2"><input type="checkbox" checked={r.in_budget} onChange={(e) => toggleInBudget(r, e.target.checked)} disabled={saving} /></td>
+                    <td className="p-2"><input type="checkbox" className="lp-checkbox" checked={r.in_budget} onChange={(e) => toggleInBudget(r, e.target.checked)} disabled={saving} /></td>
                     <td className="p-2 text-lp-text-secondary">
                       {r.in_budget && (isEditing ? (
                         <select className="min-w-[120px] rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-lp-text" value={row.linked_line_item_id ?? ''} onChange={(e) => setEditRow((x) => ({ ...x, linked_line_item_id: e.target.value || null }))}>

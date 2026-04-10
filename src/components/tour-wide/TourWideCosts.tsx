@@ -320,7 +320,7 @@ export function TourWideCosts({
                           return next;
                         });
                       }}
-                      className="rounded border-lp-border"
+                      className="lp-checkbox"
                     />
                     <span className="flex-1 text-lp-text">{it.label}</span>
                     <span className="text-lp-text-secondary">{fmt(it.proposed_cost)}</span>

@@ -870,7 +870,7 @@ function ApplyTemplateModal({
                     type="checkbox"
                     checked={targetIds.has(d.routing_id)}
                     onChange={() => toggleTarget(d.routing_id)}
-                    className="rounded border-lp-border"
+                    className="lp-checkbox"
                   />
                   <span className="text-sm text-lp-text">
                     {dateLabel(d)} — {d.venue_name || d.city || '—'}

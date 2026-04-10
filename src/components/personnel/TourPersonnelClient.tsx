@@ -217,7 +217,7 @@ export function TourPersonnelClient({
               type="checkbox"
               checked={allRatesSelected}
               onChange={(e) => (e.target.checked ? selectAllRates() : clearSelection())}
-              className="h-4 w-4 rounded border-lp-border text-lp-orange focus:ring-2 focus:ring-lp-orange focus:ring-offset-0 focus:ring-offset-lp-surface"
+              className="lp-checkbox"
             />
             <span>
               Select all<span className="ml-1 text-lp-text-secondary">({rates.length})</span>
@@ -273,7 +273,7 @@ export function TourPersonnelClient({
                   checked={selectedIds.has(r.id)}
                   onChange={() => toggleSelect(r.id)}
                   onClick={(e) => e.stopPropagation()}
-                  className="h-4 w-4 shrink-0 rounded border-lp-border text-lp-orange focus:ring-2 focus:ring-lp-orange focus:ring-offset-0 focus:ring-offset-lp-surface"
+                  className="lp-checkbox"
                   aria-label={`Select ${r.person_name}`}
                 />
                 <div className="h-10 w-0.5 shrink-0 rounded-full bg-lp-border group-hover:bg-lp-orange/60" aria-hidden />

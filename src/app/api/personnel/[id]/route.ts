@@ -115,14 +115,15 @@ export async function DELETE(_request: Request, { params }: { params: Promise<{ 
   }
   const { profile } = check;
 
-  const { data: removed, error } = await supabase
+  const { error } = await supabase
     .from('personnel')
     .delete()
     .eq('id', id)
-    .eq('workspace_id', profile.workspace_id)
-    .select('id');
+    .eq('workspace_id', profile.workspace_id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  if (!removed?.length) {
+
+  const { data: stillThere } = await supabase.from('personnel').select('id').eq('id', id).maybeSingle();
+  if (stillThere) {
     return NextResponse.json({ error: 'Not found or could not delete' }, { status: 404 });
   }
   revalidatePath('/personnel');

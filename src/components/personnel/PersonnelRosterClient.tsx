@@ -209,7 +209,7 @@ export function PersonnelRosterClient({
               type="checkbox"
               checked={allFilteredSelected}
               onChange={(e) => (e.target.checked ? selectAllFiltered() : clearSelection())}
-              className="h-4 w-4 rounded border-lp-border text-lp-orange focus:ring-2 focus:ring-lp-orange focus:ring-offset-0 focus:ring-offset-lp-surface"
+              className="lp-checkbox"
             />
             <span>
               Select all{search.trim() ? ' matching' : ''}
@@ -261,7 +261,7 @@ export function PersonnelRosterClient({
                   checked={selectedIds.has(p.id)}
                   onChange={() => toggleSelect(p.id)}
                   onClick={(e) => e.stopPropagation()}
-                  className="mt-1.5 h-4 w-4 shrink-0 rounded border-lp-border text-lp-orange focus:ring-2 focus:ring-lp-orange focus:ring-offset-0 focus:ring-offset-lp-surface"
+                  className="lp-checkbox mt-1.5"
                   aria-label={`Select ${p.name}`}
                 />
                 <div className="mt-0.5 h-full w-0.5 shrink-0 rounded-full bg-lp-border group-hover:bg-lp-orange/60" aria-hidden />

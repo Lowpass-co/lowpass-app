@@ -127,7 +127,7 @@ export function CalendarView() {
               type="checkbox"
               checked={selectedTourIds.has(t.id)}
               onChange={() => toggleTour(t.id)}
-              className="rounded border-lp-border text-lp-orange focus:ring-lp-orange"
+              className="lp-checkbox"
             />
             <span
               className="w-3 h-3 rounded-full shrink-0"
@@ -146,7 +146,7 @@ export function CalendarView() {
               type="checkbox"
               checked={selectedArtistIds.has(id)}
               onChange={() => toggleArtist(id)}
-              className="rounded border-lp-border text-lp-orange focus:ring-lp-orange"
+              className="lp-checkbox"
             />
             <span className="text-sm text-lp-text">{artistNames.get(id) ?? id}</span>
           </label>

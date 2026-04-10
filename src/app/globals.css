@@ -127,6 +127,29 @@
   color: var(--lp-table-header-text);
 }
 
+/* Brand-aligned checkboxes (#FF4500 accent) */
+input[type='checkbox'].lp-checkbox {
+  height: 1rem;
+  width: 1rem;
+  flex-shrink: 0;
+  border-radius: 0.25rem;
+  border: 1px solid var(--lp-border);
+  background-color: var(--lp-surface);
+  accent-color: #ff4500;
+  cursor: pointer;
+}
+input[type='checkbox'].lp-checkbox:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+input[type='checkbox'].lp-checkbox:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--lp-surface), 0 0 0 4px rgba(255, 69, 0, 0.35);
+}
+.dark input[type='checkbox'].lp-checkbox:focus-visible {
+  box-shadow: 0 0 0 2px var(--lp-surface), 0 0 0 4px rgba(255, 106, 51, 0.45);
+}
+
 /* Budget: hide number input spinners (values are typed, not stepped) */
 .lp-budget input[type='number']::-webkit-inner-spin-button,
 .lp-budget input[type='number']::-webkit-outer-spin-button {

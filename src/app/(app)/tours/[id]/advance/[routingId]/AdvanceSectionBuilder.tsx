@@ -2754,7 +2754,7 @@ function PersonnelMultiSelect({
             ) : (
               filteredOptions.map((opt) => (
                 <label key={opt.id} className="flex cursor-pointer items-center gap-2 px-3 py-2 hover:bg-lp-surface-hover">
-                  <input type="checkbox" checked={selectedIds.includes(opt.id)} onChange={() => toggle(opt.id)} className="rounded border-lp-border text-lp-orange focus:ring-lp-orange" />
+                  <input type="checkbox" checked={selectedIds.includes(opt.id)} onChange={() => toggle(opt.id)} className="lp-checkbox" />
                   <span className="text-sm text-lp-text">{opt.label}</span>
                 </label>
               ))
