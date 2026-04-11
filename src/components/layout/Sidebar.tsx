@@ -77,6 +77,17 @@ export function Sidebar() {
     localStorage.setItem(SIDEBAR_MODE_KEY, navMode);
   }, [navMode]);
 
+  // Sync toggle with actual URL — if you land on /budget the toggle shows Budget,
+  // if you land on an advance page it shows Advance.
+  useEffect(() => {
+    if (!pathname) return;
+    if (pathname.startsWith('/budget')) {
+      setNavMode('budget');
+    } else if (pathname.includes('/advance')) {
+      setNavMode('advance');
+    }
+  }, [pathname]);
+
   useLayoutEffect(() => {
     document.documentElement.style.setProperty('--sidebar-w', collapsed ? '72px' : '260px');
   }, [collapsed]);
@@ -378,7 +389,13 @@ export function Sidebar() {
                   <button
                     type="button"
                     title="Advance"
-                    onClick={() => setNavMode('advance')}
+                    onClick={() => {
+                      setNavMode('advance');
+                      // Navigate to the tour advance overview (show list) so the user
+                      // can pick a specific show. If already on an advance page, this
+                      // is a no-op in practice but keeps the intent clear.
+                      router.push(`/tours/${selectedTourId}/advance`);
+                    }}
                     className={cn(
                       'lp-label-caps flex flex-1 items-center justify-center gap-1 rounded-md py-2 transition-colors',
                       collapsed && 'px-0'
@@ -393,7 +410,11 @@ export function Sidebar() {
                   <button
                     type="button"
                     title="Budget"
-                    onClick={() => setNavMode('budget')}
+                    onClick={() => {
+                      setNavMode('budget');
+                      // Budget is tour-level — navigate directly, no show selection needed.
+                      router.push(`/budget?tour_id=${selectedTourId}`);
+                    }}
                     className={cn(
                       'lp-label-caps flex flex-1 items-center justify-center gap-1 rounded-md py-2 transition-colors',
                       collapsed && 'px-0'
