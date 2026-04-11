@@ -18,6 +18,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { ChevronDown, Plus, Trash2, Loader2, Pencil, Check, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Skeleton } from '@/components/ui/Skeleton';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -36,6 +37,7 @@ interface SummarySection {
 interface SummaryData {
   sections: SummarySection[];
   dayCount: { showDays: number; offDays: number; rehearsalDays: number; totalDays: number };
+  currency: string;
 }
 interface LineItem {
   id: string;
@@ -144,12 +146,119 @@ const GRID_SM = 'grid grid-cols-[minmax(0,1fr)_5.25rem_5.25rem_3.25rem] gap-x-2 
 
 function ColHeader({ extra = '' }: { extra?: string }) {
   return (
-    <div className={cn(GRID, 'px-4 py-2 text-[10px] font-semibold uppercase tracking-wider text-lp-text-tertiary border-b border-lp-border/60', extra)}>
+    <div className={cn(GRID, 'border-b border-lp-border px-5 py-2 text-[10px] font-semibold uppercase tracking-wider text-lp-text-tertiary', extra)}>
       <span>Item</span>
       <span className="text-right">Proposed</span>
       <span className="text-right">Actual</span>
       <span className="text-right">Variance</span>
     </div>
+  );
+}
+
+function AccordionBodySkeletonRows() {
+  return (
+    <>
+      <ColHeader />
+      {[0, 1, 2].map((i) => (
+        <div key={i} className={cn(GRID, 'border-b border-lp-border px-5 py-2.5')}>
+          <Skeleton className="h-4 w-[55%] max-w-[220px]" />
+          <Skeleton className="h-4 w-14 justify-self-end" />
+          <Skeleton className="h-4 w-14 justify-self-end" />
+          <Skeleton className="h-4 w-10 justify-self-end" />
+        </div>
+      ))}
+    </>
+  );
+}
+
+function SalariesAccordionSkeletonRows() {
+  return (
+    <>
+      <div
+        className={cn(
+          'grid grid-cols-[minmax(0,1fr)_80px_80px_80px_80px_60px] gap-x-2 border-b border-lp-border px-5 py-2 text-[10px] font-semibold uppercase tracking-wider text-lp-text-tertiary',
+        )}
+      >
+        <span>Name / Role</span>
+        <span className="text-right">Prop. Salary</span>
+        <span className="text-right">Act. Salary</span>
+        <span className="text-right">Prop. P/D</span>
+        <span className="text-right">Act. P/D</span>
+        <span className="text-right">Var.</span>
+      </div>
+      {[0, 1, 2].map((i) => (
+        <div
+          key={i}
+          className="grid grid-cols-[minmax(0,1fr)_80px_80px_80px_80px_60px] gap-x-2 border-b border-lp-border px-5 py-2.5"
+        >
+          <div className="space-y-1.5">
+            <Skeleton className="h-4 w-36" />
+            <Skeleton className="h-3 w-24" />
+          </div>
+          <Skeleton className="h-4 w-12 justify-self-end" />
+          <Skeleton className="h-4 w-12 justify-self-end" />
+          <Skeleton className="h-4 w-12 justify-self-end" />
+          <Skeleton className="h-4 w-12 justify-self-end" />
+          <Skeleton className="h-4 w-10 justify-self-end" />
+        </div>
+      ))}
+    </>
+  );
+}
+
+function CommissionsAccordionSkeletonRows() {
+  return (
+    <>
+      <div
+        className={cn(
+          'grid grid-cols-[minmax(0,1fr)_60px_100px_100px_80px] gap-x-2 border-b border-lp-border px-5 py-2 text-[10px] font-semibold uppercase tracking-wider text-lp-text-tertiary',
+        )}
+      >
+        <span>Recipient</span>
+        <span className="text-right">Rate</span>
+        <span className="text-right">Basis</span>
+        <span className="text-right">Amount</span>
+        <span className="text-right">Var.</span>
+      </div>
+      {[0, 1, 2].map((i) => (
+        <div
+          key={i}
+          className="grid grid-cols-[minmax(0,1fr)_60px_100px_100px_80px] gap-x-2 border-b border-lp-border px-5 py-2.5"
+        >
+          <Skeleton className="h-4 w-32" />
+          <Skeleton className="h-4 w-10 justify-self-end" />
+          <Skeleton className="h-4 w-16 justify-self-end" />
+          <Skeleton className="h-4 w-14 justify-self-end" />
+          <Skeleton className="h-4 w-8 justify-self-end" />
+        </div>
+      ))}
+    </>
+  );
+}
+
+function FlightsAccordionSkeletonRows() {
+  return (
+    <>
+      <div
+        className={cn(
+          GRID,
+          'border-b border-lp-border px-5 py-2 text-[10px] font-semibold uppercase tracking-wider text-lp-text-tertiary',
+        )}
+      >
+        <span>Route / Passenger</span>
+        <span className="text-right">Proposed</span>
+        <span className="text-right">Actual</span>
+        <span className="text-right">Variance</span>
+      </div>
+      {[0, 1, 2].map((i) => (
+        <div key={i} className={cn(GRID, 'border-b border-lp-border px-5 py-2.5')}>
+          <Skeleton className="h-4 w-[70%] max-w-[260px]" />
+          <Skeleton className="h-4 w-14 justify-self-end" />
+          <Skeleton className="h-4 w-14 justify-self-end" />
+          <Skeleton className="h-4 w-10 justify-self-end" />
+        </div>
+      ))}
+    </>
   );
 }
 
@@ -195,7 +304,7 @@ function LineRow({
 
   if (editing) {
     return (
-      <div className={cn(GRID, 'px-4 py-1.5 text-[12px] border-b border-lp-border/30 bg-lp-surface-hover')}>
+      <div className={cn(GRID, 'px-5 py-1.5 text-[12px] border-b border-lp-border/30 bg-lp-surface-hover')}>
         <input
           autoFocus
           className="w-full min-w-0 bg-lp-surface border border-lp-border rounded px-1.5 py-0.5 text-lp-text text-[12px] focus:outline-none focus:border-lp-orange"
@@ -233,7 +342,7 @@ function LineRow({
 
   return (
     <div
-      className={cn(GRID, 'group px-4 py-1.5 text-[12px] border-b border-lp-border/30 hover:bg-lp-surface-hover cursor-pointer')}
+      className={cn(GRID, 'group px-5 py-1.5 text-[12px] border-b border-lp-border/30 hover:bg-lp-surface-hover cursor-pointer')}
       onClick={() => setEditing(true)}
     >
       <span className="truncate text-lp-text">{item.label}</span>
@@ -286,7 +395,7 @@ function AddRow({
   return (
     <div className="border-b border-lp-border/30 bg-lp-surface/50">
       {categories.length > 1 && (
-        <div className="px-4 pt-2">
+        <div className="px-5 pt-2">
           <select
             value={category}
             onChange={e => setCategory(e.target.value)}
@@ -298,7 +407,7 @@ function AddRow({
           </select>
         </div>
       )}
-      <div className={cn(GRID, 'px-4 py-1.5')}>
+      <div className={cn(GRID, 'px-5 py-1.5')}>
         <input
           autoFocus
           placeholder="Description…"
@@ -346,7 +455,6 @@ function AccordionSection({
   icon,
   open,
   onToggle,
-  loading,
   children,
 }: {
   title: string;
@@ -356,7 +464,6 @@ function AccordionSection({
   icon?: React.ReactNode;
   open: boolean;
   onToggle: () => void;
-  loading?: boolean;
   children?: React.ReactNode;
 }) {
   const [feedbackKey, setFeedbackKey] = useState(0);
@@ -386,7 +493,7 @@ function AccordionSection({
         type="button"
         className={cn(
           GRID,
-          'relative z-[2] w-full px-4 py-3 text-left',
+          'relative z-[2] w-full px-5 py-3 text-left',
           open ? 'bg-lp-bg-tertiary/40' : 'bg-lp-surface hover:bg-lp-bg-tertiary/25'
         )}
         onClick={handleToggle}
@@ -402,7 +509,6 @@ function AccordionSection({
         <span className="text-right text-[12px] tabular-nums text-lp-text-secondary">{fmt(proposed)}</span>
         <span className={cn('text-right text-[12px] tabular-nums font-semibold', plClass)}>{fmt(actual)}</span>
         <div className="flex items-center justify-end gap-1.5">
-          {loading && <Loader2 className="h-3.5 w-3.5 animate-spin text-lp-text-tertiary" />}
           <span className={cn('text-[11px] tabular-nums font-medium', varCls)}>{varStr}</span>
         </div>
       </button>
@@ -498,12 +604,8 @@ function LineItemsAccordionBody({
     load();
   };
 
-  if (loading) return (
-    <div className="flex items-center gap-2 px-4 py-3 text-[12px] text-lp-text-tertiary">
-      <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading…
-    </div>
-  );
-  if (error) return <div className="px-4 py-3 text-[12px] text-red-500">{error}</div>;
+  if (loading) return <AccordionBodySkeletonRows />;
+  if (error) return <div className="px-5 py-3 text-[12px] text-red-500">{error}</div>;
 
   // Group by sub-category
   const grouped = categories.map(cat => ({
@@ -519,7 +621,7 @@ function LineItemsAccordionBody({
       {categories.length > 1 ? (
         grouped.map(group => (
           <div key={group.value}>
-            <div className="px-4 py-1 text-[10px] font-semibold uppercase tracking-wider text-lp-text-tertiary bg-lp-surface/60 border-b border-lp-border/30">
+            <div className="px-5 py-1 text-[10px] font-semibold uppercase tracking-wider text-lp-text-tertiary bg-lp-surface/60 border-b border-lp-border/30">
               {group.label}
             </div>
             {group.items.map(item => (
@@ -533,14 +635,14 @@ function LineItemsAccordionBody({
         ))
       )}
       {items.length === 0 && !adding && (
-        <div className="px-4 py-2 text-[11px] text-lp-text-tertiary italic">No items yet</div>
+        <div className="px-5 py-2 text-[11px] text-lp-text-tertiary italic">No items yet</div>
       )}
       {adding ? (
         <AddRow categories={categories} defaultCategory={defaultCat} symbol={symbol} onAdd={handleAdd} onCancel={() => setAdding(false)} />
       ) : (
         <button
           onClick={() => setAdding(true)}
-          className="flex items-center gap-1.5 px-4 py-2 text-[11px] text-lp-text-tertiary hover:text-lp-orange"
+          className="flex items-center gap-1.5 px-5 py-2 text-[11px] text-lp-text-tertiary hover:text-lp-orange"
         >
           <Plus className="h-3.5 w-3.5" /> Add line item
         </button>
@@ -577,11 +679,11 @@ function FlightsAccordionBody({ tourId, symbol }: { tourId: string; symbol: stri
     load();
   };
 
-  if (loading) return <div className="flex items-center gap-2 px-4 py-3 text-[12px] text-lp-text-tertiary"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading…</div>;
+  if (loading) return <FlightsAccordionSkeletonRows />;
 
   return (
     <div>
-      <div className={cn(GRID, 'px-4 py-2 text-[10px] font-semibold uppercase tracking-wider text-lp-text-tertiary border-b border-lp-border/60')}>
+      <div className={cn(GRID, 'border-b border-lp-border px-5 py-2 text-[10px] font-semibold uppercase tracking-wider text-lp-text-tertiary')}>
         <span>Route / Passenger</span>
         <span className="text-right">Proposed</span>
         <span className="text-right">Actual</span>
@@ -604,7 +706,7 @@ function FlightsAccordionBody({ tourId, symbol }: { tourId: string; symbol: stri
         );
       })}
       {flights.length === 0 && (
-        <div className="px-4 py-2 text-[11px] text-lp-text-tertiary italic">No flights booked. Use the Flights tab for detailed booking management.</div>
+        <div className="px-5 py-2 text-[11px] text-lp-text-tertiary italic">No flights booked. Use the Flights tab for detailed booking management.</div>
       )}
     </div>
   );
@@ -638,10 +740,10 @@ function IncomeAccordionBody({ tourId, symbol }: { tourId: string; symbol: strin
     load();
   };
 
-  if (loading) return <div className="flex items-center gap-2 px-4 py-3 text-[12px] text-lp-text-tertiary"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading…</div>;
+  if (loading) return <AccordionBodySkeletonRows />;
 
   if (rows.length === 0) {
-    return <div className="px-4 py-3 text-[11px] text-lp-text-tertiary italic">No income data. Set up routing first, then add guarantees in the Routing & Income tab.</div>;
+    return <div className="px-5 py-3 text-[11px] text-lp-text-tertiary italic">No income data. Set up routing first, then add guarantees in the Routing & Income tab.</div>;
   }
 
   // Aggregate into summary lines: Guarantees, Merch, VIP
@@ -662,7 +764,7 @@ function IncomeAccordionBody({ tourId, symbol }: { tourId: string; symbol: strin
     <div>
       <ColHeader />
       {summaryLines.map((line, i) => (
-        <div key={i} className={cn(GRID, 'px-4 py-2 text-[12px] border-b border-lp-border/30')}>
+        <div key={i} className={cn(GRID, 'px-5 py-2 text-[12px] border-b border-lp-border/30')}>
           <span className="text-lp-text">{line.label}</span>
           <span className="text-right tabular-nums text-lp-text-secondary">{fmtFull(line.proposed, symbol)}</span>
           <span className="text-right tabular-nums text-lp-text">{fmtFull(line.actual, symbol)}</span>
@@ -671,7 +773,7 @@ function IncomeAccordionBody({ tourId, symbol }: { tourId: string; symbol: strin
           </span>
         </div>
       ))}
-      <div className="border-t border-lp-border/40 px-4 py-2 text-[10px] italic text-lp-text-tertiary">
+      <div className="border-t border-lp-border/40 px-5 py-2 text-[10px] italic text-lp-text-tertiary">
         {rows.length} show{rows.length !== 1 ? 's' : ''} — edit per-show income in the Routing & Income tab
       </div>
     </div>
@@ -704,7 +806,7 @@ function SalariesAccordionBody({
     }).catch(() => {}).finally(() => setLoading(false));
   }, [tourId]);
 
-  if (loading) return <div className="flex items-center gap-2 px-4 py-3 text-[12px] text-lp-text-tertiary"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading…</div>;
+  if (loading) return <SalariesAccordionSkeletonRows />;
 
   const { showDays, offDays, rehearsalDays, totalDays } = dayCount;
 
@@ -725,12 +827,12 @@ function SalariesAccordionBody({
   });
 
   if (personRows.length === 0) {
-    return <div className="px-4 py-3 text-[11px] text-lp-text-tertiary italic">No personnel set up. Add crew and band members in the Personnel section.</div>;
+    return <div className="px-5 py-3 text-[11px] text-lp-text-tertiary italic">No personnel set up. Add crew and band members in the Personnel section.</div>;
   }
 
   return (
     <div>
-      <div className={cn('grid grid-cols-[minmax(0,1fr)_80px_80px_80px_80px_60px] gap-x-2 border-b border-lp-border/60 px-4 py-2 text-[10px] font-semibold uppercase tracking-wider text-lp-text-tertiary')}>
+      <div className={cn('grid grid-cols-[minmax(0,1fr)_80px_80px_80px_80px_60px] gap-x-2 border-b border-lp-border/60 px-5 py-2 text-[10px] font-semibold uppercase tracking-wider text-lp-text-tertiary')}>
         <span>Name / Role</span>
         <span className="text-right">Prop. Salary</span>
         <span className="text-right">Act. Salary</span>
@@ -742,7 +844,7 @@ function SalariesAccordionBody({
         const totalProposed = p.proposedSalary + p.proposedPerDiem;
         const totalActual = p.actualSalary + p.actualPerDiem;
         return (
-          <div key={p.id} className="grid grid-cols-[minmax(0,1fr)_80px_80px_80px_80px_60px] gap-x-2 border-b border-lp-border/30 px-4 py-2 text-[12px] hover:bg-lp-surface-hover items-center">
+          <div key={p.id} className="grid grid-cols-[minmax(0,1fr)_80px_80px_80px_80px_60px] gap-x-2 border-b border-lp-border/30 px-5 py-2 text-[12px] hover:bg-lp-surface-hover items-center">
             <div className="min-w-0">
               <div className="truncate text-lp-text">{p.person_name}</div>
               <div className="text-[10px] text-lp-text-tertiary">{p.role ?? p.person_type}</div>
@@ -757,7 +859,7 @@ function SalariesAccordionBody({
           </div>
         );
       })}
-      <div className="border-t border-lp-border/40 px-4 py-2 text-[10px] italic text-lp-text-tertiary">
+      <div className="border-t border-lp-border/40 px-5 py-2 text-[10px] italic text-lp-text-tertiary">
         Edit rates & per diems in the Salary & Per Diems tab · {totalDays} tour day{totalDays !== 1 ? 's' : ''} ({showDays} show, {offDays} off, {rehearsalDays} rehearsal)
       </div>
     </div>
@@ -779,15 +881,15 @@ function CommissionsAccordionBody({ tourId, symbol, totalIncome }: { tourId: str
       .finally(() => setLoading(false));
   }, [tourId]);
 
-  if (loading) return <div className="flex items-center gap-2 px-4 py-3 text-[12px] text-lp-text-tertiary"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading…</div>;
+  if (loading) return <CommissionsAccordionSkeletonRows />;
 
   if (commissions.length === 0) {
-    return <div className="px-4 py-3 text-[11px] text-lp-text-tertiary italic">No commissions configured. Add them in the Commissions tab.</div>;
+    return <div className="px-5 py-3 text-[11px] text-lp-text-tertiary italic">No commissions configured. Add them in the Commissions tab.</div>;
   }
 
   return (
     <div>
-      <div className={cn('grid grid-cols-[minmax(0,1fr)_60px_100px_100px_80px] gap-x-2 border-b border-lp-border/60 px-4 py-2 text-[10px] font-semibold uppercase tracking-wider text-lp-text-tertiary')}>
+      <div className={cn('grid grid-cols-[minmax(0,1fr)_60px_100px_100px_80px] gap-x-2 border-b border-lp-border/60 px-5 py-2 text-[10px] font-semibold uppercase tracking-wider text-lp-text-tertiary')}>
         <span>Recipient</span>
         <span className="text-right">Rate</span>
         <span className="text-right">Basis</span>
@@ -797,7 +899,7 @@ function CommissionsAccordionBody({ tourId, symbol, totalIncome }: { tourId: str
       {commissions.map(c => {
         const amount = n(c.percentage) * totalIncome;
         return (
-          <div key={c.id} className="grid grid-cols-[minmax(0,1fr)_60px_100px_100px_80px] gap-x-2 border-b border-lp-border/30 px-4 py-2 text-[12px] items-center">
+          <div key={c.id} className="grid grid-cols-[minmax(0,1fr)_60px_100px_100px_80px] gap-x-2 border-b border-lp-border/30 px-5 py-2 text-[12px] items-center">
             <span className="truncate text-lp-text">{c.label}</span>
             <span className="text-right tabular-nums text-lp-text-secondary">{(n(c.percentage) * 100).toFixed(1)}%</span>
             <span className="text-right tabular-nums text-[11px] text-lp-text-tertiary capitalize">{c.basis.replace('_', ' ')}</span>
@@ -806,7 +908,7 @@ function CommissionsAccordionBody({ tourId, symbol, totalIncome }: { tourId: str
           </div>
         );
       })}
-      <div className="border-t border-lp-border/40 px-4 py-2 text-[10px] italic text-lp-text-tertiary">
+      <div className="border-t border-lp-border/40 px-5 py-2 text-[10px] italic text-lp-text-tertiary">
         Edit commissions in the Commissions tab
       </div>
     </div>
@@ -833,7 +935,7 @@ function PctAccordionBody({
   return (
     <div>
       <ColHeader />
-      <div className={cn(GRID, 'border-b border-lp-border/30 px-4 py-2 text-[12px]')}>
+      <div className={cn(GRID, 'border-b border-lp-border/30 px-5 py-2 text-[12px]')}>
         <div>
           <span className="text-lp-text">{label}</span>
           <span className="ml-2 text-[10px] text-lp-text-tertiary">{(pct * 100).toFixed(1)}% of {basis}</span>
@@ -844,7 +946,7 @@ function PctAccordionBody({
           {varianceDisplay(proposed, actual)}
         </span>
       </div>
-      <div className="px-4 py-2 text-[10px] italic text-lp-text-tertiary">
+      <div className="px-5 py-2 text-[10px] italic text-lp-text-tertiary">
         Edit percentage in Budget Settings
       </div>
     </div>
@@ -870,7 +972,7 @@ function PLHeader({ summary, symbol }: { summary: SummaryData; symbol: string })
     const netVariance = actual - proposed;
     const isPositive = isIncome ? netVariance >= 0 : netVariance <= 0;
     return (
-      <div className="flex flex-col gap-1 px-4 py-3 border-r border-lp-border/40 last:border-r-0">
+      <div className="flex flex-col gap-1 border-r border-lp-border px-5 py-3 last:border-r-0">
         <span className="text-[10px] font-semibold uppercase tracking-wider text-lp-text-tertiary">{label}</span>
         <div className="flex items-baseline gap-2">
           <span className="text-[18px] font-bold tabular-nums text-lp-text">{fmt(actual, symbol)}</span>
@@ -886,11 +988,11 @@ function PLHeader({ summary, symbol }: { summary: SummaryData; symbol: string })
   const netClass = netA >= 0 ? 'text-emerald-500' : 'text-red-500';
 
   return (
-    <div className="mx-4 mt-4 shrink-0 overflow-hidden rounded-xl border border-lp-border bg-lp-surface shadow-sm">
+    <div className="mx-5 mt-4 shrink-0 overflow-hidden rounded-xl border border-lp-border bg-lp-surface shadow-sm">
       <div className="flex min-w-0 items-stretch overflow-x-auto">
         {card('Income', incomeP, incomeA, true)}
         {card('Expenses', expP, expA, false)}
-        <div className="flex min-w-[8rem] flex-col gap-1 px-4 py-3">
+        <div className="flex min-w-[8rem] flex-col gap-1 px-5 py-3">
           <span className="text-[10px] font-semibold uppercase tracking-wider text-lp-text-tertiary">Net P&amp;L</span>
           <div className="flex items-baseline gap-2">
             <span className={cn('text-[18px] font-bold tabular-nums', netClass)}>{fmt(netA, symbol)}</span>
@@ -936,8 +1038,17 @@ export function TourBudgetAccordion({ tourId }: { tourId: string }) {
 
   if (loading) {
     return (
-      <div className="flex items-center gap-2 p-8 text-lp-text-secondary">
-        <Loader2 className="h-5 w-5 animate-spin" /> Loading budget…
+      <div className="flex h-full flex-col overflow-hidden">
+        <div className="mx-5 mt-4 flex shrink-0 gap-2">
+          <Skeleton className="h-12 flex-1 rounded-xl" />
+          <Skeleton className="h-12 flex-1 rounded-xl" />
+          <Skeleton className="h-12 flex-1 rounded-xl" />
+        </div>
+        <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-5 pb-4 pt-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <Skeleton key={i} className="h-14 w-full rounded-xl" />
+          ))}
+        </div>
       </div>
     );
   }
@@ -949,7 +1060,8 @@ export function TourBudgetAccordion({ tourId }: { tourId: string }) {
     );
   }
 
-  const symbol = '£'; // TODO: pull from budget settings
+  const currencyCode = summary.currency ?? 'GBP';
+  const symbol = ((0).toLocaleString('en-GB', { style: 'currency', currency: currencyCode, minimumFractionDigits: 0, maximumFractionDigits: 0 }).replace(/[\d,.\s]/g, '').trim()) || currencyCode;
   const sections = summary.sections;
   const income = sections.find(s => s.title === 'INCOME');
   const directExp = sections.find(s => s.title === 'DIRECT EXPENSES');
@@ -982,11 +1094,11 @@ export function TourBudgetAccordion({ tourId }: { tourId: string }) {
     <div className="flex h-full flex-col overflow-hidden">
       <PLHeader summary={summary} symbol={symbol} />
 
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-4 pt-2">
+      <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-4 pt-2">
         <div
           className={cn(
             GRID,
-            'sticky top-0 z-10 mb-2 rounded-lg border border-lp-border bg-lp-surface px-4 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-lp-text-tertiary shadow-sm'
+            'sticky top-0 z-10 mb-2 rounded-lg border border-lp-border bg-lp-surface px-5 py-2.5 text-[10px] font-semibold uppercase tracking-wider text-lp-text-tertiary shadow-sm'
           )}
         >
           <span>Section</span>

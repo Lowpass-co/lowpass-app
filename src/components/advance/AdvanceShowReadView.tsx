@@ -13,11 +13,12 @@
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import {
-  Loader2, Pencil, FileText, Phone, Mail, Globe,
+  Pencil, FileText, Phone, Mail, Globe,
   AlertCircle, ChevronRight,
   Paperclip, User, ExternalLink, Flag, Printer,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { Skeleton } from '@/components/ui/Skeleton';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -232,21 +233,21 @@ function KeyInfoBlock({ hotel, contacts }: { hotel: HotelKeyInfo | null; contact
   if (!hotel && contacts.length === 0) return null;
   return (
     <div className="mb-1">
-      <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-lp-text-tertiary">Key Info</p>
+      <p className="lp-label-caps mb-2 text-lp-text-tertiary">Key Info</p>
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {hotel && (
-          <div className="rounded-lg bg-lp-surface p-4">
+          <div className="rounded-lg border border-lp-border bg-lp-surface p-5">
             <h3 className="mb-3 text-[12px] font-semibold text-lp-text">Hotel</h3>
             <dl className="space-y-2 text-[13px]">
               {hotel.name && (
                 <div>
-                  <dt className="text-[10px] font-semibold uppercase tracking-wider text-lp-text-tertiary">Name</dt>
+                  <dt className="lp-label-caps text-lp-text-tertiary">Name</dt>
                   <dd className="text-lp-text">{hotel.name}</dd>
                 </div>
               )}
               {hotel.address && (
                 <div>
-                  <dt className="text-[10px] font-semibold uppercase tracking-wider text-lp-text-tertiary">Address</dt>
+                  <dt className="lp-label-caps text-lp-text-tertiary">Address</dt>
                   <dd className="text-lp-text whitespace-pre-line">{hotel.address}</dd>
                 </div>
               )}
@@ -254,13 +255,13 @@ function KeyInfoBlock({ hotel, contacts }: { hotel: HotelKeyInfo | null; contact
                 <div className="flex flex-wrap gap-4">
                   {hotel.checkIn && (
                     <div>
-                      <dt className="text-[10px] font-semibold uppercase tracking-wider text-lp-text-tertiary">Check-in</dt>
+                      <dt className="lp-label-caps text-lp-text-tertiary">Check-in</dt>
                       <dd className="text-lp-text">{hotel.checkIn}</dd>
                     </div>
                   )}
                   {hotel.checkOut && (
                     <div>
-                      <dt className="text-[10px] font-semibold uppercase tracking-wider text-lp-text-tertiary">Check-out</dt>
+                      <dt className="lp-label-caps text-lp-text-tertiary">Check-out</dt>
                       <dd className="text-lp-text">{hotel.checkOut}</dd>
                     </div>
                   )}
@@ -268,7 +269,7 @@ function KeyInfoBlock({ hotel, contacts }: { hotel: HotelKeyInfo | null; contact
               )}
               {hotel.notes && (
                 <div>
-                  <dt className="text-[10px] font-semibold uppercase tracking-wider text-lp-text-tertiary">Notes</dt>
+                  <dt className="lp-label-caps text-lp-text-tertiary">Notes</dt>
                   <dd className="text-lp-text whitespace-pre-line text-[12px] leading-relaxed">{hotel.notes}</dd>
                 </div>
               )}
@@ -278,7 +279,7 @@ function KeyInfoBlock({ hotel, contacts }: { hotel: HotelKeyInfo | null; contact
         {contacts.length > 0 && (
           <div className="flex flex-col gap-3">
             {contacts.map((c, i) => (
-              <div key={`${c.name}-${c.email}-${i}`} className="rounded-lg bg-lp-surface p-4">
+              <div key={`${c.name}-${c.email}-${i}`} className="rounded-lg border border-lp-border bg-lp-surface p-5">
                 <p className="text-[13px] font-bold text-lp-text">{c.name}</p>
                 <p className="mt-0.5 text-[11px] text-lp-text-tertiary">{c.role}</p>
                 <div className="mt-2 flex flex-col gap-1">
@@ -321,10 +322,10 @@ function SectionReadStatusBadge({ status }: { status: string }) {
     sk === 'complete' ? 'complete' : sk === 'not_started' ? 'not_started' : 'in_progress';
   const label = key === 'complete' ? 'Complete' : key === 'not_started' ? 'Not started' : 'In Progress';
   const dotColor =
-    key === 'complete' ? 'bg-emerald-500' : key === 'in_progress' ? 'bg-amber-500' : 'bg-lp-text-tertiary';
+    key === 'complete' ? 'bg-[#22C55E]' : key === 'in_progress' ? 'bg-[#F59E0B]' : 'bg-lp-text-tertiary';
   const textCls =
-    key === 'complete' ? 'text-emerald-600 dark:text-emerald-400'
-      : key === 'in_progress' ? 'text-amber-600 dark:text-amber-400'
+    key === 'complete' ? 'text-[#22C55E]'
+      : key === 'in_progress' ? 'text-[#F59E0B]'
         : 'text-lp-text-tertiary';
   return (
     <span className={cn('inline-flex items-center gap-1.5 text-[11px] font-medium', textCls)}>
@@ -473,14 +474,12 @@ function SectionCard({
   status,
   flags,
   editHref,
-  currency,
 }: {
   section: SectionDef;
   sectionData: Record<string, unknown>;
   status: SectionStatus | undefined;
   flags: AdvanceFlag[];
   editHref: string;
-  currency: string;
 }) {
   const statusKey = (status?.status ?? 'not_started') as SectionStatusKey;
 
@@ -493,19 +492,16 @@ function SectionCard({
   const activeFlags = flags.filter(f => !f.resolved);
   const isEmpty = filledFields.length === 0;
 
-  const borderColor = statusKey === 'complete' ? 'border-emerald-500/30'
-    : statusKey === 'in_progress' ? 'border-amber-500/30'
-    : statusKey === 'needs_review' ? 'border-red-500/30'
-    : 'border-lp-border/60';
+  if (isEmpty && activeFlags.length === 0) return null;
 
   return (
-    <div className={cn('rounded-xl border bg-lp-surface overflow-hidden', borderColor)}>
+    <div className="rounded-xl border border-lp-border bg-lp-surface overflow-hidden">
       {/* Section header */}
-      <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-lp-border/40 bg-lp-surface/60">
+      <div className="flex items-center justify-between gap-3 border-b border-lp-border bg-lp-surface/60 px-5 py-3">
         <div className="flex items-center gap-2.5 min-w-0">
-          <span className="text-[14px] font-semibold text-lp-text">{section.label}</span>
+          <h2 className="min-w-0 truncate text-lp-text">{section.label}</h2>
           {activeFlags.length > 0 && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-red-500/15 px-2 py-0.5 text-[10px] font-medium text-red-400">
+            <span className="inline-flex items-center gap-1 rounded-full bg-red-500/15 px-2 py-0.5 text-[10px] font-medium text-[#EF4444]">
               <Flag className="h-2.5 w-2.5" />
               {activeFlags.length} {activeFlags.length === 1 ? 'flag' : 'flags'}
             </span>
@@ -515,7 +511,7 @@ function SectionCard({
           <SectionReadStatusBadge status={statusKey} />
           <Link
             href={editHref}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-lp-border px-2.5 py-1 text-[11px] font-medium text-lp-text-secondary hover:border-lp-orange hover:text-lp-orange transition-colors"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-lp-border px-2.5 py-1 text-[11px] font-semibold text-lp-text-secondary transition-colors hover:border-lp-orange hover:text-lp-orange"
           >
             <Pencil className="h-3 w-3" />
             Edit
@@ -526,7 +522,7 @@ function SectionCard({
       {/* Flags */}
       {activeFlags.map(flag => (
         <div key={flag.id} className={cn(
-          'flex items-start gap-2 px-4 py-2 text-[12px] border-b border-lp-border/30',
+          'flex items-start gap-2 border-b border-lp-border px-5 py-2 text-[12px]',
           flag.type === 'blocker' ? 'bg-red-500/10 text-red-400' :
           flag.type === 'issue' ? 'bg-amber-500/10 text-amber-400' :
           'bg-blue-500/10 text-blue-400'
@@ -536,19 +532,8 @@ function SectionCard({
         </div>
       ))}
 
-      {/* Empty state */}
-      {isEmpty ? (
-        <div className="px-4 py-5 flex items-center justify-between">
-          <span className="text-[12px] text-lp-text-tertiary italic">No data entered yet</span>
-          <Link
-            href={editHref}
-            className="advance-read-no-print text-[12px] text-lp-orange hover:underline font-medium"
-          >
-            Fill in →
-          </Link>
-        </div>
-      ) : (
-        <div className="px-4 py-4 space-y-4">
+      {(otherFields.length > 0 || contactFields.length > 0 || fileFields.length > 0) && (
+        <div className="space-y-4 px-5 py-5">
           {/* Regular fields — 2-col grid for short values */}
           {otherFields.length > 0 && (
             <div className="grid grid-cols-1 gap-x-8 gap-y-3 sm:grid-cols-2">
@@ -583,7 +568,7 @@ function SectionCard({
 
           {/* Files — always at the bottom */}
           {fileFields.length > 0 && (
-            <div className="space-y-2 pt-1 border-t border-lp-border/30">
+            <div className="space-y-2 border-t border-lp-border pt-1">
               <span className="block text-[10px] font-semibold uppercase tracking-wider text-lp-text-tertiary mb-1.5">
                 Documents
               </span>
@@ -606,20 +591,20 @@ function DocumentsSection({ docs, editHref }: {
 }) {
   if (docs.length === 0) return null;
   return (
-    <div className="rounded-xl border border-lp-border/60 bg-lp-surface overflow-hidden">
-      <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-lp-border/40 bg-lp-surface/60">
+    <div className="rounded-xl border border-lp-border bg-lp-surface overflow-hidden">
+      <div className="flex items-center justify-between gap-3 border-b border-lp-border bg-lp-surface/60 px-5 py-3">
         <div className="flex items-center gap-2">
           <FileText className="h-4 w-4 text-lp-text-tertiary" />
-          <span className="text-[14px] font-semibold text-lp-text">Important Documents</span>
+          <h2 className="text-lp-text">Important Documents</h2>
         </div>
         <Link
           href={editHref}
-          className="advance-read-no-print inline-flex items-center gap-1.5 rounded-lg border border-lp-border px-2.5 py-1 text-[11px] font-medium text-lp-text-secondary hover:border-lp-orange hover:text-lp-orange transition-colors"
+          className="advance-read-no-print inline-flex items-center gap-1.5 rounded-lg border border-lp-border px-2.5 py-1 text-[11px] font-semibold text-lp-text-secondary transition-colors hover:border-lp-orange hover:text-lp-orange"
         >
           <Pencil className="h-3 w-3" /> Edit
         </Link>
       </div>
-      <div className="px-4 py-3 flex flex-col gap-2">
+      <div className="flex flex-col gap-2 px-5 py-5">
         {docs.map((doc, i) => (
           <a key={doc?.id ?? i} href={doc?.url} target="_blank" rel="noopener noreferrer"
             className="inline-flex items-center gap-2 rounded-lg border border-lp-border bg-lp-bg px-3 py-2 text-[12px] text-lp-text hover:border-lp-orange hover:text-lp-orange transition-colors group">
@@ -630,6 +615,91 @@ function DocumentsSection({ docs, editHref }: {
           </a>
         ))}
       </div>
+    </div>
+  );
+}
+
+function AdvanceReadStickyHeader({
+  overviewHref,
+  editHref,
+  routing,
+  headerLoading,
+}: {
+  overviewHref: string;
+  editHref: string;
+  routing: PageData['routing'] | null;
+  headerLoading: boolean;
+}) {
+  return (
+    <div className="sticky top-0 z-20 border-b border-lp-border bg-lp-bg/95 backdrop-blur-sm">
+      <div className="flex items-center justify-between gap-3 px-8 py-3">
+        <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
+          <div className="advance-read-no-print flex shrink-0 items-center gap-2">
+            <Link href={overviewHref} className="lp-meta transition-colors hover:text-lp-orange">
+              ← Advance
+            </Link>
+            <span className="text-lp-border">|</span>
+          </div>
+          <div className="flex min-w-0 flex-wrap items-center gap-2">
+            {headerLoading || !routing ? (
+              <>
+                <Skeleton className="h-5 w-28" />
+                <Skeleton className="h-5 w-24 rounded-md" />
+                <Skeleton className="hidden h-5 max-w-[min(280px,45vw)] flex-1 sm:block" />
+                <Skeleton className="h-4 w-20" />
+              </>
+            ) : (
+              <>
+                <span className="font-semibold text-lp-text">{formatDate(routing.date)}</span>
+                <span className={cn('rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider', dayTypeClass(routing.day_type))}>
+                  {dayTypeLabel(routing.day_type)}
+                </span>
+                {routing.venue_name && (
+                  <>
+                    <span className="hidden lp-meta sm:inline">—</span>
+                    <span className="truncate text-lp-text">{routing.venue_name}</span>
+                  </>
+                )}
+                {routing.city && <span className="shrink-0 lp-meta">{routing.city}</span>}
+              </>
+            )}
+          </div>
+        </div>
+        <div className="advance-read-no-print flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-lp-border px-2.5 py-1.5 font-medium text-lp-text-secondary transition-colors hover:border-lp-orange hover:text-lp-orange"
+          >
+            <Printer className="h-3.5 w-3.5 shrink-0" />
+            Print
+          </button>
+          <Link
+            href={editHref}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-lp-orange px-3 py-1.5 font-medium text-white transition-colors hover:bg-lp-orange/90"
+          >
+            <Pencil className="h-3.5 w-3.5 shrink-0" />
+            Edit advance
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AdvanceReadLoadingSkeleton() {
+  return (
+    <div className="space-y-4 px-8 py-6">
+      <div>
+        <p className="lp-label-caps mb-2 text-lp-text-tertiary">Key Info</p>
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+          <Skeleton className="h-[120px] w-full rounded-lg" />
+          <Skeleton className="h-[120px] w-full rounded-lg" />
+        </div>
+      </div>
+      <Skeleton className="h-20 w-full rounded-xl" />
+      <Skeleton className="h-20 w-full rounded-xl" />
+      <Skeleton className="h-20 w-full rounded-xl" />
     </div>
   );
 }
@@ -652,6 +722,8 @@ export function AdvanceShowReadView({
 
   const load = useCallback(() => {
     setLoading(true);
+    setError(null);
+    setPageData(null);
     fetch(`/api/tours/${tourId}/advance/${routingId}`)
       .then(r => r.ok ? r.json() : Promise.reject(new Error(`${r.status}`)))
       .then(d => setPageData(d))
@@ -661,23 +733,44 @@ export function AdvanceShowReadView({
 
   useEffect(() => { load(); }, [load]);
 
-  if (loading) return (
-    <div className="flex items-center gap-2 p-8 text-lp-text-secondary">
-      <Loader2 className="h-5 w-5 animate-spin" /> Loading advance…
+  if (error && !loading) {
+    return (
+      <div className="p-8 text-sm text-[#EF4444]">
+        Failed to load: {error}
+      </div>
+    );
+  }
+
+  const routing = pageData?.routing ?? null;
+  const headerLoading = loading || !routing;
+
+  return (
+    <div className="advance-read-view space-y-0">
+      <style dangerouslySetInnerHTML={{ __html: PRINT_HIDE_CSS }} />
+
+      <AdvanceReadStickyHeader
+        overviewHref={overviewHref}
+        editHref={editHref}
+        routing={routing}
+        headerLoading={headerLoading}
+      />
+
+      {loading ? (
+        <AdvanceReadLoadingSkeleton />
+      ) : pageData ? (
+        <AdvanceReadLoadedBody pageData={pageData} editHref={editHref} />
+      ) : null}
     </div>
   );
+}
 
-  if (error || !pageData) return (
-    <div className="p-8 text-red-500 text-sm">Failed to load: {error}</div>
-  );
-
-  const { routing, tour, advance } = pageData;
+function AdvanceReadLoadedBody({ pageData, editHref }: { pageData: PageData; editHref: string }) {
+  const { tour, advance } = pageData;
   const sections = advance?.sections ?? [];
   const data = advance?.data ?? {};
   const sectionStatuses = advance?.section_statuses ?? {};
   const flags = advance?.flags ?? [];
 
-  // Extract top-level documents (stored at a special section or data key)
   const topLevelDocs: AdvanceDocument[] = [];
 
   const visibleSections = sections
@@ -690,104 +783,48 @@ export function AdvanceShowReadView({
   const hasNoSections = sections.length === 0;
 
   return (
-    <div className="advance-read-view space-y-0">
-      <style dangerouslySetInnerHTML={{ __html: PRINT_HIDE_CSS }} />
-
-      {/* Page header — single compact row */}
-      <div className="sticky top-0 z-20 border-b border-lp-border/60 bg-lp-bg/95 backdrop-blur-sm">
-        <div className="flex items-center justify-between gap-3 px-6 py-3">
-          <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
-            <div className="advance-read-no-print flex shrink-0 items-center gap-2">
-              <Link href={overviewHref} className="text-[12px] text-lp-text-tertiary transition-colors hover:text-lp-orange">
-                ← Advance
-              </Link>
-              <span className="text-lp-border/60">|</span>
-            </div>
-            <div className="flex min-w-0 flex-wrap items-center gap-2">
-              <span className="text-[14px] font-semibold text-lp-text">{formatDate(routing.date)}</span>
-              <span className={cn('rounded px-1.5 py-0.5 text-[10px] font-semibold', dayTypeClass(routing.day_type))}>
-                {dayTypeLabel(routing.day_type)}
-              </span>
-              {routing.venue_name && (
-                <>
-                  <span className="hidden text-lp-text-tertiary sm:inline">—</span>
-                  <span className="truncate text-[13px] text-lp-text">{routing.venue_name}</span>
-                </>
-              )}
-              {routing.city && (
-                <span className="shrink-0 text-[12px] text-lp-text-tertiary">{routing.city}</span>
-              )}
-            </div>
-          </div>
-          <div className="advance-read-no-print flex shrink-0 items-center gap-2">
-            <button
-              type="button"
-              onClick={() => window.print()}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-lp-border px-2.5 py-1.5 text-[12px] font-medium text-lp-text-secondary transition-colors hover:border-lp-orange hover:text-lp-orange"
-            >
-              <Printer className="h-3.5 w-3.5 shrink-0" />
-              Print
-            </button>
-            <Link
-              href={editHref}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-lp-orange px-3 py-1.5 text-[12px] font-medium text-white transition-colors hover:bg-lp-orange/90"
-            >
-              <Pencil className="h-3.5 w-3.5 shrink-0" />
-              Edit advance
-            </Link>
-          </div>
+    <div className="space-y-4 px-8 py-6">
+      {hasNoSections && (
+        <div className="rounded-xl border border-dashed border-lp-border p-8 text-center">
+          <p className="mb-3 lp-meta">No sections set up for this show yet.</p>
+          <Link
+            href={editHref}
+            className="advance-read-no-print inline-flex items-center gap-1.5 rounded-lg bg-lp-orange px-4 py-2 font-medium text-white hover:bg-lp-orange/90"
+          >
+            Set up advance <ChevronRight className="h-4 w-4" />
+          </Link>
         </div>
-      </div>
+      )}
 
-      {/* Content */}
-      <div className="space-y-4 px-6 py-6">
-        {/* No sections yet */}
-        {hasNoSections && (
-          <div className="rounded-xl border border-dashed border-lp-border p-8 text-center">
-            <p className="mb-3 text-[13px] text-lp-text-tertiary">No sections set up for this show yet.</p>
-            <Link
-              href={editHref}
-              className="advance-read-no-print inline-flex items-center gap-1.5 rounded-lg bg-lp-orange px-4 py-2 text-[13px] font-medium text-white hover:bg-lp-orange/90"
-            >
-              Set up advance <ChevronRight className="h-4 w-4" />
-            </Link>
-          </div>
-        )}
+      {!hasNoSections && <KeyInfoBlock hotel={hotelKeyInfo} contacts={keyContacts} />}
 
-        {!hasNoSections && <KeyInfoBlock hotel={hotelKeyInfo} contacts={keyContacts} />}
+      {topLevelDocs.length > 0 && (
+        <DocumentsSection docs={topLevelDocs} editHref={editHref} />
+      )}
 
-        {/* Top-level documents */}
-        {topLevelDocs.length > 0 && (
-          <DocumentsSection docs={topLevelDocs} editHref={editHref} />
-        )}
+      {visibleSections.map((section) => (
+        <SectionCard
+          key={section.template_id}
+          section={section}
+          sectionData={data[section.template_id] ?? {}}
+          status={sectionStatuses[section.template_id]}
+          flags={flags.filter((f) => f.section_id === section.template_id)}
+          editHref={editHref}
+        />
+      ))}
 
-        {/* Section cards */}
-        {visibleSections.map((section) => (
-          <SectionCard
-            key={section.template_id}
-            section={section}
-            sectionData={data[section.template_id] ?? {}}
-            status={sectionStatuses[section.template_id]}
-            flags={flags.filter((f) => f.section_id === section.template_id)}
-            editHref={editHref}
-            currency={tour.currency}
-          />
-        ))}
-
-        {/* Last updated */}
-        {advance?.last_updated_at && (
-          <p className="advance-read-no-print pt-2 text-center text-[11px] text-lp-text-tertiary">
-            Last updated{' '}
-            {new Date(advance.last_updated_at).toLocaleString('en-GB', {
-              day: 'numeric',
-              month: 'short',
-              hour: '2-digit',
-              minute: '2-digit',
-            })}
-            {advance.last_updated_by_name && ` by ${advance.last_updated_by_name}`}
-          </p>
-        )}
-      </div>
+      {advance?.last_updated_at && (
+        <p className="advance-read-no-print pt-2 text-center lp-meta">
+          Last updated{' '}
+          {new Date(advance.last_updated_at).toLocaleString('en-GB', {
+            day: 'numeric',
+            month: 'short',
+            hour: '2-digit',
+            minute: '2-digit',
+          })}
+          {advance.last_updated_by_name && ` by ${advance.last_updated_by_name}`}
+        </p>
+      )}
     </div>
   );
 }

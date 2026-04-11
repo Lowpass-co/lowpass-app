@@ -65,6 +65,7 @@ export async function GET(request: Request) {
 
   // All 8 queries in parallel — single round trip to Supabase
   const [
+    tourRes,
     settingsRes,
     incomeRes,
     routingRes,
@@ -74,6 +75,12 @@ export async function GET(request: Request) {
     commissionsRes,
     flightsRes,
   ] = await Promise.all([
+    supabase
+      .from('tours')
+      .select('currency')
+      .eq('id', tourId)
+      .eq('workspace_id', wid)
+      .maybeSingle(),
     supabase
       .from('budget_settings')
       .select('insurance_pct, contingency_pct, accountancy_pct')
@@ -285,5 +292,6 @@ export async function GET(request: Request) {
     },
   ];
 
-  return NextResponse.json({ sections, dayCount: { showDays, offDays, rehearsalDays, totalDays } });
+  const currency: string = (tourRes?.data as { currency?: string } | null)?.currency ?? 'GBP';
+  return NextResponse.json({ sections, dayCount: { showDays, offDays, rehearsalDays, totalDays }, currency });
 }

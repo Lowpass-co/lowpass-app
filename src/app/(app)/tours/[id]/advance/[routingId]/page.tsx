@@ -27,7 +27,7 @@ export default async function AdvanceShowPage({
   }
 
   return (
-    <div className="-mx-6 -my-6">
+    <div className="-mx-8 -my-6">
       <AdvanceShowReadView tourId={tourId} routingId={routingId} />
     </div>
   );

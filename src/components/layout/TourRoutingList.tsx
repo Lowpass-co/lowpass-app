@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
+import { Skeleton } from '@/components/ui/Skeleton';
 
 export type TourRoutingListRow = {
   id: string;
@@ -36,17 +37,34 @@ export function TourRoutingList({
   routing,
   mode,
   collapsed,
+  isRoutingLoading,
 }: {
   tourId: string;
   routing: TourRoutingListRow[];
   mode: 'advance' | 'budget';
   collapsed: boolean;
+  isRoutingLoading?: boolean;
 }) {
   const pathname = usePathname() ?? '';
+
+  const showSkeletons = routing.length === 0 && isRoutingLoading;
 
   return (
     <nav className={cn('flex min-h-0 flex-1 flex-col overflow-y-auto', collapsed && 'items-center')}>
       <ul className={cn('space-y-0.5', collapsed ? 'w-full px-0' : 'w-full')}>
+        {showSkeletons &&
+          !collapsed &&
+          Array.from({ length: 8 }).map((_, i) => (
+            <li key={`sk-${i}`} className="px-3 py-2">
+              <div className="flex items-center gap-2">
+                <Skeleton className="h-[7px] w-[7px] shrink-0 rounded-full" />
+                <div className="min-w-0 flex-1 space-y-1.5">
+                  <Skeleton className="h-3.5 w-20 max-w-[80px]" />
+                  <Skeleton className="h-3 w-[50px]" />
+                </div>
+              </div>
+            </li>
+          ))}
         {routing.map((row) => {
           const href =
             mode === 'advance'

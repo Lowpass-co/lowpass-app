@@ -60,6 +60,7 @@ export function Sidebar() {
     selectedTour,
     setSelectedTourId,
     tourRouting,
+    isRoutingLoading,
   } = useArtistTourContext();
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
@@ -232,35 +233,22 @@ export function Sidebar() {
                 collapsed && 'justify-center px-2'
               )}
               style={{
-                backgroundColor: isActive ? 'var(--lp-sidebar-active-bg)' : 'transparent',
-                color: isActive ? '#FF4500' : 'var(--lp-sidebar-text)',
+                backgroundColor: isActive ? '#FF4500' : 'transparent',
+                color: isActive ? '#ffffff' : 'var(--lp-sidebar-text)',
               }}
             >
-              {isActive ? (
-                <svg
-                  className="h-4 w-4 shrink-0"
-                  viewBox="0 0 14 14"
-                  fill="none"
-                  stroke="#FF4500"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden
-                >
-                  <path d="M 2 0 L 2 6 L 8 6 L 14 12" />
-                </svg>
-              ) : (
-                <Icon
-                  size={20}
-                  className="shrink-0 transition-colors group-hover:[color:var(--lp-sidebar-text-heading)]"
-                  style={{ color: 'var(--lp-sidebar-icon)' }}
-                />
-              )}
+              <Icon
+                size={20}
+                className={cn(
+                  'shrink-0 transition-colors',
+                  !isActive && 'group-hover:[color:var(--lp-sidebar-text-heading)]'
+                )}
+                style={{ color: isActive ? '#ffffff' : 'var(--lp-sidebar-icon)' }}
+              />
               {!collapsed && (
                 <span
                   className={cn(
-                    'flex-1 text-[11px] font-semibold uppercase tracking-wide',
-                    isActive && 'font-bold'
+                    'flex-1 text-[11px] font-bold uppercase tracking-[0.1em]',
                   )}
                 >
                   {item.label}
@@ -392,7 +380,7 @@ export function Sidebar() {
                     title="Advance"
                     onClick={() => setNavMode('advance')}
                     className={cn(
-                      'flex flex-1 items-center justify-center gap-1 rounded-md py-2 text-[11px] font-semibold transition-colors',
+                      'lp-label-caps flex flex-1 items-center justify-center gap-1 rounded-md py-2 transition-colors',
                       collapsed && 'px-0'
                     )}
                     style={{
@@ -407,7 +395,7 @@ export function Sidebar() {
                     title="Budget"
                     onClick={() => setNavMode('budget')}
                     className={cn(
-                      'flex flex-1 items-center justify-center gap-1 rounded-md py-2 text-[11px] font-semibold transition-colors',
+                      'lp-label-caps flex flex-1 items-center justify-center gap-1 rounded-md py-2 transition-colors',
                       collapsed && 'px-0'
                     )}
                     style={{
@@ -426,6 +414,7 @@ export function Sidebar() {
                       routing={tourRouting}
                       mode={navMode}
                       collapsed={collapsed}
+                      isRoutingLoading={isRoutingLoading}
                     />
                   )}
                 </div>

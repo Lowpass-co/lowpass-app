@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, useLayoutEffect, useCallback, ReactNode } from 'react';
 import type { Artist, Tour } from '@/types';
 
 const STORAGE_ARTIST = 'lp-selected-artist';
@@ -53,7 +53,7 @@ export function ArtistTourProvider({ children }: { children: ReactNode }) {
   const [tourRouting, setTourRouting] = useState<TourRoutingLiteRow[]>([]);
   const [isRoutingLoading, setIsRoutingLoading] = useState(false);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (typeof window === 'undefined') return;
     const a = localStorage.getItem(STORAGE_ARTIST);
     const t = localStorage.getItem(STORAGE_TOUR);
@@ -93,6 +93,7 @@ export function ArtistTourProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    if (!hydrated) return;
     if (!selectedArtistId) {
       setTours([]);
       setIsLoading(false);
@@ -112,9 +113,10 @@ export function ArtistTourProvider({ children }: { children: ReactNode }) {
       .catch(() => { if (!cancelled) setTours([]); })
       .finally(() => { if (!cancelled) setIsLoading(false); });
     return () => { cancelled = true; };
-  }, [selectedArtistId]);
+  }, [hydrated, selectedArtistId]);
 
   useEffect(() => {
+    if (!hydrated) return;
     if (!selectedTourId) {
       setTourRouting([]);
       setIsRoutingLoading(false);
@@ -139,7 +141,7 @@ export function ArtistTourProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [selectedTourId]);
+  }, [hydrated, selectedTourId]);
 
   const selectedArtist = selectedArtistId ? artists.find((a) => a.id === selectedArtistId) ?? null : null;
   const selectedTour = selectedTourId ? tours.find((t) => t.id === selectedTourId) ?? null : null;
