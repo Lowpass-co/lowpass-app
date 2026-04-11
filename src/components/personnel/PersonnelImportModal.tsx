@@ -136,8 +136,11 @@ export function PersonnelImportModal({
       setHeaderRowIndex(auto.headerRowIndex);
       setMapping({ ...auto.suggestedMapping });
       setStep('map');
+      const layoutNote = auto.transposed
+        ? 'Vertical layout detected (names were column headers) — rotated automatically. '
+        : '';
       setHint(
-        `Detected ${delimiterLabel(auto.delimiter)} · ${auto.dataRows.length} data rows · header on row ${auto.headerRowIndex + 1}. ` +
+        `${layoutNote}Detected ${delimiterLabel(auto.delimiter)} · ${auto.dataRows.length} ${auto.transposed ? 'people' : 'data rows'} · header on row ${auto.headerRowIndex + 1}. ` +
           'If columns look wrong, change which row is the header. Google Sheets: File → Download → CSV.'
       );
     };
@@ -277,7 +280,8 @@ export function PersonnelImportModal({
                 </button>
               </div>
               <p className="text-sm text-lp-text-secondary">
-                Match each column to a field ({analysis.dataRows.length} data rows, {analysis.columns.length} columns).
+                Match each column to a field ({analysis.dataRows.length}{' '}
+                {analysis.transposed ? 'people' : 'data rows'}, {analysis.columns.length} columns).
               </p>
               {analysis.dataRows[0] && (
                 <details

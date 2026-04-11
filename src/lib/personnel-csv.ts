@@ -195,12 +195,65 @@ export type PersonnelCsvAnalysis = {
   suggestedMapping: Record<number, string>;
   /** Rows returned by parseCSV (for header row picker UI). */
   totalParsedRows: number;
+  /**
+   * True when the CSV was automatically transposed because names were column
+   * headers and field labels were on the left (vertical / Sheets-style layout).
+   */
+  transposed: boolean;
 };
+
+/**
+ * Detect whether a parsed CSV grid is in "vertical" format:
+ * column 0 = field labels, row 0 = person names (each column = one person).
+ *
+ * Strategy:
+ *  1. Score column 0 as if it were a header row — if it contains recognisable
+ *     field keywords (name, email, phone, role, …) it scores positively.
+ *  2. Also trigger when there are significantly more columns than rows, which
+ *     is a strong structural signal that the sheet has been transposed.
+ */
+function detectVerticalLayout(grid: string[][]): boolean {
+  if (grid.length < 2) return false;
+  const numCols = Math.max(...grid.map((r) => r.length));
+  if (numCols < 2) return false;
+
+  // Extract column 0 values as a candidate "header"
+  const col0 = grid.map((r) => r[0] ?? '').filter(Boolean);
+  if (col0.length < 2) return false;
+
+  const col0Score = scoreHeaderRow(col0);
+
+  // If column 0 scores as a reasonable header, almost certainly vertical
+  if (col0Score >= 3) return true;
+
+  // Secondary signal: many more columns than rows (e.g. 58 people × 30 fields)
+  const numRows = grid.length;
+  if (numCols > numRows * 2 && col0Score >= 1) return true;
+
+  return false;
+}
+
+/** Rotate a 2-D grid 90°: grid[row][col] → transposed[col][row] */
+function transposeGrid(grid: string[][]): string[][] {
+  if (grid.length === 0) return [];
+  const numCols = Math.max(...grid.map((r) => r.length));
+  const result: string[][] = [];
+  for (let c = 0; c < numCols; c++) {
+    result.push(grid.map((r) => r[c] ?? ''));
+  }
+  return result;
+}
 
 export function analyzePersonnelCsv(text: string, headerRowIndexOverride?: number): PersonnelCsvAnalysis {
   const normalized = normalizeCsvText(text);
   const delimiter = detectDelimiterFromText(normalized);
-  const grid = parseCSV(normalized, delimiter);
+  const rawGrid = parseCSV(normalized, delimiter);
+
+  // Auto-detect and fix vertical layouts (names as column headers, fields as row labels).
+  // Detection always runs on the raw grid so the result is stable across calls
+  // even when the user adjusts the header row picker.
+  const transposed = detectVerticalLayout(rawGrid);
+  const grid = transposed ? transposeGrid(rawGrid) : rawGrid;
 
   const headerRowIndex =
     headerRowIndexOverride !== undefined
@@ -234,6 +287,7 @@ export function analyzePersonnelCsv(text: string, headerRowIndexOverride?: numbe
     dataRows,
     suggestedMapping,
     totalParsedRows: grid.length,
+    transposed,
   };
 }
 
