@@ -29,12 +29,19 @@ export function SidebarTourPicker() {
     pathname?.includes('/rooming');
 
   function redirectAfterTourSwitch(newTourId: string) {
-    if (!onManagePage) {
-      router.push(`/budget?tour_id=${newTourId}`);
+    if (pathname?.includes('/overview')) {
+      router.push(`/tours/${newTourId}/overview`);
+      return;
+    }
+    if (pathname?.includes('/rooming')) {
+      router.push(`/tours/${newTourId}/rooming`);
+      return;
+    }
+    if (pathname?.includes('/payroll')) {
+      router.push(`/tours/${newTourId}/payroll`);
       return;
     }
     if (pathname?.startsWith('/budget')) {
-      // Preserve view=detail if already in detail mode; otherwise go to overview
       const view = searchParams?.get('view');
       const tab = searchParams?.get('tab') ?? 'summary';
       if (view === 'detail') {
@@ -42,17 +49,9 @@ export function SidebarTourPicker() {
       } else {
         router.push(`/budget?tour_id=${newTourId}`);
       }
-    } else if (pathname?.includes('/overview')) {
-      router.push(`/tours/${newTourId}/overview`);
-    } else if (pathname?.includes('/advance')) {
-      router.push(`/tours/${newTourId}/advance`);
-    } else if (pathname?.includes('/rooming')) {
-      router.push(`/tours/${newTourId}/rooming`);
-    } else if (pathname?.includes('/payroll')) {
-      router.push(`/tours/${newTourId}/payroll`);
-    } else {
-      router.push(`/budget?tour_id=${newTourId}`);
+      return;
     }
+    router.push(`/tours/${newTourId}/advance`);
   }
 
   const tourOptions: StyledSelectOption<string>[] = useMemo(
@@ -60,7 +59,7 @@ export function SidebarTourPicker() {
       {
         value: '',
         label: !selectedArtistId
-          ? 'Select artist in header'
+          ? 'Select artist on dashboard'
           : isLoading
             ? 'Loading tours…'
             : 'Select tour',
@@ -81,7 +80,7 @@ export function SidebarTourPicker() {
       onChange={(v) => {
         if (!v) {
           setSelectedTourId(null);
-          if (onManagePage) router.push('/budget');
+          if (onManagePage) router.push('/dashboard');
           return;
         }
         setSelectedTourId(v);

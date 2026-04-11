@@ -1,7 +1,8 @@
 /* ============================================
    LOWPASS — Tour Routing API
 
-   GET: List routing dates for a tour
+   GET: List routing (?lite=1 → { routing } subset + workspace check;
+        default → full rows array for editors/budget).
    POST: Upsert routing (replace all dates in range)
    ============================================ */
 
@@ -9,7 +10,7 @@ import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const supabase = await createServerSupabaseClient();
@@ -19,6 +20,42 @@ export async function GET(
   }
 
   const { id: tourId } = await params;
+  const { searchParams } = new URL(request.url);
+  const lite = searchParams.get('lite') === '1';
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('workspace_id')
+    .eq('id', user.id)
+    .single();
+
+  if (!profile?.workspace_id) {
+    return NextResponse.json({ error: 'No workspace' }, { status: 403 });
+  }
+
+  const { data: tour, error: tourErr } = await supabase
+    .from('tours')
+    .select('id')
+    .eq('id', tourId)
+    .eq('workspace_id', profile.workspace_id)
+    .maybeSingle();
+
+  if (tourErr || !tour) {
+    return NextResponse.json({ error: 'Tour not found' }, { status: 404 });
+  }
+
+  if (lite) {
+    const { data, error } = await supabase
+      .from('routing')
+      .select('id, date, day_type, city, venue_name')
+      .eq('tour_id', tourId)
+      .order('date');
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+    return NextResponse.json({ routing: data ?? [] });
+  }
+
   const { data, error } = await supabase
     .from('routing')
     .select('*')

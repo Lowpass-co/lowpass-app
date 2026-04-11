@@ -9,7 +9,7 @@
 
 import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import Link from 'next/link';
-import { usePathname, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
   ChevronLeft, ChevronRight, LogOut,
   LayoutDashboard, ListMusic, ClipboardList, LineChart,
@@ -18,13 +18,13 @@ import {
 import { useAuth } from '@/hooks/useAuth';
 import { useArtistTourContext } from '@/contexts/ArtistTourContext';
 import { SidebarTourPicker } from '@/components/layout/SidebarTourPicker';
+import { TourRoutingList } from '@/components/layout/TourRoutingList';
 import { cn, toTitleCase } from '@/lib/utils';
 
 interface NavItem {
   label: string;
   href: string;
   icon: React.ElementType;
-  /** Override active detection. 'exact' = pathname must equal href path. 'includes' = pathname includes segment. */
   activeMode?:
     | 'exact'
     | 'includes'
@@ -45,16 +45,37 @@ interface NavGroup {
 }
 
 const SIDEBAR_COLLAPSED_KEY = 'lp-sidebar-collapsed';
+const SIDEBAR_MODE_KEY = 'lp-sidebar-mode';
+
+type SidebarNavMode = 'advance' | 'budget';
 
 export function Sidebar() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { selectedTourId, selectedArtistId } = useArtistTourContext();
+  const router = useRouter();
+  const {
+    selectedTourId,
+    selectedArtistId,
+    selectedArtist,
+    selectedTour,
+    setSelectedTourId,
+    tourRouting,
+  } = useArtistTourContext();
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
     return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true';
   });
-  // Sync sidebar width as CSS variable so AppShell can track it without prop drilling
+  const [navMode, setNavMode] = useState<SidebarNavMode>(() => {
+    if (typeof window === 'undefined') return 'advance';
+    const stored = localStorage.getItem(SIDEBAR_MODE_KEY);
+    return stored === 'budget' ? 'budget' : 'advance';
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    localStorage.setItem(SIDEBAR_MODE_KEY, navMode);
+  }, [navMode]);
+
   useLayoutEffect(() => {
     document.documentElement.style.setProperty('--sidebar-w', collapsed ? '72px' : '260px');
   }, [collapsed]);
@@ -112,6 +133,10 @@ export function Sidebar() {
     { label: 'Payroll', href: selectedTourId ? `/tours/${selectedTourId}/payroll` : '/budget', icon: HandCoins, activeMode: 'payroll' },
   ];
 
+  const tourSecondaryItems: NavItem[] = tourManagementItems.filter(
+    (i) => i.label !== 'Budget' && i.label !== 'Advance'
+  );
+
   useEffect(() => {
     localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(collapsed));
   }, [collapsed]);
@@ -158,10 +183,102 @@ export function Sidebar() {
     return () => document.removeEventListener('mousedown', close);
   }, [userMenuOpen]);
 
+  function isNavItemActive(item: NavItem): boolean {
+    const hrefPath = item.href.split('?')[0];
+    const tab = searchParams?.get('tab');
+    if (item.activeMode === 'never') return false;
+    if (item.activeMode === 'all_advances') return pathname === '/advance';
+    if (item.activeMode === 'tour_advance') {
+      return /^\/tours\/[^/]+\/advance(?:\/|$)/.test(pathname ?? '');
+    }
+    if (item.activeMode === 'tour_personnel') {
+      return /^\/tours\/[^/]+\/personnel(?:\/|$)/.test(pathname ?? '');
+    }
+    if (item.activeMode === 'rooming') {
+      return pathname === '/rooming' || /^\/tours\/[^/]+\/rooming(?:\/|$)/.test(pathname ?? '');
+    }
+    if (item.activeMode === 'payroll') {
+      return /^\/tours\/[^/]+\/payroll(?:\/|$)/.test(pathname ?? '');
+    }
+    if (item.activeMode === 'tour_overview') {
+      return /^\/tours\/[^/]+\/overview(?:\/|$)/.test(pathname ?? '');
+    }
+    if (item.activeMode === 'settlement') {
+      return pathname?.startsWith('/budget') && tab === 'settlement';
+    }
+    if (item.activeMode === 'budget') {
+      return pathname?.startsWith('/budget') && tab !== 'settlement';
+    }
+    if (item.activeMode === 'includes') {
+      return !!pathname?.includes(hrefPath.split('/').pop() ?? '');
+    }
+    return pathname === hrefPath;
+  }
+
+  function renderNavLinks(items: NavItem[], groupKey: string) {
+    return (
+      <div className="space-y-0.5">
+        {items.map((item) => {
+          const isActive = isNavItemActive(item);
+          const Icon = item.icon;
+          return (
+            <Link
+              key={`${groupKey}-${item.label}-${item.href}`}
+              href={item.href}
+              title={collapsed ? item.label : undefined}
+              className={cn(
+                'group flex items-center gap-3 rounded-md px-3 py-2 transition-colors',
+                'hover:bg-[var(--lp-sidebar-hover-bg)]',
+                collapsed && 'justify-center px-2'
+              )}
+              style={{
+                backgroundColor: isActive ? 'var(--lp-sidebar-active-bg)' : 'transparent',
+                color: isActive ? '#FF4500' : 'var(--lp-sidebar-text)',
+              }}
+            >
+              {isActive ? (
+                <svg
+                  className="h-4 w-4 shrink-0"
+                  viewBox="0 0 14 14"
+                  fill="none"
+                  stroke="#FF4500"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden
+                >
+                  <path d="M 2 0 L 2 6 L 8 6 L 14 12" />
+                </svg>
+              ) : (
+                <Icon
+                  size={20}
+                  className="shrink-0 transition-colors group-hover:[color:var(--lp-sidebar-text-heading)]"
+                  style={{ color: 'var(--lp-sidebar-icon)' }}
+                />
+              )}
+              {!collapsed && (
+                <span
+                  className={cn(
+                    'flex-1 text-[11px] font-semibold uppercase tracking-wide',
+                    isActive && 'font-bold'
+                  )}
+                >
+                  {item.label}
+                </span>
+              )}
+            </Link>
+          );
+        })}
+      </div>
+    );
+  }
+
+  const breadcrumbLabel = [selectedArtist?.name, selectedTour?.name].filter(Boolean).join(' / ');
+
   return (
     <aside
       className={cn(
-        'fixed inset-y-0 left-0 z-30 flex flex-col transition-[width] duration-200 ease-in-out',
+        'fixed inset-y-0 left-0 z-30 flex min-h-0 flex-col transition-[width] duration-200 ease-in-out',
         collapsed ? 'w-[72px]' : 'w-[260px]'
       )}
       style={{
@@ -170,12 +287,9 @@ export function Sidebar() {
         borderRightColor: 'var(--lp-sidebar-border)',
       }}
     >
-      {/* Content layer */}
-      <div className="relative flex h-full flex-col" style={{ zIndex: 1 }}>
-
-        {/* Wordmark + collapse toggle */}
+      <div className="relative flex h-full min-h-0 flex-col" style={{ zIndex: 1 }}>
         <div
-          className="flex h-16 items-center justify-between px-5"
+          className="flex h-16 shrink-0 items-center justify-between px-5"
           style={{ borderBottom: '1px solid var(--lp-sidebar-border)' }}
         >
           {!collapsed ? (
@@ -191,6 +305,7 @@ export function Sidebar() {
             </span>
           )}
           <button
+            type="button"
             onClick={() => setCollapsed(!collapsed)}
             className={cn(
               'flex h-6 w-6 items-center justify-center rounded transition-colors',
@@ -203,8 +318,7 @@ export function Sidebar() {
           </button>
         </div>
 
-        {/* Navigation */}
-        <nav className="sidebar-scroll flex-1 overflow-y-auto px-4 pb-6">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-4 pb-2">
           <style>{`
             .sidebar-scroll::-webkit-scrollbar { width: 4px; }
             .sidebar-scroll::-webkit-scrollbar-track { background: transparent; }
@@ -216,127 +330,114 @@ export function Sidebar() {
               background-color: var(--lp-sidebar-text-muted);
             }
           `}</style>
-          {(() => {
-            const renderNavLinks = (items: NavItem[], groupKey: string) => (
-              <div className="space-y-0.5">
-                {items.map((item) => {
-                  const hrefPath = item.href.split('?')[0];
-                  const tab = searchParams?.get('tab');
-                  const isActive =
-                    item.activeMode === 'never'
-                      ? false
-                      : item.activeMode === 'all_advances'
-                        ? pathname === '/advance'
-                        : item.activeMode === 'tour_advance'
-                          ? /^\/tours\/[^/]+\/advance(?:\/|$)/.test(pathname ?? '')
-                          : item.activeMode === 'tour_personnel'
-                            ? /^\/tours\/[^/]+\/personnel(?:\/|$)/.test(pathname ?? '')
-                          : item.activeMode === 'rooming'
-                            ? pathname === '/rooming' ||
-                              /^\/tours\/[^/]+\/rooming(?:\/|$)/.test(pathname ?? '')
-                            : item.activeMode === 'payroll'
-                              ? /^\/tours\/[^/]+\/payroll(?:\/|$)/.test(pathname ?? '')
-                              : item.activeMode === 'tour_overview'
-                                ? /^\/tours\/[^/]+\/overview(?:\/|$)/.test(pathname ?? '')
-                                : item.activeMode === 'settlement'
-                                  ? pathname?.startsWith('/budget') && tab === 'settlement'
-                                  : item.activeMode === 'budget'
-                                    ? pathname?.startsWith('/budget') && tab !== 'settlement'
-                                    : item.activeMode === 'includes'
-                                      ? !!pathname?.includes(hrefPath.split('/').pop() ?? '')
-                                      : pathname === hrefPath;
 
-                  const Icon = item.icon;
-                  return (
-                    <Link
-                      key={`${groupKey}-${item.label}-${item.href}`}
-                      href={item.href}
-                      title={collapsed ? item.label : undefined}
-                      className={cn(
-                        'group flex items-center gap-3 rounded-md px-3 py-2 transition-colors',
-                        'hover:bg-[var(--lp-sidebar-hover-bg)]',
-                        collapsed && 'justify-center px-2'
-                      )}
-                      style={{
-                        backgroundColor: isActive ? 'var(--lp-sidebar-active-bg)' : 'transparent',
-                        color: isActive ? '#FF4500' : 'var(--lp-sidebar-text)',
+          {selectedTourId ? (
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+              <div className="mt-2 shrink-0">
+                {!collapsed && (
+                  <h3
+                    className="mb-3 px-3 text-xs font-extrabold uppercase tracking-wider"
+                    style={{ color: 'var(--lp-sidebar-text-heading)' }}
+                  >
+                    Artist Overview
+                  </h3>
+                )}
+                {renderNavLinks(overviewItems, 'overview')}
+              </div>
+
+              <div className="mt-4 flex min-h-0 flex-1 flex-col overflow-hidden border-t border-[var(--lp-sidebar-border)] pt-4">
+                {!collapsed && (
+                  <>
+                    <p
+                      className="mb-2 truncate px-1 text-[11px] leading-snug"
+                      style={{ color: 'var(--lp-sidebar-text-muted)' }}
+                      title={breadcrumbLabel}
+                    >
+                      {breadcrumbLabel}
+                    </p>
+                    <button
+                      type="button"
+                      className="mb-3 w-fit px-1 text-left text-[10px] font-semibold transition-opacity hover:opacity-90"
+                      style={{ color: '#FF4500' }}
+                      onClick={() => {
+                        setSelectedTourId(null);
+                        router.push('/dashboard');
                       }}
                     >
-                      {isActive ? (
-                        <svg
-                          className="h-4 w-4 shrink-0"
-                          viewBox="0 0 14 14"
-                          fill="none"
-                          stroke="#FF4500"
-                          strokeWidth="1.5"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          aria-hidden
-                        >
-                          <path d="M 2 0 L 2 6 L 8 6 L 14 12" />
-                        </svg>
-                      ) : (
-                        <Icon
-                          size={20}
-                          className="shrink-0 transition-colors group-hover:[color:var(--lp-sidebar-text-heading)]"
-                          style={{ color: 'var(--lp-sidebar-icon)' }}
-                        />
-                      )}
-                      {!collapsed && (
-                        <span
-                          className={cn(
-                            'flex-1 text-[11px] font-semibold uppercase tracking-wide',
-                            isActive && 'font-bold'
-                          )}
-                        >
-                          {item.label}
-                        </span>
-                      )}
-                    </Link>
-                  );
-                })}
+                      Change tour
+                    </button>
+                  </>
+                )}
+                {collapsed && (
+                  <div className="mb-2 flex justify-center">
+                    <button
+                      type="button"
+                      className="flex h-8 w-8 items-center justify-center rounded-md transition-colors hover:bg-[var(--lp-sidebar-hover-bg)]"
+                      style={{ color: '#FF4500' }}
+                      title="Change tour"
+                      aria-label="Change tour"
+                      onClick={() => {
+                        setSelectedTourId(null);
+                        router.push('/dashboard');
+                      }}
+                    >
+                      <ChevronLeft size={16} strokeWidth={2.5} />
+                    </button>
+                  </div>
+                )}
+
+                <div className={cn('mb-2 flex shrink-0 gap-1', collapsed && 'flex-col items-stretch px-0')}>
+                  <button
+                    type="button"
+                    title="Advance"
+                    onClick={() => setNavMode('advance')}
+                    className={cn(
+                      'flex flex-1 items-center justify-center gap-1 rounded-md py-2 text-[11px] font-semibold transition-colors',
+                      collapsed && 'px-0'
+                    )}
+                    style={{
+                      backgroundColor: navMode === 'advance' ? '#FF4500' : 'var(--lp-sidebar-hover-bg)',
+                      color: navMode === 'advance' ? '#fff' : 'var(--lp-sidebar-text-muted)',
+                    }}
+                  >
+                    {collapsed ? <ClipboardList size={18} strokeWidth={2} /> : 'Advance'}
+                  </button>
+                  <button
+                    type="button"
+                    title="Budget"
+                    onClick={() => setNavMode('budget')}
+                    className={cn(
+                      'flex flex-1 items-center justify-center gap-1 rounded-md py-2 text-[11px] font-semibold transition-colors',
+                      collapsed && 'px-0'
+                    )}
+                    style={{
+                      backgroundColor: navMode === 'budget' ? '#FF4500' : 'var(--lp-sidebar-hover-bg)',
+                      color: navMode === 'budget' ? '#fff' : 'var(--lp-sidebar-text-muted)',
+                    }}
+                  >
+                    {collapsed ? <Wallet size={18} strokeWidth={2} /> : 'Budget'}
+                  </button>
+                </div>
+
+                <div className="sidebar-scroll flex min-h-0 flex-1 flex-col overflow-y-auto">
+                  {selectedTourId && (
+                    <TourRoutingList
+                      tourId={selectedTourId}
+                      routing={tourRouting}
+                      mode={navMode}
+                      collapsed={collapsed}
+                    />
+                  )}
+                </div>
+
+                <div className="mt-3 shrink-0 space-y-0.5 border-t border-[var(--lp-sidebar-border)] pt-3">
+                  {renderNavLinks(tourSecondaryItems, 'tour-secondary')}
+                </div>
               </div>
-            );
 
-            return (
-              <>
-                <div className="mt-2">
-                  {!collapsed && (
-                    <h3
-                      className="mb-3 px-3 text-xs font-extrabold uppercase tracking-wider"
-                      style={{ color: 'var(--lp-sidebar-text-heading)' }}
-                    >
-                      Artist Overview
-                    </h3>
-                  )}
-                  {renderNavLinks(overviewItems, 'overview')}
-                </div>
-
-                <div className="mt-8">
-                  {!collapsed && (
-                    <h3
-                      className="mb-3 px-3 text-xs font-extrabold uppercase tracking-wider"
-                      style={{ color: 'var(--lp-sidebar-text-heading)' }}
-                    >
-                      Tour Management
-                    </h3>
-                  )}
-                  {!collapsed && (
-                    <div className="mb-3 px-3">
-                      <p
-                        className="mb-1.5 text-[10px] font-bold uppercase tracking-wider"
-                        style={{ color: 'var(--lp-sidebar-text-muted)' }}
-                      >
-                        Choose Tour
-                      </p>
-                      <SidebarTourPicker />
-                    </div>
-                  )}
-                  {renderNavLinks(tourManagementItems, 'tour-mgmt')}
-                </div>
-
+              <div className="mt-4 shrink-0 border-t border-[var(--lp-sidebar-border)] pt-4">
                 {baseGroups.map((group, groupIndex) => (
-                  <div key={group.title ?? `group-${groupIndex}`} className="mt-8">
+                  <div key={group.title ?? `group-${groupIndex}`} className={groupIndex > 0 ? 'mt-6' : ''}>
                     {group.title && !collapsed && (
                       <h3
                         className="mb-3 px-3 text-xs font-extrabold uppercase tracking-wider"
@@ -348,14 +449,64 @@ export function Sidebar() {
                     {renderNavLinks(group.items, `base-${group.title ?? groupIndex}`)}
                   </div>
                 ))}
-              </>
-            );
-          })()}
-        </nav>
+              </div>
+            </div>
+          ) : (
+            <nav className="sidebar-scroll flex min-h-0 flex-1 flex-col overflow-y-auto pb-6">
+              <div className="mt-2 shrink-0">
+                {!collapsed && (
+                  <h3
+                    className="mb-3 px-3 text-xs font-extrabold uppercase tracking-wider"
+                    style={{ color: 'var(--lp-sidebar-text-heading)' }}
+                  >
+                    Artist Overview
+                  </h3>
+                )}
+                {renderNavLinks(overviewItems, 'overview')}
+              </div>
 
-        {/* Footer — avatar + name (link to profile), Account menu with Log out */}
+              <div className="mt-8 shrink-0">
+                {!collapsed && (
+                  <h3
+                    className="mb-3 px-3 text-xs font-extrabold uppercase tracking-wider"
+                    style={{ color: 'var(--lp-sidebar-text-heading)' }}
+                  >
+                    Tour Management
+                  </h3>
+                )}
+                {!collapsed && (
+                  <div className="mb-3 px-3">
+                    <p
+                      className="mb-1.5 text-[10px] font-bold uppercase tracking-wider"
+                      style={{ color: 'var(--lp-sidebar-text-muted)' }}
+                    >
+                      Choose Tour
+                    </p>
+                    <SidebarTourPicker />
+                  </div>
+                )}
+                {renderNavLinks(tourManagementItems, 'tour-mgmt')}
+              </div>
+
+              {baseGroups.map((group, groupIndex) => (
+                <div key={group.title ?? `group-${groupIndex}`} className="mt-8 shrink-0">
+                  {group.title && !collapsed && (
+                    <h3
+                      className="mb-3 px-3 text-xs font-extrabold uppercase tracking-wider"
+                      style={{ color: 'var(--lp-sidebar-text-heading)' }}
+                    >
+                      {group.title}
+                    </h3>
+                  )}
+                  {renderNavLinks(group.items, `base-${group.title ?? groupIndex}`)}
+                </div>
+              ))}
+            </nav>
+          )}
+        </div>
+
         <div
-          className="border-t px-4 py-4 relative"
+          className="relative shrink-0 border-t px-4 py-4"
           ref={menuRef}
           style={{
             borderTopColor: 'var(--lp-sidebar-border)',
@@ -365,7 +516,7 @@ export function Sidebar() {
           <Link
             href="/profile"
             className={cn(
-              'flex w-full items-center gap-3 text-left transition-colors rounded-md py-1 -my-1',
+              'flex w-full items-center gap-3 rounded-md py-1 -my-1 text-left transition-colors',
               collapsed && 'justify-center'
             )}
           >
@@ -410,7 +561,7 @@ export function Sidebar() {
             type="button"
             onClick={() => setUserMenuOpen((open) => !open)}
             className={cn(
-              'flex w-full items-center gap-2 px-0 py-1.5 text-xs font-medium transition-colors mt-1 hover:opacity-80',
+              'mt-1 flex w-full items-center gap-2 px-0 py-1.5 text-xs font-medium transition-colors hover:opacity-80',
               collapsed && 'justify-center'
             )}
             style={{ color: 'var(--lp-sidebar-text-muted)' }}

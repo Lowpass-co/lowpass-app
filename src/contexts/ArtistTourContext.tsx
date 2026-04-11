@@ -6,6 +6,14 @@ import type { Artist, Tour } from '@/types';
 const STORAGE_ARTIST = 'lp-selected-artist';
 const STORAGE_TOUR = 'lp-selected-tour';
 
+export type TourRoutingLiteRow = {
+  id: string;
+  date: string;
+  day_type: string;
+  city: string;
+  venue_name: string | null;
+};
+
 interface ArtistTourContextType {
   selectedArtistId: string | null;
   selectedTourId: string | null;
@@ -18,6 +26,10 @@ interface ArtistTourContextType {
   isLoading: boolean;
   /** True once localStorage has been read — prevents artist-picker flashing on load */
   hydrated: boolean;
+  /** True after initial GET /api/artists completes (success or fail) */
+  artistsLoaded: boolean;
+  tourRouting: TourRoutingLiteRow[];
+  isRoutingLoading: boolean;
 }
 
 const ArtistTourContext = createContext<ArtistTourContextType | null>(null);
@@ -38,6 +50,8 @@ export function ArtistTourProvider({ children }: { children: ReactNode }) {
   const [tours, setTours] = useState<Tour[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [hydrated, setHydrated] = useState(false);
+  const [tourRouting, setTourRouting] = useState<TourRoutingLiteRow[]>([]);
+  const [isRoutingLoading, setIsRoutingLoading] = useState(false);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -100,6 +114,33 @@ export function ArtistTourProvider({ children }: { children: ReactNode }) {
     return () => { cancelled = true; };
   }, [selectedArtistId]);
 
+  useEffect(() => {
+    if (!selectedTourId) {
+      setTourRouting([]);
+      setIsRoutingLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setIsRoutingLoading(true);
+    fetch(`/api/tours/${selectedTourId}/routing?lite=1`)
+      .then((r) => (r.ok ? r.json() : { routing: [] }))
+      .then((data: { routing?: TourRoutingLiteRow[] }) => {
+        const list = data?.routing;
+        if (!cancelled && Array.isArray(list)) {
+          setTourRouting(list);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setTourRouting([]);
+      })
+      .finally(() => {
+        if (!cancelled) setIsRoutingLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedTourId]);
+
   const selectedArtist = selectedArtistId ? artists.find((a) => a.id === selectedArtistId) ?? null : null;
   const selectedTour = selectedTourId ? tours.find((t) => t.id === selectedTourId) ?? null : null;
 
@@ -129,6 +170,9 @@ export function ArtistTourProvider({ children }: { children: ReactNode }) {
     tours,
     isLoading,
     hydrated,
+    artistsLoaded,
+    tourRouting,
+    isRoutingLoading,
   };
 
   return (
