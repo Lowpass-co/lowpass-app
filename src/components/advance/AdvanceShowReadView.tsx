@@ -14,8 +14,8 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import {
   Loader2, Pencil, FileText, Phone, Mail, Globe,
-  AlertCircle, CheckCircle2, Clock, ChevronRight,
-  Paperclip, User, MapPin, ExternalLink, Flag,
+  AlertCircle, ChevronRight,
+  Paperclip, User, ExternalLink, Flag, Printer,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -123,20 +123,213 @@ function dayTypeClass(t: string) {
   return 'bg-blue-500/15 text-blue-400';
 }
 
-const STATUS_META = {
-  complete:     { label: 'Complete',     icon: CheckCircle2, cls: 'text-emerald-500' },
-  in_progress:  { label: 'In Progress',  icon: Clock,        cls: 'text-amber-500' },
-  needs_review: { label: 'Needs Review', icon: AlertCircle,  cls: 'text-red-500' },
-  not_started:  { label: 'Not Started',  icon: Clock,        cls: 'text-lp-text-tertiary' },
-};
+function shouldShowSectionInReadView(section: SectionDef): boolean {
+  const lab = section.label.toLowerCase();
+  if (lab.includes('settlement')) return false;
+  if (section.fields.length === 0) return true;
+  const allCurrency = section.fields.every((f) => f.type === 'currency');
+  if (!allCurrency) return true;
+  const prodTech = ['production', 'tech', 'audio', 'stage', 'lighting', 'backline', 'crew', 'sound', 'video', 'monitor', 'foh', 'rigging'];
+  return prodTech.some((k) => lab.includes(k));
+}
 
-function StatusBadge({ status }: { status: string }) {
-  const meta = STATUS_META[status as keyof typeof STATUS_META] ?? STATUS_META.not_started;
-  const Icon = meta.icon;
+function sectionsForKeyInfoExtraction(sections: SectionDef[]): SectionDef[] {
+  return sections.filter((s) => !s.label.toLowerCase().includes('settlement'));
+}
+
+type HotelKeyInfo = { name?: string; address?: string; checkIn?: string; checkOut?: string; notes?: string };
+type KeyContactCard = { name: string; role: string; phone?: string; email?: string };
+
+function normalizeContactRows(value: unknown): ContactRow[] {
+  if (value == null) return [];
+  if (Array.isArray(value)) return (value as ContactRow[]).filter(Boolean);
+  return [value as ContactRow];
+}
+
+function extractHotelKeyInfo(
+  sections: SectionDef[],
+  data: Record<string, Record<string, unknown>>
+): HotelKeyInfo | null {
+  const pool = sectionsForKeyInfoExtraction(sections);
+  const hotelSection = pool.find((s) => {
+    const l = s.label.toLowerCase();
+    return l.includes('hotel') || l.includes('accommodation');
+  });
+  if (!hotelSection) return null;
+  const secData = data[hotelSection.template_id] ?? {};
+  const out: HotelKeyInfo = {};
+  const noteParts: string[] = [];
+  for (const f of hotelSection.fields) {
+    const lab = f.label.toLowerCase();
+    const v = secData[f.id];
+    if (isBlank(v)) continue;
+    if (typeof v === 'object' && !Array.isArray(v)) continue;
+    const str = String(v).trim();
+    if (!str) continue;
+    if (lab.includes('hotel name') || lab.includes('property name')) out.name = str;
+    else if (lab.includes('address')) out.address = str;
+    else if (lab.includes('check in') || lab.includes('check-in')) out.checkIn = str;
+    else if (lab.includes('check out') || lab.includes('check-out')) out.checkOut = str;
+    else if (lab.includes('notes') || lab.includes('parking')) noteParts.push(str);
+  }
+  if (noteParts.length) out.notes = noteParts.join('\n\n');
+  if (!out.name && !out.address && !out.checkIn && !out.checkOut && !out.notes) return null;
+  return out;
+}
+
+function contactMatchPriority(roleLower: string): number {
+  if (roleLower.includes('promoter')) return 0;
+  if (roleLower.includes('venue') || roleLower.includes('production')) return 1;
+  if (roleLower.includes('tour manager') || /\btm\b/i.test(roleLower)) return 2;
+  return 99;
+}
+
+function extractKeyContacts(
+  sections: SectionDef[],
+  data: Record<string, Record<string, unknown>>
+): KeyContactCard[] {
+  const pool = sectionsForKeyInfoExtraction(sections);
+  const out: KeyContactCard[] = [];
+  const seen = new Set<string>();
+  for (const section of pool) {
+    for (const field of section.fields) {
+      if (field.type !== 'contact') continue;
+      const rows = normalizeContactRows(data[section.template_id]?.[field.id]);
+      for (const c of rows) {
+        if (!c || (!c.first_name && !c.last_name)) continue;
+        const roleLower = (c.role ?? '').toLowerCase();
+        const match =
+          roleLower.includes('promoter') ||
+          roleLower.includes('venue') ||
+          roleLower.includes('production') ||
+          roleLower.includes('tour manager') ||
+          /\btm\b/i.test(roleLower);
+        if (!match) continue;
+        const name = [c.first_name, c.last_name].filter(Boolean).join(' ').trim();
+        if (!name) continue;
+        const key = `${name.toLowerCase()}|${(c.email ?? '').toLowerCase()}|${(c.phone ?? '').trim()}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push({
+          name,
+          role: (c.role ?? '').trim() || 'Contact',
+          phone: c.phone?.trim() || undefined,
+          email: c.email?.trim() || undefined,
+        });
+      }
+    }
+  }
+  out.sort((a, b) => {
+    const pa = contactMatchPriority(a.role.toLowerCase());
+    const pb = contactMatchPriority(b.role.toLowerCase());
+    if (pa !== pb) return pa - pb;
+    return a.name.localeCompare(b.name);
+  });
+  return out;
+}
+
+function KeyInfoBlock({ hotel, contacts }: { hotel: HotelKeyInfo | null; contacts: KeyContactCard[] }) {
+  if (!hotel && contacts.length === 0) return null;
   return (
-    <span className={cn('inline-flex items-center gap-1 text-[11px] font-medium', meta.cls)}>
-      <Icon className="h-3 w-3" />
-      {meta.label}
+    <div className="mb-1">
+      <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-lp-text-tertiary">Key Info</p>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        {hotel && (
+          <div className="rounded-lg bg-lp-surface p-4">
+            <h3 className="mb-3 text-[12px] font-semibold text-lp-text">Hotel</h3>
+            <dl className="space-y-2 text-[13px]">
+              {hotel.name && (
+                <div>
+                  <dt className="text-[10px] font-semibold uppercase tracking-wider text-lp-text-tertiary">Name</dt>
+                  <dd className="text-lp-text">{hotel.name}</dd>
+                </div>
+              )}
+              {hotel.address && (
+                <div>
+                  <dt className="text-[10px] font-semibold uppercase tracking-wider text-lp-text-tertiary">Address</dt>
+                  <dd className="text-lp-text whitespace-pre-line">{hotel.address}</dd>
+                </div>
+              )}
+              {(hotel.checkIn || hotel.checkOut) && (
+                <div className="flex flex-wrap gap-4">
+                  {hotel.checkIn && (
+                    <div>
+                      <dt className="text-[10px] font-semibold uppercase tracking-wider text-lp-text-tertiary">Check-in</dt>
+                      <dd className="text-lp-text">{hotel.checkIn}</dd>
+                    </div>
+                  )}
+                  {hotel.checkOut && (
+                    <div>
+                      <dt className="text-[10px] font-semibold uppercase tracking-wider text-lp-text-tertiary">Check-out</dt>
+                      <dd className="text-lp-text">{hotel.checkOut}</dd>
+                    </div>
+                  )}
+                </div>
+              )}
+              {hotel.notes && (
+                <div>
+                  <dt className="text-[10px] font-semibold uppercase tracking-wider text-lp-text-tertiary">Notes</dt>
+                  <dd className="text-lp-text whitespace-pre-line text-[12px] leading-relaxed">{hotel.notes}</dd>
+                </div>
+              )}
+            </dl>
+          </div>
+        )}
+        {contacts.length > 0 && (
+          <div className="flex flex-col gap-3">
+            {contacts.map((c, i) => (
+              <div key={`${c.name}-${c.email}-${i}`} className="rounded-lg bg-lp-surface p-4">
+                <p className="text-[13px] font-bold text-lp-text">{c.name}</p>
+                <p className="mt-0.5 text-[11px] text-lp-text-tertiary">{c.role}</p>
+                <div className="mt-2 flex flex-col gap-1">
+                  {c.phone && (
+                    <a href={`tel:${c.phone}`} className="inline-flex w-fit items-center gap-1 text-[12px] text-lp-text-secondary hover:text-lp-orange">
+                      <Phone className="h-3 w-3 shrink-0" /> {c.phone}
+                    </a>
+                  )}
+                  {c.email && (
+                    <a href={`mailto:${c.email}`} className="inline-flex w-fit items-center gap-1 text-[12px] text-lp-text-secondary hover:text-lp-orange">
+                      <Mail className="h-3 w-3 shrink-0" /> {c.email}
+                    </a>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+const PRINT_HIDE_CSS = `
+@media print {
+  aside, header, nav { display: none !important; }
+  button { display: none !important; }
+  .advance-read-no-print { display: none !important; }
+  body { margin: 0; }
+  .advance-read-view { padding: 0 !important; }
+}
+`;
+
+type SectionStatusKey = 'complete' | 'in_progress' | 'needs_review' | 'not_started';
+
+/** Read view: Complete | In Progress | Not started + coloured dot (needs_review → In Progress). */
+function SectionReadStatusBadge({ status }: { status: string }) {
+  const sk = status as SectionStatusKey;
+  const key: 'complete' | 'in_progress' | 'not_started' =
+    sk === 'complete' ? 'complete' : sk === 'not_started' ? 'not_started' : 'in_progress';
+  const label = key === 'complete' ? 'Complete' : key === 'not_started' ? 'Not started' : 'In Progress';
+  const dotColor =
+    key === 'complete' ? 'bg-emerald-500' : key === 'in_progress' ? 'bg-amber-500' : 'bg-lp-text-tertiary';
+  const textCls =
+    key === 'complete' ? 'text-emerald-600 dark:text-emerald-400'
+      : key === 'in_progress' ? 'text-amber-600 dark:text-amber-400'
+        : 'text-lp-text-tertiary';
+  return (
+    <span className={cn('inline-flex items-center gap-1.5 text-[11px] font-medium', textCls)}>
+      <span className={cn('h-2 w-2 shrink-0 rounded-full', dotColor)} aria-hidden />
+      {label}
     </span>
   );
 }
@@ -289,7 +482,7 @@ function SectionCard({
   editHref: string;
   currency: string;
 }) {
-  const statusKey = (status?.status ?? 'not_started') as keyof typeof STATUS_META;
+  const statusKey = (status?.status ?? 'not_started') as SectionStatusKey;
 
   // Filter to fields that have actual values
   const filledFields = section.fields.filter(f => !isBlank(sectionData[f.id]));
@@ -318,8 +511,8 @@ function SectionCard({
             </span>
           )}
         </div>
-        <div className="flex items-center gap-3 shrink-0">
-          <StatusBadge status={statusKey} />
+        <div className="advance-read-no-print flex items-center gap-3 shrink-0">
+          <SectionReadStatusBadge status={statusKey} />
           <Link
             href={editHref}
             className="inline-flex items-center gap-1.5 rounded-lg border border-lp-border px-2.5 py-1 text-[11px] font-medium text-lp-text-secondary hover:border-lp-orange hover:text-lp-orange transition-colors"
@@ -349,7 +542,7 @@ function SectionCard({
           <span className="text-[12px] text-lp-text-tertiary italic">No data entered yet</span>
           <Link
             href={editHref}
-            className="text-[12px] text-lp-orange hover:underline font-medium"
+            className="advance-read-no-print text-[12px] text-lp-orange hover:underline font-medium"
           >
             Fill in →
           </Link>
@@ -419,7 +612,10 @@ function DocumentsSection({ docs, editHref }: {
           <FileText className="h-4 w-4 text-lp-text-tertiary" />
           <span className="text-[14px] font-semibold text-lp-text">Important Documents</span>
         </div>
-        <Link href={editHref} className="inline-flex items-center gap-1.5 rounded-lg border border-lp-border px-2.5 py-1 text-[11px] font-medium text-lp-text-secondary hover:border-lp-orange hover:text-lp-orange transition-colors">
+        <Link
+          href={editHref}
+          className="advance-read-no-print inline-flex items-center gap-1.5 rounded-lg border border-lp-border px-2.5 py-1 text-[11px] font-medium text-lp-text-secondary hover:border-lp-orange hover:text-lp-orange transition-colors"
+        >
           <Pencil className="h-3 w-3" /> Edit
         </Link>
       </div>
@@ -484,89 +680,81 @@ export function AdvanceShowReadView({
   // Extract top-level documents (stored at a special section or data key)
   const topLevelDocs: AdvanceDocument[] = [];
 
-  // Completed vs total sections count
-  const completed = sections.filter(s =>
-    sectionStatuses[s.template_id]?.status === 'complete'
-  ).length;
+  const visibleSections = sections
+    .filter(shouldShowSectionInReadView)
+    .sort((a, b) => a.order - b.order);
+
+  const hotelKeyInfo = extractHotelKeyInfo(sections, data);
+  const keyContacts = extractKeyContacts(sections, data);
 
   const hasNoSections = sections.length === 0;
 
   return (
-    <div className="space-y-0">
-      {/* Page header */}
+    <div className="advance-read-view space-y-0">
+      <style dangerouslySetInnerHTML={{ __html: PRINT_HIDE_CSS }} />
+
+      {/* Page header — single compact row */}
       <div className="sticky top-0 z-20 border-b border-lp-border/60 bg-lp-bg/95 backdrop-blur-sm">
-        <div className="flex items-center justify-between gap-4 px-6 py-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <Link href={overviewHref} className="text-[12px] text-lp-text-tertiary hover:text-lp-orange transition-colors shrink-0">
-              ← Advance
-            </Link>
-            <span className="text-lp-border/60">|</span>
-            <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center justify-between gap-3 px-6 py-3">
+          <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
+            <div className="advance-read-no-print flex shrink-0 items-center gap-2">
+              <Link href={overviewHref} className="text-[12px] text-lp-text-tertiary transition-colors hover:text-lp-orange">
+                ← Advance
+              </Link>
+              <span className="text-lp-border/60">|</span>
+            </div>
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
               <span className="text-[14px] font-semibold text-lp-text">{formatDate(routing.date)}</span>
               <span className={cn('rounded px-1.5 py-0.5 text-[10px] font-semibold', dayTypeClass(routing.day_type))}>
                 {dayTypeLabel(routing.day_type)}
               </span>
               {routing.venue_name && (
                 <>
-                  <span className="text-lp-text-tertiary">—</span>
-                  <span className="text-[13px] text-lp-text truncate">{routing.venue_name}</span>
+                  <span className="hidden text-lp-text-tertiary sm:inline">—</span>
+                  <span className="truncate text-[13px] text-lp-text">{routing.venue_name}</span>
                 </>
               )}
               {routing.city && (
-                <span className="text-[12px] text-lp-text-tertiary shrink-0">{routing.city}</span>
+                <span className="shrink-0 text-[12px] text-lp-text-tertiary">{routing.city}</span>
               )}
             </div>
           </div>
-          <div className="flex items-center gap-3 shrink-0">
-            {sections.length > 0 && (
-              <span className="text-[11px] text-lp-text-tertiary">
-                {completed}/{sections.length} sections complete
-              </span>
-            )}
+          <div className="advance-read-no-print flex shrink-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-lp-border px-2.5 py-1.5 text-[12px] font-medium text-lp-text-secondary transition-colors hover:border-lp-orange hover:text-lp-orange"
+            >
+              <Printer className="h-3.5 w-3.5 shrink-0" />
+              Print
+            </button>
             <Link
               href={editHref}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-lp-orange px-3 py-1.5 text-[12px] font-medium text-white hover:bg-lp-orange/90 transition-colors"
+              className="inline-flex items-center gap-1.5 rounded-lg bg-lp-orange px-3 py-1.5 text-[12px] font-medium text-white transition-colors hover:bg-lp-orange/90"
             >
-              <Pencil className="h-3.5 w-3.5" />
-              Edit Advance
+              <Pencil className="h-3.5 w-3.5 shrink-0" />
+              Edit advance
             </Link>
           </div>
         </div>
-
-        {/* Venue details sub-row */}
-        {(routing.address || routing.venue_phone || routing.venue_website) && (
-          <div className="flex items-center gap-4 px-6 pb-2 text-[11px] text-lp-text-tertiary">
-            {routing.address && (
-              <span className="flex items-center gap-1">
-                <MapPin className="h-3 w-3" /> {routing.address}
-              </span>
-            )}
-            {routing.venue_phone && (
-              <a href={`tel:${routing.venue_phone}`} className="flex items-center gap-1 hover:text-lp-orange">
-                <Phone className="h-3 w-3" /> {routing.venue_phone}
-              </a>
-            )}
-            {routing.venue_website && (
-              <a href={routing.venue_website} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 hover:text-lp-orange">
-                <Globe className="h-3 w-3" /> Venue website
-              </a>
-            )}
-          </div>
-        )}
       </div>
 
       {/* Content */}
-      <div className="px-6 py-6 space-y-4">
+      <div className="space-y-4 px-6 py-6">
         {/* No sections yet */}
         {hasNoSections && (
           <div className="rounded-xl border border-dashed border-lp-border p-8 text-center">
-            <p className="text-[13px] text-lp-text-tertiary mb-3">No sections set up for this show yet.</p>
-            <Link href={editHref}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-lp-orange px-4 py-2 text-[13px] font-medium text-white hover:bg-lp-orange/90">
+            <p className="mb-3 text-[13px] text-lp-text-tertiary">No sections set up for this show yet.</p>
+            <Link
+              href={editHref}
+              className="advance-read-no-print inline-flex items-center gap-1.5 rounded-lg bg-lp-orange px-4 py-2 text-[13px] font-medium text-white hover:bg-lp-orange/90"
+            >
               Set up advance <ChevronRight className="h-4 w-4" />
             </Link>
           </div>
         )}
+
+        {!hasNoSections && <KeyInfoBlock hotel={hotelKeyInfo} contacts={keyContacts} />}
 
         {/* Top-level documents */}
         {topLevelDocs.length > 0 && (
@@ -574,25 +762,27 @@ export function AdvanceShowReadView({
         )}
 
         {/* Section cards */}
-        {sections
-          .sort((a, b) => a.order - b.order)
-          .map(section => (
-            <SectionCard
-              key={section.template_id}
-              section={section}
-              sectionData={data[section.template_id] ?? {}}
-              status={sectionStatuses[section.template_id]}
-              flags={flags.filter(f => f.section_id === section.template_id)}
-              editHref={editHref}
-              currency={tour.currency}
-            />
-          ))}
+        {visibleSections.map((section) => (
+          <SectionCard
+            key={section.template_id}
+            section={section}
+            sectionData={data[section.template_id] ?? {}}
+            status={sectionStatuses[section.template_id]}
+            flags={flags.filter((f) => f.section_id === section.template_id)}
+            editHref={editHref}
+            currency={tour.currency}
+          />
+        ))}
 
         {/* Last updated */}
         {advance?.last_updated_at && (
-          <p className="text-center text-[11px] text-lp-text-tertiary pt-2">
-            Last updated {new Date(advance.last_updated_at).toLocaleString('en-GB', {
-              day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit'
+          <p className="advance-read-no-print pt-2 text-center text-[11px] text-lp-text-tertiary">
+            Last updated{' '}
+            {new Date(advance.last_updated_at).toLocaleString('en-GB', {
+              day: 'numeric',
+              month: 'short',
+              hour: '2-digit',
+              minute: '2-digit',
             })}
             {advance.last_updated_by_name && ` by ${advance.last_updated_by_name}`}
           </p>
