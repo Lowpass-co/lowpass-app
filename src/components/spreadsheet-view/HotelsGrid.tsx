@@ -214,8 +214,35 @@ export function HotelsGrid({ tourId, currency }: { tourId: string; currency: str
                             <td className="border-r border-lp-border px-3 py-2 text-right font-[tabular-nums] text-lp-text-secondary last:border-r-0">
                               {a.nights}
                             </td>
-                            <td className="border-r border-lp-border px-3 py-2 text-lp-text-secondary last:border-r-0">
-                              <SpreadsheetCurrencyAmount amount={a.rate_per_night} currency={currency} />
+                            <td className="border-r border-lp-border p-0 text-lp-text-secondary last:border-r-0">
+                              <InlineEditCell
+                                value={a.rate_per_night}
+                                type="currency"
+                                currency={currency}
+                                align="right"
+                                onSave={async (v) => {
+                                  const rate = typeof v === 'number' ? v : parseFloat(String(v));
+                                  if (Number.isNaN(rate)) return;
+                                  const res = await fetch('/api/budget/hotels/assignments', {
+                                    method: 'PATCH',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({ id: a.id, rate_per_night: rate }),
+                                  });
+                                  if (!res.ok) return;
+                                  setHotels((prev) =>
+                                    prev.map((hotel) =>
+                                      hotel.id === h.id
+                                        ? {
+                                            ...hotel,
+                                            room_assignments: hotel.room_assignments.map((ra) =>
+                                              ra.id === a.id ? { ...ra, rate_per_night: rate } : ra
+                                            ),
+                                          }
+                                        : hotel
+                                    )
+                                  );
+                                }}
+                              />
                             </td>
                             <td className="px-3 py-2 text-lp-text-secondary">{a.confirmation ?? '—'}</td>
                           </tr>

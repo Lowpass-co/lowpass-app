@@ -6,7 +6,6 @@ import { TourHeroBar } from './TourHeroBar';
 import { BudgetSummaryCard } from './BudgetSummaryCard';
 import { AdvanceSummaryCard } from './AdvanceSummaryCard';
 import { SettlementSummaryCard } from './SettlementSummaryCard';
-import { RoomingSummaryCard } from './RoomingSummaryCard';
 import { PayrollSummaryCard } from './PayrollSummaryCard';
 import type { TourOverviewData } from './overview-utils';
 
@@ -44,7 +43,7 @@ export function TourOverviewClient({
   currency,
   overview,
 }: TourOverviewClientProps) {
-  const { heroData, budgetData, advanceData, settlementData, roomingData, payrollData } = overview;
+  const { heroData, budgetData, advanceData, settlementData, payrollData } = overview;
 
   return (
     <div className="mx-auto max-w-6xl space-y-6 px-4 py-6">
@@ -63,10 +62,7 @@ export function TourOverviewClient({
         <SettlementSummaryCard data={settlementData} currency={currency} />
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <RoomingSummaryCard data={roomingData} />
-        <PayrollSummaryCard data={payrollData} currency={currency} />
-      </div>
+      <PayrollSummaryCard data={payrollData} currency={currency} />
 
       <section
         id="day-view"

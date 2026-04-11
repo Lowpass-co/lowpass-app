@@ -62,7 +62,6 @@ export interface TourOverviewData {
   budgetData: BudgetCardData | null;
   advanceData: AdvanceCardData | null;
   settlementData: SettlementCardData | null;
-  roomingData: RoomingCardData | null;
   payrollData: PayrollCardData | null;
 }
 

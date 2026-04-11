@@ -385,7 +385,11 @@ export function TransportationTab({ tourId }: { tourId: string }) {
                     <td className="p-3">
                       <InlineCurrencyCell
                         value={isEditing ? (row.proposed_cost ?? item.proposed_cost) : item.proposed_cost}
-                        onChange={(v) => setEditRow((r) => ({ ...r, proposed_cost: v }))}
+                        onChange={(v) =>
+                          setEditRow((prev: Partial<LineItem> | null) =>
+                            prev ? { ...prev, proposed_cost: v === null ? undefined : v } : null
+                          )
+                        }
                         isEditing={isEditing}
                         inputClassName="w-24"
                       />
@@ -393,7 +397,11 @@ export function TransportationTab({ tourId }: { tourId: string }) {
                     <td className="p-3">
                       <InlineCurrencyCell
                         value={isEditing ? (row.actual_cost ?? item.actual_cost) : item.actual_cost}
-                        onChange={(v) => setEditRow((r) => ({ ...r, actual_cost: v }))}
+                        onChange={(v) =>
+                          setEditRow((prev: Partial<LineItem> | null) =>
+                            prev ? { ...prev, actual_cost: v === null ? undefined : v } : null
+                          )
+                        }
                         isEditing={isEditing}
                         inputClassName="w-24"
                       />

@@ -12,7 +12,6 @@ import {
   computeBudgetData,
   computeAdvanceData,
   computeSettlementData,
-  computeRoomingData,
   computePayrollData,
   type TourOverviewData,
 } from '@/components/tour-overview/overview-utils';
@@ -82,7 +81,7 @@ export default async function TourOverviewPage({
 
   const empty = Promise.resolve({ data: [] as Record<string, unknown>[] });
 
-  const [incomeRes, instancesRes, settlementRes, hotelsRes] = await Promise.all([
+  const [incomeRes, instancesRes, settlementRes] = await Promise.all([
     routingIds.length
       ? supabase
           .from('budget_income')
@@ -100,19 +99,12 @@ export default async function TourOverviewPage({
           .in('routing_id', routingIds)
           .eq('workspace_id', workspaceId)
       : empty,
-    supabase
-      .from('hotel_bookings')
-      .select('hotel_name, check_in_date, check_out_date, city, hotel_room_assignments(id)')
-      .eq('tour_id', id)
-      .eq('workspace_id', workspaceId)
-      .order('check_in_date', { ascending: true, nullsFirst: true }),
   ]);
 
   const income = (incomeRes.data ?? []) as Parameters<typeof computeBudgetData>[0];
   const lineItemsTyped = (lineItems ?? []) as Parameters<typeof computeBudgetData>[1];
   const instances = (instancesRes.data ?? []) as Parameters<typeof computeAdvanceData>[0];
   const settlements = (settlementRes.data ?? []) as Parameters<typeof computeSettlementData>[0];
-  const hotels = (hotelsRes.data ?? []) as Parameters<typeof computeRoomingData>[0];
   const ratesForPayroll = (personnelRates ?? []) as Parameters<typeof computePayrollData>[1];
   const payrollEntries = (payrollRows ?? []) as Parameters<typeof computePayrollData>[0];
 
@@ -139,7 +131,6 @@ export default async function TourOverviewPage({
     budgetData: computeBudgetData(income, lineItemsTyped),
     advanceData: computeAdvanceData(instances, routing),
     settlementData: computeSettlementData(settlements, routing, today),
-    roomingData: computeRoomingData(hotels, routing, ratesForPayroll, today),
     payrollData: computePayrollData(payrollEntries, ratesForPayroll, routing),
   };
 

@@ -55,6 +55,7 @@ export function SettlementTab({ tourId, currency = 'GBP' }: { tourId: string; cu
   const [saving, setSaving] = useState(false);
   const [uploadingField, setUploadingField] = useState<string | null>(null);
   const cc = (currency ?? 'GBP').trim().toUpperCase() || 'GBP';
+  const currencyInputPad = cc.length > 3 ? 'pl-12' : 'pl-10';
 
   const load = useCallback(() => {
     if (!tourId) return;
@@ -231,10 +232,34 @@ export function SettlementTab({ tourId, currency = 'GBP' }: { tourId: string; cu
               </div>
 
               <div className="grid grid-cols-2 gap-4">
-                <div><label className="block text-sm font-medium text-lp-text mb-1">Day-of Guarantee</label><input type="number" step="0.01" className="w-full rounded-md border border-lp-border bg-transparent px-3 py-2 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30" value={form.day_of_guarantee ?? ''} onChange={(e) => setForm((f) => ({ ...f!, day_of_guarantee: e.target.value ? parseFloat(e.target.value) : null }))} /></div>
-                <div><label className="block text-sm font-medium text-lp-text mb-1">Day-of Overage</label><input type="number" step="0.01" className="w-full rounded-md border border-lp-border bg-transparent px-3 py-2 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30" value={form.day_of_overage ?? ''} onChange={(e) => setForm((f) => ({ ...f!, day_of_overage: e.target.value ? parseFloat(e.target.value) : null }))} /></div>
-                <div><label className="block text-sm font-medium text-lp-text mb-1">Day-of Merch</label><input type="number" step="0.01" className="w-full rounded-md border border-lp-border bg-transparent px-3 py-2 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30" value={form.day_of_merch ?? ''} onChange={(e) => setForm((f) => ({ ...f!, day_of_merch: e.target.value ? parseFloat(e.target.value) : null }))} /></div>
-                <div><label className="block text-sm font-medium text-lp-text mb-1">Day-of Deductions</label><input type="number" step="0.01" className="w-full rounded-md border border-lp-border bg-transparent px-3 py-2 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30" value={form.day_of_deductions ?? ''} onChange={(e) => setForm((f) => ({ ...f!, day_of_deductions: e.target.value ? parseFloat(e.target.value) : null }))} /></div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-lp-text">Day-of Guarantee</label>
+                  <div className="relative">
+                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 font-mono text-xs text-lp-text-tertiary">{cc}</span>
+                    <input type="number" step="0.01" className={`w-full rounded-md border border-lp-border bg-transparent py-2 pr-3 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 ${currencyInputPad}`} value={form.day_of_guarantee ?? ''} onChange={(e) => setForm((f) => ({ ...f!, day_of_guarantee: e.target.value ? parseFloat(e.target.value) : null }))} />
+                  </div>
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-lp-text">Day-of Overage</label>
+                  <div className="relative">
+                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 font-mono text-xs text-lp-text-tertiary">{cc}</span>
+                    <input type="number" step="0.01" className={`w-full rounded-md border border-lp-border bg-transparent py-2 pr-3 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 ${currencyInputPad}`} value={form.day_of_overage ?? ''} onChange={(e) => setForm((f) => ({ ...f!, day_of_overage: e.target.value ? parseFloat(e.target.value) : null }))} />
+                  </div>
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-lp-text">Day-of Merch</label>
+                  <div className="relative">
+                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 font-mono text-xs text-lp-text-tertiary">{cc}</span>
+                    <input type="number" step="0.01" className={`w-full rounded-md border border-lp-border bg-transparent py-2 pr-3 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 ${currencyInputPad}`} value={form.day_of_merch ?? ''} onChange={(e) => setForm((f) => ({ ...f!, day_of_merch: e.target.value ? parseFloat(e.target.value) : null }))} />
+                  </div>
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-lp-text">Day-of Deductions</label>
+                  <div className="relative">
+                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 font-mono text-xs text-lp-text-tertiary">{cc}</span>
+                    <input type="number" step="0.01" className={`w-full rounded-md border border-lp-border bg-transparent py-2 pr-3 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 ${currencyInputPad}`} value={form.day_of_deductions ?? ''} onChange={(e) => setForm((f) => ({ ...f!, day_of_deductions: e.target.value ? parseFloat(e.target.value) : null }))} />
+                  </div>
+                </div>
               </div>
               <div className="flex flex-wrap items-baseline gap-2">
                 <span className="text-sm font-medium text-lp-text">Day-of Net (computed):</span>
@@ -251,10 +276,34 @@ export function SettlementTab({ tourId, currency = 'GBP' }: { tourId: string; cu
               <hr className="border-lp-border" />
 
               <div className="grid grid-cols-2 gap-4">
-                <div><label className="block text-sm font-medium text-lp-text mb-1">Reconciled Guarantee</label><input type="number" step="0.01" className="w-full rounded-md border border-lp-border bg-transparent px-3 py-2 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30" value={form.reconciled_guarantee ?? ''} onChange={(e) => setForm((f) => ({ ...f!, reconciled_guarantee: e.target.value ? parseFloat(e.target.value) : null }))} /></div>
-                <div><label className="block text-sm font-medium text-lp-text mb-1">Reconciled Overage</label><input type="number" step="0.01" className="w-full rounded-md border border-lp-border bg-transparent px-3 py-2 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30" value={form.reconciled_overage ?? ''} onChange={(e) => setForm((f) => ({ ...f!, reconciled_overage: e.target.value ? parseFloat(e.target.value) : null }))} /></div>
-                <div><label className="block text-sm font-medium text-lp-text mb-1">Reconciled Merch</label><input type="number" step="0.01" className="w-full rounded-md border border-lp-border bg-transparent px-3 py-2 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30" value={form.reconciled_merch ?? ''} onChange={(e) => setForm((f) => ({ ...f!, reconciled_merch: e.target.value ? parseFloat(e.target.value) : null }))} /></div>
-                <div><label className="block text-sm font-medium text-lp-text mb-1">Reconciled Deductions</label><input type="number" step="0.01" className="w-full rounded-md border border-lp-border bg-transparent px-3 py-2 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30" value={form.reconciled_deductions ?? ''} onChange={(e) => setForm((f) => ({ ...f!, reconciled_deductions: e.target.value ? parseFloat(e.target.value) : null }))} /></div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-lp-text">Reconciled Guarantee</label>
+                  <div className="relative">
+                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 font-mono text-xs text-lp-text-tertiary">{cc}</span>
+                    <input type="number" step="0.01" className={`w-full rounded-md border border-lp-border bg-transparent py-2 pr-3 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 ${currencyInputPad}`} value={form.reconciled_guarantee ?? ''} onChange={(e) => setForm((f) => ({ ...f!, reconciled_guarantee: e.target.value ? parseFloat(e.target.value) : null }))} />
+                  </div>
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-lp-text">Reconciled Overage</label>
+                  <div className="relative">
+                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 font-mono text-xs text-lp-text-tertiary">{cc}</span>
+                    <input type="number" step="0.01" className={`w-full rounded-md border border-lp-border bg-transparent py-2 pr-3 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 ${currencyInputPad}`} value={form.reconciled_overage ?? ''} onChange={(e) => setForm((f) => ({ ...f!, reconciled_overage: e.target.value ? parseFloat(e.target.value) : null }))} />
+                  </div>
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-lp-text">Reconciled Merch</label>
+                  <div className="relative">
+                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 font-mono text-xs text-lp-text-tertiary">{cc}</span>
+                    <input type="number" step="0.01" className={`w-full rounded-md border border-lp-border bg-transparent py-2 pr-3 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 ${currencyInputPad}`} value={form.reconciled_merch ?? ''} onChange={(e) => setForm((f) => ({ ...f!, reconciled_merch: e.target.value ? parseFloat(e.target.value) : null }))} />
+                  </div>
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-lp-text">Reconciled Deductions</label>
+                  <div className="relative">
+                    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 font-mono text-xs text-lp-text-tertiary">{cc}</span>
+                    <input type="number" step="0.01" className={`w-full rounded-md border border-lp-border bg-transparent py-2 pr-3 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 ${currencyInputPad}`} value={form.reconciled_deductions ?? ''} onChange={(e) => setForm((f) => ({ ...f!, reconciled_deductions: e.target.value ? parseFloat(e.target.value) : null }))} />
+                  </div>
+                </div>
               </div>
               <div className="flex flex-wrap items-baseline gap-2">
                 <span className="text-sm font-medium text-lp-text">Reconciled Net (computed):</span>

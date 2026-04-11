@@ -58,7 +58,15 @@ export async function POST(request: Request) {
   const buffer = Buffer.from(await file.arrayBuffer());
   const { data, error } = await supabase.storage.from(BUCKET).upload(path, buffer, { contentType: file.type, upsert: true });
   if (error) {
-    if (error.message?.includes('Bucket not found')) return NextResponse.json({ error: 'Storage bucket not found' }, { status: 503 });
+    if (error.message?.includes('Bucket not found')) {
+      return NextResponse.json(
+        {
+          error:
+            'Storage bucket "budget-receipts" not found in Supabase. Create it in the Supabase dashboard.',
+        },
+        { status: 503 }
+      );
+    }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
   const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(data.path);
