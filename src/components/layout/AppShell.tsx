@@ -9,7 +9,7 @@
 
 import { Suspense, useState } from 'react';
 import { Sidebar } from '@/components/layout/Sidebar';
-import { Header } from '@/components/layout/Header';
+import { AppTopBar } from '@/components/layout/AppTopBar';
 import { ArtistTourScopeGuard } from '@/components/layout/ArtistTourScopeGuard';
 import { OverviewArtistQuerySync } from '@/components/layout/OverviewArtistQuerySync';
 export function AppShell({ children }: { children: React.ReactNode }) {
@@ -38,7 +38,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           background: 'var(--lp-dashboard-bg)',
         }}
       >
-        <Header onMenuClick={() => setMobileMenuOpen(!mobileMenuOpen)} />
+        <AppTopBar onMenuClick={() => setMobileMenuOpen(!mobileMenuOpen)} />
         <Suspense fallback={null}>
           <ArtistTourScopeGuard />
         </Suspense>

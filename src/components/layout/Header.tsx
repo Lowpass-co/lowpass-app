@@ -21,6 +21,10 @@ interface HeaderProps {
   onMenuClick?: () => void;
 }
 
+/**
+ * @deprecated Use `AppTopBar` from `./AppTopBar` instead.
+ * Scheduled for removal in PR A0.4.
+ */
 export function Header({ title, subtitle, onMenuClick }: HeaderProps) {
   const { selectedArtistId, hydrated } = useArtistTourContext();
   const compactNewTour = hydrated && !!selectedArtistId;

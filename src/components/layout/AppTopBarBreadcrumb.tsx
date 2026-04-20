@@ -1,8 +1,12 @@
 /* ============================================
-   LOWPASS — Header artist / tour context
+   LOWPASS — AppTopBar breadcrumb
 
-   Breadcrumb-style context; artist and tour
-   changes use small inline dropdowns.
+   Artist / Tour chooser for the top bar.
+
+   Behavior copy of HeaderArtistTourPicker;
+
+   that file is deprecated and deleted in PR A0.4.
+
    ============================================ */
 
 'use client';
@@ -12,11 +16,7 @@ import { useRouter } from 'next/navigation';
 import { useArtistTourContext } from '@/contexts/ArtistTourContext';
 import { cn } from '@/lib/utils';
 
-/**
- * @deprecated Use `AppTopBarBreadcrumb` from `./AppTopBarBreadcrumb` instead.
- * Scheduled for removal in PR A0.4.
- */
-export function HeaderArtistTourPicker() {
+export function AppTopBarBreadcrumb() {
   const router = useRouter();
   const {
     selectedArtistId,
