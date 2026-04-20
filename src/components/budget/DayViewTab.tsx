@@ -54,12 +54,14 @@ function dayNum(dateStr: string): string {
 }
 
 function dayTypeLabel(dayTypeRaw: string): string {
-  const t = (dayTypeRaw ?? '').split(',')[0]?.trim() || 'off';
+  const t = (dayTypeRaw ?? '').split(',')[0]?.trim() ?? '';
+  if (!t) return '—';
   return t.toUpperCase();
 }
 
 function dayDotClass(dayTypeRaw: string): string {
-  const t = (dayTypeRaw ?? '').split(',')[0]?.trim() || 'off';
+  const t = (dayTypeRaw ?? '').split(',')[0]?.trim() ?? '';
+  if (!t) return 'bg-lp-border/60';
   if (t === 'show' || t === 'festival') return 'bg-emerald-500';
   if (t === 'travel') return 'bg-blue-500';
   return 'bg-lp-text-tertiary';

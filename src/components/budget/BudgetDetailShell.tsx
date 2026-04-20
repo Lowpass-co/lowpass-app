@@ -7,7 +7,6 @@ import { Loader2 } from 'lucide-react';
 import { BudgetFolderTabsNav } from '@/components/budget/BudgetFolderTabsNav';
 import { BUDGET_CURRENCY_OPTIONS } from '@/lib/budget-currency';
 import { StyledSelect, type StyledSelectOption } from '@/components/ui/StyledSelect';
-import { IncomeGrid } from '@/components/spreadsheet-view/IncomeGrid';
 import { HotelsGrid } from '@/components/spreadsheet-view/HotelsGrid';
 import { FlightsGrid } from '@/components/spreadsheet-view/FlightsGrid';
 import { TransportGrid } from '@/components/spreadsheet-view/TransportGrid';
@@ -19,6 +18,10 @@ import type { TabId } from '@/components/budget/budget-tabs';
 const SummaryTab = dynamic(
   () => import('@/components/budget/SummaryTab').then((m) => ({ default: m.SummaryTab })),
   { ssr: false, loading: () => <TabLoading label="Summary" /> }
+);
+const IncomeTab = dynamic(
+  () => import('@/components/budget/IncomeTab').then((m) => ({ default: m.IncomeTab })),
+  { ssr: false, loading: () => <TabLoading label="Routing & Income" /> }
 );
 const SalariesTab = dynamic(
   () => import('@/components/budget/SalariesTab').then((m) => ({ default: m.SalariesTab })),
@@ -91,14 +94,14 @@ export function BudgetDetailShell({ tourId, activeTab }: { tourId: string; activ
       case 'summary':
         return <SummaryTab tourId={tourId} currency={currency} />;
       case 'income':
-        return <IncomeGrid {...sheet} />;
+        return <IncomeTab tourId={tourId} />;
       case 'salaries':
         return (
           <div className="space-y-3">
             <p className="text-[11px] text-lp-text-secondary">
               Day grid and rates use tour currency <span className="font-semibold text-lp-text">{currency}</span>.
             </p>
-            <SalariesTab tourId={tourId} />
+            <SalariesTab tourId={tourId} currency={currency} />
           </div>
         );
       case 'hotels':
@@ -166,7 +169,15 @@ export function BudgetDetailShell({ tourId, activeTab }: { tourId: string; activ
         <BudgetFolderTabsNav tourId={tourId} activeTab={activeTab} />
       </div>
 
-      <div className="lp-budget min-h-0 flex-1 overflow-auto px-4 py-4 sm:px-6 sm:py-5">{main()}</div>
+      <div
+        className={
+          activeTab === 'income'
+            ? 'lp-budget flex min-h-0 flex-1 flex-col overflow-hidden px-4 py-4 sm:px-6 sm:py-5'
+            : 'lp-budget min-h-0 flex-1 overflow-auto px-4 py-4 sm:px-6 sm:py-5'
+        }
+      >
+        {main()}
+      </div>
     </div>
   );
 }

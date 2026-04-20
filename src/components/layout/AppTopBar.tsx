@@ -11,18 +11,19 @@
 
 import { Suspense } from 'react';
 import Link from 'next/link';
-import { Bell, Menu, Plus } from 'lucide-react';
+import { ArrowLeft, Bell, Menu, Plus } from 'lucide-react';
 import { DarkModeToggle } from './DarkModeToggle';
 import { AppTopBarBreadcrumb } from './AppTopBarBreadcrumb';
-import { AppTopBarModePill } from './AppTopBarModePill';
 import { useArtistTourContext } from '@/contexts/ArtistTourContext';
 import { cn } from '@/lib/utils';
+import { useRouter } from 'next/navigation';
 
 interface AppTopBarProps {
   onMenuClick?: () => void;
 }
 
 export function AppTopBar({ onMenuClick }: AppTopBarProps) {
+  const router = useRouter();
   const { selectedArtistId, hydrated } = useArtistTourContext();
   const compactNewTour = hydrated && !!selectedArtistId;
 
@@ -66,13 +67,16 @@ export function AppTopBar({ onMenuClick }: AppTopBarProps) {
           <AppTopBarBreadcrumb />
         </Suspense>
 
-        {/* Mode pill (centered on wider screens) */}
-        <div className="ml-auto hidden shrink-0 md:block">
-          <AppTopBarModePill />
-        </div>
-
         {/* Right actions */}
-        <div className="flex shrink-0 items-center gap-1">
+        <div className="ml-auto flex shrink-0 items-center gap-1">
+          <button
+            type="button"
+            onClick={() => router.back()}
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-lp-text-secondary hover:bg-lp-bg-tertiary hover:text-lp-text transition-colors"
+            aria-label="Go back"
+          >
+            <ArrowLeft size={18} />
+          </button>
           <button
             type="button"
             className="relative flex h-9 w-9 items-center justify-center rounded-lg text-lp-text-secondary hover:bg-lp-bg-tertiary hover:text-lp-text transition-colors"
@@ -85,10 +89,6 @@ export function AppTopBar({ onMenuClick }: AppTopBarProps) {
         </div>
       </div>
 
-      {/* Mobile: pill below on narrow screens */}
-      <div className="md:hidden -mt-1 pb-2 flex justify-center">
-        <AppTopBarModePill />
-      </div>
     </header>
   );
 }

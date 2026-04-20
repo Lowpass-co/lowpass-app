@@ -7,8 +7,6 @@ import { cn } from '@/lib/utils';
 import { getDayTypeColor, parseRoutingDate, firstDayType } from '@/lib/utils';
 import { RoutingGrid, type RoutingRow, type TransportToNext } from '@/components/routing/RoutingGrid';
 import type { PrimaryTransit } from '@/components/routing/RoutingMap';
-import { BUDGET_FOLDER_STICKY_STACK_TOP } from '@/components/budget/BudgetFolderTabsNav';
-
 const BudgetRoutingMap = dynamic(
   () => import('./BudgetRoutingMap').then((m) => ({ default: m.BudgetRoutingMap })),
   {
@@ -78,7 +76,7 @@ function reconcileRowsToRange(existing: RoutingRow[], startStr: string, endStr: 
     if (prev) return { ...prev, date };
     return {
       date,
-      day_type: 'off',
+      day_type: '',
       city: '',
       address: '',
       venue_name: '',
@@ -91,6 +89,14 @@ function reconcileRowsToRange(existing: RoutingRow[], startStr: string, endStr: 
 function countRowsRemovedByShrink(existing: RoutingRow[], startStr: string, endStr: string): number {
   const allowed = new Set(enumerateTourDates(startStr, endStr));
   return existing.filter((r) => !allowed.has(r.date)).length;
+}
+
+/** True when at least one calendar day in [start,end] has no routing row from the API yet. */
+function routingNeedsBackfillForTourRange(rows: RoutingRow[], startStr: string, endStr: string): boolean {
+  const expected = enumerateTourDates(startStr, endStr);
+  if (expected.length === 0) return false;
+  const byDate = new Map(rows.map((r) => [r.date, true]));
+  return expected.some((d) => !byDate.has(d));
 }
 
 const PRIMARY_TRANSIT_OPTIONS_UNSORTED: { value: PrimaryTransit; label: string }[] = [
@@ -329,26 +335,28 @@ export function IncomeTab({ tourId }: { tourId: string }) {
   routingRowsRef.current = routingRows;
 
   const postRoutingPayload = useCallback(
-    async (rows: RoutingRow[]) => {
+    async (rows: RoutingRow[], opts?: { keepalive?: boolean }) => {
+      const body = JSON.stringify({
+        dates: rows.map((r) => ({
+          date: r.date,
+          day_type: r.day_type ?? '',
+          city: r.city ?? '',
+          address: r.address ?? '',
+          venue_name: r.venue_name ?? '',
+          notes: r.notes ?? '',
+          latitude: r.latitude ?? null,
+          longitude: r.longitude ?? null,
+          transport_to_next: r.transport_to_next ?? 'default',
+          venue_website: r.venue_website ?? null,
+          venue_phone: r.venue_phone ?? null,
+          venue_capacity: r.venue_capacity ?? null,
+        })),
+      });
       const res = await fetch(`/api/tours/${tourId}/routing`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          dates: rows.map((r) => ({
-            date: r.date,
-            day_type: r.day_type ?? '',
-            city: r.city ?? '',
-            address: r.address ?? '',
-            venue_name: r.venue_name ?? '',
-            notes: r.notes ?? '',
-            latitude: r.latitude ?? null,
-            longitude: r.longitude ?? null,
-            transport_to_next: r.transport_to_next ?? 'default',
-            venue_website: r.venue_website ?? null,
-            venue_phone: r.venue_phone ?? null,
-            venue_capacity: r.venue_capacity ?? null,
-          })),
-        }),
+        body,
+        keepalive: opts?.keepalive === true,
       });
       if (!res.ok) throw new Error('Failed to save routing');
     },
@@ -371,13 +379,13 @@ export function IncomeTab({ tourId }: { tourId: string }) {
       setRoutingOnly(data.routing_only ?? []);
       const routeJson = routeRes.ok ? await routeRes.json() : [];
       const mapped = mapApiRoutesToGridRows(Array.isArray(routeJson) ? routeJson : []);
-      setRoutingRows(mapped);
-      routingSnapshotRef.current = JSON.stringify(mapped);
 
+      let s = '';
+      let e = '';
       if (tourRes.ok) {
         const tour = await tourRes.json();
-        const s = tour?.start_date != null ? String(tour.start_date).slice(0, 10) : '';
-        const e = tour?.end_date != null ? String(tour.end_date).slice(0, 10) : '';
+        s = tour?.start_date != null ? String(tour.start_date).slice(0, 10) : '';
+        e = tour?.end_date != null ? String(tour.end_date).slice(0, 10) : '';
         if (s && e) {
           const td = { start: s, end: e };
           setTourDates(td);
@@ -390,12 +398,39 @@ export function IncomeTab({ tourId }: { tourId: string }) {
         setTourDates(null);
         committedTourDatesRef.current = null;
       }
+
+      // One row per tour day so Routing + Income can edit; DB may be empty or partial until we sync.
+      const reconciled =
+        s && e ? reconcileRowsToRange(mapped, s, e) : mapped;
+
+      if (s && e && routingNeedsBackfillForTourRange(mapped, s, e)) {
+        try {
+          await postRoutingPayload(reconciled);
+          const routeRes2 = await fetch(`/api/tours/${tourId}/routing`);
+          const routeJson2 = routeRes2.ok ? await routeRes2.json() : [];
+          const mapped2 = mapApiRoutesToGridRows(Array.isArray(routeJson2) ? routeJson2 : []);
+          const synced = reconcileRowsToRange(mapped2, s, e);
+          setRoutingRows(synced);
+          routingSnapshotRef.current = JSON.stringify(synced);
+          const incRes2 = await fetch(`/api/budget/income?tour_id=${tourId}`);
+          const data2 = incRes2.ok ? await incRes2.json() : { income: [], routing_only: [] };
+          setIncomeRows(data2.income ?? []);
+          setRoutingOnly(data2.routing_only ?? []);
+        } catch {
+          setRoutingRows(reconciled);
+          routingSnapshotRef.current = JSON.stringify(reconciled);
+          setError('Could not create routing days for this tour. Check tour dates and try again.');
+        }
+      } else {
+        setRoutingRows(reconciled);
+        routingSnapshotRef.current = JSON.stringify(reconciled);
+      }
     } catch (err) {
       setError((err as Error)?.message ?? 'Failed to load income');
     } finally {
       if (!silent) setLoading(false);
     }
-  }, [tourId]);
+  }, [tourId, postRoutingPayload]);
 
   useEffect(() => {
     void load();
@@ -462,7 +497,10 @@ export function IncomeTab({ tourId }: { tourId: string }) {
   allRowsRef.current = allRows;
   const incomeDebounceRef = useRef<Record<string, number>>({});
 
-  /** Debounced autosave of routing grid; flush when leaving routing sub-tab or unmount if dirty */
+  const ROUTING_AUTOSAVE_MS = 400;
+  const INCOME_AUTOSAVE_MS = 350;
+
+  /** Debounced autosave of routing grid */
   useEffect(() => {
     if (routingSnapshotRef.current === null) return;
     const snap = JSON.stringify(routingRows);
@@ -481,20 +519,37 @@ export function IncomeTab({ tourId }: { tourId: string }) {
           setError('Failed to save routing');
         }
       })();
-    }, 700);
+    }, ROUTING_AUTOSAVE_MS);
 
     return () => window.clearTimeout(tid);
-  }, [routingRows, postRoutingPayload, load]);
+  }, [routingRows, postRoutingPayload]);
 
+  /** Flush dirty routing on tab unmount / full page hide (back button) so fetch can finish */
   useEffect(() => {
-    return () => {
+    const flushRouting = (keepalive: boolean) => {
       const snap = JSON.stringify(routingRowsRef.current);
       if (routingSnapshotRef.current !== null && snap !== routingSnapshotRef.current) {
-        void postRoutingPayload(routingRowsRef.current).catch(() => {});
+        void postRoutingPayload(routingRowsRef.current, keepalive ? { keepalive: true } : undefined)
+          .then(() => {
+            routingSnapshotRef.current = JSON.stringify(routingRowsRef.current);
+          })
+          .catch(() => {});
       }
+    };
+
+    const onPageHide = (e: PageTransitionEvent) => {
+      if (e.persisted) return;
+      flushRouting(true);
+    };
+
+    window.addEventListener('pagehide', onPageHide);
+    return () => {
+      window.removeEventListener('pagehide', onPageHide);
+      flushRouting(true);
     };
   }, [postRoutingPayload]);
 
+  /** Leaving Routing sub-tab → persist routing immediately */
   useEffect(() => {
     if (activeSubTab !== 'routing') {
       const snap = JSON.stringify(routingRowsRef.current);
@@ -504,20 +559,19 @@ export function IncomeTab({ tourId }: { tourId: string }) {
             await postRoutingPayload(routingRowsRef.current);
             routingSnapshotRef.current = JSON.stringify(routingRowsRef.current);
           } catch {
-            /* debounce effect will retry or user returns to routing */
+            /* user can return to Routing to retry */
           }
         })();
       }
     }
-  }, [activeSubTab, postRoutingPayload, load]);
+  }, [activeSubTab, postRoutingPayload]);
 
   const handleFieldChange = (routingId: string, field: keyof IncomeRow, value: number | string | null) => {
     setLocalEdits((prev) => ({ ...prev, [routingId]: { ...prev[routingId], [field]: value } }));
   };
 
-  const saveRow = useCallback((row: FullRow) => {
-    setSavingId(row.routing_id);
-    fetch('/api/budget/income', {
+  const persistIncomeRow = useCallback(async (row: FullRow) => {
+    const res = await fetch('/api/budget/income', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -530,8 +584,14 @@ export function IncomeTab({ tourId }: { tourId: string }) {
         drop_count: row.drop_count,
         notes: row.notes,
       }),
-    })
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error('Save failed'))))
+    });
+    if (!res.ok) throw new Error('Save failed');
+    return (await res.json()) as IncomeRow;
+  }, []);
+
+  const saveRow = useCallback((row: FullRow) => {
+    setSavingId(row.routing_id);
+    persistIncomeRow(row)
       .then((saved) => {
         setLocalEdits((prev) => {
           const next = { ...prev };
@@ -556,7 +616,7 @@ export function IncomeTab({ tourId }: { tourId: string }) {
       })
       .catch(() => setError('Failed to save'))
       .finally(() => setSavingId(null));
-  }, []);
+  }, [persistIncomeRow]);
 
   const scheduleIncomeSave = useCallback(
     (routingId: string) => {
@@ -565,7 +625,7 @@ export function IncomeTab({ tourId }: { tourId: string }) {
         const row = allRowsRef.current.find((r) => r.routing_id === routingId);
         if (row) saveRow(row);
         delete incomeDebounceRef.current[routingId];
-      }, 600);
+      }, INCOME_AUTOSAVE_MS);
     },
     [saveRow]
   );
@@ -579,11 +639,32 @@ export function IncomeTab({ tourId }: { tourId: string }) {
     [saveRow]
   );
 
+  /** Leaving Income sub-tab → flush debounced cell saves while still mounted */
+  useEffect(() => {
+    if (activeSubTab === 'income') return;
+    const pending = Object.keys(incomeDebounceRef.current);
+    for (const routingId of pending) {
+      window.clearTimeout(incomeDebounceRef.current[routingId]);
+      delete incomeDebounceRef.current[routingId];
+      const row = allRowsRef.current.find((r) => r.routing_id === routingId);
+      if (row) saveRow(row);
+    }
+  }, [activeSubTab, saveRow]);
+
+  /** Unmount / leave budget tab: persist pending income without relying on timers (no setState after unmount) */
   useEffect(() => {
     return () => {
-      Object.values(incomeDebounceRef.current).forEach((t) => window.clearTimeout(t));
+      const pending = Object.keys(incomeDebounceRef.current);
+      for (const routingId of pending) {
+        window.clearTimeout(incomeDebounceRef.current[routingId]);
+        delete incomeDebounceRef.current[routingId];
+      }
+      for (const routingId of pending) {
+        const row = allRowsRef.current.find((r) => r.routing_id === routingId);
+        if (row) void persistIncomeRow(row).catch(() => {});
+      }
     };
-  }, []);
+  }, [persistIncomeRow]);
 
   const applyTourDateRange = useCallback(
     async (nextDates: { start: string; end: string }, reconciled: RoutingRow[]) => {
@@ -665,7 +746,7 @@ export function IncomeTab({ tourId }: { tourId: string }) {
   }
 
   return (
-    <div className="space-y-7">
+    <div className="flex h-full min-h-0 w-full min-w-0 flex-1 flex-col">
       {rangeShrinkModal && (
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4"
@@ -709,46 +790,12 @@ export function IncomeTab({ tourId }: { tourId: string }) {
         </div>
       )}
 
-      {/* Second sticky row: full-bleed dashboard bg so scroll content stays beneath (z below folder header z-30) */}
+      {/* Fixed below budget folder tabs — does not scroll; map/grid/table scroll underneath */}
       <div
-        className="sticky z-[28] -mx-8 px-8 py-2 pb-3"
-        style={{ top: BUDGET_FOLDER_STICKY_STACK_TOP, background: 'var(--lp-dashboard-bg)' }}
+        className="shrink-0 space-y-4 border-b border-lp-border/70 pb-3 pt-1"
+        style={{ background: 'var(--lp-dashboard-bg)' }}
       >
-        <div className="relative flex flex-wrap items-center gap-3">
-          <div className="flex w-fit items-center gap-5 border-b border-lp-border/50">
-            <button
-              type="button"
-              onClick={() => setActiveSubTab('routing')}
-              className={cn(
-                '-mb-px border-b-2 pb-2 text-xs font-semibold uppercase tracking-wide transition-colors',
-                activeSubTab === 'routing'
-                  ? 'border-lp-orange text-lp-text'
-                  : 'border-transparent text-lp-text-secondary hover:text-lp-text'
-              )}
-            >
-              Routing
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveSubTab('income')}
-              className={cn(
-                '-mb-px border-b-2 pb-2 text-xs font-semibold uppercase tracking-wide transition-colors',
-                activeSubTab === 'income'
-                  ? 'border-lp-orange text-lp-text'
-                  : 'border-transparent text-lp-text-secondary hover:text-lp-text'
-              )}
-            >
-              Income
-            </button>
-          </div>
-          {activeSubTab === 'routing' && routingAutosaveState === 'error' && (
-            <div className="ml-auto text-xs font-medium text-red-500">Routing save failed</div>
-          )}
-        </div>
-      </div>
-
-      {activeSubTab === 'routing' && (
-        <>
+        {activeSubTab === 'routing' && (
           <div className="flex flex-wrap items-end gap-4">
             <div className="flex flex-wrap gap-4">
               <label className="flex flex-col gap-1">
@@ -791,12 +838,49 @@ export function IncomeTab({ tourId }: { tourId: string }) {
               </select>
             </label>
           </div>
+        )}
 
+        <div className="relative flex flex-wrap items-center gap-3">
+          <div className="flex w-fit items-center gap-5 border-b border-lp-border/50">
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('routing')}
+              className={cn(
+                '-mb-px border-b-2 pb-2 text-xs font-semibold uppercase tracking-wide transition-colors',
+                activeSubTab === 'routing'
+                  ? 'border-lp-orange text-lp-text'
+                  : 'border-transparent text-lp-text-secondary hover:text-lp-text'
+              )}
+            >
+              Routing
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('income')}
+              className={cn(
+                '-mb-px border-b-2 pb-2 text-xs font-semibold uppercase tracking-wide transition-colors',
+                activeSubTab === 'income'
+                  ? 'border-lp-orange text-lp-text'
+                  : 'border-transparent text-lp-text-secondary hover:text-lp-text'
+              )}
+            >
+              Income
+            </button>
+          </div>
+          {activeSubTab === 'routing' && routingAutosaveState === 'error' && (
+            <div className="ml-auto text-xs font-medium text-red-500">Routing save failed</div>
+          )}
+        </div>
+      </div>
+
+      <div className="min-h-0 flex-1 space-y-7 overflow-y-auto overscroll-y-contain py-2">
+      {activeSubTab === 'routing' && (
+        <>
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(260px,300px)_1fr] lg:items-stretch lg:gap-6 lg:h-[280px]">
             <div className="relative z-0 flex min-h-[220px] flex-col overflow-y-auto rounded-xl border border-lp-border bg-lp-surface p-3 shadow-sm lg:min-h-0 lg:h-full">
               <RoutingMiniCalendar routingRows={calRows} />
             </div>
-            <div className="relative z-0 min-h-[220px] min-w-0 overflow-hidden rounded-xl border border-lp-border bg-lp-surface shadow-sm lg:min-h-0 lg:h-full">
+            <div className="relative z-0 flex min-h-[220px] min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-lp-border bg-lp-surface shadow-sm lg:min-h-0 lg:h-full">
               <BudgetRoutingMap rows={calRows} />
             </div>
           </div>
@@ -1095,6 +1179,7 @@ export function IncomeTab({ tourId }: { tourId: string }) {
           Saving…
         </div>
       )}
+      </div>
     </div>
   );
 }

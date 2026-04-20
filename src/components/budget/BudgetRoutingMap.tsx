@@ -23,10 +23,41 @@ function FitBounds({ points }: { points: [number, number][] }) {
     hasFitted.current = true;
     if (points.length === 1) {
       map.setView(points[0], 8);
-      return;
+    } else {
+      map.fitBounds(L.latLngBounds(points), { padding: [40, 40], maxZoom: 10 });
     }
-    map.fitBounds(L.latLngBounds(points), { padding: [40, 40], maxZoom: 10 });
+    requestAnimationFrame(() => map.invalidateSize({ animate: false }));
   }, [map, points]);
+  return null;
+}
+
+/**
+ * Leaflet computes tile positions from container size. In flex/grid layouts the map often mounts
+ * before the final height exists — tiles then stay misaligned until invalidateSize runs.
+ */
+function MapLayoutSync({ revision }: { revision: string }) {
+  const map = useMap();
+  useEffect(() => {
+    const run = () => {
+      map.invalidateSize({ animate: false });
+    };
+    const el = map.getContainer();
+    const raf = requestAnimationFrame(run);
+    const t1 = window.setTimeout(run, 0);
+    const t2 = window.setTimeout(run, 120);
+    const t3 = window.setTimeout(run, 400);
+    const ro = new ResizeObserver(() => run());
+    ro.observe(el);
+    window.addEventListener('resize', run);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+      window.clearTimeout(t3);
+      ro.disconnect();
+      window.removeEventListener('resize', run);
+    };
+  }, [map, revision]);
   return null;
 }
 
@@ -102,8 +133,10 @@ export function BudgetRoutingMap({ rows }: { rows: MapRow[] }) {
     ? boundsPoints[Math.floor(boundsPoints.length / 2)]
     : [20, 0];
 
+  const layoutRevision = `${colorSchemeDark ? 'd' : 'l'}-${boundsPoints.length}-${center[0]}-${center[1]}`;
+
   return (
-    <div className="lp-budget-routing-map relative isolate z-0 h-full w-full overflow-hidden rounded-xl">
+    <div className="lp-budget-routing-map relative z-0 flex h-full min-h-[200px] w-full flex-col overflow-hidden rounded-xl">
       <style>{`
         .lp-budget-route {
           animation: lp-dash-move 25s linear infinite;
@@ -135,30 +168,33 @@ export function BudgetRoutingMap({ rows }: { rows: MapRow[] }) {
         }
       `}</style>
 
+      {/* pointer-events-none so pan/zoom/drag still reach Leaflet when there are no plotted venues yet */}
       {boundsPoints.length === 0 && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center">
-          <p className="text-lp-text-tertiary text-sm text-center px-6">
-            No venue locations — add venues with addresses to your routing dates.
+        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center">
+          <p className="max-w-sm rounded-lg bg-lp-surface/90 px-4 py-2 text-center text-sm text-lp-text-secondary shadow-sm">
+            No venue locations yet — add venues or addresses to routing rows to plot markers. You can still
+            pan and zoom the map.
           </p>
         </div>
       )}
 
       <MapContainer
+        key={colorSchemeDark ? 'map-dark' : 'map-light'}
         center={center}
         zoom={3}
-        className="h-full w-full"
-        style={{ height: '100%' }}
+        className="min-h-0 flex-1 [&_.leaflet-container]:h-full [&_.leaflet-container]:min-h-[200px] [&_.leaflet-container]:w-full"
+        style={{ height: '100%', minHeight: 200 }}
         zoomControl={true}
         scrollWheelZoom={true}
         dragging={true}
         attributionControl={false}
       >
+        <MapLayoutSync revision={layoutRevision} />
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; CARTO'
           url={colorSchemeDark ? TILE_DARK : TILE_LIGHT}
           maxZoom={19}
           maxNativeZoom={19}
-          className={colorSchemeDark ? 'brightness-[1.02] contrast-[1.05]' : 'contrast-[1.03] saturate-[1.02]'}
         />
         {boundsPoints.length > 0 && <FitBounds points={boundsPoints} />}
 

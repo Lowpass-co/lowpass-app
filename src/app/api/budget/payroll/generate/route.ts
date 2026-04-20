@@ -25,7 +25,8 @@ function getWeekStart(dateStr: string): string {
 
 /** Map routing day_type to payroll day_status */
 function dayTypeToStatus(dayType: RoutingDayType): DayStatus {
-  const t = (dayType ?? '').toLowerCase();
+  const t = (dayType ?? '').toLowerCase().trim();
+  if (!t) return 'no_tour';
   if (t === 'show' || t === 'festival') return 'show';
   if (t === 'rehearsal') return 'rehearsal';
   if (['off', 'travel', 'press', 'radio', 'tv'].includes(t)) return 'off_travel';
@@ -151,7 +152,7 @@ export async function POST(request: Request) {
   for (const r of routingRows ?? []) {
     const dateStr = typeof r.date === 'string' ? r.date.slice(0, 10) : '';
     if (dateStr) {
-      routingByDate.set(dateStr, { day_type: (r.day_type as string) ?? 'show' });
+      routingByDate.set(dateStr, { day_type: String((r as { day_type?: string }).day_type ?? '').trim() });
       weekStarts.add(getWeekStart(dateStr));
     }
   }

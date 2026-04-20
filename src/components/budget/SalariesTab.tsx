@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { budgetCurrencySymbol } from '@/lib/budget-currency';
 
 type DayStatus = 'show' | 'off_travel' | 'rehearsal' | 'no_tour';
 
@@ -74,11 +75,20 @@ function suggestedAdvanceFee(
 
 export function SalariesTab({
   tourId,
+  currency = 'GBP',
   showCommission = false,
 }: {
   tourId: string;
+  /** Tour currency from budget shell (matches header selector). */
+  currency?: string;
   showCommission?: boolean;
 }) {
+  const tourCurrency = useMemo(
+    () => (currency?.trim() ? currency.trim().toUpperCase() : 'GBP'),
+    [currency]
+  );
+  const currencySymbol = useMemo(() => budgetCurrencySymbol(tourCurrency), [tourCurrency]);
+
   const [loading, setLoading] = useState(true);
   const [personnel, setPersonnel] = useState<PersonnelRate[]>([]);
   const [payrollEntries, setPayrollEntries] = useState<PayrollEntry[]>([]);
@@ -463,14 +473,14 @@ export function SalariesTab({
             <div className="flex items-center justify-between text-[13px]">
               <span className="font-medium text-lp-text-tertiary">Total Salaries</span>
               <span className="font-mono tabular-nums tracking-wide text-lp-text">
-                <span className="mr-1 text-lp-text-secondary">$</span>
+                <span className="mr-1 text-lp-text-secondary">{currencySymbol}</span>
                 {totalSalaries.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
             </div>
             <div className="flex items-center justify-between text-[13px]">
               <span className="font-medium text-lp-text-tertiary">Total Per Diem</span>
               <span className="font-mono tabular-nums tracking-wide text-lp-text">
-                <span className="mr-1 text-lp-text-secondary">$</span>
+                <span className="mr-1 text-lp-text-secondary">{currencySymbol}</span>
                 {totalPerDiemSum.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
             </div>
@@ -478,7 +488,7 @@ export function SalariesTab({
             <div className="flex items-center justify-between text-[15px]">
               <span className="font-bold text-lp-text">Total (Salaries + Per Diem)</span>
               <span className="font-mono font-bold tabular-nums tracking-wide text-lp-orange">
-                <span className="mr-1 text-lp-orange/60">$</span>
+                <span className="mr-1 text-lp-orange/60">{currencySymbol}</span>
                 {(totalSalaries + totalPerDiemSum).toLocaleString('en-GB', {
                   minimumFractionDigits: 2,
                   maximumFractionDigits: 2,
