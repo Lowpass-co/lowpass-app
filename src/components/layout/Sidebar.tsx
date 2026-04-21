@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useArtistTourContext } from '@/contexts/ArtistTourContext';
-import { cn, toTitleCase } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 
 interface NavItem {
   label: string;
@@ -141,7 +141,7 @@ export function Sidebar() {
   }, [user?.id]);
 
   const rawName = profile?.name ?? user?.user_metadata?.name ?? user?.email ?? lastDisplay.current.name;
-  const displayName = toTitleCase(rawName) || (user?.email ?? lastDisplay.current.email).split('@')[0] || '…';
+  const displayName = (typeof rawName === 'string' ? rawName.trim() : '') || (user?.email ?? lastDisplay.current.email).split('@')[0] || '…';
   const displayEmail = profile?.email ?? user?.email ?? lastDisplay.current.email;
   const avatarUrl = profile?.avatar_url ?? null;
   const jobTitle = profile?.job_title ?? null;
