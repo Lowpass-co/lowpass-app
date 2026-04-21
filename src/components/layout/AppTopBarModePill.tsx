@@ -5,9 +5,8 @@
 
    [Advance | Budget] pill slider.
 
-   Persists active pill to 'lp-sidebar-mode' localStorage
-
-   (shared key with Sidebar — rename deferred to A0.4).
+   Persists active pill to 'lp-workspace-mode' localStorage
+   (legacy 'lp-sidebar-mode' key is migrated on mount — see LEGACY_MODE_KEY).
 
    ============================================ */
 
@@ -18,7 +17,10 @@ import { cn } from '@/lib/utils';
 
 type Mode = 'advance' | 'budget';
 
-const MODE_KEY = 'lp-sidebar-mode';
+const MODE_KEY = 'lp-workspace-mode';
+// Legacy key from pre-A0.4. Kept as a literal so future localStorage audits
+// can find every key by plain grep.
+const LEGACY_MODE_KEY = 'lp-sidebar-mode';
 
 function resolveModeFromPath(pathname: string | null): Mode | null {
   if (!pathname) return null;
@@ -27,19 +29,36 @@ function resolveModeFromPath(pathname: string | null): Mode | null {
   return null;
 }
 
+function readInitialMode(): Mode {
+  if (typeof window === 'undefined') return 'advance';
+  const fromPath = resolveModeFromPath(window.location.pathname);
+  if (fromPath) return fromPath;
+  const stored = window.localStorage.getItem(MODE_KEY);
+  if (stored === 'budget' || stored === 'advance') return stored;
+  const legacy = window.localStorage.getItem(LEGACY_MODE_KEY);
+  if (legacy === 'budget' || legacy === 'advance') return legacy;
+  return 'advance';
+}
+
 export function AppTopBarModePill() {
   const router = useRouter();
   const pathname = usePathname();
   const { selectedTourId, selectedArtistId, hydrated } = useArtistTourContext();
 
-  // Initial mode: url wins > localStorage > default 'advance'
-  const [mode, setMode] = useState<Mode>(() => {
-    if (typeof window === 'undefined') return 'advance';
-    const fromPath = resolveModeFromPath(window.location.pathname);
-    if (fromPath) return fromPath;
-    const stored = window.localStorage.getItem(MODE_KEY);
-    return stored === 'budget' ? 'budget' : 'advance';
-  });
+  const [mode, setMode] = useState<Mode>(readInitialMode);
+
+  // One-shot migration: read legacy key, copy to new key if new key is empty,
+  // then delete the legacy entry so it can't drift.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const legacy = window.localStorage.getItem(LEGACY_MODE_KEY);
+    if (legacy == null) return;
+    const current = window.localStorage.getItem(MODE_KEY);
+    if (current == null && (legacy === 'advance' || legacy === 'budget')) {
+      window.localStorage.setItem(MODE_KEY, legacy);
+    }
+    window.localStorage.removeItem(LEGACY_MODE_KEY);
+  }, []);
 
   // Keep mode in sync with URL changes (covers sidebar clicks etc.)
   useEffect(() => {
@@ -90,7 +109,6 @@ export function AppTopBarModePill() {
         type="button"
         role="tab"
         aria-selected={mode === 'advance'}
-        aria-pressed={mode === 'advance'}
         onClick={() => go('advance')}
         className={cn(
           'relative z-10 flex-1 rounded-full px-3 py-1.5 text-xs font-semibold tracking-wide transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-lp-orange focus-visible:ring-offset-2 focus-visible:ring-offset-lp-bg',
@@ -103,7 +121,6 @@ export function AppTopBarModePill() {
         type="button"
         role="tab"
         aria-selected={mode === 'budget'}
-        aria-pressed={mode === 'budget'}
         onClick={() => go('budget')}
         className={cn(
           'relative z-10 flex-1 rounded-full px-3 py-1.5 text-xs font-semibold tracking-wide transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-lp-orange focus-visible:ring-offset-2 focus-visible:ring-offset-lp-bg',
