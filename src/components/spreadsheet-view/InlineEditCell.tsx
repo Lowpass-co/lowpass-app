@@ -171,7 +171,7 @@ export function InlineEditCell({
       <span
         className={cn(
           'inline-flex min-h-[2.75rem] min-w-0 max-w-full items-center gap-1 px-3 py-2 font-sans text-sm leading-normal text-lp-text-secondary',
-          align === 'right' && 'w-full justify-end font-[tabular-nums]',
+          align === 'right' && 'w-full justify-end tabular-nums',
           className
         )}
       >
@@ -187,7 +187,7 @@ export function InlineEditCell({
 
   if (editing) {
     const inputClass =
-      'lp-budget min-h-[2.75rem] w-full border border-lp-orange/35 bg-lp-surface px-3 py-2 font-sans text-sm leading-normal outline-none font-[tabular-nums] focus:border-lp-orange/50 focus:ring-1 focus:ring-lp-orange/15';
+      'lp-budget min-h-[2.75rem] w-full border border-lp-orange/35 bg-lp-surface px-3 py-2 font-sans text-sm leading-normal outline-none tabular-nums focus:border-lp-orange/50 focus:ring-1 focus:ring-lp-orange/15';
     return (
       <span className={cn('block min-w-0', className)}>
         {type === 'select' ? (
@@ -237,7 +237,7 @@ export function InlineEditCell({
       }}
       className={cn(
         'inline-flex min-h-[2.75rem] min-w-0 w-full cursor-pointer items-center gap-1 px-3 py-2 text-left font-sans text-sm leading-normal transition-colors',
-        align === 'right' && 'justify-end font-[tabular-nums]',
+        align === 'right' && 'justify-end tabular-nums',
         saving && 'opacity-70',
         error && 'bg-red-500/20 animate-pulse',
         !error && 'hover:bg-lp-orange/[0.04]',

@@ -114,9 +114,9 @@ export function PayrollSummary({
       footer={
         <>
           <td colSpan={8} className="px-2 py-2 font-bold text-lp-text">TOTALS</td>
-          <td className="px-2 py-2 text-right font-[tabular-nums]">{formatter.format(totals.totalFee)}</td>
+          <td className="px-2 py-2 text-right tabular-nums">{formatter.format(totals.totalFee)}</td>
           <td className="px-2 py-2" />
-          <td className="px-2 py-2 text-right font-[tabular-nums]">{formatter.format(totals.totalPerDiem)}</td>
+          <td className="px-2 py-2 text-right tabular-nums">{formatter.format(totals.totalPerDiem)}</td>
         </>
       }
     >
@@ -140,11 +140,11 @@ export function PayrollSummary({
             <td className="px-2 py-0">
               <InlineEditCell value={r.perDiemRate} type="currency" currency={currency} onSave={(v) => saveRate(r.id, 'per_diem', v)} align="right" />
             </td>
-            <td className="px-2 py-1 text-sm text-lp-text-secondary text-right font-[tabular-nums]">{r.showDays}</td>
-            <td className="px-2 py-1 text-sm text-lp-text-secondary text-right font-[tabular-nums]">{r.offTravelDays}</td>
-            <td className="px-2 py-1 text-sm text-right font-[tabular-nums]">{formatter.format(r.totalFee)}</td>
-            <td className="px-2 py-1 text-sm text-lp-text-secondary text-right font-[tabular-nums]">{formatter.format(r.perDiemRate)}</td>
-            <td className="px-2 py-1 text-sm text-right font-[tabular-nums]">{formatter.format(r.totalPerDiem)}</td>
+            <td className="px-2 py-1 text-sm text-lp-text-secondary text-right tabular-nums">{r.showDays}</td>
+            <td className="px-2 py-1 text-sm text-lp-text-secondary text-right tabular-nums">{r.offTravelDays}</td>
+            <td className="px-2 py-1 text-sm text-right tabular-nums">{formatter.format(r.totalFee)}</td>
+            <td className="px-2 py-1 text-sm text-lp-text-secondary text-right tabular-nums">{formatter.format(r.perDiemRate)}</td>
+            <td className="px-2 py-1 text-sm text-right tabular-nums">{formatter.format(r.totalPerDiem)}</td>
           </tr>
       ))}
     </GridTable>

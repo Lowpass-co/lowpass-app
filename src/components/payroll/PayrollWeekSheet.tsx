@@ -255,8 +255,8 @@ export function PayrollWeekSheet({
                     align="right"
                   />
                 </td>
-                <td className="border-b border-lp-border/30 px-2 py-1 text-right font-[tabular-nums]">{formatter.format(totalFee)}</td>
-                <td className="border-b border-lp-border/30 px-2 py-1 text-right font-[tabular-nums]">{formatter.format(totalPD)}</td>
+                <td className="border-b border-lp-border/30 px-2 py-1 text-right tabular-nums">{formatter.format(totalFee)}</td>
+                <td className="border-b border-lp-border/30 px-2 py-1 text-right tabular-nums">{formatter.format(totalPD)}</td>
                 <td className="border-b border-lp-border/30 px-2 py-1 text-lp-text-secondary">—</td>
               </tr>
             );
