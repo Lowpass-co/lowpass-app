@@ -16,6 +16,7 @@
     "@supabase/supabase-js": "^2.98.0",
     "clsx": "^2.1.1",
     "decimal.js": "^10.6.0",
+    "googleapis": "^171.4.0",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.577.0",
     "next": "16.1.6",
@@ -27,10 +28,10 @@
     "xlsx": "^0.18.5"
   },
   "optionalDependencies": {
-    "lightningcss-linux-x64-gnu": "1.31.1",
-    "lightningcss-linux-x64-musl": "1.31.1",
     "lightningcss-darwin-arm64": "1.31.1",
     "lightningcss-darwin-x64": "1.31.1",
+    "lightningcss-linux-x64-gnu": "1.31.1",
+    "lightningcss-linux-x64-musl": "1.31.1",
     "lightningcss-win32-x64-msvc": "1.31.1"
   },
   "devDependencies": {
