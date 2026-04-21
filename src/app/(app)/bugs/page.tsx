@@ -1,6 +1,13 @@
+import { notFound } from 'next/navigation';
 import { BugReportsClient } from '@/components/bug-report/BugReportsClient';
+import { getUserAndAdminStatus } from '@/lib/site-admin';
 
-export default function BugReportsPage() {
+export default async function BugReportsPage() {
+  const { user, isAdmin } = await getUserAndAdminStatus();
+  if (!user || !isAdmin) {
+    notFound();
+  }
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="mb-4">

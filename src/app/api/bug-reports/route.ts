@@ -11,6 +11,7 @@
 
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { getUserAndAdminStatus } from '@/lib/site-admin';
 
 export const runtime = 'nodejs';
 
@@ -128,13 +129,14 @@ export async function POST(request: Request) {
 }
 
 export async function GET() {
-  const supabase = await createServerSupabaseClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const { user, isAdmin } = await getUserAndAdminStatus();
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  if (!isAdmin) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+  const supabase = await createServerSupabaseClient();
 
   const { data: rows, error } = await supabase
     .from('bug_reports')

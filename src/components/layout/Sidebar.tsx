@@ -57,6 +57,20 @@ export function Sidebar() {
     document.documentElement.style.setProperty('--sidebar-w', collapsed ? '72px' : '260px');
   }, [collapsed]);
 
+  const [userMenuOpen, setUserMenuOpen] = useState(false);
+  const [profile, setProfile] = useState<{ name: string; email?: string; avatar_url?: string | null; job_title?: string | null; is_site_admin?: boolean } | null>(null);
+  const { user, signOut } = useAuth();
+  const lastDisplay = useRef({ name: '', email: '' });
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  const isSiteAdmin = profile?.is_site_admin === true;
+  const adminItems: NavItem[] = [
+    { label: 'Settings', href: '/settings', icon: Settings, activeMode: 'exact' },
+    ...(isSiteAdmin
+      ? [{ label: 'Bug Reports', href: '/bugs', icon: Bug, activeMode: 'exact' as const }]
+      : []),
+  ];
+
   const baseGroups: NavGroup[] = [
     {
       title: 'Data',
@@ -74,10 +88,7 @@ export function Sidebar() {
     },
     {
       title: 'Admin',
-      items: [
-        { label: 'Settings', href: '/settings', icon: Settings, activeMode: 'exact' },
-        { label: 'Bug Reports', href: '/bugs', icon: Bug, activeMode: 'exact' },
-      ],
+      items: adminItems,
     },
   ];
 
@@ -106,12 +117,6 @@ export function Sidebar() {
     localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(collapsed));
   }, [collapsed]);
 
-  const [userMenuOpen, setUserMenuOpen] = useState(false);
-  const [profile, setProfile] = useState<{ name: string; email?: string; avatar_url?: string | null; job_title?: string | null } | null>(null);
-  const { user, signOut } = useAuth();
-  const lastDisplay = useRef({ name: '', email: '' });
-  const menuRef = useRef<HTMLDivElement>(null);
-
   useEffect(() => {
     if (user?.email) {
       lastDisplay.current = {
@@ -125,7 +130,13 @@ export function Sidebar() {
     if (!user?.id) return;
     fetch('/api/profile')
       .then((r) => (r.ok ? r.json() : null))
-      .then((data) => data && setProfile({ name: data.name, email: data.email, avatar_url: data.avatar_url, job_title: data.job_title }))
+      .then((data) => data && setProfile({
+        name: data.name,
+        email: data.email,
+        avatar_url: data.avatar_url,
+        job_title: data.job_title,
+        is_site_admin: !!data.is_site_admin,
+      }))
       .catch(() => {});
   }, [user?.id]);
 

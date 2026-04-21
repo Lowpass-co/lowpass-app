@@ -7,6 +7,7 @@
 
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { getUserAndAdminStatus } from '@/lib/site-admin';
 
 export const runtime = 'nodejs';
 
@@ -17,11 +18,14 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const supabase = await createServerSupabaseClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { user, isAdmin } = await getUserAndAdminStatus();
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
+  if (!isAdmin) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+  const supabase = await createServerSupabaseClient();
 
   const { id } = await params;
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
