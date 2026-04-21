@@ -29,17 +29,15 @@ export function AppTopBar({ onMenuClick }: AppTopBarProps) {
   return (
     <header className="sticky top-0 z-20 overflow-visible border-b border-lp-border bg-lp-bg/80 px-4 backdrop-blur-sm sm:px-6">
       <div className="flex min-h-16 items-center gap-3 py-2 lg:gap-4 lg:py-0">
-        {/* Mobile menu button */}
         <button
           type="button"
           onClick={onMenuClick}
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-lp-text-secondary hover:bg-lp-bg-tertiary lg:hidden"
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-lp-text-secondary hover:bg-lp-bg-tertiary lg:hidden"
           aria-label="Open menu"
         >
           <Menu size={20} />
         </button>
 
-        {/* New Tour button (compact when artist selected) */}
         <Link
           href="/tours/create"
           title={compactNewTour ? 'New tour' : undefined}
@@ -48,7 +46,7 @@ export function AppTopBar({ onMenuClick }: AppTopBarProps) {
             'flex shrink-0 items-center justify-center rounded-lg border border-lp-orange text-lp-orange transition-colors duration-200',
             'hover:bg-lp-orange hover:text-white dark:hover:text-black',
             compactNewTour
-              ? 'h-9 w-9'
+              ? 'h-11 w-11'
               : 'min-h-[2.75rem] gap-1.5 px-3 py-2 text-xs font-bold tracking-widest'
           )}
           style={compactNewTour ? undefined : { letterSpacing: '0.12em' }}
@@ -57,37 +55,31 @@ export function AppTopBar({ onMenuClick }: AppTopBarProps) {
           {!compactNewTour && <span className="whitespace-nowrap">NEW TOUR</span>}
         </Link>
 
-        {/* Breadcrumb */}
         <Suspense
           fallback={
-            <div className="min-h-[2.75rem] flex-1 rounded-lg border border-lp-border bg-lp-bg/50 sm:max-w-[min(100%,28rem)]" />
+            <div className="min-h-[2.75rem] min-w-0 flex-1 rounded-lg border border-lp-border bg-lp-bg/50" />
           }
         >
-          <AppTopBarBreadcrumb />
+          <div className="min-w-0 flex-1">
+            <AppTopBarBreadcrumb />
+          </div>
         </Suspense>
 
-        {/* Mode pill (centered on wider screens) */}
-        <div className="ml-auto hidden shrink-0 md:block">
-          <AppTopBarModePill />
+        <div className="shrink-0">
+          <AppTopBarModePill className="w-40 md:w-48" />
         </div>
 
-        {/* Right actions */}
         <div className="flex shrink-0 items-center gap-1">
           <button
             type="button"
-            className="relative flex h-9 w-9 items-center justify-center rounded-lg text-lp-text-secondary hover:bg-lp-bg-tertiary hover:text-lp-text transition-colors"
+            className="relative flex h-11 w-11 items-center justify-center rounded-lg text-lp-text-secondary hover:bg-lp-bg-tertiary hover:text-lp-text transition-colors"
             aria-label="Notifications"
           >
             <Bell size={18} />
-            <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-lp-orange" />
+            <span className="absolute right-2.5 top-2.5 h-2 w-2 rounded-full bg-lp-orange" />
           </button>
           <DarkModeToggle />
         </div>
-      </div>
-
-      {/* Mobile: pill below on narrow screens */}
-      <div className="md:hidden -mt-1 pb-2 flex justify-center">
-        <AppTopBarModePill />
       </div>
     </header>
   );

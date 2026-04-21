@@ -668,7 +668,8 @@ function ShowRow({
 
       <DeleteConfirmationModal
         open={deleteOpen}
-        itemName={rowLabel}
+        itemName={`advance for ${rowLabel}`}
+        description="Only the advance questionnaire data is cleared. The show itself stays on the tour — you can start a new advance for this date any time."
         onClose={() => setDeleteOpen(false)}
         onConfirm={async () => {
           const res = await fetch(`/api/tours/${tourId}/advance/${item.routing_id}`, { method: 'DELETE' });
@@ -676,7 +677,7 @@ function ShowRow({
             const data = await res.json().catch(() => ({}));
             throw new Error(data.error ?? 'Failed to delete advance');
           }
-          showToast('Advance deleted');
+          showToast('Advance cleared');
         }}
         onDeleted={() => {
           setDeletingFade(true);

@@ -45,9 +45,6 @@ interface NavGroup {
 }
 
 const SIDEBAR_COLLAPSED_KEY = 'lp-sidebar-collapsed';
-const SIDEBAR_MODE_KEY = 'lp-sidebar-mode';
-
-type SidebarNavMode = 'advance' | 'budget';
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -66,27 +63,6 @@ export function Sidebar() {
     if (typeof window === 'undefined') return false;
     return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true';
   });
-  const [navMode, setNavMode] = useState<SidebarNavMode>(() => {
-    if (typeof window === 'undefined') return 'advance';
-    const stored = localStorage.getItem(SIDEBAR_MODE_KEY);
-    return stored === 'budget' ? 'budget' : 'advance';
-  });
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    localStorage.setItem(SIDEBAR_MODE_KEY, navMode);
-  }, [navMode]);
-
-  // Sync toggle with actual URL — if you land on /budget the toggle shows Budget,
-  // if you land on an advance page it shows Advance.
-  useEffect(() => {
-    if (!pathname) return;
-    if (pathname.startsWith('/budget')) {
-      setNavMode('budget');
-    } else if (pathname.includes('/advance')) {
-      setNavMode('advance');
-    }
-  }, [pathname]);
 
   useLayoutEffect(() => {
     document.documentElement.style.setProperty('--sidebar-w', collapsed ? '72px' : '260px');
@@ -385,55 +361,12 @@ export function Sidebar() {
                   </div>
                 )}
 
-                <div className={cn('mb-2 flex shrink-0 gap-1', collapsed && 'flex-col items-stretch px-0')}>
-                  <button
-                    type="button"
-                    title="Advance"
-                    onClick={() => {
-                      setNavMode('advance');
-                      // Navigate to the tour advance overview (show list) so the user
-                      // can pick a specific show. If already on an advance page, this
-                      // is a no-op in practice but keeps the intent clear.
-                      router.push(`/tours/${selectedTourId}/advance`);
-                    }}
-                    className={cn(
-                      'lp-label-caps flex flex-1 items-center justify-center gap-1 rounded-md py-2 transition-colors',
-                      collapsed && 'px-0'
-                    )}
-                    style={{
-                      backgroundColor: navMode === 'advance' ? '#FF4500' : 'var(--lp-sidebar-hover-bg)',
-                      color: navMode === 'advance' ? '#fff' : 'var(--lp-sidebar-text-muted)',
-                    }}
-                  >
-                    {collapsed ? <ClipboardList size={18} strokeWidth={2} /> : 'Advance'}
-                  </button>
-                  <button
-                    type="button"
-                    title="Budget"
-                    onClick={() => {
-                      setNavMode('budget');
-                      // Budget is tour-level — navigate directly, no show selection needed.
-                      router.push(`/budget?tour_id=${selectedTourId}`);
-                    }}
-                    className={cn(
-                      'lp-label-caps flex flex-1 items-center justify-center gap-1 rounded-md py-2 transition-colors',
-                      collapsed && 'px-0'
-                    )}
-                    style={{
-                      backgroundColor: navMode === 'budget' ? '#FF4500' : 'var(--lp-sidebar-hover-bg)',
-                      color: navMode === 'budget' ? '#fff' : 'var(--lp-sidebar-text-muted)',
-                    }}
-                  >
-                    {collapsed ? <Wallet size={18} strokeWidth={2} /> : 'Budget'}
-                  </button>
-                </div>
-
                 <div className="sidebar-scroll flex min-h-0 flex-1 flex-col overflow-y-auto">
                   {selectedTourId && (
                     <TourRoutingList
                       tourId={selectedTourId}
                       routing={tourRouting}
-                      mode={navMode}
+                      mode="advance"
                       collapsed={collapsed}
                       isRoutingLoading={isRoutingLoading}
                     />

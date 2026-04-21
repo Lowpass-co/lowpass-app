@@ -107,7 +107,7 @@ export function AppTopBarBreadcrumb() {
         )}
       </div>
 
-      <div className="flex min-w-0 flex-1 items-center gap-1 text-sm font-semibold" style={{ color: 'var(--lp-text)' }}>
+      <div className="flex min-w-0 flex-1 items-center gap-2 text-sm font-semibold" style={{ color: 'var(--lp-text)' }}>
         <div className="relative min-w-0" ref={artistWrapRef}>
           <button
             type="button"
@@ -115,10 +115,10 @@ export function AppTopBarBreadcrumb() {
               setTourMenuOpen(false);
               setArtistMenuOpen((o) => !o);
             }}
-            className="truncate text-left transition-opacity hover:opacity-80"
+            className="max-w-full truncate text-left transition-opacity hover:opacity-80"
             style={{ color: 'var(--lp-text)' }}
           >
-            {selectedArtist?.name ?? 'Artist'}
+            <span className="block truncate">{selectedArtist?.name ?? 'Artist'}</span>
           </button>
           {artistMenuOpen && (
             <div
@@ -159,7 +159,7 @@ export function AppTopBarBreadcrumb() {
             className="w-full truncate text-left transition-opacity hover:opacity-80"
             style={{ color: 'var(--lp-text)' }}
           >
-            {selectedTour?.name ?? 'Tour'}
+            <span className="block truncate">{selectedTour?.name ?? 'Tour'}</span>
           </button>
           {tourMenuOpen && (
             <div

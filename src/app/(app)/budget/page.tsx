@@ -20,10 +20,7 @@ export default async function BudgetPage({
   // Default to spreadsheet-style detail; use view=overview for accordion summary.
   const view = params.view ?? 'detail';
 
-  const tab =
-    rawTab === 'day-view'
-      ? 'summary'
-      : ((rawTab as TabId | undefined) ?? 'summary');
+  const tab = (rawTab as TabId | undefined) ?? 'summary';
   const validTab = BUDGET_TABS.some((t) => t.id === tab) ? tab : 'summary';
 
   if (!tourId) {

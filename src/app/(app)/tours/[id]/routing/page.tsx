@@ -8,7 +8,7 @@
 
 import { notFound } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
-import { RoutingEditor } from '@/components/routing/RoutingEditor';
+import { RoutingPageShell } from './RoutingPageShell';
 
 export default async function RoutingPage({
   params,
@@ -20,7 +20,7 @@ export default async function RoutingPage({
 
   const { data: tour, error } = await supabase
     .from('tours')
-    .select('id, start_date, end_date, custom_day_types')
+    .select('id, start_date, end_date, custom_day_types, currency')
     .eq('id', id)
     .single();
 
@@ -29,11 +29,12 @@ export default async function RoutingPage({
   }
 
   return (
-    <RoutingEditor
+    <RoutingPageShell
       tourId={id}
       startDate={tour.start_date ?? ''}
       endDate={tour.end_date ?? ''}
       initialCustomDayTypes={tour.custom_day_types ?? []}
+      tourCurrency={tour.currency ?? 'GBP'}
     />
   );
 }

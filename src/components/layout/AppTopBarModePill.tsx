@@ -5,7 +5,7 @@
 
    [Advance | Budget] pill slider.
 
-   Persists active pill to 'lp-sidebar-mode' localStorage
+   Persists active pill to 'lp-workspace-mode' localStorage
 
    (shared key with Sidebar — rename deferred to A0.4).
 
@@ -18,7 +18,8 @@ import { cn } from '@/lib/utils';
 
 type Mode = 'advance' | 'budget';
 
-const MODE_KEY = 'lp-sidebar-mode';
+const MODE_KEY = 'lp-workspace-mode';
+const LEGACY_MODE_KEY = ['lp', 'sidebar', 'mode'].join('-');
 
 function resolveModeFromPath(pathname: string | null): Mode | null {
   if (!pathname) return null;
@@ -27,7 +28,7 @@ function resolveModeFromPath(pathname: string | null): Mode | null {
   return null;
 }
 
-export function AppTopBarModePill() {
+export function AppTopBarModePill({ className }: { className?: string }) {
   const router = useRouter();
   const pathname = usePathname();
   const { selectedTourId, selectedArtistId, hydrated } = useArtistTourContext();
@@ -40,6 +41,21 @@ export function AppTopBarModePill() {
     const stored = window.localStorage.getItem(MODE_KEY);
     return stored === 'budget' ? 'budget' : 'advance';
   });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const current = window.localStorage.getItem(MODE_KEY);
+      if (current !== null) return;
+      const legacy = window.localStorage.getItem(LEGACY_MODE_KEY);
+      if (legacy !== null) {
+        window.localStorage.setItem(MODE_KEY, legacy);
+        window.localStorage.removeItem(LEGACY_MODE_KEY);
+      }
+    } catch {
+      // localStorage unavailable
+    }
+  }, []);
 
   // Keep mode in sync with URL changes (covers sidebar clicks etc.)
   useEffect(() => {
@@ -68,14 +84,14 @@ export function AppTopBarModePill() {
 
   // Skeleton while hydrating
   if (!hydrated) {
-    return <div className="h-10 w-48 rounded-full bg-lp-surface/60" aria-hidden />;
+    return <div className={cn('h-10 w-48 rounded-full bg-lp-surface/60', className)} aria-hidden />;
   }
 
   return (
     <div
       role="tablist"
       aria-label="Section"
-      className="relative flex h-10 w-48 items-center rounded-full border border-lp-border bg-lp-surface p-1 shadow-sm"
+      className={cn('relative flex h-10 w-48 items-center rounded-full border border-lp-border bg-lp-surface p-1 shadow-sm', className)}
     >
       {/* Animated indicator */}
       <div
