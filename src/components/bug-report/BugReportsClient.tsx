@@ -17,6 +17,7 @@ import {
   Loader2,
   RefreshCw,
   Search,
+  Sparkles,
   X,
 } from 'lucide-react';
 import {
@@ -44,6 +45,87 @@ function formatDate(iso: string): string {
     });
   } catch {
     return iso;
+  }
+}
+
+/**
+ * Build a markdown prompt the user can paste into the Cursor agent or Claude
+ * web UI. Everything the agent needs to start triaging lives in the body:
+ * severity, environment, screenshot URL (signed — expires in ~1h), etc.
+ */
+function buildRepairPrompt(report: BugReport): string {
+  const summary = report.title?.trim() || report.description.split('\n')[0].slice(0, 200);
+  const viewport =
+    report.viewport_width && report.viewport_height
+      ? `${report.viewport_width}×${report.viewport_height}`
+      : '(unknown)';
+  const reporter =
+    report.reporter?.name || report.reporter?.email || '(unknown)';
+  const screenshot = report.screenshot_url
+    ? `${report.screenshot_url}\n\n(Signed URL — expires in about an hour. Refresh the bug-reports page to regenerate if it 403s.)`
+    : '(no screenshot attached)';
+
+  return `You are investigating a bug reported inside the Lowpass tour-management app.
+Your job is to locate the root cause in the codebase and propose a minimal,
+surgical fix. If the fix is obvious, implement it and tell me which files you changed.
+
+## Summary
+${summary}
+
+## Severity
+${SEVERITY_META[report.severity].label} (${report.severity})
+
+## What happened
+${report.description.trim() || '(no description)'}
+
+## Steps to reproduce
+${report.steps_to_reproduce?.trim() || '(not provided)'}
+
+## Where it happened
+- Page URL: ${report.page_url ?? '(unknown)'}
+- Path: ${report.page_path ?? '(unknown)'}
+- Browser: ${report.browser ?? '(unknown)'}
+- OS: ${report.os ?? '(unknown)'}
+- Viewport: ${viewport}
+- Device pixel ratio: ${report.device_pixel_ratio ?? '(unknown)'}
+- User agent: ${report.user_agent ?? '(unknown)'}
+
+## Reporter
+${reporter}
+
+## Screenshot
+${screenshot}
+
+## What I want from you
+1. Find the specific component / route / handler responsible.
+2. Explain the likely cause in one short paragraph.
+3. Propose the smallest change that fixes it.
+4. Ask before touching anything outside that surface area.
+
+Bug report ID: ${report.id}`;
+}
+
+async function copyToClipboard(text: string): Promise<boolean> {
+  try {
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    // fall through to textarea fallback
+  }
+  try {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand('copy');
+    document.body.removeChild(ta);
+    return ok;
+  } catch {
+    return false;
   }
 }
 
@@ -435,11 +517,19 @@ function DetailPanel({
   const [resolutionNotes, setResolutionNotes] = useState(report.resolution_notes ?? '');
   const [notesSaving, setNotesSaving] = useState(false);
   const [notesSaved, setNotesSaved] = useState(false);
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
 
   useEffect(() => {
     setResolutionNotes(report.resolution_notes ?? '');
     setNotesSaved(false);
+    setCopyState('idle');
   }, [report.id, report.resolution_notes]);
+
+  const onSendToAgent = useCallback(async () => {
+    const ok = await copyToClipboard(buildRepairPrompt(report));
+    setCopyState(ok ? 'copied' : 'error');
+    setTimeout(() => setCopyState('idle'), 2000);
+  }, [report]);
 
   return (
     <div
@@ -641,7 +731,7 @@ function DetailPanel({
         </div>
 
         <div
-          className="flex items-center justify-between border-t px-5 py-4"
+          className="flex items-center justify-between gap-3 border-t px-5 py-4"
           style={{ borderColor: 'var(--lp-border)' }}
         >
           <button
@@ -653,18 +743,59 @@ function DetailPanel({
             <AlertTriangle size={12} />
             Delete
           </button>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg px-4 py-2 text-sm font-semibold"
-            style={{
-              backgroundColor: 'var(--lp-bg-secondary)',
-              border: '1px solid var(--lp-border)',
-              color: 'var(--lp-text)',
-            }}
-          >
-            Close
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onSendToAgent}
+              className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold"
+              style={{
+                backgroundColor: copyState === 'copied' ? '#22c55e1a' : 'var(--lp-bg-secondary)',
+                border: `1px solid ${
+                  copyState === 'copied'
+                    ? '#22c55e55'
+                    : copyState === 'error'
+                      ? '#ef444455'
+                      : 'var(--lp-border)'
+                }`,
+                color:
+                  copyState === 'copied'
+                    ? '#22c55e'
+                    : copyState === 'error'
+                      ? '#ef4444'
+                      : 'var(--lp-text)',
+              }}
+              title="Copy a structured repair prompt to your clipboard. Paste it into the Cursor agent or claude.ai."
+            >
+              {copyState === 'copied' ? (
+                <>
+                  <CheckCircle2 size={12} />
+                  Copied — paste into Cursor
+                </>
+              ) : copyState === 'error' ? (
+                <>
+                  <AlertTriangle size={12} />
+                  Copy failed
+                </>
+              ) : (
+                <>
+                  <Sparkles size={12} />
+                  Send to Cursor / Claude
+                </>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg px-4 py-2 text-sm font-semibold"
+              style={{
+                backgroundColor: 'var(--lp-bg-secondary)',
+                border: '1px solid var(--lp-border)',
+                color: 'var(--lp-text)',
+              }}
+            >
+              Close
+            </button>
+          </div>
         </div>
       </div>
     </div>
