@@ -66,7 +66,7 @@ function buildRepairPrompt(report: BugReport): string {
   const reporter =
     report.reporter?.name || report.reporter?.email || '(unknown)';
   const screenshot = report.screenshot_url
-    ? `${report.screenshot_url}\n\n(Signed URL — expires in about an hour. Refresh the bug-reports page to regenerate if it 403s.)`
+    ? `A screenshot of the bug is attached alongside this prompt — paste it into the chat and inspect it directly. If the paste didn't include the image, this signed URL is the fallback (expires in ~1h): ${report.screenshot_url}`
     : '(no screenshot attached)';
 
   return `You are investigating a bug reported inside the Lowpass tour-management app.
@@ -131,6 +131,65 @@ async function copyToClipboard(text: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/**
+ * Re-encode any supported image blob to PNG. The async clipboard only
+ * accepts a narrow set of MIME types and PNG is the universal one, so
+ * we always normalise before calling navigator.clipboard.write().
+ */
+async function toPngBlob(source: Blob): Promise<Blob> {
+  if (source.type === 'image/png') return source;
+  const bitmap = await createImageBitmap(source);
+  const canvas = document.createElement('canvas');
+  canvas.width = bitmap.width;
+  canvas.height = bitmap.height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('2d context unavailable');
+  ctx.drawImage(bitmap, 0, 0);
+  return await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob(
+      (b) => (b ? resolve(b) : reject(new Error('png encode failed'))),
+      'image/png',
+    );
+  });
+}
+
+type CopyOutcome = 'text+image' | 'text' | 'error';
+
+/**
+ * Copy the repair prompt to the clipboard. When the report has a screenshot
+ * we also fetch the signed URL and stuff the image into the same
+ * ClipboardItem, so a single paste into Cursor/Claude lands both the prompt
+ * (in the chat input) and the screenshot (as an attachment). Falls back to
+ * text-only copy if anything goes wrong with the image path.
+ */
+async function copyPromptWithScreenshot(
+  text: string,
+  screenshotUrl: string | null,
+): Promise<CopyOutcome> {
+  if (
+    screenshotUrl &&
+    typeof ClipboardItem !== 'undefined' &&
+    typeof navigator !== 'undefined' &&
+    navigator.clipboard?.write
+  ) {
+    try {
+      const res = await fetch(screenshotUrl, { credentials: 'omit' });
+      if (!res.ok) throw new Error(`screenshot fetch ${res.status}`);
+      const png = await toPngBlob(await res.blob());
+      const item = new ClipboardItem({
+        'text/plain': new Blob([text], { type: 'text/plain' }),
+        'image/png': png,
+      });
+      await navigator.clipboard.write([item]);
+      return 'text+image';
+    } catch {
+      // Fall through to text-only copy below.
+    }
+  }
+  const ok = await copyToClipboard(text);
+  return ok ? 'text' : 'error';
 }
 
 function Pill({ label, color }: { label: string; color: string }) {
@@ -580,7 +639,9 @@ function DetailPanel({
   const [resolutionNotes, setResolutionNotes] = useState(report?.resolution_notes ?? '');
   const [notesSaving, setNotesSaving] = useState(false);
   const [notesSaved, setNotesSaved] = useState(false);
-  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
+  const [copyState, setCopyState] = useState<
+    'idle' | 'copied-text+image' | 'copied-text' | 'error'
+  >('idle');
   const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -591,9 +652,14 @@ function DetailPanel({
 
   const onSendToAgent = useCallback(async () => {
     if (!report) return;
-    const ok = await copyToClipboard(buildRepairPrompt(report));
-    setCopyState(ok ? 'copied' : 'error');
-    setTimeout(() => setCopyState('idle'), 2000);
+    const outcome = await copyPromptWithScreenshot(
+      buildRepairPrompt(report),
+      report.screenshot_url ?? null,
+    );
+    if (outcome === 'text+image') setCopyState('copied-text+image');
+    else if (outcome === 'text') setCopyState('copied-text');
+    else setCopyState('error');
+    setTimeout(() => setCopyState('idle'), 2500);
   }, [report]);
 
   // When the inner panel finishes its slide-out transition, tell the
@@ -832,27 +898,35 @@ function DetailPanel({
               onClick={onSendToAgent}
               className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold"
               style={{
-                backgroundColor: copyState === 'copied' ? '#22c55e1a' : 'var(--lp-bg-secondary)',
+                backgroundColor:
+                  copyState === 'copied-text+image' || copyState === 'copied-text'
+                    ? '#22c55e1a'
+                    : 'var(--lp-bg-secondary)',
                 border: `1px solid ${
-                  copyState === 'copied'
+                  copyState === 'copied-text+image' || copyState === 'copied-text'
                     ? '#22c55e55'
                     : copyState === 'error'
                       ? '#ef444455'
                       : 'var(--lp-border)'
                 }`,
                 color:
-                  copyState === 'copied'
+                  copyState === 'copied-text+image' || copyState === 'copied-text'
                     ? '#22c55e'
                     : copyState === 'error'
                       ? '#ef4444'
                       : 'var(--lp-text)',
               }}
-              title="Copy a structured repair prompt to your clipboard. Paste it into the Cursor agent or claude.ai."
+              title="Copy a structured repair prompt to your clipboard. When a screenshot is attached it rides along so Cursor/Claude can see it on paste."
             >
-              {copyState === 'copied' ? (
+              {copyState === 'copied-text+image' ? (
                 <>
                   <CheckCircle2 size={12} />
-                  Copied — paste into Cursor
+                  Copied prompt + screenshot — paste into Cursor
+                </>
+              ) : copyState === 'copied-text' ? (
+                <>
+                  <CheckCircle2 size={12} />
+                  Copied prompt — paste into Cursor
                 </>
               ) : copyState === 'error' ? (
                 <>
