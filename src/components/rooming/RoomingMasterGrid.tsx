@@ -115,7 +115,7 @@ export function RoomingMasterGrid({
     <div className="space-y-4 overflow-x-auto">
       <div className="flex flex-wrap items-center gap-4 text-sm">
         <span className="text-lp-text-secondary">Assumed Rate:</span>
-        <span className="font-[tabular-nums]">{currency}</span>
+        <span className="tabular-nums">{currency}</span>
         <input
           type="number"
           step="0.01"

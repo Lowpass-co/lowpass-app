@@ -185,10 +185,10 @@ export function CommissionsGrid({ tourId }: { tourId: string; currency?: string 
                   align="right"
                 />
               </td>
-              <td className="px-3 py-2 text-right text-lp-text-secondary font-[tabular-nums]">
+              <td className="px-3 py-2 text-right text-lp-text-secondary tabular-nums">
                 {overheadAmounts[label].proposed.toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
               </td>
-              <td className="px-3 py-2 text-right text-lp-text-secondary font-[tabular-nums]">
+              <td className="px-3 py-2 text-right text-lp-text-secondary tabular-nums">
                 {overheadAmounts[label].actual.toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
               </td>
             </tr>
@@ -226,10 +226,10 @@ export function CommissionsGrid({ tourId }: { tourId: string; currency?: string 
                 onSave={async (v) => saveCommission(c.id, 'basis', String(v))}
               />
             </td>
-            <td className="text-right text-lp-text-secondary font-[tabular-nums]">
+            <td className="text-right text-lp-text-secondary tabular-nums">
               —
             </td>
-            <td className="text-right text-lp-text-secondary font-[tabular-nums]">
+            <td className="text-right text-lp-text-secondary tabular-nums">
               —
             </td>
             <td className="p-0">
