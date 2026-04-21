@@ -390,7 +390,6 @@ export async function DELETE(
     return NextResponse.json({ error: 'Tour not found' }, { status: 404 });
   }
 
-  // Validate the routing row belongs to this tour. We do NOT delete it.
   const { data: routingRow, error: routingErr } = await supabase
     .from('routing')
     .select('id')
@@ -402,25 +401,17 @@ export async function DELETE(
     return NextResponse.json({ error: 'Routing date not found' }, { status: 404 });
   }
 
-  // Delete ONLY the advance_instances row for this routing.
-  // advance_comments cascades via ON DELETE CASCADE.
-  // The routing row itself stays intact — the show remains on the tour.
-  const { data: deletedInstance, error: deleteInstanceErr } = await supabase
-    .from('advance_instances')
+  const { data: deletedRouting, error: deleteRoutingErr } = await supabase
+    .from('routing')
     .delete()
-    .eq('routing_id', routingId)
+    .eq('id', routingId)
+    .eq('tour_id', tourId)
     .select('id');
-
-  if (deleteInstanceErr) {
-    return NextResponse.json({ error: deleteInstanceErr.message }, { status: 500 });
+  if (deleteRoutingErr) {
+    return NextResponse.json({ error: deleteRoutingErr.message }, { status: 500 });
   }
-
-  if (!deletedInstance?.length) {
-    // No advance was ever created for this show — nothing to clear.
-    return NextResponse.json(
-      { error: 'No advance exists for this show yet' },
-      { status: 404 }
-    );
+  if (!deletedRouting?.length) {
+    return NextResponse.json({ error: 'Routing date not found' }, { status: 404 });
   }
 
   return new NextResponse(null, { status: 204 });

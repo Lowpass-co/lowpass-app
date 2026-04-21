@@ -21,7 +21,7 @@ export function DarkModeToggle({ className }: DarkModeToggleProps) {
     <button
       onClick={toggle}
       className={cn(
-        'flex h-11 w-11 items-center justify-center rounded-lg',
+        'flex h-9 w-9 items-center justify-center rounded-lg',
         'text-lp-text-secondary hover:text-lp-text',
         'hover:bg-lp-bg-tertiary',
         'transition-colors duration-150',
