@@ -110,11 +110,14 @@ export function BudgetTabsNav({ tourId, activeTab, leftRail }: { tourId: string;
 export function BudgetTabs({
   tourId,
   activeTab,
+  currency = 'GBP',
   summaryBreakdownHeading,
   summarySlot,
 }: {
   tourId: string;
   activeTab: string;
+  /** Tour currency (e.g. from budget shell); used by tabs that show amounts. */
+  currency?: string;
   /** When 'outside', Summary tab omits the Breakdown heading (page renders it in line with Select Tour) */
   summaryBreakdownHeading?: 'inline' | 'outside';
   /** When 'left' or 'right', Summary tab renders only that column (for split layout with Breakdown at top) */
@@ -126,19 +129,20 @@ export function BudgetTabs({
         return (
           <SummaryTab
             tourId={tourId}
+            currency={currency}
             breakdownHeading={summaryBreakdownHeading ?? 'inline'}
             slot={summarySlot}
           />
         );
       case 'income': return <IncomeTab tourId={tourId} />;
-      case 'salaries': return <SalariesTab tourId={tourId} />;
+      case 'salaries': return <SalariesTab tourId={tourId} currency={currency} />;
       case 'hotels': return <HotelsTab tourId={tourId} />;
       case 'flights': return <FlightsTab tourId={tourId} />;
       case 'transport': return <TransportationTab tourId={tourId} />;
       case 'production': return <ProductionTab tourId={tourId} />;
       case 'commissions': return <CommissionsTab tourId={tourId} />;
       case 'receipts': return <ReceiptsTab tourId={tourId} />;
-      case 'settlement': return <SettlementTab tourId={tourId} />;
+      case 'settlement': return <SettlementTab tourId={tourId} currency={currency} />;
       default: return null;
     }
   };

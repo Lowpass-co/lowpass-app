@@ -9,16 +9,14 @@
 
 import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useSearchParams } from 'next/navigation';
 import {
-  ChevronLeft, ChevronRight, LogOut,
+  ChevronLeft, ChevronRight, LogOut, Lock,
   LayoutDashboard, ListMusic, ClipboardList, LineChart,
-  Wallet, HandCoins, Bed, FileCheck2, Music, Users, Users2, Building2, Settings, Bug, Gauge, Package,
+  HandCoins, Bed, FileCheck2, Music, Users, Users2, Building2, Settings, Bug, Package,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useArtistTourContext } from '@/contexts/ArtistTourContext';
-import { SidebarTourPicker } from '@/components/layout/SidebarTourPicker';
-import { TourRoutingList } from '@/components/layout/TourRoutingList';
 import { cn, toTitleCase } from '@/lib/utils';
 
 interface NavItem {
@@ -36,7 +34,8 @@ interface NavItem {
     | 'tour_overview'
     | 'rooming'
     | 'payroll'
-    | 'tour_personnel';
+    | 'tour_personnel'
+    | 'dashboard';
 }
 
 interface NavGroup {
@@ -45,49 +44,15 @@ interface NavGroup {
 }
 
 const SIDEBAR_COLLAPSED_KEY = 'lp-sidebar-collapsed';
-const SIDEBAR_MODE_KEY = 'lp-sidebar-mode';
-
-type SidebarNavMode = 'advance' | 'budget';
 
 export function Sidebar() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const router = useRouter();
-  const {
-    selectedTourId,
-    selectedArtistId,
-    selectedArtist,
-    selectedTour,
-    setSelectedTourId,
-    tourRouting,
-    isRoutingLoading,
-  } = useArtistTourContext();
+  const { selectedTourId, selectedArtistId } = useArtistTourContext();
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false;
     return localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true';
   });
-  const [navMode, setNavMode] = useState<SidebarNavMode>(() => {
-    if (typeof window === 'undefined') return 'advance';
-    const stored = localStorage.getItem(SIDEBAR_MODE_KEY);
-    return stored === 'budget' ? 'budget' : 'advance';
-  });
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    localStorage.setItem(SIDEBAR_MODE_KEY, navMode);
-  }, [navMode]);
-
-  // Sync toggle with actual URL — if you land on /budget the toggle shows Budget,
-  // if you land on an advance page it shows Advance.
-  useEffect(() => {
-    if (!pathname) return;
-    if (pathname.startsWith('/budget')) {
-      setNavMode('budget');
-    } else if (pathname.includes('/advance')) {
-      setNavMode('advance');
-    }
-  }, [pathname]);
-
   useLayoutEffect(() => {
     document.documentElement.style.setProperty('--sidebar-w', collapsed ? '72px' : '260px');
   }, [collapsed]);
@@ -119,21 +84,13 @@ export function Sidebar() {
   const artistQuery = selectedArtistId ? `?artist_id=${selectedArtistId}` : '';
 
   const overviewItems: NavItem[] = [
-    { label: 'Dashboard', href: `/dashboard${artistQuery}`, icon: LayoutDashboard, activeMode: 'exact' },
+    { label: 'Dashboard', href: `/dashboard${artistQuery}`, icon: LayoutDashboard, activeMode: 'dashboard' },
     { label: 'All Tours', href: `/tours${artistQuery}`, icon: ListMusic, activeMode: 'exact' },
     { label: 'Advances', href: `/advance${artistQuery}`, icon: ClipboardList, activeMode: 'all_advances' },
     { label: 'Performance', href: `/performance${artistQuery}`, icon: LineChart, activeMode: 'exact' },
   ];
 
   const tourManagementItems: NavItem[] = [
-    {
-      label: 'Tour Summary',
-      href: selectedTourId ? `/tours/${selectedTourId}/overview` : '/budget',
-      icon: Gauge,
-      activeMode: 'tour_overview',
-    },
-    { label: 'Budget', href: selectedTourId ? `/budget?tour_id=${selectedTourId}` : '/budget', icon: Wallet, activeMode: 'budget' },
-    { label: 'Advance', href: selectedTourId ? `/tours/${selectedTourId}/advance` : '/budget', icon: ClipboardList, activeMode: 'tour_advance' },
     {
       label: 'Tour personnel',
       href: selectedTourId ? `/tours/${selectedTourId}/personnel` : '/budget',
@@ -144,10 +101,6 @@ export function Sidebar() {
     { label: 'Rooming', href: selectedTourId ? `/tours/${selectedTourId}/rooming` : '/budget', icon: Bed, activeMode: 'rooming' },
     { label: 'Payroll', href: selectedTourId ? `/tours/${selectedTourId}/payroll` : '/budget', icon: HandCoins, activeMode: 'payroll' },
   ];
-
-  const tourSecondaryItems: NavItem[] = tourManagementItems.filter(
-    (i) => i.label !== 'Budget' && i.label !== 'Advance'
-  );
 
   useEffect(() => {
     localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(collapsed));
@@ -221,6 +174,9 @@ export function Sidebar() {
     if (item.activeMode === 'budget') {
       return pathname?.startsWith('/budget') && tab !== 'settlement';
     }
+    if (item.activeMode === 'dashboard') {
+      return pathname?.startsWith('/dashboard');
+    }
     if (item.activeMode === 'includes') {
       return !!pathname?.includes(hrefPath.split('/').pop() ?? '');
     }
@@ -272,8 +228,6 @@ export function Sidebar() {
     );
   }
 
-  const breadcrumbLabel = [selectedArtist?.name, selectedTour?.name].filter(Boolean).join(' / ');
-
   return (
     <aside
       className={cn(
@@ -317,7 +271,7 @@ export function Sidebar() {
           </button>
         </div>
 
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-4 pb-2">
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden pl-4 pr-0 pb-2">
           <style>{`
             .sidebar-scroll::-webkit-scrollbar { width: 4px; }
             .sidebar-scroll::-webkit-scrollbar-track { background: transparent; }
@@ -330,176 +284,62 @@ export function Sidebar() {
             }
           `}</style>
 
-          {selectedTourId ? (
-            <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-              <div className="mt-2 shrink-0">
-                {!collapsed && (
-                  <h3
-                    className="mb-3 px-3 text-xs font-extrabold uppercase tracking-wider"
-                    style={{ color: 'var(--lp-sidebar-text-heading)' }}
-                  >
-                    Artist Overview
-                  </h3>
-                )}
-                {renderNavLinks(overviewItems, 'overview')}
-              </div>
-
-              <div className="mt-4 flex min-h-0 flex-1 flex-col overflow-hidden border-t border-[var(--lp-sidebar-border)] pt-4">
-                {!collapsed && (
-                  <>
-                    <p
-                      className="mb-2 truncate px-1 text-[11px] leading-snug"
-                      style={{ color: 'var(--lp-sidebar-text-muted)' }}
-                      title={breadcrumbLabel}
-                    >
-                      {breadcrumbLabel}
-                    </p>
-                    <button
-                      type="button"
-                      className="mb-3 w-fit px-1 text-left text-[10px] font-semibold transition-opacity hover:opacity-90"
-                      style={{ color: '#FF4500' }}
-                      onClick={() => {
-                        setSelectedTourId(null);
-                        router.push('/dashboard');
-                      }}
-                    >
-                      Change tour
-                    </button>
-                  </>
-                )}
-                {collapsed && (
-                  <div className="mb-2 flex justify-center">
-                    <button
-                      type="button"
-                      className="flex h-8 w-8 items-center justify-center rounded-md transition-colors hover:bg-[var(--lp-sidebar-hover-bg)]"
-                      style={{ color: '#FF4500' }}
-                      title="Change tour"
-                      aria-label="Change tour"
-                      onClick={() => {
-                        setSelectedTourId(null);
-                        router.push('/dashboard');
-                      }}
-                    >
-                      <ChevronLeft size={16} strokeWidth={2.5} />
-                    </button>
-                  </div>
-                )}
-
-                <div className={cn('mb-2 flex shrink-0 gap-1', collapsed && 'flex-col items-stretch px-0')}>
-                  <button
-                    type="button"
-                    title="Advance"
-                    onClick={() => {
-                      setNavMode('advance');
-                      // Navigate to the tour advance overview (show list) so the user
-                      // can pick a specific show. If already on an advance page, this
-                      // is a no-op in practice but keeps the intent clear.
-                      router.push(`/tours/${selectedTourId}/advance`);
-                    }}
-                    className={cn(
-                      'lp-label-caps flex flex-1 items-center justify-center gap-1 rounded-md py-2 transition-colors',
-                      collapsed && 'px-0'
-                    )}
-                    style={{
-                      backgroundColor: navMode === 'advance' ? '#FF4500' : 'var(--lp-sidebar-hover-bg)',
-                      color: navMode === 'advance' ? '#fff' : 'var(--lp-sidebar-text-muted)',
-                    }}
-                  >
-                    {collapsed ? <ClipboardList size={18} strokeWidth={2} /> : 'Advance'}
-                  </button>
-                  <button
-                    type="button"
-                    title="Budget"
-                    onClick={() => {
-                      setNavMode('budget');
-                      // Budget is tour-level — navigate directly, no show selection needed.
-                      router.push(`/budget?tour_id=${selectedTourId}`);
-                    }}
-                    className={cn(
-                      'lp-label-caps flex flex-1 items-center justify-center gap-1 rounded-md py-2 transition-colors',
-                      collapsed && 'px-0'
-                    )}
-                    style={{
-                      backgroundColor: navMode === 'budget' ? '#FF4500' : 'var(--lp-sidebar-hover-bg)',
-                      color: navMode === 'budget' ? '#fff' : 'var(--lp-sidebar-text-muted)',
-                    }}
-                  >
-                    {collapsed ? <Wallet size={18} strokeWidth={2} /> : 'Budget'}
-                  </button>
-                </div>
-
-                <div className="sidebar-scroll flex min-h-0 flex-1 flex-col overflow-y-auto">
-                  {selectedTourId && (
-                    <TourRoutingList
-                      tourId={selectedTourId}
-                      routing={tourRouting}
-                      mode={navMode}
-                      collapsed={collapsed}
-                      isRoutingLoading={isRoutingLoading}
-                    />
-                  )}
-                </div>
-
-                <div className="mt-3 shrink-0 space-y-0.5 border-t border-[var(--lp-sidebar-border)] pt-3">
-                  {renderNavLinks(tourSecondaryItems, 'tour-secondary')}
-                </div>
-              </div>
-
-              <div className="mt-4 shrink-0 border-t border-[var(--lp-sidebar-border)] pt-4">
-                {baseGroups.map((group, groupIndex) => (
-                  <div key={group.title ?? `group-${groupIndex}`} className={groupIndex > 0 ? 'mt-6' : ''}>
-                    {group.title && !collapsed && (
-                      <h3
-                        className="mb-3 px-3 text-xs font-extrabold uppercase tracking-wider"
-                        style={{ color: 'var(--lp-sidebar-text-heading)' }}
-                      >
-                        {group.title}
-                      </h3>
-                    )}
-                    {renderNavLinks(group.items, `base-${group.title ?? groupIndex}`)}
-                  </div>
-                ))}
-              </div>
+          <div className="sidebar-scroll flex min-h-0 flex-1 flex-col overflow-y-auto pb-6 pr-2">
+            <div className="mt-2 shrink-0">
+              {!collapsed && (
+                <h3
+                  className="mb-3 px-3 text-xs font-extrabold uppercase tracking-wider"
+                  style={{ color: 'var(--lp-sidebar-text-heading)' }}
+                >
+                  Artist Overview
+                </h3>
+              )}
+              {renderNavLinks(overviewItems, 'overview')}
             </div>
-          ) : (
-            <nav className="sidebar-scroll flex min-h-0 flex-1 flex-col overflow-y-auto pb-6">
-              <div className="mt-2 shrink-0">
-                {!collapsed && (
-                  <h3
-                    className="mb-3 px-3 text-xs font-extrabold uppercase tracking-wider"
-                    style={{ color: 'var(--lp-sidebar-text-heading)' }}
-                  >
-                    Artist Overview
-                  </h3>
-                )}
-                {renderNavLinks(overviewItems, 'overview')}
-              </div>
 
-              <div className="mt-8 shrink-0">
-                {!collapsed && (
-                  <h3
-                    className="mb-3 px-3 text-xs font-extrabold uppercase tracking-wider"
-                    style={{ color: 'var(--lp-sidebar-text-heading)' }}
-                  >
-                    Tour Management
-                  </h3>
-                )}
-                {!collapsed && (
-                  <div className="mb-3 px-3">
-                    <p
-                      className="mb-1.5 text-[10px] font-bold uppercase tracking-wider"
-                      style={{ color: 'var(--lp-sidebar-text-muted)' }}
-                    >
-                      Choose Tour
-                    </p>
-                    <SidebarTourPicker />
-                  </div>
-                )}
-                {renderNavLinks(tourManagementItems, 'tour-mgmt')}
-              </div>
+            <div className="mt-4 shrink-0 border-t border-[var(--lp-sidebar-border)] pt-4">
+              {!collapsed && (
+                <h3
+                  className="mb-3 px-3 text-xs font-extrabold uppercase tracking-wider"
+                  style={{ color: 'var(--lp-sidebar-text-heading)' }}
+                >
+                  Manage Tour
+                </h3>
+              )}
+              {selectedTourId ? (
+                <div className="mt-1 space-y-0.5">{renderNavLinks(tourManagementItems, 'tour-secondary')}</div>
+              ) : collapsed ? (
+                <div
+                  className="flex justify-center py-2"
+                  title={
+                    selectedArtistId ? 'Select a tour from the header' : 'Select an artist and tour from the header to access'
+                  }
+                >
+                  <Lock className="h-4 w-4 shrink-0 text-lp-orange" strokeWidth={2.25} aria-hidden />
+                </div>
+              ) : (
+                <div className="mx-3 mt-1 flex flex-col items-center gap-2 rounded-lg border border-lp-border/50 bg-lp-surface/40 px-3 py-4 text-center opacity-90">
+                  <Lock className="h-5 w-5 shrink-0 text-lp-orange" strokeWidth={2.25} aria-hidden />
+                  <p className="text-[11px] font-extrabold uppercase leading-relaxed tracking-wide text-lp-orange">
+                    {selectedArtistId ? (
+                      <>
+                        Select a tour to access
+                        <br />
+                        <span className="text-[10px] font-bold uppercase tracking-wide text-lp-orange/90">
+                          Choose a tour from the header
+                        </span>
+                      </>
+                    ) : (
+                      <>Select an artist and tour from the header to access</>
+                    )}
+                  </p>
+                </div>
+              )}
+            </div>
 
+            <div className="mt-4 shrink-0 border-t border-[var(--lp-sidebar-border)] pt-4">
               {baseGroups.map((group, groupIndex) => (
-                <div key={group.title ?? `group-${groupIndex}`} className="mt-8 shrink-0">
+                <div key={group.title ?? `group-${groupIndex}`} className={groupIndex > 0 ? 'mt-6' : ''}>
                   {group.title && !collapsed && (
                     <h3
                       className="mb-3 px-3 text-xs font-extrabold uppercase tracking-wider"
@@ -511,8 +351,8 @@ export function Sidebar() {
                   {renderNavLinks(group.items, `base-${group.title ?? groupIndex}`)}
                 </div>
               ))}
-            </nav>
-          )}
+            </div>
+          </div>
         </div>
 
         <div

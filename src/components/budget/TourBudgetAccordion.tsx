@@ -19,6 +19,12 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { ChevronDown, Plus, Trash2, Loader2, Pencil, Check, X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { useDetailPanel } from '@/contexts/DetailPanelContext';
+import {
+  normalizeCommissionPct,
+  formatCommissionDisplayPercentString,
+  userPercentInputToStored,
+} from '@/lib/commission-pct';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -268,6 +274,7 @@ function LineRow({
   item,
   symbol,
   isIncome = false,
+  onOpen,
   onSave,
   onDelete,
   saving,
@@ -275,6 +282,7 @@ function LineRow({
   item: LineItem;
   symbol: string;
   isIncome?: boolean;
+  onOpen?: (id: string) => void;
   onSave: (id: string, proposed: number, actual: number, label?: string) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
   saving: boolean;
@@ -342,13 +350,27 @@ function LineRow({
 
   return (
     <div
-      className={cn(GRID, 'group px-5 py-1.5 text-[12px] border-b border-lp-border/30 hover:bg-lp-surface-hover cursor-pointer')}
-      onClick={() => setEditing(true)}
+      className={cn(
+        GRID,
+        'group px-5 py-1.5 text-[12px] border-b border-lp-border/30 hover:bg-lp-surface-hover',
+        onOpen ? 'cursor-pointer' : 'cursor-default'
+      )}
+      onClick={() => onOpen?.(item.id)}
     >
       <span className="truncate text-lp-text">{item.label}</span>
       <span className="text-right tabular-nums text-lp-text-secondary">{fmtFull(n(item.proposed_cost), symbol)}</span>
       <span className="text-right tabular-nums text-lp-text">{fmtFull(n(item.actual_cost), symbol)}</span>
       <div className="flex items-center justify-end gap-1">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            setEditing(true);
+          }}
+          className="ml-0.5 opacity-0 group-hover:opacity-70 hover:!opacity-100 text-lp-text-tertiary"
+          aria-label={`Edit ${item.label}`}
+        >
+          <Pencil className="h-3 w-3" />
+        </button>
         <span className={cn('text-right tabular-nums text-[11px]', varianceClass(n(item.proposed_cost), n(item.actual_cost), isIncome))}>
           {varianceDisplay(n(item.proposed_cost), n(item.actual_cost), isIncome)}
         </span>
@@ -541,6 +563,14 @@ const PRODUCTION_CATS = [
 ];
 const HOTELS_CAT = [{ value: 'hotels', label: 'Hotels' }];
 
+const COMMISSION_BASIS_OPTIONS = [
+  { value: 'gross', label: 'Gross' },
+  { value: 'net', label: 'Net' },
+  { value: 'gross_merch', label: 'Merch Gross' },
+  { value: 'net_merch', label: 'Net Merch' },
+  { value: 'gross_minus_tax', label: 'Gross Minus Tax' },
+] as const;
+
 function LineItemsAccordionBody({
   tourId,
   categoryPrefix,
@@ -552,6 +582,7 @@ function LineItemsAccordionBody({
   categories: { value: string; label: string }[];
   symbol: string;
 }) {
+  const { openLineItem } = useDetailPanel();
   const [items, setItems] = useState<LineItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -625,13 +656,29 @@ function LineItemsAccordionBody({
               {group.label}
             </div>
             {group.items.map(item => (
-              <LineRow key={item.id} item={item} symbol={symbol} onSave={handleSave} onDelete={handleDelete} saving={saving} />
+              <LineRow
+                key={item.id}
+                item={item}
+                symbol={symbol}
+                onOpen={openLineItem}
+                onSave={handleSave}
+                onDelete={handleDelete}
+                saving={saving}
+              />
             ))}
           </div>
         ))
       ) : (
         items.map(item => (
-          <LineRow key={item.id} item={item} symbol={symbol} onSave={handleSave} onDelete={handleDelete} saving={saving} />
+          <LineRow
+            key={item.id}
+            item={item}
+            symbol={symbol}
+            onOpen={openLineItem}
+            onSave={handleSave}
+            onDelete={handleDelete}
+            saving={saving}
+          />
         ))
       )}
       {items.length === 0 && !adding && (
@@ -795,16 +842,32 @@ function SalariesAccordionBody({
   const [payroll, setPayroll] = useState<PayrollEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    if (!tourId) return;
     setLoading(true);
     Promise.all([
-      fetch(`/api/budget/personnel-rates?tour_id=${tourId}`).then(r => r.ok ? r.json() : { personnel: [] }),
-      fetch(`/api/budget/payroll?tour_id=${tourId}`).then(r => r.ok ? r.json() : { entries: [] }),
-    ]).then(([pData, prData]: [{ personnel?: Personnel[] }, { entries?: PayrollEntry[] }]) => {
-      setPersonnel(pData.personnel ?? []);
-      setPayroll(prData.entries ?? []);
-    }).catch(() => {}).finally(() => setLoading(false));
+      fetch(`/api/budget/personnel-rates?tour_id=${tourId}`).then((r) => (r.ok ? r.json() : { personnel_rates: [] })),
+      fetch(`/api/budget/payroll?tour_id=${tourId}`).then((r) => (r.ok ? r.json() : { entries: [] })),
+    ])
+      .then(([pData, prData]: [{ personnel?: Personnel[]; personnel_rates?: Personnel[] }, { entries?: PayrollEntry[] }]) => {
+        setPersonnel(pData.personnel_rates ?? pData.personnel ?? []);
+        setPayroll(prData.entries ?? []);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, [tourId]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState === 'visible') void load();
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, [load]);
 
   if (loading) return <SalariesAccordionSkeletonRows />;
 
@@ -871,8 +934,14 @@ function SalariesAccordionBody({
 function CommissionsAccordionBody({ tourId, symbol, totalIncome }: { tourId: string; symbol: string; totalIncome: number }) {
   const [commissions, setCommissions] = useState<Commission[]>([]);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<Partial<Commission>>({});
+  const [adding, setAdding] = useState(false);
+  const [addDraft, setAddDraft] = useState<Partial<Commission>>({ label: '', basis: 'gross' });
 
-  useEffect(() => {
+  const load = useCallback(() => {
+    if (!tourId) return;
     setLoading(true);
     fetch(`/api/budget/commissions?tour_id=${tourId}`)
       .then(r => r.ok ? r.json() : { commissions: [] })
@@ -881,35 +950,217 @@ function CommissionsAccordionBody({ tourId, symbol, totalIncome }: { tourId: str
       .finally(() => setLoading(false));
   }, [tourId]);
 
-  if (loading) return <CommissionsAccordionSkeletonRows />;
+  useEffect(() => { void load(); }, [load]);
 
-  if (commissions.length === 0) {
-    return <div className="px-5 py-3 text-[11px] text-lp-text-tertiary italic">No commissions configured. Add them in the Commissions tab.</div>;
-  }
+  const patch = async (id: string, body: Record<string, unknown>) => {
+    setSaving(true);
+    try {
+      const r = await fetch('/api/budget/commissions', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, ...body }),
+      });
+      if (!r.ok) throw new Error();
+      setEditingId(null);
+      setDraft({});
+      void load();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const onDelete = async (id: string) => {
+    if (!window.confirm('Remove this commission line?')) return;
+    setSaving(true);
+    try {
+      const r = await fetch('/api/budget/commissions', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      });
+      if (!r.ok) throw new Error();
+      setEditingId(null);
+      setDraft({});
+      void load();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const onAdd = async () => {
+    const label = String(addDraft.label ?? '').trim() || 'Commission';
+    setSaving(true);
+    try {
+      const r = await fetch('/api/budget/commissions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tour_id: tourId,
+          label,
+          basis: (addDraft.basis ?? 'gross').toString(),
+          percentage: 0,
+        }),
+      });
+      if (!r.ok) throw new Error();
+      setAdding(false);
+      setAddDraft({ label: '', basis: 'gross' });
+      void load();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) return <CommissionsAccordionSkeletonRows />;
 
   return (
     <div>
-      <div className={cn('grid grid-cols-[minmax(0,1fr)_60px_100px_100px_80px] gap-x-2 border-b border-lp-border/60 px-5 py-2 text-[10px] font-semibold uppercase tracking-wider text-lp-text-tertiary')}>
+      <div className={cn('grid grid-cols-[minmax(0,1fr)_64px_88px_100px_56px] gap-x-1 border-b border-lp-border/60 px-5 py-2 text-[10px] font-semibold uppercase tracking-wider text-lp-text-tertiary')}>
         <span>Recipient</span>
-        <span className="text-right">Rate</span>
+        <span className="text-right">Rate %</span>
         <span className="text-right">Basis</span>
         <span className="text-right">Amount</span>
-        <span className="text-right">Var.</span>
+        <span className="w-12 text-right" />
       </div>
       {commissions.map(c => {
-        const amount = n(c.percentage) * totalIncome;
+        const isEditing = editingId === c.id;
+        const row = isEditing ? { ...c, ...draft } : c;
+        const pctForAmount = isEditing ? (draft.percentage !== undefined ? draft.percentage : c.percentage) : c.percentage;
+        const amount = normalizeCommissionPct(pctForAmount) * totalIncome;
         return (
-          <div key={c.id} className="grid grid-cols-[minmax(0,1fr)_60px_100px_100px_80px] gap-x-2 border-b border-lp-border/30 px-5 py-2 text-[12px] items-center">
-            <span className="truncate text-lp-text">{c.label}</span>
-            <span className="text-right tabular-nums text-lp-text-secondary">{(n(c.percentage) * 100).toFixed(1)}%</span>
-            <span className="text-right tabular-nums text-[11px] text-lp-text-tertiary capitalize">{c.basis.replace('_', ' ')}</span>
+          <div
+            key={c.id}
+            className="grid grid-cols-[minmax(0,1fr)_64px_88px_100px_56px] gap-x-1 border-b border-lp-border/30 px-4 py-1.5 text-[12px] items-center hover:bg-lp-surface-hover"
+          >
+            {isEditing ? (
+              <input
+                className="min-w-0 rounded border border-lp-border bg-lp-surface px-1.5 py-0.5 text-lp-text"
+                value={row.label ?? ''}
+                onChange={e => setDraft(d => ({ ...d, label: e.target.value }))}
+              />
+            ) : (
+              <span className="min-w-0 truncate text-lp-text">{c.label}</span>
+            )}
+            {isEditing ? (
+              <input
+                className="w-14 justify-self-end rounded border border-lp-border bg-lp-surface px-0.5 py-0.5 text-right tabular-nums"
+                value={formatCommissionDisplayPercentString(Number(row.percentage) || 0)}
+                onChange={e => {
+                  const n = userPercentInputToStored(parseFloat(e.target.value) || 0);
+                  setDraft(d => ({ ...d, percentage: n }));
+                }}
+                inputMode="decimal"
+              />
+            ) : (
+              <span className="text-right tabular-nums text-lp-text-secondary">
+                {formatCommissionDisplayPercentString(c.percentage)}%
+              </span>
+            )}
+            {isEditing ? (
+              <select
+                className="w-full min-w-0 rounded border border-lp-border bg-lp-surface text-[10px]"
+                value={row.basis ?? c.basis}
+                onChange={e => setDraft(d => ({ ...d, basis: e.target.value }))}
+              >
+                {COMMISSION_BASIS_OPTIONS.map(o => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            ) : (
+              <span className="text-right text-[10px] text-lp-text-tertiary">
+                {COMMISSION_BASIS_OPTIONS.find(b => b.value === c.basis)?.label ?? c.basis}
+              </span>
+            )}
             <span className="text-right tabular-nums text-lp-text">{fmt(amount, symbol)}</span>
-            <span className="text-right text-[11px] text-lp-text-tertiary">—</span>
+            <div className="flex justify-end gap-0.5">
+              {isEditing ? (
+                <>
+                  <button
+                    type="button"
+                    className="rounded p-0.5 text-emerald-600 hover:bg-lp-surface"
+                    onClick={() =>
+                      void patch(c.id, {
+                        label: String(draft.label ?? c.label).trim() || c.label,
+                        percentage: draft.percentage !== undefined ? draft.percentage : c.percentage,
+                        basis: (draft.basis ?? c.basis) as string,
+                      })
+                    }
+                    disabled={saving}
+                    title="Save"
+                  >
+                    <Check className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded p-0.5 text-lp-text-tertiary"
+                    onClick={() => { setEditingId(null); setDraft({}); }}
+                    title="Cancel"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    className="rounded p-0.5 text-lp-text-tertiary hover:text-lp-text"
+                    onClick={() => {
+                      setEditingId(c.id);
+                      setDraft({ label: c.label, percentage: c.percentage, basis: c.basis, notes: c.notes ?? null });
+                    }}
+                    title="Edit"
+                    disabled={saving}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    className="rounded p-0.5 text-red-500/80"
+                    onClick={() => void onDelete(c.id)}
+                    disabled={saving}
+                    title="Delete"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </button>
+                </>
+              )}
+            </div>
           </div>
         );
       })}
-      <div className="border-t border-lp-border/40 px-5 py-2 text-[10px] italic text-lp-text-tertiary">
-        Edit commissions in the Commissions tab
+      {adding && (
+        <div className="flex flex-wrap items-end gap-2 border-b border-lp-border/30 border-dashed bg-lp-orange/5 px-4 py-2 text-[12px]">
+          <input
+            placeholder="Label"
+            className="min-w-[120px] flex-1 rounded border border-lp-border bg-lp-surface px-1.5 py-1"
+            value={addDraft.label ?? ''}
+            onChange={e => setAddDraft(d => ({ ...d, label: e.target.value }))}
+          />
+          <select
+            className="w-32 rounded border border-lp-border bg-lp-surface text-[10px]"
+            value={addDraft.basis ?? 'gross'}
+            onChange={e => setAddDraft(d => ({ ...d, basis: e.target.value }))}
+          >
+            {COMMISSION_BASIS_OPTIONS.map(o => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+          <button type="button" className="text-[11px] text-lp-text-tertiary" onClick={() => { setAdding(false); setAddDraft({ label: '', basis: 'gross' }); }}>
+            Cancel
+          </button>
+          <button type="button" className="text-[11px] font-medium text-lp-orange" onClick={() => void onAdd()} disabled={saving}>
+            Add line
+          </button>
+        </div>
+      )}
+      <div className="border-t border-lp-border/40 px-5 py-2">
+        <button
+          type="button"
+          className="inline-flex items-center gap-0.5 rounded border border-lp-border bg-lp-surface px-2 py-1 text-[10px] font-medium text-lp-text hover:bg-lp-surface-hover"
+          onClick={() => { setAdding(true); setAddDraft({ label: '', basis: 'gross' }); }}
+        >
+          <Plus className="h-3.5 w-3.5" />
+          Add commission
+        </button>
       </div>
     </div>
   );

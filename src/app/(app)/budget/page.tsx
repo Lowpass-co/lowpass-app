@@ -48,20 +48,37 @@ export default async function BudgetPage({
   if (view === 'overview') {
     return (
       <div className="lp-budget -mx-6 -my-6 h-[calc(100vh-4rem)] flex flex-col bg-transparent overflow-hidden">
-        {/* Toolbar: title + "Detailed view" toggle */}
         <div
           className="shrink-0 flex flex-col gap-3 border-b border-lp-border/60 px-6 py-3 sm:flex-row sm:items-center sm:justify-between"
           style={{ background: 'var(--lp-dashboard-bg)' }}
         >
-          <h1 className="text-[13px] font-semibold text-lp-text">Budget Overview</h1>
+          <div className="flex items-center gap-3">
+            <div className="shrink-0">
+              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-lp-table-header-text">
+                View Style
+              </p>
+              <div className="relative flex w-[14.5rem] rounded-xl border border-[var(--lp-sidebar-border)] p-1">
+                <span
+                  className="absolute bottom-1 top-1 w-[calc(50%-6px)] rounded-lg bg-lp-orange transition-[left,opacity] duration-200"
+                  style={{ left: '4px', opacity: 1 }}
+                />
+                <a
+                  href={`/budget?tour_id=${tourId}&view=overview`}
+                  className="lp-label-caps relative z-10 flex flex-1 items-center justify-center rounded-md py-2 text-[11px] text-white transition-colors"
+                >
+                  Overview
+                </a>
+                <a
+                  href={`/budget?tour_id=${tourId}&view=detail&tab=summary`}
+                  className="lp-label-caps relative z-10 flex flex-1 items-center justify-center rounded-md py-2 text-[11px] text-[var(--lp-sidebar-text-muted)] transition-colors"
+                >
+                  Spreadsheet
+                </a>
+              </div>
+            </div>
+          </div>
           <div className="flex flex-wrap items-center gap-4">
             <BudgetOverviewToolbar tourId={tourId} />
-            <a
-              href={`/budget?tour_id=${tourId}&view=detail&tab=summary`}
-              className="text-[11px] text-lp-text-tertiary hover:text-lp-orange/80"
-            >
-              Spreadsheet budget →
-            </a>
           </div>
         </div>
         <div className="flex-1 min-h-0 overflow-hidden">

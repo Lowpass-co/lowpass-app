@@ -79,6 +79,21 @@ export function TransportationTab({ tourId }: { tourId: string }) {
 
   useEffect(() => load(), [load]);
 
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const id = (e as CustomEvent<{ id?: string }>).detail?.id;
+      if (!id) return;
+      setItems((prev) => prev.filter((item) => item.id !== id));
+      setDeleteModal((prev) => (prev?.id === id ? null : prev));
+      if (editingId === id) {
+        setEditingId(null);
+        setEditRow(null);
+      }
+    };
+    window.addEventListener('lp-line-item-deleted', handler);
+    return () => window.removeEventListener('lp-line-item-deleted', handler);
+  }, [editingId]);
+
   const sortedItems = [...items].sort(
     (a, b) => TRANSPORT_CATEGORIES.findIndex((c) => c.value === a.category) - TRANSPORT_CATEGORIES.findIndex((c) => c.value === b.category) || a.order_index - b.order_index
   );
@@ -493,14 +508,14 @@ export function TransportationTab({ tourId }: { tourId: string }) {
           <div key={c.value} className="flex justify-between items-baseline">
             <span className="font-medium text-lp-text">{c.label}:</span>
             <span className="tabular-nums text-lp-text">
-              {(subtotals[c.value]?.proposed ?? 0).toLocaleString('en-GB', { minimumFractionDigits: 2 })} / {(subtotals[c.value]?.actual ?? 0).toLocaleString('en-GB', { minimumFractionDigits: 2 })}
+              {(subtotals[c.value]?.proposed ?? 0).toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} / {(subtotals[c.value]?.actual ?? 0).toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
             </span>
           </div>
         ))}
         <div className="border-t border-lp-border pt-2 mt-2 flex justify-between items-baseline font-semibold text-lp-text">
           <span>TOTAL TRANSPORTATION:</span>
           <span className="tabular-nums">
-            {totalProposed.toLocaleString('en-GB', { minimumFractionDigits: 2 })} / {totalActual.toLocaleString('en-GB', { minimumFractionDigits: 2 })}
+            {totalProposed.toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} / {totalActual.toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
           </span>
         </div>
       </div>

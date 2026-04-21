@@ -2,8 +2,10 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import { ArrowLeft, Plus } from 'lucide-react';
 import { useArtistTourContext } from '@/contexts/ArtistTourContext';
+import { NewArtistSlideOver } from '@/components/artists/NewArtistSlideOver';
 import type { Tour } from '@/types';
 import { cn } from '@/lib/utils';
 
@@ -35,7 +37,16 @@ function statusBadgeClass(status: Tour['status']): string {
   }
 }
 
-export function DashboardArtistGate({ children }: { children: React.ReactNode }) {
+/** Dashboard: optional artist picker (?select=artist), tour list when artist has no tour, else main dashboard. */
+export function DashboardArtistGate({
+  children,
+  pickArtistMode = false,
+}: {
+  children: React.ReactNode;
+  /** When true and no artist is selected, show the artist grid (header “select an artist” CTA). */
+  pickArtistMode?: boolean;
+}) {
+  const router = useRouter();
   const {
     selectedArtistId,
     selectedTourId,
@@ -47,7 +58,14 @@ export function DashboardArtistGate({ children }: { children: React.ReactNode })
     setSelectedTourId,
     tours,
     isLoading,
+    refetchArtists,
   } = useArtistTourContext();
+
+  const [newArtistOpen, setNewArtistOpen] = useState(false);
+
+  useEffect(() => {
+    if (!pickArtistMode) setNewArtistOpen(false);
+  }, [pickArtistMode]);
 
   if (!hydrated) {
     return (
@@ -65,6 +83,9 @@ export function DashboardArtistGate({ children }: { children: React.ReactNode })
   }
 
   if (!selectedArtistId) {
+    if (!pickArtistMode) {
+      return <>{children}</>;
+    }
     if (!artistsLoaded) {
       return (
         <div className="mx-auto min-h-[60vh] max-w-7xl px-2 sm:px-0" aria-busy="true">
@@ -79,7 +100,25 @@ export function DashboardArtistGate({ children }: { children: React.ReactNode })
         </div>
       );
     }
-    return <DashboardChooseArtist artists={artists} onPick={setSelectedArtistId} />;
+    return (
+      <>
+        <DashboardChooseArtist
+          artists={artists}
+          onPick={(id) => {
+            setSelectedArtistId(id);
+            router.replace('/dashboard');
+          }}
+          onAddNew={() => setNewArtistOpen(true)}
+        />
+        <NewArtistSlideOver
+          open={newArtistOpen}
+          onClose={() => setNewArtistOpen(false)}
+          onCreated={async () => {
+            await refetchArtists();
+          }}
+        />
+      </>
+    );
   }
 
   if (!selectedTourId) {
@@ -102,9 +141,11 @@ export function DashboardArtistGate({ children }: { children: React.ReactNode })
 function DashboardChooseArtist({
   artists,
   onPick,
+  onAddNew,
 }: {
   artists: { id: string; name: string; spotify_image_url?: string }[];
   onPick: (id: string) => void;
+  onAddNew: () => void;
 }) {
   return (
     <div className="mx-auto max-w-7xl px-2 py-8 sm:px-0">
@@ -129,13 +170,14 @@ function DashboardChooseArtist({
             <p className="px-2 py-3 text-center text-[13px] font-semibold text-lp-text">{artist.name}</p>
           </button>
         ))}
-        <Link
-          href="/artists"
+        <button
+          type="button"
+          onClick={onAddNew}
           className="flex min-h-[140px] flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-lp-border bg-lp-surface/50 text-lp-text-secondary transition-colors hover:border-lp-orange hover:bg-lp-surface-hover hover:text-lp-orange"
         >
           <Plus className="h-8 w-8" strokeWidth={1.5} />
           <span className="text-[13px] font-semibold">Add new artist</span>
-        </Link>
+        </button>
       </div>
     </div>
   );

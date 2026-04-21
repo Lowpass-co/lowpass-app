@@ -13,8 +13,33 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { X } from 'lucide-react';
 import { useArtistTourContext } from '@/contexts/ArtistTourContext';
 import { cn } from '@/lib/utils';
+
+/** Clears workspace artist+tour scope and returns to the artist picker on Dashboard. */
+function ArtistTourScopeClearButton() {
+  const router = useRouter();
+  const { setSelectedArtistId } = useArtistTourContext();
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        setSelectedArtistId(null);
+        router.push('/dashboard');
+      }}
+      className={cn(
+        'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-transparent',
+        'text-lp-text-secondary transition-colors',
+        'hover:border-lp-border hover:bg-lp-bg-tertiary hover:text-lp-text'
+      )}
+      aria-label="Clear artist and tour"
+      title="Clear artist & tour"
+    >
+      <X size={17} strokeWidth={2.25} />
+    </button>
+  );
+}
 
 export function AppTopBarBreadcrumb() {
   const router = useRouter();
@@ -50,7 +75,7 @@ export function AppTopBarBreadcrumb() {
   if (!hydrated) {
     return (
       <div className="flex min-w-0 w-full max-w-2xl flex-1 items-center gap-3 sm:max-w-3xl" aria-hidden>
-        <div className="h-8 w-8 shrink-0 rounded-md bg-lp-surface/60" />
+        <div className="h-9 w-9 shrink-0 rounded-md bg-lp-surface/60" />
         <div className="h-4 min-w-0 flex-1 rounded bg-lp-surface/40" />
       </div>
     );
@@ -60,18 +85,52 @@ export function AppTopBarBreadcrumb() {
     return (
       <button
         type="button"
-        onClick={() => router.push('/dashboard')}
-        className="text-sm font-semibold text-lp-orange transition-opacity hover:opacity-80"
+        onClick={() => router.push('/dashboard?select=artist')}
+        className={cn(
+          'flex min-h-[2.75rem] shrink-0 items-center justify-center gap-1.5 rounded-lg px-3 py-2',
+          'text-xs font-bold tracking-widest text-lp-orange transition-opacity hover:opacity-80'
+        )}
+        style={{ letterSpacing: '0.12em' }}
       >
-        Choose artist →
+        <span className="whitespace-nowrap">SELECT AN ARTIST →</span>
       </button>
     );
   }
 
   if (!selectedTourId) {
     return (
-      <div className="flex min-w-0 w-full max-w-2xl flex-1 items-center gap-3 sm:max-w-3xl">
-        <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-md ring-1 ring-lp-border">
+      <div className="flex min-w-0 w-full max-w-2xl flex-1 items-center gap-2 sm:max-w-3xl">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
+          <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-md ring-1 ring-lp-border">
+            {selectedArtist?.spotify_image_url ? (
+              <img src={selectedArtist.spotify_image_url} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-lp-bg-secondary to-lp-bg-tertiary text-xs font-bold text-lp-text-secondary">
+                {(selectedArtist?.name ?? '?').charAt(0).toUpperCase()}
+              </div>
+            )}
+          </div>
+          <div className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-1 text-sm font-semibold text-lp-text">
+            <span className="truncate">{selectedArtist?.name ?? 'Artist'}</span>
+            <span className="text-lp-text-tertiary">/</span>
+            <button
+              type="button"
+              onClick={() => router.push('/dashboard')}
+              className="shrink-0 text-lp-orange transition-opacity hover:opacity-80"
+            >
+              Choose tour →
+            </button>
+          </div>
+        </div>
+        <ArtistTourScopeClearButton />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex min-w-0 w-full max-w-2xl flex-1 items-center gap-2 sm:max-w-3xl">
+      <div className="flex min-w-0 flex-1 items-center gap-3">
+        <div className="relative h-9 w-9 shrink-0 overflow-hidden rounded-md ring-1 ring-lp-border">
           {selectedArtist?.spotify_image_url ? (
             <img src={selectedArtist.spotify_image_url} alt="" className="h-full w-full object-cover" />
           ) : (
@@ -80,35 +139,9 @@ export function AppTopBarBreadcrumb() {
             </div>
           )}
         </div>
-        <div className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-1 text-sm font-semibold text-lp-text">
-          <span className="truncate">{selectedArtist?.name ?? 'Artist'}</span>
-          <span className="text-lp-text-tertiary">/</span>
-          <button
-            type="button"
-            onClick={() => router.push('/dashboard')}
-            className="shrink-0 text-lp-orange transition-opacity hover:opacity-80"
-          >
-            Choose tour →
-          </button>
-        </div>
-      </div>
-    );
-  }
 
-  return (
-    <div className="flex min-w-0 w-full max-w-2xl flex-1 items-center gap-3 sm:max-w-3xl">
-      <div className="relative h-8 w-8 shrink-0 overflow-hidden rounded-md ring-1 ring-lp-border">
-        {selectedArtist?.spotify_image_url ? (
-          <img src={selectedArtist.spotify_image_url} alt="" className="h-full w-full object-cover" />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-lp-bg-secondary to-lp-bg-tertiary text-xs font-bold text-lp-text-secondary">
-            {(selectedArtist?.name ?? '?').charAt(0).toUpperCase()}
-          </div>
-        )}
-      </div>
-
-      <div className="flex min-w-0 flex-1 items-center gap-1 text-sm font-semibold" style={{ color: 'var(--lp-text)' }}>
-        <div className="relative min-w-0" ref={artistWrapRef}>
+        <div className="flex min-w-0 flex-1 items-center gap-1 text-sm font-semibold" style={{ color: 'var(--lp-text)' }}>
+          <div className="relative min-w-0" ref={artistWrapRef}>
           <button
             type="button"
             onClick={() => {
@@ -145,49 +178,51 @@ export function AppTopBarBreadcrumb() {
               ))}
             </div>
           )}
-        </div>
+          </div>
 
-        <span className="shrink-0 text-lp-text-tertiary">/</span>
+          <span className="shrink-0 text-lp-text-tertiary">/</span>
 
-        <div className="relative min-w-0 flex-1" ref={tourWrapRef}>
-          <button
-            type="button"
-            onClick={() => {
-              setArtistMenuOpen(false);
-              setTourMenuOpen((o) => !o);
-            }}
-            className="w-full truncate text-left transition-opacity hover:opacity-80"
-            style={{ color: 'var(--lp-text)' }}
-          >
-            {selectedTour?.name ?? 'Tour'}
-          </button>
-          {tourMenuOpen && (
-            <div
-              className="absolute left-0 top-full z-50 mt-1 max-h-56 min-w-[12rem] overflow-y-auto rounded-lg border border-lp-border bg-lp-surface py-1 shadow-lg"
-              role="listbox"
+          <div className="relative min-w-0 flex-1" ref={tourWrapRef}>
+            <button
+              type="button"
+              onClick={() => {
+                setArtistMenuOpen(false);
+                setTourMenuOpen((o) => !o);
+              }}
+              className="w-full truncate text-left transition-opacity hover:opacity-80"
+              style={{ color: 'var(--lp-text)' }}
             >
-              {tours.map((t) => (
-                <button
-                  key={t.id}
-                  type="button"
-                  role="option"
-                  className={cn(
-                    'flex w-full px-3 py-2 text-left text-sm transition-colors hover:bg-lp-bg-tertiary',
-                    t.id === selectedTourId && 'bg-lp-bg-secondary font-medium'
-                  )}
-                  onClick={() => {
-                    setSelectedTourId(t.id);
-                    setTourMenuOpen(false);
-                    router.push(`/tours/${t.id}/advance`);
-                  }}
-                >
-                  {t.name}
-                </button>
-              ))}
-            </div>
-          )}
+              {selectedTour?.name ?? 'Tour'}
+            </button>
+            {tourMenuOpen && (
+              <div
+                className="absolute left-0 top-full z-50 mt-1 max-h-56 min-w-[12rem] overflow-y-auto rounded-lg border border-lp-border bg-lp-surface py-1 shadow-lg"
+                role="listbox"
+              >
+                {tours.map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    role="option"
+                    className={cn(
+                      'flex w-full px-3 py-2 text-left text-sm transition-colors hover:bg-lp-bg-tertiary',
+                      t.id === selectedTourId && 'bg-lp-bg-secondary font-medium'
+                    )}
+                    onClick={() => {
+                      setSelectedTourId(t.id);
+                      setTourMenuOpen(false);
+                      router.push(`/tours/${t.id}/advance`);
+                    }}
+                  >
+                    {t.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
+      <ArtistTourScopeClearButton />
     </div>
   );
 }

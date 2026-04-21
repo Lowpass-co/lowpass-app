@@ -161,7 +161,7 @@ export function TourPersonnelDetailSlideOver({
           </div>
 
           <Link
-            href={`/budget?tour_id=${tourId}`}
+            href={`/budget?tour_id=${tourId}&view=detail&tab=salaries`}
             className="inline-block text-sm text-lp-orange hover:underline"
             onClick={onClose}
           >

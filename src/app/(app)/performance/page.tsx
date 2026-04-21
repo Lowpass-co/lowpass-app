@@ -29,14 +29,14 @@ export default async function PerformancePage({
             ? artistName
               ? `Analytics and insights for ${artistName}. Detailed modules coming soon.`
               : 'Analytics for the selected artist. Detailed modules coming soon.'
-            : 'Artist and tour financial analytics page. Detailed performance modules coming soon.'}
+            : 'Workspace-wide analytics placeholder (all artists). Detailed performance modules coming soon.'}
         </p>
       </div>
       <div className="rounded-xl border border-lp-border bg-lp-surface p-6">
         <p className="text-sm text-lp-text-secondary">
           {artistId
             ? 'Placeholder for touring patterns, P/L trends, and performance metrics scoped to this artist.'
-            : 'Placeholder for touring patterns, P/L trend analysis, and cross-variable performance insights.'}
+            : 'Placeholder for workspace-wide touring patterns, P/L trends, and cross-variable performance insights.'}
         </p>
       </div>
     </div>

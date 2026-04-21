@@ -25,6 +25,7 @@ export default function LoginPage() {
   const [forgotSent, setForgotSent] = useState(false);
   const [forgotLoading, setForgotLoading] = useState(false);
   const [transitioning, setTransitioning] = useState(false);
+  const navFailTimerRef = useRef<number | null>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   // Animated globe
@@ -129,6 +130,14 @@ export default function LoginPage() {
     };
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (navFailTimerRef.current != null) {
+        window.clearTimeout(navFailTimerRef.current);
+      }
+    };
+  }, []);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -136,6 +145,13 @@ export default function LoginPage() {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) { setError(error.message); setLoading(false); return; }
     setTransitioning(true);
+    navFailTimerRef.current = window.setTimeout(() => {
+      if (window.location.pathname.startsWith('/login')) {
+        setTransitioning(false);
+        setLoading(false);
+        setError('Signed in, but dashboard did not load. Please retry in a moment.');
+      }
+    }, 4500);
     setTimeout(() => {
       router.push('/dashboard');
       router.refresh();

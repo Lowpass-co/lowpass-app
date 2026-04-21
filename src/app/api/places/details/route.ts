@@ -25,7 +25,8 @@ export async function GET(request: Request) {
     headers: {
       'Content-Type': 'application/json',
       'X-Goog-Api-Key': key,
-      'X-Goog-FieldMask': 'displayName,formattedAddress,addressComponents,location,websiteUri,internationalPhoneNumber,rating,currentOpeningHours',
+      'X-Goog-FieldMask':
+        'displayName,formattedAddress,addressComponents,location,websiteUri,internationalPhoneNumber,rating,currentOpeningHours,iataCode,types,primaryType',
     },
   });
 
@@ -38,6 +39,9 @@ export async function GET(request: Request) {
   const data = (await res.json()) as {
     displayName?: { text?: string };
     formattedAddress?: string;
+    iataCode?: string;
+    primaryType?: string;
+    types?: string[];
     location?: { latitude?: number; longitude?: number };
     addressComponents?: Array<{
       types?: string[];
@@ -55,13 +59,29 @@ export async function GET(request: Request) {
   };
 
   let locality: string | undefined;
+  let postalTown: string | undefined;
+  let sublocality: string | undefined;
+  let adminArea2: string | undefined;
+  let adminArea1: string | undefined;
   let country: string | undefined;
   for (const comp of data.addressComponents ?? []) {
     const types = comp.types ?? [];
     const text = comp.longText ?? comp.shortText ?? '';
     if (types.includes('locality')) locality = text;
+    if (types.includes('postal_town')) postalTown = text;
+    if (types.includes('sublocality') || types.includes('sublocality_level_1')) sublocality = text;
+    if (types.includes('administrative_area_level_2')) adminArea2 = text;
+    if (types.includes('administrative_area_level_1')) adminArea1 = text;
     if (types.includes('country')) country = text;
   }
+
+  const inferredCity =
+    locality?.trim() ||
+    postalTown?.trim() ||
+    sublocality?.trim() ||
+    adminArea2?.trim() ||
+    adminArea1?.trim() ||
+    null;
 
   const openingHours = data.currentOpeningHours
     ? {
@@ -73,7 +93,12 @@ export async function GET(request: Request) {
   return NextResponse.json({
     displayName: data.displayName?.text ?? '',
     formattedAddress: data.formattedAddress ?? '',
+    iataCode: data.iataCode ?? undefined,
+    primaryType: data.primaryType ?? undefined,
+    types: data.types ?? undefined,
     locality,
+    postalTown: postalTown ?? undefined,
+    inferredCity,
     country,
     latitude: data.location?.latitude,
     longitude: data.location?.longitude,

@@ -1,8 +1,9 @@
 /* ============================================
-   LOWPASS — Google Places Autocomplete (New) proxy
+   LOWPASS — Google Places Autocomplete (airports only)
 
-   POST body: { input: string; includedPrimaryTypes?: string[] }
+   POST body: { input: string }
    Returns: { suggestions: { placeId: string; text: string }[] }
+   Uses Places API (New) with includedPrimaryTypes: [airport].
    ============================================ */
 
 import { NextResponse } from 'next/server';
@@ -15,7 +16,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Places API not configured' }, { status: 503 });
   }
 
-  let body: { input?: string; includedPrimaryTypes?: string[] };
+  let body: { input?: string };
   try {
     body = await request.json();
   } catch {
@@ -27,13 +28,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ suggestions: [] });
   }
 
-  const requestPayload: Record<string, unknown> = { input };
-  if (Array.isArray(body.includedPrimaryTypes) && body.includedPrimaryTypes.length > 0) {
-    requestPayload.includedPrimaryTypes = body.includedPrimaryTypes.filter(
-      (t): t is string => typeof t === 'string' && t.length > 0
-    );
-  }
-
   const res = await fetch(PLACES_AUTOCOMPLETE_URL, {
     method: 'POST',
     headers: {
@@ -41,12 +35,15 @@ export async function POST(request: Request) {
       'X-Goog-Api-Key': key,
       'X-Goog-FieldMask': 'suggestions.placePrediction.placeId,suggestions.placePrediction.text.text',
     },
-    body: JSON.stringify(requestPayload),
+    body: JSON.stringify({
+      input,
+      includedPrimaryTypes: ['airport'],
+    }),
   });
 
   if (!res.ok) {
     const err = await res.text();
-    console.error('Places autocomplete error:', res.status, err);
+    console.error('Places airport autocomplete error:', res.status, err);
     return NextResponse.json({ error: 'Places request failed' }, { status: 502 });
   }
 

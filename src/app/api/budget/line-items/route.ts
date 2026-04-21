@@ -229,6 +229,27 @@ export async function PATCH(request: Request) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  const row = data as {
+    source_entity_type?: string | null;
+    source_entity_id?: string | null;
+  };
+  if (
+    updates.label !== undefined &&
+    row.source_entity_type === 'hotel_booking' &&
+    row.source_entity_id
+  ) {
+    const name = String(updates.label).trim();
+    await supabase
+      .from('hotel_bookings')
+      .update({
+        hotel_name: name,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', row.source_entity_id)
+      .eq('workspace_id', profile.workspace_id);
+  }
+
   return NextResponse.json(data);
 }
 

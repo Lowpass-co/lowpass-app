@@ -64,7 +64,65 @@ export async function GET(request: Request) {
     room_assignments: h.hotel_room_assignments ?? [],
   }));
 
-  return NextResponse.json({ hotels });
+  // Ensure each hotel has a linked budget_line_item for the detail pop-out
+  for (const h of hotels) {
+    const row = h as { id: string; line_item_id?: string | null; hotel_name: string; tour_id: string };
+    if (row.line_item_id) continue;
+    const { data: lineItem, error: liErr } = await supabase
+      .from('budget_line_items')
+      .insert({
+        tour_id: tourId,
+        workspace_id: profile.workspace_id,
+        category: 'hotels',
+        label: String(row.hotel_name ?? '').trim(),
+        proposed_cost: 0,
+        actual_cost: 0,
+        source_entity_type: 'hotel_booking',
+        source_entity_id: row.id,
+      })
+      .select('id')
+      .single();
+    if (!liErr && lineItem?.id) {
+      await supabase.from('hotel_bookings').update({ line_item_id: lineItem.id }).eq('id', row.id);
+      row.line_item_id = lineItem.id;
+    }
+  }
+
+  const lineIds = [
+    ...new Set(
+      hotels
+        .map((x) => (x as { line_item_id?: string | null }).line_item_id)
+        .filter((id): id is string => Boolean(id))
+    ),
+  ];
+  const lineMetaById = new Map<string, { proposed_cost: number; actual_cost: number; status: string }>();
+  if (lineIds.length > 0) {
+    const { data: lineRows } = await supabase
+      .from('budget_line_items')
+      .select('id, proposed_cost, actual_cost, status')
+      .eq('workspace_id', profile.workspace_id)
+      .in('id', lineIds);
+    for (const row of lineRows ?? []) {
+      lineMetaById.set(String((row as { id: string }).id), {
+        proposed_cost: Number((row as { proposed_cost?: number | null }).proposed_cost ?? 0),
+        actual_cost: Number((row as { actual_cost?: number | null }).actual_cost ?? 0),
+        status: String((row as { status?: string | null }).status ?? 'draft'),
+      });
+    }
+  }
+
+  const hotelsOut = hotels.map((h) => {
+    const liId = (h as { line_item_id?: string | null }).line_item_id;
+    const meta = liId ? lineMetaById.get(liId) : undefined;
+    return {
+      ...h,
+      proposed_cost: meta?.proposed_cost ?? 0,
+      actual_cost: meta?.actual_cost ?? 0,
+      status: meta?.status ?? 'draft',
+    };
+  });
+
+  return NextResponse.json({ hotels: hotelsOut });
 }
 
 export async function POST(request: Request) {
@@ -86,7 +144,7 @@ export async function POST(request: Request) {
 
   let body: {
     tour_id: string;
-    hotel_name: string;
+    hotel_name?: string;
     address?: string | null;
     phone?: string | null;
     cancellation_policy?: string | null;
@@ -102,13 +160,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  const { tour_id, hotel_name } = body;
-  if (!tour_id || !hotel_name?.trim()) {
-    return NextResponse.json(
-      { error: 'tour_id and hotel_name are required' },
-      { status: 400 }
-    );
+  const { tour_id } = body;
+  if (!tour_id) {
+    return NextResponse.json({ error: 'tour_id is required' }, { status: 400 });
   }
+  const nameForRow = typeof body.hotel_name === 'string' ? body.hotel_name.trim() : '';
 
   const { data: tour } = await supabase
     .from('tours')
@@ -126,7 +182,7 @@ export async function POST(request: Request) {
     .insert({
       tour_id,
       workspace_id: profile.workspace_id,
-      hotel_name: hotel_name.trim(),
+      hotel_name: nameForRow,
       address: body.address ?? null,
       phone: body.phone ?? null,
       cancellation_policy: body.cancellation_policy ?? null,
@@ -151,7 +207,7 @@ export async function POST(request: Request) {
       tour_id,
       workspace_id: profile.workspace_id,
       category: 'hotels',
-      label: hotel_name.trim(),
+      label: nameForRow,
       proposed_cost: 0,
       actual_cost: 0,
       source_entity_type: 'hotel_booking',
@@ -238,6 +294,17 @@ export async function PATCH(request: Request) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  const row = data as { line_item_id?: string | null; hotel_name?: string | null };
+  if (updates.hotel_name !== undefined && row.line_item_id) {
+    const label = String(row.hotel_name ?? '').trim();
+    await supabase
+      .from('budget_line_items')
+      .update({ label, updated_at: new Date().toISOString() })
+      .eq('id', row.line_item_id)
+      .eq('workspace_id', profile.workspace_id);
+  }
+
   return NextResponse.json(data);
 }
 

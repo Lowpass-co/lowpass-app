@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
+import { formatCommissionDisplayPercentString, userPercentInputToStored } from '@/lib/commission-pct';
 
 export interface InlineEditCellProps {
   value: string | number | null;
@@ -55,11 +56,8 @@ function formatDisplay(
     }).format(Number(value));
   }
   if (type === 'percentage') {
-    const n = Number(value);
-    if (Number.isNaN(n)) return EMPTY;
-    const t = Math.round(n * 1000) / 1000;
-    const s = t.toFixed(3).replace(/\.?0+$/, '');
-    return `${s}%`;
+    if (value === null || value === undefined || value === '') return EMPTY;
+    return `${formatCommissionDisplayPercentString(Number(value))}%`;
   }
   return String(value);
 }
@@ -70,9 +68,13 @@ function valueToEditString(
 ): string {
   if (value === null || value === undefined || value === '') return '';
   if (type === 'text' || type === 'select') return String(value);
-  if (type === 'percentage' || type === 'currency') {
+  if (type === 'currency') {
     const n = Number(value);
     return Number.isNaN(n) ? '' : String(value);
+  }
+  if (type === 'percentage') {
+    if (value === null || value === undefined || value === '') return '';
+    return formatCommissionDisplayPercentString(Number(value));
   }
   if (type === 'number') {
     const n = Number(value);
@@ -121,10 +123,14 @@ export function InlineEditCell({
       if (type === 'number') {
         const cleaned = sanitizeIntegerInput(String(newVal));
         newVal = cleaned === '' ? 0 : parseInt(cleaned, 10);
-      } else if (type === 'currency' || type === 'percentage') {
+      } else if (type === 'currency') {
         const raw = String(newVal).replace(/[^0-9.-]/g, '');
         const n = parseFloat(raw);
         newVal = Number.isNaN(n) ? 0 : n;
+      } else if (type === 'percentage') {
+        const raw = String(newVal).replace(/[^0-9.-]/g, '');
+        const n = parseFloat(raw);
+        newVal = Number.isNaN(n) ? 0 : userPercentInputToStored(n);
       }
     }
 

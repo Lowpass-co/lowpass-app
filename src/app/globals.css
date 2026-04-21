@@ -338,8 +338,23 @@ main h2 {
 
 /* Selection */
 ::selection {
-  background: var(--color-lp-orange-subtle);
-  color: var(--lp-text);
+  background: rgba(255, 69, 0, 0.3);
+  color: #111111;
+}
+
+input::selection,
+textarea::selection,
+[contenteditable='true']::selection {
+  background: rgba(255, 69, 0, 0.3);
+  color: #111111;
+}
+
+.dark ::selection,
+.dark input::selection,
+.dark textarea::selection,
+.dark [contenteditable='true']::selection {
+  background: rgba(255, 69, 0, 0.45);
+  color: #ffffff;
 }
 
 /* Display / heading font (Montserrat) */

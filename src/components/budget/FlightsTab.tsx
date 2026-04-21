@@ -561,10 +561,10 @@ export function FlightsTab({ tourId }: { tourId: string }) {
 
       <div className="flex flex-wrap items-baseline gap-6 rounded-xl border border-lp-border bg-lp-surface p-4">
         <span className="font-semibold text-lp-text">
-          Total Flights (Proposed) = {totalProposed.toLocaleString('en-GB', { minimumFractionDigits: 2 })}
+          Total Flights (Proposed) = {totalProposed.toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
         </span>
         <span className="font-semibold text-lp-text">
-          Total Flights (Actual) = {totalActual.toLocaleString('en-GB', { minimumFractionDigits: 2 })}
+          Total Flights (Actual) = {totalActual.toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
         </span>
         <span className={cn('text-sm font-medium tabular-nums', totalVariance.className)}>
           Variance: {totalVariance.text}
