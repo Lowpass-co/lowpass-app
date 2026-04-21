@@ -2,7 +2,6 @@
 
 import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useState } from 'react';
-import Link from 'next/link';
 import { Loader2 } from 'lucide-react';
 import { BudgetFolderTabsNav } from '@/components/budget/BudgetFolderTabsNav';
 import { BUDGET_CURRENCY_OPTIONS } from '@/lib/budget-currency';
@@ -47,7 +46,6 @@ const CURRENCY_SELECT_OPTIONS: StyledSelectOption<string>[] = BUDGET_CURRENCY_OP
 }));
 
 export function BudgetDetailShell({ tourId, activeTab }: { tourId: string; activeTab: TabId }) {
-  const [tourName, setTourName] = useState('');
   const [currency, setCurrency] = useState('GBP');
   const [loadingTour, setLoadingTour] = useState(true);
   const [savingCurrency, setSavingCurrency] = useState(false);
@@ -58,7 +56,6 @@ export function BudgetDetailShell({ tourId, activeTab }: { tourId: string; activ
       const res = await fetch(`/api/tours/${tourId}`);
       if (!res.ok) return;
       const t = await res.json();
-      setTourName(typeof t.name === 'string' ? t.name : 'Tour');
       const c = typeof t.currency === 'string' && t.currency.trim() ? t.currency.trim().toUpperCase() : 'GBP';
       setCurrency(c);
     } finally {
@@ -96,14 +93,7 @@ export function BudgetDetailShell({ tourId, activeTab }: { tourId: string; activ
       case 'income':
         return <IncomeTab tourId={tourId} />;
       case 'salaries':
-        return (
-          <div className="space-y-3">
-            <p className="text-[11px] text-lp-text-secondary">
-              Day grid and rates use tour currency <span className="font-semibold text-lp-text">{currency}</span>.
-            </p>
-            <SalariesTab tourId={tourId} currency={currency} />
-          </div>
-        );
+        return <SalariesTab tourId={tourId} currency={currency} />;
       case 'hotels':
         return <HotelsGrid {...sheet} />;
       case 'flights':
@@ -130,21 +120,29 @@ export function BudgetDetailShell({ tourId, activeTab }: { tourId: string; activ
         style={{ background: 'var(--lp-dashboard-bg)' }}
       >
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2">
-            <Link
-              href={`/budget?tour_id=${tourId}&view=overview`}
-              className="text-sm text-lp-text-tertiary transition-colors hover:text-lp-orange"
-            >
-              ← Budget overview
-            </Link>
-            <div className="hidden h-4 w-px bg-lp-border sm:block" aria-hidden />
-            <div className="min-w-0">
-              <h1 className="truncate text-lg font-semibold tracking-tight text-lp-text">
-                {loadingTour ? '…' : tourName}
-              </h1>
-              <p className="text-sm text-lp-text-secondary">
-                Spreadsheet-style budget · click cells to edit · all figures in tour currency unless noted
+          <div className="flex items-center gap-3">
+            <div className="shrink-0">
+              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-lp-table-header-text">
+                View Style
               </p>
+              <div className="relative flex w-[14.5rem] rounded-xl border border-[var(--lp-sidebar-border)] p-1">
+                <span
+                  className="absolute bottom-1 top-1 w-[calc(50%-6px)] rounded-lg bg-lp-orange transition-[left,opacity] duration-200"
+                  style={{ left: 'calc(50% + 2px)', opacity: 1 }}
+                />
+                <a
+                  href={`/budget?tour_id=${tourId}&view=overview`}
+                  className="lp-label-caps relative z-10 flex flex-1 items-center justify-center rounded-md py-2 text-[11px] text-[var(--lp-sidebar-text-muted)] transition-colors"
+                >
+                  Overview
+                </a>
+                <a
+                  href={`/budget?tour_id=${tourId}&view=detail&tab=${activeTab}`}
+                  className="lp-label-caps relative z-10 flex flex-1 items-center justify-center rounded-md py-2 text-[11px] text-white transition-colors"
+                >
+                  Spreadsheet
+                </a>
+              </div>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">

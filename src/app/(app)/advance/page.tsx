@@ -115,7 +115,7 @@ function AdvanceOverviewContent() {
         <p className="mt-1 text-sm text-lp-text-secondary">
           {advanceApiQuery
             ? 'Advance progress and shows needing attention for the selected artist.'
-            : 'Cross-tour advance progress and shows needing attention.'}
+            : 'Advance progress and shows needing attention across all artists and tours.'}
         </p>
       </div>
 

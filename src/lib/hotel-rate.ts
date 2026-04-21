@@ -1,0 +1,31 @@
+/** Stay length from hotel booking dates (checkout minus check-in, whole nights). */
+export function nightsBetweenHotelStay(checkIn: string | null, checkOut: string | null): number | null {
+  if (!checkIn || !checkOut) return null;
+  const a = new Date(checkIn + 'T12:00:00');
+  const b = new Date(checkOut + 'T12:00:00');
+  if (Number.isNaN(a.getTime()) || Number.isNaN(b.getTime())) return null;
+  return Math.round((b.getTime() - a.getTime()) / (24 * 60 * 60 * 1000));
+}
+
+/** Prefer stay nights from booking dates; otherwise sum of assignment nights. */
+export function hotelRateDenominatorNights(stayNights: number | null, totalAssignmentNights: number): number {
+  if (stayNights != null && stayNights > 0) return stayNights;
+  return Math.max(0, totalAssignmentNights);
+}
+
+/** Actual is treated as "confirmed" when strictly positive (shows actual-based rate). */
+export function useActualForHotelRate(actualCost: number | null | undefined): boolean {
+  return Number(actualCost ?? 0) > 0;
+}
+
+/** Blended rate/night: proposed ÷ nights until actual is set (positive), then actual ÷ nights. */
+export function impliedRatePerNight(
+  proposedCost: number | null | undefined,
+  actualCost: number | null | undefined,
+  denomNights: number
+): number | null {
+  if (denomNights <= 0) return null;
+  const useActual = useActualForHotelRate(actualCost);
+  const total = useActual ? Number(actualCost ?? 0) : Number(proposedCost ?? 0);
+  return total / denomNights;
+}

@@ -30,6 +30,8 @@ interface ArtistTourContextType {
   artistsLoaded: boolean;
   tourRouting: TourRoutingLiteRow[];
   isRoutingLoading: boolean;
+  /** Reload artists from the server (e.g. after creating one). */
+  refetchArtists: () => Promise<void>;
 }
 
 const ArtistTourContext = createContext<ArtistTourContextType | null>(null);
@@ -80,17 +82,35 @@ export function ArtistTourProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const fetchArtistsList = useCallback(async (): Promise<Artist[]> => {
+    try {
+      const r = await fetch('/api/artists');
+      if (!r.ok) return [];
+      const data = await r.json();
+      return Array.isArray(data) ? data : [];
+    } catch {
+      return [];
+    }
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
-    fetch('/api/artists')
-      .then((r) => (r.ok ? r.json() : []))
-      .then((data) => {
-        if (!cancelled && Array.isArray(data)) setArtists(data);
+    fetchArtistsList()
+      .then((list) => {
+        if (!cancelled) setArtists(list);
       })
-      .catch(() => { if (!cancelled) setArtists([]); })
-      .finally(() => { if (!cancelled) setArtistsLoaded(true); });
-    return () => { cancelled = true; };
-  }, []);
+      .finally(() => {
+        if (!cancelled) setArtistsLoaded(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [fetchArtistsList]);
+
+  const refetchArtists = useCallback(async () => {
+    const list = await fetchArtistsList();
+    setArtists(list);
+  }, [fetchArtistsList]);
 
   useEffect(() => {
     if (!hydrated) return;
@@ -175,6 +195,7 @@ export function ArtistTourProvider({ children }: { children: ReactNode }) {
     artistsLoaded,
     tourRouting,
     isRoutingLoading,
+    refetchArtists,
   };
 
   return (

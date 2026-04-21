@@ -91,7 +91,6 @@ export async function POST(
       file_name: file.name,
       file_type: file.type,
       file_size_bytes: file.size,
-      uploaded_by: user.id,
     })
     .select()
     .single();

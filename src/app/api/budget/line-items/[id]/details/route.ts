@@ -7,6 +7,8 @@
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 
+const BUCKET = 'budget-files';
+
 export async function GET(
   _request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -39,16 +41,30 @@ export async function GET(
       .from('budget_line_item_attachments')
       .select('*')
       .eq('line_item_id', lineItemId)
+      .eq('workspace_id', profile.workspace_id)
       .order('uploaded_at', { ascending: false }),
     supabase
       .from('budget_line_item_notes')
       .select('*')
       .eq('line_item_id', lineItemId)
+      .eq('workspace_id', profile.workspace_id)
       .order('created_at', { ascending: false }),
   ]);
 
-  const attachments = attachmentsRes.data ?? [];
+  const attachmentRows = attachmentsRes.data ?? [];
   const notesRaw = notesRes.data ?? [];
+
+  const attachments = await Promise.all(
+    attachmentRows.map(async (row) => {
+      const fileUrl = String((row as { file_url?: string | null }).file_url ?? '');
+      const marker = `/${BUCKET}/`;
+      const storagePath = fileUrl.includes(marker) ? fileUrl.split(marker)[1] : null;
+      if (!storagePath) return row;
+      const { data: signed } = await supabase.storage.from(BUCKET).createSignedUrl(storagePath, 60 * 60 * 12);
+      if (!signed?.signedUrl) return row;
+      return { ...row, file_url: signed.signedUrl };
+    })
+  );
 
   const createdByIds = [...new Set((notesRaw ?? []).map((n) => (n as { created_by?: string | null }).created_by).filter(Boolean))] as string[];
   const { data: profilesRaw } = createdByIds.length
@@ -80,10 +96,60 @@ export async function GET(
     linkedItems = linked ?? [];
   }
 
+  let hotel_booking: {
+    id: string;
+    hotel_name: string;
+    city: string | null;
+    check_in_date: string | null;
+    check_out_date: string | null;
+    total_assignment_nights: number;
+  } | null = null;
+  const srcType = (lineItem as { source_entity_type?: string | null }).source_entity_type;
+  const srcId = (lineItem as { source_entity_id?: string | null }).source_entity_id;
+  if (srcType === 'hotel_booking' && srcId) {
+    const [{ data: hb }, { data: asgRows }] = await Promise.all([
+      supabase
+        .from('hotel_bookings')
+        .select('id, hotel_name, city, check_in_date, check_out_date')
+        .eq('id', srcId)
+        .eq('workspace_id', profile.workspace_id)
+        .maybeSingle(),
+      supabase.from('hotel_room_assignments').select('nights').eq('hotel_booking_id', srcId).eq('workspace_id', profile.workspace_id),
+    ]);
+    const totalAssignmentNights = (asgRows ?? []).reduce((s, r) => s + Number((r as { nights?: number }).nights ?? 0), 0);
+    if (hb) {
+      const b = hb as {
+        id: string;
+        hotel_name?: string | null;
+        city?: string | null;
+        check_in_date?: string | null;
+        check_out_date?: string | null;
+      };
+      hotel_booking = {
+        id: b.id,
+        hotel_name: String(b.hotel_name ?? '').trim(),
+        city: b.city ?? null,
+        check_in_date: b.check_in_date ?? null,
+        check_out_date: b.check_out_date ?? null,
+        total_assignment_nights: totalAssignmentNights,
+      };
+    }
+  }
+
   return NextResponse.json({
     line_item: lineItem,
     attachments,
     notes,
     linked_items: linkedItems,
+    /** Hotel stay fields aligned with the budget grid (same source row). */
+    hotel_booking,
+    /** @deprecated Use hotel_booking for dates and nights; kept for older clients. */
+    hotel_booking_summary: hotel_booking
+      ? {
+          check_in_date: hotel_booking.check_in_date,
+          check_out_date: hotel_booking.check_out_date,
+          total_assignment_nights: hotel_booking.total_assignment_nights,
+        }
+      : null,
   });
 }

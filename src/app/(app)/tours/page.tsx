@@ -67,7 +67,7 @@ export default async function ToursPage({
           <p className="mt-1 text-sm text-lp-text-secondary">
             {artistId
               ? 'Tours for the selected artist — routing and advance progress.'
-              : 'Manage your tours, routing, and advance progress.'}
+              : 'All tours across all artists — routing and advance progress.'}
           </p>
         </div>
         <Link

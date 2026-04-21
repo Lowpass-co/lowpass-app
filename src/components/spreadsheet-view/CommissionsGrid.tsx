@@ -23,7 +23,7 @@ const COLS = [
   { key: 'notes', label: 'Notes', width: '180px' },
 ];
 
-export function CommissionsGrid({ tourId, currency }: { tourId: string; currency: string }) {
+export function CommissionsGrid({ tourId }: { tourId: string; currency?: string }) {
   const [commissions, setCommissions] = useState<BudgetCommission[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -86,10 +86,6 @@ export function CommissionsGrid({ tourId, currency }: { tourId: string; currency
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-lp-text-secondary">
-        Commission amounts (when shown) use tour currency{' '}
-        <span className="font-semibold text-lp-text">{(currency ?? 'GBP').trim().toUpperCase() || 'GBP'}</span>.
-      </p>
       <GridTable columns={COLS}>
         {commissions.map((c) => (
           <tr key={c.id}>

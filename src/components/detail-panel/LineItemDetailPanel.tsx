@@ -3,7 +3,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { X, Lightbulb, Pencil, Trash2 } from 'lucide-react';
 import { formatCurrency, formatDate } from '@/lib/utils';
+import {
+  nightsBetweenHotelStay,
+  hotelRateDenominatorNights,
+  impliedRatePerNight,
+} from '@/lib/hotel-rate';
 import { InlineEditCell } from '@/components/spreadsheet-view/InlineEditCell';
+import { RoutingDateField } from '@/components/spreadsheet-view/RoutingDateField';
 import { cn } from '@/lib/utils';
 
 const STATUS_OPTIONS = [
@@ -98,6 +104,8 @@ export function LineItemDetailPanel({ lineItemId, tourId, onClose }: LineItemDet
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editingNoteText, setEditingNoteText] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [deletingLineItem, setDeletingLineItem] = useState(false);
   const filesInputRef = useRef<HTMLInputElement>(null);
   const [routingContext, setRoutingContext] = useState<{ date: string; venue_name?: string } | null>(null);
   const [suggestions, setSuggestions] = useState<string[]>([]);
@@ -105,6 +113,14 @@ export function LineItemDetailPanel({ lineItemId, tourId, onClose }: LineItemDet
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const [rooms, setRooms] = useState<HotelRoomAssignmentRow[]>([]);
   const [roomsLoading, setRoomsLoading] = useState(false);
+  const [hotelBooking, setHotelBooking] = useState<{
+    id: string;
+    hotel_name: string;
+    city: string | null;
+    check_in_date: string | null;
+    check_out_date: string | null;
+    total_assignment_nights: number;
+  } | null>(null);
 
   const initialsFor = (name: string | null | undefined, fallback: string = '?') => {
     const n = (name ?? '').trim();
@@ -115,9 +131,10 @@ export function LineItemDetailPanel({ lineItemId, tourId, onClose }: LineItemDet
   const fmtStamp = (iso: string) =>
     iso ? new Date(iso).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : '';
 
-  const fetchDetails = useCallback(async () => {
+  const fetchDetails = useCallback(async (opts?: { background?: boolean }) => {
     if (!lineItemId) return;
-    setLoading(true);
+    const background = Boolean(opts?.background);
+    if (!background) setLoading(true);
     try {
       const res = await fetch(`/api/budget/line-items/${lineItemId}/details`);
       if (!res.ok) throw new Error('Failed to load');
@@ -126,6 +143,7 @@ export function LineItemDetailPanel({ lineItemId, tourId, onClose }: LineItemDet
       setAttachments(json.attachments ?? []);
       setNotes(json.notes ?? []);
       setLinkedItems(json.linked_items ?? []);
+      setHotelBooking(json.hotel_booking ?? null);
       if (json.line_item?.routing_id) {
         const rRes = await fetch(`/api/tours/${tourId}/routing`);
         if (rRes.ok) {
@@ -140,9 +158,22 @@ export function LineItemDetailPanel({ lineItemId, tourId, onClose }: LineItemDet
     } catch {
       setLineItem(null);
     } finally {
-      setLoading(false);
+      if (!background) setLoading(false);
     }
   }, [lineItemId, tourId]);
+
+  useEffect(() => {
+    if (!lineItemId) return;
+    const refresh = () => {
+      void fetchDetails({ background: true });
+    };
+    window.addEventListener('lp-budget-line-item-updated', refresh);
+    window.addEventListener('lp-hotel-booking-updated', refresh);
+    return () => {
+      window.removeEventListener('lp-budget-line-item-updated', refresh);
+      window.removeEventListener('lp-hotel-booking-updated', refresh);
+    };
+  }, [lineItemId, fetchDetails]);
 
   useEffect(() => {
     if (lineItemId) {
@@ -155,6 +186,7 @@ export function LineItemDetailPanel({ lineItemId, tourId, onClose }: LineItemDet
       setLinkedItems([]);
       setSuggestions([]);
       setSuggestionsDismissed(new Set());
+      setHotelBooking(null);
     }
   }, [lineItemId, fetchDetails]);
 
@@ -207,18 +239,111 @@ export function LineItemDetailPanel({ lineItemId, tourId, onClose }: LineItemDet
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id: lineItemId, status: String(newValue) }),
     });
-    if (res.ok && lineItem) setLineItem({ ...lineItem, status: String(newValue) });
+    if (res.ok && lineItem) {
+      setLineItem({ ...lineItem, status: String(newValue) });
+      window.dispatchEvent(new CustomEvent('lp-budget-line-item-updated'));
+    }
   }, [lineItemId, lineItem]);
 
   const saveLabel = useCallback(async (newValue: string | number) => {
     if (!lineItemId) return;
+    const label = String(newValue);
     const res = await fetch('/api/budget/line-items', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: lineItemId, label: String(newValue) }),
+      body: JSON.stringify({ id: lineItemId, label }),
     });
-    if (res.ok && lineItem) setLineItem({ ...lineItem, label: String(newValue) });
+    if (res.ok && lineItem) {
+      setLineItem({ ...lineItem, label });
+      if (lineItem.source_entity_type === 'hotel_booking') {
+        setHotelBooking((prev) => (prev ? { ...prev, hotel_name: label.trim() } : null));
+      }
+      window.dispatchEvent(new CustomEvent('lp-budget-line-item-updated'));
+      window.dispatchEvent(new CustomEvent('lp-hotel-booking-updated'));
+    }
   }, [lineItemId, lineItem]);
+
+  const persistHotelBookingFields = useCallback(
+    async (patch: { city?: string | null; check_in_date?: string | null; check_out_date?: string | null }) => {
+      const hid =
+        lineItem?.source_entity_type === 'hotel_booking' ? lineItem.source_entity_id : null;
+      if (!hid) return;
+      const res = await fetch('/api/budget/hotels', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: hid, ...patch }),
+      });
+      if (!res.ok) throw new Error('Save failed');
+      const updated = (await res.json()) as {
+        city?: string | null;
+        check_in_date?: string | null;
+        check_out_date?: string | null;
+      };
+      setHotelBooking((prev) => (prev ? { ...prev, ...updated } : null));
+      window.dispatchEvent(new CustomEvent('lp-hotel-booking-updated'));
+    },
+    [lineItem?.source_entity_type, lineItem?.source_entity_id]
+  );
+
+  const saveProposedCost = useCallback(
+    async (newValue: string | number) => {
+      if (!lineItemId) return;
+      const res = await fetch('/api/budget/line-items', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: lineItemId, proposed_cost: Number(newValue) }),
+      });
+      if (!res.ok) throw new Error('Save failed');
+      const d = (await res.json()) as { proposed_cost?: number | null; actual_cost?: number | null };
+      setLineItem((prev) =>
+        prev
+          ? {
+              ...prev,
+              proposed_cost: Number(d.proposed_cost ?? 0),
+              actual_cost: Number(d.actual_cost ?? prev.actual_cost ?? 0),
+            }
+          : null
+      );
+      window.dispatchEvent(new CustomEvent('lp-budget-line-item-updated'));
+    },
+    [lineItemId]
+  );
+
+  const saveActualCost = useCallback(
+    async (newValue: string | number) => {
+      if (!lineItemId) return;
+      const res = await fetch('/api/budget/line-items', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: lineItemId, actual_cost: Number(newValue) }),
+      });
+      if (!res.ok) throw new Error('Save failed');
+      const d = (await res.json()) as { proposed_cost?: number | null; actual_cost?: number | null };
+      setLineItem((prev) =>
+        prev
+          ? {
+              ...prev,
+              proposed_cost: Number(d.proposed_cost ?? prev.proposed_cost ?? 0),
+              actual_cost: Number(d.actual_cost ?? 0),
+            }
+          : null
+      );
+      window.dispatchEvent(new CustomEvent('lp-budget-line-item-updated'));
+    },
+    [lineItemId]
+  );
+
+  const saveRoomRate = useCallback(async (roomId: string, newValue: string | number) => {
+    const res = await fetch('/api/budget/hotels/assignments', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: roomId, rate_per_night: Number(newValue) }),
+    });
+    if (!res.ok) throw new Error('Save failed');
+    const updated = (await res.json()) as HotelRoomAssignmentRow;
+    setRooms((prev) => prev.map((r) => (r.id === roomId ? { ...r, ...updated } : r)));
+    window.dispatchEvent(new CustomEvent('lp-budget-line-item-updated'));
+  }, []);
 
   const addNote = useCallback(async () => {
     if (!lineItemId || !noteDraft.trim()) return;
@@ -281,6 +406,7 @@ export function LineItemDetailPanel({ lineItemId, tourId, onClose }: LineItemDet
     async (file: File) => {
       if (!lineItemId || !file) return;
       setUploading(true);
+      setUploadError(null);
       try {
         const form = new FormData();
         form.append('file', file);
@@ -288,7 +414,16 @@ export function LineItemDetailPanel({ lineItemId, tourId, onClose }: LineItemDet
           method: 'POST',
           body: form,
         });
-        if (res.ok) await fetchDetails();
+        if (!res.ok) {
+          const payload = await res.json().catch(() => ({}));
+          const message =
+            typeof payload?.error === 'string' && payload.error.trim().length > 0
+              ? payload.error
+              : `Upload failed (${res.status})`;
+          setUploadError(message);
+          return;
+        }
+        await fetchDetails();
       } finally {
         setUploading(false);
         if (filesInputRef.current) filesInputRef.current.value = '';
@@ -323,6 +458,24 @@ export function LineItemDetailPanel({ lineItemId, tourId, onClose }: LineItemDet
       window.dispatchEvent(event);
     }, 0);
   }, [onClose]);
+
+  const deleteLineItem = useCallback(async () => {
+    if (!lineItemId || !lineItem) return;
+    if (!window.confirm(`Delete "${lineItem.label}"? This cannot be undone.`)) return;
+    setDeletingLineItem(true);
+    try {
+      const res = await fetch('/api/budget/line-items', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: lineItemId }),
+      });
+      if (!res.ok) throw new Error('Delete failed');
+      window.dispatchEvent(new CustomEvent('lp-line-item-deleted', { detail: { id: lineItemId } }));
+      onClose();
+    } finally {
+      setDeletingLineItem(false);
+    }
+  }, [lineItemId, lineItem, onClose]);
 
   if (!lineItemId) return null;
 
@@ -377,9 +530,58 @@ export function LineItemDetailPanel({ lineItemId, tourId, onClose }: LineItemDet
                     onSave={saveStatus}
                   />
                 </div>
-                <p className="mt-2 text-sm text-lp-text">
-                  Proposed: {formatter.format(lineItem.proposed_cost ?? 0)} · Actual: {formatter.format(lineItem.actual_cost ?? 0)}
-                </p>
+                <div className="mt-2 space-y-2">
+                  <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                    <span className="text-xs font-medium text-lp-text-secondary">Proposed</span>
+                    <InlineEditCell
+                      value={lineItem.proposed_cost ?? 0}
+                      type="currency"
+                      currency={currency}
+                      align="left"
+                      className="text-sm text-lp-text"
+                      onSave={saveProposedCost}
+                    />
+                  </div>
+                  <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                    <span className="text-xs font-medium text-lp-text-secondary">Actual</span>
+                    <InlineEditCell
+                      value={lineItem.actual_cost ?? 0}
+                      type="currency"
+                      currency={currency}
+                      align="left"
+                      className="text-sm text-lp-text"
+                      onSave={saveActualCost}
+                    />
+                  </div>
+                  {lineItem.source_entity_type === 'hotel_booking' ? (
+                    <p className="text-xs text-lp-text-tertiary leading-snug">
+                      {(() => {
+                        const stayNights = hotelBooking
+                          ? nightsBetweenHotelStay(
+                              hotelBooking.check_in_date,
+                              hotelBooking.check_out_date
+                            )
+                          : null;
+                        const denom = hotelRateDenominatorNights(
+                          stayNights,
+                          hotelBooking?.total_assignment_nights ?? 0
+                        );
+                        const implied =
+                          denom > 0
+                            ? impliedRatePerNight(
+                                lineItem.proposed_cost,
+                                lineItem.actual_cost,
+                                denom
+                              )
+                            : null;
+                        if (implied == null) {
+                          return 'Rate/night in the grid uses proposed (or actual when set) ÷ stay nights from check-in/out.';
+                        }
+                        return `Implied rate/night from line totals ÷ stay nights (${denom}): ${formatter.format(implied)}.`;
+                      })()}
+                    </p>
+                  ) : null}
+                </div>
                 <p className="mt-1 text-xs text-lp-text-secondary">
                   Applies to: {routingContext ? `${routingContext.date}${routingContext.venue_name ? ` · ${routingContext.venue_name}` : ''}` : 'Whole tour'}
                 </p>
@@ -421,6 +623,49 @@ export function LineItemDetailPanel({ lineItemId, tourId, onClose }: LineItemDet
             <div className="overflow-y-auto p-4 min-h-[200px]">
               {tab === 'overview' && (
                 <div className="space-y-4">
+                  {lineItem.source_entity_type === 'hotel_booking' && hotelBooking ? (
+                    <div className="rounded-xl border border-lp-border bg-lp-surface/50 p-4 space-y-3">
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-lp-text-secondary">Hotel stay</h3>
+                      <div className="grid gap-2 sm:grid-cols-2">
+                        <div className="sm:col-span-2">
+                          <p className="text-[11px] font-medium text-lp-text-secondary mb-1">City</p>
+                          <InlineEditCell
+                            value={hotelBooking.city ?? ''}
+                            type="text"
+                            placeholder="City"
+                            onSave={async (v) => {
+                              await persistHotelBookingFields({
+                                city: String(v).trim() ? String(v).trim() : null,
+                              });
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <p className="text-[11px] font-medium text-lp-text-secondary mb-1">Check-in</p>
+                          <RoutingDateField
+                            tourId={tourId}
+                            value={hotelBooking.check_in_date}
+                            onChange={async (iso) => {
+                              if (!iso) return;
+                              await persistHotelBookingFields({ check_in_date: iso.slice(0, 10) });
+                            }}
+                          />
+                        </div>
+                        <div>
+                          <p className="text-[11px] font-medium text-lp-text-secondary mb-1">Check-out</p>
+                          <RoutingDateField
+                            tourId={tourId}
+                            value={hotelBooking.check_out_date}
+                            onChange={async (iso) => {
+                              if (!iso) return;
+                              await persistHotelBookingFields({ check_out_date: iso.slice(0, 10) });
+                            }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ) : null}
+
                   <div>
                     <h3 className="text-xs font-bold uppercase tracking-wider text-lp-text-secondary mb-2">Notes</h3>
                     <div className="space-y-2">
@@ -596,6 +841,14 @@ export function LineItemDetailPanel({ lineItemId, tourId, onClose }: LineItemDet
                     <p className="mt-2 text-xs text-lp-text-secondary">or drag and drop a file here (max 10MB)</p>
                   </div>
 
+                  <div>
+                    <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-lp-text-secondary">
+                      Uploaded files
+                    </h3>
+                    {uploadError ? (
+                      <p className="mb-2 text-xs font-medium text-red-500">{uploadError}</p>
+                    ) : null}
+                  </div>
                   {attachments.length === 0 ? (
                     <p className="text-sm text-lp-text-tertiary">No attachments yet.</p>
                   ) : (
@@ -609,7 +862,7 @@ export function LineItemDetailPanel({ lineItemId, tourId, onClose }: LineItemDet
                             href={a.file_url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="min-w-0 flex-1 text-sm font-medium text-lp-orange hover:underline"
+                            className="min-w-0 flex-1 break-all text-sm font-semibold text-lp-orange underline decoration-lp-orange/55 underline-offset-2 hover:decoration-lp-orange"
                           >
                             {a.file_name}
                           </a>
@@ -703,8 +956,15 @@ export function LineItemDetailPanel({ lineItemId, tourId, onClose }: LineItemDet
                                 {room.check_out ? formatDate(room.check_out) : '—'}
                               </td>
                               <td className="px-3 py-2 tabular-nums text-right text-lp-text">{room.nights}</td>
-                              <td className="px-3 py-2 tabular-nums text-right text-lp-text-secondary">
-                                {room.rate_per_night != null ? Number(room.rate_per_night).toFixed(2) : '—'}
+                              <td className="px-3 py-2 text-right text-lp-text-secondary" onClick={(e) => e.stopPropagation()}>
+                                <InlineEditCell
+                                  type="currency"
+                                  currency={currency}
+                                  align="right"
+                                  value={room.rate_per_night ?? 0}
+                                  className="text-sm"
+                                  onSave={(v) => saveRoomRate(room.id, v)}
+                                />
                               </td>
                               <td className="px-3 py-2 text-lp-text-tertiary text-xs">{room.confirmation ?? '—'}</td>
                             </tr>
@@ -713,6 +973,23 @@ export function LineItemDetailPanel({ lineItemId, tourId, onClose }: LineItemDet
                       </table>
                     </div>
                   )}
+                </div>
+              )}
+
+              {(lineItem.category.startsWith('transport_') ||
+                lineItem.category.startsWith('prod_') ||
+                lineItem.category === 'misc') && (
+                <div className="mt-8 border-t border-lp-border pt-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void deleteLineItem();
+                    }}
+                    disabled={deletingLineItem}
+                    className="w-full rounded-lg border border-red-500/35 bg-red-500/10 px-3 py-2 text-sm font-semibold text-red-500 hover:bg-red-500/15 disabled:opacity-50"
+                  >
+                    {deletingLineItem ? 'Deleting line item…' : 'Delete line item'}
+                  </button>
                 </div>
               )}
             </div>

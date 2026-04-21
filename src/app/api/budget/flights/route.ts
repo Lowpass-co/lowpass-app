@@ -57,7 +57,32 @@ export async function GET(request: Request) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  return NextResponse.json({ flights: data ?? [] });
+
+  const flights = data ?? [];
+  for (const row of flights) {
+    const f = row as { id: string; line_item_id?: string | null; person_name: string; tour_id: string };
+    if (f.line_item_id) continue;
+    const { data: lineItem, error: liErr } = await supabase
+      .from('budget_line_items')
+      .insert({
+        tour_id: tourId,
+        workspace_id: profile.workspace_id,
+        category: 'flights',
+        label: `${f.person_name}: flight`,
+        proposed_cost: 0,
+        actual_cost: 0,
+        source_entity_type: 'flight_booking',
+        source_entity_id: f.id,
+      })
+      .select('id')
+      .single();
+    if (!liErr && lineItem?.id) {
+      await supabase.from('flight_bookings').update({ line_item_id: lineItem.id }).eq('id', f.id);
+      f.line_item_id = lineItem.id;
+    }
+  }
+
+  return NextResponse.json({ flights });
 }
 
 export async function POST(request: Request) {

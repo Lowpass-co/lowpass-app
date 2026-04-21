@@ -29,8 +29,10 @@ export function OverviewArtistQuerySync() {
     const current = next.get('artist_id');
 
     if (selectedArtistId) {
-      if (current === selectedArtistId) return;
+      const hadSelect = searchParams.has('select');
+      if (current === selectedArtistId && !hadSelect) return;
       next.set('artist_id', selectedArtistId);
+      next.delete('select');
       router.replace(`${base}?${next.toString()}`);
       return;
     }

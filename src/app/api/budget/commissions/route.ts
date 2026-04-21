@@ -9,6 +9,7 @@
 
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { normalizeCommissionPct } from '@/lib/commission-pct';
 
 const BASIS_VALUES = new Set([
   'gross',
@@ -131,7 +132,7 @@ export async function POST(request: Request) {
       tour_id,
       workspace_id: profile.workspace_id,
       label: label.trim(),
-      percentage: Number(body.percentage) || 0,
+      percentage: normalizeCommissionPct(Number(body.percentage) || 0),
       basis: (body.basis ?? 'gross').trim(),
       notes: body.notes ?? null,
       order_index: orderIndex,
@@ -193,7 +194,9 @@ export async function PATCH(request: Request) {
     }
     payload.label = trimmed;
   }
-  if (updates.percentage !== undefined) payload.percentage = updates.percentage;
+  if (updates.percentage !== undefined) {
+    payload.percentage = normalizeCommissionPct(Number(updates.percentage) || 0);
+  }
   if (updates.basis !== undefined) {
     const b = typeof updates.basis === 'string' ? updates.basis.trim() : String(updates.basis);
     if (!BASIS_VALUES.has(b)) {

@@ -18,10 +18,11 @@ import { parseWorkspaceArtistId } from '@/lib/artist-scope';
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ artist_id?: string }>;
+  searchParams: Promise<{ artist_id?: string; select?: string }>;
 }) {
-  const { artist_id: artistIdParam } = await searchParams;
-  const artistId = parseWorkspaceArtistId(artistIdParam);
+  const params = await searchParams;
+  const artistId = parseWorkspaceArtistId(params.artist_id);
+  const pickArtistMode = params.select === 'artist';
 
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -200,7 +201,7 @@ export default async function DashboardPage({
   const { data: toursList } = await toursListQ;
 
   return (
-    <DashboardArtistGate>
+    <DashboardArtistGate pickArtistMode={pickArtistMode}>
       <div className="lp-dashboard-glass mx-auto min-h-[60vh] max-w-7xl space-y-6">
         <div className="flex items-center justify-between">
           <div>
@@ -208,7 +209,7 @@ export default async function DashboardPage({
             <p className="mt-1 text-sm text-lp-text-secondary">
               {artistId
                 ? 'Overview of active tours and advance progress for the selected artist.'
-                : 'Overview of your active tours and advance progress.'}
+                : 'Workspace-wide overview: all artists, all tours, and advance signals.'}
             </p>
           </div>
         </div>

@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Loader2, Plus, Pencil, Trash2, ChevronUp, ChevronDown } from 'lucide-react';
 import { DeleteConfirmationModal } from '@/components/ui/DeleteConfirmationModal';
+import { normalizeCommissionPct, formatCommissionDisplayPercentString } from '@/lib/commission-pct';
 
 /** Math spec §7: basis options and formulas for calculated amount */
 const BASIS_OPTIONS = [
@@ -26,7 +27,10 @@ type CommissionRow = {
 
 type IncomeRow = {
   post_tax_guarantee: number;
+  post_tax_overage?: number;
   pre_tax_guarantee?: number;
+  pre_tax_overage?: number;
+  withholding_pct?: number;
   merch_income: number;
   vip_income: number;
   actual_guarantee: number | null;
@@ -54,6 +58,18 @@ function n(x: number | null | undefined): number {
   return x == null ? 0 : Number(x);
 }
 
+function derivedPostTaxGuarantee(row: IncomeRow): number {
+  const preTax = n(row.pre_tax_guarantee);
+  const withholdingPct = n(row.withholding_pct);
+  return preTax * (1 - withholdingPct / 100);
+}
+
+function derivedPostTaxOverage(row: IncomeRow): number {
+  const preTax = n(row.pre_tax_overage);
+  const withholdingPct = n(row.withholding_pct);
+  return preTax * (1 - withholdingPct / 100);
+}
+
 /** Compute basis values and then commission amounts (math spec §7). */
 function computeCommissionContext(
   incomeRows: IncomeRow[],
@@ -68,7 +84,15 @@ function computeCommissionContext(
   totalDays: number
 ) {
   const proposedGrossIncome =
-    sum(incomeRows.map((i) => i.post_tax_guarantee)) +
+    sum(incomeRows.map((i) => {
+      const postTax = i.post_tax_guarantee;
+      // Income uses post-tax guarantee for projected totals; derive from pre-tax + withholding when needed.
+      return postTax == null ? derivedPostTaxGuarantee(i) : n(postTax);
+    })) +
+    sum(incomeRows.map((i) => {
+      const postTaxOverage = i.post_tax_overage;
+      return postTaxOverage == null ? derivedPostTaxOverage(i) : n(postTaxOverage);
+    })) +
     sum(incomeRows.map((i) => i.merch_income)) +
     sum(incomeRows.map((i) => i.vip_income));
   const actualGrossIncome =
@@ -177,7 +201,7 @@ function computeCommissionContext(
   const amountProposed = (pct: number, basis: string) => pct * basisValueProposed(basis);
   const amountActual = (pct: number, basis: string) => pct * basisValueActual(basis);
 
-  return { amountProposed, amountActual };
+  return { amountProposed, amountActual, proposedGrossIncome };
 }
 
 export function CommissionsTab({ tourId }: { tourId: string }) {
@@ -247,17 +271,18 @@ export function CommissionsTab({ tourId }: { tourId: string }) {
   const totalProposed = context
     ? sum(
         sortedCommissions.map((c) =>
-          context.amountProposed(Number(c.percentage) || 0, c.basis ?? 'gross')
+          context.amountProposed(normalizeCommissionPct(c.percentage), c.basis ?? 'gross')
         )
       )
     : 0;
   const totalActual = context
     ? sum(
         sortedCommissions.map((c) =>
-          context.amountActual(Number(c.percentage) || 0, c.basis ?? 'gross')
+          context.amountActual(normalizeCommissionPct(c.percentage), c.basis ?? 'gross')
         )
       )
     : 0;
+  const projectedIncomeTotal = context?.proposedGrossIncome ?? 0;
 
   const createCommission = async () => {
     if (!newRow.label?.trim()) return;
@@ -292,6 +317,9 @@ export function CommissionsTab({ tourId }: { tourId: string }) {
     }
     const sanitized = { ...payload };
     if (typeof sanitized.label === 'string') sanitized.label = sanitized.label.trim();
+    if (sanitized.percentage !== undefined) {
+      sanitized.percentage = normalizeCommissionPct(Number(sanitized.percentage));
+    }
     setSaving(true);
     try {
       const res = await fetch('/api/budget/commissions', {
@@ -355,9 +383,6 @@ export function CommissionsTab({ tourId }: { tourId: string }) {
       .finally(() => setSaving(false));
   };
 
-  /** Percentage stored as decimal 0.10 = 10%; display with one decimal in 0–100 space */
-  const pctToDisplay = (pct: number) => (Math.round(Number(pct) * 1000) / 10).toFixed(1);
-
   function decimalFromDisplayPctInput(raw: string): number {
     const v = parseFloat(raw);
     if (!Number.isFinite(v)) return 0;
@@ -383,6 +408,14 @@ export function CommissionsTab({ tourId }: { tourId: string }) {
 
   return (
     <div className="space-y-6">
+      <div className="rounded-xl border border-lp-border bg-lp-surface px-4 py-3 text-sm">
+        <div className="flex items-center justify-between">
+          <span className="font-medium text-lp-text-tertiary">Current Projected Income Total</span>
+          <span className="tabular-nums font-semibold text-lp-text">
+            {projectedIncomeTotal.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </span>
+        </div>
+      </div>
       <div className="rounded-xl border border-lp-border bg-lp-surface overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -418,7 +451,7 @@ export function CommissionsTab({ tourId }: { tourId: string }) {
                         min={0}
                         max={100}
                         className="min-w-0 flex-1 max-w-[5.5rem] rounded-md border border-lp-border bg-transparent px-2 py-1.5 text-right text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30"
-                        value={pctToDisplay(newRow.percentage ?? 0)}
+                        value={formatCommissionDisplayPercentString(newRow.percentage ?? 0)}
                         onChange={(e) =>
                           setNewRow((r) => ({ ...r, percentage: decimalFromDisplayPctInput(e.target.value) }))
                         }
@@ -440,14 +473,18 @@ export function CommissionsTab({ tourId }: { tourId: string }) {
                   </td>
                   <td className="p-2 text-right tabular-nums text-lp-text-tertiary">
                     {context
-                      ? context.amountProposed(newRow.percentage ?? 0, newRow.basis ?? 'gross').toLocaleString('en-GB', {
+                      ? context
+                          .amountProposed(normalizeCommissionPct(newRow.percentage ?? 0), newRow.basis ?? 'gross')
+                          .toLocaleString('en-GB', {
                           minimumFractionDigits: 2,
                         })
                       : '—'}
                   </td>
                   <td className="p-2 text-right tabular-nums text-lp-text-tertiary">
                     {context
-                      ? context.amountActual(newRow.percentage ?? 0, newRow.basis ?? 'gross').toLocaleString('en-GB', {
+                      ? context
+                          .amountActual(normalizeCommissionPct(newRow.percentage ?? 0), newRow.basis ?? 'gross')
+                          .toLocaleString('en-GB', {
                           minimumFractionDigits: 2,
                         })
                       : '—'}
@@ -482,7 +519,7 @@ export function CommissionsTab({ tourId }: { tourId: string }) {
               {sortedCommissions.map((c) => {
                 const isEditing = editingId === c.id;
                 const row = isEditing ? (editRow ?? c) : c;
-                const pct = Number(c.percentage) || 0;
+                const pct = normalizeCommissionPct(c.percentage);
                 const basis = c.basis ?? 'gross';
                 const proposedAmt = context ? context.amountProposed(pct, basis) : 0;
                 const actualAmt = context ? context.amountActual(pct, basis) : 0;
@@ -533,7 +570,7 @@ export function CommissionsTab({ tourId }: { tourId: string }) {
                             min={0}
                             max={100}
                             className="w-16 max-w-full rounded-md border border-lp-border bg-transparent px-2 py-1 text-right text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30"
-                            value={pctToDisplay(Number(row.percentage) || 0)}
+                            value={formatCommissionDisplayPercentString(Number(row.percentage) || 0)}
                             onChange={(e) =>
                               setEditRow((r) => ({
                                 ...r,
@@ -544,7 +581,7 @@ export function CommissionsTab({ tourId }: { tourId: string }) {
                           <span className="shrink-0 text-lp-text-tertiary">%</span>
                         </span>
                       ) : (
-                        <span className="tabular-nums text-lp-text">{pctToDisplay(pct)}%</span>
+                        <span className="tabular-nums text-lp-text">{formatCommissionDisplayPercentString(c.percentage)}%</span>
                       )}
                     </td>
                     <td className="p-3 text-lp-text-secondary">
@@ -565,14 +602,20 @@ export function CommissionsTab({ tourId }: { tourId: string }) {
                     <td className="p-3 text-right tabular-nums text-lp-text-secondary bg-lp-bg-tertiary/50">
                       {isEditing && context && editRow
                         ? context
-                            .amountProposed(Number(editRow.percentage) || pct, editRow.basis ?? basis)
+                            .amountProposed(
+                              normalizeCommissionPct(Number(editRow.percentage) || pct),
+                              editRow.basis ?? basis
+                            )
                             .toLocaleString('en-GB', { minimumFractionDigits: 2 })
                         : proposedAmt.toLocaleString('en-GB', { minimumFractionDigits: 2 })}
                     </td>
                     <td className="p-3 text-right tabular-nums text-lp-text-secondary bg-lp-bg-tertiary/50">
                       {isEditing && context && editRow
                         ? context
-                            .amountActual(Number(editRow.percentage) || pct, editRow.basis ?? basis)
+                            .amountActual(
+                              normalizeCommissionPct(Number(editRow.percentage) || pct),
+                              editRow.basis ?? basis
+                            )
                             .toLocaleString('en-GB', { minimumFractionDigits: 2 })
                         : actualAmt.toLocaleString('en-GB', { minimumFractionDigits: 2 })}
                     </td>

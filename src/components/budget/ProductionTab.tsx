@@ -77,6 +77,21 @@ export function ProductionTab({ tourId }: { tourId: string }) {
 
   useEffect(() => load(), [load]);
 
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const id = (e as CustomEvent<{ id?: string }>).detail?.id;
+      if (!id) return;
+      setItems((prev) => prev.filter((item) => item.id !== id));
+      setDeleteModal((prev) => (prev?.id === id ? null : prev));
+      if (editingId === id) {
+        setEditingId(null);
+        setEditRow(null);
+      }
+    };
+    window.addEventListener('lp-line-item-deleted', handler);
+    return () => window.removeEventListener('lp-line-item-deleted', handler);
+  }, [editingId]);
+
   const sortedItems = [...items].sort(
     (a, b) => PROD_CATEGORIES.findIndex((c) => c.value === a.category) - PROD_CATEGORIES.findIndex((c) => c.value === b.category) || a.order_index - b.order_index
   );
