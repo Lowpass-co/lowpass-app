@@ -516,14 +516,14 @@ export function ProductionTab({ tourId }: { tourId: string }) {
           <div key={c.value} className="flex justify-between items-baseline">
             <span className="font-medium text-lp-text">{c.label}:</span>
             <span className="tabular-nums text-lp-text">
-              {(subtotals[c.value]?.proposed ?? 0).toLocaleString('en-GB', { minimumFractionDigits: 2 })} / {(subtotals[c.value]?.actual ?? 0).toLocaleString('en-GB', { minimumFractionDigits: 2 })}
+              {(subtotals[c.value]?.proposed ?? 0).toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} / {(subtotals[c.value]?.actual ?? 0).toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
             </span>
           </div>
         ))}
         <div className="border-t border-lp-border pt-2 mt-2 flex justify-between items-baseline font-semibold text-lp-text">
           <span>TOTAL PRODUCTION & MISC:</span>
           <span className="tabular-nums">
-            {totalProposed.toLocaleString('en-GB', { minimumFractionDigits: 2 })} / {totalActual.toLocaleString('en-GB', { minimumFractionDigits: 2 })}
+            {totalProposed.toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} / {totalActual.toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
           </span>
         </div>
       </div>

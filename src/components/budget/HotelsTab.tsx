@@ -336,10 +336,10 @@ export function HotelsTab({ tourId }: { tourId: string }) {
 
       <div className="flex flex-wrap items-baseline gap-6 rounded-xl border border-lp-border bg-lp-surface p-4">
         <span className="font-semibold text-lp-text">
-          Total Hotels Cost (Proposed) = {totalProposedLineItems.toLocaleString('en-GB', { minimumFractionDigits: 2 })}
+          Total Hotels Cost (Proposed) = {totalProposedLineItems.toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
         </span>
         <span className="font-semibold text-lp-text">
-          Total Hotels Cost (Actual) = {totalActualLineItems.toLocaleString('en-GB', { minimumFractionDigits: 2 })}
+          Total Hotels Cost (Actual) = {totalActualLineItems.toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
         </span>
         <p className="text-xs text-lp-text-tertiary">
           From budget line items with category &quot;hotels&quot;. Per-hotel room cost is computed from assignments (nights × rate per night).

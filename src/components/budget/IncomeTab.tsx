@@ -30,6 +30,10 @@ function fmt(n: number) {
   return n.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+function fmtTotal(n: number) {
+  return n.toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+}
+
 function mapApiRoutesToGridRows(apiRows: unknown[]): RoutingRow[] {
   const rows = apiRows as Array<Record<string, unknown>>;
   return [...rows]
@@ -987,7 +991,7 @@ export function IncomeTab({ tourId }: { tourId: string }) {
                 <span className="ml-1.5 text-sm font-normal text-lp-text-tertiary">(excl. overages)</span>
               </td>
               <td className="whitespace-nowrap px-4 py-3 text-left tabular-nums text-sm font-bold text-lp-text">
-                {fmt(proposedTotal)}
+                {fmtTotal(proposedTotal)}
               </td>
               <td colSpan={6} />
             </tr>
@@ -1005,7 +1009,7 @@ export function IncomeTab({ tourId }: { tourId: string }) {
                 className="whitespace-nowrap px-4 py-3 text-left tabular-nums text-sm font-bold"
                 style={{ color: '#FF4500' }}
               >
-                {fmt(actualTotal)}
+                {fmtTotal(actualTotal)}
               </td>
               <td colSpan={6} />
             </tr>

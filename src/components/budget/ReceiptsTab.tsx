@@ -386,11 +386,11 @@ export function ReceiptsTab({ tourId }: { tourId: string }) {
 
       <div className="rounded-xl border border-lp-border bg-lp-surface p-4 flex flex-wrap items-baseline gap-6 text-sm">
         <span className="font-semibold text-lp-text">
-          Total Receipts (Tour Currency) = {totalTourCurrency.toLocaleString('en-GB', { minimumFractionDigits: 2 })} {settings?.currency_tour ?? ''}
+          Total Receipts (Tour Currency) = {totalTourCurrency.toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} {settings?.currency_tour ?? ''}
         </span>
         {totalHomeCurrency != null && (
           <span className="font-semibold text-red-600 dark:text-red-400">
-            Total Receipts (Home Currency) = {totalHomeCurrency.toLocaleString('en-GB', { minimumFractionDigits: 2 })} {settings?.currency_home ?? ''}
+            Total Receipts (Home Currency) = {totalHomeCurrency.toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} {settings?.currency_home ?? ''}
           </span>
         )}
         <span className="text-lp-text-tertiary">(Only receipts with In Budget = Yes)</span>

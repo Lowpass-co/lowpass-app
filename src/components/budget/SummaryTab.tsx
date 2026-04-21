@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useState, useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -65,16 +66,16 @@ function bucketSections(sections: BudgetSummarySection[]): {
 }
 
 function fmt(n: number) {
-  return n.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return n.toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 
 /** P&L display: explicit +/− and £ (graph + tables) */
 function fmtSignedPl(n: number, currencySymbol: string) {
   const abs = Math.abs(n);
-  const body = `${currencySymbol}${abs.toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const body = `${currencySymbol}${abs.toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
   if (n > 0) return `+${body}`;
   if (n < 0) return `−${body}`;
-  return `${currencySymbol}0.00`;
+  return `${currencySymbol}0`;
 }
 
 /** Tailwind classes: profit (≥0 green — 0 is break-even) / loss (red) */
@@ -119,6 +120,34 @@ function varianceColor(proposed: number, actual: number): string {
   if (pct <= 0) return 'text-emerald-500';
   if (pct <= 5) return 'text-amber-500';
   return 'text-red-500';
+}
+
+function breakdownLinkForLine(tourId: string, sectionTitle: string, lineLabel: string): string | null {
+  const title = sectionTitle.toUpperCase();
+  const label = lineLabel.toUpperCase();
+
+  if (title.includes('INCOME') || title.includes('REVENUE')) {
+    return `/budget?tour_id=${tourId}&tab=income`;
+  }
+  if (title.includes('OVERHEAD') || title.includes('COMMISSION')) {
+    return `/budget?tour_id=${tourId}&tab=commissions`;
+  }
+  if (label.includes('SALAR') || label.includes('PER DIEM') || label.includes('PAYROLL')) {
+    return `/budget?tour_id=${tourId}&tab=salaries`;
+  }
+  if (label.includes('HOTEL') || label.includes('ACCOMMODATION')) {
+    return `/budget?tour_id=${tourId}&tab=hotels`;
+  }
+  if (label.includes('FLIGHT') || label.includes('AIRFARE')) {
+    return `/budget?tour_id=${tourId}&tab=flights`;
+  }
+  if (label.includes('TRANSPORT') || label.includes('BUS') || label.includes('TRUCK') || label.includes('TAXI') || label.includes('FUEL') || label.includes('PARKING')) {
+    return `/budget?tour_id=${tourId}&tab=transport`;
+  }
+  if (label.includes('PRODUCTION') || label.includes('FREIGHT') || label.includes('AUDIO') || label.includes('LIGHTING')) {
+    return `/budget?tour_id=${tourId}&tab=production`;
+  }
+  return null;
 }
 
 const INCOME_COLOR = '#166534';
@@ -271,12 +300,14 @@ function BreakdownSection({
   title,
   color,
   sections,
+  tourId,
   currencySymbol = '£',
   fillHeight = false,
 }: {
   title: string;
   color: string;
   sections: BudgetSummarySection[];
+  tourId: string;
   currencySymbol?: string;
   fillHeight?: boolean;
 }) {
@@ -323,7 +354,17 @@ function BreakdownSection({
         BREAKDOWN_GRID_COLS
       )}
     >
-      <span className="min-w-0 text-lp-text break-words pr-1">{row.label}</span>
+      <span className="min-w-0 break-words pr-1">
+        {(() => {
+          const href = breakdownLinkForLine(tourId, title, row.label);
+          if (!href) return <span className="text-lp-text">{row.label}</span>;
+          return (
+            <Link href={href} className="text-lp-text hover:underline">
+              {row.label}
+            </Link>
+          );
+        })()}
+      </span>
       <span className="whitespace-nowrap text-center tabular-nums text-lp-text-tertiary">
         {currencySymbol}
         {fmt(row.proposed)}
@@ -454,8 +495,7 @@ export function SummaryTab({
   const netProposed = income.proposed - expenses.proposed - overheads.proposed;
   /** Positive = actual outcome better than proposed (e.g. smaller loss or larger profit). */
   const netVariance = netActual - netProposed;
-  const currencyCode = (tourCurrency ?? 'GBP').trim().toUpperCase() || 'GBP';
-  const currencySymbol = budgetCurrencySymbol(currencyCode);
+  const currencySymbol = budgetCurrencySymbol((tourCurrency ?? 'GBP').trim().toUpperCase() || 'GBP');
 
   const proposedTotal = income.proposed + expenses.proposed + overheads.proposed;
   const actualTotal = income.actual + expenses.actual + overheads.actual;
@@ -465,58 +505,35 @@ export function SummaryTab({
   );
 
   const leftColumn = (
-    <div className="mt-6 flex min-h-0 flex-1 flex-col rounded-xl border border-lp-border bg-lp-surface/50 p-4">
-      <div className="flex shrink-0 flex-wrap items-center justify-center gap-x-2 gap-y-1 px-1 text-center">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-lp-text">
+    <div className="flex min-h-0 flex-1 flex-col rounded-xl border border-lp-border bg-lp-surface/50 p-4">
+      <div className="flex shrink-0 flex-wrap items-center justify-center gap-x-2 gap-y-1 px-1 text-center text-[11px]">
+        <p className="font-semibold uppercase tracking-[0.2em] text-lp-text">
           Net Profit / Loss
         </p>
-        <span className="text-[11px] font-normal normal-case tracking-normal text-lp-text-tertiary">
+        <span className="font-normal normal-case tracking-normal text-lp-text-tertiary">
           –
         </span>
         <span className="inline-flex flex-wrap items-baseline justify-center gap-x-1.5">
-          <span className={cn('text-[11px] font-semibold tabular-nums tracking-tight', plTextClass(netVariance))}>
+          <span className={cn('font-semibold tabular-nums tracking-tight', plTextClass(netVariance))}>
             {fmtSignedPl(netVariance, currencySymbol)}
           </span>
-          <span className="text-[11px] font-normal italic normal-case tracking-normal text-lp-text-tertiary">
+          <span className="font-normal italic normal-case tracking-normal text-lp-text-tertiary">
             variance
           </span>
         </span>
       </div>
-      {/* GRAPH SECTION — bar *heights* reflect net (higher net = taller); stacks still show income/expense/overhead mix */}
-      <div className="flex min-h-[140px] min-w-0 flex-1 items-end justify-center gap-6 overflow-x-auto px-2">
-        <VerticalStackedBar
-          income={income.proposed}
-          expenses={expenses.proposed}
-          overheads={overheads.proposed}
-          label="Proposed"
-          valueAbove={fmtSignedPl(netProposed, currencySymbol)}
-          valueAboveClassName={plTextClass(netProposed)}
-          heightPx={proposedBarHeight}
-          hasData={proposedTotal > 0}
-        />
-        <VerticalStackedBar
-          income={income.actual}
-          expenses={expenses.actual}
-          overheads={overheads.actual}
-          label="Actual"
-          valueAbove={fmtSignedPl(netActual, currencySymbol)}
-          valueAboveClassName={plTextClass(netActual)}
-          heightPx={actualBarHeight}
-          hasData={actualTotal > 0}
-        />
-      </div>
-      {/* Totals at bottom of graph section; P/L label white; Actual column green (profit) / red (loss) */}
-      <div className="mt-auto min-w-0 shrink-0 overflow-x-auto rounded-lg border border-lp-border bg-lp-budget-card px-3 py-3 dark:border-white/10">
-        <table className="min-w-max w-full border-collapse text-[11px]">
+      {/* Totals table directly below the section header */}
+      <div className="mt-3 min-w-0 shrink-0 overflow-x-auto rounded-lg border border-lp-border bg-lp-budget-card px-3 py-3 dark:border-white/10">
+        <table className="min-w-max w-full border-collapse text-[8px] font-normal">
           <thead>
             <tr className="border-b border-white/20 dark:border-white/15">
-              <th className="py-1.5 text-left text-[10px] font-bold uppercase tracking-wider text-black dark:text-white">
+              <th className="py-1.5 text-left font-semibold uppercase tracking-[0.2em] text-black dark:text-white">
                 Totals
               </th>
-              <th className="whitespace-nowrap py-1.5 text-right text-[10px] font-bold uppercase tracking-wider text-black dark:text-white">
+              <th className="whitespace-nowrap py-1.5 text-right font-semibold uppercase tracking-[0.2em] text-black dark:text-white">
                 Proposed
               </th>
-              <th className="whitespace-nowrap py-1.5 text-right text-[10px] font-bold uppercase tracking-wider text-black dark:text-white">
+              <th className="whitespace-nowrap py-1.5 text-right font-semibold uppercase tracking-[0.2em] text-black dark:text-white">
                 Actual
               </th>
             </tr>
@@ -546,12 +563,7 @@ export function SummaryTab({
             </tr>
             <tr className="border-t-2 border-white/25">
               <td className="py-2 font-medium text-lp-text">P / L</td>
-              <td
-                className={cn(
-                  'whitespace-nowrap py-2 text-right tabular-nums font-medium',
-                  plTextClass(netProposed)
-                )}
-              >
+              <td className={cn('whitespace-nowrap py-2 text-right tabular-nums font-semibold', plTextClass(netProposed))}>
                 {fmtSignedPl(netProposed, currencySymbol)}
               </td>
               <td
@@ -566,26 +578,44 @@ export function SummaryTab({
           </tbody>
         </table>
       </div>
+      {/* GRAPH SECTION — keep bars anchored at the bottom of the panel */}
+      <div className="mt-auto flex min-h-[140px] min-w-0 flex-1 items-end justify-center gap-6 overflow-x-auto px-2 pt-4">
+        <VerticalStackedBar
+          income={income.proposed}
+          expenses={expenses.proposed}
+          overheads={overheads.proposed}
+          label="Proposed"
+          valueAbove={fmtSignedPl(netProposed, currencySymbol)}
+          valueAboveClassName={plTextClass(netProposed)}
+          heightPx={proposedBarHeight}
+          hasData={proposedTotal > 0}
+        />
+        <VerticalStackedBar
+          income={income.actual}
+          expenses={expenses.actual}
+          overheads={overheads.actual}
+          label="Actual"
+          valueAbove={fmtSignedPl(netActual, currencySymbol)}
+          valueAboveClassName={plTextClass(netActual)}
+          heightPx={actualBarHeight}
+          hasData={actualTotal > 0}
+        />
+      </div>
     </div>
   );
 
   const rightColumn = (
     <div className="flex min-h-0 h-full flex-1 flex-col overflow-hidden">
-      {breakdownHeading === 'inline' && (
-        <p className="shrink-0 text-[11px] font-semibold uppercase tracking-wider lp-table-header-text">
-          Breakdown
-        </p>
-      )}
       {/* Income: content height. Direct Expenses: fills middle. Overheads: content height at bottom. A couple of pixels between boxes. */}
       <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-hidden">
         <div className="w-full min-w-0 shrink-0">
-          <BreakdownSection title="Income" color={INCOME_COLOR} sections={income.sections} currencySymbol={currencySymbol} fillHeight={false} />
+          <BreakdownSection title="Income" color={INCOME_COLOR} sections={income.sections} tourId={tourId} currencySymbol={currencySymbol} fillHeight={false} />
         </div>
         <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
-          <BreakdownSection title="Direct Expenses" color={EXPENSES_COLOR} sections={expenses.sections} currencySymbol={currencySymbol} fillHeight />
+          <BreakdownSection title="Direct Expenses" color={EXPENSES_COLOR} sections={expenses.sections} tourId={tourId} currencySymbol={currencySymbol} fillHeight />
         </div>
         <div className="w-full min-w-0 shrink-0">
-          <BreakdownSection title="Overheads" color={OVERHEADS_COLOR} sections={overheads.sections} currencySymbol={currencySymbol} fillHeight={false} />
+          <BreakdownSection title="Overheads" color={OVERHEADS_COLOR} sections={overheads.sections} tourId={tourId} currencySymbol={currencySymbol} fillHeight={false} />
         </div>
       </div>
     </div>
@@ -594,16 +624,16 @@ export function SummaryTab({
   if (slot === 'left') return <div className="flex h-full min-h-0 flex-col overflow-hidden">{leftColumn}</div>;
   if (slot === 'right') {
     return (
-      <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden pt-2">
+      <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
         <div className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-hidden">
           <div className="w-full min-w-0 shrink-0">
-            <BreakdownSection title="Income" color={INCOME_COLOR} sections={income.sections} currencySymbol={currencySymbol} fillHeight={false} />
+            <BreakdownSection title="Income" color={INCOME_COLOR} sections={income.sections} tourId={tourId} currencySymbol={currencySymbol} fillHeight={false} />
           </div>
           <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
-            <BreakdownSection title="Direct Expenses" color={EXPENSES_COLOR} sections={expenses.sections} currencySymbol={currencySymbol} fillHeight />
+            <BreakdownSection title="Direct Expenses" color={EXPENSES_COLOR} sections={expenses.sections} tourId={tourId} currencySymbol={currencySymbol} fillHeight />
           </div>
           <div className="w-full min-w-0 shrink-0">
-            <BreakdownSection title="Overheads" color={OVERHEADS_COLOR} sections={overheads.sections} currencySymbol={currencySymbol} fillHeight={false} />
+            <BreakdownSection title="Overheads" color={OVERHEADS_COLOR} sections={overheads.sections} tourId={tourId} currencySymbol={currencySymbol} fillHeight={false} />
           </div>
         </div>
       </div>
@@ -612,11 +642,6 @@ export function SummaryTab({
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
-      {slot == null && (
-        <p className="mb-2 shrink-0 text-[10px] font-medium uppercase tracking-wider text-lp-text-tertiary">
-          All amounts in {currencyCode}
-        </p>
-      )}
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
         {leftColumn}
         {rightColumn}

@@ -115,9 +115,9 @@ export function ManageTourSegmentNav({ artistId, tourId }: Props) {
             /* Light: solid brand fill so white type reads clearly (glass reads washed on pale UI). */
             'border-orange-950/15 bg-lp-orange',
             'shadow-[inset_0_1px_0_rgba(255,255,255,0.22),0_2px_10px_rgba(255,69,0,0.35)]',
-            /* Dark: glassy pill */
-            'dark:border-white/15 dark:bg-[rgba(255,69,0,0.48)] dark:backdrop-blur-md dark:backdrop-saturate-150',
-            'dark:shadow-[0_2px_16px_rgba(0,0,0,0.35),inset_0_1px_0_rgba(255,255,255,0.12)]'
+            /* Dark: match the stronger light-mode brand pill (less washed). */
+            'dark:border-orange-950/20 dark:bg-lp-orange',
+            'dark:shadow-[inset_0_1px_0_rgba(255,255,255,0.18),0_4px_16px_rgba(255,69,0,0.35)]'
           )}
           style={{
             left: pill.left,

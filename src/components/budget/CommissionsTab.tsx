@@ -201,7 +201,23 @@ function computeCommissionContext(
   const amountProposed = (pct: number, basis: string) => pct * basisValueProposed(basis);
   const amountActual = (pct: number, basis: string) => pct * basisValueActual(basis);
 
-  return { amountProposed, amountActual, proposedGrossIncome };
+  return {
+    amountProposed,
+    amountActual,
+    proposedGrossIncome,
+    actualGrossIncome,
+    subtotalDirectProposed,
+    subtotalDirectActual,
+    accountancyPct,
+    insurancePct,
+    contingencyPct,
+    accountancyProposed,
+    accountancyActual,
+    insuranceProposed,
+    insuranceActual,
+    contingencyProposed,
+    contingencyActual,
+  };
 }
 
 export function CommissionsTab({ tourId }: { tourId: string }) {
@@ -220,6 +236,12 @@ export function CommissionsTab({ tourId }: { tourId: string }) {
   });
   const [deleteModal, setDeleteModal] = useState<{ id: string; label: string } | null>(null);
   const [saving, setSaving] = useState(false);
+  const [settingsDraft, setSettingsDraft] = useState<{ insurance: number; contingency: number; accountancy: number }>({
+    insurance: 3,
+    contingency: 2,
+    accountancy: 0,
+  });
+  const [savingOverheads, setSavingOverheads] = useState(false);
 
   const load = useCallback(() => {
     if (!tourId) return;
@@ -259,6 +281,11 @@ export function CommissionsTab({ tourId }: { tourId: string }) {
             totalDays
           );
           setContext(ctx);
+          setSettingsDraft({
+            insurance: Number((Number(settings?.insurance_pct ?? 0.03) * 100).toFixed(1)),
+            contingency: Number((Number(settings?.contingency_pct ?? 0.02) * 100).toFixed(1)),
+            accountancy: Number((Number(settings?.accountancy_pct ?? 0) * 100).toFixed(1)),
+          });
         }
       )
       .catch((err) => setError(err?.message ?? 'Failed to load'))
@@ -283,6 +310,29 @@ export function CommissionsTab({ tourId }: { tourId: string }) {
       )
     : 0;
   const projectedIncomeTotal = context?.proposedGrossIncome ?? 0;
+
+  const saveStandardOverheads = async () => {
+    setSavingOverheads(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/budget/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tour_id: tourId,
+          insurance_pct: Math.max(0, Number(settingsDraft.insurance) || 0) / 100,
+          contingency_pct: Math.max(0, Number(settingsDraft.contingency) || 0) / 100,
+          accountancy_pct: Math.max(0, Number(settingsDraft.accountancy) || 0) / 100,
+        }),
+      });
+      if (!res.ok) throw new Error('Failed to save standard overheads');
+      load();
+    } catch (e) {
+      setError((e as Error)?.message ?? 'Failed to save standard overheads');
+    } finally {
+      setSavingOverheads(false);
+    }
+  };
 
   const createCommission = async () => {
     if (!newRow.label?.trim()) return;
@@ -416,7 +466,131 @@ export function CommissionsTab({ tourId }: { tourId: string }) {
           </span>
         </div>
       </div>
+
       <div className="rounded-xl border border-lp-border bg-lp-surface overflow-hidden">
+        <div className="border-b border-lp-border px-4 py-3">
+          <h3 className="text-[11px] font-semibold uppercase tracking-widest lp-table-header-text">
+            Standard Overheads
+          </h3>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-lp-border">
+                <th className="text-left p-3 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Label</th>
+                <th className="text-right p-3 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text w-24">Percentage</th>
+                <th className="text-right p-3 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text w-32">Calculated (Proposed)</th>
+                <th className="text-right p-3 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text w-32">Calculated (Actual)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(() => {
+                const accountancyPctDraft = Math.max(0, Number(settingsDraft.accountancy) || 0) / 100;
+                const insurancePctDraft = Math.max(0, Number(settingsDraft.insurance) || 0) / 100;
+                const contingencyPctDraft = Math.max(0, Number(settingsDraft.contingency) || 0) / 100;
+                const grossP = context?.proposedGrossIncome ?? 0;
+                const grossA = context?.actualGrossIncome ?? 0;
+                const directP = context?.subtotalDirectProposed ?? 0;
+                const directA = context?.subtotalDirectActual ?? 0;
+                const acctP = accountancyPctDraft * grossP;
+                const acctA = accountancyPctDraft * grossA;
+                const insP = insurancePctDraft * grossP;
+                const insA = insurancePctDraft * grossA;
+                const contP = contingencyPctDraft * (directP + acctP + insP);
+                const contA = contingencyPctDraft * (directA + acctA + insA);
+                return (
+                  <>
+              <tr className="border-b border-lp-border">
+                <td className="p-3 text-lp-text">Accountancy</td>
+                <td className="p-3 text-right">
+                  <span className="inline-flex items-center justify-end gap-1">
+                    <input
+                      type="number"
+                      step="0.1"
+                      min={0}
+                      className="w-16 max-w-full rounded-md border border-lp-border bg-transparent px-2 py-1 text-right text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30"
+                      value={settingsDraft.accountancy}
+                      onChange={(e) => setSettingsDraft((p) => ({ ...p, accountancy: Number(e.target.value) || 0 }))}
+                    />
+                    <span className="shrink-0 text-lp-text-tertiary">%</span>
+                  </span>
+                </td>
+                <td className="p-3 text-right tabular-nums text-lp-text-secondary bg-lp-bg-tertiary/50">
+                  {acctP.toLocaleString('en-GB', { minimumFractionDigits: 2 })}
+                </td>
+                <td className="p-3 text-right tabular-nums text-lp-text-secondary bg-lp-bg-tertiary/50">
+                  {acctA.toLocaleString('en-GB', { minimumFractionDigits: 2 })}
+                </td>
+              </tr>
+              <tr className="border-b border-lp-border">
+                <td className="p-3 text-lp-text">Insurance</td>
+                <td className="p-3 text-right">
+                  <span className="inline-flex items-center justify-end gap-1">
+                    <input
+                      type="number"
+                      step="0.1"
+                      min={0}
+                      className="w-16 max-w-full rounded-md border border-lp-border bg-transparent px-2 py-1 text-right text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30"
+                      value={settingsDraft.insurance}
+                      onChange={(e) => setSettingsDraft((p) => ({ ...p, insurance: Number(e.target.value) || 0 }))}
+                    />
+                    <span className="shrink-0 text-lp-text-tertiary">%</span>
+                  </span>
+                </td>
+                <td className="p-3 text-right tabular-nums text-lp-text-secondary bg-lp-bg-tertiary/50">
+                  {insP.toLocaleString('en-GB', { minimumFractionDigits: 2 })}
+                </td>
+                <td className="p-3 text-right tabular-nums text-lp-text-secondary bg-lp-bg-tertiary/50">
+                  {insA.toLocaleString('en-GB', { minimumFractionDigits: 2 })}
+                </td>
+              </tr>
+              <tr>
+                <td className="p-3 text-lp-text">Contingency</td>
+                <td className="p-3 text-right">
+                  <span className="inline-flex items-center justify-end gap-1">
+                    <input
+                      type="number"
+                      step="0.1"
+                      min={0}
+                      className="w-16 max-w-full rounded-md border border-lp-border bg-transparent px-2 py-1 text-right text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30"
+                      value={settingsDraft.contingency}
+                      onChange={(e) => setSettingsDraft((p) => ({ ...p, contingency: Number(e.target.value) || 0 }))}
+                    />
+                    <span className="shrink-0 text-lp-text-tertiary">%</span>
+                  </span>
+                </td>
+                <td className="p-3 text-right tabular-nums text-lp-text-secondary bg-lp-bg-tertiary/50">
+                  {contP.toLocaleString('en-GB', { minimumFractionDigits: 2 })}
+                </td>
+                <td className="p-3 text-right tabular-nums text-lp-text-secondary bg-lp-bg-tertiary/50">
+                  {contA.toLocaleString('en-GB', { minimumFractionDigits: 2 })}
+                </td>
+              </tr>
+                  </>
+                );
+              })()}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div className="flex justify-start">
+        <button
+          type="button"
+          onClick={saveStandardOverheads}
+          disabled={savingOverheads}
+          className="flex items-center gap-1 rounded-lg border border-lp-border bg-lp-bg px-3 py-2 text-sm font-medium text-lp-text hover:bg-lp-bg-tertiary disabled:opacity-50"
+        >
+          {savingOverheads ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+          Save Standard Overheads
+        </button>
+      </div>
+      <div className="rounded-xl border border-lp-border bg-lp-surface overflow-hidden">
+        <div className="border-b border-lp-border px-4 py-3">
+          <h3 className="text-[11px] font-semibold uppercase tracking-widest lp-table-header-text">
+            Commissions
+          </h3>
+        </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
@@ -693,7 +867,7 @@ export function CommissionsTab({ tourId }: { tourId: string }) {
         <div className="flex flex-wrap items-baseline justify-between gap-4 border-b border-lp-border px-4 py-3 font-semibold text-lp-text">
           <span>Total Commission Amount (Proposed)</span>
           <span className="tabular-nums">
-            {totalProposed.toLocaleString('en-GB', { minimumFractionDigits: 2 })}
+            {totalProposed.toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
           </span>
         </div>
         <div
@@ -702,7 +876,7 @@ export function CommissionsTab({ tourId }: { tourId: string }) {
         >
           <span>Total Commission Amount (Actual)</span>
           <span className="tabular-nums">
-            {totalActual.toLocaleString('en-GB', { minimumFractionDigits: 2 })}
+            {totalActual.toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
           </span>
         </div>
       </div>
