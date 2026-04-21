@@ -3,7 +3,7 @@
 import { useState, useMemo, useRef, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import Link from 'next/link';
-import { Plus, ArrowUpDown, ChevronDown } from 'lucide-react';
+import { Plus, ArrowUpDown, Check, ChevronDown } from 'lucide-react';
 import type { Tour, TourStatus } from '@/types';
 import { DashboardTourCard } from '@/components/dashboard/DashboardTourCard';
 import { cn } from '@/lib/utils';
@@ -108,9 +108,13 @@ export function DashboardTourList({ tours }: { tours: Tour[] }) {
                         setSortOrder('date_asc');
                         setSortMenuOpen(false);
                       }}
-                      className={cn('w-full px-3 py-2 text-left text-sm', sortOrder === 'date_asc' && 'bg-lp-orange/10 text-lp-orange')}
+                      className={cn(
+                        'flex w-full items-center gap-2 px-3 py-2 text-left text-sm',
+                        sortOrder === 'date_asc' && 'bg-lp-surface-hover'
+                      )}
                     >
-                      Earliest first
+                      <span className="flex-1 truncate">Earliest first</span>
+                      {sortOrder === 'date_asc' && <Check size={14} className="shrink-0 text-lp-orange" />}
                     </button>
                     <button
                       type="button"
@@ -118,9 +122,13 @@ export function DashboardTourList({ tours }: { tours: Tour[] }) {
                         setSortOrder('date_desc');
                         setSortMenuOpen(false);
                       }}
-                      className={cn('w-full px-3 py-2 text-left text-sm', sortOrder === 'date_desc' && 'bg-lp-orange/10 text-lp-orange')}
+                      className={cn(
+                        'flex w-full items-center gap-2 px-3 py-2 text-left text-sm',
+                        sortOrder === 'date_desc' && 'bg-lp-surface-hover'
+                      )}
                     >
-                      Latest first
+                      <span className="flex-1 truncate">Latest first</span>
+                      {sortOrder === 'date_desc' && <Check size={14} className="shrink-0 text-lp-orange" />}
                     </button>
                     <p className="mt-1 border-t border-lp-border px-3 py-1.5 text-xs font-semibold uppercase tracking-wider text-lp-text-tertiary">
                       Artist
@@ -131,9 +139,13 @@ export function DashboardTourList({ tours }: { tours: Tour[] }) {
                         setSortOrder('artist_asc');
                         setSortMenuOpen(false);
                       }}
-                      className={cn('w-full px-3 py-2 text-left text-sm', sortOrder === 'artist_asc' && 'bg-lp-orange/10 text-lp-orange')}
+                      className={cn(
+                        'flex w-full items-center gap-2 px-3 py-2 text-left text-sm',
+                        sortOrder === 'artist_asc' && 'bg-lp-surface-hover'
+                      )}
                     >
-                      A–Z
+                      <span className="flex-1 truncate">A–Z</span>
+                      {sortOrder === 'artist_asc' && <Check size={14} className="shrink-0 text-lp-orange" />}
                     </button>
                     <button
                       type="button"
@@ -141,9 +153,13 @@ export function DashboardTourList({ tours }: { tours: Tour[] }) {
                         setSortOrder('artist_desc');
                         setSortMenuOpen(false);
                       }}
-                      className={cn('w-full px-3 py-2 text-left text-sm', sortOrder === 'artist_desc' && 'bg-lp-orange/10 text-lp-orange')}
+                      className={cn(
+                        'flex w-full items-center gap-2 px-3 py-2 text-left text-sm',
+                        sortOrder === 'artist_desc' && 'bg-lp-surface-hover'
+                      )}
                     >
-                      Z–A
+                      <span className="flex-1 truncate">Z–A</span>
+                      {sortOrder === 'artist_desc' && <Check size={14} className="shrink-0 text-lp-orange" />}
                     </button>
                   </div>
                 </>,
@@ -197,11 +213,12 @@ export function DashboardTourList({ tours }: { tours: Tour[] }) {
                             setStatusMenuOpen(false);
                           }}
                           className={cn(
-                            'w-full px-3 py-2 text-left text-sm',
-                            statusFilter === value && 'bg-lp-orange/10 text-lp-orange'
+                            'flex w-full items-center gap-2 px-3 py-2 text-left text-sm',
+                            statusFilter === value && 'bg-lp-surface-hover'
                           )}
                         >
-                          {label}
+                          <span className="flex-1 truncate">{label}</span>
+                          {statusFilter === value && <Check size={14} className="shrink-0 text-lp-orange" />}
                         </button>
                       ))}
                     </div>
