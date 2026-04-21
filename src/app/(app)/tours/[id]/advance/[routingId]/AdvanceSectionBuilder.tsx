@@ -78,6 +78,7 @@ import { parseRoutingDate, getDayTypeLabel, getDayTypeColor, getAdvanceStatusInf
 import { SlidingToggle } from '@/components/ui/SlidingToggle';
 import { ContextMenu } from '@/components/ui/ContextMenu';
 import { DeleteConfirmationModal } from '@/components/ui/DeleteConfirmationModal';
+import { BrandedSelect } from '@/components/ui/BrandedSelect';
 import { useAuth } from '@/hooks/useAuth';
 
 function relativeTime(iso: string): string {
@@ -2847,15 +2848,13 @@ function DealInfoUploadBlock({ onFieldChange }: { onFieldChange: (fieldId: strin
                 <div className="mt-4 space-y-4">
                   <div>
                     <label className="block text-xs font-medium text-lp-text-tertiary mb-1">Document type</label>
-                    <select
+                    <BrandedSelect
                       value={documentType}
-                      onChange={(e) => setDocumentType(e.target.value)}
-                      className="w-full rounded-xl border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text focus:border-lp-orange focus:outline-none"
-                    >
-                      {DEAL_MEMO_DOC_TYPES.map((t) => (
-                        <option key={t} value={t}>{t}</option>
-                      ))}
-                    </select>
+                      onChange={setDocumentType}
+                      options={DEAL_MEMO_DOC_TYPES.map((t) => ({ value: t, label: t }))}
+                      ariaLabel="Document type"
+                      className="w-full"
+                    />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-lp-text-tertiary mb-1">Files (PDF or image)</label>

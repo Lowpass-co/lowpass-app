@@ -8,6 +8,7 @@ import { SpreadsheetCurrencyAmount } from './SpreadsheetCurrencyAmount';
 import { RoutingDateField } from './RoutingDateField';
 import { TextColumnHeader, NumberColumnHeader, DateColumnHeader } from './SpreadsheetColumnHeader';
 import { InlineEditCell } from './InlineEditCell';
+import { BrandedSelect } from '@/components/ui/BrandedSelect';
 
 type PersonnelOption = { person_name: string; role: string | null };
 
@@ -527,11 +528,9 @@ export function FlightsGrid({ tourId, currency }: { tourId: string; currency: st
                         {f.person_name || '—'}
                       </span>
                     ) : (
-                      <select
-                        className="w-full min-w-0 max-w-[200px] rounded border border-lp-border bg-lp-surface py-1.5 pl-2 pr-1 text-sm"
+                      <BrandedSelect
                         value={isEditing ? form.person_name : f.person_name}
-                        onChange={async (e) => {
-                          const name = e.target.value;
+                        onChange={async (name) => {
                           const opt = byName(name);
                           if (isEditing) {
                             setEditDraft((d) => ({ ...d, person_name: name, role: opt?.role ?? null }));
@@ -545,13 +544,12 @@ export function FlightsGrid({ tourId, currency }: { tourId: string; currency: st
                             }
                           }
                         }}
-                      >
-                        {personnel.map((p) => (
-                          <option key={p.person_name} value={p.person_name}>
-                            {p.person_name}
-                          </option>
-                        ))}
-                      </select>
+                        options={personnel.map((p) => ({ value: p.person_name, label: p.person_name }))}
+                        ariaLabel="Person"
+                        className="w-full max-w-[200px]"
+                        size="sm"
+                        minWidth={140}
+                      />
                     )}
                   </td>
                   <td className="p-0 align-top" onClick={(e) => e.stopPropagation()}>

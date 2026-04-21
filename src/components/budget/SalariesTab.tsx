@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { budgetCurrencySymbol } from '@/lib/budget-currency';
+import { BrandedSelect } from '@/components/ui/BrandedSelect';
 import type { Personnel, PersonType } from '@/types';
 
 const PERSON_TYPE_LABEL: Record<PersonType, string> = {
@@ -406,17 +407,18 @@ export function SalariesTab({
             >
               Type
             </label>
-            <select
-              id="salaries-type-filter"
+            <BrandedSelect
               value={typeFilter}
-              onChange={(e) => setTypeFilter((e.target.value as 'all' | PersonType) || 'all')}
-              className="w-full rounded-md border border-lp-border bg-lp-bg px-3 py-2 text-sm text-lp-text focus:border-lp-orange/50 focus:outline-none focus:ring-1 focus:ring-lp-orange/20"
-            >
-              <option value="all">ALL</option>
-              <option value="principal">PRINCIPAL</option>
-              <option value="band">BAND</option>
-              <option value="crew">CREW</option>
-            </select>
+              onChange={(v) => setTypeFilter((v as 'all' | PersonType) || 'all')}
+              options={[
+                { value: 'all', label: 'ALL' },
+                { value: 'principal', label: 'PRINCIPAL' },
+                { value: 'band', label: 'BAND' },
+                { value: 'crew', label: 'CREW' },
+              ]}
+              ariaLabel="Filter by person type"
+              className="w-full"
+            />
           </div>
         </div>
         <div className="shrink-0 pb-0.5">
@@ -482,14 +484,17 @@ export function SalariesTab({
                   <td className={cn('px-3 py-2 capitalize', personTypeCellClass(p.person_type))}>{p.person_type}</td>
                   <td className="px-3 py-2">
                     {isEditing ? (
-                      <select
-                        className="w-full rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30"
-                        value={form.rate_type}
-                        onChange={(e) => setEditForm((prev) => ({ ...prev, rate_type: e.target.value }))}
-                      >
-                        <option value="day_rate">Day Rate</option>
-                        <option value="split_rate">Split Rate</option>
-                      </select>
+                      <BrandedSelect
+                        value={form.rate_type ?? 'day_rate'}
+                        onChange={(v) => setEditForm((prev) => ({ ...prev, rate_type: v }))}
+                        options={[
+                          { value: 'day_rate', label: 'Day Rate' },
+                          { value: 'split_rate', label: 'Split Rate' },
+                        ]}
+                        ariaLabel="Rate type"
+                        className="w-full"
+                        size="sm"
+                      />
                     ) : (
                       <span className="text-lp-text">{rateType === 'split_rate' ? 'Split Rate' : 'Day Rate'}</span>
                     )}
@@ -736,40 +741,44 @@ export function SalariesTab({
                   <span className="text-lp-text">Personnel</span> or the tour personnel view first.
                 </p>
               ) : (
-                <select
-                  className="rounded-md border border-lp-border bg-transparent px-2 py-1.5 text-sm text-lp-text sm:col-span-2"
+                <BrandedSelect
                   value={newMember.roster_id}
-                  onChange={(e) => setNewMember((prev) => ({ ...prev, roster_id: e.target.value }))}
-                >
-                  <option value="">Select from roster…</option>
-                  {availableRoster.map((person) => (
-                    <option key={person.id} value={person.id}>
-                      {person.name} ({person.lp_id})
-                    </option>
-                  ))}
-                </select>
+                  onChange={(v) => setNewMember((prev) => ({ ...prev, roster_id: v }))}
+                  options={[
+                    { value: '', label: 'Select from roster…' },
+                    ...availableRoster.map((person) => ({
+                      value: person.id,
+                      label: `${person.name} (${person.lp_id})`,
+                    })),
+                  ]}
+                  placeholder="Select from roster…"
+                  ariaLabel="Roster member"
+                  className="sm:col-span-2"
+                />
               )}
-              <select
-                className="rounded-md border border-lp-border bg-transparent px-2 py-1.5 text-sm text-lp-text"
+              <BrandedSelect
                 value={newMember.person_type}
-                onChange={(e) =>
-                  setNewMember((prev) => ({ ...prev, person_type: e.target.value as 'principal' | 'band' | 'crew' }))
+                onChange={(v) =>
+                  setNewMember((prev) => ({ ...prev, person_type: v as 'principal' | 'band' | 'crew' }))
                 }
-              >
-                <option value="principal">Principal</option>
-                <option value="band">Band</option>
-                <option value="crew">Crew</option>
-              </select>
-              <select
-                className="rounded-md border border-lp-border bg-transparent px-2 py-1.5 text-sm text-lp-text"
+                options={[
+                  { value: 'principal', label: 'Principal' },
+                  { value: 'band', label: 'Band' },
+                  { value: 'crew', label: 'Crew' },
+                ]}
+                ariaLabel="Person type"
+              />
+              <BrandedSelect
                 value={newMember.rate_type}
-                onChange={(e) =>
-                  setNewMember((prev) => ({ ...prev, rate_type: e.target.value as 'day_rate' | 'split_rate' }))
+                onChange={(v) =>
+                  setNewMember((prev) => ({ ...prev, rate_type: v as 'day_rate' | 'split_rate' }))
                 }
-              >
-                <option value="day_rate">Day Rate</option>
-                <option value="split_rate">Split Rate</option>
-              </select>
+                options={[
+                  { value: 'day_rate', label: 'Day Rate' },
+                  { value: 'split_rate', label: 'Split Rate' },
+                ]}
+                ariaLabel="Rate type"
+              />
               <div className="sm:col-span-4 flex justify-end gap-2">
                 <button
                   type="button"

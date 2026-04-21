@@ -11,6 +11,7 @@ import { createClient } from '@/lib/supabase-client';
 import { InventoryModal } from './InventoryModal';
 import { ImportModal } from './ImportModal';
 import { StyledSelect, type StyledSelectOption } from '@/components/ui/StyledSelect';
+import { BrandedSelect } from '@/components/ui/BrandedSelect';
 import {
   dayRateFromPurchase,
   effectiveInventoryDayRate,
@@ -587,17 +588,18 @@ export function InventoryTab({ userId, inventory, setInventory }: Props) {
                       {/* Category */}
                       <td className="px-4 py-2.5">
                         {editMode ? (
-                          <select
-                            className={INLINE_INPUT}
-                            style={inlineInputStyle}
+                          <BrandedSelect
                             value={String(getDraft(item, 'category') ?? '')}
-                            onChange={e => updateDraft(item.id, 'category', e.target.value || null)}
-                            onFocus={inlineFocusHandlers}
-                            onBlur={inlineBlurHandlers}
-                          >
-                            <option value="">— none —</option>
-                            {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
-                          </select>
+                            onChange={(v) => updateDraft(item.id, 'category', v || null)}
+                            options={[
+                              { value: '', label: '— none —' },
+                              ...CATEGORIES.map((c) => ({ value: c, label: c })),
+                            ]}
+                            ariaLabel="Category"
+                            size="sm"
+                            className="w-full"
+                            minWidth={140}
+                          />
                         ) : (
                           item.category
                             ? <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium" style={{ backgroundColor: 'rgba(255,69,0,0.08)', color: '#FF4500' }}>{item.category}</span>

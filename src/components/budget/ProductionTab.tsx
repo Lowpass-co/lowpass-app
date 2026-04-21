@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { Loader2, Plus, Pencil, Trash2, ChevronUp, ChevronDown, ChevronRight } from 'lucide-react';
 import { useDetailPanel } from '@/contexts/DetailPanelContext';
 import { DeleteConfirmationModal } from '@/components/ui/DeleteConfirmationModal';
+import { BrandedSelect } from '@/components/ui/BrandedSelect';
 import { cn } from '@/lib/utils';
 
 const PROD_CATEGORIES = [
@@ -231,15 +232,13 @@ export function ProductionTab({ tourId }: { tourId: string }) {
                 <tr className="border-b border-lp-border bg-lp-orange-subtle/30">
                   <td className="p-2" />
                   <td className="p-2">
-                    <select
-                      className="rounded border border-lp-border bg-lp-bg px-2 py-1.5 text-lp-text"
+                    <BrandedSelect
                       value={newRow.category}
-                      onChange={(e) => setNewRow((r) => ({ ...r, category: e.target.value as ProdCategory }))}
-                    >
-                      {PROD_CATEGORIES.map((c) => (
-                        <option key={c.value} value={c.value}>{c.label}</option>
-                      ))}
-                    </select>
+                      onChange={(v) => setNewRow((r) => ({ ...r, category: v as ProdCategory }))}
+                      options={PROD_CATEGORIES.map((c) => ({ value: c.value, label: c.label }))}
+                      ariaLabel="Category"
+                      size="sm"
+                    />
                   </td>
                   <td className="p-2">
                     <input
@@ -363,15 +362,13 @@ export function ProductionTab({ tourId }: { tourId: string }) {
                     </td>
                     <td className="p-3 text-lp-text-secondary">
                       {isEditing ? (
-                        <select
-                          className="rounded border border-lp-border bg-lp-bg px-2 py-1 text-lp-text"
+                        <BrandedSelect
                           value={row.category ?? item.category}
-                          onChange={(e) => setEditRow((r) => ({ ...r, category: e.target.value }))}
-                        >
-                          {PROD_CATEGORIES.map((c) => (
-                            <option key={c.value} value={c.value}>{c.label}</option>
-                          ))}
-                        </select>
+                          onChange={(v) => setEditRow((r) => ({ ...r, category: v }))}
+                          options={PROD_CATEGORIES.map((c) => ({ value: c.value, label: c.label }))}
+                          ariaLabel="Category"
+                          size="sm"
+                        />
                       ) : (
                         catLabel
                       )}

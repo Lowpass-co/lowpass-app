@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import { parseRoutingDate } from '@/lib/utils';
 import { RoutingMiniCalendar, DayTypePill, type CalRow } from '@/components/budget/RoutingMiniCalendar';
 import { RoutingGrid, type RoutingRow, type TransportToNext } from '@/components/routing/RoutingGrid';
+import { BrandedSelect } from '@/components/ui/BrandedSelect';
 import type { PrimaryTransit } from '@/components/routing/RoutingMap';
 const BudgetRoutingMap = dynamic(
   () => import('./BudgetRoutingMap').then((m) => ({ default: m.BudgetRoutingMap })),
@@ -671,17 +672,13 @@ export function IncomeTab({ tourId }: { tourId: string }) {
               <span className="text-[10px] font-semibold uppercase tracking-wider lp-table-header-text">
                 Primary transport mode
               </span>
-              <select
+              <BrandedSelect
                 value={primaryTransit}
-                onChange={(e) => setPrimaryTransit(e.target.value as PrimaryTransit)}
-                className="min-w-[14rem] rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text"
-              >
-                {PRIMARY_TRANSIT_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
+                onChange={(v) => setPrimaryTransit(v as PrimaryTransit)}
+                options={PRIMARY_TRANSIT_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+                ariaLabel="Primary transport mode"
+                minWidth={224}
+              />
             </label>
           </div>
         )}

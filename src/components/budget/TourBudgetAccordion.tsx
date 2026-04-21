@@ -20,6 +20,7 @@ import { ChevronDown, Plus, Trash2, Loader2, Pencil, Check, X } from 'lucide-rea
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { useDetailPanel } from '@/contexts/DetailPanelContext';
+import { BrandedSelect } from '@/components/ui/BrandedSelect';
 import {
   normalizeCommissionPct,
   formatCommissionDisplayPercentString,
@@ -418,15 +419,13 @@ function AddRow({
     <div className="border-b border-lp-border/30 bg-lp-surface/50">
       {categories.length > 1 && (
         <div className="px-5 pt-2">
-          <select
+          <BrandedSelect
             value={category}
-            onChange={e => setCategory(e.target.value)}
-            className="bg-lp-surface border border-lp-border rounded px-2 py-1 text-[11px] text-lp-text focus:outline-none focus:border-lp-orange"
-          >
-            {categories.map(c => (
-              <option key={c.value} value={c.value}>{c.label}</option>
-            ))}
-          </select>
+            onChange={setCategory}
+            options={categories.map((c) => ({ value: c.value, label: c.label }))}
+            ariaLabel="Category"
+            size="sm"
+          />
         </div>
       )}
       <div className={cn(GRID, 'px-5 py-1.5')}>
@@ -1056,15 +1055,14 @@ function CommissionsAccordionBody({ tourId, symbol, totalIncome }: { tourId: str
               </span>
             )}
             {isEditing ? (
-              <select
-                className="w-full min-w-0 rounded border border-lp-border bg-lp-surface text-[10px]"
+              <BrandedSelect
                 value={row.basis ?? c.basis}
-                onChange={e => setDraft(d => ({ ...d, basis: e.target.value }))}
-              >
-                {COMMISSION_BASIS_OPTIONS.map(o => (
-                  <option key={o.value} value={o.value}>{o.label}</option>
-                ))}
-              </select>
+                onChange={(v) => setDraft(d => ({ ...d, basis: v }))}
+                options={COMMISSION_BASIS_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+                ariaLabel="Basis"
+                className="w-full min-w-0"
+                size="sm"
+              />
             ) : (
               <span className="text-right text-[10px] text-lp-text-tertiary">
                 {COMMISSION_BASIS_OPTIONS.find(b => b.value === c.basis)?.label ?? c.basis}
@@ -1135,15 +1133,15 @@ function CommissionsAccordionBody({ tourId, symbol, totalIncome }: { tourId: str
             value={addDraft.label ?? ''}
             onChange={e => setAddDraft(d => ({ ...d, label: e.target.value }))}
           />
-          <select
-            className="w-32 rounded border border-lp-border bg-lp-surface text-[10px]"
+          <BrandedSelect
             value={addDraft.basis ?? 'gross'}
-            onChange={e => setAddDraft(d => ({ ...d, basis: e.target.value }))}
-          >
-            {COMMISSION_BASIS_OPTIONS.map(o => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
+            onChange={(v) => setAddDraft(d => ({ ...d, basis: v }))}
+            options={COMMISSION_BASIS_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+            ariaLabel="Basis"
+            className="w-32"
+            size="sm"
+            minWidth={128}
+          />
           <button type="button" className="text-[11px] text-lp-text-tertiary" onClick={() => { setAdding(false); setAddDraft({ label: '', basis: 'gross' }); }}>
             Cancel
           </button>

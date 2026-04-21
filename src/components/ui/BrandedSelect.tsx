@@ -42,6 +42,9 @@ export function BrandedSelect({
   ariaLabel,
   disabled = false,
   minWidth = 160,
+  size = 'md',
+  autoOpen = false,
+  onOpenChange,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -52,8 +55,26 @@ export function BrandedSelect({
   ariaLabel?: string;
   disabled?: boolean;
   minWidth?: number;
+  /** 'sm' = compact (h-8, text-xs) for inline-edit cells. */
+  size?: 'sm' | 'md';
+  /** Open immediately on mount. Use for inline-edit cells that replace
+   *  a native <select> where the user has already clicked through to edit. */
+  autoOpen?: boolean;
+  /** Notified when the dropdown opens or closes. Useful for parents that
+   *  need to detect "user dismissed without picking" (cancel). */
+  onOpenChange?: (open: boolean) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpenState] = useState(autoOpen);
+  const setOpen = useCallback(
+    (next: boolean | ((prev: boolean) => boolean)) => {
+      setOpenState((prev) => {
+        const resolved = typeof next === 'function' ? next(prev) : next;
+        if (resolved !== prev) onOpenChange?.(resolved);
+        return resolved;
+      });
+    },
+    [onOpenChange]
+  );
   const [rect, setRect] = useState<
     { top: number; left: number; width: number; flipUp: boolean } | null
   >(null);
@@ -62,7 +83,7 @@ export function BrandedSelect({
 
   const current = options.find((o) => o.value === value);
 
-  const close = useCallback(() => setOpen(false), []);
+  const close = useCallback(() => setOpen(false), [setOpen]);
 
   useLayoutEffect(() => {
     if (open && wrapRef.current) {
@@ -147,7 +168,10 @@ export function BrandedSelect({
         aria-expanded={open}
         aria-label={ariaLabel}
         className={cn(
-          'inline-flex h-9 w-full items-center justify-between gap-2 rounded-xl px-3 py-2 text-left text-sm transition-colors duration-150',
+          'inline-flex w-full items-center justify-between gap-2 text-left transition-colors duration-150',
+          size === 'sm'
+            ? 'h-8 rounded-lg px-2 py-1 text-xs'
+            : 'h-9 rounded-xl px-3 py-2 text-sm',
           'border border-[var(--lp-border)] bg-[var(--lp-bg-secondary)] text-[var(--lp-text)]',
           'hover:bg-[var(--lp-surface-hover)] focus:outline-none focus:ring-2 focus:ring-[var(--lp-orange)]/20',
           open && 'ring-2 ring-[var(--lp-orange)]/20',

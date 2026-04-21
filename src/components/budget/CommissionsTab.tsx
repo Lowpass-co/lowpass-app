@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Loader2, Plus, Pencil, Trash2, ChevronUp, ChevronDown } from 'lucide-react';
 import { DeleteConfirmationModal } from '@/components/ui/DeleteConfirmationModal';
+import { BrandedSelect } from '@/components/ui/BrandedSelect';
 import { normalizeCommissionPct, formatCommissionDisplayPercentString } from '@/lib/commission-pct';
 
 /** Math spec §7: basis options and formulas for calculated amount */
@@ -635,15 +636,15 @@ export function CommissionsTab({ tourId }: { tourId: string }) {
                     </div>
                   </td>
                   <td className="p-2">
-                    <select
-                      className="w-full min-w-[140px] rounded border border-lp-border bg-lp-bg px-2 py-1.5 text-lp-text"
+                    <BrandedSelect
                       value={newRow.basis ?? 'gross'}
-                      onChange={(e) => setNewRow((r) => ({ ...r, basis: e.target.value as CommissionBasis }))}
-                    >
-                      {BASIS_OPTIONS.map((o) => (
-                        <option key={o.value} value={o.value}>{o.label}</option>
-                      ))}
-                    </select>
+                      onChange={(v) => setNewRow((r) => ({ ...r, basis: v as CommissionBasis }))}
+                      options={BASIS_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+                      ariaLabel="Basis"
+                      className="w-full"
+                      size="sm"
+                      minWidth={140}
+                    />
                   </td>
                   <td className="p-2 text-right tabular-nums text-lp-text-tertiary">
                     {context
@@ -760,15 +761,15 @@ export function CommissionsTab({ tourId }: { tourId: string }) {
                     </td>
                     <td className="p-3 text-lp-text-secondary">
                       {isEditing ? (
-                        <select
-                          className="w-full min-w-[140px] rounded border border-lp-border bg-lp-bg px-2 py-1 text-lp-text"
+                        <BrandedSelect
                           value={row.basis ?? c.basis}
-                          onChange={(e) => setEditRow((r) => ({ ...r, basis: e.target.value }))}
-                        >
-                          {BASIS_OPTIONS.map((o) => (
-                            <option key={o.value} value={o.value}>{o.label}</option>
-                          ))}
-                        </select>
+                          onChange={(v) => setEditRow((r) => ({ ...r, basis: v }))}
+                          options={BASIS_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+                          ariaLabel="Basis"
+                          className="w-full"
+                          size="sm"
+                          minWidth={140}
+                        />
                       ) : (
                         BASIS_OPTIONS.find((o) => o.value === basis)?.label ?? basis
                       )}

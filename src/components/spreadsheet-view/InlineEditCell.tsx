@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { formatCommissionDisplayPercentString, userPercentInputToStored } from '@/lib/commission-pct';
+import { BrandedSelect } from '@/components/ui/BrandedSelect';
 
 export interface InlineEditCellProps {
   value: string | number | null;
@@ -98,26 +99,25 @@ export function InlineEditCell({
   const [inputValue, setInputValue] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(false);
-  const inputRef = useRef<HTMLInputElement | HTMLSelectElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
   const displayValue = formatDisplay(value, type, currency, options);
 
   useEffect(() => {
     if (editing && inputRef.current) {
       inputRef.current.focus();
-      if (inputRef.current instanceof HTMLInputElement && inputRef.current.type === 'text') {
+      if (inputRef.current.type === 'text') {
         inputRef.current.select();
       }
     }
   }, [editing]);
 
-  const handleSave = async () => {
+  const handleSave = async (override?: string | number) => {
     if (readOnly) return;
 
-    // Read select value directly from DOM to avoid stale state during onBlur.
     let newVal: string | number;
-    if (type === 'select' && inputRef.current instanceof HTMLSelectElement) {
-      newVal = inputRef.current.value;
+    if (override !== undefined) {
+      newVal = override;
     } else {
       newVal = inputValue.trim();
       if (type === 'number') {
@@ -191,20 +191,28 @@ export function InlineEditCell({
     return (
       <span className={cn('block min-w-0', className)}>
         {type === 'select' ? (
-          <select
-            ref={inputRef as React.RefObject<HTMLSelectElement>}
+          <BrandedSelect
             value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onBlur={() => void handleSave()}
-            onKeyDown={handleKeyDown}
-            className={cn(inputClass, align === 'right' && 'text-right')}
-          >
-            {options.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
+            onChange={(v) => {
+              setInputValue(v);
+              void handleSave(v);
+            }}
+            options={options}
+            ariaLabel={placeholder}
+            autoOpen
+            onOpenChange={(o) => {
+              if (!o) {
+                setEditing(false);
+                setInputValue(valueToEditString(value, type));
+              }
+            }}
+            className="w-full"
+            triggerClassName={cn(
+              'min-h-[2.75rem] h-auto rounded-none border-lp-orange/35 bg-lp-surface px-3 py-2 text-sm',
+              align === 'right' && 'text-right'
+            )}
+            minWidth={0}
+          />
         ) : (
           <input
             ref={inputRef as React.RefObject<HTMLInputElement>}

@@ -10,6 +10,7 @@
 import { useState, useEffect } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { parseRoutingDate, getAdvanceStatusInfo, cn } from '@/lib/utils';
+import { BrandedSelect } from '@/components/ui/BrandedSelect';
 
 export type AdvanceDateItem = {
   routing_id: string;
@@ -173,19 +174,22 @@ export function CopyAdvanceModal({
             <label className="block text-xs font-medium text-lp-text-tertiary uppercase tracking-wide">
               Source show
             </label>
-            <select
+            <BrandedSelect
               value={sourceId}
-              onChange={(e) => setSourceId(e.target.value)}
-              className="mt-1.5 w-full rounded-xl border border-lp-border bg-lp-surface px-3 py-2.5 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-2 focus:ring-lp-orange/20"
-            >
-              <option value="">Select a show...</option>
-              {dates.map((d) => (
-                <option key={d.routing_id} value={d.routing_id}>
-                  {dateLabel(d)} — {d.venue_name || d.city || '—'} ({sectionCount(d)} sections
-                  {d.advance ? `, ${completionPercent(d)}% complete` : ''})
-                </option>
-              ))}
-            </select>
+              onChange={setSourceId}
+              options={[
+                { value: '', label: 'Select a show...' },
+                ...dates.map((d) => ({
+                  value: d.routing_id,
+                  label: `${dateLabel(d)} — ${d.venue_name || d.city || '—'} (${sectionCount(d)} sections${
+                    d.advance ? `, ${completionPercent(d)}% complete` : ''
+                  })`,
+                })),
+              ]}
+              placeholder="Select a show..."
+              ariaLabel="Source show"
+              className="mt-1.5 w-full"
+            />
             {sourceItem && (
               <p className="mt-1.5 text-xs text-lp-text-tertiary">
                 {dateLabel(sourceItem)} · {sourceItem.venue_name || '—'} · {sourceItem.city || '—'}
