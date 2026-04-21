@@ -8,11 +8,13 @@
 
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   Bug as BugIcon,
   CheckCircle2,
+  Eye,
+  EyeOff,
   ImageOff,
   Loader2,
   RefreshCw,
@@ -20,6 +22,8 @@ import {
   Sparkles,
   X,
 } from 'lucide-react';
+import { BrandedSelect } from '@/components/ui/BrandedSelect';
+import { cn } from '@/lib/utils';
 import {
   SEVERITY_META,
   SEVERITY_ORDER,
@@ -153,8 +157,13 @@ export function BugReportsClient() {
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [severityFilter, setSeverityFilter] = useState<SeverityFilter>('all');
+  const [hideResolved, setHideResolved] = useState(true);
   const [search, setSearch] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Detail panel slides in via CSS transform. We cache the last-selected
+  // report so the panel can keep rendering content while sliding out.
+  const [cachedReport, setCachedReport] = useState<BugReport | null>(null);
+  const [panelOpen, setPanelOpen] = useState(false);
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -186,6 +195,11 @@ export function BugReportsClient() {
     if (!reports) return [];
     const q = search.trim().toLowerCase();
     return reports.filter(r => {
+      // "Hide resolved" is on by default and only filters when the user
+      // hasn't explicitly picked a status (otherwise the status filter wins).
+      if (hideResolved && statusFilter === 'all' && (r.status === 'resolved' || r.status === 'wont_fix')) {
+        return false;
+      }
       if (statusFilter !== 'all' && r.status !== statusFilter) return false;
       if (severityFilter !== 'all' && r.severity !== severityFilter) return false;
       if (q) {
@@ -206,7 +220,12 @@ export function BugReportsClient() {
       }
       return true;
     });
-  }, [reports, statusFilter, severityFilter, search]);
+  }, [reports, statusFilter, severityFilter, hideResolved, search]);
+
+  const hiddenResolvedCount = useMemo(() => {
+    if (!reports) return 0;
+    return reports.filter(r => r.status === 'resolved' || r.status === 'wont_fix').length;
+  }, [reports]);
 
   const counts = useMemo(() => {
     const out = {
@@ -225,7 +244,30 @@ export function BugReportsClient() {
     return out;
   }, [reports]);
 
-  const selected = reports?.find(r => r.id === selectedId) ?? null;
+  // Keep cachedReport in sync with the current selection, and fire the
+  // slide-in animation on the next frame so the transition actually runs.
+  useEffect(() => {
+    if (selectedId && reports) {
+      const r = reports.find(x => x.id === selectedId);
+      if (r) {
+        setCachedReport(r);
+        const raf = requestAnimationFrame(() => setPanelOpen(true));
+        return () => cancelAnimationFrame(raf);
+      }
+    } else {
+      setPanelOpen(false);
+    }
+  }, [selectedId, reports]);
+
+  // Escape closes the panel.
+  useEffect(() => {
+    if (!panelOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setSelectedId(null);
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [panelOpen]);
 
   const onUpdate = useCallback(
     async (id: string, patch: Partial<Pick<BugReport, 'status' | 'severity' | 'title' | 'resolution_notes'>>) => {
@@ -281,22 +323,68 @@ export function BugReportsClient() {
           />
         </div>
 
-        <SelectPill
+        <BrandedSelect
           value={statusFilter}
           onChange={v => setStatusFilter(v as StatusFilter)}
+          ariaLabel="Filter by status"
+          minWidth={170}
           options={[
             { value: 'all', label: 'All status' },
-            ...STATUS_ORDER.map(s => ({ value: s, label: STATUS_META[s].label })),
+            ...STATUS_ORDER.map(s => ({
+              value: s,
+              label: STATUS_META[s].label,
+              color: STATUS_META[s].color,
+            })),
           ]}
         />
-        <SelectPill
+        <BrandedSelect
           value={severityFilter}
           onChange={v => setSeverityFilter(v as SeverityFilter)}
+          ariaLabel="Filter by severity"
+          minWidth={170}
           options={[
             { value: 'all', label: 'All severity' },
-            ...SEVERITY_ORDER.map(s => ({ value: s, label: SEVERITY_META[s].label })),
+            ...SEVERITY_ORDER.map(s => ({
+              value: s,
+              label: SEVERITY_META[s].label,
+              color: SEVERITY_META[s].color,
+            })),
           ]}
         />
+
+        <button
+          type="button"
+          onClick={() => setHideResolved(v => !v)}
+          aria-pressed={hideResolved}
+          title={
+            statusFilter !== 'all'
+              ? 'Status filter is active — hide-resolved is paused'
+              : hideResolved
+                ? `Showing open work. ${hiddenResolvedCount} resolved / won't-fix hidden.`
+                : 'Showing everything, including resolved.'
+          }
+          className="inline-flex h-9 items-center gap-2 rounded-xl px-3 text-sm font-semibold transition-colors"
+          style={{
+            backgroundColor: hideResolved ? 'var(--lp-orange)' + '1a' : 'var(--lp-bg-secondary)',
+            border: `1px solid ${hideResolved ? 'var(--lp-orange)' + '55' : 'var(--lp-border)'}`,
+            color: hideResolved ? 'var(--lp-orange)' : 'var(--lp-text)',
+            opacity: statusFilter !== 'all' ? 0.55 : 1,
+          }}
+        >
+          {hideResolved ? <EyeOff size={14} /> : <Eye size={14} />}
+          Hide resolved
+          {hideResolved && statusFilter === 'all' && hiddenResolvedCount > 0 && (
+            <span
+              className="ml-1 rounded-md px-1.5 text-[10px] font-bold"
+              style={{
+                backgroundColor: 'var(--lp-orange)' + '33',
+                color: 'var(--lp-orange)',
+              }}
+            >
+              {hiddenResolvedCount}
+            </span>
+          )}
+        </button>
 
         <div className="flex-1" />
         <button
@@ -368,14 +456,14 @@ export function BugReportsClient() {
         </div>
       </div>
 
-      {selected && (
-        <DetailPanel
-          report={selected}
-          onClose={() => setSelectedId(null)}
-          onUpdate={onUpdate}
-          onDelete={onDelete}
-        />
-      )}
+      <DetailPanel
+        report={cachedReport}
+        open={panelOpen}
+        onClose={() => setSelectedId(null)}
+        onUpdate={onUpdate}
+        onDelete={onDelete}
+        onFullyClosed={() => setCachedReport(null)}
+      />
     </div>
   );
 }
@@ -409,35 +497,6 @@ function StatCards({
         </div>
       ))}
     </div>
-  );
-}
-
-function SelectPill({
-  value,
-  onChange,
-  options,
-}: {
-  value: string;
-  onChange: (v: string) => void;
-  options: { value: string; label: string }[];
-}) {
-  return (
-    <select
-      value={value}
-      onChange={e => onChange(e.target.value)}
-      className="rounded-lg px-3 py-2 text-sm outline-none"
-      style={{
-        backgroundColor: 'var(--lp-bg-secondary)',
-        border: '1px solid var(--lp-border)',
-        color: 'var(--lp-text)',
-      }}
-    >
-      {options.map(o => (
-        <option key={o.value} value={o.value}>
-          {o.label}
-        </option>
-      ))}
-    </select>
   );
 }
 
@@ -502,45 +561,73 @@ function Row({ report, onClick }: { report: BugReport; onClick: () => void }) {
 
 function DetailPanel({
   report,
+  open,
   onClose,
   onUpdate,
   onDelete,
+  onFullyClosed,
 }: {
-  report: BugReport;
+  report: BugReport | null;
+  open: boolean;
   onClose: () => void;
   onUpdate: (
     id: string,
     patch: Partial<Pick<BugReport, 'status' | 'severity' | 'title' | 'resolution_notes'>>
   ) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
+  onFullyClosed: () => void;
 }) {
-  const [resolutionNotes, setResolutionNotes] = useState(report.resolution_notes ?? '');
+  const [resolutionNotes, setResolutionNotes] = useState(report?.resolution_notes ?? '');
   const [notesSaving, setNotesSaving] = useState(false);
   const [notesSaved, setNotesSaved] = useState(false);
   const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
+  const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    setResolutionNotes(report.resolution_notes ?? '');
+    setResolutionNotes(report?.resolution_notes ?? '');
     setNotesSaved(false);
     setCopyState('idle');
-  }, [report.id, report.resolution_notes]);
+  }, [report?.id, report?.resolution_notes]);
 
   const onSendToAgent = useCallback(async () => {
+    if (!report) return;
     const ok = await copyToClipboard(buildRepairPrompt(report));
     setCopyState(ok ? 'copied' : 'error');
     setTimeout(() => setCopyState('idle'), 2000);
   }, [report]);
 
+  // When the inner panel finishes its slide-out transition, tell the
+  // parent it's safe to drop the cached report from memory.
+  const onTransitionEnd = (e: React.TransitionEvent<HTMLDivElement>) => {
+    if (e.target !== panelRef.current) return;
+    if (e.propertyName !== 'transform') return;
+    if (!open) onFullyClosed();
+  };
+
+  // Nothing to render at all (no report has ever been selected).
+  if (!report) return null;
+
   return (
     <div
-      className="fixed inset-0 z-[102] flex justify-end"
+      className={cn(
+        'fixed inset-0 z-[102] flex justify-end transition-opacity duration-300 ease-out',
+        open ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
+      )}
       style={{ backgroundColor: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }}
       onClick={e => {
         if (e.target === e.currentTarget) onClose();
       }}
+      aria-hidden={!open}
     >
       <div
-        className="flex h-full w-full max-w-2xl flex-col overflow-hidden"
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        onTransitionEnd={onTransitionEnd}
+        className={cn(
+          'flex h-full w-full max-w-2xl flex-col overflow-hidden transition-transform duration-300 ease-out',
+          open ? 'translate-x-0' : 'translate-x-full'
+        )}
         style={{ backgroundColor: 'var(--lp-surface)', borderLeft: '1px solid var(--lp-border)' }}
       >
         <div
@@ -575,22 +662,18 @@ function DetailPanel({
 
         <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-5">
           <Field label="Status">
-            <select
+            <BrandedSelect
               value={report.status}
-              onChange={e => onUpdate(report.id, { status: e.target.value as BugStatus })}
-              className="w-full rounded-lg px-3 py-2 text-sm outline-none"
-              style={{
-                backgroundColor: 'var(--lp-bg-secondary)',
-                border: '1px solid var(--lp-border)',
-                color: 'var(--lp-text)',
-              }}
-            >
-              {STATUS_ORDER.map(s => (
-                <option key={s} value={s}>
-                  {STATUS_META[s].label}
-                </option>
-              ))}
-            </select>
+              onChange={v => onUpdate(report.id, { status: v as BugStatus })}
+              ariaLabel="Status"
+              className="w-full"
+              triggerClassName="w-full"
+              options={STATUS_ORDER.map(s => ({
+                value: s,
+                label: STATUS_META[s].label,
+                color: STATUS_META[s].color,
+              }))}
+            />
           </Field>
 
           <Field label="Severity">

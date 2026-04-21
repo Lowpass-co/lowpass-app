@@ -6,6 +6,7 @@ import { X } from 'lucide-react';
 import type { PersonnelRate } from '@/types';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/components/ui/Toast';
+import { BrandedSelect } from '@/components/ui/BrandedSelect';
 
 const IC =
   'w-full rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text outline-none focus:border-lp-orange';
@@ -129,13 +130,14 @@ export function TourPersonnelDetailSlideOver({
           </div>
           <div>
             <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-lp-text-tertiary">Person type</label>
-            <select value={person_type} onChange={(e) => setPersonType(e.target.value)} className={IC}>
-              {PT.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
+            <BrandedSelect
+              value={person_type}
+              onChange={(v) => setPersonType(v)}
+              className="w-full"
+              triggerClassName="w-full"
+              ariaLabel="Person type"
+              options={PT.map((o) => ({ value: o.value, label: o.label }))}
+            />
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
