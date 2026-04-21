@@ -15,6 +15,7 @@ import {
   CheckCircle2,
   Eye,
   EyeOff,
+  Image as ImageIcon,
   ImageOff,
   Loader2,
   RefreshCw,
@@ -66,7 +67,7 @@ function buildRepairPrompt(report: BugReport): string {
   const reporter =
     report.reporter?.name || report.reporter?.email || '(unknown)';
   const screenshot = report.screenshot_url
-    ? `A screenshot of the bug is attached alongside this prompt — paste it into the chat and inspect it directly. If the paste didn't include the image, this signed URL is the fallback (expires in ~1h): ${report.screenshot_url}`
+    ? `A screenshot was captured for this bug. The reporter will paste it into the chat as a second paste (via the "Copy screenshot" button). If it isn't attached, this signed URL is the fallback (expires in ~1h, and binary content isn't directly fetchable by the agent): ${report.screenshot_url}`
     : '(no screenshot attached)';
 
   return `You are investigating a bug reported inside the Lowpass tour-management app.
@@ -155,41 +156,29 @@ async function toPngBlob(source: Blob): Promise<Blob> {
   });
 }
 
-type CopyOutcome = 'text+image' | 'text' | 'error';
-
 /**
- * Copy the repair prompt to the clipboard. When the report has a screenshot
- * we also fetch the signed URL and stuff the image into the same
- * ClipboardItem, so a single paste into Cursor/Claude lands both the prompt
- * (in the chat input) and the screenshot (as an attachment). Falls back to
- * text-only copy if anything goes wrong with the image path.
+ * Copy just the screenshot (as PNG) to the clipboard so the user can
+ * paste it into the Cursor/Claude chat as an attachment. We keep text
+ * and image on separate buttons because Cursor's paste handler picks
+ * image and drops text when a ClipboardItem contains both.
  */
-async function copyPromptWithScreenshot(
-  text: string,
-  screenshotUrl: string | null,
-): Promise<CopyOutcome> {
+async function copyScreenshotToClipboard(screenshotUrl: string): Promise<boolean> {
   if (
-    screenshotUrl &&
-    typeof ClipboardItem !== 'undefined' &&
-    typeof navigator !== 'undefined' &&
-    navigator.clipboard?.write
+    typeof ClipboardItem === 'undefined' ||
+    typeof navigator === 'undefined' ||
+    !navigator.clipboard?.write
   ) {
-    try {
-      const res = await fetch(screenshotUrl, { credentials: 'omit' });
-      if (!res.ok) throw new Error(`screenshot fetch ${res.status}`);
-      const png = await toPngBlob(await res.blob());
-      const item = new ClipboardItem({
-        'text/plain': new Blob([text], { type: 'text/plain' }),
-        'image/png': png,
-      });
-      await navigator.clipboard.write([item]);
-      return 'text+image';
-    } catch {
-      // Fall through to text-only copy below.
-    }
+    return false;
   }
-  const ok = await copyToClipboard(text);
-  return ok ? 'text' : 'error';
+  try {
+    const res = await fetch(screenshotUrl, { credentials: 'omit' });
+    if (!res.ok) return false;
+    const png = await toPngBlob(await res.blob());
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': png })]);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function Pill({ label, color }: { label: string; color: string }) {
@@ -639,27 +628,31 @@ function DetailPanel({
   const [resolutionNotes, setResolutionNotes] = useState(report?.resolution_notes ?? '');
   const [notesSaving, setNotesSaving] = useState(false);
   const [notesSaved, setNotesSaved] = useState(false);
-  const [copyState, setCopyState] = useState<
-    'idle' | 'copied-text+image' | 'copied-text' | 'error'
-  >('idle');
+  const [copyState, setCopyState] = useState<'idle' | 'copied' | 'error'>('idle');
+  const [imageCopyState, setImageCopyState] = useState<'idle' | 'copied' | 'error'>(
+    'idle',
+  );
   const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setResolutionNotes(report?.resolution_notes ?? '');
     setNotesSaved(false);
     setCopyState('idle');
+    setImageCopyState('idle');
   }, [report?.id, report?.resolution_notes]);
 
   const onSendToAgent = useCallback(async () => {
     if (!report) return;
-    const outcome = await copyPromptWithScreenshot(
-      buildRepairPrompt(report),
-      report.screenshot_url ?? null,
-    );
-    if (outcome === 'text+image') setCopyState('copied-text+image');
-    else if (outcome === 'text') setCopyState('copied-text');
-    else setCopyState('error');
+    const ok = await copyToClipboard(buildRepairPrompt(report));
+    setCopyState(ok ? 'copied' : 'error');
     setTimeout(() => setCopyState('idle'), 2500);
+  }, [report]);
+
+  const onCopyScreenshot = useCallback(async () => {
+    if (!report?.screenshot_url) return;
+    const ok = await copyScreenshotToClipboard(report.screenshot_url);
+    setImageCopyState(ok ? 'copied' : 'error');
+    setTimeout(() => setImageCopyState('idle'), 2500);
   }, [report]);
 
   // When the inner panel finishes its slide-out transition, tell the
@@ -892,41 +885,34 @@ function DetailPanel({
             <AlertTriangle size={12} />
             Delete
           </button>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               onClick={onSendToAgent}
               className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold"
               style={{
                 backgroundColor:
-                  copyState === 'copied-text+image' || copyState === 'copied-text'
-                    ? '#22c55e1a'
-                    : 'var(--lp-bg-secondary)',
+                  copyState === 'copied' ? '#22c55e1a' : 'var(--lp-bg-secondary)',
                 border: `1px solid ${
-                  copyState === 'copied-text+image' || copyState === 'copied-text'
+                  copyState === 'copied'
                     ? '#22c55e55'
                     : copyState === 'error'
                       ? '#ef444455'
                       : 'var(--lp-border)'
                 }`,
                 color:
-                  copyState === 'copied-text+image' || copyState === 'copied-text'
+                  copyState === 'copied'
                     ? '#22c55e'
                     : copyState === 'error'
                       ? '#ef4444'
                       : 'var(--lp-text)',
               }}
-              title="Copy a structured repair prompt to your clipboard. When a screenshot is attached it rides along so Cursor/Claude can see it on paste."
+              title="Copy the structured repair prompt. Paste it into the Cursor agent or claude.ai, then use 'Copy screenshot' for the image."
             >
-              {copyState === 'copied-text+image' ? (
+              {copyState === 'copied' ? (
                 <>
                   <CheckCircle2 size={12} />
-                  Copied prompt + screenshot — paste into Cursor
-                </>
-              ) : copyState === 'copied-text' ? (
-                <>
-                  <CheckCircle2 size={12} />
-                  Copied prompt — paste into Cursor
+                  Prompt copied — paste into Cursor
                 </>
               ) : copyState === 'error' ? (
                 <>
@@ -936,10 +922,52 @@ function DetailPanel({
               ) : (
                 <>
                   <Sparkles size={12} />
-                  Send to Cursor / Claude
+                  Copy prompt for Cursor / Claude
                 </>
               )}
             </button>
+            {report.screenshot_url ? (
+              <button
+                type="button"
+                onClick={onCopyScreenshot}
+                className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold"
+                style={{
+                  backgroundColor:
+                    imageCopyState === 'copied' ? '#22c55e1a' : 'var(--lp-bg-secondary)',
+                  border: `1px solid ${
+                    imageCopyState === 'copied'
+                      ? '#22c55e55'
+                      : imageCopyState === 'error'
+                        ? '#ef444455'
+                        : 'var(--lp-border)'
+                  }`,
+                  color:
+                    imageCopyState === 'copied'
+                      ? '#22c55e'
+                      : imageCopyState === 'error'
+                        ? '#ef4444'
+                        : 'var(--lp-text)',
+                }}
+                title="Copy the screenshot to the clipboard as an image. Paste it into the same Cursor/Claude chat as a second paste."
+              >
+                {imageCopyState === 'copied' ? (
+                  <>
+                    <CheckCircle2 size={12} />
+                    Screenshot copied — paste again
+                  </>
+                ) : imageCopyState === 'error' ? (
+                  <>
+                    <AlertTriangle size={12} />
+                    Screenshot copy failed
+                  </>
+                ) : (
+                  <>
+                    <ImageIcon size={12} />
+                    Copy screenshot
+                  </>
+                )}
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={onClose}
