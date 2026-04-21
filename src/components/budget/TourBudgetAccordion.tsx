@@ -840,20 +840,43 @@ function SalariesAccordionBody({
   const [personnel, setPersonnel] = useState<Personnel[]>([]);
   const [payroll, setPayroll] = useState<PayrollEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  const load = useCallback(() => {
+  const load = useCallback(async () => {
     if (!tourId) return;
     setLoading(true);
-    Promise.all([
-      fetch(`/api/budget/personnel-rates?tour_id=${tourId}`).then((r) => (r.ok ? r.json() : { personnel_rates: [] })),
-      fetch(`/api/budget/payroll?tour_id=${tourId}`).then((r) => (r.ok ? r.json() : { entries: [] })),
-    ])
-      .then(([pData, prData]: [{ personnel?: Personnel[]; personnel_rates?: Personnel[] }, { entries?: PayrollEntry[] }]) => {
-        setPersonnel(pData.personnel_rates ?? pData.personnel ?? []);
-        setPayroll(prData.entries ?? []);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+    setLoadError(null);
+    try {
+      const [personnelRes, payrollRes] = await Promise.all([
+        fetch(`/api/budget/personnel-rates?tour_id=${tourId}`),
+        fetch(`/api/budget/payroll?tour_id=${tourId}`),
+      ]);
+
+      if (!personnelRes.ok) {
+        const body = await personnelRes.text().catch(() => '');
+        throw new Error(
+          `personnel-rates ${personnelRes.status}${body ? ` — ${body.slice(0, 200)}` : ''}`,
+        );
+      }
+
+      const pData = (await personnelRes.json()) as {
+        personnel?: Personnel[];
+        personnel_rates?: Personnel[];
+      };
+      const prData = payrollRes.ok
+        ? ((await payrollRes.json()) as { entries?: PayrollEntry[] })
+        : { entries: [] };
+
+      setPersonnel(pData.personnel_rates ?? pData.personnel ?? []);
+      setPayroll(prData.entries ?? []);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      setLoadError(msg || 'Failed to load personnel');
+      setPersonnel([]);
+      setPayroll([]);
+    } finally {
+      setLoading(false);
+    }
   }, [tourId]);
 
   useEffect(() => {
@@ -869,6 +892,14 @@ function SalariesAccordionBody({
   }, [load]);
 
   if (loading) return <SalariesAccordionSkeletonRows />;
+
+  if (loadError) {
+    return (
+      <div className="px-5 py-3 text-[11px] text-red-500">
+        Couldn&apos;t load personnel for this tour: {loadError}
+      </div>
+    );
+  }
 
   const { showDays, offDays, rehearsalDays, totalDays } = dayCount;
 
@@ -889,7 +920,17 @@ function SalariesAccordionBody({
   });
 
   if (personRows.length === 0) {
-    return <div className="px-5 py-3 text-[11px] text-lp-text-tertiary italic">No personnel set up. Add crew and band members in the Personnel section.</div>;
+    return (
+      <div className="px-5 py-3 text-[11px] italic text-lp-text-tertiary">
+        No personnel assigned to this tour yet.{' '}
+        <a
+          href={`/tours/${tourId}/personnel`}
+          className="not-italic font-semibold text-lp-orange underline underline-offset-2"
+        >
+          Assign personnel &rarr;
+        </a>
+      </div>
+    );
   }
 
   return (
