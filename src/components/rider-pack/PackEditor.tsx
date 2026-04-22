@@ -170,8 +170,8 @@ export function PackEditor({ packId }: Props) {
 
   // ----- Render -----
 
-  if (loading) return <div className="p-6 text-sm text-neutral-500">Loading...</div>;
-  if (error) return <div className="p-6 text-sm text-red-600">{error}</div>;
+  if (loading) return <div className="p-6 text-sm text-lp-text-secondary">Loading...</div>;
+  if (error) return <div className="p-6 text-sm text-red-500">{error}</div>;
   if (!data) return null;
 
   const packContext: PackContext = {
@@ -183,11 +183,11 @@ export function PackEditor({ packId }: Props) {
   };
 
   return (
-    <div className="grid grid-cols-[220px_1fr_280px] gap-0 h-[calc(100vh-120px)] border-t border-neutral-200">
+    <div className="grid h-[calc(100vh-120px)] grid-cols-[220px_1fr_280px] gap-0 border-t border-lp-border bg-lp-surface">
       {/* LEFT: section list */}
-      <aside className="border-r border-neutral-200 overflow-y-auto">
+      <aside className="overflow-y-auto border-r border-lp-border bg-lp-surface">
         <div className="p-3 flex items-center justify-between">
-          <span className="text-xs font-medium uppercase text-neutral-500">Sections</span>
+          <span className="text-xs font-semibold uppercase tracking-widest text-lp-text-tertiary">Sections</span>
           <button
             type="button"
             onClick={handleAddSection}
@@ -204,13 +204,13 @@ export function PackEditor({ packId }: Props) {
                 onClick={() => setSelected(s.section_key)}
                 className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between gap-2 border-l-2 ${
                   selected === s.section_key
-                    ? 'bg-neutral-100 border-[var(--lp-orange)]'
-                    : 'border-transparent hover:bg-neutral-50'
+                    ? 'border-[var(--lp-orange)] bg-lp-surface-hover'
+                    : 'border-transparent hover:bg-lp-surface-hover'
                 }`}
               >
                 <span className="truncate">{s.title}</span>
                 {s.inherited_from && (
-                  <span className="text-[10px] uppercase tracking-wide text-neutral-400">
+                  <span className="text-[10px] uppercase tracking-wide text-lp-text-tertiary">
                     {s.inherited_from === 'artist' ? 'artist' : 'tour'}
                   </span>
                 )}
@@ -221,9 +221,9 @@ export function PackEditor({ packId }: Props) {
       </aside>
 
       {/* CENTER: section editor */}
-      <main className="overflow-y-auto bg-neutral-50 p-6">
+      <main className="overflow-y-auto bg-lp-surface-hover p-6">
         {!selectedSection ? (
-          <div className="text-sm text-neutral-500">Select a section, or add a new one.</div>
+          <div className="text-sm text-lp-text-secondary">Select a section, or add a new one.</div>
         ) : (
           <SectionEditor
             key={selectedSection.id}
@@ -242,7 +242,7 @@ export function PackEditor({ packId }: Props) {
       </main>
 
       {/* RIGHT: inspector */}
-      <aside className="border-l border-neutral-200 overflow-y-auto p-4 space-y-4 text-sm">
+      <aside className="overflow-y-auto border-l border-lp-border bg-lp-surface p-4 text-sm text-lp-text space-y-4">
         <Inspector
           pack={data.pack}
           onPackUpdate={() => refresh()}
@@ -308,9 +308,9 @@ function SectionEditor({
               if (titleDraft !== section.title && !inherited) onTitleChange(titleDraft);
             }}
             disabled={inherited}
-            className="w-full text-2xl font-semibold bg-transparent outline-none border-b border-transparent focus:border-neutral-300 disabled:text-neutral-400"
+            className="w-full border-b border-transparent bg-transparent text-2xl font-semibold text-lp-text outline-none focus:border-lp-border disabled:text-lp-text-tertiary"
           />
-          <div className="mt-1 text-xs text-neutral-500">
+          <div className="mt-1 text-xs text-lp-text-secondary">
             {inherited ? (
               <>Inherited from {section.inherited_from}. </>
             ) : (
@@ -322,14 +322,14 @@ function SectionEditor({
           <button
             type="button"
             onClick={onMoveUp}
-            className="rounded border border-neutral-200 px-2 py-1 hover:bg-neutral-50"
+            className="rounded border border-lp-border px-2 py-1 hover:bg-lp-surface-hover"
           >
             ↑
           </button>
           <button
             type="button"
             onClick={onMoveDown}
-            className="rounded border border-neutral-200 px-2 py-1 hover:bg-neutral-50"
+            className="rounded border border-lp-border px-2 py-1 hover:bg-lp-surface-hover"
           >
             ↓
           </button>
@@ -345,7 +345,7 @@ function SectionEditor({
             <button
               type="button"
               onClick={onRemove}
-              className="rounded border border-neutral-200 px-2 py-1 hover:bg-red-50 hover:text-red-600"
+              className="rounded border border-lp-border px-2 py-1 hover:bg-red-50 hover:text-red-500"
             >
               Remove
             </button>
@@ -383,7 +383,7 @@ function AddFieldDropdown({ onAdd }: { onAdd: (type: Field['type']) => void }) {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="rounded border border-dashed border-neutral-300 px-3 py-2 text-sm text-neutral-600 hover:bg-neutral-50"
+        className="rounded border border-dashed border-lp-border px-3 py-2 text-sm text-lp-text-secondary hover:bg-lp-surface-hover"
       >
         + Add field
       </button>
@@ -397,7 +397,7 @@ function AddFieldDropdown({ onAdd }: { onAdd: (type: Field['type']) => void }) {
                 onAdd(t);
                 setOpen(false);
               }}
-              className="rounded border border-neutral-200 px-2 py-1 text-xs hover:bg-neutral-50"
+              className="rounded border border-lp-border px-2 py-1 text-xs hover:bg-lp-surface-hover"
             >
               {FIELD_TYPE_LABELS[t]}
             </button>
@@ -439,20 +439,20 @@ function Inspector({
   return (
     <>
       <div>
-        <div className="text-[10px] uppercase tracking-wide text-neutral-400">Scope</div>
-        <div className="mt-1 inline-flex items-center rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-medium uppercase">
+        <div className="text-[10px] uppercase tracking-widest text-lp-text-tertiary">Scope</div>
+        <div className="mt-1 inline-flex items-center rounded-full bg-lp-surface-hover px-2 py-0.5 text-xs font-semibold uppercase text-lp-text">
           {pack.scope}
         </div>
       </div>
 
       <div>
-        <label className="text-[10px] uppercase tracking-wide text-neutral-400">Title</label>
+        <label className="text-[10px] uppercase tracking-widest text-lp-text-tertiary">Title</label>
         <input
           type="text"
           value={titleDraft}
           onChange={(e) => setTitleDraft(e.target.value)}
           onBlur={commitTitle}
-          className="mt-1 w-full rounded border border-neutral-200 px-2 py-1 text-sm"
+          className="mt-1 w-full rounded border border-lp-border bg-lp-surface px-2 py-1 text-sm text-lp-text"
           placeholder="Untitled"
         />
       </div>
@@ -461,11 +461,11 @@ function Inspector({
 
       <SharingPanel packId={pack.id} />
 
-      <div className="pt-4 border-t border-neutral-200">
+      <div className="border-t border-lp-border pt-4">
         <button
           type="button"
           onClick={onPackDelete}
-          className="text-xs text-neutral-500 hover:text-red-600"
+          className="text-xs text-lp-text-secondary hover:text-red-500"
         >
           Delete pack
         </button>
@@ -507,7 +507,7 @@ export function NewPackForm({ artists }: { artists: { id: string; name: string }
 
   if (artists.length === 0) {
     return (
-      <div className="p-4 text-xs text-neutral-500">
+      <div className="p-4 text-xs text-lp-text-secondary">
         No artists in this workspace yet. Create one first.
       </div>
     );
@@ -516,11 +516,11 @@ export function NewPackForm({ artists }: { artists: { id: string; name: string }
   return (
     <div className="flex flex-wrap items-end gap-3 p-4">
       <label className="text-xs">
-        <div className="text-[10px] uppercase tracking-wide text-neutral-400 mb-1">Artist</div>
+        <div className="mb-1 text-[10px] uppercase tracking-widest text-lp-text-tertiary">Artist</div>
         <select
           value={artistId}
           onChange={(e) => setArtistId(e.target.value)}
-          className="rounded border border-neutral-200 px-2 py-1 text-sm"
+          className="rounded border border-lp-border bg-lp-surface px-2 py-1 text-sm text-lp-text"
         >
           {artists.map((a) => (
             <option key={a.id} value={a.id}>
@@ -530,14 +530,14 @@ export function NewPackForm({ artists }: { artists: { id: string; name: string }
         </select>
       </label>
       <label className="text-xs flex-1 min-w-[200px]">
-        <div className="text-[10px] uppercase tracking-wide text-neutral-400 mb-1">
+        <div className="mb-1 text-[10px] uppercase tracking-widest text-lp-text-tertiary">
           Title (optional)
         </div>
         <input
           type="text"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
-          className="w-full rounded border border-neutral-200 px-2 py-1 text-sm"
+          className="w-full rounded border border-lp-border bg-lp-surface px-2 py-1 text-sm text-lp-text"
           placeholder="e.g. Master rider v1"
         />
       </label>
@@ -609,26 +609,26 @@ function SharingPanel({ packId }: { packId: string }) {
 
   return (
     <div>
-      <div className="text-[10px] uppercase tracking-wide text-neutral-400">Sharing</div>
-      {loading && <div className="mt-1 text-xs text-neutral-400">Loading...</div>}
+      <div className="text-[10px] uppercase tracking-widest text-lp-text-tertiary">Sharing</div>
+      {loading && <div className="mt-1 text-xs text-lp-text-tertiary">Loading...</div>}
       {error && <div className="mt-1 text-xs text-red-600">{error}</div>}
       {!loading && active.length > 0 && (
         <ul className="mt-2 space-y-2">
           {active.map((link) => (
-            <li key={link.id} className="rounded border border-neutral-200 bg-neutral-50 p-2 space-y-1">
+            <li key={link.id} className="space-y-1 rounded border border-lp-border bg-lp-surface-hover p-2">
               <div className="flex items-center justify-between gap-2">
-                <span className="text-[10px] uppercase tracking-wide text-neutral-500">
+                <span className="text-[10px] uppercase tracking-wide text-lp-text-secondary">
                   {link.has_password ? 'Password' : 'Open'}
                 </span>
                 <button
                   type="button"
                   onClick={() => handleRevoke(link.id)}
-                  className="text-[10px] text-neutral-500 hover:text-red-600"
+                  className="text-[10px] text-lp-text-secondary hover:text-red-500"
                 >
                   Revoke
                 </button>
               </div>
-              <div className="font-mono text-[10px] break-all text-neutral-700">/r/{link.token}</div>
+              <div className="font-mono text-[10px] break-all text-lp-text">/r/{link.token}</div>
               <button
                 type="button"
                 onClick={() => {
@@ -643,7 +643,7 @@ function SharingPanel({ packId }: { packId: string }) {
         </ul>
       )}
       {!loading && active.length === 0 && (
-        <div className="mt-1 text-xs text-neutral-400">No active links.</div>
+        <div className="mt-1 text-xs text-lp-text-tertiary">No active links.</div>
       )}
 
       <div className="mt-3 space-y-2">
@@ -653,7 +653,7 @@ function SharingPanel({ packId }: { packId: string }) {
             value={passwordDraft}
             onChange={(e) => setPasswordDraft(e.target.value)}
             placeholder="Password for this link"
-            className="w-full rounded border border-neutral-200 px-2 py-1 text-xs"
+            className="w-full rounded border border-lp-border bg-lp-surface px-2 py-1 text-xs text-lp-text"
             autoFocus
           />
         )}
@@ -666,7 +666,7 @@ function SharingPanel({ packId }: { packId: string }) {
           >
             {creating ? 'Creating...' : 'Create link'}
           </button>
-          <label className="flex items-center gap-1 text-[10px] text-neutral-500">
+          <label className="flex items-center gap-1 text-[10px] text-lp-text-secondary">
             <input
               type="checkbox"
               checked={showPasswordField}
@@ -682,14 +682,14 @@ function SharingPanel({ packId }: { packId: string }) {
 
       {revoked.length > 0 && (
         <details className="mt-3">
-          <summary className="cursor-pointer text-[10px] text-neutral-400">
+          <summary className="cursor-pointer text-[10px] text-lp-text-tertiary">
             Revoked ({revoked.length})
           </summary>
           <ul className="mt-1 space-y-1">
             {revoked.map((link) => (
               <li
                 key={link.id}
-                className="text-[10px] text-neutral-400 font-mono line-through truncate"
+                className="font-mono text-[10px] text-lp-text-tertiary line-through truncate"
               >
                 /r/{link.token}
               </li>
@@ -734,7 +734,7 @@ function ExportPanel({
 
   return (
     <div>
-      <div className="text-[10px] uppercase tracking-wide text-neutral-400">Google Doc</div>
+      <div className="text-[10px] uppercase tracking-widest text-lp-text-tertiary">Google Doc</div>
       {pack.google_doc_url ? (
         <a
           href={pack.google_doc_url}
@@ -745,7 +745,7 @@ function ExportPanel({
           {pack.google_doc_url}
         </a>
       ) : (
-        <div className="mt-1 text-xs text-neutral-400">Not yet exported.</div>
+        <div className="mt-1 text-xs text-lp-text-tertiary">Not yet exported.</div>
       )}
       <div className="mt-2">
         <button

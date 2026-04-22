@@ -24,17 +24,17 @@ export default async function RiderPackEditorPage({
     .maybeSingle();
 
   if (!pack) {
-    return <div className="p-6 text-sm text-neutral-500">Pack not found.</div>;
+    return <div className="p-6 text-sm text-lp-text-secondary">Pack not found.</div>;
   }
 
   return (
     <div>
-      <div className="px-6 py-3 border-b border-neutral-200 flex items-center gap-2 text-sm">
-        <Link href="/rider-packs" className="text-neutral-500 hover:text-neutral-900">
+      <div className="flex items-center gap-2 border-b border-lp-border bg-lp-surface px-6 py-3 text-sm">
+        <Link href="/rider-packs" className="text-lp-text-secondary hover:text-lp-text">
           ← Rider / Pack
         </Link>
-        <span className="text-neutral-300">/</span>
-        <span className="font-medium">{pack.title || '(untitled)'}</span>
+        <span className="text-lp-text-tertiary">/</span>
+        <span className="font-semibold text-lp-text">{pack.title || '(untitled)'}</span>
       </div>
       <PackEditor packId={id} />
     </div>

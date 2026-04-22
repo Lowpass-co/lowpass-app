@@ -17,7 +17,7 @@ export default async function RiderPacksIndexPage() {
     .single();
 
   if (!profile?.workspace_id) {
-    return <div className="p-6 text-sm text-neutral-500">No workspace found.</div>;
+    return <div className="p-6 text-sm text-lp-text-secondary">No workspace found.</div>;
   }
 
   const [{ data: artists }, { data: packs }] = await Promise.all([
@@ -35,41 +35,44 @@ export default async function RiderPacksIndexPage() {
   const artistMap = new Map((artists ?? []).map((a) => [a.id, a.name]));
 
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6">
-      <header>
-        <h1 className="text-2xl font-semibold">Rider / Pack</h1>
+    <div className="flex min-h-0 flex-1 flex-col space-y-5">
+      <header className="space-y-1">
+        <h1 className="text-2xl font-bold text-lp-text">Rider / Pack</h1>
+        <p className="text-sm text-lp-text-secondary">
+          Build, edit, and share rider packs across artists, tours, and shows.
+        </p>
       </header>
 
-      <section className="rounded border border-neutral-200 bg-white">
-        <div className="border-b border-neutral-200 px-4 py-2 text-xs font-medium uppercase text-neutral-500">
+      <section className="rounded-md border border-lp-border bg-lp-surface">
+        <div className="border-b border-lp-border px-4 py-2 text-xs font-semibold uppercase tracking-widest text-lp-text-tertiary">
           New artist pack
         </div>
         <NewPackForm artists={artists ?? []} />
       </section>
 
-      <section className="rounded border border-neutral-200 bg-white">
-        <div className="border-b border-neutral-200 px-4 py-2 text-xs font-medium uppercase text-neutral-500">
+      <section className="rounded-md border border-lp-border bg-lp-surface">
+        <div className="border-b border-lp-border px-4 py-2 text-xs font-semibold uppercase tracking-widest text-lp-text-tertiary">
           Packs
         </div>
         {!packs || packs.length === 0 ? (
-          <div className="p-4 text-sm text-neutral-500">No packs yet. Create one above.</div>
+          <div className="p-4 text-sm text-lp-text-secondary">No packs yet. Create one above.</div>
         ) : (
-          <ul className="divide-y divide-neutral-100">
+          <ul className="divide-y divide-lp-border">
             {packs.map((p) => (
               <li key={p.id}>
                 <Link
                   href={`/rider-packs/${p.id}`}
-                  className="flex items-center justify-between gap-4 px-4 py-3 hover:bg-neutral-50"
+                  className="flex items-center justify-between gap-4 px-4 py-3 transition-colors hover:bg-lp-surface-hover"
                 >
                   <div className="min-w-0">
-                    <div className="text-sm font-medium truncate">{p.title || '(untitled)'}</div>
-                    <div className="text-xs text-neutral-500 truncate">
+                    <div className="truncate text-sm font-semibold text-lp-text">{p.title || '(untitled)'}</div>
+                    <div className="truncate text-xs text-lp-text-secondary">
                       {artistMap.get(p.artist_id) ?? 'Unknown artist'}
                       {' · '}
                       <span className="uppercase tracking-wide">{p.scope}</span>
                     </div>
                   </div>
-                  <div className="text-[10px] text-neutral-400">
+                  <div className="text-[10px] text-lp-text-tertiary">
                     {new Date(p.updated_at).toLocaleString()}
                   </div>
                 </Link>
