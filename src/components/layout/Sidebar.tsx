@@ -13,7 +13,7 @@ import { usePathname, useSearchParams } from 'next/navigation';
 import {
   ChevronLeft, ChevronRight, LogOut, Lock,
   LayoutDashboard, ListMusic, ClipboardList, LineChart,
-  HandCoins, Bed, FileCheck2, Music, Users, Users2, Building2, Settings, Bug, Package,
+  HandCoins, Bed, BookOpen, FileCheck2, Music, Users, Users2, Building2, Settings, Bug, Package,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useArtistTourContext } from '@/contexts/ArtistTourContext';
@@ -35,6 +35,7 @@ interface NavItem {
     | 'rooming'
     | 'payroll'
     | 'tour_personnel'
+    | 'rider_packs'
     | 'dashboard';
 }
 
@@ -60,7 +61,6 @@ export function Sidebar() {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [profile, setProfile] = useState<{ name: string; email?: string; avatar_url?: string | null; job_title?: string | null; is_site_admin?: boolean } | null>(null);
   const { user, signOut } = useAuth();
-  const lastDisplay = useRef({ name: '', email: '' });
   const menuRef = useRef<HTMLDivElement>(null);
 
   const isSiteAdmin = profile?.is_site_admin === true;
@@ -108,6 +108,7 @@ export function Sidebar() {
       icon: Users2,
       activeMode: 'tour_personnel',
     },
+    { label: 'Rider / Pack', href: '/rider-packs', icon: BookOpen, activeMode: 'rider_packs' },
     { label: 'Settlement', href: selectedTourId ? `/budget?tour_id=${selectedTourId}&tab=settlement` : '/budget', icon: FileCheck2, activeMode: 'settlement' },
     { label: 'Rooming', href: selectedTourId ? `/tours/${selectedTourId}/rooming` : '/budget', icon: Bed, activeMode: 'rooming' },
     { label: 'Payroll', href: selectedTourId ? `/tours/${selectedTourId}/payroll` : '/budget', icon: HandCoins, activeMode: 'payroll' },
@@ -116,15 +117,6 @@ export function Sidebar() {
   useEffect(() => {
     localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(collapsed));
   }, [collapsed]);
-
-  useEffect(() => {
-    if (user?.email) {
-      lastDisplay.current = {
-        name: user.user_metadata?.name ?? user.email ?? '',
-        email: user.email ?? '',
-      };
-    }
-  }, [user]);
 
   useEffect(() => {
     if (!user?.id) return;
@@ -140,9 +132,9 @@ export function Sidebar() {
       .catch(() => {});
   }, [user?.id]);
 
-  const rawName = profile?.name ?? user?.user_metadata?.name ?? user?.email ?? lastDisplay.current.name;
-  const displayName = (typeof rawName === 'string' ? rawName.trim() : '') || (user?.email ?? lastDisplay.current.email).split('@')[0] || '…';
-  const displayEmail = profile?.email ?? user?.email ?? lastDisplay.current.email;
+  const rawName = profile?.name ?? user?.user_metadata?.name ?? user?.email ?? '';
+  const displayName = (typeof rawName === 'string' ? rawName.trim() : '') || (user?.email ?? '').split('@')[0] || '…';
+  const displayEmail = profile?.email ?? user?.email ?? '';
   const avatarUrl = profile?.avatar_url ?? null;
   const jobTitle = profile?.job_title ?? null;
   const initials = displayName && displayName !== '…'
@@ -169,6 +161,9 @@ export function Sidebar() {
     }
     if (item.activeMode === 'tour_personnel') {
       return /^\/tours\/[^/]+\/personnel(?:\/|$)/.test(pathname ?? '');
+    }
+    if (item.activeMode === 'rider_packs') {
+      return /^\/rider-packs(?:\/|$)/.test(pathname ?? '');
     }
     if (item.activeMode === 'rooming') {
       return pathname === '/rooming' || /^\/tours\/[^/]+\/rooming(?:\/|$)/.test(pathname ?? '');
