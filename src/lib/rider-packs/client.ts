@@ -202,3 +202,40 @@ export async function listAssets(params: {
   const res = await fetch(`/api/rider-assets?${q.toString()}`);
   return asJson(res);
 }
+
+// ============================================================
+// Web links (R4)
+// ============================================================
+
+export type WebLink = {
+  id: string;
+  pack_id: string;
+  token: string;
+  has_password: boolean;
+  created_by: string | null;
+  created_at: string;
+  revoked_at: string | null;
+  revoked_reason: string | null;
+};
+
+export async function listWebLinks(packId: string): Promise<{ links: WebLink[] }> {
+  const res = await fetch(`/api/rider-packs/${packId}/web-links`);
+  return asJson(res);
+}
+
+export async function createWebLink(
+  packId: string,
+  body: { password?: string | null } = {},
+): Promise<WebLink> {
+  const res = await fetch(`/api/rider-packs/${packId}/web-links`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body.password ? { password: body.password } : {}),
+  });
+  return asJson(res);
+}
+
+export async function revokeWebLink(linkId: string): Promise<void> {
+  const res = await fetch(`/api/rider-web-links/${linkId}`, { method: 'DELETE' });
+  if (!res.ok) throw new Error(`Failed to revoke link (status ${res.status})`);
+}

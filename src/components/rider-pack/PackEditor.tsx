@@ -24,11 +24,15 @@ import type {
 } from '@/lib/rider-packs/types';
 import {
   createSection,
+  createWebLink,
   deletePack,
   deleteSection,
   getPackResolved,
+  listWebLinks,
+  revokeWebLink,
   updatePack,
   updateSection,
+  type WebLink,
 } from '@/lib/rider-packs/client';
 import {
   FIELD_TYPE_LABELS,
@@ -468,6 +472,8 @@ function Inspector({
         )}
       </div>
 
+      <SharingPanel packId={pack.id} />
+
       <div className="pt-4 border-t border-neutral-200">
         <button
           type="button"
@@ -558,4 +564,157 @@ export function NewPackForm({ artists }: { artists: { id: string; name: string }
       </button>
     </div>
   );
+}
+
+function SharingPanel({ packId }: { packId: string }) {
+  const [links, setLinks] = useState<WebLink[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [passwordDraft, setPasswordDraft] = useState('');
+  const [showPasswordField, setShowPasswordField] = useState(false);
+
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await listWebLinks(packId);
+      setLinks(res.links);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to load links');
+    } finally {
+      setLoading(false);
+    }
+  }, [packId]);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  const handleCreate = async () => {
+    setCreating(true);
+    try {
+      const password = showPasswordField && passwordDraft.length > 0 ? passwordDraft : null;
+      const link = await createWebLink(packId, password ? { password } : {});
+      await navigator.clipboard?.writeText(buildPublicUrl(link.token)).catch(() => {});
+      setPasswordDraft('');
+      setShowPasswordField(false);
+      await refresh();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Failed to create link');
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  const handleRevoke = async (linkId: string) => {
+    if (!confirm('Revoke this link? Anyone using it will lose access.')) return;
+    try {
+      await revokeWebLink(linkId);
+      await refresh();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Failed to revoke link');
+    }
+  };
+
+  const active = (links ?? []).filter((l) => !l.revoked_at);
+  const revoked = (links ?? []).filter((l) => l.revoked_at);
+
+  return (
+    <div>
+      <div className="text-[10px] uppercase tracking-wide text-neutral-400">Sharing</div>
+      {loading && <div className="mt-1 text-xs text-neutral-400">Loading...</div>}
+      {error && <div className="mt-1 text-xs text-red-600">{error}</div>}
+      {!loading && active.length > 0 && (
+        <ul className="mt-2 space-y-2">
+          {active.map((link) => (
+            <li key={link.id} className="rounded border border-neutral-200 bg-neutral-50 p-2 space-y-1">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-[10px] uppercase tracking-wide text-neutral-500">
+                  {link.has_password ? 'Password' : 'Open'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleRevoke(link.id)}
+                  className="text-[10px] text-neutral-500 hover:text-red-600"
+                >
+                  Revoke
+                </button>
+              </div>
+              <div className="font-mono text-[10px] break-all text-neutral-700">/r/{link.token}</div>
+              <button
+                type="button"
+                onClick={() => {
+                  navigator.clipboard?.writeText(buildPublicUrl(link.token)).catch(() => {});
+                }}
+                className="text-[10px] text-[var(--lp-orange)] hover:underline"
+              >
+                Copy link
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {!loading && active.length === 0 && (
+        <div className="mt-1 text-xs text-neutral-400">No active links.</div>
+      )}
+
+      <div className="mt-3 space-y-2">
+        {showPasswordField && (
+          <input
+            type="text"
+            value={passwordDraft}
+            onChange={(e) => setPasswordDraft(e.target.value)}
+            placeholder="Password for this link"
+            className="w-full rounded border border-neutral-200 px-2 py-1 text-xs"
+            autoFocus
+          />
+        )}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleCreate}
+            disabled={creating}
+            className="rounded bg-[var(--lp-orange)] px-3 py-1.5 text-xs text-white hover:opacity-90 disabled:opacity-50"
+          >
+            {creating ? 'Creating...' : 'Create link'}
+          </button>
+          <label className="flex items-center gap-1 text-[10px] text-neutral-500">
+            <input
+              type="checkbox"
+              checked={showPasswordField}
+              onChange={(e) => {
+                setShowPasswordField(e.target.checked);
+                if (!e.target.checked) setPasswordDraft('');
+              }}
+            />
+            Protect with password
+          </label>
+        </div>
+      </div>
+
+      {revoked.length > 0 && (
+        <details className="mt-3">
+          <summary className="cursor-pointer text-[10px] text-neutral-400">
+            Revoked ({revoked.length})
+          </summary>
+          <ul className="mt-1 space-y-1">
+            {revoked.map((link) => (
+              <li
+                key={link.id}
+                className="text-[10px] text-neutral-400 font-mono line-through truncate"
+              >
+                /r/{link.token}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </div>
+  );
+}
+
+function buildPublicUrl(token: string): string {
+  if (typeof window === 'undefined') return `/r/${token}`;
+  return `${window.location.origin}/r/${token}`;
 }
