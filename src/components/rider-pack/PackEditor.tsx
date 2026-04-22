@@ -35,6 +35,7 @@ import {
   FieldEditor,
   makeDefaultField,
 } from './FieldEditors';
+import type { PackContext } from './AssetPicker';
 
 type Props = {
   packId: string;
@@ -168,6 +169,14 @@ export function PackEditor({ packId }: Props) {
   if (error) return <div className="p-6 text-sm text-red-600">{error}</div>;
   if (!data) return null;
 
+  const packContext: PackContext = {
+    workspaceId: data.pack.workspace_id,
+    artistId: data.pack.artist_id,
+    scope: data.pack.scope,
+    tourId: data.pack.tour_id,
+    routingId: data.pack.routing_id,
+  };
+
   return (
     <div className="grid grid-cols-[220px_1fr_280px] gap-0 h-[calc(100vh-120px)] border-t border-neutral-200">
       {/* LEFT: section list */}
@@ -215,6 +224,7 @@ export function PackEditor({ packId }: Props) {
             key={selectedSection.id}
             section={selectedSection}
             tourId={data.pack.tour_id}
+            packContext={packContext}
             saving={savingSection}
             onTitleChange={(title) => saveSelectedSection({ title })}
             onFieldsChange={(fields) => saveSelectedSection({ fields })}
@@ -249,6 +259,7 @@ export function PackEditor({ packId }: Props) {
 function SectionEditor({
   section,
   tourId,
+  packContext,
   saving,
   onTitleChange,
   onFieldsChange,
@@ -259,6 +270,7 @@ function SectionEditor({
 }: {
   section: ResolvedSection;
   tourId: string | null;
+  packContext: PackContext;
   saving: boolean;
   onTitleChange: (title: string) => void;
   onFieldsChange: (fields: Field[]) => void;
@@ -343,6 +355,7 @@ function SectionEditor({
               key={i}
               field={f}
               tourId={tourId}
+              packContext={packContext}
               onChange={(next) => {
                 const copy = [...fields];
                 copy[i] = next;

@@ -27,6 +27,7 @@ import type {
   FieldUrl,
 } from '@/lib/rider-packs/types';
 import { pickContacts, type PickedContact } from '@/lib/rider-packs/client';
+import { AssetPicker, type PackContext } from './AssetPicker';
 
 type FieldEditorProps<F extends Field = Field> = {
   field: F;
@@ -34,9 +35,17 @@ type FieldEditorProps<F extends Field = Field> = {
   onRemove?: () => void;
   /** Tour id for the containing pack, if any. Contact picker uses it. */
   tourId?: string | null;
+  /** Full pack context. Asset picker uses it. */
+  packContext?: PackContext;
 };
 
-export function FieldEditor({ field, onChange, onRemove, tourId }: FieldEditorProps) {
+export function FieldEditor({
+  field,
+  onChange,
+  onRemove,
+  tourId,
+  packContext,
+}: FieldEditorProps) {
   return (
     <div className="rounded-md border border-neutral-200 bg-white p-3 space-y-2">
       <div className="flex items-center justify-between gap-2">
@@ -51,7 +60,12 @@ export function FieldEditor({ field, onChange, onRemove, tourId }: FieldEditorPr
           </button>
         )}
       </div>
-      <Dispatcher field={field} onChange={onChange} tourId={tourId ?? null} />
+      <Dispatcher
+        field={field}
+        onChange={onChange}
+        tourId={tourId ?? null}
+        packContext={packContext ?? null}
+      />
     </div>
   );
 }
@@ -72,10 +86,12 @@ function Dispatcher({
   field,
   onChange,
   tourId,
+  packContext,
 }: {
   field: Field;
   onChange: (n: Field) => void;
   tourId: string | null;
+  packContext: PackContext | null;
 }) {
   switch (field.type) {
     case 'text':
@@ -91,7 +107,13 @@ function Dispatcher({
         />
       );
     case 'asset':
-      return <AssetEditor field={field} onChange={onChange as (n: FieldAsset) => void} />;
+      return (
+        <AssetEditor
+          field={field}
+          onChange={onChange as (n: FieldAsset) => void}
+          packContext={packContext}
+        />
+      );
     case 'time':
       return <TimeEditor field={field} onChange={onChange as (n: FieldTime) => void} />;
     case 'currency':
@@ -385,21 +407,29 @@ function CheckboxListEditor({
   );
 }
 
-function AssetEditor({ field, onChange }: { field: FieldAsset; onChange: (n: FieldAsset) => void }) {
-  // R3 stub: raw id input. R3b ships the real asset picker.
+function AssetEditor({
+  field,
+  onChange,
+  packContext,
+}: {
+  field: FieldAsset;
+  onChange: (n: FieldAsset) => void;
+  packContext: PackContext | null;
+}) {
+  if (!packContext) {
+    // Safety net — parent should always pass context.
+    return (
+      <div className="text-xs text-red-600">
+        Asset field has no pack context. This is a bug — please report.
+      </div>
+    );
+  }
   return (
-    <div className="space-y-1">
-      <input
-        type="text"
-        value={field.asset_id ?? ''}
-        onChange={(e) => onChange({ ...field, asset_id: e.target.value })}
-        placeholder="Asset ID (picker coming in R3b)"
-        className="w-full rounded border border-neutral-200 px-2 py-1 text-sm font-mono"
-      />
-      <p className="text-xs text-neutral-500">
-        Asset picker UI is a later PR. For now, paste an asset id from /api/rider-assets.
-      </p>
-    </div>
+    <AssetPicker
+      value={field.asset_id ?? ''}
+      onChange={(assetId) => onChange({ ...field, asset_id: assetId })}
+      packContext={packContext}
+    />
   );
 }
 
