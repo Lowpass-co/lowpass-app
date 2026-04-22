@@ -31,3 +31,15 @@ Thumbs.db
 
 # local reference assets (designs, screenshots, ideas — not part of build)
 LP UI/
+
+# TypeScript incremental build cache
+tsconfig.tsbuildinfo
+
+# Cursor / agent worktrees
+.claude/worktrees/
+
+# local lint output
+.lint-output.txt
+
+# session handovers / local .docx scratch
+*.docx
