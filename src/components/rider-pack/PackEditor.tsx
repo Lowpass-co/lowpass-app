@@ -27,6 +27,7 @@ import {
   createWebLink,
   deletePack,
   deleteSection,
+  exportGoogleDoc,
   getPackResolved,
   listWebLinks,
   revokeWebLink,
@@ -456,21 +457,7 @@ function Inspector({
         />
       </div>
 
-      <div>
-        <div className="text-[10px] uppercase tracking-wide text-neutral-400">Google Doc</div>
-        {pack.google_doc_url ? (
-          <a
-            href={pack.google_doc_url}
-            target="_blank"
-            rel="noreferrer"
-            className="mt-1 block text-xs text-[var(--lp-orange)] hover:underline truncate"
-          >
-            {pack.google_doc_url}
-          </a>
-        ) : (
-          <div className="mt-1 text-xs text-neutral-400">Not yet exported. (R5 wires this up.)</div>
-        )}
-      </div>
+      <ExportPanel pack={pack} onExported={onPackUpdate} />
 
       <SharingPanel packId={pack.id} />
 
@@ -717,4 +704,64 @@ function SharingPanel({ packId }: { packId: string }) {
 function buildPublicUrl(token: string): string {
   if (typeof window === 'undefined') return `/r/${token}`;
   return `${window.location.origin}/r/${token}`;
+}
+
+function ExportPanel({
+  pack,
+  onExported,
+}: {
+  pack: RiderPack;
+  onExported: () => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const handleExport = async () => {
+    setBusy(true);
+    setErr(null);
+    try {
+      const res = await exportGoogleDoc(pack.id);
+      onExported();
+      if (res.document_url) {
+        window.open(res.document_url, '_blank', 'noopener,noreferrer');
+      }
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Export failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div>
+      <div className="text-[10px] uppercase tracking-wide text-neutral-400">Google Doc</div>
+      {pack.google_doc_url ? (
+        <a
+          href={pack.google_doc_url}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-1 block text-xs text-[var(--lp-orange)] hover:underline truncate"
+        >
+          {pack.google_doc_url}
+        </a>
+      ) : (
+        <div className="mt-1 text-xs text-neutral-400">Not yet exported.</div>
+      )}
+      <div className="mt-2">
+        <button
+          type="button"
+          onClick={handleExport}
+          disabled={busy}
+          className="rounded bg-[var(--lp-orange)] px-3 py-1.5 text-xs text-white hover:opacity-90 disabled:opacity-50"
+        >
+          {busy
+            ? 'Exporting...'
+            : pack.google_doc_url
+              ? 'Re-export (updates doc)'
+              : 'Export to Google Doc'}
+        </button>
+      </div>
+      {err && <div className="mt-1 text-xs text-red-600">{err}</div>}
+    </div>
+  );
 }

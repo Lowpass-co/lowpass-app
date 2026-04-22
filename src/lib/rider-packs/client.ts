@@ -239,3 +239,18 @@ export async function revokeWebLink(linkId: string): Promise<void> {
   const res = await fetch(`/api/rider-web-links/${linkId}`, { method: 'DELETE' });
   if (!res.ok) throw new Error(`Failed to revoke link (status ${res.status})`);
 }
+
+// ============================================================
+// Google Doc export (R5)
+// ============================================================
+
+export async function exportGoogleDoc(packId: string): Promise<{
+  document_id: string;
+  document_url: string | null;
+  is_new: boolean;
+}> {
+  const res = await fetch(`/api/rider-packs/${packId}/export/google-doc`, {
+    method: 'POST',
+  });
+  return asJson(res);
+}
