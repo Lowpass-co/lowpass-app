@@ -9,6 +9,8 @@
 import { notFound } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { RoutingEditor } from '@/components/routing/RoutingEditor';
+import { RoutingPageShell } from '@/components/routing/RoutingPageShell';
+import { RoutingRightRail } from '@/components/routing/RoutingRightRail';
 
 export default async function RoutingPage({
   params,
@@ -20,7 +22,7 @@ export default async function RoutingPage({
 
   const { data: tour, error } = await supabase
     .from('tours')
-    .select('id, start_date, end_date, custom_day_types')
+    .select('id, name, start_date, end_date, custom_day_types')
     .eq('id', id)
     .single();
 
@@ -28,12 +30,35 @@ export default async function RoutingPage({
     notFound();
   }
 
+  const subtitle = formatSubtitle(tour.name, tour.start_date, tour.end_date);
+
   return (
-    <RoutingEditor
-      tourId={id}
-      startDate={tour.start_date ?? ''}
-      endDate={tour.end_date ?? ''}
-      initialCustomDayTypes={tour.custom_day_types ?? []}
-    />
+    <RoutingPageShell
+      title="Routing"
+      subtitle={subtitle}
+      rightRail={<RoutingRightRail tourId={id} />}
+    >
+      <RoutingEditor
+        tourId={id}
+        startDate={tour.start_date ?? ''}
+        endDate={tour.end_date ?? ''}
+        initialCustomDayTypes={tour.custom_day_types ?? []}
+      />
+    </RoutingPageShell>
   );
+}
+
+function formatSubtitle(
+  name: string | null,
+  startDate: string | null,
+  endDate: string | null,
+): string {
+  const parts: string[] = [];
+  if (name) parts.push(name);
+  if (startDate && endDate) {
+    parts.push(`${startDate} → ${endDate}`);
+  } else if (startDate) {
+    parts.push(startDate);
+  }
+  return parts.join(' · ');
 }
