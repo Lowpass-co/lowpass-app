@@ -37,29 +37,44 @@ export default async function RiderPacksIndexPage() {
   return (
     <div className="flex min-h-0 flex-1 flex-col space-y-5">
       <header className="space-y-1">
-        <h1 className="text-2xl font-bold text-lp-text">Rider / Pack</h1>
+        <h1 className="text-2xl font-bold text-lp-text">Rider Packs</h1>
         <p className="text-sm text-lp-text-secondary">
           Build, edit, and share rider packs across artists, tours, and shows.
         </p>
       </header>
 
-      <section className="rounded-md border border-lp-border bg-lp-surface">
-        <div className="border-b border-lp-border px-4 py-2 text-xs font-semibold uppercase tracking-widest text-lp-text-tertiary">
+      <section
+        className="overflow-hidden rounded-xl border"
+        style={{ backgroundColor: 'var(--lp-surface)', borderColor: 'var(--lp-border)' }}
+      >
+        <div
+          className="border-b px-4 py-2 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary"
+          style={{ borderColor: 'var(--lp-border)' }}
+        >
           New artist pack
         </div>
         <NewPackForm artists={artists ?? []} />
       </section>
 
-      <section className="rounded-md border border-lp-border bg-lp-surface">
-        <div className="border-b border-lp-border px-4 py-2 text-xs font-semibold uppercase tracking-widest text-lp-text-tertiary">
+      <section
+        className="overflow-hidden rounded-xl border"
+        style={{ backgroundColor: 'var(--lp-surface)', borderColor: 'var(--lp-border)' }}
+      >
+        <div
+          className="border-b px-4 py-2 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary"
+          style={{ borderColor: 'var(--lp-border)' }}
+        >
           Packs
         </div>
         {!packs || packs.length === 0 ? (
           <div className="p-4 text-sm text-lp-text-secondary">No packs yet. Create one above.</div>
         ) : (
-          <ul className="divide-y divide-lp-border">
-            {packs.map((p) => (
-              <li key={p.id}>
+          <ul>
+            {packs.map((p, index) => (
+              <li
+                key={p.id}
+                style={index > 0 ? { borderTop: '1px solid var(--lp-border)' } : undefined}
+              >
                 <Link
                   href={`/rider-packs/${p.id}`}
                   className="flex items-center justify-between gap-4 px-4 py-3 transition-colors hover:bg-lp-surface-hover"

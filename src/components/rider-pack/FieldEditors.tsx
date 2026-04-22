@@ -47,14 +47,14 @@ export function FieldEditor({
   packContext,
 }: FieldEditorProps) {
   return (
-    <div className="rounded-md border border-neutral-200 bg-white p-3 space-y-2">
+    <div className="space-y-2 rounded-lg border border-lp-border bg-lp-bg-secondary p-4">
       <div className="flex items-center justify-between gap-2">
         <LabelInput field={field} onChange={onChange} />
         {onRemove && (
           <button
             type="button"
             onClick={onRemove}
-            className="text-xs text-neutral-500 hover:text-red-600"
+            className="text-xs text-lp-text-secondary hover:text-lp-error"
           >
             Remove
           </button>
@@ -77,7 +77,7 @@ function LabelInput({ field, onChange }: { field: Field; onChange: (n: Field) =>
       value={field.label ?? ''}
       onChange={(e) => onChange({ ...field, label: e.target.value })}
       placeholder="Field label"
-      className="flex-1 text-sm font-medium bg-transparent outline-none border-b border-transparent focus:border-neutral-300"
+      className="flex-1 border-b border-transparent bg-transparent py-1 text-base font-medium outline-none focus:border-lp-border"
     />
   );
 }
@@ -130,7 +130,7 @@ function Dispatcher({
     case 'url':
       return <UrlEditor field={field} onChange={onChange as (n: FieldUrl) => void} />;
     default:
-      return <div className="text-xs text-neutral-500">Unknown field type.</div>;
+      return <div className="text-xs text-lp-text-secondary">Unknown field type.</div>;
   }
 }
 
@@ -142,7 +142,7 @@ function TextEditor({ field, onChange }: { field: FieldText; onChange: (n: Field
       value={field.value ?? ''}
       onChange={(e) => onChange({ ...field, value: e.target.value })}
       placeholder="Text..."
-      className="w-full min-h-[80px] rounded border border-neutral-200 p-2 text-sm outline-none focus:border-neutral-400"
+      className="min-h-[140px] w-full rounded-md border border-lp-border px-3 py-2 text-sm outline-none focus:border-lp-border-light"
     />
   );
 }
@@ -154,14 +154,14 @@ function TimeEditor({ field, onChange }: { field: FieldTime; onChange: (n: Field
         type="time"
         value={field.value ?? ''}
         onChange={(e) => onChange({ ...field, value: e.target.value })}
-        className="rounded border border-neutral-200 px-2 py-1 text-sm"
+        className="rounded-md border border-lp-border px-3 py-2 text-sm"
       />
       <input
         type="text"
         value={field.tz ?? ''}
         onChange={(e) => onChange({ ...field, tz: e.target.value })}
         placeholder="Timezone (optional)"
-        className="flex-1 rounded border border-neutral-200 px-2 py-1 text-sm"
+        className="flex-1 rounded-md border border-lp-border px-3 py-2 text-sm"
       />
     </div>
   );
@@ -181,14 +181,14 @@ function CurrencyEditor({
         value={Number.isFinite(field.amount) ? field.amount : 0}
         onChange={(e) => onChange({ ...field, amount: Number(e.target.value) || 0 })}
         step="0.01"
-        className="flex-1 rounded border border-neutral-200 px-2 py-1 text-sm"
+        className="flex-1 rounded-md border border-lp-border px-3 py-2 text-sm"
       />
       <input
         type="text"
         value={field.currency ?? 'USD'}
         onChange={(e) => onChange({ ...field, currency: e.target.value.toUpperCase() })}
         maxLength={3}
-        className="w-16 rounded border border-neutral-200 px-2 py-1 text-sm uppercase"
+        className="w-20 rounded-md border border-lp-border px-3 py-2 text-sm uppercase"
       />
     </div>
   );
@@ -207,14 +207,14 @@ function NumberEditor({
         type="number"
         value={Number.isFinite(field.value) ? field.value : 0}
         onChange={(e) => onChange({ ...field, value: Number(e.target.value) || 0 })}
-        className="flex-1 rounded border border-neutral-200 px-2 py-1 text-sm"
+        className="flex-1 rounded-md border border-lp-border px-3 py-2 text-sm"
       />
       <input
         type="text"
         value={field.unit ?? ''}
         onChange={(e) => onChange({ ...field, unit: e.target.value })}
         placeholder="unit"
-        className="w-24 rounded border border-neutral-200 px-2 py-1 text-sm"
+        className="w-28 rounded-md border border-lp-border px-3 py-2 text-sm"
       />
     </div>
   );
@@ -228,14 +228,14 @@ function UrlEditor({ field, onChange }: { field: FieldUrl; onChange: (n: FieldUr
         value={field.href ?? ''}
         onChange={(e) => onChange({ ...field, href: e.target.value })}
         placeholder="https://..."
-        className="w-full rounded border border-neutral-200 px-2 py-1 text-sm"
+        className="w-full rounded-md border border-lp-border px-3 py-2 text-sm"
       />
       <input
         type="text"
         value={field.display_text ?? ''}
         onChange={(e) => onChange({ ...field, display_text: e.target.value })}
         placeholder="Link text (optional)"
-        className="w-full rounded border border-neutral-200 px-2 py-1 text-sm"
+        className="w-full rounded-md border border-lp-border px-3 py-2 text-sm"
       />
     </div>
   );
@@ -250,10 +250,14 @@ function TableEditor({ field, onChange }: { field: FieldTable; onChange: (n: Fie
 
   return (
     <div className="space-y-2">
-      <div className="flex flex-wrap items-center gap-2 text-xs text-neutral-500">
+      <div className="flex flex-wrap items-center gap-2 text-xs text-lp-text-secondary">
         <span>Columns:</span>
         {columns.map((c, i) => (
-          <span key={i} className="inline-flex items-center gap-1 rounded bg-neutral-100 px-2 py-0.5">
+          <span
+            key={i}
+            className="inline-flex items-center gap-1 rounded px-2 py-0.5"
+            style={{ backgroundColor: 'var(--lp-surface-hover)' }}
+          >
             <input
               value={c.label}
               onChange={(e) => {
@@ -261,11 +265,11 @@ function TableEditor({ field, onChange }: { field: FieldTable; onChange: (n: Fie
                 next[i] = { ...c, label: e.target.value };
                 setColumns(next);
               }}
-              className="bg-transparent outline-none w-24"
+              className="w-24 bg-transparent outline-none"
             />
             <button
               type="button"
-              className="text-neutral-400 hover:text-red-600"
+              className="text-lp-text-tertiary hover:text-lp-error"
               onClick={() => {
                 const next = columns.filter((_, j) => j !== i);
                 setColumns(next);
@@ -288,7 +292,7 @@ function TableEditor({ field, onChange }: { field: FieldTable; onChange: (n: Fie
             const key = `col_${Date.now().toString(36)}`;
             setColumns([...columns, { key, label: 'New column' }]);
           }}
-          className="rounded bg-neutral-200 px-2 py-0.5 hover:bg-neutral-300"
+          className="rounded bg-lp-bg-secondary px-2 py-0.5 hover:bg-lp-surface-hover"
         >
           + column
         </button>
@@ -299,7 +303,7 @@ function TableEditor({ field, onChange }: { field: FieldTable; onChange: (n: Fie
           <thead>
             <tr>
               {columns.map((c) => (
-                <th key={c.key} className="px-2 py-1 text-left font-medium text-neutral-600">
+                <th key={c.key} className="px-2 py-1 text-left font-medium text-lp-text-secondary">
                   {c.label}
                 </th>
               ))}
@@ -310,7 +314,7 @@ function TableEditor({ field, onChange }: { field: FieldTable; onChange: (n: Fie
             {rows.map((row, rowIdx) => (
               <tr key={rowIdx}>
                 {columns.map((c) => (
-                  <td key={c.key} className="border-t border-neutral-100 px-1 py-1">
+                  <td key={c.key} className="border-t border-lp-border-light px-1 py-1">
                     <input
                       value={row[c.key] ?? ''}
                       onChange={(e) => {
@@ -318,15 +322,15 @@ function TableEditor({ field, onChange }: { field: FieldTable; onChange: (n: Fie
                         next[rowIdx] = { ...row, [c.key]: e.target.value };
                         setRows(next);
                       }}
-                      className="w-full rounded border border-transparent px-1 py-0.5 text-sm outline-none focus:border-neutral-300"
+                      className="w-full rounded border border-transparent px-1 py-0.5 text-sm outline-none focus:border-lp-border"
                     />
                   </td>
                 ))}
-                <td className="border-t border-neutral-100 px-1 py-1 text-right">
+                <td className="border-t border-lp-border-light px-1 py-1 text-right">
                   <button
                     type="button"
                     onClick={() => setRows(rows.filter((_, j) => j !== rowIdx))}
-                    className="text-xs text-neutral-400 hover:text-red-600"
+                    className="text-xs text-lp-text-tertiary hover:text-lp-error"
                   >
                     ×
                   </button>
@@ -340,7 +344,7 @@ function TableEditor({ field, onChange }: { field: FieldTable; onChange: (n: Fie
       <button
         type="button"
         onClick={() => setRows([...rows, Object.fromEntries(columns.map((c) => [c.key, '']))])}
-        className="rounded bg-neutral-200 px-2 py-0.5 text-xs hover:bg-neutral-300"
+        className="rounded bg-lp-bg-secondary px-2 py-0.5 text-xs hover:bg-lp-surface-hover"
       >
         + row
       </button>
@@ -377,12 +381,12 @@ function CheckboxListEditor({
               next[i] = { ...item, label: e.target.value };
               onChange({ ...field, items: next });
             }}
-            className="flex-1 rounded border border-neutral-200 px-2 py-1 text-sm"
+            className="flex-1 rounded-md border border-lp-border px-3 py-2 text-sm"
           />
           <button
             type="button"
             onClick={() => onChange({ ...field, items: items.filter((_, j) => j !== i) })}
-            className="text-xs text-neutral-400 hover:text-red-600"
+            className="text-xs text-lp-text-tertiary hover:text-lp-error"
           >
             ×
           </button>
@@ -399,7 +403,7 @@ function CheckboxListEditor({
             ],
           })
         }
-        className="rounded bg-neutral-200 px-2 py-0.5 text-xs hover:bg-neutral-300"
+        className="rounded bg-lp-bg-secondary px-2 py-0.5 text-xs hover:bg-lp-surface-hover"
       >
         + item
       </button>
@@ -419,7 +423,7 @@ function AssetEditor({
   if (!packContext) {
     // Safety net — parent should always pass context.
     return (
-      <div className="text-xs text-red-600">
+      <div className="text-xs text-lp-error">
         Asset field has no pack context. This is a bug — please report.
       </div>
     );
@@ -507,17 +511,18 @@ function ContactEditor({
       {entries.map((entry, i) => (
         <div
           key={i}
-          className="rounded border border-neutral-200 p-2 text-sm space-y-1 bg-neutral-50"
+          className="space-y-1 rounded-md border border-lp-border p-2 text-sm"
+          style={{ backgroundColor: 'var(--lp-bg-secondary)' }}
         >
           <div className="flex items-center justify-between gap-2">
-            <span className="text-xs text-neutral-500">
+            <span className="text-xs text-lp-text-secondary">
               {entry.source === 'tour_personnel' && 'On tour'}
               {entry.source === 'contact' && 'Contact'}
               {entry.source === 'external' && 'External'}
             </span>
             <button
               type="button"
-              className="text-xs text-neutral-400 hover:text-red-600"
+              className="text-xs text-lp-text-tertiary hover:text-lp-error"
               onClick={() => onChange({ ...field, entries: entries.filter((_, j) => j !== i) })}
             >
               Remove
@@ -533,7 +538,7 @@ function ContactEditor({
                 onChange({ ...field, entries: next });
               }}
               placeholder="Name"
-              className="rounded border border-neutral-200 px-2 py-1 text-sm"
+              className="rounded-md border border-lp-border px-3 py-2 text-sm"
             />
             <input
               type="text"
@@ -544,7 +549,7 @@ function ContactEditor({
                 onChange({ ...field, entries: next });
               }}
               placeholder="Role"
-              className="rounded border border-neutral-200 px-2 py-1 text-sm"
+              className="rounded-md border border-lp-border px-3 py-2 text-sm"
             />
             <input
               type="email"
@@ -555,7 +560,7 @@ function ContactEditor({
                 onChange({ ...field, entries: next });
               }}
               placeholder="Email"
-              className="rounded border border-neutral-200 px-2 py-1 text-sm"
+              className="rounded-md border border-lp-border px-3 py-2 text-sm"
             />
             <input
               type="tel"
@@ -566,51 +571,51 @@ function ContactEditor({
                 onChange({ ...field, entries: next });
               }}
               placeholder="Phone"
-              className="rounded border border-neutral-200 px-2 py-1 text-sm"
+              className="rounded-md border border-lp-border px-3 py-2 text-sm"
             />
           </div>
         </div>
       ))}
 
       {open ? (
-        <div className="rounded border border-neutral-200 p-2 space-y-2 bg-white">
+        <div className="space-y-2 rounded-md border border-lp-border bg-lp-surface p-2">
           <input
             type="text"
             value={q}
             onChange={(e) => setQ(e.target.value)}
             placeholder="Search tour personnel & contacts..."
-            className="w-full rounded border border-neutral-200 px-2 py-1 text-sm"
+            className="w-full rounded-md border border-lp-border px-3 py-2 text-sm"
             autoFocus
           />
           <div className="max-h-48 overflow-y-auto space-y-1">
             {picker?.tour_personnel?.length ? (
               <>
-                <div className="text-xs font-medium text-neutral-500 px-1">On tour</div>
+                <div className="px-1 text-xs font-medium text-lp-text-secondary">On tour</div>
                 {picker.tour_personnel.map((c) => (
                   <button
                     key={c.id}
                     type="button"
                     onClick={() => addEntry(c)}
-                    className="w-full text-left rounded px-2 py-1 text-sm hover:bg-neutral-100"
+                    className="w-full rounded px-2 py-1 text-left text-sm hover:bg-lp-surface-hover"
                   >
                     <div className="font-medium">{c.name || '(unnamed)'}</div>
-                    <div className="text-xs text-neutral-500">{c.role ?? ''}</div>
+                    <div className="text-xs text-lp-text-secondary">{c.role ?? ''}</div>
                   </button>
                 ))}
               </>
             ) : null}
             {picker?.contacts?.length ? (
               <>
-                <div className="text-xs font-medium text-neutral-500 px-1 pt-1">Contacts</div>
+                <div className="px-1 pt-1 text-xs font-medium text-lp-text-secondary">Contacts</div>
                 {picker.contacts.map((c) => (
                   <button
                     key={c.id}
                     type="button"
                     onClick={() => addEntry(c)}
-                    className="w-full text-left rounded px-2 py-1 text-sm hover:bg-neutral-100"
+                    className="w-full rounded px-2 py-1 text-left text-sm hover:bg-lp-surface-hover"
                   >
                     <div className="font-medium">{c.name || '(unnamed)'}</div>
-                    <div className="text-xs text-neutral-500">
+                    <div className="text-xs text-lp-text-secondary">
                       {c.role ?? ''}
                       {c.company ? ` — ${c.company}` : ''}
                     </div>
@@ -619,21 +624,21 @@ function ContactEditor({
               </>
             ) : null}
             {!picker?.tour_personnel?.length && !picker?.contacts?.length && (
-              <div className="text-xs text-neutral-500 px-1 py-2">No matches.</div>
+              <div className="px-1 py-2 text-xs text-lp-text-secondary">No matches.</div>
             )}
           </div>
           <div className="flex items-center justify-between">
             <button
               type="button"
               onClick={() => setOpen(false)}
-              className="text-xs text-neutral-500 hover:text-neutral-900"
+              className="text-xs text-lp-text-secondary hover:text-lp-text"
             >
               Cancel
             </button>
             <button
               type="button"
               onClick={addExternal}
-              className="text-xs text-neutral-500 hover:text-neutral-900"
+              className="text-xs text-lp-text-secondary hover:text-lp-text"
             >
               Add external...
             </button>
@@ -643,7 +648,7 @@ function ContactEditor({
         <button
           type="button"
           onClick={() => setOpen(true)}
-          className="rounded bg-neutral-200 px-2 py-1 text-xs hover:bg-neutral-300"
+          className="rounded bg-lp-bg-secondary px-2 py-1 text-xs hover:bg-lp-surface-hover"
         >
           + contact
         </button>

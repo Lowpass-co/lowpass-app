@@ -27,7 +27,6 @@ import {
   createWebLink,
   deletePack,
   deleteSection,
-  exportGoogleDoc,
   getPackResolved,
   listWebLinks,
   revokeWebLink,
@@ -41,6 +40,7 @@ import {
   makeDefaultField,
 } from './FieldEditors';
 import type { PackContext } from './AssetPicker';
+import NewSectionDialog from './NewSectionDialog';
 
 type Props = {
   packId: string;
@@ -52,6 +52,8 @@ export function PackEditor({ packId }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [savingSection, setSavingSection] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [newSectionOpen, setNewSectionOpen] = useState(false);
+  const [newSectionDialogKey, setNewSectionDialogKey] = useState(0);
 
   const refresh = useCallback(async () => {
     try {
@@ -77,20 +79,21 @@ export function PackEditor({ packId }: Props) {
 
   // ----- Section mutations -----
 
-  const handleAddSection = async () => {
+  const handleAddSection = async ({ sectionKey, title }: { sectionKey: string; title: string }) => {
     if (!data) return;
-    const sectionKey = prompt('Section key (e.g. "hospitality"):');
-    if (!sectionKey) return;
-    const title = prompt('Section title:', sectionKey) ?? sectionKey;
+    const normalizedKey = sectionKey.trim();
+    const normalizedTitle = title.trim() || normalizedKey;
+    if (!normalizedKey) return;
     try {
       await createSection(packId, {
-        section_key: sectionKey,
-        title,
+        section_key: normalizedKey,
+        title: normalizedTitle,
         sort_order: (data.sections[data.sections.length - 1]?.sort_order ?? 0) + 10,
         fields: [],
       });
       await refresh();
-      setSelected(sectionKey);
+      setSelected(normalizedKey);
+      setNewSectionOpen(false);
     } catch (e) {
       alert(e instanceof Error ? e.message : 'Failed to add section');
     }
@@ -171,7 +174,7 @@ export function PackEditor({ packId }: Props) {
   // ----- Render -----
 
   if (loading) return <div className="p-6 text-sm text-lp-text-secondary">Loading...</div>;
-  if (error) return <div className="p-6 text-sm text-red-500">{error}</div>;
+  if (error) return <div className="p-6 text-sm text-lp-error">{error}</div>;
   if (!data) return null;
 
   const packContext: PackContext = {
@@ -190,7 +193,10 @@ export function PackEditor({ packId }: Props) {
           <span className="text-xs font-semibold uppercase tracking-widest text-lp-text-tertiary">Sections</span>
           <button
             type="button"
-            onClick={handleAddSection}
+            onClick={() => {
+              setNewSectionDialogKey((current) => current + 1);
+              setNewSectionOpen(true);
+            }}
             className="text-xs text-[var(--lp-orange)] hover:underline"
           >
             + add
@@ -257,6 +263,12 @@ export function PackEditor({ packId }: Props) {
           }}
         />
       </aside>
+      <NewSectionDialog
+        key={newSectionDialogKey}
+        open={newSectionOpen}
+        onClose={() => setNewSectionOpen(false)}
+        onSubmit={handleAddSection}
+      />
     </div>
   );
 }
@@ -345,7 +357,8 @@ function SectionEditor({
             <button
               type="button"
               onClick={onRemove}
-              className="rounded border border-lp-border px-2 py-1 hover:bg-red-50 hover:text-red-500"
+              className="rounded border border-lp-border px-2 py-1 text-lp-error hover:opacity-90"
+              style={{ backgroundColor: 'rgba(239,68,68,0.1)' }}
             >
               Remove
             </button>
@@ -465,7 +478,7 @@ function Inspector({
         <button
           type="button"
           onClick={onPackDelete}
-          className="text-xs text-lp-text-secondary hover:text-red-500"
+          className="text-xs text-lp-text-secondary hover:text-lp-error"
         >
           Delete pack
         </button>
@@ -560,6 +573,7 @@ function SharingPanel({ packId }: { packId: string }) {
   const [creating, setCreating] = useState(false);
   const [passwordDraft, setPasswordDraft] = useState('');
   const [showPasswordField, setShowPasswordField] = useState(false);
+  const [copiedLinkId, setCopiedLinkId] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -604,6 +618,12 @@ function SharingPanel({ packId }: { packId: string }) {
     }
   };
 
+  const handleCopy = async (linkId: string, url: string) => {
+    await navigator.clipboard.writeText(url);
+    setCopiedLinkId(linkId);
+    setTimeout(() => setCopiedLinkId((current) => (current === linkId ? null : current)), 1500);
+  };
+
   const active = (links ?? []).filter((l) => !l.revoked_at);
   const revoked = (links ?? []).filter((l) => l.revoked_at);
 
@@ -611,19 +631,32 @@ function SharingPanel({ packId }: { packId: string }) {
     <div>
       <div className="text-[10px] uppercase tracking-widest text-lp-text-tertiary">Sharing</div>
       {loading && <div className="mt-1 text-xs text-lp-text-tertiary">Loading...</div>}
-      {error && <div className="mt-1 text-xs text-red-600">{error}</div>}
+      {error && <div className="mt-1 text-xs text-lp-error">{error}</div>}
       {!loading && active.length > 0 && (
         <ul className="mt-2 space-y-2">
           {active.map((link) => (
-            <li key={link.id} className="space-y-1 rounded border border-lp-border bg-lp-surface-hover p-2">
+            <li
+              key={link.id}
+              className="space-y-2 rounded-lg border p-3"
+              style={{ backgroundColor: 'var(--lp-bg-secondary)', borderColor: 'var(--lp-border)' }}
+            >
               <div className="flex items-center justify-between gap-2">
-                <span className="text-[10px] uppercase tracking-wide text-lp-text-secondary">
-                  {link.has_password ? 'Password' : 'Open'}
+                <span
+                  className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide"
+                  style={{
+                    backgroundColor: link.has_password
+                      ? 'rgba(156, 163, 175, 0.1)'
+                      : 'rgba(255, 69, 0, 0.1)',
+                    color: link.has_password ? '#9CA3AF' : '#FF4500',
+                    border: `1px solid ${link.has_password ? 'rgba(156, 163, 175, 0.2)' : 'rgba(255, 69, 0, 0.2)'}`,
+                  }}
+                >
+                  {link.has_password ? 'Password-protected' : 'Open'}
                 </span>
                 <button
                   type="button"
                   onClick={() => handleRevoke(link.id)}
-                  className="text-[10px] text-lp-text-secondary hover:text-red-500"
+                  className="text-[10px] text-lp-text-secondary hover:text-lp-error"
                 >
                   Revoke
                 </button>
@@ -631,19 +664,19 @@ function SharingPanel({ packId }: { packId: string }) {
               <div className="font-mono text-[10px] break-all text-lp-text">/r/{link.token}</div>
               <button
                 type="button"
-                onClick={() => {
-                  navigator.clipboard?.writeText(buildPublicUrl(link.token)).catch(() => {});
-                }}
+                onClick={() => handleCopy(link.id, buildPublicUrl(link.token))}
                 className="text-[10px] text-[var(--lp-orange)] hover:underline"
               >
-                Copy link
+                {copiedLinkId === link.id ? 'Copied!' : 'Copy link'}
               </button>
             </li>
           ))}
         </ul>
       )}
       {!loading && active.length === 0 && (
-        <div className="mt-1 text-xs text-lp-text-tertiary">No active links.</div>
+        <div className="px-4 py-6 text-center text-sm text-lp-text-secondary">
+          No share links yet. Create one above.
+        </div>
       )}
 
       <div className="mt-3 space-y-2">
@@ -714,54 +747,87 @@ function ExportPanel({
   onExported: () => void;
 }) {
   const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const handleExport = async () => {
     setBusy(true);
-    setErr(null);
+    setError(null);
     try {
-      const res = await exportGoogleDoc(pack.id);
+      const res = await fetch(`/api/rider-packs/${pack.id}/export/google-doc`, { method: 'POST' });
+      const body = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        const detail = body?.error || res.statusText || 'Export failed';
+        setError(detail);
+        return;
+      }
+
       onExported();
-      if (res.document_url) {
-        window.open(res.document_url, '_blank', 'noopener,noreferrer');
+      if (body?.document_url) {
+        window.open(body.document_url, '_blank', 'noopener,noreferrer');
       }
     } catch (e) {
-      setErr(e instanceof Error ? e.message : 'Export failed');
+      setError(e instanceof Error ? e.message : 'Export failed');
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <div>
+    <div className="space-y-2">
       <div className="text-[10px] uppercase tracking-widest text-lp-text-tertiary">Google Doc</div>
-      {pack.google_doc_url ? (
-        <a
-          href={pack.google_doc_url}
-          target="_blank"
-          rel="noreferrer"
-          className="mt-1 block text-xs text-[var(--lp-orange)] hover:underline truncate"
+      <span
+        className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide"
+        style={{
+          backgroundColor: pack.google_doc_url ? 'rgba(255, 69, 0, 0.1)' : 'rgba(156, 163, 175, 0.1)',
+          color: pack.google_doc_url ? '#FF4500' : '#9CA3AF',
+          border: `1px solid ${pack.google_doc_url ? 'rgba(255, 69, 0, 0.2)' : 'rgba(156, 163, 175, 0.2)'}`,
+        }}
+      >
+        {pack.google_doc_url ? 'Exported' : 'Not exported'}
+      </span>
+
+      {error && (
+        <div
+          className="rounded-md border px-3 py-2 text-xs"
+          style={{
+            backgroundColor: 'rgba(239,68,68,0.1)',
+            borderColor: '#EF4444',
+            color: 'var(--lp-text)',
+          }}
         >
-          {pack.google_doc_url}
-        </a>
-      ) : (
-        <div className="mt-1 text-xs text-lp-text-tertiary">Not yet exported.</div>
+          <div className="font-semibold" style={{ color: '#EF4444' }}>
+            Export failed
+          </div>
+          <div className="mt-0.5 text-lp-text-secondary">{error}</div>
+        </div>
       )}
+
       <div className="mt-2">
         <button
           type="button"
           onClick={handleExport}
           disabled={busy}
-          className="rounded bg-[var(--lp-orange)] px-3 py-1.5 text-xs text-white hover:opacity-90 disabled:opacity-50"
+          className="rounded bg-[var(--lp-orange)] px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
         >
           {busy
-            ? 'Exporting...'
+            ? 'Exporting…'
             : pack.google_doc_url
-              ? 'Re-export (updates doc)'
+              ? 'Re-export to Google Doc'
               : 'Export to Google Doc'}
         </button>
       </div>
-      {err && <div className="mt-1 text-xs text-red-600">{err}</div>}
+      {pack.google_doc_url && (
+        <a
+          href={pack.google_doc_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-xs underline"
+          style={{ color: 'var(--lp-text-secondary)' }}
+        >
+          Open in Google Docs ↗
+        </a>
+      )}
     </div>
   );
 }

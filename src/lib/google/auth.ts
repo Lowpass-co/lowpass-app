@@ -22,16 +22,31 @@ const SCOPES = [
 
 let cachedAuth: InstanceType<typeof google.auth.JWT> | null = null;
 
+export class GoogleAuthConfigError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'GoogleAuthConfigError';
+  }
+}
+
 export function getGoogleAuth() {
   if (cachedAuth) return cachedAuth;
 
   const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
   const rawKey = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY;
-  if (!email || !rawKey) {
-    throw new Error('Missing GOOGLE_SERVICE_ACCOUNT_EMAIL or GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY');
+  if (!email) {
+    throw new GoogleAuthConfigError('GOOGLE_SERVICE_ACCOUNT_EMAIL is not set');
+  }
+  if (!rawKey) {
+    throw new GoogleAuthConfigError('GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY is not set');
   }
 
   const privateKey = rawKey.replace(/\\n/g, '\n');
+  if (!privateKey.includes('BEGIN PRIVATE KEY')) {
+    throw new GoogleAuthConfigError(
+      'GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY does not look like a PEM key (missing BEGIN PRIVATE KEY header). Check the .env value was copied correctly.',
+    );
+  }
 
   cachedAuth = new google.auth.JWT({
     email,

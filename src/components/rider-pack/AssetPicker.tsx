@@ -81,14 +81,14 @@ export function AssetPicker({ value, onChange, packContext }: Props) {
         <button
           type="button"
           onClick={() => setExpanded(true)}
-          className="w-full rounded border border-dashed border-neutral-300 px-3 py-2 text-sm text-neutral-600 hover:bg-neutral-50"
+          className="w-full rounded-md border border-dashed border-lp-border px-3 py-2 text-sm text-lp-text-secondary hover:bg-lp-surface-hover"
         >
           Choose or upload an asset
         </button>
       )}
 
       {expanded && (
-        <div className="rounded border border-neutral-200 bg-white p-3 space-y-3">
+        <div className="space-y-3 rounded-md border border-lp-border bg-lp-surface p-3">
           <UploadForm
             packContext={packContext}
             onUploaded={async (newAssetId) => {
@@ -98,24 +98,24 @@ export function AssetPicker({ value, onChange, packContext }: Props) {
             }}
           />
 
-          <div className="border-t border-neutral-200 pt-3">
+          <div className="border-t border-lp-border pt-3">
             <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-medium uppercase text-neutral-500">
+              <span className="text-xs font-medium uppercase text-lp-text-secondary">
                 Existing assets
               </span>
               <button
                 type="button"
                 onClick={() => setExpanded(false)}
-                className="text-xs text-neutral-500 hover:text-neutral-900"
+                className="text-xs text-lp-text-secondary hover:text-lp-text"
               >
                 Close
               </button>
             </div>
 
-            {loading && <div className="text-xs text-neutral-500">Loading…</div>}
-            {error && <div className="text-xs text-red-600">{error}</div>}
+            {loading && <div className="text-xs text-lp-text-secondary">Loading…</div>}
+            {error && <div className="text-xs text-lp-error">{error}</div>}
             {!loading && !error && assets.length === 0 && (
-              <div className="text-xs text-neutral-500">
+              <div className="text-xs text-lp-text-secondary">
                 No assets for this artist yet. Upload one above.
               </div>
             )}
@@ -159,33 +159,33 @@ function SelectedAssetCard({
   onChange: () => void;
 }) {
   return (
-    <div className="flex items-center gap-3 rounded border border-neutral-200 bg-neutral-50 p-2">
-      <div className="h-14 w-14 shrink-0 overflow-hidden rounded border border-neutral-200 bg-white flex items-center justify-center">
+    <div className="flex items-center gap-3 rounded-md border border-lp-border bg-lp-bg-secondary p-2">
+      <div className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded border border-lp-border bg-lp-surface">
         {asset?.asset_type === 'image' && signedUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={signedUrl} alt={asset.label} className="h-full w-full object-cover" />
         ) : (
-          <span className="text-[10px] text-neutral-400 uppercase">file</span>
+          <span className="text-[10px] uppercase text-lp-text-tertiary">file</span>
         )}
       </div>
       <div className="flex-1 min-w-0">
         <div className="text-sm font-medium truncate">
           {asset?.label ?? '(asset not visible in this scope)'}
         </div>
-        <div className="text-[10px] text-neutral-500 font-mono truncate">{assetId}</div>
+        <div className="truncate font-mono text-[10px] text-lp-text-secondary">{assetId}</div>
       </div>
       <div className="flex items-center gap-1">
         <button
           type="button"
           onClick={onChange}
-          className="rounded border border-neutral-200 px-2 py-1 text-xs hover:bg-neutral-100"
+          className="rounded border border-lp-border px-2 py-1 text-xs hover:bg-lp-surface-hover"
         >
           Change
         </button>
         <button
           type="button"
           onClick={onClear}
-          className="text-xs text-neutral-400 hover:text-red-600 px-1"
+          className="px-1 text-xs text-lp-text-tertiary hover:text-lp-error"
         >
           Clear
         </button>
@@ -209,23 +209,23 @@ function AssetTile({
     <button
       type="button"
       onClick={onSelect}
-      className={`text-left rounded border overflow-hidden bg-white hover:shadow-sm transition ${
+      className={`overflow-hidden rounded border bg-lp-surface text-left transition hover:shadow-sm ${
         selected
           ? 'border-[var(--lp-orange)] ring-1 ring-[var(--lp-orange)]'
-          : 'border-neutral-200'
+          : 'border-lp-border'
       }`}
     >
-      <div className="h-20 w-full bg-neutral-50 flex items-center justify-center overflow-hidden">
+      <div className="flex h-20 w-full items-center justify-center overflow-hidden bg-lp-bg-secondary">
         {asset.asset_type === 'image' && signedUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={signedUrl} alt={asset.label} className="h-full w-full object-cover" />
         ) : (
-          <span className="text-[10px] text-neutral-400 uppercase">{asset.asset_type}</span>
+          <span className="text-[10px] uppercase text-lp-text-tertiary">{asset.asset_type}</span>
         )}
       </div>
       <div className="px-2 py-1.5">
         <div className="text-xs font-medium truncate">{asset.label}</div>
-        <div className="text-[10px] uppercase tracking-wide text-neutral-400">
+        <div className="text-[10px] uppercase tracking-wide text-lp-text-tertiary">
           {asset.scope}
         </div>
       </div>
@@ -308,21 +308,21 @@ function UploadForm({
 
   return (
     <div className="space-y-2">
-      <div className="text-xs font-medium uppercase text-neutral-500">Upload new</div>
+      <div className="text-xs font-medium uppercase text-lp-text-secondary">Upload new</div>
       <input
         type="file"
         onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-        className="block w-full text-xs text-neutral-700 file:mr-3 file:rounded file:border-0 file:bg-neutral-200 file:px-3 file:py-1 file:text-xs hover:file:bg-neutral-300"
+        className="block w-full text-xs text-lp-text file:mr-3 file:rounded file:border-0 file:bg-lp-bg-secondary file:px-3 file:py-1 file:text-xs hover:file:bg-lp-surface-hover"
       />
       <input
         type="text"
         value={label}
         onChange={(e) => setLabel(e.target.value)}
         placeholder="Label (defaults to filename)"
-        className="w-full rounded border border-neutral-200 px-2 py-1 text-sm"
+        className="w-full rounded-md border border-lp-border px-3 py-2 text-sm"
       />
       {canPromote && (
-        <label className="flex items-center gap-2 text-xs text-neutral-600">
+        <label className="flex items-center gap-2 text-xs text-lp-text-secondary">
           <input
             type="checkbox"
             checked={promoteToArtist}
@@ -331,7 +331,7 @@ function UploadForm({
           Make available to all tours for this artist
         </label>
       )}
-      {err && <div className="text-xs text-red-600">{err}</div>}
+      {err && <div className="text-xs text-lp-error">{err}</div>}
       <button
         type="button"
         onClick={submit}

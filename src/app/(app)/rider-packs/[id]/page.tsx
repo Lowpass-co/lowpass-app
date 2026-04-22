@@ -31,7 +31,7 @@ export default async function RiderPackEditorPage({
     <div>
       <div className="flex items-center gap-2 border-b border-lp-border bg-lp-surface px-6 py-3 text-sm">
         <Link href="/rider-packs" className="text-lp-text-secondary hover:text-lp-text">
-          ← Rider / Pack
+          ← Rider Packs
         </Link>
         <span className="text-lp-text-tertiary">/</span>
         <span className="font-semibold text-lp-text">{pack.title || '(untitled)'}</span>
