@@ -47,8 +47,8 @@ export function CommissionsGrid({ tourId }: { tourId: string; currency?: string 
   const [error, setError] = useState<string | null>(null);
   const [savingOverheads, setSavingOverheads] = useState(false);
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
+  const fetchData = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
+    if (!silent) setLoading(true);
     setError(null);
     try {
       const [commissionsRes, settingsRes, summaryRes] = await Promise.all([
@@ -85,7 +85,7 @@ export function CommissionsGrid({ tourId }: { tourId: string; currency?: string 
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error loading data');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [tourId]);
 
@@ -129,7 +129,10 @@ export function CommissionsGrid({ tourId }: { tourId: string; currency?: string 
 
   const saveOverheadPct = useCallback(
     async (field: keyof OverheadSettings, value: number) => {
-      const pct = Math.max(0, Number(value) || 0) / 100;
+      // InlineEditCell with type="percentage" already converts the user's
+      // typed percent (e.g. "14") into the stored fraction (0.14) on blur,
+      // so we must NOT divide by 100 again here.
+      const pct = Math.max(0, Number(value) || 0);
       const next = { ...overheadSettings, [field]: pct };
       setOverheadSettings(next);
       setSavingOverheads(true);
@@ -145,7 +148,9 @@ export function CommissionsGrid({ tourId }: { tourId: string; currency?: string 
           }),
         });
         if (!res.ok) throw new Error('Failed to save standard overheads');
-        await fetchData();
+        // Silent refresh so the Calculated columns pick up new totals without
+        // blanking the grid with the "Loading…" state.
+        await fetchData({ silent: true });
       } finally {
         setSavingOverheads(false);
       }
