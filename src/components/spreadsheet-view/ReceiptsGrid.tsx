@@ -63,21 +63,22 @@ const COLS = [
 export function ReceiptsGrid({ tourId, currency }: { tourId: string; currency: string }) {
   const [receipts, setReceipts] = useState<ExpenseReceipt[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [scanError, setScanError] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
   const [ocrPrefilledIds, setOcrPrefilledIds] = useState<Set<string>>(new Set());
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    setError(null);
+    setLoadError(null);
     try {
       const res = await fetch(`/api/budget/receipts?tour_id=${tourId}`);
       if (!res.ok) throw new Error('Failed to load receipts');
       const json = await res.json();
       setReceipts(json.receipts ?? []);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Error loading data');
+      setLoadError(e instanceof Error ? e.message : 'Error loading data');
     } finally {
       setLoading(false);
     }
@@ -134,7 +135,7 @@ export function ReceiptsGrid({ tourId, currency }: { tourId: string; currency: s
       if (!file || !tourId) return;
       e.target.value = '';
       setScanning(true);
-      setError(null);
+      setScanError(null);
       try {
         const formData = new FormData();
         formData.set('file', file);
@@ -144,8 +145,15 @@ export function ReceiptsGrid({ tourId, currency }: { tourId: string; currency: s
           body: formData,
         });
         if (!ocrRes.ok) {
-          const err = await ocrRes.json().catch(() => ({}));
-          throw new Error(err.error || 'Scan failed');
+          const err = await ocrRes.json().catch(() => ({} as { error?: unknown }));
+          const raw = err.error;
+          const msg =
+            typeof raw === 'string'
+              ? raw
+              : raw && typeof raw === 'object' && raw !== null && 'message' in raw
+                ? String((raw as { message?: string }).message)
+                : 'Scan failed';
+          throw new Error(msg);
         }
         const ocr = await ocrRes.json();
         const amount = Number(ocr.total_amount) || 0;
@@ -168,7 +176,7 @@ export function ReceiptsGrid({ tourId, currency }: { tourId: string; currency: s
         setReceipts((prev) => [created, ...prev]);
         setOcrPrefilledIds((prev) => new Set(prev).add(created.id));
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Scan failed');
+        setScanError(err instanceof Error ? err.message : 'Scan failed');
       } finally {
         setScanning(false);
       }
@@ -177,10 +185,20 @@ export function ReceiptsGrid({ tourId, currency }: { tourId: string; currency: s
   );
 
   if (loading) return <div className="text-sm text-lp-text-secondary py-4">Loading…</div>;
-  if (error) return <div className="text-sm text-lp-error py-4">{error}</div>;
+  if (loadError) return <div className="text-sm text-lp-error py-4">{loadError}</div>;
 
   return (
     <div className="space-y-4">
+      {scanError ? (
+        <div
+          className="rounded-md border border-lp-border px-3 py-2 text-sm text-lp-text-secondary"
+          style={{ backgroundColor: 'rgba(239,68,68,0.1)' }}
+          role="alert"
+        >
+          <span className="text-lp-error font-medium">Scan failed. </span>
+          {scanError}
+        </div>
+      ) : null}
       <input
         ref={fileInputRef}
         type="file"

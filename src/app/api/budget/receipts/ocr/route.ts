@@ -5,7 +5,24 @@
    ============================================ */
 
 import { NextResponse } from 'next/server';
-import Anthropic from '@anthropic-ai/sdk';
+import Anthropic, { APIError } from '@anthropic-ai/sdk';
+
+/** Pull nested message from Anthropic error JSON (SDK puts API body on `.error`). */
+function anthropicErrorText(err: APIError): string {
+  const parts: string[] = [];
+  if (err.message) parts.push(err.message);
+  const body = err.error;
+  if (body && typeof body === 'object') {
+    const o = body as Record<string, unknown>;
+    if (typeof o.message === 'string') parts.push(o.message);
+    const inner = o.error;
+    if (inner && typeof inner === 'object' && inner !== null) {
+      const m = (inner as Record<string, unknown>).message;
+      if (typeof m === 'string') parts.push(m);
+    }
+  }
+  return parts.join(' ');
+}
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'] as const;
 
@@ -89,9 +106,31 @@ If any field is unclear, use null. Tour currency is ${tourCurrency}.`,
     return NextResponse.json(receiptData);
   } catch (err) {
     console.error('Receipt OCR error:', err);
+    if (err instanceof APIError) {
+      const text = anthropicErrorText(err).toLowerCase();
+      if (
+        text.includes('credit') ||
+        text.includes('balance is too low') ||
+        text.includes('billing') ||
+        text.includes('plans & billing')
+      ) {
+        return NextResponse.json(
+          {
+            error:
+              'Receipt scan uses the Anthropic API (Claude), which is billed separately from your Lowpass app plan. This key has no API credits—add a payment method or credits at console.anthropic.com for the org that owns ANTHROPIC_API_KEY, or set a new key in Vercel.',
+            code: 'ANTHROPIC_BILLING',
+          },
+          { status: 503 },
+        );
+      }
+      return NextResponse.json(
+        { error: 'Could not read this receipt with the AI service. Try again or enter the receipt manually.', code: 'ANTHROPIC_API' },
+        { status: 502 },
+      );
+    }
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'OCR failed' },
-      { status: 500 }
+      { status: 500 },
     );
   }
 }
