@@ -41,9 +41,10 @@ import {
   makeDefaultField,
 } from './FieldEditors';
 import type { PackContext } from './AssetPicker';
-import { PackStatCards } from './PackStatCards';
+import { RiderTemplateSuggestions } from './RiderTemplateSuggestions';
 import { useDebouncedSave, type SaveState } from './useDebouncedSave';
 import NewSectionDialog from './NewSectionDialog';
+import { formatRelativeTime } from '@/lib/format-relative';
 
 type Props = {
   packId: string;
@@ -224,11 +225,6 @@ export function PackEditor({ packId }: Props) {
 
   // ----- Render -----
 
-  const fieldCount = useMemo(
-    () => (data ? data.sections.reduce((n, s) => n + (s.fields?.length ?? 0), 0) : 0),
-    [data],
-  );
-
   if (loading) return <div className="p-6 text-sm text-lp-text-secondary">Loading...</div>;
   if (error) return <div className="p-6 text-sm text-lp-error">{error}</div>;
   if (!data) return null;
@@ -244,12 +240,10 @@ export function PackEditor({ packId }: Props) {
   return (
     <div className="flex h-[calc(100vh-120px)] min-h-0 flex-col border-t border-lp-border bg-lp-surface">
       <div className="shrink-0 border-b border-lp-border px-4 py-3">
-        <PackStatCards
-          sectionCount={data.sections.length}
-          fieldCount={fieldCount}
-          updatedAt={data.pack.updated_at}
-          exportStatus={data.pack.google_doc_url ? 'exported' : 'never'}
-          shareLinkCount={0}
+        <RiderTemplateSuggestions
+          packId={packId}
+          sections={data.sections}
+          onApplied={() => refresh()}
         />
       </div>
       <div className="grid min-h-0 flex-1 grid-cols-[220px_1fr_280px] gap-0">
@@ -343,6 +337,7 @@ export function PackEditor({ packId }: Props) {
       <aside className="overflow-y-auto border-l border-lp-border bg-lp-surface p-4 text-sm text-lp-text space-y-4">
         <Inspector
           pack={data.pack}
+          lastEditLabel={formatRelativeTime(data.pack.updated_at)}
           onPackUpdate={() => refresh()}
           onPackDelete={async () => {
             if (!confirm('Delete this pack? This cannot be undone.')) return;
@@ -547,10 +542,12 @@ function AddFieldDropdown({ onAdd }: { onAdd: (type: Field['type']) => void }) {
 
 function Inspector({
   pack,
+  lastEditLabel,
   onPackUpdate,
   onPackDelete,
 }: {
   pack: RiderPack;
+  lastEditLabel: string;
   onPackUpdate: () => void;
   onPackDelete: () => void;
 }) {
@@ -580,6 +577,13 @@ function Inspector({
         <div className="mt-1 inline-flex items-center rounded-full bg-lp-surface-hover px-2 py-0.5 text-xs font-semibold uppercase text-lp-text">
           {pack.scope}
         </div>
+      </div>
+
+      <div>
+        <div className="text-[10px] uppercase tracking-widest text-lp-text-tertiary">Last edit</div>
+        <p className="mt-1 text-sm text-lp-text" title={pack.updated_at ?? undefined}>
+          {lastEditLabel}
+        </p>
       </div>
 
       <div>
