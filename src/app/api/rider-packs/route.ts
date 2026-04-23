@@ -48,6 +48,19 @@ export async function GET(request: Request) {
   return NextResponse.json({ packs: data ?? [] });
 }
 
+function userFacingUniqueViolationMessage(postgresMessage: string): string {
+  if (postgresMessage.includes('rider_packs_artist_unique')) {
+    return 'This artist already has a rider pack at the artist level. There can only be one per artist; open the existing pack in the list to edit it.';
+  }
+  if (postgresMessage.includes('rider_packs_tour_unique')) {
+    return 'A rider pack for this tour already exists. Open that pack in the list to edit it.';
+  }
+  if (postgresMessage.includes('rider_packs_show_unique')) {
+    return 'A rider pack for this show already exists. Open that pack in the list to edit it.';
+  }
+  return 'A pack already exists for this scope. There can only be one pack per artist, one per tour, or one per show.';
+}
+
 export async function POST(request: Request) {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -116,6 +129,28 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Artist not found' }, { status: 404 });
   }
 
+  // One artist-scoped pack per artist (unique partial index rider_packs_artist_unique).
+  if (scope === 'artist') {
+    const { data: dupe, error: dupeError } = await supabase
+      .from('rider_packs')
+      .select('id')
+      .eq('artist_id', artistId)
+      .eq('scope', 'artist')
+      .maybeSingle();
+    if (dupeError) {
+      return NextResponse.json({ error: dupeError.message }, { status: 500 });
+    }
+    if (dupe) {
+      return NextResponse.json(
+        {
+          error: userFacingUniqueViolationMessage('rider_packs_artist_unique'),
+          code: 'DUPLICATE_PACK',
+        },
+        { status: 409 },
+      );
+    }
+  }
+
   const { data: inserted, error } = await supabase
     .from('rider_packs')
     .insert({
@@ -131,9 +166,12 @@ export async function POST(request: Request) {
     .single();
 
   if (error) {
-    // Likely unique-index conflict (one pack per scope tuple) or RLS denial (artist scope + non-admin).
-    const status = error.code === '23505' ? 409 : 400;
-    return NextResponse.json({ error: error.message }, { status });
+    // One pack per (artist | tour+artist | show+artist) — see partial unique indexes in migration 034.
+    if (error.code === '23505') {
+      const message = userFacingUniqueViolationMessage(error.message);
+      return NextResponse.json({ error: message, code: 'DUPLICATE_PACK' }, { status: 409 });
+    }
+    return NextResponse.json({ error: error.message }, { status: 400 });
   }
 
   await appendHistory(supabase, {

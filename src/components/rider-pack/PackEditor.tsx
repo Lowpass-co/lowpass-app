@@ -15,6 +15,7 @@
      'artist'   → inherited from artist (click to override)
    ============================================ */
 
+import Link from 'next/link';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type {
   Field,
@@ -492,10 +493,22 @@ function Inspector({
 // Exported from this file so page.tsx (a server component) can import
 // a ready-made client component without needing its own file.
 // ============================================================
-export function NewPackForm({ artists }: { artists: { id: string; name: string }[] }) {
+export function NewPackForm({
+  artists,
+  existingArtistPacks = [],
+}: {
+  artists: { id: string; name: string }[];
+  /** At most one artist-scoped pack per artist (DB constraint). Used to block duplicate create + link to the pack. */
+  existingArtistPacks?: { id: string; artist_id: string }[];
+}) {
   const [artistId, setArtistId] = useState(artists[0]?.id ?? '');
   const [title, setTitle] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  const existingForSelectedArtist = useMemo(
+    () => existingArtistPacks.find((p) => p.artist_id === artistId) ?? null,
+    [existingArtistPacks, artistId],
+  );
 
   const submit = async () => {
     if (!artistId) return;
@@ -527,41 +540,60 @@ export function NewPackForm({ artists }: { artists: { id: string; name: string }
   }
 
   return (
-    <div className="flex flex-wrap items-end gap-3 p-4">
-      <label className="text-xs">
-        <div className="mb-1 text-[10px] uppercase tracking-widest text-lp-text-tertiary">Artist</div>
-        <select
-          value={artistId}
-          onChange={(e) => setArtistId(e.target.value)}
-          className="rounded border border-lp-border bg-lp-surface px-2 py-1 text-sm text-lp-text"
+    <div className="space-y-2 p-4">
+      {existingForSelectedArtist && (
+        <p
+          className="rounded-md border border-lp-border px-3 py-2 text-xs text-lp-text-secondary"
+          style={{ backgroundColor: 'var(--lp-bg-secondary)' }}
+          role="status"
         >
-          {artists.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.name}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="text-xs flex-1 min-w-[200px]">
-        <div className="mb-1 text-[10px] uppercase tracking-widest text-lp-text-tertiary">
-          Title (optional)
-        </div>
-        <input
-          type="text"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          className="w-full rounded border border-lp-border bg-lp-surface px-2 py-1 text-sm text-lp-text"
-          placeholder="e.g. Master rider v1"
-        />
-      </label>
-      <button
-        type="button"
-        onClick={submit}
-        disabled={submitting || !artistId}
-        className="rounded bg-[var(--lp-orange)] px-4 py-1.5 text-sm text-white hover:opacity-90 disabled:opacity-50"
-      >
-        Create
-      </button>
+          This artist already has an artist-level pack (only one is allowed).{' '}
+          <Link
+            href={`/rider-packs/${existingForSelectedArtist.id}`}
+            className="font-medium text-[var(--lp-orange)] hover:underline"
+          >
+            Open it to edit
+          </Link>
+          .
+        </p>
+      )}
+      <div className="flex flex-wrap items-end gap-3">
+        <label className="text-xs">
+          <div className="mb-1 text-[10px] uppercase tracking-widest text-lp-text-tertiary">Artist</div>
+          <select
+            value={artistId}
+            onChange={(e) => setArtistId(e.target.value)}
+            className="rounded border border-lp-border bg-lp-surface px-2 py-1 text-sm text-lp-text"
+          >
+            {artists.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="min-w-[200px] flex-1 text-xs">
+          <div className="mb-1 text-[10px] uppercase tracking-widest text-lp-text-tertiary">
+            Title (optional)
+          </div>
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            className="w-full rounded border border-lp-border bg-lp-surface px-2 py-1 text-sm text-lp-text"
+            placeholder="e.g. Master rider v1"
+            disabled={!!existingForSelectedArtist}
+          />
+        </label>
+        <button
+          type="button"
+          onClick={submit}
+          disabled={submitting || !artistId || !!existingForSelectedArtist}
+          className="rounded bg-[var(--lp-orange)] px-4 py-1.5 text-sm text-white hover:opacity-90 disabled:opacity-50"
+        >
+          Create
+        </button>
+      </div>
     </div>
   );
 }

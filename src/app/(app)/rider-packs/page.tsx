@@ -33,6 +33,9 @@ export default async function RiderPacksIndexPage() {
   ]);
 
   const artistMap = new Map((artists ?? []).map((a) => [a.id, a.name]));
+  const existingArtistPacks = (packs ?? [])
+    .filter((p) => p.scope === 'artist')
+    .map((p) => ({ id: p.id, artist_id: p.artist_id }));
 
   return (
     <div className="flex min-h-0 flex-1 flex-col space-y-5">
@@ -53,7 +56,7 @@ export default async function RiderPacksIndexPage() {
         >
           New artist pack
         </div>
-        <NewPackForm artists={artists ?? []} />
+        <NewPackForm artists={artists ?? []} existingArtistPacks={existingArtistPacks} />
       </section>
 
       <section
