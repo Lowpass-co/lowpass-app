@@ -106,10 +106,27 @@ export const FIELD_TYPES = [
 
 export type FieldType = (typeof FIELD_TYPES)[number];
 
+/** Grouping for rider content: many per artist / tour / show; one pack per folder (migration 039). */
+export type RiderFolder = {
+  id: string;
+  workspace_id: string;
+  artist_id: string;
+  scope: PackScope;
+  tour_id: string | null;
+  routing_id: string | null;
+  title: string | null;
+  inherit_from_folder_id: string | null;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
 /** rider_packs row. */
 export type RiderPack = {
   id: string;
   workspace_id: string;
+  /** 1:1 with rider_folders (folder is the "rider" slot in the UI). Set after migration 039. */
+  folder_id?: string;
   scope: PackScope;
   artist_id: string;
   tour_id: string | null;
@@ -120,6 +137,8 @@ export type RiderPack = {
   created_by: string | null;
   created_at: string;
   updated_at: string;
+  /** Set when list/detail embeds the folder (optional on older clients). */
+  folder?: RiderFolder | null;
 };
 
 /** rider_sections row (as stored). */

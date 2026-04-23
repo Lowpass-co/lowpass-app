@@ -1,12 +1,16 @@
 /* ============================================
    LOWPASS — Rider/Pack section resolver
 
-   Given a pack, return its sections merged with parent-scope
+   Given a pack, return its sections merged with parent folders'
    sections so the UI can show "inherited from tour" / etc.
 
    Resolution order: show > tour > artist. First match per
-   section_key wins. Sort the final list by sort_order from
-   whichever scope authored it.
+   section_key wins. Parent chain is defined by
+   rider_folders.inherit_from_folder_id (show → tour → artist).
+
+   Multiple riders per scope are allowed; each pack belongs to
+   one folder, and inheritance follows folder links, not
+   a single parent pack per (artist, tour, show).
    ============================================ */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -18,32 +22,47 @@ import type {
   ResolvedPack,
 } from './types';
 
-/** Find the chain of parent pack IDs for a given pack. */
+/** Walk folder.parent chain; collect (pack id, scope) for each parent folder. */
 async function resolveParentPackIds(
   supabase: SupabaseClient,
   pack: RiderPack,
 ): Promise<Array<{ id: string; scope: PackScope }>> {
   const parents: Array<{ id: string; scope: PackScope }> = [];
-
-  if (pack.scope === 'show' && pack.tour_id) {
-    const { data: tourPack } = await supabase
-      .from('rider_packs')
-      .select('id, scope')
-      .eq('scope', 'tour')
-      .eq('artist_id', pack.artist_id)
-      .eq('tour_id', pack.tour_id)
-      .maybeSingle();
-    if (tourPack) parents.push({ id: tourPack.id, scope: 'tour' });
+  if (!pack.folder_id) {
+    // Pre-migration rows should not exist after 039; keep empty
+    return parents;
   }
 
-  if (pack.scope === 'show' || pack.scope === 'tour') {
-    const { data: artistPack } = await supabase
-      .from('rider_packs')
-      .select('id, scope')
-      .eq('scope', 'artist')
-      .eq('artist_id', pack.artist_id)
+  const { data: startFolder } = await supabase
+    .from('rider_folders')
+    .select('id, inherit_from_folder_id')
+    .eq('id', pack.folder_id)
+    .maybeSingle();
+  if (!startFolder) return parents;
+
+  let nextFolderId: string | null = startFolder.inherit_from_folder_id;
+  const visited = new Set<string>([startFolder.id]);
+
+  while (nextFolderId) {
+    if (visited.has(nextFolderId)) break;
+    visited.add(nextFolderId);
+
+    const { data: parentFolder } = await supabase
+      .from('rider_folders')
+      .select('id, scope, inherit_from_folder_id')
+      .eq('id', nextFolderId)
       .maybeSingle();
-    if (artistPack) parents.push({ id: artistPack.id, scope: 'artist' });
+    if (!parentFolder) break;
+
+    const { data: parentPack } = await supabase
+      .from('rider_packs')
+      .select('id')
+      .eq('folder_id', parentFolder.id)
+      .maybeSingle();
+    if (parentPack) {
+      parents.push({ id: parentPack.id, scope: parentFolder.scope as PackScope });
+    }
+    nextFolderId = parentFolder.inherit_from_folder_id;
   }
 
   return parents;

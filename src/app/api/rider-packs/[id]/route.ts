@@ -98,6 +98,10 @@ export async function PATCH(
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
 
+  if (Object.prototype.hasOwnProperty.call(updates, 'title') && before.folder_id) {
+    await supabase.from('rider_folders').update({ title: updated.title }).eq('id', before.folder_id);
+  }
+
   await appendHistory(supabase, {
     packId: id,
     changedBy: user.id,
@@ -134,7 +138,11 @@ export async function DELETE(
   // NB: cascade WILL delete history rows for this pack. This is the tradeoff we
   // accepted in the design — history is 90-day rolling, not forever. If a pack
   // is deleted, its audit goes with it.
-  const { error } = await supabase.from('rider_packs').delete().eq('id', id);
+  if (!before.folder_id) {
+    return NextResponse.json({ error: 'Pack has no folder' }, { status: 500 });
+  }
+
+  const { error } = await supabase.from('rider_folders').delete().eq('id', before.folder_id);
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 400 });
   }

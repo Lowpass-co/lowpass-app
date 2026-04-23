@@ -33,16 +33,14 @@ export default async function RiderPacksIndexPage() {
   ]);
 
   const artistMap = new Map((artists ?? []).map((a) => [a.id, a.name]));
-  const existingArtistPacks = (packs ?? [])
-    .filter((p) => p.scope === 'artist')
-    .map((p) => ({ id: p.id, artist_id: p.artist_id }));
 
   return (
     <div className="flex min-h-0 flex-1 flex-col space-y-5">
       <header className="space-y-1">
         <h1 className="text-2xl font-bold text-lp-text">Rider Packs</h1>
         <p className="text-sm text-lp-text-secondary">
-          Build, edit, and share rider packs across artists, tours, and shows.
+          You can have many riders per artist. Each rider is one document; tour- and show-level riders can inherit
+          sections from artist-level riders via folder links.
         </p>
       </header>
 
@@ -54,9 +52,9 @@ export default async function RiderPacksIndexPage() {
           className="border-b px-4 py-2 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary"
           style={{ borderColor: 'var(--lp-border)' }}
         >
-          New artist pack
+          New rider (artist level)
         </div>
-        <NewPackForm artists={artists ?? []} existingArtistPacks={existingArtistPacks} />
+        <NewPackForm artists={artists ?? []} />
       </section>
 
       <section

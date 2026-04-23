@@ -6,7 +6,12 @@
                         &tour_id=...
                         &routing_id=...
    POST /api/rider-packs   body: { scope, artist_id,
-                                   tour_id?, routing_id?, title? }
+                                   tour_id?, routing_id?, title?,
+                                   inherit_from_folder_id? } — creates
+                                   a rider_folders row + one rider_packs row.
+
+   See migration 039: many folders (and thus riders) per artist / tour / show;
+   one pack per folder.
    ============================================ */
 
 import { NextResponse } from 'next/server';
@@ -18,7 +23,9 @@ const SCOPES: PackScope[] = ['artist', 'tour', 'show'];
 
 export async function GET(request: Request) {
   const supabase = await createServerSupabaseClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -48,22 +55,11 @@ export async function GET(request: Request) {
   return NextResponse.json({ packs: data ?? [] });
 }
 
-function userFacingUniqueViolationMessage(postgresMessage: string): string {
-  if (postgresMessage.includes('rider_packs_artist_unique')) {
-    return 'This artist already has a rider pack at the artist level. There can only be one per artist; open the existing pack in the list to edit it.';
-  }
-  if (postgresMessage.includes('rider_packs_tour_unique')) {
-    return 'A rider pack for this tour already exists. Open that pack in the list to edit it.';
-  }
-  if (postgresMessage.includes('rider_packs_show_unique')) {
-    return 'A rider pack for this show already exists. Open that pack in the list to edit it.';
-  }
-  return 'A pack already exists for this scope. There can only be one pack per artist, one per tour, or one per show.';
-}
-
 export async function POST(request: Request) {
   const supabase = await createServerSupabaseClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -80,6 +76,7 @@ export async function POST(request: Request) {
   const tourId = (body.tour_id as string | undefined) ?? null;
   const routingId = (body.routing_id as string | undefined) ?? null;
   const title = (body.title as string | undefined) ?? null;
+  const inheritFromClient = (body.inherit_from_folder_id as string | null | undefined) ?? undefined;
 
   if (!scope || !SCOPES.includes(scope)) {
     return NextResponse.json({ error: 'scope must be artist|tour|show' }, { status: 400 });
@@ -88,7 +85,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'artist_id is required' }, { status: 400 });
   }
 
-  // Shape checks mirror the DB CHECK constraint — fail fast with a clear message.
   if (scope === 'artist' && (tourId || routingId)) {
     return NextResponse.json(
       { error: 'artist scope cannot have tour_id or routing_id' },
@@ -108,7 +104,6 @@ export async function POST(request: Request) {
     );
   }
 
-  // Workspace lookup for the row.
   const { data: profile } = await supabase
     .from('profiles')
     .select('workspace_id')
@@ -118,7 +113,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'No workspace' }, { status: 403 });
   }
 
-  // Verify artist belongs to workspace.
   const { data: artist } = await supabase
     .from('artists')
     .select('id')
@@ -129,32 +123,74 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Artist not found' }, { status: 404 });
   }
 
-  // One artist-scoped pack per artist (unique partial index rider_packs_artist_unique).
-  if (scope === 'artist') {
-    const { data: dupe, error: dupeError } = await supabase
-      .from('rider_packs')
-      .select('id')
-      .eq('artist_id', artistId)
-      .eq('scope', 'artist')
-      .maybeSingle();
-    if (dupeError) {
-      return NextResponse.json({ error: dupeError.message }, { status: 500 });
+  let resolvedInherit: string | null = null;
+  if (inheritFromClient !== undefined) {
+    if (inheritFromClient === null || inheritFromClient === '') {
+      resolvedInherit = null;
+    } else {
+      const { data: pFolder, error: pErr } = await supabase
+        .from('rider_folders')
+        .select('id, artist_id, workspace_id')
+        .eq('id', inheritFromClient)
+        .maybeSingle();
+      if (pErr) {
+        return NextResponse.json({ error: pErr.message }, { status: 500 });
+      }
+      if (!pFolder || pFolder.artist_id !== artistId || pFolder.workspace_id !== profile.workspace_id) {
+        return NextResponse.json(
+          { error: 'inherit_from_folder_id is invalid for this artist' },
+          { status: 400 },
+        );
+      }
+      resolvedInherit = inheritFromClient;
     }
-    if (dupe) {
-      return NextResponse.json(
-        {
-          error: userFacingUniqueViolationMessage('rider_packs_artist_unique'),
-          code: 'DUPLICATE_PACK',
-        },
-        { status: 409 },
-      );
+  } else {
+    if (scope === 'tour') {
+      const { data: artFolder } = await supabase
+        .from('rider_folders')
+        .select('id')
+        .eq('artist_id', artistId)
+        .eq('scope', 'artist')
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      resolvedInherit = artFolder?.id ?? null;
+    } else if (scope === 'show') {
+      const { data: tourFolder } = await supabase
+        .from('rider_folders')
+        .select('id')
+        .eq('artist_id', artistId)
+        .eq('tour_id', tourId)
+        .eq('scope', 'tour')
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      resolvedInherit = tourFolder?.id ?? null;
     }
+  }
+
+  const { data: folder, error: folderError } = await supabase
+    .from('rider_folders')
+    .insert({
+      workspace_id: profile.workspace_id,
+      artist_id: artistId,
+      scope,
+      tour_id: tourId,
+      routing_id: routingId,
+      title,
+      inherit_from_folder_id: resolvedInherit,
+    })
+    .select()
+    .single();
+  if (folderError) {
+    return NextResponse.json({ error: folderError.message }, { status: 400 });
   }
 
   const { data: inserted, error } = await supabase
     .from('rider_packs')
     .insert({
       workspace_id: profile.workspace_id,
+      folder_id: folder.id,
       scope,
       artist_id: artistId,
       tour_id: tourId,
@@ -162,14 +198,16 @@ export async function POST(request: Request) {
       title,
       created_by: user.id,
     })
-    .select()
+    .select('*')
     .single();
 
   if (error) {
-    // One pack per (artist | tour+artist | show+artist) — see partial unique indexes in migration 034.
+    await supabase.from('rider_folders').delete().eq('id', folder.id);
     if (error.code === '23505') {
-      const message = userFacingUniqueViolationMessage(error.message);
-      return NextResponse.json({ error: message, code: 'DUPLICATE_PACK' }, { status: 409 });
+      return NextResponse.json(
+        { error: 'A pack with this link already exists.', code: 'DUPLICATE_PACK' },
+        { status: 409 },
+      );
     }
     return NextResponse.json({ error: error.message }, { status: 400 });
   }

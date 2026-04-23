@@ -57,6 +57,8 @@ export async function createPack(body: {
   tour_id?: string | null;
   routing_id?: string | null;
   title?: string | null;
+  /** Optional: override parent in inheritance chain; omit to default (oldest artist folder for tour, oldest tour for show). */
+  inherit_from_folder_id?: string | null;
 }): Promise<RiderPack> {
   const res = await fetch('/api/rider-packs', {
     method: 'POST',
