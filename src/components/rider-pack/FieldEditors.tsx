@@ -4,16 +4,12 @@
    LOWPASS — Field editors for the rider/pack editor
 
    Exports <FieldEditor> which dispatches on field.type.
-   All editors are controlled: they call `onChange(nextField)`
-   on every keystroke. Parent is responsible for persisting
-   on blur / explicit save.
-
-   Asset field renders a placeholder — a full asset picker UI
-   is coming in R3b (it consumes the R2b API already shipped).
-   Contact field uses the R2c /api/contacts/pick endpoint.
+   Text-like editors keep a local draft so server merges never
+   clobber in-flight typing; parent is responsible for persisting
+   (debounced + flush on blur from PackEditor).
    ============================================ */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type FocusEvent } from 'react';
 import type {
   Field,
   FieldText,
@@ -33,6 +29,7 @@ type FieldEditorProps<F extends Field = Field> = {
   field: F;
   onChange: (next: F) => void;
   onRemove?: () => void;
+  onFieldBlur?: () => void;
   /** Tour id for the containing pack, if any. Contact picker uses it. */
   tourId?: string | null;
   /** Full pack context. Asset picker uses it. */
@@ -43,13 +40,14 @@ export function FieldEditor({
   field,
   onChange,
   onRemove,
+  onFieldBlur,
   tourId,
   packContext,
 }: FieldEditorProps) {
   return (
     <div className="space-y-2 rounded-lg border border-lp-border bg-lp-bg-secondary p-4">
       <div className="flex items-center justify-between gap-2">
-        <LabelInput field={field} onChange={onChange} />
+        <LabelInput field={field} onChange={onChange} onFieldBlur={onFieldBlur} />
         {onRemove && (
           <button
             type="button"
@@ -63,6 +61,7 @@ export function FieldEditor({
       <Dispatcher
         field={field}
         onChange={onChange}
+        onFieldBlur={onFieldBlur}
         tourId={tourId ?? null}
         packContext={packContext ?? null}
       />
@@ -70,40 +69,85 @@ export function FieldEditor({
   );
 }
 
-function LabelInput({ field, onChange }: { field: Field; onChange: (n: Field) => void }) {
+function LabelInput({
+  field,
+  onChange,
+  onFieldBlur,
+}: {
+  field: Field;
+  onChange: (n: Field) => void;
+  onFieldBlur?: () => void;
+}) {
+  const v = field.label ?? '';
+  const [draft, setDraft] = useState(v);
+  useEffect(() => {
+    setDraft(v);
+  }, [v]);
+
   return (
     <input
       type="text"
-      value={field.label ?? ''}
-      onChange={(e) => onChange({ ...field, label: e.target.value })}
+      value={draft}
+      onChange={(e) => {
+        const next = e.target.value;
+        setDraft(next);
+        onChange({ ...field, label: next });
+      }}
+      onBlur={() => {
+        onFieldBlur?.();
+      }}
       placeholder="Field label"
       className="flex-1 border-b border-transparent bg-transparent py-1 text-base font-medium outline-none focus:border-lp-border"
     />
   );
 }
 
+function fireBlur(
+  onFieldBlur: (() => void) | undefined,
+  e: FocusEvent<HTMLElement>,
+) {
+  const next = e.relatedTarget;
+  if (next && e.currentTarget.contains(next as Node)) return;
+  onFieldBlur?.();
+}
+
 function Dispatcher({
   field,
   onChange,
+  onFieldBlur,
   tourId,
   packContext,
 }: {
   field: Field;
   onChange: (n: Field) => void;
+  onFieldBlur?: () => void;
   tourId: string | null;
   packContext: PackContext | null;
 }) {
   switch (field.type) {
     case 'text':
-      return <TextEditor field={field} onChange={onChange as (n: FieldText) => void} />;
+      return (
+        <TextEditor
+          field={field}
+          onChange={onChange as (n: FieldText) => void}
+          onFieldBlur={onFieldBlur}
+        />
+      );
     case 'table':
-      return <TableEditor field={field} onChange={onChange as (n: FieldTable) => void} />;
+      return (
+        <TableEditor
+          field={field}
+          onChange={onChange as (n: FieldTable) => void}
+          onFieldBlur={onFieldBlur}
+        />
+      );
     case 'contact':
       return (
         <ContactEditor
           field={field}
           onChange={onChange as (n: FieldContact) => void}
           tourId={tourId}
+          onFieldBlur={onFieldBlur}
         />
       );
     case 'asset':
@@ -115,20 +159,45 @@ function Dispatcher({
         />
       );
     case 'time':
-      return <TimeEditor field={field} onChange={onChange as (n: FieldTime) => void} />;
+      return (
+        <TimeEditor
+          field={field}
+          onChange={onChange as (n: FieldTime) => void}
+          onFieldBlur={onFieldBlur}
+        />
+      );
     case 'currency':
-      return <CurrencyEditor field={field} onChange={onChange as (n: FieldCurrency) => void} />;
+      return (
+        <CurrencyEditor
+          field={field}
+          onChange={onChange as (n: FieldCurrency) => void}
+          onFieldBlur={onFieldBlur}
+        />
+      );
     case 'number':
-      return <NumberEditor field={field} onChange={onChange as (n: FieldNumber) => void} />;
+      return (
+        <NumberEditor
+          field={field}
+          onChange={onChange as (n: FieldNumber) => void}
+          onFieldBlur={onFieldBlur}
+        />
+      );
     case 'checkbox_list':
       return (
         <CheckboxListEditor
           field={field}
           onChange={onChange as (n: FieldCheckboxList) => void}
+          onFieldBlur={onFieldBlur}
         />
       );
     case 'url':
-      return <UrlEditor field={field} onChange={onChange as (n: FieldUrl) => void} />;
+      return (
+        <UrlEditor
+          field={field}
+          onChange={onChange as (n: FieldUrl) => void}
+          onFieldBlur={onFieldBlur}
+        />
+      );
     default:
       return <div className="text-xs text-lp-text-secondary">Unknown field type.</div>;
   }
@@ -136,30 +205,79 @@ function Dispatcher({
 
 // ----- Per-type editors -----
 
-function TextEditor({ field, onChange }: { field: FieldText; onChange: (n: FieldText) => void }) {
+function TextEditor({
+  field,
+  onChange,
+  onFieldBlur,
+}: {
+  field: FieldText;
+  onChange: (n: FieldText) => void;
+  onFieldBlur?: () => void;
+}) {
+  const v = field.value ?? '';
+  const [draft, setDraft] = useState(v);
+  useEffect(() => {
+    setDraft(v);
+  }, [v]);
+
   return (
     <textarea
-      value={field.value ?? ''}
-      onChange={(e) => onChange({ ...field, value: e.target.value })}
+      value={draft}
+      onChange={(e) => {
+        const next = e.target.value;
+        setDraft(next);
+        onChange({ ...field, value: next });
+      }}
+      onBlur={() => onFieldBlur?.()}
       placeholder="Text..."
       className="min-h-[140px] w-full rounded-md border border-lp-border px-3 py-2 text-sm outline-none focus:border-lp-border-light"
     />
   );
 }
 
-function TimeEditor({ field, onChange }: { field: FieldTime; onChange: (n: FieldTime) => void }) {
+function TimeEditor({
+  field,
+  onChange,
+  onFieldBlur,
+}: {
+  field: FieldTime;
+  onChange: (n: FieldTime) => void;
+  onFieldBlur?: () => void;
+}) {
+  const v = field.value ?? '';
+  const tzV = field.tz ?? '';
+  const [valDraft, setValDraft] = useState(v);
+  const [tzDraft, setTzDraft] = useState(tzV);
+  useEffect(() => {
+    setValDraft(v);
+  }, [v]);
+  useEffect(() => {
+    setTzDraft(tzV);
+  }, [tzV]);
+
   return (
-    <div className="flex items-center gap-2">
+    <div
+      className="flex items-center gap-2"
+      onBlur={(e) => fireBlur(onFieldBlur, e)}
+    >
       <input
         type="time"
-        value={field.value ?? ''}
-        onChange={(e) => onChange({ ...field, value: e.target.value })}
+        value={valDraft}
+        onChange={(e) => {
+          const next = e.target.value;
+          setValDraft(next);
+          onChange({ ...field, value: next });
+        }}
         className="rounded-md border border-lp-border px-3 py-2 text-sm"
       />
       <input
         type="text"
-        value={field.tz ?? ''}
-        onChange={(e) => onChange({ ...field, tz: e.target.value })}
+        value={tzDraft}
+        onChange={(e) => {
+          const next = e.target.value;
+          setTzDraft(next);
+          onChange({ ...field, tz: next });
+        }}
         placeholder="Timezone (optional)"
         className="flex-1 rounded-md border border-lp-border px-3 py-2 text-sm"
       />
@@ -170,23 +288,51 @@ function TimeEditor({ field, onChange }: { field: FieldTime; onChange: (n: Field
 function CurrencyEditor({
   field,
   onChange,
+  onFieldBlur,
 }: {
   field: FieldCurrency;
   onChange: (n: FieldCurrency) => void;
+  onFieldBlur?: () => void;
 }) {
+  const [amountDraft, setAmountDraft] = useState(() =>
+    Number.isFinite(field.amount) ? String(field.amount) : '',
+  );
+  const [curDraft, setCurDraft] = useState(field.currency ?? 'USD');
+  const [lastAmount, setLastAmount] = useState(field.amount);
+  const [lastCurrency, setLastCurrency] = useState(field.currency);
+  if (field.amount !== lastAmount) {
+    setLastAmount(field.amount);
+    setAmountDraft(Number.isFinite(field.amount) ? String(field.amount) : '');
+  }
+  if (field.currency !== lastCurrency) {
+    setLastCurrency(field.currency);
+    setCurDraft(field.currency ?? 'USD');
+  }
+
   return (
-    <div className="flex items-center gap-2">
+    <div
+      className="flex items-center gap-2"
+      onBlur={(e) => fireBlur(onFieldBlur, e)}
+    >
       <input
         type="number"
-        value={Number.isFinite(field.amount) ? field.amount : 0}
-        onChange={(e) => onChange({ ...field, amount: Number(e.target.value) || 0 })}
+        value={amountDraft}
+        onChange={(e) => {
+          const s = e.target.value;
+          setAmountDraft(s);
+          onChange({ ...field, amount: Number(s) || 0 });
+        }}
         step="0.01"
         className="flex-1 rounded-md border border-lp-border px-3 py-2 text-sm"
       />
       <input
         type="text"
-        value={field.currency ?? 'USD'}
-        onChange={(e) => onChange({ ...field, currency: e.target.value.toUpperCase() })}
+        value={curDraft}
+        onChange={(e) => {
+          const next = e.target.value.toUpperCase();
+          setCurDraft(next);
+          onChange({ ...field, currency: next });
+        }}
         maxLength={3}
         className="w-20 rounded-md border border-lp-border px-3 py-2 text-sm uppercase"
       />
@@ -197,22 +343,50 @@ function CurrencyEditor({
 function NumberEditor({
   field,
   onChange,
+  onFieldBlur,
 }: {
   field: FieldNumber;
   onChange: (n: FieldNumber) => void;
+  onFieldBlur?: () => void;
 }) {
+  const [numDraft, setNumDraft] = useState(() =>
+    Number.isFinite(field.value) ? String(field.value) : '',
+  );
+  const [unitDraft, setUnitDraft] = useState(field.unit ?? '');
+  const [lastValue, setLastValue] = useState(field.value);
+  const [lastUnit, setLastUnit] = useState(field.unit);
+  if (field.value !== lastValue) {
+    setLastValue(field.value);
+    setNumDraft(Number.isFinite(field.value) ? String(field.value) : '');
+  }
+  if (field.unit !== lastUnit) {
+    setLastUnit(field.unit);
+    setUnitDraft(field.unit ?? '');
+  }
+
   return (
-    <div className="flex items-center gap-2">
+    <div
+      className="flex items-center gap-2"
+      onBlur={(e) => fireBlur(onFieldBlur, e)}
+    >
       <input
         type="number"
-        value={Number.isFinite(field.value) ? field.value : 0}
-        onChange={(e) => onChange({ ...field, value: Number(e.target.value) || 0 })}
+        value={numDraft}
+        onChange={(e) => {
+          const s = e.target.value;
+          setNumDraft(s);
+          onChange({ ...field, value: Number(s) || 0 });
+        }}
         className="flex-1 rounded-md border border-lp-border px-3 py-2 text-sm"
       />
       <input
         type="text"
-        value={field.unit ?? ''}
-        onChange={(e) => onChange({ ...field, unit: e.target.value })}
+        value={unitDraft}
+        onChange={(e) => {
+          const next = e.target.value;
+          setUnitDraft(next);
+          onChange({ ...field, unit: next });
+        }}
         placeholder="unit"
         className="w-28 rounded-md border border-lp-border px-3 py-2 text-sm"
       />
@@ -220,20 +394,50 @@ function NumberEditor({
   );
 }
 
-function UrlEditor({ field, onChange }: { field: FieldUrl; onChange: (n: FieldUrl) => void }) {
+function UrlEditor({
+  field,
+  onChange,
+  onFieldBlur,
+}: {
+  field: FieldUrl;
+  onChange: (n: FieldUrl) => void;
+  onFieldBlur?: () => void;
+}) {
+  const h = field.href ?? '';
+  const d = field.display_text ?? '';
+  const [hrefDraft, setHrefDraft] = useState(h);
+  const [displayDraft, setDisplayDraft] = useState(d);
+  useEffect(() => {
+    setHrefDraft(h);
+  }, [h]);
+  useEffect(() => {
+    setDisplayDraft(d);
+  }, [d]);
+
   return (
-    <div className="space-y-2">
+    <div
+      className="space-y-2"
+      onBlur={(e) => fireBlur(onFieldBlur, e)}
+    >
       <input
         type="url"
-        value={field.href ?? ''}
-        onChange={(e) => onChange({ ...field, href: e.target.value })}
+        value={hrefDraft}
+        onChange={(e) => {
+          const next = e.target.value;
+          setHrefDraft(next);
+          onChange({ ...field, href: next });
+        }}
         placeholder="https://..."
         className="w-full rounded-md border border-lp-border px-3 py-2 text-sm"
       />
       <input
         type="text"
-        value={field.display_text ?? ''}
-        onChange={(e) => onChange({ ...field, display_text: e.target.value })}
+        value={displayDraft}
+        onChange={(e) => {
+          const next = e.target.value;
+          setDisplayDraft(next);
+          onChange({ ...field, display_text: next });
+        }}
         placeholder="Link text (optional)"
         className="w-full rounded-md border border-lp-border px-3 py-2 text-sm"
       />
@@ -241,7 +445,15 @@ function UrlEditor({ field, onChange }: { field: FieldUrl; onChange: (n: FieldUr
   );
 }
 
-function TableEditor({ field, onChange }: { field: FieldTable; onChange: (n: FieldTable) => void }) {
+function TableEditor({
+  field,
+  onChange,
+  onFieldBlur,
+}: {
+  field: FieldTable;
+  onChange: (n: FieldTable) => void;
+  onFieldBlur?: () => void;
+}) {
   const columns = field.columns ?? [];
   const rows = field.rows ?? [];
 
@@ -249,12 +461,15 @@ function TableEditor({ field, onChange }: { field: FieldTable; onChange: (n: Fie
   const setRows = (next: typeof rows) => onChange({ ...field, rows: next });
 
   return (
-    <div className="space-y-2">
+    <div
+      className="space-y-2"
+      onBlur={(e) => fireBlur(onFieldBlur, e)}
+    >
       <div className="flex flex-wrap items-center gap-2 text-xs text-lp-text-secondary">
         <span>Columns:</span>
         {columns.map((c, i) => (
           <span
-            key={i}
+            key={c.key}
             className="inline-flex items-center gap-1 rounded px-2 py-0.5"
             style={{ backgroundColor: 'var(--lp-surface-hover)' }}
           >
@@ -265,6 +480,7 @@ function TableEditor({ field, onChange }: { field: FieldTable; onChange: (n: Fie
                 next[i] = { ...c, label: e.target.value };
                 setColumns(next);
               }}
+              onBlur={() => onFieldBlur?.()}
               className="w-24 bg-transparent outline-none"
             />
             <button
@@ -322,6 +538,7 @@ function TableEditor({ field, onChange }: { field: FieldTable; onChange: (n: Fie
                         next[rowIdx] = { ...row, [c.key]: e.target.value };
                         setRows(next);
                       }}
+                      onBlur={() => onFieldBlur?.()}
                       className="w-full rounded border border-transparent px-1 py-0.5 text-sm outline-none focus:border-lp-border"
                     />
                   </td>
@@ -355,13 +572,18 @@ function TableEditor({ field, onChange }: { field: FieldTable; onChange: (n: Fie
 function CheckboxListEditor({
   field,
   onChange,
+  onFieldBlur,
 }: {
   field: FieldCheckboxList;
   onChange: (n: FieldCheckboxList) => void;
+  onFieldBlur?: () => void;
 }) {
   const items = field.items ?? [];
   return (
-    <div className="space-y-1">
+    <div
+      className="space-y-1"
+      onBlur={(e) => fireBlur(onFieldBlur, e)}
+    >
       {items.map((item, i) => (
         <div key={item.key} className="flex items-center gap-2">
           <input
@@ -373,15 +595,14 @@ function CheckboxListEditor({
               onChange({ ...field, items: next });
             }}
           />
-          <input
-            type="text"
+          <CheckboxItemLabel
             value={item.label}
-            onChange={(e) => {
+            onChangeValue={(label) => {
               const next = [...items];
-              next[i] = { ...item, label: e.target.value };
+              next[i] = { ...item, label };
               onChange({ ...field, items: next });
             }}
-            className="flex-1 rounded-md border border-lp-border px-3 py-2 text-sm"
+            onFieldBlur={onFieldBlur}
           />
           <button
             type="button"
@@ -408,6 +629,35 @@ function CheckboxListEditor({
         + item
       </button>
     </div>
+  );
+}
+
+function CheckboxItemLabel({
+  value,
+  onChangeValue,
+  onFieldBlur,
+}: {
+  value: string;
+  onChangeValue: (v: string) => void;
+  onFieldBlur?: () => void;
+}) {
+  const [draft, setDraft] = useState(value);
+  useEffect(() => {
+    setDraft(value);
+  }, [value]);
+
+  return (
+    <input
+      type="text"
+      value={draft}
+      onChange={(e) => {
+        const next = e.target.value;
+        setDraft(next);
+        onChangeValue(next);
+      }}
+      onBlur={() => onFieldBlur?.()}
+      className="flex-1 rounded-md border border-lp-border px-3 py-2 text-sm"
+    />
   );
 }
 
@@ -441,10 +691,12 @@ function ContactEditor({
   field,
   onChange,
   tourId,
+  onFieldBlur,
 }: {
   field: FieldContact;
   onChange: (n: FieldContact) => void;
   tourId: string | null;
+  onFieldBlur?: () => void;
 }) {
   const [q, setQ] = useState('');
   const [picker, setPicker] = useState<{
@@ -507,7 +759,10 @@ function ContactEditor({
   };
 
   return (
-    <div className="space-y-2">
+    <div
+      className="space-y-2"
+      onBlur={(e) => fireBlur(onFieldBlur, e)}
+    >
       {entries.map((entry, i) => (
         <div
           key={i}
@@ -537,6 +792,7 @@ function ContactEditor({
                 next[i] = { ...entry, name: e.target.value };
                 onChange({ ...field, entries: next });
               }}
+              onBlur={() => onFieldBlur?.()}
               placeholder="Name"
               className="rounded-md border border-lp-border px-3 py-2 text-sm"
             />
@@ -548,6 +804,7 @@ function ContactEditor({
                 next[i] = { ...entry, role: e.target.value };
                 onChange({ ...field, entries: next });
               }}
+              onBlur={() => onFieldBlur?.()}
               placeholder="Role"
               className="rounded-md border border-lp-border px-3 py-2 text-sm"
             />
@@ -559,6 +816,7 @@ function ContactEditor({
                 next[i] = { ...entry, email: e.target.value };
                 onChange({ ...field, entries: next });
               }}
+              onBlur={() => onFieldBlur?.()}
               placeholder="Email"
               className="rounded-md border border-lp-border px-3 py-2 text-sm"
             />
@@ -570,6 +828,7 @@ function ContactEditor({
                 next[i] = { ...entry, phone: e.target.value };
                 onChange({ ...field, entries: next });
               }}
+              onBlur={() => onFieldBlur?.()}
               placeholder="Phone"
               className="rounded-md border border-lp-border px-3 py-2 text-sm"
             />
@@ -578,7 +837,10 @@ function ContactEditor({
       ))}
 
       {open ? (
-        <div className="space-y-2 rounded-md border border-lp-border bg-lp-surface p-2">
+        <div
+          className="space-y-2 rounded-md border border-lp-border bg-lp-surface p-2"
+          onClick={(e) => e.stopPropagation()}
+        >
           <input
             type="text"
             value={q}
@@ -587,7 +849,7 @@ function ContactEditor({
             className="w-full rounded-md border border-lp-border px-3 py-2 text-sm"
             autoFocus
           />
-          <div className="max-h-48 overflow-y-auto space-y-1">
+          <div className="max-h-48 space-y-1 overflow-y-auto">
             {picker?.tour_personnel?.length ? (
               <>
                 <div className="px-1 text-xs font-medium text-lp-text-secondary">On tour</div>

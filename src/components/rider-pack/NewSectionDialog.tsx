@@ -39,13 +39,21 @@ export default function NewSectionDialog({ open, onClose, onSubmit }: Props) {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
+      className="fixed inset-0 z-50 flex items-center justify-center"
+      style={{
+        backgroundColor: 'rgba(0, 0, 0, 0.55)',
+        backdropFilter: 'blur(4px)',
+        WebkitBackdropFilter: 'blur(4px)',
+      }}
       onClick={onClose}
     >
       <div
-        className="w-full max-w-md rounded-xl p-5"
-        style={{ backgroundColor: 'var(--lp-surface)', border: '1px solid var(--lp-border)' }}
+        className="mx-4 w-full max-w-md rounded-xl p-5"
+        style={{
+          backgroundColor: 'var(--lp-surface)',
+          border: '1px solid var(--lp-border)',
+          boxShadow: '0 10px 40px rgba(0,0,0,0.25)',
+        }}
         onClick={(event) => event.stopPropagation()}
       >
         <h2 className="text-sm font-semibold text-lp-text">New section</h2>

@@ -15,10 +15,11 @@
      'artist'   → inherited from artist (click to override)
    ============================================ */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type {
   Field,
   RiderPack,
+  RiderSection,
   ResolvedPack,
   ResolvedSection,
 } from '@/lib/rider-packs/types';
@@ -40,20 +41,42 @@ import {
   makeDefaultField,
 } from './FieldEditors';
 import type { PackContext } from './AssetPicker';
+import { PackStatCards } from './PackStatCards';
+import { useDebouncedSave, type SaveState } from './useDebouncedSave';
 import NewSectionDialog from './NewSectionDialog';
 
 type Props = {
   packId: string;
 };
 
+type SectionSavePayload = Partial<Pick<ResolvedSection, 'title' | 'sort_order' | 'fields' | 'section_key'>> & {
+  sectionId: string;
+};
+
+type SectionEditorBaseProps = {
+  section: ResolvedSection;
+  tourId: string | null;
+  packContext: PackContext;
+  savePill: { state: SaveState; error: string | null };
+  onTitleCommit: (title: string) => void;
+  onFieldsChange: (fields: Field[]) => void;
+  onFieldBlur: () => void;
+  onRemove: () => void;
+  onOverride: () => void;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+};
+
 export function PackEditor({ packId }: Props) {
   const [data, setData] = useState<ResolvedPack | null>(null);
   const [selected, setSelected] = useState<string | null>(null); // section_key
   const [error, setError] = useState<string | null>(null);
-  const [savingSection, setSavingSection] = useState(false);
   const [loading, setLoading] = useState(true);
   const [newSectionOpen, setNewSectionOpen] = useState(false);
   const [newSectionDialogKey, setNewSectionDialogKey] = useState(0);
+
+  const dataRef = useRef<ResolvedPack | null>(null);
+  dataRef.current = data;
 
   const refresh = useCallback(async () => {
     try {
@@ -76,6 +99,53 @@ export function PackEditor({ packId }: Props) {
     () => data?.sections.find((s) => s.section_key === selected) ?? null,
     [data, selected],
   );
+
+  const saveSection = useCallback(
+    async (payload: SectionSavePayload) => {
+      const { sectionId, title, sort_order, fields, section_key } = payload;
+      const restCount = [title, sort_order, fields, section_key].filter((v) => v !== undefined).length;
+      if (restCount === 0) return;
+      const sec = dataRef.current?.sections.find((x) => x.id === sectionId);
+      if (!sec || sec.inherited_from) {
+        if (sec?.inherited_from) {
+          alert('This section is inherited. Override it first.');
+        }
+        return;
+      }
+      const body: Partial<Pick<RiderSection, 'title' | 'sort_order' | 'fields' | 'section_key'>> = {};
+      if (title !== undefined) body.title = title;
+      if (sort_order !== undefined) body.sort_order = sort_order;
+      if (fields !== undefined) body.fields = fields;
+      if (section_key !== undefined) body.section_key = section_key;
+      if (Object.keys(body).length === 0) return;
+      const updated = await updateSection(packId, sectionId, body);
+      setData((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          pack: { ...prev.pack, updated_at: new Date().toISOString() },
+          sections: prev.sections.map((s) =>
+            s.id === sectionId
+              ? { ...s, ...updated, inherited_from: s.inherited_from, source_pack_id: s.source_pack_id }
+              : s,
+          ),
+        };
+      });
+    },
+    [packId],
+  );
+
+  const sectionSave = useDebouncedSave<SectionSavePayload>(saveSection, { delay: 800 });
+
+  const prevSelectedKey = useRef<string | null>(null);
+  const flushRef = useRef(sectionSave.flush);
+  flushRef.current = sectionSave.flush;
+  useEffect(() => {
+    if (prevSelectedKey.current !== null && prevSelectedKey.current !== selected) {
+      void flushRef.current();
+    }
+    prevSelectedKey.current = selected;
+  }, [selected]);
 
   // ----- Section mutations -----
 
@@ -152,26 +222,12 @@ export function PackEditor({ packId }: Props) {
     }
   };
 
-  // ----- Field mutations on the selected section -----
-
-  const saveSelectedSection = async (next: Partial<ResolvedSection>) => {
-    if (!selectedSection) return;
-    if (selectedSection.inherited_from) {
-      alert('This section is inherited. Override it first.');
-      return;
-    }
-    setSavingSection(true);
-    try {
-      await updateSection(packId, selectedSection.id, next);
-      await refresh();
-    } catch (e) {
-      alert(e instanceof Error ? e.message : 'Failed to save');
-    } finally {
-      setSavingSection(false);
-    }
-  };
-
   // ----- Render -----
+
+  const fieldCount = useMemo(
+    () => (data ? data.sections.reduce((n, s) => n + (s.fields?.length ?? 0), 0) : 0),
+    [data],
+  );
 
   if (loading) return <div className="p-6 text-sm text-lp-text-secondary">Loading...</div>;
   if (error) return <div className="p-6 text-sm text-lp-error">{error}</div>;
@@ -186,7 +242,17 @@ export function PackEditor({ packId }: Props) {
   };
 
   return (
-    <div className="grid h-[calc(100vh-120px)] grid-cols-[220px_1fr_280px] gap-0 border-t border-lp-border bg-lp-surface">
+    <div className="flex h-[calc(100vh-120px)] min-h-0 flex-col border-t border-lp-border bg-lp-surface">
+      <div className="shrink-0 border-b border-lp-border px-4 py-3">
+        <PackStatCards
+          sectionCount={data.sections.length}
+          fieldCount={fieldCount}
+          updatedAt={data.pack.updated_at}
+          exportStatus={data.pack.google_doc_url ? 'exported' : 'never'}
+          shareLinkCount={0}
+        />
+      </div>
+      <div className="grid min-h-0 flex-1 grid-cols-[220px_1fr_280px] gap-0">
       {/* LEFT: section list */}
       <aside className="overflow-y-auto border-r border-lp-border bg-lp-surface">
         <div className="p-3 flex items-center justify-between">
@@ -236,9 +302,35 @@ export function PackEditor({ packId }: Props) {
             section={selectedSection}
             tourId={data.pack.tour_id}
             packContext={packContext}
-            saving={savingSection}
-            onTitleChange={(title) => saveSelectedSection({ title })}
-            onFieldsChange={(fields) => saveSelectedSection({ fields })}
+            savePill={{ state: sectionSave.state, error: sectionSave.error }}
+            onTitleCommit={(title) => {
+              setData((prev) => {
+                if (!prev) return prev;
+                return {
+                  ...prev,
+                  sections: prev.sections.map((s) =>
+                    s.id === selectedSection.id ? { ...s, title } : s,
+                  ),
+                };
+              });
+              sectionSave.schedule({ sectionId: selectedSection.id, title });
+              void sectionSave.flush();
+            }}
+            onFieldsChange={(fields) => {
+              setData((prev) => {
+                if (!prev) return prev;
+                return {
+                  ...prev,
+                  sections: prev.sections.map((s) =>
+                    s.id === selectedSection.id ? { ...s, fields } : s,
+                  ),
+                };
+              });
+              sectionSave.schedule({ sectionId: selectedSection.id, fields });
+            }}
+            onFieldBlur={() => {
+              void sectionSave.flush();
+            }}
             onRemove={() => handleRemoveSection(selectedSection)}
             onOverride={() => handleOverrideSection(selectedSection)}
             onMoveUp={() => handleMoveSection(selectedSection, -1)}
@@ -263,6 +355,7 @@ export function PackEditor({ packId }: Props) {
           }}
         />
       </aside>
+      </div>
       <NewSectionDialog
         key={newSectionDialogKey}
         open={newSectionOpen}
@@ -273,32 +366,50 @@ export function PackEditor({ packId }: Props) {
   );
 }
 
+function SaveStatePill({
+  state,
+  error,
+}: {
+  state: 'idle' | 'pending' | 'saving' | 'saved' | 'error';
+  error: string | null;
+}) {
+  if (state === 'idle') return null;
+  const config = {
+    pending: { label: 'Unsaved changes', color: 'var(--lp-text-tertiary)' },
+    saving: { label: 'Saving…', color: 'var(--lp-text-secondary)' },
+    saved: { label: 'Saved', color: 'var(--lp-orange)' },
+    error: { label: error || 'Save failed', color: 'var(--lp-error)' },
+  }[state];
+  return (
+    <span
+      title={state === 'error' && error ? error : undefined}
+      className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide"
+      style={{
+        color: config.color,
+        border: `1px solid ${config.color}`,
+        backgroundColor: 'transparent',
+      }}
+    >
+      <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: config.color }} />
+      {config.label}
+    </span>
+  );
+}
+
 function SectionEditor({
   section,
   tourId,
   packContext,
-  saving,
-  onTitleChange,
+  savePill,
+  onTitleCommit,
   onFieldsChange,
+  onFieldBlur,
   onRemove,
   onOverride,
   onMoveUp,
   onMoveDown,
-}: {
-  section: ResolvedSection;
-  tourId: string | null;
-  packContext: PackContext;
-  saving: boolean;
-  onTitleChange: (title: string) => void;
-  onFieldsChange: (fields: Field[]) => void;
-  onRemove: () => void;
-  onOverride: () => void;
-  onMoveUp: () => void;
-  onMoveDown: () => void;
-}) {
+}: SectionEditorBaseProps) {
   const [titleDraft, setTitleDraft] = useState(section.title);
-  // Reset draft when the upstream prop changes (e.g. after refresh) without
-  // an effect — see https://react.dev/reference/react/useState#storing-information-from-previous-renders
   const [lastSyncedTitle, setLastSyncedTitle] = useState(section.title);
   if (lastSyncedTitle !== section.title) {
     setLastSyncedTitle(section.title);
@@ -309,28 +420,29 @@ function SectionEditor({
   const fields = section.fields ?? [];
 
   return (
-    <div className="max-w-3xl mx-auto space-y-4">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex-1">
+    <div
+      className="mx-auto max-w-3xl overflow-hidden rounded-xl border"
+      style={{ backgroundColor: 'var(--lp-surface)', borderColor: 'var(--lp-border)' }}
+    >
+      <div
+        className="flex items-center justify-between gap-2 border-b px-4 py-3"
+        style={{ borderColor: 'var(--lp-border)' }}
+      >
+        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
           <input
             type="text"
             value={titleDraft}
             onChange={(e) => setTitleDraft(e.target.value)}
             onBlur={() => {
-              if (titleDraft !== section.title && !inherited) onTitleChange(titleDraft);
+              if (titleDraft !== section.title && !inherited) onTitleCommit(titleDraft);
             }}
             disabled={inherited}
-            className="w-full border-b border-transparent bg-transparent text-2xl font-semibold text-lp-text outline-none focus:border-lp-border disabled:text-lp-text-tertiary"
+            className="min-w-0 max-w-md flex-1 border-b border-transparent bg-transparent text-sm font-semibold text-lp-text outline-none focus:border-lp-border disabled:text-lp-text-tertiary"
+            placeholder="Section title"
           />
-          <div className="mt-1 text-xs text-lp-text-secondary">
-            {inherited ? (
-              <>Inherited from {section.inherited_from}. </>
-            ) : (
-              <>{saving ? 'Saving…' : 'Authored here.'} </>
-            )}
-          </div>
+          <SaveStatePill state={savePill.state} error={savePill.error} />
         </div>
-        <div className="flex items-center gap-1 pt-2 text-xs">
+        <div className="flex shrink-0 items-center gap-1 text-xs">
           <button
             type="button"
             onClick={onMoveUp}
@@ -351,7 +463,7 @@ function SectionEditor({
               onClick={onOverride}
               className="rounded bg-[var(--lp-orange)] px-2 py-1 text-white hover:opacity-90"
             >
-              Override here
+              Override
             </button>
           ) : (
             <button
@@ -365,25 +477,37 @@ function SectionEditor({
           )}
         </div>
       </div>
+      {inherited && (
+        <div className="border-b px-4 py-2 text-xs text-lp-text-secondary" style={{ borderColor: 'var(--lp-border)' }}>
+          Inherited from {section.inherited_from}. Override to edit here.
+        </div>
+      )}
 
-      <fieldset disabled={inherited} className={inherited ? 'opacity-60 pointer-events-none' : ''}>
-        <div className="space-y-2">
+      <fieldset disabled={inherited} className={inherited ? 'pointer-events-none opacity-60' : ''}>
+        <div>
           {fields.map((f, i) => (
-            <FieldEditor
-              key={i}
-              field={f}
-              tourId={tourId}
-              packContext={packContext}
-              onChange={(next) => {
-                const copy = [...fields];
-                copy[i] = next;
-                onFieldsChange(copy);
-              }}
-              onRemove={() => onFieldsChange(fields.filter((_, j) => j !== i))}
-            />
+            <div
+              key={f.key}
+              className="border-b border-lp-border px-4 py-3 transition-colors last:border-b-0 hover:bg-lp-surface-hover"
+            >
+              <FieldEditor
+                field={f}
+                tourId={tourId}
+                packContext={packContext}
+                onFieldBlur={onFieldBlur}
+                onChange={(next) => {
+                  const copy = [...fields];
+                  copy[i] = next;
+                  onFieldsChange(copy);
+                }}
+                onRemove={() => onFieldsChange(fields.filter((_, j) => j !== i))}
+              />
+            </div>
           ))}
         </div>
-        <AddFieldDropdown onAdd={(type) => onFieldsChange([...fields, makeDefaultField(type)])} />
+        <div className="px-4 pb-4">
+          <AddFieldDropdown onAdd={(type) => onFieldsChange([...fields, makeDefaultField(type)])} />
+        </div>
       </fieldset>
     </div>
   );
