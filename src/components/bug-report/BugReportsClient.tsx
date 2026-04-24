@@ -15,6 +15,7 @@ import {
   CheckCircle2,
   Eye,
   EyeOff,
+  FolderDown,
   Image as ImageIcon,
   ImageOff,
   Loader2,
@@ -25,6 +26,15 @@ import {
 } from 'lucide-react';
 import { BrandedSelect } from '@/components/ui/BrandedSelect';
 import { cn } from '@/lib/utils';
+import {
+  buildBundle,
+  exportBundleToFolder,
+  exportBundleToZip,
+  isDirectoryPickerSupported,
+  selectTopCritical,
+  toPngBlob,
+  type ExportProgress,
+} from './bulk-export';
 import {
   SEVERITY_META,
   SEVERITY_ORDER,
@@ -135,28 +145,6 @@ async function copyToClipboard(text: string): Promise<boolean> {
 }
 
 /**
- * Re-encode any supported image blob to PNG. The async clipboard only
- * accepts a narrow set of MIME types and PNG is the universal one, so
- * we always normalise before calling navigator.clipboard.write().
- */
-async function toPngBlob(source: Blob): Promise<Blob> {
-  if (source.type === 'image/png') return source;
-  const bitmap = await createImageBitmap(source);
-  const canvas = document.createElement('canvas');
-  canvas.width = bitmap.width;
-  canvas.height = bitmap.height;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) throw new Error('2d context unavailable');
-  ctx.drawImage(bitmap, 0, 0);
-  return await new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob(
-      (b) => (b ? resolve(b) : reject(new Error('png encode failed'))),
-      'image/png',
-    );
-  });
-}
-
-/**
  * Copy just the screenshot (as PNG) to the clipboard so the user can
  * paste it into the Cursor/Claude chat as an attachment. We keep text
  * and image on separate buttons because Cursor's paste handler picks
@@ -212,6 +200,45 @@ export function BugReportsClient() {
   // report so the panel can keep rendering content while sliding out.
   const [cachedReport, setCachedReport] = useState<BugReport | null>(null);
   const [panelOpen, setPanelOpen] = useState(false);
+
+  const [exporting, setExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState<ExportProgress | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
+
+  const handleBulkExport = useCallback(async () => {
+    if (exporting) return;
+    if (!reports?.length) return;
+    setExporting(true);
+    setExportError(null);
+    try {
+      const top = selectTopCritical(reports, 10);
+      if (top.length === 0) {
+        setExportError('No bugs to export.');
+        return;
+      }
+
+      const bundle = await buildBundle(top, setExportProgress);
+
+      if (isDirectoryPickerSupported()) {
+        try {
+          await exportBundleToFolder(bundle, setExportProgress);
+        } catch (err) {
+          if (err instanceof DOMException && err.name === 'AbortError') {
+            return;
+          }
+          console.warn('[bulk-export] folder mode failed, falling back to zip', err);
+          await exportBundleToZip(bundle, setExportProgress);
+        }
+      } else {
+        await exportBundleToZip(bundle, setExportProgress);
+      }
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : 'Export failed');
+    } finally {
+      setExporting(false);
+      setExportProgress(null);
+    }
+  }, [exporting, reports]);
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -437,6 +464,33 @@ export function BugReportsClient() {
         <div className="flex-1" />
         <button
           type="button"
+          onClick={handleBulkExport}
+          disabled={exporting || !reports || reports.length === 0}
+          className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition-colors disabled:opacity-50"
+          style={{
+            backgroundColor: 'var(--lp-bg-secondary)',
+            border: '1px solid var(--lp-border)',
+            color: 'var(--lp-text)',
+          }}
+          title={
+            isDirectoryPickerSupported()
+              ? 'Export top 10 critical bugs into a folder you pick'
+              : 'Export top 10 critical bugs as a ZIP download'
+          }
+        >
+          {exporting ? (
+            <Loader2 size={14} className="animate-spin" />
+          ) : (
+            <FolderDown size={14} />
+          )}
+          {exporting
+            ? exportProgress
+              ? `${exportProgress.stage === 'fetching' ? 'Fetching' : exportProgress.stage === 'writing' ? 'Writing' : 'Done'} ${exportProgress.current}/${exportProgress.total}`
+              : 'Exporting…'
+            : 'Export top 10'}
+        </button>
+        <button
+          type="button"
           onClick={() => load(true)}
           disabled={refreshing}
           className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold"
@@ -450,6 +504,24 @@ export function BugReportsClient() {
           Refresh
         </button>
       </div>
+
+      {exportError && (
+        <div
+          className="rounded-md border px-3 py-2 text-xs"
+          style={{
+            backgroundColor: 'color-mix(in srgb, var(--color-lp-error) 10%, transparent)',
+            borderColor: 'var(--color-lp-error)',
+            color: 'var(--lp-text)',
+          }}
+        >
+          <div className="font-semibold" style={{ color: 'var(--color-lp-error)' }}>
+            Export failed
+          </div>
+          <div className="mt-0.5" style={{ color: 'var(--lp-text-secondary)' }}>
+            {exportError}
+          </div>
+        </div>
+      )}
 
       {error && (
         <div
