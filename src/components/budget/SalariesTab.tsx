@@ -741,20 +741,36 @@ export function SalariesTab({
                   <span className="text-lp-text">Personnel</span> or the tour personnel view first.
                 </p>
               ) : (
-                <BrandedSelect
-                  value={newMember.roster_id}
-                  onChange={(v) => setNewMember((prev) => ({ ...prev, roster_id: v }))}
-                  options={[
-                    { value: '', label: 'Select from roster…' },
-                    ...availableRoster.map((person) => ({
-                      value: person.id,
-                      label: `${person.name} (${person.lp_id})`,
-                    })),
-                  ]}
-                  placeholder="Select from roster…"
-                  ariaLabel="Roster member"
-                  className="sm:col-span-2"
-                />
+                <div className="flex min-w-0 flex-col gap-1.5 sm:col-span-2">
+                  <BrandedSelect
+                    value={newMember.roster_id}
+                    onChange={(v) => setNewMember((prev) => ({ ...prev, roster_id: v }))}
+                    options={[
+                      { value: '', label: 'Select from roster…' },
+                      ...availableRoster.map((person) => ({
+                        value: person.id,
+                        label: `${person.name} (${person.lp_id})`,
+                      })),
+                    ]}
+                    placeholder="Select from roster…"
+                    ariaLabel="Roster member"
+                    className="w-full"
+                  />
+                  <div className="flex flex-col gap-0.5 text-xs">
+                    <Link
+                      href="/personnel"
+                      className="w-fit font-medium text-lp-orange hover:underline"
+                    >
+                      Add new person to roster
+                    </Link>
+                    <Link
+                      href={`/tours/${tourId}/personnel`}
+                      className="w-fit text-lp-text-tertiary hover:text-lp-text hover:underline"
+                    >
+                      Tour personnel (assign to this tour)
+                    </Link>
+                  </div>
+                </div>
               )}
               <BrandedSelect
                 value={newMember.person_type}
