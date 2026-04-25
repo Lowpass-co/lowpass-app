@@ -64,10 +64,13 @@ export type ExportProgress = {
 
 /**
  * Returns up to `count` reports, ranked critical > high > medium > low,
- * then by created_at DESC. Status is ignored.
+ * then by created_at DESC. Excludes resolved and won't-fix.
  */
 export function selectTopCritical(reports: BugReport[], count = 10): BugReport[] {
-  return [...reports]
+  const eligible = reports.filter(
+    (r) => r.status !== 'resolved' && r.status !== 'wont_fix',
+  );
+  return [...eligible]
     .sort((a, b) => {
       const rankDiff =
         SEVERITY_ORDER.indexOf(a.severity) - SEVERITY_ORDER.indexOf(b.severity);

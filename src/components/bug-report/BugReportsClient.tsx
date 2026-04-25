@@ -205,41 +205,6 @@ export function BugReportsClient() {
   const [exportProgress, setExportProgress] = useState<ExportProgress | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
 
-  const handleBulkExport = useCallback(async () => {
-    if (exporting) return;
-    if (!reports?.length) return;
-    setExporting(true);
-    setExportError(null);
-    try {
-      const top = selectTopCritical(reports, 10);
-      if (top.length === 0) {
-        setExportError('No bugs to export.');
-        return;
-      }
-
-      const bundle = await buildBundle(top, setExportProgress);
-
-      if (isDirectoryPickerSupported()) {
-        try {
-          await exportBundleToFolder(bundle, setExportProgress);
-        } catch (err) {
-          if (err instanceof DOMException && err.name === 'AbortError') {
-            return;
-          }
-          console.warn('[bulk-export] folder mode failed, falling back to zip', err);
-          await exportBundleToZip(bundle, setExportProgress);
-        }
-      } else {
-        await exportBundleToZip(bundle, setExportProgress);
-      }
-    } catch (err) {
-      setExportError(err instanceof Error ? err.message : 'Export failed');
-    } finally {
-      setExporting(false);
-      setExportProgress(null);
-    }
-  }, [exporting, reports]);
-
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     else setRefreshing(true);
@@ -380,6 +345,58 @@ export function BugReportsClient() {
     []
   );
 
+  const handleBulkExport = useCallback(async () => {
+    if (exporting) return;
+    if (!reports?.length) return;
+    setExporting(true);
+    setExportError(null);
+    try {
+      const top = selectTopCritical(reports, 10);
+      if (top.length === 0) {
+        setExportError('No eligible bugs to export (resolved and won\'t fix are excluded).');
+        return;
+      }
+
+      const bundle = await buildBundle(top, setExportProgress);
+
+      if (isDirectoryPickerSupported()) {
+        try {
+          await exportBundleToFolder(bundle, setExportProgress);
+        } catch (err) {
+          if (err instanceof DOMException && err.name === 'AbortError') {
+            return;
+          }
+          console.warn('[bulk-export] folder mode failed, falling back to zip', err);
+          await exportBundleToZip(bundle, setExportProgress);
+        }
+      } else {
+        await exportBundleToZip(bundle, setExportProgress);
+      }
+
+      const resps = await Promise.all(
+        top.map(t =>
+          fetch(`/api/bug-reports/${t.id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: 'in_progress' }),
+          })
+        )
+      );
+      const failed = resps.filter(r => !r.ok);
+      if (failed.length > 0) {
+        setExportError(
+          'Export completed, but some reports could not be set to In progress. Use Refresh, then set status manually if needed.',
+        );
+      }
+      await load(true);
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : 'Export failed');
+    } finally {
+      setExporting(false);
+      setExportProgress(null);
+    }
+  }, [exporting, reports, load]);
+
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
       <StatCards counts={counts} />
@@ -491,8 +508,8 @@ export function BugReportsClient() {
           }}
           title={
             isDirectoryPickerSupported()
-              ? 'Export top 10 critical bugs into a folder you pick'
-              : 'Export top 10 critical bugs as a ZIP download'
+              ? 'Top 10 by severity (excludes resolved & won\'t fix), mark as In progress, pick a folder'
+              : 'Top 10 by severity (excludes resolved & won\'t fix), mark as In progress, download ZIP'
           }
         >
           {exporting ? (
