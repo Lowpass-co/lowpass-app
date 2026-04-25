@@ -72,6 +72,7 @@ export async function POST(request: Request) {
     .insert({
       reporter_id: user.id,
       workspace_id: profile?.workspace_id ?? null,
+      status: 'open', // avoid legacy DB default `new` which violates status CHECK
       title: str(formData.get('title'), 200),
       description,
       steps_to_reproduce: str(formData.get('stepsToReproduce'), MAX_DESCRIPTION),
