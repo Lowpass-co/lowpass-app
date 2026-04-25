@@ -744,12 +744,6 @@ function Inspector({
     <div className="flex flex-col gap-4 text-sm text-lp-text lg:flex-row lg:flex-wrap lg:items-start lg:gap-x-8 lg:gap-y-3">
       <div className="flex min-w-0 flex-wrap items-end gap-4">
         <div>
-          <div className="text-[10px] uppercase tracking-widest text-lp-text-tertiary">Scope</div>
-          <div className="mt-1 inline-flex items-center rounded-full border border-lp-border bg-lp-bg-secondary px-2 py-0.5 text-xs font-semibold uppercase text-lp-text">
-            {pack.scope}
-          </div>
-        </div>
-        <div>
           <div className="text-[10px] uppercase tracking-widest text-lp-text-tertiary">Last edit</div>
           <p className="mt-1 text-sm text-lp-text" title={pack.updated_at ?? undefined}>
             {lastEditLabel}
