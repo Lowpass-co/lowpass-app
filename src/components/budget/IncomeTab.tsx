@@ -756,18 +756,6 @@ export function IncomeTab({ tourId }: { tourId: string }) {
           <div className="flex w-fit items-center gap-5 border-b border-lp-border/50">
             <button
               type="button"
-              onClick={() => setActiveSubTab('routing')}
-              className={cn(
-                '-mb-px border-b-2 pb-2 text-xs font-semibold uppercase tracking-wide transition-colors',
-                activeSubTab === 'routing'
-                  ? 'border-lp-orange text-lp-text'
-                  : 'border-transparent text-lp-text-secondary hover:text-lp-text'
-              )}
-            >
-              Routing
-            </button>
-            <button
-              type="button"
               onClick={() => setActiveSubTab('income')}
               className={cn(
                 '-mb-px border-b-2 pb-2 text-xs font-semibold uppercase tracking-wide transition-colors',
@@ -777,6 +765,18 @@ export function IncomeTab({ tourId }: { tourId: string }) {
               )}
             >
               Income
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('routing')}
+              className={cn(
+                '-mb-px border-b-2 pb-2 text-xs font-semibold uppercase tracking-wide transition-colors',
+                activeSubTab === 'routing'
+                  ? 'border-lp-orange text-lp-text'
+                  : 'border-transparent text-lp-text-secondary hover:text-lp-text'
+              )}
+            >
+              Routing
             </button>
           </div>
           {activeSubTab === 'routing' && routingAutosaveState === 'error' && (
@@ -788,11 +788,11 @@ export function IncomeTab({ tourId }: { tourId: string }) {
       <div className="min-h-0 flex-1 space-y-7 overflow-y-auto overscroll-y-contain py-2">
       {activeSubTab === 'routing' && (
         <>
-          <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(260px,300px)_1fr] lg:items-stretch lg:gap-6 lg:h-[280px]">
-            <div className="relative z-0 flex min-h-[220px] flex-col overflow-y-auto rounded-xl border border-lp-border bg-lp-surface p-3 shadow-sm lg:min-h-0 lg:h-full">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(220px,260px)_1fr] lg:items-stretch lg:gap-4 lg:h-[200px]">
+            <div className="relative z-0 flex min-h-[180px] flex-col overflow-y-auto rounded-xl border border-lp-border bg-lp-surface p-2 shadow-sm lg:min-h-0 lg:h-full">
               <RoutingMiniCalendar key={tourId} routingRows={calRows} />
             </div>
-            <div className="relative z-0 flex min-h-[220px] min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-lp-border bg-lp-surface shadow-sm lg:min-h-0 lg:h-full">
+            <div className="relative z-0 flex min-h-[180px] min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-lp-border bg-lp-surface shadow-sm lg:min-h-0 lg:h-full">
               <BudgetRoutingMap rows={calRows} />
             </div>
           </div>
