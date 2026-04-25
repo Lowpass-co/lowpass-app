@@ -42,7 +42,7 @@ import {
 } from './FieldEditors';
 import type { PackContext } from './AssetPicker';
 import { RiderTemplateSuggestions } from './RiderTemplateSuggestions';
-import { useDebouncedSave, type SaveState } from './useDebouncedSave';
+import { useDebouncedSave } from '@/hooks/useDebouncedSave';
 import NewSectionDialog from './NewSectionDialog';
 import { formatRelativeTime } from '@/lib/format-relative';
 
@@ -54,11 +54,13 @@ type SectionSavePayload = Partial<Pick<ResolvedSection, 'title' | 'sort_order' |
   sectionId: string;
 };
 
+export type SavePillState = 'idle' | 'pending' | 'saving' | 'saved' | 'error';
+
 type SectionEditorBaseProps = {
   section: ResolvedSection;
   tourId: string | null;
   packContext: PackContext;
-  savePill: { state: SaveState; error: string | null };
+  savePill: { state: SavePillState; error: string | null };
   onTitleCommit: (title: string) => void;
   onFieldsChange: (fields: Field[]) => void;
   onFieldBlur: () => void;
@@ -101,6 +103,7 @@ export function PackEditor({ packId }: Props) {
     [data, selected],
   );
 
+  /** Field-level saves are optimistic; structural changes (add/remove/reorder) call `refresh()` separately. */
   const saveSection = useCallback(
     async (payload: SectionSavePayload) => {
       const { sectionId, title, sort_order, fields, section_key } = payload;
@@ -136,17 +139,57 @@ export function PackEditor({ packId }: Props) {
     [packId],
   );
 
-  const sectionSave = useDebouncedSave<SectionSavePayload>(saveSection, { delay: 800 });
+  const [savePill, setSavePill] = useState<{ state: SavePillState; error: string | null }>({
+    state: 'idle',
+    error: null,
+  });
+  const savedResetTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const runSectionSave = useCallback(
+    async (payload: SectionSavePayload) => {
+      if (savedResetTimer.current) {
+        clearTimeout(savedResetTimer.current);
+        savedResetTimer.current = null;
+      }
+      setSavePill({ state: 'saving', error: null });
+      try {
+        await saveSection(payload);
+        setSavePill({ state: 'saved', error: null });
+        savedResetTimer.current = setTimeout(() => setSavePill({ state: 'idle', error: null }), 1500);
+      } catch (e) {
+        setSavePill({ state: 'error', error: e instanceof Error ? e.message : 'Save failed' });
+      }
+    },
+    [saveSection],
+  );
+
+  const { schedule: debouncedRunSave, flush: flushSectionSave } = useDebouncedSave(
+    runSectionSave,
+    400,
+  );
+  const sectionMergeRef = useRef<Partial<SectionSavePayload> & { sectionId: string }>({ sectionId: '' });
+
+  const scheduleSectionSave = useCallback(
+    (patch: Partial<SectionSavePayload> & { sectionId: string }) => {
+      sectionMergeRef.current = { ...sectionMergeRef.current, ...patch };
+      setSavePill((p) => (p.state === 'saving' ? p : { state: 'pending', error: null }));
+      debouncedRunSave(sectionMergeRef.current as SectionSavePayload);
+    },
+    [debouncedRunSave],
+  );
 
   const prevSelectedKey = useRef<string | null>(null);
-  const flushRef = useRef(sectionSave.flush);
-  flushRef.current = sectionSave.flush;
+  const flushRef = useRef(flushSectionSave);
+  flushRef.current = flushSectionSave;
   useEffect(() => {
     if (prevSelectedKey.current !== null && prevSelectedKey.current !== selected) {
       void flushRef.current();
     }
     prevSelectedKey.current = selected;
-  }, [selected]);
+    if (selectedSection) {
+      sectionMergeRef.current = { sectionId: selectedSection.id };
+    }
+  }, [selected, selectedSection]);
 
   // ----- Section mutations -----
 
@@ -296,7 +339,7 @@ export function PackEditor({ packId }: Props) {
             section={selectedSection}
             tourId={data.pack.tour_id}
             packContext={packContext}
-            savePill={{ state: sectionSave.state, error: sectionSave.error }}
+            savePill={savePill}
             onTitleCommit={(title) => {
               setData((prev) => {
                 if (!prev) return prev;
@@ -307,8 +350,8 @@ export function PackEditor({ packId }: Props) {
                   ),
                 };
               });
-              sectionSave.schedule({ sectionId: selectedSection.id, title });
-              void sectionSave.flush();
+              scheduleSectionSave({ sectionId: selectedSection.id, title });
+              void flushSectionSave();
             }}
             onFieldsChange={(fields) => {
               setData((prev) => {
@@ -320,10 +363,10 @@ export function PackEditor({ packId }: Props) {
                   ),
                 };
               });
-              sectionSave.schedule({ sectionId: selectedSection.id, fields });
+              scheduleSectionSave({ sectionId: selectedSection.id, fields });
             }}
             onFieldBlur={() => {
-              void sectionSave.flush();
+              void flushSectionSave();
             }}
             onRemove={() => handleRemoveSection(selectedSection)}
             onOverride={() => handleOverrideSection(selectedSection)}

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 export type DebouncedSave<T> = {
   schedule: (value: T) => void;
@@ -111,5 +111,8 @@ export function useDebouncedSave<T>(saveFn: (value: T) => Promise<void>, delayMs
     }
   }, [saveFn, cancel]);
 
-  return { schedule, flush, cancel, isPending };
+  return useMemo(
+    () => ({ schedule, flush, cancel, isPending }),
+    [schedule, flush, cancel, isPending],
+  );
 }
