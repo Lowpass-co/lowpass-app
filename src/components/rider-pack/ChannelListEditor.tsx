@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import {
   DndContext,
   PointerSensor,
@@ -11,7 +11,7 @@ import {
 } from '@dnd-kit/core';
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Check, ChevronRight, GripVertical, MoreHorizontal } from 'lucide-react';
+import { Check, GripVertical } from 'lucide-react';
 import { useDebouncedSave } from '@/hooks/useDebouncedSave';
 import { createClient } from '@/lib/supabase-client';
 import type {
@@ -38,6 +38,24 @@ const ADD_BTN_STYLE = {
   border: '1px solid var(--lp-border)',
   color: 'var(--lp-text)',
 } as const;
+
+/** Aligned header + data rows: all channel fields visible (no row “more” menu or expand). */
+const CHANNEL_ROW_GRID: CSSProperties = {
+  gridTemplateColumns:
+    '6px 24px 32px minmax(10rem,1.45fr) minmax(5.5rem,0.72fr) minmax(4.5rem,0.68fr) minmax(2.75rem,0.42fr) minmax(3.5rem,0.5fr) minmax(5.5rem,0.95fr) minmax(3.75rem,0.6fr) minmax(3.5rem,0.55fr) 2.25rem minmax(4.5rem,0.55fr) minmax(7rem,1.1fr) 4.5rem',
+};
+
+function countWirelessHint(rows: ChannelListRow[]) {
+  return rows.filter((r) =>
+    /\bRF\d?\b|wireless|W\/L|IEM|belt-?pack/i.test(
+      [r.channel_name, r.mic, r.position, r.mic_substitute, r.notes, r.stand, r.di].join(' '),
+    ),
+  ).length;
+}
+
+function countDiFilled(rows: ChannelListRow[]) {
+  return rows.filter((r) => (r.di ?? '').trim().length > 0).length;
+}
 
 type Props = {
   section: ResolvedSection;
@@ -83,11 +101,9 @@ export default function ChannelListEditor({
   const [rows, setRows] = useState<ChannelListRow[]>(section.rows ?? []);
   const subSnakes = section.subSnakes ?? [];
   const stageIOs = section.stageIOs ?? [];
-  const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
   const [subDialog, setSubDialog] = useState(false);
   const [stageDialog, setStageDialog] = useState(false);
   const [mics, setMics] = useState<MicLibraryEntry[]>([]);
-  const [rowMenu, setRowMenu] = useState<string | null>(null);
   const inherited = !!section.inherited_from;
 
   useEffect(() => {
@@ -132,7 +148,7 @@ export default function ChannelListEditor({
 
   return (
     <div
-      className="w-full overflow-hidden rounded-xl border"
+      className="w-full max-w-full min-w-0 overflow-hidden rounded-xl border"
       style={{ backgroundColor: 'var(--lp-surface)', borderColor: 'var(--lp-border)' }}
     >
       <div
@@ -212,54 +228,68 @@ export default function ChannelListEditor({
       )}
 
       <div className={inherited ? 'pointer-events-none opacity-60' : ''}>
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => void handleDragEnd(e)}>
-          <div className="w-full">
+        <div className="grid grid-cols-2 gap-2 border-b border-lp-border px-3 py-3 sm:grid-cols-4" style={{ borderColor: 'var(--lp-border)' }}>
+          {[
+            { k: 'channels', label: 'Channels', value: String(rows.length) },
+            { k: 'wireless', label: 'Wireless / RF (hint)', value: String(countWirelessHint(rows)) },
+            { k: 'boxes', label: 'Sub-snakes (boxes)', value: String(subSnakes.length) },
+            { k: 'di', label: 'DI / cable (filled)', value: String(countDiFilled(rows)) },
+          ].map((c) => (
             <div
-              className="grid w-full gap-0 border-b border-lp-border bg-lp-surface text-[10px] font-bold uppercase tracking-wider text-lp-text-tertiary"
-              style={{
-                gridTemplateColumns:
-                  '6px 22px 26px minmax(6rem,1.1fr) minmax(5.5rem,0.75fr) minmax(4rem,0.55fr) minmax(3.5rem,0.45fr) minmax(5rem,0.75fr) 2rem 24px',
-              }}
+              key={c.k}
+              className="rounded-lg px-3 py-2"
+              style={{ backgroundColor: 'var(--lp-bg)', border: '1px solid var(--lp-border)' }}
             >
-              <div />
-              <div />
-              <div className="py-2 pl-0.5">#</div>
-              <div className="py-2 pl-1">Channel</div>
-              <div className="py-2">Sub-snake</div>
-              <div className="py-2">I/O</div>
-              <div className="py-2">Pos</div>
-              <div className="py-2">Mic</div>
-              <div className="py-2 text-center">+48</div>
-              <div className="py-2" />
+              <div className="text-[10px] font-bold uppercase tracking-wider text-lp-text-tertiary">
+                {c.label}
+              </div>
+              <div className="text-xl font-semibold tabular-nums text-lp-text">{c.value}</div>
             </div>
-            <SortableContext items={rows.map((r) => r.id)} strategy={verticalListSortingStrategy}>
-              {rows.map((row) => (
-                <ChannelBlock
-                  key={row.id}
-                  row={row}
-                  subSnakes={subSnakes}
-                  stageIOs={stageIOs}
-                  mics={mics}
-                  expanded={expanded.has(row.id)}
-                  onToggleExpand={() =>
-                    setExpanded((prev) => {
-                      const n = new Set(prev);
-                      if (n.has(row.id)) n.delete(row.id);
-                      else n.add(row.id);
-                      return n;
-                    })
-                  }
-                  rowMenu={rowMenu === row.id}
-                  onRowMenuToggle={() => setRowMenu((id) => (id === row.id ? null : row.id))}
-                  onUpdateLocal={(r) => setRows((prev) => prev.map((x) => (x.id === r.id ? r : x)))}
-                  onRefresh={onStructureChange}
-                  onOpenSubDialog={() => setSubDialog(true)}
-                  onOpenStageDialog={() => setStageDialog(true)}
-                  sectionId={section.id}
-                  packId={pack.id}
-                />
-              ))}
-            </SortableContext>
+          ))}
+        </div>
+
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => void handleDragEnd(e)}>
+          <div className="w-full overflow-x-auto">
+            <div className="min-w-[1180px]">
+              <div
+                className="grid w-full min-h-9 items-stretch gap-0 border-b border-lp-border bg-lp-surface/90 text-[10px] font-bold uppercase tracking-wider text-lp-text-tertiary"
+                style={CHANNEL_ROW_GRID}
+              >
+                <div className="py-2" style={{ borderLeft: '2px solid transparent' }} />
+                <div className="py-2" />
+                <div className="py-2 pl-0.5">#</div>
+                <div className="px-0.5 py-2 pl-1">Name</div>
+                <div className="px-0.5 py-2">Box</div>
+                <div className="px-0.5 py-2">I/O</div>
+                <div className="px-0.5 py-2">Pos</div>
+                <div className="px-0.5 py-2">DI / cable</div>
+                <div className="px-0.5 py-2">Mic</div>
+                <div className="px-0.5 py-2">Sub</div>
+                <div className="px-0.5 py-2">Stand</div>
+                <div className="px-0.5 py-2 text-center">+48</div>
+                <div className="px-0.5 py-2">Prov</div>
+                <div className="px-0.5 py-2 min-w-0">Notes</div>
+                <div className="px-0.5 py-2 text-right" />
+              </div>
+              <SortableContext items={rows.map((r) => r.id)} strategy={verticalListSortingStrategy}>
+                {rows.map((row) => (
+                  <ChannelBlock
+                    key={row.id}
+                    row={row}
+                    subSnakes={subSnakes}
+                    stageIOs={stageIOs}
+                    mics={mics}
+                    gridStyle={CHANNEL_ROW_GRID}
+                    onUpdateLocal={(r) => setRows((prev) => prev.map((x) => (x.id === r.id ? r : x)))}
+                    onRefresh={onStructureChange}
+                    onOpenSubDialog={() => setSubDialog(true)}
+                    onOpenStageDialog={() => setStageDialog(true)}
+                    sectionId={section.id}
+                    packId={pack.id}
+                  />
+                ))}
+              </SortableContext>
+            </div>
           </div>
         </DndContext>
 
@@ -304,10 +334,7 @@ function ChannelBlock({
   subSnakes,
   stageIOs,
   mics,
-  expanded,
-  onToggleExpand,
-  rowMenu,
-  onRowMenuToggle,
+  gridStyle,
   onUpdateLocal,
   onRefresh,
   onOpenSubDialog,
@@ -319,10 +346,7 @@ function ChannelBlock({
   subSnakes: SubSnake[];
   stageIOs: SectionStageIO[];
   mics: MicLibraryEntry[];
-  expanded: boolean;
-  onToggleExpand: () => void;
-  rowMenu: boolean;
-  onRowMenuToggle: () => void;
+  gridStyle: CSSProperties;
   onUpdateLocal: (r: ChannelListRow) => void;
   onRefresh: () => void | Promise<void>;
   onOpenSubDialog: () => void;
@@ -379,43 +403,26 @@ function ChannelBlock({
   };
 
   const posListId = `pos-hint-${row.id}`;
-  const ioPick = stageIOs.find((s) => s.id === (local.stage_io_id ?? undefined));
-
   return (
     <div ref={setNodeRef} style={style} className="group w-full border-b border-lp-border-light bg-lp-surface">
       <div
-        className="grid w-full min-h-11 min-w-0 items-stretch gap-0 transition-colors hover:bg-lp-surface-hover"
-        style={{
-          gridTemplateColumns:
-            '6px 22px 26px minmax(6rem,1.1fr) minmax(5.5rem,0.75fr) minmax(4rem,0.55fr) minmax(3.5rem,0.45fr) minmax(5rem,0.75fr) 2rem 24px',
-        }}
+        className="grid w-full min-h-11 min-w-0 items-center gap-0 transition-colors hover:bg-lp-surface-hover"
+        style={gridStyle}
       >
         <div
-          className="w-1 shrink-0 self-stretch"
+          className="h-full min-h-8 w-1 shrink-0"
           style={{ backgroundColor: stripe ?? 'transparent' }}
           aria-hidden
         />
         <div
-          className="flex w-5 shrink-0 cursor-grab items-center justify-center pl-0.5 text-lp-text-tertiary opacity-0 transition-opacity group-hover:opacity-100 active:cursor-grabbing"
+          className="flex w-5 shrink-0 cursor-grab items-center justify-center text-lp-text-tertiary opacity-0 transition-opacity group-hover:opacity-100 active:cursor-grabbing"
           {...attributes}
           {...listeners}
         >
           <GripVertical className="h-3.5 w-3.5" aria-hidden />
         </div>
-        <div className="flex w-7 shrink-0 items-center pr-0.5 font-mono text-xs tabular-nums text-lp-text-tertiary">
-          {row.row_index}
-        </div>
-        <div className="flex min-w-0 items-center gap-0.5 px-1">
-          <button
-            type="button"
-            onClick={onToggleExpand}
-            className="shrink-0 rounded p-0.5 text-lp-text-tertiary hover:text-lp-text"
-            aria-expanded={expanded}
-          >
-            <ChevronRight
-              className={`h-3.5 w-3.5 transition-transform ${expanded ? 'rotate-90' : ''}`}
-            />
-          </button>
+        <div className="font-mono text-[11px] tabular-nums text-lp-text-tertiary">{row.row_index}</div>
+        <div className="min-w-0 px-0.5 pl-1">
           <input
             type="text"
             value={local.channel_name}
@@ -423,8 +430,9 @@ function ChannelBlock({
             onBlur={() => {
               void saveRow.flush();
             }}
-            className="min-w-0 flex-1 border-0 bg-transparent py-1.5 text-sm text-lp-text outline-none focus:ring-0"
+            className="min-w-0 w-full border-0 bg-transparent py-2 text-sm font-semibold text-lp-text outline-none focus:ring-0"
             placeholder="Channel"
+            title={local.channel_name}
           />
         </div>
         <div className="min-w-0 self-center px-0.5">
@@ -454,7 +462,7 @@ function ChannelBlock({
             onChange={(e) => queue({ position: e.target.value })}
             onBlur={() => void saveRow.flush()}
             list={posListId}
-            className="w-full min-w-0 rounded border border-lp-border bg-lp-bg px-1.5 py-1 text-sm text-lp-text outline-none focus:border-lp-orange/40"
+            className="w-full min-w-0 rounded border border-lp-border bg-lp-bg px-1.5 py-1.5 text-xs text-lp-text outline-none focus:border-lp-orange/40"
             placeholder="Pos"
           />
           <datalist id={posListId}>
@@ -462,6 +470,17 @@ function ChannelBlock({
               <option key={p} value={p} />
             ))}
           </datalist>
+        </div>
+        <div className="min-w-0 self-center px-0.5">
+          <input
+            type="text"
+            value={local.di}
+            onChange={(e) => queue({ di: e.target.value })}
+            onBlur={() => void saveRow.flush()}
+            className="w-full min-w-0 rounded border border-lp-border bg-lp-bg px-1.5 py-1.5 text-xs text-lp-text outline-none focus:border-lp-orange/40"
+            placeholder="6′, DI…"
+            title="Cable / DI / sub snakes"
+          />
         </div>
         <div className="min-w-0 self-center px-0.5">
           <input
@@ -477,7 +496,7 @@ function ChannelBlock({
               void saveRow.flush();
             }}
             list={`mic-hint-${row.id}`}
-            className="w-full min-w-0 rounded border border-lp-border bg-lp-bg px-1.5 py-1 text-sm text-lp-text outline-none focus:border-lp-orange/40"
+            className="w-full min-w-0 rounded border border-lp-border bg-lp-bg px-1.5 py-1.5 text-xs text-lp-text outline-none focus:border-lp-orange/40"
             placeholder="Mic"
           />
           <datalist id={`mic-hint-${row.id}`}>
@@ -486,10 +505,30 @@ function ChannelBlock({
             ))}
           </datalist>
         </div>
-        <div className="flex items-center justify-center self-center pr-0.5">
+        <div className="min-w-0 self-center px-0.5">
+          <input
+            type="text"
+            value={local.mic_substitute}
+            onChange={(e) => queue({ mic_substitute: e.target.value })}
+            onBlur={() => void saveRow.flush()}
+            className="w-full min-w-0 rounded border border-lp-border bg-lp-bg px-1.5 py-1.5 text-xs text-lp-text outline-none focus:border-lp-orange/40"
+            placeholder="Sub"
+          />
+        </div>
+        <div className="min-w-0 self-center px-0.5">
+          <input
+            type="text"
+            value={local.stand}
+            onChange={(e) => queue({ stand: e.target.value })}
+            onBlur={() => void saveRow.flush()}
+            className="w-full min-w-0 rounded border border-lp-border bg-lp-bg px-1.5 py-1.5 text-xs text-lp-text outline-none focus:border-lp-orange/40"
+            placeholder="Stand"
+          />
+        </div>
+        <div className="flex items-center justify-center self-center">
           <button
             type="button"
-            title="Phantom +48V"
+            title="Phantom +48V (tap: on · off · n/a)"
             onClick={() => {
               const next = cyclePhantom(local.phantom_power);
               queue({ phantom_power: next });
@@ -497,121 +536,70 @@ function ChannelBlock({
             }}
             className="flex h-7 w-7 items-center justify-center rounded border border-lp-border bg-lp-bg text-lp-text hover:bg-lp-surface-hover"
           >
-            {local.phantom_power === true && <Check className="h-4 w-4 text-emerald-500" strokeWidth={2.5} />}
+            {local.phantom_power === true && <Check className="h-3.5 w-3.5 text-emerald-500" strokeWidth={2.5} />}
             {local.phantom_power === false && <span className="text-lp-text-tertiary">·</span>}
             {local.phantom_power === null && <span className="text-[10px] text-lp-text-tertiary/70">—</span>}
           </button>
         </div>
-        <div className="relative flex items-center self-center pr-0.5">
+        <div className="min-w-0 self-center px-0.5">
+          <BrandedSelect
+            value={local.provider ?? ''}
+            onChange={(v) => {
+              const p = v || '';
+              const next: 'band' | 'venue' | 'hire' | null =
+                p === 'band' || p === 'venue' || p === 'hire' ? p : null;
+              queue({ provider: next });
+              void saveRow.flush();
+            }}
+            options={[
+              { value: '', label: '—' },
+              { value: 'band', label: 'Band' },
+              { value: 'venue', label: 'Venue' },
+              { value: 'hire', label: 'Hire' },
+            ]}
+            ariaLabel="Provider"
+            minWidth={0}
+            size="sm"
+            className="w-full min-w-0"
+            triggerClassName="min-h-8 w-full"
+          />
+        </div>
+        <div className="min-w-0 self-center px-0.5">
+          <input
+            type="text"
+            value={local.notes}
+            onChange={(e) => queue({ notes: e.target.value })}
+            onBlur={() => void saveRow.flush()}
+            className="w-full min-w-0 rounded border border-lp-border bg-lp-bg px-1.5 py-1.5 text-xs text-lp-text outline-none focus:border-lp-orange/40"
+            placeholder="…"
+            title={local.notes}
+          />
+        </div>
+        <div className="flex flex-col items-stretch justify-center gap-0.5 self-center pl-0.5 pr-1 text-[10px] sm:flex-row sm:items-center sm:gap-1">
           <button
             type="button"
-            onClick={onRowMenuToggle}
-            className="rounded p-1 text-lp-text-tertiary opacity-0 transition-opacity group-hover:opacity-100"
-            aria-label="Row actions"
+            className="whitespace-nowrap text-lp-text-secondary hover:text-lp-text"
+            onClick={async () => {
+              await ch.duplicateRow(createClient(), row.id, sectionId, packId);
+              await onRefresh();
+            }}
           >
-            <MoreHorizontal className="h-4 w-4" />
+            Copy
           </button>
-          {rowMenu && (
-            <div
-              className="absolute right-0 z-20 mt-0 min-w-[120px] rounded-md border border-lp-border bg-lp-surface py-1 shadow-md"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <button
-                type="button"
-                className="w-full px-2 py-1.5 text-left text-xs text-lp-text hover:bg-lp-surface-hover"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={async () => {
-                  onRowMenuToggle();
-                  await ch.duplicateRow(createClient(), row.id, sectionId, packId);
-                  await onRefresh();
-                }}
-              >
-                Duplicate
-              </button>
-              <button
-                type="button"
-                className="w-full px-2 py-1.5 text-left text-xs text-lp-error hover:bg-lp-surface-hover"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={async () => {
-                  if (!confirm('Delete this row?')) return;
-                  onRowMenuToggle();
-                  await ch.deleteRow(createClient(), row.id);
-                  await onRefresh();
-                }}
-              >
-                Delete
-              </button>
-            </div>
-          )}
+          <span className="hidden text-lp-text-tertiary/40 sm:inline">|</span>
+          <button
+            type="button"
+            className="whitespace-nowrap text-lp-error hover:opacity-90"
+            onClick={async () => {
+              if (!confirm('Delete this channel row?')) return;
+              await ch.deleteRow(createClient(), row.id);
+              await onRefresh();
+            }}
+          >
+            Del
+          </button>
         </div>
       </div>
-
-      {expanded && (
-        <div className="border-t border-lp-border-light bg-lp-bg px-4 py-3 sm:px-8">
-          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-lp-text-tertiary">More</p>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-x-4">
-            <DetailField
-              label="Mic substitute"
-              value={local.mic_substitute}
-              onChange={(v) => queue({ mic_substitute: v })}
-              onFlush={() => void saveRow.flush()}
-            />
-            <DetailField
-              label="DI"
-              value={local.di}
-              onChange={(v) => queue({ di: v })}
-              onFlush={() => void saveRow.flush()}
-            />
-            <DetailField
-              label="Stand"
-              value={local.stand}
-              onChange={(v) => queue({ stand: v })}
-              onFlush={() => void saveRow.flush()}
-            />
-            <div>
-              <div className="text-xs text-lp-text-tertiary">Provider</div>
-              <div className="mt-0.5">
-                <BrandedSelect
-                  value={local.provider ?? ''}
-                  onChange={(v) => {
-                    const p = v || '';
-                    const next: 'band' | 'venue' | 'hire' | null =
-                      p === 'band' || p === 'venue' || p === 'hire' ? p : null;
-                    queue({ provider: next });
-                    void saveRow.flush();
-                  }}
-                  options={[
-                    { value: '', label: '—' },
-                    { value: 'band', label: 'Band' },
-                    { value: 'venue', label: 'Venue' },
-                    { value: 'hire', label: 'Hire' },
-                  ]}
-                  ariaLabel="Provider"
-                  minWidth={0}
-                  size="sm"
-                  className="w-full max-w-xs"
-                />
-              </div>
-            </div>
-            <div className="sm:col-span-2">
-              <div className="text-xs text-lp-text-tertiary">Notes</div>
-              <textarea
-                value={local.notes}
-                onChange={(e) => queue({ notes: e.target.value })}
-                onBlur={() => void saveRow.flush()}
-                rows={3}
-                className="mt-0.5 w-full rounded border border-lp-border bg-lp-surface px-2 py-1.5 text-sm text-lp-text"
-                placeholder="Notes…"
-              />
-            </div>
-          </div>
-          {ioPick && (
-            <p className="mt-2 text-xs text-lp-text-tertiary">
-              I/O: <span style={{ color: ioPick.colour }}>{ioPick.label}</span>
-            </p>
-          )}
-        </div>
-      )}
     </div>
   );
 }
@@ -637,7 +625,6 @@ function SubSnakeCombo({
     [subSnakes, q],
   );
 
-  const display = open ? q : (selected?.label ?? '');
   return (
     <div className="relative min-w-0">
       <input
@@ -848,27 +835,3 @@ function StageIoCombo({
   );
 }
 
-function DetailField({
-  label,
-  value,
-  onChange,
-  onFlush,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  onFlush: () => void;
-}) {
-  return (
-    <div>
-      <div className="text-xs text-lp-text-tertiary">{label}</div>
-      <input
-        type="text"
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        onBlur={onFlush}
-        className="mt-0.5 w-full rounded border border-lp-border bg-lp-surface px-2 py-1 text-sm text-lp-text"
-      />
-    </div>
-  );
-}

@@ -1,11 +1,18 @@
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
-import { NewPackForm } from '@/components/rider-pack/PackEditor';
+import { RiderPacksIndexToolbar } from '@/components/rider-pack/RiderPacksIndexToolbar';
 
 export const dynamic = 'force-dynamic';
 
-export default async function RiderPacksIndexPage() {
+export default async function RiderPacksIndexPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ artist_id?: string }>;
+}) {
+  const params = await searchParams;
+  const rawArtistId = params.artist_id?.trim() ?? null;
+
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
@@ -32,29 +39,63 @@ export default async function RiderPacksIndexPage() {
       .order('updated_at', { ascending: false }),
   ]);
 
-  const artistMap = new Map((artists ?? []).map((a) => [a.id, a.name]));
+  const list = artists ?? [];
+  const contextArtist =
+    rawArtistId && list.some((a) => a.id === rawArtistId)
+      ? list.find((a) => a.id === rawArtistId) ?? null
+      : null;
+  const badArtistParam = rawArtistId && !contextArtist;
+
+  const allPacks = packs ?? [];
+  const displayedPacks = contextArtist
+    ? allPacks.filter((p) => p.artist_id === contextArtist.id)
+    : allPacks;
+
+  const artistMap = new Map(list.map((a) => [a.id, a.name]));
 
   return (
     <div className="flex min-h-0 flex-1 flex-col space-y-5">
       <header className="space-y-1">
-        <h1 className="text-2xl font-bold text-lp-text">Rider Packs</h1>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4">
+          <h1 className="text-2xl font-bold text-lp-text">Rider Packs</h1>
+          {contextArtist && (
+            <Link
+              href="/rider-packs"
+              className="shrink-0 text-xs text-[var(--lp-orange)] hover:underline"
+            >
+              All workspace packs
+            </Link>
+          )}
+        </div>
         <p className="text-sm text-lp-text-secondary">
-          You can have many riders per artist. Each rider is one document; tour- and show-level riders can inherit
-          sections from artist-level riders via folder links.
+          {contextArtist ? (
+            <>
+              Riders for <span className="text-lp-text">{contextArtist.name}</span>. You can have
+              many per band; each rider is one document. Tour- and show-level riders can inherit
+              from artist-level riders.
+            </>
+          ) : (
+            <>Many riders per artist, one document per rider. Open from the sidebar with a band selected to work in one act&apos;s list only.</>
+          )}
         </p>
+        {badArtistParam && (
+          <p className="text-xs text-lp-text-tertiary">Unknown artist; showing all workspace packs.</p>
+        )}
       </header>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[
-          { label: 'Packs', value: String(packs?.length ?? 0) },
-          { label: 'Artists', value: String(artists?.length ?? 0) },
+          { label: 'Packs', value: String(displayedPacks.length) },
+          { label: 'Artists', value: String(list.length) },
           {
             label: 'Recently edited',
-            value: packs?.[0] ? new Date(packs[0].updated_at).toLocaleDateString() : '—',
+            value: displayedPacks[0]
+              ? new Date(displayedPacks[0].updated_at).toLocaleDateString()
+              : '—',
           },
           {
             label: 'Exports',
-            value: String(packs?.filter((p) => p.google_doc_id).length ?? 0),
+            value: String(displayedPacks.filter((p) => p.google_doc_id).length),
           },
         ].map((c) => (
           <div
@@ -82,69 +123,59 @@ export default async function RiderPacksIndexPage() {
         className="overflow-hidden rounded-xl border"
         style={{ backgroundColor: 'var(--lp-surface)', borderColor: 'var(--lp-border)' }}
       >
-        <div
-          className="border-b px-4 py-2 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary"
-          style={{ borderColor: 'var(--lp-border)' }}
-        >
-          New rider (artist level)
-        </div>
-        <NewPackForm artists={artists ?? []} />
+        <RiderPacksIndexToolbar
+          artists={list}
+          contextArtist={contextArtist}
+          sectionLabel={contextArtist ? `New ${contextArtist.name} rider` : 'New rider (artist level)'}
+        />
       </section>
 
-      <section
-        className="overflow-hidden rounded-xl border"
-        style={{
-          backgroundColor: 'var(--lp-surface)',
-          borderColor: 'var(--lp-border)',
-        }}
-      >
-        <div
-          className="grid items-center gap-3 border-b px-4 py-3 text-[10px] font-semibold uppercase tracking-widest lp-table-header-text"
-          style={{
-            gridTemplateColumns: 'minmax(0,2fr) minmax(0,1fr) 100px 140px',
-            borderColor: 'var(--lp-border)',
-          }}
-        >
-          <div>Pack</div>
-          <div>Artist</div>
-          <div>Scope</div>
-          <div className="text-right">Updated</div>
-        </div>
-        {packs && packs.length > 0 ? (
-          packs.map((p) => (
-            <Link
-              key={p.id}
-              href={`/rider-packs/${p.id}`}
-              className="grid cursor-pointer items-center gap-3 border-b px-4 py-3 transition-colors hover:bg-lp-surface-hover"
-              style={{
-                gridTemplateColumns: 'minmax(0,2fr) minmax(0,1fr) 100px 140px',
-                borderColor: 'var(--lp-border)',
-              }}
-            >
-              <div className="truncate text-sm font-semibold text-lp-text">{p.title || '(untitled)'}</div>
-              <div className="truncate text-sm text-lp-text-secondary">
-                {artistMap.get(p.artist_id) ?? 'Unknown artist'}
-              </div>
-              <div>
-                <span
-                  className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide"
-                  style={{
-                    backgroundColor: '#FF45001a',
-                    color: '#FF4500',
-                    border: '1px solid #FF450033',
-                  }}
-                >
-                  {p.scope}
-                </span>
-              </div>
-              <div className="text-right text-[11px] text-lp-text-tertiary tabular-nums">
-                {new Date(p.updated_at).toLocaleDateString()}
-              </div>
-            </Link>
-          ))
+      <section>
+        <h2 className="mb-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">
+          {contextArtist ? `${contextArtist.name} riders` : 'All packs'}
+        </h2>
+        {displayedPacks.length > 0 ? (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {displayedPacks.map((p) => (
+              <Link
+                key={p.id}
+                href={`/rider-packs/${p.id}`}
+                className="block rounded-xl border p-4 transition-colors hover:bg-lp-surface-hover"
+                style={{ borderColor: 'var(--lp-border)', backgroundColor: 'var(--lp-surface)' }}
+              >
+                <div className="truncate text-sm font-semibold text-lp-text">
+                  {p.title || '(untitled)'}
+                </div>
+                {!contextArtist && (
+                  <div className="mt-0.5 truncate text-xs text-lp-text-secondary">
+                    {artistMap.get(p.artist_id) ?? 'Unknown artist'}
+                  </div>
+                )}
+                <div className="mt-3 flex items-center justify-between gap-2">
+                  <span
+                    className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide"
+                    style={{
+                      backgroundColor: '#FF45001a',
+                      color: '#FF4500',
+                      border: '1px solid #FF450033',
+                    }}
+                  >
+                    {p.scope}
+                  </span>
+                  <span className="text-[11px] text-lp-text-tertiary tabular-nums">
+                    {new Date(p.updated_at).toLocaleDateString()}
+                  </span>
+                </div>
+              </Link>
+            ))}
+          </div>
         ) : (
-          <div className="px-4 py-10 text-center text-sm text-lp-text-secondary">
-            No packs yet. Create one above.
+          <div
+            className="rounded-xl border px-4 py-10 text-center text-sm text-lp-text-secondary"
+            style={{ borderColor: 'var(--lp-border)' }}
+          >
+            No packs yet. Create one above
+            {contextArtist ? ' or import from another band.' : '.'}
           </div>
         )}
       </section>

@@ -108,7 +108,12 @@ export function Sidebar() {
       icon: Users2,
       activeMode: 'tour_personnel',
     },
-    { label: 'Rider Packs', href: '/rider-packs', icon: BookOpen, activeMode: 'rider_packs' },
+    {
+      label: 'Rider Packs',
+      href: selectedArtistId ? `/rider-packs?artist_id=${selectedArtistId}` : '/rider-packs',
+      icon: BookOpen,
+      activeMode: 'rider_packs',
+    },
     { label: 'Settlement', href: selectedTourId ? `/budget?tour_id=${selectedTourId}&tab=settlement` : '/budget', icon: FileCheck2, activeMode: 'settlement' },
     { label: 'Rooming', href: selectedTourId ? `/tours/${selectedTourId}/rooming` : '/budget', icon: Bed, activeMode: 'rooming' },
     { label: 'Payroll', href: selectedTourId ? `/tours/${selectedTourId}/payroll` : '/budget', icon: HandCoins, activeMode: 'payroll' },

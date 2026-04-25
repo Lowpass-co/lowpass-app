@@ -47,6 +47,12 @@ CREATE INDEX IF NOT EXISTS section_stage_io_section_idx ON section_stage_io(sect
 
 ALTER TABLE section_stage_io ENABLE ROW LEVEL SECURITY;
 
+-- Idempotent: safe if a previous run created policies before failure on a later statement.
+DROP POLICY IF EXISTS "section_stage_io_select" ON section_stage_io;
+DROP POLICY IF EXISTS "section_stage_io_insert" ON section_stage_io;
+DROP POLICY IF EXISTS "section_stage_io_update" ON section_stage_io;
+DROP POLICY IF EXISTS "section_stage_io_delete" ON section_stage_io;
+
 CREATE POLICY "section_stage_io_select"
   ON section_stage_io FOR SELECT
   USING (

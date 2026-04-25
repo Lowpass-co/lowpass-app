@@ -17,6 +17,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { MoreHorizontal } from 'lucide-react';
+import { BrandedSelect } from '@/components/ui/BrandedSelect';
 import type {
   Field,
   RiderPack,
@@ -125,6 +126,8 @@ export function PackEditor({ packId }: Props) {
     () => data?.sections.find((s) => s.section_key === selected) ?? null,
     [data, selected],
   );
+  const selectedIsChannelList =
+    (selectedSection?.section_type ?? 'fields') === 'channel_list';
 
   const commitPackTitle = useCallback(async () => {
     if (!data) return;
@@ -492,9 +495,17 @@ export function PackEditor({ packId }: Props) {
       </aside>
 
       {/* CENTER: section editor */}
-      <main className="overflow-y-auto bg-lp-surface-hover p-6">
+      <main
+        className={
+          selectedIsChannelList
+            ? 'min-h-0 min-w-0 flex-1 overflow-y-auto bg-lp-surface-hover p-0 sm:p-2'
+            : 'min-h-0 flex-1 overflow-y-auto bg-lp-surface-hover p-4 lg:p-6'
+        }
+      >
         {!selectedSection ? (
-          <div className="text-sm text-lp-text-secondary">Select a section, or add a new one.</div>
+          <div className="p-2 text-sm text-lp-text-secondary sm:p-4">
+            Select a section, or add a new one.
+          </div>
         ) : (selectedSection.section_type ?? 'fields') === 'channel_list' ? (
           <ChannelListEditor
             key={selectedSection.id}
@@ -780,26 +791,48 @@ function Inspector({
 // Exported from this file so page.tsx (a server component) can import
 // a ready-made client component without needing its own file.
 // ============================================================
-export function NewPackForm({ artists }: { artists: { id: string; name: string }[] }) {
-  const [artistId, setArtistId] = useState(artists[0]?.id ?? '');
+export function NewPackForm({
+  artists,
+  lockArtist,
+}: {
+  artists: { id: string; name: string }[];
+  /** When set (e.g. from tour/artist context), the band select is hidden. */
+  lockArtist?: { id: string; name: string } | null;
+}) {
+  const [artistId, setArtistId] = useState(
+    () => lockArtist?.id ?? artists[0]?.id ?? '',
+  );
   const [title, setTitle] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const artistOptions = useMemo(
+    () => artists.map((a) => ({ value: a.id, label: a.name })),
+    [artists],
+  );
+
+  const effectiveArtistId = lockArtist ? lockArtist.id : artistId;
 
   const submit = async () => {
-    if (!artistId) return;
+    if (!effectiveArtistId) return;
     setSubmitting(true);
+    setError(null);
     try {
       const res = await fetch('/api/rider-packs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scope: 'artist', artist_id: artistId, title: title || null }),
+        body: JSON.stringify({
+          scope: 'artist',
+          artist_id: effectiveArtistId,
+          title: title || null,
+        }),
       });
+      const j = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const j = await res.json().catch(() => ({}));
-        alert(j.error ?? 'Failed to create pack');
+        setError(typeof j.error === 'string' ? j.error : 'Failed to create pack');
         return;
       }
-      const pack = await res.json();
+      const pack = j;
       window.location.href = `/rider-packs/${pack.id}`;
     } finally {
       setSubmitting(false);
@@ -814,42 +847,68 @@ export function NewPackForm({ artists }: { artists: { id: string; name: string }
     );
   }
 
+  if (lockArtist && !artists.some((a) => a.id === lockArtist.id)) {
+    return (
+      <div className="p-4 text-xs text-lp-text-secondary">
+        Artist is not in this workspace.
+      </div>
+    );
+  }
+
   return (
-    <div className="flex flex-wrap items-end gap-3 p-4">
-      <label className="text-xs">
-        <div className="mb-1 text-[10px] uppercase tracking-widest text-lp-text-tertiary">Artist</div>
-        <select
-          value={artistId}
-          onChange={(e) => setArtistId(e.target.value)}
-          className="rounded border border-lp-border bg-lp-surface px-2 py-1 text-sm text-lp-text"
+    <div className="space-y-3 p-4">
+      {lockArtist && (
+        <p className="text-sm font-medium text-lp-text">
+          Create new {lockArtist.name} rider
+          <span className="ml-0.5 font-normal text-lp-text-tertiary">?</span>
+        </p>
+      )}
+      {error && (
+        <div
+          className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-xs text-red-200"
+          role="alert"
         >
-          {artists.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.name}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="min-w-[200px] flex-1 text-xs">
-        <div className="mb-1 text-[10px] uppercase tracking-widest text-lp-text-tertiary">
-          Title (optional)
+          {error}
         </div>
-        <input
-          type="text"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          className="w-full rounded border border-lp-border bg-lp-surface px-2 py-1 text-sm text-lp-text"
-          placeholder="e.g. FOH · EU leg"
-        />
-      </label>
-      <button
-        type="button"
-        onClick={submit}
-        disabled={submitting || !artistId}
-        className="rounded bg-[var(--lp-orange)] px-4 py-1.5 text-sm text-white hover:opacity-90 disabled:opacity-50"
-      >
-        Create
-      </button>
+      )}
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+        {!lockArtist && (
+          <div className="w-full min-w-0 sm:w-56 sm:shrink-0">
+            <div className="mb-1 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">
+              Artist
+            </div>
+            <BrandedSelect
+              value={artistId}
+              onChange={setArtistId}
+              options={artistOptions}
+              placeholder="Select artist…"
+              ariaLabel="Artist for new rider"
+              className="w-full"
+              minWidth={0}
+            />
+          </div>
+        )}
+        <label className="block w-full min-w-0 sm:max-w-md">
+          <div className="mb-1 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">
+            Title (optional)
+          </div>
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            className="h-9 w-full rounded-lg border border-lp-border bg-lp-bg px-3 text-sm text-lp-text"
+            placeholder="e.g. FOH · EU leg"
+          />
+        </label>
+        <button
+          type="button"
+          onClick={submit}
+          disabled={submitting || !effectiveArtistId}
+          className="h-9 shrink-0 rounded-lg bg-[var(--lp-orange)] px-5 text-sm font-medium text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {submitting ? 'Creating…' : 'Create'}
+        </button>
+      </div>
     </div>
   );
 }

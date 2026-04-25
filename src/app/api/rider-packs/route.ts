@@ -17,6 +17,7 @@
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { appendHistory } from '@/lib/rider-packs/history';
+import { isRiderFoldersMissingError, RIDER_FOLDERS_SETUP_MESSAGE } from '@/lib/rider-packs/schema-errors';
 import type { PackScope } from '@/lib/rider-packs/types';
 
 const SCOPES: PackScope[] = ['artist', 'tour', 'show'];
@@ -134,6 +135,12 @@ export async function POST(request: Request) {
         .eq('id', inheritFromClient)
         .maybeSingle();
       if (pErr) {
+        if (isRiderFoldersMissingError(pErr.message)) {
+          return NextResponse.json(
+            { error: RIDER_FOLDERS_SETUP_MESSAGE, code: 'MIGRATION_REQUIRED' },
+            { status: 503 },
+          );
+        }
         return NextResponse.json({ error: pErr.message }, { status: 500 });
       }
       if (!pFolder || pFolder.artist_id !== artistId || pFolder.workspace_id !== profile.workspace_id) {
@@ -146,7 +153,7 @@ export async function POST(request: Request) {
     }
   } else {
     if (scope === 'tour') {
-      const { data: artFolder } = await supabase
+      const { data: artFolder, error: artFolderErr } = await supabase
         .from('rider_folders')
         .select('id')
         .eq('artist_id', artistId)
@@ -154,9 +161,15 @@ export async function POST(request: Request) {
         .order('created_at', { ascending: true })
         .limit(1)
         .maybeSingle();
+      if (artFolderErr && isRiderFoldersMissingError(artFolderErr.message)) {
+        return NextResponse.json(
+          { error: RIDER_FOLDERS_SETUP_MESSAGE, code: 'MIGRATION_REQUIRED' },
+          { status: 503 },
+        );
+      }
       resolvedInherit = artFolder?.id ?? null;
     } else if (scope === 'show') {
-      const { data: tourFolder } = await supabase
+      const { data: tourFolder, error: tourFolderErr } = await supabase
         .from('rider_folders')
         .select('id')
         .eq('artist_id', artistId)
@@ -165,6 +178,12 @@ export async function POST(request: Request) {
         .order('created_at', { ascending: true })
         .limit(1)
         .maybeSingle();
+      if (tourFolderErr && isRiderFoldersMissingError(tourFolderErr.message)) {
+        return NextResponse.json(
+          { error: RIDER_FOLDERS_SETUP_MESSAGE, code: 'MIGRATION_REQUIRED' },
+          { status: 503 },
+        );
+      }
       resolvedInherit = tourFolder?.id ?? null;
     }
   }
@@ -183,6 +202,12 @@ export async function POST(request: Request) {
     .select()
     .single();
   if (folderError) {
+    if (isRiderFoldersMissingError(folderError.message)) {
+      return NextResponse.json(
+        { error: RIDER_FOLDERS_SETUP_MESSAGE, code: 'MIGRATION_REQUIRED' },
+        { status: 503 },
+      );
+    }
     return NextResponse.json({ error: folderError.message }, { status: 400 });
   }
 
