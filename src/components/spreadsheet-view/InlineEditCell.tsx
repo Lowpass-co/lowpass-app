@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { formatCommissionDisplayPercentString, userPercentInputToStored } from '@/lib/commission-pct';
+import { parseBudgetAmountInput } from '@/lib/budget-utils';
 import { BrandedSelect } from '@/components/ui/BrandedSelect';
 
 export interface InlineEditCellProps {
@@ -124,9 +125,8 @@ export function InlineEditCell({
         const cleaned = sanitizeIntegerInput(String(newVal));
         newVal = cleaned === '' ? 0 : parseInt(cleaned, 10);
       } else if (type === 'currency') {
-        const raw = String(newVal).replace(/[^0-9.-]/g, '');
-        const n = parseFloat(raw);
-        newVal = Number.isNaN(n) ? 0 : n;
+        const n = parseBudgetAmountInput(String(newVal));
+        newVal = n === null ? 0 : n;
       } else if (type === 'percentage') {
         const raw = String(newVal).replace(/[^0-9.-]/g, '');
         const n = parseFloat(raw);

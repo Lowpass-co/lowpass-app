@@ -187,8 +187,8 @@ function IncomeTextAmountField({
         setDraft(value ? String(value) : '');
       }}
       onChange={(e) => setDraft(e.target.value)}
-      onBlur={(e) => {
-        const n = parseBudgetAmountInput(e.target.value);
+      onBlur={() => {
+        const n = parseBudgetAmountInput(draft);
         onCommit(n === null ? null : n);
         setEditing(false);
         onAfterCommit();
