@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 
 interface DayAdvancePanelProps {
@@ -60,6 +61,7 @@ function formatAdvanceFieldValue(value: unknown): string {
 }
 
 export function DayAdvancePanel({ tourId, routingId }: DayAdvancePanelProps) {
+  const pathname = usePathname();
   const [advance, setAdvance] = useState<AdvanceData | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<string | null>(null);
@@ -85,7 +87,7 @@ export function DayAdvancePanel({ tourId, routingId }: DayAdvancePanelProps) {
 
   useEffect(() => {
     fetchAdvance();
-  }, [fetchAdvance]);
+  }, [fetchAdvance, pathname]);
 
   const saveField = useCallback(
     async (sectionId: string, fieldId: string, value: unknown) => {

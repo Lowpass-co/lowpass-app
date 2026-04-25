@@ -8,7 +8,7 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
   ChevronRight,
   Copy,
@@ -66,6 +66,7 @@ export function AdvanceOverview({
   initialCopyRoutingId?: string | null;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const { showToast } = useToast();
   const [dates, setDates] = useState<AdvanceDateItem[]>([]);
@@ -121,7 +122,7 @@ export function AdvanceOverview({
     }
     fetchAdvance();
     return () => { cancelled = true; };
-  }, [tourId]);
+  }, [tourId, pathname]);
 
   useEffect(() => {
     // Initial load: hide spinner once advance list has been fetched

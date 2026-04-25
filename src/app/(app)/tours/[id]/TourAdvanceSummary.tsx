@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import { parseRoutingDate } from '@/lib/utils';
 import { ArrowRight, Loader2 } from 'lucide-react';
 
@@ -23,6 +24,7 @@ type AdvanceDateItem = {
 const SHOW_DAY_TYPES = ['show', 'festival'];
 
 export function TourAdvanceSummary({ tourId }: { tourId: string }) {
+  const pathname = usePathname();
   const [dates, setDates] = useState<AdvanceDateItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -33,7 +35,7 @@ export function TourAdvanceSummary({ tourId }: { tourId: string }) {
       .then((j) => { if (!cancelled) setDates(j.dates ?? []); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [tourId]);
+  }, [tourId, pathname]);
 
   const showDates = dates.filter((d) => SHOW_DAY_TYPES.includes(d.day_type));
   const withAdvance = showDates.filter((d) => d.advance != null);

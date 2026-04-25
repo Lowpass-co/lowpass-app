@@ -1808,6 +1808,7 @@ function FillMode({
   onCopyToOther: () => void;
   onRemoveSection?: (templateId: string) => void | Promise<void>;
 }) {
+  const router = useRouter();
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const patchRef = useRef<{ data?: AdvanceData; section_statuses?: SectionStatuses; status?: string; flags?: AdvanceFlag[] }>({});
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1893,10 +1894,13 @@ function FillMode({
           const time = formatAdvanceDateTime(serverUpdated);
           onConflictWarning?.(`This advance was updated by ${name} at ${time}`);
         }
+        if (override?.section_statuses !== undefined) {
+          router.refresh();
+        }
         setTimeout(() => onAutosaveStatusChange?.('idle'), 3000);
       })
       .catch(() => onAutosaveStatusChange?.('error'));
-  }, [tourId, routingId, onAutosaveStatusChange, onConflictWarning]);
+  }, [tourId, routingId, onAutosaveStatusChange, onConflictWarning, router]);
 
   if (autosaveRetryRef) autosaveRetryRef.current = () => flushPatch();
 
@@ -1932,8 +1936,12 @@ function FillMode({
   );
 
   const setFieldValue = (templateId: string, fieldId: string, value: unknown) => {
-    const sectionData = { ...(advance.data[templateId] ?? {}) };
-    sectionData[fieldId] = value;
+    setSectionFieldBatch(templateId, { [fieldId]: value });
+  };
+
+  /** One atomic section update (avoids losing the first of two in-flight field updates, e.g. drive distance + source). */
+  const setSectionFieldBatch = (templateId: string, updates: Record<string, unknown>) => {
+    const sectionData = { ...(advance.data[templateId] ?? {}), ...updates };
     const nextData = { ...advance.data, [templateId]: sectionData };
 
     let nextSectionStatuses = advance.section_statuses;
@@ -2102,6 +2110,7 @@ function FillMode({
               onSetSectionStatus={(status) => setSectionStatus(section.template_id, status)}
               onSetSectionAssigned={(userId) => setSectionAssigned(section.template_id, userId)}
               onFieldChange={(fieldId, value) => setFieldValue(section.template_id, fieldId, value)}
+              onFieldsBatchChange={(updates) => setSectionFieldBatch(section.template_id, updates)}
               onFlagsChange={updateFlags}
               allFlags={flags}
               currentUserId={currentUserId}
@@ -2497,6 +2506,43 @@ function buildTourPersonnelList(counts: { principal_count: number; band_count: n
   return list;
 }
 
+/** Legacy Flights section stored flat text fields; structured UI uses `flights` array. */
+function flightRowsFromLegacyData(data: Record<string, unknown>): (Partial<FlightEntry> & { id?: string })[] | null {
+  const fromArr = data.flights;
+  if (Array.isArray(fromArr) && fromArr.length > 0) return null;
+  const ob = String(data.flight_outbound ?? '').trim();
+  const ib = String(data.flight_inbound ?? '').trim();
+  const al = String(data.airline ?? '').trim();
+  const br = String(data.booking_ref ?? data.booking_reference ?? '').trim();
+  if (!ob && !ib && !al && !br) return null;
+  const rows: (Partial<FlightEntry> & { id?: string })[] = [];
+  if (ob || al || br) {
+    rows.push({
+      id: 'legacy-outbound',
+      departure_city: ob,
+      arrival_city: '',
+      date: '',
+      time: '',
+      airline: al,
+      flight_number: '',
+      confirmation_code: br,
+    });
+  }
+  if (ib) {
+    rows.push({
+      id: 'legacy-inbound',
+      departure_city: '',
+      arrival_city: ib,
+      date: '',
+      time: '',
+      airline: al,
+      flight_number: '',
+      confirmation_code: br,
+    });
+  }
+  return rows.length > 0 ? rows : null;
+}
+
 function FlightsSectionCard({
   instanceId,
   section,
@@ -2534,9 +2580,11 @@ function FlightsSectionCard({
   workspaceMembers?: WorkspaceMember[];
   tourPersonnelCounts?: { principal_count: number; band_count: number; crew_count: number };
 }) {
-  const rawFlights = Array.isArray(data.flights) ? (data.flights as (Partial<FlightEntry> & { id?: string })[]) : [];
-  const flights: FlightEntry[] = rawFlights.map((f) => ({
-    id: f.id ?? crypto.randomUUID(),
+  const fromStorage = Array.isArray(data.flights) ? (data.flights as (Partial<FlightEntry> & { id?: string })[]) : [];
+  const legacyRows = fromStorage.length > 0 ? null : flightRowsFromLegacyData(data);
+  const rawFlights: (Partial<FlightEntry> & { id?: string })[] = fromStorage.length > 0 ? fromStorage : (legacyRows ?? []);
+  const flights: FlightEntry[] = rawFlights.map((f, i) => ({
+    id: (f.id && String(f.id)) || `row-${i}`,
     departure_city: f.departure_city ?? '',
     arrival_city: f.arrival_city ?? '',
     date: f.date ?? '',
@@ -4111,6 +4159,7 @@ function SectionCard({
   onSetSectionStatus,
   onSetSectionAssigned,
   onFieldChange,
+  onFieldsBatchChange,
   onFlagsChange,
   allFlags,
   currentUserId,
@@ -4139,6 +4188,7 @@ function SectionCard({
   onSetSectionStatus: (status: string) => void;
   onSetSectionAssigned?: (userId: string | null) => void;
   onFieldChange: (fieldId: string, value: unknown) => void;
+  onFieldsBatchChange?: (updates: Record<string, unknown>) => void;
   onFlagsChange: (nextFlags: AdvanceFlag[]) => void;
   allFlags: AdvanceFlag[];
   currentUserId: string | null;
@@ -4467,8 +4517,13 @@ function SectionCard({
                     type="text"
                     value={(data.drive_distance as string) ?? ''}
                     onChange={(e) => {
-                      onFieldChange('drive_distance', e.target.value);
-                      onFieldChange('drive_distance_source', 'custom');
+                      const v = e.target.value;
+                      if (onFieldsBatchChange) {
+                        onFieldsBatchChange({ drive_distance: v, drive_distance_source: 'custom' });
+                      } else {
+                        onFieldChange('drive_distance', v);
+                        onFieldChange('drive_distance_source', 'custom');
+                      }
                     }}
                     placeholder="e.g. 245 miles / 4h 15m"
                     className="w-full rounded-xl border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:border-lp-orange focus:outline-none focus:ring-2 focus:ring-lp-orange/20"
