@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { LayoutList } from 'lucide-react';
 
 type Props = {
   open: boolean;
@@ -20,6 +21,7 @@ export default function NewSectionDialog({ open, onClose, onSubmit }: Props) {
   const [title, setTitle] = useState('');
   const [sectionKey, setSectionKey] = useState('');
   const [keyEdited, setKeyEdited] = useState(false);
+  const [typeSelected, setTypeSelected] = useState(true);
 
   useEffect(() => {
     if (!open) return;
@@ -30,33 +32,53 @@ export default function NewSectionDialog({ open, onClose, onSubmit }: Props) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [open, onClose]);
 
+  useEffect(() => {
+    if (open) {
+      setTitle('');
+      setSectionKey('');
+      setKeyEdited(false);
+      setTypeSelected(true);
+    }
+  }, [open]);
+
   const canSubmit = useMemo(
-    () => title.trim().length > 0 && sectionKey.trim().length > 0,
-    [title, sectionKey],
+    () => typeSelected && title.trim().length > 0 && sectionKey.trim().length > 0,
+    [typeSelected, title, sectionKey],
   );
 
   if (!open) return null;
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{
-        backgroundColor: 'rgba(0, 0, 0, 0.55)',
-        backdropFilter: 'blur(4px)',
-        WebkitBackdropFilter: 'blur(4px)',
-      }}
+      className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 backdrop-blur-md"
       onClick={onClose}
     >
       <div
-        className="mx-4 w-full max-w-md rounded-xl p-5"
-        style={{
-          backgroundColor: 'var(--lp-surface)',
-          border: '1px solid var(--lp-border)',
-          boxShadow: '0 10px 40px rgba(0,0,0,0.25)',
-        }}
+        className="border border-lp-border bg-lp-surface shadow-2xl mx-4 w-full max-w-md rounded-2xl p-5"
         onClick={(event) => event.stopPropagation()}
       >
         <h2 className="text-sm font-semibold text-lp-text">New section</h2>
+        <p className="mt-1 text-xs text-lp-text-secondary">Choose a layout, then name your section.</p>
+
+        <div className="mt-4 space-y-2">
+          <button
+            type="button"
+            onClick={() => setTypeSelected(true)}
+            className={`flex w-full items-start gap-3 rounded-xl border p-3 text-left transition-colors hover:bg-lp-surface-hover ${
+              typeSelected ? 'border-lp-orange' : 'border-lp-border'
+            }`}
+          >
+            <span className="mt-0.5 shrink-0 text-lp-orange">
+              <LayoutList className="h-5 w-5" strokeWidth={1.75} />
+            </span>
+            <span>
+              <span className="block text-sm font-medium text-lp-text">Fields & content</span>
+              <span className="mt-0.5 block text-xs text-lp-text-secondary">
+                Text, tables, contacts, and linked assets.
+              </span>
+            </span>
+          </button>
+        </div>
 
         <form
           className="mt-4 space-y-3"
@@ -67,9 +89,7 @@ export default function NewSectionDialog({ open, onClose, onSubmit }: Props) {
           }}
         >
           <div>
-            <label className="text-[10px] uppercase tracking-widest text-lp-text-tertiary">
-              Title
-            </label>
+            <label className="text-[10px] uppercase tracking-widest text-lp-text-tertiary">Title</label>
             <input
               type="text"
               value={title}
@@ -81,19 +101,12 @@ export default function NewSectionDialog({ open, onClose, onSubmit }: Props) {
                 }
               }}
               placeholder="e.g. Hospitality"
-              className="mt-1 w-full rounded border px-3 py-2 text-sm"
-              style={{
-                backgroundColor: 'var(--lp-bg-secondary)',
-                borderColor: 'var(--lp-border)',
-                color: 'var(--lp-text)',
-              }}
+              className="mt-1 w-full rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text"
             />
           </div>
 
           <div>
-            <label className="text-[10px] uppercase tracking-widest text-lp-text-tertiary">
-              Section key
-            </label>
+            <label className="text-[10px] uppercase tracking-widest text-lp-text-tertiary">Section key</label>
             <input
               type="text"
               value={sectionKey}
@@ -102,12 +115,7 @@ export default function NewSectionDialog({ open, onClose, onSubmit }: Props) {
                 setKeyEdited(true);
               }}
               placeholder="hospitality"
-              className="mt-1 w-full rounded border px-3 py-2 text-sm"
-              style={{
-                backgroundColor: 'var(--lp-bg-secondary)',
-                borderColor: 'var(--lp-border)',
-                color: 'var(--lp-text)',
-              }}
+              className="mt-1 w-full rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text"
             />
           </div>
 
@@ -115,17 +123,16 @@ export default function NewSectionDialog({ open, onClose, onSubmit }: Props) {
             <button
               type="button"
               onClick={onClose}
-              className="rounded border border-lp-border px-3 py-1.5 text-xs"
-              style={{ color: 'var(--lp-text-secondary)' }}
+              className="px-3 py-1.5 text-sm text-lp-text-secondary transition-colors hover:text-lp-text"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={!canSubmit}
-              className="rounded bg-[var(--lp-orange)] px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
+              className="rounded-lg bg-lp-orange px-4 py-1.5 text-sm font-medium text-white hover:bg-lp-orange/90 disabled:opacity-50"
             >
-              Create section
+              Add
             </button>
           </div>
         </form>

@@ -440,8 +440,8 @@ export function BugReportsClient() {
           }
           className="inline-flex h-9 items-center gap-2 rounded-xl px-3 text-sm font-semibold transition-colors"
           style={{
-            backgroundColor: hideResolved ? 'var(--lp-orange)' + '1a' : 'var(--lp-bg-secondary)',
-            border: `1px solid ${hideResolved ? 'var(--lp-orange)' + '55' : 'var(--lp-border)'}`,
+            backgroundColor: hideResolved ? '#FF45001a' : 'var(--lp-bg-secondary)',
+            border: `1px solid ${hideResolved ? '#FF450055' : 'var(--lp-border)'}`,
             color: hideResolved ? 'var(--lp-orange)' : 'var(--lp-text)',
             opacity: statusFilter !== 'all' ? 0.55 : 1,
           }}
@@ -452,8 +452,8 @@ export function BugReportsClient() {
             <span
               className="ml-1 rounded-md px-1.5 text-[10px] font-bold"
               style={{
-                backgroundColor: 'var(--lp-orange)' + '33',
-                color: 'var(--lp-orange)',
+                backgroundColor: '#FF450033',
+                color: '#FF4500',
               }}
             >
               {hiddenResolvedCount}

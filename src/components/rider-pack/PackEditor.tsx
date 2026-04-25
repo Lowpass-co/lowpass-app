@@ -16,6 +16,7 @@
    ============================================ */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { MoreHorizontal } from 'lucide-react';
 import type {
   Field,
   RiderPack,
@@ -45,6 +46,7 @@ import { RiderTemplateSuggestions } from './RiderTemplateSuggestions';
 import { useDebouncedSave } from '@/hooks/useDebouncedSave';
 import NewSectionDialog from './NewSectionDialog';
 import { formatRelativeTime } from '@/lib/format-relative';
+import { PackStatCards } from './PackStatCards';
 
 type Props = {
   packId: string;
@@ -77,6 +79,11 @@ export function PackEditor({ packId }: Props) {
   const [loading, setLoading] = useState(true);
   const [newSectionOpen, setNewSectionOpen] = useState(false);
   const [newSectionDialogKey, setNewSectionDialogKey] = useState(0);
+  const [packTitleDraft, setPackTitleDraft] = useState('');
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+  const [exportingDoc, setExportingDoc] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
+  const moreMenuRef = useRef<HTMLDivElement | null>(null);
 
   const dataRef = useRef<ResolvedPack | null>(null);
   dataRef.current = data;
@@ -98,10 +105,66 @@ export function PackEditor({ packId }: Props) {
     void refresh();
   }, [refresh]);
 
+  useEffect(() => {
+    if (!data) return;
+    setPackTitleDraft(data.pack.title ?? '');
+  }, [data?.pack.id, data?.pack.title]);
+
+  useEffect(() => {
+    if (!moreMenuOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      if (moreMenuRef.current && !moreMenuRef.current.contains(e.target as Node)) {
+        setMoreMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [moreMenuOpen]);
+
   const selectedSection = useMemo(
     () => data?.sections.find((s) => s.section_key === selected) ?? null,
     [data, selected],
   );
+
+  const commitPackTitle = useCallback(async () => {
+    if (!data) return;
+    if ((data.pack.title ?? '') === (packTitleDraft || '').trim()) return;
+    try {
+      await updatePack(data.pack.id, { title: packTitleDraft.trim() || null });
+      setData((prev) =>
+        prev ? { ...prev, pack: { ...prev.pack, title: packTitleDraft.trim() || null } } : prev,
+      );
+      setError(null);
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Failed to save title');
+    }
+  }, [data, packTitleDraft]);
+
+  const runGoogleDocExport = useCallback(async () => {
+    if (!data) return;
+    setExportingDoc(true);
+    setExportError(null);
+    try {
+      const res = await fetch(`/api/rider-packs/${data.pack.id}/export/google-doc`, { method: 'POST' });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setExportError((body?.error as string) || res.statusText || 'Export failed');
+        return;
+      }
+      await refresh();
+      if (body?.document_url) {
+        window.open(body.document_url as string, '_blank', 'noopener,noreferrer');
+      }
+    } catch (e) {
+      setExportError(e instanceof Error ? e.message : 'Export failed');
+    } finally {
+      setExportingDoc(false);
+    }
+  }, [data, refresh]);
+
+  const focusSharePanel = useCallback(() => {
+    document.getElementById('rider-pack-share')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, []);
 
   /** Field-level saves are optimistic; structural changes (add/remove/reorder) call `refresh()` separately. */
   const saveSection = useCallback(
@@ -280,8 +343,87 @@ export function PackEditor({ packId }: Props) {
     routingId: data.pack.routing_id,
   };
 
+  const handleDeletePack = async () => {
+    if (!data) return;
+    if (!confirm('Delete this pack? This cannot be undone.')) return;
+    try {
+      await deletePack(packId);
+      window.location.href = '/rider-packs';
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Failed to delete');
+    }
+  };
+
   return (
     <div className="flex h-[calc(100vh-120px)] min-h-0 flex-col border-t border-lp-border bg-lp-surface">
+      <div className="shrink-0 space-y-4 border-b border-lp-border bg-lp-surface px-4 py-4">
+        <div className="flex items-start justify-between gap-3">
+          <input
+            type="text"
+            value={packTitleDraft}
+            onChange={(e) => setPackTitleDraft(e.target.value)}
+            onBlur={() => {
+              void commitPackTitle();
+            }}
+            className="min-w-0 flex-1 border-0 border-b border-transparent bg-transparent text-2xl font-semibold text-lp-text outline-none focus:border-lp-border"
+            placeholder="Untitled pack"
+            aria-label="Pack title"
+          />
+          <span className="shrink-0 rounded-full border border-lp-border bg-lp-surface-hover px-2.5 py-1 text-xs font-semibold uppercase text-lp-text">
+            {data.pack.scope}
+          </span>
+        </div>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <button
+            type="button"
+            onClick={focusSharePanel}
+            className="rounded-lg bg-lp-orange px-4 py-2 text-sm font-medium text-white hover:bg-lp-orange/90"
+          >
+            Share
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              void runGoogleDocExport();
+            }}
+            disabled={exportingDoc}
+            className="rounded-lg border border-lp-border bg-transparent px-4 py-2 text-sm font-medium text-lp-text hover:bg-lp-surface-hover disabled:opacity-50"
+          >
+            {exportingDoc ? 'Exporting…' : 'Export'}
+          </button>
+          <div className="relative" ref={moreMenuRef}>
+            <button
+              type="button"
+              onClick={() => setMoreMenuOpen((o) => !o)}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-lp-border text-lp-text hover:bg-lp-surface-hover"
+              aria-label="More actions"
+            >
+              <MoreHorizontal className="h-4 w-4" />
+            </button>
+            {moreMenuOpen && (
+              <div className="absolute right-0 z-50 mt-1 min-w-[180px] rounded-xl border border-lp-border bg-lp-surface py-1 shadow-lg">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMoreMenuOpen(false);
+                    void handleDeletePack();
+                  }}
+                  className="w-full px-3 py-2 text-left text-sm text-lp-error hover:bg-lp-surface-hover"
+                >
+                  Delete pack
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+        {exportError && <div className="text-sm text-lp-error">{exportError}</div>}
+        <PackStatCards
+          packId={packId}
+          packUpdatedAt={data.pack.updated_at}
+          sections={data.sections}
+          onShareClick={focusSharePanel}
+        />
+      </div>
       <div className="shrink-0 border-b border-lp-border px-4 py-3">
         <RiderTemplateSuggestions
           packId={packId}
@@ -381,16 +523,10 @@ export function PackEditor({ packId }: Props) {
         <Inspector
           pack={data.pack}
           lastEditLabel={formatRelativeTime(data.pack.updated_at)}
-          onPackUpdate={() => refresh()}
-          onPackDelete={async () => {
-            if (!confirm('Delete this pack? This cannot be undone.')) return;
-            try {
-              await deletePack(packId);
-              window.location.href = '/rider-packs';
-            } catch (e) {
-              alert(e instanceof Error ? e.message : 'Failed to delete');
-            }
-          }}
+          onExportGoogleDoc={runGoogleDocExport}
+          exportingDoc={exportingDoc}
+          exportError={exportError}
+          onPackDelete={handleDeletePack}
         />
       </aside>
       </div>
@@ -448,11 +584,9 @@ function SectionEditor({
   onMoveDown,
 }: SectionEditorBaseProps) {
   const [titleDraft, setTitleDraft] = useState(section.title);
-  const [lastSyncedTitle, setLastSyncedTitle] = useState(section.title);
-  if (lastSyncedTitle !== section.title) {
-    setLastSyncedTitle(section.title);
+  useEffect(() => {
     setTitleDraft(section.title);
-  }
+  }, [section.title]);
 
   const inherited = !!section.inherited_from;
   const fields = section.fields ?? [];
@@ -522,28 +656,30 @@ function SectionEditor({
       )}
 
       <fieldset disabled={inherited} className={inherited ? 'pointer-events-none opacity-60' : ''}>
-        <div>
+        <div className="rounded-xl border border-lp-border bg-lp-surface overflow-hidden">
           {fields.map((f, i) => (
-            <div
+            <FieldEditor
               key={f.key}
-              className="border-b border-lp-border px-4 py-3 transition-colors last:border-b-0 hover:bg-lp-surface-hover"
-            >
-              <FieldEditor
-                field={f}
-                tourId={tourId}
-                packContext={packContext}
-                onFieldBlur={onFieldBlur}
-                onChange={(next) => {
-                  const copy = [...fields];
-                  copy[i] = next;
-                  onFieldsChange(copy);
-                }}
-                onRemove={() => onFieldsChange(fields.filter((_, j) => j !== i))}
-              />
-            </div>
+              field={f}
+              tourId={tourId}
+              packContext={packContext}
+              isLast={i === fields.length - 1}
+              onFieldBlur={onFieldBlur}
+              onChange={(next) => {
+                const copy = [...fields];
+                copy[i] = next;
+                onFieldsChange(copy);
+              }}
+              onRemove={() => onFieldsChange(fields.filter((_, j) => j !== i))}
+              onDuplicate={() => {
+                const clone = structuredClone(f) as Field;
+                clone.key = `f_${Date.now().toString(36)}`;
+                onFieldsChange([...fields.slice(0, i + 1), clone, ...fields.slice(i + 1)]);
+              }}
+            />
           ))}
         </div>
-        <div className="px-4 pb-4">
+        <div className="px-0 pb-4 pt-3">
           <AddFieldDropdown onAdd={(type) => onFieldsChange([...fields, makeDefaultField(type)])} />
         </div>
       </fieldset>
@@ -563,7 +699,7 @@ function AddFieldDropdown({ onAdd }: { onAdd: (type: Field['type']) => void }) {
         + Add field
       </button>
       {open && (
-        <div className="mt-2 grid grid-cols-3 gap-1">
+        <div className="mt-2 max-h-64 space-y-1 overflow-y-auto rounded-xl border border-lp-border bg-lp-surface p-2">
           {(Object.keys(FIELD_TYPE_LABELS) as Field['type'][]).map((t) => (
             <button
               key={t}
@@ -572,7 +708,7 @@ function AddFieldDropdown({ onAdd }: { onAdd: (type: Field['type']) => void }) {
                 onAdd(t);
                 setOpen(false);
               }}
-              className="rounded border border-lp-border px-2 py-1 text-xs hover:bg-lp-surface-hover"
+              className="w-full rounded-lg px-3 py-2 text-left text-sm text-lp-text hover:bg-lp-surface-hover"
             >
               {FIELD_TYPE_LABELS[t]}
             </button>
@@ -586,33 +722,18 @@ function AddFieldDropdown({ onAdd }: { onAdd: (type: Field['type']) => void }) {
 function Inspector({
   pack,
   lastEditLabel,
-  onPackUpdate,
+  onExportGoogleDoc,
+  exportingDoc,
+  exportError,
   onPackDelete,
 }: {
   pack: RiderPack;
   lastEditLabel: string;
-  onPackUpdate: () => void;
+  onExportGoogleDoc: () => void | Promise<void>;
+  exportingDoc: boolean;
+  exportError: string | null;
   onPackDelete: () => void;
 }) {
-  const [titleDraft, setTitleDraft] = useState(pack.title ?? '');
-  // Reset draft when the upstream prop changes — derive in render rather than effect.
-  const [lastSyncedTitle, setLastSyncedTitle] = useState(pack.title ?? '');
-  const upstreamTitle = pack.title ?? '';
-  if (lastSyncedTitle !== upstreamTitle) {
-    setLastSyncedTitle(upstreamTitle);
-    setTitleDraft(upstreamTitle);
-  }
-
-  const commitTitle = async () => {
-    if ((pack.title ?? '') === titleDraft) return;
-    try {
-      await updatePack(pack.id, { title: titleDraft });
-      onPackUpdate();
-    } catch (e) {
-      alert(e instanceof Error ? e.message : 'Failed to save title');
-    }
-  };
-
   return (
     <>
       <div>
@@ -629,21 +750,16 @@ function Inspector({
         </p>
       </div>
 
-      <div>
-        <label className="text-[10px] uppercase tracking-widest text-lp-text-tertiary">Title</label>
-        <input
-          type="text"
-          value={titleDraft}
-          onChange={(e) => setTitleDraft(e.target.value)}
-          onBlur={commitTitle}
-          className="mt-1 w-full rounded border border-lp-border bg-lp-surface px-2 py-1 text-sm text-lp-text"
-          placeholder="Untitled"
-        />
+      <ExportPanel
+        pack={pack}
+        onExport={onExportGoogleDoc}
+        busy={exportingDoc}
+        error={exportError}
+      />
+
+      <div id="rider-pack-share">
+        <SharingPanel packId={pack.id} />
       </div>
-
-      <ExportPanel pack={pack} onExported={onPackUpdate} />
-
-      <SharingPanel packId={pack.id} />
 
       <div className="border-t border-lp-border pt-4">
         <button
@@ -912,38 +1028,15 @@ function buildPublicUrl(token: string): string {
 
 function ExportPanel({
   pack,
-  onExported,
+  onExport,
+  busy,
+  error,
 }: {
   pack: RiderPack;
-  onExported: () => void;
+  onExport: () => void | Promise<void>;
+  busy: boolean;
+  error: string | null;
 }) {
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const handleExport = async () => {
-    setBusy(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/rider-packs/${pack.id}/export/google-doc`, { method: 'POST' });
-      const body = await res.json().catch(() => ({}));
-
-      if (!res.ok) {
-        const detail = body?.error || res.statusText || 'Export failed';
-        setError(detail);
-        return;
-      }
-
-      onExported();
-      if (body?.document_url) {
-        window.open(body.document_url, '_blank', 'noopener,noreferrer');
-      }
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Export failed');
-    } finally {
-      setBusy(false);
-    }
-  };
-
   return (
     <div className="space-y-2">
       <div className="text-[10px] uppercase tracking-widest text-lp-text-tertiary">Google Doc</div>
@@ -977,9 +1070,11 @@ function ExportPanel({
       <div className="mt-2">
         <button
           type="button"
-          onClick={handleExport}
+          onClick={() => {
+            void onExport();
+          }}
           disabled={busy}
-          className="rounded bg-[var(--lp-orange)] px-3 py-1.5 text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
+          className="rounded-lg border border-lp-border px-3 py-1.5 text-xs font-medium text-lp-text hover:bg-lp-surface-hover disabled:opacity-50"
         >
           {busy
             ? 'Exporting…'

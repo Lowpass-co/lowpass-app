@@ -92,15 +92,9 @@ export function useDebouncedSave<T>(saveFn: (value: T) => Promise<void>, delayMs
 
   useEffect(
     () => () => {
-      if (timerRef.current) {
-        clearTimeout(timerRef.current);
-        timerRef.current = null;
-      }
-      if (!activeDrainRef.current) {
-        stagedRef.current = undefined;
-      }
+      cancel();
     },
-    [],
+    [cancel],
   );
 
   const prevSaveFn = useRef(saveFn);

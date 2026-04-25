@@ -9,7 +9,9 @@
    (debounced + flush on blur from PackEditor).
    ============================================ */
 
-import { useEffect, useState, type FocusEvent } from 'react';
+import { useCallback, useEffect, useRef, useState, type FocusEvent } from 'react';
+import clsx from 'clsx';
+import { useDebouncedSave } from '@/hooks/useDebouncedSave';
 import type {
   Field,
   FieldText,
@@ -25,46 +27,112 @@ import type {
 import { pickContacts, type PickedContact } from '@/lib/rider-packs/client';
 import { AssetPicker, type PackContext } from './AssetPicker';
 
+export const FIELD_TYPE_LABELS: Record<Field['type'], string> = {
+  text: 'Long text',
+  table: 'Table',
+  contact: 'Contacts',
+  asset: 'Attachment',
+  time: 'Date / time',
+  currency: 'Currency',
+  number: 'Number',
+  checkbox_list: 'Yes / No list',
+  url: 'Link',
+};
+
 type FieldEditorProps<F extends Field = Field> = {
   field: F;
   onChange: (next: F) => void;
   onRemove?: () => void;
+  onDuplicate?: () => void;
   onFieldBlur?: () => void;
+  isLast?: boolean;
   /** Tour id for the containing pack, if any. Contact picker uses it. */
   tourId?: string | null;
   /** Full pack context. Asset picker uses it. */
   packContext?: PackContext;
 };
 
+function isFieldConsideredEmpty(field: Field): boolean {
+  switch (field.type) {
+    case 'text':
+      return !(field.value && field.value.trim());
+    case 'url':
+      return !(field.href && field.href.trim());
+    case 'time':
+      return !(field.value && field.value.trim());
+    case 'currency':
+      return field.amount === 0 && field.currency === 'USD';
+    case 'number':
+      return field.value === 0 && !(field.unit && field.unit.trim());
+    case 'table':
+      return (field.rows?.length ?? 0) === 0;
+    case 'contact':
+      return (field.entries?.length ?? 0) === 0;
+    case 'asset':
+      return !field.asset_id;
+    case 'checkbox_list':
+      return (field.items?.length ?? 0) === 0;
+    default:
+      return false;
+  }
+}
+
 export function FieldEditor({
   field,
   onChange,
   onRemove,
+  onDuplicate,
   onFieldBlur,
+  isLast,
   tourId,
   packContext,
 }: FieldEditorProps) {
+  const showTypeHint = isFieldConsideredEmpty(field);
+
   return (
-    <div className="space-y-2 rounded-lg border border-lp-border bg-lp-bg-secondary p-4">
-      <div className="flex items-center justify-between gap-2">
+    <div
+      className={clsx(
+        'group relative flex flex-col gap-3 border-b border-lp-border-light px-4 py-3 md:flex-row md:items-start',
+        isLast && 'border-b-0',
+      )}
+    >
+      <div className="w-full shrink-0 md:w-[28%] md:pr-2">
         <LabelInput field={field} onChange={onChange} onFieldBlur={onFieldBlur} />
-        {onRemove && (
-          <button
-            type="button"
-            onClick={onRemove}
-            className="text-xs text-lp-text-secondary hover:text-lp-error"
-          >
-            Remove
-          </button>
+        {showTypeHint && (
+          <div className="mt-0.5 text-xs text-lp-text-tertiary">{FIELD_TYPE_LABELS[field.type]}</div>
         )}
       </div>
-      <Dispatcher
-        field={field}
-        onChange={onChange}
-        onFieldBlur={onFieldBlur}
-        tourId={tourId ?? null}
-        packContext={packContext ?? null}
-      />
+      <div className="min-w-0 flex-1">
+        <Dispatcher
+          field={field}
+          onChange={onChange}
+          onFieldBlur={onFieldBlur}
+          tourId={tourId ?? null}
+          packContext={packContext ?? null}
+        />
+      </div>
+      {(onRemove || onDuplicate) && (
+        <div className="flex shrink-0 items-start justify-end gap-1 self-end opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
+          {onDuplicate && (
+            <button
+              type="button"
+              onClick={onDuplicate}
+              className="text-xs text-lp-text-secondary hover:text-lp-text"
+            >
+              Duplicate
+            </button>
+          )}
+          {onRemove && (
+            <button
+              type="button"
+              onClick={onRemove}
+              className="text-xs text-lp-text-secondary hover:text-lp-error"
+            >
+              Delete
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -80,9 +148,19 @@ function LabelInput({
 }) {
   const v = field.label ?? '';
   const [draft, setDraft] = useState(v);
+  const dirtyRef = useRef(false);
+  const commit = useCallback(
+    async (label: string) => {
+      dirtyRef.current = false;
+      onChange({ ...field, label });
+    },
+    [field, onChange],
+  );
+  const save = useDebouncedSave(commit, 400);
   useEffect(() => {
-    setDraft(v);
-  }, [v]);
+    if (save.isPending() || dirtyRef.current) return;
+    if (v !== draft) setDraft(v);
+  }, [v, draft, save]);
 
   return (
     <input
@@ -90,10 +168,12 @@ function LabelInput({
       value={draft}
       onChange={(e) => {
         const next = e.target.value;
+        dirtyRef.current = true;
         setDraft(next);
-        onChange({ ...field, label: next });
+        save.schedule(next);
       }}
       onBlur={() => {
+        void save.flush();
         onFieldBlur?.();
       }}
       placeholder="Field label"
@@ -216,19 +296,33 @@ function TextEditor({
 }) {
   const v = field.value ?? '';
   const [draft, setDraft] = useState(v);
+  const dirtyRef = useRef(false);
+  const commit = useCallback(
+    async (value: string) => {
+      dirtyRef.current = false;
+      onChange({ ...field, value });
+    },
+    [field, onChange],
+  );
+  const save = useDebouncedSave(commit, 400);
   useEffect(() => {
-    setDraft(v);
-  }, [v]);
+    if (save.isPending() || dirtyRef.current) return;
+    if (v !== draft) setDraft(v);
+  }, [v, draft, save]);
 
   return (
     <textarea
       value={draft}
       onChange={(e) => {
         const next = e.target.value;
+        dirtyRef.current = true;
         setDraft(next);
-        onChange({ ...field, value: next });
+        save.schedule(next);
       }}
-      onBlur={() => onFieldBlur?.()}
+      onBlur={() => {
+        void save.flush();
+        onFieldBlur?.();
+      }}
       placeholder="Text..."
       className="min-h-[140px] w-full rounded-md border border-lp-border px-3 py-2 text-sm outline-none focus:border-lp-border-light"
     />
@@ -248,12 +342,23 @@ function TimeEditor({
   const tzV = field.tz ?? '';
   const [valDraft, setValDraft] = useState(v);
   const [tzDraft, setTzDraft] = useState(tzV);
+  const dirtyRef = useRef(false);
+  const commit = useCallback(
+    async (payload: { value: string; tz: string }) => {
+      dirtyRef.current = false;
+      onChange({ ...field, value: payload.value, tz: payload.tz });
+    },
+    [field, onChange],
+  );
+  const save = useDebouncedSave(commit, 400);
   useEffect(() => {
-    setValDraft(v);
-  }, [v]);
+    if (save.isPending() || dirtyRef.current) return;
+    if (v !== valDraft) setValDraft(v);
+  }, [v, valDraft, save]);
   useEffect(() => {
-    setTzDraft(tzV);
-  }, [tzV]);
+    if (save.isPending() || dirtyRef.current) return;
+    if (tzV !== tzDraft) setTzDraft(tzV);
+  }, [tzV, tzDraft, save]);
 
   return (
     <div
@@ -265,8 +370,12 @@ function TimeEditor({
         value={valDraft}
         onChange={(e) => {
           const next = e.target.value;
+          dirtyRef.current = true;
           setValDraft(next);
-          onChange({ ...field, value: next });
+          save.schedule({ value: next, tz: tzDraft });
+        }}
+        onBlur={() => {
+          void save.flush();
         }}
         className="rounded-md border border-lp-border px-3 py-2 text-sm"
       />
@@ -275,8 +384,12 @@ function TimeEditor({
         value={tzDraft}
         onChange={(e) => {
           const next = e.target.value;
+          dirtyRef.current = true;
           setTzDraft(next);
-          onChange({ ...field, tz: next });
+          save.schedule({ value: valDraft, tz: next });
+        }}
+        onBlur={() => {
+          void save.flush();
         }}
         placeholder="Timezone (optional)"
         className="flex-1 rounded-md border border-lp-border px-3 py-2 text-sm"
@@ -298,29 +411,41 @@ function CurrencyEditor({
     Number.isFinite(field.amount) ? String(field.amount) : '',
   );
   const [curDraft, setCurDraft] = useState(field.currency ?? 'USD');
-  const [lastAmount, setLastAmount] = useState(field.amount);
-  const [lastCurrency, setLastCurrency] = useState(field.currency);
-  if (field.amount !== lastAmount) {
-    setLastAmount(field.amount);
+  const dirtyRef = useRef(false);
+  const commit = useCallback(
+    async (payload: { amount: number; currency: string }) => {
+      dirtyRef.current = false;
+      onChange({ ...field, amount: payload.amount, currency: payload.currency });
+    },
+    [field, onChange],
+  );
+  const save = useDebouncedSave(commit, 400);
+  useEffect(() => {
+    if (save.isPending() || dirtyRef.current) return;
     setAmountDraft(Number.isFinite(field.amount) ? String(field.amount) : '');
-  }
-  if (field.currency !== lastCurrency) {
-    setLastCurrency(field.currency);
+  }, [field.amount, save]);
+  useEffect(() => {
+    if (save.isPending() || dirtyRef.current) return;
     setCurDraft(field.currency ?? 'USD');
-  }
+  }, [field.currency, save]);
 
   return (
     <div
       className="flex items-center gap-2"
-      onBlur={(e) => fireBlur(onFieldBlur, e)}
+      onBlur={(e) => {
+        void save.flush();
+        fireBlur(onFieldBlur, e);
+      }}
     >
       <input
         type="number"
         value={amountDraft}
         onChange={(e) => {
           const s = e.target.value;
+          const amount = Number(s) || 0;
+          dirtyRef.current = true;
           setAmountDraft(s);
-          onChange({ ...field, amount: Number(s) || 0 });
+          save.schedule({ amount, currency: curDraft });
         }}
         step="0.01"
         className="flex-1 rounded-md border border-lp-border px-3 py-2 text-sm"
@@ -330,8 +455,9 @@ function CurrencyEditor({
         value={curDraft}
         onChange={(e) => {
           const next = e.target.value.toUpperCase();
+          dirtyRef.current = true;
           setCurDraft(next);
-          onChange({ ...field, currency: next });
+          save.schedule({ amount: Number(amountDraft) || 0, currency: next });
         }}
         maxLength={3}
         className="w-20 rounded-md border border-lp-border px-3 py-2 text-sm uppercase"
@@ -353,29 +479,41 @@ function NumberEditor({
     Number.isFinite(field.value) ? String(field.value) : '',
   );
   const [unitDraft, setUnitDraft] = useState(field.unit ?? '');
-  const [lastValue, setLastValue] = useState(field.value);
-  const [lastUnit, setLastUnit] = useState(field.unit);
-  if (field.value !== lastValue) {
-    setLastValue(field.value);
+  const dirtyRef = useRef(false);
+  const commit = useCallback(
+    async (payload: { value: number; unit: string }) => {
+      dirtyRef.current = false;
+      onChange({ ...field, value: payload.value, unit: payload.unit });
+    },
+    [field, onChange],
+  );
+  const save = useDebouncedSave(commit, 400);
+  useEffect(() => {
+    if (save.isPending() || dirtyRef.current) return;
     setNumDraft(Number.isFinite(field.value) ? String(field.value) : '');
-  }
-  if (field.unit !== lastUnit) {
-    setLastUnit(field.unit);
+  }, [field.value, save]);
+  useEffect(() => {
+    if (save.isPending() || dirtyRef.current) return;
     setUnitDraft(field.unit ?? '');
-  }
+  }, [field.unit, save]);
 
   return (
     <div
       className="flex items-center gap-2"
-      onBlur={(e) => fireBlur(onFieldBlur, e)}
+      onBlur={(e) => {
+        void save.flush();
+        fireBlur(onFieldBlur, e);
+      }}
     >
       <input
         type="number"
         value={numDraft}
         onChange={(e) => {
           const s = e.target.value;
+          const value = Number(s) || 0;
+          dirtyRef.current = true;
           setNumDraft(s);
-          onChange({ ...field, value: Number(s) || 0 });
+          save.schedule({ value, unit: unitDraft });
         }}
         className="flex-1 rounded-md border border-lp-border px-3 py-2 text-sm"
       />
@@ -384,8 +522,9 @@ function NumberEditor({
         value={unitDraft}
         onChange={(e) => {
           const next = e.target.value;
+          dirtyRef.current = true;
           setUnitDraft(next);
-          onChange({ ...field, unit: next });
+          save.schedule({ value: Number(numDraft) || 0, unit: next });
         }}
         placeholder="unit"
         className="w-28 rounded-md border border-lp-border px-3 py-2 text-sm"
@@ -407,25 +546,40 @@ function UrlEditor({
   const d = field.display_text ?? '';
   const [hrefDraft, setHrefDraft] = useState(h);
   const [displayDraft, setDisplayDraft] = useState(d);
+  const dirtyRef = useRef(false);
+  const commit = useCallback(
+    async (payload: { href: string; display_text: string }) => {
+      dirtyRef.current = false;
+      onChange({ ...field, href: payload.href, display_text: payload.display_text });
+    },
+    [field, onChange],
+  );
+  const save = useDebouncedSave(commit, 400);
   useEffect(() => {
+    if (save.isPending() || dirtyRef.current) return;
     setHrefDraft(h);
-  }, [h]);
+  }, [h, save]);
   useEffect(() => {
+    if (save.isPending() || dirtyRef.current) return;
     setDisplayDraft(d);
-  }, [d]);
+  }, [d, save]);
 
   return (
     <div
       className="space-y-2"
-      onBlur={(e) => fireBlur(onFieldBlur, e)}
+      onBlur={(e) => {
+        void save.flush();
+        fireBlur(onFieldBlur, e);
+      }}
     >
       <input
         type="url"
         value={hrefDraft}
         onChange={(e) => {
           const next = e.target.value;
+          dirtyRef.current = true;
           setHrefDraft(next);
-          onChange({ ...field, href: next });
+          save.schedule({ href: next, display_text: displayDraft });
         }}
         placeholder="https://..."
         className="w-full rounded-md border border-lp-border px-3 py-2 text-sm"
@@ -435,8 +589,9 @@ function UrlEditor({
         value={displayDraft}
         onChange={(e) => {
           const next = e.target.value;
+          dirtyRef.current = true;
           setDisplayDraft(next);
-          onChange({ ...field, display_text: next });
+          save.schedule({ href: hrefDraft, display_text: next });
         }}
         placeholder="Link text (optional)"
         className="w-full rounded-md border border-lp-border px-3 py-2 text-sm"
@@ -949,15 +1104,3 @@ export function makeDefaultField(type: Field['type']): Field {
       return { type, key: baseKey, label: 'Link', href: '' };
   }
 }
-
-export const FIELD_TYPE_LABELS: Record<Field['type'], string> = {
-  text: 'Text',
-  table: 'Table',
-  contact: 'Contacts',
-  asset: 'Asset (stub)',
-  time: 'Time',
-  currency: 'Currency',
-  number: 'Number',
-  checkbox_list: 'Checklist',
-  url: 'Link',
-};
