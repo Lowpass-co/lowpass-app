@@ -50,6 +50,7 @@ import { formatRelativeTime } from '@/lib/format-relative';
 import { PackStatCards } from './PackStatCards';
 import { SaveStatePill, type SavePillState } from './SaveStatePill';
 import ChannelListEditor from './ChannelListEditor';
+import { makeUniqueSectionKey } from '@/lib/rider-packs/templates';
 
 type Props = {
   packId: string;
@@ -272,16 +273,18 @@ export function PackEditor({ packId }: Props) {
     const normalizedKey = sectionKey.trim();
     const normalizedTitle = title.trim() || normalizedKey;
     if (!normalizedKey) return;
+    const existingKeys = new Set(data.sections.map((s) => s.section_key));
+    const uniqueKey = makeUniqueSectionKey(normalizedKey, existingKeys);
     try {
-      await createSection(packId, {
-        section_key: normalizedKey,
+      const created = await createSection(packId, {
+        section_key: uniqueKey,
         title: normalizedTitle,
         sort_order: (data.sections[data.sections.length - 1]?.sort_order ?? 0) + 10,
         fields: [],
         section_type,
       });
       await refresh();
-      setSelected(normalizedKey);
+      setSelected(created.section_key);
       setNewSectionOpen(false);
     } catch (e) {
       alert(e instanceof Error ? e.message : 'Failed to add section');

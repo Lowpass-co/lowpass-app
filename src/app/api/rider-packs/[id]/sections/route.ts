@@ -9,6 +9,7 @@
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { appendHistory } from '@/lib/rider-packs/history';
+import { makeUniqueSectionKey } from '@/lib/rider-packs/templates';
 
 export async function GET(
   _request: Request,
@@ -72,10 +73,10 @@ export async function POST(
       ? 'channel_list'
       : 'fields';
 
-  if (!sectionKey || typeof sectionKey !== 'string') {
+  if (typeof sectionKey !== 'string' || !sectionKey.trim()) {
     return NextResponse.json({ error: 'section_key is required' }, { status: 400 });
   }
-  if (!title || typeof title !== 'string') {
+  if (typeof title !== 'string' || !title.trim()) {
     return NextResponse.json({ error: 'title is required' }, { status: 400 });
   }
 
@@ -88,12 +89,24 @@ export async function POST(
     return NextResponse.json({ error: 'Pack not found' }, { status: 404 });
   }
 
+  const { data: keyRows, error: keysErr } = await supabase
+    .from('rider_sections')
+    .select('section_key')
+    .eq('pack_id', packId);
+  if (keysErr) {
+    return NextResponse.json({ error: keysErr.message }, { status: 500 });
+  }
+  const usedKeys = new Set(
+    (keyRows ?? []).map((r) => (r as { section_key: string }).section_key),
+  );
+  const uniqueKey = makeUniqueSectionKey(sectionKey.trim(), usedKeys);
+
   const { data: inserted, error } = await supabase
     .from('rider_sections')
     .insert({
       pack_id: packId,
-      section_key: sectionKey,
-      title,
+      section_key: uniqueKey,
+      title: title.trim(),
       sort_order: sortOrder,
       fields,
       section_type: sectionType,
@@ -126,7 +139,7 @@ export async function POST(
     packId,
     changedBy: user.id,
     changeType: 'section.added',
-    sectionKey: sectionKey,
+    sectionKey: uniqueKey,
     newValue: inserted,
   });
 
