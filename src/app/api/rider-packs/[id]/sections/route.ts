@@ -67,6 +67,10 @@ export async function POST(
   const sortOrder =
     typeof body.sort_order === 'number' ? (body.sort_order as number) : 0;
   const fields = Array.isArray(body.fields) ? body.fields : [];
+  const sectionType =
+    body.section_type === 'channel_list'
+      ? 'channel_list'
+      : 'fields';
 
   if (!sectionKey || typeof sectionKey !== 'string') {
     return NextResponse.json({ error: 'section_key is required' }, { status: 400 });
@@ -92,6 +96,7 @@ export async function POST(
       title,
       sort_order: sortOrder,
       fields,
+      section_type: sectionType,
     })
     .select()
     .single();

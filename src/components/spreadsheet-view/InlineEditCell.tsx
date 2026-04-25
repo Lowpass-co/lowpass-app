@@ -252,19 +252,22 @@ export function InlineEditCell({
         className
       )}
       title={saving ? 'Saving…' : undefined}
+      aria-busy={saving}
     >
-      {saving ? (
-        '…'
-      ) : (
-        <>
-          <span>{displayValue}</span>
-          {showCurrencyCode && (
-            <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-lp-text-tertiary">
-              {currency}
-            </span>
-          )}
-        </>
-      )}
+      <span className={cn('inline-flex min-w-0 items-baseline gap-1', saving && 'opacity-60')}>
+        <span>{displayValue}</span>
+        {showCurrencyCode && (
+          <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-lp-text-tertiary">
+            {currency}
+          </span>
+        )}
+        {saving && (
+          <span
+            className="inline-block size-1.5 shrink-0 rounded-full bg-lp-orange/70 motion-safe:animate-pulse"
+            aria-hidden
+          />
+        )}
+      </span>
     </button>
   );
 }

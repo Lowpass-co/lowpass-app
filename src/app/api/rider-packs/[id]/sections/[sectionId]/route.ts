@@ -14,6 +14,7 @@ const ALLOWED_SECTION_FIELDS = new Set<string>([
   'sort_order',
   'fields',
   'section_key', // allow rename (e.g. user renames 'technical' -> 'technical_audio')
+  'section_type',
 ]);
 
 export async function PATCH(

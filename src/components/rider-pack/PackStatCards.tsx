@@ -45,12 +45,20 @@ function StatCard({
   );
 }
 
-/** Count sections by kind for caption; all current packs are field sections until R10 adds section_type. */
 export function formatSectionBreakdown(sections: ResolvedSection[]): string {
   const n = sections.length;
   if (n === 0) return 'No sections yet';
-  // When section_type exists on rows, extend to count 'fields' | 'channel_list' | 'attachments' etc.
-  return `${n} — ${n} field ${n === 1 ? 'section' : 'sections'}`;
+  let fields = 0;
+  let channels = 0;
+  for (const s of sections) {
+    const t = s.section_type ?? 'fields';
+    if (t === 'channel_list') channels += 1;
+    else fields += 1;
+  }
+  const parts: string[] = [];
+  if (fields) parts.push(`${fields} field${fields === 1 ? '' : 's'}`);
+  if (channels) parts.push(`${channels} channel list${channels === 1 ? '' : 's'}`);
+  return `${n} — ${parts.join(', ')}`;
 }
 
 export function PackStatCards({ packId, packUpdatedAt, sections, onShareClick }: Props) {

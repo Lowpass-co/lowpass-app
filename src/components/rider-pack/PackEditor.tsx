@@ -47,6 +47,8 @@ import { useDebouncedSave } from '@/hooks/useDebouncedSave';
 import NewSectionDialog from './NewSectionDialog';
 import { formatRelativeTime } from '@/lib/format-relative';
 import { PackStatCards } from './PackStatCards';
+import { SaveStatePill, type SavePillState } from './SaveStatePill';
+import ChannelListEditor from './ChannelListEditor';
 
 type Props = {
   packId: string;
@@ -55,8 +57,6 @@ type Props = {
 type SectionSavePayload = Partial<Pick<ResolvedSection, 'title' | 'sort_order' | 'fields' | 'section_key'>> & {
   sectionId: string;
 };
-
-export type SavePillState = 'idle' | 'pending' | 'saving' | 'saved' | 'error';
 
 type SectionEditorBaseProps = {
   section: ResolvedSection;
@@ -256,7 +256,15 @@ export function PackEditor({ packId }: Props) {
 
   // ----- Section mutations -----
 
-  const handleAddSection = async ({ sectionKey, title }: { sectionKey: string; title: string }) => {
+  const handleAddSection = async ({
+    sectionKey,
+    title,
+    section_type = 'fields',
+  }: {
+    sectionKey: string;
+    title: string;
+    section_type?: 'fields' | 'channel_list';
+  }) => {
     if (!data) return;
     const normalizedKey = sectionKey.trim();
     const normalizedTitle = title.trim() || normalizedKey;
@@ -267,6 +275,7 @@ export function PackEditor({ packId }: Props) {
         title: normalizedTitle,
         sort_order: (data.sections[data.sections.length - 1]?.sort_order ?? 0) + 10,
         fields: [],
+        section_type,
       });
       await refresh();
       setSelected(normalizedKey);
@@ -299,6 +308,7 @@ export function PackEditor({ packId }: Props) {
         title: section.title,
         sort_order: section.sort_order,
         fields: section.fields,
+        section_type: section.section_type,
       });
       await refresh();
     } catch (e) {
@@ -475,6 +485,34 @@ export function PackEditor({ packId }: Props) {
       <main className="overflow-y-auto bg-lp-surface-hover p-6">
         {!selectedSection ? (
           <div className="text-sm text-lp-text-secondary">Select a section, or add a new one.</div>
+        ) : (selectedSection.section_type ?? 'fields') === 'channel_list' ? (
+          <ChannelListEditor
+            key={selectedSection.id}
+            section={selectedSection}
+            pack={data.pack}
+            savePill={savePill}
+            onTitleCommit={(title) => {
+              setData((prev) => {
+                if (!prev) return prev;
+                return {
+                  ...prev,
+                  sections: prev.sections.map((s) =>
+                    s.id === selectedSection.id ? { ...s, title } : s,
+                  ),
+                };
+              });
+              scheduleSectionSave({ sectionId: selectedSection.id, title });
+              void flushSectionSave();
+            }}
+            onFieldBlur={() => {
+              void flushSectionSave();
+            }}
+            onRemove={() => handleRemoveSection(selectedSection)}
+            onOverride={() => handleOverrideSection(selectedSection)}
+            onMoveUp={() => handleMoveSection(selectedSection, -1)}
+            onMoveDown={() => handleMoveSection(selectedSection, 1)}
+            onStructureChange={() => void refresh()}
+          />
         ) : (
           <SectionEditor
             key={selectedSection.id}
@@ -537,36 +575,6 @@ export function PackEditor({ packId }: Props) {
         onSubmit={handleAddSection}
       />
     </div>
-  );
-}
-
-function SaveStatePill({
-  state,
-  error,
-}: {
-  state: 'idle' | 'pending' | 'saving' | 'saved' | 'error';
-  error: string | null;
-}) {
-  if (state === 'idle') return null;
-  const config = {
-    pending: { label: 'Unsaved changes', color: 'var(--lp-text-tertiary)' },
-    saving: { label: 'Saving…', color: 'var(--lp-text-secondary)' },
-    saved: { label: 'Saved', color: 'var(--lp-orange)' },
-    error: { label: error || 'Save failed', color: 'var(--lp-error)' },
-  }[state];
-  return (
-    <span
-      title={state === 'error' && error ? error : undefined}
-      className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide"
-      style={{
-        color: config.color,
-        border: `1px solid ${config.color}`,
-        backgroundColor: 'transparent',
-      }}
-    >
-      <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: config.color }} />
-      {config.label}
-    </span>
   );
 }
 

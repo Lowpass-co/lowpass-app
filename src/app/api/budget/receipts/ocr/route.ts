@@ -24,6 +24,25 @@ function anthropicErrorText(err: APIError): string {
   return parts.join(' ');
 }
 
+const BILLING_ERROR_USER_MSG =
+  'Receipt scan uses the Anthropic API (Claude), which is billed separately from your Lowpass subscription. Add credits or a payment method at console.anthropic.com for the org that owns ANTHROPIC_API_KEY, or set a new key in the Vercel project environment.';
+
+/** Works even when the SDK does not use APIError (or embeds 400 + JSON in Error.message). */
+function looksLikeAnthropicCreditError(err: unknown): boolean {
+  const chunks: string[] = [];
+  if (err instanceof APIError) {
+    chunks.push(anthropicErrorText(err), err.message ?? '', String(err.status ?? ''));
+  } else if (err instanceof Error) {
+    chunks.push(err.message);
+  } else {
+    chunks.push(String(err));
+  }
+  const t = chunks.join(' ').toLowerCase();
+  if (t.includes('balance is too low') || t.includes('plans & billing')) return true;
+  if (t.includes('credit') && (t.includes('too low') || t.includes('balance'))) return true;
+  return false;
+}
+
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'] as const;
 
 export async function POST(request: Request) {
@@ -106,30 +125,17 @@ If any field is unclear, use null. Tour currency is ${tourCurrency}.`,
     return NextResponse.json(receiptData);
   } catch (err) {
     console.error('Receipt OCR error:', err);
+    if (looksLikeAnthropicCreditError(err)) {
+      return NextResponse.json({ error: BILLING_ERROR_USER_MSG, code: 'ANTHROPIC_BILLING' }, { status: 503 });
+    }
     if (err instanceof APIError) {
-      const text = anthropicErrorText(err).toLowerCase();
-      if (
-        text.includes('credit') ||
-        text.includes('balance is too low') ||
-        text.includes('billing') ||
-        text.includes('plans & billing')
-      ) {
-        return NextResponse.json(
-          {
-            error:
-              'Receipt scan uses the Anthropic API (Claude), which is billed separately from your Lowpass app plan. This key has no API credits—add a payment method or credits at console.anthropic.com for the org that owns ANTHROPIC_API_KEY, or set a new key in Vercel.',
-            code: 'ANTHROPIC_BILLING',
-          },
-          { status: 503 },
-        );
-      }
       return NextResponse.json(
         { error: 'Could not read this receipt with the AI service. Try again or enter the receipt manually.', code: 'ANTHROPIC_API' },
         { status: 502 },
       );
     }
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'OCR failed' },
+      { error: 'Could not read this receipt. Try again or enter the details manually.', code: 'OCR_FAILED' },
       { status: 500 },
     );
   }

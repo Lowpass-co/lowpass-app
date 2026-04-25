@@ -8,7 +8,7 @@
    ============================================ */
 
 import { useState, useEffect } from 'react';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, ArrowRight } from 'lucide-react';
 import { parseRoutingDate, getAdvanceStatusInfo, cn } from '@/lib/utils';
 import { BrandedSelect } from '@/components/ui/BrandedSelect';
 
@@ -70,8 +70,10 @@ export function CopyAdvanceModal({
 }) {
   const [sourceId, setSourceId] = useState('');
   const [targetIds, setTargetIds] = useState<Set<string>>(new Set());
-  const [copySections, setCopySections] = useState(true);
-  const [copyData, setCopyData] = useState(true);
+  /** 'layout' = structure only; 'layout_and_data' = same as old both checkboxes on */
+  const [copyMode, setCopyMode] = useState<'layout' | 'layout_and_data'>('layout_and_data');
+  const copySections = true;
+  const copyData = copyMode === 'layout_and_data';
   const [submitting, setSubmitting] = useState(false);
   const [confirming, setConfirming] = useState(false);
 
@@ -208,26 +210,64 @@ export function CopyAdvanceModal({
             )}
           </div>
 
-          {/* Checkboxes */}
-          <div className="flex flex-wrap gap-6">
-            <label className="flex cursor-pointer items-center gap-2">
-              <input
-                type="checkbox"
-                checked={copySections}
-                onChange={(e) => setCopySections(e.target.checked)}
-                className="lp-checkbox"
-              />
-              <span className="text-sm text-lp-text">Copy section layout</span>
-            </label>
-            <label className="flex cursor-pointer items-center gap-2">
-              <input
-                type="checkbox"
-                checked={copyData}
-                onChange={(e) => setCopyData(e.target.checked)}
-                className="lp-checkbox"
-              />
-              <span className="text-sm text-lp-text">Copy filled data</span>
-            </label>
+          {/* Copy mode: side-by-side (layout vs layout + data) + source → target flow */}
+          <div className="space-y-3">
+            <p className="text-xs font-medium text-lp-text-tertiary uppercase tracking-wide">What to copy</p>
+            <div
+              className="flex items-center justify-center gap-2 rounded-lg border border-lp-border-light bg-lp-bg px-3 py-2.5 text-center"
+              role="img"
+              aria-label="From source show to target shows"
+            >
+              <span className="min-w-0 text-xs font-medium text-lp-text">This side (source)</span>
+              <ArrowRight className="h-4 w-4 shrink-0 text-lp-orange" strokeWidth={2.25} aria-hidden />
+              <span className="min-w-0 text-xs font-medium text-lp-text">This side (targets you pick below)</span>
+            </div>
+            <fieldset>
+              <legend className="sr-only">Copy mode</legend>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <label
+                  className={cn(
+                    'relative cursor-pointer rounded-xl border-2 p-3 transition-colors hover:bg-lp-surface-hover focus-within:ring-2 focus-within:ring-lp-orange/35 focus-within:ring-offset-2',
+                    copyMode === 'layout' ? 'border-lp-orange bg-lp-surface' : 'border-lp-border'
+                  )}
+                >
+                  <input
+                    type="radio"
+                    name="copyMode"
+                    value="layout"
+                    checked={copyMode === 'layout'}
+                    onChange={() => setCopyMode('layout')}
+                    className="sr-only"
+                  />
+                  <span className="block text-sm font-semibold text-lp-text">Layout</span>
+                  <span className="mt-0.5 block text-xs text-lp-text-secondary leading-snug">
+                    Same sections and fields on each target — answers stay empty (not started).
+                  </span>
+                </label>
+                <label
+                  className={cn(
+                    'relative cursor-pointer rounded-xl border-2 p-3 transition-colors hover:bg-lp-surface-hover focus-within:ring-2 focus-within:ring-lp-orange/35 focus-within:ring-offset-2',
+                    copyMode === 'layout_and_data' ? 'border-lp-orange bg-lp-surface' : 'border-lp-border'
+                  )}
+                >
+                  <input
+                    type="radio"
+                    name="copyMode"
+                    value="layout_and_data"
+                    checked={copyMode === 'layout_and_data'}
+                    onChange={() => setCopyMode('layout_and_data')}
+                    className="sr-only"
+                  />
+                  <span className="block text-sm font-semibold text-lp-text">Layout + data</span>
+                  <span className="mt-0.5 block text-xs text-lp-text-secondary leading-snug">
+                    Same structure and all filled-in values, statuses, and progress from the source.
+                  </span>
+                </label>
+              </div>
+            </fieldset>
+            <p className="text-xs text-lp-text-tertiary">
+              Nothing is removed from the source. Targets you tick will be updated to match the option above.
+            </p>
           </div>
 
           {/* Target shows */}

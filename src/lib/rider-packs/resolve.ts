@@ -20,6 +20,9 @@ import type {
   RiderSection,
   ResolvedSection,
   ResolvedPack,
+  SubSnake,
+  ChannelListRow,
+  SectionType,
 } from './types';
 
 /** Walk folder.parent chain; collect (pack id, scope) for each parent folder. */
@@ -100,17 +103,54 @@ export async function resolvePack(
     if (byKey.has(row.section_key)) continue;
     const { pack: srcPack, ...rest } = row as RiderSection & {
       pack: { id: string; scope: PackScope };
+      section_type?: SectionType;
     };
+    const st: SectionType = rest.section_type ?? 'fields';
     byKey.set(row.section_key, {
       ...rest,
+      section_type: st,
       inherited_from: srcPack.id === pack.id ? null : srcPack.scope,
       source_pack_id: srcPack.id,
     });
   }
 
-  const sections = Array.from(byKey.values()).sort(
+  let sections = Array.from(byKey.values()).sort(
     (a, b) => a.sort_order - b.sort_order,
   );
+
+  const channelIds = sections.filter((s) => s.section_type === 'channel_list').map((s) => s.id);
+  if (channelIds.length > 0) {
+    const [{ data: subRows, error: e1 }, { data: chRows, error: e2 }] = await Promise.all([
+      supabase.from('sub_snakes').select('*').in('section_id', channelIds).order('position'),
+      supabase
+        .from('channel_list_rows')
+        .select('*')
+        .in('section_id', channelIds)
+        .order('row_index', { ascending: true }),
+    ]);
+    if (e1) throw e1;
+    if (e2) throw e2;
+
+    const subBy = new Map<string, SubSnake[]>();
+    for (const r of subRows ?? []) {
+      const s = r as SubSnake;
+      const list = subBy.get(s.section_id) ?? [];
+      list.push(s);
+      subBy.set(s.section_id, list);
+    }
+    const rowBy = new Map<string, ChannelListRow[]>();
+    for (const r of chRows ?? []) {
+      const row = r as ChannelListRow;
+      const list = rowBy.get(row.section_id) ?? [];
+      list.push(row);
+      rowBy.set(row.section_id, list);
+    }
+    sections = sections.map((s) =>
+      s.section_type === 'channel_list'
+        ? { ...s, subSnakes: subBy.get(s.id) ?? [], rows: rowBy.get(s.id) ?? [] }
+        : s,
+    );
+  }
 
   return { pack, sections };
 }

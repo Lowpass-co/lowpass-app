@@ -47,6 +47,23 @@ const IN_BUDGET_OPTIONS = [
   { value: 'false', label: 'No' },
 ];
 
+/** Parse OCR error JSON whether the API returns `{ error: string }` or a nested provider shape. */
+function ocrErrorMessageFromBody(body: Record<string, unknown>): string {
+  const e = body.error;
+  if (typeof e === 'string') return e;
+  if (e && typeof e === 'object' && e !== null) {
+    const o = e as Record<string, unknown>;
+    if (typeof o.message === 'string') return o.message;
+    const inner = o.error;
+    if (inner && typeof inner === 'object' && inner !== null && 'message' in inner) {
+      const m = (inner as { message?: unknown }).message;
+      if (typeof m === 'string') return m;
+    }
+  }
+  if (typeof body.message === 'string') return body.message;
+  return 'Scan failed';
+}
+
 const COLS = [
   { key: 'receipt_number', label: 'Receipt #', width: '88px' },
   { key: 'date', label: 'Date', width: '100px' },
@@ -145,15 +162,8 @@ export function ReceiptsGrid({ tourId, currency }: { tourId: string; currency: s
           body: formData,
         });
         if (!ocrRes.ok) {
-          const err = await ocrRes.json().catch(() => ({} as { error?: unknown }));
-          const raw = err.error;
-          const msg =
-            typeof raw === 'string'
-              ? raw
-              : raw && typeof raw === 'object' && raw !== null && 'message' in raw
-                ? String((raw as { message?: string }).message)
-                : 'Scan failed';
-          throw new Error(msg);
+          const errBody = (await ocrRes.json().catch(() => ({}))) as Record<string, unknown>;
+          throw new Error(ocrErrorMessageFromBody(errBody));
         }
         const ocr = await ocrRes.json();
         const amount = Number(ocr.total_amount) || 0;

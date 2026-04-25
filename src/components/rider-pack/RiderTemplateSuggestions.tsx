@@ -35,6 +35,7 @@ export function RiderTemplateSuggestions({ packId, sections, onApplied }: Props)
           title: sec.title,
           sort_order: sortBase,
           fields: sec.fields,
+          section_type: 'fields',
         });
         sortBase += 10;
       }

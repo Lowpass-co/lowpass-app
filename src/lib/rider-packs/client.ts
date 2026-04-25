@@ -15,6 +15,7 @@ import type {
   RiderPack,
   RiderPackHistoryRow,
   RiderSection,
+  SectionType,
 } from './types';
 
 // --- low-level ---------------------------------------------------------------
@@ -102,7 +103,13 @@ export async function deletePack(id: string): Promise<void> {
 
 export async function createSection(
   packId: string,
-  body: { section_key: string; title: string; sort_order?: number; fields?: unknown[] },
+  body: {
+    section_key: string;
+    title: string;
+    sort_order?: number;
+    fields?: unknown[];
+    section_type?: SectionType;
+  },
 ): Promise<RiderSection> {
   const res = await fetch(`/api/rider-packs/${packId}/sections`, {
     method: 'POST',
@@ -115,7 +122,7 @@ export async function createSection(
 export async function updateSection(
   packId: string,
   sectionId: string,
-  body: Partial<Pick<RiderSection, 'title' | 'sort_order' | 'fields' | 'section_key'>>,
+  body: Partial<Pick<RiderSection, 'title' | 'sort_order' | 'fields' | 'section_key' | 'section_type'>>,
 ): Promise<RiderSection> {
   const res = await fetch(`/api/rider-packs/${packId}/sections/${sectionId}`, {
     method: 'PATCH',

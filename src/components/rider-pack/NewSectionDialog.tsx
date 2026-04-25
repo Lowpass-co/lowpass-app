@@ -1,12 +1,13 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { LayoutList } from 'lucide-react';
+import { LayoutGrid, LayoutList } from 'lucide-react';
+import type { SectionType } from '@/lib/rider-packs/types';
 
 type Props = {
   open: boolean;
   onClose: () => void;
-  onSubmit: (args: { sectionKey: string; title: string }) => void;
+  onSubmit: (args: { sectionKey: string; title: string; section_type: SectionType }) => void;
 };
 
 function slugify(input: string): string {
@@ -21,7 +22,7 @@ export default function NewSectionDialog({ open, onClose, onSubmit }: Props) {
   const [title, setTitle] = useState('');
   const [sectionKey, setSectionKey] = useState('');
   const [keyEdited, setKeyEdited] = useState(false);
-  const [typeSelected, setTypeSelected] = useState(true);
+  const [sectionType, setSectionType] = useState<SectionType>('fields');
 
   useEffect(() => {
     if (!open) return;
@@ -37,13 +38,13 @@ export default function NewSectionDialog({ open, onClose, onSubmit }: Props) {
       setTitle('');
       setSectionKey('');
       setKeyEdited(false);
-      setTypeSelected(true);
+      setSectionType('fields');
     }
   }, [open]);
 
   const canSubmit = useMemo(
-    () => typeSelected && title.trim().length > 0 && sectionKey.trim().length > 0,
-    [typeSelected, title, sectionKey],
+    () => title.trim().length > 0 && sectionKey.trim().length > 0,
+    [title, sectionKey],
   );
 
   if (!open) return null;
@@ -63,9 +64,9 @@ export default function NewSectionDialog({ open, onClose, onSubmit }: Props) {
         <div className="mt-4 space-y-2">
           <button
             type="button"
-            onClick={() => setTypeSelected(true)}
+            onClick={() => setSectionType('fields')}
             className={`flex w-full items-start gap-3 rounded-xl border p-3 text-left transition-colors hover:bg-lp-surface-hover ${
-              typeSelected ? 'border-lp-orange' : 'border-lp-border'
+              sectionType === 'fields' ? 'border-lp-orange' : 'border-lp-border'
             }`}
           >
             <span className="mt-0.5 shrink-0 text-lp-orange">
@@ -78,6 +79,27 @@ export default function NewSectionDialog({ open, onClose, onSubmit }: Props) {
               </span>
             </span>
           </button>
+          <button
+            type="button"
+            onClick={() => {
+              setSectionType('channel_list');
+              setTitle((t) => (t.trim() === '' ? 'Input channels' : t));
+              if (!keyEdited) setSectionKey((k) => (k.trim() === '' ? slugify('input-channels') : k));
+            }}
+            className={`flex w-full items-start gap-3 rounded-xl border p-3 text-left transition-colors hover:bg-lp-surface-hover ${
+              sectionType === 'channel_list' ? 'border-lp-orange' : 'border-lp-border'
+            }`}
+          >
+            <span className="mt-0.5 shrink-0 text-lp-orange">
+              <LayoutGrid className="h-5 w-5" strokeWidth={1.75} />
+            </span>
+            <span>
+              <span className="block text-sm font-medium text-lp-text">Channel list</span>
+              <span className="mt-0.5 block text-xs text-lp-text-secondary">
+                Inputs and routing — drag to reorder, sub-snakes, mics, phantom, provider.
+              </span>
+            </span>
+          </button>
         </div>
 
         <form
@@ -85,7 +107,11 @@ export default function NewSectionDialog({ open, onClose, onSubmit }: Props) {
           onSubmit={(event) => {
             event.preventDefault();
             if (!canSubmit) return;
-            onSubmit({ sectionKey: sectionKey.trim(), title: title.trim() });
+            onSubmit({
+              sectionKey: sectionKey.trim(),
+              title: title.trim(),
+              section_type: sectionType,
+            });
           }}
         >
           <div>

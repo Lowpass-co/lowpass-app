@@ -125,13 +125,13 @@ export function DayViewTab({ tourId }: { tourId: string }) {
         if (typeof c === 'string' && c.trim()) setCurrency(c.trim());
       }
 
-      if (!selectedRoutingId && routingRows.length > 0) {
-        setSelectedRoutingId(routingRows[0].id);
-      }
+      setSelectedRoutingId((prev) =>
+        prev == null && routingRows.length > 0 ? routingRows[0].id : prev
+      );
     } finally {
       setLoading(false);
     }
-  }, [tourId, selectedRoutingId]);
+  }, [tourId]);
 
   useEffect(() => {
     fetchAll();

@@ -106,6 +106,9 @@ export const FIELD_TYPES = [
 
 export type FieldType = (typeof FIELD_TYPES)[number];
 
+/** How section content is stored and edited. */
+export type SectionType = 'fields' | 'channel_list';
+
 /** Grouping for rider content: many per artist / tour / show; one pack per folder (migration 039). */
 export type RiderFolder = {
   id: string;
@@ -148,9 +151,50 @@ export type RiderSection = {
   section_key: string;
   title: string;
   sort_order: number;
+  /** Defaults to `fields` when missing (pre-migration rows). */
+  section_type?: SectionType;
   fields: Field[];
   created_at: string;
   updated_at: string;
+};
+
+export type SubSnake = {
+  id: string;
+  pack_id: string;
+  section_id: string;
+  label: string;
+  colour: string;
+  position: number;
+  created_at: string;
+};
+
+export type ChannelListRow = {
+  id: string;
+  pack_id: string;
+  section_id: string;
+  row_index: number;
+  channel_name: string;
+  sub_snake_id: string | null;
+  stage_box: string;
+  position: string;
+  mic: string;
+  mic_substitute: string;
+  di: string;
+  stand: string;
+  phantom_power: boolean | null;
+  provider: 'band' | 'venue' | 'hire' | null;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type Provider = 'band' | 'venue' | 'hire';
+
+export type MicLibraryEntry = {
+  id: string;
+  name: string;
+  type: 'dynamic' | 'condenser' | 'ribbon' | 'di_active' | 'di_passive';
+  default_phantom: boolean;
 };
 
 /** Resolved section with inheritance metadata. */
@@ -159,6 +203,10 @@ export type ResolvedSection = RiderSection & {
   inherited_from: PackScope | null;
   /** Pack ID the section was sourced from (may differ from the requested pack). */
   source_pack_id: string;
+  /** Set when `section_type === 'channel_list'` (from resolve). */
+  subSnakes?: SubSnake[];
+  /** Set when `section_type === 'channel_list'` (from resolve). */
+  rows?: ChannelListRow[];
 };
 
 /** Shape returned by GET /api/rider-packs/[id]/resolved. */

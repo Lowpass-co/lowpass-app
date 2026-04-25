@@ -23,6 +23,42 @@ interface AdvanceData {
   data?: Record<string, Record<string, unknown>>;
 }
 
+function formatAdvanceFieldValue(value: unknown): string {
+  if (value === undefined || value === null || value === '') return '—';
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
+  }
+  if (Array.isArray(value)) {
+    if (value.length === 0) return '—';
+    const parts = value.map((item) => {
+      if (item && typeof item === 'object' && !Array.isArray(item)) {
+        const o = item as Record<string, unknown>;
+        if ('type' in o || 'time' in o) {
+          const type = o.type != null && o.type !== '' ? String(o.type) : '';
+          const time = o.time != null && o.time !== '' ? String(o.time) : '';
+          const line = [type, time].filter(Boolean).join(' · ');
+          return line || null;
+        }
+      }
+      try {
+        return JSON.stringify(item);
+      } catch {
+        return String(item);
+      }
+    });
+    const joined = parts.filter((p) => p != null && p !== '—').join('; ');
+    return joined || '—';
+  }
+  if (typeof value === 'object') {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return String(value);
+    }
+  }
+  return String(value);
+}
+
 export function DayAdvancePanel({ tourId, routingId }: DayAdvancePanelProps) {
   const [advance, setAdvance] = useState<AdvanceData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -38,13 +74,14 @@ export function DayAdvancePanel({ tourId, routingId }: DayAdvancePanelProps) {
         return;
       }
       const json = await res.json();
-      setAdvance(json.advance ?? null);
-      const first = json.advance?.sections?.[0];
-      if (first && !activeTab) setActiveTab(first.template_id);
+      const adv = json.advance ?? null;
+      setAdvance(adv);
+      const first = adv?.sections?.[0];
+      setActiveTab(first?.template_id ?? null);
     } finally {
       setLoading(false);
     }
-  }, [tourId, routingId, activeTab]);
+  }, [tourId, routingId]);
 
   useEffect(() => {
     fetchAdvance();
@@ -121,10 +158,7 @@ export function DayAdvancePanel({ tourId, routingId }: DayAdvancePanelProps) {
           const label = (field as { label?: string }).label ?? fieldId;
           const value = sectionData[fieldId];
           const isEditing = editing?.sectionId === sectionId && editing?.fieldId === fieldId;
-          const displayValue =
-            value === undefined || value === null || value === ''
-              ? '—'
-              : String(value);
+          const displayValue = formatAdvanceFieldValue(value);
 
           return (
             <div key={fieldId} className="flex justify-between items-start gap-2 py-1 text-sm">

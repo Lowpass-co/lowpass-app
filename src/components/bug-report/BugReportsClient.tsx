@@ -307,12 +307,14 @@ export function BugReportsClient() {
       total: reports?.length ?? 0,
       open: 0,
       in_progress: 0,
+      pending_testing: 0,
       resolved: 0,
       critical: 0,
     };
     for (const r of reports ?? []) {
       if (r.status === 'open') out.open += 1;
       if (r.status === 'in_progress') out.in_progress += 1;
+      if (r.status === 'pending_testing') out.pending_testing += 1;
       if (r.status === 'resolved') out.resolved += 1;
       if (r.severity === 'critical' && r.status !== 'resolved' && r.status !== 'wont_fix') out.critical += 1;
     }
@@ -383,6 +385,21 @@ export function BugReportsClient() {
       <StatCards counts={counts} />
 
       <div className="flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          aria-pressed={statusFilter === 'pending_testing'}
+          onClick={() => setStatusFilter(s => (s === 'pending_testing' ? 'all' : 'pending_testing'))}
+          className="inline-flex h-9 items-center gap-2 rounded-xl px-3 text-sm font-semibold transition-colors"
+          style={{
+            backgroundColor: statusFilter === 'pending_testing' ? '#f59e0b26' : 'var(--lp-surface)',
+            border: `1px solid ${
+              statusFilter === 'pending_testing' ? '#f59e0b88' : 'var(--lp-border)'
+            }`,
+            color: statusFilter === 'pending_testing' ? '#f59e0b' : 'var(--lp-text)',
+          }}
+        >
+          {statusFilter === 'pending_testing' ? 'Showing: to be tested' : 'Show to be tested'}
+        </button>
         <div
           className="flex items-center gap-2 rounded-lg px-3"
           style={{ backgroundColor: 'var(--lp-bg-secondary)', border: '1px solid var(--lp-border)' }}
@@ -591,17 +608,25 @@ export function BugReportsClient() {
 function StatCards({
   counts,
 }: {
-  counts: { total: number; open: number; in_progress: number; resolved: number; critical: number };
+  counts: {
+    total: number;
+    open: number;
+    in_progress: number;
+    pending_testing: number;
+    resolved: number;
+    critical: number;
+  };
 }) {
   const cards = [
     { label: 'Total', value: counts.total, color: 'var(--lp-text)' },
     { label: 'Open', value: counts.open, color: STATUS_META.open.color },
     { label: 'In progress', value: counts.in_progress, color: STATUS_META.in_progress.color },
+    { label: 'Pending testing', value: counts.pending_testing, color: STATUS_META.pending_testing.color },
     { label: 'Critical', value: counts.critical, color: SEVERITY_META.critical.color },
     { label: 'Resolved', value: counts.resolved, color: STATUS_META.resolved.color },
   ];
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
       {cards.map(c => (
         <div
           key={c.label}

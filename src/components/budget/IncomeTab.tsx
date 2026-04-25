@@ -5,6 +5,7 @@ import dynamic from 'next/dynamic';
 import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { parseRoutingDate } from '@/lib/utils';
+import { parseBudgetAmountInput } from '@/lib/budget-utils';
 import { RoutingMiniCalendar, DayTypePill, type CalRow } from '@/components/budget/RoutingMiniCalendar';
 import { RoutingGrid, type RoutingRow, type TransportToNext } from '@/components/routing/RoutingGrid';
 import { BrandedSelect } from '@/components/ui/BrandedSelect';
@@ -155,6 +156,46 @@ type FullRow = IncomeRow & {
   routing: { date: string; venue_name: string; city: string; day_type: string };
   isNew?: boolean;
 };
+
+/**
+ * `type="number"` strips/invalidates commas (e.g. Safari), so "70,000" becomes 70. Text
+ * field + commit on blur allows thousands separators. Parent still stores a number.
+ */
+function IncomeTextAmountField({
+  value,
+  onCommit,
+  onAfterCommit,
+  className,
+}: {
+  value: number;
+  onCommit: (n: number | null) => void;
+  onAfterCommit: () => void;
+  className: string;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      autoComplete="off"
+      className={className}
+      value={editing ? draft : value ? String(value) : ''}
+      onFocus={() => {
+        setEditing(true);
+        setDraft(value ? String(value) : '');
+      }}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={(e) => {
+        const n = parseBudgetAmountInput(e.target.value);
+        onCommit(n === null ? null : n);
+        setEditing(false);
+        onAfterCommit();
+      }}
+    />
+  );
+}
 
 // ─── Main IncomeTab ──────────────────────────────────────────────────────────
 
@@ -828,19 +869,22 @@ export function IncomeTab({ tourId }: { tourId: string }) {
 
                   {/* Pre-tax guarantee */}
                   <td className="px-4 py-2">
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
+                    <IncomeTextAmountField
+                      value={row.pre_tax_guarantee}
                       className="w-full rounded-md border border-lp-border bg-transparent px-2 py-1 text-right text-xs text-lp-text tabular-nums focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30"
-                      value={row.pre_tax_guarantee || ''}
-                      onChange={(e) => {
-                        handleFieldChange(row.routing_id, 'pre_tax_guarantee', e.target.value === '' ? null : Number(e.target.value));
-                        scheduleIncomeSave(row.routing_id);
+                      onCommit={(n) => {
+                        handleFieldChange(
+                          row.routing_id,
+                          'pre_tax_guarantee',
+                          n === null || n === undefined ? null : n
+                        );
                       }}
-                      onBlur={() => {
-                        const r = allRowsRef.current.find((x) => x.routing_id === row.routing_id);
-                        if (r) flushIncomeSave(r);
+                      onAfterCommit={() => {
+                        const id = row.routing_id;
+                        queueMicrotask(() => {
+                          const r = allRowsRef.current.find((x) => x.routing_id === id);
+                          if (r) flushIncomeSave(r);
+                        });
                       }}
                     />
                   </td>

@@ -11,7 +11,14 @@ import { getUserAndAdminStatus } from '@/lib/site-admin';
 
 export const runtime = 'nodejs';
 
-const ALLOWED_STATUS = new Set(['open', 'in_progress', 'resolved', 'wont_fix', 'duplicate']);
+const ALLOWED_STATUS = new Set([
+  'open',
+  'in_progress',
+  'pending_testing',
+  'resolved',
+  'wont_fix',
+  'duplicate',
+]);
 const ALLOWED_SEVERITIES = new Set(['low', 'medium', 'high', 'critical']);
 
 export async function PATCH(
