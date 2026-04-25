@@ -1,16 +1,20 @@
 import Link from 'next/link';
+import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { RiderPacksIndexToolbar } from '@/components/rider-pack/RiderPacksIndexToolbar';
+import { RiderPacksUrlSync } from '@/components/rider-pack/RiderPacksUrlSync';
 
 export const dynamic = 'force-dynamic';
 
 export default async function RiderPacksIndexPage({
   searchParams,
 }: {
-  searchParams: Promise<{ artist_id?: string }>;
+  searchParams: Promise<{ artist_id?: string; all?: string }>;
 }) {
   const params = await searchParams;
+  const showAllWorkspace =
+    params.all === '1' || params.all === 'true' || params.all === 'yes';
   const rawArtistId = params.artist_id?.trim() ?? null;
 
   const supabase = await createServerSupabaseClient();
@@ -40,11 +44,12 @@ export default async function RiderPacksIndexPage({
   ]);
 
   const list = artists ?? [];
-  const contextArtist =
-    rawArtistId && list.some((a) => a.id === rawArtistId)
+  const contextArtist = showAllWorkspace
+    ? null
+    : rawArtistId && list.some((a) => a.id === rawArtistId)
       ? list.find((a) => a.id === rawArtistId) ?? null
       : null;
-  const badArtistParam = rawArtistId && !contextArtist;
+  const badArtistParam = !showAllWorkspace && rawArtistId && !contextArtist;
 
   const allPacks = packs ?? [];
   const displayedPacks = contextArtist
@@ -55,12 +60,15 @@ export default async function RiderPacksIndexPage({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col space-y-5">
+      <Suspense fallback={null}>
+        <RiderPacksUrlSync />
+      </Suspense>
       <header className="space-y-1">
         <div className="flex flex-col gap-2 sm:flex-row sm:items-baseline sm:justify-between sm:gap-4">
           <h1 className="text-2xl font-bold text-lp-text">Rider Packs</h1>
           {contextArtist && (
             <Link
-              href="/rider-packs"
+              href="/rider-packs?all=1"
               className="shrink-0 text-xs text-[var(--lp-orange)] hover:underline"
             >
               All workspace packs
