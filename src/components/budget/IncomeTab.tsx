@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -26,6 +27,15 @@ const BudgetRoutingMap = dynamic(
 /** post_tax = pre_tax × (1 - withholding_pct / 100) */
 function postTaxFromPreTax(preTax: number, withholdingPct: number): number {
   return preTax * (1 - withholdingPct / 100);
+}
+
+/** Coerce API/local values so formatted strings (e.g. "70,000") never yield NaN totals. */
+function incomeAmountFromUnknown(v: unknown): number {
+  if (v == null) return 0;
+  if (typeof v === 'number' && Number.isFinite(v)) return v;
+  if (typeof v === 'string') return parseBudgetAmountInput(v) ?? 0;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
 }
 
 function fmt(n: number) {
@@ -200,13 +210,16 @@ function IncomeTextAmountField({
 // ─── Main IncomeTab ──────────────────────────────────────────────────────────
 
 export function IncomeTab({ tourId }: { tourId: string }) {
+  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [incomeRows, setIncomeRows] = useState<IncomeRow[]>([]);
   const [routingOnly, setRoutingOnly] = useState<RoutingOnlyRow[]>([]);
   const [localEdits, setLocalEdits] = useState<Record<string, Partial<IncomeRow>>>({});
   const [error, setError] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
-  const [activeSubTab, setActiveSubTab] = useState<'routing' | 'income'>('routing');
+  const [activeSubTab, setActiveSubTab] = useState<'routing' | 'income'>(() =>
+    searchParams.get('tab') === 'income' ? 'income' : 'routing',
+  );
   const [routingRows, setRoutingRows] = useState<RoutingRow[]>([]);
   const [routingAutosaveState, setRoutingAutosaveState] = useState<'idle' | 'saving' | 'error'>('idle');
   const [primaryTransit, setPrimaryTransit] = useState<PrimaryTransit>('bus_van');
@@ -354,8 +367,11 @@ export function IncomeTab({ tourId }: { tourId: string }) {
   const mergeRow = (base: FullRow): FullRow => {
     const edits = localEdits[base.routing_id] ?? {};
     const merged = { ...base, ...edits } as FullRow;
-    merged.post_tax_guarantee = postTaxFromPreTax(Number(merged.pre_tax_guarantee), Number(merged.withholding_pct));
-    merged.post_tax_overage = postTaxFromPreTax(Number(merged.pre_tax_overage), Number(merged.withholding_pct));
+    const preG = incomeAmountFromUnknown(merged.pre_tax_guarantee);
+    const preO = incomeAmountFromUnknown(merged.pre_tax_overage);
+    const w = incomeAmountFromUnknown(merged.withholding_pct);
+    merged.post_tax_guarantee = postTaxFromPreTax(preG, w);
+    merged.post_tax_overage = postTaxFromPreTax(preO, w);
     return merged;
   };
 
@@ -599,10 +615,22 @@ export function IncomeTab({ tourId }: { tourId: string }) {
     }
   };
 
-  const proposedTotal = allRows.reduce((a, r) => a + r.post_tax_guarantee + r.merch_income + r.vip_income, 0);
+  const proposedTotal = allRows.reduce(
+    (a, r) =>
+      a +
+      incomeAmountFromUnknown(r.post_tax_guarantee) +
+      incomeAmountFromUnknown(r.merch_income) +
+      incomeAmountFromUnknown(r.vip_income),
+    0,
+  );
   const actualTotal = allRows.reduce(
-    (a, r) => a + (r.actual_guarantee ?? 0) + (r.actual_overage ?? 0) + (r.actual_merch ?? 0) + (r.actual_vip ?? 0),
-    0
+    (a, r) =>
+      a +
+      incomeAmountFromUnknown(r.actual_guarantee) +
+      incomeAmountFromUnknown(r.actual_overage) +
+      incomeAmountFromUnknown(r.actual_merch) +
+      incomeAmountFromUnknown(r.actual_vip),
+    0,
   );
 
   /** Calendar + map follow the routing grid so edits show before autosave completes */
