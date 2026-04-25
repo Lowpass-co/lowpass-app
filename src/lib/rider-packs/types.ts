@@ -168,6 +168,17 @@ export type SubSnake = {
   created_at: string;
 };
 
+/** Stage I/O labels (e.g. 16A) for the channel list I/O column; same shape as sub-snake rows. */
+export type SectionStageIO = {
+  id: string;
+  pack_id: string;
+  section_id: string;
+  label: string;
+  colour: string;
+  position: number;
+  created_at: string;
+};
+
 export type ChannelListRow = {
   id: string;
   pack_id: string;
@@ -175,6 +186,8 @@ export type ChannelListRow = {
   row_index: number;
   channel_name: string;
   sub_snake_id: string | null;
+  /** Optional pick from "Manage stage I/O"; legacy free text in `stage_box` when null. */
+  stage_io_id?: string | null;
   stage_box: string;
   position: string;
   mic: string;
@@ -205,6 +218,8 @@ export type ResolvedSection = RiderSection & {
   source_pack_id: string;
   /** Set when `section_type === 'channel_list'` (from resolve). */
   subSnakes?: SubSnake[];
+  /** Set when `section_type === 'channel_list'` (from resolve). */
+  stageIOs?: SectionStageIO[];
   /** Set when `section_type === 'channel_list'` (from resolve). */
   rows?: ChannelListRow[];
 };

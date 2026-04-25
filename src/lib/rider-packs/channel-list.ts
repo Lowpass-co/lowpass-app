@@ -1,11 +1,12 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
-import type { ChannelListRow, SubSnake } from './types';
+import type { ChannelListRow, SectionStageIO, SubSnake } from './types';
 
 type RowPatch = Partial<
   Pick<
     ChannelListRow,
     | 'channel_name'
     | 'sub_snake_id'
+    | 'stage_io_id'
     | 'stage_box'
     | 'position'
     | 'mic'
@@ -65,6 +66,56 @@ export async function updateSubSnake(
 
 export async function deleteSubSnake(supabase: SupabaseClient, id: string): Promise<void> {
   const { error } = await supabase.from('sub_snakes').delete().eq('id', id);
+  if (error) throw new Error(error.message);
+}
+
+export async function listStageIO(supabase: SupabaseClient, sectionId: string): Promise<SectionStageIO[]> {
+  const { data, error } = await supabase
+    .from('section_stage_io')
+    .select('*')
+    .eq('section_id', sectionId)
+    .order('position', { ascending: true });
+  if (error) throw new Error(error.message);
+  return (data ?? []) as SectionStageIO[];
+}
+
+export async function createStageIO(
+  supabase: SupabaseClient,
+  args: { packId: string; sectionId: string; label: string; colour: string },
+): Promise<SectionStageIO> {
+  const { data: existing } = await supabase
+    .from('section_stage_io')
+    .select('position')
+    .eq('section_id', args.sectionId);
+  const nextPos = existing?.length ? Math.max(...existing.map((r) => r.position)) + 1 : 0;
+  const { data, error } = await supabase
+    .from('section_stage_io')
+    .insert({
+      pack_id: args.packId,
+      section_id: args.sectionId,
+      label: args.label,
+      colour: args.colour,
+      position: nextPos,
+    })
+    .select('*')
+    .single();
+  if (error) throw new Error(error.message);
+  return data as SectionStageIO;
+}
+
+type StageIoPatch = Partial<Pick<SectionStageIO, 'label' | 'colour' | 'position'>>;
+
+export async function updateStageIO(
+  supabase: SupabaseClient,
+  id: string,
+  patch: StageIoPatch,
+): Promise<void> {
+  const { error } = await supabase.from('section_stage_io').update(patch).eq('id', id);
+  if (error) throw new Error(error.message);
+}
+
+export async function deleteStageIO(supabase: SupabaseClient, id: string): Promise<void> {
+  const { error } = await supabase.from('section_stage_io').delete().eq('id', id);
   if (error) throw new Error(error.message);
 }
 
@@ -162,6 +213,7 @@ export async function duplicateRow(
       mic_substitute: src.mic_substitute,
       di: src.di,
       stand: src.stand,
+      stage_io_id: src.stage_io_id ?? null,
       phantom_power: src.phantom_power,
       provider: src.provider,
       notes: src.notes,

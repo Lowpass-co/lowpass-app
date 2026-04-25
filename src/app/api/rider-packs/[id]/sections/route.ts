@@ -105,6 +105,23 @@ export async function POST(
     return NextResponse.json({ error: error.message }, { status });
   }
 
+  if (sectionType === 'channel_list' && inserted?.id) {
+    const sectionId = inserted.id as string;
+    const count = 16;
+    const batch = Array.from({ length: count }, (_, i) => ({
+      pack_id: packId,
+      section_id: sectionId,
+      row_index: i + 1,
+    }));
+    const { error: rowErr } = await supabase.from('channel_list_rows').insert(batch);
+    if (rowErr) {
+      return NextResponse.json(
+        { error: `Section created but channel rows failed: ${rowErr.message}` },
+        { status: 500 },
+      );
+    }
+  }
+
   await appendHistory(supabase, {
     packId,
     changedBy: user.id,

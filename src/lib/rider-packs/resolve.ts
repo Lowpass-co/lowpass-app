@@ -21,6 +21,7 @@ import type {
   ResolvedSection,
   ResolvedPack,
   SubSnake,
+  SectionStageIO,
   ChannelListRow,
   SectionType,
 } from './types';
@@ -131,12 +132,25 @@ export async function resolvePack(
     if (e1) throw e1;
     if (e2) throw e2;
 
+    const { data: ioRows } = await supabase
+      .from('section_stage_io')
+      .select('*')
+      .in('section_id', channelIds)
+      .order('position');
+
     const subBy = new Map<string, SubSnake[]>();
     for (const r of subRows ?? []) {
       const s = r as SubSnake;
       const list = subBy.get(s.section_id) ?? [];
       list.push(s);
       subBy.set(s.section_id, list);
+    }
+    const ioBy = new Map<string, SectionStageIO[]>();
+    for (const r of ioRows ?? []) {
+      const s = r as SectionStageIO;
+      const list = ioBy.get(s.section_id) ?? [];
+      list.push(s);
+      ioBy.set(s.section_id, list);
     }
     const rowBy = new Map<string, ChannelListRow[]>();
     for (const r of chRows ?? []) {
@@ -147,7 +161,12 @@ export async function resolvePack(
     }
     sections = sections.map((s) =>
       s.section_type === 'channel_list'
-        ? { ...s, subSnakes: subBy.get(s.id) ?? [], rows: rowBy.get(s.id) ?? [] }
+        ? {
+            ...s,
+            subSnakes: subBy.get(s.id) ?? [],
+            stageIOs: ioBy.get(s.id) ?? [],
+            rows: rowBy.get(s.id) ?? [],
+          }
         : s,
     );
   }

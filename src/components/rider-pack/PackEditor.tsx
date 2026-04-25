@@ -441,7 +441,17 @@ export function PackEditor({ packId }: Props) {
           onApplied={() => refresh()}
         />
       </div>
-      <div className="grid min-h-0 flex-1 grid-cols-[220px_1fr_280px] gap-0">
+      <div className="shrink-0 border-b border-lp-border bg-lp-surface px-4 py-3">
+        <Inspector
+          pack={data.pack}
+          lastEditLabel={formatRelativeTime(data.pack.updated_at)}
+          onExportGoogleDoc={runGoogleDocExport}
+          exportingDoc={exportingDoc}
+          exportError={exportError}
+          onPackDelete={handleDeletePack}
+        />
+      </div>
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-0 lg:grid-cols-[220px_1fr]">
       {/* LEFT: section list */}
       <aside className="overflow-y-auto border-r border-lp-border bg-lp-surface">
         <div className="p-3 flex items-center justify-between">
@@ -555,18 +565,6 @@ export function PackEditor({ packId }: Props) {
           />
         )}
       </main>
-
-      {/* RIGHT: inspector */}
-      <aside className="overflow-y-auto border-l border-lp-border bg-lp-surface p-4 text-sm text-lp-text space-y-4">
-        <Inspector
-          pack={data.pack}
-          lastEditLabel={formatRelativeTime(data.pack.updated_at)}
-          onExportGoogleDoc={runGoogleDocExport}
-          exportingDoc={exportingDoc}
-          exportError={exportError}
-          onPackDelete={handleDeletePack}
-        />
-      </aside>
       </div>
       <NewSectionDialog
         key={newSectionDialogKey}
@@ -743,42 +741,43 @@ function Inspector({
   onPackDelete: () => void;
 }) {
   return (
-    <>
-      <div>
-        <div className="text-[10px] uppercase tracking-widest text-lp-text-tertiary">Scope</div>
-        <div className="mt-1 inline-flex items-center rounded-full bg-lp-surface-hover px-2 py-0.5 text-xs font-semibold uppercase text-lp-text">
-          {pack.scope}
+    <div className="flex flex-col gap-4 text-sm text-lp-text lg:flex-row lg:flex-wrap lg:items-start lg:gap-x-8 lg:gap-y-3">
+      <div className="flex min-w-0 flex-wrap items-end gap-4">
+        <div>
+          <div className="text-[10px] uppercase tracking-widest text-lp-text-tertiary">Scope</div>
+          <div className="mt-1 inline-flex items-center rounded-full border border-lp-border bg-lp-bg-secondary px-2 py-0.5 text-xs font-semibold uppercase text-lp-text">
+            {pack.scope}
+          </div>
+        </div>
+        <div>
+          <div className="text-[10px] uppercase tracking-widest text-lp-text-tertiary">Last edit</div>
+          <p className="mt-1 text-sm text-lp-text" title={pack.updated_at ?? undefined}>
+            {lastEditLabel}
+          </p>
         </div>
       </div>
 
-      <div>
-        <div className="text-[10px] uppercase tracking-widest text-lp-text-tertiary">Last edit</div>
-        <p className="mt-1 text-sm text-lp-text" title={pack.updated_at ?? undefined}>
-          {lastEditLabel}
-        </p>
+      <div className="min-w-0 flex-1 lg:max-w-md">
+        <ExportPanel
+          pack={pack}
+          onExport={onExportGoogleDoc}
+          busy={exportingDoc}
+          error={exportError}
+        />
       </div>
 
-      <ExportPanel
-        pack={pack}
-        onExport={onExportGoogleDoc}
-        busy={exportingDoc}
-        error={exportError}
-      />
-
-      <div id="rider-pack-share">
+      <div id="rider-pack-share" className="min-w-0 flex-1 lg:max-w-md">
         <SharingPanel packId={pack.id} />
       </div>
 
-      <div className="border-t border-lp-border pt-4">
-        <button
-          type="button"
-          onClick={onPackDelete}
-          className="text-xs text-lp-text-secondary hover:text-lp-error"
-        >
-          Delete pack
-        </button>
-      </div>
-    </>
+      <button
+        type="button"
+        onClick={onPackDelete}
+        className="text-xs text-lp-text-secondary hover:text-lp-error lg:ml-auto"
+      >
+        Delete pack
+      </button>
+    </div>
   );
 }
 

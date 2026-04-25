@@ -3,26 +3,16 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useDebouncedSave } from '@/hooks/useDebouncedSave';
 import { createClient } from '@/lib/supabase-client';
-import type { SubSnake } from '@/lib/rider-packs/types';
+import type { SectionStageIO } from '@/lib/rider-packs/types';
+import { SUB_SNAKE_PALETTE } from './SubSnakeDialog';
 import {
-  createSubSnake,
-  deleteSubSnake,
-  listSubSnakes,
-  updateSubSnake,
+  createStageIO,
+  deleteStageIO,
+  listStageIO,
+  updateStageIO,
 } from '@/lib/rider-packs/channel-list';
 
-export const SUB_SNAKE_PALETTE = [
-  '#3B82F6',
-  '#10B981',
-  '#F59E0B',
-  '#8B5CF6',
-  '#EC4899',
-  '#14B8A6',
-  '#F97316',
-  '#84CC16',
-];
-
-function nextPaletteColour(existing: SubSnake[]): string {
+function nextPaletteColour(existing: SectionStageIO[]): string {
   const used = new Set(existing.map((s) => s.colour.toLowerCase()));
   for (const c of SUB_SNAKE_PALETTE) {
     if (!used.has(c.toLowerCase())) return c;
@@ -38,13 +28,13 @@ type Props = {
   onChanged: () => void | Promise<void>;
 };
 
-export default function SubSnakeDialog({ open, onClose, packId, sectionId, onChanged }: Props) {
-  const [list, setList] = useState<SubSnake[]>([]);
+export default function StageIoDialog({ open, onClose, packId, sectionId, onChanged }: Props) {
+  const [list, setList] = useState<SectionStageIO[]>([]);
   const [pickerFor, setPickerFor] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     const supabase = createClient();
-    const rows = await listSubSnakes(supabase, sectionId);
+    const rows = await listStageIO(supabase, sectionId);
     setList(rows);
   }, [sectionId]);
 
@@ -65,10 +55,10 @@ export default function SubSnakeDialog({ open, onClose, packId, sectionId, onCha
   const addNew = async () => {
     const supabase = createClient();
     const colour = nextPaletteColour(list);
-    const created = await createSubSnake(supabase, {
+    const created = await createStageIO(supabase, {
       packId,
       sectionId,
-      label: 'New sub-snake',
+      label: 'New I/O',
       colour,
     });
     setList((prev) => [...prev, created].sort((a, b) => a.position - b.position));
@@ -87,27 +77,27 @@ export default function SubSnakeDialog({ open, onClose, packId, sectionId, onCha
         onClick={(e) => e.stopPropagation()}
       >
         <div className="border-b border-lp-border px-4 py-3">
-          <h2 className="text-sm font-semibold text-lp-text">Sub-snakes</h2>
-          <p className="mt-0.5 text-xs text-lp-text-secondary">Colour-group channels in the input list.</p>
+          <h2 className="text-sm font-semibold text-lp-text">Stage I/O</h2>
+          <p className="mt-0.5 text-xs text-lp-text-secondary">Labels for the I/O column (e.g. 16A, 16B).</p>
         </div>
         <div className="max-h-[min(60vh,400px)] space-y-2 overflow-y-auto p-4">
           {list.map((s) => (
-            <SubSnakeRow
+            <StageIoRow
               key={s.id}
-              sub={s}
+              row={s}
               onPickerToggle={() => setPickerFor((id) => (id === s.id ? null : s.id))}
               showPicker={pickerFor === s.id}
               onClosePicker={() => setPickerFor(null)}
               onUpdateColour={async (hex: string) => {
                 const supabase = createClient();
-                await updateSubSnake(supabase, s.id, { colour: hex });
+                await updateStageIO(supabase, s.id, { colour: hex });
                 setList((prev) => prev.map((x) => (x.id === s.id ? { ...x, colour: hex } : x)));
                 await onChanged();
               }}
               onDelete={async () => {
-                if (!confirm('Remove this sub-snake?')) return;
+                if (!confirm('Remove this I/O label?')) return;
                 const supabase = createClient();
-                await deleteSubSnake(supabase, s.id);
+                await deleteStageIO(supabase, s.id);
                 setList((prev) => prev.filter((x) => x.id !== s.id));
                 setPickerFor(null);
                 await onChanged();
@@ -120,15 +110,11 @@ export default function SubSnakeDialog({ open, onClose, packId, sectionId, onCha
           <button
             type="button"
             onClick={() => void addNew()}
-            className="w-full rounded-lg border border-dashed border-lp-border py-2 text-sm text-lp-text-secondary hover:bg-lp-surface-hover"
+            className="w-full rounded-lg border border-lp-border bg-lp-bg-secondary py-2 text-sm font-medium text-lp-text hover:bg-lp-surface-hover"
           >
-            + Add sub-snake
+            + Add I/O label
           </button>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-sm text-lp-text-secondary hover:text-lp-text"
-          >
+          <button type="button" onClick={onClose} className="text-sm text-lp-text-secondary hover:text-lp-text">
             Done
           </button>
         </div>
@@ -137,8 +123,8 @@ export default function SubSnakeDialog({ open, onClose, packId, sectionId, onCha
   );
 }
 
-function SubSnakeRow({
-  sub,
+function StageIoRow({
+  row: s,
   onPickerToggle,
   showPicker,
   onClosePicker,
@@ -146,7 +132,7 @@ function SubSnakeRow({
   onDelete,
   onLabelSaved,
 }: {
-  sub: SubSnake;
+  row: SectionStageIO;
   onPickerToggle: () => void;
   showPicker: boolean;
   onClosePicker: () => void;
@@ -154,29 +140,28 @@ function SubSnakeRow({
   onDelete: () => void | Promise<void>;
   onLabelSaved: () => void | Promise<void>;
 }) {
-  const [label, setLabel] = useState(sub.label);
-  const [hexDraft, setHexDraft] = useState(sub.colour);
+  const [label, setLabel] = useState(s.label);
+  const [hexDraft, setHexDraft] = useState(s.colour);
 
   const save = useDebouncedSave(
     useCallback(
       async (v: string) => {
-        if (v === sub.label) return;
-        const supabase = createClient();
-        await updateSubSnake(supabase, sub.id, { label: v });
+        if (v === s.label) return;
+        await updateStageIO(createClient(), s.id, { label: v });
         await onLabelSaved();
       },
-      [sub.id, sub.label, onLabelSaved],
+      [s.id, s.label, onLabelSaved],
     ),
     400,
   );
   useEffect(() => {
     if (save.isPending()) return;
-    setLabel(sub.label);
-  }, [sub.label, save]);
+    setLabel(s.label);
+  }, [s.label, save]);
 
   useEffect(() => {
-    if (showPicker) setHexDraft(sub.colour);
-  }, [showPicker, sub.colour]);
+    if (showPicker) setHexDraft(s.colour);
+  }, [showPicker, s.colour]);
 
   return (
     <div className="flex items-start gap-2 rounded-lg border border-lp-border bg-lp-surface p-2">
@@ -186,8 +171,8 @@ function SubSnakeRow({
           onClick={onPickerToggle}
           className="mt-0.5 h-8 w-8 rounded-md"
           style={{
-            backgroundColor: sub.colour,
-            border: `1px solid ${sub.colour}99`,
+            backgroundColor: s.colour,
+            border: `1px solid ${s.colour}99`,
           }}
           title="Change colour"
           aria-label="Change colour"
