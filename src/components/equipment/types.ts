@@ -33,6 +33,11 @@ export interface RentalJob {
   notes: string | null;
   status: 'draft' | 'confirmed' | 'invoiced' | 'completed';
   created_at: string;
+  /** Optional billing details — appear on the exported quote/invoice PDF. */
+  billing_address?: string | null;
+  billing_email?: string | null;
+  billing_phone?: string | null;
+  billing_tax_id?: string | null;
   /** Populated when listing with Supabase embed `artist:artists(...)` */
   artist?: { id: string; name: string } | null;
   /** Populated when listing with Supabase embed `tour:tours(...)` */
