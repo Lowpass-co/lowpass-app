@@ -8,7 +8,7 @@
 
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   Bug as BugIcon,
@@ -205,6 +205,11 @@ export function BugReportsClient() {
   const [exportProgress, setExportProgress] = useState<ExportProgress | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
 
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [bulkStatusTarget, setBulkStatusTarget] = useState<BugStatus>('in_progress');
+  const [bulkApplying, setBulkApplying] = useState(false);
+  const headerSelectAllRef = useRef<HTMLInputElement>(null);
+
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     else setRefreshing(true);
@@ -262,6 +267,16 @@ export function BugReportsClient() {
     });
   }, [reports, statusFilter, severityFilter, hideResolved, search]);
 
+  const allFilteredSelected =
+    filtered.length > 0 && filtered.every(r => selectedIds.has(r.id));
+  const someSelectedInFilter = filtered.some(r => selectedIds.has(r.id));
+
+  useLayoutEffect(() => {
+    const el = headerSelectAllRef.current;
+    if (!el) return;
+    el.indeterminate = someSelectedInFilter && !allFilteredSelected;
+  }, [someSelectedInFilter, allFilteredSelected]);
+
   const hiddenResolvedCount = useMemo(() => {
     if (!reports) return 0;
     return reports.filter(r => r.status === 'resolved' || r.status === 'wont_fix').length;
@@ -301,15 +316,19 @@ export function BugReportsClient() {
     }
   }, [selectedId, reports]);
 
-  // Escape closes the panel.
+  // Escape clears row selection first, then closes the detail panel.
   useEffect(() => {
-    if (!panelOpen) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setSelectedId(null);
+      if (e.key !== 'Escape') return;
+      if (selectedIds.size > 0) {
+        setSelectedIds(new Set());
+        return;
+      }
+      if (panelOpen) setSelectedId(null);
     };
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
-  }, [panelOpen]);
+  }, [panelOpen, selectedIds]);
 
   const onUpdate = useCallback(
     async (id: string, patch: Partial<Pick<BugReport, 'status' | 'severity' | 'title' | 'resolution_notes'>>) => {
@@ -341,9 +360,65 @@ export function BugReportsClient() {
       }
       setReports(prev => (prev ? prev.filter(r => r.id !== id) : prev));
       setSelectedId(null);
+      setSelectedIds(prev => {
+        if (!prev.has(id)) return prev;
+        const n = new Set(prev);
+        n.delete(id);
+        return n;
+      });
     },
     []
   );
+
+  const toggleRowSelected = useCallback((id: string) => {
+    setSelectedIds(prev => {
+      const n = new Set(prev);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  }, []);
+
+  const toggleSelectAllFiltered = useCallback(() => {
+    setSelectedIds(prev => {
+      if (filtered.length === 0) return prev;
+      const allOn = filtered.every(r => prev.has(r.id));
+      const n = new Set(prev);
+      for (const r of filtered) {
+        if (allOn) n.delete(r.id);
+        else n.add(r.id);
+      }
+      return n;
+    });
+  }, [filtered]);
+
+  const clearRowSelection = useCallback(() => setSelectedIds(new Set()), []);
+
+  const applyBulkStatus = useCallback(async () => {
+    if (selectedIds.size === 0) return;
+    setBulkApplying(true);
+    setError(null);
+    const status = bulkStatusTarget;
+    const ids = [...selectedIds];
+    try {
+      const res = await fetch('/api/bug-reports/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids, status }),
+      });
+      const data = (await res.json().catch(() => ({}))) as { error?: string };
+      if (!res.ok) {
+        setError(data.error ?? 'Bulk update failed.');
+        return;
+      }
+      setSelectedIds(new Set());
+      await load(true);
+    } catch {
+      setError('Network error.');
+    } finally {
+      setBulkApplying(false);
+    }
+  }, [selectedIds, bulkStatusTarget, load]);
 
   const handleBulkExport = useCallback(async () => {
     if (exporting) return;
@@ -566,6 +641,58 @@ export function BugReportsClient() {
         </div>
       )}
 
+      {selectedIds.size > 0 && (
+        <div
+          className="flex flex-wrap items-center gap-3 rounded-xl border px-4 py-3"
+          style={{
+            backgroundColor: 'var(--lp-surface)',
+            borderColor: 'var(--lp-border)',
+            color: 'var(--lp-text)',
+          }}
+        >
+          <span className="text-sm font-semibold">
+            {selectedIds.size} selected
+          </span>
+          <button
+            type="button"
+            onClick={clearRowSelection}
+            className="rounded-lg border px-3 py-1.5 text-xs font-medium"
+            style={{ borderColor: 'var(--lp-border)', color: 'var(--lp-text-secondary)' }}
+          >
+            Clear
+          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs" style={{ color: 'var(--lp-text-tertiary)' }}>
+              Set status to
+            </span>
+            <BrandedSelect
+              value={bulkStatusTarget}
+              onChange={v => setBulkStatusTarget(v as BugStatus)}
+              ariaLabel="Bulk status"
+              minWidth={180}
+              options={STATUS_ORDER.map(s => ({
+                value: s,
+                label: STATUS_META[s].label,
+                color: STATUS_META[s].color,
+              }))}
+            />
+            <button
+              type="button"
+              disabled={bulkApplying}
+              onClick={() => void applyBulkStatus()}
+              className="inline-flex items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-semibold disabled:opacity-50"
+              style={{
+                backgroundColor: 'var(--lp-orange)',
+                color: '#fff',
+              }}
+            >
+              {bulkApplying ? <Loader2 size={14} className="animate-spin" /> : null}
+              Apply
+            </button>
+          </div>
+        </div>
+      )}
+
       <div
         className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl"
         style={{ backgroundColor: 'var(--lp-surface)', border: '1px solid var(--lp-border)' }}
@@ -575,9 +702,22 @@ export function BugReportsClient() {
           style={{
             borderColor: 'var(--lp-border)',
             color: 'var(--lp-text-tertiary)',
-            gridTemplateColumns: '80px minmax(0,1fr) 120px 120px 160px 160px 140px',
+            gridTemplateColumns: '36px 80px minmax(0,1fr) 120px 120px 160px 160px 140px',
           }}
         >
+          <div className="flex items-center justify-center">
+            <input
+              ref={headerSelectAllRef}
+              type="checkbox"
+              className="h-4 w-4 rounded border"
+              style={{ borderColor: 'var(--lp-border)', accentColor: 'var(--lp-orange)' }}
+              checked={allFilteredSelected}
+              onChange={toggleSelectAllFiltered}
+              disabled={filtered.length === 0}
+              title="Select all visible rows"
+              aria-label="Select all visible bug reports"
+            />
+          </div>
           <div>Shot</div>
           <div>Title / Description</div>
           <div>Severity</div>
@@ -604,7 +744,13 @@ export function BugReportsClient() {
             </div>
           ) : (
             filtered.map(r => (
-              <Row key={r.id} report={r} onClick={() => setSelectedId(r.id)} />
+              <Row
+                key={r.id}
+                report={r}
+                selected={selectedIds.has(r.id)}
+                onToggleSelect={() => toggleRowSelected(r.id)}
+                onClick={() => setSelectedId(r.id)}
+              />
             ))
           )}
         </div>
@@ -662,22 +808,56 @@ function StatCards({
   );
 }
 
-function Row({ report, onClick }: { report: BugReport; onClick: () => void }) {
+function Row({
+  report,
+  selected,
+  onToggleSelect,
+  onClick,
+}: {
+  report: BugReport;
+  selected: boolean;
+  onToggleSelect: () => void;
+  onClick: () => void;
+}) {
   const sev = SEVERITY_META[report.severity];
   const st = STATUS_META[report.status];
   const title = report.title || report.description.split('\n')[0].slice(0, 120);
 
   return (
+    <div
+      className="grid w-full items-center gap-3 border-b px-4 py-3 text-left transition-colors"
+      style={{
+        borderColor: 'var(--lp-border-light)',
+        gridTemplateColumns: '36px 80px minmax(0,1fr) 120px 120px 160px 160px 140px',
+        backgroundColor: selected ? 'color-mix(in srgb, var(--lp-orange) 8%, transparent)' : undefined,
+      }}
+    >
+      <div
+        className="flex items-center justify-center"
+        onClick={e => e.stopPropagation()}
+        onKeyDown={e => e.stopPropagation()}
+      >
+        <input
+          type="checkbox"
+          className="h-4 w-4 rounded border"
+          style={{ borderColor: 'var(--lp-border)', accentColor: 'var(--lp-orange)' }}
+          checked={selected}
+          onChange={onToggleSelect}
+          onClick={e => e.stopPropagation()}
+          aria-label={`Select: ${title}`}
+        />
+      </div>
     <button
       type="button"
       onClick={onClick}
-      className="grid w-full cursor-pointer items-center gap-3 border-b px-4 py-3 text-left transition-colors"
+      className="grid w-full min-w-0 cursor-pointer items-center gap-3 text-left"
       style={{
-        borderColor: 'var(--lp-border-light)',
+        gridColumn: '2 / -1',
+        display: 'grid',
         gridTemplateColumns: '80px minmax(0,1fr) 120px 120px 160px 160px 140px',
       }}
       onMouseOver={e => {
-        e.currentTarget.style.backgroundColor = 'var(--lp-surface-hover)';
+        if (!selected) e.currentTarget.style.backgroundColor = 'var(--lp-surface-hover)';
       }}
       onMouseOut={e => {
         e.currentTarget.style.backgroundColor = '';
@@ -718,6 +898,7 @@ function Row({ report, onClick }: { report: BugReport; onClick: () => void }) {
         {formatDate(report.created_at)}
       </div>
     </button>
+    </div>
   );
 }
 
