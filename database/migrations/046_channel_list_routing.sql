@@ -1,5 +1,7 @@
 -- R11: Sub-snake capacity, stage_boxes entity, structured routing columns on channel_list_rows.
 -- Migrates section_stage_io → stage_boxes (preserves ids). Drops legacy stage_box text + stage_io_id.
+-- Apply in one run (entire file). If the unique index step failed with 23505, use 047 after this.
+-- Do not run 047 on a database that still has stage_io_id / no stage_box_id; 047 is a repair for post-046 only.
 
 ALTER TABLE sub_snakes
   ADD COLUMN IF NOT EXISTS capacity integer NOT NULL DEFAULT 8;
@@ -62,6 +64,18 @@ ALTER TABLE channel_list_rows DROP COLUMN IF EXISTS stage_io_id;
 ALTER TABLE channel_list_rows DROP COLUMN IF EXISTS stage_box;
 
 DROP TABLE IF EXISTS section_stage_io;
+
+-- Previous UPDATEs set stage_box_position = 1 for every row sharing a box; the unique
+-- index below needs distinct 1..n per stage_box (stable: row order then id).
+UPDATE channel_list_rows AS clr
+SET stage_box_position = s.rn
+FROM (
+  SELECT id,
+    row_number() OVER (PARTITION BY stage_box_id ORDER BY row_index, id) AS rn
+  FROM channel_list_rows
+  WHERE stage_box_id IS NOT NULL
+) s
+WHERE clr.id = s.id;
 
 CREATE UNIQUE INDEX IF NOT EXISTS channel_list_rows_subsnake_position_unique
   ON channel_list_rows(sub_snake_id, sub_snake_position)

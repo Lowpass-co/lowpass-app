@@ -41,6 +41,15 @@ export function formatResolveError(err: unknown): string {
   }
 }
 
+/** True when PostgREST has not been exposed to a relation yet (migration not applied, or API schema reload needed). */
+function isSchemaCacheMissingTable(err: unknown, tableName: string): boolean {
+  const msg = formatResolveError(err);
+  return (
+    (msg.includes('Could not find the table') || msg.includes('schema cache')) &&
+    msg.includes(tableName)
+  );
+}
+
 /** Walk folder.parent chain; collect (pack id, scope) for each parent folder. */
 async function resolveParentPackIds(
   supabase: SupabaseClient,
@@ -163,7 +172,15 @@ export async function resolvePack(
       .select('*')
       .in('section_id', channelIds)
       .order('position');
-    if (e3) throw new Error(formatResolveError(e3));
+    // DB without migration 046 has no public.stage_boxes — still load; stage boxes are empty until migrated.
+    let boxRowsForMap: NonNullable<typeof boxRows> = boxRows ?? [];
+    if (e3) {
+      if (isSchemaCacheMissingTable(e3, 'stage_boxes')) {
+        boxRowsForMap = [];
+      } else {
+        throw new Error(formatResolveError(e3));
+      }
+    }
 
     const subBy = new Map<string, SubSnake[]>();
     for (const r of subRows ?? []) {
@@ -173,7 +190,7 @@ export async function resolvePack(
       subBy.set(s.section_id, list);
     }
     const boxBy = new Map<string, StageBox[]>();
-    for (const r of boxRows ?? []) {
+    for (const r of boxRowsForMap) {
       const s = r as StageBox;
       const list = boxBy.get(s.section_id) ?? [];
       list.push(s);
