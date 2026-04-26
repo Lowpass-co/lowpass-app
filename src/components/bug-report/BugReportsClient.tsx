@@ -428,7 +428,9 @@ export function BugReportsClient() {
     try {
       const top = selectTopCritical(reports, 10);
       if (top.length === 0) {
-        setExportError('No eligible bugs to export (resolved and won\'t fix are excluded).');
+        setExportError(
+          'No open bugs to export. Export includes Open status only; set reports to Open or add new ones.',
+        );
         return;
       }
 
@@ -583,8 +585,8 @@ export function BugReportsClient() {
           }}
           title={
             isDirectoryPickerSupported()
-              ? 'Top 10 by severity (excludes resolved & won\'t fix), mark as In progress, pick a folder'
-              : 'Top 10 by severity (excludes resolved & won\'t fix), mark as In progress, download ZIP'
+              ? 'Top 10 open bugs by severity, mark as In progress, pick a folder'
+              : 'Top 10 open bugs by severity, mark as In progress, download ZIP'
           }
         >
           {exporting ? (
