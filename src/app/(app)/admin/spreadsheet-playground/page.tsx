@@ -1,8 +1,8 @@
 import { notFound } from 'next/navigation';
 import { getUserAndAdminStatus } from '@/lib/site-admin';
-import ShellPlaygroundClient from './ShellPlaygroundClient';
+import SpreadsheetPlaygroundClient from './SpreadsheetPlaygroundClient';
 
-export default async function ShellPlaygroundPage() {
+export default async function SpreadsheetPlaygroundPage() {
   const { user, isAdmin } = await getUserAndAdminStatus();
   if (!user || !isAdmin) {
     notFound();
@@ -12,13 +12,13 @@ export default async function ShellPlaygroundPage() {
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="mb-4">
         <h1 className="text-2xl font-bold" style={{ color: 'var(--lp-text)' }}>
-          Shell playground
+          SpreadsheetGrid playground
         </h1>
         <p className="mt-1 text-sm" style={{ color: 'var(--lp-text-secondary)' }}>
-          TopBar, LeftRail, and PageShell (UX02) plus UX07 TimelineDashboard and DocumentCanvas demos.
+          UX06 — data-entry grid (admin only). Budget, payroll, and channel list mocks.
         </p>
       </div>
-      <ShellPlaygroundClient />
+      <SpreadsheetPlaygroundClient />
     </div>
   );
 }
