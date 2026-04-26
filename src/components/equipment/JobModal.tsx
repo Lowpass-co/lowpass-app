@@ -5,7 +5,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { X, ExternalLink } from 'lucide-react';
+import { X, ExternalLink, ChevronDown, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase-client';
 import { StyledSelect, type StyledSelectOption } from '@/components/ui/StyledSelect';
@@ -43,6 +43,16 @@ export function JobModal({
   const [start, setStart] = useState(editing?.start_date ?? '');
   const [end, setEnd] = useState(editing?.end_date ?? '');
   const [notes, setNotes] = useState(editing?.notes ?? '');
+
+  // Optional billing details (shown on exported PDF when filled)
+  const [billingAddress, setBillingAddress] = useState(editing?.billing_address ?? '');
+  const [billingEmail,   setBillingEmail]   = useState(editing?.billing_email ?? '');
+  const [billingPhone,   setBillingPhone]   = useState(editing?.billing_phone ?? '');
+  const [billingTaxId,   setBillingTaxId]   = useState(editing?.billing_tax_id ?? '');
+  const hasAnyBilling =
+    !!(editing?.billing_address || editing?.billing_email || editing?.billing_phone || editing?.billing_tax_id);
+  const [billingOpen, setBillingOpen] = useState(hasAnyBilling);
+
   const [saving, setSaving] = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
   const supabase = createClient();
@@ -103,6 +113,10 @@ export function JobModal({
       start_date: start,
       end_date: end,
       notes: notes.trim() || null,
+      billing_address: billingAddress.trim() || null,
+      billing_email:   billingEmail.trim()   || null,
+      billing_phone:   billingPhone.trim()   || null,
+      billing_tax_id:  billingTaxId.trim()   || null,
     };
 
     let result;
@@ -227,6 +241,83 @@ export function JobModal({
             <Field label="End Date" required>
               <input type="date" value={end} onChange={(e) => setEnd(e.target.value)} className="lp-input" />
             </Field>
+          </div>
+
+          {/* ── Billing details — optional. Appear on exported PDF when filled. ── */}
+          <div
+            className="rounded-lg border"
+            style={{ borderColor: 'var(--lp-border)', backgroundColor: 'var(--lp-bg)' }}
+          >
+            <button
+              type="button"
+              onClick={() => setBillingOpen(o => !o)}
+              className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left transition-colors"
+              style={{ color: 'var(--lp-text-secondary)' }}
+            >
+              <span className="flex items-center gap-2">
+                {billingOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                <span className="text-xs font-semibold uppercase tracking-wider">
+                  Billing details
+                </span>
+                <span className="text-[11px] font-normal normal-case" style={{ color: 'var(--lp-text-tertiary)' }}>
+                  optional · shown on exported PDF
+                </span>
+              </span>
+              {hasAnyBilling && !billingOpen && (
+                <span
+                  className="rounded-full px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider"
+                  style={{ backgroundColor: 'rgba(255,69,0,0.12)', color: '#FF4500' }}
+                >
+                  Filled
+                </span>
+              )}
+            </button>
+            {billingOpen && (
+              <div
+                className="space-y-3 px-3 pb-3"
+                style={{ borderTop: '1px solid var(--lp-border)' }}
+              >
+                <div className="pt-3">
+                  <Field label="Billing Address">
+                    <textarea
+                      value={billingAddress}
+                      onChange={(e) => setBillingAddress(e.target.value)}
+                      placeholder={'Street\nCity, Postcode\nCountry'}
+                      rows={3}
+                      className="lp-input resize-none"
+                    />
+                  </Field>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="Billing Email">
+                    <input
+                      type="email"
+                      value={billingEmail}
+                      onChange={(e) => setBillingEmail(e.target.value)}
+                      placeholder="accounts@client.com"
+                      className="lp-input"
+                    />
+                  </Field>
+                  <Field label="Billing Phone">
+                    <input
+                      type="tel"
+                      value={billingPhone}
+                      onChange={(e) => setBillingPhone(e.target.value)}
+                      placeholder="+44 …"
+                      className="lp-input"
+                    />
+                  </Field>
+                </div>
+                <Field label="Tax / VAT ID">
+                  <input
+                    value={billingTaxId}
+                    onChange={(e) => setBillingTaxId(e.target.value)}
+                    placeholder="e.g. GB123456789"
+                    className="lp-input"
+                  />
+                </Field>
+              </div>
+            )}
           </div>
 
           <Field label="Notes">
