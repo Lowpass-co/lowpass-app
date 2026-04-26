@@ -52,6 +52,75 @@ async function loadLogoDataUrl(): Promise<string | null> {
   }
 }
 
+/* ────────────────────────────────────────────────────────────────
+   Brand fonts — Inter (body) + Montserrat Bold (display).
+   Loaded once and cached at module scope so repeat exports skip
+   the network round-trip. Each font is fetched as a TTF, base64-
+   encoded, registered with jsPDF's virtual file system, and then
+   bound to a logical family name we can call via setFont().
+   These fonts ship as static TTFs under /public/fonts/ — both
+   are OFL-licensed and safe to redistribute inside generated PDFs.
+   ──────────────────────────────────────────────────────────────── */
+
+const FONT_FILES: Array<{ family: string; style: 'normal' | 'bold'; path: string; vfs: string }> = [
+  { family: 'Inter',      style: 'normal', path: '/fonts/Inter-Regular.ttf',    vfs: 'Inter-Regular.ttf' },
+  { family: 'Inter',      style: 'bold',   path: '/fonts/Inter-Bold.ttf',       vfs: 'Inter-Bold.ttf' },
+  { family: 'Montserrat', style: 'bold',   path: '/fonts/Montserrat-Bold.ttf',  vfs: 'Montserrat-Bold.ttf' },
+];
+
+let fontBase64Cache: Record<string, string> | null = null;
+let fontLoadInflight: Promise<Record<string, string> | null> | null = null;
+
+/** ArrayBuffer → base64 (browser-safe, chunked to avoid call-stack overflow). */
+function bufferToBase64(buf: ArrayBuffer): string {
+  const bytes = new Uint8Array(buf);
+  let binary = '';
+  const chunk = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunk) {
+    binary += String.fromCharCode.apply(null, Array.from(bytes.subarray(i, i + chunk)));
+  }
+  return typeof btoa === 'function' ? btoa(binary) : Buffer.from(binary, 'binary').toString('base64');
+}
+
+/** Fetch + cache the TTFs once. Returns null on any failure (callers fall back to helvetica). */
+async function getFontBase64Cache(): Promise<Record<string, string> | null> {
+  if (fontBase64Cache) return fontBase64Cache;
+  if (fontLoadInflight) return fontLoadInflight;
+  fontLoadInflight = (async () => {
+    try {
+      const entries = await Promise.all(FONT_FILES.map(async (f) => {
+        const res = await fetch(f.path);
+        if (!res.ok) throw new Error(`font ${f.path} ${res.status}`);
+        const buf = await res.arrayBuffer();
+        return [f.vfs, bufferToBase64(buf)] as const;
+      }));
+      fontBase64Cache = Object.fromEntries(entries);
+      return fontBase64Cache;
+    } catch (err) {
+      console.warn('[exportJobPdf] custom font load failed, falling back to Helvetica', err);
+      return null;
+    } finally {
+      fontLoadInflight = null;
+    }
+  })();
+  return fontLoadInflight;
+}
+
+/** Register the cached TTFs with this jsPDF instance. Returns the resolved family names. */
+async function registerFonts(doc: jsPDF): Promise<{ body: string; display: string }> {
+  const cache = await getFontBase64Cache();
+  if (!cache) {
+    return { body: 'helvetica', display: 'helvetica' };
+  }
+  for (const f of FONT_FILES) {
+    const b64 = cache[f.vfs];
+    if (!b64) continue;
+    doc.addFileToVFS(f.vfs, b64);
+    doc.addFont(f.vfs, f.family, f.style);
+  }
+  return { body: 'Inter', display: 'Montserrat' };
+}
+
 export async function exportJobPdf(opts: ExportOptions): Promise<void> {
   const { job, jobItems, inventory, artistLabel, tourLabel, discPct, discFixed } = opts;
 
@@ -74,7 +143,10 @@ export async function exportJobPdf(opts: ExportOptions): Promise<void> {
           : 'RENTAL QUOTE';
 
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
-  const logoDataUrl = await loadLogoDataUrl();
+  const [{ body: BODY, display: DISPLAY }, logoDataUrl] = await Promise.all([
+    registerFonts(doc),
+    loadLogoDataUrl(),
+  ]);
 
   // ── HEADER ──────────────────────────────────────────────────────
   // Logo + title sit at the very top, full width, separated by an
@@ -88,14 +160,14 @@ export async function exportJobPdf(opts: ExportOptions): Promise<void> {
     doc.addImage(logoDataUrl, 'PNG', MARGIN_X, y, logoW, logoH);
   }
 
-  // Title — right-aligned to page edge
-  doc.setFont('helvetica', 'bold');
+  // Title — right-aligned to page edge (display face)
+  doc.setFont(DISPLAY, 'bold');
   doc.setFontSize(20);
   doc.setTextColor(...INK);
   doc.text(docTitle, PAGE_W - MARGIN_X, y + 8, { align: 'right' });
 
   // Doc no. + issue date
-  doc.setFont('helvetica', 'normal');
+  doc.setFont(BODY, 'normal');
   doc.setFontSize(8.5);
   doc.setTextColor(...MUTED);
   doc.text(`No. ${documentNumber}`, PAGE_W - MARGIN_X, y + 13.5, { align: 'right' });
@@ -124,13 +196,13 @@ export async function exportJobPdf(opts: ExportOptions): Promise<void> {
   if (job.billing_phone)  billingLines.push(job.billing_phone);
   if (job.billing_tax_id) billingLines.push(`Tax ID: ${job.billing_tax_id}`);
 
-  drawColLabel(doc, 'BILL TO', c1, y);
-  drawColLabel(doc, 'JOB',     c2, y);
-  drawColLabel(doc, 'RENTAL PERIOD', c3, y);
+  drawColLabel(doc, 'BILL TO', c1, y, BODY);
+  drawColLabel(doc, 'JOB',     c2, y, BODY);
+  drawColLabel(doc, 'RENTAL PERIOD', c3, y, BODY);
 
   // Bill To value: client name in bold, then optional billing detail lines (muted)
   let yBill = y + 4.5;
-  doc.setFont('helvetica', 'bold');
+  doc.setFont(BODY, 'bold');
   doc.setFontSize(10);
   doc.setTextColor(...INK);
   const clientName = job.client_name || '-';
@@ -139,7 +211,7 @@ export async function exportJobPdf(opts: ExportOptions): Promise<void> {
   yBill += wrappedClient.length * 4.2;
 
   if (billingLines.length > 0) {
-    doc.setFont('helvetica', 'normal');
+    doc.setFont(BODY, 'normal');
     doc.setFontSize(8.5);
     doc.setTextColor(...MUTED);
     for (const line of billingLines) {
@@ -151,13 +223,13 @@ export async function exportJobPdf(opts: ExportOptions): Promise<void> {
 
   // Job column
   let yJob = y + 4.5;
-  doc.setFont('helvetica', 'bold');
+  doc.setFont(BODY, 'bold');
   doc.setFontSize(10);
   doc.setTextColor(...INK);
   const wrappedName = doc.splitTextToSize(job.name, colW - 4) as string[];
   doc.text(wrappedName, c2, yJob);
   yJob += wrappedName.length * 4.2;
-  doc.setFont('helvetica', 'normal');
+  doc.setFont(BODY, 'normal');
   doc.setFontSize(8.5);
   doc.setTextColor(...MUTED);
   const statusLabel = `Status: ${job.status.charAt(0).toUpperCase()}${job.status.slice(1)}`;
@@ -168,7 +240,7 @@ export async function exportJobPdf(opts: ExportOptions): Promise<void> {
 
   // Period column
   let yPer = y + 4.5;
-  doc.setFont('helvetica', 'bold');
+  doc.setFont(BODY, 'bold');
   doc.setFontSize(10);
   doc.setTextColor(...INK);
   // ASCII separator only — jsPDF's default Helvetica is WinAnsi-encoded
@@ -176,7 +248,7 @@ export async function exportJobPdf(opts: ExportOptions): Promise<void> {
   const periodStr = `${fmtDate(job.start_date)}  to  ${fmtDate(job.end_date)}`;
   doc.text(periodStr, c3, yPer);
   yPer += 4.5;
-  doc.setFont('helvetica', 'normal');
+  doc.setFont(BODY, 'normal');
   doc.setFontSize(8.5);
   doc.setTextColor(...MUTED);
   doc.text(`${days} billable day${days !== 1 ? 's' : ''}`, c3, yPer);
@@ -198,7 +270,7 @@ export async function exportJobPdf(opts: ExportOptions): Promise<void> {
   // Header (black bar)
   doc.setFillColor(...INK);
   doc.rect(MARGIN_X, y, CONTENT_W, 7.5, 'F');
-  doc.setFont('helvetica', 'bold');
+  doc.setFont(BODY, 'bold');
   doc.setFontSize(8);
   doc.setTextColor(255, 255, 255);
   doc.text('ITEM',     colItem + 2, y + 5);
@@ -209,7 +281,7 @@ export async function exportJobPdf(opts: ExportOptions): Promise<void> {
   y += 7.5;
 
   // Rows
-  doc.setFont('helvetica', 'normal');
+  doc.setFont(BODY, 'normal');
   doc.setFontSize(9);
   doc.setTextColor(...INK);
 
@@ -234,7 +306,7 @@ export async function exportJobPdf(opts: ExportOptions): Promise<void> {
       // Re-draw table header on new page
       doc.setFillColor(...INK);
       doc.rect(MARGIN_X, y, CONTENT_W, 7.5, 'F');
-      doc.setFont('helvetica', 'bold');
+      doc.setFont(BODY, 'bold');
       doc.setFontSize(8);
       doc.setTextColor(255, 255, 255);
       doc.text('ITEM',     colItem + 2, y + 5);
@@ -243,21 +315,21 @@ export async function exportJobPdf(opts: ExportOptions): Promise<void> {
       doc.text('DAY RATE', colRate,     y + 5, { align: 'right' });
       doc.text('SUBTOTAL', colSub - 2,  y + 5, { align: 'right' });
       y += 7.5;
-      doc.setFont('helvetica', 'normal');
+      doc.setFont(BODY, 'normal');
       doc.setFontSize(9);
       doc.setTextColor(...INK);
     }
 
     let yRow = y + 5;
     // Item name
-    doc.setFont('helvetica', 'bold');
+    doc.setFont(BODY, 'bold');
     doc.setFontSize(9.5);
     doc.setTextColor(...INK);
     doc.text(itemNameLines, colItem + 2, yRow);
     yRow += itemNameLines.length * baseLineH;
     // Category
     if (hasCategory) {
-      doc.setFont('helvetica', 'normal');
+      doc.setFont(BODY, 'normal');
       doc.setFontSize(7.5);
       doc.setTextColor(...MUTED);
       doc.text(inv!.category!, colItem + 2, yRow);
@@ -265,21 +337,21 @@ export async function exportJobPdf(opts: ExportOptions): Promise<void> {
     }
     // Override pill
     if (hasOverride) {
-      doc.setFont('helvetica', 'bold');
+      doc.setFont(BODY, 'bold');
       doc.setFontSize(7.5);
       doc.setTextColor(...ORANGE);
       doc.text('Custom rate', colItem + 2, yRow);
     }
 
     // Numeric columns
-    doc.setFont('helvetica', 'normal');
+    doc.setFont(BODY, 'normal');
     doc.setFontSize(9.5);
     doc.setTextColor(...INK);
     const midY = y + 5;
     doc.text(String(it.quantity ?? 1), colQty, midY, { align: 'center' });
     doc.text(String(days),             colDays, midY, { align: 'center' });
     doc.text(fmtUSD(rate),             colRate, midY, { align: 'right' });
-    doc.setFont('helvetica', 'bold');
+    doc.setFont(BODY, 'bold');
     doc.text(fmtUSD(lineAmt),          colSub - 2, midY, { align: 'right' });
 
     // Hairline separator
@@ -290,7 +362,8 @@ export async function exportJobPdf(opts: ExportOptions): Promise<void> {
   };
 
   if (jobItems.length === 0) {
-    doc.setFont('helvetica', 'italic');
+    // Inter ships with normal+bold only; use normal for the empty-state line.
+    doc.setFont(BODY, 'normal');
     doc.setFontSize(9);
     doc.setTextColor(...MUTED);
     doc.text('No items on this job.', PAGE_W / 2, y + 8, { align: 'center' });
@@ -308,17 +381,17 @@ export async function exportJobPdf(opts: ExportOptions): Promise<void> {
   const totalsW = CONTENT_W * 0.42;
   const totalsX = PAGE_W - MARGIN_X - totalsW;
 
-  doc.setFont('helvetica', 'normal');
+  doc.setFont(BODY, 'normal');
   doc.setFontSize(9.5);
   doc.setTextColor(...MUTED);
   doc.text('Subtotal', totalsX + 2, y + 5);
   doc.setTextColor(...INK);
-  doc.setFont('helvetica', 'bold');
+  doc.setFont(BODY, 'bold');
   doc.text(fmtUSD(subtotal), totalsX + totalsW - 2, y + 5, { align: 'right' });
   y += 7;
 
   if (discAmt > 0) {
-    doc.setFont('helvetica', 'normal');
+    doc.setFont(BODY, 'normal');
     doc.setTextColor(...MUTED);
     const discLabel =
       discPct > 0 && discFixed > 0 ? `Discount (${discPct}% + fixed)`
@@ -326,7 +399,7 @@ export async function exportJobPdf(opts: ExportOptions): Promise<void> {
           : 'Discount';
     doc.text(discLabel, totalsX + 2, y + 5);
     doc.setTextColor(...ORANGE);
-    doc.setFont('helvetica', 'bold');
+    doc.setFont(BODY, 'bold');
     doc.text(`-${fmtUSD(discAmt)}`, totalsX + totalsW - 2, y + 5, { align: 'right' });
     y += 7;
   }
@@ -337,7 +410,7 @@ export async function exportJobPdf(opts: ExportOptions): Promise<void> {
   doc.line(totalsX, y, totalsX + totalsW, y);
   y += 6;
 
-  doc.setFont('helvetica', 'bold');
+  doc.setFont(BODY, 'bold');
   doc.setFontSize(11);
   doc.setTextColor(...INK);
   doc.text('TOTAL DUE', totalsX + 2, y + 4);
@@ -349,9 +422,9 @@ export async function exportJobPdf(opts: ExportOptions): Promise<void> {
   // ── NOTES ──────────────────────────────────────────────────────
   if (job.notes && job.notes.trim()) {
     if (y > PAGE_H - MARGIN_BOTTOM - 50) { doc.addPage(); y = MARGIN_TOP; }
-    drawColLabel(doc, 'NOTES', MARGIN_X, y);
+    drawColLabel(doc, 'NOTES', MARGIN_X, y, BODY);
     y += 5;
-    doc.setFont('helvetica', 'normal');
+    doc.setFont(BODY, 'normal');
     doc.setFontSize(9);
     doc.setTextColor(...INK);
     const notesLines = doc.splitTextToSize(job.notes.trim(), CONTENT_W - 8) as string[];
@@ -373,9 +446,9 @@ export async function exportJobPdf(opts: ExportOptions): Promise<void> {
   ];
 
   if (y > PAGE_H - MARGIN_BOTTOM - 40) { doc.addPage(); y = MARGIN_TOP; }
-  drawColLabel(doc, 'TERMS', MARGIN_X, y);
+  drawColLabel(doc, 'TERMS', MARGIN_X, y, BODY);
   y += 5;
-  doc.setFont('helvetica', 'normal');
+  doc.setFont(BODY, 'normal');
   doc.setFontSize(8);
   doc.setTextColor(...MUTED);
   for (let i = 0; i < terms.length; i++) {
@@ -391,8 +464,8 @@ export async function exportJobPdf(opts: ExportOptions): Promise<void> {
 }
 
 /** Small orange uppercase column label used across the document. */
-function drawColLabel(doc: jsPDF, label: string, x: number, y: number) {
-  doc.setFont('helvetica', 'bold');
+function drawColLabel(doc: jsPDF, label: string, x: number, y: number, family: string = 'helvetica') {
+  doc.setFont(family, 'bold');
   doc.setFontSize(7.5);
   doc.setTextColor(...ORANGE);
   doc.text(label, x, y);
