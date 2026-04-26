@@ -133,7 +133,7 @@ export async function exportJobPdf(opts: ExportOptions): Promise<void> {
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(10);
   doc.setTextColor(...INK);
-  const clientName = job.client_name || '—';
+  const clientName = job.client_name || '-';
   const wrappedClient = doc.splitTextToSize(clientName, colW - 4) as string[];
   doc.text(wrappedClient, c1, yBill);
   yBill += wrappedClient.length * 4.2;
@@ -171,7 +171,9 @@ export async function exportJobPdf(opts: ExportOptions): Promise<void> {
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(10);
   doc.setTextColor(...INK);
-  const periodStr = `${fmtDate(job.start_date)} → ${fmtDate(job.end_date)}`;
+  // ASCII separator only — jsPDF's default Helvetica is WinAnsi-encoded
+  // and renders Unicode arrows/minus-signs as garbage glyphs.
+  const periodStr = `${fmtDate(job.start_date)}  to  ${fmtDate(job.end_date)}`;
   doc.text(periodStr, c3, yPer);
   yPer += 4.5;
   doc.setFont('helvetica', 'normal');
@@ -325,7 +327,7 @@ export async function exportJobPdf(opts: ExportOptions): Promise<void> {
     doc.text(discLabel, totalsX + 2, y + 5);
     doc.setTextColor(...ORANGE);
     doc.setFont('helvetica', 'bold');
-    doc.text(`−${fmtUSD(discAmt)}`, totalsX + totalsW - 2, y + 5, { align: 'right' });
+    doc.text(`-${fmtUSD(discAmt)}`, totalsX + totalsW - 2, y + 5, { align: 'right' });
     y += 7;
   }
 
