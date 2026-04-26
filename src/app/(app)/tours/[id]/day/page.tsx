@@ -5,6 +5,7 @@
    ============================================ */
 
 import { notFound } from 'next/navigation';
+import { listAppPageShell } from '@/components/shell/app-page-shells';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { DayViewTimeline } from '@/components/day-view/DayViewTimeline';
 import type { Tour } from '@/types';
@@ -40,7 +41,7 @@ export default async function DayViewPage({
 
   const routing = (routingDates ?? []) as RoutingDate[];
 
-  return (
+  return listAppPageShell(
     <div className="mx-auto max-w-5xl space-y-4 pb-12">
       <DayViewTimeline tour={tour as Tour} routingDates={routing} />
     </div>

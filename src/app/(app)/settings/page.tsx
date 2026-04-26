@@ -1,10 +1,12 @@
 import { getUserAndAdminStatus } from '@/lib/site-admin';
+import { documentSectionsAppPageShell } from '@/components/shell/app-page-shells';
+import { getSettingsLeftRail } from '@/lib/shell/rails/settingsSections';
 import { SiteAdminsCard } from '@/components/settings/SiteAdminsCard';
 
 export default async function SettingsPage() {
   const { user, isAdmin } = await getUserAndAdminStatus();
 
-  return (
+  return documentSectionsAppPageShell(
     <div className="mx-auto w-full max-w-3xl">
       <header className="mb-6">
         <h1 className="text-2xl font-bold text-lp-text">Settings</h1>
@@ -18,6 +20,7 @@ export default async function SettingsPage() {
           <SiteAdminsCard currentUserId={user.id} />
         </div>
       )}
-    </div>
+    </div>,
+    getSettingsLeftRail('account')
   );
 }

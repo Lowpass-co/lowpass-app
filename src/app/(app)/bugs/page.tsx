@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import { BugReportsClient } from '@/components/bug-report/BugReportsClient';
 import { getUserAndAdminStatus } from '@/lib/site-admin';
+import { listAppPageShell } from '@/components/shell/app-page-shells';
 
 export default async function BugReportsPage() {
   const { user, isAdmin } = await getUserAndAdminStatus();
@@ -8,7 +9,7 @@ export default async function BugReportsPage() {
     notFound();
   }
 
-  return (
+  return listAppPageShell(
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="mb-4">
         <h1 className="text-2xl font-bold" style={{ color: 'var(--lp-text)' }}>

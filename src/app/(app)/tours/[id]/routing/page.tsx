@@ -7,6 +7,8 @@
    ============================================ */
 
 import { notFound } from 'next/navigation';
+import { docDaysAppPageShell } from '@/components/shell/app-page-shells';
+import { getDocDaysLeftRail } from '@/lib/shell/rails/docDaysForTour';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { RoutingEditor } from '@/components/routing/RoutingEditor';
 import { RoutingPageShell } from '@/components/routing/RoutingPageShell';
@@ -32,7 +34,9 @@ export default async function RoutingPage({
 
   const subtitle = formatSubtitle(tour.name, tour.start_date, tour.end_date);
 
-  return (
+  const dayRail = await getDocDaysLeftRail(id);
+
+  return docDaysAppPageShell(
     <RoutingPageShell
       title="Routing"
       subtitle={subtitle}
@@ -44,7 +48,8 @@ export default async function RoutingPage({
         endDate={tour.end_date ?? ''}
         initialCustomDayTypes={tour.custom_day_types ?? []}
       />
-    </RoutingPageShell>
+    </RoutingPageShell>,
+    dayRail
   );
 }
 

@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { builderAppPageShell } from '@/components/shell/app-page-shells';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { redirect } from 'next/navigation';
 import { PackEditor } from '@/components/rider-pack/PackEditor';
@@ -27,7 +28,7 @@ export default async function RiderPackEditorPage({
     return <div className="p-6 text-sm text-lp-text-secondary">Pack not found.</div>;
   }
 
-  return (
+  return builderAppPageShell(
     <div>
       <div className="flex items-center gap-2 border-b border-lp-border bg-lp-surface px-6 py-3 text-sm">
         <Link href="/rider-packs" className="text-lp-text-secondary hover:text-lp-text">
@@ -37,6 +38,11 @@ export default async function RiderPackEditorPage({
         <span className="font-semibold text-lp-text">{pack.title || '(untitled)'}</span>
       </div>
       <PackEditor packId={id} />
-    </div>
+    </div>,
+    {
+      kind: 'docSections',
+      activeId: 'doc',
+      sections: [{ id: 'doc', label: 'Document', href: `/rider-packs/${id}` }],
+    }
   );
 }

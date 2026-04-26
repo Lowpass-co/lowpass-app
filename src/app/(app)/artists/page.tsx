@@ -5,6 +5,7 @@
    ============================================ */
 
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { listAppPageShell } from '@/components/shell/app-page-shells';
 import { ArtistsList } from '@/components/artists/ArtistsList';
 import { SpotifyReleasesPanel } from '@/components/artists/SpotifyReleasesPanel';
 
@@ -39,7 +40,7 @@ export default async function ArtistsPage() {
     .eq('workspace_id', profile.workspace_id)
     .order('name');
 
-  return (
+  return listAppPageShell(
     <div className="mx-auto flex max-w-7xl gap-8">
       <div className="min-w-0 flex-1 space-y-6">
         <div className="flex items-center justify-between">

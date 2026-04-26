@@ -5,6 +5,7 @@
    ============================================ */
 
 import { Suspense } from 'react';
+import { listAppPageShell } from '@/components/shell/app-page-shells';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { PersonnelPageClient } from '@/components/personnel/PersonnelPageClient';
 import type { Personnel } from '@/types';
@@ -44,7 +45,7 @@ export default async function PersonnelPage() {
     .eq('workspace_id', profile.workspace_id)
     .order('lp_id', { ascending: true });
 
-  return (
+  return listAppPageShell(
     <div className="mx-auto max-w-7xl space-y-6 pb-12">
       <div>
         <h1 className="text-2xl font-bold text-lp-text">Personnel</h1>

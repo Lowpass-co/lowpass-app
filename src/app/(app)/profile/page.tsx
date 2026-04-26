@@ -7,6 +7,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { listAppPageShell } from '@/components/shell/app-page-shells';
 import Link from 'next/link';
 import { Loader2, ArrowLeft } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
@@ -129,7 +130,7 @@ export default function ProfilePage() {
     .join('')
     .toUpperCase() || profile.email?.charAt(0).toUpperCase() || '?';
 
-  return (
+  return listAppPageShell(
     <div className="mx-auto max-w-xl space-y-6">
       <Link
         href="/dashboard"

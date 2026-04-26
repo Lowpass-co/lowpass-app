@@ -6,6 +6,9 @@
    ============================================ */
 
 import { AdvanceShowReadView } from '@/components/advance/AdvanceShowReadView';
+import { docDaysAppPageShell } from '@/components/shell/app-page-shells';
+import { getDocDaysLeftRail } from '@/lib/shell/rails/docDaysForTour';
+import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { AdvanceSectionBuilderDynamic } from '@/components/advance/AdvanceSectionBuilderDynamic';
 
 export default async function AdvanceShowPage({
@@ -18,17 +21,29 @@ export default async function AdvanceShowPage({
   const { id: tourId, routingId } = await params;
   const { mode } = await searchParams;
 
+  const supabase = await createServerSupabaseClient();
+  const { data: rRow } = await supabase
+    .from('routing')
+    .select('date')
+    .eq('id', routingId)
+    .maybeSingle();
+  const dayRail = await getDocDaysLeftRail(tourId, {
+    activeDate: (rRow?.date as string) || undefined,
+  });
+
   if (mode === 'edit') {
-    return (
+    return docDaysAppPageShell(
       <div className="mx-auto max-w-5xl space-y-6">
         <AdvanceSectionBuilderDynamic tourId={tourId} routingId={routingId} />
-      </div>
+      </div>,
+      dayRail
     );
   }
 
-  return (
+  return docDaysAppPageShell(
     <div className="-mx-8 -my-6">
       <AdvanceShowReadView tourId={tourId} routingId={routingId} />
-    </div>
+    </div>,
+    dayRail
   );
 }

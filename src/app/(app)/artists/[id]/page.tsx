@@ -6,6 +6,7 @@
    ============================================ */
 
 import { notFound } from 'next/navigation';
+import { listAppPageShell } from '@/components/shell/app-page-shells';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { ArtistEditForm } from '@/components/artists/ArtistEditForm';
 import { ArtistPageHeader } from '@/components/artists/ArtistPageHeader';
@@ -31,7 +32,7 @@ export default async function ArtistPage({
 
   const a = artist as Artist;
 
-  return (
+  return listAppPageShell(
     <div className="mx-auto max-w-4xl space-y-6">
       <ArtistPageHeader artistId={a.id} artistName={a.name ?? 'Artist'} />
 

@@ -2,7 +2,8 @@
    LOWPASS — App Layout
 
    Layout for authenticated pages.
-   Includes sidebar + header shell.
+   Global: toasts, artist/tour context, bug reporter.
+   Per-route chrome: <PageShell> (TopBar + LeftRail) in each `page.tsx` (UX04).
 
    All pages under (app)/ get this layout.
    Auth pages under (auth)/ do NOT.

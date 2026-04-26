@@ -5,6 +5,7 @@
    ============================================ */
 
 import Link from 'next/link';
+import { listAppPageShell } from '@/components/shell/app-page-shells';
 import { notFound } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { ArrowLeft } from 'lucide-react';
@@ -30,7 +31,7 @@ export default async function TourEditPage({
     notFound();
   }
 
-  return (
+  return listAppPageShell(
     <div className="mx-auto max-w-xl space-y-6">
       <div className="flex items-center gap-4">
         <Link

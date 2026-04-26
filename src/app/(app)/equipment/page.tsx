@@ -5,6 +5,7 @@
    ============================================ */
 
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { listAppPageShell } from '@/components/shell/app-page-shells';
 import { EquipmentClient } from '@/components/equipment/EquipmentClient';
 import { redirect } from 'next/navigation';
 import type { EquipmentArtistOption, EquipmentTourOption, RentalJob } from '@/components/equipment/types';
@@ -56,7 +57,7 @@ export default async function EquipmentPage() {
   const artists = (artistsRaw ?? []) as EquipmentArtistOption[];
   const tours = (toursRaw ?? []) as EquipmentTourOption[];
 
-  return (
+  return listAppPageShell(
     <EquipmentClient
       userId={user.id}
       workspaceId={ws}

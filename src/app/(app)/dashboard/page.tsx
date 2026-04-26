@@ -14,6 +14,8 @@ import { DashboardUpcoming } from '@/components/dashboard/DashboardUpcoming';
 import { DashboardTourList } from '@/components/dashboard/DashboardTourList';
 import { DashboardArtistGate } from '@/components/dashboard/DashboardArtistGate';
 import { parseWorkspaceArtistId } from '@/lib/artist-scope';
+import { dashboardAppPageShell } from '@/components/shell/app-page-shells';
+import { getWorkspaceDashboardRail } from '@/lib/shell/rails/workspaceDashboard';
 
 export default async function DashboardPage({
   searchParams,
@@ -23,14 +25,16 @@ export default async function DashboardPage({
   const params = await searchParams;
   const artistId = parseWorkspaceArtistId(params.artist_id);
   const pickArtistMode = params.select === 'artist';
+  const q = artistId ? `?artist_id=${encodeURIComponent(artistId)}` : '';
 
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
-    return (
+    return dashboardAppPageShell(
       <div className="mx-auto max-w-6xl">
         <p className="text-lp-text-secondary">Please sign in.</p>
-      </div>
+      </div>,
+      getWorkspaceDashboardRail(q)
     );
   }
 
@@ -41,10 +45,11 @@ export default async function DashboardPage({
     .single();
 
   if (!profile?.workspace_id) {
-    return (
+    return dashboardAppPageShell(
       <div className="mx-auto max-w-6xl">
         <p className="text-lp-text-secondary">No workspace.</p>
-      </div>
+      </div>,
+      getWorkspaceDashboardRail(q)
     );
   }
 
@@ -200,7 +205,7 @@ export default async function DashboardPage({
   if (artistId) toursListQ = toursListQ.eq('artist_id', artistId);
   const { data: toursList } = await toursListQ;
 
-  return (
+  return dashboardAppPageShell(
     <DashboardArtistGate pickArtistMode={pickArtistMode}>
       <div className="lp-dashboard-glass mx-auto min-h-[60vh] max-w-7xl space-y-6">
         <div className="flex items-center justify-between">
@@ -257,7 +262,8 @@ export default async function DashboardPage({
           </div>
         </div>
       </div>
-    </DashboardArtistGate>
+    </DashboardArtistGate>,
+    getWorkspaceDashboardRail(q)
   );
 }
 

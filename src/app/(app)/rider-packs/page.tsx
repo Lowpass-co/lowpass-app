@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { listAppPageShell } from '@/components/shell/app-page-shells';
 import { Suspense } from 'react';
 import { redirect } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
@@ -59,7 +60,7 @@ export default async function RiderPacksIndexPage({
 
   const artistMap = new Map(list.map((a) => [a.id, a.name]));
 
-  return (
+  return listAppPageShell(
     <div className="flex min-h-0 flex-1 flex-col space-y-5">
       <Suspense fallback={null}>
         <RiderPacksUrlSync />

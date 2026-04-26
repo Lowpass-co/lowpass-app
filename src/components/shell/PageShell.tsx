@@ -12,7 +12,7 @@ export type PageShellProps = {
 
 /**
  * Canonical app layout: TopBar + optional LeftRail + main. Server component.
- * Legacy AppShell is unchanged; playground is the first consumer until UX04.
+ * Used by `app-page-shells` on each route; see `app/(app)/layout.tsx` for global providers.
  */
 export function PageShell({ topBar, leftRail, archetype, children }: PageShellProps) {
   const hasRail = leftRail != null;
