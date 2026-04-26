@@ -393,7 +393,7 @@ export function PackEditor({ packId }: Props) {
   };
 
   return (
-    <div className="flex h-[calc(100vh-120px)] min-h-0 flex-col border-t border-lp-border bg-lp-surface">
+    <div className="flex flex-col border-t border-lp-border bg-lp-surface">
       <div className="shrink-0 border-b border-lp-border bg-lp-surface px-4 py-3">
         <div className="mb-2 flex items-start justify-between gap-4">
           <div className="flex min-w-0 items-center gap-3">
@@ -521,9 +521,9 @@ export function PackEditor({ packId }: Props) {
           </div>
         )}
       </div>
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-0 lg:grid-cols-[220px_1fr]">
-      {/* LEFT: section list */}
-      <aside className="overflow-y-auto border-r border-lp-border bg-lp-surface">
+      <div className="grid grid-cols-1 gap-0 lg:grid-cols-[220px_minmax(0,1fr)] lg:items-start">
+      {/* LEFT: section list — sticky below app top bar while page scrolls */}
+      <aside className="border-r border-lp-border bg-lp-surface lg:sticky lg:top-16 lg:z-[5] lg:max-h-[calc(100vh-4rem)] lg:overflow-y-auto lg:self-start">
         <div className="p-3 flex items-center justify-between">
           <span className="text-xs font-semibold uppercase tracking-widest text-lp-text-tertiary">Sections</span>
           <button
@@ -565,8 +565,8 @@ export function PackEditor({ packId }: Props) {
       <main
         className={
           selectedIsChannelList
-            ? 'min-h-0 min-w-0 flex-1 overflow-y-auto bg-lp-surface-hover p-0 sm:p-2'
-            : 'min-h-0 flex-1 overflow-y-auto bg-lp-surface-hover p-4 lg:p-6'
+            ? 'min-w-0 flex-1 bg-lp-surface-hover p-0 sm:p-2'
+            : 'min-w-0 flex-1 bg-lp-surface-hover p-4 lg:p-6'
         }
       >
         {!selectedSection ? (
