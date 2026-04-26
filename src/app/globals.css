@@ -71,6 +71,19 @@
   --font-sans: var(--font-geist-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono: var(--font-geist-mono), "SF Mono", "Fira Code", monospace;
   --font-display: var(--font-montserrat), var(--font-geist-sans), sans-serif;
+
+  /* UX01 — page shell metrics (fixed; applied in UX02) */
+  --lp-topbar-height: 56px;
+  --lp-rail-width: 240px;
+  --lp-rail-collapsed: 56px;
+  --lp-slideover-width: 480px;
+  --lp-slideover-width-wide: 640px;
+  --lp-content-padding-x: 24px;
+  --lp-content-padding-y: 24px;
+  --lp-content-max-width: 1440px;
+
+  /* UX01 — tabular / numeric (opt-in) */
+  --lp-font-numeric: var(--font-mono);
 }
 
 /* ============================================
@@ -120,6 +133,104 @@
   --lp-budget-card-border: #E7E5E4;
   --lp-budget-card-header: #EBEBEA;
   --lp-budget-card-footer: #EEEDEC;
+}
+
+/* ============================================
+   UX01 — Foundation tokens (spacing, type, z, motion, radii, shadows, row density, aliases)
+   Additive only — existing tokens above are unchanged.
+   ============================================ */
+:root {
+  /* 4.1 Spacing (4px grid) */
+  --lp-space-0: 0;
+  --lp-space-1: 4px;
+  --lp-space-2: 8px;
+  --lp-space-3: 12px;
+  --lp-space-4: 16px;
+  --lp-space-5: 20px;
+  --lp-space-6: 24px;
+  --lp-space-8: 32px;
+  --lp-space-10: 40px;
+  --lp-space-12: 48px;
+  --lp-space-16: 64px;
+
+  /* 4.2 Type scale (px) */
+  --lp-text-2xs: 11px;
+  --lp-text-xs: 12px;
+  --lp-text-sm: 13px;
+  --lp-text-base: 14px;
+  --lp-text-md: 15px;
+  --lp-text-lg: 17px;
+  --lp-text-xl: 20px;
+  --lp-text-2xl: 22px;
+  --lp-text-3xl: 28px;
+  --lp-text-4xl: 34px;
+  --lp-leading-tight: 1.2;
+  --lp-leading-snug: 1.3;
+  --lp-leading-normal: 1.5;
+  --lp-leading-relaxed: 1.65;
+  --lp-weight-regular: 400;
+  --lp-weight-medium: 500;
+  --lp-weight-semibold: 600;
+  --lp-weight-bold: 700;
+  --lp-tracking-normal: 0;
+  --lp-tracking-caps: 0.1em;
+  --lp-tracking-tight: -0.01em;
+
+  /* 4.3 Z-layer system */
+  --lp-z-base: 0;
+  --lp-z-elevated: 10;
+  --lp-z-sticky: 30;
+  --lp-z-overlay: 50;
+  --lp-z-dropdown: 1000;
+  --lp-z-modal-backdrop: 1100;
+  --lp-z-modal: 1110;
+  --lp-z-slide-over-backdrop: 1200;
+  --lp-z-slide-over: 1210;
+  --lp-z-toast: 1300;
+  --lp-z-tooltip: 1400;
+  --lp-z-command-palette: 1500;
+  /* Backwards-compatible alias (resolves to 1000) */
+  --lp-dropdown-layer: var(--lp-z-dropdown);
+
+  /* 4.4 Motion */
+  --lp-duration-instant: 0ms;
+  --lp-duration-fast: 100ms;
+  --lp-duration-base: 150ms;
+  --lp-duration-slow: 200ms;
+  --lp-duration-slower: 250ms;
+  --lp-duration-page: 300ms;
+  --lp-ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
+  --lp-ease-emphasized: cubic-bezier(0.2, 0, 0, 1);
+  --lp-ease-decelerate: cubic-bezier(0, 0, 0.2, 1);
+  --lp-ease-accelerate: cubic-bezier(0.4, 0, 1, 1);
+
+  /* 4.5 Radii */
+  --lp-radius-none: 0;
+  --lp-radius-xs: 2px;
+  --lp-radius-sm: 4px;
+  --lp-radius-md: 6px;
+  --lp-radius-lg: 8px;
+  --lp-radius-xl: 12px;
+  --lp-radius-2xl: 16px;
+  --lp-radius-full: 9999px;
+
+  /* 4.6 Shadows — light */
+  --lp-shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.04);
+  --lp-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --lp-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --lp-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.1);
+  --lp-shadow-xl: 0 16px 40px rgba(0, 0, 0, 0.12);
+  --lp-shadow-overlay: 0 0 0 1px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.1);
+  --lp-shadow-focus-ring: 0 0 0 4px rgba(255, 69, 0, 0.22);
+
+  /* 4.7 Row density (DataTable / SpreadsheetGrid) */
+  --lp-row-comfortable: 44px;
+  --lp-row-compact: 32px;
+  --lp-row-tight: 28px;
+  --lp-row-cell-padding-y-comfortable: 10px;
+  --lp-row-cell-padding-y-compact: 6px;
+  --lp-row-cell-padding-y-tight: 4px;
+  --lp-row-cell-padding-x: 12px;
 }
 
 /* Table / breakdown column headers — light #471300, dark muted grey */
@@ -260,6 +371,15 @@ input[type='checkbox'].lp-checkbox:focus-visible {
   --lp-budget-card-border: #2a2a2a;
   --lp-budget-card-header: #141414;
   --lp-budget-card-footer: #111111;
+
+  /* UX01 — 4.6 Shadows — dark (higher opacity) */
+  --lp-shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.2);
+  --lp-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --lp-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --lp-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --lp-shadow-xl: 0 16px 40px rgba(0, 0, 0, 0.6);
+  --lp-shadow-overlay: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 8px 24px rgba(0, 0, 0, 0.5);
+  --lp-shadow-focus-ring: 0 0 0 4px rgba(255, 69, 0, 0.35);
 }
 
 /* ============================================
