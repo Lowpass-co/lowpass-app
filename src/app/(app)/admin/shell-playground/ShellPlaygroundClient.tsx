@@ -5,6 +5,7 @@ import { Building2, Calendar, FileText, LayoutGrid, Users } from 'lucide-react';
 import { LeftRail, type LeftRailVariant, type ListFilterDef } from '@/components/shell/LeftRail';
 import { PageShell, type PageShellArchetype } from '@/components/shell/PageShell';
 import { TopBar } from '@/components/shell/TopBar';
+import { SlideOver } from '@/components/shell/SlideOver';
 
 type PlayTab =
   | 'list'
@@ -29,6 +30,8 @@ export default function ShellPlaygroundClient() {
   const [from, setFrom] = useState('2026-04-01');
   const [to, setTo] = useState('2026-04-30');
   const [tags, setTags] = useState<string[]>(['band']);
+  const [slideOverOpen, setSlideOverOpen] = useState(false);
+  const [slideOverMode, setSlideOverMode] = useState<'default' | 'wideBackdrop'>('default');
 
   const onPalette = useCallback(() => {
     console.log('[shell-playground] Command palette open (UX08b placeholder)');
@@ -274,9 +277,81 @@ export default function ShellPlaygroundClient() {
               <FileText className="h-4 w-4" />
               <span>Main column padding follows PageShell rules for this archetype.</span>
             </div>
+
+            <div
+              className="flex flex-wrap items-center gap-2 rounded-lg border p-3"
+              style={{ borderColor: 'var(--lp-border)', background: 'var(--lp-bg-secondary)' }}
+            >
+              <label className="flex items-center gap-2 text-sm" style={{ color: 'var(--lp-text)' }}>
+                <span className="whitespace-nowrap">SlideOver demo</span>
+                <select
+                  className="rounded-md border px-2 py-1.5 text-sm"
+                  style={{
+                    borderColor: 'var(--lp-border)',
+                    background: 'var(--lp-bg)',
+                    color: 'var(--lp-text)',
+                  }}
+                  value={slideOverMode}
+                  onChange={e => setSlideOverMode(e.target.value as 'default' | 'wideBackdrop')}
+                >
+                  <option value="default">Default width, no backdrop</option>
+                  <option value="wideBackdrop">Wide + backdrop</option>
+                </select>
+              </label>
+              <button
+                type="button"
+                onClick={() => setSlideOverOpen(true)}
+                className="rounded-lg px-3 py-1.5 text-sm font-semibold"
+                style={{
+                  background: 'var(--lp-orange)',
+                  color: '#fff',
+                }}
+              >
+                Open SlideOver demo
+              </button>
+            </div>
           </div>
         </PageShell>
       </div>
+      <SlideOver
+        open={slideOverOpen}
+        onClose={() => setSlideOverOpen(false)}
+        title="Britannia Row Audio Rental"
+        subtitle="£12,500.00 · Expense · 12 Aug 2026"
+        width={slideOverMode === 'wideBackdrop' ? 'wide' : 'default'}
+        backdrop={slideOverMode === 'wideBackdrop'}
+        footer={
+          <button
+            type="button"
+            className="text-sm font-medium"
+            style={{ color: 'var(--lp-text-secondary)' }}
+            onClick={() => {}}
+          >
+            View source
+          </button>
+        }
+      >
+        <div className="space-y-4 text-sm" style={{ color: 'var(--lp-text)' }}>
+          <div>
+            <div className="mb-1 text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--lp-text-tertiary)' }}>
+              Notes
+            </div>
+            <p style={{ color: 'var(--lp-text-secondary)' }}>Placeholder for notes or markdown.</p>
+          </div>
+          <div>
+            <div className="mb-1 text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--lp-text-tertiary)' }}>
+              Attachments
+            </div>
+            <p style={{ color: 'var(--lp-text-secondary)' }}>Placeholder for file list + upload.</p>
+          </div>
+          <div>
+            <div className="mb-1 text-[11px] font-bold uppercase tracking-wider" style={{ color: 'var(--lp-text-tertiary)' }}>
+              Comments
+            </div>
+            <p style={{ color: 'var(--lp-text-secondary)' }}>Placeholder for threaded comments.</p>
+          </div>
+        </div>
+      </SlideOver>
     </div>
   );
 }
