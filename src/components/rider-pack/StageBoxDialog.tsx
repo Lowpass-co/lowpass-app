@@ -3,16 +3,18 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useDebouncedSave } from '@/hooks/useDebouncedSave';
 import { createClient } from '@/lib/supabase-client';
-import type { SectionStageIO } from '@/lib/rider-packs/types';
-import { SUB_SNAKE_PALETTE } from './SubSnakeDialog';
+import type { StageBox } from '@/lib/rider-packs/types';
 import {
-  createStageIO,
-  deleteStageIO,
-  listStageIO,
-  updateStageIO,
+  clearStageBoxPositionsAbove,
+  createStageBox,
+  deleteStageBox,
+  listChannelRowsStageBoxAbovePosition,
+  listStageBoxes,
+  updateStageBox,
 } from '@/lib/rider-packs/channel-list';
+import { SUB_SNAKE_PALETTE } from './SubSnakeDialog';
 
-function nextPaletteColour(existing: SectionStageIO[]): string {
+function nextPaletteColour(existing: StageBox[]): string {
   const used = new Set(existing.map((s) => s.colour.toLowerCase()));
   for (const c of SUB_SNAKE_PALETTE) {
     if (!used.has(c.toLowerCase())) return c;
@@ -28,13 +30,13 @@ type Props = {
   onChanged: () => void | Promise<void>;
 };
 
-export default function StageIoDialog({ open, onClose, packId, sectionId, onChanged }: Props) {
-  const [list, setList] = useState<SectionStageIO[]>([]);
+export default function StageBoxDialog({ open, onClose, packId, sectionId, onChanged }: Props) {
+  const [list, setList] = useState<StageBox[]>([]);
   const [pickerFor, setPickerFor] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     const supabase = createClient();
-    const rows = await listStageIO(supabase, sectionId);
+    const rows = await listStageBoxes(supabase, sectionId);
     setList(rows);
   }, [sectionId]);
 
@@ -55,11 +57,12 @@ export default function StageIoDialog({ open, onClose, packId, sectionId, onChan
   const addNew = async () => {
     const supabase = createClient();
     const colour = nextPaletteColour(list);
-    const created = await createStageIO(supabase, {
+    const created = await createStageBox(supabase, {
       packId,
       sectionId,
-      label: 'New I/O',
+      label: 'New box',
       colour,
+      capacity: 16,
     });
     setList((prev) => [...prev, created].sort((a, b) => a.position - b.position));
     await onChanged();
@@ -78,11 +81,11 @@ export default function StageIoDialog({ open, onClose, packId, sectionId, onChan
       >
         <div className="border-b border-lp-border px-4 py-3">
           <h2 className="text-sm font-semibold text-lp-text">Stage I/O</h2>
-          <p className="mt-0.5 text-xs text-lp-text-secondary">Labels for the I/O column (e.g. 16A, 16B).</p>
+          <p className="mt-0.5 text-xs text-lp-text-secondary">Label each stage box, set capacity, and assign in the I/O column.</p>
         </div>
         <div className="max-h-[min(60vh,400px)] space-y-2 overflow-y-auto p-4">
           {list.map((s) => (
-            <StageIoRow
+            <StageBoxRow
               key={s.id}
               row={s}
               onPickerToggle={() => setPickerFor((id) => (id === s.id ? null : s.id))}
@@ -90,19 +93,42 @@ export default function StageIoDialog({ open, onClose, packId, sectionId, onChan
               onClosePicker={() => setPickerFor(null)}
               onUpdateColour={async (hex: string) => {
                 const supabase = createClient();
-                await updateStageIO(supabase, s.id, { colour: hex });
+                await updateStageBox(supabase, s.id, { colour: hex });
                 setList((prev) => prev.map((x) => (x.id === s.id ? { ...x, colour: hex } : x)));
                 await onChanged();
               }}
               onDelete={async () => {
-                if (!confirm('Remove this I/O label?')) return;
+                if (!confirm('Remove this stage box?')) return;
                 const supabase = createClient();
-                await deleteStageIO(supabase, s.id);
+                await deleteStageBox(supabase, s.id);
                 setList((prev) => prev.filter((x) => x.id !== s.id));
                 setPickerFor(null);
                 await onChanged();
               }}
               onLabelSaved={async () => onChanged()}
+              onCapacityCommit={async (next: number) => {
+                const supabase = createClient();
+                const prevCap = s.capacity ?? 16;
+                if (next < prevCap) {
+                  const over = await listChannelRowsStageBoxAbovePosition(supabase, s.id, next);
+                  if (over.length > 0) {
+                    const pos = over.map((r) => r.stage_box_position).filter((p): p is number => p != null);
+                    if (
+                      !confirm(
+                        `Lowering capacity will unassign ${over.length} channel(s) (positions ${pos.join(', ')}). Continue?`,
+                      )
+                    ) {
+                      return 'cancelled';
+                    }
+                    await clearStageBoxPositionsAbove(supabase, s.id, next);
+                  }
+                }
+                if (next === prevCap) return 'ok';
+                await updateStageBox(supabase, s.id, { capacity: next });
+                setList((prev) => prev.map((x) => (x.id === s.id ? { ...x, capacity: next } : x)));
+                await onChanged();
+                return 'ok';
+              }}
             />
           ))}
         </div>
@@ -110,9 +136,9 @@ export default function StageIoDialog({ open, onClose, packId, sectionId, onChan
           <button
             type="button"
             onClick={() => void addNew()}
-            className="w-full rounded-lg border border-lp-border bg-lp-bg-secondary py-2 text-sm font-medium text-lp-text hover:bg-lp-surface-hover"
+            className="w-full rounded-lg border border-dashed border-lp-border py-2 text-sm text-lp-text-secondary hover:bg-lp-surface-hover"
           >
-            + Add I/O label
+            + Add stage box
           </button>
           <button type="button" onClick={onClose} className="text-sm text-lp-text-secondary hover:text-lp-text">
             Done
@@ -123,7 +149,7 @@ export default function StageIoDialog({ open, onClose, packId, sectionId, onChan
   );
 }
 
-function StageIoRow({
+function StageBoxRow({
   row: s,
   onPickerToggle,
   showPicker,
@@ -131,23 +157,27 @@ function StageIoRow({
   onUpdateColour,
   onDelete,
   onLabelSaved,
+  onCapacityCommit,
 }: {
-  row: SectionStageIO;
+  row: StageBox;
   onPickerToggle: () => void;
   showPicker: boolean;
   onClosePicker: () => void;
   onUpdateColour: (hex: string) => void | Promise<void>;
   onDelete: () => void | Promise<void>;
   onLabelSaved: () => void | Promise<void>;
+  onCapacityCommit: (next: number) => Promise<'ok' | 'cancelled'>;
 }) {
   const [label, setLabel] = useState(s.label);
   const [hexDraft, setHexDraft] = useState(s.colour);
+  const [capDraft, setCapDraft] = useState(String(s.capacity ?? 16));
 
   const save = useDebouncedSave(
     useCallback(
       async (v: string) => {
         if (v === s.label) return;
-        await updateStageIO(createClient(), s.id, { label: v });
+        const supabase = createClient();
+        await updateStageBox(supabase, s.id, { label: v });
         await onLabelSaved();
       },
       [s.id, s.label, onLabelSaved],
@@ -160,11 +190,15 @@ function StageIoRow({
   }, [s.label, save]);
 
   useEffect(() => {
+    setCapDraft(String(s.capacity ?? 16));
+  }, [s.capacity]);
+
+  useEffect(() => {
     if (showPicker) setHexDraft(s.colour);
   }, [showPicker, s.colour]);
 
   return (
-    <div className="flex items-start gap-2 rounded-lg border border-lp-border bg-lp-surface p-2">
+    <div className="flex flex-wrap items-start gap-2 rounded-lg border border-lp-border bg-lp-surface p-2">
       <div className="relative shrink-0">
         <button
           type="button"
@@ -250,6 +284,23 @@ function StageIoRow({
         }}
         className="min-w-0 flex-1 rounded border border-lp-border bg-lp-bg px-2 py-1 text-sm text-lp-text"
       />
+      <label className="flex shrink-0 items-center gap-1 text-xs text-lp-text-tertiary">
+        <span className="whitespace-nowrap">Cap</span>
+        <input
+          type="number"
+          min={1}
+          max={64}
+          value={capDraft}
+          onChange={(e) => setCapDraft(e.target.value)}
+          onBlur={async () => {
+            const n = Math.min(64, Math.max(1, Math.round(parseInt(capDraft, 10) || 1)));
+            setCapDraft(String(n));
+            const r = await onCapacityCommit(n);
+            if (r === 'cancelled') setCapDraft(String(s.capacity ?? 16));
+          }}
+          className="w-12 rounded border border-lp-border bg-lp-bg px-1 py-1 text-sm tabular-nums text-lp-text"
+        />
+      </label>
       <button
         type="button"
         onClick={() => void onDelete()}

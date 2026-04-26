@@ -5,8 +5,10 @@ import { useDebouncedSave } from '@/hooks/useDebouncedSave';
 import { createClient } from '@/lib/supabase-client';
 import type { SubSnake } from '@/lib/rider-packs/types';
 import {
+  clearSubSnakePositionsAbove,
   createSubSnake,
   deleteSubSnake,
+  listChannelRowsSubSnakeAbovePosition,
   listSubSnakes,
   updateSubSnake,
 } from '@/lib/rider-packs/channel-list';
@@ -70,6 +72,7 @@ export default function SubSnakeDialog({ open, onClose, packId, sectionId, onCha
       sectionId,
       label: 'New sub-snake',
       colour,
+      capacity: 8,
     });
     setList((prev) => [...prev, created].sort((a, b) => a.position - b.position));
     await onChanged();
@@ -113,6 +116,29 @@ export default function SubSnakeDialog({ open, onClose, packId, sectionId, onCha
                 await onChanged();
               }}
               onLabelSaved={async () => onChanged()}
+              onCapacityCommit={async (next: number) => {
+                const supabase = createClient();
+                const prevCap = s.capacity ?? 8;
+                if (next < prevCap) {
+                  const over = await listChannelRowsSubSnakeAbovePosition(supabase, s.id, next);
+                  if (over.length > 0) {
+                    const pos = over.map((r) => r.sub_snake_position).filter((p): p is number => p != null);
+                    if (
+                      !confirm(
+                        `Lowering capacity will unassign ${over.length} channel(s) (positions ${pos.join(', ')}). Continue?`,
+                      )
+                    ) {
+                      return 'cancelled';
+                    }
+                    await clearSubSnakePositionsAbove(supabase, s.id, next);
+                  }
+                }
+                if (next === prevCap) return 'ok';
+                await updateSubSnake(supabase, s.id, { capacity: next });
+                setList((prev) => prev.map((x) => (x.id === s.id ? { ...x, capacity: next } : x)));
+                await onChanged();
+                return 'ok';
+              }}
             />
           ))}
         </div>
@@ -145,6 +171,7 @@ function SubSnakeRow({
   onUpdateColour,
   onDelete,
   onLabelSaved,
+  onCapacityCommit,
 }: {
   sub: SubSnake;
   onPickerToggle: () => void;
@@ -153,9 +180,11 @@ function SubSnakeRow({
   onUpdateColour: (hex: string) => void | Promise<void>;
   onDelete: () => void | Promise<void>;
   onLabelSaved: () => void | Promise<void>;
+  onCapacityCommit: (next: number) => Promise<'ok' | 'cancelled'>;
 }) {
   const [label, setLabel] = useState(sub.label);
   const [hexDraft, setHexDraft] = useState(sub.colour);
+  const [capDraft, setCapDraft] = useState(String(sub.capacity ?? 8));
 
   const save = useDebouncedSave(
     useCallback(
@@ -173,6 +202,10 @@ function SubSnakeRow({
     if (save.isPending()) return;
     setLabel(sub.label);
   }, [sub.label, save]);
+
+  useEffect(() => {
+    setCapDraft(String(sub.capacity ?? 8));
+  }, [sub.capacity]);
 
   useEffect(() => {
     if (showPicker) setHexDraft(sub.colour);
@@ -265,6 +298,23 @@ function SubSnakeRow({
         }}
         className="min-w-0 flex-1 rounded border border-lp-border bg-lp-bg px-2 py-1 text-sm text-lp-text"
       />
+      <label className="flex shrink-0 items-center gap-1 text-xs text-lp-text-tertiary">
+        <span className="whitespace-nowrap">Cap</span>
+        <input
+          type="number"
+          min={1}
+          max={64}
+          value={capDraft}
+          onChange={(e) => setCapDraft(e.target.value)}
+          onBlur={async () => {
+            const n = Math.min(64, Math.max(1, Math.round(parseInt(capDraft, 10) || 1)));
+            setCapDraft(String(n));
+            const r = await onCapacityCommit(n);
+            if (r === 'cancelled') setCapDraft(String(sub.capacity ?? 8));
+          }}
+          className="w-12 rounded border border-lp-border bg-lp-bg px-1 py-1 text-sm tabular-nums text-lp-text"
+        />
+      </label>
       <button
         type="button"
         onClick={() => void onDelete()}

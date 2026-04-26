@@ -21,7 +21,7 @@ import type {
   ResolvedSection,
   ResolvedPack,
   SubSnake,
-  SectionStageIO,
+  StageBox,
   ChannelListRow,
   SectionType,
 } from './types';
@@ -132,11 +132,12 @@ export async function resolvePack(
     if (e1) throw e1;
     if (e2) throw e2;
 
-    const { data: ioRows } = await supabase
-      .from('section_stage_io')
+    const { data: boxRows, error: e3 } = await supabase
+      .from('stage_boxes')
       .select('*')
       .in('section_id', channelIds)
       .order('position');
+    if (e3) throw e3;
 
     const subBy = new Map<string, SubSnake[]>();
     for (const r of subRows ?? []) {
@@ -145,12 +146,12 @@ export async function resolvePack(
       list.push(s);
       subBy.set(s.section_id, list);
     }
-    const ioBy = new Map<string, SectionStageIO[]>();
-    for (const r of ioRows ?? []) {
-      const s = r as SectionStageIO;
-      const list = ioBy.get(s.section_id) ?? [];
+    const boxBy = new Map<string, StageBox[]>();
+    for (const r of boxRows ?? []) {
+      const s = r as StageBox;
+      const list = boxBy.get(s.section_id) ?? [];
       list.push(s);
-      ioBy.set(s.section_id, list);
+      boxBy.set(s.section_id, list);
     }
     const rowBy = new Map<string, ChannelListRow[]>();
     for (const r of chRows ?? []) {
@@ -164,7 +165,7 @@ export async function resolvePack(
         ? {
             ...s,
             subSnakes: subBy.get(s.id) ?? [],
-            stageIOs: ioBy.get(s.id) ?? [],
+            stageBoxes: boxBy.get(s.id) ?? [],
             rows: rowBy.get(s.id) ?? [],
           }
         : s,

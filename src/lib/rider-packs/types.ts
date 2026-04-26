@@ -164,17 +164,19 @@ export type SubSnake = {
   section_id: string;
   label: string;
   colour: string;
+  /** Max patch positions 1..capacity per box. */
+  capacity: number;
   position: number;
   created_at: string;
 };
 
-/** Stage I/O labels (e.g. 16A) for the channel list I/O column; same shape as sub-snake rows. */
-export type SectionStageIO = {
+export type StageBox = {
   id: string;
   pack_id: string;
   section_id: string;
   label: string;
   colour: string;
+  capacity: number;
   position: number;
   created_at: string;
 };
@@ -186,9 +188,9 @@ export type ChannelListRow = {
   row_index: number;
   channel_name: string;
   sub_snake_id: string | null;
-  /** Optional pick from "Manage stage I/O"; legacy free text in `stage_box` when null. */
-  stage_io_id?: string | null;
-  stage_box: string;
+  sub_snake_position: number | null;
+  stage_box_id: string | null;
+  stage_box_position: number | null;
   position: string;
   mic: string;
   mic_substitute: string;
@@ -219,7 +221,7 @@ export type ResolvedSection = RiderSection & {
   /** Set when `section_type === 'channel_list'` (from resolve). */
   subSnakes?: SubSnake[];
   /** Set when `section_type === 'channel_list'` (from resolve). */
-  stageIOs?: SectionStageIO[];
+  stageBoxes?: StageBox[];
   /** Set when `section_type === 'channel_list'` (from resolve). */
   rows?: ChannelListRow[];
 };

@@ -14,18 +14,12 @@ import { CSS } from '@dnd-kit/utilities';
 import { Check, GripVertical } from 'lucide-react';
 import { useDebouncedSave } from '@/hooks/useDebouncedSave';
 import { createClient } from '@/lib/supabase-client';
-import type {
-  ChannelListRow,
-  MicLibraryEntry,
-  RiderPack,
-  ResolvedSection,
-  SectionStageIO,
-  SubSnake,
-} from '@/lib/rider-packs/types';
+import type { ChannelListRow, MicLibraryEntry, RiderPack, ResolvedSection, StageBox, SubSnake } from '@/lib/rider-packs/types';
 import * as ch from '@/lib/rider-packs/channel-list';
 import { listMics } from '@/lib/rider-packs/mic-library';
 import SubSnakeDialog from './SubSnakeDialog';
-import StageIoDialog from './StageIoDialog';
+import StageBoxDialog from './StageBoxDialog';
+import PositionPicker from './PositionPicker';
 import { SaveStatePill, type SavePillState } from './SaveStatePill';
 import { BrandedSelect } from '@/components/ui/BrandedSelect';
 
@@ -70,15 +64,6 @@ type Props = {
   onStructureChange: () => void | Promise<void>;
 };
 
-function hexAlphaBorder(hex: string) {
-  if (!hex?.startsWith('#') || hex.length < 7) return '#00000033';
-  return `${hex.slice(0, 7)}33`;
-}
-function hexAlphaBg(hex: string) {
-  if (!hex?.startsWith('#') || hex.length < 7) return '#0000001a';
-  return `${hex.slice(0, 7)}1a`;
-}
-
 function cyclePhantom(p: boolean | null): boolean | null {
   if (p === null) return true;
   if (p === true) return false;
@@ -100,7 +85,7 @@ export default function ChannelListEditor({
   const [titleDraft, setTitleDraft] = useState(section.title);
   const [rows, setRows] = useState<ChannelListRow[]>(section.rows ?? []);
   const subSnakes = section.subSnakes ?? [];
-  const stageIOs = section.stageIOs ?? [];
+  const stageBoxes = section.stageBoxes ?? [];
   const [subDialog, setSubDialog] = useState(false);
   const [stageDialog, setStageDialog] = useState(false);
   const [mics, setMics] = useState<MicLibraryEntry[]>([]);
@@ -276,8 +261,9 @@ export default function ChannelListEditor({
                   <ChannelBlock
                     key={row.id}
                     row={row}
+                    rows={rows}
                     subSnakes={subSnakes}
-                    stageIOs={stageIOs}
+                    stageBoxes={stageBoxes}
                     mics={mics}
                     gridStyle={CHANNEL_ROW_GRID}
                     onUpdateLocal={(r) => setRows((prev) => prev.map((x) => (x.id === r.id ? r : x)))}
@@ -315,7 +301,7 @@ export default function ChannelListEditor({
         sectionId={section.id}
         onChanged={onStructureChange}
       />
-      <StageIoDialog
+      <StageBoxDialog
         open={stageDialog}
         onClose={() => {
           setStageDialog(false);
@@ -331,8 +317,9 @@ export default function ChannelListEditor({
 
 function ChannelBlock({
   row,
+  rows,
   subSnakes,
-  stageIOs,
+  stageBoxes,
   mics,
   gridStyle,
   onUpdateLocal,
@@ -343,8 +330,9 @@ function ChannelBlock({
   packId,
 }: {
   row: ChannelListRow;
+  rows: ChannelListRow[];
   subSnakes: SubSnake[];
-  stageIOs: SectionStageIO[];
+  stageBoxes: StageBox[];
   mics: MicLibraryEntry[];
   gridStyle: CSSProperties;
   onUpdateLocal: (r: ChannelListRow) => void;
@@ -358,6 +346,50 @@ function ChannelBlock({
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.85 : 1 };
   const sub = subSnakes.find((s) => s.id === row.sub_snake_id);
   const stripe = sub?.colour;
+
+  const usedSubSnakePositions = useMemo(() => {
+    const map: Record<string, Set<number>> = {};
+    for (const r of rows) {
+      if (r.id === row.id) continue;
+      if (r.sub_snake_id && r.sub_snake_position != null) {
+        (map[r.sub_snake_id] ??= new Set()).add(r.sub_snake_position);
+      }
+    }
+    return map;
+  }, [rows, row.id]);
+
+  const usedStageBoxPositions = useMemo(() => {
+    const map: Record<string, Set<number>> = {};
+    for (const r of rows) {
+      if (r.id === row.id) continue;
+      if (r.stage_box_id && r.stage_box_position != null) {
+        (map[r.stage_box_id] ??= new Set()).add(r.stage_box_position);
+      }
+    }
+    return map;
+  }, [rows, row.id]);
+
+  const getSubOccupant = useCallback(
+    (eid: string, pos: number) => {
+      const r = rows.find(
+        (x) => x.id !== row.id && x.sub_snake_id === eid && x.sub_snake_position === pos,
+      );
+      if (!r) return null;
+      return { rowIndex: r.row_index, name: (r.channel_name || '').trim() || '—' };
+    },
+    [rows, row.id],
+  );
+
+  const getStageOccupant = useCallback(
+    (eid: string, pos: number) => {
+      const r = rows.find(
+        (x) => x.id !== row.id && x.stage_box_id === eid && x.stage_box_position === pos,
+      );
+      if (!r) return null;
+      return { rowIndex: r.row_index, name: (r.channel_name || '').trim() || '—' };
+    },
+    [rows, row.id],
+  );
 
   const patchRef = useRef<Partial<ChannelListRow>>({});
   const saveRow = useDebouncedSave<number>(
@@ -436,23 +468,41 @@ function ChannelBlock({
           />
         </div>
         <div className="min-w-0 self-center px-0.5">
-          <SubSnakeCombo
-            subSnakes={subSnakes}
-            selectedId={local.sub_snake_id}
-            onSelect={(id) => queue({ sub_snake_id: id })}
-            onOpenManage={onOpenSubDialog}
-            disabled={false}
+          <PositionPicker
+            entityId={local.sub_snake_id}
+            position={local.sub_snake_position}
+            entities={subSnakes.map((s) => ({
+              id: s.id,
+              label: s.label,
+              colour: s.colour,
+              capacity: s.capacity ?? 8,
+            }))}
+            usedPositions={usedSubSnakePositions}
+            onChange={(id, pos) => queue({ sub_snake_id: id, sub_snake_position: pos })}
+            onManageClick={onOpenSubDialog}
+            ariaLabel={`Sub-snake position for channel ${row.row_index}`}
+            manageLabel="Manage sub-snakes"
+            getOccupant={getSubOccupant}
+            formatLabel={(l, p) => `${l}-${p}`}
           />
         </div>
         <div className="min-w-0 self-center px-0.5">
-          <StageIoCombo
-            stageIOs={stageIOs}
-            selectedId={local.stage_io_id ?? null}
-            fallbackText={local.stage_box}
-            onSelect={(id, label) => {
-              queue({ stage_io_id: id, stage_box: label });
-            }}
-            onOpenManage={onOpenStageDialog}
+          <PositionPicker
+            entityId={local.stage_box_id}
+            position={local.stage_box_position}
+            entities={stageBoxes.map((s) => ({
+              id: s.id,
+              label: s.label,
+              colour: s.colour,
+              capacity: s.capacity ?? 16,
+            }))}
+            usedPositions={usedStageBoxPositions}
+            onChange={(id, pos) => queue({ stage_box_id: id, stage_box_position: pos })}
+            onManageClick={onOpenStageDialog}
+            ariaLabel={`Stage box I/O for channel ${row.row_index}`}
+            manageLabel="Manage stage I/O"
+            getOccupant={getStageOccupant}
+            formatLabel={(l, p) => `${l}-${p}`}
           />
         </div>
         <div className="min-w-0 self-center px-0.5">
@@ -603,235 +653,3 @@ function ChannelBlock({
     </div>
   );
 }
-
-function SubSnakeCombo({
-  subSnakes,
-  selectedId,
-  onSelect,
-  onOpenManage,
-  disabled,
-}: {
-  subSnakes: SubSnake[];
-  selectedId: string | null;
-  onSelect: (id: string | null) => void;
-  onOpenManage: () => void;
-  disabled: boolean;
-}) {
-  const [open, setOpen] = useState(false);
-  const [q, setQ] = useState('');
-  const selected = subSnakes.find((s) => s.id === selectedId);
-  const filtered = useMemo(
-    () => subSnakes.filter((s) => s.label.toLowerCase().includes(q.trim().toLowerCase())),
-    [subSnakes, q],
-  );
-
-  return (
-    <div className="relative min-w-0">
-      <input
-        disabled={disabled}
-        type="text"
-        value={open ? q : (selected ? selected.label : '')}
-        onChange={(e) => {
-          setQ(e.target.value);
-          setOpen(true);
-        }}
-        onFocus={() => {
-          setOpen(true);
-          setQ(selected?.label ?? '');
-        }}
-        onKeyDown={(e) => {
-          if (e.key === 'Tab' && !e.shiftKey && open && filtered.length > 0) {
-            e.preventDefault();
-            onSelect(filtered[0].id);
-            setOpen(false);
-            setQ('');
-          } else if (e.key === 'Enter' && open && filtered.length > 0) {
-            e.preventDefault();
-            onSelect(filtered[0].id);
-            setOpen(false);
-            setQ('');
-          } else if (e.key === 'Escape') {
-            setOpen(false);
-            setQ(selected?.label ?? '');
-          }
-        }}
-        onBlur={() => {
-          window.setTimeout(() => setOpen(false), 120);
-        }}
-        className="w-full min-w-0 rounded border border-lp-border bg-lp-bg px-1.5 py-1 text-xs text-lp-text outline-none focus:border-lp-orange/50"
-        style={
-          selected && !open
-            ? {
-                color: selected.colour,
-                backgroundColor: hexAlphaBg(selected.colour),
-                borderColor: hexAlphaBorder(selected.colour),
-              }
-            : undefined
-        }
-        placeholder="—"
-        aria-label="Sub-snake"
-        autoComplete="off"
-      />
-      {open && (filtered.length > 0 || subSnakes.length === 0) && (
-        <ul
-          className="absolute left-0 z-30 mt-0.5 max-h-40 min-w-full overflow-y-auto rounded-md border border-lp-border bg-lp-surface py-0.5 shadow-md"
-          role="listbox"
-        >
-          <li>
-            <button
-              type="button"
-              className="w-full px-2 py-1.5 text-left text-xs text-lp-text hover:bg-lp-surface-hover"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => {
-                onSelect(null);
-                setOpen(false);
-                setQ('');
-              }}
-            >
-              None
-            </button>
-          </li>
-          {(filtered.length > 0 ? filtered : subSnakes).map((s) => (
-            <li key={s.id}>
-              <button
-                type="button"
-                className="flex w-full items-center gap-2 px-2 py-1.5 text-left text-xs hover:bg-lp-surface-hover"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => {
-                  onSelect(s.id);
-                  setOpen(false);
-                  setQ('');
-                }}
-              >
-                <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: s.colour }} />
-                {s.label}
-              </button>
-            </li>
-          ))}
-          <li className="border-t border-lp-border">
-            <button
-              type="button"
-              className="w-full px-2 py-1.5 text-left text-xs text-lp-orange hover:bg-lp-surface-hover"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => {
-                setOpen(false);
-                onOpenManage();
-              }}
-            >
-              Manage sub-snakes…
-            </button>
-          </li>
-        </ul>
-      )}
-    </div>
-  );
-}
-
-function StageIoCombo({
-  stageIOs,
-  selectedId,
-  fallbackText,
-  onSelect,
-  onOpenManage,
-}: {
-  stageIOs: SectionStageIO[];
-  selectedId: string | null;
-  fallbackText: string;
-  onSelect: (id: string | null, label: string) => void;
-  onOpenManage: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [q, setQ] = useState('');
-  const selected = stageIOs.find((s) => s.id === selectedId);
-  const showVal = selected ? selected.label : fallbackText;
-  const filtered = useMemo(
-    () => stageIOs.filter((s) => s.label.toLowerCase().includes(q.trim().toLowerCase())),
-    [stageIOs, q],
-  );
-
-  return (
-    <div className="relative min-w-0">
-      <input
-        type="text"
-        value={open ? q : showVal}
-        onChange={(e) => {
-          setQ(e.target.value);
-          setOpen(true);
-        }}
-        onFocus={() => {
-          setOpen(true);
-          setQ(showVal);
-        }}
-        onKeyDown={(e) => {
-          if (e.key === 'Tab' && !e.shiftKey && open && filtered.length > 0) {
-            e.preventDefault();
-            const s = filtered[0];
-            onSelect(s.id, s.label);
-            setOpen(false);
-            setQ('');
-          } else if (e.key === 'Enter' && open && filtered.length > 0) {
-            e.preventDefault();
-            const s = filtered[0];
-            onSelect(s.id, s.label);
-            setOpen(false);
-            setQ('');
-          } else if (e.key === 'Escape') {
-            setOpen(false);
-            setQ(showVal);
-          }
-        }}
-        onBlur={() => {
-          window.setTimeout(() => setOpen(false), 120);
-        }}
-        className="w-full min-w-0 rounded border border-lp-border bg-lp-bg px-1.5 py-1 text-xs text-lp-text outline-none focus:border-lp-orange/50"
-        style={
-          selected
-            ? {
-                color: selected.colour,
-                backgroundColor: hexAlphaBg(selected.colour),
-                borderColor: hexAlphaBorder(selected.colour),
-              }
-            : undefined
-        }
-        placeholder="I/O"
-        aria-label="Stage I/O"
-        autoComplete="off"
-      />
-      {open && (
-        <ul className="absolute left-0 z-30 mt-0.5 max-h-40 min-w-full overflow-y-auto rounded-md border border-lp-border bg-lp-surface py-0.5 shadow-md">
-          {filtered.map((s) => (
-            <li key={s.id}>
-              <button
-                type="button"
-                className="flex w-full items-center gap-2 px-2 py-1.5 text-left text-xs hover:bg-lp-surface-hover"
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => {
-                  onSelect(s.id, s.label);
-                  setOpen(false);
-                  setQ('');
-                }}
-              >
-                <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: s.colour }} />
-                {s.label}
-              </button>
-            </li>
-          ))}
-          <li className="border-t border-lp-border">
-            <button
-              type="button"
-              className="w-full px-2 py-1.5 text-left text-xs text-lp-orange hover:bg-lp-surface-hover"
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => {
-                setOpen(false);
-                onOpenManage();
-              }}
-            >
-              Manage stage I/O…
-            </button>
-          </li>
-        </ul>
-      )}
-    </div>
-  );
-}
-

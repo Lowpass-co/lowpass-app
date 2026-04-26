@@ -27,14 +27,17 @@ type SubSnakeRow = {
   section_id: string;
   label: string;
   colour: string;
+  capacity?: number;
   position: number;
 };
 
-type StageIoRow = {
+type StageBoxRow = {
+  id: string;
   pack_id: string;
   section_id: string;
   label: string;
   colour: string;
+  capacity?: number;
   position: number;
 };
 
@@ -45,7 +48,9 @@ type ChannelListRow = {
   row_index: number;
   channel_name: string;
   sub_snake_id: string | null;
-  stage_box: string;
+  sub_snake_position: number | null;
+  stage_box_id: string | null;
+  stage_box_position: number | null;
   position: string;
   mic: string;
   mic_substitute: string;
@@ -231,6 +236,7 @@ export async function POST(request: Request) {
         label: sn.label,
         colour: sn.colour,
         position: sn.position,
+        capacity: sn.capacity ?? 8,
       })
       .select('id')
       .single();
@@ -241,43 +247,51 @@ export async function POST(request: Request) {
     subSnakeIdMap.set(sn.id, nSn.id);
   }
 
+  const stageBoxIdMap = new Map<string, string>();
   const { data: oldStage, error: stQErr } = await supabase
-    .from('section_stage_io')
-    .select('pack_id, section_id, label, colour, position')
+    .from('stage_boxes')
+    .select('id, pack_id, section_id, label, colour, capacity, position')
     .eq('pack_id', sourcePackId);
 
   if (stQErr) {
-    if (/relation|does not exist|schema cache/i.test(stQErr.message)) {
-      // Migration 043 not applied: skip stage I/O copy
-    } else {
+    if (!/relation|does not exist|schema cache/i.test(stQErr.message)) {
       await rollback();
       return NextResponse.json({ error: stQErr.message }, { status: 500 });
     }
   } else {
-    for (const st of (oldStage ?? []) as StageIoRow[]) {
+    for (const st of (oldStage ?? []) as StageBoxRow[]) {
       const newSec = sectionIdMap.get(st.section_id);
       if (!newSec) continue;
-      const { error: stInsErr } = await supabase.from('section_stage_io').insert({
-        pack_id: newPackId,
-        section_id: newSec,
-        label: st.label,
-        colour: st.colour,
-        position: st.position,
-      });
-      if (stInsErr) {
-        if (/relation|does not exist|schema cache/i.test(stInsErr.message)) {
+      const { data: nSt, error: stInsErr } = await supabase
+        .from('stage_boxes')
+        .insert({
+          pack_id: newPackId,
+          section_id: newSec,
+          label: st.label,
+          colour: st.colour,
+          position: st.position,
+          capacity: st.capacity ?? 16,
+        })
+        .select('id')
+        .single();
+      if (stInsErr || !nSt) {
+        if (stInsErr && /relation|does not exist|schema cache/i.test(stInsErr.message)) {
           break;
         }
         await rollback();
-        return NextResponse.json({ error: stInsErr.message }, { status: 500 });
+        return NextResponse.json(
+          { error: stInsErr?.message ?? 'Failed to copy stage box' },
+          { status: 500 },
+        );
       }
+      stageBoxIdMap.set(st.id, nSt.id);
     }
   }
 
   const { data: oldRows, error: rowQErr } = await supabase
     .from('channel_list_rows')
     .select(
-      'id, pack_id, section_id, row_index, channel_name, sub_snake_id, stage_box, position, mic, mic_substitute, di, stand, phantom_power, provider, notes',
+      'id, pack_id, section_id, row_index, channel_name, sub_snake_id, sub_snake_position, stage_box_id, stage_box_position, position, mic, mic_substitute, di, stand, phantom_power, provider, notes',
     )
     .eq('pack_id', sourcePackId);
 
@@ -292,13 +306,17 @@ export async function POST(request: Request) {
     if (!newSec) continue;
     const mappedSub =
       r.sub_snake_id == null ? null : subSnakeIdMap.get(r.sub_snake_id) ?? null;
+    const mappedBox =
+      r.stage_box_id == null ? null : stageBoxIdMap.get(r.stage_box_id) ?? null;
     const { error: rowIns } = await supabase.from('channel_list_rows').insert({
       pack_id: newPackId,
       section_id: newSec,
       row_index: r.row_index,
       channel_name: r.channel_name,
       sub_snake_id: mappedSub,
-      stage_box: r.stage_box,
+      sub_snake_position: mappedSub ? r.sub_snake_position : null,
+      stage_box_id: mappedBox,
+      stage_box_position: mappedBox ? r.stage_box_position : null,
       position: r.position,
       mic: r.mic,
       mic_substitute: r.mic_substitute,
