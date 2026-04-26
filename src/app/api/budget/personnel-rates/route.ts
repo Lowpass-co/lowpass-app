@@ -11,6 +11,7 @@
 import { NextResponse } from 'next/server';
 import { revalidatePath } from 'next/cache';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { findOrCreateWorkspacePersonnelByName } from '@/lib/personnel-workspace';
 import { isMissingRosterPersonnelIdColumn } from '@/lib/personnel-schema-fallback';
 import { PERMISSIONS } from '@/types';
 
@@ -156,6 +157,23 @@ export async function POST(request: Request) {
   let person_name = body.person_name?.trim() ?? '';
   let roster_personnel_id: string | null = body.roster_personnel_id ?? null;
   let rosterLinkSupported = true;
+
+  if (!roster_personnel_id && person_name) {
+    try {
+      const resolved = await findOrCreateWorkspacePersonnelByName(
+        supabase,
+        profile.workspace_id,
+        person_name,
+        body.role ?? null
+      );
+      roster_personnel_id = resolved.id;
+    } catch (e) {
+      return NextResponse.json(
+        { error: e instanceof Error ? e.message : 'Failed to create workspace personnel' },
+        { status: 500 }
+      );
+    }
+  }
 
   if (roster_personnel_id) {
     const { data: roster } = await supabase

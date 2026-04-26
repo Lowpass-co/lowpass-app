@@ -242,7 +242,7 @@ The `.lp-dropdown-layer` class in `globals.css` still uses `z-index: 1000` (unch
 
 ## 10. Page shell metrics (UX02 — not yet applied in layout)
 
-Defined in `@theme inline`: `--lp-topbar-height`, `--lp-rail-width`, `--lp-rail-collapsed`, `--lp-slideover-width`, `--lp-slideover-width-wide`, `--lp-content-padding-x` / `y`, `--lp-content-max-width`.
+Defined in `@theme inline`: `--lp-topbar-height`, `--lp-rail-width`, `--lp-rail-collapsed`, `--lp-slideover-width`, `--lp-slideover-width-wide`, `--lp-content-padding-x` / `y`, `--lp-content-max-width`, `--lp-search-trigger-width` (the ⌘K search pill in TopBar — UX02).
 
 Existing `--sidebar-width`, `--sidebar-collapsed-width`, `--header-height` remain for the current shell.
 

@@ -472,7 +472,7 @@ export function TopBar({
               onClick={onCommandPaletteOpen}
               className="btn-transition flex min-w-0 max-w-full items-center justify-between gap-2 rounded-md border px-3 py-2 text-left"
               style={{
-                width: '240px',
+                width: 'var(--lp-search-trigger-width)',
                 borderColor: 'var(--lp-border)',
                 color: 'var(--lp-text-secondary)',
                 background: 'var(--lp-bg-secondary)',

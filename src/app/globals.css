@@ -81,6 +81,7 @@
   --lp-content-padding-x: 24px;
   --lp-content-padding-y: 24px;
   --lp-content-max-width: 1440px;
+  --lp-search-trigger-width: 240px;
 
   /* UX01 — tabular / numeric (opt-in) */
   --lp-font-numeric: var(--font-mono);

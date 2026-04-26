@@ -5,7 +5,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { ArrowLeft, Trash2, Plus } from 'lucide-react';
+import { ArrowLeft, Trash2, Plus, FileDown } from 'lucide-react';
 import { createClient } from '@/lib/supabase-client';
 import { effectiveInventoryDayRate } from '@/lib/rental-pricing';
 import { StyledSelect, type StyledSelectOption } from '@/components/ui/StyledSelect';
@@ -127,7 +127,26 @@ export function JobDetail({ job, inventory, artists, tours, onBack, onEdit, onDe
   }
 
   return (
-    <div className="w-full min-w-0 space-y-6">
+    <div className="w-full min-w-0 space-y-6 lp-job-detail-root">
+      <style dangerouslySetInnerHTML={{ __html: JOB_PRINT_CSS }} />
+
+      {/* Branded export sheet — visible only when printing */}
+      <JobExportSheet
+        job={job}
+        jobItems={jobItems}
+        inventory={inventory}
+        artistLabel={artistLabel}
+        tourLabel={tourLabel}
+        days={days}
+        subtotal={subtotal}
+        discPct={dp}
+        discFixed={df}
+        discAmt={discAmt}
+        total={total}
+      />
+
+      {/* On-screen UI (hidden when printing) */}
+      <div className="lp-job-screen-only space-y-6">
       {/* Back + title row */}
       <div>
         <button
@@ -153,7 +172,24 @@ export function JobDetail({ job, inventory, artists, tours, onBack, onEdit, onDe
               </span>
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 lp-job-no-print">
+            <button
+              onClick={() => window.print()}
+              className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors"
+              style={{ borderColor: 'var(--lp-border)', color: 'var(--lp-text-secondary)', backgroundColor: 'transparent' }}
+              onMouseOver={e => {
+                e.currentTarget.style.borderColor = '#FF4500';
+                e.currentTarget.style.color = '#FF4500';
+              }}
+              onMouseOut={e => {
+                e.currentTarget.style.borderColor = 'var(--lp-border)';
+                e.currentTarget.style.color = 'var(--lp-text-secondary)';
+              }}
+              title="Export as branded PDF"
+            >
+              <FileDown size={13} strokeWidth={2.5} />
+              Export
+            </button>
             <button
               onClick={onEdit}
               className="rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors"
@@ -374,6 +410,7 @@ export function JobDetail({ job, inventory, artists, tours, onBack, onEdit, onDe
           </div>
         </div>
       </div>
+      </div> {/* /lp-job-screen-only */}
     </div>
   );
 }
@@ -385,4 +422,337 @@ function PricingField({ label, children }: { label: string; children: React.Reac
       {children}
     </div>
   );
+}
+
+/* ============================================================
+   Branded Export Sheet — Rental Quote / Pull Sheet
+   Hidden on screen, revealed via @media print (window.print()
+   → "Save as PDF" produces the branded client-ready document).
+   Mirrors the existing print pattern used in AdvanceShowReadView.
+   ============================================================ */
+
+const JOB_PRINT_CSS = `
+@media screen {
+  .lp-job-export-sheet { display: none; }
+}
+@media print {
+  @page { size: A4; margin: 14mm 14mm 16mm 14mm; }
+
+  /* Hide everything chrome-y on the page */
+  aside, nav, header { display: none !important; }
+  body { margin: 0 !important; background: #fff !important; }
+
+  /* Hide the on-screen job detail UI */
+  .lp-job-screen-only,
+  .lp-job-no-print { display: none !important; }
+
+  /* Reveal & lay out the printable */
+  .lp-job-export-sheet {
+    display: block !important;
+    color: #111;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+    font-size: 10pt;
+    line-height: 1.4;
+  }
+
+  .lp-job-export-sheet table { page-break-inside: auto; }
+  .lp-job-export-sheet tr    { page-break-inside: avoid; page-break-after: auto; }
+  .lp-job-export-sheet thead { display: table-header-group; }
+  .lp-job-export-sheet tfoot { display: table-footer-group; }
+}
+`;
+
+interface JobExportSheetProps {
+  job: RentalJob;
+  jobItems: RentalJobItem[];
+  inventory: RentalInventoryItem[];
+  artistLabel: string | null;
+  tourLabel: string | null;
+  days: number;
+  subtotal: number;
+  discPct: number;
+  discFixed: number;
+  discAmt: number;
+  total: number;
+}
+
+function JobExportSheet({
+  job, jobItems, inventory,
+  artistLabel, tourLabel,
+  days, subtotal, discPct, discFixed, discAmt, total,
+}: JobExportSheetProps) {
+  const ORANGE = '#FF4500';
+  const INK = '#111111';
+  const MUTED = '#6B7280';
+  const HAIR = '#E5E7EB';
+
+  const documentNumber = `LP-${job.id.slice(0, 8).toUpperCase()}`;
+  const issueDate = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+
+  // Title flips with status: invoiced → INVOICE, completed → RECEIPT, else QUOTE / PULL SHEET
+  const docTitle =
+    job.status === 'invoiced' ? 'RENTAL INVOICE'
+      : job.status === 'completed' ? 'RENTAL RECEIPT'
+        : job.status === 'confirmed' ? 'PULL SHEET / QUOTE'
+          : 'RENTAL QUOTE';
+
+  return (
+    <div className="lp-job-export-sheet">
+      {/* ─── HEADER ────────────────────────────────────────────────── */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'flex-start',
+        justifyContent: 'space-between',
+        gap: 24,
+        paddingBottom: 16,
+        borderBottom: `3px solid ${ORANGE}`,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/lowpass-logo.png" alt="Lowpass" style={{ height: 56, width: 'auto', display: 'block' }} />
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <div style={{
+            fontSize: 18,
+            fontWeight: 800,
+            letterSpacing: '0.12em',
+            color: INK,
+            textTransform: 'uppercase',
+          }}>{docTitle}</div>
+          <div style={{ marginTop: 6, fontSize: 9.5, color: MUTED, letterSpacing: '0.04em' }}>
+            <div><span style={{ color: MUTED, fontWeight: 600 }}>No.</span> <span style={{ color: INK, fontWeight: 600 }}>{documentNumber}</span></div>
+            <div><span style={{ color: MUTED, fontWeight: 600 }}>Issued</span> <span style={{ color: INK }}>{issueDate}</span></div>
+          </div>
+        </div>
+      </div>
+
+      {/* ─── META BLOCK (Bill To / Job / Period) ───────────────────── */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: '1fr 1fr 1fr',
+        gap: 24,
+        marginTop: 18,
+        marginBottom: 22,
+      }}>
+        <div>
+          <SheetLabel>Bill To</SheetLabel>
+          <div style={{ fontSize: 11, color: INK, fontWeight: 700 }}>
+            {job.client_name || '—'}
+          </div>
+          {artistLabel && (
+            <div style={{ fontSize: 10, color: MUTED, marginTop: 2 }}>{artistLabel}</div>
+          )}
+          {tourLabel && (
+            <div style={{ fontSize: 10, color: MUTED }}>{tourLabel}</div>
+          )}
+        </div>
+        <div>
+          <SheetLabel>Job</SheetLabel>
+          <div style={{ fontSize: 11, color: INK, fontWeight: 700 }}>{job.name}</div>
+          <div style={{ fontSize: 10, color: MUTED, marginTop: 2, textTransform: 'capitalize' }}>
+            Status: {job.status}
+          </div>
+        </div>
+        <div>
+          <SheetLabel>Rental Period</SheetLabel>
+          <div style={{ fontSize: 11, color: INK, fontWeight: 700 }}>
+            {fmtDate(job.start_date)} → {fmtDate(job.end_date)}
+          </div>
+          <div style={{ fontSize: 10, color: MUTED, marginTop: 2 }}>
+            {days} billable day{days !== 1 ? 's' : ''} <span style={{ color: '#9CA3AF' }}>(3-day-week)</span>
+          </div>
+        </div>
+      </div>
+
+      {/* ─── LINE ITEMS TABLE ──────────────────────────────────────── */}
+      <table style={{
+        width: '100%',
+        borderCollapse: 'collapse',
+        fontSize: 10,
+      }}>
+        <thead>
+          <tr style={{ backgroundColor: '#111111', color: '#fff' }}>
+            <th style={thStyle('left',   '46%')}>Item</th>
+            <th style={thStyle('center', '8%')}>Qty</th>
+            <th style={thStyle('center', '12%')}>Days</th>
+            <th style={thStyle('right',  '17%')}>Day Rate</th>
+            <th style={thStyle('right',  '17%')}>Subtotal</th>
+          </tr>
+        </thead>
+        <tbody>
+          {jobItems.length === 0 ? (
+            <tr>
+              <td colSpan={5} style={{
+                padding: '20px 10px',
+                textAlign: 'center',
+                color: MUTED,
+                fontStyle: 'italic',
+                borderBottom: `1px solid ${HAIR}`,
+              }}>
+                No items on this job.
+              </td>
+            </tr>
+          ) : jobItems.map((it) => {
+            const inv  = inventory.find(i => i.id === it.inventory_id);
+            const rate = it.day_rate_override ?? (inv ? effectiveInventoryDayRate(inv) ?? 0 : 0);
+            const lineAmt = (it.quantity || 1) * days * rate;
+            return (
+              <tr key={it.id} style={{ borderBottom: `1px solid ${HAIR}` }}>
+                <td style={tdStyle('left')}>
+                  <div style={{ fontWeight: 600, color: INK }}>{inv?.name ?? 'Unknown'}</div>
+                  {inv?.category && (
+                    <div style={{ fontSize: 8.5, color: MUTED, marginTop: 1 }}>{inv.category}</div>
+                  )}
+                  {it.day_rate_override != null && (
+                    <div style={{ fontSize: 8.5, color: ORANGE, fontWeight: 600, marginTop: 1 }}>
+                      Custom rate
+                    </div>
+                  )}
+                </td>
+                <td style={tdStyle('center')}>{it.quantity}</td>
+                <td style={tdStyle('center')}>{days}</td>
+                <td style={tdStyle('right')}>{fmtUSD(rate)}</td>
+                <td style={{ ...tdStyle('right'), fontWeight: 700 }}>{fmtUSD(lineAmt)}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+
+      {/* ─── TOTALS BLOCK ──────────────────────────────────────────── */}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 16 }}>
+        <table style={{ width: '46%', borderCollapse: 'collapse', fontSize: 10 }}>
+          <tbody>
+            <tr>
+              <td style={{ padding: '6px 10px', color: MUTED }}>Subtotal</td>
+              <td style={{ padding: '6px 10px', textAlign: 'right', color: INK, fontWeight: 600 }}>
+                {fmtUSD(subtotal)}
+              </td>
+            </tr>
+            {discAmt > 0 && (
+              <tr>
+                <td style={{ padding: '6px 10px', color: MUTED }}>
+                  {discPct > 0 && discFixed > 0 ? `Discount (${discPct}% + fixed)`
+                    : discPct > 0 ? `Discount (${discPct}%)`
+                      : 'Discount'}
+                </td>
+                <td style={{ padding: '6px 10px', textAlign: 'right', color: ORANGE, fontWeight: 600 }}>
+                  −{fmtUSD(discAmt)}
+                </td>
+              </tr>
+            )}
+            <tr>
+              <td style={{
+                padding: '10px',
+                borderTop: `2px solid ${INK}`,
+                color: INK,
+                fontWeight: 800,
+                textTransform: 'uppercase',
+                letterSpacing: '0.06em',
+                fontSize: 11,
+              }}>
+                Total Due
+              </td>
+              <td style={{
+                padding: '10px',
+                borderTop: `2px solid ${INK}`,
+                textAlign: 'right',
+                color: ORANGE,
+                fontWeight: 800,
+                fontSize: 14,
+              }}>
+                {fmtUSD(total)}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      {/* ─── NOTES ─────────────────────────────────────────────────── */}
+      {job.notes && (
+        <div style={{ marginTop: 26 }}>
+          <SheetLabel>Notes</SheetLabel>
+          <div style={{
+            fontSize: 9.5,
+            color: INK,
+            whiteSpace: 'pre-wrap',
+            padding: '10px 12px',
+            border: `1px solid ${HAIR}`,
+            borderRadius: 4,
+            backgroundColor: '#FAFAFA',
+          }}>
+            {job.notes}
+          </div>
+        </div>
+      )}
+
+      {/* ─── TERMS ─────────────────────────────────────────────────── */}
+      <div style={{ marginTop: 26 }}>
+        <SheetLabel>Terms</SheetLabel>
+        <ol style={{
+          margin: 0,
+          paddingLeft: 16,
+          fontSize: 8.5,
+          color: MUTED,
+          lineHeight: 1.55,
+        }}>
+          <li>All equipment remains the property of the lessor and must be returned in the condition supplied.</li>
+          <li>Billable days follow the 3-day-week rule (each 7 calendar days = 3 billable days).</li>
+          <li>Lessee assumes responsibility for loss, theft, and damage during the rental period.</li>
+          <li>Quote is valid for 30 days from issue date. Final invoice may vary based on additions or losses.</li>
+        </ol>
+      </div>
+
+      {/* ─── FOOTER ────────────────────────────────────────────────── */}
+      <div style={{
+        marginTop: 32,
+        paddingTop: 12,
+        borderTop: `1px solid ${HAIR}`,
+        display: 'flex',
+        justifyContent: 'space-between',
+        fontSize: 8,
+        color: '#9CA3AF',
+        letterSpacing: '0.04em',
+      }}>
+        <span>Generated by Lowpass · Tour Management Platform</span>
+        <span>{documentNumber} · {issueDate}</span>
+      </div>
+    </div>
+  );
+}
+
+function SheetLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div style={{
+      fontSize: 8,
+      fontWeight: 800,
+      letterSpacing: '0.14em',
+      textTransform: 'uppercase',
+      color: '#FF4500',
+      marginBottom: 4,
+    }}>
+      {children}
+    </div>
+  );
+}
+
+function thStyle(align: 'left' | 'center' | 'right', width: string): React.CSSProperties {
+  return {
+    padding: '8px 10px',
+    textAlign: align,
+    width,
+    fontSize: 9,
+    fontWeight: 700,
+    letterSpacing: '0.08em',
+    textTransform: 'uppercase',
+  };
+}
+
+function tdStyle(align: 'left' | 'center' | 'right'): React.CSSProperties {
+  return {
+    padding: '8px 10px',
+    textAlign: align,
+    verticalAlign: 'top',
+    color: '#111111',
+  };
 }
