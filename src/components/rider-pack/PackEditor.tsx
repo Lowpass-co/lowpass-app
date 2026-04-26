@@ -18,13 +18,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { MoreHorizontal } from 'lucide-react';
 import { BrandedSelect } from '@/components/ui/BrandedSelect';
-import type {
-  Field,
-  RiderPack,
-  RiderSection,
-  ResolvedPack,
-  ResolvedSection,
-} from '@/lib/rider-packs/types';
+import type { Field, RiderSection, ResolvedPack, ResolvedSection } from '@/lib/rider-packs/types';
 import {
   createSection,
   createWebLink,
@@ -47,7 +41,6 @@ import { RiderTemplateSuggestions } from './RiderTemplateSuggestions';
 import { useDebouncedSave } from '@/hooks/useDebouncedSave';
 import NewSectionDialog from './NewSectionDialog';
 import { formatRelativeTime } from '@/lib/format-relative';
-import { PackStatCards } from './PackStatCards';
 import { SaveStatePill, type SavePillState } from './SaveStatePill';
 import ChannelListEditor from './ChannelListEditor';
 import { makeUniqueSectionKey } from '@/lib/rider-packs/templates';
@@ -86,6 +79,10 @@ export function PackEditor({ packId }: Props) {
   const [exportingDoc, setExportingDoc] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
   const moreMenuRef = useRef<HTMLDivElement | null>(null);
+  const shareMenuRef = useRef<HTMLDivElement | null>(null);
+  const [shareLinkCount, setShareLinkCount] = useState(0);
+  const [showTemplates, setShowTemplates] = useState(false);
+  const [shareMenuOpen, setShareMenuOpen] = useState(false);
 
   const dataRef = useRef<ResolvedPack | null>(null);
   dataRef.current = data;
@@ -166,9 +163,29 @@ export function PackEditor({ packId }: Props) {
     }
   }, [data, refresh]);
 
-  const focusSharePanel = useCallback(() => {
-    document.getElementById('rider-pack-share')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-  }, []);
+  const refreshShareLinkCount = useCallback(async () => {
+    try {
+      const r = await listWebLinks(packId);
+      setShareLinkCount((r.links ?? []).filter((l) => !l.revoked_at).length);
+    } catch {
+      setShareLinkCount(0);
+    }
+  }, [packId]);
+
+  useEffect(() => {
+    void refreshShareLinkCount();
+  }, [refreshShareLinkCount, data?.pack.id]);
+
+  useEffect(() => {
+    if (!shareMenuOpen) return;
+    const onDoc = (e: MouseEvent) => {
+      if (shareMenuRef.current && !shareMenuRef.current.contains(e.target as Node)) {
+        setShareMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [shareMenuOpen]);
 
   /** Field-level saves are optimistic; structural changes (add/remove/reorder) call `refresh()` separately. */
   const saveSection = useCallback(
@@ -358,6 +375,11 @@ export function PackEditor({ packId }: Props) {
     tourId: data.pack.tour_id,
     routingId: data.pack.routing_id,
   };
+  const pack = data.pack;
+  const sectionCount = data.sections.length;
+  const googleDocStatus = !pack.google_doc_id
+    ? 'No Google Doc'
+    : `Google Doc · exported ${formatRelativeTime(pack.updated_at)}`;
 
   const handleDeletePack = async () => {
     if (!data) return;
@@ -372,90 +394,132 @@ export function PackEditor({ packId }: Props) {
 
   return (
     <div className="flex h-[calc(100vh-120px)] min-h-0 flex-col border-t border-lp-border bg-lp-surface">
-      <div className="shrink-0 space-y-4 border-b border-lp-border bg-lp-surface px-4 py-4">
-        <div className="flex items-start justify-between gap-3">
-          <input
-            type="text"
-            value={packTitleDraft}
-            onChange={(e) => setPackTitleDraft(e.target.value)}
-            onBlur={() => {
-              void commitPackTitle();
-            }}
-            className="min-w-0 flex-1 border-0 border-b border-transparent bg-transparent text-2xl font-semibold text-lp-text outline-none focus:border-lp-border"
-            placeholder="Untitled pack"
-            aria-label="Pack title"
-          />
-          <span className="shrink-0 rounded-full border border-lp-border bg-lp-surface-hover px-2.5 py-1 text-xs font-semibold uppercase text-lp-text">
-            {data.pack.scope}
-          </span>
-        </div>
-        <div className="flex flex-wrap items-center justify-end gap-2">
-          <button
-            type="button"
-            onClick={focusSharePanel}
-            className="rounded-lg bg-lp-orange px-4 py-2 text-sm font-medium text-white hover:bg-lp-orange/90"
-          >
-            Share
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              void runGoogleDocExport();
-            }}
-            disabled={exportingDoc}
-            className="rounded-lg border border-lp-border bg-transparent px-4 py-2 text-sm font-medium text-lp-text hover:bg-lp-surface-hover disabled:opacity-50"
-          >
-            {exportingDoc ? 'Exporting…' : 'Export'}
-          </button>
-          <div className="relative" ref={moreMenuRef}>
+      <div className="shrink-0 border-b border-lp-border bg-lp-surface px-4 py-3">
+        <div className="mb-2 flex items-start justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-3">
+            <input
+              type="text"
+              value={packTitleDraft}
+              onChange={(e) => setPackTitleDraft(e.target.value)}
+              onBlur={() => {
+                void commitPackTitle();
+              }}
+              className="min-w-0 max-w-md flex-1 border-0 border-b border-transparent bg-transparent text-2xl font-semibold text-lp-text outline-none focus:border-lp-border"
+              placeholder="Untitled pack"
+              aria-label="Pack title"
+            />
+            <span className="shrink-0 rounded-full border border-lp-border bg-lp-surface-hover px-2.5 py-1 text-xs font-semibold uppercase text-lp-text">
+              {pack.scope}
+            </span>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <div className="relative" ref={shareMenuRef}>
+              <button
+                type="button"
+                onClick={() => setShareMenuOpen((o) => !o)}
+                className="rounded-lg bg-lp-orange px-3 py-1.5 text-sm font-medium text-white hover:bg-lp-orange/90"
+              >
+                Share
+              </button>
+              {shareMenuOpen && (
+                <div className="absolute right-0 z-50 mt-1 max-h-[min(80vh,420px)] w-[min(100vw-2rem,22rem)] overflow-y-auto rounded-xl border border-lp-border bg-lp-surface p-3 shadow-lg">
+                  <h3 className="mb-3 text-sm font-semibold text-lp-text">Share this pack</h3>
+                  <SharingPanel
+                    packId={packId}
+                    onLinksChange={() => void refreshShareLinkCount()}
+                  />
+                </div>
+              )}
+            </div>
             <button
               type="button"
-              onClick={() => setMoreMenuOpen((o) => !o)}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-lp-border text-lp-text hover:bg-lp-surface-hover"
-              aria-label="More actions"
+              onClick={() => {
+                void runGoogleDocExport();
+              }}
+              disabled={exportingDoc}
+              onContextMenu={(e) => {
+                if (!data.pack.google_doc_url) return;
+                e.preventDefault();
+                window.open(data.pack.google_doc_url!, '_blank', 'noopener,noreferrer');
+              }}
+              className="rounded-lg border border-lp-border px-3 py-1.5 text-sm text-lp-text hover:bg-lp-surface-hover disabled:opacity-50"
             >
-              <MoreHorizontal className="h-4 w-4" />
+              {exportingDoc
+                ? 'Exporting…'
+                : data.pack.google_doc_id
+                  ? 'Update doc'
+                  : 'Export'}
             </button>
-            {moreMenuOpen && (
-              <div className="absolute right-0 z-50 mt-1 min-w-[180px] rounded-xl border border-lp-border bg-lp-surface py-1 shadow-lg">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMoreMenuOpen(false);
-                    void handleDeletePack();
-                  }}
-                  className="w-full px-3 py-2 text-left text-sm text-lp-error hover:bg-lp-surface-hover"
-                >
-                  Delete pack
-                </button>
-              </div>
-            )}
+            <div className="relative" ref={moreMenuRef}>
+              <button
+                type="button"
+                onClick={() => setMoreMenuOpen((o) => !o)}
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-lp-border text-lp-text hover:bg-lp-surface-hover"
+                aria-label="More actions"
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </button>
+              {moreMenuOpen && (
+                <div className="absolute right-0 z-50 mt-1 min-w-[200px] rounded-xl border border-lp-border bg-lp-surface py-1 shadow-lg">
+                  {data.pack.google_doc_url && (
+                    <a
+                      href={data.pack.google_doc_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={() => setMoreMenuOpen(false)}
+                      className="block px-3 py-2 text-left text-sm text-lp-text hover:bg-lp-surface-hover"
+                    >
+                      Open in Google Docs
+                    </a>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMoreMenuOpen(false);
+                      void handleDeletePack();
+                    }}
+                    className="w-full px-3 py-2 text-left text-sm text-lp-error hover:bg-lp-surface-hover"
+                  >
+                    Delete pack
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         </div>
-        {exportError && <div className="text-sm text-lp-error">{exportError}</div>}
-        <PackStatCards
-          packId={packId}
-          packUpdatedAt={data.pack.updated_at}
-          sections={data.sections}
-          onShareClick={focusSharePanel}
-        />
-      </div>
-      <div className="shrink-0 border-b border-lp-border px-4 py-3">
-        <RiderTemplateSuggestions
-          packId={packId}
-          sections={data.sections}
-          onApplied={() => refresh()}
-        />
-      </div>
-      <div className="shrink-0 border-b border-lp-border bg-lp-surface px-4 py-3">
-        <Inspector
-          pack={data.pack}
-          lastEditLabel={formatRelativeTime(data.pack.updated_at)}
-          onExportGoogleDoc={runGoogleDocExport}
-          exportingDoc={exportingDoc}
-          exportError={exportError}
-          onPackDelete={handleDeletePack}
-        />
+        <div className="mb-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-lp-text-secondary">
+          <span>
+            <span className="text-lp-text-tertiary">Last edit</span> {formatRelativeTime(pack.updated_at)}
+          </span>
+          <span className="text-lp-border">·</span>
+          <span>
+            <span className="text-lp-text-tertiary">Sections</span> {sectionCount}
+          </span>
+          <span className="text-lp-border">·</span>
+          <span>
+            <span className="text-lp-text-tertiary">Share links</span> {shareLinkCount}
+          </span>
+          <span className="text-lp-border">·</span>
+          <button
+            type="button"
+            className="text-lp-text-secondary hover:text-lp-text"
+            onClick={() => setShowTemplates((v) => !v)}
+          >
+            Templates ›
+          </button>
+          <span className="text-lp-border">·</span>
+          <span className="text-lp-text-tertiary">{googleDocStatus}</span>
+        </div>
+        {exportError && <div className="mb-2 text-sm text-lp-error">{exportError}</div>}
+        {showTemplates && (
+          <div className="mb-0 border-t border-lp-border pt-3">
+            <RiderTemplateSuggestions
+              packId={packId}
+              sections={data.sections}
+              onApplied={() => refresh()}
+            />
+          </div>
+        )}
       </div>
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-0 lg:grid-cols-[220px_1fr]">
       {/* LEFT: section list */}
@@ -739,56 +803,6 @@ function AddFieldDropdown({ onAdd }: { onAdd: (type: Field['type']) => void }) {
   );
 }
 
-function Inspector({
-  pack,
-  lastEditLabel,
-  onExportGoogleDoc,
-  exportingDoc,
-  exportError,
-  onPackDelete,
-}: {
-  pack: RiderPack;
-  lastEditLabel: string;
-  onExportGoogleDoc: () => void | Promise<void>;
-  exportingDoc: boolean;
-  exportError: string | null;
-  onPackDelete: () => void;
-}) {
-  return (
-    <div className="flex flex-col gap-4 text-sm text-lp-text lg:flex-row lg:flex-wrap lg:items-start lg:gap-x-8 lg:gap-y-3">
-      <div className="flex min-w-0 flex-wrap items-end gap-4">
-        <div>
-          <div className="text-[10px] uppercase tracking-widest text-lp-text-tertiary">Last edit</div>
-          <p className="mt-1 text-sm text-lp-text" title={pack.updated_at ?? undefined}>
-            {lastEditLabel}
-          </p>
-        </div>
-      </div>
-
-      <div className="min-w-0 flex-1 lg:max-w-md">
-        <ExportPanel
-          pack={pack}
-          onExport={onExportGoogleDoc}
-          busy={exportingDoc}
-          error={exportError}
-        />
-      </div>
-
-      <div id="rider-pack-share" className="min-w-0 flex-1 lg:max-w-md">
-        <SharingPanel packId={pack.id} />
-      </div>
-
-      <button
-        type="button"
-        onClick={onPackDelete}
-        className="text-xs text-lp-text-secondary hover:text-lp-error lg:ml-auto"
-      >
-        Delete pack
-      </button>
-    </div>
-  );
-}
-
 // ============================================================
 // NewPackForm — small client form for the /rider-packs index page.
 // Exported from this file so page.tsx (a server component) can import
@@ -916,7 +930,13 @@ export function NewPackForm({
   );
 }
 
-function SharingPanel({ packId }: { packId: string }) {
+function SharingPanel({
+  packId,
+  onLinksChange,
+}: {
+  packId: string;
+  onLinksChange?: () => void;
+}) {
   const [links, setLinks] = useState<WebLink[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -951,6 +971,7 @@ function SharingPanel({ packId }: { packId: string }) {
       setPasswordDraft('');
       setShowPasswordField(false);
       await refresh();
+      onLinksChange?.();
     } catch (e) {
       alert(e instanceof Error ? e.message : 'Failed to create link');
     } finally {
@@ -963,6 +984,7 @@ function SharingPanel({ packId }: { packId: string }) {
     try {
       await revokeWebLink(linkId);
       await refresh();
+      onLinksChange?.();
     } catch (e) {
       alert(e instanceof Error ? e.message : 'Failed to revoke link');
     }
@@ -979,77 +1001,23 @@ function SharingPanel({ packId }: { packId: string }) {
 
   return (
     <div>
-      <div className="text-[10px] uppercase tracking-widest text-lp-text-tertiary">Sharing</div>
-      {loading && <div className="mt-1 text-xs text-lp-text-tertiary">Loading...</div>}
-      {error && <div className="mt-1 text-xs text-lp-error">{error}</div>}
-      {!loading && active.length > 0 && (
-        <ul className="mt-2 space-y-2">
-          {active.map((link) => (
-            <li
-              key={link.id}
-              className="space-y-2 rounded-lg border p-3"
-              style={{ backgroundColor: 'var(--lp-bg-secondary)', borderColor: 'var(--lp-border)' }}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <span
-                  className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide"
-                  style={{
-                    backgroundColor: link.has_password
-                      ? 'rgba(156, 163, 175, 0.1)'
-                      : 'rgba(255, 69, 0, 0.1)',
-                    color: link.has_password ? '#9CA3AF' : '#FF4500',
-                    border: `1px solid ${link.has_password ? 'rgba(156, 163, 175, 0.2)' : 'rgba(255, 69, 0, 0.2)'}`,
-                  }}
-                >
-                  {link.has_password ? 'Password-protected' : 'Open'}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => handleRevoke(link.id)}
-                  className="text-[10px] text-lp-text-secondary hover:text-lp-error"
-                >
-                  Revoke
-                </button>
-              </div>
-              <div className="font-mono text-[10px] break-all text-lp-text">/r/{link.token}</div>
-              <button
-                type="button"
-                onClick={() => handleCopy(link.id, buildPublicUrl(link.token))}
-                className="text-[10px] text-[var(--lp-orange)] hover:underline"
-              >
-                {copiedLinkId === link.id ? 'Copied!' : 'Copy link'}
-              </button>
-            </li>
-          ))}
-        </ul>
-      )}
-      {!loading && active.length === 0 && (
-        <div className="px-4 py-6 text-center text-sm text-lp-text-secondary">
-          No share links yet. Create one above.
-        </div>
-      )}
+      {loading && <div className="text-xs text-lp-text-tertiary">Loading...</div>}
+      {error && <div className="text-xs text-lp-error">{error}</div>}
 
-      <div className="mt-3 space-y-2">
+      <div className="mb-3 space-y-2">
+        <div className="text-[10px] font-medium uppercase tracking-wide text-lp-text-tertiary">Create share link</div>
         {showPasswordField && (
           <input
             type="text"
             value={passwordDraft}
             onChange={(e) => setPasswordDraft(e.target.value)}
             placeholder="Password for this link"
-            className="w-full rounded border border-lp-border bg-lp-surface px-2 py-1 text-xs text-lp-text"
+            className="w-full rounded border border-lp-border bg-lp-surface px-2 py-1.5 text-xs text-lp-text"
             autoFocus
           />
         )}
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={handleCreate}
-            disabled={creating}
-            className="rounded bg-[var(--lp-orange)] px-3 py-1.5 text-xs text-white hover:opacity-90 disabled:opacity-50"
-          >
-            {creating ? 'Creating...' : 'Create link'}
-          </button>
-          <label className="flex items-center gap-1 text-[10px] text-lp-text-secondary">
+        <div className="flex flex-wrap items-center gap-2">
+          <label className="flex cursor-pointer items-center gap-1.5 text-[10px] text-lp-text-secondary">
             <input
               type="checkbox"
               checked={showPasswordField}
@@ -1060,8 +1028,71 @@ function SharingPanel({ packId }: { packId: string }) {
             />
             Protect with password
           </label>
+          <button
+            type="button"
+            onClick={handleCreate}
+            disabled={creating}
+            className="rounded bg-lp-orange px-3 py-1.5 text-xs font-medium text-white hover:bg-lp-orange/90 disabled:opacity-50"
+          >
+            {creating ? 'Creating…' : 'Create'}
+          </button>
         </div>
       </div>
+
+      {!loading && active.length > 0 && (
+        <ul className="space-y-2">
+          {active.map((link) => (
+            <li
+              key={link.id}
+              className="space-y-2 rounded-lg border border-lp-border bg-lp-bg-secondary p-3"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span
+                    className="inline-flex items-center rounded-full border border-[#9ca3af33] bg-[#9ca3af1a] px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-lp-text-secondary"
+                    style={
+                      !link.has_password
+                        ? {
+                            backgroundColor: '#FF45001a',
+                            borderColor: '#FF450033',
+                            color: 'var(--lp-orange)',
+                          }
+                        : undefined
+                    }
+                  >
+                    {link.has_password ? 'Password-protected' : 'Open'}
+                  </span>
+                  <span className="text-[10px] text-lp-text-tertiary" title="TODO(R15)">
+                    0 views
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handleRevoke(link.id)}
+                  className="text-[10px] text-lp-text-secondary hover:text-lp-error"
+                >
+                  Revoke
+                </button>
+              </div>
+              <div className="font-mono text-[10px] break-all text-lp-text">/r/{link.token}</div>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleCopy(link.id, buildPublicUrl(link.token))}
+                  className="text-[10px] text-lp-orange hover:underline"
+                >
+                  {copiedLinkId === link.id ? 'Copied!' : 'Copy link'}
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+      {!loading && active.length === 0 && (
+        <div className="rounded-lg border border-dashed border-lp-border px-3 py-4 text-center text-xs text-lp-text-secondary">
+          No share links yet. Create one above.
+        </div>
+      )}
 
       {revoked.length > 0 && (
         <details className="mt-3">
@@ -1072,7 +1103,7 @@ function SharingPanel({ packId }: { packId: string }) {
             {revoked.map((link) => (
               <li
                 key={link.id}
-                className="font-mono text-[10px] text-lp-text-tertiary line-through truncate"
+                className="truncate font-mono text-[10px] text-lp-text-tertiary line-through"
               >
                 /r/{link.token}
               </li>
@@ -1087,76 +1118,4 @@ function SharingPanel({ packId }: { packId: string }) {
 function buildPublicUrl(token: string): string {
   if (typeof window === 'undefined') return `/r/${token}`;
   return `${window.location.origin}/r/${token}`;
-}
-
-function ExportPanel({
-  pack,
-  onExport,
-  busy,
-  error,
-}: {
-  pack: RiderPack;
-  onExport: () => void | Promise<void>;
-  busy: boolean;
-  error: string | null;
-}) {
-  return (
-    <div className="space-y-2">
-      <div className="text-[10px] uppercase tracking-widest text-lp-text-tertiary">Google Doc</div>
-      <span
-        className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide"
-        style={{
-          backgroundColor: pack.google_doc_url ? 'rgba(255, 69, 0, 0.1)' : 'rgba(156, 163, 175, 0.1)',
-          color: pack.google_doc_url ? '#FF4500' : '#9CA3AF',
-          border: `1px solid ${pack.google_doc_url ? 'rgba(255, 69, 0, 0.2)' : 'rgba(156, 163, 175, 0.2)'}`,
-        }}
-      >
-        {pack.google_doc_url ? 'Exported' : 'Not exported'}
-      </span>
-
-      {error && (
-        <div
-          className="rounded-md border px-3 py-2 text-xs"
-          style={{
-            backgroundColor: 'rgba(239,68,68,0.1)',
-            borderColor: '#EF4444',
-            color: 'var(--lp-text)',
-          }}
-        >
-          <div className="font-semibold" style={{ color: '#EF4444' }}>
-            Export failed
-          </div>
-          <div className="mt-0.5 text-lp-text-secondary">{error}</div>
-        </div>
-      )}
-
-      <div className="mt-2">
-        <button
-          type="button"
-          onClick={() => {
-            void onExport();
-          }}
-          disabled={busy}
-          className="rounded-lg border border-lp-border px-3 py-1.5 text-xs font-medium text-lp-text hover:bg-lp-surface-hover disabled:opacity-50"
-        >
-          {busy
-            ? 'Exporting…'
-            : pack.google_doc_url
-              ? 'Re-export to Google Doc'
-              : 'Export to Google Doc'}
-        </button>
-      </div>
-      {pack.google_doc_url && (
-        <a
-          href={pack.google_doc_url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-xs underline"
-          style={{ color: 'var(--lp-text-secondary)' }}
-        >
-          Open in Google Docs ↗
-        </a>
-      )}
-    </div>
-  );
 }

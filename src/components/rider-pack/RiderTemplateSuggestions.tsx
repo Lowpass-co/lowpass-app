@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { createSection } from '@/lib/rider-packs/client';
 import {
@@ -16,22 +16,10 @@ type Props = {
   onApplied: () => void | Promise<void>;
 };
 
-const STORAGE_KEY = 'lowpass_rider_templates_expanded';
-
 export function RiderTemplateSuggestions({ packId, sections, onApplied }: Props) {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [open, setOpen] = useState(false);
-
-  useEffect(() => {
-    try {
-      if (typeof window === 'undefined') return;
-      const v = window.sessionStorage.getItem(STORAGE_KEY);
-      if (v === '1') setOpen(true);
-    } catch {
-      /* ignore */
-    }
-  }, []);
+  const [open, setOpen] = useState(true);
 
   const applyTemplate = async (template: RiderPackTemplate) => {
     if (busyId) return;
@@ -69,15 +57,7 @@ export function RiderTemplateSuggestions({ packId, sections, onApplied }: Props)
       <button
         type="button"
         onClick={() => {
-          setOpen((o) => {
-            const n = !o;
-            try {
-              window.sessionStorage.setItem(STORAGE_KEY, n ? '1' : '0');
-            } catch {
-              /* ignore */
-            }
-            return n;
-          });
+          setOpen((o) => !o);
         }}
         className="flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left transition-colors hover:bg-lp-surface-hover"
         style={{ borderColor: 'var(--lp-border)' }}
