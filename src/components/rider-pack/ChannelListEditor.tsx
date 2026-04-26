@@ -234,10 +234,10 @@ export default function ChannelListEditor({
         </div>
 
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => void handleDragEnd(e)}>
-          <div className="w-full min-w-0 overflow-x-auto">
+          <div className="w-full min-w-0 max-h-[min(75vh,720px)] overflow-y-auto overflow-x-auto overscroll-contain">
             <div className="w-full min-w-0" style={{ minWidth: 'min(100%, 1180px)' }}>
               <div
-                className="sticky top-16 z-10 grid w-full min-h-9 items-stretch gap-0 border-b border-lp-border bg-lp-surface text-[10px] font-bold uppercase tracking-wider text-lp-text-tertiary shadow-[0_1px_0_var(--lp-border)]"
+                className="sticky top-0 z-20 grid w-full min-h-9 items-stretch gap-0 border-b border-lp-border bg-lp-surface text-[10px] font-bold uppercase tracking-wider text-lp-text-tertiary shadow-[0_1px_0_var(--lp-border)]"
                 style={CHANNEL_ROW_GRID}
               >
                 <div className="py-2" style={{ borderLeft: '2px solid transparent' }} />

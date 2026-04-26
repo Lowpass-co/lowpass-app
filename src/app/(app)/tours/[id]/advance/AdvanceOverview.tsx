@@ -19,6 +19,7 @@ import {
   CheckCircle2,
   Trash2,
   ExternalLink,
+  ListOrdered,
 } from 'lucide-react';
 import { parseRoutingDate, getDayTypeLabel, getDayTypeColor, getAdvanceStatusInfo, dayTypesInclude, cn } from '@/lib/utils';
 import { formatRelativeTime } from '@/lib/format-relative';
@@ -295,6 +296,11 @@ export function AdvanceOverview({
                     setCopySourceRoutingId(routingId);
                     setCopyModalOpen(true);
                   }}
+                  onPatched={() => {
+                    void fetch(`/api/tours/${tourId}/advance?all=true`)
+                      .then((r) => r.json())
+                      .then((j) => setDates(j.dates ?? []));
+                  }}
                   onDeleted={() => {
                     fetch(`/api/tours/${tourId}/advance?all=true`).then((r) => r.json()).then((j) => setDates(j.dates ?? []));
                   }}
@@ -551,11 +557,13 @@ function ShowRow({
   tourId,
   item,
   onOpenCopyModal,
+  onPatched,
   onDeleted,
 }: {
   tourId: string;
   item: AdvanceDateItem;
   onOpenCopyModal?: (routingId: string) => void;
+  onPatched?: () => void;
   onDeleted?: () => void;
 }) {
   const router = useRouter();
@@ -615,6 +623,29 @@ function ShowRow({
               });
               if (res.ok) {
                 showToast('Marked as complete');
+                onPatched?.();
+                router.refresh();
+              }
+            } catch {
+              /* ignore */
+            }
+          },
+        }]
+      : []),
+    ...(hasAdvance && isComplete
+      ? [{
+          label: 'Mark as in progress',
+          icon: ListOrdered,
+          onClick: async () => {
+            try {
+              const res = await fetch(`/api/tours/${tourId}/advance/${item.routing_id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: 'in_progress' }),
+              });
+              if (res.ok) {
+                showToast('Marked as in progress');
+                onPatched?.();
                 router.refresh();
               }
             } catch {

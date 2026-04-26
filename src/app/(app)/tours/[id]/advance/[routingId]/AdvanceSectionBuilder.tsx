@@ -247,6 +247,7 @@ function sortHospitalityFieldsFirst(fields: FieldDef[]): FieldDef[] {
 }
 
 export type ContactRow = {
+  /** Stable id for list identity (persisted; generated client-side for new rows). */
   id?: string;
   first_name: string;
   last_name: string;
@@ -2226,6 +2227,24 @@ function KeyContactsCard({
   workspaceMembers?: WorkspaceMember[];
 }) {
   const roles = contactRoles ?? [...CONTACT_ROLES];
+  const backfilledIds = useRef(false);
+  useEffect(() => {
+    if (contacts.length === 0) {
+      backfilledIds.current = false;
+    }
+  }, [contacts.length]);
+  useEffect(() => {
+    if (backfilledIds.current) return;
+    if (contacts.length === 0) return;
+    if (contacts.every((c) => c.id)) {
+      backfilledIds.current = true;
+      return;
+    }
+    backfilledIds.current = true;
+    onContactsChange(
+      contacts.map((c) => (c.id ? c : { ...c, id: crypto.randomUUID() })),
+    );
+  }, [contacts, onContactsChange]);
   const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false);
   const menuItems = [
     { label: 'Mark section complete', icon: CheckCircle2, onClick: () => onSetSectionStatus('complete') },
@@ -2236,7 +2255,16 @@ function KeyContactsCard({
   const addRow = () => {
     onContactsChange([
       ...contacts,
-      { first_name: '', last_name: '', role: defaultRole, phone: '', email: '', venue_name: venueName ?? undefined, notes: '' },
+      {
+        id: crypto.randomUUID(),
+        first_name: '',
+        last_name: '',
+        role: defaultRole,
+        phone: '',
+        email: '',
+        venue_name: venueName ?? undefined,
+        notes: '',
+      },
     ]);
   };
   const removeRow = (index: number) => {
@@ -2282,7 +2310,7 @@ function KeyContactsCard({
           <div className={cn('border-t border-lp-border px-4 py-4 space-y-4 transition-opacity duration-200', expanded ? 'opacity-100 delay-50' : 'opacity-0 delay-0')}>
             {contacts.map((row, index) => (
               <KeyContactRow
-                key={index}
+                key={row.id ?? `contact-fallback-${index}`}
                 row={row}
                 venueName={venueName}
                 onUpdate={(patch) => updateRow(index, patch)}
@@ -2599,7 +2627,17 @@ function FlightsSectionCard({
   const [personnelDropdownOpen, setPersonnelDropdownOpen] = useState<string | null>(null);
 
   const EMPTY_FLIGHT: FlightEntry = { id: '', departure_city: '', arrival_city: '', date: '', time: '', airline: '', flight_number: '', confirmation_code: '', personnel_ids: [] };
-  const hasKeyFlightFields = (f: FlightEntry) => !!(f.departure_city?.trim() || f.arrival_city?.trim() || f.airline?.trim() || f.flight_number?.trim() || f.confirmation_code?.trim());
+  const hasKeyFlightFields = (f: FlightEntry) =>
+    !!(
+      f.departure_city?.trim() ||
+      f.arrival_city?.trim() ||
+      f.airline?.trim() ||
+      f.flight_number?.trim() ||
+      f.confirmation_code?.trim() ||
+      f.date?.trim() ||
+      f.time?.trim() ||
+      (f.personnel_ids && f.personnel_ids.length > 0)
+    );
   const displayFlights = flights.length > 0 ? flights : [EMPTY_FLIGHT];
   const showAddFlightButton = displayFlights.some(hasKeyFlightFields);
 
@@ -2787,7 +2825,7 @@ function PersonnelMultiSelect({
         <ChevronDown size={16} className={cn('ml-auto shrink-0 transition-transform', open && 'rotate-180')} />
       </button>
       {open && (
-        <div className="absolute left-0 right-0 top-full z-[100] mt-1 max-h-56 overflow-hidden rounded-xl border border-lp-border bg-lp-surface shadow-lg">
+        <div className="absolute left-0 right-0 top-full z-[5000] mt-1 max-h-56 overflow-hidden rounded-xl border border-lp-border bg-lp-surface shadow-lg">
           <div className="border-b border-lp-border p-2">
             <input
               type="text"

@@ -66,7 +66,10 @@ export function PayrollSummary({
         totalFee =
           agg.show * showRate + agg.offTravel * offRate + agg.rehearsal * rehearsalRate + agg.advanceFee;
       } else {
-        totalFee = active * offRate + agg.advanceFee;
+        // Day rate: bill show days at show rate, travel/off/rehearsal at off rate (not 0 when only show rate is set).
+        const showPart = agg.show * (showRate || offRate);
+        const otherPart = (agg.offTravel + agg.rehearsal) * (offRate || showRate);
+        totalFee = showPart + otherPart + agg.advanceFee;
       }
       const totalDays = active;
       const totalPerDiem = active * perDiemRate;

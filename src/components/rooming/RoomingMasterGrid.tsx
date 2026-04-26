@@ -96,18 +96,26 @@ export function RoomingMasterGrid({
     });
   }, [gridByPerson, personnelRates]);
 
-  const nonDashCount = useMemo(() => {
+  /** Room nights: SGL = one room each; each distinct DBL (A).. group on a date = one room (shared). */
+  const roomNights = useMemo(() => {
     let n = 0;
-    for (const p of people) {
       for (const r of routingDates) {
-        const v = cellMap.get(`${p.person_name}:${r.id}`);
-        if (v && v !== '-') n++;
+        const dblLabels = new Set<string>();
+      for (const p of people) {
+        const v = cellMap.get(`${p.person_name}:${r.id}`) ?? '-';
+        if (!v || v === '-') continue;
+        if (v === 'SGL') {
+          n += 1;
+        } else if (v.startsWith('DBL')) {
+          dblLabels.add(v);
+        }
       }
+      n += dblLabels.size;
     }
     return n;
   }, [people, routingDates, cellMap]);
 
-  const estTotal = assumedRate * nonDashCount;
+  const estTotal = assumedRate * roomNights;
 
   if (loading) return <div className="text-sm text-lp-text-secondary py-4">Loading…</div>;
 

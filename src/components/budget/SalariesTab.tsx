@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Loader2, Pencil, Plus, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { budgetCurrencySymbol } from '@/lib/budget-currency';
@@ -165,6 +166,7 @@ export function SalariesTab({
     [currency]
   );
   const currencySymbol = useMemo(() => budgetCurrencySymbol(tourCurrency), [tourCurrency]);
+  const router = useRouter();
 
   const [loading, setLoading] = useState(true);
   const [personnel, setPersonnel] = useState<PersonnelRate[]>([]);
@@ -744,9 +746,16 @@ export function SalariesTab({
                 <div className="flex min-w-0 flex-col gap-1.5 sm:col-span-2">
                   <BrandedSelect
                     value={newMember.roster_id}
-                    onChange={(v) => setNewMember((prev) => ({ ...prev, roster_id: v }))}
+                    onChange={(v) => {
+                      if (v === '__add_personnel__') {
+                        router.push(`/tours/${tourId}/personnel`);
+                        return;
+                      }
+                      setNewMember((prev) => ({ ...prev, roster_id: v }));
+                    }}
                     options={[
                       { value: '', label: 'Select from roster…' },
+                      { value: '__add_personnel__', label: 'Add new Personnel…' },
                       ...availableRoster.map((person) => ({
                         value: person.id,
                         label: `${person.name} (${person.lp_id})`,

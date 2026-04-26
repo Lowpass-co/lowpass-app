@@ -4,6 +4,7 @@ import { redirect } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { RiderPacksIndexToolbar } from '@/components/rider-pack/RiderPacksIndexToolbar';
 import { RiderPacksUrlSync } from '@/components/rider-pack/RiderPacksUrlSync';
+import { RiderPackGridCard } from '@/components/rider-pack/RiderPackGridCard';
 
 export const dynamic = 'force-dynamic';
 
@@ -145,36 +146,14 @@ export default async function RiderPacksIndexPage({
         {displayedPacks.length > 0 ? (
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {displayedPacks.map((p) => (
-              <Link
+              <RiderPackGridCard
                 key={p.id}
-                href={`/rider-packs/${p.id}`}
-                className="block rounded-xl border p-4 transition-colors hover:bg-lp-surface-hover"
-                style={{ borderColor: 'var(--lp-border)', backgroundColor: 'var(--lp-surface)' }}
-              >
-                <div className="truncate text-sm font-semibold text-lp-text">
-                  {p.title || '(untitled)'}
-                </div>
-                {!contextArtist && (
-                  <div className="mt-0.5 truncate text-xs text-lp-text-secondary">
-                    {artistMap.get(p.artist_id) ?? 'Unknown artist'}
-                  </div>
-                )}
-                <div className="mt-3 flex items-center justify-between gap-2">
-                  <span
-                    className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide"
-                    style={{
-                      backgroundColor: '#FF45001a',
-                      color: '#FF4500',
-                      border: '1px solid #FF450033',
-                    }}
-                  >
-                    {p.scope}
-                  </span>
-                  <span className="text-[11px] text-lp-text-tertiary tabular-nums">
-                    {new Date(p.updated_at).toLocaleDateString()}
-                  </span>
-                </div>
-              </Link>
+                pack={p}
+                showArtist={!contextArtist}
+                artistName={artistMap.get(p.artist_id) ?? 'Unknown artist'}
+                artists={list}
+                contextArtistId={contextArtist?.id}
+              />
             ))}
           </div>
         ) : (

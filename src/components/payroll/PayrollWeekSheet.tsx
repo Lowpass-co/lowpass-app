@@ -223,7 +223,7 @@ export function PayrollWeekSheet({
             const totalFee =
               rateType === 'split_rate'
                 ? show * showRate + offTravel * offRate + advanceFee
-                : (show + offTravel) * offRate + advanceFee;
+                : show * (showRate || offRate) + offTravel * (offRate || showRate) + advanceFee;
             const totalPD = (show + offTravel) * perDiemRate;
             weekTotalFee += totalFee;
             weekTotalPD += totalPD;
