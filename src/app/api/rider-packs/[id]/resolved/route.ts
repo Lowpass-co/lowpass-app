@@ -9,7 +9,7 @@
 
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
-import { resolvePack } from '@/lib/rider-packs/resolve';
+import { formatResolveError, resolvePack } from '@/lib/rider-packs/resolve';
 
 export async function GET(
   _request: Request,
@@ -39,7 +39,6 @@ export async function GET(
     const resolved = await resolvePack(supabase, pack);
     return NextResponse.json(resolved);
   } catch (err) {
-    const msg = err instanceof Error ? err.message : 'resolve failed';
-    return NextResponse.json({ error: msg }, { status: 500 });
+    return NextResponse.json({ error: formatResolveError(err) }, { status: 500 });
   }
 }

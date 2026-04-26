@@ -26,6 +26,21 @@ import type {
   SectionType,
 } from './types';
 
+/** Supabase/PostgREST errors are often plain objects, not `Error` — avoids generic "resolve failed" in the UI. */
+export function formatResolveError(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  if (err && typeof err === 'object' && 'message' in err) {
+    const m = (err as { message?: unknown }).message;
+    if (typeof m === 'string' && m.length > 0) return m;
+  }
+  if (typeof err === 'string') return err;
+  try {
+    return JSON.stringify(err);
+  } catch {
+    return 'Unknown error';
+  }
+}
+
 /** Walk folder.parent chain; collect (pack id, scope) for each parent folder. */
 async function resolveParentPackIds(
   supabase: SupabaseClient,
@@ -86,37 +101,48 @@ export async function resolvePack(
   const parents = await resolveParentPackIds(supabase, pack);
   const allPackIds = [pack.id, ...parents.map((p) => p.id)];
 
-  const { data: rawSections, error } = await supabase
+  // Two queries avoid PostgREST embed ambiguity (multiple pack↔section paths) and match `!inner` RLS.
+  const { data: rawSections, error: secErr } = await supabase
     .from('rider_sections')
-    .select('*, pack:rider_packs!inner(id, scope)')
+    .select('*')
     .in('pack_id', allPackIds);
-  if (error) throw error;
+  if (secErr) throw new Error(formatResolveError(secErr));
+
+  const { data: scopeRows, error: packErr } = await supabase
+    .from('rider_packs')
+    .select('id, scope')
+    .in('id', allPackIds);
+  if (packErr) throw new Error(formatResolveError(packErr));
+
+  const scopeByPackId = new Map<string, PackScope>();
+  for (const r of scopeRows ?? []) {
+    scopeByPackId.set(r.id, r.scope as PackScope);
+  }
 
   // Sort so the most specific scope comes first, then pick first per key.
   const sorted = (rawSections ?? []).slice().sort((a, b) => {
-    const ap = SCOPE_PRIORITY[a.pack.scope as PackScope] ?? 99;
-    const bp = SCOPE_PRIORITY[b.pack.scope as PackScope] ?? 99;
+    const ap = SCOPE_PRIORITY[scopeByPackId.get(a.pack_id) as PackScope] ?? 99;
+    const bp = SCOPE_PRIORITY[scopeByPackId.get(b.pack_id) as PackScope] ?? 99;
     return ap - bp;
   });
 
   const byKey = new Map<string, ResolvedSection>();
   for (const row of sorted) {
     if (byKey.has(row.section_key)) continue;
-    const { pack: srcPack, ...rest } = row as RiderSection & {
-      pack: { id: string; scope: PackScope };
-      section_type?: SectionType;
-    };
+    const srcScope = scopeByPackId.get(row.pack_id);
+    if (srcScope === undefined) continue;
+    const rest = row as RiderSection & { section_type?: SectionType };
     const st: SectionType = rest.section_type ?? 'fields';
     byKey.set(row.section_key, {
       ...rest,
       section_type: st,
-      inherited_from: srcPack.id === pack.id ? null : srcPack.scope,
-      source_pack_id: srcPack.id,
+      inherited_from: row.pack_id === pack.id ? null : srcScope,
+      source_pack_id: row.pack_id,
     });
   }
 
   let sections = Array.from(byKey.values()).sort(
-    (a, b) => a.sort_order - b.sort_order,
+    (a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0),
   );
 
   const channelIds = sections.filter((s) => s.section_type === 'channel_list').map((s) => s.id);
@@ -129,15 +155,15 @@ export async function resolvePack(
         .in('section_id', channelIds)
         .order('row_index', { ascending: true }),
     ]);
-    if (e1) throw e1;
-    if (e2) throw e2;
+    if (e1) throw new Error(formatResolveError(e1));
+    if (e2) throw new Error(formatResolveError(e2));
 
     const { data: boxRows, error: e3 } = await supabase
       .from('stage_boxes')
       .select('*')
       .in('section_id', channelIds)
       .order('position');
-    if (e3) throw e3;
+    if (e3) throw new Error(formatResolveError(e3));
 
     const subBy = new Map<string, SubSnake[]>();
     for (const r of subRows ?? []) {
