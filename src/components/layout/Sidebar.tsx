@@ -175,7 +175,7 @@ export function Sidebar() {
       return pathname?.startsWith('/budget') && tab !== 'settlement';
     }
     if (item.activeMode === 'dashboard') {
-      return pathname?.startsWith('/dashboard');
+      return pathname?.startsWith('/dashboard') && searchParams?.get('select') !== 'artist';
     }
     if (item.activeMode === 'includes') {
       return !!pathname?.includes(hrefPath.split('/').pop() ?? '');

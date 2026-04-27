@@ -105,32 +105,47 @@ export async function GET(
     total_assignment_nights: number;
   } | null = null;
   const srcType = (lineItem as { source_entity_type?: string | null }).source_entity_type;
-  const srcId = (lineItem as { source_entity_id?: string | null }).source_entity_id;
-  if (srcType === 'hotel_booking' && srcId) {
+  const srcId = (lineItem as { source_entity_id?: string | null; hotel_id?: string | null }).hotel_id
+    ?? (lineItem as { source_entity_id?: string | null }).source_entity_id;
+  if ((srcType === 'hotel_booking' || srcId) && srcId) {
     const [{ data: hb }, { data: asgRows }] = await Promise.all([
       supabase
-        .from('hotel_bookings')
-        .select('id, hotel_name, city, check_in_date, check_out_date')
+        .from('hotels')
+        .select('id, name, city, check_in_at, check_out_at')
         .eq('id', srcId)
         .eq('workspace_id', profile.workspace_id)
         .maybeSingle(),
-      supabase.from('hotel_room_assignments').select('nights').eq('hotel_booking_id', srcId).eq('workspace_id', profile.workspace_id),
+      supabase
+        .from('rooms')
+        .select('room_assignments(starts_on, ends_on)')
+        .eq('hotel_id', srcId)
+        .eq('workspace_id', profile.workspace_id),
     ]);
-    const totalAssignmentNights = (asgRows ?? []).reduce((s, r) => s + Number((r as { nights?: number }).nights ?? 0), 0);
+    const totalAssignmentNights = (asgRows ?? []).reduce((sum, r) => {
+      const ranges = (r as { room_assignments?: Array<{ starts_on?: string; ends_on?: string }> }).room_assignments ?? [];
+      const roomNights = ranges.reduce((rs, range) => {
+        if (!range.starts_on || !range.ends_on) return rs;
+        const ms =
+          new Date(`${range.ends_on}T12:00:00`).getTime() -
+          new Date(`${range.starts_on}T12:00:00`).getTime();
+        return rs + Math.max(0, Math.round(ms / (24 * 60 * 60 * 1000)));
+      }, 0);
+      return sum + roomNights;
+    }, 0);
     if (hb) {
       const b = hb as {
         id: string;
-        hotel_name?: string | null;
+        name?: string | null;
         city?: string | null;
-        check_in_date?: string | null;
-        check_out_date?: string | null;
+        check_in_at?: string | null;
+        check_out_at?: string | null;
       };
       hotel_booking = {
         id: b.id,
-        hotel_name: String(b.hotel_name ?? '').trim(),
+        hotel_name: String(b.name ?? '').trim(),
         city: b.city ?? null,
-        check_in_date: b.check_in_date ?? null,
-        check_out_date: b.check_out_date ?? null,
+        check_in_date: b.check_in_at?.slice(0, 10) ?? null,
+        check_out_date: b.check_out_at?.slice(0, 10) ?? null,
         total_assignment_nights: totalAssignmentNights,
       };
     }

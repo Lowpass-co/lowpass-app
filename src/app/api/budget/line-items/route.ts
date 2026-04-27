@@ -188,6 +188,8 @@ export async function PATCH(request: Request) {
     tags?: string[];
     linked_item_ids?: string[];
     flight_id?: string | null;
+    hotel_id?: string | null;
+    room_id?: string | null;
   };
   try {
     body = await request.json();
@@ -202,7 +204,7 @@ export async function PATCH(request: Request) {
 
   const { data: existingRow } = await supabase
     .from('budget_line_items')
-    .select('id, flight_id')
+    .select('id, flight_id, hotel_id, room_id')
     .eq('id', id)
     .eq('workspace_id', profile.workspace_id)
     .maybeSingle();
@@ -218,6 +220,12 @@ export async function PATCH(request: Request) {
   if (existingRow.flight_id && updatesDerivedFields) {
     return NextResponse.json(
       { error: `This row is derived from flight ${existingRow.flight_id}; edit the flight instead` },
+      { status: 409 }
+    );
+  }
+  if ((existingRow.hotel_id || existingRow.room_id) && updatesDerivedFields) {
+    return NextResponse.json(
+      { error: 'This row is derived from rooming; edit the linked room/hotel instead' },
       { status: 409 }
     );
   }
@@ -241,6 +249,8 @@ export async function PATCH(request: Request) {
   if (updates.tags !== undefined) payload.tags = Array.isArray(updates.tags) ? updates.tags : [];
   if (updates.linked_item_ids !== undefined) payload.linked_item_ids = Array.isArray(updates.linked_item_ids) ? updates.linked_item_ids : [];
   if (updates.flight_id !== undefined) payload.flight_id = updates.flight_id;
+  if (updates.hotel_id !== undefined) payload.hotel_id = updates.hotel_id;
+  if (updates.room_id !== undefined) payload.room_id = updates.room_id;
 
   const { data, error } = await supabase
     .from('budget_line_items')
@@ -260,17 +270,16 @@ export async function PATCH(request: Request) {
   };
   if (
     updates.label !== undefined &&
-    row.source_entity_type === 'hotel_booking' &&
-    row.source_entity_id
+    ((row.source_entity_type === 'hotel_booking' && row.source_entity_id) || updates.hotel_id)
   ) {
     const name = String(updates.label).trim();
     await supabase
-      .from('hotel_bookings')
+      .from('hotels')
       .update({
-        hotel_name: name,
+        name,
         updated_at: new Date().toISOString(),
       })
-      .eq('id', row.source_entity_id)
+      .eq('id', updates.hotel_id ?? row.source_entity_id)
       .eq('workspace_id', profile.workspace_id);
   }
 

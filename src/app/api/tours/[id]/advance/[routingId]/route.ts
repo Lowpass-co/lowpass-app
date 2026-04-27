@@ -127,6 +127,59 @@ export async function GET(
       };
     }
 
+    // Pre-fill Hotel section from canonical hotels for this routing date (if form is empty)
+    const hotelSection = advance.sections.find((sec) =>
+      sec.label.toLowerCase().includes('hotel') ||
+      (sec.fields as { id?: string }[]).some((f) =>
+        ['hotel_name', 'hotel_address', 'hotel_phone', 'confirmation_number', 'check_in', 'check_out'].includes(
+          String(f.id ?? '')
+        )
+      )
+    );
+    if (hotelSection && routing?.date) {
+      const tid = hotelSection.template_id;
+      const current = advance.data[tid] ?? {};
+      const dateMs = new Date(`${routing.date}T12:00:00`).getTime();
+      const { data: hotelRows } = await supabase
+        .from('hotels')
+        .select('name, address, phone, confirmation_number, check_in_at, check_out_at')
+        .eq('tour_id', tourId)
+        .order('check_in_at', { ascending: true, nullsFirst: true })
+        .limit(20);
+      const hotel =
+        (hotelRows ?? []).find((row) => {
+          const start = (row as { check_in_at?: string | null }).check_in_at;
+          const end = (row as { check_out_at?: string | null }).check_out_at;
+          const startOk = !start || new Date(start).getTime() <= dateMs;
+          const endOk = !end || new Date(end).getTime() >= dateMs;
+          return startOk && endOk;
+        }) ??
+        (hotelRows ?? [])[0] ??
+        null;
+      if (hotel) {
+        const h = hotel as {
+          name?: string | null;
+          address?: string | null;
+          phone?: string | null;
+          confirmation_number?: string | null;
+          check_in_at?: string | null;
+          check_out_at?: string | null;
+        };
+        advance.data = {
+          ...advance.data,
+          [tid]: {
+            ...current,
+            hotel_name: current.hotel_name ?? h.name ?? undefined,
+            hotel_address: current.hotel_address ?? h.address ?? undefined,
+            hotel_phone: current.hotel_phone ?? h.phone ?? undefined,
+            confirmation_number: current.confirmation_number ?? h.confirmation_number ?? undefined,
+            check_in: current.check_in ?? h.check_in_at?.slice(0, 10) ?? undefined,
+            check_out: current.check_out ?? h.check_out_at?.slice(0, 10) ?? undefined,
+          },
+        };
+      }
+    }
+
     // Pre-fill Transport drive_distance from previous routing leg (if not already set)
     const transportSection = advance.sections.find((sec) =>
       (sec.fields as { id?: string }[]).some((f) => f.id === 'drive_distance')

@@ -94,30 +94,30 @@ export async function POST(request: Request) {
   const [
     routingRes,
     lineItemsRes,
-    hotelBookingsRes,
+    hotelsRes,
     flightRes,
     personnelRes,
   ] = await Promise.all([
     supabase.from('routing').select('tour_id, day_type').in('tour_id', tourIds),
     supabase.from('budget_line_items').select('tour_id, category, actual_cost, proposed_cost').in('tour_id', tourIds),
-    supabase.from('hotel_bookings').select('id, tour_id').in('tour_id', tourIds),
+    supabase.from('hotels').select('id, tour_id').in('tour_id', tourIds),
     supabase.from('flights').select('tour_id, cost_amount').in('tour_id', tourIds),
     supabase.from('personnel_rates').select('tour_id, show_rate, off_rate, per_diem, person_type').in('tour_id', tourIds),
   ]);
 
   const routing = routingRes.data ?? [];
   const lineItems = lineItemsRes.data ?? [];
-  const hotelBookings = hotelBookingsRes.data ?? [];
+  const hotels = hotelsRes.data ?? [];
   const flightBookings = flightRes.data ?? [];
   const personnel = personnelRes.data ?? [];
 
-  const hotelBookingIds = hotelBookings.map((h: { id: string }) => h.id);
-  let assignments: { hotel_booking_id: string; rate_per_night: number; nights: number }[] = [];
-  if (hotelBookingIds.length > 0) {
+  const hotelIds = hotels.map((h: { id: string }) => h.id);
+  let assignments: { hotel_id: string; cost_amount: number }[] = [];
+  if (hotelIds.length > 0) {
     const { data: assign } = await supabase
-      .from('hotel_room_assignments')
-      .select('hotel_booking_id, rate_per_night, nights')
-      .in('hotel_booking_id', hotelBookingIds);
+      .from('rooms')
+      .select('hotel_id, cost_amount')
+      .in('hotel_id', hotelIds);
     assignments = assign ?? [];
   }
 
@@ -140,8 +140,7 @@ export async function POST(request: Request) {
     sumByCategory.set(cat, (sumByCategory.get(cat) ?? 0) + cost);
   }
 
-  const totalLineItems = Array.from(sumByCategory.values()).reduce((a, b) => a + b, 0);
-  const hotelTotal = assignments.reduce((a, x) => a + n(x.rate_per_night) * n(x.nights), 0);
+  const hotelTotal = assignments.reduce((a, x) => a + n(x.cost_amount), 0);
   const flightTotal = flightBookings.reduce((a, x) => a + n((x as { cost_amount?: number }).cost_amount), 0);
   const transportTotal = Array.from(sumByCategory.entries())
     .filter(([c]) => c.startsWith('transport_'))

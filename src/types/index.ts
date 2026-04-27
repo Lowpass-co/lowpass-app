@@ -489,6 +489,8 @@ export interface BudgetLineItem {
   routing_id: string | null;
   notes: string | null;
   flight_id?: string | null;
+  hotel_id?: string | null;
+  room_id?: string | null;
   order_index: number;
   created_at: string;
   updated_at: string;

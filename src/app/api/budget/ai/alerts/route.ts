@@ -45,8 +45,6 @@ export async function GET(request: Request) {
     lineItemsRes,
     routingRes,
     flightsRes,
-    hotelsRes,
-    settingsRes,
   ] = await Promise.all([
     fetch(new URL(`/api/budget/summary?tour_id=${tourId}`, request.url).toString(), {
       headers: { cookie: request.headers.get('cookie') ?? '' },
@@ -54,24 +52,12 @@ export async function GET(request: Request) {
     supabase.from('budget_line_items').select('category, proposed_cost, actual_cost, routing_id').eq('tour_id', tourId).eq('workspace_id', wid),
     supabase.from('routing').select('id, day_type').eq('tour_id', tourId),
     supabase.from('flights').select('cost_amount').eq('tour_id', tourId).eq('workspace_id', wid),
-    supabase.from('hotel_bookings').select('id').eq('tour_id', tourId).eq('workspace_id', wid),
-    supabase.from('budget_settings').select('*').eq('tour_id', tourId).maybeSingle(),
   ]);
 
   const summary = summaryRes && !summaryRes.error ? summaryRes : null;
   const lineItems = lineItemsRes.data ?? [];
   const routing = routingRes.data ?? [];
   const flights = flightsRes.data ?? [];
-  const hotelIds = (hotelsRes.data ?? []).map((h: { id: string }) => h.id);
-
-  let assignments: { rate_per_night: number }[] = [];
-  if (hotelIds.length > 0) {
-    const { data: a } = await supabase
-      .from('hotel_room_assignments')
-      .select('rate_per_night')
-      .in('hotel_booking_id', hotelIds);
-    assignments = a ?? [];
-  }
 
   const incomeSection = summary?.sections?.find((s: { title: string }) => s.title === 'INCOME');
   const totalsSection = summary?.sections?.find((s: { title: string }) => s.title === 'TOTALS');
@@ -96,7 +82,6 @@ export async function GET(request: Request) {
   }
 
   const showDays = routing.filter((r: { day_type: string }) => r.day_type === 'show' || r.day_type === 'festival').length;
-  const routingIds = new Set(routing.map((r: { id: string }) => (r as { id: string }).id));
   const lineItemsByRouting = new Map<string, number>();
   for (const i of lineItems) {
     const rid = (i as { routing_id?: string }).routing_id;
