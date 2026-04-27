@@ -100,8 +100,8 @@ export async function GET(request: Request) {
       .eq('workspace_id', wid)
       .in('tour_id', tourIds),
 
-    supabase.from('flight_bookings')
-      .select('tour_id, proposed_cost, actual_cost')
+    supabase.from('flights')
+      .select('tour_id, cost_amount')
       .eq('workspace_id', wid)
       .in('tour_id', tourIds),
 
@@ -167,8 +167,8 @@ export async function GET(request: Request) {
 
     // Flights
     const tourFlights = flights.filter(f => f.tour_id === tid);
-    const flightsP = sum(tourFlights.map(f => n(f.proposed_cost)));
-    const flightsA = sum(tourFlights.map(f => n(f.actual_cost)));
+    const flightsP = sum(tourFlights.map(f => n(f.cost_amount)));
+    const flightsA = sum(tourFlights.map(f => n(f.cost_amount)));
 
     const directP = proposedSalaries + proposedPerDiem + hotelsP + flightsP + transportP + prodP;
     const directA = actualSalaries + actualPerDiem + hotelsA + flightsA + transportA + prodA;

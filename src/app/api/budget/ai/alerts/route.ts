@@ -53,7 +53,7 @@ export async function GET(request: Request) {
     }).then((r) => r.json().catch(() => null)),
     supabase.from('budget_line_items').select('category, proposed_cost, actual_cost, routing_id').eq('tour_id', tourId).eq('workspace_id', wid),
     supabase.from('routing').select('id, day_type').eq('tour_id', tourId),
-    supabase.from('flight_bookings').select('proposed_cost, actual_cost').eq('tour_id', tourId).eq('workspace_id', wid),
+    supabase.from('flights').select('cost_amount').eq('tour_id', tourId).eq('workspace_id', wid),
     supabase.from('hotel_bookings').select('id').eq('tour_id', tourId).eq('workspace_id', wid),
     supabase.from('budget_settings').select('*').eq('tour_id', tourId).maybeSingle(),
   ]);
@@ -108,7 +108,7 @@ export async function GET(request: Request) {
     .filter((r: { day_type: string; id: string }) => (r.day_type === 'show' || r.day_type === 'festival') && !lineItemsByRouting.has((r as { id: string }).id))
     .length;
 
-  const flightCosts = flights.map((f: { proposed_cost?: number; actual_cost?: number }) => n(f.actual_cost) || n(f.proposed_cost)).filter(Boolean);
+  const flightCosts = flights.map((f: { cost_amount?: number }) => n(f.cost_amount)).filter(Boolean);
   const minFlight = flightCosts.length ? Math.min(...flightCosts) : 0;
   const maxFlight = flightCosts.length ? Math.max(...flightCosts) : 0;
 

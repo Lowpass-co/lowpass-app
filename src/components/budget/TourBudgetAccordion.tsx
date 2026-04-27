@@ -53,6 +53,7 @@ interface LineItem {
   proposed_cost: number;
   actual_cost: number;
   notes: string | null;
+  flight_id?: string | null;
   order_index: number;
 }
 interface Personnel {
@@ -90,14 +91,27 @@ interface IncomeRow {
 }
 interface FlightBooking {
   id: string;
-  routing_id: string | null;
-  passenger_name: string;
-  origin: string;
-  destination: string;
+  line_item_id?: string | null;
+  person_name: string;
+  role: string | null;
+  origin_code: string | null;
+  destination_code: string | null;
+  departure_date: string | null;
+  departure_time: string | null;
+  airline: string | null;
+  flight_number: string | null;
+  leg_order: number;
   proposed_cost: number;
   actual_cost: number;
-  notes: string | null;
-  routing?: { date: string; city: string };
+  confirmation: string | null;
+}
+
+interface BudgetFlightRow {
+  id: string;
+  label: string;
+  proposed_cost: number;
+  actual_cost: number;
+  flight_id: string | null;
 }
 interface BudgetSettings {
   insurance_pct: number;
@@ -292,6 +306,7 @@ function LineRow({
   const [actual, setActual] = useState(String(item.actual_cost));
   const [label, setLabel] = useState(item.label);
   const [pendingSave, setPendingSave] = useState(false);
+  const isDerivedFromFlight = !!item.flight_id;
 
   const save = async () => {
     setPendingSave(true);
@@ -310,7 +325,7 @@ function LineRow({
   const proposed_n = parseFloat(proposed) || 0;
   const actual_n = parseFloat(actual) || 0;
 
-  if (editing) {
+  if (editing && !isDerivedFromFlight) {
     return (
       <div className={cn(GRID, 'px-5 py-1.5 text-[12px] border-b border-lp-border/30 bg-lp-surface-hover')}>
         <input
@@ -361,22 +376,28 @@ function LineRow({
       <span className="text-right tabular-nums text-lp-text-secondary">{fmtFull(n(item.proposed_cost), symbol)}</span>
       <span className="text-right tabular-nums text-lp-text">{fmtFull(n(item.actual_cost), symbol)}</span>
       <div className="flex items-center justify-end gap-1">
-        <button
-          onClick={(e) => {
-            e.stopPropagation();
-            setEditing(true);
-          }}
-          className="ml-0.5 opacity-0 group-hover:opacity-70 hover:!opacity-100 text-lp-text-tertiary"
-          aria-label={`Edit ${item.label}`}
-        >
-          <Pencil className="h-3 w-3" />
-        </button>
+        {isDerivedFromFlight ? (
+          <span className="rounded border border-lp-border bg-lp-surface px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-lp-text-tertiary">
+            Derived
+          </span>
+        ) : (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setEditing(true);
+            }}
+            className="ml-0.5 opacity-0 group-hover:opacity-70 hover:!opacity-100 text-lp-text-tertiary"
+            aria-label={`Edit ${item.label}`}
+          >
+            <Pencil className="h-3 w-3" />
+          </button>
+        )}
         <span className={cn('text-right tabular-nums text-[11px]', varianceClass(n(item.proposed_cost), n(item.actual_cost), isIncome))}>
           {varianceDisplay(n(item.proposed_cost), n(item.actual_cost), isIncome)}
         </span>
         <button
           onClick={e => { e.stopPropagation(); onDelete(item.id); }}
-          disabled={saving}
+          disabled={saving || isDerivedFromFlight}
           className="ml-1 opacity-0 group-hover:opacity-60 hover:!opacity-100 text-red-500"
         >
           <Trash2 className="h-3 w-3" />
@@ -701,55 +722,152 @@ function LineItemsAccordionBody({
 // ─── Flights Section ──────────────────────────────────────────────────────────
 
 function FlightsAccordionBody({ tourId, symbol }: { tourId: string; symbol: string }) {
+  const { openLineItem } = useDetailPanel();
   const [flights, setFlights] = useState<FlightBooking[]>([]);
+  const [budgetRows, setBudgetRows] = useState<BudgetFlightRow[]>([]);
+  const [linkChoiceByFlight, setLinkChoiceByFlight] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(() => {
     setLoading(true);
-    fetch(`/api/budget/flights?tour_id=${tourId}`)
-      .then(r => r.ok ? r.json() : { flights: [] })
-      .then((d: { flights?: FlightBooking[] }) => setFlights(d.flights ?? []))
-      .catch(() => {})
+    Promise.all([
+      fetch(`/api/budget/flights?tour_id=${tourId}`).then(r => r.ok ? r.json() : { flights: [] }),
+      fetch(`/api/budget/line-items?tour_id=${tourId}&category=flights`).then(r => r.ok ? r.json() : { line_items: [] }),
+    ])
+      .then(([flightRes, lineItemRes]: [{ flights?: FlightBooking[] }, { line_items?: BudgetFlightRow[] }]) => {
+        setFlights(flightRes.flights ?? []);
+        setBudgetRows(lineItemRes.line_items ?? []);
+      })
+      .catch(() => setError('Failed to load flights'))
       .finally(() => setLoading(false));
   }, [tourId]);
   useEffect(() => { load(); }, [load]);
 
-  const handleSave = async (id: string, proposed: number, actual: number) => {
+  const linkedByFlight = new Map<string, BudgetFlightRow>();
+  for (const row of budgetRows) {
+    if (row.flight_id) linkedByFlight.set(row.flight_id, row);
+  }
+  const unlinkedRows = budgetRows.filter((row) => !row.flight_id);
+
+  const linkFlightToRow = async (flightId: string, lineItemId: string) => {
     setSaving(true);
-    await fetch('/api/budget/flights', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, proposed_cost: proposed, actual_cost: actual }),
-    });
-    setSaving(false);
-    load();
+    setError(null);
+    try {
+      const res = await fetch('/api/budget/line-items', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: lineItemId, flight_id: flightId }),
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error((json as { error?: string }).error ?? 'Failed to link flight');
+      }
+      await load();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const unlinkFlightRow = async (lineItemId: string) => {
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch('/api/budget/line-items', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: lineItemId, flight_id: null }),
+      });
+      if (!res.ok) {
+        const json = await res.json().catch(() => ({}));
+        throw new Error((json as { error?: string }).error ?? 'Failed to unlink flight');
+      }
+      await load();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (loading) return <FlightsAccordionSkeletonRows />;
+  if (error) return <div className="px-5 py-3 text-[12px] text-red-500">{error}</div>;
 
   return (
     <div>
-      <div className={cn(GRID, 'border-b border-lp-border px-5 py-2 text-[10px] font-semibold uppercase tracking-wider text-lp-text-tertiary')}>
+      <div className={cn('grid grid-cols-[minmax(0,1fr)_6.5rem_6.5rem_11.5rem] gap-x-3 items-center border-b border-lp-border px-5 py-2 text-[10px] font-semibold uppercase tracking-wider text-lp-text-tertiary')}>
         <span>Route / Passenger</span>
         <span className="text-right">Proposed</span>
         <span className="text-right">Actual</span>
-        <span className="text-right">Variance</span>
+        <span className="text-right">Link</span>
       </div>
       {flights.map(f => {
-        const label = f.origin && f.destination
-          ? `${f.passenger_name} — ${f.origin} → ${f.destination}`
-          : f.passenger_name;
-        const fakeItem: LineItem = { id: f.id, category: 'flights', label, quantity: 1, proposed_cost: f.proposed_cost, actual_cost: f.actual_cost, notes: f.notes, order_index: 0 };
+        const label = f.origin_code && f.destination_code
+          ? `${f.person_name} — ${f.origin_code} → ${f.destination_code}`
+          : f.person_name;
+        const linkedRow = linkedByFlight.get(f.id) ?? null;
+        const selectedLink = linkChoiceByFlight[f.id] ?? '';
         return (
-          <LineRow
+          <div
             key={f.id}
-            item={fakeItem}
-            symbol={symbol}
-            onSave={async (id, proposed, actual) => handleSave(id, proposed, actual)}
-            onDelete={async () => {}}
-            saving={saving}
-          />
+            className={cn(
+              'grid grid-cols-[minmax(0,1fr)_6.5rem_6.5rem_11.5rem] gap-x-3 items-center border-b border-lp-border/30 px-5 py-2 text-[12px]',
+              linkedRow ? 'cursor-pointer hover:bg-lp-surface-hover' : ''
+            )}
+            onClick={() => {
+              if (linkedRow) openLineItem(linkedRow.id);
+            }}
+          >
+            <span className="truncate text-lp-text">{label}</span>
+            <span className="text-right tabular-nums text-lp-text-secondary">{fmtFull(n(f.proposed_cost), symbol)}</span>
+            <span className="text-right tabular-nums text-lp-text">{fmtFull(n(f.actual_cost), symbol)}</span>
+            <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
+              {linkedRow ? (
+                <>
+                  <span className="rounded border border-lp-border bg-lp-surface px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-lp-text-tertiary">
+                    Derived
+                  </span>
+                  <button
+                    type="button"
+                    className="text-[11px] text-lp-text-tertiary hover:text-lp-orange"
+                    disabled={saving}
+                    onClick={() => void unlinkFlightRow(linkedRow.id)}
+                  >
+                    Unlink
+                  </button>
+                </>
+              ) : (
+                <>
+                  <select
+                    value={selectedLink}
+                    onChange={(e) => setLinkChoiceByFlight((prev) => ({ ...prev, [f.id]: e.target.value }))}
+                    className="h-7 max-w-[120px] rounded border border-lp-border bg-lp-surface px-1 text-[11px] text-lp-text"
+                  >
+                    <option value="">Select row…</option>
+                    {unlinkedRows.map((row) => (
+                      <option key={row.id} value={row.id}>
+                        {row.label}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    className="text-[11px] text-lp-orange disabled:opacity-50"
+                    disabled={saving || !selectedLink}
+                    onClick={() => {
+                      if (!selectedLink) return;
+                      void linkFlightToRow(f.id, selectedLink);
+                    }}
+                  >
+                    Link
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
         );
       })}
       {flights.length === 0 && (

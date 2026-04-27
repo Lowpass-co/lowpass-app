@@ -46,11 +46,11 @@ export async function GET(request: Request) {
   }
 
   const { data, error } = await supabase
-    .from('flight_bookings')
+    .from('flights')
     .select('*')
     .eq('workspace_id', profile.workspace_id)
     .eq('tour_id', tourId)
-    .order('departure_date', { ascending: true, nullsFirst: false })
+    .order('depart_at', { ascending: true, nullsFirst: false })
     .order('person_name')
     .order('leg_order');
 
@@ -58,30 +58,76 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const flights = data ?? [];
-  for (const row of flights) {
-    const f = row as { id: string; line_item_id?: string | null; person_name: string; tour_id: string };
-    if (f.line_item_id) continue;
-    const { data: lineItem, error: liErr } = await supabase
+  const flightsRaw = (data ?? []) as Array<{
+    id: string;
+    person_name: string;
+    role: string | null;
+    origin_airport: string;
+    destination_airport: string;
+    depart_at: string;
+    airline: string | null;
+    flight_number: string | null;
+    leg_order: number;
+    cost_amount: number | null;
+    confirmation: string | null;
+  }>;
+  const flightIds = flightsRaw.map((f) => f.id);
+  const { data: lineItems } = flightIds.length
+    ? await supabase
+        .from('budget_line_items')
+        .select('id, flight_id')
+        .eq('workspace_id', profile.workspace_id)
+        .eq('tour_id', tourId)
+        .eq('category', 'flights')
+        .in('flight_id', flightIds)
+    : { data: [] as Array<{ id: string; flight_id: string | null }> };
+
+  const lineItemByFlight = new Map<string, string>();
+  (lineItems ?? []).forEach((row) => {
+    if (row.flight_id) lineItemByFlight.set(row.flight_id, row.id);
+  });
+
+  for (const f of flightsRaw) {
+    if (lineItemByFlight.has(f.id)) continue;
+    const label = `${f.person_name}: ${f.origin_airport}→${f.destination_airport}`;
+    const { data: lineItem } = await supabase
       .from('budget_line_items')
       .insert({
         tour_id: tourId,
         workspace_id: profile.workspace_id,
         category: 'flights',
-        label: `${f.person_name}: flight`,
-        proposed_cost: 0,
-        actual_cost: 0,
-        source_entity_type: 'flight_booking',
+        label,
+        proposed_cost: Number(f.cost_amount) || 0,
+        actual_cost: Number(f.cost_amount) || 0,
+        source_entity_type: 'flight',
         source_entity_id: f.id,
+        flight_id: f.id,
       })
       .select('id')
       .single();
-    if (!liErr && lineItem?.id) {
-      await supabase.from('flight_bookings').update({ line_item_id: lineItem.id }).eq('id', f.id);
-      f.line_item_id = lineItem.id;
-    }
+    if (lineItem?.id) lineItemByFlight.set(f.id, lineItem.id);
   }
-
+  const flights = flightsRaw.map((f) => {
+    const date = f.depart_at?.slice(0, 10) ?? null;
+    const time = f.depart_at?.slice(11, 16) ?? null;
+    const cost = Number(f.cost_amount) || 0;
+    return {
+      id: f.id,
+      line_item_id: lineItemByFlight.get(f.id) ?? null,
+      person_name: f.person_name,
+      role: f.role,
+      origin_code: f.origin_airport,
+      destination_code: f.destination_airport,
+      departure_date: date,
+      departure_time: time,
+      airline: f.airline,
+      flight_number: f.flight_number,
+      leg_order: f.leg_order,
+      proposed_cost: cost,
+      actual_cost: cost,
+      confirmation: f.confirmation,
+    };
+  });
   return NextResponse.json({ flights });
 }
 
@@ -142,23 +188,33 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Tour not found' }, { status: 404 });
   }
 
+  const nowIso = new Date().toISOString();
+  const departureDate = body.departure_date ?? nowIso.slice(0, 10);
+  const departureTime = body.departure_time ?? '00:00';
+  const departAt = new Date(`${departureDate}T${departureTime}:00Z`).toISOString();
+  const arriveAt = new Date(new Date(departAt).getTime() + 2 * 60 * 60 * 1000).toISOString();
+  const costAmount = Number(body.actual_cost ?? body.proposed_cost) || 0;
+
   const { data: created, error } = await supabase
-    .from('flight_bookings')
+    .from('flights')
     .insert({
       tour_id,
       workspace_id: profile.workspace_id,
       person_name: person_name.trim(),
       role: body.role ?? null,
-      origin_code: body.origin_code ?? null,
-      destination_code: body.destination_code ?? null,
-      proposed_cost: Number(body.proposed_cost) || 0,
-      actual_cost: Number(body.actual_cost) || 0,
+      origin_airport: (body.origin_code ?? 'TBD').toUpperCase(),
+      destination_airport: (body.destination_code ?? 'TBD').toUpperCase(),
+      cost_amount: costAmount,
+      cost_currency: 'GBP',
       airline: body.airline ?? null,
       flight_number: body.flight_number ?? null,
+      pnr: body.confirmation ?? null,
       confirmation: body.confirmation ?? null,
-      departure_date: body.departure_date ?? null,
-      departure_time: body.departure_time ?? null,
+      depart_at: departAt,
+      arrive_at: arriveAt,
       leg_order: Number(body.leg_order) || 1,
+      created_by: user.id,
+      updated_by: user.id,
     })
     .select()
     .single();
@@ -167,8 +223,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const flight = created as { id: string; line_item_id?: string | null };
-  const label = `${body.person_name.trim()}: ${body.origin_code ?? ''}→${body.destination_code ?? ''}`;
+  const flight = created as {
+    id: string;
+    line_item_id?: string | null;
+    origin_airport: string;
+    destination_airport: string;
+    depart_at: string;
+    cost_amount: number | null;
+  };
+  const label = `${body.person_name.trim()}: ${(body.origin_code ?? 'TBD').toUpperCase()}→${(body.destination_code ?? 'TBD').toUpperCase()}`;
 
   const { data: lineItem, error: liError } = await supabase
     .from('budget_line_items')
@@ -177,28 +240,26 @@ export async function POST(request: Request) {
       workspace_id: profile.workspace_id,
       category: 'flights',
       label,
-      proposed_cost: Number(body.proposed_cost) || 0,
-      actual_cost: Number(body.actual_cost) || 0,
-      source_entity_type: 'flight_booking',
+      proposed_cost: costAmount,
+      actual_cost: costAmount,
+      source_entity_type: 'flight',
       source_entity_id: flight.id,
+      flight_id: flight.id,
     })
     .select('id')
     .single();
 
-  if (!liError && lineItem) {
-    const { data: updated } = await supabase
-      .from('flight_bookings')
-      .update({ line_item_id: lineItem.id })
-      .eq('id', flight.id)
-      .select()
-      .single();
-    if (updated) {
-      return NextResponse.json(updated);
-    }
-    flight.line_item_id = lineItem.id;
-  }
-
-  return NextResponse.json(flight);
+  const response = {
+    ...flight,
+    line_item_id: liError ? null : lineItem?.id ?? null,
+    origin_code: flight.origin_airport,
+    destination_code: flight.destination_airport,
+    departure_date: flight.depart_at?.slice(0, 10) ?? null,
+    departure_time: flight.depart_at?.slice(11, 16) ?? null,
+    proposed_cost: Number(flight.cost_amount) || 0,
+    actual_cost: Number(flight.cost_amount) || 0,
+  };
+  return NextResponse.json(response);
 }
 
 export async function PATCH(request: Request) {
@@ -244,22 +305,39 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: 'id is required' }, { status: 400 });
   }
 
-  const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  const payload: Record<string, unknown> = { updated_at: new Date().toISOString(), updated_by: user.id };
   if (updates.person_name !== undefined) payload.person_name = updates.person_name;
   if (updates.role !== undefined) payload.role = updates.role;
-  if (updates.origin_code !== undefined) payload.origin_code = updates.origin_code;
-  if (updates.destination_code !== undefined) payload.destination_code = updates.destination_code;
-  if (updates.proposed_cost !== undefined) payload.proposed_cost = updates.proposed_cost;
-  if (updates.actual_cost !== undefined) payload.actual_cost = updates.actual_cost;
+  if (updates.origin_code !== undefined) payload.origin_airport = updates.origin_code;
+  if (updates.destination_code !== undefined) payload.destination_airport = updates.destination_code;
+  if (updates.proposed_cost !== undefined || updates.actual_cost !== undefined) {
+    payload.cost_amount = Number(updates.actual_cost ?? updates.proposed_cost) || 0;
+  }
   if (updates.airline !== undefined) payload.airline = updates.airline;
   if (updates.flight_number !== undefined) payload.flight_number = updates.flight_number;
-  if (updates.confirmation !== undefined) payload.confirmation = updates.confirmation;
-  if (updates.departure_date !== undefined) payload.departure_date = updates.departure_date;
-  if (updates.departure_time !== undefined) payload.departure_time = updates.departure_time;
+  if (updates.confirmation !== undefined) {
+    payload.confirmation = updates.confirmation;
+    payload.pnr = updates.confirmation;
+  }
+  if (updates.departure_date !== undefined || updates.departure_time !== undefined) {
+    const { data: existing } = await supabase
+      .from('flights')
+      .select('depart_at')
+      .eq('id', id)
+      .eq('workspace_id', profile.workspace_id)
+      .maybeSingle();
+    const existingDate = existing?.depart_at?.slice(0, 10) ?? new Date().toISOString().slice(0, 10);
+    const existingTime = existing?.depart_at?.slice(11, 16) ?? '00:00';
+    const nextDate = updates.departure_date ?? existingDate;
+    const nextTime = updates.departure_time ?? existingTime;
+    const nextDepart = new Date(`${nextDate}T${nextTime}:00Z`).toISOString();
+    payload.depart_at = nextDepart;
+    payload.arrive_at = new Date(new Date(nextDepart).getTime() + 2 * 60 * 60 * 1000).toISOString();
+  }
   if (updates.leg_order !== undefined) payload.leg_order = updates.leg_order;
 
   const { data, error } = await supabase
-    .from('flight_bookings')
+    .from('flights')
     .update(payload)
     .eq('id', id)
     .eq('workspace_id', profile.workspace_id)
@@ -269,6 +347,18 @@ export async function PATCH(request: Request) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+  await supabase
+    .from('budget_line_items')
+    .update({
+      label: `${data.person_name}: ${data.origin_airport}→${data.destination_airport}`,
+      proposed_cost: Number(data.cost_amount) || 0,
+      actual_cost: Number(data.cost_amount) || 0,
+      source_entity_type: 'flight',
+      source_entity_id: data.id,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('workspace_id', profile.workspace_id)
+    .eq('flight_id', data.id);
   return NextResponse.json(data);
 }
 
@@ -301,7 +391,7 @@ export async function DELETE(request: Request) {
   }
 
   const { error } = await supabase
-    .from('flight_bookings')
+    .from('flights')
     .delete()
     .eq('id', body.id)
     .eq('workspace_id', profile.workspace_id);

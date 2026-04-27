@@ -101,7 +101,7 @@ export async function POST(request: Request) {
     supabase.from('routing').select('tour_id, day_type').in('tour_id', tourIds),
     supabase.from('budget_line_items').select('tour_id, category, actual_cost, proposed_cost').in('tour_id', tourIds),
     supabase.from('hotel_bookings').select('id, tour_id').in('tour_id', tourIds),
-    supabase.from('flight_bookings').select('tour_id, actual_cost, proposed_cost').in('tour_id', tourIds),
+    supabase.from('flights').select('tour_id, cost_amount').in('tour_id', tourIds),
     supabase.from('personnel_rates').select('tour_id, show_rate, off_rate, per_diem, person_type').in('tour_id', tourIds),
   ]);
 
@@ -142,7 +142,7 @@ export async function POST(request: Request) {
 
   const totalLineItems = Array.from(sumByCategory.values()).reduce((a, b) => a + b, 0);
   const hotelTotal = assignments.reduce((a, x) => a + n(x.rate_per_night) * n(x.nights), 0);
-  const flightTotal = flightBookings.reduce((a, x) => a + (n((x as { actual_cost?: number }).actual_cost) || n((x as { proposed_cost?: number }).proposed_cost)), 0);
+  const flightTotal = flightBookings.reduce((a, x) => a + n((x as { cost_amount?: number }).cost_amount), 0);
   const transportTotal = Array.from(sumByCategory.entries())
     .filter(([c]) => c.startsWith('transport_'))
     .reduce((a, [, v]) => a + v, 0);

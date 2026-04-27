@@ -187,6 +187,7 @@ export async function PATCH(request: Request) {
     status?: string;
     tags?: string[];
     linked_item_ids?: string[];
+    flight_id?: string | null;
   };
   try {
     body = await request.json();
@@ -197,6 +198,28 @@ export async function PATCH(request: Request) {
   const { id, ...updates } = body;
   if (!id) {
     return NextResponse.json({ error: 'id is required' }, { status: 400 });
+  }
+
+  const { data: existingRow } = await supabase
+    .from('budget_line_items')
+    .select('id, flight_id')
+    .eq('id', id)
+    .eq('workspace_id', profile.workspace_id)
+    .maybeSingle();
+  if (!existingRow) {
+    return NextResponse.json({ error: 'Line item not found' }, { status: 404 });
+  }
+
+  const updatesDerivedFields =
+    updates.label !== undefined ||
+    updates.proposed_cost !== undefined ||
+    updates.actual_cost !== undefined ||
+    updates.currency !== undefined;
+  if (existingRow.flight_id && updatesDerivedFields) {
+    return NextResponse.json(
+      { error: `This row is derived from flight ${existingRow.flight_id}; edit the flight instead` },
+      { status: 409 }
+    );
   }
 
   const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
@@ -217,6 +240,7 @@ export async function PATCH(request: Request) {
   }
   if (updates.tags !== undefined) payload.tags = Array.isArray(updates.tags) ? updates.tags : [];
   if (updates.linked_item_ids !== undefined) payload.linked_item_ids = Array.isArray(updates.linked_item_ids) ? updates.linked_item_ids : [];
+  if (updates.flight_id !== undefined) payload.flight_id = updates.flight_id;
 
   const { data, error } = await supabase
     .from('budget_line_items')
