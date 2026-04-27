@@ -25,6 +25,6 @@ When `flight_id` is set:
 
 ## Backfill behavior
 
-Migration `033_flight_canonical.sql` backfills from legacy `flight_bookings` to `flights` (id-preserving), then links `budget_line_items` via `flight_id` where `flight_bookings.line_item_id` already existed.
+Migration `049_flight_canonical.sql` backfills from legacy `flight_bookings` to `flights` (id-preserving), then links `budget_line_items` via `flight_id` where `flight_bookings.line_item_id` already existed.
 
 Legacy ad-hoc budget travel rows remain untouched unless explicitly linked by users.

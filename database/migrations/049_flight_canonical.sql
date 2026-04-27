@@ -1,6 +1,6 @@
 -- ============================================
 -- LOWPASS — Flight as canonical entity
--- Migration 033
+-- Migration 049
 -- ============================================
 
 CREATE TABLE IF NOT EXISTS public.flights (
