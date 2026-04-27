@@ -78,13 +78,15 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: gridError.message }, { status: 500 });
   }
 
-  const byPerson = new Map<string, { person_name: string; role: string | null; entries: unknown[] }>();
+  const byPerson = new Map<string, { person_name: string; role: string | null; person_id: string | null; entries: unknown[] }>();
   for (const row of gridRows ?? []) {
     const name = row.person_name as string;
+    const personId = (row as { person_id?: string | null }).person_id ?? null;
     if (!byPerson.has(name)) {
       byPerson.set(name, {
         person_name: name,
         role: (row.role as string) ?? null,
+        person_id: personId,
         entries: [],
       });
     }
@@ -128,12 +130,14 @@ export async function POST(request: Request) {
 
   let body: {
     tour_id?: string;
+    person_id?: string | null;
     person_name?: string;
     role?: string | null;
     routing_id?: string;
     room_type?: string;
     entries?: Array<{
       tour_id: string;
+      person_id?: string | null;
       person_name: string;
       role?: string | null;
       routing_id: string;
@@ -170,6 +174,7 @@ export async function POST(request: Request) {
     const payloads = entries.map((e) => ({
       tour_id: e.tour_id,
       workspace_id: profile.workspace_id,
+      person_id: e.person_id ?? null,
       person_name: e.person_name.trim(),
       role: e.role ?? null,
       routing_id: e.routing_id,
@@ -207,6 +212,7 @@ export async function POST(request: Request) {
   const payload = {
     tour_id,
     workspace_id: profile.workspace_id,
+    person_id: body.person_id ?? null,
     person_name: person_name.trim(),
     role: body.role ?? null,
     routing_id,

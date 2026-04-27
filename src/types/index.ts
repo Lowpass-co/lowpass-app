@@ -522,6 +522,7 @@ export interface PayrollEntry {
   tour_id: string;
   workspace_id: string;
   personnel_id: string;
+  person_id?: string | null;
   week_start: string;
   day_statuses: Record<string, DayStatus>;
   advance_fee: number;
@@ -539,6 +540,7 @@ export interface RoomingGridEntry {
   tour_id: string;
   workspace_id: string;
   person_name: string;
+  person_id?: string | null;
   role: string | null;
   routing_id: string;
   room_type: RoomType;

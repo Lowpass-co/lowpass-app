@@ -34,7 +34,7 @@ export async function GET(request: Request) {
 
   let query = supabase
     .from('contacts')
-    .select('id, first_name, last_name, phone, email, role, venue_name, notes, created_at, updated_at')
+    .select('id, first_name, last_name, phone, email, role, venue_name, notes, person_id, created_at, updated_at')
     .eq('workspace_id', workspaceId)
     .order('last_name')
     .order('first_name');
@@ -82,6 +82,7 @@ export async function POST(request: Request) {
     role?: string;
     venue_name?: string;
     notes?: string;
+    person_id?: string | null;
   };
   try {
     body = await request.json();
@@ -105,6 +106,7 @@ export async function POST(request: Request) {
       role: body.role ?? '',
       venue_name: body.venue_name ?? null,
       notes: body.notes ?? null,
+      person_id: body.person_id ?? null,
     })
     .select()
     .single();
@@ -132,6 +134,7 @@ export async function PATCH(request: Request) {
     role?: string;
     venue_name?: string;
     notes?: string;
+    person_id?: string | null;
   };
   try {
     body = await request.json();
@@ -152,6 +155,7 @@ export async function PATCH(request: Request) {
   if (updates.role !== undefined) payload.role = updates.role;
   if (updates.venue_name !== undefined) payload.venue_name = updates.venue_name;
   if (updates.notes !== undefined) payload.notes = updates.notes;
+  if (updates.person_id !== undefined) payload.person_id = updates.person_id;
 
   const { data: contact, error } = await supabase
     .from('contacts')

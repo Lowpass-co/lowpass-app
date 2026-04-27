@@ -156,6 +156,7 @@ export async function POST(request: Request) {
   let body: {
     tour_id: string;
     personnel_id: string;
+    person_id?: string | null;
     week_start: string;
     day_statuses?: Record<string, DayStatus>;
     advance_fee?: number;
@@ -210,6 +211,7 @@ export async function POST(request: Request) {
     tour_id,
     workspace_id: profile.workspace_id,
     personnel_id,
+    person_id: body.person_id ?? null,
     week_start,
     day_statuses: dayStatuses,
     advance_fee: advanceFee,

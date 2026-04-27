@@ -6,8 +6,8 @@
 
 import { Suspense } from 'react';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
-import { PersonnelPageClient } from '@/components/personnel/PersonnelPageClient';
-import type { Personnel } from '@/types';
+import { PersonLibraryClient } from '@/components/personnel/PersonLibraryClient';
+import type { Person } from '@/lib/types/person';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,11 +38,11 @@ export default async function PersonnelPage() {
     );
   }
 
-  const { data: personnel } = await supabase
-    .from('personnel')
+  const { data: persons } = await supabase
+    .from('persons')
     .select('*')
     .eq('workspace_id', profile.workspace_id)
-    .order('lp_id', { ascending: true });
+    .order('full_name', { ascending: true });
 
   return (
     <div className="mx-auto max-w-7xl space-y-6 pb-12">
@@ -57,7 +57,7 @@ export default async function PersonnelPage() {
           <div className="h-48 animate-pulse rounded-xl border border-lp-border bg-lp-surface/50" />
         }
       >
-        <PersonnelPageClient initial={(personnel ?? []) as Personnel[]} />
+        <PersonLibraryClient initial={(persons ?? []) as Person[]} />
       </Suspense>
     </div>
   );
