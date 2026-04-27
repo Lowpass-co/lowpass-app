@@ -1,3 +1,8 @@
+// TODO(UX13): refactor to use <SlideOver> primitive from src/components/shell/SlideOver.tsx.
+//   Currently rolls its own chrome (backdrop / aside / header / footer). Functionally OK but
+//   skips focus trap, mobile bottom-sheet, and standard animations. UX13 (list pages re-skin)
+//   will sweep this when entity surfaces touch DataTable + slide-over.
+
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';

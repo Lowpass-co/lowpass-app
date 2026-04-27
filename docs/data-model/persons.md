@@ -27,7 +27,7 @@ These links allow roster, rooming, payroll, and advance-contact surfaces to poin
 
 ## Backfill behavior
 
-Migration `034_person_canonical.sql`:
+Migration `050_person_canonical.sql`:
 
 - backfills `persons` from existing `personnel`
 - backfills `tour_personnel` from existing `personnel_rates`
@@ -35,3 +35,11 @@ Migration `034_person_canonical.sql`:
 - backfills `payroll_entries.person_id` from `tour_personnel`
 
 Rows that cannot be matched remain as ad-hoc text rows and continue working without data loss.
+
+## Channel-list inputs and `person_id`
+
+The current `channel_list_rows` schema (migration `040_channel_list.sql`) does not have a personnel column to replace — its input fields (`mic`, `mic_substitute`, `di`, `stand`, `phantom_power`, `provider`) describe gear and signal flow, not people.
+
+The UX10 prompt called for a `person_id` FK on Channel List input rows; in this codebase the closest match is the `contacts` table (used as the durable people store for advance contacts), which now has `contacts.person_id -> persons.id`.
+
+If a future migration adds a dedicated input-owner column on `channel_list_rows` (e.g. `played_by_person_id`), it should reference `persons.id` directly. UX12 (Gear canonical) replaces `mic`/`di`/`stand` text with `gear_id` FKs but does not need to add a personnel FK unless explicitly scoped.

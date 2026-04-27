@@ -1,6 +1,6 @@
 -- ============================================
 -- LOWPASS — Room as canonical entity
--- Migration 035
+-- Migration 051
 -- ============================================
 
 CREATE TABLE IF NOT EXISTS public.hotels (

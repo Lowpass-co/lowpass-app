@@ -1,6 +1,6 @@
 -- ============================================
 -- LOWPASS — Person as canonical entity
--- Migration 034
+-- Migration 050
 -- ============================================
 
 CREATE TABLE IF NOT EXISTS public.persons (
