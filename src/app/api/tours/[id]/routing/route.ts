@@ -47,7 +47,7 @@ export async function GET(
   if (lite) {
     const { data, error } = await supabase
       .from('routing')
-      .select('id, date, day_type, city, venue_name')
+      .select('id, date, day_type, city, venue_name, notes')
       .eq('tour_id', tourId)
       .order('date');
     if (error) {

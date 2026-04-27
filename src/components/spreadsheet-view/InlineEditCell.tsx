@@ -3,6 +3,8 @@
 import { useState, useRef, useEffect } from 'react';
 import { cn } from '@/lib/utils';
 import { formatCommissionDisplayPercentString, userPercentInputToStored } from '@/lib/commission-pct';
+import { parseBudgetAmountInput } from '@/lib/budget-utils';
+import { BrandedSelect } from '@/components/ui/BrandedSelect';
 
 export interface InlineEditCellProps {
   value: string | number | null;
@@ -98,35 +100,33 @@ export function InlineEditCell({
   const [inputValue, setInputValue] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(false);
-  const inputRef = useRef<HTMLInputElement | HTMLSelectElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
   const displayValue = formatDisplay(value, type, currency, options);
 
   useEffect(() => {
     if (editing && inputRef.current) {
       inputRef.current.focus();
-      if (inputRef.current instanceof HTMLInputElement && inputRef.current.type === 'text') {
+      if (inputRef.current.type === 'text') {
         inputRef.current.select();
       }
     }
   }, [editing]);
 
-  const handleSave = async () => {
+  const handleSave = async (override?: string | number) => {
     if (readOnly) return;
 
-    // Read select value directly from DOM to avoid stale state during onBlur.
     let newVal: string | number;
-    if (type === 'select' && inputRef.current instanceof HTMLSelectElement) {
-      newVal = inputRef.current.value;
+    if (override !== undefined) {
+      newVal = override;
     } else {
       newVal = inputValue.trim();
       if (type === 'number') {
         const cleaned = sanitizeIntegerInput(String(newVal));
         newVal = cleaned === '' ? 0 : parseInt(cleaned, 10);
       } else if (type === 'currency') {
-        const raw = String(newVal).replace(/[^0-9.-]/g, '');
-        const n = parseFloat(raw);
-        newVal = Number.isNaN(n) ? 0 : n;
+        const n = parseBudgetAmountInput(String(newVal));
+        newVal = n === null ? 0 : n;
       } else if (type === 'percentage') {
         const raw = String(newVal).replace(/[^0-9.-]/g, '');
         const n = parseFloat(raw);
@@ -171,7 +171,7 @@ export function InlineEditCell({
       <span
         className={cn(
           'inline-flex min-h-[2.75rem] min-w-0 max-w-full items-center gap-1 px-3 py-2 font-sans text-sm leading-normal text-lp-text-secondary',
-          align === 'right' && 'w-full justify-end font-[tabular-nums]',
+          align === 'right' && 'w-full justify-end tabular-nums',
           className
         )}
       >
@@ -187,24 +187,32 @@ export function InlineEditCell({
 
   if (editing) {
     const inputClass =
-      'lp-budget min-h-[2.75rem] w-full border border-lp-orange/35 bg-lp-surface px-3 py-2 font-sans text-sm leading-normal outline-none font-[tabular-nums] focus:border-lp-orange/50 focus:ring-1 focus:ring-lp-orange/15';
+      'lp-budget min-h-[2.75rem] w-full border border-lp-orange/35 bg-lp-surface px-3 py-2 font-sans text-sm leading-normal outline-none tabular-nums focus:border-lp-orange/50 focus:ring-1 focus:ring-lp-orange/15';
     return (
       <span className={cn('block min-w-0', className)}>
         {type === 'select' ? (
-          <select
-            ref={inputRef as React.RefObject<HTMLSelectElement>}
+          <BrandedSelect
             value={inputValue}
-            onChange={(e) => setInputValue(e.target.value)}
-            onBlur={() => void handleSave()}
-            onKeyDown={handleKeyDown}
-            className={cn(inputClass, align === 'right' && 'text-right')}
-          >
-            {options.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
+            onChange={(v) => {
+              setInputValue(v);
+              void handleSave(v);
+            }}
+            options={options}
+            ariaLabel={placeholder}
+            autoOpen
+            onOpenChange={(o) => {
+              if (!o) {
+                setEditing(false);
+                setInputValue(valueToEditString(value, type));
+              }
+            }}
+            className="w-full"
+            triggerClassName={cn(
+              'min-h-[2.75rem] h-auto rounded-none border-lp-orange/35 bg-lp-surface px-3 py-2 text-sm',
+              align === 'right' && 'text-right'
+            )}
+            minWidth={0}
+          />
         ) : (
           <input
             ref={inputRef as React.RefObject<HTMLInputElement>}
@@ -237,26 +245,29 @@ export function InlineEditCell({
       }}
       className={cn(
         'inline-flex min-h-[2.75rem] min-w-0 w-full cursor-pointer items-center gap-1 px-3 py-2 text-left font-sans text-sm leading-normal transition-colors',
-        align === 'right' && 'justify-end font-[tabular-nums]',
+        align === 'right' && 'justify-end tabular-nums',
         saving && 'opacity-70',
         error && 'bg-red-500/20 animate-pulse',
         !error && 'hover:bg-lp-orange/[0.04]',
         className
       )}
       title={saving ? 'Saving…' : undefined}
+      aria-busy={saving}
     >
-      {saving ? (
-        '…'
-      ) : (
-        <>
-          <span>{displayValue}</span>
-          {showCurrencyCode && (
-            <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-lp-text-tertiary">
-              {currency}
-            </span>
-          )}
-        </>
-      )}
+      <span className={cn('inline-flex min-w-0 items-baseline gap-1', saving && 'opacity-60')}>
+        <span>{displayValue}</span>
+        {showCurrencyCode && (
+          <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-lp-text-tertiary">
+            {currency}
+          </span>
+        )}
+        {saving && (
+          <span
+            className="inline-block size-1.5 shrink-0 rounded-full bg-lp-orange/70 motion-safe:animate-pulse"
+            aria-hidden
+          />
+        )}
+      </span>
     </button>
   );
 }

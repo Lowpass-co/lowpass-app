@@ -5,18 +5,25 @@
   "scripts": {
     "dev": "WATCHPACK_POLLING=true next dev --webpack --hostname 127.0.0.1",
     "dev:turbopack": "next dev --hostname 127.0.0.1",
-    "build": "next build",
+    "build": "next build --webpack",
+    "build:turbopack": "next build --turbopack",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
     "@heroui/react": "^2.8.10",
     "@supabase/ssr": "^0.9.0",
     "@supabase/supabase-js": "^2.98.0",
     "clsx": "^2.1.1",
     "decimal.js": "^10.6.0",
+    "googleapis": "^171.4.0",
+    "html2canvas-pro": "^2.0.2",
     "jspdf": "^4.2.1",
+    "jszip": "^3.10.1",
     "leaflet": "^1.9.4",
     "lucide-react": "^0.577.0",
     "next": "16.1.6",
@@ -28,10 +35,10 @@
     "xlsx": "^0.18.5"
   },
   "optionalDependencies": {
-    "lightningcss-linux-x64-gnu": "1.31.1",
-    "lightningcss-linux-x64-musl": "1.31.1",
     "lightningcss-darwin-arm64": "1.31.1",
     "lightningcss-darwin-x64": "1.31.1",
+    "lightningcss-linux-x64-gnu": "1.31.1",
+    "lightningcss-linux-x64-musl": "1.31.1",
     "lightningcss-win32-x64-msvc": "1.31.1"
   },
   "devDependencies": {

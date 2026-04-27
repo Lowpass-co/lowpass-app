@@ -27,7 +27,7 @@ export function SpreadsheetCurrencyAmount({
         className
       )}
     >
-      <span className="font-sans font-[tabular-nums] text-sm leading-normal">{formatted}</span>
+      <span className="font-sans tabular-nums text-sm leading-normal">{formatted}</span>
       <span className="shrink-0 text-[10px] font-semibold uppercase tracking-wide text-lp-text-tertiary">
         {currency}
       </span>

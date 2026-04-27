@@ -28,19 +28,24 @@ export function PayrollSummary({
   payrollEntries,
 }: PayrollSummaryProps) {
   const rows = useMemo(() => {
-    const entriesByPerson = new Map<string, { show: number; offTravel: number; advanceFee: number }>();
+    type Agg = { show: number; offTravel: number; rehearsal: number; advanceFee: number };
+    const entriesByPerson = new Map<string, Agg>();
+    const emptyAgg = (): Agg => ({ show: 0, offTravel: 0, rehearsal: 0, advanceFee: 0 });
     for (const e of payrollEntries) {
       const pid = e.personnel_id as string;
       const statuses = (e.day_statuses as Record<string, string>) ?? {};
       let show = 0;
       let offTravel = 0;
+      let rehearsal = 0;
       for (const v of Object.values(statuses)) {
         if (v === 'show') show++;
-        else if (v === 'off_travel' || v === 'rehearsal') offTravel++;
+        else if (v === 'off_travel') offTravel++;
+        else if (v === 'rehearsal') rehearsal++;
       }
-      const existing = entriesByPerson.get(pid) ?? { show: 0, offTravel: 0, advanceFee: 0 };
+      const existing = entriesByPerson.get(pid) ?? emptyAgg();
       existing.show += show;
       existing.offTravel += offTravel;
+      existing.rehearsal += rehearsal;
       existing.advanceFee += Number((e as { advance_fee?: number }).advance_fee) || 0;
       entriesByPerson.set(pid, existing);
     }
@@ -51,11 +56,23 @@ export function PayrollSummary({
       const { forename, surname } = splitName(personName);
       const showRate = Number(pr.show_rate) || 0;
       const offRate = Number(pr.off_rate) || 0;
+      const rehearsalRate = Number((pr as { rehearsal_rate?: number }).rehearsal_rate) || 0;
       const perDiemRate = Number(pr.per_diem) || 0;
-      const agg = entriesByPerson.get(id) ?? { show: 0, offTravel: 0, advanceFee: 0 };
-      const totalFee = agg.show * showRate + agg.offTravel * offRate + agg.advanceFee;
-      const totalDays = agg.show + agg.offTravel;
-      const totalPerDiem = totalDays * perDiemRate;
+      const rateType = String(pr.rate_type ?? 'day_rate');
+      const agg = entriesByPerson.get(id) ?? emptyAgg();
+      const active = agg.show + agg.offTravel + agg.rehearsal;
+      let totalFee: number;
+      if (rateType === 'split_rate') {
+        totalFee =
+          agg.show * showRate + agg.offTravel * offRate + agg.rehearsal * rehearsalRate + agg.advanceFee;
+      } else {
+        // Day rate: bill show days at show rate, travel/off/rehearsal at off rate (not 0 when only show rate is set).
+        const showPart = agg.show * (showRate || offRate);
+        const otherPart = (agg.offTravel + agg.rehearsal) * (offRate || showRate);
+        totalFee = showPart + otherPart + agg.advanceFee;
+      }
+      const totalDays = active;
+      const totalPerDiem = active * perDiemRate;
 
       return {
         id,
@@ -114,9 +131,9 @@ export function PayrollSummary({
       footer={
         <>
           <td colSpan={8} className="px-2 py-2 font-bold text-lp-text">TOTALS</td>
-          <td className="px-2 py-2 text-right font-[tabular-nums]">{formatter.format(totals.totalFee)}</td>
+          <td className="px-2 py-2 text-right tabular-nums">{formatter.format(totals.totalFee)}</td>
           <td className="px-2 py-2" />
-          <td className="px-2 py-2 text-right font-[tabular-nums]">{formatter.format(totals.totalPerDiem)}</td>
+          <td className="px-2 py-2 text-right tabular-nums">{formatter.format(totals.totalPerDiem)}</td>
         </>
       }
     >
@@ -140,11 +157,11 @@ export function PayrollSummary({
             <td className="px-2 py-0">
               <InlineEditCell value={r.perDiemRate} type="currency" currency={currency} onSave={(v) => saveRate(r.id, 'per_diem', v)} align="right" />
             </td>
-            <td className="px-2 py-1 text-sm text-lp-text-secondary text-right font-[tabular-nums]">{r.showDays}</td>
-            <td className="px-2 py-1 text-sm text-lp-text-secondary text-right font-[tabular-nums]">{r.offTravelDays}</td>
-            <td className="px-2 py-1 text-sm text-right font-[tabular-nums]">{formatter.format(r.totalFee)}</td>
-            <td className="px-2 py-1 text-sm text-lp-text-secondary text-right font-[tabular-nums]">{formatter.format(r.perDiemRate)}</td>
-            <td className="px-2 py-1 text-sm text-right font-[tabular-nums]">{formatter.format(r.totalPerDiem)}</td>
+            <td className="px-2 py-1 text-sm text-lp-text-secondary text-right tabular-nums">{r.showDays}</td>
+            <td className="px-2 py-1 text-sm text-lp-text-secondary text-right tabular-nums">{r.offTravelDays}</td>
+            <td className="px-2 py-1 text-sm text-right tabular-nums">{formatter.format(r.totalFee)}</td>
+            <td className="px-2 py-1 text-sm text-lp-text-secondary text-right tabular-nums">{formatter.format(r.perDiemRate)}</td>
+            <td className="px-2 py-1 text-sm text-right tabular-nums">{formatter.format(r.totalPerDiem)}</td>
           </tr>
       ))}
     </GridTable>

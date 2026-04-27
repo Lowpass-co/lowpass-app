@@ -18,7 +18,7 @@ export async function GET() {
 
   const { data: profile, error } = await supabase
     .from('profiles')
-    .select('id, email, name, avatar_url, job_title, phone, passport_encrypted, day_rate, per_diem_rate, workspace_id, role_id')
+    .select('id, email, name, avatar_url, job_title, phone, passport_encrypted, day_rate, per_diem_rate, workspace_id, role_id, is_site_admin')
     .eq('id', user.id)
     .single();
 
@@ -38,6 +38,7 @@ export async function GET() {
     per_diem_rate: profile.per_diem_rate != null ? Number(profile.per_diem_rate) : null,
     workspace_id: profile.workspace_id ?? null,
     role_id: profile.role_id ?? null,
+    is_site_admin: !!profile.is_site_admin,
   });
 }
 

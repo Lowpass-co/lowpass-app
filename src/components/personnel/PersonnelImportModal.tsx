@@ -10,6 +10,7 @@ import {
 } from '@/lib/personnel-csv';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/components/ui/Toast';
+import { BrandedSelect } from '@/components/ui/BrandedSelect';
 
 const FIELD_OPTIONS: { value: string; label: string }[] = [
   { value: '__ignore', label: '— Ignore —' },
@@ -259,17 +260,12 @@ export function PersonnelImportModal({
                   <label className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-lp-text-tertiary">
                     Header row (1-based)
                   </label>
-                  <select
-                    value={headerRowIndex}
-                    onChange={(e) => onHeaderRowChange(Number(e.target.value))}
-                    className="rounded-lg border border-lp-border bg-lp-bg px-3 py-2 text-sm text-lp-text outline-none focus:border-lp-orange"
-                  >
-                    {headerRowOptions.map((i) => (
-                      <option key={i} value={i}>
-                        Row {i + 1}
-                      </option>
-                    ))}
-                  </select>
+                  <BrandedSelect
+                    value={String(headerRowIndex)}
+                    onChange={(v) => onHeaderRowChange(Number(v))}
+                    options={headerRowOptions.map((i) => ({ value: String(i), label: `Row ${i + 1}` }))}
+                    ariaLabel="Header row"
+                  />
                 </div>
                 <button
                   type="button"
@@ -320,19 +316,14 @@ export function PersonnelImportModal({
                     <span className="min-w-[10rem] max-w-[14rem] truncate text-sm font-medium text-lp-text" title={col.label}>
                       {col.label}
                     </span>
-                    <select
+                    <BrandedSelect
                       value={mapping[col.index] ?? '__ignore'}
-                      onChange={(e) => setMapping((m) => ({ ...m, [col.index]: e.target.value }))}
-                      className={cn(
-                        'min-w-[12rem] flex-1 rounded-lg border border-lp-border bg-lp-bg px-3 py-2 text-sm text-lp-text outline-none focus:border-lp-orange'
-                      )}
-                    >
-                      {FIELD_OPTIONS.map((o) => (
-                        <option key={o.value} value={o.value}>
-                          {o.label}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={(v) => setMapping((m) => ({ ...m, [col.index]: v }))}
+                      options={FIELD_OPTIONS}
+                      ariaLabel={`Mapping for column ${col.label}`}
+                      className="min-w-[12rem] flex-1"
+                      minWidth={192}
+                    />
                   </div>
                 ))}
               </div>

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ChevronRight } from 'lucide-react';
 import { formatCurrency } from '@/lib/utils';
 import { useDetailPanel } from '@/contexts/DetailPanelContext';
+import { BrandedSelect } from '@/components/ui/BrandedSelect';
 import type { RoutingDate } from '@/types';
 import type { BudgetLineItem } from '@/types';
 import type { BudgetCategory } from '@/types';
@@ -394,17 +395,13 @@ function AddLineItemForm({
         onChange={(e) => setLabel(e.target.value)}
         className="min-w-[120px] rounded border border-lp-border bg-lp-surface px-2 py-1 text-sm"
       />
-      <select
+      <BrandedSelect
         value={category}
-        onChange={(e) => setCategory(e.target.value as BudgetCategory)}
-        className="rounded border border-lp-border bg-lp-surface px-2 py-1 text-sm"
-      >
-        {categories.map((c) => (
-          <option key={c} value={c}>
-            {c.replace(/_/g, ' ')}
-          </option>
-        ))}
-      </select>
+        onChange={(v) => setCategory(v as BudgetCategory)}
+        options={categories.map((c) => ({ value: c, label: c.replace(/_/g, ' ') }))}
+        ariaLabel="Category"
+        size="sm"
+      />
       <input
         type="number"
         step="0.01"

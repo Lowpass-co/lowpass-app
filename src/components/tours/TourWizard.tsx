@@ -248,8 +248,19 @@ export function TourWizard({ initialTourId }: TourWizardProps) {
           throw new Error(err.error || 'Failed to create tour');
         }
         const tour = await tourRes.json();
-        router.push(`/tours/${tour.id}?toast=tour_created`);
-        router.refresh();
+        // Full navigation + sync saved scope so the sidebar does not keep the previous tour selected.
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.setItem('lp-selected-tour', tour.id);
+            localStorage.setItem('lp-selected-artist', resolvedArtistId);
+          } catch {
+            /* ignore */
+          }
+          window.location.assign(`/tours/${tour.id}?toast=tour_created`);
+        } else {
+          router.push(`/tours/${tour.id}?toast=tour_created`);
+          router.refresh();
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Something went wrong');

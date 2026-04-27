@@ -12,6 +12,8 @@ import { Sidebar } from '@/components/layout/Sidebar';
 import { AppTopBar } from '@/components/layout/AppTopBar';
 import { ArtistTourScopeGuard } from '@/components/layout/ArtistTourScopeGuard';
 import { OverviewArtistQuerySync } from '@/components/layout/OverviewArtistQuerySync';
+import { FloatingBugReport } from '@/components/bug-report/FloatingBugReport';
+
 export function AppShell({ children }: { children: React.ReactNode }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
@@ -46,6 +48,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <OverviewArtistQuerySync />
         </Suspense>
         <main className="flex min-h-0 flex-1 flex-col px-8 py-6">{children}</main>
+        <FloatingBugReport />
       </div>
     </div>
   );

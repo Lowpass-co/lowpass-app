@@ -186,8 +186,10 @@ export default function ProfilePage() {
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            autoCapitalize="off"
+            autoComplete="name"
             autoCorrect="off"
+            autoCapitalize="none"
+            spellCheck={false}
             className="w-full rounded-lg border border-lp-border bg-lp-bg px-3 py-2.5 text-sm text-lp-text focus:outline-none focus:ring-2 focus:ring-lp-orange/50"
             placeholder="Your name"
           />

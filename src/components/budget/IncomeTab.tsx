@@ -1,12 +1,15 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useSearchParams } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { Loader2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { parseRoutingDate } from '@/lib/utils';
+import { parseBudgetAmountInput } from '@/lib/budget-utils';
 import { RoutingMiniCalendar, DayTypePill, type CalRow } from '@/components/budget/RoutingMiniCalendar';
 import { RoutingGrid, type RoutingRow, type TransportToNext } from '@/components/routing/RoutingGrid';
+import { BrandedSelect } from '@/components/ui/BrandedSelect';
 import type { PrimaryTransit } from '@/components/routing/RoutingMap';
 const BudgetRoutingMap = dynamic(
   () => import('./BudgetRoutingMap').then((m) => ({ default: m.BudgetRoutingMap })),
@@ -24,6 +27,15 @@ const BudgetRoutingMap = dynamic(
 /** post_tax = pre_tax × (1 - withholding_pct / 100) */
 function postTaxFromPreTax(preTax: number, withholdingPct: number): number {
   return preTax * (1 - withholdingPct / 100);
+}
+
+/** Coerce API/local values so formatted strings (e.g. "70,000") never yield NaN totals. */
+function incomeAmountFromUnknown(v: unknown): number {
+  if (v == null) return 0;
+  if (typeof v === 'number' && Number.isFinite(v)) return v;
+  if (typeof v === 'string') return parseBudgetAmountInput(v) ?? 0;
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
 }
 
 function fmt(n: number) {
@@ -155,16 +167,59 @@ type FullRow = IncomeRow & {
   isNew?: boolean;
 };
 
+/**
+ * `type="number"` strips/invalidates commas (e.g. Safari), so "70,000" becomes 70. Text
+ * field + commit on blur allows thousands separators. Parent still stores a number.
+ */
+function IncomeTextAmountField({
+  value,
+  onCommit,
+  onAfterCommit,
+  className,
+}: {
+  value: number;
+  onCommit: (n: number | null) => void;
+  onAfterCommit: () => void;
+  className: string;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState('');
+
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      autoComplete="off"
+      className={className}
+      value={editing ? draft : value ? String(value) : ''}
+      onFocus={() => {
+        setEditing(true);
+        setDraft(value ? String(value) : '');
+      }}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => {
+        const n = parseBudgetAmountInput(draft);
+        onCommit(n === null ? null : n);
+        setEditing(false);
+        onAfterCommit();
+      }}
+    />
+  );
+}
+
 // ─── Main IncomeTab ──────────────────────────────────────────────────────────
 
 export function IncomeTab({ tourId }: { tourId: string }) {
+  const searchParams = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [incomeRows, setIncomeRows] = useState<IncomeRow[]>([]);
   const [routingOnly, setRoutingOnly] = useState<RoutingOnlyRow[]>([]);
   const [localEdits, setLocalEdits] = useState<Record<string, Partial<IncomeRow>>>({});
   const [error, setError] = useState<string | null>(null);
   const [savingId, setSavingId] = useState<string | null>(null);
-  const [activeSubTab, setActiveSubTab] = useState<'routing' | 'income'>('routing');
+  const [activeSubTab, setActiveSubTab] = useState<'routing' | 'income'>(() =>
+    searchParams.get('tab') === 'income' ? 'income' : 'routing',
+  );
   const [routingRows, setRoutingRows] = useState<RoutingRow[]>([]);
   const [routingAutosaveState, setRoutingAutosaveState] = useState<'idle' | 'saving' | 'error'>('idle');
   const [primaryTransit, setPrimaryTransit] = useState<PrimaryTransit>('bus_van');
@@ -312,8 +367,11 @@ export function IncomeTab({ tourId }: { tourId: string }) {
   const mergeRow = (base: FullRow): FullRow => {
     const edits = localEdits[base.routing_id] ?? {};
     const merged = { ...base, ...edits } as FullRow;
-    merged.post_tax_guarantee = postTaxFromPreTax(Number(merged.pre_tax_guarantee), Number(merged.withholding_pct));
-    merged.post_tax_overage = postTaxFromPreTax(Number(merged.pre_tax_overage), Number(merged.withholding_pct));
+    const preG = incomeAmountFromUnknown(merged.pre_tax_guarantee);
+    const preO = incomeAmountFromUnknown(merged.pre_tax_overage);
+    const w = incomeAmountFromUnknown(merged.withholding_pct);
+    merged.post_tax_guarantee = postTaxFromPreTax(preG, w);
+    merged.post_tax_overage = postTaxFromPreTax(preO, w);
     return merged;
   };
 
@@ -557,10 +615,22 @@ export function IncomeTab({ tourId }: { tourId: string }) {
     }
   };
 
-  const proposedTotal = allRows.reduce((a, r) => a + r.post_tax_guarantee + r.merch_income + r.vip_income, 0);
+  const proposedTotal = allRows.reduce(
+    (a, r) =>
+      a +
+      incomeAmountFromUnknown(r.post_tax_guarantee) +
+      incomeAmountFromUnknown(r.merch_income) +
+      incomeAmountFromUnknown(r.vip_income),
+    0,
+  );
   const actualTotal = allRows.reduce(
-    (a, r) => a + (r.actual_guarantee ?? 0) + (r.actual_overage ?? 0) + (r.actual_merch ?? 0) + (r.actual_vip ?? 0),
-    0
+    (a, r) =>
+      a +
+      incomeAmountFromUnknown(r.actual_guarantee) +
+      incomeAmountFromUnknown(r.actual_overage) +
+      incomeAmountFromUnknown(r.actual_merch) +
+      incomeAmountFromUnknown(r.actual_vip),
+    0,
   );
 
   /** Calendar + map follow the routing grid so edits show before autosave completes */
@@ -671,35 +741,19 @@ export function IncomeTab({ tourId }: { tourId: string }) {
               <span className="text-[10px] font-semibold uppercase tracking-wider lp-table-header-text">
                 Primary transport mode
               </span>
-              <select
+              <BrandedSelect
                 value={primaryTransit}
-                onChange={(e) => setPrimaryTransit(e.target.value as PrimaryTransit)}
-                className="min-w-[14rem] rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text"
-              >
-                {PRIMARY_TRANSIT_OPTIONS.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
+                onChange={(v) => setPrimaryTransit(v as PrimaryTransit)}
+                options={PRIMARY_TRANSIT_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+                ariaLabel="Primary transport mode"
+                minWidth={224}
+              />
             </label>
           </div>
         )}
 
         <div className="relative flex flex-wrap items-center gap-3">
           <div className="flex w-fit items-center gap-5 border-b border-lp-border/50">
-            <button
-              type="button"
-              onClick={() => setActiveSubTab('routing')}
-              className={cn(
-                '-mb-px border-b-2 pb-2 text-xs font-semibold uppercase tracking-wide transition-colors',
-                activeSubTab === 'routing'
-                  ? 'border-lp-orange text-lp-text'
-                  : 'border-transparent text-lp-text-secondary hover:text-lp-text'
-              )}
-            >
-              Routing
-            </button>
             <button
               type="button"
               onClick={() => setActiveSubTab('income')}
@@ -712,6 +766,18 @@ export function IncomeTab({ tourId }: { tourId: string }) {
             >
               Income
             </button>
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('routing')}
+              className={cn(
+                '-mb-px border-b-2 pb-2 text-xs font-semibold uppercase tracking-wide transition-colors',
+                activeSubTab === 'routing'
+                  ? 'border-lp-orange text-lp-text'
+                  : 'border-transparent text-lp-text-secondary hover:text-lp-text'
+              )}
+            >
+              Routing
+            </button>
           </div>
           {activeSubTab === 'routing' && routingAutosaveState === 'error' && (
             <div className="ml-auto text-xs font-medium text-red-500">Routing save failed</div>
@@ -722,11 +788,11 @@ export function IncomeTab({ tourId }: { tourId: string }) {
       <div className="min-h-0 flex-1 space-y-7 overflow-y-auto overscroll-y-contain py-2">
       {activeSubTab === 'routing' && (
         <>
-          <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(260px,300px)_1fr] lg:items-stretch lg:gap-6 lg:h-[280px]">
-            <div className="relative z-0 flex min-h-[220px] flex-col overflow-y-auto rounded-xl border border-lp-border bg-lp-surface p-3 shadow-sm lg:min-h-0 lg:h-full">
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(220px,260px)_1fr] lg:items-stretch lg:gap-4 lg:h-[200px]">
+            <div className="relative z-0 flex min-h-[180px] flex-col overflow-y-auto rounded-xl border border-lp-border bg-lp-surface p-2 shadow-sm lg:min-h-0 lg:h-full">
               <RoutingMiniCalendar key={tourId} routingRows={calRows} />
             </div>
-            <div className="relative z-0 flex min-h-[220px] min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-lp-border bg-lp-surface shadow-sm lg:min-h-0 lg:h-full">
+            <div className="relative z-0 flex min-h-[180px] min-w-0 flex-1 flex-col overflow-hidden rounded-xl border border-lp-border bg-lp-surface shadow-sm lg:min-h-0 lg:h-full">
               <BudgetRoutingMap rows={calRows} />
             </div>
           </div>
@@ -831,19 +897,22 @@ export function IncomeTab({ tourId }: { tourId: string }) {
 
                   {/* Pre-tax guarantee */}
                   <td className="px-4 py-2">
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
+                    <IncomeTextAmountField
+                      value={row.pre_tax_guarantee}
                       className="w-full rounded-md border border-lp-border bg-transparent px-2 py-1 text-right text-xs text-lp-text tabular-nums focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30"
-                      value={row.pre_tax_guarantee || ''}
-                      onChange={(e) => {
-                        handleFieldChange(row.routing_id, 'pre_tax_guarantee', e.target.value === '' ? null : Number(e.target.value));
-                        scheduleIncomeSave(row.routing_id);
+                      onCommit={(n) => {
+                        handleFieldChange(
+                          row.routing_id,
+                          'pre_tax_guarantee',
+                          n === null || n === undefined ? null : n
+                        );
                       }}
-                      onBlur={() => {
-                        const r = allRowsRef.current.find((x) => x.routing_id === row.routing_id);
-                        if (r) flushIncomeSave(r);
+                      onAfterCommit={() => {
+                        const id = row.routing_id;
+                        queueMicrotask(() => {
+                          const r = allRowsRef.current.find((x) => x.routing_id === id);
+                          if (r) flushIncomeSave(r);
+                        });
                       }}
                     />
                   </td>

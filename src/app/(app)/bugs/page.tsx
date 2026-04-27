@@ -1,8 +1,24 @@
-export default function BugReportsPage() {
+import { notFound } from 'next/navigation';
+import { BugReportsClient } from '@/components/bug-report/BugReportsClient';
+import { getUserAndAdminStatus } from '@/lib/site-admin';
+
+export default async function BugReportsPage() {
+  const { user, isAdmin } = await getUserAndAdminStatus();
+  if (!user || !isAdmin) {
+    notFound();
+  }
+
   return (
-    <div className="mx-auto max-w-6xl">
-      <h1 className="text-2xl font-bold text-lp-text">Bug Reports</h1>
-      <p className="mt-1 text-sm text-lp-text-secondary">Triage and manage reported issues. Admin only.</p>
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="mb-4">
+        <h1 className="text-2xl font-bold" style={{ color: 'var(--lp-text)' }}>
+          Bug Reports
+        </h1>
+        <p className="mt-1 text-sm" style={{ color: 'var(--lp-text-secondary)' }}>
+          Triage, assign, and resolve reported issues. Click a row to see full details.
+        </p>
+      </div>
+      <BugReportsClient />
     </div>
   );
 }

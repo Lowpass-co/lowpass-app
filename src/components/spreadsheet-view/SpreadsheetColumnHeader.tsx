@@ -10,6 +10,7 @@ import {
   Calendar,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { BrandedSelect } from '@/components/ui/BrandedSelect';
 
 type SortText = 'az' | 'za' | null;
 type SortNum = 'hi' | 'lo' | null;
@@ -267,21 +268,25 @@ export function DateColumnHeader({
           </button>
           {open && (
             <div className="absolute right-0 top-full z-30 mt-1 min-w-[10rem] rounded-md border border-lp-border bg-lp-bg p-1 shadow-md">
-              <select
+              <BrandedSelect
                 value={monthYyyymm}
-                onChange={(e) => {
-                  onMonthYyyymm(e.target.value);
+                onChange={(v) => {
+                  onMonthYyyymm(v);
                   setOpen(false);
                 }}
-                className="w-full rounded border border-lp-border bg-lp-surface px-2 py-1 text-xs text-lp-text"
-              >
-                <option value="">All months</option>
-                {monthOptions.map((o) => (
-                  <option key={o.value} value={o.value}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
+                options={[
+                  { value: '', label: 'All months' },
+                  ...monthOptions.map((o) => ({ value: o.value, label: o.label })),
+                ]}
+                ariaLabel="Month filter"
+                size="sm"
+                className="w-full"
+                minWidth={144}
+                autoOpen
+                onOpenChange={(o) => {
+                  if (!o) setOpen(false);
+                }}
+              />
             </div>
           )}
         </div>

@@ -78,6 +78,7 @@ import { parseRoutingDate, getDayTypeLabel, getDayTypeColor, getAdvanceStatusInf
 import { SlidingToggle } from '@/components/ui/SlidingToggle';
 import { ContextMenu } from '@/components/ui/ContextMenu';
 import { DeleteConfirmationModal } from '@/components/ui/DeleteConfirmationModal';
+import { BrandedSelect } from '@/components/ui/BrandedSelect';
 import { useAuth } from '@/hooks/useAuth';
 
 function relativeTime(iso: string): string {
@@ -246,6 +247,7 @@ function sortHospitalityFieldsFirst(fields: FieldDef[]): FieldDef[] {
 }
 
 export type ContactRow = {
+  /** Stable id for list identity (persisted; generated client-side for new rows). */
   id?: string;
   first_name: string;
   last_name: string;
@@ -1807,6 +1809,7 @@ function FillMode({
   onCopyToOther: () => void;
   onRemoveSection?: (templateId: string) => void | Promise<void>;
 }) {
+  const router = useRouter();
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set());
   const patchRef = useRef<{ data?: AdvanceData; section_statuses?: SectionStatuses; status?: string; flags?: AdvanceFlag[] }>({});
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1892,10 +1895,13 @@ function FillMode({
           const time = formatAdvanceDateTime(serverUpdated);
           onConflictWarning?.(`This advance was updated by ${name} at ${time}`);
         }
+        if (override?.section_statuses !== undefined) {
+          router.refresh();
+        }
         setTimeout(() => onAutosaveStatusChange?.('idle'), 3000);
       })
       .catch(() => onAutosaveStatusChange?.('error'));
-  }, [tourId, routingId, onAutosaveStatusChange, onConflictWarning]);
+  }, [tourId, routingId, onAutosaveStatusChange, onConflictWarning, router]);
 
   if (autosaveRetryRef) autosaveRetryRef.current = () => flushPatch();
 
@@ -1931,8 +1937,12 @@ function FillMode({
   );
 
   const setFieldValue = (templateId: string, fieldId: string, value: unknown) => {
-    const sectionData = { ...(advance.data[templateId] ?? {}) };
-    sectionData[fieldId] = value;
+    setSectionFieldBatch(templateId, { [fieldId]: value });
+  };
+
+  /** One atomic section update (avoids losing the first of two in-flight field updates, e.g. drive distance + source). */
+  const setSectionFieldBatch = (templateId: string, updates: Record<string, unknown>) => {
+    const sectionData = { ...(advance.data[templateId] ?? {}), ...updates };
     const nextData = { ...advance.data, [templateId]: sectionData };
 
     let nextSectionStatuses = advance.section_statuses;
@@ -2101,6 +2111,7 @@ function FillMode({
               onSetSectionStatus={(status) => setSectionStatus(section.template_id, status)}
               onSetSectionAssigned={(userId) => setSectionAssigned(section.template_id, userId)}
               onFieldChange={(fieldId, value) => setFieldValue(section.template_id, fieldId, value)}
+              onFieldsBatchChange={(updates) => setSectionFieldBatch(section.template_id, updates)}
               onFlagsChange={updateFlags}
               allFlags={flags}
               currentUserId={currentUserId}
@@ -2216,6 +2227,24 @@ function KeyContactsCard({
   workspaceMembers?: WorkspaceMember[];
 }) {
   const roles = contactRoles ?? [...CONTACT_ROLES];
+  const backfilledIds = useRef(false);
+  useEffect(() => {
+    if (contacts.length === 0) {
+      backfilledIds.current = false;
+    }
+  }, [contacts.length]);
+  useEffect(() => {
+    if (backfilledIds.current) return;
+    if (contacts.length === 0) return;
+    if (contacts.every((c) => c.id)) {
+      backfilledIds.current = true;
+      return;
+    }
+    backfilledIds.current = true;
+    onContactsChange(
+      contacts.map((c) => (c.id ? c : { ...c, id: crypto.randomUUID() })),
+    );
+  }, [contacts, onContactsChange]);
   const [removeConfirmOpen, setRemoveConfirmOpen] = useState(false);
   const menuItems = [
     { label: 'Mark section complete', icon: CheckCircle2, onClick: () => onSetSectionStatus('complete') },
@@ -2226,7 +2255,16 @@ function KeyContactsCard({
   const addRow = () => {
     onContactsChange([
       ...contacts,
-      { first_name: '', last_name: '', role: defaultRole, phone: '', email: '', venue_name: venueName ?? undefined, notes: '' },
+      {
+        id: crypto.randomUUID(),
+        first_name: '',
+        last_name: '',
+        role: defaultRole,
+        phone: '',
+        email: '',
+        venue_name: venueName ?? undefined,
+        notes: '',
+      },
     ]);
   };
   const removeRow = (index: number) => {
@@ -2272,7 +2310,7 @@ function KeyContactsCard({
           <div className={cn('border-t border-lp-border px-4 py-4 space-y-4 transition-opacity duration-200', expanded ? 'opacity-100 delay-50' : 'opacity-0 delay-0')}>
             {contacts.map((row, index) => (
               <KeyContactRow
-                key={index}
+                key={row.id ?? `contact-fallback-${index}`}
                 row={row}
                 venueName={venueName}
                 onUpdate={(patch) => updateRow(index, patch)}
@@ -2496,6 +2534,43 @@ function buildTourPersonnelList(counts: { principal_count: number; band_count: n
   return list;
 }
 
+/** Legacy Flights section stored flat text fields; structured UI uses `flights` array. */
+function flightRowsFromLegacyData(data: Record<string, unknown>): (Partial<FlightEntry> & { id?: string })[] | null {
+  const fromArr = data.flights;
+  if (Array.isArray(fromArr) && fromArr.length > 0) return null;
+  const ob = String(data.flight_outbound ?? '').trim();
+  const ib = String(data.flight_inbound ?? '').trim();
+  const al = String(data.airline ?? '').trim();
+  const br = String(data.booking_ref ?? data.booking_reference ?? '').trim();
+  if (!ob && !ib && !al && !br) return null;
+  const rows: (Partial<FlightEntry> & { id?: string })[] = [];
+  if (ob || al || br) {
+    rows.push({
+      id: 'legacy-outbound',
+      departure_city: ob,
+      arrival_city: '',
+      date: '',
+      time: '',
+      airline: al,
+      flight_number: '',
+      confirmation_code: br,
+    });
+  }
+  if (ib) {
+    rows.push({
+      id: 'legacy-inbound',
+      departure_city: '',
+      arrival_city: ib,
+      date: '',
+      time: '',
+      airline: al,
+      flight_number: '',
+      confirmation_code: br,
+    });
+  }
+  return rows.length > 0 ? rows : null;
+}
+
 function FlightsSectionCard({
   instanceId,
   section,
@@ -2533,9 +2608,11 @@ function FlightsSectionCard({
   workspaceMembers?: WorkspaceMember[];
   tourPersonnelCounts?: { principal_count: number; band_count: number; crew_count: number };
 }) {
-  const rawFlights = Array.isArray(data.flights) ? (data.flights as (Partial<FlightEntry> & { id?: string })[]) : [];
-  const flights: FlightEntry[] = rawFlights.map((f) => ({
-    id: f.id ?? crypto.randomUUID(),
+  const fromStorage = Array.isArray(data.flights) ? (data.flights as (Partial<FlightEntry> & { id?: string })[]) : [];
+  const legacyRows = fromStorage.length > 0 ? null : flightRowsFromLegacyData(data);
+  const rawFlights: (Partial<FlightEntry> & { id?: string })[] = fromStorage.length > 0 ? fromStorage : (legacyRows ?? []);
+  const flights: FlightEntry[] = rawFlights.map((f, i) => ({
+    id: (f.id && String(f.id)) || `row-${i}`,
     departure_city: f.departure_city ?? '',
     arrival_city: f.arrival_city ?? '',
     date: f.date ?? '',
@@ -2550,7 +2627,17 @@ function FlightsSectionCard({
   const [personnelDropdownOpen, setPersonnelDropdownOpen] = useState<string | null>(null);
 
   const EMPTY_FLIGHT: FlightEntry = { id: '', departure_city: '', arrival_city: '', date: '', time: '', airline: '', flight_number: '', confirmation_code: '', personnel_ids: [] };
-  const hasKeyFlightFields = (f: FlightEntry) => !!(f.departure_city?.trim() || f.arrival_city?.trim() || f.airline?.trim() || f.flight_number?.trim() || f.confirmation_code?.trim());
+  const hasKeyFlightFields = (f: FlightEntry) =>
+    !!(
+      f.departure_city?.trim() ||
+      f.arrival_city?.trim() ||
+      f.airline?.trim() ||
+      f.flight_number?.trim() ||
+      f.confirmation_code?.trim() ||
+      f.date?.trim() ||
+      f.time?.trim() ||
+      (f.personnel_ids && f.personnel_ids.length > 0)
+    );
   const displayFlights = flights.length > 0 ? flights : [EMPTY_FLIGHT];
   const showAddFlightButton = displayFlights.some(hasKeyFlightFields);
 
@@ -2738,7 +2825,7 @@ function PersonnelMultiSelect({
         <ChevronDown size={16} className={cn('ml-auto shrink-0 transition-transform', open && 'rotate-180')} />
       </button>
       {open && (
-        <div className="absolute left-0 right-0 top-full z-[100] mt-1 max-h-56 overflow-hidden rounded-xl border border-lp-border bg-lp-surface shadow-lg">
+        <div className="absolute left-0 right-0 top-full z-[5000] mt-1 max-h-56 overflow-hidden rounded-xl border border-lp-border bg-lp-surface shadow-lg">
           <div className="border-b border-lp-border p-2">
             <input
               type="text"
@@ -2847,15 +2934,13 @@ function DealInfoUploadBlock({ onFieldChange }: { onFieldChange: (fieldId: strin
                 <div className="mt-4 space-y-4">
                   <div>
                     <label className="block text-xs font-medium text-lp-text-tertiary mb-1">Document type</label>
-                    <select
+                    <BrandedSelect
                       value={documentType}
-                      onChange={(e) => setDocumentType(e.target.value)}
-                      className="w-full rounded-xl border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text focus:border-lp-orange focus:outline-none"
-                    >
-                      {DEAL_MEMO_DOC_TYPES.map((t) => (
-                        <option key={t} value={t}>{t}</option>
-                      ))}
-                    </select>
+                      onChange={setDocumentType}
+                      options={DEAL_MEMO_DOC_TYPES.map((t) => ({ value: t, label: t }))}
+                      ariaLabel="Document type"
+                      className="w-full"
+                    />
                   </div>
                   <div>
                     <label className="block text-xs font-medium text-lp-text-tertiary mb-1">Files (PDF or image)</label>
@@ -4112,6 +4197,7 @@ function SectionCard({
   onSetSectionStatus,
   onSetSectionAssigned,
   onFieldChange,
+  onFieldsBatchChange,
   onFlagsChange,
   allFlags,
   currentUserId,
@@ -4140,6 +4226,7 @@ function SectionCard({
   onSetSectionStatus: (status: string) => void;
   onSetSectionAssigned?: (userId: string | null) => void;
   onFieldChange: (fieldId: string, value: unknown) => void;
+  onFieldsBatchChange?: (updates: Record<string, unknown>) => void;
   onFlagsChange: (nextFlags: AdvanceFlag[]) => void;
   allFlags: AdvanceFlag[];
   currentUserId: string | null;
@@ -4468,8 +4555,13 @@ function SectionCard({
                     type="text"
                     value={(data.drive_distance as string) ?? ''}
                     onChange={(e) => {
-                      onFieldChange('drive_distance', e.target.value);
-                      onFieldChange('drive_distance_source', 'custom');
+                      const v = e.target.value;
+                      if (onFieldsBatchChange) {
+                        onFieldsBatchChange({ drive_distance: v, drive_distance_source: 'custom' });
+                      } else {
+                        onFieldChange('drive_distance', v);
+                        onFieldChange('drive_distance_source', 'custom');
+                      }
                     }}
                     placeholder="e.g. 245 miles / 4h 15m"
                     className="w-full rounded-xl border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:border-lp-orange focus:outline-none focus:ring-2 focus:ring-lp-orange/20"

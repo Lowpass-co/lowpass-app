@@ -30,6 +30,7 @@ export type AdvanceDateItem = {
     section_statuses: Record<string, { status: string; assigned_to?: string }>;
     form_config_id: string;
     sections: AdvanceSection[];
+    last_updated_at?: string | null;
   } | null;
 };
 
@@ -93,7 +94,7 @@ export async function GET(
 
   const { data: instances, error: instancesError } = await supabase
     .from('advance_instances')
-    .select('id, routing_id, form_config_id, status, section_statuses')
+    .select('id, routing_id, form_config_id, status, section_statuses, last_updated_at')
     .in('routing_id', routingIds);
 
   if (instancesError) {
@@ -133,6 +134,7 @@ export async function GET(
             section_statuses: (instance.section_statuses as Record<string, { status: string; assigned_to?: string }>) ?? {},
             form_config_id: instance.form_config_id,
             sections,
+            last_updated_at: (instance as { last_updated_at?: string | null }).last_updated_at ?? null,
           }
         : null,
     };
