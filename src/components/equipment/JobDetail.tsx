@@ -5,7 +5,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { ArrowLeft, Trash2, Plus, FileDown } from 'lucide-react';
+import { ArrowLeft, Trash2, Plus, FileDown, Sun, Moon } from 'lucide-react';
 import { createClient } from '@/lib/supabase-client';
 import { effectiveInventoryDayRate } from '@/lib/rental-pricing';
 import { StyledSelect, type StyledSelectOption } from '@/components/ui/StyledSelect';
@@ -15,7 +15,7 @@ import {
   type EquipmentTourOption,
   type RentalJob, type RentalInventoryItem, type RentalJobItem,
 } from './types';
-import { exportJobPdf } from './exportJobPdf';
+import { exportJobPdf, type PdfMode } from './exportJobPdf';
 
 interface Props {
   job: RentalJob;
@@ -42,8 +42,15 @@ export function JobDetail({ job, inventory, artists, tours, onBack, onEdit, onDe
   const [discPct,   setDiscPct]   = useState(String(job.discount_percent ?? ''));
   const [discFixed, setDiscFixed] = useState(String(job.discount_fixed   ?? ''));
   const [status,    setStatus]    = useState(job.status);
-  // PDF export
+  // PDF export — `pdfMode` chooses light/dark output, defaulting to the
+  // app's current theme so the export feels native by default. Detected
+  // once on mount via the `.dark` class on <html>.
   const [exporting, setExporting] = useState(false);
+  const [pdfMode, setPdfMode] = useState<PdfMode>('light');
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    setPdfMode(document.documentElement.classList.contains('dark') ? 'dark' : 'light');
+  }, []);
 
   const supabase = createClient();
   const days = calcDays(job.start_date, job.end_date);
@@ -135,6 +142,7 @@ export function JobDetail({ job, inventory, artists, tours, onBack, onEdit, onDe
         tourLabel,
         discPct: dp,
         discFixed: df,
+        mode: pdfMode,
       });
     } catch (err) {
       console.error('PDF export failed', err);
@@ -179,6 +187,9 @@ export function JobDetail({ job, inventory, artists, tours, onBack, onEdit, onDe
             </div>
           </div>
           <div className="flex gap-2">
+            {/* Light/Dark toggle for the PDF export. Sits attached to the
+                Export button on the left so it reads as one control. */}
+            <PdfModeToggle mode={pdfMode} onChange={setPdfMode} disabled={exporting} />
             <button
               onClick={() => void handleExportPdf()}
               disabled={exporting}
@@ -193,7 +204,7 @@ export function JobDetail({ job, inventory, artists, tours, onBack, onEdit, onDe
                 e.currentTarget.style.borderColor = 'var(--lp-border)';
                 e.currentTarget.style.color = 'var(--lp-text-secondary)';
               }}
-              title="Download as branded PDF"
+              title={`Download as branded PDF (${pdfMode === 'dark' ? 'dark' : 'light'} mode)`}
             >
               <FileDown size={13} strokeWidth={2.5} />
               {exporting ? 'Exporting…' : 'Export'}
@@ -427,6 +438,47 @@ function PricingField({ label, children }: { label: string; children: React.Reac
     <div className="space-y-1.5">
       <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--lp-text-secondary)' }}>{label}</label>
       {children}
+    </div>
+  );
+}
+
+/** Segmented Light/Dark toggle for PDF export. Two icon buttons sharing
+ *  one rounded border, matching the visual weight of the Export/Edit
+ *  buttons next to it. */
+function PdfModeToggle({
+  mode, onChange, disabled,
+}: { mode: PdfMode; onChange: (m: PdfMode) => void; disabled?: boolean }) {
+  const options: Array<{ value: PdfMode; label: string; Icon: typeof Sun }> = [
+    { value: 'light', label: 'Light PDF', Icon: Sun },
+    { value: 'dark',  label: 'Dark PDF',  Icon: Moon },
+  ];
+  return (
+    <div
+      className="flex items-stretch overflow-hidden rounded-lg border"
+      style={{ borderColor: 'var(--lp-border)', backgroundColor: 'transparent' }}
+      role="group"
+      aria-label="PDF export mode"
+    >
+      {options.map(({ value, label, Icon }) => {
+        const active = mode === value;
+        return (
+          <button
+            key={value}
+            type="button"
+            onClick={() => onChange(value)}
+            disabled={disabled}
+            title={label}
+            aria-pressed={active}
+            className="flex items-center justify-center px-2.5 text-xs transition-colors disabled:opacity-50"
+            style={{
+              backgroundColor: active ? '#FF4500' : 'transparent',
+              color: active ? '#FFFFFF' : 'var(--lp-text-secondary)',
+            }}
+          >
+            <Icon size={13} strokeWidth={2.5} />
+          </button>
+        );
+      })}
     </div>
   );
 }

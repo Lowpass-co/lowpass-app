@@ -10,12 +10,59 @@ import { jsPDF } from 'jspdf';
 import { effectiveInventoryDayRate } from '@/lib/rental-pricing';
 import { calcDays, fmtUSD, fmtDate, type RentalJob, type RentalInventoryItem, type RentalJobItem } from './types';
 
-// Brand
-const ORANGE: [number, number, number] = [255, 69, 0];
-const INK:    [number, number, number] = [17, 17, 17];
-const MUTED:  [number, number, number] = [107, 114, 128];
-const HAIR:   [number, number, number] = [229, 231, 235];
-const FAINT:  [number, number, number] = [156, 163, 175];
+/* ── Theme tokens ─────────────────────────────────────────────────
+   Mirrors the app's `--lp-*` CSS variables in `globals.css`. We can't
+   read CSS vars from inside jsPDF, so we duplicate the canonical
+   light/dark palettes here as numeric tuples and choose one set per
+   export. Updating the app tokens? Update these. The orange brand
+   accent is a constant — it does not flip between modes.
+   ──────────────────────────────────────────────────────────────── */
+type RGB = [number, number, number];
+export type PdfMode = 'light' | 'dark';
+
+interface PdfTokens {
+  pageBg: RGB;        // page background fill
+  ink: RGB;           // primary text / strong rules
+  muted: RGB;         // secondary text
+  faint: RGB;         // tertiary text
+  hair: RGB;          // hairline row dividers
+  surface: RGB;       // soft fill (table header, notes panel)
+  surfaceBorder: RGB; // border around panels
+  tableHeaderText: RGB;
+  white: RGB;         // for icons/text that always need to be reversed against ink
+}
+
+const ORANGE: RGB = [255, 69, 0]; // brand accent — same in both modes
+
+/** Light tokens map to the values in `:root` of `src/app/globals.css`. */
+const LIGHT_TOKENS: PdfTokens = {
+  pageBg:          [255, 255, 255], // --lp-bg
+  ink:             [17, 24, 39],     // --lp-text  (#111827)
+  muted:           [107, 114, 128],  // --lp-text-secondary (#6B7280)
+  faint:           [156, 163, 175],  // --lp-text-tertiary  (#9CA3AF)
+  hair:            [229, 231, 235],  // --lp-border (#E5E7EB)
+  surface:         [249, 250, 251],  // --lp-bg-secondary (#F9FAFB)
+  surfaceBorder:   [229, 231, 235],  // --lp-border
+  tableHeaderText: [71, 19, 0],      // --lp-table-header-text (#471300, brand brown)
+  white:           [255, 255, 255],
+};
+
+/** Dark tokens map to `.dark` overrides in globals.css. */
+const DARK_TOKENS: PdfTokens = {
+  pageBg:          [15, 15, 15],     // --lp-bg (#0F0F0F)
+  ink:             [245, 245, 245],  // --lp-text (#F5F5F5)
+  muted:           [163, 163, 163],  // --lp-text-secondary (#A3A3A3)
+  faint:           [115, 115, 115],  // --lp-text-tertiary  (#737373)
+  hair:            [46, 46, 46],     // --lp-border (#2E2E2E)
+  surface:         [26, 26, 26],     // --lp-bg-secondary (#1A1A1A)
+  surfaceBorder:   [46, 46, 46],     // --lp-border
+  tableHeaderText: [115, 115, 115],  // --lp-table-header-text dark = #737373
+  white:           [255, 255, 255],
+};
+
+function getPdfTokens(mode: PdfMode): PdfTokens {
+  return mode === 'dark' ? DARK_TOKENS : LIGHT_TOKENS;
+}
 
 // Page geometry (A4, in mm)
 const PAGE_W = 210;
@@ -33,6 +80,8 @@ interface ExportOptions {
   tourLabel: string | null;
   discPct: number;
   discFixed: number;
+  /** Defaults to light. Pass 'dark' for an inverted document that feels native to the app's dark mode. */
+  mode?: PdfMode;
 }
 
 /** Load the Lowpass wordmark as a data URL so jsPDF can embed it. */
@@ -123,6 +172,17 @@ async function registerFonts(doc: jsPDF): Promise<{ body: string; display: strin
 
 export async function exportJobPdf(opts: ExportOptions): Promise<void> {
   const { job, jobItems, inventory, artistLabel, tourLabel, discPct, discFixed } = opts;
+  const mode: PdfMode = opts.mode ?? 'light';
+  const T = getPdfTokens(mode);
+
+  /** Paint the current page with the mode's background colour. jsPDF
+   *  pages default to a transparent fill — without this, dark mode
+   *  exports would still print white, defeating the point. Called on
+   *  every page (including ones added during pagination). */
+  const paintPageBg = () => {
+    doc.setFillColor(...T.pageBg);
+    doc.rect(0, 0, PAGE_W, PAGE_H, 'F');
+  };
 
   const days     = calcDays(job.start_date, job.end_date);
   const subtotal = jobItems.reduce((sum, it) => {
@@ -148,6 +208,9 @@ export async function exportJobPdf(opts: ExportOptions): Promise<void> {
     loadLogoDataUrl(),
   ]);
 
+  // First page: paint the mode background underneath everything.
+  paintPageBg();
+
   // ── HEADER ──────────────────────────────────────────────────────
   // Logo + title sit at the very top, full width, separated by an
   // orange rule. No page meta, no URL, no app chrome.
@@ -163,13 +226,13 @@ export async function exportJobPdf(opts: ExportOptions): Promise<void> {
   // Title — right-aligned to page edge (display face)
   doc.setFont(DISPLAY, 'bold');
   doc.setFontSize(20);
-  doc.setTextColor(...INK);
+  doc.setTextColor(...T.ink);
   doc.text(docTitle, PAGE_W - MARGIN_X, y + 8, { align: 'right' });
 
   // Doc no. + issue date
   doc.setFont(BODY, 'normal');
   doc.setFontSize(8.5);
-  doc.setTextColor(...MUTED);
+  doc.setTextColor(...T.muted);
   doc.text(`No. ${documentNumber}`, PAGE_W - MARGIN_X, y + 13.5, { align: 'right' });
   doc.text(`Issued ${issueDate}`,    PAGE_W - MARGIN_X, y + 17.5, { align: 'right' });
 
@@ -204,7 +267,7 @@ export async function exportJobPdf(opts: ExportOptions): Promise<void> {
   let yBill = y + 4.5;
   doc.setFont(BODY, 'bold');
   doc.setFontSize(10);
-  doc.setTextColor(...INK);
+  doc.setTextColor(...T.ink);
   const clientName = job.client_name || '-';
   const wrappedClient = doc.splitTextToSize(clientName, colW - 4) as string[];
   doc.text(wrappedClient, c1, yBill);
@@ -213,7 +276,7 @@ export async function exportJobPdf(opts: ExportOptions): Promise<void> {
   if (billingLines.length > 0) {
     doc.setFont(BODY, 'normal');
     doc.setFontSize(8.5);
-    doc.setTextColor(...MUTED);
+    doc.setTextColor(...T.muted);
     for (const line of billingLines) {
       const wrapped = doc.splitTextToSize(line, colW - 4) as string[];
       doc.text(wrapped, c1, yBill);
@@ -225,13 +288,13 @@ export async function exportJobPdf(opts: ExportOptions): Promise<void> {
   let yJob = y + 4.5;
   doc.setFont(BODY, 'bold');
   doc.setFontSize(10);
-  doc.setTextColor(...INK);
+  doc.setTextColor(...T.ink);
   const wrappedName = doc.splitTextToSize(job.name, colW - 4) as string[];
   doc.text(wrappedName, c2, yJob);
   yJob += wrappedName.length * 4.2;
   doc.setFont(BODY, 'normal');
   doc.setFontSize(8.5);
-  doc.setTextColor(...MUTED);
+  doc.setTextColor(...T.muted);
   const statusLabel = `Status: ${job.status.charAt(0).toUpperCase()}${job.status.slice(1)}`;
   doc.text(statusLabel, c2, yJob);
   yJob += 4;
@@ -242,7 +305,7 @@ export async function exportJobPdf(opts: ExportOptions): Promise<void> {
   let yPer = y + 4.5;
   doc.setFont(BODY, 'bold');
   doc.setFontSize(10);
-  doc.setTextColor(...INK);
+  doc.setTextColor(...T.ink);
   // ASCII separator only — jsPDF's default Helvetica is WinAnsi-encoded
   // and renders Unicode arrows/minus-signs as garbage glyphs.
   const periodStr = `${fmtDate(job.start_date)}  to  ${fmtDate(job.end_date)}`;
@@ -250,10 +313,10 @@ export async function exportJobPdf(opts: ExportOptions): Promise<void> {
   yPer += 4.5;
   doc.setFont(BODY, 'normal');
   doc.setFontSize(8.5);
-  doc.setTextColor(...MUTED);
+  doc.setTextColor(...T.muted);
   doc.text(`${days} billable day${days !== 1 ? 's' : ''}`, c3, yPer);
   yPer += 3.8;
-  doc.setTextColor(...FAINT);
+  doc.setTextColor(...T.faint);
   doc.text('(3-day-week rule)', c3, yPer);
   yPer += 4;
 
@@ -267,23 +330,29 @@ export async function exportJobPdf(opts: ExportOptions): Promise<void> {
   const colRate = MARGIN_X + CONTENT_W * 0.80;
   const colSub  = MARGIN_X + CONTENT_W;
 
-  // Header (black bar)
-  doc.setFillColor(...INK);
-  doc.rect(MARGIN_X, y, CONTENT_W, 7.5, 'F');
-  doc.setFont(BODY, 'bold');
-  doc.setFontSize(8);
-  doc.setTextColor(255, 255, 255);
-  doc.text('ITEM',     colItem + 2, y + 5);
-  doc.text('QTY',      colQty,      y + 5, { align: 'center' });
-  doc.text('DAYS',     colDays,     y + 5, { align: 'center' });
-  doc.text('DAY RATE', colRate,     y + 5, { align: 'right' });
-  doc.text('SUBTOTAL', colSub - 2,  y + 5, { align: 'right' });
-  y += 7.5;
+  // Table header — soft surface bar, brand-brown caps in light / muted in dark.
+  // Mirrors the app's `.lp-table thead` pattern.
+  const drawTableHeader = () => {
+    doc.setFillColor(...T.surface);
+    doc.setDrawColor(...T.surfaceBorder);
+    doc.setLineWidth(0.2);
+    doc.rect(MARGIN_X, y, CONTENT_W, 7.5, 'FD');
+    doc.setFont(BODY, 'bold');
+    doc.setFontSize(7.5);
+    doc.setTextColor(...T.tableHeaderText);
+    doc.text('ITEM',     colItem + 2, y + 5);
+    doc.text('QTY',      colQty,      y + 5, { align: 'center' });
+    doc.text('DAYS',     colDays,     y + 5, { align: 'center' });
+    doc.text('DAY RATE', colRate,     y + 5, { align: 'right' });
+    doc.text('SUBTOTAL', colSub - 2,  y + 5, { align: 'right' });
+    y += 7.5;
+  };
+  drawTableHeader();
 
   // Rows
   doc.setFont(BODY, 'normal');
   doc.setFontSize(9);
-  doc.setTextColor(...INK);
+  doc.setTextColor(...T.ink);
 
   const drawItemRow = (it: RentalJobItem) => {
     const inv  = inventory.find(i => i.id === it.inventory_id);
@@ -302,36 +371,26 @@ export async function exportJobPdf(opts: ExportOptions): Promise<void> {
     if (y + rowH > PAGE_H - MARGIN_BOTTOM - 60) {
       // Save room for totals/terms; spill onto next page if needed
       doc.addPage();
+      paintPageBg();
       y = MARGIN_TOP;
-      // Re-draw table header on new page
-      doc.setFillColor(...INK);
-      doc.rect(MARGIN_X, y, CONTENT_W, 7.5, 'F');
-      doc.setFont(BODY, 'bold');
-      doc.setFontSize(8);
-      doc.setTextColor(255, 255, 255);
-      doc.text('ITEM',     colItem + 2, y + 5);
-      doc.text('QTY',      colQty,      y + 5, { align: 'center' });
-      doc.text('DAYS',     colDays,     y + 5, { align: 'center' });
-      doc.text('DAY RATE', colRate,     y + 5, { align: 'right' });
-      doc.text('SUBTOTAL', colSub - 2,  y + 5, { align: 'right' });
-      y += 7.5;
+      drawTableHeader();
       doc.setFont(BODY, 'normal');
       doc.setFontSize(9);
-      doc.setTextColor(...INK);
+      doc.setTextColor(...T.ink);
     }
 
     let yRow = y + 5;
     // Item name
     doc.setFont(BODY, 'bold');
     doc.setFontSize(9.5);
-    doc.setTextColor(...INK);
+    doc.setTextColor(...T.ink);
     doc.text(itemNameLines, colItem + 2, yRow);
     yRow += itemNameLines.length * baseLineH;
     // Category
     if (hasCategory) {
       doc.setFont(BODY, 'normal');
       doc.setFontSize(7.5);
-      doc.setTextColor(...MUTED);
+      doc.setTextColor(...T.muted);
       doc.text(inv!.category!, colItem + 2, yRow);
       yRow += 3.6;
     }
@@ -346,7 +405,7 @@ export async function exportJobPdf(opts: ExportOptions): Promise<void> {
     // Numeric columns
     doc.setFont(BODY, 'normal');
     doc.setFontSize(9.5);
-    doc.setTextColor(...INK);
+    doc.setTextColor(...T.ink);
     const midY = y + 5;
     doc.text(String(it.quantity ?? 1), colQty, midY, { align: 'center' });
     doc.text(String(days),             colDays, midY, { align: 'center' });
@@ -356,7 +415,7 @@ export async function exportJobPdf(opts: ExportOptions): Promise<void> {
 
     // Hairline separator
     y += rowH;
-    doc.setDrawColor(...HAIR);
+    doc.setDrawColor(...T.hair);
     doc.setLineWidth(0.2);
     doc.line(MARGIN_X, y, PAGE_W - MARGIN_X, y);
   };
@@ -365,10 +424,10 @@ export async function exportJobPdf(opts: ExportOptions): Promise<void> {
     // Inter ships with normal+bold only; use normal for the empty-state line.
     doc.setFont(BODY, 'normal');
     doc.setFontSize(9);
-    doc.setTextColor(...MUTED);
+    doc.setTextColor(...T.muted);
     doc.text('No items on this job.', PAGE_W / 2, y + 8, { align: 'center' });
     y += 14;
-    doc.setDrawColor(...HAIR);
+    doc.setDrawColor(...T.hair);
     doc.setLineWidth(0.2);
     doc.line(MARGIN_X, y, PAGE_W - MARGIN_X, y);
   } else {
@@ -383,16 +442,16 @@ export async function exportJobPdf(opts: ExportOptions): Promise<void> {
 
   doc.setFont(BODY, 'normal');
   doc.setFontSize(9.5);
-  doc.setTextColor(...MUTED);
+  doc.setTextColor(...T.muted);
   doc.text('Subtotal', totalsX + 2, y + 5);
-  doc.setTextColor(...INK);
+  doc.setTextColor(...T.ink);
   doc.setFont(BODY, 'bold');
   doc.text(fmtUSD(subtotal), totalsX + totalsW - 2, y + 5, { align: 'right' });
   y += 7;
 
   if (discAmt > 0) {
     doc.setFont(BODY, 'normal');
-    doc.setTextColor(...MUTED);
+    doc.setTextColor(...T.muted);
     const discLabel =
       discPct > 0 && discFixed > 0 ? `Discount (${discPct}% + fixed)`
         : discPct > 0 ? `Discount (${discPct}%)`
@@ -404,15 +463,15 @@ export async function exportJobPdf(opts: ExportOptions): Promise<void> {
     y += 7;
   }
 
-  // Total Due — heavy black rule + orange amount
-  doc.setDrawColor(...INK);
+  // Total Due — heavy ink rule + orange amount
+  doc.setDrawColor(...T.ink);
   doc.setLineWidth(0.6);
   doc.line(totalsX, y, totalsX + totalsW, y);
   y += 6;
 
   doc.setFont(BODY, 'bold');
   doc.setFontSize(11);
-  doc.setTextColor(...INK);
+  doc.setTextColor(...T.ink);
   doc.text('TOTAL DUE', totalsX + 2, y + 4);
   doc.setFontSize(15);
   doc.setTextColor(...ORANGE);
@@ -421,18 +480,19 @@ export async function exportJobPdf(opts: ExportOptions): Promise<void> {
 
   // ── NOTES ──────────────────────────────────────────────────────
   if (job.notes && job.notes.trim()) {
-    if (y > PAGE_H - MARGIN_BOTTOM - 50) { doc.addPage(); y = MARGIN_TOP; }
+    if (y > PAGE_H - MARGIN_BOTTOM - 50) { doc.addPage(); paintPageBg(); y = MARGIN_TOP; }
     drawColLabel(doc, 'NOTES', MARGIN_X, y, BODY);
     y += 5;
     doc.setFont(BODY, 'normal');
     doc.setFontSize(9);
-    doc.setTextColor(...INK);
+    doc.setTextColor(...T.ink);
     const notesLines = doc.splitTextToSize(job.notes.trim(), CONTENT_W - 8) as string[];
     const notesH = notesLines.length * 4.2 + 6;
-    doc.setFillColor(250, 250, 250);
-    doc.setDrawColor(...HAIR);
+    doc.setFillColor(...T.surface);
+    doc.setDrawColor(...T.surfaceBorder);
     doc.setLineWidth(0.2);
     doc.roundedRect(MARGIN_X, y, CONTENT_W, notesH, 1.2, 1.2, 'FD');
+    doc.setTextColor(...T.ink);
     doc.text(notesLines, MARGIN_X + 4, y + 5);
     y += notesH + 6;
   }
@@ -445,12 +505,12 @@ export async function exportJobPdf(opts: ExportOptions): Promise<void> {
     'Quote is valid for 30 days from issue date. Final invoice may vary based on additions or losses.',
   ];
 
-  if (y > PAGE_H - MARGIN_BOTTOM - 40) { doc.addPage(); y = MARGIN_TOP; }
+  if (y > PAGE_H - MARGIN_BOTTOM - 40) { doc.addPage(); paintPageBg(); y = MARGIN_TOP; }
   drawColLabel(doc, 'TERMS', MARGIN_X, y, BODY);
   y += 5;
   doc.setFont(BODY, 'normal');
   doc.setFontSize(8);
-  doc.setTextColor(...MUTED);
+  doc.setTextColor(...T.muted);
   for (let i = 0; i < terms.length; i++) {
     const numbered = `${i + 1}.  ${terms[i]}`;
     const lines = doc.splitTextToSize(numbered, CONTENT_W - 4) as string[];
