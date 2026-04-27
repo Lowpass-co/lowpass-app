@@ -1,13 +1,5 @@
 /* ============================================
-   LOWPASS — Budget Rooming Grid API
-
-   GET: Rooming grid for a tour (?tour_id=uuid).
-        Returns grid_by_person (grouped by person) and routing_dates (columns).
-        Order: routing dates ascending, persons by role then name.
-   POST: Upsert single entry or bulk entries.
-        Single: { tour_id, person_name, role?, routing_id, room_type }
-        Bulk: { entries: [{ tour_id, person_name, role?, routing_id, room_type }] }
-   DELETE: Remove rooming entry (id in body).
+   LOWPASS — Budget Rooming Grid API (canonical room assignments)
    ============================================ */
 
 import { NextResponse } from 'next/server';
@@ -67,35 +59,57 @@ export async function GET(request: Request) {
     });
   }
 
-  const { data: gridRows, error: gridError } = await supabase
-    .from('rooming_grid')
-    .select('*, routing(date, venue_name, city)')
+  const { data: assignmentRows, error: gridError } = await supabase
+    .from('room_assignments')
+    .select(`
+      id,
+      starts_on,
+      ends_on,
+      persons(id, full_name),
+      rooms(room_type, hotels!inner(tour_id))
+    `)
     .eq('workspace_id', profile.workspace_id)
-    .eq('tour_id', tourId)
-    .in('routing_id', routingIds);
+    .eq('rooms.hotels.tour_id', tourId);
 
   if (gridError) {
     return NextResponse.json({ error: gridError.message }, { status: 500 });
   }
 
   const byPerson = new Map<string, { person_name: string; role: string | null; person_id: string | null; entries: unknown[] }>();
-  for (const row of gridRows ?? []) {
-    const name = row.person_name as string;
-    const personId = (row as { person_id?: string | null }).person_id ?? null;
-    if (!byPerson.has(name)) {
-      byPerson.set(name, {
-        person_name: name,
-        role: (row.role as string) ?? null,
-        person_id: personId,
+  for (const row of assignmentRows ?? []) {
+    const personRef = Array.isArray((row as { persons?: unknown }).persons)
+      ? ((row as { persons?: Array<{ id?: string; full_name?: string | null }> }).persons ?? [])[0]
+      : (row as { persons?: { id?: string; full_name?: string | null } | null }).persons;
+    const roomRef = Array.isArray((row as { rooms?: unknown }).rooms)
+      ? ((row as { rooms?: Array<{ room_type?: string | null }> }).rooms ?? [])[0]
+      : (row as { rooms?: { room_type?: string | null } | null }).rooms;
+    const personName = String(personRef?.full_name ?? '').trim();
+    if (!personName) continue;
+    if (!byPerson.has(personName)) {
+      byPerson.set(personName, {
+        person_name: personName,
+        role: null,
+        person_id: personRef?.id ?? null,
         entries: [],
       });
     }
-    const r = row.routing as unknown;
-    const entry = {
-      ...row,
-      routing: Array.isArray(r) ? r[0] : r,
-    };
-    byPerson.get(name)!.entries.push(entry);
+    const start = (row as { starts_on: string }).starts_on;
+    const end = (row as { ends_on: string }).ends_on;
+    const roomType = roomRef?.room_type ?? '-';
+    for (const routing of routingDates) {
+      if (routing.date >= start && routing.date <= end) {
+        byPerson.get(personName)!.entries.push({
+          id: (row as { id: string }).id,
+          routing_id: routing.id,
+          room_type: roomType,
+          routing: {
+            date: routing.date,
+            venue_name: routing.venue_name,
+            city: routing.city,
+          },
+        });
+      }
+    }
   }
 
   const gridByPerson = Array.from(byPerson.values());
@@ -151,57 +165,30 @@ export async function POST(request: Request) {
   }
 
   const entries = body.entries;
-  const isBulk = Array.isArray(entries) && entries.length > 0;
+  const workEntries = Array.isArray(entries) && entries.length > 0
+    ? entries
+    : [{
+        tour_id: body.tour_id!,
+        person_id: body.person_id ?? null,
+        person_name: body.person_name!,
+        role: body.role ?? null,
+        routing_id: body.routing_id!,
+        room_type: body.room_type ?? '-',
+      }];
 
-  if (isBulk) {
-    for (const e of entries) {
-      if (!e.tour_id || !e.person_name?.trim() || !e.routing_id) {
-        return NextResponse.json(
-          { error: 'Each entry must have tour_id, person_name, and routing_id' },
-          { status: 400 }
-        );
-      }
+  for (const e of workEntries) {
+    if (!e.tour_id || !e.person_name?.trim() || !e.routing_id) {
+      return NextResponse.json(
+        { error: 'Each entry must have tour_id, person_name, and routing_id' },
+        { status: 400 }
+      );
     }
-    const { data: tour } = await supabase
-      .from('tours')
-      .select('id')
-      .eq('id', entries[0].tour_id)
-      .eq('workspace_id', profile.workspace_id)
-      .single();
-    if (!tour) {
-      return NextResponse.json({ error: 'Tour not found' }, { status: 404 });
-    }
-    const payloads = entries.map((e) => ({
-      tour_id: e.tour_id,
-      workspace_id: profile.workspace_id,
-      person_id: e.person_id ?? null,
-      person_name: e.person_name.trim(),
-      role: e.role ?? null,
-      routing_id: e.routing_id,
-      room_type: (e.room_type ?? '-').trim(),
-    }));
-    const { data: upserted, error } = await supabase
-      .from('rooming_grid')
-      .upsert(payloads, { onConflict: 'tour_id,person_name,routing_id' })
-      .select();
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
-    }
-    return NextResponse.json({ entries: upserted ?? [] });
-  }
-
-  const { tour_id, person_name, routing_id } = body;
-  if (!tour_id || !person_name?.trim() || !routing_id) {
-    return NextResponse.json(
-      { error: 'tour_id, person_name, and routing_id are required' },
-      { status: 400 }
-    );
   }
 
   const { data: tour } = await supabase
     .from('tours')
     .select('id')
-    .eq('id', tour_id)
+    .eq('id', workEntries[0].tour_id)
     .eq('workspace_id', profile.workspace_id)
     .single();
 
@@ -209,26 +196,124 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Tour not found' }, { status: 404 });
   }
 
-  const payload = {
-    tour_id,
-    workspace_id: profile.workspace_id,
-    person_id: body.person_id ?? null,
-    person_name: person_name.trim(),
-    role: body.role ?? null,
-    routing_id,
-    room_type: (body.room_type ?? '-').trim(),
-  };
+  const upserted: unknown[] = [];
+  for (const entry of workEntries) {
+    const personName = entry.person_name.trim();
+    const { data: routing } = await supabase
+      .from('routing')
+      .select('id, date')
+      .eq('id', entry.routing_id)
+      .eq('tour_id', entry.tour_id)
+      .maybeSingle();
+    if (!routing?.id) continue;
 
-  const { data, error } = await supabase
-    .from('rooming_grid')
-    .upsert(payload, { onConflict: 'tour_id,person_name,routing_id' })
-    .select()
-    .single();
+    const personId = entry.person_id ?? (
+      await supabase
+        .from('persons')
+        .select('id')
+        .eq('workspace_id', profile.workspace_id)
+        .ilike('full_name', personName)
+        .maybeSingle()
+    ).data?.id;
+    if (!personId) continue;
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    const routingDate = (routing as { date: string }).date;
+    const dateIso = `${routingDate}T12:00:00`;
+
+    const { data: hotels } = await supabase
+      .from('hotels')
+      .select('id, check_in_at, check_out_at')
+      .eq('workspace_id', profile.workspace_id)
+      .eq('tour_id', entry.tour_id)
+      .order('check_in_at', { ascending: true, nullsFirst: true });
+
+    let targetHotelId =
+      (hotels ?? []).find((h) => {
+        const start = (h as { check_in_at?: string | null }).check_in_at;
+        const end = (h as { check_out_at?: string | null }).check_out_at;
+        const s = start ? new Date(start).getTime() : Number.NEGATIVE_INFINITY;
+        const e = end ? new Date(end).getTime() : Number.POSITIVE_INFINITY;
+        const d = new Date(dateIso).getTime();
+        return d >= s && d <= e;
+      })?.id ?? null;
+
+    if (!targetHotelId) {
+      const { data: createdHotel } = await supabase
+        .from('hotels')
+        .insert({
+          workspace_id: profile.workspace_id,
+          tour_id: entry.tour_id,
+          name: 'Unassigned Hotel',
+          check_in_at: `${routingDate}T00:00:00Z`,
+          check_out_at: `${routingDate}T23:59:59Z`,
+        })
+        .select('id')
+        .single();
+      targetHotelId = createdHotel?.id ?? null;
+    }
+    if (!targetHotelId) continue;
+
+    const roomType = (entry.room_type ?? '-').trim();
+    let roomId =
+      (
+        await supabase
+          .from('rooms')
+          .select('id')
+          .eq('workspace_id', profile.workspace_id)
+          .eq('hotel_id', targetHotelId)
+          .eq('room_type', roomType)
+          .maybeSingle()
+      ).data?.id ?? null;
+
+    if (!roomId) {
+      const { data: createdRoom } = await supabase
+        .from('rooms')
+        .insert({
+          workspace_id: profile.workspace_id,
+          hotel_id: targetHotelId,
+          room_type: roomType,
+          cost_amount: 0,
+        })
+        .select('id')
+        .single();
+      roomId = createdRoom?.id ?? null;
+    }
+    if (!roomId) continue;
+
+    const { data: existingAssignment } = await supabase
+      .from('room_assignments')
+      .select('id')
+      .eq('workspace_id', profile.workspace_id)
+      .eq('person_id', personId)
+      .eq('starts_on', routingDate)
+      .eq('ends_on', routingDate)
+      .maybeSingle();
+
+    if (existingAssignment?.id) {
+      const { data: updated } = await supabase
+        .from('room_assignments')
+        .update({ room_id: roomId })
+        .eq('id', existingAssignment.id)
+        .select()
+        .single();
+      if (updated) upserted.push(updated);
+    } else {
+      const { data: inserted } = await supabase
+        .from('room_assignments')
+        .insert({
+          workspace_id: profile.workspace_id,
+          room_id: roomId,
+          person_id: personId,
+          starts_on: routingDate,
+          ends_on: routingDate,
+        })
+        .select()
+        .single();
+      if (inserted) upserted.push(inserted);
+    }
   }
-  return NextResponse.json(data);
+
+  return NextResponse.json(Array.isArray(entries) ? { entries: upserted } : (upserted[0] ?? null));
 }
 
 export async function DELETE(request: Request) {
@@ -260,7 +345,7 @@ export async function DELETE(request: Request) {
   }
 
   const { error } = await supabase
-    .from('rooming_grid')
+    .from('room_assignments')
     .delete()
     .eq('id', body.id)
     .eq('workspace_id', profile.workspace_id);
