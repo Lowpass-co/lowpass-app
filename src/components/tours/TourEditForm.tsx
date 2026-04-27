@@ -12,6 +12,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import type { Tour } from '@/types';
 import type { Continent } from '@/types';
+import { BrandedSelect } from '@/components/ui/BrandedSelect';
 
 type LayoutTemplate = { id: string; name: string; sections: unknown[] };
 
@@ -141,27 +142,23 @@ export function TourEditForm({ tour }: { tour: Tour }) {
       <div className="grid grid-cols-2 gap-4">
         <div>
           <label className="mb-1 block text-sm font-medium text-lp-text-secondary">Continent</label>
-          <select
+          <BrandedSelect
             value={continent}
-            onChange={(e) => setContinent(e.target.value as Continent)}
-            className="w-full rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange"
-          >
-            {CONTINENTS.map((c) => (
-              <option key={c.value} value={c.value}>{c.label}</option>
-            ))}
-          </select>
+            onChange={(v) => setContinent(v as Continent)}
+            options={CONTINENTS.map((c) => ({ value: c.value, label: c.label }))}
+            ariaLabel="Continent"
+            className="w-full"
+          />
         </div>
         <div>
           <label className="mb-1 block text-sm font-medium text-lp-text-secondary">Currency</label>
-          <select
+          <BrandedSelect
             value={currency}
-            onChange={(e) => setCurrency(e.target.value)}
-            className="w-full rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange"
-          >
-            {CURRENCIES.map((c) => (
-              <option key={c.value} value={c.value}>{c.label}</option>
-            ))}
-          </select>
+            onChange={setCurrency}
+            options={CURRENCIES.map((c) => ({ value: c.value, label: c.label }))}
+            ariaLabel="Currency"
+            className="w-full"
+          />
         </div>
       </div>
       <div className="grid grid-cols-3 gap-4">
@@ -198,28 +195,26 @@ export function TourEditForm({ tour }: { tour: Tour }) {
       </div>
       <div>
         <label className="mb-1 block text-sm font-medium text-lp-text-secondary">Status</label>
-        <select
+        <BrandedSelect
           value={status}
-          onChange={(e) => setStatus(e.target.value as Tour['status'])}
-          className="w-full rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange"
-        >
-          {STATUSES.map((s) => (
-            <option key={s.value} value={s.value}>{s.label}</option>
-          ))}
-        </select>
+          onChange={(v) => setStatus(v as Tour['status'])}
+          options={STATUSES.map((s) => ({ value: s.value, label: s.label }))}
+          ariaLabel="Status"
+          className="w-full"
+        />
       </div>
       <div>
         <label className="mb-1 block text-sm font-medium text-lp-text-secondary">Default advance template</label>
-        <select
+        <BrandedSelect
           value={defaultAdvanceTemplateId}
-          onChange={(e) => setDefaultAdvanceTemplateId(e.target.value)}
-          className="w-full rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange"
-        >
-          <option value="">None</option>
-          {layoutTemplates.map((t) => (
-            <option key={t.id} value={t.id}>{t.name}</option>
-          ))}
-        </select>
+          onChange={setDefaultAdvanceTemplateId}
+          options={[
+            { value: '', label: 'None' },
+            ...layoutTemplates.map((t) => ({ value: t.id, label: t.name })),
+          ]}
+          ariaLabel="Default advance template"
+          className="w-full"
+        />
         <p className="mt-0.5 text-xs text-lp-text-tertiary">
           New advances for this tour will use this section layout by default.
         </p>

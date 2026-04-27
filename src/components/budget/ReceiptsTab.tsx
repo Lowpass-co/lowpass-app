@@ -5,6 +5,7 @@ import { Loader2, Plus, Pencil, Trash2, Upload, ExternalLink } from 'lucide-reac
 import { formatDate } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 import { DeleteConfirmationModal } from '@/components/ui/DeleteConfirmationModal';
+import { BrandedSelect } from '@/components/ui/BrandedSelect';
 
 const PAYMENT_METHODS: { value: string; label: string }[] = [
   { value: 'card', label: 'Card' },
@@ -220,23 +221,34 @@ export function ReceiptsTab({ tourId }: { tourId: string }) {
         <input type="date" className="rounded-md border border-lp-border bg-transparent px-2 py-1.5 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30" value={filterDateFrom} onChange={(e) => setFilterDateFrom(e.target.value)} placeholder="From" />
         <input type="date" className="rounded-md border border-lp-border bg-transparent px-2 py-1.5 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30" value={filterDateTo} onChange={(e) => setFilterDateTo(e.target.value)} placeholder="To" />
         <input type="text" className="rounded-md border border-lp-border bg-transparent px-2 py-1.5 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 w-40" value={filterVendor} onChange={(e) => setFilterVendor(e.target.value)} placeholder="Vendor" />
-        <select className="rounded-md border border-lp-border bg-transparent px-2 py-1.5 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30" value={filterCategory} onChange={(e) => setFilterCategory(e.target.value)}>
-          <option value="">All categories</option>
-          {CATEGORY_OPTIONS.map((c) => (
-            <option key={c} value={c}>{c.replace(/_/g, ' ')}</option>
-          ))}
-        </select>
-        <select className="rounded-md border border-lp-border bg-transparent px-2 py-1.5 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30" value={filterPayment} onChange={(e) => setFilterPayment(e.target.value)}>
-          <option value="">All payment</option>
-          {PAYMENT_METHODS.map((m) => (
-            <option key={m.value} value={m.value}>{m.label}</option>
-          ))}
-        </select>
-        <select className="rounded-md border border-lp-border bg-transparent px-2 py-1.5 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30" value={filterInBudget} onChange={(e) => setFilterInBudget(e.target.value as 'all' | 'yes' | 'no')}>
-          <option value="all">In budget: All</option>
-          <option value="yes">In budget: Yes</option>
-          <option value="no">In budget: No</option>
-        </select>
+        <BrandedSelect
+          value={filterCategory}
+          onChange={setFilterCategory}
+          options={[
+            { value: '', label: 'All categories' },
+            ...CATEGORY_OPTIONS.map((c) => ({ value: c, label: c.replace(/_/g, ' ') })),
+          ]}
+          ariaLabel="Filter by category"
+        />
+        <BrandedSelect
+          value={filterPayment}
+          onChange={setFilterPayment}
+          options={[
+            { value: '', label: 'All payment' },
+            ...PAYMENT_METHODS,
+          ]}
+          ariaLabel="Filter by payment method"
+        />
+        <BrandedSelect
+          value={filterInBudget}
+          onChange={(v) => setFilterInBudget(v as 'all' | 'yes' | 'no')}
+          options={[
+            { value: 'all', label: 'In budget: All' },
+            { value: 'yes', label: 'In budget: Yes' },
+            { value: 'no', label: 'In budget: No' },
+          ]}
+          ariaLabel="Filter by in-budget"
+        />
       </div>
 
       <div className="rounded-xl border border-lp-border bg-lp-surface overflow-hidden">
@@ -266,32 +278,45 @@ export function ReceiptsTab({ tourId }: { tourId: string }) {
                   <td className="p-2"><input type="date" className="w-full rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-lp-text" value={newRow.date ?? ''} onChange={(e) => setNewRow((r) => ({ ...r, date: e.target.value || null }))} /></td>
                   <td className="p-2"><input className="w-28 rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-lp-text" value={newRow.vendor ?? ''} onChange={(e) => setNewRow((r) => ({ ...r, vendor: e.target.value || null }))} placeholder="Vendor" /></td>
                   <td className="p-2">
-                    <select className="w-full min-w-[100px] rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-lp-text" value={newRow.category ?? ''} onChange={(e) => setNewRow((r) => ({ ...r, category: e.target.value || null }))}>
-                      <option value="">—</option>
-                      {CATEGORY_OPTIONS.map((c) => (
-                        <option key={c} value={c}>{c.replace(/_/g, ' ')}</option>
-                      ))}
-                    </select>
+                    <BrandedSelect
+                      value={newRow.category ?? ''}
+                      onChange={(v) => setNewRow((r) => ({ ...r, category: v || null }))}
+                      options={[
+                        { value: '', label: '—' },
+                        ...CATEGORY_OPTIONS.map((c) => ({ value: c, label: c.replace(/_/g, ' ') })),
+                      ]}
+                      ariaLabel="Category"
+                      className="w-full"
+                      size="sm"
+                      minWidth={100}
+                    />
                   </td>
                   <td className="p-2"><input className="w-32 rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-lp-text" value={newRow.description ?? ''} onChange={(e) => setNewRow((r) => ({ ...r, description: e.target.value || null }))} placeholder="Description" /></td>
                   <td className="p-2">
-                    <select className="rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-lp-text" value={newRow.payment_method ?? 'card'} onChange={(e) => setNewRow((r) => ({ ...r, payment_method: e.target.value }))}>
-                      {PAYMENT_METHODS.map((m) => (
-                        <option key={m.value} value={m.value}>{m.label}</option>
-                      ))}
-                    </select>
+                    <BrandedSelect
+                      value={newRow.payment_method ?? 'card'}
+                      onChange={(v) => setNewRow((r) => ({ ...r, payment_method: v }))}
+                      options={PAYMENT_METHODS}
+                      ariaLabel="Payment method"
+                      size="sm"
+                    />
                   </td>
                   <td className="p-2"><input type="number" step="0.01" className="w-20 rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-right text-lp-text" value={newRow.cost_tour_currency ?? ''} onChange={(e) => setNewRow((r) => ({ ...r, cost_tour_currency: e.target.value === '' ? undefined : parseFloat(e.target.value) }))} /></td>
                   <td className="p-2"><input type="number" step="0.01" className="w-20 rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-right text-lp-text text-red-600" value={newRow.cost_home_currency ?? ''} onChange={(e) => setNewRow((r) => ({ ...r, cost_home_currency: e.target.value === '' ? undefined : parseFloat(e.target.value) }))} /></td>
                   <td className="p-2"><input type="checkbox" className="lp-checkbox" checked={!!newRow.in_budget} onChange={(e) => setNewRow((r) => ({ ...r, in_budget: e.target.checked }))} /></td>
                   <td className="p-2">
                     {newRow.in_budget && (
-                      <select className="min-w-[120px] rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-lp-text" value={newRow.linked_line_item_id ?? ''} onChange={(e) => setNewRow((r) => ({ ...r, linked_line_item_id: e.target.value || null }))}>
-                        <option value="">—</option>
-                        {lineItems.map((li) => (
-                          <option key={li.id} value={li.id}>{li.label} ({li.category})</option>
-                        ))}
-                      </select>
+                      <BrandedSelect
+                        value={newRow.linked_line_item_id ?? ''}
+                        onChange={(v) => setNewRow((r) => ({ ...r, linked_line_item_id: v || null }))}
+                        options={[
+                          { value: '', label: '—' },
+                          ...lineItems.map((li) => ({ value: li.id, label: `${li.label} (${li.category})` })),
+                        ]}
+                        ariaLabel="Linked line item"
+                        size="sm"
+                        minWidth={120}
+                      />
                     )}
                   </td>
                   <td className="p-2"><input className="w-24 rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-lp-text" value={newRow.notes ?? ''} onChange={(e) => setNewRow((r) => ({ ...r, notes: e.target.value || null }))} placeholder="Notes" /></td>
@@ -314,18 +339,30 @@ export function ReceiptsTab({ tourId }: { tourId: string }) {
                     <td className="p-2 text-lp-text">{isEditing ? <input className="w-28 rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-lp-text" value={row.vendor ?? ''} onChange={(e) => setEditRow((x) => ({ ...x, vendor: e.target.value || null }))} /> : (r.vendor ?? '—')}</td>
                     <td className="p-2 text-lp-text-secondary">
                       {isEditing ? (
-                        <select className="rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-lp-text" value={row.category ?? ''} onChange={(e) => setEditRow((x) => ({ ...x, category: e.target.value || null }))}>
-                          <option value="">—</option>
-                          {CATEGORY_OPTIONS.map((c) => (
-                            <option key={c} value={c}>{c.replace(/_/g, ' ')}</option>
-                          ))}
-                        </select>
+                        <BrandedSelect
+                          value={row.category ?? ''}
+                          onChange={(v) => setEditRow((x) => ({ ...x, category: v || null }))}
+                          options={[
+                            { value: '', label: '—' },
+                            ...CATEGORY_OPTIONS.map((c) => ({ value: c, label: c.replace(/_/g, ' ') })),
+                          ]}
+                          ariaLabel="Category"
+                          size="sm"
+                        />
                       ) : (
                         (r.category ?? '—').replace(/_/g, ' ')
                       )}
                     </td>
                     <td className="p-2 text-lp-text-secondary max-w-[120px] truncate" title={r.description ?? undefined}>{isEditing ? <input className="w-full rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-lp-text" value={row.description ?? ''} onChange={(e) => setEditRow((x) => ({ ...x, description: e.target.value || null }))} /> : (r.description ?? '—')}</td>
-                    <td className="p-2 text-lp-text-secondary">{isEditing ? <select className="rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-lp-text" value={row.payment_method ?? 'card'} onChange={(e) => setEditRow((x) => ({ ...x, payment_method: e.target.value }))}>{PAYMENT_METHODS.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}</select> : (PAYMENT_METHODS.find((m) => m.value === r.payment_method)?.label ?? r.payment_method)}</td>
+                    <td className="p-2 text-lp-text-secondary">{isEditing ? (
+                      <BrandedSelect
+                        value={row.payment_method ?? 'card'}
+                        onChange={(v) => setEditRow((x) => ({ ...x, payment_method: v }))}
+                        options={PAYMENT_METHODS}
+                        ariaLabel="Payment method"
+                        size="sm"
+                      />
+                    ) : (PAYMENT_METHODS.find((m) => m.value === r.payment_method)?.label ?? r.payment_method)}</td>
                     <td className="p-2 text-right tabular-nums text-lp-text">{isEditing ? <input type="number" step="0.01" className="w-20 rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-right text-lp-text" value={row.cost_tour_currency ?? ''} onChange={(e) => setEditRow((x) => ({ ...x, cost_tour_currency: e.target.value === '' ? undefined : parseFloat(e.target.value) }))} /> : (Number(r.cost_tour_currency) || 0).toLocaleString('en-GB', { minimumFractionDigits: 2 })}</td>
                     <td className="p-2 text-right tabular-nums">
                       {isEditing ? (
@@ -341,12 +378,17 @@ export function ReceiptsTab({ tourId }: { tourId: string }) {
                     <td className="p-2"><input type="checkbox" className="lp-checkbox" checked={r.in_budget} onChange={(e) => toggleInBudget(r, e.target.checked)} disabled={saving} /></td>
                     <td className="p-2 text-lp-text-secondary">
                       {r.in_budget && (isEditing ? (
-                        <select className="min-w-[120px] rounded-md border border-lp-border bg-transparent px-2 py-1 text-sm focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30 text-lp-text" value={row.linked_line_item_id ?? ''} onChange={(e) => setEditRow((x) => ({ ...x, linked_line_item_id: e.target.value || null }))}>
-                          <option value="">—</option>
-                          {lineItems.map((li) => (
-                            <option key={li.id} value={li.id}>{li.label}</option>
-                          ))}
-                        </select>
+                        <BrandedSelect
+                          value={row.linked_line_item_id ?? ''}
+                          onChange={(v) => setEditRow((x) => ({ ...x, linked_line_item_id: v || null }))}
+                          options={[
+                            { value: '', label: '—' },
+                            ...lineItems.map((li) => ({ value: li.id, label: li.label })),
+                          ]}
+                          ariaLabel="Linked line item"
+                          size="sm"
+                          minWidth={120}
+                        />
                       ) : (
                         linkedLabel
                       ))}

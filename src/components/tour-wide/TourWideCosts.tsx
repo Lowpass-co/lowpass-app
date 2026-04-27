@@ -523,8 +523,8 @@ export function TourWideCosts({
               <span className="min-w-0 flex-1 truncate text-lp-text">{c.label}</span>
               <span className="shrink-0">
                 <InlineEditCell
-                  value={c.percentage * 100}
-                  onSave={(v) => saveCommissionPct(c.id, Number(v) / 100)}
+                  value={c.percentage}
+                  onSave={(v) => saveCommissionPct(c.id, Number(v))}
                   type="percentage"
                   align="right"
                   className="min-w-[60px] text-right"

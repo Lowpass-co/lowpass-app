@@ -8,7 +8,7 @@
 
 import { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
   ChevronRight,
   Copy,
@@ -19,8 +19,10 @@ import {
   CheckCircle2,
   Trash2,
   ExternalLink,
+  ListOrdered,
 } from 'lucide-react';
-import { parseRoutingDate, getDayTypeLabel, getDayTypeColor, getAdvanceStatusInfo, firstDayType, dayTypesInclude, cn } from '@/lib/utils';
+import { parseRoutingDate, getDayTypeLabel, getDayTypeColor, getAdvanceStatusInfo, dayTypesInclude, cn } from '@/lib/utils';
+import { formatRelativeTime } from '@/lib/format-relative';
 import { useToast } from '@/components/ui/Toast';
 import { CopyAdvanceModal } from '@/components/advance/CopyAdvanceModal';
 import { ContextMenu } from '@/components/ui/ContextMenu';
@@ -46,6 +48,7 @@ export type AdvanceDateItem = {
     section_statuses: Record<string, { status: string; assigned_to?: string }>;
     form_config_id: string;
     sections: AdvanceSection[];
+    last_updated_at?: string | null;
   } | null;
 };
 
@@ -64,6 +67,7 @@ export function AdvanceOverview({
   initialCopyRoutingId?: string | null;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const { showToast } = useToast();
   const [dates, setDates] = useState<AdvanceDateItem[]>([]);
@@ -78,12 +82,33 @@ export function AdvanceOverview({
   const copyFromUrl = initialCopyRoutingId ?? searchParams.get('copy');
   useEffect(() => {
     if (copyFromUrl && dates.length > 0) {
+      /* react-hooks/set-state-in-effect: sync ?copy= from URL to modal */
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setCopySourceRoutingId(copyFromUrl);
       setCopyModalOpen(true);
     }
   }, [copyFromUrl, dates.length]);
   const [formTemplates, setFormTemplates] = useState<FormTemplate[]>([]);
-  const [formTemplatesLoading, setFormTemplatesLoading] = useState(false);
+  const [formTemplatesLoading, setFormTemplatesLoading] = useState(true);
+  const [templateInitialId, setTemplateInitialId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/advance/layout-templates')
+      .then((r) => (r.ok ? r.json() : { templates: [] }))
+      .then((j) => {
+        if (!cancelled) setFormTemplates(j.templates ?? []);
+      })
+      .catch(() => {
+        if (!cancelled) setFormTemplates([]);
+      })
+      .finally(() => {
+        if (!cancelled) setFormTemplatesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [tourId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -98,10 +123,23 @@ export function AdvanceOverview({
     }
     fetchAdvance();
     return () => { cancelled = true; };
-  }, [tourId]);
+  }, [tourId, pathname]);
 
   useEffect(() => {
+    // Initial load: hide spinner once advance list has been fetched
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(false);
+  }, [dates]);
+
+  const tourLastUpdatedAt = useMemo(() => {
+    let maxMs = 0;
+    for (const d of dates) {
+      const iso = d.advance?.last_updated_at;
+      if (!iso) continue;
+      const t = new Date(iso).getTime();
+      if (Number.isFinite(t) && t > maxMs) maxMs = t;
+    }
+    return maxMs > 0 ? new Date(maxMs).toISOString() : null;
   }, [dates]);
 
   const filteredDates = useMemo(() => {
@@ -122,88 +160,62 @@ export function AdvanceOverview({
     return list;
   }, [dates, statusFilter, searchQuery]);
 
-  const { completeSections, totalSections } = useMemo(() => {
-    let complete = 0;
-    let total = 0;
-    for (const d of dates) {
-      if (!d.advance) continue;
-      const sections = d.advance.sections ?? [];
-      const statuses = d.advance.section_statuses ?? {};
-      total += sections.length;
-      for (const sec of sections) {
-        const key = sec.template_id ?? sec.label;
-        if (statuses[key]?.status === 'complete') complete += 1;
-      }
-    }
-    return { completeSections: complete, totalSections: total };
-  }, [dates]);
-
-  const progressPercent = totalSections > 0 ? Math.round((completeSections / totalSections) * 100) : 0;
-
-  const showDatesCount = useMemo(
-    () => dates.filter((d) => dayTypesInclude(d.day_type ?? '', 'show') || dayTypesInclude(d.day_type ?? '', 'festival')).length,
-    [dates]
-  );
-  const completeCount = useMemo(() => dates.filter((d) => d.advance?.status === 'complete').length, [dates]);
-  const inProgressCount = useMemo(() => dates.filter((d) => d.advance?.status === 'in_progress').length, [dates]);
-  const notStartedCount = useMemo(() => dates.filter((d) => !d.advance || d.advance.status === 'not_started').length, [dates]);
-
   const openCopyModal = () => setCopyModalOpen(true);
-  const openTemplateModal = () => {
+  const openTemplateModal = (presetTemplateId: string | null = null) => {
+    setTemplateInitialId(presetTemplateId);
     setTemplateModalOpen(true);
-    setFormTemplatesLoading(true);
-    fetch('/api/advance/layout-templates')
-      .then((r) => (r.ok ? r.json() : { templates: [] }))
-      .then((j) => setFormTemplates(j.templates ?? []))
-      .catch(() => setFormTemplates([]))
-      .finally(() => setFormTemplatesLoading(false));
   };
 
   return (
-    <div className="mx-auto max-w-4xl space-y-6">
-      {/* Progress bar */}
+    <>
+    <div className="grid gap-6 lg:grid-cols-[1fr_260px] lg:items-start">
+      <div className="min-w-0 space-y-6">
+      {/* Suggested layout templates (saved in this tour) */}
       {dates.length > 0 && (
-        <div className="rounded-xl border border-lp-border bg-lp-surface p-4">
-          <div className="mb-2 flex items-center justify-between text-sm">
-            <span className="text-lp-text-secondary">Tour advance progress</span>
-            {totalSections === 0 ? (
-              <span className="italic text-lp-text-tertiary">Add a section to track progress</span>
-            ) : (
-              <span className="font-medium text-lp-text">
-                {completeSections} of {totalSections} sections complete
-              </span>
-            )}
+        <div
+          className="overflow-hidden rounded-xl border border-lp-border"
+          style={{ backgroundColor: 'var(--lp-surface)' }}
+        >
+          <div className="border-b border-lp-border px-4 py-2.5">
+            <h2 className="text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">
+              Suggested form layouts · {tourName}
+            </h2>
+            <p className="mt-1 text-xs text-lp-text-secondary">
+              Use a saved layout as a starting point for show advances — every section stays editable in the builder.
+            </p>
           </div>
-          {totalSections > 0 && (
-            <div className="h-2 w-full overflow-hidden rounded-full bg-lp-bg-tertiary">
-              <div
-                className="h-full rounded-full bg-lp-orange transition-all duration-300"
-                style={{ width: `${progressPercent}%` }}
-              />
+          {formTemplatesLoading ? (
+            <div className="flex items-center gap-2 px-4 py-6 text-sm text-lp-text-tertiary">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading templates…
+            </div>
+          ) : formTemplates.length === 0 ? (
+            <p className="px-4 py-5 text-sm text-lp-text-secondary">
+              No saved layout templates yet. In any show&apos;s advance, open <strong>Setup</strong> and save the section layout
+              as a template — it will show up here.
+            </p>
+          ) : (
+            <div className="grid gap-2 p-4 sm:grid-cols-2">
+              {formTemplates.slice(0, 6).map((t) => (
+                <div
+                  key={t.id}
+                  className="flex flex-col rounded-lg border border-lp-border bg-lp-bg-secondary p-3"
+                >
+                  <div className="text-sm font-semibold text-lp-text">{t.name}</div>
+                  <p className="mt-0.5 text-xs text-lp-text-tertiary">
+                    {t.sections?.length ?? 0} section{(t.sections?.length ?? 0) === 1 ? '' : 's'}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => openTemplateModal(t.id)}
+                    className="mt-2 w-fit rounded-lg border border-lp-border bg-lp-surface px-2.5 py-1 text-xs font-medium text-lp-text hover:bg-lp-surface-hover"
+                  >
+                    Apply to shows…
+                  </button>
+                </div>
+              ))}
             </div>
           )}
-        </div>
-      )}
-
-      {/* Summary cards */}
-      {dates.length > 0 && (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <div className="rounded-xl border border-lp-border bg-lp-surface p-3">
-            <p className="text-xs font-medium uppercase tracking-wide text-lp-text-tertiary">Show dates</p>
-            <p className="mt-0.5 text-xl font-bold text-lp-text">{showDatesCount}</p>
-          </div>
-          <div className="rounded-xl border border-lp-border bg-lp-surface p-3">
-            <p className="text-xs font-medium uppercase tracking-wide text-lp-text-tertiary">Complete</p>
-            <p className="mt-0.5 text-xl font-bold text-lp-status-complete">{completeCount}</p>
-          </div>
-          <div className="rounded-xl border border-lp-border bg-lp-surface p-3">
-            <p className="text-xs font-medium uppercase tracking-wide text-lp-text-tertiary">In progress</p>
-            <p className="mt-0.5 text-xl font-bold text-lp-status-in-progress">{inProgressCount}</p>
-          </div>
-          <div className="rounded-xl border border-lp-border bg-lp-surface p-3">
-            <p className="text-xs font-medium uppercase tracking-wide text-lp-text-tertiary">Not started</p>
-            <p className="mt-0.5 text-xl font-bold text-lp-text">{notStartedCount}</p>
-          </div>
         </div>
       )}
 
@@ -284,6 +296,11 @@ export function AdvanceOverview({
                     setCopySourceRoutingId(routingId);
                     setCopyModalOpen(true);
                   }}
+                  onPatched={() => {
+                    void fetch(`/api/tours/${tourId}/advance?all=true`)
+                      .then((r) => r.json())
+                      .then((j) => setDates(j.dates ?? []));
+                  }}
                   onDeleted={() => {
                     fetch(`/api/tours/${tourId}/advance?all=true`).then((r) => r.json()).then((j) => setDates(j.dates ?? []));
                   }}
@@ -315,7 +332,7 @@ export function AdvanceOverview({
           </button>
           <button
             type="button"
-            onClick={openTemplateModal}
+            onClick={() => openTemplateModal(null)}
             className="inline-flex items-center gap-2 rounded-xl border border-lp-border bg-lp-surface px-4 py-2 text-sm font-medium text-lp-text hover:bg-lp-surface-hover"
           >
             <LayoutTemplate size={16} />
@@ -323,6 +340,31 @@ export function AdvanceOverview({
           </button>
         </div>
       )}
+
+      </div>
+
+      <aside className="space-y-4 lg:sticky lg:top-4">
+        <div className="rounded-xl border border-lp-border bg-lp-surface p-4">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Last edit</p>
+          <p className="mt-1 text-sm text-lp-text" title={tourLastUpdatedAt ?? undefined}>
+            {formatRelativeTime(tourLastUpdatedAt)}
+          </p>
+          <p className="mt-1.5 text-[11px] text-lp-text-tertiary">Latest save across all show advances on this tour.</p>
+        </div>
+        <div className="rounded-xl border border-lp-border bg-lp-surface p-4">
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Layout templates</p>
+          <p className="mt-1 text-2xl font-bold tabular-nums text-lp-text">{formTemplates.length}</p>
+          <p className="mt-0.5 text-xs text-lp-text-secondary">Saved in this tour (reuse on any show).</p>
+          <button
+            type="button"
+            onClick={() => openTemplateModal(null)}
+            className="mt-3 w-full rounded-lg border border-lp-border bg-lp-bg-secondary px-3 py-2 text-xs font-medium text-lp-text hover:bg-lp-surface-hover"
+          >
+            Open template manager
+          </button>
+        </div>
+      </aside>
+    </div>
 
       <CopyAdvanceModal
         tourId={tourId}
@@ -344,13 +386,19 @@ export function AdvanceOverview({
 
       {templateModalOpen && (
         <ApplyTemplateModal
+          key={templateInitialId ?? 'all'}
           tourId={tourId}
           dates={dates}
           templates={formTemplates}
           loading={formTemplatesLoading}
-          onClose={() => setTemplateModalOpen(false)}
+          initialTemplateId={templateInitialId}
+          onClose={() => {
+            setTemplateModalOpen(false);
+            setTemplateInitialId(null);
+          }}
           onDone={() => {
             setTemplateModalOpen(false);
+            setTemplateInitialId(null);
             router.refresh();
             fetch(`/api/tours/${tourId}/advance?all=true`)
               .then((r) => r.json())
@@ -372,12 +420,12 @@ export function AdvanceOverview({
           }}
         />
       )}
-    </div>
+    </>
   );
 }
 
 /** Small, subtle pill for day off / travel. Opens notes modal (not full advance builder). */
-function DayOffPill({ tourId, item, onOpenNotes }: { tourId: string; item: AdvanceDateItem; onOpenNotes: () => void }) {
+function DayOffPill({ item, onOpenNotes }: { tourId?: string; item: AdvanceDateItem; onOpenNotes: () => void }) {
   const dateLabel = parseRoutingDate(item.date).toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short' });
   const isTravel = dayTypesInclude(item.day_type ?? '', 'travel');
   const label = isTravel ? 'Travel' : 'Day Off';
@@ -509,18 +557,19 @@ function ShowRow({
   tourId,
   item,
   onOpenCopyModal,
+  onPatched,
   onDeleted,
 }: {
   tourId: string;
   item: AdvanceDateItem;
   onOpenCopyModal?: (routingId: string) => void;
+  onPatched?: () => void;
   onDeleted?: () => void;
 }) {
   const router = useRouter();
   const { showToast } = useToast();
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deletingFade, setDeletingFade] = useState(false);
-  const [markingComplete, setMarkingComplete] = useState(false);
 
   const dateLabel = parseRoutingDate(item.date).toLocaleDateString('en-GB', {
     weekday: 'short',
@@ -566,7 +615,6 @@ function ShowRow({
           label: 'Mark as complete',
           icon: CheckCircle2,
           onClick: async () => {
-            setMarkingComplete(true);
             try {
               const res = await fetch(`/api/tours/${tourId}/advance/${item.routing_id}`, {
                 method: 'PATCH',
@@ -575,10 +623,33 @@ function ShowRow({
               });
               if (res.ok) {
                 showToast('Marked as complete');
+                onPatched?.();
                 router.refresh();
               }
-            } finally {
-              setMarkingComplete(false);
+            } catch {
+              /* ignore */
+            }
+          },
+        }]
+      : []),
+    ...(hasAdvance && isComplete
+      ? [{
+          label: 'Mark as in progress',
+          icon: ListOrdered,
+          onClick: async () => {
+            try {
+              const res = await fetch(`/api/tours/${tourId}/advance/${item.routing_id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: 'in_progress' }),
+              });
+              if (res.ok) {
+                showToast('Marked as in progress');
+                onPatched?.();
+                router.refresh();
+              }
+            } catch {
+              /* ignore */
             }
           },
         }]
@@ -747,6 +818,7 @@ function ApplyTemplateModal({
   dates,
   templates,
   loading,
+  initialTemplateId,
   onClose,
   onDone,
 }: {
@@ -754,10 +826,11 @@ function ApplyTemplateModal({
   dates: AdvanceDateItem[];
   templates: FormTemplate[];
   loading: boolean;
+  initialTemplateId: string | null;
   onClose: () => void;
   onDone: () => void;
 }) {
-  const [templateId, setTemplateId] = useState('');
+  const [templateId, setTemplateId] = useState(() => initialTemplateId ?? '');
   const [targetIds, setTargetIds] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
   const [previewId, setPreviewId] = useState<string | null>(null);

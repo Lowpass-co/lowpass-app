@@ -14,6 +14,7 @@ import {
   passportsFromPerson,
 } from '@/lib/personnel-extended-profile';
 import { cn } from '@/lib/utils';
+import { BrandedSelect } from '@/components/ui/BrandedSelect';
 
 export type PersonnelPanelState = null | { mode: 'create' } | { mode: 'edit'; id: string };
 
@@ -818,13 +819,14 @@ export function PersonnelDetailSlideOver({
               <Section title="Default day rates">
                 <div>
                   <L>Currency</L>
-                  <select value={rates.currency} onChange={(e) => setRates((r) => ({ ...r, currency: e.target.value }))} className={IC}>
-                    {CUR.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </select>
+                  <BrandedSelect
+                    value={rates.currency}
+                    onChange={(v) => setRates((r) => ({ ...r, currency: v }))}
+                    className="w-full"
+                    triggerClassName="w-full"
+                    ariaLabel="Currency"
+                    options={CUR.map((c) => ({ value: c, label: c }))}
+                  />
                 </div>
                 <div className="grid gap-3 sm:grid-cols-2">
                   {(

@@ -73,7 +73,7 @@ interface InlineEditCellProps {
 **Styling:**
 - Display mode: `px-2 py-1.5 text-sm cursor-pointer rounded`
 - Edit mode: `px-2 py-1 text-sm border border-lp-orange rounded bg-transparent outline-none w-full`
-- Currency values: `font-[tabular-nums] text-right`
+- Currency values: `tabular-nums text-right`
 
 ### 4. Grid components for each tab
 

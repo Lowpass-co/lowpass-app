@@ -151,7 +151,7 @@ export function RoomingHotelSheet({ hotelBooking, roomAssignments: initialAssign
                   <td className="border-b border-lp-border/30 px-2 py-0">
                     <InlineEditCell value={a.check_out ? a.check_out.slice(0, 10) : null} type="text" onSave={(v) => saveAssignment(a.id, 'check_out', String(v) || '')} />
                   </td>
-                  <td className="border-b border-lp-border/30 px-2 py-1 text-right font-[tabular-nums]">{nights}</td>
+                  <td className="border-b border-lp-border/30 px-2 py-1 text-right tabular-nums">{nights}</td>
                   <td className="border-b border-lp-border/30 px-2 py-0">
                     <InlineEditCell value={a.room_type} type="text" onSave={(v) => saveAssignment(a.id, 'room_type', String(v))} />
                   </td>
@@ -167,7 +167,7 @@ export function RoomingHotelSheet({ hotelBooking, roomAssignments: initialAssign
                   <td className="border-b border-lp-border/30 px-2 py-0">
                     <InlineEditCell value={a.rate_per_night} type="currency" currency={currency} onSave={(v) => saveAssignment(a.id, 'rate_per_night', v)} align="right" />
                   </td>
-                  <td className="border-b border-lp-border/30 px-2 py-1 text-right font-[tabular-nums]">{formatter.format(total)}</td>
+                  <td className="border-b border-lp-border/30 px-2 py-1 text-right tabular-nums">{formatter.format(total)}</td>
                 </tr>
               );
             })}
@@ -175,9 +175,9 @@ export function RoomingHotelSheet({ hotelBooking, roomAssignments: initialAssign
           <tfoot>
             <tr className="font-semibold border-t-2 border-lp-border">
               <td colSpan={4} className="px-2 py-2">TOTALS</td>
-              <td className="px-2 py-2 text-right font-[tabular-nums]">{totalNights}</td>
+              <td className="px-2 py-2 text-right tabular-nums">{totalNights}</td>
               <td colSpan={4} className="px-2 py-2" />
-              <td className="px-2 py-2 text-right font-[tabular-nums]">{formatter.format(totalAmount)}</td>
+              <td className="px-2 py-2 text-right tabular-nums">{formatter.format(totalAmount)}</td>
             </tr>
           </tfoot>
         </table>

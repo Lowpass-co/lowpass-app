@@ -1,5 +1,5 @@
 export type BugSeverity = 'low' | 'medium' | 'high' | 'critical';
-export type BugStatus = 'open' | 'in_progress' | 'resolved' | 'wont_fix' | 'duplicate';
+export type BugStatus = 'open' | 'in_progress' | 'pending_testing' | 'resolved' | 'wont_fix' | 'duplicate';
 
 export type BugReportReporter = {
   id: string;
@@ -44,10 +44,18 @@ export const SEVERITY_META: Record<BugSeverity, { label: string; color: string }
 export const STATUS_META: Record<BugStatus, { label: string; color: string }> = {
   open: { label: 'Open', color: '#3b82f6' },
   in_progress: { label: 'In progress', color: '#a855f7' },
+  pending_testing: { label: 'Pending testing', color: '#f59e0b' },
   resolved: { label: 'Resolved', color: '#22c55e' },
   wont_fix: { label: "Won't fix", color: '#6b7280' },
   duplicate: { label: 'Duplicate', color: '#64748b' },
 };
 
 export const SEVERITY_ORDER: BugSeverity[] = ['critical', 'high', 'medium', 'low'];
-export const STATUS_ORDER: BugStatus[] = ['open', 'in_progress', 'resolved', 'wont_fix', 'duplicate'];
+export const STATUS_ORDER: BugStatus[] = [
+  'open',
+  'in_progress',
+  'pending_testing',
+  'resolved',
+  'wont_fix',
+  'duplicate',
+];

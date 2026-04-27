@@ -80,6 +80,19 @@ export interface TourDataForSummary {
   showCommission?: boolean;
 }
 
+/**
+ * Parse amounts typed in budget forms (e.g. "70,000"). Commas/whitespace are stripped;
+ * decimal dot is US-style. `null` = empty/invalid, caller may coerce to 0.
+ */
+export function parseBudgetAmountInput(raw: string): number | null {
+  const t = raw.trim();
+  if (t === '' || t === '.' || t === '-' || t === '-.') return null;
+  const norm = t.replace(/,/g, '').replace(/\s+/g, '');
+  if (norm === '' || norm === '.' || norm === '-' || norm === '-.') return null;
+  const n = parseFloat(norm);
+  return Number.isFinite(n) ? n : null;
+}
+
 function d(v: number | null | undefined): Decimal {
   if (v == null || Number.isNaN(v)) return new Decimal(0);
   return new Decimal(v);

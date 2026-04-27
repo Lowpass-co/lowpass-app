@@ -10,6 +10,7 @@ import { X, Upload, Link2, ChevronRight, Check, Loader2, AlertCircle } from 'luc
 import * as XLSX from 'xlsx';
 import { createClient } from '@/lib/supabase-client';
 import { dayRateFromPurchase } from '@/lib/rental-pricing';
+import { BrandedSelect } from '@/components/ui/BrandedSelect';
 import type { RentalInventoryItem } from './types';
 
 /* ─── Types ─────────────────────────────────────────────────────────── */
@@ -455,21 +456,17 @@ export function ImportModal({ userId, onImported, onClose }: Props) {
                           </div>
                         </td>
                         <td className="px-4 py-2">
-                          <select
+                          <BrandedSelect
                             value={selectedCol}
-                            onChange={e => setColMap(m => ({ ...m, [key]: e.target.value }))}
-                            className="w-full rounded-md border px-2 py-1.5 text-xs"
-                            style={{
-                              backgroundColor: 'var(--lp-surface)',
-                              borderColor: 'var(--lp-border)',
-                              color: 'var(--lp-text)',
-                            }}
-                          >
-                            <option value="">— skip —</option>
-                            {parsed.headers.map(h => (
-                              <option key={h} value={h}>{h}</option>
-                            ))}
-                          </select>
+                            onChange={(v) => setColMap(m => ({ ...m, [key]: v }))}
+                            options={[
+                              { value: '', label: '— skip —' },
+                              ...parsed.headers.map((h) => ({ value: h, label: h })),
+                            ]}
+                            ariaLabel={`Map column ${label}`}
+                            className="w-full"
+                            size="sm"
+                          />
                         </td>
                         <td className="max-w-[180px] truncate px-4 py-2 text-xs" style={{ color: 'var(--lp-text-tertiary)' }}>
                           {preview || <span style={{ opacity: 0.4 }}>—</span>}

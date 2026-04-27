@@ -1,8 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { GridTable } from './GridTable';
 import { InlineEditCell } from './InlineEditCell';
+import { computeCommissionContext, type CommissionContextIncomeRow } from '@/lib/commission-context';
+import { normalizeCommissionPct } from '@/lib/commission-pct';
 import type { BudgetCommission } from '@/types';
 import type { CommissionBasis } from '@/types';
 
@@ -31,6 +33,19 @@ type OverheadSettings = {
 
 type OverheadAmounts = Record<'Accountancy' | 'Insurance' | 'Contingency', { proposed: number; actual: number }>;
 
+function overheadAmountsFromSummaryJson(summaryJson: { sections?: unknown }): OverheadAmounts {
+  const sections = Array.isArray(summaryJson?.sections) ? summaryJson.sections : [];
+  const overheadSection = sections.find((s: { title?: string }) => (s?.title ?? '').toUpperCase() === 'OVERHEADS');
+  const lines = Array.isArray(overheadSection?.lines) ? overheadSection.lines : [];
+  const getLine = (name: string) =>
+    lines.find((l: { label?: string }) => (l?.label ?? '').toUpperCase() === name.toUpperCase()) ?? { proposed: 0, actual: 0 };
+  return {
+    Accountancy: { proposed: Number(getLine('Accountancy').proposed ?? 0), actual: Number(getLine('Accountancy').actual ?? 0) },
+    Insurance: { proposed: Number(getLine('Insurance').proposed ?? 0), actual: Number(getLine('Insurance').actual ?? 0) },
+    Contingency: { proposed: Number(getLine('Contingency').proposed ?? 0), actual: Number(getLine('Contingency').actual ?? 0) },
+  };
+}
+
 export function CommissionsGrid({ tourId }: { tourId: string; currency?: string }) {
   const [commissions, setCommissions] = useState<BudgetCommission[]>([]);
   const [overheadSettings, setOverheadSettings] = useState<OverheadSettings>({
@@ -46,22 +61,53 @@ export function CommissionsGrid({ tourId }: { tourId: string; currency?: string 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [savingOverheads, setSavingOverheads] = useState(false);
+  const [commissionContext, setCommissionContext] = useState<ReturnType<typeof computeCommissionContext> | null>(
+    null
+  );
+  const overheadsRef = useRef(overheadSettings);
+  overheadsRef.current = overheadSettings;
 
-  const fetchData = useCallback(async () => {
-    setLoading(true);
+  const fetchData = useCallback(async ({ silent = false }: { silent?: boolean } = {}) => {
+    if (!silent) setLoading(true);
     setError(null);
     try {
-      const [commissionsRes, settingsRes, summaryRes] = await Promise.all([
+      const [
+        commissionsRes,
+        settingsRes,
+        summaryRes,
+        incomeRes,
+        routingRes,
+        personnelRes,
+        payrollRes,
+        lineItemsRes,
+        flightsRes,
+      ] = await Promise.all([
         fetch(`/api/budget/commissions?tour_id=${tourId}`),
         fetch(`/api/budget/settings?tour_id=${tourId}`),
         fetch(`/api/budget/summary?tour_id=${tourId}`),
+        fetch(`/api/budget/income?tour_id=${tourId}`),
+        fetch(`/api/tours/${tourId}/routing`),
+        fetch(`/api/budget/personnel-rates?tour_id=${tourId}`),
+        fetch(`/api/budget/payroll?tour_id=${tourId}`),
+        fetch(`/api/budget/line-items?tour_id=${tourId}`),
+        fetch(`/api/budget/flights?tour_id=${tourId}`),
       ]);
       if (!commissionsRes.ok) throw new Error('Failed to load commissions');
-      const commissionsJson = await commissionsRes.json();
+      const [commissionsJson, settingsJson, summaryJson, incomeData, routingRows, personnelData, payrollData, lineItemsData, flightsData] =
+        await Promise.all([
+          commissionsRes.json(),
+          settingsRes.ok ? settingsRes.json() : Promise.resolve(null),
+          summaryRes.ok ? summaryRes.json() : Promise.resolve(null),
+          incomeRes.ok ? incomeRes.json() : Promise.resolve({ income: [] }),
+          routingRes.ok ? routingRes.json() : Promise.resolve([]),
+          personnelRes.ok ? personnelRes.json() : Promise.resolve({ personnel_rates: [] }),
+          payrollRes.ok ? payrollRes.json() : Promise.resolve({ entries: [] }),
+          lineItemsRes.ok ? lineItemsRes.json() : Promise.resolve({ line_items: [] }),
+          flightsRes.ok ? flightsRes.json() : Promise.resolve({ flights: [] }),
+        ]);
       setCommissions(commissionsJson.commissions ?? []);
 
-      if (settingsRes.ok) {
-        const settingsJson = await settingsRes.json();
+      if (settingsJson) {
         setOverheadSettings({
           insurance_pct: Number(settingsJson?.insurance_pct ?? 0.03),
           contingency_pct: Number(settingsJson?.contingency_pct ?? 0.02),
@@ -69,23 +115,44 @@ export function CommissionsGrid({ tourId }: { tourId: string; currency?: string 
         });
       }
 
-      if (summaryRes.ok) {
-        const summaryJson = await summaryRes.json();
-        const sections = Array.isArray(summaryJson?.sections) ? summaryJson.sections : [];
-        const overheadSection = sections.find((s: { title?: string }) => (s?.title ?? '').toUpperCase() === 'OVERHEADS');
-        const lines = Array.isArray(overheadSection?.lines) ? overheadSection.lines : [];
-        const getLine = (name: string) =>
-          lines.find((l: { label?: string }) => (l?.label ?? '').toUpperCase() === name.toUpperCase()) ?? { proposed: 0, actual: 0 };
-        setOverheadAmounts({
-          Accountancy: { proposed: Number(getLine('Accountancy').proposed ?? 0), actual: Number(getLine('Accountancy').actual ?? 0) },
-          Insurance: { proposed: Number(getLine('Insurance').proposed ?? 0), actual: Number(getLine('Insurance').actual ?? 0) },
-          Contingency: { proposed: Number(getLine('Contingency').proposed ?? 0), actual: Number(getLine('Contingency').actual ?? 0) },
-        });
+      if (summaryJson) {
+        setOverheadAmounts(overheadAmountsFromSummaryJson(summaryJson));
       }
+
+      const routing = Array.isArray(routingRows) ? routingRows : [];
+      const showDays = routing.filter(
+        (r: { day_type: string }) => r.day_type === 'show' || r.day_type === 'festival'
+      ).length;
+      const offDays = routing.filter((r: { day_type: string }) =>
+        ['off', 'travel', 'press', 'radio', 'tv'].includes(r.day_type)
+      ).length;
+      const rehearsalDays = routing.filter((r: { day_type: string }) => r.day_type === 'rehearsal').length;
+      const totalDays = showDays + offDays + rehearsalDays;
+      const incomeRows: CommissionContextIncomeRow[] = incomeData?.income ?? [];
+      setCommissionContext(
+        computeCommissionContext(
+          incomeRows,
+          lineItemsData?.line_items ?? [],
+          personnelData?.personnel_rates ?? [],
+          payrollData?.entries ?? [],
+          flightsData?.flights ?? [],
+          settingsJson
+            ? {
+                insurance_pct: Number(settingsJson?.insurance_pct ?? 0.03),
+                contingency_pct: Number(settingsJson?.contingency_pct ?? 0.02),
+                accountancy_pct: Number(settingsJson?.accountancy_pct ?? 0),
+              }
+            : null,
+          showDays,
+          offDays,
+          rehearsalDays,
+          totalDays
+        )
+      );
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Error loading data');
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, [tourId]);
 
@@ -129,8 +196,11 @@ export function CommissionsGrid({ tourId }: { tourId: string; currency?: string 
 
   const saveOverheadPct = useCallback(
     async (field: keyof OverheadSettings, value: number) => {
-      const pct = Math.max(0, Number(value) || 0) / 100;
-      const next = { ...overheadSettings, [field]: pct };
+      // InlineEditCell with type="percentage" already converts the user's
+      // typed percent (e.g. "14") into the stored fraction (0.14) on blur,
+      // so we must NOT divide by 100 again here.
+      const pct = Math.max(0, Number(value) || 0);
+      const next = { ...overheadsRef.current, [field]: pct };
       setOverheadSettings(next);
       setSavingOverheads(true);
       try {
@@ -145,12 +215,19 @@ export function CommissionsGrid({ tourId }: { tourId: string; currency?: string 
           }),
         });
         if (!res.ok) throw new Error('Failed to save standard overheads');
-        await fetchData();
+        await fetchData({ silent: true });
+      } catch {
+        await fetchData({ silent: true });
       } finally {
         setSavingOverheads(false);
       }
     },
-    [fetchData, overheadSettings, tourId]
+    [fetchData, tourId]
+  );
+
+  const sortedCommissions = useMemo(
+    () => [...commissions].sort((a, b) => a.order_index - b.order_index),
+    [commissions]
   );
 
   if (loading) return <div className="text-sm text-lp-text-secondary py-4">Loading…</div>;
@@ -185,10 +262,10 @@ export function CommissionsGrid({ tourId }: { tourId: string; currency?: string 
                   align="right"
                 />
               </td>
-              <td className="px-3 py-2 text-right text-lp-text-secondary font-[tabular-nums]">
+              <td className="px-3 py-2 text-right text-lp-text-secondary tabular-nums">
                 {overheadAmounts[label].proposed.toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
               </td>
-              <td className="px-3 py-2 text-right text-lp-text-secondary font-[tabular-nums]">
+              <td className="px-3 py-2 text-right text-lp-text-secondary tabular-nums">
                 {overheadAmounts[label].actual.toLocaleString('en-GB', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
               </td>
             </tr>
@@ -201,46 +278,52 @@ export function CommissionsGrid({ tourId }: { tourId: string; currency?: string 
 
       <div className="text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">Commissions</div>
       <GridTable columns={COLS}>
-        {commissions.map((c) => (
-          <tr key={c.id}>
-            <td className="p-0">
-              <InlineEditCell
-                value={c.label}
-                type="text"
-                onSave={async (v) => saveCommission(c.id, 'label', String(v))}
-              />
-            </td>
-            <td className="p-0">
-              <InlineEditCell
-                value={c.percentage}
-                type="percentage"
-                onSave={async (v) => saveCommission(c.id, 'percentage', v)}
-                align="right"
-              />
-            </td>
-            <td className="p-0">
-              <InlineEditCell
-                value={c.basis}
-                type="select"
-                options={BASIS_OPTIONS}
-                onSave={async (v) => saveCommission(c.id, 'basis', String(v))}
-              />
-            </td>
-            <td className="text-right text-lp-text-secondary font-[tabular-nums]">
-              —
-            </td>
-            <td className="text-right text-lp-text-secondary font-[tabular-nums]">
-              —
-            </td>
-            <td className="p-0">
-              <InlineEditCell
-                value={c.notes}
-                type="text"
-                onSave={async (v) => saveCommission(c.id, 'notes', String(v))}
-              />
-            </td>
-          </tr>
-        ))}
+        {sortedCommissions.map((c) => {
+          const basis = c.basis ?? 'gross';
+          const pct = normalizeCommissionPct(c.percentage);
+          const proposedAmt = commissionContext ? commissionContext.amountProposed(pct, basis) : null;
+          const actualAmt = commissionContext ? commissionContext.amountActual(pct, basis) : null;
+          return (
+            <tr key={c.id}>
+              <td className="p-0">
+                <InlineEditCell
+                  value={c.label}
+                  type="text"
+                  onSave={async (v) => saveCommission(c.id, 'label', String(v))}
+                />
+              </td>
+              <td className="p-0">
+                <InlineEditCell
+                  value={c.percentage}
+                  type="percentage"
+                  onSave={async (v) => saveCommission(c.id, 'percentage', v)}
+                  align="right"
+                />
+              </td>
+              <td className="p-0">
+                <InlineEditCell
+                  value={c.basis}
+                  type="select"
+                  options={BASIS_OPTIONS}
+                  onSave={async (v) => saveCommission(c.id, 'basis', String(v))}
+                />
+              </td>
+              <td className="px-3 py-2 text-right text-lp-text-secondary tabular-nums">
+                {proposedAmt == null ? '—' : proposedAmt.toLocaleString('en-GB', { minimumFractionDigits: 2 })}
+              </td>
+              <td className="px-3 py-2 text-right text-lp-text-secondary tabular-nums">
+                {actualAmt == null ? '—' : actualAmt.toLocaleString('en-GB', { minimumFractionDigits: 2 })}
+              </td>
+              <td className="p-0">
+                <InlineEditCell
+                  value={c.notes}
+                  type="text"
+                  onSave={async (v) => saveCommission(c.id, 'notes', String(v))}
+                />
+              </td>
+            </tr>
+          );
+        })}
       </GridTable>
       <button
         type="button"

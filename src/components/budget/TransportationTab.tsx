@@ -7,6 +7,7 @@ import { DeleteConfirmationModal } from '@/components/ui/DeleteConfirmationModal
 import { BudgetTable } from '@/components/budget/BudgetTable';
 import { InlineEdit } from '@/components/budget/InlineEdit';
 import { InlineCurrencyCell } from '@/components/budget/InlineCurrencyCell';
+import { BrandedSelect } from '@/components/ui/BrandedSelect';
 import { cn } from '@/lib/utils';
 
 const TRANSPORT_CATEGORIES = [
@@ -229,15 +230,13 @@ export function TransportationTab({ tourId }: { tourId: string }) {
                 <tr className="border-b border-lp-border bg-lp-orange-subtle/30">
                   <td className="p-2" />
                   <td className="p-2">
-                    <select
-                      className="rounded border border-lp-border bg-lp-bg px-2 py-1.5 text-lp-text"
+                    <BrandedSelect
                       value={newRow.category}
-                      onChange={(e) => setNewRow((r) => ({ ...r, category: e.target.value as TransportCategory }))}
-                    >
-                      {TRANSPORT_CATEGORIES.map((c) => (
-                        <option key={c.value} value={c.value}>{c.label}</option>
-                      ))}
-                    </select>
+                      onChange={(v) => setNewRow((r) => ({ ...r, category: v as TransportCategory }))}
+                      options={TRANSPORT_CATEGORIES.map((c) => ({ value: c.value, label: c.label }))}
+                      ariaLabel="Category"
+                      size="sm"
+                    />
                   </td>
                   <td className="p-2">
                     <input
@@ -361,15 +360,13 @@ export function TransportationTab({ tourId }: { tourId: string }) {
                     </td>
                     <td className="p-3 text-lp-text-secondary">
                       {isEditing ? (
-                        <select
-                          className="rounded border border-lp-border bg-lp-bg px-2 py-1 text-lp-text"
+                        <BrandedSelect
                           value={row.category ?? item.category}
-                          onChange={(e) => setEditRow((r) => ({ ...r, category: e.target.value }))}
-                        >
-                          {TRANSPORT_CATEGORIES.map((c) => (
-                            <option key={c.value} value={c.value}>{c.label}</option>
-                          ))}
-                        </select>
+                          onChange={(v) => setEditRow((r) => ({ ...r, category: v }))}
+                          options={TRANSPORT_CATEGORIES.map((c) => ({ value: c.value, label: c.label }))}
+                          ariaLabel="Category"
+                          size="sm"
+                        />
                       ) : (
                         catLabel
                       )}

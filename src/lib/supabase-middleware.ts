@@ -37,18 +37,22 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // If no user and trying to access protected routes, redirect to login
+  // If no user and trying to access protected routes, redirect to login.
   const isAuthRoute = request.nextUrl.pathname.startsWith('/login') ||
     request.nextUrl.pathname.startsWith('/signup') ||
     request.nextUrl.pathname.startsWith('/auth');
+  // Public routes accessible without a session (public rider links).
+  const isPublicRoute = request.nextUrl.pathname.startsWith('/r/');
 
-  if (!user && !isAuthRoute) {
+  if (!user && !isAuthRoute && !isPublicRoute) {
     const url = request.nextUrl.clone();
     url.pathname = '/login';
     return NextResponse.redirect(url);
   }
 
-  // If user exists and on auth route, redirect to dashboard
+  // If user exists and on auth route, redirect to dashboard.
+  // Public routes (e.g. /r/[token]) are fine to visit while signed in —
+  // do NOT redirect authenticated users away from them.
   if (user && isAuthRoute) {
     const url = request.nextUrl.clone();
     url.pathname = '/dashboard';

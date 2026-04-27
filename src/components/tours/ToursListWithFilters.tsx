@@ -5,6 +5,7 @@ import { Search, Filter } from 'lucide-react';
 import { TourCard } from '@/components/tours/TourCard';
 import { capitaliseStatus } from '@/lib/utils';
 import { useArtistTourContext } from '@/contexts/ArtistTourContext';
+import { BrandedSelect } from '@/components/ui/BrandedSelect';
 import type { Tour } from '@/types';
 
 const STATUS_OPTIONS = ['planning', 'active', 'completed', 'archived'] as const;
@@ -74,19 +75,15 @@ export function ToursListWithFilters({ tours }: { tours: Tour[] }) {
         </div>
         <div className="flex items-center gap-2">
           <Filter className="h-4 w-4 text-lp-text-tertiary" />
-          <select
+          <BrandedSelect
             value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value)}
-            className="rounded-lg border border-lp-border bg-lp-bg px-3 py-2 text-sm text-lp-text focus:outline-none focus:ring-2 focus:ring-lp-orange/50"
-            aria-label="Filter by status"
-          >
-            <option value="">All statuses</option>
-            {STATUS_OPTIONS.map((s) => (
-              <option key={s} value={s}>
-                {capitaliseStatus(s)}
-              </option>
-            ))}
-          </select>
+            onChange={setFilterStatus}
+            options={[
+              { value: '', label: 'All statuses' },
+              ...STATUS_OPTIONS.map((s) => ({ value: s, label: capitaliseStatus(s) })),
+            ]}
+            ariaLabel="Filter by status"
+          />
           {scopedArtistId ? (
             <div
               className="flex min-w-[140px] items-center rounded-lg border border-lp-orange/40 bg-lp-orange/5 px-3 py-2 text-sm font-medium text-lp-text"
@@ -95,19 +92,16 @@ export function ToursListWithFilters({ tours }: { tours: Tour[] }) {
               <span className="truncate">{selectedArtist?.name ?? 'Artist scope'}</span>
             </div>
           ) : (
-            <select
+            <BrandedSelect
               value={filterArtistId}
-              onChange={(e) => setFilterArtistId(e.target.value)}
-              className="min-w-[140px] rounded-lg border border-lp-border bg-lp-bg px-3 py-2 text-sm text-lp-text focus:outline-none focus:ring-2 focus:ring-lp-orange/50"
-              aria-label="Filter by artist"
-            >
-              <option value="">All artists</option>
-              {distinctArtists.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
+              onChange={setFilterArtistId}
+              options={[
+                { value: '', label: 'All artists' },
+                ...distinctArtists.map((a) => ({ value: a.id, label: a.name })),
+              ]}
+              ariaLabel="Filter by artist"
+              minWidth={140}
+            />
           )}
         </div>
       </div>

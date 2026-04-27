@@ -9,6 +9,7 @@ import { RoutingDateField } from './RoutingDateField';
 import { TextColumnHeader, NumberColumnHeader } from './SpreadsheetColumnHeader';
 import { InlineEditCell } from './InlineEditCell';
 import { PlacesAutocompleteInput } from './PlacesAutocompleteInput';
+import { BrandedSelect } from '@/components/ui/BrandedSelect';
 import {
   nightsBetweenHotelStay,
   hotelRateDenominatorNights,
@@ -23,20 +24,20 @@ const HOTEL_BOOKING_STATUS_OPTIONS = [
   { value: 'disputed', label: 'Disputed' },
 ] as const;
 
-function hotelBookingStatusSelectClasses(status: string): string {
+function hotelBookingStatusDotColor(status: string): string {
   switch (status) {
     case 'draft':
-      return 'border-zinc-500/50 bg-zinc-900/75 text-zinc-100';
+      return '#a1a1aa';
     case 'quoted':
-      return 'border-sky-500/55 bg-sky-950/65 text-sky-50';
+      return '#38bdf8';
     case 'approved':
-      return 'border-emerald-500/55 bg-emerald-950/55 text-emerald-50';
+      return '#10b981';
     case 'paid':
-      return 'border-violet-500/55 bg-violet-950/55 text-violet-50';
+      return '#a78bfa';
     case 'disputed':
-      return 'border-rose-500/55 bg-rose-950/55 text-rose-50';
+      return '#f43f5e';
     default:
-      return 'border-lp-border bg-lp-surface text-lp-text';
+      return '#a1a1aa';
   }
 }
 
@@ -355,34 +356,33 @@ export function HotelsGrid({ tourId, currency }: { tourId: string; currency: str
       <div className="flex flex-wrap items-center gap-4 rounded-xl border border-lp-border bg-lp-surface px-4 py-3 text-sm">
         <label className="flex flex-wrap items-center gap-2 text-lp-text-secondary">
           <span className="whitespace-nowrap font-medium text-lp-text">Sort by check-in</span>
-          <select
+          <BrandedSelect
             value={checkInSortValue}
-            onChange={(e) => {
-              const v = e.target.value;
+            onChange={(v) => {
               if (v === 'earliest' || v === 'latest') setSort({ col: 'check_in', mode: v });
               else setSort((prev) => (prev?.col === 'check_in' ? null : prev));
             }}
-            className="min-w-[11rem] rounded-md border border-lp-border bg-lp-bg px-2 py-1.5 text-lp-text"
-          >
-            <option value="">Default order</option>
-            <option value="earliest">Earliest first</option>
-            <option value="latest">Latest first</option>
-          </select>
+            options={[
+              { value: '', label: 'Default order' },
+              { value: 'earliest', label: 'Earliest first' },
+              { value: 'latest', label: 'Latest first' },
+            ]}
+            ariaLabel="Sort by check-in"
+            minWidth={176}
+          />
         </label>
         <label className="flex flex-wrap items-center gap-2 text-lp-text-secondary">
           <span className="whitespace-nowrap font-medium text-lp-text">Month</span>
-          <select
+          <BrandedSelect
             value={monthYyyymm}
-            onChange={(e) => setMonthYyyymm(e.target.value)}
-            className="min-w-[10rem] rounded-md border border-lp-border bg-lp-bg px-2 py-1.5 text-lp-text"
-          >
-            <option value="">All months</option>
-            {monthOpts.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
+            onChange={setMonthYyyymm}
+            options={[
+              { value: '', label: 'All months' },
+              ...monthOpts.map((o) => ({ value: o.value, label: o.label })),
+            ]}
+            ariaLabel="Month filter"
+            minWidth={160}
+          />
         </label>
       </div>
       <div className="overflow-x-auto rounded-xl border border-lp-border bg-lp-surface">
@@ -654,25 +654,22 @@ export function HotelsGrid({ tourId, currency }: { tourId: string; currency: str
                   <td className="p-0 align-middle" onClick={(e) => e.stopPropagation()}>
                     <div className="flex min-h-11 w-full items-center px-2 py-2">
                       {h.line_item_id ? (
-                        <select
+                        <BrandedSelect
                           value={h.status ?? 'draft'}
                           disabled={saving}
-                          onChange={(e) => {
-                            void patchHotelLineItem(h.id, h.line_item_id!, { status: e.target.value });
+                          onChange={(v) => {
+                            void patchHotelLineItem(h.id, h.line_item_id!, { status: v });
                           }}
-                          className={cn(
-                            'w-full min-w-[7.25rem] max-w-[10.5rem] cursor-pointer rounded-md border px-2 py-1.5 text-xs font-semibold shadow-sm transition-colors',
-                            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-lp-orange/35',
-                            'disabled:cursor-not-allowed disabled:opacity-50',
-                            hotelBookingStatusSelectClasses(h.status ?? 'draft')
-                          )}
-                        >
-                          {HOTEL_BOOKING_STATUS_OPTIONS.map((o) => (
-                            <option key={o.value} value={o.value}>
-                              {o.label}
-                            </option>
-                          ))}
-                        </select>
+                          options={HOTEL_BOOKING_STATUS_OPTIONS.map((o) => ({
+                            value: o.value,
+                            label: o.label,
+                            color: hotelBookingStatusDotColor(o.value),
+                          }))}
+                          ariaLabel="Booking status"
+                          size="sm"
+                          className="w-full"
+                          minWidth={116}
+                        />
                       ) : (
                         <span className="text-xs text-lp-text-tertiary">—</span>
                       )}

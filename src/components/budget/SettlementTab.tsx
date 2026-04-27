@@ -5,6 +5,7 @@ import { Loader2, ChevronRight, Upload, ExternalLink, X } from 'lucide-react';
 import { formatDate } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 import { SpreadsheetCurrencyAmount } from '@/components/spreadsheet-view/SpreadsheetCurrencyAmount';
+import { BrandedSelect } from '@/components/ui/BrandedSelect';
 
 /** Math spec §12: day_of_net = guarantee + overage + merch - deductions; reconciled_net = same */
 function computeNet(
@@ -224,11 +225,18 @@ export function SettlementTab({ tourId, currency = 'GBP' }: { tourId: string; cu
             <div className="space-y-6">
               <div>
                 <label className="block text-sm font-medium text-lp-text mb-1">Status</label>
-                <select className="w-full rounded-md border border-lp-border bg-transparent px-3 py-2 text-sm text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30" value={form.status ?? 'pending'} onChange={(e) => setForm((f) => ({ ...f!, status: e.target.value }))}>
-                  <option value="pending">Pending</option>
-                  <option value="day_of_complete">Day-of Complete</option>
-                  <option value="reconciled">Reconciled</option>
-                </select>
+                <BrandedSelect
+                  value={form.status ?? 'pending'}
+                  onChange={(v) => setForm((f) => ({ ...f!, status: v }))}
+                  className="w-full"
+                  triggerClassName="w-full"
+                  ariaLabel="Settlement status"
+                  options={[
+                    { value: 'pending', label: 'Pending' },
+                    { value: 'day_of_complete', label: 'Day-of Complete' },
+                    { value: 'reconciled', label: 'Reconciled' },
+                  ]}
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-4">
