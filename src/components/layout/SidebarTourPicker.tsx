@@ -51,7 +51,7 @@ export function SidebarTourPicker() {
       }
       return;
     }
-    router.push(`/tours/${newTourId}/advance`);
+    router.push(`/tours/${newTourId}/overview`);
   }
 
   const tourOptions: StyledSelectOption<string>[] = useMemo(
@@ -80,11 +80,11 @@ export function SidebarTourPicker() {
       onChange={(v) => {
         if (!v) {
           setSelectedTourId(null);
-          if (onManagePage) router.push('/dashboard');
+          if (onManagePage) router.push('/dashboard?select=artist');
           return;
         }
-        setSelectedTourId(v);
         redirectAfterTourSwitch(v);
+        setSelectedTourId(v);
       }}
       options={tourOptions}
       placeholder="Select tour"
