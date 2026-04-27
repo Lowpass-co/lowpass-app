@@ -13,7 +13,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { X } from 'lucide-react';
+import { ChevronDown, X } from 'lucide-react';
 import { useArtistTourContext } from '@/contexts/ArtistTourContext';
 import { cn } from '@/lib/utils';
 
@@ -26,7 +26,7 @@ function ArtistTourScopeClearButton() {
       type="button"
       onClick={() => {
         setSelectedArtistId(null);
-        router.push('/dashboard');
+        router.push('/dashboard?select=artist');
       }}
       className={cn(
         'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-transparent',
@@ -141,17 +141,22 @@ export function AppTopBarBreadcrumb() {
         </div>
 
         <div className="flex min-w-0 flex-1 items-center gap-1 text-sm font-semibold" style={{ color: 'var(--lp-text)' }}>
-          <div className="relative min-w-0" ref={artistWrapRef}>
+          <div className="group/artist relative min-w-0" ref={artistWrapRef}>
           <button
             type="button"
             onClick={() => {
               setTourMenuOpen(false);
               setArtistMenuOpen((o) => !o);
             }}
-            className="truncate text-left transition-opacity hover:opacity-80"
+            className="inline-flex max-w-full items-center gap-1 truncate text-left transition-opacity hover:opacity-80"
             style={{ color: 'var(--lp-text)' }}
           >
-            {selectedArtist?.name ?? 'Artist'}
+            <span className="truncate">{selectedArtist?.name ?? 'Artist'}</span>
+            <ChevronDown
+              size={12}
+              className="shrink-0 opacity-0 transition-opacity group-hover/artist:opacity-60"
+              aria-hidden
+            />
           </button>
           {artistMenuOpen && (
             <div
@@ -182,17 +187,22 @@ export function AppTopBarBreadcrumb() {
 
           <span className="shrink-0 text-lp-text-tertiary">/</span>
 
-          <div className="relative min-w-0 flex-1" ref={tourWrapRef}>
+          <div className="group/tour relative min-w-0 flex-1" ref={tourWrapRef}>
             <button
               type="button"
               onClick={() => {
                 setArtistMenuOpen(false);
                 setTourMenuOpen((o) => !o);
               }}
-              className="w-full truncate text-left transition-opacity hover:opacity-80"
+              className="inline-flex w-full items-center gap-1 truncate text-left transition-opacity hover:opacity-80"
               style={{ color: 'var(--lp-text)' }}
             >
-              {selectedTour?.name ?? 'Tour'}
+              <span className="truncate">{selectedTour?.name ?? 'Tour'}</span>
+              <ChevronDown
+                size={12}
+                className="shrink-0 opacity-0 transition-opacity group-hover/tour:opacity-60"
+                aria-hidden
+              />
             </button>
             {tourMenuOpen && (
               <div
@@ -209,9 +219,9 @@ export function AppTopBarBreadcrumb() {
                       t.id === selectedTourId && 'bg-lp-bg-secondary font-medium'
                     )}
                     onClick={() => {
-                      setSelectedTourId(t.id);
                       setTourMenuOpen(false);
-                      router.push(`/tours/${t.id}/advance`);
+                      router.push(`/tours/${t.id}/overview`);
+                      setSelectedTourId(t.id);
                     }}
                   >
                     {t.name}

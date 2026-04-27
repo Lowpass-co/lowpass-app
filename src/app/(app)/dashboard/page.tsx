@@ -201,7 +201,7 @@ export default async function DashboardPage({
   const { data: toursList } = await toursListQ;
 
   return (
-    <DashboardArtistGate pickArtistMode={pickArtistMode}>
+    <DashboardArtistGate pickArtistMode={pickArtistMode} allToursMode={!!artistId}>
       <div className="lp-dashboard-glass mx-auto min-h-[60vh] max-w-7xl space-y-6">
         <div className="flex items-center justify-between">
           <div>

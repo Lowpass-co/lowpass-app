@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { ArrowLeft, Plus } from 'lucide-react';
 import { useArtistTourContext } from '@/contexts/ArtistTourContext';
@@ -41,12 +41,16 @@ function statusBadgeClass(status: Tour['status']): string {
 export function DashboardArtistGate({
   children,
   pickArtistMode = false,
+  allToursMode = false,
 }: {
   children: React.ReactNode;
   /** When true and no artist is selected, show the artist grid (header “select an artist” CTA). */
   pickArtistMode?: boolean;
+  /** When true and artist is selected, skip tour gate and show dashboard directly. */
+  allToursMode?: boolean;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const {
     selectedArtistId,
     selectedTourId,
@@ -62,10 +66,18 @@ export function DashboardArtistGate({
   } = useArtistTourContext();
 
   const [newArtistOpen, setNewArtistOpen] = useState(false);
+  const [isNavigatingToTour, setIsNavigatingToTour] = useState(false);
 
   useEffect(() => {
     if (!pickArtistMode) setNewArtistOpen(false);
   }, [pickArtistMode]);
+
+  useEffect(() => {
+    // Once we leave dashboard, clear the in-flight tour navigation guard.
+    if (!pathname?.startsWith('/dashboard')) {
+      setIsNavigatingToTour(false);
+    }
+  }, [pathname]);
 
   if (!hydrated) {
     return (
@@ -121,17 +133,30 @@ export function DashboardArtistGate({
     );
   }
 
-  if (!selectedTourId) {
+  if (!selectedTourId && !allToursMode) {
     return (
       <DashboardChooseTour
+        artistId={selectedArtistId}
         artistName={selectedArtist?.name ?? 'Artist'}
         tours={tours}
         isLoading={isLoading}
         onBack={() => setSelectedArtistId(null)}
         onPickTour={(tourId) => {
+          setIsNavigatingToTour(true);
           setSelectedTourId(tourId);
         }}
       />
+    );
+  }
+
+  // Prevent dashboard flash while route push to /tours/{id}/overview is in flight.
+  if (isNavigatingToTour && pathname?.startsWith('/dashboard')) {
+    return (
+      <div className="mx-auto min-h-[40vh] max-w-2xl px-2 py-8 sm:px-0" aria-busy="true">
+        <div className="rounded-lg border border-lp-border bg-lp-surface/40 px-4 py-6 text-center text-sm text-lp-text-secondary">
+          Opening tour summary…
+        </div>
+      </div>
     );
   }
 
@@ -184,12 +209,14 @@ function DashboardChooseArtist({
 }
 
 function DashboardChooseTour({
+  artistId,
   artistName,
   tours,
   isLoading,
   onBack,
   onPickTour,
 }: {
+  artistId: string;
   artistName: string;
   tours: Tour[];
   isLoading: boolean;
@@ -210,9 +237,25 @@ function DashboardChooseTour({
         Back
       </button>
       <h1 className="text-2xl font-bold text-lp-text">{artistName}</h1>
-      <p className="mt-1 text-sm text-lp-text-secondary">Select a tour to open advances for that run.</p>
+      <p className="mt-1 text-sm text-lp-text-secondary">
+        Select individual tour to manage, or 'All Tours' for an artist overview.
+      </p>
 
       <div className="mt-8 space-y-2">
+        {!isLoading && (
+          <div className="space-y-2">
+            <button
+              type="button"
+              onClick={() => {
+                router.push(`/dashboard?artist_id=${artistId}`);
+              }}
+              className="w-full rounded-lg border border-lp-border/70 bg-lp-surface/60 px-4 py-3 text-left text-sm font-medium text-lp-text-secondary transition-colors hover:border-lp-orange/30 hover:text-lp-text"
+            >
+              All Tours
+            </button>
+            <div className="h-px w-full bg-lp-border/70" />
+          </div>
+        )}
         {isLoading && (
           <div className="rounded-lg border border-lp-border bg-lp-surface/60 px-4 py-6 text-center text-sm text-lp-text-secondary">
             Loading tours…
@@ -229,8 +272,8 @@ function DashboardChooseTour({
               key={tour.id}
               type="button"
               onClick={() => {
+                router.push(`/tours/${tour.id}/overview`);
                 onPickTour(tour.id);
-                router.push(`/tours/${tour.id}/advance`);
               }}
               className="flex w-full items-center justify-between gap-3 rounded-lg border border-lp-border bg-lp-surface px-4 py-3 text-left transition-colors hover:border-lp-orange/40 hover:bg-lp-surface-hover"
             >
