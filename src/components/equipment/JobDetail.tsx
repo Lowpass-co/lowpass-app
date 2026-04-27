@@ -5,7 +5,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { ArrowLeft, Trash2, Plus } from 'lucide-react';
+import { ArrowLeft, Trash2, Plus, FileDown } from 'lucide-react';
 import { createClient } from '@/lib/supabase-client';
 import { effectiveInventoryDayRate } from '@/lib/rental-pricing';
 import { StyledSelect, type StyledSelectOption } from '@/components/ui/StyledSelect';
@@ -41,6 +41,7 @@ export function JobDetail({ job, inventory, artists, tours, onBack, onEdit, onDe
   const [discPct,   setDiscPct]   = useState(String(job.discount_percent ?? ''));
   const [discFixed, setDiscFixed] = useState(String(job.discount_fixed   ?? ''));
   const [status,    setStatus]    = useState(job.status);
+  const [exporting, setExporting] = useState(false);
 
   const supabase = createClient();
   const days = calcDays(job.start_date, job.end_date);
@@ -126,6 +127,16 @@ export function JobDetail({ job, inventory, artists, tours, onBack, onEdit, onDe
     onJobUpdated({ ...job, status: val as RentalJob['status'] });
   }
 
+  function handleExport() {
+    if (exporting) return;
+    setExporting(true);
+    try {
+      window.print();
+    } finally {
+      setTimeout(() => setExporting(false), 250);
+    }
+  }
+
   return (
     <div className="w-full min-w-0 space-y-6">
       {/* Back + title row */}
@@ -154,6 +165,25 @@ export function JobDetail({ job, inventory, artists, tours, onBack, onEdit, onDe
             </div>
           </div>
           <div className="flex gap-2">
+            <button
+              onClick={handleExport}
+              disabled={exporting}
+              className="flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-60"
+              style={{ borderColor: 'var(--lp-border)', color: 'var(--lp-text-secondary)', backgroundColor: 'transparent' }}
+              onMouseOver={e => {
+                if (exporting) return;
+                e.currentTarget.style.borderColor = '#FF4500';
+                e.currentTarget.style.color = '#FF4500';
+              }}
+              onMouseOut={e => {
+                e.currentTarget.style.borderColor = 'var(--lp-border)';
+                e.currentTarget.style.color = 'var(--lp-text-secondary)';
+              }}
+              title="Export this rental job"
+            >
+              <FileDown size={13} strokeWidth={2.5} />
+              {exporting ? 'Exporting…' : 'Export'}
+            </button>
             <button
               onClick={onEdit}
               className="rounded-lg border px-3 py-1.5 text-xs font-semibold transition-colors"
