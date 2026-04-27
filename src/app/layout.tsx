@@ -8,6 +8,7 @@
 import type { Metadata } from 'next';
 import { Inter, Montserrat } from 'next/font/google';
 import './globals.css';
+import '@/lib/entities';
 
 const inter = Inter({
   variable: '--font-geist-sans',

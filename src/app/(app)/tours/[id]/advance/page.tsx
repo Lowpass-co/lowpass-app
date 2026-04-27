@@ -10,6 +10,7 @@ import { notFound } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { AdvanceOverview } from './AdvanceOverview';
 import { ChevronRight } from 'lucide-react';
+import { AdvanceFlightsPanel } from '@/components/advance/AdvanceFlightsPanel';
 
 export default async function TourAdvancePage({
   params,
@@ -57,6 +58,7 @@ export default async function TourAdvancePage({
         </p>
       </div>
 
+      <AdvanceFlightsPanel tourId={tour.id} />
       <AdvanceOverview tourId={tour.id} tourName={tour.name} />
     </div>
   );
