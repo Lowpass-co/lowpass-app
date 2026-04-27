@@ -1,3 +1,8 @@
+// TODO(UX13): refactor to use <SlideOver> primitive from src/components/shell/SlideOver.tsx.
+//   Currently rolls its own chrome (backdrop / aside / header / footer). Functionally OK but
+//   skips focus trap, mobile bottom-sheet, and standard animations. UX13 (list pages re-skin)
+//   will sweep this when entity surfaces touch DataTable + slide-over.
+
 'use client';
 
 import { useEffect, useState } from 'react';
@@ -138,6 +143,7 @@ export default function PersonSlideOver({ id, onClose }: { id: string; onClose: 
                   <input className={IC} placeholder="Dietary" value={dietary} onChange={(e) => setDietary(e.target.value)} />
                 </div>
               </Section>
+              {/* TODO(UX13): inline edit role/employment_type/rate_amount/rate_currency/rate_period/dates per tour_personnel row. Currently read-only. Needs PATCH /api/tour-personnel/[id] endpoint + per-row local state. */}
               <Section title="Tours">
                 <div className="space-y-2">
                   {(person?.tourPersonnel ?? []).length === 0 ? (
