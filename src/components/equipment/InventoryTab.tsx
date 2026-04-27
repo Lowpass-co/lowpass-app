@@ -193,44 +193,122 @@ export function InventoryTab({ userId, inventory, setInventory }: Props) {
     setEditMode(false);
   }
 
-  /* ── Auto image fill ── */
+  /* ── Auto image fill ──
+     Walks every inventory row missing an image and asks
+     `/api/equipment/find-image` for the top Google Custom Search hit.
+     Two subtleties worth preserving:
+       1. We keep a *local* running copy of inventory across the loop.
+          `inventory` in this closure is captured at click time, so doing
+          `setInventory(inventory.map(...))` on each iteration would clobber
+          earlier successful updates with the original (stale) array — only
+          the last image would visibly stick. The local `working` copy
+          accumulates updates and is pushed to React state after each save.
+       2. Configuration / API errors are surfaced to the user. We used to
+          silently `break` on `CSE_NOT_CONFIGURED` / `GOOGLE_CSE_ERROR`,
+          which made a misconfigured key indistinguishable from a working
+          batch with zero matches — i.e. "Auto Images appears to do
+          nothing". Now the message bubbles up in a single alert at the
+          end so the user knows whether to fix env vars, enable the
+          Custom Search JSON API on their key, or just try a better query.
+  */
   async function autoFillImages() {
     const targets = inventory.filter(i => !i.image_url);
     if (!targets.length) { alert('All items already have images.'); return; }
     imgFillStop.current = false;
     setImgFill({ current: 0, total: targets.length, found: 0 });
+
     let found = 0;
+    let savedFailures = 0;          // Supabase update failures
+    let firstApiError: string | null = null;
+    let fatalCode: string | null = null; // CSE_NOT_CONFIGURED stops the batch
+    let working = inventory;        // running snapshot, threaded through setInventory
+
     for (let i = 0; i < targets.length; i++) {
       if (imgFillStop.current) break;
       const item = targets[i];
       setImgFill({ current: i + 1, total: targets.length, found });
+
+      let data: { imageUrl?: string | null; code?: string; message?: string } | null = null;
       try {
         const res = await fetch(`/api/equipment/find-image?q=${encodeURIComponent(item.name)}`);
-        let data: {
-          imageUrl?: string | null;
-          code?: string;
-          message?: string;
-        };
-        try {
-          data = await res.json();
-        } catch {
+        try { data = await res.json(); } catch { data = null; }
+      } catch {
+        // Network error — record once and keep trying so a single blip
+        // doesn't kill the whole run.
+        if (!firstApiError) firstApiError = 'Network error reaching the image search API.';
+        continue;
+      }
+
+      if (!data) continue;
+      const { imageUrl, code, message } = data;
+
+      // Hard-stop: the server isn't configured at all. No point hammering it.
+      if (code === 'CSE_NOT_CONFIGURED') {
+        fatalCode = code;
+        if (!firstApiError) firstApiError = message || 'Image search is not configured on the server.';
+        break;
+      }
+      // Soft errors (quota, key missing Custom Search API, transient Google
+      // failures) — record the first one but keep going; some queries may
+      // still hit cache or recover.
+      if (code === 'GOOGLE_CSE_ERROR') {
+        if (!firstApiError) firstApiError = message || 'Google Custom Search returned an error.';
+        continue;
+      }
+      if (code === 'BAD_REQUEST') continue;
+
+      if (imageUrl) {
+        const { error: updErr } = await supabase
+          .from('rental_inventory')
+          .update({ image_url: imageUrl })
+          .eq('id', item.id);
+        if (updErr) {
+          savedFailures++;
+          if (!firstApiError) firstApiError = `Database update failed: ${updErr.message}`;
           continue;
         }
-        const { imageUrl, code } = data;
-        // API returns 200 + code for “not configured” and Google errors — stop batch quietly (no alert)
-        if (code === 'CSE_NOT_CONFIGURED' || code === 'GOOGLE_CSE_ERROR') break;
-        if (!res.ok && code === 'BAD_REQUEST') break;
-        if (imageUrl) {
-          await supabase.from('rental_inventory').update({ image_url: imageUrl }).eq('id', item.id);
-          setInventory(inventory.map(inv => inv.id === item.id ? { ...inv, image_url: imageUrl } : inv));
-          found++;
-          setImgFill({ current: i + 1, total: targets.length, found });
-        }
-      } catch {
-        /* skip item on network error */
+        // Thread the update through our running copy so later iterations
+        // (and the final setInventory call) see every previous match.
+        working = working.map(inv =>
+          inv.id === item.id ? { ...inv, image_url: imageUrl } : inv,
+        );
+        setInventory(working);
+        found++;
+        setImgFill({ current: i + 1, total: targets.length, found });
       }
     }
+
     setImgFill(null);
+
+    // Final user-visible summary. Quiet success when at least one image
+    // landed and nothing went wrong; otherwise tell the user what
+    // happened so they can act on it.
+    const stopped = imgFillStop.current;
+    if (fatalCode === 'CSE_NOT_CONFIGURED') {
+      alert(
+        `Auto Images can't run — image search isn't configured.\n\n${firstApiError}\n\n` +
+          `Set GOOGLE_CSE_CX and either GOOGLE_CUSTOM_SEARCH_API_KEY or GOOGLE_PLACES_API_KEY (with the Custom Search JSON API enabled) in .env.local, then restart the dev server.`,
+      );
+      return;
+    }
+    if (firstApiError && found === 0 && !stopped) {
+      alert(
+        `Auto Images finished with no matches.\n\nFirst error: ${firstApiError}\n\n` +
+          `If this is a Google API key error, check that the Custom Search JSON API is enabled on the key and that billing is active in Google Cloud.`,
+      );
+      return;
+    }
+    if (firstApiError && found > 0) {
+      alert(
+        `Auto Images: matched ${found} of ${targets.length} item${targets.length !== 1 ? 's' : ''}.\n\n` +
+          `Some lookups failed — first error: ${firstApiError}` +
+          (savedFailures ? `\n\n${savedFailures} database update${savedFailures !== 1 ? 's' : ''} also failed.` : ''),
+      );
+      return;
+    }
+    if (stopped && found === 0) {
+      alert('Auto Images stopped — no matches were saved.');
+    }
   }
 
   /* ── Single-item handlers ── */
