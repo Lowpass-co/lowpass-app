@@ -1,6 +1,6 @@
 import type { ComponentType } from 'react';
 
-export type EntityKind = 'flight' | 'person' | 'room' | 'show' | 'tour';
+export type EntityKind = 'flight' | 'person' | 'room' | 'gear' | 'show' | 'tour';
 
 export type EntityDescriptor<T> = {
   kind: EntityKind;
@@ -8,6 +8,7 @@ export type EntityDescriptor<T> = {
   search: (query: string, opts?: { tourId?: string; limit?: number }) => Promise<T[]>;
   getLabel: (entity: T) => string;
   getSecondary: (entity: T) => string;
+  getColor?: (entity: T) => string;
   SlideOverContent: () => Promise<{ default: ComponentType<{ id: string; onClose: () => void }> }>;
 };
 

@@ -22,6 +22,7 @@ import StageBoxDialog from './StageBoxDialog';
 import PositionPicker from './PositionPicker';
 import { SaveStatePill, type SavePillState } from './SaveStatePill';
 import { BrandedSelect } from '@/components/ui/BrandedSelect';
+import { searchGear } from '@/lib/api/gear';
 
 const POSITION_SUGGESTIONS = ['USR', 'USL', 'USC', 'DSC', 'DSL', 'DSR', 'OSR', 'OSL', 'DLS', 'FOH'] as const;
 
@@ -89,13 +90,18 @@ export default function ChannelListEditor({
   const [subDialog, setSubDialog] = useState(false);
   const [stageDialog, setStageDialog] = useState(false);
   const [mics, setMics] = useState<MicLibraryEntry[]>([]);
+  const [gearByName, setGearByName] = useState<
+    Map<string, { id: string; ownership: 'owned' | 'sub_hired' | 'hired_to_client' }>
+  >(new Map());
   const inherited = !!section.inherited_from;
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setTitleDraft(section.title);
   }, [section.title]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setRows(section.rows ?? []);
   }, [section.id, section.rows]);
 
@@ -103,6 +109,28 @@ export default function ChannelListEditor({
     const supabase = createClient();
     void listMics(supabase, pack.workspace_id).then(setMics).catch(() => setMics([]));
   }, [pack.workspace_id]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void searchGear('', { limit: 400 })
+      .then((rows) => {
+        if (cancelled) return;
+        const next = new Map<string, { id: string; ownership: 'owned' | 'sub_hired' | 'hired_to_client' }>();
+        for (const row of rows) {
+          next.set((row.name ?? '').trim().toLowerCase(), {
+            id: row.id,
+            ownership: row.ownership,
+          });
+        }
+        setGearByName(next);
+      })
+      .catch(() => {
+        if (!cancelled) setGearByName(new Map());
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
@@ -265,6 +293,7 @@ export default function ChannelListEditor({
                     subSnakes={subSnakes}
                     stageBoxes={stageBoxes}
                     mics={mics}
+                    gearByName={gearByName}
                     gridStyle={CHANNEL_ROW_GRID}
                     onUpdateLocal={(r) => setRows((prev) => prev.map((x) => (x.id === r.id ? r : x)))}
                     onRefresh={onStructureChange}
@@ -321,6 +350,7 @@ function ChannelBlock({
   subSnakes,
   stageBoxes,
   mics,
+  gearByName,
   gridStyle,
   onUpdateLocal,
   onRefresh,
@@ -334,6 +364,7 @@ function ChannelBlock({
   subSnakes: SubSnake[];
   stageBoxes: StageBox[];
   mics: MicLibraryEntry[];
+  gearByName: Map<string, { id: string; ownership: 'owned' | 'sub_hired' | 'hired_to_client' }>;
   gridStyle: CSSProperties;
   onUpdateLocal: (r: ChannelListRow) => void;
   onRefresh: () => void | Promise<void>;
@@ -395,6 +426,7 @@ function ChannelBlock({
   const saveRow = useDebouncedSave<number>(
     useCallback(
       async (_tick: number) => {
+        void _tick;
         const p = { ...patchRef.current };
         patchRef.current = {};
         if (Object.keys(p).length === 0) return;
@@ -428,6 +460,8 @@ function ChannelBlock({
       return;
     }
     const patch: Partial<ChannelListRow> = { mic: name };
+    const mapped = gearByName.get(name.trim().toLowerCase()) ?? null;
+    patch.gear_id = mapped?.id ?? null;
     if (local.phantom_power === null) {
       patch.phantom_power = entry.default_phantom;
     }
@@ -543,6 +577,8 @@ function ChannelBlock({
                 pickMic(v);
                 return;
               }
+              const mapped = gearByName.get(v.toLowerCase()) ?? null;
+              queue({ gear_id: mapped?.id ?? null });
               void saveRow.flush();
             }}
             list={`mic-hint-${row.id}`}
@@ -554,6 +590,23 @@ function ChannelBlock({
               <option key={m.id} value={m.name} />
             ))}
           </datalist>
+          {local.gear_id ? (
+            <div className="mt-1 inline-flex items-center rounded border border-lp-border bg-lp-bg px-1.5 py-0.5 text-[10px] text-lp-text-secondary">
+              <span
+                className={
+                  (() => {
+                    const ownership =
+                      gearByName.get(local.mic.trim().toLowerCase())?.ownership ?? 'owned';
+                    if (ownership === 'hired_to_client') return 'text-lp-orange';
+                    if (ownership === 'sub_hired') return 'text-blue-400';
+                    return 'text-emerald-500';
+                  })()
+                }
+              >
+                Gear linked
+              </span>
+            </div>
+          ) : null}
         </div>
         <div className="min-w-0 self-center px-0.5">
           <input

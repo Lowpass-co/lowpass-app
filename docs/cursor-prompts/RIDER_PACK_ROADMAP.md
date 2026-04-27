@@ -141,6 +141,8 @@ Each row below is a self-contained Cursor prompt I'll expand into a full `.md` f
 
 ### R14 — Templates system
 
+> Superseded note (UX alignment): Hire-list scope originally discussed around R14 is deferred/superseded by UX12 Gear canonical implementation. R14 remains template-focused.
+
 **Goal:** Save a pack as a reusable template; new packs can apply a template (snapshot or live-linked).
 
 **Scope:**

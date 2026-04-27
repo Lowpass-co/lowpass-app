@@ -192,6 +192,7 @@ export type ChannelListRow = {
   stage_box_id: string | null;
   stage_box_position: number | null;
   position: string;
+  gear_id: string | null;
   mic: string;
   mic_substitute: string;
   di: string;

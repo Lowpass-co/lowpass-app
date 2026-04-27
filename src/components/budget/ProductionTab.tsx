@@ -27,6 +27,8 @@ type LineItem = {
   proposed_cost: number;
   actual_cost: number;
   notes: string | null;
+  source_entity_type?: string | null;
+  gear_id?: string | null;
   order_index: number;
 };
 
@@ -305,11 +307,12 @@ export function ProductionTab({ tourId }: { tourId: string }) {
               {sortedItems.map((item) => {
                 const isEditing = editingId === item.id;
                 const row = isEditing ? (editRow ?? item) : item;
+                const isDerivedGear = item.source_entity_type === 'gear' || !!item.gear_id;
                 const catLabel = PROD_CATEGORIES.find((c) => c.value === item.category)?.label ?? item.category;
                 const sameCategory = sortedItems.filter((i) => i.category === item.category);
                 const idx = sameCategory.findIndex((i) => i.id === item.id);
-                const canMoveUp = idx > 0;
-                const canMoveDown = idx >= 0 && idx < sameCategory.length - 1;
+                const canMoveUp = idx > 0 && !isDerivedGear;
+                const canMoveDown = idx >= 0 && idx < sameCategory.length - 1 && !isDerivedGear;
                 return (
                   <tr
                     key={item.id}
@@ -329,7 +332,8 @@ export function ProductionTab({ tourId }: { tourId: string }) {
                     }}
                     className={cn(
                       'border-b border-lp-border',
-                      !isEditing && 'cursor-pointer hover:bg-lp-surface-hover'
+                      !isEditing && 'cursor-pointer hover:bg-lp-surface-hover',
+                      isDerivedGear && 'bg-lp-orange-subtle/20'
                     )}
                   >
                     <td className="p-2">
@@ -370,7 +374,14 @@ export function ProductionTab({ tourId }: { tourId: string }) {
                           size="sm"
                         />
                       ) : (
-                        catLabel
+                        <span className="inline-flex items-center gap-2">
+                          {catLabel}
+                          {isDerivedGear ? (
+                            <span className="rounded border border-lp-orange/40 bg-lp-orange-subtle px-1.5 py-0.5 text-[10px] font-semibold text-lp-orange">
+                              Derived
+                            </span>
+                          ) : null}
+                        </span>
                       )}
                     </td>
                     <td className="p-3 text-lp-text">
@@ -469,7 +480,8 @@ export function ProductionTab({ tourId }: { tourId: string }) {
                               setEditingId(item.id);
                               setEditRow({ ...item });
                             }}
-                            className="rounded p-1 text-lp-text-tertiary hover:bg-lp-bg-tertiary hover:text-lp-text"
+                            disabled={isDerivedGear}
+                            className="rounded p-1 text-lp-text-tertiary hover:bg-lp-bg-tertiary hover:text-lp-text disabled:opacity-40"
                             title="Edit"
                           >
                             <Pencil className="h-4 w-4" />
@@ -480,7 +492,8 @@ export function ProductionTab({ tourId }: { tourId: string }) {
                               e.stopPropagation();
                               setDeleteModal({ id: item.id, label: item.label });
                             }}
-                            className="rounded p-1 text-lp-text-tertiary hover:bg-red-500/10 hover:text-red-600"
+                            disabled={isDerivedGear}
+                            className="rounded p-1 text-lp-text-tertiary hover:bg-red-500/10 hover:text-red-600 disabled:opacity-40"
                             title="Delete"
                           >
                             <Trash2 className="h-4 w-4" />

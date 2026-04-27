@@ -10,6 +10,7 @@ type RowPatch = Partial<
     | 'stage_box_id'
     | 'stage_box_position'
     | 'position'
+    | 'gear_id'
     | 'mic'
     | 'mic_substitute'
     | 'di'
@@ -274,6 +275,7 @@ export async function duplicateRow(
       stage_box_id: null,
       stage_box_position: null,
       position: s.position,
+      gear_id: s.gear_id,
       mic: s.mic,
       mic_substitute: s.mic_substitute,
       di: s.di,
