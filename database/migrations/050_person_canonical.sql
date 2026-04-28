@@ -136,6 +136,13 @@ ON CONFLICT (id) DO UPDATE SET
   notes = COALESCE(public.persons.notes, EXCLUDED.notes),
   updated_at = now();
 
+-- Defensive: ensure personnel_rates.roster_personnel_id exists before the backfill below.
+-- Migration 025_personnel_roster_link.sql added this column; not all environments
+-- have applied it (older codebases or the 025_*.sql duplicate-numbering issue may
+-- have caused it to be skipped). Idempotent — no-op if already present.
+ALTER TABLE public.personnel_rates
+  ADD COLUMN IF NOT EXISTS roster_personnel_id uuid REFERENCES public.personnel(id) ON DELETE SET NULL;
+
 -- Backfill tour-personnel join from personnel_rates
 INSERT INTO public.tour_personnel (
   id,
