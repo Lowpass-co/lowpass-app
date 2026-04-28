@@ -14,7 +14,7 @@ import {
   ChevronLeft, ChevronRight, LogOut, Lock,
   LayoutDashboard, ListMusic, ClipboardList, LineChart,
   HandCoins, Bed, BookOpen, FileCheck2, Music, Users, Users2, Building2, Settings, Bug, Package,
-  FileSignature,
+  FileSignature, LayoutTemplate,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useArtistTourContext } from '@/contexts/ArtistTourContext';
@@ -79,6 +79,7 @@ export function Sidebar() {
         { label: 'Artists', href: '/artists', icon: Music, activeMode: 'exact' },
         { label: 'Personnel', href: '/personnel', icon: Users, activeMode: 'exact' },
         { label: 'Deal memos', href: '/library/deal-memos', icon: FileSignature, activeMode: 'exact' },
+        { label: 'Templates', href: '/templates', icon: LayoutTemplate, activeMode: 'exact' },
         { label: 'Venues', href: '/venues', icon: Building2, activeMode: 'exact' },
       ],
     },
