@@ -27,9 +27,20 @@ type LegacyDataTableProps<T> = {
   rows: T[];
   emptyLabel?: string;
   onRowClick?: (row: T) => void;
+  /** Optional explicit row key. Defaults to row.id (or JSON.stringify fallback). */
+  rowKey?: (row: T) => string;
+  /** Forwards to the canonical DataTable; defaults to 'comfortable'. */
+  density?: 'comfortable' | 'compact';
 };
 
-export function DataTable<T>({ columns, rows, emptyLabel, onRowClick }: LegacyDataTableProps<T>) {
+export function DataTable<T>({
+  columns,
+  rows,
+  emptyLabel,
+  onRowClick,
+  rowKey,
+  density = 'comfortable',
+}: LegacyDataTableProps<T>) {
   // Map legacy Column<T> → ColumnDef<T>
   const mappedColumns: ColumnDef<T>[] = columns.map((col) => ({
     id: col.key,
@@ -40,18 +51,18 @@ export function DataTable<T>({ columns, rows, emptyLabel, onRowClick }: LegacyDa
     className: col.className,
   }));
 
-  // rowKey strategy: fallback to JSON.stringify if no obvious id field on T
-  const rowKey = (row: T) => {
+  // rowKey strategy: caller-provided, else row.id, else JSON.stringify fallback.
+  const resolvedRowKey = rowKey ?? ((row: T) => {
     const r = row as { id?: string | number };
     return r.id != null ? String(r.id) : JSON.stringify(row);
-  };
+  });
 
   return (
     <RealDataTable<T>
       rows={rows}
       columns={mappedColumns}
-      rowKey={rowKey}
-      density="comfortable"
+      rowKey={resolvedRowKey}
+      density={density}
       onRowClick={onRowClick}
       // Keep features minimal so visual UX matches the legacy stub.
       // Per-page migration to the rich API is a Phase 3 follow-up.
