@@ -1,5 +1,9 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## Design system
+
+- [Design tokens (reference)](docs/design-tokens.md) — spacing, type, z-index, motion, radii, shadows, and density; foundation for the UX overhaul (`UX01+`).
+
 ## Getting Started
 
 First, run the development server:

@@ -3,6 +3,8 @@
    ============================================ */
 
 import { Suspense } from 'react';
+import { listAppPageShell, spreadsheetAppPageShell } from '@/components/shell/app-page-shells';
+import { getBudgetSheetSections } from '@/lib/shell/rails/budgetSheetSections';
 import { BudgetTourRedirect } from '@/components/budget/BudgetTourRedirect';
 import { BUDGET_TABS, TabId } from '@/components/budget/budget-tabs';
 import { TourBudgetAccordionDynamic } from '@/components/budget/TourBudgetAccordionDynamic';
@@ -27,7 +29,7 @@ export default async function BudgetPage({
   const validTab = BUDGET_TABS.some((t) => t.id === tab) ? tab : 'summary';
 
   if (!tourId) {
-    return (
+    return listAppPageShell(
       <>
         <Suspense fallback={null}>
           <BudgetTourRedirect />
@@ -45,8 +47,8 @@ export default async function BudgetPage({
   }
 
   // ── New accordion overview (default) ──────────────────────────────────────
-  if (view === 'overview') {
-    return (
+  if (view === 'overview' && tourId) {
+    return spreadsheetAppPageShell(
       <div className="lp-budget -mx-6 -my-6 h-[calc(100vh-4rem)] flex flex-col bg-transparent overflow-hidden">
         <div
           className="shrink-0 flex flex-col gap-3 border-b border-lp-border/60 px-6 py-3 sm:flex-row sm:items-center sm:justify-between"
@@ -84,14 +86,16 @@ export default async function BudgetPage({
         <div className="flex-1 min-h-0 overflow-hidden">
           <TourBudgetAccordionDynamic tourId={tourId} />
         </div>
-      </div>
+      </div>,
+      getBudgetSheetSections(tourId, 'summary')
     );
   }
 
   // ── Spreadsheet-style detail (tabs + grids + tour currency) ────────────────
-  return (
+  return spreadsheetAppPageShell(
     <div className="lp-budget -mx-6 -my-6 flex h-[calc(100vh-4rem)] flex-col overflow-hidden bg-transparent">
       <BudgetDetailShell tourId={tourId} activeTab={validTab} />
-    </div>
+    </div>,
+    getBudgetSheetSections(tourId, validTab)
   );
 }

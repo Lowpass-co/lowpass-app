@@ -22,10 +22,9 @@ import {
   RefreshCw,
   Search,
   Sparkles,
-  X,
 } from 'lucide-react';
 import { BrandedSelect } from '@/components/ui/BrandedSelect';
-import { cn } from '@/lib/utils';
+import { SlideOver } from '@/components/shell/SlideOver';
 import {
   buildBundle,
   exportBundleToFolder,
@@ -929,7 +928,6 @@ function DetailPanel({
   const [imageCopyState, setImageCopyState] = useState<'idle' | 'copied' | 'error'>(
     'idle',
   );
-  const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setResolutionNotes(report?.resolution_notes ?? '');
@@ -952,71 +950,144 @@ function DetailPanel({
     setTimeout(() => setImageCopyState('idle'), 2500);
   }, [report]);
 
-  // When the inner panel finishes its slide-out transition, tell the
-  // parent it's safe to drop the cached report from memory.
-  const onTransitionEnd = (e: React.TransitionEvent<HTMLDivElement>) => {
-    if (e.target !== panelRef.current) return;
-    if (e.propertyName !== 'transform') return;
-    if (!open) onFullyClosed();
-  };
-
   // Nothing to render at all (no report has ever been selected).
   if (!report) return null;
 
+  // Bug Reports: admin exception — the slide-over is the primary admin surface; this
+  // is the only record view (see docs/components/SLIDE_OVER_CONTRACT.md).
   return (
-    <div
-      className={cn(
-        'fixed inset-0 z-[102] flex justify-end transition-opacity duration-300 ease-out',
-        open ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'
-      )}
-      style={{ backgroundColor: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(4px)' }}
-      onClick={e => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-      aria-hidden={!open}
-    >
-      <div
-        ref={panelRef}
-        role="dialog"
-        aria-modal="true"
-        onTransitionEnd={onTransitionEnd}
-        className={cn(
-          'flex h-full w-full max-w-2xl flex-col overflow-hidden transition-transform duration-300 ease-out',
-          open ? 'translate-x-0' : 'translate-x-full'
-        )}
-        style={{ backgroundColor: 'var(--lp-surface)', borderLeft: '1px solid var(--lp-border)' }}
-      >
-        <div
-          className="flex items-start justify-between border-b px-5 py-4"
-          style={{ borderColor: 'var(--lp-border)' }}
-        >
-          <div className="min-w-0 flex-1 pr-4">
-            <div className="flex items-center gap-2">
-              <Pill label={STATUS_META[report.status].label} color={STATUS_META[report.status].color} />
-              <Pill label={SEVERITY_META[report.severity].label} color={SEVERITY_META[report.severity].color} />
-            </div>
-            <h2 className="mt-2 text-lg font-bold" style={{ color: 'var(--lp-text)' }}>
-              {report.title || report.description.split('\n')[0].slice(0, 160)}
-            </h2>
-            <p className="mt-0.5 text-xs" style={{ color: 'var(--lp-text-tertiary)' }}>
-              Reported {formatDate(report.created_at)}
-              {report.reporter?.name || report.reporter?.email
-                ? ` by ${report.reporter?.name || report.reporter?.email}`
-                : ''}
-            </p>
-          </div>
+    <SlideOver
+      open={open}
+      onClose={onClose}
+      onExitComplete={onFullyClosed}
+      width="wide"
+      backdrop
+      title={report.title || report.description.split('\n')[0].slice(0, 160)}
+      headerStart={
+        <>
+          <Pill label={STATUS_META[report.status].label} color={STATUS_META[report.status].color} />
+          <Pill label={SEVERITY_META[report.severity].label} color={SEVERITY_META[report.severity].color} />
+        </>
+      }
+      subtitle={
+        <span className="text-xs" style={{ color: 'var(--lp-text-tertiary)' }}>
+          Reported {formatDate(report.created_at)}
+          {report.reporter?.name || report.reporter?.email
+            ? ` by ${report.reporter?.name || report.reporter?.email}`
+            : ''}
+        </span>
+      }
+      footer={
+        <div className="flex items-center justify-between gap-3">
           <button
             type="button"
-            className="rounded-lg p-1.5"
-            style={{ color: 'var(--lp-text-tertiary)' }}
-            onClick={onClose}
-            aria-label="Close"
+            onClick={() => onDelete(report.id)}
+            className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold"
+            style={{ color: '#ef4444', border: '1px solid #ef444433' }}
           >
-            <X size={18} />
+            <AlertTriangle size={12} />
+            Delete
           </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={onSendToAgent}
+              className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold"
+              style={{
+                backgroundColor:
+                  copyState === 'copied' ? '#22c55e1a' : 'var(--lp-bg-secondary)',
+                border: `1px solid ${
+                  copyState === 'copied'
+                    ? '#22c55e55'
+                    : copyState === 'error'
+                      ? '#ef444455'
+                      : 'var(--lp-border)'
+                }`,
+                color:
+                  copyState === 'copied'
+                    ? '#22c55e'
+                    : copyState === 'error'
+                      ? '#ef4444'
+                      : 'var(--lp-text)',
+              }}
+              title="Copy the structured repair prompt. Paste it into the Cursor agent or claude.ai, then use 'Copy screenshot' for the image."
+            >
+              {copyState === 'copied' ? (
+                <>
+                  <CheckCircle2 size={12} />
+                  Prompt copied — paste into Cursor
+                </>
+              ) : copyState === 'error' ? (
+                <>
+                  <AlertTriangle size={12} />
+                  Copy failed
+                </>
+              ) : (
+                <>
+                  <Sparkles size={12} />
+                  Copy prompt for Cursor / Claude
+                </>
+              )}
+            </button>
+            {report.screenshot_url ? (
+              <button
+                type="button"
+                onClick={onCopyScreenshot}
+                className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold"
+                style={{
+                  backgroundColor:
+                    imageCopyState === 'copied' ? '#22c55e1a' : 'var(--lp-bg-secondary)',
+                  border: `1px solid ${
+                    imageCopyState === 'copied'
+                      ? '#22c55e55'
+                      : imageCopyState === 'error'
+                        ? '#ef444455'
+                        : 'var(--lp-border)'
+                  }`,
+                  color:
+                    imageCopyState === 'copied'
+                      ? '#22c55e'
+                      : imageCopyState === 'error'
+                        ? '#ef4444'
+                        : 'var(--lp-text)',
+                }}
+                title="Copy the screenshot to the clipboard as an image. Paste it into the same Cursor/Claude chat as a second paste."
+              >
+                {imageCopyState === 'copied' ? (
+                  <>
+                    <CheckCircle2 size={12} />
+                    Screenshot copied — paste again
+                  </>
+                ) : imageCopyState === 'error' ? (
+                  <>
+                    <AlertTriangle size={12} />
+                    Screenshot copy failed
+                  </>
+                ) : (
+                  <>
+                    <ImageIcon size={12} />
+                    Copy screenshot
+                  </>
+                )}
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg px-4 py-2 text-sm font-semibold"
+              style={{
+                backgroundColor: 'var(--lp-bg-secondary)',
+                border: '1px solid var(--lp-border)',
+                color: 'var(--lp-text)',
+              }}
+            >
+              Close
+            </button>
+          </div>
         </div>
-
-        <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto p-5">
+      }
+    >
+        <div className="flex flex-col gap-5">
           <Field label="Status">
             <BrandedSelect
               value={report.status}
@@ -1168,119 +1239,7 @@ function DetailPanel({
             </p>
           )}
         </div>
-
-        <div
-          className="flex items-center justify-between gap-3 border-t px-5 py-4"
-          style={{ borderColor: 'var(--lp-border)' }}
-        >
-          <button
-            type="button"
-            onClick={() => onDelete(report.id)}
-            className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold"
-            style={{ color: '#ef4444', border: '1px solid #ef444433' }}
-          >
-            <AlertTriangle size={12} />
-            Delete
-          </button>
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={onSendToAgent}
-              className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold"
-              style={{
-                backgroundColor:
-                  copyState === 'copied' ? '#22c55e1a' : 'var(--lp-bg-secondary)',
-                border: `1px solid ${
-                  copyState === 'copied'
-                    ? '#22c55e55'
-                    : copyState === 'error'
-                      ? '#ef444455'
-                      : 'var(--lp-border)'
-                }`,
-                color:
-                  copyState === 'copied'
-                    ? '#22c55e'
-                    : copyState === 'error'
-                      ? '#ef4444'
-                      : 'var(--lp-text)',
-              }}
-              title="Copy the structured repair prompt. Paste it into the Cursor agent or claude.ai, then use 'Copy screenshot' for the image."
-            >
-              {copyState === 'copied' ? (
-                <>
-                  <CheckCircle2 size={12} />
-                  Prompt copied — paste into Cursor
-                </>
-              ) : copyState === 'error' ? (
-                <>
-                  <AlertTriangle size={12} />
-                  Copy failed
-                </>
-              ) : (
-                <>
-                  <Sparkles size={12} />
-                  Copy prompt for Cursor / Claude
-                </>
-              )}
-            </button>
-            {report.screenshot_url ? (
-              <button
-                type="button"
-                onClick={onCopyScreenshot}
-                className="inline-flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold"
-                style={{
-                  backgroundColor:
-                    imageCopyState === 'copied' ? '#22c55e1a' : 'var(--lp-bg-secondary)',
-                  border: `1px solid ${
-                    imageCopyState === 'copied'
-                      ? '#22c55e55'
-                      : imageCopyState === 'error'
-                        ? '#ef444455'
-                        : 'var(--lp-border)'
-                  }`,
-                  color:
-                    imageCopyState === 'copied'
-                      ? '#22c55e'
-                      : imageCopyState === 'error'
-                        ? '#ef4444'
-                        : 'var(--lp-text)',
-                }}
-                title="Copy the screenshot to the clipboard as an image. Paste it into the same Cursor/Claude chat as a second paste."
-              >
-                {imageCopyState === 'copied' ? (
-                  <>
-                    <CheckCircle2 size={12} />
-                    Screenshot copied — paste again
-                  </>
-                ) : imageCopyState === 'error' ? (
-                  <>
-                    <AlertTriangle size={12} />
-                    Screenshot copy failed
-                  </>
-                ) : (
-                  <>
-                    <ImageIcon size={12} />
-                    Copy screenshot
-                  </>
-                )}
-              </button>
-            ) : null}
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-lg px-4 py-2 text-sm font-semibold"
-              style={{
-                backgroundColor: 'var(--lp-bg-secondary)',
-                border: '1px solid var(--lp-border)',
-                color: 'var(--lp-text)',
-              }}
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
+    </SlideOver>
   );
 }
 

@@ -5,6 +5,7 @@
    ============================================ */
 
 import { notFound } from 'next/navigation';
+import { listAppPageShell } from '@/components/shell/app-page-shells';
 import type { Metadata } from 'next';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { TourOverviewClient } from '@/components/tour-overview/TourOverviewClient';
@@ -137,7 +138,7 @@ export default async function TourOverviewPage({
   const artistName = (tour.artist as { name?: string } | null)?.name ?? '—';
   const currency = (tour.currency as string) || 'GBP';
 
-  return (
+  return listAppPageShell(
     <TourOverviewClient
       tourId={id}
       artistName={artistName}

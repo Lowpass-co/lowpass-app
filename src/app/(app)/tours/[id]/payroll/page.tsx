@@ -5,6 +5,7 @@
    ============================================ */
 
 import { notFound } from 'next/navigation';
+import { listAppPageShell } from '@/components/shell/app-page-shells';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { PayrollView } from '@/components/payroll/PayrollView';
 
@@ -53,7 +54,7 @@ export default async function PayrollPage({
       return ((a.personnel?.order_index ?? 0) - (b.personnel?.order_index ?? 0));
     });
 
-  return (
+  return listAppPageShell(
     <div className="mx-auto max-w-[1400px] space-y-4 pb-12">
       <PayrollView
         tourId={tour.id}

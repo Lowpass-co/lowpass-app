@@ -1,16 +1,6 @@
-import type { ComponentType } from 'react';
+import type { EntityDescriptor, EntityKind } from './types';
 
-export type EntityKind = 'deal-memo' | 'flight' | 'gear' | 'person' | 'room' | 'show' | 'tour';
-
-export type EntityDescriptor<T> = {
-  kind: EntityKind;
-  fetchById: (id: string) => Promise<T | null>;
-  search: (query: string, opts?: { tourId?: string; limit?: number }) => Promise<T[]>;
-  getLabel: (entity: T) => string;
-  getSecondary: (entity: T) => string;
-  getColor?: (entity: T) => string;
-  SlideOverContent: () => Promise<{ default: ComponentType<{ id: string; onClose: () => void }> }>;
-};
+export type { EntityDescriptor, EntityKind } from './types';
 
 const registry = new Map<EntityKind, EntityDescriptor<unknown>>();
 

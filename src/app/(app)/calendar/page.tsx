@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { listAppPageShell } from '@/components/shell/app-page-shells';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { CalendarView } from '@/components/calendar/CalendarView';
 
@@ -9,7 +10,7 @@ export default async function CalendarPage() {
     .select('*', { count: 'exact', head: true })
     .in('status', ['planning', 'active']);
 
-  return (
+  return listAppPageShell(
     <div className="mx-auto max-w-6xl space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-lp-text">Calendar</h1>

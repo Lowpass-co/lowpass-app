@@ -6,6 +6,8 @@
    ============================================ */
 
 import Link from 'next/link';
+import { docDaysAppPageShell } from '@/components/shell/app-page-shells';
+import { getDocDaysLeftRail } from '@/lib/shell/rails/docDaysForTour';
 import { notFound } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { AdvanceOverview } from './AdvanceOverview';
@@ -29,7 +31,9 @@ export default async function TourAdvancePage({
     notFound();
   }
 
-  return (
+  const dayRail = await getDocDaysLeftRail(id);
+
+  return docDaysAppPageShell(
     <div className="mx-auto max-w-6xl space-y-6">
       {/* Breadcrumbs */}
       <nav className="flex items-center gap-2 text-sm text-lp-text-secondary">
@@ -60,6 +64,7 @@ export default async function TourAdvancePage({
 
       <AdvanceFlightsPanel tourId={tour.id} />
       <AdvanceOverview tourId={tour.id} tourName={tour.name} />
-    </div>
+    </div>,
+    dayRail
   );
 }

@@ -5,6 +5,8 @@
    ============================================ */
 
 import { notFound } from 'next/navigation';
+import { spreadsheetAppPageShell } from '@/components/shell/app-page-shells';
+import { getRoomingSheetSections } from '@/lib/shell/rails/roomingSheetSections';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { RoomingView } from '@/components/rooming/RoomingView';
 
@@ -96,7 +98,7 @@ export default async function TourRoomingPage({
     ),
   }));
 
-  return (
+  return spreadsheetAppPageShell(
     <div className="mx-auto max-w-[1600px] space-y-4 pb-12">
       <RoomingView
         tourId={tour.id}
@@ -106,6 +108,7 @@ export default async function TourRoomingPage({
         hotels={hotels}
         personnelRates={personnelRates ?? []}
       />
-    </div>
+    </div>,
+    getRoomingSheetSections(tourId)
   );
 }

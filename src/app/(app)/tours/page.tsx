@@ -10,6 +10,7 @@ import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { parseWorkspaceArtistId } from '@/lib/artist-scope';
 import { ToursListWithFilters } from '@/components/tours/ToursListWithFilters';
 import type { Tour } from '@/types';
+import { listAppPageShell } from '@/components/shell/app-page-shells';
 
 const TOURS_LIMIT = 200;
 
@@ -24,7 +25,7 @@ export default async function ToursPage({
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
-    return (
+    return listAppPageShell(
       <div className="mx-auto max-w-6xl">
         <p className="text-lp-text-secondary">Please sign in.</p>
       </div>
@@ -38,7 +39,7 @@ export default async function ToursPage({
     .single();
 
   if (!profile?.workspace_id) {
-    return (
+    return listAppPageShell(
       <div className="mx-auto max-w-6xl">
         <p className="text-lp-text-secondary">No workspace.</p>
       </div>
@@ -56,7 +57,7 @@ export default async function ToursPage({
 
   const total = tours?.length ?? 0;
 
-  return (
+  return listAppPageShell(
     <div className="mx-auto max-w-6xl space-y-6">
       <div className="flex items-center justify-between">
         <div>

@@ -5,6 +5,7 @@
    ============================================ */
 
 import Link from 'next/link';
+import { listAppPageShell } from '@/components/shell/app-page-shells';
 import { TourWizard } from '@/components/tours/TourWizard';
 import { ArrowLeft } from 'lucide-react';
 
@@ -17,7 +18,7 @@ export default async function CreateTourPage({
   const editTourId = params?.edit?.trim() || null;
   const isEdit = !!editTourId;
 
-  return (
+  return listAppPageShell(
     <div className="mx-auto max-w-2xl px-2">
       <nav className="mb-8 flex items-center gap-4">
         <Link

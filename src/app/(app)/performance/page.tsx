@@ -3,6 +3,7 @@
    ============================================ */
 
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { listAppPageShell } from '@/components/shell/app-page-shells';
 import { parseWorkspaceArtistId } from '@/lib/artist-scope';
 
 export default async function PerformancePage({
@@ -20,7 +21,7 @@ export default async function PerformancePage({
     artistName = artist?.name ?? null;
   }
 
-  return (
+  return listAppPageShell(
     <div className="mx-auto max-w-5xl space-y-4">
       <div>
         <h1 className="text-2xl font-bold text-lp-text">Performance</h1>

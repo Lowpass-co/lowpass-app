@@ -1,73 +1,67 @@
 'use client';
 
-import { cn } from '@/lib/utils';
-import type { ReactNode } from 'react';
+/**
+ * Compatibility shim: forwards calls from UX13 client components (which used
+ * an early stub API) to the canonical <DataTable> from `@/components/data-table`.
+ *
+ * New code should import directly from `@/components/data-table/DataTable`. This
+ * adapter exists only to keep UX13's pre-existing list clients (Personnel,
+ * Rider Packs, Files, Gear, Deal Memos, Templates, Advance Flights) working
+ * while the foundation lands. Migration to the rich API (sort/filter/search/
+ * pagination/keyboard-nav) is a Phase 3 task per the recovery plan.
+ */
 
-type Column<T> = {
+import type { ReactNode } from 'react';
+import { DataTable as RealDataTable } from '@/components/data-table/DataTable';
+import type { ColumnDef } from '@/components/data-table/types';
+
+type LegacyColumn<T> = {
   key: string;
   header: string;
   className?: string;
   render: (row: T) => ReactNode;
 };
 
-export function DataTable<T>({
-  columns,
-  rows,
-  emptyLabel,
-  onRowClick,
-}: {
-  columns: Column<T>[];
+type LegacyDataTableProps<T> = {
+  columns: LegacyColumn<T>[];
   rows: T[];
   emptyLabel?: string;
   onRowClick?: (row: T) => void;
-}) {
+};
+
+export function DataTable<T>({ columns, rows, emptyLabel, onRowClick }: LegacyDataTableProps<T>) {
+  // Map legacy Column<T> → ColumnDef<T>
+  const mappedColumns: ColumnDef<T>[] = columns.map((col) => ({
+    id: col.key,
+    header: col.header,
+    // Use full row as accessor since legacy render signature was render(row)
+    accessor: (row: T) => row as unknown,
+    cell: (_value, row) => col.render(row),
+    className: col.className,
+  }));
+
+  // rowKey strategy: fallback to JSON.stringify if no obvious id field on T
+  const rowKey = (row: T) => {
+    const r = row as { id?: string | number };
+    return r.id != null ? String(r.id) : JSON.stringify(row);
+  };
+
   return (
-    <div className="overflow-x-auto rounded-xl border border-lp-border bg-lp-surface">
-      <table className="w-full min-w-[720px] text-sm">
-        <thead>
-          <tr className="border-b border-lp-border">
-            {columns.map((col) => (
-              <th
-                key={col.key}
-                className={cn(
-                  'px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-wider text-lp-text-tertiary',
-                  col.className
-                )}
-              >
-                {col.header}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, idx) => (
-            <tr
-              key={idx}
-              className={cn(
-                'border-b border-lp-border/40 last:border-b-0',
-                onRowClick ? 'cursor-pointer hover:bg-lp-surface-hover' : ''
-              )}
-              onClick={() => onRowClick?.(row)}
-            >
-              {columns.map((col) => (
-                <td key={col.key} className={cn('px-3 py-2 text-lp-text', col.className)}>
-                  {col.render(row)}
-                </td>
-              ))}
-            </tr>
-          ))}
-          {rows.length === 0 && (
-            <tr>
-              <td
-                colSpan={Math.max(columns.length, 1)}
-                className="px-3 py-6 text-center text-sm text-lp-text-tertiary"
-              >
-                {emptyLabel ?? 'No rows'}
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
-    </div>
+    <RealDataTable<T>
+      rows={rows}
+      columns={mappedColumns}
+      rowKey={rowKey}
+      density="comfortable"
+      onRowClick={onRowClick}
+      // Keep features minimal so visual UX matches the legacy stub.
+      // Per-page migration to the rich API is a Phase 3 follow-up.
+      searchable={false}
+      pagination="none"
+      emptyState={
+        <div className="px-3 py-6 text-center text-sm" style={{ color: 'var(--lp-text-tertiary)' }}>
+          {emptyLabel ?? 'No rows'}
+        </div>
+      }
+    />
   );
 }

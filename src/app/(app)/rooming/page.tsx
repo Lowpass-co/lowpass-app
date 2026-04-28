@@ -6,6 +6,8 @@
    ============================================ */
 
 import Link from 'next/link';
+import { listAppPageShell, spreadsheetAppPageShell } from '@/components/shell/app-page-shells';
+import { getRoomingSheetSections } from '@/lib/shell/rails/roomingSheetSections';
 import { Suspense } from 'react';
 import { BudgetTourSelector } from '@/components/budget/BudgetTourSelector';
 import { RoomingTourRedirect } from '@/components/rooming/RoomingTourRedirect';
@@ -76,7 +78,7 @@ export default async function RoomingPage({
   const validTab = ROOMING_TABS.some((t) => t.id === tab) ? tab : 'grid';
 
   if (!tourId) {
-    return (
+    return listAppPageShell(
       <>
         <Suspense fallback={null}>
           <RoomingTourRedirect />
@@ -93,7 +95,7 @@ export default async function RoomingPage({
     );
   }
 
-  return (
+  return spreadsheetAppPageShell(
     <div className="mx-auto max-w-6xl space-y-6">
       <div>
         <h1 className="text-2xl font-bold text-lp-text">Rooming</h1>
@@ -111,6 +113,7 @@ export default async function RoomingPage({
       </Suspense>
 
       <RoomingTabs tourId={tourId} activeTab={validTab} />
-    </div>
+    </div>,
+    getRoomingSheetSections(tourId)
   );
 }

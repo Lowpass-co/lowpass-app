@@ -1,0 +1,588 @@
+'use client';
+
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+} from 'react';
+import { createPortal } from 'react-dom';
+import { GridDataRow } from './GridDataRow';
+import { buildFrozenLeft, GridHeader } from './GridHeader';
+import { GridBody } from './GridBody';
+import { GridSectionHeader } from './GridSectionHeader';
+import { useGridEditing } from './hooks/useGridEditing';
+import { useGridSelection } from './hooks/useGridSelection';
+import { useGridVirtualisation } from './hooks/useGridVirtualisation';
+import type { CellCoord, GridColumn, GridRow, SelectionRange, SpreadsheetGridProps } from './types';
+import { getCellRaw } from './utils/accessor';
+import { filterCollapsed } from './utils/collapseFilter';
+import {
+  getRowIdsInRange,
+  isRectSingleColumn,
+  mergeWithSections,
+  partitionRows,
+} from './utils/displayRows';
+import { valueToEditString } from './utils/format';
+import { getDataRowIdOrder, isReadOnly, nextCellId } from './utils/nav';
+import { parseInput } from './utils/parse';
+import { validateValue } from './utils/validate';
+
+const DEF_W = 160;
+
+const rowHeightPx: Record<'comfortable' | 'compact' | 'tight', number> = {
+  comfortable: 44,
+  compact: 32,
+  tight: 28,
+};
+
+function keyCell(row: string, col: string) {
+  return `${row}::${col}`;
+}
+
+function useColumnWidths<T>(columns: GridColumn<T>[]) {
+  return useState<Record<string, number>>(() => {
+    const w: Record<string, number> = {};
+    for (const c of columns) {
+      w[c.id] = c.width ?? DEF_W;
+    }
+    return w;
+  });
+}
+
+export function SpreadsheetGrid<T>(props: SpreadsheetGridProps<T>) {
+  const {
+    columns,
+    rows,
+    density = 'compact',
+    sectionHeaders,
+    onSelectionChange,
+    onCommitCell,
+    onBulkEdit,
+    onRowOpen,
+    onRowDelete,
+    onRowDuplicate,
+    contextMenuItems,
+    containerHeight = '100%',
+    ariaLabel = 'Spreadsheet',
+    entitySearchTourId,
+  } = props;
+
+  const { top, middle, bottom } = useMemo(() => partitionRows(rows), [rows]);
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
+
+  const merged = useMemo(
+    () => mergeWithSections(middle, sectionHeaders),
+    [middle, sectionHeaders]
+  );
+  const displayFlat = useMemo(
+    () => filterCollapsed(merged, collapsed),
+    [merged, collapsed]
+  );
+
+  const [columnWidths, setColumnWidths] = useColumnWidths(columns);
+  const setW = useCallback((id: string, w: number) => {
+    setColumnWidths(s => ({ ...s, [id]: w }));
+  }, [setColumnWidths]);
+
+  const frozenLeft = useMemo(
+    () => buildFrozenLeft(columns, columnWidths),
+    [columns, columnWidths]
+  );
+
+  const sel = useGridSelection(columns, displayFlat);
+  const edit = useGridEditing();
+  const [cellErr, setCellErr] = useState<Record<string, string | null>>({});
+  const [bulkErr, setBulkErr] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
+  const [ctx, setCtx] = useState<{ x: number; y: number; rowId: string } | null>(null);
+  const drag = useRef(false);
+  const gridRef = useRef<HTMLDivElement>(null);
+  const liveRef = useRef<HTMLDivElement>(null);
+
+  const rH = rowHeightPx[density];
+  const virt = useGridVirtualisation(displayFlat.length, rH);
+  const { startIndex, endIndex, offsetY, totalHeight, scrollRef, onScroll } = virt;
+  const slice = displayFlat.slice(startIndex, endIndex);
+
+  const colIds = useMemo(() => columns.map(c => c.id), [columns]);
+  const dataIdOrder = useMemo(() => getDataRowIdOrder(displayFlat), [displayFlat]);
+
+  useEffect(() => {
+    if (sel.range) onSelectionChange?.(sel.range);
+  }, [onSelectionChange, sel.range]);
+
+  const commit = useCallback(
+    async (row: GridRow<T>, col: GridColumn<T>, raw: string) => {
+      const p = parseInput(raw, col.type);
+      if (!p.ok) {
+        setCellErr(m => ({ ...m, [keyCell(row.id, col.id)]: p.error }));
+        return;
+      }
+      const v = p.value;
+      const err = validateValue(v, col.type, row.data, { validator: col.validator });
+      if (err) {
+        setCellErr(m => ({ ...m, [keyCell(row.id, col.id)]: err }));
+        return;
+      }
+      setCellErr(m => ({ ...m, [keyCell(row.id, col.id)]: null }));
+      if (col.onCommit) {
+        try {
+          await col.onCommit(row.data, v);
+        } catch (e) {
+          setToast(e instanceof Error ? e.message : 'Commit failed');
+          return;
+        }
+      }
+      if (onCommitCell) {
+        try {
+          await onCommitCell(row.id, col.id, v);
+        } catch (e) {
+          setToast(e instanceof Error ? e.message : 'Commit failed');
+        }
+      }
+    },
+    [onCommitCell]
+  );
+
+  const finishEdit = useCallback(
+    async (nav?: 'down' | 'right' | 'none') => {
+      if (edit.mode !== 'edit' || !sel.focus) {
+        return;
+      }
+      const row = rows.find(r => r.id === sel.focus!.rowId);
+      const col = columns.find(c => c.id === sel.focus!.columnId);
+      if (!row || !col) {
+        edit.cancelEdit();
+        return;
+      }
+      if (isReadOnly(row, col)) {
+        edit.cancelEdit();
+        return;
+      }
+      setBulkErr(null);
+      if (sel.range) {
+        if (!isRectSingleColumn(sel.range)) {
+          setBulkErr('Select a single column to fill multiple rows.');
+          return;
+        }
+        const rids = getRowIdsInRange(
+          displayFlat as import('./types').DisplayEntry<T>[],
+          sel.range.startRowId,
+          sel.range.endRowId
+        );
+        if (rids.length > 1 && onBulkEdit) {
+          const p = parseInput(edit.draft, col.type);
+          if (!p.ok) {
+            setCellErr(m => ({ ...m, [keyCell(row.id, col.id)]: p.error }));
+            return;
+          }
+          try {
+            await onBulkEdit(rids, col.id, p.value);
+          } catch (e) {
+            setToast(e instanceof Error ? e.message : 'Bulk failed');
+            return;
+          }
+          edit.cancelEdit();
+          if (nav === 'down' && sel.focus) {
+            const n = nextCellId(dataIdOrder, colIds, sel.focus, 1, 0);
+            if (n) sel.moveFocus(n);
+          } else if (nav === 'right' && sel.focus) {
+            const n = nextCellId(dataIdOrder, colIds, sel.focus, 0, 1);
+            if (n) sel.moveFocus(n);
+          }
+          return;
+        }
+      }
+      await commit(row, col, edit.draft);
+      edit.cancelEdit();
+      if (nav === 'down') {
+        const n = nextCellId(dataIdOrder, colIds, sel.focus, 1, 0);
+        if (n) sel.moveFocus(n);
+      } else if (nav === 'right') {
+        const n = nextCellId(dataIdOrder, colIds, sel.focus, 0, 1);
+        if (n) sel.moveFocus(n);
+      }
+    },
+    [colIds, columns, commit, dataIdOrder, displayFlat, edit, onBulkEdit, rows, sel]
+  );
+
+  const onKeyDown = useCallback(
+    (e: KeyboardEvent) => {
+      if (!gridRef.current?.contains(e.target as Node)) return;
+      if (edit.mode === 'edit') {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          edit.cancelEdit();
+          return;
+        }
+        if (e.key === 'Enter' && !e.shiftKey) {
+          e.preventDefault();
+          void finishEdit('down');
+          return;
+        }
+        if (e.key === 'Tab') {
+          e.preventDefault();
+          if (e.shiftKey) {
+            void finishEdit('none');
+            const n = sel.focus && nextCellId(dataIdOrder, colIds, sel.focus, 0, -1);
+            if (n) sel.moveFocus(n);
+          } else {
+            void finishEdit('right');
+          }
+        }
+        return;
+      }
+      if (e.key === 'Enter' && sel.focus) {
+        e.preventDefault();
+        const row = rows.find(r => r.id === sel.focus!.rowId);
+        const col = columns.find(c => c.id === sel.focus!.columnId);
+        if (row && col && !isReadOnly(row, col)) {
+          const v = getCellRaw(row, col);
+          edit.enterEdit(valueToEditString(v, col.type), { bulk: false });
+        }
+        return;
+      }
+      if (e.key === 'F2' && sel.focus) {
+        e.preventDefault();
+        const row = rows.find(r => r.id === sel.focus!.rowId);
+        const col = columns.find(c => c.id === sel.focus!.columnId);
+        if (row && col && !isReadOnly(row, col)) {
+          const v = getCellRaw(row, col);
+          edit.enterEdit(valueToEditString(v, col.type), { bulk: false });
+        }
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === 'a') {
+        e.preventDefault();
+        sel.selectAll();
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === '.') {
+        e.preventDefault();
+        const r0 = rows.find(x => x.id === sel.focus?.rowId);
+        if (r0 && onRowOpen) onRowOpen(r0.data);
+        return;
+      }
+      if (sel.range && !e.ctrlKey && !e.metaKey && !e.altKey && e.key.length === 1) {
+        if (!isRectSingleColumn(sel.range)) {
+          e.preventDefault();
+          setBulkErr('Type into a range in a single column, or a single cell.');
+          return;
+        }
+        const row = rows.find(r => r.id === sel.focus?.rowId);
+        const col = columns.find(c => c.id === sel.focus?.columnId);
+        if (row && col && !isReadOnly(row, col)) {
+          const rids = getRowIdsInRange(
+            displayFlat as import('./types').DisplayEntry<T>[],
+            sel.range.startRowId,
+            sel.range.endRowId
+          );
+          e.preventDefault();
+          edit.enterEdit(e.key, { bulk: rids.length > 1 });
+          return;
+        }
+      }
+      if (!sel.focus) return;
+      const dr = e.key === 'ArrowUp' ? -1 : e.key === 'ArrowDown' ? 1 : 0;
+      const dc = e.key === 'ArrowLeft' ? -1 : e.key === 'ArrowRight' ? 1 : 0;
+      if (dr || dc) {
+        e.preventDefault();
+        const n = nextCellId(dataIdOrder, colIds, sel.focus, dr, dc);
+        if (n) {
+          if (e.shiftKey) sel.extendFocus(n);
+          else sel.moveFocus(n);
+        }
+      }
+    },
+    [colIds, columns, dataIdOrder, displayFlat, edit, finishEdit, onRowOpen, rows, sel]
+  );
+
+  const onCellDown = (rowId: string, colId: string, e: React.MouseEvent, sh: boolean) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    gridRef.current?.focus();
+    drag.current = true;
+    const c: CellCoord = { rowId, columnId: colId };
+    if (sh) {
+      sel.extendFocus(c);
+    } else {
+      sel.selectOne(c);
+    }
+  };
+
+  const onCellEnter = (rowId: string, colId: string) => {
+    if (!drag.current) return;
+    sel.extendFocus({ rowId, columnId: colId });
+  };
+
+  useEffect(() => {
+    const u = () => {
+      drag.current = false;
+    };
+    document.addEventListener('mouseup', u);
+    return () => document.removeEventListener('mouseup', u);
+  }, []);
+
+  const isCellEditing = (r: string, c: string) =>
+    edit.mode === 'edit' && sel.focus?.rowId === r && sel.focus?.columnId === c;
+  const showBulkHint = (r: string, c: string) => edit.bulkHint && isCellEditing(r, c);
+
+  const toggleSection = (id: string) => {
+    setCollapsed(s => {
+      const n = new Set(s);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  };
+
+  const announce = (selR: SelectionRange | null) => {
+    if (!selR) return;
+    if (liveRef.current) {
+      liveRef.current.textContent = `Selection: ${selR.startRowId} to ${selR.endRowId}, columns ${selR.startColumnId} to ${selR.endColumnId}`;
+    }
+  };
+  useEffect(() => {
+    announce(sel.range);
+  }, [sel.range]);
+
+  return (
+    <div
+      className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl"
+      data-spreadsheet-root
+      style={{ border: '1px solid var(--lp-border)', height: containerHeight }}
+    >
+      {toast && (
+        <div
+          className="fixed bottom-4 right-4 z-[100] max-w-sm rounded-lg border px-3 py-2 text-sm shadow-lg"
+          style={{
+            background: 'var(--lp-bg)',
+            borderColor: 'var(--lp-border)',
+            color: 'var(--lp-text)',
+          }}
+          role="status"
+        >
+          {toast}
+        </div>
+      )}
+      <div
+        ref={gridRef}
+        className="min-h-0 flex-1 outline-none"
+        role="grid"
+        aria-label={ariaLabel}
+        tabIndex={0}
+        onKeyDown={onKeyDown}
+      >
+        <div
+          className="h-full min-h-0 overflow-auto"
+          ref={scrollRef as React.RefObject<HTMLDivElement>}
+          onScroll={onScroll}
+        >
+          <table className="w-full min-w-0 border-collapse" style={{ minWidth: 'max(100%, 800px)' }}>
+            <GridHeader
+              columns={columns}
+              density={density}
+              columnWidths={columnWidths}
+              setColumnWidth={setW}
+              frozenLeft={frozenLeft}
+            />
+            <GridBody>
+              {top.map(tr => (
+                <GridDataRow
+                  key={tr.id}
+                  row={tr}
+                  rowIndex1={1}
+                  columns={columns}
+                  columnWidths={columnWidths}
+                  frozenLeft={frozenLeft}
+                  density={density}
+                  isInRange={sel.isInRange}
+                  isActive={sel.isActive}
+                  isEditing={isCellEditing}
+                  mode={edit.mode}
+                  draft={edit.draft}
+                  onDraft={edit.setDraft}
+                  onEditorKey={e => {
+                    if (e.key === 'Enter' && e.shiftKey) e.preventDefault();
+                  }}
+                  onCellMouseDown={onCellDown}
+                  onCellMouseEnter={onCellEnter}
+                  readOnly={(r, c) => isReadOnly(r, c)}
+                  readOnlyHint={r => (r.computed ? 'Derived' : 'Read-only')}
+                  error={(a, c) => cellErr[keyCell(a, c)]}
+                  showBulkHint={showBulkHint}
+                  entitySearchTourId={entitySearchTourId}
+                  onContextMenu={e => {
+                    e.preventDefault();
+                    setCtx({ x: e.clientX, y: e.clientY, rowId: tr.id });
+                  }}
+                />
+              ))}
+              {offsetY > 0 && (
+                <tr aria-hidden>
+                  <td colSpan={columns.length} style={{ height: offsetY, padding: 0, lineHeight: 0 }} />
+                </tr>
+              )}
+              {slice.map((en, i) => {
+                const rIdx = startIndex + i;
+                if (en.kind === 'section') {
+                  return (
+                    <GridSectionHeader
+                      key={en.key}
+                      label={en.label}
+                      colSpan={columns.length}
+                      collapsible={en.collapsible}
+                      collapsed={collapsed.has(en.sectionId)}
+                      onToggle={() => toggleSection(en.sectionId)}
+                      density={density}
+                    />
+                  );
+                }
+                return (
+                  <GridDataRow
+                    key={en.row.id}
+                    row={en.row}
+                    rowIndex1={rIdx + 1 + top.length}
+                    columns={columns}
+                    columnWidths={columnWidths}
+                    frozenLeft={frozenLeft}
+                    density={density}
+                    isInRange={sel.isInRange}
+                    isActive={sel.isActive}
+                    isEditing={isCellEditing}
+                    mode={edit.mode}
+                    draft={edit.draft}
+                    onDraft={edit.setDraft}
+                    onEditorKey={e => {
+                      if (e.key === 'Enter' && e.shiftKey) e.preventDefault();
+                    }}
+                    onCellMouseDown={onCellDown}
+                    onCellMouseEnter={onCellEnter}
+                    readOnly={(r, c) => isReadOnly(r, c)}
+                    readOnlyHint={r => (r.computed ? 'Derived from source' : undefined)}
+                    error={(a, c) => cellErr[keyCell(a, c)]}
+                    showBulkHint={showBulkHint}
+                    entitySearchTourId={entitySearchTourId}
+                    onContextMenu={e => {
+                      e.preventDefault();
+                      setCtx({ x: e.clientX, y: e.clientY, rowId: en.row.id });
+                    }}
+                  />
+                );
+              })}
+              {Math.max(0, totalHeight - endIndex * rH) > 0 && (
+                <tr aria-hidden>
+                  <td
+                    colSpan={columns.length}
+                    style={{
+                      height: Math.max(0, totalHeight - endIndex * rH),
+                      padding: 0,
+                    }}
+                  />
+                </tr>
+              )}
+              {bottom.map(tr => (
+                <GridDataRow
+                  key={tr.id}
+                  row={tr}
+                  rowIndex1={displayFlat.length + top.length + 1}
+                  columns={columns}
+                  columnWidths={columnWidths}
+                  frozenLeft={frozenLeft}
+                  density={density}
+                  isInRange={sel.isInRange}
+                  isActive={sel.isActive}
+                  isEditing={isCellEditing}
+                  mode={edit.mode}
+                  draft={edit.draft}
+                  onDraft={edit.setDraft}
+                  onEditorKey={() => undefined}
+                  onCellMouseDown={onCellDown}
+                  onCellMouseEnter={onCellEnter}
+                  readOnly={(r, c) => isReadOnly(r, c)}
+                  error={() => null}
+                  showBulkHint={() => false}
+                  entitySearchTourId={entitySearchTourId}
+                />
+              ))}
+            </GridBody>
+          </table>
+        </div>
+      </div>
+      <div ref={liveRef} className="sr-only" aria-live="polite" />
+      {bulkErr && (
+        <div className="px-2 py-1 text-xs" style={{ color: 'var(--color-lp-error)' }}>
+          {bulkErr}
+        </div>
+      )}
+      {ctx &&
+        createPortal(
+          <div
+            className="fixed z-[200] min-w-48 rounded-lg border py-1 shadow-lg"
+            style={{
+              top: ctx.y,
+              left: ctx.x,
+              background: 'var(--lp-bg)',
+              borderColor: 'var(--lp-border)',
+            }}
+            role="menu"
+          >
+            {onRowOpen && (
+              <button
+                type="button"
+                className="block w-full px-3 py-1.5 text-left text-sm"
+                onClick={() => {
+                  const r = rows.find(x => x.id === ctx.rowId);
+                  if (r) onRowOpen(r.data);
+                  setCtx(null);
+                }}
+              >
+                Open context
+              </button>
+            )}
+            {onRowDelete && (
+              <button
+                type="button"
+                className="block w-full px-3 py-1.5 text-left text-sm"
+                onClick={() => {
+                  onRowDelete(ctx.rowId);
+                  setCtx(null);
+                }}
+              >
+                Delete
+              </button>
+            )}
+            {onRowDuplicate && (
+              <button
+                type="button"
+                className="block w-full px-3 py-1.5 text-left text-sm"
+                onClick={() => {
+                  onRowDuplicate(ctx.rowId);
+                  setCtx(null);
+                }}
+              >
+                Duplicate
+              </button>
+            )}
+            {contextMenuItems?.(rows.find(x => x.id === ctx.rowId)!).map(m => (
+              <button
+                key={m.id}
+                type="button"
+                className="block w-full px-3 py-1.5 text-left text-sm"
+                onClick={() => {
+                  m.onSelect();
+                  setCtx(null);
+                }}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>,
+          document.body
+        )}
+    </div>
+  );
+}

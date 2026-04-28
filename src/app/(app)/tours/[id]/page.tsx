@@ -5,6 +5,8 @@
    ============================================ */
 
 import Link from 'next/link';
+import { dashboardAppPageShell } from '@/components/shell/app-page-shells';
+import { getDashboardLeftRail } from '@/lib/shell/rails/dashboardForTour';
 import { notFound } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { formatTourDateRange, capitaliseStatus } from '@/lib/utils';
@@ -81,7 +83,7 @@ export default async function TourDetailPage({
       ? today.getTime() >= start.getTime() && today.getTime() <= end.getTime()
       : false;
 
-  return (
+  return dashboardAppPageShell(
     <div className="mx-auto max-w-6xl space-y-6">
       <div className="flex items-center gap-4">
         <Link
@@ -183,6 +185,7 @@ export default async function TourDetailPage({
       </TourDetailToasts>
 
       <TourAdvanceSummary tourId={tour.id} />
-    </div>
+    </div>,
+    getDashboardLeftRail(id)
   );
 }
