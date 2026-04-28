@@ -28,8 +28,16 @@ export const metadata: Metadata = {
     template: '%s | Lowpass',
   },
   description: 'Advance, budget, and manage tours from one place.',
+  manifest: '/manifest.webmanifest',
+  themeColor: '#FF4500',
   icons: {
     icon: '/favicon.ico',
+    apple: '/icons/icon-192.png',
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'Lowpass',
   },
 };
 

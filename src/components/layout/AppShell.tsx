@@ -13,6 +13,7 @@ import { ArtistTourScopeGuard } from '@/components/layout/ArtistTourScopeGuard';
 import { OverviewArtistQuerySync } from '@/components/layout/OverviewArtistQuerySync';
 import { FloatingBugReport } from '@/components/bug-report/FloatingBugReport';
 import { EntityRoutingProvider } from '@/components/entity/EntityRoutingContext';
+import { PwaClient } from '@/components/pwa/PwaClient';
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   return (
@@ -29,6 +30,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </Suspense>
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">{children}</div>
         <FloatingBugReport />
+        {/* UX18: PWA shell — registers SW (production only) and renders the install prompt. */}
+        <PwaClient />
       </div>
     </EntityRoutingProvider>
   );
