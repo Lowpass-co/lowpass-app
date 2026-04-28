@@ -1,15 +1,11 @@
-// TODO(UX13): refactor to use <SlideOver> primitive from src/components/shell/SlideOver.tsx.
-//   Currently rolls its own chrome (backdrop / aside / header / footer). Functionally OK but
-//   skips focus trap, mobile bottom-sheet, and standard animations. UX13 (list pages re-skin)
-//   will sweep this when entity surfaces touch DataTable + slide-over.
-
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { Loader2, X } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
 import Image from 'next/image';
 import { getGearById, updateGear } from '@/lib/api/gear';
 import type { Gear, TourGear } from '@/lib/types/gear';
+import { SlideOver } from '@/components/shell/SlideOver';
 
 type GearWithTours = Gear & { tourGear?: TourGear[] };
 
@@ -53,15 +49,6 @@ export default function GearSlideOver({ id, onClose }: { id: string; onClose: ()
 
   const tourUsage = useMemo(() => gear?.tourGear ?? [], [gear?.tourGear]);
 
-  if (loading) {
-    return (
-      <div className="p-6 text-sm text-lp-text-secondary flex items-center gap-2">
-        <Loader2 className="h-4 w-4 animate-spin" /> Loading gear...
-      </div>
-    );
-  }
-  if (!gear) return <div className="p-6 text-sm text-red-500">{error ?? 'Gear not found'}</div>;
-
   const handleOwnershipChange = async (nextOwnership: 'owned' | 'sub_hired' | 'hired_to_client') => {
     if (!gear) return;
     if (nextOwnership === gear.ownership) return;
@@ -76,6 +63,7 @@ export default function GearSlideOver({ id, onClose }: { id: string; onClose: ()
   };
 
   const updateTourGear = async (nextTourGear: TourGear[]) => {
+    if (!gear) return;
     const syncTourIds = nextTourGear.map((tg) => tg.tourId);
     await save({
       tour_gear: nextTourGear.map((tg) => ({
@@ -94,169 +82,231 @@ export default function GearSlideOver({ id, onClose }: { id: string; onClose: ()
     });
   };
 
+  const title = loading ? 'Gear' : (gear?.name ?? 'Gear');
+
   return (
-    <div className="h-full overflow-y-auto bg-lp-surface">
-      <div className="sticky top-0 z-10 flex items-center justify-between border-b border-lp-border bg-lp-surface px-4 py-3">
-        <h3 className="text-sm font-semibold text-lp-text">Gear</h3>
-        <button type="button" onClick={onClose} className="rounded p-1 hover:bg-lp-bg-tertiary">
-          <X className="h-4 w-4" />
-        </button>
-      </div>
-
-      <div className="space-y-6 p-4">
-        {error && <div className="text-xs text-red-500">{error}</div>}
-
-        <section className="space-y-2">
-          <h4 className="text-xs uppercase tracking-wider text-lp-text-secondary">Identity</h4>
-          <input className="w-full rounded border border-lp-border bg-transparent px-2 py-1 text-sm" defaultValue={gear.name} onBlur={(e) => void save({ name: e.target.value })} />
-          <input className="w-full rounded border border-lp-border bg-transparent px-2 py-1 text-sm" placeholder="Category" defaultValue={gear.category ?? ''} onBlur={(e) => void save({ category: e.target.value || null })} />
-          <input className="w-full rounded border border-lp-border bg-transparent px-2 py-1 text-sm" placeholder="Manufacturer" defaultValue={gear.manufacturer ?? ''} onBlur={(e) => void save({ manufacturer: e.target.value || null })} />
-          <input className="w-full rounded border border-lp-border bg-transparent px-2 py-1 text-sm" placeholder="Model" defaultValue={gear.model ?? ''} onBlur={(e) => void save({ model: e.target.value || null })} />
-          <input className="w-full rounded border border-lp-border bg-transparent px-2 py-1 text-sm" placeholder="Serial" defaultValue={gear.serialNumber ?? ''} onBlur={(e) => void save({ serial_number: e.target.value || null })} />
-        </section>
-
-        <section className="space-y-2">
-          <h4 className="text-xs uppercase tracking-wider text-lp-text-secondary">Ownership</h4>
-          <select className="w-full rounded border border-lp-border bg-transparent px-2 py-1 text-sm" value={ownership} onChange={(e) => void handleOwnershipChange(e.target.value as 'owned' | 'sub_hired' | 'hired_to_client')}>
-            <option value="owned">Owned</option>
-            <option value="sub_hired">Sub-hired</option>
-            <option value="hired_to_client">Hired-to-client</option>
-          </select>
-          {ownership !== 'owned' && (
-            <input className="w-full rounded border border-lp-border bg-transparent px-2 py-1 text-sm" placeholder="Owner label" defaultValue={gear.ownerLabel ?? ''} onBlur={(e) => void save({ owner_label: e.target.value || null })} />
-          )}
-        </section>
-
-        {showCost && (
-          <section className="space-y-2">
-            <h4 className="text-xs uppercase tracking-wider text-lp-text-secondary">Cost</h4>
-            <input className="w-full rounded border border-lp-border bg-transparent px-2 py-1 text-sm" type="number" defaultValue={gear.hireCostAmount ?? 0} onBlur={(e) => void save({ hire_cost_amount: Number(e.target.value) || 0 })} />
-            <input className="w-full rounded border border-lp-border bg-transparent px-2 py-1 text-sm" placeholder="Currency" defaultValue={gear.hireCostCurrency ?? 'GBP'} onBlur={(e) => void save({ hire_cost_currency: e.target.value || 'GBP' })} />
-            <select className="w-full rounded border border-lp-border bg-transparent px-2 py-1 text-sm" value={gear.hireCostPeriod ?? ''} onChange={(e) => void save({ hire_cost_period: e.target.value || null })}>
-              <option value="">Select period</option>
-              <option value="day">Day</option>
-              <option value="week">Week</option>
-              <option value="flat">Flat</option>
-            </select>
-          </section>
+    <SlideOver
+      open
+      onClose={onClose}
+      title={title}
+      subtitle={
+        <span className="text-xs" style={{ color: 'var(--lp-text-secondary)' }}>
+          Canonical gear record
+        </span>
+      }
+      width="wide"
+      backdrop
+      footer={
+        <div className="flex items-center justify-end gap-2">
+          <button type="button" className="rounded-md border border-lp-border px-3 py-2 text-sm text-lp-text" onClick={onClose}>
+            Close
+          </button>
+        </div>
+      }
+    >
+      <div className="space-y-6">
+        {loading && (
+          <div className="flex items-center gap-2 text-sm text-lp-text-secondary">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Loading gear...
+          </div>
         )}
+        {!loading && !gear && <div className="text-sm text-red-500">{error ?? 'Gear not found'}</div>}
+        {!loading && gear && (
+          <>
+            {error && <div className="text-xs text-red-500">{error}</div>}
 
-        <section className="space-y-2">
-          <h4 className="text-xs uppercase tracking-wider text-lp-text-secondary">Image</h4>
-          <input className="w-full rounded border border-lp-border bg-transparent px-2 py-1 text-sm" placeholder="Image URL" defaultValue={gear.imageUrl ?? ''} onBlur={(e) => void save({ image_url: e.target.value || null })} />
-          {gear.imageUrl ? (
-            <div className="relative h-44 w-full overflow-hidden rounded border border-lp-border">
-              <Image src={gear.imageUrl} alt={gear.name} fill className="object-contain" />
-            </div>
-          ) : null}
-        </section>
+            <section className="space-y-2">
+              <h4 className="text-xs uppercase tracking-wider text-lp-text-secondary">Identity</h4>
+              <input className="w-full rounded border border-lp-border bg-transparent px-2 py-1 text-sm" defaultValue={gear.name} onBlur={(e) => void save({ name: e.target.value })} />
+              <input
+                className="w-full rounded border border-lp-border bg-transparent px-2 py-1 text-sm"
+                placeholder="Category"
+                defaultValue={gear.category ?? ''}
+                onBlur={(e) => void save({ category: e.target.value || null })}
+              />
+              <input
+                className="w-full rounded border border-lp-border bg-transparent px-2 py-1 text-sm"
+                placeholder="Manufacturer"
+                defaultValue={gear.manufacturer ?? ''}
+                onBlur={(e) => void save({ manufacturer: e.target.value || null })}
+              />
+              <input
+                className="w-full rounded border border-lp-border bg-transparent px-2 py-1 text-sm"
+                placeholder="Model"
+                defaultValue={gear.model ?? ''}
+                onBlur={(e) => void save({ model: e.target.value || null })}
+              />
+              <input
+                className="w-full rounded border border-lp-border bg-transparent px-2 py-1 text-sm"
+                placeholder="Serial"
+                defaultValue={gear.serialNumber ?? ''}
+                onBlur={(e) => void save({ serial_number: e.target.value || null })}
+              />
+            </section>
 
-        <section className="space-y-2">
-          <h4 className="text-xs uppercase tracking-wider text-lp-text-secondary">Tour usage</h4>
-          <div className="space-y-1">
-            {tourUsage.length === 0 && <div className="text-xs text-lp-text-secondary">No linked tours.</div>}
-            {tourUsage.map((tg) => (
-              <div key={tg.id} className="rounded border border-lp-border p-2 text-xs text-lp-text-secondary space-y-1">
-                <div>Tour: {tg.tourId}</div>
-                <div className="grid grid-cols-3 gap-2">
+            <section className="space-y-2">
+              <h4 className="text-xs uppercase tracking-wider text-lp-text-secondary">Ownership</h4>
+              <select className="w-full rounded border border-lp-border bg-transparent px-2 py-1 text-sm" value={ownership} onChange={(e) => void handleOwnershipChange(e.target.value as 'owned' | 'sub_hired' | 'hired_to_client')}>
+                <option value="owned">Owned</option>
+                <option value="sub_hired">Sub-hired</option>
+                <option value="hired_to_client">Hired-to-client</option>
+              </select>
+              {ownership !== 'owned' && (
+                <input
+                  className="w-full rounded border border-lp-border bg-transparent px-2 py-1 text-sm"
+                  placeholder="Owner label"
+                  defaultValue={gear.ownerLabel ?? ''}
+                  onBlur={(e) => void save({ owner_label: e.target.value || null })}
+                />
+              )}
+            </section>
+
+            {showCost && (
+              <section className="space-y-2">
+                <h4 className="text-xs uppercase tracking-wider text-lp-text-secondary">Cost</h4>
+                <input
+                  className="w-full rounded border border-lp-border bg-transparent px-2 py-1 text-sm"
+                  type="number"
+                  defaultValue={gear.hireCostAmount ?? 0}
+                  onBlur={(e) => void save({ hire_cost_amount: Number(e.target.value) || 0 })}
+                />
+                <input
+                  className="w-full rounded border border-lp-border bg-transparent px-2 py-1 text-sm"
+                  placeholder="Currency"
+                  defaultValue={gear.hireCostCurrency ?? 'GBP'}
+                  onBlur={(e) => void save({ hire_cost_currency: e.target.value || 'GBP' })}
+                />
+                <select className="w-full rounded border border-lp-border bg-transparent px-2 py-1 text-sm" value={gear.hireCostPeriod ?? ''} onChange={(e) => void save({ hire_cost_period: e.target.value || null })}>
+                  <option value="">Select period</option>
+                  <option value="day">Day</option>
+                  <option value="week">Week</option>
+                  <option value="flat">Flat</option>
+                </select>
+              </section>
+            )}
+
+            <section className="space-y-2">
+              <h4 className="text-xs uppercase tracking-wider text-lp-text-secondary">Image</h4>
+              <input className="w-full rounded border border-lp-border bg-transparent px-2 py-1 text-sm" placeholder="Image URL" defaultValue={gear.imageUrl ?? ''} onBlur={(e) => void save({ image_url: e.target.value || null })} />
+              {gear.imageUrl ? (
+                <div className="relative h-44 w-full overflow-hidden rounded border border-lp-border">
+                  <Image src={gear.imageUrl} alt={gear.name} fill className="object-contain" />
+                </div>
+              ) : null}
+            </section>
+
+            <section className="space-y-2">
+              <h4 className="text-xs uppercase tracking-wider text-lp-text-secondary">Tour usage</h4>
+              <div className="space-y-1">
+                {tourUsage.length === 0 && <div className="text-xs text-lp-text-secondary">No linked tours.</div>}
+                {tourUsage.map((tg) => (
+                  <div key={tg.id} className="rounded border border-lp-border p-2 text-xs text-lp-text-secondary space-y-1">
+                    <div>Tour: {tg.tourId}</div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <input
+                        className="rounded border border-lp-border bg-transparent px-2 py-1"
+                        type="number"
+                        defaultValue={tg.quantity}
+                        onBlur={(e) => {
+                          const qty = Math.max(1, Number(e.target.value) || 1);
+                          void updateTourGear(
+                            tourUsage.map((row) => (row.id === tg.id ? { ...row, quantity: qty } : row))
+                          );
+                        }}
+                      />
+                      <select
+                        className="rounded border border-lp-border bg-transparent px-2 py-1"
+                        defaultValue={tg.tourOwnership ?? ''}
+                        onChange={(e) => {
+                          const val = e.target.value as 'owned' | 'sub_hired' | 'hired_to_client' | '';
+                          void updateTourGear(
+                            tourUsage.map((row) => (row.id === tg.id ? { ...row, tourOwnership: val || null } : row))
+                          );
+                        }}
+                      >
+                        <option value="">inherit</option>
+                        <option value="owned">owned</option>
+                        <option value="sub_hired">sub-hired</option>
+                        <option value="hired_to_client">hired-to-client</option>
+                      </select>
+                      <input
+                        className="rounded border border-lp-border bg-transparent px-2 py-1"
+                        type="number"
+                        defaultValue={tg.tourHireCostAmount ?? gear.hireCostAmount ?? 0}
+                        onBlur={(e) => {
+                          const amount = Number(e.target.value) || 0;
+                          void updateTourGear(
+                            tourUsage.map((row) =>
+                              row.id === tg.id ? { ...row, tourHireCostAmount: amount } : row
+                            )
+                          );
+                        }}
+                      />
+                    </div>
+                  </div>
+                ))}
+                <div className="flex gap-2">
                   <input
-                    className="rounded border border-lp-border bg-transparent px-2 py-1"
-                    type="number"
-                    defaultValue={tg.quantity}
-                    onBlur={(e) => {
-                      const qty = Math.max(1, Number(e.target.value) || 1);
-                      void updateTourGear(
-                        tourUsage.map((row) => (row.id === tg.id ? { ...row, quantity: qty } : row))
-                      );
-                    }}
+                    className="w-full rounded border border-lp-border bg-transparent px-2 py-1 text-xs"
+                    placeholder="Tour ID to link"
+                    value={newTourId}
+                    onChange={(e) => setNewTourId(e.target.value)}
                   />
-                  <select
-                    className="rounded border border-lp-border bg-transparent px-2 py-1"
-                    defaultValue={tg.tourOwnership ?? ''}
-                    onChange={(e) => {
-                      const val = e.target.value as 'owned' | 'sub_hired' | 'hired_to_client' | '';
-                      void updateTourGear(
-                        tourUsage.map((row) =>
-                          row.id === tg.id ? { ...row, tourOwnership: val || null } : row
-                        )
-                      );
+                  <button
+                    type="button"
+                    className="rounded border border-lp-border px-2 py-1 text-xs hover:bg-lp-bg-tertiary"
+                    onClick={() => {
+                      const tid = newTourId.trim();
+                      if (!tid) return;
+                      if (tourUsage.some((t) => t.tourId === tid)) return;
+                      const next: TourGear[] = [
+                        ...tourUsage,
+                        {
+                          id: `new-${tid}`,
+                          workspaceId: gear.workspaceId,
+                          tourId: tid,
+                          gearId: gear.id,
+                          tourOwnership: null,
+                          tourHireCostAmount: gear.hireCostAmount,
+                          tourHireCostCurrency: gear.hireCostCurrency,
+                          tourHireCostPeriod: gear.hireCostPeriod,
+                          startsOn: null,
+                          endsOn: null,
+                          quantity: 1,
+                          notes: null,
+                          createdAt: new Date().toISOString(),
+                        },
+                      ];
+                      void updateTourGear(next);
+                      setNewTourId('');
                     }}
                   >
-                    <option value="">inherit</option>
-                    <option value="owned">owned</option>
-                    <option value="sub_hired">sub-hired</option>
-                    <option value="hired_to_client">hired-to-client</option>
-                  </select>
-                  <input
-                    className="rounded border border-lp-border bg-transparent px-2 py-1"
-                    type="number"
-                    defaultValue={tg.tourHireCostAmount ?? gear.hireCostAmount ?? 0}
-                    onBlur={(e) => {
-                      const amount = Number(e.target.value) || 0;
-                      void updateTourGear(
-                        tourUsage.map((row) =>
-                          row.id === tg.id ? { ...row, tourHireCostAmount: amount } : row
-                        )
-                      );
-                    }}
-                  />
+                    Add
+                  </button>
                 </div>
               </div>
-            ))}
-            <div className="flex gap-2">
-              <input
-                className="w-full rounded border border-lp-border bg-transparent px-2 py-1 text-xs"
-                placeholder="Tour ID to link"
-                value={newTourId}
-                onChange={(e) => setNewTourId(e.target.value)}
+            </section>
+
+            <section className="space-y-2">
+              <h4 className="text-xs uppercase tracking-wider text-lp-text-secondary">Notes</h4>
+              <textarea
+                className="w-full rounded border border-lp-border bg-transparent px-2 py-1 text-sm"
+                rows={4}
+                defaultValue={gear.notes ?? ''}
+                onBlur={(e) => void save({ notes: e.target.value || null })}
               />
-              <button
-                type="button"
-                className="rounded border border-lp-border px-2 py-1 text-xs hover:bg-lp-bg-tertiary"
-                onClick={() => {
-                  const tid = newTourId.trim();
-                  if (!tid) return;
-                  if (tourUsage.some((t) => t.tourId === tid)) return;
-                  const next: TourGear[] = [
-                    ...tourUsage,
-                    {
-                      id: `new-${tid}`,
-                      workspaceId: gear.workspaceId,
-                      tourId: tid,
-                      gearId: gear.id,
-                      tourOwnership: null,
-                      tourHireCostAmount: gear.hireCostAmount,
-                      tourHireCostCurrency: gear.hireCostCurrency,
-                      tourHireCostPeriod: gear.hireCostPeriod,
-                      startsOn: null,
-                      endsOn: null,
-                      quantity: 1,
-                      notes: null,
-                      createdAt: new Date().toISOString(),
-                    },
-                  ];
-                  void updateTourGear(next);
-                  setNewTourId('');
-                }}
-              >
-                Add
-              </button>
-            </div>
-          </div>
-        </section>
+            </section>
 
-        <section className="space-y-2">
-          <h4 className="text-xs uppercase tracking-wider text-lp-text-secondary">Notes</h4>
-          <textarea className="w-full rounded border border-lp-border bg-transparent px-2 py-1 text-sm" rows={4} defaultValue={gear.notes ?? ''} onBlur={(e) => void save({ notes: e.target.value || null })} />
-        </section>
-
-        <section className="space-y-1 text-xs text-lp-text-secondary">
-          <h4 className="uppercase tracking-wider">Activity</h4>
-          <p>Created: {new Date(gear.createdAt).toLocaleString()}</p>
-          <p>Updated: {new Date(gear.updatedAt).toLocaleString()}</p>
-          <p>{saving ? 'Saving...' : 'All changes saved'}</p>
-        </section>
+            <section className="space-y-1 text-xs text-lp-text-secondary">
+              <h4 className="uppercase tracking-wider">Activity</h4>
+              <p>Created: {new Date(gear.createdAt).toLocaleString()}</p>
+              <p>Updated: {new Date(gear.updatedAt).toLocaleString()}</p>
+              <p>{saving ? 'Saving...' : 'All changes saved'}</p>
+            </section>
+          </>
+        )}
       </div>
-    </div>
+    </SlideOver>
   );
 }
