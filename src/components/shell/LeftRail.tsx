@@ -2,8 +2,8 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import type { LucideIcon } from 'lucide-react';
 import { ChevronLeft, Filter, List, PanelLeft, Pin } from 'lucide-react';
+import { railIcons, type RailIconKey } from './rail-icons';
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 /** Day type → colour token (left strip). */
@@ -78,7 +78,7 @@ export type LeftRailVariant =
       savedViews?: Array<{ id: string; name: string }>;
       onSavedViewSelect?: (id: string) => void;
     }
-  | { kind: 'dashboard'; tourId: string; structure: Array<{ label: string; href: string; icon: LucideIcon }> }
+  | { kind: 'dashboard'; tourId: string; structure: Array<{ label: string; href: string; icon: RailIconKey }> }
   | { kind: 'none' };
 
 export type LeftRailProps = {
@@ -557,7 +557,7 @@ function DashboardList({
   structure,
   collapsed,
 }: {
-  structure: Array<{ label: string; href: string; icon: LucideIcon }>;
+  structure: Array<{ label: string; href: string; icon: RailIconKey }>;
   collapsed: boolean;
 }) {
   const pathname = usePathname() ?? '';
@@ -572,7 +572,7 @@ function DashboardList({
     return (
       <nav className="flex flex-col items-center gap-1 py-2" aria-label="Tour">
         {structure.map((item) => {
-          const Icon = item.icon;
+          const Icon = railIcons[item.icon];
           const active = pathname.startsWith(item.href);
           return (
             <CollapsedIconTooltip key={item.href} label={item.label}>
@@ -596,7 +596,7 @@ function DashboardList({
   return (
     <nav className="flex flex-col py-2" aria-label="Tour">
       {structure.map((item) => {
-        const Icon = item.icon;
+        const Icon = railIcons[item.icon];
         const active = pathname.startsWith(item.href);
         return (
           <Link
