@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Building2, Calendar, FileText, Hotel, LayoutGrid, Plane, Users } from 'lucide-react';
+import { FileText, Hotel, Plane } from "lucide-react";
 import { DocumentCanvas } from '@/components/document/DocumentCanvas';
 import { LeftRail, type LeftRailVariant, type ListFilterDef } from '@/components/shell/LeftRail';
 import { PageShell, type PageShellArchetype } from '@/components/shell/PageShell';
@@ -45,7 +45,7 @@ function makeTimelineRows(): TimelineRow<string>[] {
     {
       id: 'shows',
       label: 'Shows',
-      icon: Calendar,
+      icon: 'calendar',
       items: [
         item('sh1', '2026-01-10', '2026-01-12', 'Headline — NYC'),
         item('sh2', '2026-01-18', '2026-01-18', 'Festival set'),
@@ -314,10 +314,10 @@ export default function ShellPlaygroundClient() {
           kind: 'dashboard',
           tourId: tourId,
           structure: [
-            { label: 'Overview', href: '/dashboard', icon: LayoutGrid },
-            { label: 'Advance', href: '/advance', icon: Calendar },
-            { label: 'Personnel', href: '/personnel', icon: Users },
-            { label: 'Budget', href: '/budget', icon: Building2 },
+            { label: 'Overview', href: '/dashboard', icon: 'layout-grid' },
+            { label: 'Advance', href: '/advance', icon: 'calendar' },
+            { label: 'Personnel', href: '/personnel', icon: 'users' },
+            { label: 'Budget', href: '/budget', icon: 'building' },
           ],
         };
         return {
@@ -389,10 +389,10 @@ export default function ShellPlaygroundClient() {
           kind: 'dashboard',
           tourId: tourId,
           structure: [
-            { label: 'Overview', href: '/admin/shell-playground', icon: LayoutGrid },
-            { label: 'Budget', href: '/admin/shell-playground', icon: Building2 },
-            { label: 'Advance', href: '/admin/shell-playground', icon: Calendar },
-            { label: 'Personnel', href: '/admin/shell-playground', icon: Users },
+            { label: 'Overview', href: '/admin/shell-playground', icon: 'layout-grid' },
+            { label: 'Budget', href: '/admin/shell-playground', icon: 'building' },
+            { label: 'Advance', href: '/admin/shell-playground', icon: 'calendar' },
+            { label: 'Personnel', href: '/admin/shell-playground', icon: 'users' },
           ],
         };
         return {
