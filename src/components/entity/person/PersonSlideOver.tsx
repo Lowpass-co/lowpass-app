@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { Loader2 } from 'lucide-react';
-import { getPersonById, updatePerson } from '@/lib/api/persons';
-import type { Person } from '@/lib/types/person';
+import { deleteTourPersonnel, getPersonById, updatePerson, updateTourPersonnel, type TourPersonnelPatch } from '@/lib/api/persons';
+import type { Person, TourPerson } from '@/lib/types/person';
 import { cn } from '@/lib/utils';
 import { SlideOver } from '@/components/shell/SlideOver';
 
@@ -17,6 +17,179 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
       <h3 className="text-[10px] font-bold uppercase tracking-wider text-lp-text-tertiary">{title}</h3>
       {children}
     </section>
+  );
+}
+
+function dateInput(iso: string | null): string {
+  if (!iso) return '';
+  try {
+    return iso.slice(0, 10);
+  } catch {
+    return '';
+  }
+}
+
+function TourPersonnelRowEditor({
+  tp,
+  tourLabel,
+  isWorkspaceAdmin,
+  onSaved,
+  onRemoved,
+}: {
+  tp: TourPerson;
+  tourLabel: string;
+  isWorkspaceAdmin: boolean;
+  onSaved: (next: TourPerson) => void;
+  onRemoved: () => void;
+}) {
+  const [role, setRole] = useState(tp.role);
+  const [employmentType, setEmploymentType] = useState(tp.employmentType ?? '');
+  const [rateAmount, setRateAmount] = useState(tp.rateAmount != null ? String(tp.rateAmount) : '');
+  const [rateCurrency, setRateCurrency] = useState(tp.rateCurrency || 'GBP');
+  const [ratePeriod, setRatePeriod] = useState(tp.ratePeriod ?? '');
+  const [startsOn, setStartsOn] = useState(dateInput(tp.startsOn));
+  const [endsOn, setEndsOn] = useState(dateInput(tp.endsOn));
+  const [saving, setSaving] = useState(false);
+  const [rowError, setRowError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setRole(tp.role);
+    setEmploymentType(tp.employmentType ?? '');
+    setRateAmount(tp.rateAmount != null ? String(tp.rateAmount) : '');
+    setRateCurrency(tp.rateCurrency || 'GBP');
+    setRatePeriod(tp.ratePeriod ?? '');
+    setStartsOn(dateInput(tp.startsOn));
+    setEndsOn(dateInput(tp.endsOn));
+    setRowError(null);
+  }, [tp]);
+
+  const baseline = useMemo(() => {
+    return {
+      role: tp.role,
+      employment_type: tp.employmentType ?? null,
+      rate_amount: tp.rateAmount,
+      rate_currency: tp.rateCurrency || 'GBP',
+      rate_period: tp.ratePeriod,
+      starts_on: dateInput(tp.startsOn) || null,
+      ends_on: dateInput(tp.endsOn) || null,
+    };
+  }, [tp]);
+
+  const dirty = useMemo(() => {
+    const nextAmount = rateAmount === '' ? null : Number(rateAmount);
+    return (
+      role !== baseline.role ||
+      (employmentType || null) !== baseline.employment_type ||
+      nextAmount !== baseline.rate_amount ||
+      rateCurrency !== baseline.rate_currency ||
+      (ratePeriod || null) !== baseline.rate_period ||
+      (startsOn || null) !== baseline.starts_on ||
+      (endsOn || null) !== baseline.ends_on
+    );
+  }, [baseline, role, employmentType, rateAmount, rateCurrency, ratePeriod, startsOn, endsOn]);
+
+  const persist = async () => {
+    setSaving(true);
+    setRowError(null);
+    try {
+      const updated = await updateTourPersonnel(tp.id, {
+        role,
+        employment_type: employmentType === '' ? null : (employmentType as NonNullable<TourPersonnelPatch['employment_type']>),
+        rate_amount: rateAmount === '' ? null : Number(rateAmount),
+        rate_currency: rateCurrency || 'GBP',
+        rate_period: ratePeriod === '' ? null : (ratePeriod as NonNullable<TourPersonnelPatch['rate_period']>),
+        starts_on: startsOn === '' ? null : startsOn,
+        ends_on: endsOn === '' ? null : endsOn,
+      });
+      onSaved(updated);
+    } catch (e) {
+      setRowError((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const remove = async () => {
+    if (!isWorkspaceAdmin) return;
+    if (!window.confirm(`Remove assignment from "${tourLabel}"?`)) return;
+    setSaving(true);
+    setRowError(null);
+    try {
+      await deleteTourPersonnel(tp.id);
+      onRemoved();
+    } catch (e) {
+      setRowError((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-2 rounded-lg border border-lp-border bg-lp-surface p-3">
+      <div className="text-xs font-medium text-lp-text">{tourLabel}</div>
+      {rowError && <p className="text-xs text-red-600">{rowError}</p>}
+      <div className="grid gap-3 sm:grid-cols-3">
+        <input className={IC} placeholder="Role" value={role} onChange={(e) => setRole(e.target.value)} />
+        <select
+          className={IC}
+          value={employmentType}
+          onChange={(e) => setEmploymentType(e.target.value)}
+          aria-label="Employment type"
+        >
+          <option value="">Employment…</option>
+          <option value="staff">Staff</option>
+          <option value="freelance">Freelance</option>
+          <option value="crew">Crew</option>
+          <option value="band">Band</option>
+          <option value="mgmt">Mgmt</option>
+        </select>
+        <input
+          className={IC}
+          type="number"
+          step="0.01"
+          placeholder="Rate amount"
+          value={rateAmount}
+          onChange={(e) => setRateAmount(e.target.value)}
+        />
+        <input
+          className={IC}
+          placeholder="ISO currency"
+          maxLength={3}
+          value={rateCurrency}
+          onChange={(e) => setRateCurrency(e.target.value.toUpperCase())}
+          aria-label="Rate currency"
+        />
+        <select className={IC} value={ratePeriod} onChange={(e) => setRatePeriod(e.target.value)} aria-label="Rate period">
+          <option value="">Period…</option>
+          <option value="day">Day</option>
+          <option value="week">Week</option>
+          <option value="flat">Flat</option>
+          <option value="hour">Hour</option>
+        </select>
+        <input className={IC} type="date" value={startsOn} onChange={(e) => setStartsOn(e.target.value)} aria-label="Starts on" />
+        <input className={IC} type="date" value={endsOn} onChange={(e) => setEndsOn(e.target.value)} aria-label="Ends on" />
+      </div>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          className="rounded-md bg-lp-orange px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50"
+          disabled={!dirty || saving}
+          onClick={() => void persist()}
+        >
+          {saving ? 'Saving…' : 'Save assignment'}
+        </button>
+        {isWorkspaceAdmin ? (
+          <button
+            type="button"
+            className="rounded-md border border-lp-border px-3 py-1.5 text-xs text-red-600 disabled:opacity-50"
+            disabled={saving}
+            onClick={() => void remove()}
+          >
+            Delete
+          </button>
+        ) : null}
+      </div>
+    </div>
   );
 }
 
@@ -39,6 +212,17 @@ export default function PersonSlideOver({ id, onClose }: { id: string; onClose: 
   const [dateOfBirth, setDateOfBirth] = useState('');
   const [dietary, setDietary] = useState('');
   const [notes, setNotes] = useState('');
+
+  const [isWorkspaceAdmin, setIsWorkspaceAdmin] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/workspace/me', { credentials: 'include' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((j) => {
+        if (j?.isWorkspaceAdmin) setIsWorkspaceAdmin(true);
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     setLoading(true);
@@ -154,20 +338,37 @@ export default function PersonSlideOver({ id, onClose }: { id: string; onClose: 
                 <input className={IC} placeholder="Dietary" value={dietary} onChange={(e) => setDietary(e.target.value)} />
               </div>
             </Section>
-            {/* TODO(UX13): inline edit role/employment_type/rate_amount/rate_currency/rate_period/dates per tour_personnel row. Currently read-only. Needs PATCH /api/tour-personnel/[id] endpoint + per-row local state. */}
+            {/* Per-tour employment and rate (tour_personnel). */}
             <Section title="Tours">
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {(person?.tourPersonnel ?? []).length === 0 ? (
                   <p className="text-xs text-lp-text-tertiary">No tour assignments.</p>
                 ) : (
                   (person?.tourPersonnel ?? []).map((tp) => (
-                    <div key={tp.id} className="rounded border border-lp-border bg-lp-surface px-2 py-1.5 text-xs text-lp-text-secondary">
-                      <p className="font-medium text-lp-text">{tp.tourName ?? tp.tourId}</p>
-                      <p>
-                        Role: {tp.role} · Rate: {tp.rateAmount ?? 0} {tp.rateCurrency}
-                      </p>
-                      <p className="text-lp-text-tertiary">Editing role/rate here is tour-scoped only.</p>
-                    </div>
+                    <TourPersonnelRowEditor
+                      key={tp.id}
+                      tp={tp}
+                      tourLabel={tp.tourName ?? tp.tourId}
+                      isWorkspaceAdmin={isWorkspaceAdmin}
+                      onSaved={(next) => {
+                        setPerson((prev) => {
+                          if (!prev?.tourPersonnel) return prev;
+                          return {
+                            ...prev,
+                            tourPersonnel: prev.tourPersonnel.map((r) => (r.id === next.id ? next : r)),
+                          };
+                        });
+                      }}
+                      onRemoved={() => {
+                        setPerson((prev) => {
+                          if (!prev?.tourPersonnel) return prev;
+                          return {
+                            ...prev,
+                            tourPersonnel: prev.tourPersonnel.filter((r) => r.id !== tp.id),
+                          };
+                        });
+                      }}
+                    />
                   ))
                 )}
               </div>

@@ -1,5 +1,15 @@
 import type { Person, TourPerson } from '@/lib/types/person';
 
+export type TourPersonnelPatch = {
+  role?: string;
+  employment_type?: 'staff' | 'freelance' | 'crew' | 'band' | 'mgmt' | null;
+  rate_amount?: number | null;
+  rate_currency?: string | null;
+  rate_period?: 'day' | 'week' | 'flat' | 'hour' | null;
+  starts_on?: string | null;
+  ends_on?: string | null;
+};
+
 type PersonRow = {
   id: string;
   workspace_id: string;
@@ -127,4 +137,34 @@ export async function updatePerson(id: string, patch: Record<string, unknown>): 
 export async function deletePerson(id: string): Promise<void> {
   const res = await fetch(`/api/persons/${encodeURIComponent(id)}`, { method: 'DELETE' });
   if (!res.ok) throw new Error('Failed to delete person');
+}
+
+/** PATCH canonical tour_personnel row; returns mapped camelCase row. */
+export async function updateTourPersonnel(id: string, patch: TourPersonnelPatch): Promise<TourPerson> {
+  const body: Record<string, unknown> = {};
+  if (patch.role !== undefined) body.role = patch.role;
+  if (patch.employment_type !== undefined) body.employment_type = patch.employment_type;
+  if (patch.rate_amount !== undefined) body.rate_amount = patch.rate_amount;
+  if (patch.rate_currency !== undefined) body.rate_currency = patch.rate_currency;
+  if (patch.rate_period !== undefined) body.rate_period = patch.rate_period;
+  if (patch.starts_on !== undefined) body.starts_on = patch.starts_on;
+  if (patch.ends_on !== undefined) body.ends_on = patch.ends_on;
+
+  const res = await fetch(`/api/tour-personnel/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error((json as { error?: string }).error ?? 'Failed to update tour assignment');
+  return mapTourPerson(json as TourPersonRow);
+}
+
+export async function deleteTourPersonnel(id: string): Promise<void> {
+  const res = await fetch(`/api/tour-personnel/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  });
+  if (res.status === 204) return;
+  const json = await res.json().catch(() => ({}));
+  throw new Error((json as { error?: string }).error ?? 'Failed to remove tour assignment');
 }
