@@ -57,6 +57,6 @@ Data-model docs that reference specific migrations:
 - `docs/data-model/flights.md` → `049_flight_canonical.sql`
 - `docs/data-model/persons.md` → `050_person_canonical.sql`
 - `docs/data-model/rooms.md` → (mentions table names; doesn't pin a number)
-- `docs/data-model/gear.md` → (mentions table names; doesn't pin a number)
+- `docs/data-model/deal-memos.md` → `053_deal_memos.sql`
 
 When you renumber a migration, **update its data-model doc and the header comment inside the migration file.**

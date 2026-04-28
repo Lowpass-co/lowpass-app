@@ -1,6 +1,6 @@
 import type { ComponentType } from 'react';
 
-export type EntityKind = 'flight' | 'person' | 'room' | 'gear' | 'show' | 'tour';
+export type EntityKind = 'deal-memo' | 'flight' | 'gear' | 'person' | 'room' | 'show' | 'tour';
 
 export type EntityDescriptor<T> = {
   kind: EntityKind;
