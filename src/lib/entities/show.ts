@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase-client';
-import type { EntityDescriptor } from './types';
+import { registerEntity } from './registry';
 
 export type ShowEntity = {
   id: string;
@@ -10,39 +10,41 @@ export type ShowEntity = {
   venue_name: string | null;
 };
 
-const select = 'id, tour_id, date, day_type, city, venue_name';
+const SELECT = 'id, tour_id, date, day_type, city, venue_name';
 
 async function fetchById(id: string): Promise<ShowEntity | null> {
   const supabase = createClient();
   const { data, error } = await supabase
     .from('routing')
-    .select(select)
+    .select(SELECT)
     .eq('id', id)
     .maybeSingle();
   if (error || !data) return null;
   return data as ShowEntity;
 }
 
-async function search(query: string, opts?: { limit?: number; tourId?: string }): Promise<ShowEntity[]> {
+async function searchShows(
+  query: string,
+  opts?: { limit?: number; tourId?: string }
+): Promise<ShowEntity[]> {
   const limit = Math.min(opts?.limit ?? 20, 50);
   const supabase = createClient();
   const q = query.trim();
-  let builder = supabase.from('routing').select(select);
-  if (opts?.tourId) {
-    builder = builder.eq('tour_id', opts.tourId);
-  }
-  if (q) {
-    builder = builder.ilike('venue_name', `%${q}%`);
-  }
-  const { data } = await builder.order('date', { ascending: true }).limit(limit);
-  return (data as ShowEntity[]) ?? [];
+
+  let builder = supabase.from('routing').select(SELECT);
+  if (opts?.tourId) builder = builder.eq('tour_id', opts.tourId);
+  if (q) builder = builder.or(`venue_name.ilike.%${q}%,city.ilike.%${q}%`);
+
+  const { data, error } = await builder.order('date', { ascending: true }).limit(limit);
+  if (error || !data) return [];
+  return data as ShowEntity[];
 }
 
-export const showDescriptor: EntityDescriptor<ShowEntity> = {
+registerEntity<ShowEntity>({
   kind: 'show',
   fetchById,
-  search,
-  getLabel: s => s.venue_name || s.city || s.date,
-  getSecondary: s => `${s.date} · ${s.day_type}`,
-  SlideOverContent: () => import('./slideover/showBody'),
-};
+  search: searchShows,
+  getLabel: (s) => s.venue_name || s.city || s.date,
+  getSecondary: (s) => `${s.date} · ${s.day_type}`,
+  SlideOverContent: () => import('@/components/entity/show/ShowSlideOver'),
+});

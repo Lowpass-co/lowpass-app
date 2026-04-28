@@ -7,13 +7,13 @@ import {
   useEffect,
   useMemo,
   useState,
-  type ReactNode,
   type ComponentType,
+  type ReactNode,
 } from 'react';
-import { registerAllEntities } from '@/lib/entities/registerAll';
+// Side-effect import: registers all canonical entity descriptors with the registry
+import '@/lib/entities';
 import { getEntityDescriptor } from '@/lib/entities/registry';
 import type { EntityKind } from '@/lib/entities/types';
-import { SlideOver } from '@/components/shell/SlideOver';
 
 export type EntityOpenTarget = { kind: EntityKind; id: string };
 
@@ -26,53 +26,34 @@ const EntityRoutingContext = createContext<RoutingValue | null>(null);
 
 type InnerProps = { target: EntityOpenTarget; onClose: () => void };
 
+/**
+ * Lazy-loads the entity-specific SlideOver component and renders it directly.
+ * The SlideOver components own their own chrome (via the shell/SlideOver
+ * primitive) and fetch their own data given an id — this route just resolves
+ * the descriptor and forwards id + onClose.
+ */
 function EntitySlideOverRoute({ target, onClose }: InnerProps) {
-  const [title, setTitle] = useState('Loading…');
-  const [subtitle, setSubtitle] = useState<string | undefined>(undefined);
-  const [entity, setEntity] = useState<unknown | null>(null);
-  const [Body, setBody] = useState<ComponentType<{ entity: unknown }> | null>(null);
+  const [Body, setBody] = useState<ComponentType<{ id: string; onClose: () => void }> | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [fetchMiss, setFetchMiss] = useState(false);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setErr(null);
-    setFetchMiss(false);
-    setEntity(null);
     setBody(null);
-    setTitle('Loading…');
-    setSubtitle(undefined);
+    setErr(null);
 
     const run = async () => {
       const desc = getEntityDescriptor(target.kind);
       if (!desc) {
-        if (!cancelled) {
-          setLoading(false);
-          setErr(`Unknown entity kind: ${target.kind}`);
-        }
+        if (!cancelled) setErr(`Unknown entity kind: ${target.kind}`);
         return;
       }
-      const row = await desc.fetchById(target.id);
-      if (cancelled) return;
-      if (!row) {
-        setLoading(false);
-        setFetchMiss(true);
-        setTitle('Not found');
-        setSubtitle(target.id);
-        return;
-      }
-      setTitle(desc.getLabel(row as never));
-      setSubtitle(desc.getSecondary ? desc.getSecondary(row as never) : undefined);
-      setEntity(row);
       try {
         const mod = await desc.SlideOverContent();
-        if (!cancelled) setBody(() => mod.default as ComponentType<{ entity: unknown }>);
+        if (!cancelled) {
+          setBody(() => mod.default as ComponentType<{ id: string; onClose: () => void }>);
+        }
       } catch (e) {
         if (!cancelled) setErr(e instanceof Error ? e.message : 'Failed to load detail panel');
-      } finally {
-        if (!cancelled) setLoading(false);
       }
     };
     void run();
@@ -81,55 +62,46 @@ function EntitySlideOverRoute({ target, onClose }: InnerProps) {
     };
   }, [target]);
 
-  return (
-    <SlideOver
-      open
-      onClose={onClose}
-      title={err ? 'Error' : title}
-      subtitle={subtitle}
-      ariaLabel={err ? 'Entity error' : `Entity: ${title}`}
-    >
-      {loading && !err && !fetchMiss && (
-        <p className="text-sm" style={{ color: 'var(--lp-text-secondary)' }}>
-          Loading…
-        </p>
-      )}
-      {err && (
-        <p className="text-sm" style={{ color: 'var(--color-lp-error)' }}>
-          {err}
-        </p>
-      )}
-      {fetchMiss && (
-        <p className="text-sm" style={{ color: 'var(--lp-text-secondary)' }}>
-          This entity could not be found or you don’t have access.
-        </p>
-      )}
-      {!loading && !err && !fetchMiss && entity != null && Body != null ? (
-        <Body entity={entity} />
-      ) : null}
-    </SlideOver>
-  );
+  if (err) {
+    return (
+      <div
+        role="alert"
+        className="fixed inset-0 z-50 flex items-center justify-center"
+        style={{ color: 'var(--color-lp-error)' }}
+      >
+        <div
+          className="max-w-md rounded-lg p-6"
+          style={{
+            background: 'var(--lp-surface)',
+            border: '1px solid var(--lp-border)',
+            boxShadow: 'var(--lp-shadow-lg)',
+          }}
+        >
+          <p className="text-sm">{err}</p>
+          <button
+            type="button"
+            className="mt-3 rounded-md px-3 py-1.5 text-sm"
+            style={{ background: 'var(--lp-surface-hover)', color: 'var(--lp-text)' }}
+            onClick={onClose}
+          >
+            Close
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!Body) return null;
+  return <Body id={target.id} onClose={onClose} />;
 }
 
 export function EntityRoutingProvider({ children }: { children: ReactNode }) {
   const [target, setTarget] = useState<EntityOpenTarget | null>(null);
 
-  useEffect(() => {
-    registerAllEntities();
-  }, []);
+  const open = useCallback((t: EntityOpenTarget) => setTarget(t), []);
+  const close = useCallback(() => setTarget(null), []);
 
-  const open = useCallback((t: EntityOpenTarget) => {
-    setTarget(t);
-  }, []);
-
-  const close = useCallback(() => {
-    setTarget(null);
-  }, []);
-
-  const value = useMemo<RoutingValue>(
-    () => ({ open, close }),
-    [open, close]
-  );
+  const value = useMemo<RoutingValue>(() => ({ open, close }), [open, close]);
 
   return (
     <EntityRoutingContext.Provider value={value}>
