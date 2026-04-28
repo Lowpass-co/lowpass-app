@@ -13,7 +13,7 @@ import { usePathname, useSearchParams } from 'next/navigation';
 import {
   ChevronLeft, ChevronRight, LogOut, Lock,
   LayoutDashboard, ListMusic, ClipboardList, LineChart,
-  HandCoins, Bed, BookOpen, FileCheck2, Music, Users, Users2, Building2, Settings, Bug, Package,
+  HandCoins, Bed, BookOpen, FileCheck2, Folder, Music, Users, Users2, Building2, Settings, Bug, Package,
   FileSignature, LayoutTemplate,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
@@ -37,6 +37,7 @@ interface NavItem {
     | 'payroll'
     | 'tour_personnel'
     | 'rider_packs'
+    | 'files'
     | 'dashboard';
 }
 
@@ -113,13 +114,18 @@ export function Sidebar() {
     },
     {
       label: 'Rider Packs',
-      href: selectedArtistId ? `/rider-packs?artist_id=${selectedArtistId}` : '/rider-packs',
+      href: selectedTourId
+        ? `/tours/${selectedTourId}/rider-packs`
+        : selectedArtistId
+          ? `/rider-packs?artist_id=${selectedArtistId}`
+          : '/rider-packs',
       icon: BookOpen,
       activeMode: 'rider_packs',
     },
     { label: 'Settlement', href: selectedTourId ? `/budget?tour_id=${selectedTourId}&tab=settlement` : '/budget', icon: FileCheck2, activeMode: 'settlement' },
     { label: 'Rooming', href: selectedTourId ? `/tours/${selectedTourId}/rooming` : '/budget', icon: Bed, activeMode: 'rooming' },
     { label: 'Payroll', href: selectedTourId ? `/tours/${selectedTourId}/payroll` : '/budget', icon: HandCoins, activeMode: 'payroll' },
+    { label: 'Files', href: selectedTourId ? `/tours/${selectedTourId}/files` : '/budget', icon: Folder, activeMode: 'files' },
   ];
 
   useEffect(() => {
@@ -171,7 +177,13 @@ export function Sidebar() {
       return /^\/tours\/[^/]+\/personnel(?:\/|$)/.test(pathname ?? '');
     }
     if (item.activeMode === 'rider_packs') {
-      return /^\/rider-packs(?:\/|$)/.test(pathname ?? '');
+      return (
+        /^\/rider-packs(?:\/|$)/.test(pathname ?? '') ||
+        /^\/tours\/[^/]+\/rider-packs(?:\/|$)/.test(pathname ?? '')
+      );
+    }
+    if (item.activeMode === 'files') {
+      return /^\/tours\/[^/]+\/files(?:\/|$)/.test(pathname ?? '');
     }
     if (item.activeMode === 'rooming') {
       return pathname === '/rooming' || /^\/tours\/[^/]+\/rooming(?:\/|$)/.test(pathname ?? '');
