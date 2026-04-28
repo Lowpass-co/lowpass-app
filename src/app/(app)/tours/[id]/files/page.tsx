@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation';
+import { listAppPageShell } from '@/components/shell/app-page-shells';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { buildTourScopedFileVms } from '@/lib/tour-files/buildTourFileVms';
 import { TourFilesClient } from '@/components/tours/TourFilesClient';
@@ -27,7 +28,7 @@ export default async function TourFilesPage({ params }: { params: Promise<{ id: 
 
   const files = await buildTourScopedFileVms(supabase, { tourId: tour.id, workspaceId: profile.workspace_id });
 
-  return (
+  return listAppPageShell(
     <div className="mx-auto w-full px-4 pt-6">
       <TourFilesClient initial={files} />
     </div>

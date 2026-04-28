@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation';
 
+import { topBarOnlyAppPageShell } from '@/components/shell/app-page-shells';
 import { ChannelListTourSheet } from '@/components/channel-list/ChannelListTourSheet';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { formatResolveError, resolvePack } from '@/lib/rider-packs/resolve';
@@ -49,7 +50,7 @@ export default async function TourChannelListPage({
 
   const tourCurrency = (tour.currency as string | null) ?? 'GBP';
 
-  return (
+  return topBarOnlyAppPageShell(
     <div className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col space-y-4 px-4 pb-16 pt-6 print:max-w-none print:pb-8">
       <header className="flex flex-wrap items-end justify-between gap-3 print:hidden">
         <div>

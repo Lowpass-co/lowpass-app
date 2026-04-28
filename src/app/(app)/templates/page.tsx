@@ -1,4 +1,5 @@
 import { Suspense } from 'react';
+import { listAppPageShell } from '@/components/shell/app-page-shells';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { listUnifiedTemplates } from '@/lib/templates/listUnifiedTemplates';
 import { TemplatesLibraryClient } from '@/components/templates/TemplatesLibraryClient';
@@ -11,7 +12,7 @@ export default async function TemplatesPage() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    return (
+    return listAppPageShell(
       <div className="mx-auto max-w-6xl">
         <p className="text-lp-text-secondary">Please sign in.</p>
       </div>
@@ -20,7 +21,7 @@ export default async function TemplatesPage() {
 
   const initial = await listUnifiedTemplates(supabase).catch(() => []);
 
-  return (
+  return listAppPageShell(
     <div className="mx-auto max-w-7xl space-y-6 pb-12">
       <div>
         <h1 className="text-2xl font-bold text-lp-text">Templates</h1>

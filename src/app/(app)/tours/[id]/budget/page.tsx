@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 
 import type { Metadata } from 'next';
 
+import { topBarOnlyAppPageShell } from '@/components/shell/app-page-shells';
 import { TourBudgetRebuildClient } from '@/components/budget/TourBudgetRebuildClient';
 import { MobileBudgetBanner } from '@/components/mobile/MobileBudgetBanner';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
@@ -47,7 +48,9 @@ export default async function TourBudgetPage({
     .order('category')
     .order('order_index', { ascending: true });
 
-  return (
+  // TODO(UX14): once budget section list is treated as a rail, replace
+  // topBarOnlyAppPageShell with spreadsheetAppPageShell + a section variant.
+  return topBarOnlyAppPageShell(
     <div className="flex min-h-0 flex-1 flex-col pb-24">
       <MobileBudgetBanner />
       <TourBudgetRebuildClient

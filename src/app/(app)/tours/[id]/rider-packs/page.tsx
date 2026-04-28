@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation';
+import { listAppPageShell } from '@/components/shell/app-page-shells';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { RiderPacksTourClient, riderPackRowsFromServer } from '@/components/tours/RiderPacksTourClient';
 
@@ -49,7 +50,7 @@ export default async function TourRiderPacksPage({ params }: { params: Promise<{
     artistMap,
   );
 
-  return (
+  return listAppPageShell(
     <div className="mx-auto w-full px-4 pt-6">
       <RiderPacksTourClient tourId={tour.id} tourName={tour.name ?? 'Tour'} rows={rows} />
     </div>

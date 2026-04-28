@@ -1,4 +1,5 @@
 import { Suspense } from 'react';
+import { listAppPageShell } from '@/components/shell/app-page-shells';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import {
   DealMemoLibraryClient,
@@ -13,7 +14,7 @@ export default async function DealMemosLibraryPage() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    return (
+    return listAppPageShell(
       <div className="mx-auto max-w-6xl">
         <p className="text-lp-text-secondary">Please sign in.</p>
       </div>
@@ -23,7 +24,7 @@ export default async function DealMemosLibraryPage() {
   const { data: profile } = await supabase.from('profiles').select('workspace_id').eq('id', user.id).maybeSingle();
 
   if (!profile?.workspace_id) {
-    return (
+    return listAppPageShell(
       <div className="mx-auto max-w-6xl">
         <p className="text-lp-text-secondary">No workspace.</p>
       </div>
@@ -41,7 +42,7 @@ export default async function DealMemosLibraryPage() {
     name: t.name,
   }));
 
-  return (
+  return listAppPageShell(
     <div className="mx-auto max-w-7xl space-y-6 pb-12">
       <div>
         <h1 className="text-2xl font-bold text-lp-text">Deal memos</h1>
