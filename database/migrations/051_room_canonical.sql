@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS public.hotels (
   confirmation_number text,
   check_in_at timestamptz,
   check_out_at timestamptz,
-  show_id uuid REFERENCES public.shows(id) ON DELETE SET NULL,
+  show_id uuid REFERENCES public.routing(id) ON DELETE SET NULL,
   notes text,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()

@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS public.flights (
   cost_currency text NOT NULL DEFAULT 'GBP',
   passenger_ids uuid[] NOT NULL DEFAULT '{}',
   notes text,
-  show_id uuid REFERENCES public.shows(id) ON DELETE SET NULL,
+  show_id uuid REFERENCES public.routing(id) ON DELETE SET NULL,
 
   -- Compatibility fields used by current UI
   person_name text NOT NULL DEFAULT '',
