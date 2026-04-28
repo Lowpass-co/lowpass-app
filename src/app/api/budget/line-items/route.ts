@@ -50,6 +50,8 @@ export async function GET(request: Request) {
     .select('*')
     .eq('workspace_id', profile.workspace_id)
     .eq('tour_id', tourId)
+    .order('section')
+    .order('sort_order', { ascending: true })
     .order('category')
     .order('order_index');
 
@@ -149,6 +151,8 @@ export async function GET(request: Request) {
             gear_id: d.gearId,
             tour_gear_id: d.tourGearId,
             order_index: Number(maxOrder?.order_index ?? 0) + 1,
+            section: 'hire',
+            sort_order: Number(maxOrder?.order_index ?? 0) + 1,
           });
       }
     }
@@ -189,6 +193,8 @@ export async function POST(request: Request) {
     currency?: string | null;
     routing_id?: string | null;
     notes?: string | null;
+    section?: string | null;
+    sort_order?: number;
   };
   try {
     body = await request.json();
@@ -226,6 +232,18 @@ export async function POST(request: Request) {
     .maybeSingle();
 
   const orderIndex = (existing?.order_index ?? 0) + 1;
+  const sortOrder =
+    body.sort_order != null && Number.isFinite(Number(body.sort_order))
+      ? Math.max(0, Math.floor(Number(body.sort_order)))
+      : orderIndex;
+  const sectionVal =
+    body.section?.trim().length &&
+    /^[a-z_]+$/.test(body.section.trim().toLowerCase()) &&
+    ['income', 'expenses', 'hotels', 'travel', 'hire', 'payroll', 'per_diems', 'other'].includes(
+      body.section.trim().toLowerCase()
+    )
+      ? body.section.trim().toLowerCase()
+      : null;
 
   const { data: created, error } = await supabase
     .from('budget_line_items')
@@ -241,6 +259,8 @@ export async function POST(request: Request) {
       routing_id: body.routing_id ?? null,
       notes: body.notes ?? null,
       order_index: orderIndex,
+      section: sectionVal,
+      sort_order: sortOrder,
     })
     .select()
     .single();
@@ -289,6 +309,8 @@ export async function PATCH(request: Request) {
     room_id?: string | null;
     gear_id?: string | null;
     tour_gear_id?: string | null;
+    section?: string | null;
+    sort_order?: number;
   };
   try {
     body = await request.json();
@@ -358,6 +380,20 @@ export async function PATCH(request: Request) {
   if (updates.room_id !== undefined) payload.room_id = updates.room_id;
   if (updates.gear_id !== undefined) payload.gear_id = updates.gear_id;
   if (updates.tour_gear_id !== undefined) payload.tour_gear_id = updates.tour_gear_id;
+
+  const SECTION_WHITE = ['income', 'expenses', 'hotels', 'travel', 'hire', 'payroll', 'per_diems', 'other'];
+  if (updates.section !== undefined && updates.section !== null) {
+    const s = String(updates.section).trim().toLowerCase();
+    if (!SECTION_WHITE.includes(s)) {
+      return NextResponse.json({ error: 'invalid section bucket' }, { status: 400 });
+    }
+    payload.section = s;
+  } else if (updates.section === null) {
+    payload.section = null;
+  }
+  if (updates.sort_order !== undefined && Number.isFinite(Number(updates.sort_order))) {
+    payload.sort_order = Math.max(0, Math.floor(Number(updates.sort_order)));
+  }
 
   const { data, error } = await supabase
     .from('budget_line_items')

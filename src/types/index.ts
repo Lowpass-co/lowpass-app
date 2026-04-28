@@ -479,7 +479,8 @@ export interface BudgetLineItem {
   id: string;
   tour_id: string;
   workspace_id: string;
-  category: BudgetCategory;
+  /** Legacy category key; persists alongside UX14 section. */
+  category: BudgetCategory | string;
   label: string;
   quantity: number;
   proposed_cost: number;
@@ -494,6 +495,14 @@ export interface BudgetLineItem {
   gear_id?: string | null;
   tour_gear_id?: string | null;
   order_index: number;
+  /** UX14 section bucket (migration 054). */
+  section?: string | null;
+  sort_order?: number;
+  status?: string | null;
+  tags?: string[];
+  linked_item_ids?: string[];
+  source_entity_type?: string | null;
+  source_entity_id?: string | null;
   created_at: string;
   updated_at: string;
 }

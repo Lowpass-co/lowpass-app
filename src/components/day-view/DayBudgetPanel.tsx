@@ -27,11 +27,11 @@ const CATEGORY_ORDER: { key: string; label: string }[] = [
   { key: 'per_diem', label: 'PER DIEM' },
 ];
 
-function categoryGroup(cat: BudgetCategory): string {
+function categoryGroup(cat: BudgetCategory | string): string {
   if (cat === 'flights') return 'flights';
   if (cat === 'hotels') return 'hotels';
-  if (cat.startsWith('transport_')) return 'transport';
-  if (cat.startsWith('prod_')) return 'production';
+  if (typeof cat === 'string' && cat.startsWith('transport_')) return 'transport';
+  if (typeof cat === 'string' && cat.startsWith('prod_')) return 'production';
   return 'misc';
 }
 
