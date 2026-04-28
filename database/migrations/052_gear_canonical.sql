@@ -117,7 +117,7 @@ ON CONFLICT DO NOTHING;
 WITH matches AS (
   SELECT
     clr.id AS row_id,
-    MIN(g.id) AS gear_id,
+    MIN(g.id::text)::uuid AS gear_id,
     COUNT(*) AS match_count
   FROM public.channel_list_rows clr
   JOIN public.rider_packs rp ON rp.id = clr.pack_id
