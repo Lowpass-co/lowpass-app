@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { FileText, Hotel, Plane } from "lucide-react";
+import { Calendar, FileText, Hotel, Plane } from "lucide-react";
 import { DocumentCanvas } from '@/components/document/DocumentCanvas';
 import { LeftRail, type LeftRailVariant, type ListFilterDef } from '@/components/shell/LeftRail';
 import { PageShell, type PageShellArchetype } from '@/components/shell/PageShell';
@@ -45,7 +45,7 @@ function makeTimelineRows(): TimelineRow<string>[] {
     {
       id: 'shows',
       label: 'Shows',
-      icon: 'calendar',
+      icon: Calendar,
       items: [
         item('sh1', '2026-01-10', '2026-01-12', 'Headline — NYC'),
         item('sh2', '2026-01-18', '2026-01-18', 'Festival set'),
