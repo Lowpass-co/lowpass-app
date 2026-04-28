@@ -1,191 +1,161 @@
 /* ============================================
-   LOWPASS — Tour Detail Page
+   LOWPASS — Tour Overview (UX16)
 
-   Tour header + routing editor (Grid/Calendar/Kanban).
+   Today-anchored timeline of Shows / Hotels / Flights for a single tour.
+   The legacy header strip + advance-summary surface is retired in favour of
+   <TimelineDashboard>; quick links live in the LeftRail (dashboard archetype).
    ============================================ */
 
-import Link from 'next/link';
+import { notFound } from 'next/navigation';
 import { dashboardAppPageShell } from '@/components/shell/app-page-shells';
 import { getDashboardLeftRail } from '@/lib/shell/rails/dashboardForTour';
-import { notFound } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
-import { formatTourDateRange, capitaliseStatus } from '@/lib/utils';
-import { TourDetailToasts } from './TourDetailToasts';
-import { TourAdvanceSummary } from './TourAdvanceSummary';
-import { ArrowLeft } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import {
+  TourOverviewClient,
+  type FlightVm,
+  type HotelVm,
+  type ShowVm,
+} from '@/components/tours/TourOverviewClient';
 
-const statusColors: Record<string, string> = {
-  planning: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
-  active: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
-  completed: 'bg-gray-500/10 text-gray-500',
-  archived: 'bg-gray-500/10 text-gray-400',
-};
+function isoDateOnly(value: string | null | undefined): string | null {
+  if (!value) return null;
+  return value.length >= 10 ? value.slice(0, 10) : null;
+}
 
 export default async function TourDetailPage({
   params,
-  searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ toast?: string }>;
+  searchParams?: Promise<{ toast?: string }>;
 }) {
   const { id } = await params;
-  const { toast } = await searchParams;
   const supabase = await createServerSupabaseClient();
-  const { data: tour, error } = await supabase
+
+  const { data: tour, error: tourErr } = await supabase
     .from('tours')
-    .select(`
-      *,
-      artist:artists(*)
-    `)
+    .select('id, name, status, start_date, end_date, currency, artist:artists(name)')
     .eq('id', id)
     .single();
 
-  if (error || !tour) {
+  if (tourErr || !tour) {
     notFound();
   }
 
+  const tourId = tour.id as string;
+  const artist = Array.isArray(tour.artist) ? tour.artist[0] : tour.artist;
+
+  // Shows — from routing rows. day_type 'show'/'festival' carry the show colour;
+  // other day types still appear so the user sees travel/off context.
   const { data: routingRows } = await supabase
     .from('routing')
-    .select('id, date, day_type')
-    .eq('tour_id', id);
+    .select('id, date, city, venue_name, day_type')
+    .eq('tour_id', tourId)
+    .order('date', { ascending: true });
 
-  const routingCount = (routingRows ?? []).length;
-  const showCount = (routingRows ?? []).filter((r) => r.day_type === 'show' || r.day_type === 'festival').length;
+  const shows: ShowVm[] = (routingRows ?? [])
+    .filter((r) => isoDateOnly(r.date as string | null))
+    .map((r) => ({
+      type: 'show',
+      routingId: r.id as string,
+      date: isoDateOnly(r.date as string | null) as string,
+      city: (r.city as string | null) ?? '',
+      venueName: (r.venue_name as string | null) ?? null,
+      dayType: (r.day_type as string | null) ?? null,
+    }));
 
-  const showRoutingIds = (routingRows ?? [])
-    .filter((r) => r.day_type === 'show' || r.day_type === 'festival')
-    .map((r) => r.id);
+  // Hotels — UX11 canonical entity. Pre-fetch one room per hotel so card
+  // click can open the first room's slide-over without a second roundtrip.
+  const { data: hotelRows } = await supabase
+    .from('hotels')
+    .select('id, name, check_in_at, check_out_at')
+    .eq('tour_id', tourId)
+    .order('check_in_at', { ascending: true });
 
-  const { data: completeAdvanceInstances } = showRoutingIds.length
-    ? await supabase
-        .from('advance_instances')
-        .select('id, routing_id, status')
-        .in('routing_id', showRoutingIds)
-        .eq('status', 'complete')
-    : { data: [] as unknown[] };
+  const hotelIds = (hotelRows ?? []).map((h) => h.id as string);
+  const { data: roomRows } = hotelIds.length
+    ? await supabase.from('rooms').select('id, hotel_id').in('hotel_id', hotelIds)
+    : { data: [] as { id: string; hotel_id: string }[] };
 
-  const completeAdvanceCount = (completeAdvanceInstances ?? []).length;
-  const advancePercent = showCount > 0 ? Math.round((completeAdvanceCount / showCount) * 100) : 0;
+  const roomsByHotel = new Map<string, string[]>();
+  for (const r of (roomRows ?? []) as { id: string; hotel_id: string }[]) {
+    const list = roomsByHotel.get(r.hotel_id) ?? [];
+    list.push(r.id);
+    roomsByHotel.set(r.hotel_id, list);
+  }
 
-  const artistName = tour.artist?.name ?? '—';
-  const routingEmpty = routingCount === 0;
+  const hotels: HotelVm[] = (hotelRows ?? [])
+    .filter((h) => isoDateOnly(h.check_in_at as string | null) && isoDateOnly(h.check_out_at as string | null))
+    .map((h) => {
+      const id = h.id as string;
+      const rooms = roomsByHotel.get(id) ?? [];
+      return {
+        type: 'hotel',
+        hotelId: id,
+        firstRoomId: rooms[0] ?? null,
+        name: (h.name as string | null) ?? '—',
+        checkInDate: isoDateOnly(h.check_in_at as string | null) as string,
+        checkOutDate: isoDateOnly(h.check_out_at as string | null) as string,
+        roomCount: rooms.length,
+      };
+    });
 
-  const today = new Date();
-  const start = tour.start_date ? new Date(`${tour.start_date}T12:00:00`) : null;
-  const end = tour.end_date ? new Date(`${tour.end_date}T12:00:00`) : null;
-  const daysUntilStart =
-    start && start.getTime() > today.getTime()
-      ? Math.ceil((start.getTime() - today.getTime()) / (24 * 60 * 60 * 1000))
-      : null;
-  const inProgress =
-    start && end
-      ? today.getTime() >= start.getTime() && today.getTime() <= end.getTime()
-      : false;
+  // Flights — UX09 canonical entity. Single-day card at depart_at; multi-leg
+  // splits are deferred per UX16 §3.3.
+  const { data: flightRows } = await supabase
+    .from('flights')
+    .select('id, airline, flight_number, origin_airport, destination_airport, depart_at')
+    .eq('tour_id', tourId)
+    .order('depart_at', { ascending: true });
+
+  const flights: FlightVm[] = (flightRows ?? [])
+    .filter((f) => isoDateOnly(f.depart_at as string | null))
+    .map((f) => ({
+      type: 'flight',
+      flightId: f.id as string,
+      date: isoDateOnly(f.depart_at as string | null) as string,
+      airline: (f.airline as string | null) ?? null,
+      flightNumber: (f.flight_number as string | null) ?? null,
+      origin: (f.origin_airport as string | null) ?? '—',
+      destination: (f.destination_airport as string | null) ?? '—',
+    }));
+
+  // Header stats — shows / personnel / total budget (proposed sum).
+  const showCount = shows.filter((s) => {
+    const dt = s.dayType?.toLowerCase() ?? '';
+    return dt.includes('show') || dt.includes('festival');
+  }).length;
+
+  const { count: personnelCount } = await supabase
+    .from('tour_personnel')
+    .select('*', { count: 'exact', head: true })
+    .eq('tour_id', tourId);
+
+  const { data: budgetRows } = await supabase
+    .from('budget_line_items')
+    .select('proposed_cost')
+    .eq('tour_id', tourId);
+
+  const totalBudget = (budgetRows ?? []).reduce((sum, r) => {
+    const n = Number((r as { proposed_cost?: number | null }).proposed_cost ?? 0);
+    return sum + (Number.isFinite(n) ? n : 0);
+  }, 0);
 
   return dashboardAppPageShell(
-    <div className="mx-auto max-w-6xl space-y-6">
-      <div className="flex items-center gap-4">
-        <Link
-          href="/tours"
-          className="flex items-center gap-1 text-sm text-lp-text-secondary hover:text-lp-text"
-        >
-          <ArrowLeft size={16} />
-          Tours
-        </Link>
-      </div>
-
-      <div className="rounded-xl border border-lp-border bg-lp-surface px-4 py-3">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
-            <span className="text-lp-text-tertiary uppercase tracking-wider">Artist</span>
-            <span className="font-semibold text-lp-text">{artistName}</span>
-            <span className="text-lp-text-tertiary/60" aria-hidden>|</span>
-            <span className="text-lp-text-tertiary uppercase tracking-wider">Tour</span>
-            <span className="text-lp-text">{tour.name}</span>
-            <span className="text-lp-text-tertiary/60" aria-hidden>|</span>
-            <span className="text-lp-text-tertiary uppercase tracking-wider">Dates</span>
-            <span className="text-lp-text">{formatTourDateRange(tour.start_date, tour.end_date)}</span>
-            <span className="text-lp-text-tertiary/60" aria-hidden>|</span>
-            <span className="text-xs text-lp-text-tertiary">
-              {tour.principal_count ?? 0} principals · {tour.band_count} band · {tour.crew_count} crew · {tour.continent} · {tour.currency}
-            </span>
-          </div>
-          <div className="flex items-center gap-2">
-            <span
-              className={cn(
-                'rounded-full px-3 py-1 text-xs font-medium',
-                statusColors[tour.status] ?? statusColors.planning
-              )}
-            >
-              {capitaliseStatus(tour.status)}
-            </span>
-            <Link
-              href={`/tours/create?edit=${id}`}
-              className="rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-sm font-medium text-lp-text hover:bg-lp-surface-hover hover:border-lp-orange hover:text-lp-orange transition-colors"
-            >
-              Edit tour
-            </Link>
-          </div>
-        </div>
-      </div>
-
-      <TourDetailToasts toast={toast} routingEmpty={routingEmpty}>
-        <div className="grid gap-4 md:grid-cols-4">
-          <div className="rounded-xl border border-lp-border bg-lp-surface/50 p-4">
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Total shows</p>
-            <p className="mt-2 text-2xl tabular-nums font-bold text-lp-text">{showCount}</p>
-          </div>
-          <div className="rounded-xl border border-lp-border bg-lp-surface/50 p-4">
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Total days</p>
-            <p className="mt-2 text-2xl tabular-nums font-bold text-lp-text">{routingCount}</p>
-          </div>
-          <div className="rounded-xl border border-lp-border bg-lp-surface/50 p-4">
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Advance completion</p>
-            <p className="mt-2 text-2xl tabular-nums font-bold text-lp-text">{advancePercent}%</p>
-            <p className="mt-1 text-xs text-lp-text-tertiary">{completeAdvanceCount} of {showCount} complete</p>
-          </div>
-          <div className="rounded-xl border border-lp-border bg-lp-surface/50 p-4">
-            <p className="text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Starts in</p>
-            <p className="mt-2 text-2xl tabular-nums font-bold text-lp-text">
-              {inProgress ? 'In progress' : (daysUntilStart != null ? `${daysUntilStart}d` : '—')}
-            </p>
-          </div>
-        </div>
-
-        <div className="rounded-xl border border-lp-border bg-lp-surface/50 p-4">
-          <p className="mb-3 text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Quick links</p>
-          <div className="flex flex-wrap gap-2">
-            <Link
-              href={`/tours/${id}/routing`}
-              className="rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-sm font-medium text-lp-text hover:bg-lp-surface-hover hover:border-lp-orange hover:text-lp-orange transition-colors"
-            >
-              Routing
-            </Link>
-            <Link
-              href={`/tours/${id}/advance`}
-              className="rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-sm font-medium text-lp-text hover:bg-lp-surface-hover hover:border-lp-orange hover:text-lp-orange transition-colors"
-            >
-              Advance
-            </Link>
-            <Link
-              href={`/tours/${id}/personnel`}
-              className="rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-sm font-medium text-lp-text hover:bg-lp-surface-hover hover:border-lp-orange hover:text-lp-orange transition-colors"
-            >
-              Tour personnel
-            </Link>
-            <Link
-              href={`/budget?tour_id=${id}`}
-              className="rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-sm font-medium text-lp-text hover:bg-lp-surface-hover hover:border-lp-orange hover:text-lp-orange transition-colors"
-            >
-              Budget
-            </Link>
-          </div>
-        </div>
-      </TourDetailToasts>
-
-      <TourAdvanceSummary tourId={tour.id} />
-    </div>,
-    getDashboardLeftRail(id)
+    <TourOverviewClient
+      tourId={tourId}
+      tourName={(tour.name as string | null) ?? 'Tour'}
+      artistName={(artist?.name as string | null) ?? '—'}
+      status={(tour.status as string | null) ?? 'planning'}
+      startDate={isoDateOnly(tour.start_date as string | null)}
+      endDate={isoDateOnly(tour.end_date as string | null)}
+      currency={(tour.currency as string | null) ?? null}
+      showCount={showCount}
+      personnelCount={personnelCount ?? 0}
+      totalBudget={totalBudget || null}
+      shows={shows}
+      hotels={hotels}
+      flights={flights}
+    />,
+    getDashboardLeftRail(tourId),
   );
 }

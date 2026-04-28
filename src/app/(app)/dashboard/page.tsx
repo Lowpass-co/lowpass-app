@@ -6,6 +6,7 @@
    ============================================ */
 
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import type { Tour } from '@/types';
 import { DashboardAdvanceNeeds } from '@/components/dashboard/DashboardAdvanceNeeds';
@@ -133,6 +134,16 @@ export default async function DashboardPage({
   const { data: activeTours } = await activeToursQ;
 
   const activeTourIds = (activeTours ?? []).map((t) => t.id);
+
+  /**
+   * UX16 §4 — when exactly one active tour exists for the current scope
+   * (workspace OR selected artist), redirect to that tour's overview so the
+   * user lands on the screen they'll spend the most time on. Skip the
+   * redirect when the user explicitly asked for the artist picker.
+   */
+  if (!pickArtistMode && activeTourIds.length === 1) {
+    redirect(`/tours/${activeTourIds[0]}`);
+  }
 
   // Total routing days (all workspace tours)
   let totalRoutingDays = 0;
