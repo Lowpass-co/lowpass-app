@@ -311,6 +311,10 @@ const PRINT_HIDE_CSS = `
   body { margin: 0; }
   .advance-read-view { padding: 0 !important; }
 }
+/* UX17 §5.2 — public share view hides authenticated nav (edit / overview
+   buttons, slide-over openers) using the same affordance markers that the
+   print stylesheet uses. Public viewers get a clean read-only document. */
+.advance-read-view.is-public-readonly .advance-read-no-print { display: none !important; }
 `;
 
 type SectionStatusKey = 'complete' | 'in_progress' | 'needs_review' | 'not_started';
@@ -709,18 +713,35 @@ function AdvanceReadLoadingSkeleton() {
 export function AdvanceShowReadView({
   tourId,
   routingId,
+  publicReadOnly = false,
+  serverInitialJson,
 }: {
   tourId: string;
   routingId: string;
+  /**
+   * UX17 §5.2 — when true, the public share consumer is rendering this view.
+   * Hides authenticated nav (edit / overview buttons) and skips the
+   * /api/tours fetch in favour of `serverInitialJson` from the share token
+   * route, which has its own security boundary. EntityChip neutering is a
+   * follow-up TODO.
+   */
+  publicReadOnly?: boolean;
+  /** Pre-fetched advance bundle from the share-route loader. */
+  serverInitialJson?: unknown;
 }) {
-  const [pageData, setPageData] = useState<PageData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [pageData, setPageData] = useState<PageData | null>(
+    serverInitialJson ? (serverInitialJson as PageData) : null,
+  );
+  const [loading, setLoading] = useState(!serverInitialJson);
   const [error, setError] = useState<string | null>(null);
 
   const editHref = `/tours/${tourId}/advance/${routingId}?mode=edit`;
   const overviewHref = `/tours/${tourId}/advance`;
 
   const load = useCallback(() => {
+    // Public share: bundle is already in pageData via serverInitialJson; do
+    // NOT call the auth-gated /api/tours endpoint.
+    if (publicReadOnly) return;
     setLoading(true);
     setError(null);
     setPageData(null);
@@ -729,7 +750,7 @@ export function AdvanceShowReadView({
       .then(d => setPageData(d))
       .catch(e => setError(e?.message ?? 'Failed to load'))
       .finally(() => setLoading(false));
-  }, [tourId, routingId]);
+  }, [tourId, routingId, publicReadOnly]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -745,7 +766,7 @@ export function AdvanceShowReadView({
   const headerLoading = loading || !routing;
 
   return (
-    <div className="advance-read-view space-y-0">
+    <div className={`advance-read-view space-y-0${publicReadOnly ? ' is-public-readonly' : ''}`}>
       <style dangerouslySetInnerHTML={{ __html: PRINT_HIDE_CSS }} />
 
       <AdvanceReadStickyHeader

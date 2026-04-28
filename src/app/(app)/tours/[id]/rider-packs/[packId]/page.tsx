@@ -1,8 +1,22 @@
+/* ============================================
+   LOWPASS — Tour Rider-Pack Editor (UX17 §4)
+
+   Pack editor on <DocumentCanvas mode="builder"> with the builder archetype's
+   PageShell (LeftRail variant docSections). The R-series PackEditor renders
+   its own internal section list and editor surface; the builder canvas just
+   provides zoom + grid + chrome consistency with other document surfaces.
+
+   The docSections rail today shows just the active pack as a single entry —
+   future enhancement: query the pack's actual section list and let the rail
+   navigate between them.
+   ============================================ */
+
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { topBarOnlyAppPageShell } from '@/components/shell/app-page-shells';
+import { builderAppPageShell, topBarOnlyAppPageShell } from '@/components/shell/app-page-shells';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { PackEditor } from '@/components/rider-pack/PackEditor';
+import { DocumentCanvas } from '@/components/document/DocumentCanvas';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,10 +48,8 @@ export default async function TourRiderPackEditorPage({
     redirect(`/tours/${pack.tour_id}/rider-packs/${packId}`);
   }
 
-  // TODO(UX17): once pack-section list is treated as a builder rail, replace
-  // topBarOnlyAppPageShell with builderAppPageShell + a docSections variant.
-  return topBarOnlyAppPageShell(
-    <div>
+  return builderAppPageShell(
+    <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex items-center gap-2 border-b border-lp-border bg-lp-surface px-6 py-3 text-sm">
         <Link href={`/tours/${tourId}/rider-packs`} className="text-lp-text-secondary hover:text-lp-text">
           ← Rider packs
@@ -45,7 +57,20 @@ export default async function TourRiderPackEditorPage({
         <span className="text-lp-text-tertiary">/</span>
         <span className="font-semibold text-lp-text">{pack.title || '(untitled)'}</span>
       </div>
-      <PackEditor packId={packId} />
-    </div>
+      <DocumentCanvas mode="builder" minHeight="calc(100vh - var(--lp-page-header-h, 96px))">
+        <PackEditor packId={packId} />
+      </DocumentCanvas>
+    </div>,
+    {
+      kind: 'docSections',
+      sections: [
+        {
+          id: 'editor',
+          label: pack.title || 'Editor',
+          href: `/tours/${tourId}/rider-packs/${packId}`,
+        },
+      ],
+      activeId: 'editor',
+    },
   );
 }

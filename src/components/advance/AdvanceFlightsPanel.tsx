@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { DataTable } from '@/components/entity/DataTable';
+import { DataTable } from '@/components/data-table/DataTable';
+import type { ColumnDef } from '@/components/data-table/types';
 import dynamic from 'next/dynamic';
 import { listFlights } from '@/lib/api/flights';
 import type { Flight } from '@/lib/types/flight';
@@ -32,23 +33,44 @@ export function AdvanceFlightsPanel({ tourId }: { tourId: string }) {
     void load();
   }, [tourId]);
 
-  const columns = useMemo(
+  const columns = useMemo<ColumnDef<Flight>[]>(
     () => [
-      { key: 'airline', header: 'Airline', render: (f: Flight) => f.airline ?? '—' },
-      { key: 'flight', header: 'Flight #', render: (f: Flight) => f.flightNumber ?? '—' },
-      { key: 'route', header: 'Route', render: (f: Flight) => `${f.originAirport} → ${f.destinationAirport}` },
-      { key: 'depart', header: 'Depart', render: (f: Flight) => formatDate(f.departAt) },
       {
-        key: 'cost',
+        id: 'airline',
+        header: 'Airline',
+        accessor: (f) => f.airline ?? '',
+        cell: (_v, f) => f.airline ?? '—',
+      },
+      {
+        id: 'flight',
+        header: 'Flight #',
+        accessor: (f) => f.flightNumber ?? '',
+        cell: (_v, f) => f.flightNumber ?? '—',
+      },
+      {
+        id: 'route',
+        header: 'Route',
+        accessor: (f) => `${f.originAirport} → ${f.destinationAirport}`,
+        cell: (_v, f) => `${f.originAirport} → ${f.destinationAirport}`,
+      },
+      {
+        id: 'depart',
+        header: 'Depart',
+        accessor: (f) => f.departAt,
+        cell: (_v, f) => formatDate(f.departAt),
+      },
+      {
+        id: 'cost',
         header: 'Cost',
+        accessor: (f) => f.costAmount ?? 0,
         className: 'text-right',
-        render: (f: Flight) =>
+        cell: (_v, f) =>
           f.costAmount == null
             ? '—'
             : `${f.costCurrency} ${Number(f.costAmount).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`,
       },
     ],
-    []
+    [],
   );
 
   return (
@@ -62,7 +84,20 @@ export function AdvanceFlightsPanel({ tourId }: { tourId: string }) {
       ) : error ? (
         <div className="py-4 text-sm text-red-600">{error}</div>
       ) : (
-        <DataTable columns={columns} rows={rows} emptyLabel="No flights yet" onRowClick={(row) => setActiveFlightId(row.id)} />
+        <DataTable<Flight>
+          rows={rows}
+          columns={columns}
+          rowKey={(f) => f.id}
+          density="compact"
+          searchable={false}
+          pagination="none"
+          onRowClick={(row) => setActiveFlightId(row.id)}
+          emptyState={
+            <div className="px-3 py-6 text-center text-sm" style={{ color: 'var(--lp-text-tertiary)' }}>
+              No flights yet
+            </div>
+          }
+        />
       )}
       {activeFlightId && (
         <FlightSlideOver
