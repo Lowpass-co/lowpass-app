@@ -181,6 +181,11 @@
   --lp-z-base: 0;
   --lp-z-elevated: 10;
   --lp-z-sticky: 30;
+  /* TopBar must sit above sibling sticky regions (notably LeftRail, which
+     also uses --lp-z-sticky). Without a higher z-index, TopBar's dropdown
+     menus get clipped behind the rail because the dropdown's inline
+     z-index is trapped inside TopBar's stacking context. */
+  --lp-z-topbar: 40;
   --lp-z-overlay: 50;
   --lp-z-dropdown: 1000;
   --lp-z-modal-backdrop: 1100;

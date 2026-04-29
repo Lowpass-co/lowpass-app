@@ -485,7 +485,13 @@ export function TopBar({
       style={{
         position: 'sticky',
         top: 0,
-        zIndex: 'var(--lp-z-sticky)',
+        // Use --lp-z-topbar (40) so TopBar's stacking context sits ABOVE
+        // sibling sticky regions like LeftRail (--lp-z-sticky = 30).
+        // Without this the Tours/Library/Account dropdowns get clipped
+        // behind the rail — their inline z-index of --lp-z-dropdown (1000)
+        // is trapped inside TopBar's own stacking context and can't
+        // escape its parent z-index.
+        zIndex: 'var(--lp-z-topbar)',
         background: 'var(--lp-bg)',
         borderBottom: '1px solid var(--lp-border)',
         boxShadow: 'var(--lp-shadow-xs)',
