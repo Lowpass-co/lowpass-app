@@ -10,9 +10,9 @@ import {
   LogOut,
   Search,
   Settings,
-  User,
   Users,
 } from 'lucide-react';
+import { AccountAvatar } from '@/components/shell/AccountAvatar';
 
 type NavItem = {
   label: string;
@@ -458,17 +458,7 @@ export function TopBar({
                 aria-haspopup="menu"
                 aria-expanded={accountOpen}
               >
-                {user.avatarUrl ? (
-                  <Image
-                    src={user.avatarUrl}
-                    alt=""
-                    width={32}
-                    height={32}
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <User className="h-4 w-4" style={{ color: 'var(--lp-text-secondary)' }} />
-                )}
+                <AccountAvatar user={user} size={32} />
               </button>
               {accountOpen && (
                 <div
@@ -612,22 +602,7 @@ export function TopBar({
                 aria-haspopup="menu"
                 aria-expanded={accountOpen}
               >
-                {user.avatarUrl ? (
-                  <Image
-                    src={user.avatarUrl}
-                    alt=""
-                    width={28}
-                    height={28}
-                    className="h-7 w-7 rounded-full object-cover"
-                  />
-                ) : (
-                  <span
-                    className="flex h-7 w-7 items-center justify-center rounded-full text-xs font-semibold"
-                    style={{ background: 'var(--lp-surface-hover)', color: 'var(--lp-text)' }}
-                  >
-                    {user.name.slice(0, 1).toUpperCase()}
-                  </span>
-                )}
+                <AccountAvatar user={user} size={28} />
                 <span className="truncate text-sm font-medium">{user.name}</span>
               </button>
               {accountOpen && (
