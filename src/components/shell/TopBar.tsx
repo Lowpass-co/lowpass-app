@@ -411,15 +411,22 @@ export function TopBar({
           setTourOpen(false);
           setAccountOpen(false);
         }}
-        className="btn-transition flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium"
-        style={
-          libraryActive
-            ? {
-                color: 'var(--lp-text)',
-                borderBottom: '2px solid var(--color-lp-orange)',
-              }
-            : { color: 'var(--lp-text-secondary)' }
-        }
+        // No rounded-* on this button — bottom corners stay square so the
+        // active 2px orange underline runs edge-to-edge instead of tapering
+        // into a rounded corner (which is what made the previous render
+        // read as a glow "behind" the text). Transparent border on the
+        // inactive state holds the same height so toggling active doesn't
+        // jolt the row.
+        className="btn-transition flex items-center gap-1.5 px-3 py-2 text-sm font-medium"
+        style={{
+          color: libraryActive ? 'var(--lp-text)' : 'var(--lp-text-secondary)',
+          borderBottom: libraryActive
+            ? '2px solid var(--color-lp-orange)'
+            : '2px solid transparent',
+          background: libraryActive
+            ? 'color-mix(in srgb, var(--color-lp-orange) 6%, transparent)'
+            : 'transparent',
+        }}
         onMouseEnter={(e) => {
           if (!libraryActive) {
             e.currentTarget.style.color = 'var(--lp-text)';
@@ -613,15 +620,21 @@ export function TopBar({
                   <Link
                     key={item.href}
                     href={item.href}
-                    className="btn-transition rounded-md px-3 py-2 text-sm font-medium"
-                    style={
-                      active
-                        ? {
-                            color: 'var(--lp-text)',
-                            borderBottom: '2px solid var(--color-lp-orange)',
-                          }
-                        : { color: 'var(--lp-text-secondary)' }
-                    }
+                    // No rounded-* on top-level nav links — bottom corners
+                    // stay square so the active 2px orange underline runs
+                    // edge-to-edge instead of tapering. Transparent border
+                    // on inactive items keeps row height stable when an
+                    // item activates.
+                    className="btn-transition px-3 py-2 text-sm font-medium"
+                    style={{
+                      color: active ? 'var(--lp-text)' : 'var(--lp-text-secondary)',
+                      borderBottom: active
+                        ? '2px solid var(--color-lp-orange)'
+                        : '2px solid transparent',
+                      background: active
+                        ? 'color-mix(in srgb, var(--color-lp-orange) 6%, transparent)'
+                        : 'transparent',
+                    }}
                     onMouseEnter={(e) => {
                       if (!active) {
                         e.currentTarget.style.color = 'var(--lp-text)';
