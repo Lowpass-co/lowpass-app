@@ -65,7 +65,7 @@ export default async function TourAdvancePage({
         </p>
       </div>
 
-      <AdvanceOverview tourId={tour.id} tourName={tour.name} />
+      <AdvanceOverview tourId={tour.id} />
     </div>,
     dayRail,
   );

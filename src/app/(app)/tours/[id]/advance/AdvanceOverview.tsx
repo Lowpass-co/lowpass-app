@@ -29,7 +29,6 @@ import {
   LayoutTemplate,
   ListOrdered,
   Loader2,
-  MoreHorizontal,
   Printer,
   Search,
   Trash2,
@@ -44,6 +43,7 @@ import {
 import { formatRelativeTime } from '@/lib/format-relative';
 import { useToast } from '@/components/ui/Toast';
 import { CopyAdvanceModal } from '@/components/advance/CopyAdvanceModal';
+import { ApplyAdvanceTemplateSlideOver } from '@/components/advance/ApplyAdvanceTemplateSlideOver';
 import { ContextMenu, type ContextMenuItem } from '@/components/ui/ContextMenu';
 import { DeleteConfirmationModal } from '@/components/ui/DeleteConfirmationModal';
 import { DataTable } from '@/components/data-table/DataTable';
@@ -217,11 +217,9 @@ function buildRowVm(item: AdvanceDateItem): RowVm {
 
 export function AdvanceOverview({
   tourId,
-  tourName,
   initialCopyRoutingId,
 }: {
   tourId: string;
-  tourName: string;
   /** When set (e.g. from ?copy=), open Copy Advance modal with this as source */
   initialCopyRoutingId?: string | null;
 }) {
@@ -626,27 +624,25 @@ export function AdvanceOverview({
         }}
       />
 
-      {templateModalOpen && (
-        <ApplyTemplateModal
-          key={templateInitialId ?? 'all'}
-          tourId={tourId}
-          tourName={tourName}
-          dates={dates}
-          templates={formTemplates}
-          loading={formTemplatesLoading}
-          initialTemplateId={templateInitialId}
-          onClose={() => {
-            setTemplateModalOpen(false);
-            setTemplateInitialId(null);
-          }}
-          onDone={() => {
-            setTemplateModalOpen(false);
-            setTemplateInitialId(null);
-            router.refresh();
-            void fetchDates();
-          }}
-        />
-      )}
+      <ApplyAdvanceTemplateSlideOver
+        key={templateInitialId ?? 'all'}
+        open={templateModalOpen}
+        tourId={tourId}
+        dates={dates}
+        templates={formTemplates}
+        loading={formTemplatesLoading}
+        initialTemplateId={templateInitialId}
+        onClose={() => {
+          setTemplateModalOpen(false);
+          setTemplateInitialId(null);
+        }}
+        onDone={() => {
+          setTemplateModalOpen(false);
+          setTemplateInitialId(null);
+          router.refresh();
+          void fetchDates();
+        }}
+      />
 
       {dayOffNotesItem && (
         <DayOffNotesModal
@@ -824,191 +820,3 @@ function DayOffNotesModal({
   );
 }
 
-/* ──────────────────────────────────────────────────────────────────────────
-   ApplyTemplateModal — unchanged from prior implementation. UX22 phase 4
-   converts this into a <SlideOver> primitive; phase 1 keeps it as-is so
-   we land the overview redesign without touching the layout-apply flow.
-   ────────────────────────────────────────────────────────────────────────── */
-
-function ApplyTemplateModal({
-  tourId,
-  tourName,
-  dates,
-  templates,
-  loading,
-  initialTemplateId,
-  onClose,
-  onDone,
-}: {
-  tourId: string;
-  tourName: string;
-  dates: AdvanceDateItem[];
-  templates: FormTemplate[];
-  loading: boolean;
-  initialTemplateId: string | null;
-  onClose: () => void;
-  onDone: () => void;
-}) {
-  void tourName;
-  const [templateId, setTemplateId] = useState(() => initialTemplateId ?? '');
-  const [targetIds, setTargetIds] = useState<Set<string>>(new Set());
-  const [submitting, setSubmitting] = useState(false);
-  const [previewId, setPreviewId] = useState<string | null>(null);
-
-  const selectedTemplate = templates.find((t) => t.id === templateId);
-  const selectedTargetsHaveData = Array.from(targetIds).some((id) => {
-    const d = dates.find((x) => x.routing_id === id);
-    return d?.advance != null;
-  });
-
-  const toggleTarget = (id: string) => {
-    setTargetIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const handleSubmit = async () => {
-    if (!selectedTemplate || targetIds.size === 0) return;
-    setSubmitting(true);
-    try {
-      let ok = true;
-      for (const routingId of targetIds) {
-        const res = await fetch(`/api/tours/${tourId}/advance`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ routing_id: routingId, sections: selectedTemplate.sections }),
-        });
-        if (!res.ok) ok = false;
-      }
-      if (ok) onDone();
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const dateLabel = (d: AdvanceDateItem) =>
-    parseRoutingDate(d.date).toLocaleDateString('en-GB', {
-      weekday: 'short',
-      day: '2-digit',
-      month: 'short',
-    });
-
-  return (
-    <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
-      <div
-        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-lp-border bg-lp-surface p-6 shadow-xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h3 className="text-lg font-semibold text-lp-text">Apply template</h3>
-        <p className="mt-1 text-sm text-lp-text-secondary">
-          Apply a saved layout to one or more shows. This replaces the current section layout.
-        </p>
-        <div className="mt-4 space-y-4">
-          <div>
-            <label className="block text-xs font-medium text-lp-text-tertiary">Template</label>
-            {loading ? (
-              <p className="mt-1 text-sm text-lp-text-tertiary">Loading…</p>
-            ) : (
-              <ul className="mt-2 max-h-48 space-y-1 overflow-y-auto rounded-xl border border-lp-border bg-lp-bg-secondary p-2">
-                {templates.map((t) => (
-                  <li key={t.id} className="rounded-lg border border-lp-border bg-lp-surface">
-                    <button
-                      type="button"
-                      onClick={() => setTemplateId(t.id)}
-                      className={cn(
-                        'w-full px-3 py-2.5 text-left text-sm',
-                        templateId === t.id
-                          ? 'bg-lp-orange/10 font-medium text-lp-orange'
-                          : 'text-lp-text hover:bg-lp-surface-hover',
-                      )}
-                    >
-                      <span className="block">{t.name}</span>
-                      <span className="text-xs text-lp-text-tertiary">
-                        {t.sections?.length ?? 0} sections
-                        {t.sections?.length
-                          ? `: ${(t.sections as { label?: string }[]).map((s) => s.label || 'Section').join(', ')}`
-                          : ''}
-                      </span>
-                    </button>
-                    {templateId === t.id ? (
-                      <div className="border-t border-lp-border px-3 py-2">
-                        <button
-                          type="button"
-                          onClick={() => setPreviewId(previewId === t.id ? null : t.id)}
-                          className="text-xs font-medium text-lp-text-tertiary hover:text-lp-text"
-                        >
-                          {previewId === t.id ? 'Hide' : 'Show'} section list
-                        </button>
-                        {previewId === t.id && t.sections?.length ? (
-                          <ol className="mt-1.5 list-decimal space-y-0.5 pl-4 text-xs text-lp-text-secondary">
-                            {(t.sections as { label?: string }[]).map((s, i) => (
-                              <li key={i}>{s.label || `Section ${i + 1}`}</li>
-                            ))}
-                          </ol>
-                        ) : null}
-                      </div>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-            )}
-            {templates.length === 0 && !loading ? (
-              <p className="mt-1 text-xs text-lp-text-tertiary">
-                No saved templates. Save a layout as a template from the advance editor (Setup mode).
-              </p>
-            ) : null}
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-lp-text-tertiary">Apply to shows</label>
-            <div className="mt-2 max-h-40 space-y-1 overflow-y-auto rounded-xl border border-lp-border bg-lp-bg-secondary p-2">
-              {dates.map((d) => (
-                <label key={d.routing_id} className="flex cursor-pointer items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={targetIds.has(d.routing_id)}
-                    onChange={() => toggleTarget(d.routing_id)}
-                    className="lp-checkbox"
-                  />
-                  <span className="text-sm text-lp-text">
-                    {dateLabel(d)} — {d.venue_name || d.city || '—'}
-                    {d.advance ? <span className="ml-1 text-amber-600 dark:text-amber-400">(has data)</span> : null}
-                  </span>
-                </label>
-              ))}
-            </div>
-          </div>
-          {selectedTargetsHaveData ? (
-            <p className="rounded-lg border border-amber-200 bg-amber-50/50 px-3 py-2 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/20 dark:text-amber-200">
-              Some selected shows already have advance data. Applying will replace their section layout; existing form data may be lost.
-            </p>
-          ) : null}
-        </div>
-        <div className="mt-6 flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-xl border border-lp-border px-4 py-2 text-sm font-medium text-lp-text hover:bg-lp-surface-hover"
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={!selectedTemplate || targetIds.size === 0 || submitting}
-            className="rounded-xl bg-lp-orange px-4 py-2 text-sm font-medium text-white hover:bg-lp-orange-hover disabled:opacity-50"
-          >
-            {submitting ? 'Applying…' : 'Apply'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// Re-export icon to keep tree-shaking aware that MoreHorizontal is part of
-// the toolbar context-menu surface (the ContextMenu component imports its
-// own MoreVertical icon, but we may swap to MoreHorizontal in a follow-up).
-export { MoreHorizontal };
