@@ -27,6 +27,7 @@ import { BudgetPhaseStripClient } from '@/components/budget/BudgetPhaseStripClie
 import { BudgetOverviewPanels } from '@/components/budget/BudgetOverviewPanels';
 import { BudgetMainTable } from '@/components/budget/BudgetMainTable';
 import { ReceiptInbox } from '@/components/budget/ReceiptInbox';
+import { BudgetExportControls } from '@/components/budget/BudgetExportControls';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { computeTourPhases } from '@/server/budget/computeTourPhases';
 import { getBudgetPanelData } from '@/server/budget/getBudgetPanelData';
@@ -57,7 +58,7 @@ export default async function TourBudgetPage({
 
   const { data: tour, error: tourErr } = await supabase
     .from('tours')
-    .select('id, workspace_id, currency')
+    .select('id, name, workspace_id, currency')
     .eq('id', id)
     .single();
 
@@ -102,6 +103,11 @@ export default async function TourBudgetPage({
          here when the nav-redesign branch merges. */}
       <BudgetPhaseStripClient phases={phases} />
       <div className="space-y-6 px-4 pt-4">
+        <BudgetExportControls
+          lines={lines}
+          tourCurrency={tourCurrency}
+          tourName={(tour.name as string | null) ?? 'Budget'}
+        />
         <BudgetOverviewPanels
           allocation={panelData.allocation}
           burn={panelData.burn}

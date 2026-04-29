@@ -24,6 +24,7 @@ import { AlertTriangle, ArrowDown, ArrowUp, Paperclip, Plus, Trash2, X } from 'l
 import { DataTable } from '@/components/data-table/DataTable';
 import { BudgetLineSlideOver } from '@/components/budget/BudgetLineSlideOver';
 import { useToast } from '@/components/ui/Toast';
+import { convertToCurrency } from '@/lib/budget/fx';
 import type { ColumnDef } from '@/components/data-table/types';
 import type { BudgetLineItem } from '@/types';
 import type {
@@ -130,6 +131,11 @@ export function BudgetMainTable({
     rawPhase && VALID_PHASES.has(rawPhase as TourPhaseKey)
       ? (rawPhase as TourPhaseKey)
       : null;
+  // Phase F: display currency (?display=USD) overrides the visible
+  // formatting; underlying line.currency stays the source of truth.
+  const displayCurrency = (
+    searchParams.get('display') ?? tourCurrency
+  ).toUpperCase();
 
   const [statusFilter, setStatusFilter] = useState<StatusValue>(null);
   const [openLine, setOpenLine] = useState<BudgetLineItem | null>(null);
@@ -158,11 +164,22 @@ export function BudgetMainTable({
     let proposed = 0;
     let actual = 0;
     for (const line of filtered) {
-      proposed += Number(line.proposed_cost ?? 0) || 0;
-      actual += Number(line.actual_cost ?? 0) || 0;
+      const rowCurrency = (line.currency || tourCurrency).toUpperCase();
+      proposed +=
+        convertToCurrency(
+          Number(line.proposed_cost ?? 0) || 0,
+          rowCurrency,
+          displayCurrency,
+        ) || 0;
+      actual +=
+        convertToCurrency(
+          Number(line.actual_cost ?? 0) || 0,
+          rowCurrency,
+          displayCurrency,
+        ) || 0;
     }
     return { proposed, actual };
-  }, [filtered]);
+  }, [filtered, tourCurrency, displayCurrency]);
 
   const columns: ColumnDef<BudgetLineItem>[] = useMemo(
     () => [
@@ -215,28 +232,54 @@ export function BudgetMainTable({
         header: 'Estimated',
         align: 'right',
         accessor: (row) => Number(row.proposed_cost ?? 0),
-        cell: (_value, row) => (
-          <span className="tabular-nums">
-            {formatCurrency(
-              Number(row.proposed_cost ?? 0),
-              row.currency || tourCurrency,
-            )}
-          </span>
-        ),
+        cell: (_value, row) => {
+          const native = Number(row.proposed_cost ?? 0);
+          const rowCurrency = (row.currency || tourCurrency).toUpperCase();
+          const converted = convertToCurrency(native, rowCurrency, displayCurrency);
+          const showFootnote = rowCurrency !== displayCurrency.toUpperCase();
+          return (
+            <div className="flex flex-col items-end">
+              <span className="tabular-nums">
+                {formatCurrency(converted, displayCurrency)}
+              </span>
+              {showFootnote ? (
+                <span
+                  className="text-xs tabular-nums"
+                  style={{ color: 'var(--lp-text-tertiary)' }}
+                >
+                  {formatCurrency(native, rowCurrency)}
+                </span>
+              ) : null}
+            </div>
+          );
+        },
       },
       {
         id: 'actual_cost',
         header: 'Actual',
         align: 'right',
         accessor: (row) => Number(row.actual_cost ?? 0),
-        cell: (_value, row) => (
-          <span className="tabular-nums">
-            {formatCurrency(
-              Number(row.actual_cost ?? 0),
-              row.currency || tourCurrency,
-            )}
-          </span>
-        ),
+        cell: (_value, row) => {
+          const native = Number(row.actual_cost ?? 0);
+          const rowCurrency = (row.currency || tourCurrency).toUpperCase();
+          const converted = convertToCurrency(native, rowCurrency, displayCurrency);
+          const showFootnote = rowCurrency !== displayCurrency.toUpperCase();
+          return (
+            <div className="flex flex-col items-end">
+              <span className="tabular-nums">
+                {formatCurrency(converted, displayCurrency)}
+              </span>
+              {showFootnote ? (
+                <span
+                  className="text-xs tabular-nums"
+                  style={{ color: 'var(--lp-text-tertiary)' }}
+                >
+                  {formatCurrency(native, rowCurrency)}
+                </span>
+              ) : null}
+            </div>
+          );
+        },
       },
       {
         id: 'variance',
@@ -339,7 +382,7 @@ export function BudgetMainTable({
         },
       },
     ],
-    [dateMap, phases, tourCurrency],
+    [dateMap, phases, tourCurrency, displayCurrency, duplicateMap],
   );
 
   const handleQuickAdd = (template: (typeof QUICK_ADD_TEMPLATES)[number]) => {
@@ -406,8 +449,8 @@ export function BudgetMainTable({
           style={{ color: 'var(--lp-text-tertiary)' }}
         >
           {filtered.length} of {lines.length} · est{' '}
-          {formatCurrency(totals.proposed, tourCurrency)} · actual{' '}
-          {formatCurrency(totals.actual, tourCurrency)}
+          {formatCurrency(totals.proposed, displayCurrency)} · actual{' '}
+          {formatCurrency(totals.actual, displayCurrency)}
         </span>
       </div>
 
