@@ -2152,11 +2152,33 @@ function FillMode({
   );
 }
 
+/**
+ * UX22 cleanup P3 — section status options now driven by --color-lp-status-*
+ * tokens (UX01) so the edit view's status dots match the read view's
+ * SectionReadStatusBadge (UX22 phase 3) and the overview's StatusPill
+ * (UX22 phase 1). Renderers should read `dotColor` (full token) for the
+ * dot and `tintColor` (color-mix 12% over surface) when a tinted bg is
+ * needed alongside.
+ *
+ * TODO(UX22-cleanup-P3.2): EntityChip swap-in for person / hotel /
+ * flight references is blocked on schema work — the advance field
+ * dispatcher (switch field.type) doesn't have entity-reference field
+ * types today; the closest is `contact`, which stores raw freeform
+ * fields, not a canonical-entity FK. Add e.g. `entity_person`,
+ * `entity_room`, `entity_flight` field types in a follow-up migration
+ * + add picker primitives that resolve to the existing UX08 EntityChip.
+ *
+ * TODO(UX22-cleanup-P3.3): SpreadsheetGrid swap-in for schedule fields
+ * is moot today — there's no `schedule` / `multi_row_table` field type
+ * in the advance schema. Day schedules currently render as multiple
+ * separate `time` / `text` fields. If a unified schedule field type is
+ * introduced, render via <SpreadsheetGrid> per UX06 contract.
+ */
 const STATUS_OPTIONS = [
-  { value: 'not_started', label: 'Not Started', dot: 'bg-gray-500' },
-  { value: 'in_progress', label: 'In Progress', dot: 'bg-blue-500' },
-  { value: 'complete', label: 'Complete', dot: 'bg-emerald-500' },
-  { value: 'needs_review', label: 'Needs Review', dot: 'bg-amber-500' },
+  { value: 'not_started', label: 'Not Started', dotColor: 'var(--color-lp-status-not-started)' },
+  { value: 'in_progress', label: 'In Progress', dotColor: 'var(--color-lp-status-in-progress)' },
+  { value: 'complete', label: 'Complete', dotColor: 'var(--color-lp-status-complete)' },
+  { value: 'needs_review', label: 'Needs Review', dotColor: 'var(--color-lp-status-needs-review)' },
 ] as const;
 
 // ----- Key Contacts section (dynamic contact list) -----
@@ -4063,7 +4085,10 @@ function StatusDropdown({
               onClick={(e) => { e.stopPropagation(); onSelectStatus(opt.value); setOpen(false); }}
               className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-lp-text hover:bg-lp-surface-hover"
             >
-              <span className={cn('h-2 w-2 shrink-0 rounded-full', opt.dot)} />
+              <span
+                className="h-2 w-2 shrink-0 rounded-full"
+                style={{ background: opt.dotColor }}
+              />
               {opt.label}
             </button>
           ))}
