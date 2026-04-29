@@ -1024,6 +1024,16 @@ function SetupMode({
         setSections((prev) => prev.filter((s) => s.template_id !== templateToDelete.id));
         fetchTemplates();
         setTemplateToDelete(null);
+      } else {
+        // Fail loudly. Migration 059 added the missing at_delete RLS
+        // policy; before that landed, default-deny made this silently
+        // no-op (modal closed, section reappeared on refetch). Surface
+        // any future regression instead of repeating that ghost-bug.
+        const body = await res.json().catch(() => ({}));
+        const detail = (body as { error?: string })?.error ?? `HTTP ${res.status}`;
+        // eslint-disable-next-line no-console
+        console.error('[advance] template delete failed', { status: res.status, body });
+        window.alert(`Couldn't delete this section. ${detail}`);
       }
     } finally {
       setDeletingTemplate(false);
