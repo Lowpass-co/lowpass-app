@@ -904,6 +904,156 @@ CREATE POLICY "profiles_admin_update" ON public.profiles FOR UPDATE
   WITH CHECK (workspace_id = public.get_my_workspace_id() AND public.is_workspace_admin());
 
 -- ============================================
+-- §9. Missing-from-prior-audit tables
+--
+-- Smoke against the live database (see RLS_AUDIT_DISCOVERY_2026_04_29.md
+-- §3 "Followup notes") surfaced six workspace-scoped tables that were
+-- present in production but missed by 061's first pass:
+--   file_references (001), flight_bookings, hotel_bookings,
+--   hotel_room_assignments, rooming_grid (017), personnel_tour_assignments.
+--
+-- Each gets the canonical 4-policy shape using its actual workspace-
+-- resolution pattern (verified against the originating migration).
+--
+-- The rental_* triplet (rental_inventory / rental_jobs /
+-- rental_job_items) were on the candidate list but turned out to be
+-- USER-scoped (user_id, not workspace_id) with workspace siblings
+-- seeing each other via a join through workspace_members. Different
+-- pattern than this audit handles — explicitly surfaced in the
+-- discovery report under "Followup notes" and left for a separate
+-- user-scoped RLS audit pass.
+-- ============================================
+
+-- §9.1 file_references — direct workspace_id (from 001)
+ALTER TABLE public.file_references ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can view workspace file_references" ON public.file_references;
+DROP POLICY IF EXISTS "Users can create workspace file_references" ON public.file_references;
+DROP POLICY IF EXISTS "Users can update workspace file_references" ON public.file_references;
+DROP POLICY IF EXISTS "Users can delete workspace file_references" ON public.file_references;
+DROP POLICY IF EXISTS "file_references_select" ON public.file_references;
+DROP POLICY IF EXISTS "file_references_insert" ON public.file_references;
+DROP POLICY IF EXISTS "file_references_update" ON public.file_references;
+DROP POLICY IF EXISTS "file_references_delete" ON public.file_references;
+CREATE POLICY "file_references_select" ON public.file_references FOR SELECT
+  USING (workspace_id = public.get_my_workspace_id());
+CREATE POLICY "file_references_insert" ON public.file_references FOR INSERT
+  WITH CHECK (workspace_id = public.get_my_workspace_id());
+CREATE POLICY "file_references_update" ON public.file_references FOR UPDATE
+  USING (workspace_id = public.get_my_workspace_id())
+  WITH CHECK (workspace_id = public.get_my_workspace_id());
+CREATE POLICY "file_references_delete" ON public.file_references FOR DELETE
+  USING (workspace_id = public.get_my_workspace_id());
+
+-- §9.2 flight_bookings — direct workspace_id (from 017; legacy table —
+--   canonical entity is `flights` per 049, but flight_bookings remains
+--   for unmigrated data and is workspace-scoped)
+ALTER TABLE public.flight_bookings ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can view tour flights" ON public.flight_bookings;
+DROP POLICY IF EXISTS "Users can create tour flights" ON public.flight_bookings;
+DROP POLICY IF EXISTS "Users can update tour flights" ON public.flight_bookings;
+DROP POLICY IF EXISTS "Users can delete tour flights" ON public.flight_bookings;
+DROP POLICY IF EXISTS "flight_bookings_select" ON public.flight_bookings;
+DROP POLICY IF EXISTS "flight_bookings_insert" ON public.flight_bookings;
+DROP POLICY IF EXISTS "flight_bookings_update" ON public.flight_bookings;
+DROP POLICY IF EXISTS "flight_bookings_delete" ON public.flight_bookings;
+CREATE POLICY "flight_bookings_select" ON public.flight_bookings FOR SELECT
+  USING (workspace_id = public.get_my_workspace_id());
+CREATE POLICY "flight_bookings_insert" ON public.flight_bookings FOR INSERT
+  WITH CHECK (workspace_id = public.get_my_workspace_id());
+CREATE POLICY "flight_bookings_update" ON public.flight_bookings FOR UPDATE
+  USING (workspace_id = public.get_my_workspace_id())
+  WITH CHECK (workspace_id = public.get_my_workspace_id());
+CREATE POLICY "flight_bookings_delete" ON public.flight_bookings FOR DELETE
+  USING (workspace_id = public.get_my_workspace_id());
+
+-- §9.3 hotel_bookings — direct workspace_id (from 017; legacy table —
+--   canonical entity is `rooms`/`hotels` per 051, but hotel_bookings
+--   remains for unmigrated data and is workspace-scoped)
+ALTER TABLE public.hotel_bookings ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can view tour hotels" ON public.hotel_bookings;
+DROP POLICY IF EXISTS "Users can create tour hotels" ON public.hotel_bookings;
+DROP POLICY IF EXISTS "Users can update tour hotels" ON public.hotel_bookings;
+DROP POLICY IF EXISTS "Users can delete tour hotels" ON public.hotel_bookings;
+DROP POLICY IF EXISTS "hotel_bookings_select" ON public.hotel_bookings;
+DROP POLICY IF EXISTS "hotel_bookings_insert" ON public.hotel_bookings;
+DROP POLICY IF EXISTS "hotel_bookings_update" ON public.hotel_bookings;
+DROP POLICY IF EXISTS "hotel_bookings_delete" ON public.hotel_bookings;
+CREATE POLICY "hotel_bookings_select" ON public.hotel_bookings FOR SELECT
+  USING (workspace_id = public.get_my_workspace_id());
+CREATE POLICY "hotel_bookings_insert" ON public.hotel_bookings FOR INSERT
+  WITH CHECK (workspace_id = public.get_my_workspace_id());
+CREATE POLICY "hotel_bookings_update" ON public.hotel_bookings FOR UPDATE
+  USING (workspace_id = public.get_my_workspace_id())
+  WITH CHECK (workspace_id = public.get_my_workspace_id());
+CREATE POLICY "hotel_bookings_delete" ON public.hotel_bookings FOR DELETE
+  USING (workspace_id = public.get_my_workspace_id());
+
+-- §9.4 hotel_room_assignments — direct workspace_id (from 017; the
+--   workspace_id column is denormalised onto each row alongside
+--   hotel_booking_id, which lets us gate at the row level without a
+--   subquery through hotel_bookings)
+ALTER TABLE public.hotel_room_assignments ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can view hotel rooms" ON public.hotel_room_assignments;
+DROP POLICY IF EXISTS "Users can create hotel rooms" ON public.hotel_room_assignments;
+DROP POLICY IF EXISTS "Users can update hotel rooms" ON public.hotel_room_assignments;
+DROP POLICY IF EXISTS "Users can delete hotel rooms" ON public.hotel_room_assignments;
+DROP POLICY IF EXISTS "hotel_room_assignments_select" ON public.hotel_room_assignments;
+DROP POLICY IF EXISTS "hotel_room_assignments_insert" ON public.hotel_room_assignments;
+DROP POLICY IF EXISTS "hotel_room_assignments_update" ON public.hotel_room_assignments;
+DROP POLICY IF EXISTS "hotel_room_assignments_delete" ON public.hotel_room_assignments;
+CREATE POLICY "hotel_room_assignments_select" ON public.hotel_room_assignments FOR SELECT
+  USING (workspace_id = public.get_my_workspace_id());
+CREATE POLICY "hotel_room_assignments_insert" ON public.hotel_room_assignments FOR INSERT
+  WITH CHECK (workspace_id = public.get_my_workspace_id());
+CREATE POLICY "hotel_room_assignments_update" ON public.hotel_room_assignments FOR UPDATE
+  USING (workspace_id = public.get_my_workspace_id())
+  WITH CHECK (workspace_id = public.get_my_workspace_id());
+CREATE POLICY "hotel_room_assignments_delete" ON public.hotel_room_assignments FOR DELETE
+  USING (workspace_id = public.get_my_workspace_id());
+
+-- §9.5 rooming_grid — direct workspace_id (from 017)
+ALTER TABLE public.rooming_grid ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can view rooming grid" ON public.rooming_grid;
+DROP POLICY IF EXISTS "Users can create rooming grid" ON public.rooming_grid;
+DROP POLICY IF EXISTS "Users can update rooming grid" ON public.rooming_grid;
+DROP POLICY IF EXISTS "Users can delete rooming grid" ON public.rooming_grid;
+DROP POLICY IF EXISTS "rooming_grid_select" ON public.rooming_grid;
+DROP POLICY IF EXISTS "rooming_grid_insert" ON public.rooming_grid;
+DROP POLICY IF EXISTS "rooming_grid_update" ON public.rooming_grid;
+DROP POLICY IF EXISTS "rooming_grid_delete" ON public.rooming_grid;
+CREATE POLICY "rooming_grid_select" ON public.rooming_grid FOR SELECT
+  USING (workspace_id = public.get_my_workspace_id());
+CREATE POLICY "rooming_grid_insert" ON public.rooming_grid FOR INSERT
+  WITH CHECK (workspace_id = public.get_my_workspace_id());
+CREATE POLICY "rooming_grid_update" ON public.rooming_grid FOR UPDATE
+  USING (workspace_id = public.get_my_workspace_id())
+  WITH CHECK (workspace_id = public.get_my_workspace_id());
+CREATE POLICY "rooming_grid_delete" ON public.rooming_grid FOR DELETE
+  USING (workspace_id = public.get_my_workspace_id());
+
+-- §9.6 personnel_tour_assignments — tour-scoped (from 001; no workspace_id
+--   column, only tour_id). Workspace gating walks the FK chain through
+--   tours, same pattern as `routing` / `advance_form_configs`.
+ALTER TABLE public.personnel_tour_assignments ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Users can view tour personnel assignments" ON public.personnel_tour_assignments;
+DROP POLICY IF EXISTS "Users can create tour personnel assignments" ON public.personnel_tour_assignments;
+DROP POLICY IF EXISTS "Users can update tour personnel assignments" ON public.personnel_tour_assignments;
+DROP POLICY IF EXISTS "Users can delete tour personnel assignments" ON public.personnel_tour_assignments;
+DROP POLICY IF EXISTS "personnel_tour_assignments_select" ON public.personnel_tour_assignments;
+DROP POLICY IF EXISTS "personnel_tour_assignments_insert" ON public.personnel_tour_assignments;
+DROP POLICY IF EXISTS "personnel_tour_assignments_update" ON public.personnel_tour_assignments;
+DROP POLICY IF EXISTS "personnel_tour_assignments_delete" ON public.personnel_tour_assignments;
+CREATE POLICY "personnel_tour_assignments_select" ON public.personnel_tour_assignments FOR SELECT
+  USING (tour_id IN (SELECT id FROM public.tours WHERE workspace_id = public.get_my_workspace_id()));
+CREATE POLICY "personnel_tour_assignments_insert" ON public.personnel_tour_assignments FOR INSERT
+  WITH CHECK (tour_id IN (SELECT id FROM public.tours WHERE workspace_id = public.get_my_workspace_id()));
+CREATE POLICY "personnel_tour_assignments_update" ON public.personnel_tour_assignments FOR UPDATE
+  USING (tour_id IN (SELECT id FROM public.tours WHERE workspace_id = public.get_my_workspace_id()))
+  WITH CHECK (tour_id IN (SELECT id FROM public.tours WHERE workspace_id = public.get_my_workspace_id()));
+CREATE POLICY "personnel_tour_assignments_delete" ON public.personnel_tour_assignments FOR DELETE
+  USING (tour_id IN (SELECT id FROM public.tours WHERE workspace_id = public.get_my_workspace_id()));
+
+-- ============================================
 -- Down (commented; uncomment to roll back manually)
 -- ============================================
 -- This audit is a no-op revert: simply re-running the source migrations

@@ -157,7 +157,25 @@ Treatment column legend:
 |---|---|
 | `bug_reports` | Gated on `is_site_admin`, not workspace admin. Separate concern (036). |
 | `notifications` | User-scoped (`user_id = auth.uid()`), not workspace-scoped. |
+| `rental_inventory` | User-scoped (`user_id`), not workspace-scoped. Workspace siblings see each other's rental inventory via a join through `workspace_members` (see `src/app/api/gear/rental-inventory/route.ts` for the pattern). Different RLS shape than this audit handles — needs its own user-scoped audit pass. **Originally on the §9 candidate list, deferred after schema verification.** |
+| `rental_jobs` | User-scoped — same reasoning as `rental_inventory`. |
+| `rental_job_items` | Joins via `job_id → rental_jobs.user_id`, so user-scoped through that chain. |
 | `storage.objects` (rider-assets, avatars, advance-files, personnel-files, expense-receipts) | Storage bucket policies live on `storage.objects`, not regular tables. Audit only touches `public.*`. Adam: re-audit storage policies separately if drift suspected. |
+
+### 1.9 Extension — six tables added in PR #5 follow-up commit
+
+After the first apply of `061_rls_audit.sql`, smoke testing surfaced six workspace-scoped tables that exist in production but were not in `§1.1`–`§1.8` (the discovery built off migration history; these slipped through). The audit was extended with §9 in the SQL file to cover them.
+
+| Table | Migration of origin | Workspace resolution | Treatment |
+|---|---|---|---|
+| `file_references` | 001 | direct `workspace_id` | **workspace** |
+| `flight_bookings` | 017 | direct `workspace_id` (legacy table; canonical entity is `flights`) | **workspace** |
+| `hotel_bookings` | 017 | direct `workspace_id` (legacy table; canonical entity is `rooms` / `hotels`) | **workspace** |
+| `hotel_room_assignments` | 017 | direct `workspace_id` (denormalised; also has `hotel_booking_id`) | **workspace** |
+| `rooming_grid` | 017 | direct `workspace_id` (also has `tour_id`; we use `workspace_id` directly) | **workspace** |
+| `personnel_tour_assignments` | 001 | tour-scoped via `tour_id` (no `workspace_id` column) | **transitive** via `tours` |
+
+None of these are canonical entities, so DELETE stays workspace-only. The `rental_*` triplet was on the original candidate list but turned out to be user-scoped — see §1.8.
 
 ---
 
@@ -274,6 +292,25 @@ This confirms the canonical-entity DELETE admin gate is doing its job.
 
 ## §3. Notes for follow-up
 
-- If query 2.1 surfaces tables with no SELECT or INSERT policy that aren't in §1.8 (out-of-scope), they're new since this discovery and need their own audit pass. Likely culprits: anything added in migrations 062+.
+- If query 2.1 surfaces tables with no SELECT or INSERT policy that aren't in §1.8 (out-of-scope) or §1.9 (extension), they're new since this discovery and need their own audit pass. Likely culprits: anything added in migrations 062+.
 - Storage bucket policies (`rider-assets`, `avatars`, `advance-files`, `personnel-files`, `expense-receipts`) sit on `storage.objects`, not in `public.*`. They were not touched by 061 — re-audit separately if drift suspected.
 - `tour_gear` was added in 052 alongside the canonical `gear` table. The treatment for `tour_gear` is `workspace` (regular RLS) — it's a tour-scoped link table, not a destructive workspace-wide operation surface.
+
+### 3.1 Findings from the §9 extension
+
+Two distinct issues surfaced when extending 061 to cover the smoke-flagged tables:
+
+1. **`advance_dropdown_options` and `advance_schedule_templates` were missing from production entirely.** They're in migrations 020 + 021 of the repo and the audit's first pass declared policies for them (§1.8 + §1.9 of `061_rls_audit.sql`), but the `CREATE TABLE` statements never landed in prod. Adam pasted the create blocks manually before re-applying the extended 061. **Followup:** consider an idempotent `CREATE TABLE IF NOT EXISTS` for these two tables in a future migration so a fresh-clone bootstrap reproduces them — or a migration runner audit to catch missed `CREATE TABLE` statements next time the repo and prod drift.
+
+2. **The `rental_*` triplet is user-scoped, not workspace-scoped.** The original audit prompt assumed `rental_inventory` had a direct `workspace_id` column with the canonical-entity DELETE admin gate. The actual schema (verified against `src/components/equipment/types.ts` and `src/app/api/gear/rental-inventory/route.ts`) shows `user_id` ownership with workspace siblings discovered via `workspace_members`. **Decision:** deferred all three to a separate user-scoped RLS audit pass (see §1.8). They are NOT covered by this audit. The pattern that audit will need:
+   ```sql
+   USING (user_id IN (
+     SELECT user_id FROM public.workspace_members
+     WHERE workspace_id = public.get_my_workspace_id()
+   ))
+   ```
+   This walks workspace_members rather than directly resolving workspace ownership. Adam: pulling rental_* into the canonical-entity model (denormalising a `workspace_id` column onto each row) would let it fit this audit's pattern next time — flagging as a possible product call.
+
+### 3.2 Smoke re-run after the §9 extension
+
+The §2 smoke checks should be re-run after the extended 061 applies. In particular, query 2.1 should now return either an empty result or only the documented append-only / revoke-pattern exceptions (`rider_pack_history`, `rider_pack_exports`, `rider_web_links`). If any other table surfaces, it's a third extension's worth of work — capture in a new follow-up.
