@@ -9,22 +9,14 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase-client';
 import { LowpassLogo } from '@/components/common/LowpassLogo';
 import { cn } from '@/lib/utils';
 
 export default function LoginPage() {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const supabase = createClient();
-  // ?next=... lets a deep link survive the auth round-trip — we
-  // forward it through to /auth/landing which validates same-origin
-  // and 307s to the requested path.
-  const nextParam = searchParams.get('next');
-  const landingHref = nextParam && nextParam.startsWith('/') && !nextParam.startsWith('//')
-    ? `/auth/landing?next=${encodeURIComponent(nextParam)}`
-    : '/auth/landing';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -160,6 +152,18 @@ export default function LoginPage() {
         setError('Signed in, but the next page did not load. Please retry in a moment.');
       }
     }, 4500);
+    // ?next=... lets a deep link survive the auth round-trip — we
+    // forward it through to /auth/landing which validates same-origin
+    // before 307'ing to the requested path. Reading from window.location
+    // here (instead of useSearchParams above the component body) avoids
+    // a Next 16 prerender bailout for /login since useSearchParams would
+    // otherwise need a Suspense boundary the rest of the page doesn't
+    // need.
+    const nextParam = new URLSearchParams(window.location.search).get('next');
+    const landingHref =
+      nextParam && nextParam.startsWith('/') && !nextParam.startsWith('//')
+        ? `/auth/landing?next=${encodeURIComponent(nextParam)}`
+        : '/auth/landing';
     setTimeout(() => {
       router.push(landingHref);
       router.refresh();
