@@ -18,10 +18,12 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useSearchParams } from 'next/navigation';
-import { ArrowDown, ArrowUp, Paperclip, Plus } from 'lucide-react';
+import { AlertTriangle, ArrowDown, ArrowUp, Paperclip, Plus, Trash2, X } from 'lucide-react';
 import { DataTable } from '@/components/data-table/DataTable';
 import { BudgetLineSlideOver } from '@/components/budget/BudgetLineSlideOver';
+import { useToast } from '@/components/ui/Toast';
 import type { ColumnDef } from '@/components/data-table/types';
 import type { BudgetLineItem } from '@/types';
 import type {
@@ -105,6 +107,9 @@ export type BudgetMainTableProps = {
   lines: BudgetLineItem[];
   phases: TourPhase[];
   routingDateById: Record<string, string>;
+  /** Phase E: line item id → list of OTHER ids it possibly duplicates.
+   *  Computed server-side via detectDuplicates(). */
+  duplicateMap?: Record<string, string[]>;
   tourCurrency: string;
   tourId: string;
 };
@@ -113,9 +118,12 @@ export function BudgetMainTable({
   lines,
   phases,
   routingDateById,
+  duplicateMap,
   tourCurrency,
   tourId,
 }: BudgetMainTableProps) {
+  const router = useRouter();
+  const { showToast } = useToast();
   const searchParams = useSearchParams();
   const rawPhase = searchParams.get('phase');
   const phaseFilter: TourPhaseKey | null =
@@ -125,6 +133,8 @@ export function BudgetMainTable({
 
   const [statusFilter, setStatusFilter] = useState<StatusValue>(null);
   const [openLine, setOpenLine] = useState<BudgetLineItem | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [bulkBusy, setBulkBusy] = useState<null | 'status' | 'delete'>(null);
 
   const dateMap = useMemo(() => {
     const m = new Map<string, string>();
@@ -165,16 +175,26 @@ export function BudgetMainTable({
           const phaseLabel = phase
             ? phases.find((p) => p.key === phase)?.label
             : null;
+          const dupes = duplicateMap?.[row.id] ?? [];
           return (
             <div className="flex min-w-0 flex-col">
-              <span
-                className="truncate"
-                style={{
-                  color: 'var(--lp-text)',
-                  fontWeight: 'var(--lp-weight-medium)',
-                }}
-              >
-                {row.label || '(untitled)'}
+              <span className="inline-flex items-center gap-1.5">
+                {dupes.length > 0 ? (
+                  <AlertTriangle
+                    className="h-3.5 w-3.5 shrink-0"
+                    style={{ color: 'var(--color-lp-status-needs-review)' }}
+                    aria-label={`Possible duplicate of ${dupes.length} other line${dupes.length === 1 ? '' : 's'}`}
+                  />
+                ) : null}
+                <span
+                  className="truncate"
+                  style={{
+                    color: 'var(--lp-text)',
+                    fontWeight: 'var(--lp-weight-medium)',
+                  }}
+                >
+                  {row.label || '(untitled)'}
+                </span>
               </span>
               <span
                 className="truncate text-xs"
@@ -182,6 +202,9 @@ export function BudgetMainTable({
               >
                 {(row.category ?? '—').toString()}
                 {phaseLabel ? ` · ${phaseLabel}` : ''}
+                {dupes.length > 0
+                  ? ` · ${dupes.length} possible duplicate${dupes.length === 1 ? '' : 's'}`
+                  : ''}
               </span>
             </div>
           );
@@ -223,17 +246,36 @@ export function BudgetMainTable({
         cell: (_value, row) => {
           const { pct, delta } = variance(row);
           if (pct === null) return <span style={{ color: 'var(--lp-text-tertiary)' }}>—</span>;
-          const tone =
-            pct > 5
+          // Escalation: >5% over → amber tint; >10% over → red tint;
+          // negative deltas (under-budget) read green; near-zero stays
+          // neutral.
+          const isOver10 = pct > 10;
+          const isOver5 = pct > 5;
+          const isUnder = pct < -5;
+          const tone = isOver10
+            ? 'var(--color-lp-error, #EF4444)'
+            : isOver5
               ? 'var(--color-lp-status-needs-review)'
-              : pct < -5
+              : isUnder
                 ? 'var(--color-lp-status-complete)'
                 : 'var(--lp-text-tertiary)';
+          const wrapBg =
+            isOver10
+              ? 'color-mix(in srgb, var(--color-lp-error, #EF4444) 12%, transparent)'
+              : isOver5
+                ? 'color-mix(in srgb, var(--color-lp-status-needs-review) 12%, transparent)'
+                : 'transparent';
           const Icon = delta >= 0 ? ArrowUp : ArrowDown;
+          const tooltip = isOver5
+            ? `${delta >= 0 ? '+' : ''}${formatCurrency(delta, row.currency || tourCurrency)} · ${pct.toFixed(1)}% over estimate`
+            : isUnder
+              ? `${formatCurrency(delta, row.currency || tourCurrency)} · ${pct.toFixed(1)}% under estimate`
+              : `${pct.toFixed(1)}% variance`;
           return (
             <span
-              className="inline-flex items-center gap-1 tabular-nums"
-              style={{ color: tone }}
+              className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 tabular-nums"
+              style={{ color: tone, background: wrapBg }}
+              title={tooltip}
             >
               <Icon className="h-3 w-3" aria-hidden />
               {pct.toFixed(1)}%
@@ -377,6 +419,9 @@ export function BudgetMainTable({
         searchable
         searchPlaceholder="Search items, vendors, notes…"
         onRowClick={(row) => setOpenLine(row)}
+        selectable
+        selectedIds={selectedIds}
+        onSelectionChange={(ids) => setSelectedIds(ids)}
       />
 
       {/* Quick Add templates strip */}
@@ -432,6 +477,118 @@ export function BudgetMainTable({
             setOpenLine(null);
           }}
         />
+      ) : null}
+
+      {/* Phase E: bulk-edit sticky bar — appears when ≥1 row selected. */}
+      {selectedIds.length > 0 ? (
+        <div
+          className="sticky bottom-3 z-30 mx-auto flex max-w-3xl items-center gap-3 rounded-full border px-4 py-2 shadow-lg"
+          style={{
+            borderColor: 'var(--lp-border)',
+            background: 'var(--lp-surface)',
+          }}
+        >
+          <span
+            className="text-sm tabular-nums"
+            style={{ color: 'var(--lp-text)', fontWeight: 'var(--lp-weight-medium)' }}
+          >
+            {selectedIds.length} selected
+          </span>
+          <span
+            className="text-xs"
+            style={{ color: 'var(--lp-text-tertiary)' }}
+          >
+            ·
+          </span>
+          {(['approved', 'paid', 'pending'] as const).map((s) => (
+            <button
+              key={s}
+              type="button"
+              disabled={bulkBusy !== null}
+              onClick={async () => {
+                setBulkBusy('status');
+                try {
+                  await Promise.all(
+                    selectedIds.map((id) =>
+                      fetch('/api/budget/line-items', {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ id, status: s }),
+                      }),
+                    ),
+                  );
+                  showToast(`Marked ${selectedIds.length} as ${s}`);
+                  setSelectedIds([]);
+                  router.refresh();
+                } catch (err) {
+                  showToast(
+                    err instanceof Error ? err.message : 'Bulk update failed',
+                    'error',
+                  );
+                } finally {
+                  setBulkBusy(null);
+                }
+              }}
+              className="btn-transition rounded-md border px-2 py-1 text-xs"
+              style={{
+                borderColor: 'var(--lp-border)',
+                background: 'var(--lp-bg-secondary)',
+                color: 'var(--lp-text)',
+                fontWeight: 'var(--lp-weight-medium)',
+                opacity: bulkBusy === null ? 1 : 0.6,
+              }}
+            >
+              Mark {s}
+            </button>
+          ))}
+          <button
+            type="button"
+            disabled={bulkBusy !== null}
+            onClick={async () => {
+              if (!window.confirm(`Delete ${selectedIds.length} budget lines?`)) return;
+              setBulkBusy('delete');
+              try {
+                await Promise.all(
+                  selectedIds.map((id) =>
+                    fetch(`/api/budget/line-items?id=${encodeURIComponent(id)}`, {
+                      method: 'DELETE',
+                    }),
+                  ),
+                );
+                showToast(`Deleted ${selectedIds.length} lines`);
+                setSelectedIds([]);
+                router.refresh();
+              } catch (err) {
+                showToast(
+                  err instanceof Error ? err.message : 'Bulk delete failed',
+                  'error',
+                );
+              } finally {
+                setBulkBusy(null);
+              }
+            }}
+            className="btn-transition inline-flex items-center gap-1 rounded-md border px-2 py-1 text-xs"
+            style={{
+              borderColor: 'var(--color-lp-status-needs-review)',
+              color: 'var(--color-lp-status-needs-review)',
+              background: 'transparent',
+              fontWeight: 'var(--lp-weight-medium)',
+              opacity: bulkBusy === null ? 1 : 0.6,
+            }}
+          >
+            <Trash2 className="h-3 w-3" aria-hidden />
+            Delete
+          </button>
+          <button
+            type="button"
+            onClick={() => setSelectedIds([])}
+            className="btn-transition ml-auto rounded-md p-1"
+            style={{ color: 'var(--lp-text-tertiary)' }}
+            aria-label="Clear selection"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
       ) : null}
     </section>
   );

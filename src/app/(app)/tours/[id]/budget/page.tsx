@@ -30,6 +30,10 @@ import { ReceiptInbox } from '@/components/budget/ReceiptInbox';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { computeTourPhases } from '@/server/budget/computeTourPhases';
 import { getBudgetPanelData } from '@/server/budget/getBudgetPanelData';
+import {
+  detectDuplicates,
+  duplicatesToRecord,
+} from '@/server/budget/detectDuplicates';
 import type { BudgetLineItem } from '@/types';
 
 export async function generateMetadata({
@@ -108,6 +112,7 @@ export default async function TourBudgetPage({
           lines={lines}
           phases={phases}
           routingDateById={routingDateById}
+          duplicateMap={duplicatesToRecord(detectDuplicates(lines))}
           tourCurrency={tourCurrency}
           tourId={id}
         />
