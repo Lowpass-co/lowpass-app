@@ -1,64 +1,68 @@
 'use client';
 
-import { useMemo, useState } from 'react';
-import dynamic from 'next/dynamic';
-import { Search } from 'lucide-react';
+import { useMemo } from 'react';
 import type { Person } from '@/lib/types/person';
-import { DataTable } from '@/components/entity/DataTable';
+import { DataTable } from '@/components/data-table/DataTable';
+import type { ColumnDef } from '@/components/data-table/types';
+import { useEntityRouting } from '@/components/entity/EntityRoutingContext';
 
-const PersonSlideOver = dynamic(() => import('@/components/entity/person/PersonSlideOver'), { ssr: false });
+export type PersonLibraryRow = Person & {
+  lastTouredAt: string | null;
+  totalTours: number;
+};
 
-export function PersonLibraryClient({ initial }: { initial: Person[] }) {
-  const [rows] = useState(initial);
-  const [query, setQuery] = useState('');
-  const [activePersonId, setActivePersonId] = useState<string | null>(null);
+function formatDate(value: string | null) {
+  if (!value) return '—';
+  const dt = new Date(value);
+  if (Number.isNaN(dt.getTime())) return '—';
+  return dt.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+}
 
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter(
-      (p) =>
-        p.fullName.toLowerCase().includes(q) ||
-        (p.preferredName ?? '').toLowerCase().includes(q) ||
-        (p.email ?? '').toLowerCase().includes(q)
-    );
-  }, [rows, query]);
+export function PersonLibraryClient({ initial }: { initial: PersonLibraryRow[] }) {
+  const entityRouting = useEntityRouting();
 
-  const columns = useMemo(
+  const columns = useMemo<ColumnDef<PersonLibraryRow>[]>(
     () => [
-      { key: 'name', header: 'Name', render: (p: Person) => p.preferredName ?? p.fullName },
-      { key: 'full', header: 'Legal Name', render: (p: Person) => p.fullName },
-      { key: 'email', header: 'Email', render: (p: Person) => p.email ?? '—' },
-      { key: 'phone', header: 'Phone', render: (p: Person) => p.phone ?? '—' },
+      {
+        id: 'name',
+        header: 'Name',
+        accessor: (p) => p.preferredName ?? p.fullName,
+        sortable: true,
+        frozen: true,
+      },
+      {
+        id: 'last_toured',
+        header: 'Last toured',
+        accessor: (p) => p.lastTouredAt ?? '',
+        sortable: true,
+        cell: (value) => formatDate((value as string) || null),
+      },
+      {
+        id: 'total_tours',
+        header: 'Total tours',
+        accessor: 'totalTours',
+        align: 'right',
+        sortable: true,
+        cell: (value) => Number(value ?? 0).toLocaleString(),
+      },
+      {
+        id: 'email',
+        header: 'Email',
+        accessor: (p) => p.email ?? '',
+        cell: (value) => String(value || '—'),
+      },
     ],
     []
   );
 
   return (
-    <div className="space-y-4">
-      <div className="relative max-w-md">
-        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-lp-text-tertiary" />
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search person..."
-          className="w-full rounded-lg border border-lp-border bg-lp-surface py-2 pl-9 pr-3 text-sm text-lp-text outline-none focus:border-lp-orange"
-        />
-      </div>
-      <DataTable
-        columns={columns}
-        rows={filtered}
-        emptyLabel="No persons found"
-        onRowClick={(p) => setActivePersonId(p.id)}
-      />
-      {activePersonId && (
-        <PersonSlideOver
-          id={activePersonId}
-          onClose={() => {
-            setActivePersonId(null);
-          }}
-        />
-      )}
-    </div>
+    <DataTable<PersonLibraryRow>
+      rows={initial}
+      columns={columns}
+      rowKey={(row) => row.id}
+      searchPlaceholder="Search people…"
+      onRowClick={(row) => entityRouting.open({ kind: 'person', id: row.id })}
+      emptyState="No persons found"
+    />
   );
 }
