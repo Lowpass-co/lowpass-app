@@ -319,22 +319,62 @@ const PRINT_HIDE_CSS = `
 
 type SectionStatusKey = 'complete' | 'in_progress' | 'needs_review' | 'not_started';
 
-/** Read view: Complete | In Progress | Not started + coloured dot (needs_review → In Progress). */
+/**
+ * Convert a free-form section label into a stable DOM id slug. Matches the
+ * `advance-{slug}` convention so the page's DocumentCanvas IntersectionObserver
+ * can pick it up alongside the canonical 8 ids when labels match
+ * (Overview / Travel / Hotel / Venue / Schedule / Tech / Catering / Settlement).
+ */
+function sectionAnchorId(label: string | null | undefined): string {
+  const slug = (label ?? '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return slug ? `advance-${slug}` : 'advance-section';
+}
+
+/**
+ * UX22 phase 3 — token-aligned status colour. Returns the canonical
+ * `--color-lp-status-*` CSS variable for a given status key (Phase 1 used
+ * the same mapping in the overview's StatusPill; keeping them in sync so
+ * the per-show card and the overview row pill read identically).
+ */
+const STATUS_TOKEN: Record<SectionStatusKey, string> = {
+  not_started: 'var(--color-lp-status-not-started)',
+  in_progress: 'var(--color-lp-status-in-progress)',
+  needs_review: 'var(--color-lp-status-needs-review)',
+  complete: 'var(--color-lp-status-complete)',
+};
+
+const STATUS_LABEL: Record<SectionStatusKey, string> = {
+  not_started: 'Not started',
+  in_progress: 'In progress',
+  needs_review: 'Needs review',
+  complete: 'Complete',
+};
+
+/** Read view status pill — tinted bg + matching dot. needs_review → in_progress visual. */
 function SectionReadStatusBadge({ status }: { status: string }) {
   const sk = status as SectionStatusKey;
-  const key: 'complete' | 'in_progress' | 'not_started' =
-    sk === 'complete' ? 'complete' : sk === 'not_started' ? 'not_started' : 'in_progress';
-  const label = key === 'complete' ? 'Complete' : key === 'not_started' ? 'Not started' : 'In Progress';
-  const dotColor =
-    key === 'complete' ? 'bg-[#22C55E]' : key === 'in_progress' ? 'bg-[#F59E0B]' : 'bg-lp-text-tertiary';
-  const textCls =
-    key === 'complete' ? 'text-[#22C55E]'
-      : key === 'in_progress' ? 'text-[#F59E0B]'
-        : 'text-lp-text-tertiary';
+  const key: SectionStatusKey =
+    sk === 'complete' || sk === 'in_progress' || sk === 'needs_review' || sk === 'not_started'
+      ? sk
+      : 'not_started';
+  // needs_review collapses into an in_progress visual treatment for the read
+  // surface — same as the previous implementation.
+  const visualKey: SectionStatusKey = key === 'needs_review' ? 'in_progress' : key;
+  const colour = STATUS_TOKEN[visualKey];
   return (
-    <span className={cn('inline-flex items-center gap-1.5 text-[11px] font-medium', textCls)}>
-      <span className={cn('h-2 w-2 shrink-0 rounded-full', dotColor)} aria-hidden />
-      {label}
+    <span
+      className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-medium"
+      style={{
+        background: `color-mix(in srgb, ${colour} 12%, transparent)`,
+        color: colour,
+      }}
+    >
+      <span aria-hidden className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: colour }} />
+      {STATUS_LABEL[visualKey]}
     </span>
   );
 }
@@ -498,12 +538,31 @@ function SectionCard({
 
   if (isEmpty && activeFlags.length === 0) return null;
 
+  // UX22 phase 3 — section anchor for the day rail / DocumentCanvas
+  // IntersectionObserver scroll-spy. `scroll-mt-32` offsets a hash jump
+  // by ~96px so the anchor lands below the sticky AdvanceShowContextBar.
+  const anchorId = sectionAnchorId(section.label);
+
   return (
-    <div className="rounded-xl border border-lp-border bg-lp-surface overflow-hidden">
+    <section
+      id={anchorId}
+      data-section-template-id={section.template_id}
+      className="scroll-mt-32 overflow-hidden rounded-xl border border-lp-border bg-lp-surface"
+    >
       {/* Section header */}
       <div className="flex items-center justify-between gap-3 border-b border-lp-border bg-lp-surface/60 px-5 py-3">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <h2 className="min-w-0 truncate text-lp-text">{section.label}</h2>
+        <div className="flex min-w-0 items-center gap-2.5">
+          <h2
+            className="min-w-0 truncate"
+            style={{
+              color: 'var(--lp-text)',
+              fontSize: 'var(--lp-text-xl, 1.25rem)',
+              fontWeight: 600,
+              lineHeight: 'var(--lp-leading-snug, 1.3)',
+            }}
+          >
+            {section.label}
+          </h2>
           {activeFlags.length > 0 && (
             <span className="inline-flex items-center gap-1 rounded-full bg-red-500/15 px-2 py-0.5 text-[10px] font-medium text-[#EF4444]">
               <Flag className="h-2.5 w-2.5" />
@@ -511,7 +570,7 @@ function SectionCard({
             </span>
           )}
         </div>
-        <div className="advance-read-no-print flex items-center gap-3 shrink-0">
+        <div className="advance-read-no-print flex shrink-0 items-center gap-3">
           <SectionReadStatusBadge status={statusKey} />
           <Link
             href={editHref}
@@ -570,10 +629,12 @@ function SectionCard({
             </div>
           )}
 
-          {/* Files — always at the bottom */}
+          {/* Files — always at the bottom (UX22 phase 3: this is the
+              section's "attachments rail"; styling stays minimal so prose
+              fields read first). */}
           {fileFields.length > 0 && (
             <div className="space-y-2 border-t border-lp-border pt-1">
-              <span className="block text-[10px] font-semibold uppercase tracking-wider text-lp-text-tertiary mb-1.5">
+              <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wider text-lp-text-tertiary">
                 Documents
               </span>
               {fileFields.map(field => (
@@ -583,7 +644,7 @@ function SectionCard({
           )}
         </div>
       )}
-    </div>
+    </section>
   );
 }
 

@@ -24,7 +24,7 @@ This sprint fixes all three. After it lands, the app feels like a working tour-m
 2. **All visual values via `var(--lp-…)` tokens.** Hex+alpha for orange tints (`#FF45001a` or `color-mix`), never JS string concatenation of CSS vars.
 3. **Use the `<SlideOver>` primitive** for any slide-over.
 4. **No `any`. No `// @ts-ignore`. No commented-out code.**
-5. **`npm run lint` and `npm run typecheck` must exit clean** vs the 75/121 baseline before each commit.
+5. `**npm run lint` and `npm run typecheck` must exit clean** vs the 75/121 baseline before each commit.
 6. **Don't run `npm run build`** during dev — Turbopack hangs on Drive.
 7. **Three commits, in order: A → B → C.** Each pushable independently.
 8. **Workspace-scoped queries via existing RLS helpers** (`public.get_my_workspace_id()`, `public.is_workspace_admin()`).
@@ -36,6 +36,7 @@ This sprint fixes all three. After it lands, the app feels like a working tour-m
 ### Target structure
 
 Top bar (left → right):
+
 1. Lowpass logo → `/dashboard` (existing)
 2. Tours dropdown (existing — workspace tour switcher)
 3. **Dashboard** (`/dashboard`)
@@ -47,6 +48,7 @@ Top bar (left → right):
 9. Account button (existing — fixed in Step B)
 
 **Library dropdown contents** (vertical list when open):
+
 - Rider Packs (`/rider-packs`)
 - Deal Memos (`/library/deal-memos`)
 - Gear (`/gear`)
@@ -83,24 +85,20 @@ const LIBRARY_MENU_ITEMS: Array<{ label: string; href: string; activeMatch: (p: 
 ];
 ```
 
-2. Render `WORKSPACE_NAV` as direct nav links (same pattern as the current Library/Templates links).
-
-3. Replace the existing Library link with a dropdown button. Pattern parallels the Tours dropdown — button toggles a popover with the menu items. Use `--lp-z-dropdown` for the popover layer.
-
-4. Library button's active state: highlights when `usePathname()` matches any of the dropdown items' `activeMatch` (or any of the responsive-collapsed Calendar/Equipment items).
-
-5. Responsive collapse via `useViewportWidth` hook (already in the file). Below 1024px, prepend `{ ...WORKSPACE_NAV[2], group: 'workspace' }, { ...WORKSPACE_NAV[3], group: 'workspace' }` to the Library menu items with a divider, and hide them from the top bar.
-
-6. **Don't change** the Tours dropdown, ⌘K button, or Account chip — those stay as-is for this step.
+1. Render `WORKSPACE_NAV` as direct nav links (same pattern as the current Library/Templates links).
+2. Replace the existing Library link with a dropdown button. Pattern parallels the Tours dropdown — button toggles a popover with the menu items. Use `--lp-z-dropdown` for the popover layer.
+3. Library button's active state: highlights when `usePathname()` matches any of the dropdown items' `activeMatch` (or any of the responsive-collapsed Calendar/Equipment items).
+4. Responsive collapse via `useViewportWidth` hook (already in the file). Below 1024px, prepend `{ ...WORKSPACE_NAV[2], group: 'workspace' }, { ...WORKSPACE_NAV[3], group: 'workspace' }` to the Library menu items with a divider, and hide them from the top bar.
+5. **Don't change** the Tours dropdown, ⌘K button, or Account chip — those stay as-is for this step.
 
 ### Acceptance
 
-- [ ] Dashboard / Personnel / Calendar / Equipment visible at desktop widths (>1024px)
-- [ ] Library dropdown opens, shows 6 items, click navigates correctly
-- [ ] Active state lights up the right top-level item on `/dashboard`, `/personnel`, `/calendar`, `/equipment`, `/rider-packs`, `/library/deal-memos`, `/gear`, `/templates`, `/performance`, `/venues`
-- [ ] Resize to 800px wide → Calendar + Equipment now appear in the Library dropdown with a divider
-- [ ] Resize to 500px wide → existing mobile collapse pattern
-- [ ] Keyboard: Tab moves through items, Enter navigates, Escape closes Library dropdown
+- Dashboard / Personnel / Calendar / Equipment visible at desktop widths (>1024px)
+- Library dropdown opens, shows 6 items, click navigates correctly
+- Active state lights up the right top-level item on `/dashboard`, `/personnel`, `/calendar`, `/equipment`, `/rider-packs`, `/library/deal-memos`, `/gear`, `/templates`, `/performance`, `/venues`
+- Resize to 800px wide → Calendar + Equipment now appear in the Library dropdown with a divider
+- Resize to 500px wide → existing mobile collapse pattern
+- Keyboard: Tab moves through items, Enter navigates, Escape closes Library dropdown
 
 ### Commit
 
@@ -137,6 +135,7 @@ grep -nE "avatarUrl|user\.avatar|<User|profile.*avatar|<Image.*avatar" src/compo
 ```
 
 Note what's there. Likely scenarios:
+
 - `<User />` lucide icon as a placeholder; avatar never wired
 - `<img src={user.avatarUrl} />` without error handling
 - `next/image` with a misconfigured src
@@ -216,12 +215,12 @@ images: {
 
 ### Acceptance
 
-- [ ] If `user.avatarUrl` is set and reachable → photo renders
-- [ ] If `user.avatarUrl` is null OR the image fails → orange initials chip with the user's initials (e.g. "AR" for "Adam Rowley", "MR" if name is "Mr Big' Rowley")
-- [ ] No broken-image `[?]` icon ever visible
-- [ ] Initials are uppercase, white-on-orange, readable
-- [ ] Keyboard focus ring still works on the parent account button
-- [ ] Image cached / not re-fetching on every render
+- If `user.avatarUrl` is set and reachable → photo renders
+- If `user.avatarUrl` is null OR the image fails → orange initials chip with the user's initials (e.g. "AR" for "Adam Rowley", "MR" if name is "Mr Big' Rowley")
+- No broken-image `[?]` icon ever visible
+- Initials are uppercase, white-on-orange, readable
+- Keyboard focus ring still works on the parent account button
+- Image cached / not re-fetching on every render
 
 ### Commit
 
@@ -256,9 +255,11 @@ Read `docs/cursor-prompts/CURSOR_PROMPT_UX08B_COMMAND_PALETTE.md` end-to-end. Th
 ### Updated context (since the prompt was drafted)
 
 Entity registry now has these live descriptors (all with real `search()` implementations):
+
 - `person`, `flight`, `room`, `gear`, `show`, `deal-memo`
 
 Non-entity searchable kinds the prompt §4.1 specifies — query directly:
+
 - `tour` → `public.tours` (search name, status)
 - `budget-line` → query whatever the budget line items table is on this codebase. **Inspect first** with `git ls-tree origin/main database/migrations/ | grep budget` and read the relevant migration. Likely `public.budget_line_items` with `label` / `description` columns; verify before writing the query.
 - `bug-report` → `public.bug_reports` (admin only — gate via `public.is_workspace_admin()`)
@@ -281,52 +282,48 @@ Deferred kinds (per the prompt §4.2): `expense` / `file`. The original prompt d
 ### Build sequence
 
 1. **Fuzzy matcher** — `src/lib/search/fuzzy.ts`. Implement per prompt §3:
-   - Returns `{ score, ranges }` where ranges are `[start, end]` index pairs for highlight rendering
-   - Scoring: substring +1000, consecutive char +50, starts-with-word +30, sequential +10, case-match bonus +5, position penalty -position
-   - Returns `null` if no match
-   - Test self-consistency: `fuzzy("Britannia Row Audio", "brit row")` should beat `fuzzy("Audio Britannia Row", "brit row")` because order matters
-
+  - Returns `{ score, ranges }` where ranges are `[start, end]` index pairs for highlight rendering
+  - Scoring: substring +1000, consecutive char +50, starts-with-word +30, sequential +10, case-match bonus +5, position penalty -position
+  - Returns `null` if no match
+  - Test self-consistency: `fuzzy("Britannia Row Audio", "brit row")` should beat `fuzzy("Audio Britannia Row", "brit row")` because order matters
 2. **Search providers** — `src/lib/search/providers.ts`. Per prompt §4:
-   - `SearchKind` type union covering all 11 wired kinds + 2 deferred (file, expense)
-   - `SearchResult` shape: `{ id, kind, label, secondary?, score, action: { type: 'open-entity', kind, id } | { type: 'navigate', href } }`
-   - `searchAll(query, opts?)` parallels descriptor.search() across entity kinds AND issues per-non-entity Supabase queries; combines, scores, sorts descending, slices to `limit ?? 50`
-   - Empty-query path: returns recent items from `localStorage` keyed `lp:cmdk:recent:<userId>`, limit 10
-   - All non-entity queries scope by `workspace_id` via `public.get_my_workspace_id()` (RLS will enforce too — belt & braces)
-
-3. **`<CommandPalette>`** — `src/components/command-palette/CommandPalette.tsx` (`'use client'`). Per prompt §5:
-   - Centred popover, max 640×480, background `--lp-surface`, border `--lp-border`, radius `--lp-radius-xl`, shadow `--lp-shadow-xl`, z-index `--lp-z-command-palette` (1500)
-   - Backdrop: `rgba(0,0,0,0.4)` light, `rgba(0,0,0,0.6)` dark, fade-in `--lp-duration-slow`. Backdrop click closes.
-   - Search input autofocuses on open. Debounced search at 150ms (`useDebouncedValue` pattern; check if a hook already exists at `src/hooks/`).
-   - Results grouped by `kind`. Group headers in `--lp-text-2xs` caps with `--lp-tracking-caps`.
-   - Active row: `color-mix(in srgb, var(--lp-orange) 7%, transparent)` background + 2px `--lp-orange` left border.
-   - Result row content: kind icon (lucide) + highlighted label (bold the chars matched by fuzzy ranges) + right-aligned secondary text.
-   - Footer: `↑↓ navigate   ↵ open   esc close`
-   - Keyboard: ↑/↓ moves selection; Enter activates; Escape closes; ⌘K toggles; mouse hover sets selection.
-
+  - `SearchKind` type union covering all 11 wired kinds + 2 deferred (file, expense)
+  - `SearchResult` shape: `{ id, kind, label, secondary?, score, action: { type: 'open-entity', kind, id } | { type: 'navigate', href } }`
+  - `searchAll(query, opts?)` parallels descriptor.search() across entity kinds AND issues per-non-entity Supabase queries; combines, scores, sorts descending, slices to `limit ?? 50`
+  - Empty-query path: returns recent items from `localStorage` keyed `lp:cmdk:recent:<userId>`, limit 10
+  - All non-entity queries scope by `workspace_id` via `public.get_my_workspace_id()` (RLS will enforce too — belt & braces)
+3. `**<CommandPalette>`** — `src/components/command-palette/CommandPalette.tsx` (`'use client'`). Per prompt §5:
+  - Centred popover, max 640×480, background `--lp-surface`, border `--lp-border`, radius `--lp-radius-xl`, shadow `--lp-shadow-xl`, z-index `--lp-z-command-palette` (1500)
+  - Backdrop: `rgba(0,0,0,0.4)` light, `rgba(0,0,0,0.6)` dark, fade-in `--lp-duration-slow`. Backdrop click closes.
+  - Search input autofocuses on open. Debounced search at 150ms (`useDebouncedValue` pattern; check if a hook already exists at `src/hooks/`).
+  - Results grouped by `kind`. Group headers in `--lp-text-2xs` caps with `--lp-tracking-caps`.
+  - Active row: `color-mix(in srgb, var(--lp-orange) 7%, transparent)` background + 2px `--lp-orange` left border.
+  - Result row content: kind icon (lucide) + highlighted label (bold the chars matched by fuzzy ranges) + right-aligned secondary text.
+  - Footer: `↑↓ navigate   ↵ open   esc close`
+  - Keyboard: ↑/↓ moves selection; Enter activates; Escape closes; ⌘K toggles; mouse hover sets selection.
 4. **Global mount + ⌘K shortcut** — per prompt §6:
-   - Add open/close state to `AppShell.tsx` (already a client component): `const [paletteOpen, setPaletteOpen] = useState(false)`.
-   - Mount `<CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />` next to `<EntityRoutingProvider>` (inside it is fine — palette can use entity routing).
-   - Add a global keydown listener: `(e.metaKey || e.ctrlKey) && e.key === 'k'` → `e.preventDefault(); setPaletteOpen(o => !o);`
-   - Expose `setPaletteOpen` so the existing TopBar `onCommandPaletteOpen` callback can flip the same state. Two paths: (a) lift state higher and pass down to ShellTopBarClient, or (b) use a small context. (b) is cleaner — create `CommandPaletteContext` similar to `EntityRoutingContext` and have both AppShell mount + TopBar trigger consume the same context.
-
+  - Add open/close state to `AppShell.tsx` (already a client component): `const [paletteOpen, setPaletteOpen] = useState(false)`.
+  - Mount `<CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />` next to `<EntityRoutingProvider>` (inside it is fine — palette can use entity routing).
+  - Add a global keydown listener: `(e.metaKey || e.ctrlKey) && e.key === 'k'` → `e.preventDefault(); setPaletteOpen(o => !o);`
+  - Expose `setPaletteOpen` so the existing TopBar `onCommandPaletteOpen` callback can flip the same state. Two paths: (a) lift state higher and pass down to ShellTopBarClient, or (b) use a small context. (b) is cleaner — create `CommandPaletteContext` similar to `EntityRoutingContext` and have both AppShell mount + TopBar trigger consume the same context.
 5. **Recent items** — last 10 opened entities in `localStorage` (`lp:cmdk:recent:<userId>`). Update on Enter. Render under "RECENT" group when query is empty. Provide a "Clear recent" link at the bottom of the recent group.
 
 ### Acceptance (per prompt §9)
 
-- [ ] ⌘K from any page opens the palette (try `/dashboard`, `/tours/[id]`, `/library/deal-memos`)
-- [ ] Type "brit" against your real data → finds rows containing "Britannia" / "Britain" via fuzzy match
-- [ ] Group headers render for the 11 wired kinds
-- [ ] ↑/↓ moves selection (visual highlight follows)
-- [ ] Enter on an entity result opens its slide-over via `useEntityRouting().open(...)`
-- [ ] Enter on a tour/bug-report/rider-pack/rental-job/budget-line navigates to the right URL
-- [ ] Escape closes
-- [ ] Recent items persist across reload
-- [ ] Empty query shows recent (or "Type to search…" if no recent)
-- [ ] No-matches state shows "No matches for «query»"
-- [ ] Backdrop click closes
-- [ ] Loading skeleton during slow networks
-- [ ] Dark mode parity
-- [ ] No new dependencies added
+- ⌘K from any page opens the palette (try `/dashboard`, `/tours/[id]`, `/library/deal-memos`)
+- Type "brit" against your real data → finds rows containing "Britannia" / "Britain" via fuzzy match
+- Group headers render for the 11 wired kinds
+- ↑/↓ moves selection (visual highlight follows)
+- Enter on an entity result opens its slide-over via `useEntityRouting().open(...)`
+- Enter on a tour/bug-report/rider-pack/rental-job/budget-line navigates to the right URL
+- Escape closes
+- Recent items persist across reload
+- Empty query shows recent (or "Type to search…" if no recent)
+- No-matches state shows "No matches for «query»"
+- Backdrop click closes
+- Loading skeleton during slow networks
+- Dark mode parity
+- No new dependencies added
 
 ### Commit
 

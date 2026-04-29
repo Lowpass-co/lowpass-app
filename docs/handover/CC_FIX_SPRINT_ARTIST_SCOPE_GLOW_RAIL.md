@@ -1,6 +1,6 @@
-# Fix Sprint — Artist Scope + Active-State Glow + Empty Rail
+# Fix Sprint — Artist Scope + Glow + Rail + Theme + Rider RLS
 
-> Three small bugs surfaced during runtime smoke after the A/B/C nav + avatar + ⌘K fix sprint. Run this AFTER A/B/C lands cleanly. Single short session, three commits.
+> Five small bugs surfaced during runtime smoke after the A/B/C nav + avatar + ⌘K fix sprint. Run this AFTER A/B/C lands cleanly. Single short session, five commits.
 
 ---
 
@@ -19,7 +19,7 @@
 2. All visual values via `var(--lp-…)` tokens.
 3. No `any`, no `// @ts-ignore`.
 4. Lint + typecheck clean (75/121 baseline).
-5. Three commits, in order: A → B → C.
+5. Five commits, in order: A → B → C → D → E.
 
 ---
 
@@ -235,9 +235,175 @@ Made-with: Claude Code (artist scope / glow / rail fix sprint)
 
 ---
 
+## D. Restore theme toggle + audit hardcoded light/dark colours (~30 min)
+
+The legacy Sidebar had a `DarkModeToggle` mounted in it. When the Sidebar was retired, the toggle went with it. Adam now sees inconsistent theme rendering across pages — some surfaces respect the global `.dark` class, others appear stuck in light mode regardless.
+
+The component already exists at `src/components/layout/DarkModeToggle.tsx`, paired with `src/hooks/useDarkMode.ts`. We just need to remount it (in the TopBar account dropdown) AND find the surfaces that hardcode light-only colours.
+
+### D.1 Mount the toggle in the TopBar account menu
+
+In `src/components/shell/TopBar.tsx`, the `AccountMenuContent` component currently renders Settings / Workspace / Sign out. Add a "Theme" row above Sign out:
+
+```tsx
+import { DarkModeToggle } from '@/components/layout/DarkModeToggle';
+
+// inside AccountMenuContent — between Workspace and Sign out:
+<div
+  className="flex items-center justify-between px-3 py-2 text-sm"
+  style={{ color: 'var(--lp-text)' }}
+>
+  <span className="inline-flex items-center gap-2">
+    <Sun className="h-4 w-4" style={{ color: 'var(--lp-text-tertiary)' }} />
+    Theme
+  </span>
+  <DarkModeToggle />
+</div>
+<div className="my-1" style={{ borderTop: '1px solid var(--lp-border)' }} />
+```
+
+Use whatever icon the existing `DarkModeToggle` exposes if it's already self-iconned. If `DarkModeToggle` renders its own button with sun/moon icon, drop the `<Sun />` and just put the toggle on the right.
+
+### D.2 Audit hardcoded light-only colours
+
+Run the grep pattern in the working tree:
+
+```bash
+grep -rn "\bbg-white\b\|\btext-black\b\|\btext-gray-9\|\bbg-gray-1\b\|\bbg-slate-\|\btext-slate-9" \
+  src/app src/components 2>/dev/null \
+  | grep -v "/_legacy/" \
+  | grep -v "/m/" \
+  | head -30
+```
+
+For each hit:
+- Replace `bg-white` with `bg-lp-surface` or `style={{ background: 'var(--lp-surface)' }}`
+- Replace `text-black` with `text-lp-text` or `style={{ color: 'var(--lp-text)' }}`
+- Replace `text-gray-900` / `text-slate-900` with `text-lp-text`
+- Replace `bg-gray-100` / `bg-slate-100` with `bg-lp-bg-secondary`
+
+Stay strictly within Tailwind's `lp-*` colour utilities (defined via `@theme inline` in `globals.css`) or inline `style={{ ... }}` with `var(--lp-…)` tokens. Don't introduce new Tailwind plugin colours.
+
+Skip files under:
+- `src/components/_legacy/**` — quarantined
+- `src/app/(app)/m/**` — mobile flows have their own light-only treatment for paper-style document reading; that's intentional
+- `src/components/equipment/exportJobPdf.ts` — print template, hardcoded brand colours are correct there
+
+### D.3 Acceptance
+
+- [ ] Theme toggle visible in TopBar account dropdown
+- [ ] Click toggle → `<html>` class flips between presence/absence of `.dark` immediately
+- [ ] Page contents (background, text, borders, surfaces) all flip consistently — no surface stays light when the rest is dark or vice versa
+- [ ] Toggle preference persists across reloads (the existing `useDarkMode` hook handles this via localStorage)
+- [ ] No `bg-white` / `text-black` / `text-gray-900` / `text-slate-900` hits in the audit grep outside the skip-list
+- [ ] Lint + typecheck clean
+
+### D.4 Commit
+
+```
+fix(theme): restore dark-mode toggle + audit hardcoded light-only colours
+
+The legacy Sidebar had a DarkModeToggle mount; retiring the Sidebar
+removed it. DarkModeToggle component (src/components/layout/) and
+useDarkMode hook (src/hooks/) still exist — remounted in the TopBar's
+account dropdown menu between Workspace and Sign out.
+
+Audited src/app + src/components for hardcoded light-only colours
+(bg-white / text-black / text-gray-900 / text-slate-900 / bg-gray-100 /
+bg-slate-100) and replaced with lp-* tokens. Skipped _legacy/, /m/*
+(mobile paper-style read), and the rental PDF export template.
+
+Toggle persists via existing useDarkMode hook (localStorage). Surfaces
+flip consistently when toggled.
+
+Made-with: Claude Code (artist scope / glow / rail / theme / rider sprint)
+```
+
+---
+
+## E. Rider folders RLS — drop the admin gate (~10 min)
+
+Adam can't create artist-scope rider folders because `rider_folders_insert` policy requires `is_workspace_admin()` for `scope = 'artist'`, and his profile's role doesn't have `is_god = true`. Manually granting `is_god` doesn't help in this app because `profiles.role_id` is NULL for most users — the role linkage was never wired up properly.
+
+The admin gate was a defensive choice to prevent random tour managers from creating workspace-wide riders. In practice, that defensiveness is locking out the workspace owner from a primary feature. **Drop the gate. Workspace membership is sufficient.** If specific abuse cases emerge, gate then.
+
+### E.1 Migration
+
+Migration number: next sequential. As of last commit on main, the highest is 057. Use `058_rider_folders_relax_admin_gate.sql`.
+
+Verify before writing:
+```bash
+ls database/migrations/[0-9][0-9][0-9]_*.sql | sort | tail -3
+```
+Take the next number above the highest.
+
+### E.2 SQL
+
+```sql
+-- ============================================
+-- LOWPASS — Relax rider_folders RLS: drop admin gate on artist-scope
+-- Migration 058
+--
+-- The original 039_rider_folders.sql gated artist-scope writes behind
+-- public.is_workspace_admin() (which checks profiles.role_id → roles.is_god).
+-- In practice profiles.role_id is NULL for most users, so even the workspace
+-- owner can't create artist-scope rider folders. Workspace membership is a
+-- sufficient gate; tighten later if abuse cases emerge.
+-- ============================================
+
+DROP POLICY IF EXISTS "rider_folders_insert" ON public.rider_folders;
+CREATE POLICY "rider_folders_insert"
+  ON public.rider_folders FOR INSERT
+  WITH CHECK (workspace_id = public.get_my_workspace_id());
+
+DROP POLICY IF EXISTS "rider_folders_update" ON public.rider_folders;
+CREATE POLICY "rider_folders_update"
+  ON public.rider_folders FOR UPDATE
+  USING (workspace_id = public.get_my_workspace_id())
+  WITH CHECK (workspace_id = public.get_my_workspace_id());
+
+-- DELETE policy keeps the admin gate for now — destructive ops should
+-- still be protected. Workspace owners who can't delete a folder can
+-- ask Cowork Claude to grant them is_god via the UPDATE roles SQL
+-- pattern (when the role linkage works).
+-- (No change to rider_folders_delete — keep as-is.)
+```
+
+Save as `database/migrations/058_rider_folders_relax_admin_gate.sql`. Adam will paste into Supabase SQL editor after merge.
+
+### E.3 Acceptance
+
+- [ ] Migration `058_rider_folders_relax_admin_gate.sql` exists with the SQL above
+- [ ] Migration is next-sequential (verified against `ls database/migrations/[0-9][0-9][0-9]_*.sql | sort | tail`)
+- [ ] After running 058 in Supabase, Adam can create artist-scope, tour-scope, and show-scope rider folders without the RLS error
+- [ ] DELETE policy is unchanged (still admin-gated for safety)
+- [ ] Lint + typecheck clean
+
+### E.4 Commit
+
+```
+fix(rider-folders): relax RLS — drop admin gate on artist/tour/show writes
+
+Migration 039 originally gated artist-scope rider_folders writes behind
+public.is_workspace_admin(), which checks profiles.role_id → roles.is_god.
+In practice profiles.role_id is NULL for most users, so even the workspace
+owner can't create artist-scope rider folders ('new row violates row-level
+security policy for table rider_folders').
+
+Migration 058 drops the admin gate from INSERT and UPDATE; keeps DELETE
+admin-gated for safety. Workspace membership is the gate. If specific
+abuse cases emerge, tighten then.
+
+Adam: apply 058 in Supabase SQL editor after this merges.
+
+Made-with: Claude Code (artist scope / glow / rail / theme / rider sprint)
+```
+
+---
+
 ## Final verification
 
-After all three commits:
+After all five commits:
 
 1. Hard-refresh `/rider-packs` — no LeftRail visible, full-width content
 2. Hard-refresh `/gear` — same, no rail
@@ -246,7 +412,10 @@ After all three commits:
 5. Click `/dashboard` → still scoped to X (no rescope)
 6. Click another tour from artist Y → context flips to Y
 7. Active TopBar item — clean orange bottom border, no glow behind text
-8. Lint + typecheck clean
+8. TopBar account dropdown → Theme row visible; toggle flips theme; persists across reload
+9. Visit a few different pages (Dashboard, Personnel, /tours/[id], /library/deal-memos) — all flip consistently when theme toggles; no light-stuck surfaces
+10. After Adam runs migration 058 in Supabase: create a new rider folder at artist scope → succeeds
+11. Lint + typecheck clean
 
 If any check fails, fix before declaring done. Then report SHAs to Adam.
 
@@ -255,10 +424,14 @@ If any check fails, fix before declaring done. Then report SHAs to Adam.
 ## When done
 
 ```
-A/B/C scope-glow-rail sprint done.
-Commits: <A-sha>, <B-sha>, <C-sha>.
-- Tours dropdown grouped by artist; selecting tour also sets selectedArtistId
+Scope-glow-rail-theme-rider sprint done.
+Commits: <A-sha>, <B-sha>, <C-sha>, <D-sha>, <E-sha>.
+- Tours dropdown grouped by artist; tour-select also sets selectedArtistId
 - TopBar active state = 2px bottom border, no behind-text glow
 - LeftRail list-variant hidden when no filters/views configured
+- DarkModeToggle remounted in TopBar account menu; theme audit
+  replaced hardcoded light-only colours with lp-* tokens
+- Migration 058 relaxes rider_folders RLS (drops admin gate on
+  INSERT/UPDATE; DELETE still admin-only). Adam: apply 058 in Supabase.
 - Lint + typecheck clean
 ```
