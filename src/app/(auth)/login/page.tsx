@@ -9,14 +9,22 @@
 
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase-client';
 import { LowpassLogo } from '@/components/common/LowpassLogo';
 import { cn } from '@/lib/utils';
 
 export default function LoginPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const supabase = createClient();
+  // ?next=... lets a deep link survive the auth round-trip — we
+  // forward it through to /auth/landing which validates same-origin
+  // and 307s to the requested path.
+  const nextParam = searchParams.get('next');
+  const landingHref = nextParam && nextParam.startsWith('/') && !nextParam.startsWith('//')
+    ? `/auth/landing?next=${encodeURIComponent(nextParam)}`
+    : '/auth/landing';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -149,11 +157,11 @@ export default function LoginPage() {
       if (window.location.pathname.startsWith('/login')) {
         setTransitioning(false);
         setLoading(false);
-        setError('Signed in, but dashboard did not load. Please retry in a moment.');
+        setError('Signed in, but the next page did not load. Please retry in a moment.');
       }
     }, 4500);
     setTimeout(() => {
-      router.push('/dashboard');
+      router.push(landingHref);
       router.refresh();
     }, 420);
   };
