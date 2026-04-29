@@ -176,6 +176,7 @@ export default async function AdvanceShowPage({
       sections={ADVANCE_SECTIONS}
       editable={false}
       maxHeight="calc(100vh - var(--lp-page-header-h, 96px))"
+      surface
     >
       {contextBar}
       <AdvanceShowReadView tourId={tourId} routingId={routingId} />

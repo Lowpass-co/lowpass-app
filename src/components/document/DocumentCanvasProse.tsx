@@ -25,6 +25,7 @@ export function DocumentCanvasProse({
   children,
   className,
   maxHeight = 'min(70vh, 640px)',
+  surface = false,
 }: DocumentCanvasProseProps) {
   void _activeSection; // parent may sync rail highlight; scroll is driven by hash or app logic
   void _editable; // v1: consumer can mark paragraphs contentEditable in children
@@ -74,11 +75,49 @@ export function DocumentCanvasProse({
       }}
     >
       <div
-        className="prose-canvas-content mx-auto w-full [&_h1]:mb-4 [&_h1]:[font-size:var(--lp-text-3xl)] [&_h1]:[font-weight:600] [&_h1]:[color:var(--lp-text)] [&_h2]:mb-3 [&_h2]:mt-8 [&_h2]:[font-size:var(--lp-text-2xl)] [&_h2]:[font-weight:600] [&_h3]:[font-size:var(--lp-text-xl)] [&_h3]:[font-weight:600] [&_h4]:[font-size:var(--lp-text-lg)] [&_h4]:[font-weight:600] [&_p]:[font-size:var(--lp-text-base)] [&_p]:[line-height:var(--lp-leading-relaxed)] [&_p]:[color:var(--lp-text)] [&_blockquote]:[border-left:3px_solid_var(--lp-border)] [&_ul]:[list-style:disc] [&_ul]:pl-5"
-        style={{ maxWidth: 720, padding: '0 var(--lp-space-4)' }}
+        // UX22 cleanup P2 — opt-in `surface` wraps prose content in an
+        // lp-surface card so the read view doesn't sit on a dark void.
+        // Print stylesheet (next sibling <style>) drops the surface so
+        // printouts stay clean.
+        className={cn(
+          'prose-canvas-content mx-auto w-full',
+          '[&_h1]:mb-4 [&_h1]:[font-size:var(--lp-text-3xl)] [&_h1]:[font-weight:600] [&_h1]:[color:var(--lp-text)]',
+          '[&_h2]:mb-3 [&_h2]:mt-8 [&_h2]:[font-size:var(--lp-text-2xl)] [&_h2]:[font-weight:600]',
+          '[&_h3]:[font-size:var(--lp-text-xl)] [&_h3]:[font-weight:600]',
+          '[&_h4]:[font-size:var(--lp-text-lg)] [&_h4]:[font-weight:600]',
+          '[&_p]:[font-size:var(--lp-text-base)] [&_p]:[line-height:var(--lp-leading-relaxed)] [&_p]:[color:var(--lp-text)]',
+          '[&_blockquote]:[border-left:3px_solid_var(--lp-border)]',
+          '[&_ul]:[list-style:disc] [&_ul]:pl-5',
+          surface && 'lp-prose-surface',
+        )}
+        style={
+          surface
+            ? {
+                maxWidth: 720,
+                background: 'var(--lp-surface)',
+                border: '1px solid var(--lp-border)',
+                borderRadius: 'var(--lp-radius-lg, 8px)',
+                padding: 'var(--lp-space-8, 32px) var(--lp-space-6, 24px)',
+                margin: '0 auto var(--lp-space-6, 24px) auto',
+              }
+            : { maxWidth: 720, padding: '0 var(--lp-space-4)' }
+        }
       >
         {children}
       </div>
+      {surface ? (
+        <style>{`
+          @media print {
+            .lp-prose-surface {
+              background: transparent !important;
+              border: 0 !important;
+              border-radius: 0 !important;
+              padding: 0 !important;
+              margin: 0 auto !important;
+            }
+          }
+        `}</style>
+      ) : null}
     </div>
   );
 }
