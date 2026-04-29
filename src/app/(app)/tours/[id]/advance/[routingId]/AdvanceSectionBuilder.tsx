@@ -10,7 +10,6 @@ import { useState, useEffect, useCallback, useRef, Fragment, createContext, useC
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
-  ArrowLeft,
   ChevronDown,
   ChevronRight,
   GripVertical,
@@ -18,7 +17,6 @@ import {
   X,
   Save,
   Copy,
-  Download,
   LayoutTemplate,
   MessageSquarePlus,
   Flag,
@@ -74,7 +72,7 @@ import {
   Sliders,
   Lock,
 } from 'lucide-react';
-import { parseRoutingDate, getDayTypeLabel, getDayTypeColor, getAdvanceStatusInfo, firstDayType, dayTypesInclude, cn } from '@/lib/utils';
+import { parseRoutingDate, getDayTypeColor, getAdvanceStatusInfo, firstDayType, dayTypesInclude, cn } from '@/lib/utils';
 import { SlidingToggle } from '@/components/ui/SlidingToggle';
 import { ContextMenu } from '@/components/ui/ContextMenu';
 import { DeleteConfirmationModal } from '@/components/ui/DeleteConfirmationModal';
@@ -459,7 +457,6 @@ export function AdvanceSectionBuilder({
   const mainContent = (
     <>
       <Header
-        tourId={tourId}
         routing={data.routing}
         advance={data.advance}
         saving={saving}
@@ -603,8 +600,15 @@ function AdvanceDateStrip({ tourId, routingId, dates }: { tourId: string; routin
   );
 }
 
+/**
+ * UX22 cleanup P1 — slim toolbar replacing the previous chunky Header.
+ * Date / venue / day-type pill / status pill / breadcrumb all duplicated
+ * AdvanceShowContextBar from UX22 phase 2; that data is now removed
+ * here. The toolbar carries only what the ContextBar doesn't:
+ * autosave indicator, Save button, conflict warning. Stays sticky just
+ * below the ContextBar via top: var(--lp-topbar-height).
+ */
 function Header({
-  tourId,
   routing,
   advance,
   saving,
@@ -614,7 +618,6 @@ function Header({
   conflictWarning,
   onAutosaveRetry,
 }: {
-  tourId: string;
   routing: PageData['routing'];
   advance: PageData['advance'];
   saving: boolean;
@@ -624,81 +627,58 @@ function Header({
   conflictWarning?: string | null;
   onAutosaveRetry?: () => void;
 }) {
-  const dateLabel = parseRoutingDate(routing.date).toLocaleDateString('en-GB', {
-    weekday: 'short',
-    day: '2-digit',
-    month: 'short',
-  });
-  const dayColors = routing.day_type ? getDayTypeColor(routing.day_type) : null;
-  const statusInfo = getAdvanceStatusInfo(advance?.status ?? 'not_started');
+  // routing + advance still come in for prop-shape compatibility with
+  // existing call sites; only the autosave / save state matters now.
+  void routing;
+  void advance;
 
   return (
-    <>
-      <div className="flex items-center gap-4">
-        <Link
-          href={`/tours/${tourId}/advance`}
-          className="flex items-center gap-1 text-sm text-lp-text-secondary hover:text-lp-text"
-        >
-          <ArrowLeft size={16} />
-          Back to advance overview
-        </Link>
-      </div>
-      <div className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-lp-border bg-lp-surface/95 p-4 backdrop-blur">
-        <div className="flex flex-wrap items-center gap-4">
-          <span className="font-medium text-lp-text">{dateLabel}</span>
-          {dayColors && (
-            <span className={cn('rounded-full px-2.5 py-0.5 text-xs font-medium', dayColors.bg, dayColors.text)}>
-              {getDayTypeLabel(routing.day_type)}
-            </span>
-          )}
-          <span className="text-lp-text-secondary">—</span>
-          <span className="text-lp-text">{routing.venue_name || '—'}</span>
-          <span className="text-sm text-lp-text-tertiary">{routing.city || ''}</span>
-          <span className={cn('rounded-full px-2.5 py-0.5 text-xs font-medium', statusInfo.bg, statusInfo.color)}>
-            {statusInfo.label}
+    <div
+      className="sticky z-10 flex flex-wrap items-center justify-end gap-3 rounded-xl border border-lp-border bg-lp-surface/95 px-4 py-2 backdrop-blur"
+      style={{ top: 'var(--lp-topbar-height, 56px)' }}
+    >
+      {conflictWarning ? (
+        <p className="text-xs text-amber-600 dark:text-amber-400" title={conflictWarning}>
+          {conflictWarning}
+        </p>
+      ) : null}
+      <span className="inline-flex min-w-[6.5rem] items-center overflow-hidden">
+        {autosaveStatus === 'saving' && (
+          <span className="flex items-center gap-1.5 text-sm text-lp-text-tertiary">
+            <Loader2 size={14} className="animate-spin shrink-0" />
+            Saving…
           </span>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          {conflictWarning && (
-            <p className="text-xs text-amber-600 dark:text-amber-400 shrink-0" title={conflictWarning}>
-              {conflictWarning}
-            </p>
-          )}
-          <span className="inline-flex min-w-[7rem] items-center overflow-hidden">
-            {autosaveStatus === 'saving' && (
-              <span className="flex items-center gap-1.5 text-sm text-lp-text-tertiary">
-                <Loader2 size={14} className="animate-spin shrink-0" />
-                Saving...
-              </span>
-            )}
-            {autosaveStatus === 'saved' && (
-              <span className="inline-flex items-center text-sm text-emerald-600 dark:text-emerald-400 animate-slide-in-left">
-                Saved ✓
-              </span>
-            )}
-            {autosaveStatus === 'error' && (
-              <span className="flex items-center gap-2 text-sm text-red-500">
-                Error saving
-                <button type="button" onClick={onAutosaveRetry} className="rounded border border-red-500/50 px-2 py-0.5 text-xs font-medium hover:bg-red-500/10 shrink-0">
-                  Retry
-                </button>
-              </span>
-            )}
+        )}
+        {autosaveStatus === 'saved' && (
+          <span className="inline-flex items-center text-sm text-emerald-600 dark:text-emerald-400 animate-slide-in-left">
+            Saved ✓
           </span>
-          {showSaveButton && (
+        )}
+        {autosaveStatus === 'error' && (
+          <span className="flex items-center gap-2 text-sm text-red-500">
+            Error saving
             <button
               type="button"
-              onClick={onSave}
-              disabled={saving}
-              className="btn-transition btn-primary-press flex items-center gap-2 rounded-xl bg-lp-orange px-4 py-2 text-sm font-medium text-white hover:bg-lp-orange-hover disabled:opacity-50"
+              onClick={onAutosaveRetry}
+              className="rounded border border-red-500/50 px-2 py-0.5 text-xs font-medium hover:bg-red-500/10 shrink-0"
             >
-              {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-              Save
+              Retry
             </button>
-          )}
-        </div>
-      </div>
-    </>
+          </span>
+        )}
+      </span>
+      {showSaveButton && (
+        <button
+          type="button"
+          onClick={onSave}
+          disabled={saving}
+          className="btn-transition btn-primary-press flex items-center gap-2 rounded-lg bg-lp-orange px-3.5 py-1.5 text-sm font-medium text-white hover:bg-lp-orange-hover disabled:opacity-50"
+        >
+          {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+          Save
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -2018,8 +1998,11 @@ function FillMode({
 
   return (
     <AdvanceDropdownZProvider>
-    <div className="flex gap-8">
-      <div className="min-w-0 flex-1 space-y-4">
+    {/* UX22 cleanup P1 — outer flex + floating <aside> retired. Section
+        nav now lives in the LeftRail's docSections variant (see
+        page.tsx). The remaining content is a single space-y-4 column
+        that fills PageShell width. */}
+    <div className="space-y-4">
         <ImportantDocumentsCard
           instanceId={advance.instance_id}
           documents={importantDocuments}
@@ -2141,49 +2124,29 @@ function FillMode({
           )}
           </div>
         ))}
-      </div>
 
-      <aside className="w-56 shrink-0">
-        <div className="sticky top-24 rounded-xl border border-lp-border bg-lp-surface p-4">
-          <p className="mb-3 text-xs font-medium text-lp-text-tertiary">Sections</p>
-          <ul className="space-y-1.5">
-            {sortedSections.map((sec) => {
-              const status = advance.section_statuses[sec.template_id]?.status ?? 'not_started';
-              const dot = status === 'complete' ? 'bg-emerald-500' : status === 'in_progress' ? 'bg-blue-500' : status === 'needs_review' ? 'bg-amber-500' : 'bg-gray-500';
-              return (
-                <li key={sec.template_id}>
-                  <button
-                    type="button"
-                    onClick={() => toggleSection(sec.template_id)}
-                    className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-lp-text hover:bg-lp-surface-hover"
-                  >
-                    <span className={cn('h-2 w-2 shrink-0 rounded-full', dot)} />
-                    <span className="truncate">{sec.label}</span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
-          <div className="mt-4 space-y-2 border-t border-lp-border pt-4">
-            <button
-              type="button"
-              onClick={onEditSections}
-              className="flex w-full items-center gap-2 rounded-lg border border-lp-border px-3 py-2 text-sm text-lp-text hover:bg-lp-surface-hover"
-            >
-              <LayoutTemplate size={16} />
-              Edit sections
-            </button>
-            <button
-              type="button"
-              onClick={onCopyToOther}
-              className="flex w-full items-center gap-2 rounded-lg border border-lp-border px-3 py-2 text-sm text-lp-text hover:bg-lp-surface-hover"
-            >
-              <Copy size={16} />
-              Copy to other dates...
-            </button>
-          </div>
-        </div>
-      </aside>
+      {/* UX22 cleanup P1 — section-nav <ul> retired (now in LeftRail's
+          docSections variant). The two existing actions stay as a slim
+          row at the BOTTOM of the body so they're always reachable
+          without scrolling back up; the rail handles "where am I". */}
+      <div className="flex flex-wrap items-center justify-end gap-2 pt-2">
+        <button
+          type="button"
+          onClick={onEditSections}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-lp-border px-3 py-1.5 text-sm text-lp-text hover:bg-lp-surface-hover"
+        >
+          <LayoutTemplate size={16} />
+          Edit sections
+        </button>
+        <button
+          type="button"
+          onClick={onCopyToOther}
+          className="inline-flex items-center gap-1.5 rounded-lg border border-lp-border px-3 py-1.5 text-sm text-lp-text hover:bg-lp-surface-hover"
+        >
+          <Copy size={16} />
+          Copy to other dates…
+        </button>
+      </div>
     </div>
     </AdvanceDropdownZProvider>
   );

@@ -89,6 +89,14 @@ export type AdvanceShowContextBarProps = {
     venueName: string | null;
     city: string | null;
   };
+  /**
+   * UX22 cleanup P4.2 — when true (default for the read-view consumer),
+   * apply a negative top margin so the bar sits flush against the
+   * DocumentCanvas prose container's top padding. When false (edit view,
+   * which renders outside DocumentCanvas), no negative margin is applied
+   * — the parent owns top spacing.
+   */
+  flush?: boolean;
 };
 
 export function AdvanceShowContextBar({
@@ -97,6 +105,7 @@ export function AdvanceShowContextBar({
   artist,
   tour,
   show,
+  flush = true,
 }: AdvanceShowContextBarProps) {
   const [progress, setProgress] = useState<{ complete: number; total: number } | null>(null);
 
@@ -155,10 +164,7 @@ export function AdvanceShowContextBar({
         background: 'color-mix(in srgb, var(--lp-bg) 88%, transparent)',
         backdropFilter: 'blur(8px)',
         borderBottom: '1px solid var(--lp-border)',
-        // Negative top margin pulls the bar against the DocumentCanvas
-        // prose container's top padding so it sticks at the actual scroll
-        // surface edge, not 48px below it.
-        marginTop: 'calc(-1 * var(--lp-space-12, 48px))',
+        marginTop: flush ? 'calc(-1 * var(--lp-space-12, 48px))' : 0,
         marginBottom: 'var(--lp-space-4, 16px)',
         padding: 'var(--lp-space-3, 12px) var(--lp-space-4, 16px)',
       }}
