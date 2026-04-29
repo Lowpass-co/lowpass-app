@@ -28,18 +28,25 @@ export type TourHubSiblingTour = {
 };
 
 export type TourHubSetup = {
-  /** ✓ when at least one routing row exists. */
+  /** Truth source: `routing` table — ✓ when at least one row has
+      tour_id = X. */
   routing: boolean;
-  /** ✓ when at least one rider pack exists for this tour (proxy for
-      channel-list configuration — improve once channel_list_rows can
-      be joined cheaply). */
+  /** Truth source: `channel_list_rows` joined to `rider_packs` —
+      ✓ when at least one channel_list_rows row belongs to a rider
+      pack on this tour. (channel_list_rows.pack_id → rider_packs.id;
+      rider_packs.tour_id is the tour link.) */
   channelList: boolean;
-  /** ✓ when at least one tour_personnel row exists. */
+  /** Truth source: `tour_personnel` table — ✓ when at least one row
+      has tour_id = X. */
   personnel: boolean;
-  /** ✓ when at least one hotel for this tour has at least one room. */
+  /** Truth source: `hotels` ▸ `rooms` — ✓ when at least one hotel
+      for this tour has at least one room (hotels.tour_id = X plus a
+      rooms row referencing that hotel). */
   rooming: boolean;
-  /** Count of artist-level rider packs linked through to this tour
-      (applicable via shared artist_id). */
+  /** Truth source: `rider_packs` table — count of artist-level rider
+      packs (rider_packs.artist_id = this tour's artist_id). Riders
+      live at the artist level; this chip surfaces how many of those
+      apply to the current tour by shared artist. */
   ridersLinked: number;
 };
 
@@ -106,7 +113,7 @@ export async function getTourHubData(
     siblingsRes,
     routingRes,
     personnelRes,
-    riderPacksTourRes,
+    channelListRes,
     riderPacksArtistRes,
     hotelsRes,
     budgetRes,
@@ -129,10 +136,16 @@ export async function getTourHubData(
       .from('tour_personnel')
       .select('id', { count: 'exact', head: true })
       .eq('tour_id', tourId),
+    // Channel list — real existence check via the rider_packs join.
+    // channel_list_rows has no tour_id of its own; it links through
+    // pack_id → rider_packs.id. PostgREST's `!inner` embed plus a
+    // filter on the embedded table's tour_id resolves to a single
+    // join query — one round-trip, no proxy.
     supabase
-      .from('rider_packs')
-      .select('id', { count: 'exact', head: true })
-      .eq('tour_id', tourId),
+      .from('channel_list_rows')
+      .select('id, rider_packs!inner(tour_id)')
+      .eq('rider_packs.tour_id', tourId)
+      .limit(1),
     supabase
       .from('rider_packs')
       .select('id', { count: 'exact', head: true })
@@ -210,10 +223,9 @@ export async function getTourHubData(
   }
 
   const personnelCount = personnelRes.count ?? 0;
-  const ridersTourCount = riderPacksTourRes.count ?? 0;
   const ridersArtistCount = riderPacksArtistRes.count ?? 0;
   const routingCount = routingRows.length;
-  const channelListConfigured = ridersTourCount > 0;
+  const channelListConfigured = (channelListRes.data ?? []).length > 0;
 
   // Budget aggregate.
   const budgetRows = (budgetRes.data ?? []) as Array<{

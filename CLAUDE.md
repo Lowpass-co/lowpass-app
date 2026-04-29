@@ -70,6 +70,9 @@ Five canonical entity kinds: `person`, `flight`, `room`, `gear`, `show`. Each ha
 - Site admin gating: `getUserAndAdminStatus()` from `@/lib/site-admin`. Mirror the pattern used in `src/app/(app)/bugs/page.tsx` for any admin-only page.
 - Workspace scoping in SQL: always use `public.get_my_workspace_id()` and `public.is_workspace_admin()`. Don't inline `SELECT workspace_id FROM workspace_members WHERE user_id = auth.uid()`.
 
+### Tour-internal pages require `<TourBreadcrumbServer>`
+Every page under `src/app/(app)/tours/[id]/**` must mount `<TourBreadcrumbServer tourId={tourId} />` at the top of its content tree. The mount **cannot live in `tours/[id]/layout.tsx`** because `PageShell` creates a `<main overflow:auto>` scroll container — a sticky element mounted in the layout sits outside that scroll context and breaks against the TopBar's stacking. Mounted per-page (inside main), sticky `top:0` works as intended. See the Phase D commit (`e347a5f`) for the pattern. If you're adding a new tour-internal page and skip this, the user loses the `← Artist › Tour › Page` orientation strip and the `[Back to tour]` escape hatch.
+
 ### Hex+alpha for orange tints
 Right: `'#FF45001a'` or `'color-mix(in srgb, var(--lp-orange) 5.1%, transparent)'`
 Wrong: `'var(--lp-orange)' + '1a'` (concatenation doesn't resolve the var)
