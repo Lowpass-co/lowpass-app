@@ -31,11 +31,16 @@ const WORKSPACE_NAV: NavItem[] = [
   { label: 'Equipment', href: '/equipment', activeMatch: (p) => p.startsWith('/equipment') },
 ];
 
-/** Library dropdown — always reached through the Library button; never on the top bar surface. */
+/**
+ * Library dropdown — always reached through the Library button; never on
+ * the top bar surface. Phase F nav redesign: dropped Deal Memos and Gear
+ * (now exclusively artist-scoped — they live under the Artist Hub's
+ * Artist Library section). Rider Packs stays workspace-wide for now;
+ * the Artist Hub's Riders card is the primary entry point but the
+ * cross-artist index is still useful for search.
+ */
 const LIBRARY_MENU_ITEMS: NavItem[] = [
   { label: 'Rider Packs', href: '/rider-packs', activeMatch: (p) => p.startsWith('/rider-packs') },
-  { label: 'Deal Memos', href: '/library/deal-memos', activeMatch: (p) => p.startsWith('/library/deal-memos') },
-  { label: 'Gear', href: '/gear', activeMatch: (p) => p.startsWith('/gear') },
   { label: 'Templates', href: '/templates', activeMatch: (p) => p.startsWith('/templates') },
   { label: 'Performance', href: '/performance', activeMatch: (p) => p.startsWith('/performance') },
   { label: 'Venues', href: '/venues', activeMatch: (p) => p.startsWith('/venues') },
@@ -353,7 +358,10 @@ function AccountMenuContent({
 }
 
 export function TopBar({
-  logoHref = '/dashboard',
+  // Phase F nav redesign — logo routes to /artists (the new home).
+  // Post-auth landing already sends users here; clicking the logo
+  // mid-flight is the same gesture.
+  logoHref = '/artists',
   activeTourId,
   tours,
   onTourSelect,
