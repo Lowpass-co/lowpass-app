@@ -17,12 +17,12 @@ export async function getShellData(): Promise<ShellData> {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    return { user: null, tours: [] };
+    return { user: null, tours: [], isSiteAdmin: false };
   }
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('workspace_id, name, avatar_url')
+    .select('workspace_id, name, avatar_url, is_site_admin')
     .eq('id', user.id)
     .maybeSingle();
 
@@ -65,5 +65,6 @@ export async function getShellData(): Promise<ShellData> {
       avatarUrl: (profile?.avatar_url as string | null) ?? null,
     },
     tours,
+    isSiteAdmin: !!(profile?.is_site_admin as boolean | null),
   };
 }

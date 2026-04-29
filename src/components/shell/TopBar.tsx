@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
+  Bug,
   Check,
   ChevronDown,
   LogOut,
@@ -59,6 +60,9 @@ export type TopBarProps = {
   navItems?: NavItem[];
   onCommandPaletteOpen: () => void;
   user: { name: string; email: string; avatarUrl?: string | null };
+  /** Phase E nav redesign — gates the account dropdown's "Bug reports"
+   *  entry. Resolved server-side from `profiles.is_site_admin`. */
+  isSiteAdmin?: boolean;
   onSignOut?: () => void;
 };
 
@@ -274,9 +278,12 @@ function LibraryMenuList({
 function AccountMenuContent({
   onSignOut,
   onClose,
+  isSiteAdmin = false,
 }: {
   onSignOut?: () => void;
   onClose: () => void;
+  /** Phase E nav redesign — admin-gated "Bug reports" entry. */
+  isSiteAdmin?: boolean;
 }) {
   return (
     <>
@@ -302,6 +309,19 @@ function AccountMenuContent({
           Workspace
         </span>
       </Link>
+      {isSiteAdmin ? (
+        <Link
+          href="/bugs"
+          className="block px-3 py-2 text-sm"
+          style={{ color: 'var(--lp-text)' }}
+          onClick={onClose}
+        >
+          <span className="inline-flex items-center gap-2">
+            <Bug className="h-4 w-4" style={{ color: 'var(--lp-text-tertiary)' }} />
+            Bug reports
+          </span>
+        </Link>
+      ) : null}
       <div className="my-1" style={{ borderTop: '1px solid var(--lp-border)' }} />
       <div
         className="flex items-center justify-between px-3 py-1.5 text-sm"
@@ -341,6 +361,7 @@ export function TopBar({
   navItems = WORKSPACE_NAV,
   onCommandPaletteOpen,
   user,
+  isSiteAdmin = false,
   onSignOut,
 }: TopBarProps) {
   const pathname = usePathname() ?? '';
@@ -574,7 +595,7 @@ export function TopBar({
                   }}
                   role="menu"
                 >
-                  <AccountMenuContent onSignOut={onSignOut} onClose={() => setAccountOpen(false)} />
+                  <AccountMenuContent onSignOut={onSignOut} onClose={() => setAccountOpen(false)} isSiteAdmin={isSiteAdmin} />
                 </div>
               )}
             </div>
@@ -725,7 +746,7 @@ export function TopBar({
                   }}
                   role="menu"
                 >
-                  <AccountMenuContent onSignOut={onSignOut} onClose={() => setAccountOpen(false)} />
+                  <AccountMenuContent onSignOut={onSignOut} onClose={() => setAccountOpen(false)} isSiteAdmin={isSiteAdmin} />
                 </div>
               )}
             </div>

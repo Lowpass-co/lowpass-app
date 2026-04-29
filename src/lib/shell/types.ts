@@ -12,4 +12,8 @@ export type ShellTopBarTour = {
 export type ShellData = {
   user: { name: string; email: string; avatarUrl?: string | null } | null;
   tours: ShellTopBarTour[];
+  /** Phase E nav redesign — gates the account dropdown's "Bug reports"
+   *  entry. Resolved server-side via the `profiles.is_site_admin` flag
+   *  (migration 036) so non-admins never see the link. */
+  isSiteAdmin: boolean;
 };

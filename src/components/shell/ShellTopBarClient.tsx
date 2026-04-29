@@ -57,6 +57,7 @@ export function ShellTopBarClient({ shellData }: ShellTopBarClientProps) {
       onCreateTour={onCreateTour}
       onCommandPaletteOpen={onCommandPaletteOpen}
       user={user}
+      isSiteAdmin={shellData.isSiteAdmin}
       onSignOut={() => {
         void signOut();
       }}
