@@ -1,56 +1,75 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Search, Filter } from 'lucide-react';
-import { TourCard } from '@/components/tours/TourCard';
+import dynamic from 'next/dynamic';
 import { capitaliseStatus } from '@/lib/utils';
 import { useArtistTourContext } from '@/contexts/ArtistTourContext';
-import { BrandedSelect } from '@/components/ui/BrandedSelect';
+import { DataTable } from '@/components/data-table/DataTable';
+import type { ColumnDef } from '@/components/data-table/types';
 import type { Tour } from '@/types';
 
 const STATUS_OPTIONS = ['planning', 'active', 'completed', 'archived'] as const;
+const TourSlideOver = dynamic(() => import('@/components/entity/tour/TourSlideOver'), { ssr: false });
 
 export function ToursListWithFilters({ tours }: { tours: Tour[] }) {
   const { selectedArtistId, selectedArtist } = useArtistTourContext();
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterStatus, setFilterStatus] = useState<string>('');
-  const [filterArtistId, setFilterArtistId] = useState<string>('');
-
-  const distinctArtists = useMemo(() => {
-    const seen = new Set<string>();
-    const out: { id: string; name: string }[] = [];
-    for (const t of tours) {
-      const a = t.artist;
-      if (a?.id && !seen.has(a.id)) {
-        seen.add(a.id);
-        out.push({ id: a.id, name: a.name ?? '—' });
-      }
-    }
-    out.sort((a, b) => a.name.localeCompare(b.name));
-    return out;
-  }, [tours]);
+  const [selectedTourId, setSelectedTourId] = useState<string | null>(null);
 
   const scopedArtistId = selectedArtistId ?? '';
+  const rows = useMemo(() => {
+    if (!scopedArtistId) return tours;
+    return tours.filter((t) => t.artist?.id === scopedArtistId);
+  }, [tours, scopedArtistId]);
 
-  const filteredTours = useMemo(() => {
-    let list = tours;
-    const q = searchQuery.trim().toLowerCase();
-    if (q) {
-      list = list.filter(
-        (t) =>
-          t.name.toLowerCase().includes(q) ||
-          (t.artist?.name ?? '').toLowerCase().includes(q)
-      );
+  const yearOptions = useMemo(() => {
+    const years = new Set<string>();
+    for (const t of tours) {
+      if (t.start_date) years.add(String(new Date(t.start_date).getFullYear()));
     }
-    if (filterStatus) {
-      list = list.filter((t) => t.status === filterStatus);
-    }
-    const artistKey = scopedArtistId || filterArtistId;
-    if (artistKey) {
-      list = list.filter((t) => t.artist?.id === artistKey);
-    }
-    return list;
-  }, [tours, searchQuery, filterStatus, filterArtistId, scopedArtistId]);
+    return [...years]
+      .filter((y) => y !== 'NaN')
+      .sort((a, b) => Number(b) - Number(a))
+      .map((y) => ({ value: y, label: y }));
+  }, [tours]);
+
+  const columns = useMemo<ColumnDef<Tour>[]>(
+    () => [
+      { id: 'name', header: 'Tour name', accessor: 'name', sortable: true, frozen: true },
+      {
+        id: 'status',
+        header: 'Status',
+        accessor: 'status',
+        sortable: true,
+        filter: { kind: 'select', options: STATUS_OPTIONS.map((s) => ({ value: s, label: capitaliseStatus(s) })) },
+        cell: (value) => (
+          <span className="inline-flex rounded-full border border-lp-border px-2 py-0.5 text-xs capitalize">
+            {String(value)}
+          </span>
+        ),
+      },
+      { id: 'start', header: 'Start', accessor: 'start_date', sortable: true },
+      { id: 'end', header: 'End', accessor: 'end_date', sortable: true },
+      {
+        id: 'shows',
+        header: '# shows',
+        accessor: () => 0,
+        align: 'right',
+      },
+      {
+        id: 'personnel',
+        header: '# personnel',
+        accessor: (t) => Number(t.principal_count ?? 0) + Number(t.band_count ?? 0) + Number(t.crew_count ?? 0),
+        align: 'right',
+      },
+      {
+        id: 'year',
+        header: 'Year',
+        accessor: (t) => String(new Date(t.start_date).getFullYear()),
+        filter: { kind: 'select', options: yearOptions },
+      },
+    ],
+    [yearOptions]
+  );
 
   return (
     <div className="space-y-4">
@@ -61,60 +80,16 @@ export function ToursListWithFilters({ tours }: { tours: Tour[] }) {
           only. Clear the header artist scope to see every tour.
         </p>
       )}
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="relative flex-1 min-w-[200px] max-w-sm">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-lp-text-tertiary" />
-          <input
-            type="search"
-            placeholder="Search tours or artist..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full rounded-lg border border-lp-border bg-lp-bg py-2 pl-9 pr-3 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:outline-none focus:ring-2 focus:ring-lp-orange/50"
-            aria-label="Search tours"
-          />
-        </div>
-        <div className="flex items-center gap-2">
-          <Filter className="h-4 w-4 text-lp-text-tertiary" />
-          <BrandedSelect
-            value={filterStatus}
-            onChange={setFilterStatus}
-            options={[
-              { value: '', label: 'All statuses' },
-              ...STATUS_OPTIONS.map((s) => ({ value: s, label: capitaliseStatus(s) })),
-            ]}
-            ariaLabel="Filter by status"
-          />
-          {scopedArtistId ? (
-            <div
-              className="flex min-w-[140px] items-center rounded-lg border border-lp-orange/40 bg-lp-orange/5 px-3 py-2 text-sm font-medium text-lp-text"
-              title="Clear the header artist scope to see all tours"
-            >
-              <span className="truncate">{selectedArtist?.name ?? 'Artist scope'}</span>
-            </div>
-          ) : (
-            <BrandedSelect
-              value={filterArtistId}
-              onChange={setFilterArtistId}
-              options={[
-                { value: '', label: 'All artists' },
-                ...distinctArtists.map((a) => ({ value: a.id, label: a.name })),
-              ]}
-              ariaLabel="Filter by artist"
-              minWidth={140}
-            />
-          )}
-        </div>
-      </div>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {filteredTours.map((tour, index) => (
-          <TourCard key={tour.id} tour={tour} index={index} />
-        ))}
-      </div>
-      {filteredTours.length === 0 && (
-        <p className="py-8 text-center text-sm text-lp-text-tertiary">
-          No tours match your search or filters.
-        </p>
-      )}
+      <DataTable<Tour>
+        rows={rows}
+        columns={columns}
+        rowKey={(row) => row.id}
+        searchPlaceholder="Search tours or artist…"
+        searchAccessor={(row) => `${row.name} ${(row.artist?.name ?? '')} ${(row.status ?? '')}`}
+        onRowClick={(row) => setSelectedTourId(row.id)}
+        emptyState="No tours match your search or filters."
+      />
+      {selectedTourId ? <TourSlideOver id={selectedTourId} onClose={() => setSelectedTourId(null)} /> : null}
     </div>
   );
 }
