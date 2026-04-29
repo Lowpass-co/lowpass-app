@@ -9,6 +9,7 @@ import { spreadsheetAppPageShell } from '@/components/shell/app-page-shells';
 import { getRoomingSheetSections } from '@/lib/shell/rails/roomingSheetSections';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { RoomingView } from '@/components/rooming/RoomingView';
+import { TourBreadcrumbServer } from '@/components/tours/TourBreadcrumbServer';
 
 export default async function TourRoomingPage({
   params,
@@ -100,6 +101,7 @@ export default async function TourRoomingPage({
 
   return spreadsheetAppPageShell(
     <div className="mx-auto max-w-[1600px] space-y-4 pb-12">
+      <TourBreadcrumbServer tourId={tourId} />
       <RoomingView
         tourId={tour.id}
         tourName={tour.name}

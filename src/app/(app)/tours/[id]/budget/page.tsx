@@ -5,6 +5,7 @@ import type { Metadata } from 'next';
 import { topBarOnlyAppPageShell } from '@/components/shell/app-page-shells';
 import { TourBudgetRebuildClient } from '@/components/budget/TourBudgetRebuildClient';
 import { MobileBudgetBanner } from '@/components/mobile/MobileBudgetBanner';
+import { TourBreadcrumbServer } from '@/components/tours/TourBreadcrumbServer';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 
 export async function generateMetadata({
@@ -52,6 +53,7 @@ export default async function TourBudgetPage({
   // topBarOnlyAppPageShell with spreadsheetAppPageShell + a section variant.
   return topBarOnlyAppPageShell(
     <div className="flex min-h-0 flex-1 flex-col pb-24">
+      <TourBreadcrumbServer tourId={id} />
       <MobileBudgetBanner />
       <TourBudgetRebuildClient
         initialLines={lineRows ?? []}

@@ -4,12 +4,11 @@
    Edit tour details (name, dates, continent, etc.).
    ============================================ */
 
-import Link from 'next/link';
 import { listAppPageShell } from '@/components/shell/app-page-shells';
 import { notFound } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
-import { ArrowLeft } from 'lucide-react';
 import { TourEditForm } from '@/components/tours/TourEditForm';
+import { TourBreadcrumbServer } from '@/components/tours/TourBreadcrumbServer';
 
 export default async function TourEditPage({
   params,
@@ -33,15 +32,7 @@ export default async function TourEditPage({
 
   return listAppPageShell(
     <div className="mx-auto max-w-xl space-y-6">
-      <div className="flex items-center gap-4">
-        <Link
-          href={`/tours/${id}`}
-          className="flex items-center gap-1 text-sm text-lp-text-secondary hover:text-lp-text"
-        >
-          <ArrowLeft size={16} />
-          Back to tour
-        </Link>
-      </div>
+      <TourBreadcrumbServer tourId={id} />
       <div>
         <h1 className="text-2xl font-bold text-lp-text">Edit tour</h1>
         <p className="mt-1 text-sm text-lp-text-secondary">

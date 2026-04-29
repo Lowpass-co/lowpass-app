@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import { listAppPageShell } from '@/components/shell/app-page-shells';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { RiderPacksTourClient, riderPackRowsFromServer } from '@/components/tours/RiderPacksTourClient';
+import { TourBreadcrumbServer } from '@/components/tours/TourBreadcrumbServer';
 
 export const dynamic = 'force-dynamic';
 
@@ -52,6 +53,7 @@ export default async function TourRiderPacksPage({ params }: { params: Promise<{
 
   return listAppPageShell(
     <div className="mx-auto w-full px-4 pt-6">
+      <TourBreadcrumbServer tourId={tour.id} />
       <RiderPacksTourClient tourId={tour.id} tourName={tour.name ?? 'Tour'} rows={rows} />
     </div>
   );

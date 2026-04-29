@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 
 import { topBarOnlyAppPageShell } from '@/components/shell/app-page-shells';
 import { ChannelListTourSheet } from '@/components/channel-list/ChannelListTourSheet';
+import { TourBreadcrumbServer } from '@/components/tours/TourBreadcrumbServer';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { formatResolveError, resolvePack } from '@/lib/rider-packs/resolve';
 import type { RiderPack, ResolvedSection } from '@/lib/rider-packs/types';
@@ -52,6 +53,7 @@ export default async function TourChannelListPage({
 
   return topBarOnlyAppPageShell(
     <div className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col space-y-4 px-4 pb-16 pt-6 print:max-w-none print:pb-8">
+      <TourBreadcrumbServer tourId={tour.id} />
       <header className="flex flex-wrap items-end justify-between gap-3 print:hidden">
         <div>
           <h1 className="text-xl font-semibold tracking-tight text-lp-text">Channel list</h1>

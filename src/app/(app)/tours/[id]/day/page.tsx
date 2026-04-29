@@ -8,6 +8,7 @@ import { notFound } from 'next/navigation';
 import { listAppPageShell } from '@/components/shell/app-page-shells';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { DayViewTimeline } from '@/components/day-view/DayViewTimeline';
+import { TourBreadcrumbServer } from '@/components/tours/TourBreadcrumbServer';
 import type { Tour } from '@/types';
 import type { RoutingDate } from '@/types';
 
@@ -43,6 +44,7 @@ export default async function DayViewPage({
 
   return listAppPageShell(
     <div className="mx-auto max-w-5xl space-y-4 pb-12">
+      <TourBreadcrumbServer tourId={tourId} />
       <DayViewTimeline tour={tour as Tour} routingDates={routing} />
     </div>
   );

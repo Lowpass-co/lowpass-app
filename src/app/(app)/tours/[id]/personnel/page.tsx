@@ -8,6 +8,7 @@ import { notFound } from 'next/navigation';
 import { listAppPageShell } from '@/components/shell/app-page-shells';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { TourPersonnelClient } from '@/components/personnel/TourPersonnelClient';
+import { TourBreadcrumbServer } from '@/components/tours/TourBreadcrumbServer';
 import type { Personnel, PersonnelRate } from '@/types';
 
 export const dynamic = 'force-dynamic';
@@ -65,6 +66,7 @@ export default async function TourPersonnelPage({ params }: { params: Promise<{ 
 
   return listAppPageShell(
     <div className="mx-auto max-w-6xl space-y-6 pb-12">
+      <TourBreadcrumbServer tourId={tourId} />
       <TourPersonnelClient
         tourId={tour.id}
         tourName={tour.name ?? 'Tour'}

@@ -16,6 +16,7 @@
 
 import { AdvanceShowReadView } from '@/components/advance/AdvanceShowReadView';
 import { AdvanceShowContextBar } from '@/components/advance/AdvanceShowContextBar';
+import { TourBreadcrumbServer } from '@/components/tours/TourBreadcrumbServer';
 import {
   docDaysAppPageShell,
   documentSectionsAppPageShell,
@@ -154,6 +155,7 @@ export default async function AdvanceShowPage({
 
     return documentSectionsAppPageShell(
       <div className="mx-auto w-full max-w-[1400px] space-y-4 px-2 pb-12">
+        <TourBreadcrumbServer tourId={tourId} />
         {contextBar}
         <AdvanceSectionBuilderDynamic tourId={tourId} routingId={routingId} />
       </div>,
@@ -171,16 +173,19 @@ export default async function AdvanceShowPage({
   });
 
   return docDaysAppPageShell(
-    <DocumentCanvas
-      mode="prose"
-      sections={ADVANCE_SECTIONS}
-      editable={false}
-      maxHeight="calc(100vh - var(--lp-page-header-h, 96px))"
-      surface
-    >
-      {contextBar}
-      <AdvanceShowReadView tourId={tourId} routingId={routingId} />
-    </DocumentCanvas>,
+    <>
+      <TourBreadcrumbServer tourId={tourId} />
+      <DocumentCanvas
+        mode="prose"
+        sections={ADVANCE_SECTIONS}
+        editable={false}
+        maxHeight="calc(100vh - var(--lp-page-header-h, 96px))"
+        surface
+      >
+        {contextBar}
+        <AdvanceShowReadView tourId={tourId} routingId={routingId} />
+      </DocumentCanvas>
+    </>,
     dayRail,
   );
 }

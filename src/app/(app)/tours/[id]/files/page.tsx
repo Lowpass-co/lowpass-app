@@ -3,6 +3,7 @@ import { listAppPageShell } from '@/components/shell/app-page-shells';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { buildTourScopedFileVms } from '@/lib/tour-files/buildTourFileVms';
 import { TourFilesClient } from '@/components/tours/TourFilesClient';
+import { TourBreadcrumbServer } from '@/components/tours/TourBreadcrumbServer';
 
 export const dynamic = 'force-dynamic';
 
@@ -30,6 +31,7 @@ export default async function TourFilesPage({ params }: { params: Promise<{ id: 
 
   return listAppPageShell(
     <div className="mx-auto w-full px-4 pt-6">
+      <TourBreadcrumbServer tourId={tourId} />
       <TourFilesClient initial={files} />
     </div>
   );

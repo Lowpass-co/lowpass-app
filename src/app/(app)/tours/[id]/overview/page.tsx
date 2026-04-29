@@ -9,6 +9,7 @@ import { listAppPageShell } from '@/components/shell/app-page-shells';
 import type { Metadata } from 'next';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { TourOverviewClient } from '@/components/tour-overview/TourOverviewClient';
+import { TourBreadcrumbServer } from '@/components/tours/TourBreadcrumbServer';
 import {
   computeBudgetData,
   computeAdvanceData,
@@ -139,15 +140,18 @@ export default async function TourOverviewPage({
   const currency = (tour.currency as string) || 'GBP';
 
   return listAppPageShell(
-    <TourOverviewClient
-      tourId={id}
-      artistName={artistName}
-      tourName={tour.name as string}
-      startDate={(tour.start_date as string) ?? ''}
-      endDate={(tour.end_date as string) ?? ''}
-      status={(tour.status as string) ?? 'planning'}
-      currency={currency}
-      overview={overview}
-    />
+    <>
+      <TourBreadcrumbServer tourId={id} />
+      <TourOverviewClient
+        tourId={id}
+        artistName={artistName}
+        tourName={tour.name as string}
+        startDate={(tour.start_date as string) ?? ''}
+        endDate={(tour.end_date as string) ?? ''}
+        status={(tour.status as string) ?? 'planning'}
+        currency={currency}
+        overview={overview}
+      />
+    </>
   );
 }

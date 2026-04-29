@@ -17,6 +17,7 @@ import { builderAppPageShell, topBarOnlyAppPageShell } from '@/components/shell/
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { PackEditor } from '@/components/rider-pack/PackEditor';
 import { DocumentCanvas } from '@/components/document/DocumentCanvas';
+import { TourBreadcrumbServer } from '@/components/tours/TourBreadcrumbServer';
 
 export const dynamic = 'force-dynamic';
 
@@ -50,6 +51,7 @@ export default async function TourRiderPackEditorPage({
 
   return builderAppPageShell(
     <div className="flex min-h-0 flex-1 flex-col">
+      <TourBreadcrumbServer tourId={tourId} />
       <div className="flex items-center gap-2 border-b border-lp-border bg-lp-surface px-6 py-3 text-sm">
         <Link href={`/tours/${tourId}/rider-packs`} className="text-lp-text-secondary hover:text-lp-text">
           ← Rider packs

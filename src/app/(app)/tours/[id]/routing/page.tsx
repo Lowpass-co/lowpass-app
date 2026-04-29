@@ -13,6 +13,7 @@ import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { RoutingEditor } from '@/components/routing/RoutingEditor';
 import { RoutingPageShell } from '@/components/routing/RoutingPageShell';
 import { RoutingRightRail } from '@/components/routing/RoutingRightRail';
+import { TourBreadcrumbServer } from '@/components/tours/TourBreadcrumbServer';
 
 export default async function RoutingPage({
   params,
@@ -37,18 +38,21 @@ export default async function RoutingPage({
   const dayRail = await getDocDaysLeftRail(id);
 
   return docDaysAppPageShell(
-    <RoutingPageShell
-      title="Routing"
-      subtitle={subtitle}
-      rightRail={<RoutingRightRail tourId={id} />}
-    >
-      <RoutingEditor
-        tourId={id}
-        startDate={tour.start_date ?? ''}
-        endDate={tour.end_date ?? ''}
-        initialCustomDayTypes={tour.custom_day_types ?? []}
-      />
-    </RoutingPageShell>,
+    <>
+      <TourBreadcrumbServer tourId={id} />
+      <RoutingPageShell
+        title="Routing"
+        subtitle={subtitle}
+        rightRail={<RoutingRightRail tourId={id} />}
+      >
+        <RoutingEditor
+          tourId={id}
+          startDate={tour.start_date ?? ''}
+          endDate={tour.end_date ?? ''}
+          initialCustomDayTypes={tour.custom_day_types ?? []}
+        />
+      </RoutingPageShell>
+    </>,
     dayRail
   );
 }

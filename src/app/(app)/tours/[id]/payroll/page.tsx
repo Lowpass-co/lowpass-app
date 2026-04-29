@@ -8,6 +8,7 @@ import { notFound } from 'next/navigation';
 import { listAppPageShell } from '@/components/shell/app-page-shells';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { PayrollView } from '@/components/payroll/PayrollView';
+import { TourBreadcrumbServer } from '@/components/tours/TourBreadcrumbServer';
 
 export default async function PayrollPage({
   params,
@@ -56,6 +57,7 @@ export default async function PayrollPage({
 
   return listAppPageShell(
     <div className="mx-auto max-w-[1400px] space-y-4 pb-12">
+      <TourBreadcrumbServer tourId={tourId} />
       <PayrollView
         tourId={tour.id}
         tourName={tour.name}

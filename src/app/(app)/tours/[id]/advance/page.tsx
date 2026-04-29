@@ -11,13 +11,12 @@
    was redundant.
    ============================================ */
 
-import Link from 'next/link';
 import { docDaysAppPageShell } from '@/components/shell/app-page-shells';
 import { getDocDaysLeftRail } from '@/lib/shell/rails/docDaysForTour';
 import { notFound } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { AdvanceOverview } from './AdvanceOverview';
-import { ChevronRight } from 'lucide-react';
+import { TourBreadcrumbServer } from '@/components/tours/TourBreadcrumbServer';
 
 export default async function TourAdvancePage({
   params,
@@ -40,22 +39,7 @@ export default async function TourAdvancePage({
 
   return docDaysAppPageShell(
     <div className="mx-auto max-w-6xl space-y-6">
-      {/* Breadcrumbs */}
-      <nav className="flex items-center gap-2 text-sm text-lp-text-secondary">
-        <Link href="/dashboard" className="hover:text-lp-text">
-          Dashboard
-        </Link>
-        <ChevronRight size={14} className="text-lp-text-tertiary" />
-        <Link href="/tours" className="hover:text-lp-text">
-          Tours
-        </Link>
-        <ChevronRight size={14} className="text-lp-text-tertiary" />
-        <Link href={`/tours/${id}`} className="hover:text-lp-text">
-          {tour.name}
-        </Link>
-        <ChevronRight size={14} className="text-lp-text-tertiary" />
-        <span className="text-lp-text">Advance</span>
-      </nav>
+      <TourBreadcrumbServer tourId={id} />
 
       {/* Page header */}
       <div>
