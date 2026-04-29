@@ -1,14 +1,15 @@
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Plus, Trash2, UserPlus, X } from 'lucide-react';
+import { Plus, UserPlus, X } from 'lucide-react';
 import type { Personnel, PersonnelRate } from '@/types';
-import { cn } from '@/lib/utils';
 import { DeleteConfirmationModal } from '@/components/ui/DeleteConfirmationModal';
 import { useToast } from '@/components/ui/Toast';
-import { TourPersonnelDetailSlideOver } from './TourPersonnelDetailSlideOver';
+import { DataTable } from '@/components/data-table/DataTable';
+import type { ColumnDef } from '@/components/data-table/types';
+import { useEntityRouting } from '@/components/entity/EntityRoutingContext';
 
 export function TourPersonnelClient({
   tourId,
@@ -30,13 +31,11 @@ export function TourPersonnelClient({
   const [pickerOpen, setPickerOpen] = useState(false);
   const [addingId, setAddingId] = useState<string | null>(null);
   const [removeOpen, setRemoveOpen] = useState<PersonnelRate | null>(null);
-  const [removingId, setRemovingId] = useState<string | null>(null);
-  const [detailRate, setDetailRate] = useState<PersonnelRate | null>(null);
-  const [detailOpen, setDetailOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
-  const selectAllRef = useRef<HTMLInputElement>(null);
+  const [bulkRoleSaving, setBulkRoleSaving] = useState(false);
+  const entityRouting = useEntityRouting();
 
   useEffect(() => {
     setRates(initialRates);
@@ -69,26 +68,6 @@ export function TourPersonnelClient({
     () => roster.filter((p) => !assignedRosterIds.has(p.id)),
     [roster, assignedRosterIds]
   );
-
-  const allRatesSelected = rates.length > 0 && rates.every((r) => selectedIds.has(r.id));
-  const someRatesSelected = rates.some((r) => selectedIds.has(r.id));
-
-  useEffect(() => {
-    const el = selectAllRef.current;
-    if (el) el.indeterminate = someRatesSelected && !allRatesSelected;
-  }, [someRatesSelected, allRatesSelected]);
-
-  const toggleSelect = (id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const selectAllRates = () => setSelectedIds(new Set(rates.map((r) => r.id)));
-  const clearSelection = () => setSelectedIds(new Set());
 
   const addFromRoster = async (personnelId: string) => {
     setAddingId(personnelId);
@@ -127,10 +106,8 @@ export function TourPersonnelClient({
       if (!res.ok) throw new Error(data.error ?? 'Remove failed');
       showToast('Removed from tour');
       setRemoveOpen(null);
-      setRemovingId(id);
       setTimeout(() => {
         setRates((prev) => prev.filter((r) => r.id !== id));
-        setRemovingId(null);
         setSelectedIds((prev) => {
           const next = new Set(prev);
           next.delete(id);
@@ -157,10 +134,6 @@ export function TourPersonnelClient({
       if (!res.ok) throw new Error(data.error ?? 'Remove failed');
       const gone = new Set((data.deleted_ids as string[] | undefined) ?? ids);
       setRates((prev) => prev.filter((r) => !gone.has(r.id)));
-      if (detailRate && gone.has(detailRate.id)) {
-        setDetailOpen(false);
-        setDetailRate(null);
-      }
       setSelectedIds((prev) => {
         const next = new Set(prev);
         gone.forEach((id) => next.delete(id));
@@ -174,6 +147,154 @@ export function TourPersonnelClient({
       setBulkDeleting(false);
     }
   };
+
+  const bulkAssignRole = async () => {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    const nextRole = window.prompt('Assign role to selected people', '')?.trim();
+    if (!nextRole) return;
+    setBulkRoleSaving(true);
+    try {
+      await Promise.all(
+        ids.map(async (id) => {
+          const res = await fetch('/api/budget/personnel-rates', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id, role: nextRole }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error ?? 'Role update failed');
+          return data as PersonnelRate;
+        })
+      );
+      setRates((prev) => prev.map((r) => (selectedIds.has(r.id) ? { ...r, role: nextRole } : r)));
+      showToast(`Assigned role "${nextRole}"`);
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Bulk role assignment failed', 'error');
+    } finally {
+      setBulkRoleSaving(false);
+    }
+  };
+
+  const rosterMap = useMemo(() => {
+    const m = new Map<string, Personnel>();
+    for (const p of roster) m.set(p.id, p);
+    return m;
+  }, [roster]);
+
+  type TableRow = PersonnelRate & { email: string | null; phone: string | null; status: 'active' | 'inactive' };
+  const rows: TableRow[] = useMemo(
+    () =>
+      rates.map((r) => {
+        const linked = r.roster_personnel_id ? rosterMap.get(r.roster_personnel_id) : undefined;
+        return {
+          ...r,
+          email: linked?.email ?? null,
+          phone: linked?.phone ?? null,
+          status: linked ? 'active' : 'inactive',
+        };
+      }),
+    [rates, rosterMap]
+  );
+
+  const roleOptions = useMemo(
+    () =>
+      Array.from(new Set(rows.map((r) => r.role).filter((v): v is string => !!v))).map((value) => ({
+        value,
+        label: value,
+      })),
+    [rows]
+  );
+
+  const columns = useMemo<ColumnDef<TableRow>[]>(
+    () => [
+      {
+        id: 'name',
+        header: 'Name',
+        accessor: 'person_name',
+        sortable: true,
+        frozen: true,
+      },
+      {
+        id: 'role',
+        header: 'Role',
+        accessor: (r) => r.role ?? '',
+        sortable: true,
+        filter: { kind: 'select', options: roleOptions },
+        cell: (value) => String(value || '—'),
+      },
+      {
+        id: 'employment',
+        header: 'Employment type',
+        accessor: 'person_type',
+        sortable: true,
+        filter: {
+          kind: 'select',
+          options: [
+            { value: 'principal', label: 'principal' },
+            { value: 'band', label: 'band' },
+            { value: 'crew', label: 'crew' },
+          ],
+        },
+      },
+      {
+        id: 'rate',
+        header: 'Rate',
+        accessor: (r) => r.show_rate,
+        sortable: true,
+        align: 'right',
+        cell: (_, r) => `${currency} ${Number(r.show_rate ?? 0).toLocaleString()}`,
+      },
+      {
+        id: 'email',
+        header: 'Email',
+        accessor: (r) => r.email ?? '',
+        cell: (value) => String(value || '—'),
+      },
+      {
+        id: 'phone',
+        header: 'Phone',
+        accessor: (r) => r.phone ?? '',
+        cell: (value) => String(value || '—'),
+      },
+      {
+        id: 'status',
+        header: 'Status',
+        accessor: 'status',
+        filter: {
+          kind: 'select',
+          options: [
+            { value: 'active', label: 'active' },
+            { value: 'inactive', label: 'inactive' },
+          ],
+        },
+        cell: (value) => (
+          <span className="inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize border border-lp-border">
+            {String(value)}
+          </span>
+        ),
+      },
+      {
+        id: 'remove',
+        header: '',
+        accessor: (r) => r.id,
+        align: 'right',
+        cell: (_, r) => (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setRemoveOpen(r);
+            }}
+            className="rounded border border-lp-border px-2 py-1 text-xs hover:bg-lp-bg-tertiary"
+          >
+            Remove
+          </button>
+        ),
+      },
+    ],
+    [currency, roleOptions]
+  );
 
   return (
     <>
@@ -209,44 +330,43 @@ export function TourPersonnelClient({
         </div>
       </div>
 
-      {rates.length > 0 && (
-        <div className="flex flex-wrap items-center gap-3 rounded-xl border border-lp-border bg-lp-surface px-3 py-2.5">
-          <label className="flex cursor-pointer items-center gap-2 text-sm text-lp-text">
-            <input
-              ref={selectAllRef}
-              type="checkbox"
-              checked={allRatesSelected}
-              onChange={(e) => (e.target.checked ? selectAllRates() : clearSelection())}
-              className="lp-checkbox"
-            />
-            <span>
-              Select all<span className="ml-1 text-lp-text-secondary">({rates.length})</span>
-            </span>
-          </label>
-          {selectedIds.size > 0 ? (
-            <>
-              <span className="text-xs text-lp-text-secondary">{selectedIds.size} selected</span>
-              <button
-                type="button"
-                onClick={() => setBulkDeleteOpen(true)}
-                className="rounded-lg border border-red-500/50 bg-red-500/10 px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-500/20 dark:text-red-300 dark:hover:bg-red-500/15"
-              >
-                Remove from tour
-              </button>
-              <button
-                type="button"
-                onClick={clearSelection}
-                className="text-xs font-medium text-lp-text-tertiary hover:text-lp-text"
-              >
-                Clear
-              </button>
-            </>
-          ) : null}
-        </div>
-      )}
-
-      <div className="overflow-hidden rounded-xl border border-lp-border bg-lp-surface">
-        {rates.length === 0 ? (
+      <DataTable<TableRow>
+        rows={rows}
+        columns={columns}
+        rowKey={(row) => row.id}
+        searchable
+        searchPlaceholder="Search people…"
+        selectable
+        selectedIds={[...selectedIds]}
+        onSelectionChange={(ids) => setSelectedIds(new Set(ids))}
+        selectionActions={
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void bulkAssignRole()}
+              disabled={selectedIds.size === 0 || bulkRoleSaving}
+              className="rounded border border-lp-border px-2 py-1 text-xs hover:bg-lp-bg-tertiary disabled:opacity-50"
+            >
+              {bulkRoleSaving ? 'Assigning…' : 'Assign role to selection'}
+            </button>
+            <button
+              type="button"
+              onClick={() => setBulkDeleteOpen(true)}
+              disabled={selectedIds.size === 0 || bulkDeleting}
+              className="rounded border border-red-500/50 px-2 py-1 text-xs text-red-600 hover:bg-red-500/10 disabled:opacity-50"
+            >
+              Remove from tour
+            </button>
+          </div>
+        }
+        onRowClick={(row) => {
+          if (row.roster_personnel_id) {
+            entityRouting.open({ kind: 'person', id: row.roster_personnel_id });
+            return;
+          }
+          showToast('This manual row is not linked to a person record yet.', 'error');
+        }}
+        emptyState={
           <div className="px-4 py-14 text-center text-sm text-lp-text-secondary">
             No one on this tour yet. Add people from your workspace roster, or add ad-hoc names in{' '}
             <Link href={`/budget?tour_id=${tourId}`} className="text-lp-orange hover:underline">
@@ -254,61 +374,8 @@ export function TourPersonnelClient({
             </Link>
             .
           </div>
-        ) : (
-          <ul className="divide-y divide-lp-border">
-            {rates.map((r) => (
-              <li
-                key={r.id}
-                className={cn(
-                  'group flex cursor-pointer items-center gap-3 px-4 py-3 transition-colors hover:bg-lp-surface-hover/80',
-                  removingId === r.id && 'opacity-40'
-                )}
-                onClick={() => {
-                  setDetailRate(r);
-                  setDetailOpen(true);
-                }}
-              >
-                <input
-                  type="checkbox"
-                  checked={selectedIds.has(r.id)}
-                  onChange={() => toggleSelect(r.id)}
-                  onClick={(e) => e.stopPropagation()}
-                  className="lp-checkbox"
-                  aria-label={`Select ${r.person_name}`}
-                />
-                <div className="h-10 w-0.5 shrink-0 rounded-full bg-lp-border group-hover:bg-lp-orange/60" aria-hidden />
-                <div className="min-w-0 flex-1">
-                  <p className="font-medium text-lp-text">{r.person_name}</p>
-                  <p className="mt-0.5 text-xs text-lp-text-secondary">
-                    {(r.role || '—') + ' · '}
-                    <span className="capitalize">{r.person_type}</span>
-                    {' · '}
-                    <span className="tabular-nums">
-                      {r.show_rate} / {r.off_rate} / {r.per_diem}
-                    </span>
-                    {r.roster_personnel_id ? (
-                      <span className="text-lp-text-tertiary"> · Roster</span>
-                    ) : (
-                      <span className="text-lp-text-tertiary"> · Manual</span>
-                    )}
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setRemoveOpen(r);
-                  }}
-                  className="shrink-0 rounded-lg p-2 text-lp-text-tertiary hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400"
-                  title="Remove from tour"
-                >
-                  <Trash2 size={16} />
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </div>
+        }
+      />
 
       <p className="text-xs text-lp-text-tertiary">
         Full workspace profiles live under{' '}
@@ -361,19 +428,6 @@ export function TourPersonnelClient({
           </div>
         </>
       )}
-
-      <TourPersonnelDetailSlideOver
-        open={detailOpen}
-        rate={detailRate}
-        tourId={tourId}
-        onClose={() => {
-          setDetailOpen(false);
-          setDetailRate(null);
-        }}
-        onSaved={(updated) => {
-          setRates((prev) => prev.map((x) => (x.id === updated.id ? updated : x)));
-        }}
-      />
 
       <DeleteConfirmationModal
         open={!!removeOpen}
