@@ -3,25 +3,39 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
   Check,
   ChevronDown,
   LogOut,
-  MoreHorizontal,
   Search,
   Settings,
   User,
   Users,
 } from 'lucide-react';
 
-const DEFAULT_NAV: Array<{
+type NavItem = {
   label: string;
   href: string;
   activeMatch: (pathname: string) => boolean;
-}> = [
-  { label: 'Library', href: '/library', activeMatch: (p) => p.startsWith('/library') },
+};
+
+/** Workspace-level destinations — top-level on desktop, fold into Library on narrow viewports. */
+const WORKSPACE_NAV: NavItem[] = [
+  { label: 'Dashboard', href: '/dashboard', activeMatch: (p) => p === '/dashboard' || p === '/' },
+  { label: 'Personnel', href: '/personnel', activeMatch: (p) => p.startsWith('/personnel') },
+  { label: 'Calendar', href: '/calendar', activeMatch: (p) => p.startsWith('/calendar') },
+  { label: 'Equipment', href: '/equipment', activeMatch: (p) => p.startsWith('/equipment') },
+];
+
+/** Library dropdown — always reached through the Library button; never on the top bar surface. */
+const LIBRARY_MENU_ITEMS: NavItem[] = [
+  { label: 'Rider Packs', href: '/rider-packs', activeMatch: (p) => p.startsWith('/rider-packs') },
+  { label: 'Deal Memos', href: '/library/deal-memos', activeMatch: (p) => p.startsWith('/library/deal-memos') },
+  { label: 'Gear', href: '/gear', activeMatch: (p) => p.startsWith('/gear') },
   { label: 'Templates', href: '/templates', activeMatch: (p) => p.startsWith('/templates') },
+  { label: 'Performance', href: '/performance', activeMatch: (p) => p.startsWith('/performance') },
+  { label: 'Venues', href: '/venues', activeMatch: (p) => p.startsWith('/venues') },
 ];
 
 export type TopBarProps = {
@@ -30,7 +44,8 @@ export type TopBarProps = {
   tours: Array<{ id: string; name: string; status: 'active' | 'archived' }>;
   onTourSelect: (id: string) => void;
   onCreateTour: () => void;
-  navItems?: Array<{ label: string; href: string; activeMatch: (pathname: string) => boolean }>;
+  /** Optional override; defaults to the WORKSPACE_NAV constant above. */
+  navItems?: NavItem[];
   onCommandPaletteOpen: () => void;
   user: { name: string; email: string; avatarUrl?: string | null };
   onSignOut?: () => void;
@@ -120,6 +135,50 @@ function TourMenuList({
   );
 }
 
+/**
+ * Library dropdown contents. Renders an optional "folded workspace items"
+ * group above a divider, then the canonical 6 library items.
+ */
+function LibraryMenuList({
+  foldedItems,
+  pathname,
+  onClose,
+}: {
+  foldedItems: NavItem[];
+  pathname: string;
+  onClose: () => void;
+}) {
+  const renderItem = (item: NavItem) => {
+    const active = item.activeMatch(pathname);
+    return (
+      <Link
+        key={item.href}
+        href={item.href}
+        className="block px-3 py-2 text-sm"
+        style={{
+          color: active ? 'var(--lp-text)' : 'var(--lp-text-secondary)',
+          background: active ? 'var(--lp-surface-hover)' : 'transparent',
+        }}
+        onClick={onClose}
+      >
+        {item.label}
+      </Link>
+    );
+  };
+
+  return (
+    <>
+      {foldedItems.length > 0 ? (
+        <>
+          {foldedItems.map(renderItem)}
+          <div className="my-1" style={{ borderTop: '1px solid var(--lp-border)' }} />
+        </>
+      ) : null}
+      {LIBRARY_MENU_ITEMS.map(renderItem)}
+    </>
+  );
+}
+
 function AccountMenuContent({
   onSignOut,
   onClose,
@@ -175,7 +234,7 @@ export function TopBar({
   tours,
   onTourSelect,
   onCreateTour,
-  navItems = DEFAULT_NAV,
+  navItems = WORKSPACE_NAV,
   onCommandPaletteOpen,
   user,
   onSignOut,
@@ -183,27 +242,57 @@ export function TopBar({
   const pathname = usePathname() ?? '';
   const viewportW = useViewportWidth();
   const isMobile = viewportW !== undefined && viewportW < 640;
+  const isCompact = viewportW !== undefined && viewportW < 1024;
   const tourBtnId = useId();
 
   const [tourOpen, setTourOpen] = useState(false);
   const [accountOpen, setAccountOpen] = useState(false);
-  const [moreOpen, setMoreOpen] = useState(false);
+  const [libraryOpen, setLibraryOpen] = useState(false);
   const tourRef = useRef<HTMLDivElement | null>(null);
   const accountRef = useRef<HTMLDivElement | null>(null);
-  const moreRef = useRef<HTMLDivElement | null>(null);
+  const libraryRef = useRef<HTMLDivElement | null>(null);
 
   const closeAll = () => {
     setTourOpen(false);
     setAccountOpen(false);
-    setMoreOpen(false);
+    setLibraryOpen(false);
   };
+
+  /**
+   * Top-level workspace items shown directly on the bar.
+   * - Desktop (≥1024): all four (Dashboard / Personnel / Calendar / Equipment)
+   * - Mid (640–1023): Dashboard + Personnel only (Calendar + Equipment fold into Library)
+   * - Mobile (<640): none (everything goes into Library)
+   */
+  const topLevelItems = useMemo<NavItem[]>(() => {
+    if (viewportW === undefined) return navItems;
+    if (isMobile) return [];
+    if (isCompact) return navItems.slice(0, 2);
+    return navItems;
+  }, [navItems, viewportW, isMobile, isCompact]);
+
+  /** Workspace items to fold INTO the Library dropdown (above a divider). */
+  const foldedWorkspaceItems = useMemo<NavItem[]>(() => {
+    if (viewportW === undefined) return [];
+    if (isMobile) return navItems;
+    if (isCompact) return navItems.slice(2);
+    return [];
+  }, [navItems, viewportW, isMobile, isCompact]);
+
+  /** Library button is active when pathname matches any of its dropdown items. */
+  const libraryActive = useMemo(() => {
+    return (
+      LIBRARY_MENU_ITEMS.some((it) => it.activeMatch(pathname)) ||
+      foldedWorkspaceItems.some((it) => it.activeMatch(pathname))
+    );
+  }, [pathname, foldedWorkspaceItems]);
 
   useEffect(() => {
     const onDoc = (e: MouseEvent) => {
       const t = e.target as Node;
       if (tourRef.current && !tourRef.current.contains(t)) setTourOpen(false);
       if (accountRef.current && !accountRef.current.contains(t)) setAccountOpen(false);
-      if (moreRef.current && !moreRef.current.contains(t)) setMoreOpen(false);
+      if (libraryRef.current && !libraryRef.current.contains(t)) setLibraryOpen(false);
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') closeAll();
@@ -229,6 +318,62 @@ export function TopBar({
 
   const activeTour = tours.find((t) => t.id === activeTourId);
   const displayTourName = activeTour?.name ?? 'Select tour';
+
+  const libraryButton = (
+    <div className="relative" ref={libraryRef}>
+      <button
+        type="button"
+        onClick={() => {
+          setLibraryOpen((o) => !o);
+          setTourOpen(false);
+          setAccountOpen(false);
+        }}
+        className="btn-transition flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium"
+        style={
+          libraryActive
+            ? {
+                color: 'var(--lp-text)',
+                borderBottom: '2px solid var(--color-lp-orange)',
+              }
+            : { color: 'var(--lp-text-secondary)' }
+        }
+        onMouseEnter={(e) => {
+          if (!libraryActive) {
+            e.currentTarget.style.color = 'var(--lp-text)';
+            e.currentTarget.style.background = 'var(--lp-surface-hover)';
+          }
+        }}
+        onMouseLeave={(e) => {
+          if (!libraryActive) {
+            e.currentTarget.style.color = 'var(--lp-text-secondary)';
+            e.currentTarget.style.background = 'transparent';
+          }
+        }}
+        aria-expanded={libraryOpen}
+        aria-haspopup="menu"
+      >
+        Library
+        <ChevronDown className="h-3.5 w-3.5" style={{ color: 'var(--lp-text-tertiary)' }} />
+      </button>
+      {libraryOpen && (
+        <div
+          className="lp-dropdown-layer absolute right-0 mt-1 w-56 rounded-xl border py-1 shadow-lg"
+          style={{
+            zIndex: 'var(--lp-z-dropdown)',
+            background: 'var(--lp-surface)',
+            borderColor: 'var(--lp-border)',
+          }}
+          role="menu"
+        >
+          <LibraryMenuList
+            foldedItems={foldedWorkspaceItems}
+            pathname={pathname}
+            onClose={() => setLibraryOpen(false)}
+          />
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <header
@@ -259,7 +404,7 @@ export function TopBar({
                 onClick={() => {
                   setTourOpen((o) => !o);
                   setAccountOpen(false);
-                  setMoreOpen(false);
+                  setLibraryOpen(false);
                 }}
                 aria-expanded={tourOpen}
                 aria-haspopup="listbox"
@@ -269,7 +414,7 @@ export function TopBar({
               </button>
               {tourOpen && (
                 <div
-                  className="lp-dropdown-layer absolute left-0 z-[1000] mt-1 min-w-56 max-w-[90vw] rounded-xl border py-1 shadow-lg"
+                  className="lp-dropdown-layer absolute left-0 mt-1 min-w-56 max-w-[90vw] rounded-xl border py-1 shadow-lg"
                   style={{
                     zIndex: 'var(--lp-z-dropdown)',
                     background: 'var(--lp-surface)',
@@ -289,51 +434,7 @@ export function TopBar({
             </div>
           </div>
           <div className="flex shrink-0 items-center gap-0.5">
-            <div className="relative" ref={moreRef}>
-              <button
-                type="button"
-                onClick={() => {
-                  setMoreOpen((o) => !o);
-                  setTourOpen(false);
-                  setAccountOpen(false);
-                }}
-                className="btn-transition flex h-8 w-8 items-center justify-center rounded-md"
-                style={{ color: 'var(--lp-text-secondary)' }}
-                aria-label="More navigation"
-                aria-haspopup="menu"
-                aria-expanded={moreOpen}
-              >
-                <MoreHorizontal className="h-5 w-5" />
-              </button>
-              {moreOpen && (
-                <div
-                  className="lp-dropdown-layer absolute right-0 z-[1000] mt-1 w-48 rounded-xl border py-1"
-                  style={{
-                    zIndex: 'var(--lp-z-dropdown)',
-                    background: 'var(--lp-surface)',
-                    borderColor: 'var(--lp-border)',
-                  }}
-                >
-                  {navItems.map((item) => {
-                    const active = item.activeMatch(pathname);
-                    return (
-                      <Link
-                        key={item.href}
-                        href={item.href}
-                        className="block px-3 py-2 text-sm"
-                        style={{
-                          color: active ? 'var(--lp-text)' : 'var(--lp-text-secondary)',
-                          background: active ? 'var(--lp-surface-hover)' : 'transparent',
-                        }}
-                        onClick={() => setMoreOpen(false)}
-                      >
-                        {item.label}
-                      </Link>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
+            {libraryButton}
             <button
               type="button"
               onClick={onCommandPaletteOpen}
@@ -349,7 +450,7 @@ export function TopBar({
                 onClick={() => {
                   setAccountOpen((o) => !o);
                   setTourOpen(false);
-                  setMoreOpen(false);
+                  setLibraryOpen(false);
                 }}
                 className="btn-transition flex h-9 w-9 items-center justify-center overflow-hidden rounded-full border"
                 style={{ borderColor: 'var(--lp-border)' }}
@@ -371,7 +472,7 @@ export function TopBar({
               </button>
               {accountOpen && (
                 <div
-                  className="lp-dropdown-layer absolute right-0 z-[1000] mt-1 w-48 rounded-xl border py-1"
+                  className="lp-dropdown-layer absolute right-0 mt-1 w-48 rounded-xl border py-1"
                   style={{
                     zIndex: 'var(--lp-z-dropdown)',
                     background: 'var(--lp-surface)',
@@ -403,6 +504,7 @@ export function TopBar({
                 onClick={() => {
                   setTourOpen((o) => !o);
                   setAccountOpen(false);
+                  setLibraryOpen(false);
                 }}
                 aria-expanded={tourOpen}
                 aria-haspopup="listbox"
@@ -412,7 +514,7 @@ export function TopBar({
               </button>
               {tourOpen && (
                 <div
-                  className="lp-dropdown-layer absolute left-0 z-[1000] mt-1 min-w-64 max-w-sm rounded-xl border py-1 shadow-lg"
+                  className="lp-dropdown-layer absolute left-0 mt-1 min-w-64 max-w-sm rounded-xl border py-1 shadow-lg"
                   style={{
                     zIndex: 'var(--lp-z-dropdown)',
                     background: 'var(--lp-surface)',
@@ -432,7 +534,7 @@ export function TopBar({
               )}
             </div>
             <nav className="flex min-w-0 items-center gap-1" aria-label="Main">
-              {navItems.map((item) => {
+              {topLevelItems.map((item) => {
                 const active = item.activeMatch(pathname);
                 return (
                   <Link
@@ -464,6 +566,7 @@ export function TopBar({
                   </Link>
                 );
               })}
+              {libraryButton}
             </nav>
           </div>
           <div className="flex shrink-0 items-center gap-2">
@@ -501,6 +604,7 @@ export function TopBar({
                 onClick={() => {
                   setAccountOpen((o) => !o);
                   setTourOpen(false);
+                  setLibraryOpen(false);
                 }}
                 className="btn-transition flex max-w-[200px] min-w-0 items-center gap-2 rounded-md border px-2 py-1.5"
                 style={{ borderColor: 'var(--lp-border)', color: 'var(--lp-text)' }}
@@ -528,7 +632,7 @@ export function TopBar({
               </button>
               {accountOpen && (
                 <div
-                  className="absolute right-0 z-[1000] mt-1 w-56 rounded-xl border py-1"
+                  className="absolute right-0 mt-1 w-56 rounded-xl border py-1"
                   style={{
                     zIndex: 'var(--lp-z-dropdown)',
                     background: 'var(--lp-surface)',
