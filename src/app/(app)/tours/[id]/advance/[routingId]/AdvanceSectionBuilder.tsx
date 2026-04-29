@@ -1031,7 +1031,6 @@ function SetupMode({
         // any future regression instead of repeating that ghost-bug.
         const body = await res.json().catch(() => ({}));
         const detail = (body as { error?: string })?.error ?? `HTTP ${res.status}`;
-        // eslint-disable-next-line no-console
         console.error('[advance] template delete failed', { status: res.status, body });
         window.alert(`Couldn't delete this section. ${detail}`);
       }
