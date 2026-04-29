@@ -305,16 +305,9 @@ export function TopBar({
     };
   }, []);
 
-  useEffect(() => {
-    const onK = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && (e.key === 'k' || e.key === 'K')) {
-        e.preventDefault();
-        onCommandPaletteOpen();
-      }
-    };
-    document.addEventListener('keydown', onK);
-    return () => document.removeEventListener('keydown', onK);
-  }, [onCommandPaletteOpen]);
+  // ⌘K listener lives in AppShell (UX08b) so the keyboard shortcut works
+  // whether or not the TopBar is mounted. The trigger button still calls
+  // `onCommandPaletteOpen` which routes through CommandPaletteContext.
 
   const activeTour = tours.find((t) => t.id === activeTourId);
   const displayTourName = activeTour?.name ?? 'Select tour';

@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 import { useArtistTourContext } from '@/contexts/ArtistTourContext';
 import { TopBar } from '@/components/shell/TopBar';
+import { useCommandPalette } from '@/components/command-palette/CommandPaletteContext';
 import type { ShellData } from '@/lib/shell/types';
 
 export type ShellTopBarClientProps = {
@@ -16,6 +17,7 @@ export function ShellTopBarClient({ shellData }: ShellTopBarClientProps) {
   const pathname = usePathname() ?? '';
   const { signOut } = useAuth();
   const { setSelectedTourId } = useArtistTourContext();
+  const palette = useCommandPalette();
 
   const activeTourId = useMemo(() => {
     const m = pathname.match(/^\/tours\/([^/]+)/);
@@ -35,9 +37,9 @@ export function ShellTopBarClient({ shellData }: ShellTopBarClientProps) {
     router.push('/tours/create');
   }, [router]);
 
-  const onCommandPaletteOpen = useCallback(() => {
-    console.log('[shell] Command palette (UX08b stub)');
-  }, []);
+  // UX08b — TopBar's ⌘K trigger flips the same provider state the global
+  // shortcut listener owns. Two-way binding via CommandPaletteContext.
+  const onCommandPaletteOpen = palette.show;
 
   const user = shellData.user ?? { name: 'Guest', email: '' };
 
