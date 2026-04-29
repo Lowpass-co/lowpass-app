@@ -1,8 +1,14 @@
 /* ============================================
-   LOWPASS — Advance Overview Page
+   LOWPASS — Advance Overview Page (UX22 phase 1)
 
-   Main advance management screen for a tour.
-   Server: fetch tour for header/breadcrumbs; client: fetch advance data.
+   Server: fetch tour for breadcrumbs/header; the redesigned
+   AdvanceOverview client owns the show list, filters, and modals.
+
+   The legacy AdvanceFlightsPanel that lived above the show list has
+   been retired here — flights belong in /budget (Travel section, UX09
+   derives those rows) and on per-show advance pages (UX17 surfaces
+   them via EntityChip references). Showing them at the top of /advance
+   was redundant.
    ============================================ */
 
 import Link from 'next/link';
@@ -12,7 +18,6 @@ import { notFound } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { AdvanceOverview } from './AdvanceOverview';
 import { ChevronRight } from 'lucide-react';
-import { AdvanceFlightsPanel } from '@/components/advance/AdvanceFlightsPanel';
 
 export default async function TourAdvancePage({
   params,
@@ -54,17 +59,14 @@ export default async function TourAdvancePage({
 
       {/* Page header */}
       <div>
-        <h1 className="text-2xl font-bold text-lp-text">
-          Advance — {tour.name}
-        </h1>
+        <h1 className="text-2xl font-bold text-lp-text">Advance — {tour.name}</h1>
         <p className="mt-1 text-sm text-lp-text-secondary">
           Manage advance forms and section progress for each show.
         </p>
       </div>
 
-      <AdvanceFlightsPanel tourId={tour.id} />
       <AdvanceOverview tourId={tour.id} tourName={tour.name} />
     </div>,
-    dayRail
+    dayRail,
   );
 }

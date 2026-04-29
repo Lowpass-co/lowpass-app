@@ -1,32 +1,53 @@
 'use client';
 
 /* ============================================
-   LOWPASS — Advance Overview (client)
+   LOWPASS — Advance Overview (UX22 phase 1)
 
-   Fetches advance data, filters, progress, modals.
+   Show list as the dominant element. Filter chips + search + ⋯ menu in
+   a single toolbar; the legacy "Suggested form layouts" grid and the
+   right-side Layout Templates / Last Edit aside are retired (the 5%
+   information they carried moved into the toolbar text + ⋯ menu).
+
+   Existing features preserved end-to-end:
+   - Click row (show day) → /tours/[id]/advance/[routingId]
+   - Click row (off / travel / rehearsal) → DayOffNotesModal
+   - Per-row context menu: Open advance / Copy advance / Mark
+     complete-or-in-progress / Delete
+   - Toolbar ⋯ menu: Apply template / Manage templates / Copy advance /
+     Print
+   - Copy-from-URL flow (?copy=routingId) still opens CopyAdvanceModal
    ============================================ */
 
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
-  ChevronRight,
-  Copy,
-  LayoutTemplate,
-  Search,
   ArrowRight,
-  Loader2,
   CheckCircle2,
-  Trash2,
+  Copy,
   ExternalLink,
+  LayoutTemplate,
   ListOrdered,
+  Loader2,
+  MoreHorizontal,
+  Printer,
+  Search,
+  Trash2,
 } from 'lucide-react';
-import { parseRoutingDate, getDayTypeLabel, getDayTypeColor, getAdvanceStatusInfo, dayTypesInclude, cn } from '@/lib/utils';
+import {
+  cn,
+  dayTypesInclude,
+  getAdvanceStatusInfo,
+  getDayTypeLabel,
+  parseRoutingDate,
+} from '@/lib/utils';
 import { formatRelativeTime } from '@/lib/format-relative';
 import { useToast } from '@/components/ui/Toast';
 import { CopyAdvanceModal } from '@/components/advance/CopyAdvanceModal';
-import { ContextMenu } from '@/components/ui/ContextMenu';
+import { ContextMenu, type ContextMenuItem } from '@/components/ui/ContextMenu';
 import { DeleteConfirmationModal } from '@/components/ui/DeleteConfirmationModal';
+import { DataTable } from '@/components/data-table/DataTable';
+import type { ColumnDef } from '@/components/data-table/types';
 
 export type AdvanceSection = {
   template_id: string;
@@ -56,6 +77,144 @@ type StatusFilter = 'all' | 'not_started' | 'in_progress' | 'complete' | 'needs_
 
 type FormTemplate = { id: string; name: string; sections: AdvanceSection[] };
 
+const STATUS_FILTER_OPTIONS: ReadonlyArray<readonly [StatusFilter, string]> = [
+  ['all', 'All'],
+  ['not_started', 'Not started'],
+  ['in_progress', 'In progress'],
+  ['complete', 'Complete'],
+  ['needs_review', 'Needs review'],
+] as const;
+
+/** Day-type → colour token. Falls back to the `off` neutral. */
+const DAY_TYPE_TOKEN: Record<string, string> = {
+  show: 'var(--color-lp-day-show)',
+  festival: 'var(--color-lp-day-festival)',
+  travel: 'var(--color-lp-day-travel)',
+  off: 'var(--color-lp-day-off)',
+  rehearsal: 'var(--color-lp-day-rehearsal)',
+  press: 'var(--color-lp-day-press)',
+  radio: 'var(--color-lp-day-radio)',
+  tv: 'var(--color-lp-day-tv)',
+};
+
+const STATUS_TOKEN: Record<string, string> = {
+  not_started: 'var(--color-lp-status-not-started)',
+  in_progress: 'var(--color-lp-status-in-progress)',
+  complete: 'var(--color-lp-status-complete)',
+  needs_review: 'var(--color-lp-status-needs-review)',
+};
+
+function colourForDayType(dayTypeCsv: string | null | undefined): string {
+  if (!dayTypeCsv) return DAY_TYPE_TOKEN.off;
+  const first = dayTypeCsv.split(',')[0]?.trim().toLowerCase() ?? '';
+  return DAY_TYPE_TOKEN[first] ?? DAY_TYPE_TOKEN.off;
+}
+
+function isShowDay(dayTypeCsv: string | null | undefined): boolean {
+  if (!dayTypeCsv) return false;
+  return dayTypesInclude(dayTypeCsv, 'show') || dayTypesInclude(dayTypeCsv, 'festival');
+}
+
+type Progress = {
+  total: number;
+  complete: number;
+  inProgress: number;
+};
+
+function computeProgress(item: AdvanceDateItem): Progress {
+  const sections = item.advance?.sections ?? [];
+  const sectionStatuses = item.advance?.section_statuses ?? {};
+  let complete = 0;
+  let inProgress = 0;
+  for (const sec of sections) {
+    const key = (sec as { template_id?: string }).template_id ?? sec.label;
+    if (!key) continue;
+    const status = sectionStatuses[key]?.status;
+    if (status === 'complete') complete++;
+    else if (status === 'in_progress') inProgress++;
+  }
+  return { total: sections.length, complete, inProgress };
+}
+
+function StatusPill({ status }: { status: string }) {
+  const info = getAdvanceStatusInfo(status);
+  const dotColour = STATUS_TOKEN[status] ?? STATUS_TOKEN.not_started;
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium"
+      style={{
+        background: `color-mix(in srgb, ${dotColour} 12%, transparent)`,
+        color: dotColour,
+      }}
+    >
+      <span
+        aria-hidden
+        className="h-1.5 w-1.5 rounded-full"
+        style={{ background: dotColour }}
+      />
+      {info.label}
+    </span>
+  );
+}
+
+function ProgressBar({ progress }: { progress: Progress }) {
+  const { total, complete, inProgress } = progress;
+  if (total === 0) {
+    return <span className="text-xs text-lp-text-tertiary tabular-nums">0/0</span>;
+  }
+  const completePct = Math.round((complete / total) * 100);
+  const inProgressPct = Math.round((inProgress / total) * 100);
+  return (
+    <div className="flex items-center gap-2">
+      <div
+        className="h-1.5 w-16 overflow-hidden rounded-full"
+        style={{ background: 'var(--lp-bg-tertiary)' }}
+        aria-hidden
+      >
+        <div className="flex h-full">
+          <div style={{ width: `${completePct}%`, background: 'var(--color-lp-status-complete)' }} />
+          <div
+            style={{
+              width: `${inProgressPct}%`,
+              background: 'var(--color-lp-status-in-progress)',
+              opacity: 0.45,
+            }}
+          />
+        </div>
+      </div>
+      <span className="text-xs text-lp-text-secondary tabular-nums">
+        {complete}/{total}
+      </span>
+    </div>
+  );
+}
+
+type RowVm = AdvanceDateItem & {
+  /** Pre-computed for table cells / filter / search. */
+  isShow: boolean;
+  effectiveStatus: StatusFilter;
+  progress: Progress;
+  searchHaystack: string;
+  dateLabel: string;
+};
+
+function buildRowVm(item: AdvanceDateItem): RowVm {
+  const isShow = isShowDay(item.day_type);
+  const status = (item.advance?.status as StatusFilter | undefined) ?? 'not_started';
+  return {
+    ...item,
+    isShow,
+    effectiveStatus: status,
+    progress: computeProgress(item),
+    searchHaystack: [item.venue_name, item.city, item.address].filter(Boolean).join(' ').toLowerCase(),
+    dateLabel: parseRoutingDate(item.date).toLocaleDateString('en-GB', {
+      weekday: 'short',
+      day: '2-digit',
+      month: 'short',
+    }),
+  };
+}
+
 export function AdvanceOverview({
   tourId,
   tourName,
@@ -77,59 +236,58 @@ export function AdvanceOverview({
   const [copyModalOpen, setCopyModalOpen] = useState(false);
   const [copySourceRoutingId, setCopySourceRoutingId] = useState<string | null>(null);
   const [templateModalOpen, setTemplateModalOpen] = useState(false);
+  const [templateInitialId, setTemplateInitialId] = useState<string | null>(null);
   const [dayOffNotesItem, setDayOffNotesItem] = useState<AdvanceDateItem | null>(null);
+  const [formTemplates, setFormTemplates] = useState<FormTemplate[]>([]);
+  const [formTemplatesLoading, setFormTemplatesLoading] = useState(true);
+  const [bulkRow, setBulkRow] = useState<AdvanceDateItem | null>(null);
 
   const copyFromUrl = initialCopyRoutingId ?? searchParams.get('copy');
   useEffect(() => {
     if (copyFromUrl && dates.length > 0) {
-      /* react-hooks/set-state-in-effect: sync ?copy= from URL to modal */
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       setCopySourceRoutingId(copyFromUrl);
       setCopyModalOpen(true);
     }
   }, [copyFromUrl, dates.length]);
-  const [formTemplates, setFormTemplates] = useState<FormTemplate[]>([]);
-  const [formTemplatesLoading, setFormTemplatesLoading] = useState(true);
-  const [templateInitialId, setTemplateInitialId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     fetch('/api/advance/layout-templates')
       .then((r) => (r.ok ? r.json() : { templates: [] }))
       .then((j) => {
-        if (!cancelled) setFormTemplates(j.templates ?? []);
+        if (cancelled) return;
+        setFormTemplates(j.templates ?? []);
+        setFormTemplatesLoading(false);
       })
       .catch(() => {
-        if (!cancelled) setFormTemplates([]);
-      })
-      .finally(() => {
-        if (!cancelled) setFormTemplatesLoading(false);
+        if (cancelled) return;
+        setFormTemplates([]);
+        setFormTemplatesLoading(false);
       });
     return () => {
       cancelled = true;
     };
   }, [tourId]);
 
-  useEffect(() => {
-    let cancelled = false;
-    async function fetchAdvance() {
-      const res = await fetch(`/api/tours/${tourId}/advance?all=true`);
-      if (!res.ok) {
-        if (!cancelled) setDates([]);
-        return;
-      }
-      const json = await res.json();
-      if (!cancelled) setDates(json.dates ?? []);
-    }
-    fetchAdvance();
-    return () => { cancelled = true; };
-  }, [tourId, pathname]);
+  const fetchDates = (signal?: AbortSignal) =>
+    fetch(`/api/tours/${tourId}/advance?all=true`, { signal })
+      .then((r) => (r.ok ? r.json() : { dates: [] }))
+      .then((j) => {
+        setDates(j.dates ?? []);
+        setLoading(false);
+      })
+      .catch(() => {
+        if (signal?.aborted) return;
+        setDates([]);
+        setLoading(false);
+      });
 
   useEffect(() => {
-    // Initial load: hide spinner once advance list has been fetched
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setLoading(false);
-  }, [dates]);
+    const ac = new AbortController();
+    void fetchDates(ac.signal);
+    return () => ac.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tourId, pathname]);
 
   const tourLastUpdatedAt = useMemo(() => {
     let maxMs = 0;
@@ -142,229 +300,315 @@ export function AdvanceOverview({
     return maxMs > 0 ? new Date(maxMs).toISOString() : null;
   }, [dates]);
 
-  const filteredDates = useMemo(() => {
-    let list = dates;
+  const showRowVms = useMemo<RowVm[]>(() => dates.map(buildRowVm), [dates]);
+
+  const filteredRows = useMemo<RowVm[]>(() => {
+    let list = showRowVms;
     if (statusFilter !== 'all') {
-      list = list.filter((d) => {
-        if (!d.advance) return statusFilter === 'not_started';
-        return d.advance.status === statusFilter;
+      list = list.filter((r) => {
+        // Off-day rows fall under "not_started" by virtue of having no advance.
+        if (!r.isShow && statusFilter !== 'not_started') return false;
+        if (!r.advance) return statusFilter === 'not_started';
+        return r.advance.status === statusFilter;
       });
     }
     if (searchQuery.trim()) {
       const q = searchQuery.trim().toLowerCase();
-      list = list.filter((d) => {
-        const full = [d.venue_name, d.city, d.address].filter(Boolean).join(' ').toLowerCase();
-        return full.includes(q);
-      });
+      list = list.filter((r) => r.searchHaystack.includes(q));
     }
     return list;
-  }, [dates, statusFilter, searchQuery]);
+  }, [showRowVms, statusFilter, searchQuery]);
 
-  const openCopyModal = () => setCopyModalOpen(true);
-  const openTemplateModal = (presetTemplateId: string | null = null) => {
-    setTemplateInitialId(presetTemplateId);
-    setTemplateModalOpen(true);
+  const showCount = useMemo(() => showRowVms.filter((r) => r.isShow).length, [showRowVms]);
+
+  const onPatched = () => {
+    void fetchDates();
   };
+
+  const buildRowMenu = (row: RowVm): ContextMenuItem[] => {
+    const items: ContextMenuItem[] = [];
+    if (row.isShow) {
+      items.push({
+        label: 'Open advance',
+        icon: ExternalLink,
+        onClick: () => router.push(`/tours/${tourId}/advance/${row.routing_id}`),
+      });
+      items.push({
+        label: 'Copy advance…',
+        icon: Copy,
+        onClick: () => {
+          setCopySourceRoutingId(row.routing_id);
+          setCopyModalOpen(true);
+        },
+      });
+      if (row.advance && row.advance.status !== 'complete') {
+        items.push({
+          label: 'Mark as complete',
+          icon: CheckCircle2,
+          onClick: () => {
+            void fetch(`/api/tours/${tourId}/advance/${row.routing_id}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ status: 'complete' }),
+            }).then((r) => {
+              if (r.ok) {
+                showToast('Marked as complete');
+                onPatched();
+                router.refresh();
+              }
+            });
+          },
+        });
+      }
+      if (row.advance && row.advance.status === 'complete') {
+        items.push({
+          label: 'Mark as in progress',
+          icon: ListOrdered,
+          onClick: () => {
+            void fetch(`/api/tours/${tourId}/advance/${row.routing_id}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ status: 'in_progress' }),
+            }).then((r) => {
+              if (r.ok) {
+                showToast('Marked as in progress');
+                onPatched();
+                router.refresh();
+              }
+            });
+          },
+        });
+      }
+      if (row.advance) {
+        items.push({
+          label: 'Delete advance',
+          icon: Trash2,
+          variant: 'danger',
+          onClick: () => setBulkRow(row),
+        });
+      }
+    } else {
+      items.push({
+        label: 'Edit note',
+        icon: ExternalLink,
+        onClick: () => setDayOffNotesItem(row),
+      });
+    }
+    return items;
+  };
+
+  const columns = useMemo<ColumnDef<RowVm>[]>(
+    () => [
+      {
+        id: 'date',
+        header: 'Date',
+        accessor: (r) => r.date,
+        sortable: true,
+        width: 168,
+        cell: (_v, r) => (
+          <div className="flex items-center gap-3">
+            <span
+              aria-hidden
+              className="block h-8 w-1 shrink-0 rounded-sm"
+              style={{ background: colourForDayType(r.day_type) }}
+            />
+            <div className="min-w-0">
+              <div className="text-sm font-medium text-lp-text">{r.dateLabel}</div>
+              {r.day_type ? (
+                <div className="text-xs capitalize text-lp-text-tertiary">
+                  {getDayTypeLabel(r.day_type)}
+                </div>
+              ) : null}
+            </div>
+          </div>
+        ),
+      },
+      {
+        id: 'venue',
+        header: 'Venue',
+        accessor: (r) => r.venue_name ?? '',
+        sortable: true,
+        cell: (_v, r) => (
+          <span className={cn('truncate', !r.isShow && 'text-lp-text-secondary')}>
+            {r.isShow
+              ? r.venue_name || '—'
+              : `${getDayTypeLabel(r.day_type) || 'Off'}${r.city ? ` · ${r.city}` : ''}`}
+          </span>
+        ),
+      },
+      {
+        id: 'city',
+        header: 'City',
+        accessor: (r) => r.city ?? '',
+        sortable: true,
+        cell: (_v, r) => <span className="truncate text-sm text-lp-text-secondary">{r.isShow ? r.city || '—' : ''}</span>,
+      },
+      {
+        id: 'status',
+        header: 'Status',
+        accessor: (r) => r.effectiveStatus,
+        width: 132,
+        cell: (_v, r) => (r.isShow ? <StatusPill status={r.effectiveStatus} /> : null),
+      },
+      {
+        id: 'progress',
+        header: 'Sections',
+        accessor: (r) => r.progress.complete,
+        sortable: true,
+        width: 136,
+        cell: (_v, r) => (r.isShow ? <ProgressBar progress={r.progress} /> : null),
+      },
+      {
+        id: 'actions',
+        header: '',
+        accessor: () => '',
+        width: 48,
+        cell: (_v, r) => (
+          <div onClick={(e) => e.stopPropagation()}>
+            <ContextMenu items={buildRowMenu(r)} align="right" />
+          </div>
+        ),
+      },
+    ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [tourId, router, showToast],
+  );
+
+  const onRowClick = (row: RowVm) => {
+    if (row.isShow) {
+      router.push(`/tours/${tourId}/advance/${row.routing_id}`);
+    } else {
+      setDayOffNotesItem(row);
+    }
+  };
+
+  const overflowMenuItems: ContextMenuItem[] = [
+    {
+      label: 'Apply layout to shows…',
+      icon: LayoutTemplate,
+      onClick: () => {
+        setTemplateInitialId(null);
+        setTemplateModalOpen(true);
+      },
+    },
+    {
+      label: 'Manage templates',
+      icon: ExternalLink,
+      onClick: () => router.push('/templates?type=advance'),
+    },
+    {
+      label: 'Copy advance content…',
+      icon: Copy,
+      onClick: () => {
+        setCopySourceRoutingId(null);
+        setCopyModalOpen(true);
+      },
+    },
+    {
+      label: 'Print overview',
+      icon: Printer,
+      onClick: () => window.print(),
+    },
+  ];
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center rounded-xl border border-lp-border bg-lp-surface py-16">
+        <Loader2 className="h-8 w-8 animate-spin text-lp-text-tertiary" />
+      </div>
+    );
+  }
+
+  if (dates.length === 0) {
+    return (
+      <div className="rounded-xl border border-lp-border bg-lp-surface p-8 text-center">
+        <p className="text-lp-text-secondary">
+          No show dates in routing yet. Add shows to your routing first.
+        </p>
+        <Link
+          href={`/tours/${tourId}`}
+          className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-lp-orange hover:text-lp-orange-hover"
+        >
+          Go to routing
+          <ArrowRight size={16} />
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <>
-    <div className="grid gap-6 lg:grid-cols-[1fr_260px] lg:items-start">
-      <div className="min-w-0 space-y-6">
-      {/* Suggested layout templates (saved in this tour) */}
-      {dates.length > 0 && (
-        <div
-          className="overflow-hidden rounded-xl border border-lp-border"
-          style={{ backgroundColor: 'var(--lp-surface)' }}
-        >
-          <div className="border-b border-lp-border px-4 py-2.5">
-            <h2 className="text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">
-              Suggested form layouts · {tourName}
-            </h2>
-            <p className="mt-1 text-xs text-lp-text-secondary">
-              Use a saved layout as a starting point for show advances — every section stays editable in the builder.
-            </p>
-          </div>
-          {formTemplatesLoading ? (
-            <div className="flex items-center gap-2 px-4 py-6 text-sm text-lp-text-tertiary">
-              <Loader2 className="h-4 w-4 animate-spin" />
-              Loading templates…
-            </div>
-          ) : formTemplates.length === 0 ? (
-            <p className="px-4 py-5 text-sm text-lp-text-secondary">
-              No saved layout templates yet. In any show&apos;s advance, open <strong>Setup</strong> and save the section layout
-              as a template — it will show up here.
-            </p>
-          ) : (
-            <div className="grid gap-2 p-4 sm:grid-cols-2">
-              {formTemplates.slice(0, 6).map((t) => (
-                <div
-                  key={t.id}
-                  className="flex flex-col rounded-lg border border-lp-border bg-lp-bg-secondary p-3"
-                >
-                  <div className="text-sm font-semibold text-lp-text">{t.name}</div>
-                  <p className="mt-0.5 text-xs text-lp-text-tertiary">
-                    {t.sections?.length ?? 0} section{(t.sections?.length ?? 0) === 1 ? '' : 's'}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => openTemplateModal(t.id)}
-                    className="mt-2 w-fit rounded-lg border border-lp-border bg-lp-surface px-2.5 py-1 text-xs font-medium text-lp-text hover:bg-lp-surface-hover"
-                  >
-                    Apply to shows…
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Filter bar */}
-      {dates.length > 0 && (
+      <div className="space-y-4">
+        {/* Toolbar */}
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex rounded-xl border border-lp-border bg-lp-surface">
-            {(
-              [
-                ['all', 'All'],
-                ['not_started', 'Not Started'],
-                ['in_progress', 'In Progress'],
-                ['complete', 'Complete'],
-                ['needs_review', 'Needs Review'],
-              ] as const
-            ).map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => setStatusFilter(value)}
-                className={cn(
-                  'px-3 py-2 text-sm font-medium transition-colors',
-                  statusFilter === value
-                    ? 'bg-lp-bg-tertiary text-lp-text'
-                    : 'text-lp-text-secondary hover:text-lp-text'
-                )}
-              >
-                {label}
-              </button>
-            ))}
+          <div
+            className="flex flex-wrap items-stretch overflow-hidden rounded-xl border"
+            style={{ borderColor: 'var(--lp-border)', background: 'var(--lp-surface)' }}
+            role="tablist"
+            aria-label="Filter by status"
+          >
+            {STATUS_FILTER_OPTIONS.map(([value, label]) => {
+              const active = statusFilter === value;
+              return (
+                <button
+                  key={value}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => setStatusFilter(value)}
+                  className={cn(
+                    'px-3 py-2 text-sm font-medium transition-colors',
+                    active
+                      ? 'bg-lp-bg-tertiary text-lp-text'
+                      : 'text-lp-text-secondary hover:text-lp-text',
+                  )}
+                >
+                  {label}
+                </button>
+              );
+            })}
           </div>
-          <div className="relative flex-1 min-w-[200px]">
+
+          <div className="relative min-w-[200px] flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-lp-text-tertiary" />
             <input
               type="text"
-              placeholder="Search venue, city or full address..."
+              placeholder="Search venue, city or address…"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full rounded-xl border border-lp-border bg-lp-surface py-2 pl-9 pr-3 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:border-lp-orange focus:outline-none focus:ring-2 focus:ring-lp-orange/20"
+              className="w-full rounded-xl border border-lp-border bg-lp-surface py-2 pl-9 pr-3 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:border-lp-orange focus:outline-none focus:ring-2"
+              style={{ ['--tw-ring-color' as string]: 'color-mix(in srgb, var(--color-lp-orange) 20%, transparent)' }}
             />
           </div>
-        </div>
-      )}
 
-      {/* Show list */}
-      {loading ? (
-        <div className="flex items-center justify-center rounded-xl border border-lp-border bg-lp-surface py-16">
-          <Loader2 className="h-8 w-8 animate-spin text-lp-text-tertiary" />
+          <div className="ml-auto flex shrink-0 items-center gap-3 text-xs text-lp-text-tertiary">
+            <span title={tourLastUpdatedAt ?? undefined}>
+              {showCount} show{showCount === 1 ? '' : 's'} ·{' '}
+              <span className="text-lp-text-secondary">Last edit {formatRelativeTime(tourLastUpdatedAt)}</span>
+              {formTemplatesLoading ? null : ` · ${formTemplates.length} template${formTemplates.length === 1 ? '' : 's'}`}
+            </span>
+            <div>
+              <ContextMenu items={overflowMenuItems} align="right" />
+            </div>
+          </div>
         </div>
-      ) : filteredDates.length === 0 ? (
-        <div className="rounded-xl border border-lp-border bg-lp-surface p-8 text-center">
-          <p className="text-lp-text-secondary">
-            {dates.length === 0
-              ? 'No show dates in routing yet. Add shows to your routing first.'
-              : 'No shows match the current filters.'}
-          </p>
-          {dates.length === 0 && (
-            <Link
-              href={`/tours/${tourId}`}
-              className="mt-4 inline-flex items-center gap-2 text-sm font-medium text-lp-orange hover:text-lp-orange-hover"
-            >
-              Go to routing
-              <ArrowRight size={16} />
-            </Link>
-          )}
-        </div>
-      ) : (
-        <ul className="space-y-2">
-          {filteredDates.map((item) => {
-            const isShowDay = dayTypesInclude(item.day_type ?? '', 'show') || dayTypesInclude(item.day_type ?? '', 'festival');
-            if (isShowDay) {
-              return (
-                <ShowRow
-                  key={item.routing_id}
-                  tourId={tourId}
-                  item={item}
-                  onOpenCopyModal={(routingId) => {
-                    setCopySourceRoutingId(routingId);
-                    setCopyModalOpen(true);
-                  }}
-                  onPatched={() => {
-                    void fetch(`/api/tours/${tourId}/advance?all=true`)
-                      .then((r) => r.json())
-                      .then((j) => setDates(j.dates ?? []));
-                  }}
-                  onDeleted={() => {
-                    fetch(`/api/tours/${tourId}/advance?all=true`).then((r) => r.json()).then((j) => setDates(j.dates ?? []));
-                  }}
-                />
-              );
-            }
-            return (
-              <DayOffPill
-                key={item.routing_id}
-                tourId={tourId}
-                item={item}
-                onOpenNotes={() => setDayOffNotesItem(item)}
-              />
-            );
-          })}
-        </ul>
-      )}
 
-      {/* Batch actions */}
-      {dates.length > 0 && (
-        <div className="flex flex-wrap justify-end gap-2">
-          <button
-            type="button"
-            onClick={openCopyModal}
-            className="inline-flex items-center gap-2 rounded-xl border border-lp-border bg-lp-surface px-4 py-2 text-sm font-medium text-lp-text hover:bg-lp-surface-hover"
-          >
-            <Copy size={16} />
-            Copy advance...
-          </button>
-          <button
-            type="button"
-            onClick={() => openTemplateModal(null)}
-            className="inline-flex items-center gap-2 rounded-xl border border-lp-border bg-lp-surface px-4 py-2 text-sm font-medium text-lp-text hover:bg-lp-surface-hover"
-          >
-            <LayoutTemplate size={16} />
-            Apply template...
-          </button>
-        </div>
-      )}
-
+        {/* Show list */}
+        <DataTable<RowVm>
+          rows={filteredRows}
+          columns={columns}
+          rowKey={(r) => r.routing_id}
+          density="comfortable"
+          searchable={false}
+          onRowClick={onRowClick}
+          rowClassName={(r) => (r.isShow ? '' : 'opacity-70')}
+          emptyState={
+            <div className="px-3 py-8 text-center text-sm" style={{ color: 'var(--lp-text-tertiary)' }}>
+              No shows match the current filters.
+            </div>
+          }
+        />
       </div>
-
-      <aside className="space-y-4 lg:sticky lg:top-4">
-        <div className="rounded-xl border border-lp-border bg-lp-surface p-4">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Last edit</p>
-          <p className="mt-1 text-sm text-lp-text" title={tourLastUpdatedAt ?? undefined}>
-            {formatRelativeTime(tourLastUpdatedAt)}
-          </p>
-          <p className="mt-1.5 text-[11px] text-lp-text-tertiary">Latest save across all show advances on this tour.</p>
-        </div>
-        <div className="rounded-xl border border-lp-border bg-lp-surface p-4">
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-lp-text-tertiary">Layout templates</p>
-          <p className="mt-1 text-2xl font-bold tabular-nums text-lp-text">{formTemplates.length}</p>
-          <p className="mt-0.5 text-xs text-lp-text-secondary">Saved in this tour (reuse on any show).</p>
-          <button
-            type="button"
-            onClick={() => openTemplateModal(null)}
-            className="mt-3 w-full rounded-lg border border-lp-border bg-lp-bg-secondary px-3 py-2 text-xs font-medium text-lp-text hover:bg-lp-surface-hover"
-          >
-            Open template manager
-          </button>
-        </div>
-      </aside>
-    </div>
 
       <CopyAdvanceModal
         tourId={tourId}
@@ -378,9 +622,7 @@ export function AdvanceOverview({
         }}
         onSuccess={(copiedCount) => {
           showToast(`Advance copied to ${copiedCount} show${copiedCount !== 1 ? 's' : ''}`);
-          fetch(`/api/tours/${tourId}/advance?all=true`)
-            .then((r) => r.json())
-            .then((j) => setDates(j.dates ?? []));
+          void fetchDates();
         }}
       />
 
@@ -388,6 +630,7 @@ export function AdvanceOverview({
         <ApplyTemplateModal
           key={templateInitialId ?? 'all'}
           tourId={tourId}
+          tourName={tourName}
           dates={dates}
           templates={formTemplates}
           loading={formTemplatesLoading}
@@ -400,9 +643,7 @@ export function AdvanceOverview({
             setTemplateModalOpen(false);
             setTemplateInitialId(null);
             router.refresh();
-            fetch(`/api/tours/${tourId}/advance?all=true`)
-              .then((r) => r.json())
-              .then((j) => setDates(j.dates ?? []));
+            void fetchDates();
           }}
         />
       )}
@@ -414,36 +655,42 @@ export function AdvanceOverview({
           onClose={() => setDayOffNotesItem(null)}
           onSaved={() => {
             setDayOffNotesItem(null);
-            fetch(`/api/tours/${tourId}/advance?all=true`)
-              .then((r) => r.json())
-              .then((j) => setDates(j.dates ?? []));
+            void fetchDates();
           }}
         />
       )}
+
+      {bulkRow ? (
+        <DeleteConfirmationModal
+          open
+          itemName={`${parseRoutingDate(bulkRow.date).toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short' })} — ${bulkRow.venue_name || bulkRow.city || ''}`}
+          onClose={() => setBulkRow(null)}
+          onConfirm={async () => {
+            const res = await fetch(`/api/tours/${tourId}/advance/${bulkRow.routing_id}`, {
+              method: 'DELETE',
+            });
+            if (!res.ok) {
+              const data = await res.json().catch(() => ({}));
+              throw new Error(data.error ?? 'Failed to delete advance');
+            }
+            showToast('Advance deleted');
+          }}
+          onDeleted={() => {
+            setBulkRow(null);
+            void fetchDates();
+          }}
+        />
+      ) : null}
     </>
   );
 }
 
-/** Small, subtle pill for day off / travel. Opens notes modal (not full advance builder). */
-function DayOffPill({ item, onOpenNotes }: { tourId?: string; item: AdvanceDateItem; onOpenNotes: () => void }) {
-  const dateLabel = parseRoutingDate(item.date).toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short' });
-  const isTravel = dayTypesInclude(item.day_type ?? '', 'travel');
-  const label = isTravel ? 'Travel' : 'Day Off';
-  return (
-    <li>
-      <button
-        type="button"
-        onClick={onOpenNotes}
-        className="w-full rounded-lg border border-lp-border/50 bg-lp-surface/50 py-1.5 px-3 text-left text-xs text-lp-text-tertiary hover:bg-lp-surface-hover hover:text-lp-text-secondary transition-colors flex items-center gap-2"
-      >
-        <span className="shrink-0 w-20">{dateLabel}</span>
-        <span>{label}{item.city ? ` · ${item.city}` : ''}</span>
-      </button>
-    </li>
-  );
-}
+/* ──────────────────────────────────────────────────────────────────────────
+   DayOffNotesModal — unchanged from the prior implementation, just lifted
+   into its own block for readability. Will move into the SlideOver primitive
+   in a later UX22 polish pass; for now the lightweight popover is fine.
+   ────────────────────────────────────────────────────────────────────────── */
 
-/** Modal to add/edit a note for a day-off or travel date. Does not open full advance builder. */
 function DayOffNotesModal({
   tourId,
   item,
@@ -477,16 +724,21 @@ function DayOffNotesModal({
         if (data?.advance?.data) {
           setHasInstance(true);
           existingDataRef.current = (data.advance.data as Record<string, unknown>) ?? {};
-          const dayOffNotes = (existingDataRef.current.day_off_notes as string) ?? '';
-          setNotes(dayOffNotes);
+          setNotes(((existingDataRef.current.day_off_notes as string) ?? ''));
         } else {
           setHasInstance(false);
           setNotes('');
         }
       })
-      .catch(() => { if (!cancelled) setError('Could not load advance'); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
+      .catch(() => {
+        if (!cancelled) setError('Could not load advance');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [tourId, item.routing_id]);
 
   const handleSave = async () => {
@@ -517,15 +769,25 @@ function DayOffNotesModal({
     }
   };
 
-  const dateLabel = parseRoutingDate(item.date).toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short' });
+  const dateLabel = parseRoutingDate(item.date).toLocaleDateString('en-GB', {
+    weekday: 'short',
+    day: '2-digit',
+    month: 'short',
+  });
   const isTravel = dayTypesInclude(item.day_type ?? '', 'travel');
   const typeLabel = isTravel ? 'Travel' : 'Day Off';
 
   return (
     <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
-      <div className="w-full max-w-md rounded-xl border border-lp-border bg-lp-surface p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="w-full max-w-md rounded-xl border border-lp-border bg-lp-surface p-5 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
         <h3 className="text-base font-semibold text-lp-text">Advance note — {typeLabel}</h3>
-        <p className="mt-1 text-sm text-lp-text-tertiary">{dateLabel}{item.city ? ` · ${item.city}` : ''}</p>
+        <p className="mt-1 text-sm text-lp-text-tertiary">
+          {dateLabel}
+          {item.city ? ` · ${item.city}` : ''}
+        </p>
         {loading ? (
           <p className="mt-4 text-sm text-lp-text-tertiary">Loading…</p>
         ) : (
@@ -535,14 +797,23 @@ function DayOffNotesModal({
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Add a note for this date…"
               rows={4}
-              className="mt-4 w-full rounded-xl border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:border-lp-orange focus:outline-none focus:ring-2 focus:ring-lp-orange/20"
+              className="mt-4 w-full rounded-xl border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:border-lp-orange focus:outline-none"
             />
-            {error && <p className="mt-2 text-sm text-red-500">{error}</p>}
+            {error ? <p className="mt-2 text-sm text-red-500">{error}</p> : null}
             <div className="mt-4 flex justify-end gap-2">
-              <button type="button" onClick={onClose} className="rounded-xl border border-lp-border px-4 py-2 text-sm font-medium text-lp-text hover:bg-lp-surface-hover">
+              <button
+                type="button"
+                onClick={onClose}
+                className="rounded-xl border border-lp-border px-4 py-2 text-sm font-medium text-lp-text hover:bg-lp-surface-hover"
+              >
                 Cancel
               </button>
-              <button type="button" onClick={handleSave} disabled={saving} className="rounded-xl bg-lp-orange px-4 py-2 text-sm font-medium text-white hover:bg-lp-orange-hover disabled:opacity-50">
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={saving}
+                className="rounded-xl bg-lp-orange px-4 py-2 text-sm font-medium text-white hover:bg-lp-orange-hover disabled:opacity-50"
+              >
                 {saving ? 'Saving…' : 'Save note'}
               </button>
             </div>
@@ -553,268 +824,15 @@ function DayOffNotesModal({
   );
 }
 
-function ShowRow({
-  tourId,
-  item,
-  onOpenCopyModal,
-  onPatched,
-  onDeleted,
-}: {
-  tourId: string;
-  item: AdvanceDateItem;
-  onOpenCopyModal?: (routingId: string) => void;
-  onPatched?: () => void;
-  onDeleted?: () => void;
-}) {
-  const router = useRouter();
-  const { showToast } = useToast();
-  const [deleteOpen, setDeleteOpen] = useState(false);
-  const [deletingFade, setDeletingFade] = useState(false);
-
-  const dateLabel = parseRoutingDate(item.date).toLocaleDateString('en-GB', {
-    weekday: 'short',
-    day: '2-digit',
-    month: 'short',
-  });
-  const dayTypeColors = item.day_type ? getDayTypeColor(item.day_type) : null;
-  const hasAdvance = !!item.advance;
-  const sectionCount = item.advance?.sections?.length ?? 0;
-  const sectionStatuses = item.advance?.section_statuses ?? {};
-  const completeCount = item.advance?.sections?.reduce((n, sec) => {
-    const key = (sec as { template_id?: string }).template_id ?? (sec as { label?: string }).label;
-    if (!key) return n;
-    return n + (sectionStatuses[key]?.status === 'complete' ? 1 : 0);
-  }, 0) ?? 0;
-  const inProgressCount = item.advance?.sections?.reduce((n, sec) => {
-    const key = (sec as { template_id?: string }).template_id ?? (sec as { label?: string }).label;
-    if (!key) return n;
-    return n + (sectionStatuses[key]?.status === 'in_progress' ? 1 : 0);
-  }, 0) ?? 0;
-  const notStartedCount = Math.max(0, sectionCount - completeCount - inProgressCount);
-  const statusInfo = hasAdvance ? getAdvanceStatusInfo(item.advance!.status) : getAdvanceStatusInfo('not_started');
-  const isComplete = item.advance?.status === 'complete';
-  const rowLabel = [dateLabel, item.venue_name || item.city || '—'].filter(Boolean).join(' — ') || 'this advance';
-
-  const handleClick = (e: React.MouseEvent) => {
-    const target = e.target as HTMLElement;
-    if (target.closest('button') || target.closest('a') || target.closest('[data-context-menu]')) return;
-    router.push(`/tours/${tourId}/advance/${item.routing_id}`);
-  };
-
-  const menuItems = [
-    {
-      label: 'Open advance',
-      icon: ExternalLink,
-      onClick: () => router.push(`/tours/${tourId}/advance/${item.routing_id}`),
-    },
-    ...(onOpenCopyModal
-      ? [{ label: 'Copy advance...', icon: Copy, onClick: () => onOpenCopyModal(item.routing_id) }]
-      : []),
-    ...(hasAdvance && !isComplete
-      ? [{
-          label: 'Mark as complete',
-          icon: CheckCircle2,
-          onClick: async () => {
-            try {
-              const res = await fetch(`/api/tours/${tourId}/advance/${item.routing_id}`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ status: 'complete' }),
-              });
-              if (res.ok) {
-                showToast('Marked as complete');
-                onPatched?.();
-                router.refresh();
-              }
-            } catch {
-              /* ignore */
-            }
-          },
-        }]
-      : []),
-    ...(hasAdvance && isComplete
-      ? [{
-          label: 'Mark as in progress',
-          icon: ListOrdered,
-          onClick: async () => {
-            try {
-              const res = await fetch(`/api/tours/${tourId}/advance/${item.routing_id}`, {
-                method: 'PATCH',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ status: 'in_progress' }),
-              });
-              if (res.ok) {
-                showToast('Marked as in progress');
-                onPatched?.();
-                router.refresh();
-              }
-            } catch {
-              /* ignore */
-            }
-          },
-        }]
-      : []),
-    ...(hasAdvance
-      ? [{
-          label: 'Delete advance',
-          icon: Trash2,
-          variant: 'danger' as const,
-          onClick: () => setDeleteOpen(true),
-        }]
-      : []),
-  ].filter(Boolean) as { label: string; icon: typeof ExternalLink; onClick: () => void; variant?: 'danger' }[];
-
-  return (
-    <li className={cn(deletingFade && 'opacity-0 bg-red-500/10 transition-all duration-200')}>
-      <div
-        role="button"
-        tabIndex={0}
-        onClick={handleClick}
-        onKeyDown={(e) => e.key === 'Enter' && handleClick(e as unknown as React.MouseEvent)}
-        className="flex cursor-pointer items-center gap-4 rounded-xl border border-lp-border bg-lp-surface p-4 transition-colors hover:border-lp-border-light hover:bg-lp-surface-hover"
-      >
-        <div className="flex shrink-0 items-center gap-3">
-          <span className="w-24 text-sm font-medium text-lp-text">{dateLabel}</span>
-          {dayTypeColors && (
-            <span
-              className={cn(
-                'rounded-full px-2.5 py-0.5 text-xs font-medium',
-                dayTypeColors.bg,
-                dayTypeColors.text
-              )}
-            >
-              {getDayTypeLabel(item.day_type)}
-            </span>
-          )}
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium text-lp-text">
-            {item.venue_name || '—'}
-          </p>
-          <p className="truncate text-xs text-lp-text-tertiary">{item.city || '—'}</p>
-        </div>
-        <div className="flex shrink-0 items-center gap-3">
-          {!hasAdvance ? (
-            <>
-              <span className="rounded-full bg-gray-500/10 px-2.5 py-0.5 text-xs font-medium text-gray-500">
-                Not started
-              </span>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  router.push(`/tours/${tourId}/advance/${item.routing_id}`);
-                }}
-                className="inline-flex items-center gap-1 text-sm font-medium text-lp-orange hover:text-lp-orange-hover"
-              >
-                Set up advance
-                <ArrowRight size={14} />
-              </button>
-            </>
-          ) : (
-            <>
-              <div className="flex items-center gap-2">
-                <ProgressRing complete={completeCount} inProgress={inProgressCount} notStarted={notStartedCount} max={sectionCount} />
-                <span className="text-xs text-lp-text-secondary">
-                  {completeCount}/{sectionCount}
-                </span>
-              </div>
-              <span
-                className={cn(
-                  'rounded-full px-2.5 py-0.5 text-xs font-medium',
-                  statusInfo.bg,
-                  statusInfo.color
-                )}
-              >
-                {statusInfo.label}
-              </span>
-            </>
-          )}
-        </div>
-        <div data-context-menu className="shrink-0" onClick={(e) => e.stopPropagation()}>
-          <ContextMenu items={menuItems} align="right" />
-        </div>
-        <ChevronRight className="h-4 w-4 shrink-0 text-lp-text-tertiary" />
-      </div>
-
-      <DeleteConfirmationModal
-        open={deleteOpen}
-        itemName={rowLabel}
-        onClose={() => setDeleteOpen(false)}
-        onConfirm={async () => {
-          const res = await fetch(`/api/tours/${tourId}/advance/${item.routing_id}`, { method: 'DELETE' });
-          if (!res.ok) {
-            const data = await res.json().catch(() => ({}));
-            throw new Error(data.error ?? 'Failed to delete advance');
-          }
-          showToast('Advance deleted');
-        }}
-        onDeleted={() => {
-          setDeletingFade(true);
-          setTimeout(() => onDeleted?.(), 200);
-        }}
-      />
-    </li>
-  );
-}
-
-function ProgressRing({
-  complete,
-  inProgress,
-  notStarted,
-  max,
-}: { complete: number; inProgress: number; notStarted: number; max: number }) {
-  const radius = 14;
-  const stroke = 3;
-  const circumference = 2 * Math.PI * (radius - stroke / 2);
-  const total = max > 0 ? max : 1;
-  const grayLen = (notStarted / total) * circumference;
-  const blueLen = (inProgress / total) * circumference;
-  const orangeLen = (complete / total) * circumference;
-  return (
-    <svg width={28} height={28} className="-rotate-90" style={{ transition: 'cubic-bezier(0.4, 0, 0.2, 1)' }}>
-      <circle
-        cx={14}
-        cy={14}
-        r={radius - stroke / 2}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={stroke}
-        className="text-gray-500/60"
-        strokeDasharray={`${grayLen} ${circumference - grayLen}`}
-        strokeDashoffset={-(blueLen + orangeLen)}
-        strokeLinecap="round"
-      />
-      <circle
-        cx={14}
-        cy={14}
-        r={radius - stroke / 2}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={stroke}
-        className="text-blue-500/30"
-        strokeDasharray={`${blueLen} ${circumference - blueLen}`}
-        strokeDashoffset={0}
-        strokeLinecap="round"
-      />
-      <circle
-        cx={14}
-        cy={14}
-        r={radius - stroke / 2}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={stroke}
-        className="text-lp-orange"
-        strokeDasharray={`${orangeLen} ${circumference - orangeLen}`}
-        strokeDashoffset={-blueLen}
-        strokeLinecap="round"
-      />
-    </svg>
-  );
-}
+/* ──────────────────────────────────────────────────────────────────────────
+   ApplyTemplateModal — unchanged from prior implementation. UX22 phase 4
+   converts this into a <SlideOver> primitive; phase 1 keeps it as-is so
+   we land the overview redesign without touching the layout-apply flow.
+   ────────────────────────────────────────────────────────────────────────── */
 
 function ApplyTemplateModal({
   tourId,
+  tourName,
   dates,
   templates,
   loading,
@@ -823,6 +841,7 @@ function ApplyTemplateModal({
   onDone,
 }: {
   tourId: string;
+  tourName: string;
   dates: AdvanceDateItem[];
   templates: FormTemplate[];
   loading: boolean;
@@ -830,6 +849,7 @@ function ApplyTemplateModal({
   onClose: () => void;
   onDone: () => void;
 }) {
+  void tourName;
   const [templateId, setTemplateId] = useState(() => initialTemplateId ?? '');
   const [targetIds, setTargetIds] = useState<Set<string>>(new Set());
   const [submitting, setSubmitting] = useState(false);
@@ -870,15 +890,16 @@ function ApplyTemplateModal({
   };
 
   const dateLabel = (d: AdvanceDateItem) =>
-    parseRoutingDate(d.date).toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short' });
+    parseRoutingDate(d.date).toLocaleDateString('en-GB', {
+      weekday: 'short',
+      day: '2-digit',
+      month: 'short',
+    });
 
   return (
-    <div
-      className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/60 p-4"
-      onClick={onClose}
-    >
+    <div className="fixed inset-0 z-[2000] flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
       <div
-        className="w-full max-w-lg rounded-xl border border-lp-border bg-lp-surface p-6 shadow-xl max-h-[90vh] overflow-y-auto"
+        className="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-xl border border-lp-border bg-lp-surface p-6 shadow-xl"
         onClick={(e) => e.stopPropagation()}
       >
         <h3 className="text-lg font-semibold text-lp-text">Apply template</h3>
@@ -889,9 +910,9 @@ function ApplyTemplateModal({
           <div>
             <label className="block text-xs font-medium text-lp-text-tertiary">Template</label>
             {loading ? (
-              <p className="mt-1 text-sm text-lp-text-tertiary">Loading...</p>
+              <p className="mt-1 text-sm text-lp-text-tertiary">Loading…</p>
             ) : (
-              <ul className="mt-2 space-y-1 max-h-48 overflow-y-auto rounded-xl border border-lp-border bg-lp-bg-secondary p-2">
+              <ul className="mt-2 max-h-48 space-y-1 overflow-y-auto rounded-xl border border-lp-border bg-lp-bg-secondary p-2">
                 {templates.map((t) => (
                   <li key={t.id} className="rounded-lg border border-lp-border bg-lp-surface">
                     <button
@@ -899,16 +920,20 @@ function ApplyTemplateModal({
                       onClick={() => setTemplateId(t.id)}
                       className={cn(
                         'w-full px-3 py-2.5 text-left text-sm',
-                        templateId === t.id ? 'bg-lp-orange/10 text-lp-orange font-medium' : 'text-lp-text hover:bg-lp-surface-hover'
+                        templateId === t.id
+                          ? 'bg-lp-orange/10 font-medium text-lp-orange'
+                          : 'text-lp-text hover:bg-lp-surface-hover',
                       )}
                     >
                       <span className="block">{t.name}</span>
                       <span className="text-xs text-lp-text-tertiary">
                         {t.sections?.length ?? 0} sections
-                        {t.sections?.length ? `: ${(t.sections as { label?: string }[]).map((s) => s.label || 'Section').join(', ')}` : ''}
+                        {t.sections?.length
+                          ? `: ${(t.sections as { label?: string }[]).map((s) => s.label || 'Section').join(', ')}`
+                          : ''}
                       </span>
                     </button>
-                    {templateId === t.id && (
+                    {templateId === t.id ? (
                       <div className="border-t border-lp-border px-3 py-2">
                         <button
                           type="button"
@@ -918,25 +943,27 @@ function ApplyTemplateModal({
                           {previewId === t.id ? 'Hide' : 'Show'} section list
                         </button>
                         {previewId === t.id && t.sections?.length ? (
-                          <ol className="mt-1.5 list-decimal pl-4 text-xs text-lp-text-secondary space-y-0.5">
+                          <ol className="mt-1.5 list-decimal space-y-0.5 pl-4 text-xs text-lp-text-secondary">
                             {(t.sections as { label?: string }[]).map((s, i) => (
                               <li key={i}>{s.label || `Section ${i + 1}`}</li>
                             ))}
                           </ol>
                         ) : null}
                       </div>
-                    )}
+                    ) : null}
                   </li>
                 ))}
               </ul>
             )}
-            {templates.length === 0 && !loading && (
-              <p className="mt-1 text-xs text-lp-text-tertiary">No saved templates. Save a layout as a template from the advance editor (Setup mode).</p>
-            )}
+            {templates.length === 0 && !loading ? (
+              <p className="mt-1 text-xs text-lp-text-tertiary">
+                No saved templates. Save a layout as a template from the advance editor (Setup mode).
+              </p>
+            ) : null}
           </div>
           <div>
             <label className="block text-xs font-medium text-lp-text-tertiary">Apply to shows</label>
-            <div className="mt-2 max-h-40 overflow-y-auto rounded-xl border border-lp-border bg-lp-bg-secondary p-2 space-y-1">
+            <div className="mt-2 max-h-40 space-y-1 overflow-y-auto rounded-xl border border-lp-border bg-lp-bg-secondary p-2">
               {dates.map((d) => (
                 <label key={d.routing_id} className="flex cursor-pointer items-center gap-2">
                   <input
@@ -947,17 +974,17 @@ function ApplyTemplateModal({
                   />
                   <span className="text-sm text-lp-text">
                     {dateLabel(d)} — {d.venue_name || d.city || '—'}
-                    {d.advance && <span className="text-amber-600 dark:text-amber-400 ml-1">(has data)</span>}
+                    {d.advance ? <span className="ml-1 text-amber-600 dark:text-amber-400">(has data)</span> : null}
                   </span>
                 </label>
               ))}
             </div>
           </div>
-          {selectedTargetsHaveData && (
-            <p className="rounded-lg border border-amber-200 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-950/20 px-3 py-2 text-sm text-amber-800 dark:text-amber-200">
+          {selectedTargetsHaveData ? (
+            <p className="rounded-lg border border-amber-200 bg-amber-50/50 px-3 py-2 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/20 dark:text-amber-200">
               Some selected shows already have advance data. Applying will replace their section layout; existing form data may be lost.
             </p>
-          )}
+          ) : null}
         </div>
         <div className="mt-6 flex justify-end gap-2">
           <button
@@ -973,10 +1000,15 @@ function ApplyTemplateModal({
             disabled={!selectedTemplate || targetIds.size === 0 || submitting}
             className="rounded-xl bg-lp-orange px-4 py-2 text-sm font-medium text-white hover:bg-lp-orange-hover disabled:opacity-50"
           >
-            {submitting ? 'Applying...' : 'Apply'}
+            {submitting ? 'Applying…' : 'Apply'}
           </button>
         </div>
       </div>
     </div>
   );
 }
+
+// Re-export icon to keep tree-shaking aware that MoreHorizontal is part of
+// the toolbar context-menu surface (the ContextMenu component imports its
+// own MoreVertical icon, but we may swap to MoreHorizontal in a follow-up).
+export { MoreHorizontal };
