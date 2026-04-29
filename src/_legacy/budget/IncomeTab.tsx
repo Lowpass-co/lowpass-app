@@ -12,7 +12,7 @@ import { RoutingGrid, type RoutingRow, type TransportToNext } from '@/components
 import { BrandedSelect } from '@/components/ui/BrandedSelect';
 import type { PrimaryTransit } from '@/components/routing/RoutingMap';
 const BudgetRoutingMap = dynamic(
-  () => import('./BudgetRoutingMap').then((m) => ({ default: m.BudgetRoutingMap })),
+  () => import('@/components/budget/BudgetRoutingMap').then((m) => ({ default: m.BudgetRoutingMap })),
   {
     ssr: false,
     loading: () => (

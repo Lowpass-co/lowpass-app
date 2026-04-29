@@ -25,9 +25,11 @@ import { TourBudgetRebuildClient } from '@/components/budget/TourBudgetRebuildCl
 import { MobileBudgetBanner } from '@/components/mobile/MobileBudgetBanner';
 import { BudgetPhaseStripClient } from '@/components/budget/BudgetPhaseStripClient';
 import { BudgetOverviewPanels } from '@/components/budget/BudgetOverviewPanels';
+import { BudgetMainTable } from '@/components/budget/BudgetMainTable';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { computeTourPhases } from '@/server/budget/computeTourPhases';
 import { getBudgetPanelData } from '@/server/budget/getBudgetPanelData';
+import type { BudgetLineItem } from '@/types';
 
 export async function generateMetadata({
   params,
@@ -60,7 +62,7 @@ export default async function TourBudgetPage({
 
   const workspaceId = tour.workspace_id as string;
 
-  const [phases, panelData, lineItemsRes] = await Promise.all([
+  const [phases, panelData, lineItemsRes, routingRes] = await Promise.all([
     computeTourPhases(supabase, id),
     getBudgetPanelData(supabase, id),
     supabase
@@ -72,6 +74,7 @@ export default async function TourBudgetPage({
       .order('sort_order', { ascending: true })
       .order('category')
       .order('order_index', { ascending: true }),
+    supabase.from('routing').select('id, date').eq('tour_id', id),
   ]);
 
   const phaseBoundaries = phases.map((p) => ({
@@ -80,6 +83,11 @@ export default async function TourBudgetPage({
     startIso: p.startDate,
   }));
   const tourCurrency = (tour.currency as string | null) ?? 'GBP';
+  const lines: BudgetLineItem[] = (lineItemsRes.data ?? []) as BudgetLineItem[];
+  const routingDateById: Record<string, string> = {};
+  for (const r of (routingRes.data ?? []) as Array<{ id: string; date: string | null }>) {
+    if (r.id && r.date) routingDateById[r.id] = r.date.slice(0, 10);
+  }
 
   // TODO(UX14): once budget section list is treated as a rail, replace
   // topBarOnlyAppPageShell with spreadsheetAppPageShell + a section variant.
@@ -88,17 +96,27 @@ export default async function TourBudgetPage({
       {/* TODO(post-PR#3): mount <TourBreadcrumbServer tourId={id} />
          here when the nav-redesign branch merges. */}
       <BudgetPhaseStripClient phases={phases} />
-      <div className="px-4">
+      <div className="space-y-6 px-4 pt-4">
         <BudgetOverviewPanels
           allocation={panelData.allocation}
           burn={panelData.burn}
           phaseBoundaries={phaseBoundaries}
           currency={tourCurrency}
         />
+        <BudgetMainTable
+          lines={lines}
+          phases={phases}
+          routingDateById={routingDateById}
+          tourCurrency={tourCurrency}
+          tourId={id}
+        />
       </div>
       <MobileBudgetBanner />
+      {/* TourBudgetRebuildClient (UX14 section editor) preserved beneath
+         the new hub for inline section edits. Its tabs and search-by-
+         section affordances complement the new top-level table. */}
       <TourBudgetRebuildClient
-        initialLines={lineItemsRes.data ?? []}
+        initialLines={lines}
         tourDefaultCurrency={tourCurrency}
         tourId={id}
       />
