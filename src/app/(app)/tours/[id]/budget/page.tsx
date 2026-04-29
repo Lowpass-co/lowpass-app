@@ -26,6 +26,7 @@ import { MobileBudgetBanner } from '@/components/mobile/MobileBudgetBanner';
 import { BudgetPhaseStripClient } from '@/components/budget/BudgetPhaseStripClient';
 import { BudgetOverviewPanels } from '@/components/budget/BudgetOverviewPanels';
 import { BudgetMainTable } from '@/components/budget/BudgetMainTable';
+import { ReceiptInbox } from '@/components/budget/ReceiptInbox';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { computeTourPhases } from '@/server/budget/computeTourPhases';
 import { getBudgetPanelData } from '@/server/budget/getBudgetPanelData';
@@ -110,6 +111,7 @@ export default async function TourBudgetPage({
           tourCurrency={tourCurrency}
           tourId={id}
         />
+        <ReceiptInbox tourId={id} lineItems={lines} />
       </div>
       <MobileBudgetBanner />
       {/* TourBudgetRebuildClient (UX14 section editor) preserved beneath
