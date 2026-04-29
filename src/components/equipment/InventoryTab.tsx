@@ -5,13 +5,15 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Plus, Pencil, Trash2, Search, Upload, SquarePen, Check, X as XIcon, ImageIcon, Loader2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, Upload, SquarePen, Check, X as XIcon, ImageIcon, Loader2, Briefcase } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { createClient } from '@/lib/supabase-client';
 import { InventoryModal } from './InventoryModal';
 import { ImportModal } from './ImportModal';
 import { StyledSelect, type StyledSelectOption } from '@/components/ui/StyledSelect';
 import { BrandedSelect } from '@/components/ui/BrandedSelect';
+import { useToast } from '@/components/ui/Toast';
+import { createGearFromRentalInventory } from '@/lib/api/gear';
 import {
   dayRateFromPurchase,
   effectiveInventoryDayRate,
@@ -23,6 +25,8 @@ import {
   fmtUSD,
   type RentalInventoryItem,
 } from './types';
+
+type TourOpt = { id: string; name: string };
 
 const INVENTORY_TOOLBAR_CLASS = 'grid w-full min-w-0 grid-cols-[minmax(0,1fr)_10rem_minmax(5.5rem,auto)_auto] items-center gap-3';
 
@@ -57,7 +61,50 @@ export function InventoryTab({ userId, inventory, setInventory }: Props) {
   const [imgFill, setImgFill] = useState<{ current: number; total: number; found: number } | null>(null);
   const imgFillStop = useRef(false);
 
+  /* ── UX21: "Add to tour" modal state ── */
+  const { showToast } = useToast();
+  const [addToTourFor, setAddToTourFor] = useState<RentalInventoryItem | null>(null);
+  const [tours, setTours] = useState<TourOpt[]>([]);
+  const [toursLoaded, setToursLoaded] = useState(false);
+  const [addingToTourId, setAddingToTourId] = useState<string | null>(null);
+
   const supabase = createClient();
+
+  // Lazy-load active tours the first time the user opens the picker.
+  useEffect(() => {
+    if (!addToTourFor || toursLoaded) return;
+    void (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('workspace_id')
+        .eq('id', user.id)
+        .single();
+      if (!profile?.workspace_id) return;
+      const { data } = await supabase
+        .from('tours')
+        .select('id, name, status')
+        .eq('workspace_id', profile.workspace_id)
+        .in('status', ['planning', 'active'])
+        .order('start_date', { ascending: false });
+      setTours(((data ?? []) as TourOpt[]).map((t) => ({ id: t.id, name: t.name })));
+      setToursLoaded(true);
+    })();
+  }, [addToTourFor, toursLoaded, supabase]);
+
+  const handleAddToTour = async (rentalInv: RentalInventoryItem, tourId: string, tourName: string) => {
+    setAddingToTourId(tourId);
+    try {
+      await createGearFromRentalInventory(rentalInv.id, { tourId, ownership: 'owned' });
+      showToast(`Added "${rentalInv.name}" to ${tourName}`);
+      setAddToTourFor(null);
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Failed to add to tour', 'error');
+    } finally {
+      setAddingToTourId(null);
+    }
+  };
 
   const categoryOptions: StyledSelectOption<string>[] = [
     { value: '', label: 'All categories' },
@@ -787,6 +834,12 @@ export function InventoryTab({ userId, inventory, setInventory }: Props) {
                       <td className="px-4 py-2.5 text-right">
                         {!editMode && (
                           <div className="flex justify-end gap-1">
+                            <button onClick={() => setAddToTourFor(item)} className="rounded-md p-1.5 transition-colors" style={{ color: 'var(--lp-text-tertiary)' }}
+                              onMouseOver={e => (e.currentTarget.style.color = '#FF4500')}
+                              onMouseOut={e => (e.currentTarget.style.color = 'var(--lp-text-tertiary)')}
+                              title="Add to tour">
+                              <Briefcase size={14} />
+                            </button>
                             <button onClick={() => openEdit(item)} className="rounded-md p-1.5 transition-colors" style={{ color: 'var(--lp-text-tertiary)' }}
                               onMouseOver={e => (e.currentTarget.style.color = 'var(--lp-text)')}
                               onMouseOut={e => (e.currentTarget.style.color = 'var(--lp-text-tertiary)')}
@@ -834,6 +887,68 @@ export function InventoryTab({ userId, inventory, setInventory }: Props) {
           }}
           onClose={() => setImport(false)}
         />
+      )}
+
+      {/* UX21 — "Add to tour" picker. Calls createGearFromRentalInventory which
+          promotes the row to canonical Gear (or reuses an existing link) and
+          inserts a tour_gear join row in the same call. Default ownership: owned. */}
+      {addToTourFor && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+          onClick={() => addingToTourId === null && setAddToTourFor(null)}
+        >
+          <div
+            className="w-full max-w-md rounded-xl border border-lp-border bg-lp-surface p-5 shadow-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="mb-4 flex items-start justify-between gap-2">
+              <div className="min-w-0">
+                <h3 className="text-base font-semibold text-lp-text">Add to tour</h3>
+                <p className="mt-0.5 truncate text-xs text-lp-text-secondary">
+                  {addToTourFor.name}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => addingToTourId === null && setAddToTourFor(null)}
+                className="rounded-md p-1 text-lp-text-tertiary hover:text-lp-text"
+                title="Close"
+              >
+                <XIcon size={16} />
+              </button>
+            </div>
+
+            {!toursLoaded ? (
+              <div className="flex items-center gap-2 px-1 py-3 text-sm text-lp-text-secondary">
+                <Loader2 className="h-4 w-4 animate-spin" /> Loading tours…
+              </div>
+            ) : tours.length === 0 ? (
+              <p className="px-1 py-3 text-sm text-lp-text-secondary">
+                No active tours. Create a tour first.
+              </p>
+            ) : (
+              <ul className="max-h-72 divide-y divide-lp-border overflow-y-auto rounded-md border border-lp-border">
+                {tours.map((t) => (
+                  <li key={t.id}>
+                    <button
+                      type="button"
+                      disabled={addingToTourId !== null}
+                      onClick={() => void handleAddToTour(addToTourFor, t.id, t.name)}
+                      className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-lp-bg-tertiary/40 disabled:opacity-50"
+                    >
+                      <span className="truncate text-lp-text">{t.name}</span>
+                      {addingToTourId === t.id ? (
+                        <Loader2 className="h-4 w-4 shrink-0 animate-spin text-lp-text-tertiary" />
+                      ) : (
+                        <Plus size={14} className="shrink-0 text-lp-text-tertiary" />
+                      )}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
       )}
     </div>
   );

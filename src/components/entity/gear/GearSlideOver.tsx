@@ -1,10 +1,17 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Loader2, ExternalLink, X } from 'lucide-react';
+import Link from 'next/link';
 import Image from 'next/image';
-import { getGearById, updateGear } from '@/lib/api/gear';
+import {
+  getGearById,
+  linkGearToRentalInventory,
+  searchUnlinkedRentalInventory,
+  updateGear,
+} from '@/lib/api/gear';
 import type { Gear, TourGear } from '@/lib/types/gear';
+import type { RentalInventory } from '@/lib/types/rental';
 import { SlideOver } from '@/components/shell/SlideOver';
 
 type GearWithTours = Gear & { tourGear?: TourGear[] };
@@ -288,6 +295,12 @@ export default function GearSlideOver({ id, onClose }: { id: string; onClose: ()
               </div>
             </section>
 
+            <RentalInventoryLinkSection
+              gearId={gear.id}
+              rentalInventoryId={gear.rentalInventoryId}
+              onChange={(updated) => setGear(updated)}
+            />
+
             <section className="space-y-2">
               <h4 className="text-xs uppercase tracking-wider text-lp-text-secondary">Notes</h4>
               <textarea
@@ -308,5 +321,144 @@ export default function GearSlideOver({ id, onClose }: { id: string; onClose: ()
         )}
       </div>
     </SlideOver>
+  );
+}
+
+/**
+ * UX21 — Rental inventory link section inside GearSlideOver.
+ * - When linked: shows the link with a deep-link to /equipment and an Unlink button.
+ * - When unlinked: shows a debounced picker over the workspace's unlinked
+ *   rental_inventory rows. Selecting one calls linkGearToRentalInventory.
+ */
+function RentalInventoryLinkSection({
+  gearId,
+  rentalInventoryId,
+  onChange,
+}: {
+  gearId: string;
+  rentalInventoryId: string | null;
+  onChange: (updated: Gear & { tourGear?: TourGear[] }) => void;
+}) {
+  const [pickerQuery, setPickerQuery] = useState('');
+  const [results, setResults] = useState<RentalInventory[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [linkErr, setLinkErr] = useState<string | null>(null);
+  const [linking, setLinking] = useState(false);
+
+  const runSearch = useCallback((q: string) => {
+    setSearching(true);
+    setLinkErr(null);
+    void searchUnlinkedRentalInventory(q, { limit: 20 })
+      .then((items) => setResults(items))
+      .catch((e) => setLinkErr((e as Error).message))
+      .finally(() => setSearching(false));
+  }, []);
+
+  // Debounced search when picker is open (rentalInventoryId is null).
+  useEffect(() => {
+    if (rentalInventoryId) return;
+    const t = window.setTimeout(() => runSearch(pickerQuery.trim()), 220);
+    return () => window.clearTimeout(t);
+  }, [rentalInventoryId, pickerQuery, runSearch]);
+
+  const link = useCallback(
+    async (rentalInvId: string | null) => {
+      setLinking(true);
+      setLinkErr(null);
+      try {
+        const updated = await linkGearToRentalInventory(gearId, rentalInvId);
+        onChange(updated);
+      } catch (e) {
+        setLinkErr((e as Error).message);
+      } finally {
+        setLinking(false);
+      }
+    },
+    [gearId, onChange],
+  );
+
+  return (
+    <section className="space-y-2">
+      <h4 className="text-xs uppercase tracking-wider text-lp-text-secondary">
+        Rental inventory link
+      </h4>
+
+      {rentalInventoryId ? (
+        <div className="space-y-2">
+          <div className="rounded border border-lp-border bg-lp-bg-tertiary/40 px-3 py-2 text-xs">
+            <p className="text-lp-text-secondary">
+              Linked to a rental inventory item. The Channel List picker will surface this gear
+              from the rental house source.
+            </p>
+            <p className="mt-1 font-mono text-[10px] text-lp-text-tertiary">{rentalInventoryId}</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/equipment"
+              className="inline-flex items-center gap-1 rounded border border-lp-border px-2 py-1 text-xs text-lp-text-secondary hover:border-lp-orange hover:text-lp-orange"
+            >
+              <ExternalLink className="h-3 w-3" /> Open /equipment
+            </Link>
+            <button
+              type="button"
+              disabled={linking}
+              onClick={() => void link(null)}
+              className="inline-flex items-center gap-1 rounded border border-lp-border px-2 py-1 text-xs text-lp-text-secondary hover:border-red-500 hover:text-red-500 disabled:opacity-50"
+            >
+              <X className="h-3 w-3" /> Unlink
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <p className="text-xs text-lp-text-secondary">
+            Link this canonical gear to its underlying rental_inventory row.
+          </p>
+          <input
+            type="text"
+            value={pickerQuery}
+            onChange={(e) => setPickerQuery(e.target.value)}
+            placeholder="Search rental inventory…"
+            className="w-full rounded border border-lp-border bg-transparent px-2 py-1 text-sm"
+          />
+          <div className="max-h-44 overflow-y-auto rounded border border-lp-border">
+            {searching && results.length === 0 ? (
+              <div className="px-3 py-2 text-xs text-lp-text-tertiary">Searching…</div>
+            ) : results.length === 0 ? (
+              <div className="px-3 py-2 text-xs text-lp-text-tertiary">
+                No unlinked rental items match.
+              </div>
+            ) : (
+              <ul className="divide-y divide-lp-border">
+                {results.map((r) => (
+                  <li key={r.id}>
+                    <button
+                      type="button"
+                      disabled={linking}
+                      onClick={() => void link(r.id)}
+                      className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-xs hover:bg-lp-bg-tertiary/40 disabled:opacity-50"
+                    >
+                      <span className="min-w-0 truncate">
+                        <span className="font-medium text-lp-text">{r.name}</span>
+                        {r.category ? (
+                          <span className="ml-2 text-lp-text-secondary">· {r.category}</span>
+                        ) : null}
+                      </span>
+                      {r.dayRate != null ? (
+                        <span className="shrink-0 text-lp-text-tertiary tabular-nums">
+                          £{r.dayRate}/day
+                        </span>
+                      ) : null}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+      )}
+
+      {linkErr ? <p className="text-xs text-red-500">{linkErr}</p> : null}
+    </section>
   );
 }
