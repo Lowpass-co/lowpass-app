@@ -2,9 +2,10 @@
 
 import dynamic from 'next/dynamic';
 import { useEffect, useMemo, useState } from 'react';
-import { createDealMemo, listDealMemos, type DealMemoListFilters } from '@/lib/api/deal-memos';
+import { createDealMemo, listDealMemos } from '@/lib/api/deal-memos';
 import type { DealMemoStatus, DealMemoListRow } from '@/lib/types/deal-memo';
-import { DataTable } from '@/components/entity/DataTable';
+import { DataTable } from '@/components/data-table/DataTable';
+import type { ColumnDef } from '@/components/data-table/types';
 
 const DealMemoSlideOver = dynamic(() => import('@/components/entity/deal-memo/DealMemoSlideOver'), { ssr: false });
 
@@ -40,8 +41,6 @@ export function DealMemoLibraryClient({
 }: {
   tours: DealMemoTourOpt[];
 }) {
-  const [filters, setFilters] = useState<DealMemoListFilters>({});
-  const [scopeFilter, setScopeFilter] = useState<'' | 'show' | 'tour-wide'>('');
   const [rows, setRows] = useState<DealMemoListRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -54,13 +53,7 @@ export function DealMemoLibraryClient({
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
-    void listDealMemos({
-      ...(filters.status ? { status: filters.status } : {}),
-      ...(filters.tour_id?.trim() ? { tour_id: filters.tour_id } : {}),
-      ...(filters.year ? { year: filters.year } : {}),
-      ...(scopeFilter === 'show' || scopeFilter === 'tour-wide' ? { scope: scopeFilter } : {}),
-      ...(filters.q?.trim() ? { q: filters.q.trim() } : {}),
-    })
+    void listDealMemos({})
       .then((r) => {
         if (!cancelled) setRows(r);
       })
@@ -73,13 +66,7 @@ export function DealMemoLibraryClient({
     return () => {
       cancelled = true;
     };
-  }, [
-    filters.status,
-    filters.tour_id,
-    filters.year,
-    scopeFilter,
-    filters.q,
-  ]);
+  }, []);
 
   const yearOptions = useMemo(() => {
     const ys = new Set<number>();
@@ -94,52 +81,79 @@ export function DealMemoLibraryClient({
     return Array.from(ys).sort((a, b) => b - a).map(String);
   }, [rows]);
 
-  const columns = useMemo(
+  const columns = useMemo<ColumnDef<DealMemoListRow>[]>(
     () => [
       {
-        key: 'title',
+        id: 'title',
         header: 'Title',
-        render: (r: DealMemoListRow) => <span className="font-medium">{r.title}</span>,
+        accessor: 'title',
+        sortable: true,
+        frozen: true,
+        cell: (value) => <span className="font-medium">{String(value)}</span>,
       },
       {
-        key: 'tour',
+        id: 'tour',
         header: 'Tour',
-        render: (r: DealMemoListRow) => r.tourName ?? '—',
+        accessor: (r) => r.tourName ?? '',
+        filter: { kind: 'select', options: tours.map((t) => ({ value: t.name, label: t.name })) },
+        cell: (value) => String(value || '—'),
       },
       {
-        key: 'show',
+        id: 'show',
         header: 'Show',
-        render: (r: DealMemoListRow) => (r.showId ? r.showLabel ?? 'Show-linked' : 'Tour-wide'),
+        accessor: (r) => (r.showId ? r.showLabel ?? 'Show-linked' : 'Tour-wide'),
       },
       {
-        key: 'status',
+        id: 'status',
         header: 'Status',
-        render: (r: DealMemoListRow) => <StatusPill status={r.status} />,
+        accessor: 'status',
+        filter: {
+          kind: 'select',
+          options: [
+            { value: 'draft', label: 'draft' },
+            { value: 'sent', label: 'sent' },
+            { value: 'pending', label: 'pending' },
+            { value: 'signed', label: 'signed' },
+            { value: 'expired', label: 'expired' },
+          ],
+        },
+        cell: (value) => <StatusPill status={value as DealMemoStatus} />,
       },
       {
-        key: 'fee',
+        id: 'fee',
         header: 'Fee',
-        className: 'text-right',
-        render: (r: DealMemoListRow) =>
-          r.feeAmount != null ? `${r.feeCurrency} ${Number(r.feeAmount).toLocaleString()}` : '—',
+        align: 'right',
+        accessor: (r) => r.feeAmount ?? 0,
+        sortable: true,
+        cell: (_, r) => (r.feeAmount != null ? `${r.feeCurrency} ${Number(r.feeAmount).toLocaleString()}` : '—'),
       },
       {
-        key: 'sent',
+        id: 'sent',
         header: 'Sent',
-        render: (r: DealMemoListRow) => fmt(r.sentAt),
+        accessor: (r) => r.sentAt ?? '',
+        cell: (value) => fmt((value as string) || null),
       },
       {
-        key: 'signed',
+        id: 'signed',
         header: 'Signed',
-        render: (r: DealMemoListRow) => fmt(r.signedAt),
+        accessor: (r) => r.signedAt ?? '',
+        cell: (value) => fmt((value as string) || null),
       },
       {
-        key: 'updated',
+        id: 'updated',
         header: 'Updated',
-        render: (r: DealMemoListRow) => fmt(r.updatedAt),
+        accessor: (r) => r.updatedAt,
+        sortable: true,
+        cell: (value) => fmt(String(value)),
+      },
+      {
+        id: 'year',
+        header: 'Year',
+        accessor: (r) => String(new Date(r.createdAt).getFullYear()),
+        filter: { kind: 'select', options: yearOptions.map((y) => ({ value: y, label: y })) },
       },
     ],
-    []
+    [tours, yearOptions]
   );
 
   const submitCreate = async () => {
@@ -167,72 +181,6 @@ export function DealMemoLibraryClient({
   return (
     <div className="space-y-4">
       {error ? <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{error}</div> : null}
-
-      <div className="flex flex-wrap gap-3">
-        <input
-          className="min-w-[200px] flex-1 rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text outline-none focus:border-lp-orange"
-          placeholder="Search titles…"
-          value={filters.q ?? ''}
-          onChange={(e) => setFilters((f) => ({ ...f, q: e.target.value }))}
-        />
-        <select
-          className="rounded-lg border border-lp-border bg-lp-surface px-2 py-2 text-sm text-lp-text outline-none focus:border-lp-orange"
-          value={filters.status ?? ''}
-          onChange={(e) =>
-            setFilters((f) => ({
-              ...f,
-              status: e.target.value ? (e.target.value as DealMemoStatus) : undefined,
-            }))
-          }
-          aria-label="Filter by status"
-        >
-          <option value="">All statuses</option>
-          <option value="draft">Draft</option>
-          <option value="sent">Sent</option>
-          <option value="pending">Pending</option>
-          <option value="signed">Signed</option>
-          <option value="expired">Expired</option>
-        </select>
-        <select
-          className="min-w-[180px] rounded-lg border border-lp-border bg-lp-surface px-2 py-2 text-sm outline-none focus:border-lp-orange"
-          value={filters.tour_id ?? ''}
-          onChange={(e) => setFilters((f) => ({ ...f, tour_id: e.target.value || '' }))}
-          aria-label="Filter by tour"
-        >
-          <option value="">All tours</option>
-          {tours.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.name}
-            </option>
-          ))}
-        </select>
-        <select
-          className="rounded-lg border border-lp-border bg-lp-surface px-2 py-2 text-sm outline-none focus:border-lp-orange"
-          value={filters.year ?? ''}
-          onChange={(e) => setFilters((f) => ({ ...f, year: e.target.value || '' }))}
-          aria-label="Filter by year created"
-        >
-          <option value="">All years</option>
-          {yearOptions.map((y) => (
-            <option key={y} value={y}>
-              {y}
-            </option>
-          ))}
-        </select>
-        <select
-          className="rounded-lg border border-lp-border bg-lp-surface px-2 py-2 text-sm outline-none focus:border-lp-orange"
-          value={scopeFilter}
-          onChange={(e) => {
-            const v = e.target.value;
-            setScopeFilter(v === 'show' || v === 'tour-wide' ? v : '');
-          }}
-          aria-label="Scope"
-        >
-          <option value="">All scopes</option>
-          <option value="show">Show-linked</option>
-          <option value="tour-wide">Tour-wide only</option>
-        </select>
-      </div>
 
       <div
         className="rounded-xl border border-lp-border/80 p-4"
@@ -274,18 +222,13 @@ export function DealMemoLibraryClient({
         </div>
       </div>
 
-      <div className="flex items-center gap-2 text-[10px] font-bold uppercase text-lp-text-tertiary">
-        <span>Quick:</span>
-        <button type="button" className="rounded border border-lp-border px-2 py-0.5" onClick={() => setFilters((f) => ({ ...f, status: undefined }))}>
-          Clear status
-        </button>
-      </div>
-
       <DataTable
-        rows={rows}
-        emptyLabel={loading ? 'Loading…' : 'No deal memos yet'}
+        rows={loading ? undefined : rows}
+        rowKey={(row) => row.id}
+        emptyState="No deal memos yet"
         onRowClick={(r) => setSelectedId(r.id)}
         columns={columns}
+        searchPlaceholder="Search deal memos…"
       />
 
       {selectedId ? <DealMemoSlideOver id={selectedId} onClose={() => setSelectedId(null)} /> : null}
