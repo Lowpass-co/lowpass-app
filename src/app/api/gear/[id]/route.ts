@@ -121,6 +121,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (body.hire_cost_period !== undefined) payload.hire_cost_period = body.hire_cost_period;
   if (body.notes !== undefined) payload.notes = body.notes;
   if (body.image_url !== undefined) payload.image_url = body.image_url;
+  // UX21 — link / unlink to a rental_inventory row.
+  if (body.rental_inventory_id !== undefined) payload.rental_inventory_id = body.rental_inventory_id;
 
   if (Object.keys(payload).length > 0) {
     const { error: updateErr } = await supabase.from('gear').update(payload).eq('id', id);

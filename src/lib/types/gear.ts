@@ -15,6 +15,8 @@ export type Gear = {
   hireCostPeriod: string | null;
   notes: string | null;
   imageUrl: string | null;
+  /** UX21 — bridge to rental_inventory when this gear is owned via the rental house. */
+  rentalInventoryId: string | null;
   createdAt: string;
   updatedAt: string;
 };
