@@ -653,6 +653,18 @@ export function LeftRail({ variant, collapsed: controlledCollapsed, onCollapsedC
     return null;
   }
 
+  // List archetype with no filters and no saved views configured: render
+  // nothing. PageShell's grid collapses the rail column and the main content
+  // takes the full viewport width. Once a list page wires its column-filter
+  // API or saved-views catalogue, the rail returns automatically.
+  if (variant.kind === 'list') {
+    const hasFilters = (variant.filters?.length ?? 0) > 0;
+    const hasSavedViews = (variant.savedViews?.length ?? 0) > 0;
+    if (!hasFilters && !hasSavedViews) {
+      return null;
+    }
+  }
+
   const width = collapsed ? 'var(--lp-rail-collapsed)' : 'var(--lp-rail-width)';
 
   return (
