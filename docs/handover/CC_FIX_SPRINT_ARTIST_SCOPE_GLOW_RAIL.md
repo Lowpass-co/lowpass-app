@@ -1,6 +1,6 @@
-# Fix Sprint — Artist Scope + Glow + Rail + Theme + Rider RLS
+# Fix Sprint — Artist Scope + Glow + Rail + Theme + Rider RLS + Advance Template Delete
 
-> Five small bugs surfaced during runtime smoke after the A/B/C nav + avatar + ⌘K fix sprint. Run this AFTER A/B/C lands cleanly. Single short session, five commits.
+> Six small bugs surfaced during runtime smoke after the A/B/C nav + avatar + ⌘K fix sprint and UX22 ship. Run this AFTER A/B/C lands cleanly. Single short session, six commits.
 
 ---
 
@@ -19,7 +19,7 @@
 2. All visual values via `var(--lp-…)` tokens.
 3. No `any`, no `// @ts-ignore`.
 4. Lint + typecheck clean (75/121 baseline).
-5. Five commits, in order: A → B → C → D → E.
+5. Six commits, in order: A → B → C → D → E → F.
 
 ---
 
@@ -401,9 +401,131 @@ Made-with: Claude Code (artist scope / glow / rail / theme / rider sprint)
 
 ---
 
+## F. Advance template delete — add missing UPDATE/DELETE RLS policies (~15 min)
+
+The X next to a workspace custom advance section ("Support / Act / Who is…") opens the confirm modal, the user confirms, the modal closes, and the section reappears in the Custom block. This has resisted three previous attempted fixes because the symptom looks like a client/UI bug but the bug is in the database.
+
+### F.1 Root cause
+
+`public.advance_templates` has had RLS enabled since `001_initial_schema.sql`, but only ever received SELECT and INSERT policies (added in `011_advance_system_enhancements.sql` as `at_select` / `at_insert`). **No UPDATE policy. No DELETE policy. Anywhere. In any migration.**
+
+Postgres default-deny RLS means: when the API at `src/app/api/advance/templates/[id]/route.ts` calls `.delete().eq('id', x).eq('workspace_id', y)` against `advance_templates` using the user-session client, the absent DELETE policy filters out every row → 0 rows match → DELETE affects 0 rows → **Supabase returns success, no error**. The route returns 204. The client's `if (res.ok)` branch runs, optimistically removes from local state, then calls `fetchTemplates()` which re-fetches and the "deleted" template is back. The PATCH path has the same hidden problem (saves silently no-op).
+
+The DELETE route uses `createServerSupabaseClient` (anon key + cookies, RLS-respected), not the service role — so RLS is in force and the missing policy is decisive. Verified: the route file looks fine, the client modal flow looks fine, the schema looks fine. The bug is purely in the policy gap.
+
+### F.2 Migration
+
+Migration number: next sequential after `058_rider_folders_relax_admin_gate.sql`. Use `059_advance_templates_update_delete_policies.sql`. Verify before writing:
+
+```bash
+ls database/migrations/[0-9][0-9][0-9]_*.sql | sort | tail -3
+```
+
+### F.3 SQL
+
+```sql
+-- ============================================
+-- LOWPASS — advance_templates UPDATE/DELETE RLS policies
+-- Migration 059
+--
+-- 011_advance_system_enhancements.sql added at_select / at_insert
+-- but never UPDATE or DELETE. With default-deny RLS, the existing
+-- DELETE API (and any future PATCH that goes through the user
+-- session client) silently affects 0 rows. The user sees: confirm
+-- modal closes, custom section reappears (because fetchTemplates
+-- repopulates a row that was never actually deleted).
+--
+-- Add UPDATE and DELETE policies, scoped to workspace ownership.
+-- Platform templates (workspace_id IS NULL) remain immutable to
+-- end users — no workspace owns them, so the gate fails.
+-- ============================================
+
+DROP POLICY IF EXISTS "at_update" ON public.advance_templates;
+CREATE POLICY "at_update"
+  ON public.advance_templates FOR UPDATE
+  USING (workspace_id IS NOT NULL AND workspace_id = public.get_my_workspace_id())
+  WITH CHECK (workspace_id IS NOT NULL AND workspace_id = public.get_my_workspace_id());
+
+DROP POLICY IF EXISTS "at_delete" ON public.advance_templates;
+CREATE POLICY "at_delete"
+  ON public.advance_templates FOR DELETE
+  USING (workspace_id IS NOT NULL AND workspace_id = public.get_my_workspace_id());
+
+-- Down (commented for safety; uncomment to roll back manually):
+-- DROP POLICY IF EXISTS "at_update" ON public.advance_templates;
+-- DROP POLICY IF EXISTS "at_delete" ON public.advance_templates;
+```
+
+Save as `database/migrations/059_advance_templates_update_delete_policies.sql`. Adam will paste into Supabase SQL editor after merge.
+
+### F.4 Client safety net (small)
+
+`src/app/(app)/tours/[id]/advance/[routingId]/AdvanceSectionBuilder.tsx` `handleDeleteCustomSection` currently swallows non-ok responses silently (`if (res.ok)` with no else branch). Add a minimal error surface so a future RLS regression is visible instead of silent. Small diff inside `handleDeleteCustomSection`:
+
+```ts
+const handleDeleteCustomSection = async () => {
+  if (!templateToDelete) return;
+  setDeletingTemplate(true);
+  try {
+    const res = await fetch(`/api/advance/templates/${templateToDelete.id}`, { method: 'DELETE' });
+    if (res.ok) {
+      setSections((prev) => prev.filter((s) => s.template_id !== templateToDelete.id));
+      fetchTemplates();
+      setTemplateToDelete(null);
+    } else {
+      const body = await res.json().catch(() => ({}));
+      console.error('[advance] template delete failed', { status: res.status, body });
+      alert(`Couldn't delete this section. ${body?.error ?? `HTTP ${res.status}`}`);
+    }
+  } finally {
+    setDeletingTemplate(false);
+  }
+};
+```
+
+(Yes, `alert()` is crude — replace with the workspace's toast primitive if one is wired in `AdvanceSectionBuilder`'s scope. The point is to fail loudly, not silently.)
+
+Optional but recommended: the same pattern in this file's PATCH paths that hit `/api/advance/templates/${id}` would prevent another silent class of bug, but only mandatory for DELETE here.
+
+### F.5 Acceptance
+
+- [ ] Migration `059_advance_templates_update_delete_policies.sql` exists with the SQL above
+- [ ] Migration is next-sequential after 058 (verified against `ls database/migrations/[0-9][0-9][0-9]_*.sql | sort | tail`)
+- [ ] `handleDeleteCustomSection` has an `else` branch that surfaces non-ok responses
+- [ ] After running 058 + 059 in Supabase, Adam can create a custom advance section, then delete it, and on next refresh it stays gone
+- [ ] Platform-seeded templates (`workspace_id IS NULL`) cannot be deleted from the UI (the X button only renders for `t.workspace_id`-owned templates anyway, but verify)
+- [ ] Lint + typecheck clean
+
+### F.6 Commit
+
+```
+fix(advance-templates): add missing UPDATE/DELETE RLS + surface delete errors
+
+advance_templates has had RLS enabled since 001 but only at_select +
+at_insert policies (added in 011). Default-deny meant every DELETE and
+UPDATE silently affected 0 rows — Supabase returns success, the API
+returns 204, the client optimistically removes from local state, then
+fetchTemplates() repopulates the still-present row. User-visible
+symptom: confirm modal closes, custom section reappears.
+
+Migration 059 adds at_update and at_delete policies, gated on
+workspace ownership. Platform templates (workspace_id IS NULL) stay
+immutable to end users.
+
+Also adds an else-branch in handleDeleteCustomSection so a future
+RLS regression surfaces instead of silently no-op'ing.
+
+Adam: apply 058 + 059 in Supabase SQL editor after this merges.
+
+Made-with: Claude Code (artist scope / glow / rail / theme / rider /
+advance-template sprint)
+```
+
+---
+
 ## Final verification
 
-After all five commits:
+After all six commits:
 
 1. Hard-refresh `/rider-packs` — no LeftRail visible, full-width content
 2. Hard-refresh `/gear` — same, no rail
@@ -415,7 +537,8 @@ After all five commits:
 8. TopBar account dropdown → Theme row visible; toggle flips theme; persists across reload
 9. Visit a few different pages (Dashboard, Personnel, /tours/[id], /library/deal-memos) — all flip consistently when theme toggles; no light-stuck surfaces
 10. After Adam runs migration 058 in Supabase: create a new rider folder at artist scope → succeeds
-11. Lint + typecheck clean
+11. After Adam runs migration 059 in Supabase: in `/tours/[id]/advance/[routingId]` edit mode, create a custom section, click X, confirm — section disappears and stays gone after page reload
+12. Lint + typecheck clean
 
 If any check fails, fix before declaring done. Then report SHAs to Adam.
 
@@ -424,14 +547,18 @@ If any check fails, fix before declaring done. Then report SHAs to Adam.
 ## When done
 
 ```
-Scope-glow-rail-theme-rider sprint done.
-Commits: <A-sha>, <B-sha>, <C-sha>, <D-sha>, <E-sha>.
+Scope-glow-rail-theme-rider-advance sprint done.
+Commits: <A-sha>, <B-sha>, <C-sha>, <D-sha>, <E-sha>, <F-sha>.
 - Tours dropdown grouped by artist; tour-select also sets selectedArtistId
 - TopBar active state = 2px bottom border, no behind-text glow
 - LeftRail list-variant hidden when no filters/views configured
 - DarkModeToggle remounted in TopBar account menu; theme audit
   replaced hardcoded light-only colours with lp-* tokens
 - Migration 058 relaxes rider_folders RLS (drops admin gate on
-  INSERT/UPDATE; DELETE still admin-only). Adam: apply 058 in Supabase.
+  INSERT/UPDATE; DELETE still admin-only).
+- Migration 059 adds missing UPDATE/DELETE RLS policies on
+  advance_templates (default-deny was silently no-op'ing the custom
+  section delete). Client now surfaces non-ok DELETE responses.
+- Adam: apply 058 + 059 in Supabase SQL editor.
 - Lint + typecheck clean
 ```

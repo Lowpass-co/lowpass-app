@@ -151,7 +151,7 @@ export function EntityChip({
         aria-label={aria}
       >
         {showLoading ? (
-          <span className="h-3 w-12 animate-pulse rounded bg-white/20" style={{ minWidth: 40 }} />
+          <span className="h-3 w-12 animate-pulse rounded bg-lp-bg-tertiary" style={{ minWidth: 40 }} />
         ) : (
           <span className="min-w-0 truncate">
             {missing ? id : label || id}

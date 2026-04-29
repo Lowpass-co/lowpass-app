@@ -15,7 +15,7 @@ export function Card({
     <div
       className={cn(
         'rounded-xl border overflow-hidden',
-        variant === 'default' && 'bg-white border-lp-border',
+        variant === 'default' && 'bg-lp-surface border-lp-border',
         variant === 'accent' && 'bg-gradient-to-br from-orange-50 to-orange-25 border-lp-orange border-opacity-25 outline outline-lp-orange outline-opacity-25',
         variant === 'surface' && 'bg-lp-surface border-lp-border',
         !noPadding && 'p-6',

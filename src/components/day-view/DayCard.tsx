@@ -95,13 +95,13 @@ export function DayCard({ tour, routingDate, isExpanded, onToggle }: DayCardProp
 
       {isExpanded && (
         <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-          <div className="rounded-lg border border-lp-border/50 bg-white/5 p-4 dark:bg-white/5">
+          <div className="rounded-lg border border-lp-border/50 bg-lp-surface-hover p-4">
             <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-lp-text-secondary">
               Advance
             </h3>
             <DayAdvancePanel tourId={tour.id} routingId={routingDate.id} />
           </div>
-          <div className="rounded-lg border border-lp-border/50 bg-white/5 p-4 dark:bg-white/5">
+          <div className="rounded-lg border border-lp-border/50 bg-lp-surface-hover p-4">
             <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-lp-text-secondary">
               Budget
             </h3>

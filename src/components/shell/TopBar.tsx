@@ -10,9 +10,11 @@ import {
   LogOut,
   Search,
   Settings,
+  SunMoon,
   Users,
 } from 'lucide-react';
 import { AccountAvatar } from '@/components/shell/AccountAvatar';
+import { DarkModeToggle } from '@/components/layout/DarkModeToggle';
 
 type NavItem = {
   label: string;
@@ -300,6 +302,18 @@ function AccountMenuContent({
           Workspace
         </span>
       </Link>
+      <div className="my-1" style={{ borderTop: '1px solid var(--lp-border)' }} />
+      <div
+        className="flex items-center justify-between px-3 py-1.5 text-sm"
+        style={{ color: 'var(--lp-text)' }}
+      >
+        <span className="inline-flex items-center gap-2">
+          <SunMoon className="h-4 w-4" style={{ color: 'var(--lp-text-tertiary)' }} />
+          Theme
+        </span>
+        <DarkModeToggle />
+      </div>
+      <div className="my-1" style={{ borderTop: '1px solid var(--lp-border)' }} />
       <button
         type="button"
         className="w-full px-3 py-2 text-left text-sm"
