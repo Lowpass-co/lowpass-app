@@ -24,8 +24,10 @@ import { topBarOnlyAppPageShell } from '@/components/shell/app-page-shells';
 import { TourBudgetRebuildClient } from '@/components/budget/TourBudgetRebuildClient';
 import { MobileBudgetBanner } from '@/components/mobile/MobileBudgetBanner';
 import { BudgetPhaseStripClient } from '@/components/budget/BudgetPhaseStripClient';
+import { BudgetOverviewPanels } from '@/components/budget/BudgetOverviewPanels';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { computeTourPhases } from '@/server/budget/computeTourPhases';
+import { getBudgetPanelData } from '@/server/budget/getBudgetPanelData';
 
 export async function generateMetadata({
   params,
@@ -58,8 +60,9 @@ export default async function TourBudgetPage({
 
   const workspaceId = tour.workspace_id as string;
 
-  const [phases, lineItemsRes] = await Promise.all([
+  const [phases, panelData, lineItemsRes] = await Promise.all([
     computeTourPhases(supabase, id),
+    getBudgetPanelData(supabase, id),
     supabase
       .from('budget_line_items')
       .select('*')
@@ -71,6 +74,13 @@ export default async function TourBudgetPage({
       .order('order_index', { ascending: true }),
   ]);
 
+  const phaseBoundaries = phases.map((p) => ({
+    key: p.key,
+    label: p.label,
+    startIso: p.startDate,
+  }));
+  const tourCurrency = (tour.currency as string | null) ?? 'GBP';
+
   // TODO(UX14): once budget section list is treated as a rail, replace
   // topBarOnlyAppPageShell with spreadsheetAppPageShell + a section variant.
   return topBarOnlyAppPageShell(
@@ -78,10 +88,18 @@ export default async function TourBudgetPage({
       {/* TODO(post-PR#3): mount <TourBreadcrumbServer tourId={id} />
          here when the nav-redesign branch merges. */}
       <BudgetPhaseStripClient phases={phases} />
+      <div className="px-4">
+        <BudgetOverviewPanels
+          allocation={panelData.allocation}
+          burn={panelData.burn}
+          phaseBoundaries={phaseBoundaries}
+          currency={tourCurrency}
+        />
+      </div>
       <MobileBudgetBanner />
       <TourBudgetRebuildClient
         initialLines={lineItemsRes.data ?? []}
-        tourDefaultCurrency={(tour.currency as string | null) ?? 'GBP'}
+        tourDefaultCurrency={tourCurrency}
         tourId={id}
       />
     </div>,
