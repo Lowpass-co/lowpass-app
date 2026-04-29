@@ -12,4 +12,5 @@ export type ShellTopBarTour = {
 export type ShellData = {
   user: { name: string; email: string; avatarUrl?: string | null } | null;
   tours: ShellTopBarTour[];
+  isSiteAdmin: boolean;
 };

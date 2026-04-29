@@ -52,6 +52,7 @@ export function ShellTopBarClient({ shellData }: ShellTopBarClientProps) {
   return (
     <TopBar
       tours={shellData.tours}
+      isSiteAdmin={shellData.isSiteAdmin}
       activeTourId={activeTourId}
       onTourSelect={onTourSelect}
       onCreateTour={onCreateTour}

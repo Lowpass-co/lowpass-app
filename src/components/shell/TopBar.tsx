@@ -53,6 +53,7 @@ export type TopBarProps = {
   logoHref?: string;
   activeTourId?: string;
   tours: TopBarTour[];
+  isSiteAdmin?: boolean;
   onTourSelect: (id: string) => void;
   onCreateTour: () => void;
   /** Optional override; defaults to the WORKSPACE_NAV constant above. */
@@ -272,9 +273,11 @@ function LibraryMenuList({
 }
 
 function AccountMenuContent({
+  isSiteAdmin = false,
   onSignOut,
   onClose,
 }: {
+  isSiteAdmin?: boolean;
   onSignOut?: () => void;
   onClose: () => void;
 }) {
@@ -302,6 +305,19 @@ function AccountMenuContent({
           Workspace
         </span>
       </Link>
+      {isSiteAdmin ? (
+        <Link
+          href="/bugs"
+          className="block px-3 py-2 text-sm"
+          style={{ color: 'var(--lp-text)' }}
+          onClick={onClose}
+        >
+          <span className="inline-flex items-center gap-2">
+            <Settings className="h-4 w-4" style={{ color: 'var(--lp-text-tertiary)' }} />
+            Bug Reports
+          </span>
+        </Link>
+      ) : null}
       <div className="my-1" style={{ borderTop: '1px solid var(--lp-border)' }} />
       <div
         className="flex items-center justify-between px-3 py-1.5 text-sm"
@@ -336,6 +352,7 @@ export function TopBar({
   logoHref = '/dashboard',
   activeTourId,
   tours,
+  isSiteAdmin = false,
   onTourSelect,
   onCreateTour,
   navItems = WORKSPACE_NAV,
@@ -574,7 +591,7 @@ export function TopBar({
                   }}
                   role="menu"
                 >
-                  <AccountMenuContent onSignOut={onSignOut} onClose={() => setAccountOpen(false)} />
+                  <AccountMenuContent isSiteAdmin={isSiteAdmin} onSignOut={onSignOut} onClose={() => setAccountOpen(false)} />
                 </div>
               )}
             </div>
@@ -725,7 +742,7 @@ export function TopBar({
                   }}
                   role="menu"
                 >
-                  <AccountMenuContent onSignOut={onSignOut} onClose={() => setAccountOpen(false)} />
+                  <AccountMenuContent isSiteAdmin={isSiteAdmin} onSignOut={onSignOut} onClose={() => setAccountOpen(false)} />
                 </div>
               )}
             </div>

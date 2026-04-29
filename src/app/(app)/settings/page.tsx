@@ -21,6 +21,6 @@ export default async function SettingsPage() {
         </div>
       )}
     </div>,
-    getSettingsLeftRail('account')
+    getSettingsLeftRail('account', { isSiteAdmin: isAdmin })
   );
 }
