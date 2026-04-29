@@ -33,14 +33,29 @@ export async function getShellData(): Promise<ShellData> {
   if (profile?.workspace_id) {
     const { data: tourRows } = await supabase
       .from('tours')
-      .select('id, name, status')
+      .select('id, name, status, artist_id, artists(name)')
       .eq('workspace_id', profile.workspace_id)
       .order('start_date', { ascending: false });
-    tours = (tourRows ?? []).map((r: { id: string; name: string; status: string }) => ({
-      id: r.id,
-      name: r.name,
-      status: mapTourStatus(r.status),
-    }));
+    type TourRow = {
+      id: string;
+      name: string;
+      status: string;
+      artist_id: string | null;
+      // Supabase embeds can come back as a single-element array or an
+      // object depending on the inferred relationship cardinality.
+      artists: { name: string | null } | { name: string | null }[] | null;
+    };
+    tours = (tourRows ?? []).map((r) => {
+      const row = r as TourRow;
+      const artist = Array.isArray(row.artists) ? row.artists[0] : row.artists;
+      return {
+        id: row.id,
+        name: row.name,
+        status: mapTourStatus(row.status),
+        artistId: row.artist_id ?? null,
+        artistName: artist?.name ?? null,
+      };
+    });
   }
 
   return {

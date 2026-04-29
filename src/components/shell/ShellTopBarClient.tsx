@@ -16,7 +16,7 @@ export function ShellTopBarClient({ shellData }: ShellTopBarClientProps) {
   const router = useRouter();
   const pathname = usePathname() ?? '';
   const { signOut } = useAuth();
-  const { setSelectedTourId } = useArtistTourContext();
+  const { setSelectedTourId, setSelectedArtistId } = useArtistTourContext();
   const palette = useCommandPalette();
 
   const activeTourId = useMemo(() => {
@@ -27,10 +27,16 @@ export function ShellTopBarClient({ shellData }: ShellTopBarClientProps) {
 
   const onTourSelect = useCallback(
     (id: string) => {
+      // Picking a tour also re-scopes the workspace to that tour's artist —
+      // restoring the legacy Sidebar's artist-picker behaviour. Downstream
+      // pages (DashboardArtistGate, /advance, etc.) already consume
+      // selectedArtistId, so they re-filter without further wiring.
+      const tour = shellData.tours.find((t) => t.id === id);
+      if (tour?.artistId) setSelectedArtistId(tour.artistId);
       setSelectedTourId(id);
       router.push(`/tours/${id}`);
     },
-    [router, setSelectedTourId],
+    [router, setSelectedTourId, setSelectedArtistId, shellData.tours],
   );
 
   const onCreateTour = useCallback(() => {

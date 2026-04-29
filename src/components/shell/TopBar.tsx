@@ -38,10 +38,19 @@ const LIBRARY_MENU_ITEMS: NavItem[] = [
   { label: 'Venues', href: '/venues', activeMatch: (p) => p.startsWith('/venues') },
 ];
 
+export type TopBarTour = {
+  id: string;
+  name: string;
+  status: 'active' | 'archived';
+  /** Artist this tour belongs to. Used to group + scope the dropdown. */
+  artistId?: string | null;
+  artistName?: string | null;
+};
+
 export type TopBarProps = {
   logoHref?: string;
   activeTourId?: string;
-  tours: Array<{ id: string; name: string; status: 'active' | 'archived' }>;
+  tours: TopBarTour[];
   onTourSelect: (id: string) => void;
   onCreateTour: () => void;
   /** Optional override; defaults to the WORKSPACE_NAV constant above. */
@@ -62,6 +71,70 @@ function useViewportWidth(): number | undefined {
   return w;
 }
 
+/**
+ * Group tours by artistName (preserving the existing date-desc order
+ * within each group). Returns ordered group keys + a map of key → tours.
+ * Artist names sort alphabetically; "Unassigned" lands at the bottom.
+ */
+function groupToursByArtist<T extends TopBarTour>(tours: T[]): {
+  keys: string[];
+  byArtist: Record<string, T[]>;
+} {
+  const byArtist: Record<string, T[]> = {};
+  for (const t of tours) {
+    const key = t.artistName?.trim() || 'Unassigned';
+    (byArtist[key] ??= []).push(t);
+  }
+  const keys = Object.keys(byArtist).sort((a, b) => {
+    if (a === 'Unassigned') return 1;
+    if (b === 'Unassigned') return -1;
+    return a.localeCompare(b);
+  });
+  return { keys, byArtist };
+}
+
+function TourGroupHeader({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase"
+      style={{
+        color: 'var(--lp-text-tertiary)',
+        letterSpacing: 'var(--lp-tracking-caps, 0.08em)',
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+function TourMenuRow({
+  tour,
+  active,
+  muted,
+  onClick,
+}: {
+  tour: TopBarTour;
+  active: boolean;
+  muted: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className="flex w-full min-w-0 items-center gap-2 px-3 py-2 text-left text-sm"
+      style={{ color: muted ? 'var(--lp-text-secondary)' : 'var(--lp-text)' }}
+      onClick={onClick}
+    >
+      {active ? (
+        <Check className="h-4 w-4 shrink-0" style={{ color: 'var(--color-lp-orange)' }} />
+      ) : (
+        <span aria-hidden className="block h-4 w-4 shrink-0" />
+      )}
+      <span className={muted ? 'truncate' : 'truncate font-medium'}>{tour.name}</span>
+    </button>
+  );
+}
+
 function TourMenuList({
   tours,
   activeTourId,
@@ -69,7 +142,7 @@ function TourMenuList({
   onNewTour,
   onClose,
 }: {
-  tours: Array<{ id: string; name: string; status: 'active' | 'archived' }>;
+  tours: TopBarTour[];
   activeTourId?: string;
   onSelect: (id: string) => void;
   onNewTour: () => void;
@@ -77,48 +150,65 @@ function TourMenuList({
 }) {
   const active = tours.filter((t) => t.status === 'active');
   const archived = tours.filter((t) => t.status === 'archived');
+
+  const activeGroups = groupToursByArtist(active);
+  const archivedGroups = groupToursByArtist(archived);
+
+  // Single-artist degenerate case: hide group headers entirely. Operators in
+  // a one-artist workspace get the same flat experience as before this
+  // sprint; group headers only earn their place when there's a choice.
+  const distinctArtists = new Set([
+    ...activeGroups.keys.filter((k) => k !== 'Unassigned'),
+    ...archivedGroups.keys.filter((k) => k !== 'Unassigned'),
+  ]);
+  const showGroupHeaders = distinctArtists.size > 1;
+
+  const handle = (id: string) => {
+    onSelect(id);
+    onClose();
+  };
+
   return (
     <>
-      {active.map((t) => (
-        <button
-          key={t.id}
-          type="button"
-          className="flex w-full min-w-0 items-center gap-2 px-3 py-2 text-left text-sm"
-          style={{ color: 'var(--lp-text)' }}
-          onClick={() => {
-            onSelect(t.id);
-            onClose();
-          }}
-        >
-          {t.id === activeTourId && (
-            <Check className="h-4 w-4 shrink-0" style={{ color: 'var(--color-lp-orange)' }} />
-          )}
-          <span className="truncate font-medium">{t.name}</span>
-        </button>
-      ))}
-      {archived.length > 0 && (
-        <div
-          className="px-3 py-1 text-xs font-semibold uppercase"
-          style={{ color: 'var(--lp-text-tertiary)', letterSpacing: 'var(--lp-tracking-caps)' }}
-        >
-          Archived
+      {activeGroups.keys.map((key) => (
+        <div key={`active-${key}`}>
+          {showGroupHeaders ? <TourGroupHeader>{key}</TourGroupHeader> : null}
+          {activeGroups.byArtist[key].map((t) => (
+            <TourMenuRow
+              key={t.id}
+              tour={t}
+              active={t.id === activeTourId}
+              muted={false}
+              onClick={() => handle(t.id)}
+            />
+          ))}
         </div>
-      )}
-      {archived.map((t) => (
-        <button
-          key={t.id}
-          type="button"
-          className="flex w-full min-w-0 items-center gap-2 px-3 py-2 text-left text-sm"
-          style={{ color: 'var(--lp-text-secondary)' }}
-          onClick={() => {
-            onSelect(t.id);
-            onClose();
-          }}
-        >
-          {t.id === activeTourId && <Check className="h-4 w-4" />}
-          <span className="truncate">{t.name}</span>
-        </button>
       ))}
+
+      {archived.length > 0 ? (
+        <>
+          <div className="my-1" style={{ borderTop: '1px solid var(--lp-border)' }} />
+          {archivedGroups.keys.map((key) => (
+            <div key={`archived-${key}`}>
+              {showGroupHeaders ? (
+                <TourGroupHeader>{`${key} · Archived`}</TourGroupHeader>
+              ) : (
+                <TourGroupHeader>Archived</TourGroupHeader>
+              )}
+              {archivedGroups.byArtist[key].map((t) => (
+                <TourMenuRow
+                  key={t.id}
+                  tour={t}
+                  active={t.id === activeTourId}
+                  muted
+                  onClick={() => handle(t.id)}
+                />
+              ))}
+            </div>
+          ))}
+        </>
+      ) : null}
+
       <div className="mt-1" style={{ borderTop: '1px solid var(--lp-border)' }} />
       <button
         type="button"
