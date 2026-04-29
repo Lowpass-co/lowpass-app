@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from 'react';
 import dynamic from 'next/dynamic';
 import type { TemplateKind, TemplateVm } from '@/lib/types/template-vm';
 import { listTemplates } from '@/lib/api/templates';
-import { DataTable } from '@/components/entity/DataTable';
+import { DataTable } from '@/components/data-table/DataTable';
+import type { ColumnDef } from '@/components/data-table/types';
 
 const TemplateSlideOver = dynamic(() => import('@/components/entity/template/TemplateSlideOver'), {
   ssr: false,
@@ -47,9 +48,6 @@ function rel(iso: string): string {
 }
 
 export function TemplatesLibraryClient({ initial }: { initial: TemplateVm[] }) {
-  const [kind, setKind] = useState<TemplateKind | ''>('');
-  const [updatedAfter, setUpdatedAfter] = useState('');
-  const [updatedBefore, setUpdatedBefore] = useState('');
   const [rows, setRows] = useState<TemplateVm[]>(initial);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -63,11 +61,7 @@ export function TemplatesLibraryClient({ initial }: { initial: TemplateVm[] }) {
             if (cancelled) return;
             setLoading(true);
             setErr(null);
-            void listTemplates({
-              kind: kind === '' ? undefined : kind,
-              updatedAfter: updatedAfter.trim() ? updatedAfter.trim() : null,
-              updatedBefore: updatedBefore.trim() ? updatedBefore.trim() : null,
-            })
+            void listTemplates({})
               .then((list) => {
                 if (!cancelled) setRows(list);
               })
@@ -80,35 +74,54 @@ export function TemplatesLibraryClient({ initial }: { initial: TemplateVm[] }) {
       cancelled = true;
       if (sid !== undefined) window.clearTimeout(sid);
     };
-  }, [kind, updatedAfter, updatedBefore]);
+  }, []);
 
-  const columns = useMemo(
+  const columns = useMemo<ColumnDef<TemplateVm>[]>(
     () => [
       {
-        key: 'name',
+        id: 'name',
         header: 'Name',
-        render: (r: TemplateVm) => <span className="font-medium">{r.name}</span>,
+        accessor: 'name',
+        sortable: true,
+        frozen: true,
+        cell: (value) => <span className="font-medium">{String(value)}</span>,
       },
       {
-        key: 'kind',
+        id: 'kind',
         header: 'Kind',
-        render: (r: TemplateVm) => <KindLabel kind={r.kind} />,
+        accessor: 'kind',
+        filter: {
+          kind: 'select',
+          options: [
+            { value: 'rider-pack', label: 'Rider pack' },
+            { value: 'advance-layout', label: 'Advance layout' },
+            { value: 'advance-schedule', label: 'Advance schedule' },
+            { value: 'other', label: 'Advance section templates' },
+            { value: 'budget', label: 'Budget templates' },
+          ],
+        },
+        cell: (value) => <KindLabel kind={value as TemplateKind} />,
       },
       {
-        key: 'used',
+        id: 'used',
         header: 'Used count',
-        className: 'text-right tabular-nums',
-        render: (r: TemplateVm) => r.usedCount,
+        align: 'right',
+        accessor: 'usedCount',
+        sortable: true,
+        cell: (value) => Number(value ?? 0).toLocaleString(),
       },
       {
-        key: 'last',
+        id: 'last',
         header: 'Last used',
-        render: (r: TemplateVm) => (r.lastUsedAt ? rel(r.lastUsedAt) : '—'),
+        accessor: (r) => r.lastUsedAt ?? '',
+        cell: (value) => (value ? rel(String(value)) : '—'),
       },
       {
-        key: 'up',
+        id: 'updated',
         header: 'Updated',
-        render: (r: TemplateVm) => rel(r.updatedAt),
+        accessor: 'updatedAt',
+        sortable: true,
+        cell: (value) => rel(String(value)),
       },
     ],
     []
@@ -118,47 +131,12 @@ export function TemplatesLibraryClient({ initial }: { initial: TemplateVm[] }) {
     <div className="space-y-4">
       {err ? <div className="rounded border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800">{err}</div> : null}
 
-      <div className="flex flex-wrap gap-3">
-        <select
-          className="rounded-lg border border-lp-border bg-lp-surface px-2 py-2 text-sm outline-none focus:border-lp-orange"
-          aria-label="Template kind filter"
-          value={kind}
-          onChange={(e) => {
-            const v = e.target.value;
-            setKind(v === '' ? '' : (v as TemplateKind));
-          }}
-        >
-          <option value="">All kinds</option>
-          <option value="rider-pack">Rider pack</option>
-          <option value="advance-layout">Advance layout</option>
-          <option value="advance-schedule">Advance schedule</option>
-          <option value="other">Advance section templates</option>
-          <option value="budget">Budget templates</option>
-        </select>
-        <label className="text-xs font-medium">
-          <span className="mr-2 text-lp-text-tertiary">Updated after</span>
-          <input
-            type="date"
-            value={updatedAfter}
-            onChange={(e) => setUpdatedAfter(e.target.value)}
-            className="rounded-lg border border-lp-border bg-lp-surface px-2 py-2 text-sm"
-          />
-        </label>
-        <label className="text-xs font-medium">
-          <span className="mr-2 text-lp-text-tertiary">Updated before</span>
-          <input
-            type="date"
-            value={updatedBefore}
-            onChange={(e) => setUpdatedBefore(e.target.value)}
-            className="rounded-lg border border-lp-border bg-lp-surface px-2 py-2 text-sm"
-          />
-        </label>
-      </div>
-
       <DataTable
-        rows={rows}
-        emptyLabel={loading ? 'Loading templates…' : 'No templates in this workspace yet'}
+        rows={loading ? undefined : rows}
+        rowKey={(row) => row.id}
+        emptyState="No templates in this workspace yet"
         columns={columns}
+        searchPlaceholder="Search templates…"
         onRowClick={(row) => setSelected(row)}
       />
 
