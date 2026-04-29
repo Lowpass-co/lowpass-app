@@ -3,7 +3,9 @@
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { DataTable } from '@/components/entity/DataTable';
+import dynamic from 'next/dynamic';
+import { DataTable } from '@/components/data-table/DataTable';
+import type { ColumnDef } from '@/components/data-table/types';
 
 export type RiderPackRowVm = {
   id: string;
@@ -16,6 +18,10 @@ export type RiderPackRowVm = {
   updatedRelative: string;
   updatedIso: string;
 };
+const RiderPackDetailsSlideOver = dynamic(
+  () => import('@/components/entity/rider-pack/RiderPackDetailsSlideOver'),
+  { ssr: false }
+);
 
 function formatRelative(iso: string): string {
   try {
@@ -35,8 +41,7 @@ function formatRelative(iso: string): string {
 
 export function RiderPacksTourClient({ tourId, tourName, rows }: { tourId: string; tourName: string; rows: RiderPackRowVm[] }) {
   const router = useRouter();
-  const [statusFilter, setStatusFilter] = useState<'all' | RiderPackRowVm['status']>('all');
-  const [recipientFilter, setRecipientFilter] = useState<string>('all');
+  const [detailsId, setDetailsId] = useState<string | null>(null);
 
   const recipients = useMemo(() => {
     const s = new Set<string>();
@@ -44,44 +49,70 @@ export function RiderPacksTourClient({ tourId, tourName, rows }: { tourId: strin
     return [...s].sort((a, b) => a.localeCompare(b));
   }, [rows]);
 
-  const filtered = useMemo(() => {
-    let out = rows;
-    if (statusFilter !== 'all') out = out.filter((r) => r.status === statusFilter);
-    if (recipientFilter !== 'all') out = out.filter((r) => r.recipientLabel === recipientFilter);
-    return out;
-  }, [rows, statusFilter, recipientFilter]);
-
-  const columns = useMemo(
+  const columns = useMemo<ColumnDef<RiderPackRowVm>[]>(
     () => [
       {
-        key: 'name',
+        id: 'name',
         header: 'Pack',
-        render: (r: RiderPackRowVm) => <span className="font-medium text-lp-text">{r.title || 'Untitled'}</span>,
+        accessor: (r) => r.title ?? '',
+        sortable: true,
+        frozen: true,
+        cell: (value) => <span className="font-medium text-lp-text">{String(value || 'Untitled')}</span>,
       },
       {
-        key: 'status',
+        id: 'status',
         header: 'Status',
-        render: (r: RiderPackRowVm) => <StatusPill status={r.status} />,
+        accessor: 'status',
+        filter: {
+          kind: 'select',
+          options: [
+            { value: 'draft', label: 'draft' },
+            { value: 'sent', label: 'sent' },
+            { value: 'signed', label: 'signed' },
+          ],
+        },
+        cell: (value) => <StatusPill status={value as RiderPackRowVm['status']} />,
       },
       {
-        key: 'recipient',
+        id: 'recipient',
         header: 'Recipient',
-        render: (r: RiderPackRowVm) => r.recipientLabel,
+        accessor: (r) => r.recipientLabel,
+        filter: { kind: 'select', options: recipients.map((x) => ({ value: x, label: x })) },
       },
       {
-        key: 'lastSent',
+        id: 'lastSent',
         header: 'Last sent',
-        className: 'whitespace-nowrap text-lp-text-secondary',
-        render: (r: RiderPackRowVm) => r.lastSentRelative,
+        accessor: (r) => r.lastSentRelative,
+        className: 'whitespace-nowrap',
+        cell: (value) => <span className="text-lp-text-secondary">{String(value)}</span>,
       },
       {
-        key: 'updated',
+        id: 'updated',
         header: 'Updated',
-        className: 'whitespace-nowrap text-lp-text-secondary',
-        render: (r: RiderPackRowVm) => r.updatedRelative,
+        accessor: (r) => r.updatedRelative,
+        className: 'whitespace-nowrap',
+        cell: (value) => <span className="text-lp-text-secondary">{String(value)}</span>,
+      },
+      {
+        id: 'details',
+        header: '',
+        accessor: (r) => r.id,
+        align: 'right',
+        cell: (_, row) => (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setDetailsId(row.id);
+            }}
+            className="rounded border border-lp-border px-2 py-1 text-xs hover:bg-lp-bg-tertiary"
+          >
+            ...
+          </button>
+        ),
       },
     ],
-    []
+    [recipients]
   );
 
   return (
@@ -96,41 +127,12 @@ export function RiderPacksTourClient({ tourId, tourName, rows }: { tourId: strin
         <p className="mt-1 text-sm text-lp-text-secondary">Open a pack to edit the full canvas.</p>
       </div>
 
-      <div className="flex flex-wrap items-end gap-3">
-        <label className="flex flex-col gap-1 text-[10px] font-semibold uppercase tracking-wider text-lp-text-tertiary">
-          Status
-          <select
-            className="min-w-[8rem] rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-xs text-lp-text"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as typeof statusFilter)}
-          >
-            <option value="all">All</option>
-            <option value="draft">Draft</option>
-            <option value="sent">Sent</option>
-            <option value="signed">Signed</option>
-          </select>
-        </label>
-        <label className="flex flex-col gap-1 text-[10px] font-semibold uppercase tracking-wider text-lp-text-tertiary">
-          Recipient
-          <select
-            className="min-w-[11rem] rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-xs text-lp-text"
-            value={recipientFilter}
-            onChange={(e) => setRecipientFilter(e.target.value)}
-          >
-            <option value="all">All</option>
-            {recipients.map((x) => (
-              <option key={x} value={x}>
-                {x}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
-
       <DataTable<RiderPackRowVm>
         columns={columns}
-        rows={filtered}
-        emptyLabel="No rider packs for this tour."
+        rows={rows}
+        rowKey={(row) => row.id}
+        searchPlaceholder="Search rider packs…"
+        emptyState="No rider packs for this tour."
         onRowClick={(row) => {
           router.push(`/tours/${tourId}/rider-packs/${row.id}`);
         }}
@@ -143,6 +145,13 @@ export function RiderPacksTourClient({ tourId, tourName, rows }: { tourId: strin
         </Link>
         .
       </p>
+      {detailsId
+        ? (() => {
+            const row = rows.find((r) => r.id === detailsId);
+            if (!row) return null;
+            return <RiderPackDetailsSlideOver pack={row} onClose={() => setDetailsId(null)} />;
+          })()
+        : null}
     </div>
   );
 }
