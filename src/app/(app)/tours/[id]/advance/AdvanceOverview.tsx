@@ -44,6 +44,7 @@ import { formatRelativeTime } from '@/lib/format-relative';
 import { useToast } from '@/components/ui/Toast';
 import { CopyAdvanceModal } from '@/components/advance/CopyAdvanceModal';
 import { ApplyAdvanceTemplateSlideOver } from '@/components/advance/ApplyAdvanceTemplateSlideOver';
+import { BulkStatusUpdateSlideOver } from '@/components/advance/BulkStatusUpdateSlideOver';
 import { ContextMenu, type ContextMenuItem } from '@/components/ui/ContextMenu';
 import { DeleteConfirmationModal } from '@/components/ui/DeleteConfirmationModal';
 import { DataTable } from '@/components/data-table/DataTable';
@@ -239,6 +240,7 @@ export function AdvanceOverview({
   const [formTemplates, setFormTemplates] = useState<FormTemplate[]>([]);
   const [formTemplatesLoading, setFormTemplatesLoading] = useState(true);
   const [bulkRow, setBulkRow] = useState<AdvanceDateItem | null>(null);
+  const [bulkStatusOpen, setBulkStatusOpen] = useState(false);
 
   const copyFromUrl = initialCopyRoutingId ?? searchParams.get('copy');
   useEffect(() => {
@@ -503,6 +505,11 @@ export function AdvanceOverview({
       },
     },
     {
+      label: 'Bulk update status…',
+      icon: CheckCircle2,
+      onClick: () => setBulkStatusOpen(true),
+    },
+    {
       label: 'Print overview',
       icon: Printer,
       onClick: () => window.print(),
@@ -639,6 +646,19 @@ export function AdvanceOverview({
         onDone={() => {
           setTemplateModalOpen(false);
           setTemplateInitialId(null);
+          router.refresh();
+          void fetchDates();
+        }}
+      />
+
+      <BulkStatusUpdateSlideOver
+        open={bulkStatusOpen}
+        tourId={tourId}
+        dates={dates}
+        onClose={() => setBulkStatusOpen(false)}
+        onDone={() => {
+          setBulkStatusOpen(false);
+          showToast('Statuses updated');
           router.refresh();
           void fetchDates();
         }}

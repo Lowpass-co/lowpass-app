@@ -16,8 +16,9 @@ import {
   Pencil, FileText, Phone, Mail, Globe,
   AlertCircle, ChevronRight,
   Paperclip, User, ExternalLink, Flag, Printer,
+  Copy, Loader2,
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import { cn, parseRoutingDate } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/Skeleton';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -518,12 +519,22 @@ function SectionCard({
   status,
   flags,
   editHref,
+  tourId,
+  routingId,
+  fullData,
+  allowCopy,
+  onCopied,
 }: {
   section: SectionDef;
   sectionData: Record<string, unknown>;
   status: SectionStatus | undefined;
   flags: AdvanceFlag[];
   editHref: string;
+  tourId: string;
+  routingId: string;
+  fullData: Record<string, Record<string, unknown> | undefined>;
+  allowCopy: boolean;
+  onCopied: () => void;
 }) {
   const statusKey = (status?.status ?? 'not_started') as SectionStatusKey;
 
@@ -536,7 +547,24 @@ function SectionCard({
   const activeFlags = flags.filter(f => !f.resolved);
   const isEmpty = filledFields.length === 0;
 
-  if (isEmpty && activeFlags.length === 0) return null;
+  // UX22 §7.1 — when a section has no filled fields and no active flags,
+  // show a thin empty-state card with a "copy from previous show" CTA
+  // instead of swallowing the section entirely. Public-share viewers
+  // (allowCopy=false) still get nothing rendered — they shouldn't trigger
+  // authenticated PATCHes from a public surface.
+  if (isEmpty && activeFlags.length === 0) {
+    if (!allowCopy) return null;
+    return (
+      <EmptySectionCTA
+        section={section}
+        editHref={editHref}
+        tourId={tourId}
+        routingId={routingId}
+        fullData={fullData}
+        onCopied={onCopied}
+      />
+    );
+  }
 
   // UX22 phase 3 — section anchor for the day rail / DocumentCanvas
   // IntersectionObserver scroll-spy. `scroll-mt-32` offsets a hash jump
@@ -644,6 +672,223 @@ function SectionCard({
           )}
         </div>
       )}
+    </section>
+  );
+}
+
+// ─── UX22 §7.1 — empty-section "copy from previous show" CTA ─────────────────
+
+type PreviousShowOption = {
+  routingId: string;
+  date: string;
+  venueName: string | null;
+  city: string | null;
+  data: Record<string, unknown>;
+};
+
+/**
+ * Thin empty-state card replacing the previous "render nothing if empty"
+ * behaviour. Heading + Not started pill + a single CTA that lazy-fetches
+ * sibling shows on this tour with non-empty data for the same section
+ * template_id, then PATCHes this show's `data` map with the picked source's
+ * section slice. Section anchor + scroll-mt match the filled SectionCard
+ * so the day rail's IntersectionObserver still tracks the section in scroll.
+ */
+function EmptySectionCTA({
+  section,
+  editHref,
+  tourId,
+  routingId,
+  fullData,
+  onCopied,
+}: {
+  section: SectionDef;
+  editHref: string;
+  tourId: string;
+  routingId: string;
+  fullData: Record<string, Record<string, unknown> | undefined>;
+  onCopied: () => void;
+}) {
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [pickerLoading, setPickerLoading] = useState(false);
+  const [pickerOptions, setPickerOptions] = useState<PreviousShowOption[]>([]);
+  const [pickerError, setPickerError] = useState<string | null>(null);
+  const [applyingId, setApplyingId] = useState<string | null>(null);
+
+  const anchorId = sectionAnchorId(section.label);
+  const templateId = section.template_id;
+
+  const openPicker = () => {
+    setPickerOpen(true);
+    if (pickerOptions.length > 0 || pickerLoading) return;
+    setPickerLoading(true);
+    setPickerError(null);
+    fetch(`/api/tours/${tourId}/advance?all=true`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`${r.status}`))))
+      .then((j) => {
+        const dates = (j?.dates ?? []) as Array<{
+          routing_id: string;
+          date: string;
+          venue_name: string | null;
+          city: string | null;
+          advance: { data?: Record<string, Record<string, unknown> | undefined> | null } | null;
+        }>;
+        const candidates: PreviousShowOption[] = dates
+          .filter((d) => d.routing_id !== routingId)
+          .map((d): PreviousShowOption | null => {
+            const sectionSlice = d.advance?.data?.[templateId];
+            if (!sectionSlice || typeof sectionSlice !== 'object') return null;
+            const hasAnyValue = Object.values(sectionSlice).some((v) => !isBlank(v));
+            if (!hasAnyValue) return null;
+            return {
+              routingId: d.routing_id,
+              date: d.date,
+              venueName: d.venue_name,
+              city: d.city,
+              data: sectionSlice as Record<string, unknown>,
+            };
+          })
+          .filter((x): x is PreviousShowOption => x !== null)
+          .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
+        setPickerOptions(candidates);
+      })
+      .catch((e) => {
+        setPickerError(e instanceof Error ? e.message : 'Could not load other shows');
+      })
+      .finally(() => setPickerLoading(false));
+  };
+
+  const applyCopy = async (source: PreviousShowOption) => {
+    setApplyingId(source.routingId);
+    setPickerError(null);
+    try {
+      const nextData = { ...fullData, [templateId]: source.data };
+      const res = await fetch(`/api/tours/${tourId}/advance/${routingId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: nextData }),
+      });
+      if (!res.ok) {
+        throw new Error(`Failed to copy (${res.status})`);
+      }
+      setPickerOpen(false);
+      onCopied();
+    } catch (e) {
+      setPickerError(e instanceof Error ? e.message : 'Could not copy');
+    } finally {
+      setApplyingId(null);
+    }
+  };
+
+  return (
+    <section
+      id={anchorId}
+      data-section-template-id={section.template_id}
+      data-empty-section
+      className="scroll-mt-32 overflow-hidden rounded-xl border border-dashed border-lp-border bg-lp-surface/50"
+    >
+      <div className="flex items-center justify-between gap-3 px-5 py-3">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <h2
+            className="min-w-0 truncate"
+            style={{
+              color: 'var(--lp-text-secondary)',
+              fontSize: 'var(--lp-text-xl, 1.25rem)',
+              fontWeight: 600,
+              lineHeight: 'var(--lp-leading-snug, 1.3)',
+            }}
+          >
+            {section.label}
+          </h2>
+        </div>
+        <div className="advance-read-no-print flex shrink-0 items-center gap-3">
+          <SectionReadStatusBadge status="not_started" />
+          <Link
+            href={editHref}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-lp-border px-2.5 py-1 text-[11px] font-semibold text-lp-text-secondary transition-colors hover:border-lp-orange hover:text-lp-orange"
+          >
+            <Pencil className="h-3 w-3" />
+            Edit
+          </Link>
+        </div>
+      </div>
+      <div className="advance-read-no-print border-t border-dashed border-lp-border px-5 py-3">
+        {!pickerOpen ? (
+          <button
+            type="button"
+            onClick={openPicker}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-lp-border bg-lp-surface px-3 py-1.5 text-xs font-medium text-lp-text hover:border-lp-orange hover:text-lp-orange"
+          >
+            <Copy className="h-3.5 w-3.5" />
+            Copy this section&apos;s content from a previous show
+          </button>
+        ) : (
+          <div className="space-y-2">
+            <div className="flex items-baseline justify-between">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-lp-text-tertiary">
+                Pick a source show
+              </span>
+              <button
+                type="button"
+                onClick={() => setPickerOpen(false)}
+                disabled={applyingId !== null}
+                className="text-xs text-lp-text-tertiary hover:text-lp-text disabled:opacity-50"
+              >
+                Cancel
+              </button>
+            </div>
+            {pickerLoading ? (
+              <p className="px-1 py-2 text-xs text-lp-text-tertiary">Loading…</p>
+            ) : pickerOptions.length === 0 ? (
+              <p className="px-1 py-2 text-xs text-lp-text-tertiary">
+                No other show on this tour has content for this section yet.
+              </p>
+            ) : (
+              <ul className="max-h-48 space-y-1 overflow-y-auto rounded-md border border-lp-border bg-lp-bg-secondary p-1">
+                {pickerOptions.map((opt) => {
+                  const dateLabel = parseRoutingDate(opt.date).toLocaleDateString('en-GB', {
+                    weekday: 'short',
+                    day: '2-digit',
+                    month: 'short',
+                  });
+                  const busy = applyingId === opt.routingId;
+                  return (
+                    <li key={opt.routingId}>
+                      <button
+                        type="button"
+                        disabled={applyingId !== null}
+                        onClick={() => applyCopy(opt)}
+                        className="flex w-full items-center justify-between gap-2 rounded px-2 py-1.5 text-left text-xs hover:bg-lp-surface disabled:opacity-50"
+                      >
+                        <span className="min-w-0 truncate text-lp-text">
+                          <span className="font-medium">{dateLabel}</span>
+                          <span className="ml-2 text-lp-text-secondary">
+                            {opt.venueName || opt.city || '—'}
+                          </span>
+                        </span>
+                        {busy ? (
+                          <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-lp-text-tertiary" />
+                        ) : (
+                          <span
+                            aria-hidden
+                            className="text-[10px] font-semibold uppercase tracking-wider"
+                            style={{ color: 'var(--color-lp-orange)' }}
+                          >
+                            Copy
+                          </span>
+                        )}
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+            {pickerError ? (
+              <p className="text-xs text-red-500">{pickerError}</p>
+            ) : null}
+          </div>
+        )}
+      </div>
     </section>
   );
 }
@@ -840,13 +1085,37 @@ export function AdvanceShowReadView({
       {loading ? (
         <AdvanceReadLoadingSkeleton />
       ) : pageData ? (
-        <AdvanceReadLoadedBody pageData={pageData} editHref={editHref} />
+        <AdvanceReadLoadedBody
+          pageData={pageData}
+          editHref={editHref}
+          tourId={tourId}
+          routingId={routingId}
+          allowCopy={!publicReadOnly}
+          onCopied={load}
+        />
       ) : null}
     </div>
   );
 }
 
-function AdvanceReadLoadedBody({ pageData, editHref }: { pageData: PageData; editHref: string }) {
+function AdvanceReadLoadedBody({
+  pageData,
+  editHref,
+  tourId,
+  routingId,
+  allowCopy,
+  onCopied,
+}: {
+  pageData: PageData;
+  editHref: string;
+  tourId: string;
+  routingId: string;
+  /** UX22 §7.1 — when false (public share view), empty-section cards render
+   *  without the "copy from previous show" CTA so a public viewer never
+   *  triggers an authenticated PATCH. */
+  allowCopy: boolean;
+  onCopied: () => void;
+}) {
   const { tour, advance } = pageData;
   const sections = advance?.sections ?? [];
   const data = advance?.data ?? {};
@@ -892,6 +1161,11 @@ function AdvanceReadLoadedBody({ pageData, editHref }: { pageData: PageData; edi
           status={sectionStatuses[section.template_id]}
           flags={flags.filter((f) => f.section_id === section.template_id)}
           editHref={editHref}
+          tourId={tourId}
+          routingId={routingId}
+          fullData={data}
+          allowCopy={allowCopy}
+          onCopied={onCopied}
         />
       ))}
 
