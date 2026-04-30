@@ -98,18 +98,30 @@ export function BurnRateChart({
     });
   }, [buckets, phaseBoundaries]);
 
-  // SVG viewBox uses a fixed coordinate space; the rendered size is
-  // controlled via CSS (width:100% height:240px).
-  const VIEW_W = 800;
-  const VIEW_H = 240;
+  // X2.1 fix: previous version used preserveAspectRatio="none" with a
+  // 1-bar dataset, which stretched the single bar across the entire
+  // chart — the result was the "one giant orange block" Adam saw.
+  // Now the SVG width scales with the bucket count so each bar gets
+  // a fixed slot, the chart starts narrow when data is sparse, and
+  // bar widths stay capped regardless of viewport size.
   const PADDING_X = 24;
   const PADDING_TOP = 16;
   const PADDING_BOTTOM = 28;
+  const VIEW_H = 240;
+  const SLOT_W = 18; // px per bucket in viewBox coords
+  const MIN_VIEW_W = 320;
+  const VIEW_W = Math.max(
+    MIN_VIEW_W,
+    PADDING_X * 2 + Math.max(buckets.length, 1) * SLOT_W,
+  );
   const chartW = VIEW_W - PADDING_X * 2;
   const chartH = VIEW_H - PADDING_TOP - PADDING_BOTTOM;
 
   const slot = buckets.length > 0 ? chartW / buckets.length : chartW;
-  const barW = Math.max(2, slot * 0.7);
+  // Bar width capped at 12px (in viewBox units) so a 1-bucket dataset
+  // doesn't paint a 600px monolith. Min 2px so very dense charts don't
+  // collapse to invisible lines.
+  const barW = Math.min(12, Math.max(2, slot * 0.7));
 
   return (
     <div
@@ -141,14 +153,15 @@ export function BurnRateChart({
         ) : null}
       </div>
 
-      <div className="relative">
+      <div className="relative overflow-x-auto">
         <svg
-          width="100%"
+          width={VIEW_W}
           height={VIEW_H}
           viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
-          preserveAspectRatio="none"
+          preserveAspectRatio="xMinYMid meet"
           role="img"
           aria-label="Daily burn rate"
+          style={{ maxWidth: '100%', display: 'block' }}
         >
           {/* Phase boundary verticals */}
           {phaseBoundaries.map((p, i) => {

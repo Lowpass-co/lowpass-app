@@ -1,16 +1,22 @@
 /* ============================================
-   LOWPASS — Duplicate detection (Phase E budget redesign)
+   LOWPASS — Duplicate detection
+   Phase E original + X2.3 fix-up.
 
    Pure-JS heuristic over the tour's budget_line_items: rows are flagged
    as "possible duplicates" when they share:
-     - same category
-     - amount within 5% (proposed_cost OR actual_cost)
+     - same category OR same vendor (vendor extracted from the notes
+       "Vendor: …" prefix established by BudgetLineSlideOver)
+     - amount within 5% (actual_cost preferred, proposed_cost fallback)
      - created within 7 days of each other
 
-   Returns a Map<lineItemId, lineItemId[]> where each key's value is the
-   list of OTHER line ids the row collides with. The UI surfaces a
-   banner above any flagged row; clicking it opens a comparison
-   slide-over with merge / dismiss / keep-both actions.
+   X2.3 changed the original "category-only" key to "category OR
+   vendor" so that two rows with different categories but the same
+   vendor + amount + date can match. Adam's smoke test had near-
+   duplicates that didn't trigger because the original strict
+   category match was the bottleneck.
+
+   Returns a Map<lineItemId, lineItemId[]> where each key's value is
+   the list of OTHER line ids the row collides with.
 
    Detection runs on the existing dataset already loaded server-side
    so there's no extra DB round-trip — just a quadratic walk over a
@@ -26,6 +32,17 @@ function pickAmount(line: BudgetLineItem): number {
   const actual = Number(line.actual_cost ?? 0);
   if (Number.isFinite(actual) && actual > 0) return actual;
   return Number(line.proposed_cost ?? 0);
+}
+
+function pickVendor(line: BudgetLineItem): string | null {
+  // Vendor is mirrored through `notes` first line as "Vendor: <name>"
+  // (convention established by BudgetLineSlideOver). Strip and lowercase
+  // for comparison; null when the line has no vendor prefix.
+  const raw = (line.notes ?? '').toString();
+  if (!raw.startsWith('Vendor: ')) return null;
+  const firstLine = raw.split('\n')[0]?.slice('Vendor: '.length) ?? '';
+  const trimmed = firstLine.trim().toLowerCase();
+  return trimmed.length > 0 ? trimmed : null;
 }
 
 function withinPctOf(target: number, candidate: number, pct: number): boolean {
@@ -50,13 +67,19 @@ export function detectDuplicates(
     for (let j = i + 1; j < lines.length; j++) {
       const a = lines[i];
       const b = lines[j];
-      // Same row referenced twice — guard.
       if (a.id === b.id) continue;
-      // Same category required (otherwise we get false positives across
-      // unrelated buckets).
+
       const aCat = (a.category ?? '').toString().toLowerCase();
       const bCat = (b.category ?? '').toString().toLowerCase();
-      if (!aCat || !bCat || aCat !== bCat) continue;
+      const sameCategory = !!aCat && !!bCat && aCat === bCat;
+
+      const aVendor = pickVendor(a);
+      const bVendor = pickVendor(b);
+      const sameVendor = aVendor != null && aVendor === bVendor;
+
+      // Need EITHER a same category OR a same vendor. Without one of
+      // those signals the amount + date overlap is too thin to flag.
+      if (!sameCategory && !sameVendor) continue;
 
       const amtA = pickAmount(a);
       const amtB = pickAmount(b);

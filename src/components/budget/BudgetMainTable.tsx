@@ -408,8 +408,36 @@ export function BudgetMainTable({
     } as BudgetLineItem);
   };
 
+  // X2.3 summary: count of distinct rows that have at least one
+  // possible-duplicate. Shown as a banner above the filter chips so
+  // operators see the signal without scanning for icons.
+  const duplicateCount = duplicateMap
+    ? Object.keys(duplicateMap).length
+    : 0;
+
   return (
     <section className="space-y-3">
+      {duplicateCount > 0 ? (
+        <div
+          className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm"
+          style={{
+            borderColor: 'var(--color-lp-status-needs-review)',
+            background:
+              'color-mix(in srgb, var(--color-lp-status-needs-review) 10%, transparent)',
+            color: 'var(--lp-text)',
+          }}
+        >
+          <AlertTriangle
+            className="h-4 w-4 shrink-0"
+            style={{ color: 'var(--color-lp-status-needs-review)' }}
+            aria-hidden
+          />
+          <span>
+            {duplicateCount} {duplicateCount === 1 ? 'row' : 'rows'} flagged as possible duplicates — same category or vendor, amount within 5%, created within 7 days. Look for the warning icon next to the item label.
+          </span>
+        </div>
+      ) : null}
+
       {/* Status filter chips */}
       <div className="flex flex-wrap items-center gap-2">
         {STATUS_OPTIONS.map((opt) => {

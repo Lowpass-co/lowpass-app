@@ -85,9 +85,14 @@ export function MacroAllocationDonut({
     return { total, slices };
   }, [segments]);
 
-  const size = 200;
+  // X2.2 fix: previous version pinned the donut at 200×200px inside a
+  // grid cell that gave it ~1/3 of the panel width — the result was a
+  // tiny donut floating in dead space. Now the SVG uses viewBox + a
+  // max-w cap so it scales up with the container but never balloons
+  // beyond a sensible reading size on huge viewports.
+  const VIEWBOX_SIZE = 200;
   const stroke = 28;
-  const radius = (size - stroke) / 2;
+  const radius = (VIEWBOX_SIZE - stroke) / 2;
   const circumference = 2 * Math.PI * radius;
 
   return (
@@ -113,18 +118,22 @@ export function MacroAllocationDonut({
       </div>
 
       <div className="flex items-center justify-center">
-        <div className="relative" style={{ width: size, height: size }}>
+        <div
+          className="relative w-full"
+          style={{ maxWidth: 280, aspectRatio: '1 / 1' }}
+        >
           <svg
-            width={size}
-            height={size}
-            viewBox={`0 0 ${size} ${size}`}
+            width="100%"
+            height="100%"
+            viewBox={`0 0 ${VIEWBOX_SIZE} ${VIEWBOX_SIZE}`}
             className="-rotate-90"
+            preserveAspectRatio="xMidYMid meet"
             aria-hidden
           >
             {/* Track ring — also serves as the empty state when total = 0. */}
             <circle
-              cx={size / 2}
-              cy={size / 2}
+              cx={VIEWBOX_SIZE / 2}
+              cy={VIEWBOX_SIZE / 2}
               r={radius}
               fill="none"
               stroke="var(--lp-border)"
@@ -137,8 +146,8 @@ export function MacroAllocationDonut({
               return (
                 <circle
                   key={`${slice.label}-${i}`}
-                  cx={size / 2}
-                  cy={size / 2}
+                  cx={VIEWBOX_SIZE / 2}
+                  cy={VIEWBOX_SIZE / 2}
                   r={radius}
                   fill="none"
                   stroke={slice.color}
@@ -154,7 +163,8 @@ export function MacroAllocationDonut({
               );
             })}
           </svg>
-          {/* Center label — pseudo-3D over the SVG. */}
+          {/* Center label — pseudo-3D over the SVG. Uses an absolute
+              fill so it tracks the donut at any size. */}
           <div
             className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center"
             aria-hidden
