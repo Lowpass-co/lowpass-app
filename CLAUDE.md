@@ -81,6 +81,10 @@ Five canonical entity kinds: `person`, `flight`, `room`, `gear`, `show`. Each ha
 Right: `'#FF45001a'` or `'color-mix(in srgb, var(--lp-orange) 5.1%, transparent)'`
 Wrong: `'var(--lp-orange)' + '1a'` (concatenation doesn't resolve the var)
 
+### Tour-internal pages require `<TourBreadcrumb>`
+
+Every page under `src/app/(app)/tours/[id]/**` (except the Tour Hub itself, which has its own `← Artist` link in the page body) must mount `<TourBreadcrumb tourId={tourId} artistId={...} artistName={...} tourName={...} />` at the top of its content tree. The mount **cannot live in `tours/[id]/layout.tsx`** because `PageShell` creates a `<main overflow:auto>` scroll container — a sticky element mounted in the layout sits outside that scroll context and breaks against the TopBar's stacking. Mounted per-page (inside main), sticky `top:0` works as intended. See the Tour Hub redesign commit (`feat/budget-redesign` X3) for the pattern. If you skip this on a new tour-internal page, the user loses the `← Artist › Tour › Page` orientation strip and the `[Back to tour]` escape hatch.
+
 ## UX overhaul context
 
 The active project on this repo is the UX overhaul (UX01 through UX21). Roadmap: `docs/cursor-prompts/UX_OVERHAUL_ROADMAP.md`. Each prompt is `docs/cursor-prompts/CURSOR_PROMPT_UX<NN>_<TOPIC>.md`. Run them in numeric order; each is self-contained but later ones depend on earlier ones.
