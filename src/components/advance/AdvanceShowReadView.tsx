@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { cn, parseRoutingDate } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { FieldTypeIcon, isMonoFieldType } from './FieldTypeIcon';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -625,18 +626,36 @@ function SectionCard({
 
       {(otherFields.length > 0 || contactFields.length > 0 || fileFields.length > 0) && (
         <div className="space-y-4 px-5 py-5">
-          {/* Regular fields — 2-col grid for short values */}
+          {/* Regular fields — Phase 2 §B: dense field-table style.
+              Each row has a field-type icon, label, then value. Numeric /
+              date / time / currency / slider values pick up .lp-mono.
+              Textareas + long values still span both columns. */}
           {otherFields.length > 0 && (
             <div className="grid grid-cols-1 gap-x-8 gap-y-3 sm:grid-cols-2">
               {otherFields.map(field => {
                 const val = sectionData[field.id];
                 const isLong = field.type === 'textarea' || String(val ?? '').length > 60;
+                const useMono = isMonoFieldType(field.type);
                 return (
-                  <div key={field.id} className={cn('flex flex-col gap-0.5', isLong && 'sm:col-span-2')}>
-                    <span className="text-[10px] font-semibold uppercase tracking-wider text-lp-text-tertiary">
-                      {field.label}
-                    </span>
-                    <FieldValue field={field} value={val} />
+                  <div
+                    key={field.id}
+                    className={cn(
+                      'flex items-start gap-2 rounded-md',
+                      isLong && 'sm:col-span-2',
+                    )}
+                  >
+                    <FieldTypeIcon type={field.type} />
+                    <div className="min-w-0 flex-1">
+                      <span className="block text-[10px] font-semibold uppercase tracking-wider text-lp-text-tertiary">
+                        {field.label}
+                      </span>
+                      <div
+                        className={cn(useMono && 'lp-mono')}
+                        style={{ fontSize: '14px' }}
+                      >
+                        <FieldValue field={field} value={val} />
+                      </div>
+                    </div>
                   </div>
                 );
               })}

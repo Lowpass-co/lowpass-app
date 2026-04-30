@@ -151,19 +151,23 @@ function SectionIcon({ icon }: { icon?: string }) {
   return <Comp className="text-lp-text-secondary" size={18} />;
 }
 
+/* Phase 2 §B — character glyphs retired in favour of the lucide
+   components from FIELD_TYPE_OPTIONS below. The map stays for
+   any caller that still passes through, falling back to a glyph
+   shape rather than emoji. */
 const FIELD_TYPE_ICONS: Record<string, string> = {
   text: 'Aa',
   textarea: '¶',
   select: '▼',
-  time: '🕐',
+  time: 'T',
   currency: '£',
-  boolean: '⬡',
-  contact: '👤',
-  url: '🔗',
+  boolean: 'Y',
+  contact: '@',
+  url: '/',
   number: '#',
-  date: '📅',
-  file: '📎',
-  slider: '⋮⋮',
+  date: 'D',
+  file: 'F',
+  slider: '⋮',
 };
 
 const FIELD_TYPE_OPTIONS: { id: string; label: string; description: string; Icon: React.ComponentType<{ size?: number; className?: string }> }[] = [
@@ -189,10 +193,28 @@ function slugify(s: string): string {
 }
 
 function FieldTypeIcon({ type }: { type: string }) {
-  const char = FIELD_TYPE_ICONS[type] ?? '?';
+  // Phase 2 §B — render the actual lucide glyph for each field type
+  // (matches FIELD_TYPE_OPTIONS used in the field-type picker).
+  // Falls back to the character map for unknown types.
+  const opt = FIELD_TYPE_OPTIONS.find((o) => o.id === type);
   return (
-    <span className="inline-flex h-6 w-6 items-center justify-center rounded border border-lp-border bg-lp-bg-secondary text-xs font-medium text-lp-text-secondary">
-      {char}
+    <span
+      className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded border"
+      style={{
+        borderColor: 'var(--lp-border-subtle, var(--lp-border))',
+        background: 'var(--lp-bg-deep, var(--lp-bg-secondary))',
+        color: 'var(--lp-text-secondary)',
+      }}
+      aria-label={opt?.label ?? type}
+      title={opt?.label ?? type}
+    >
+      {opt ? (
+        <opt.Icon size={13} />
+      ) : (
+        <span style={{ fontSize: '11px', fontWeight: 500 }}>
+          {FIELD_TYPE_ICONS[type] ?? '?'}
+        </span>
+      )}
     </span>
   );
 }
