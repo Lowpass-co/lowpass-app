@@ -98,30 +98,34 @@ export function BurnRateChart({
     });
   }, [buckets, phaseBoundaries]);
 
-  // X2.1 fix: previous version used preserveAspectRatio="none" with a
-  // 1-bar dataset, which stretched the single bar across the entire
-  // chart — the result was the "one giant orange block" Adam saw.
-  // Now the SVG width scales with the bucket count so each bar gets
-  // a fixed slot, the chart starts narrow when data is sparse, and
-  // bar widths stay capped regardless of viewport size.
-  const PADDING_X = 24;
-  const PADDING_TOP = 16;
-  const PADDING_BOTTOM = 28;
-  const VIEW_H = 240;
-  const SLOT_W = 18; // px per bucket in viewBox coords
+  // F2.1 round 2: tighter sizing. The X2 attempt capped barW but the
+  // CHART HEIGHT (240px viewBox + container that filled its grid cell)
+  // still produced a tall single-bar render that read as a giant
+  // block. Cap container height at 180px AND make slot/bar widths
+  // proportional in real pixels rather than scaling with bucket count.
+  // For 1-bucket datasets we pad the X-axis with empty slots so the
+  // visible bar sits at a sensible proportion of the chart width.
+  const PADDING_X = 16;
+  const PADDING_TOP = 12;
+  const PADDING_BOTTOM = 24;
+  const VIEW_H = 180;
+  const SLOT_W = 14;
   const MIN_VIEW_W = 320;
+  // Pad sparse datasets out to at least 14 slots so a 1-bucket render
+  // doesn't dominate. Logical buckets stay at the true count for the
+  // hover/peak/iteration logic — only the slot count expands.
+  const slotCount = Math.max(buckets.length, 14);
   const VIEW_W = Math.max(
     MIN_VIEW_W,
-    PADDING_X * 2 + Math.max(buckets.length, 1) * SLOT_W,
+    PADDING_X * 2 + slotCount * SLOT_W,
   );
   const chartW = VIEW_W - PADDING_X * 2;
   const chartH = VIEW_H - PADDING_TOP - PADDING_BOTTOM;
 
-  const slot = buckets.length > 0 ? chartW / buckets.length : chartW;
-  // Bar width capped at 12px (in viewBox units) so a 1-bucket dataset
-  // doesn't paint a 600px monolith. Min 2px so very dense charts don't
-  // collapse to invisible lines.
-  const barW = Math.min(12, Math.max(2, slot * 0.7));
+  const slot = chartW / slotCount;
+  // Bar width capped at 10px (viewBox units) so dense datasets stay
+  // readable; min 2px so very long tours don't collapse.
+  const barW = Math.min(10, Math.max(2, slot * 0.6));
 
   return (
     <div
@@ -153,15 +157,18 @@ export function BurnRateChart({
         ) : null}
       </div>
 
-      <div className="relative overflow-x-auto">
+      <div
+        className="relative overflow-x-auto"
+        style={{ maxHeight: 200 }}
+      >
         <svg
-          width={VIEW_W}
+          width="100%"
           height={VIEW_H}
           viewBox={`0 0 ${VIEW_W} ${VIEW_H}`}
           preserveAspectRatio="xMinYMid meet"
           role="img"
           aria-label="Daily burn rate"
-          style={{ maxWidth: '100%', display: 'block' }}
+          style={{ display: 'block', maxHeight: 180 }}
         >
           {/* Phase boundary verticals */}
           {phaseBoundaries.map((p, i) => {

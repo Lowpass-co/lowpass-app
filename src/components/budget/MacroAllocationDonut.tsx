@@ -118,13 +118,19 @@ export function MacroAllocationDonut({
       </div>
 
       <div className="flex items-center justify-center">
+        {/* F2.2 round 2: previous attempt used a percentage-width
+            wrapper with aspect-ratio 1:1, which let the donut grow
+            with the column width — Adam's screenshot still showed it
+            huge in a wide grid cell. Lock to an explicit 200×200 box
+            and centre it; the legend stacks below as a separate flex
+            item so it never inflates the donut. */}
         <div
-          className="relative w-full"
-          style={{ maxWidth: 280, aspectRatio: '1 / 1' }}
+          className="relative"
+          style={{ width: 200, height: 200 }}
         >
           <svg
-            width="100%"
-            height="100%"
+            width={200}
+            height={200}
             viewBox={`0 0 ${VIEWBOX_SIZE} ${VIEWBOX_SIZE}`}
             className="-rotate-90"
             preserveAspectRatio="xMidYMid meet"

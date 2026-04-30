@@ -40,9 +40,17 @@ export function TourPrimaryCTACard({
   return (
     <Link
       href={href}
-      className="group flex flex-col gap-3 rounded-lg p-5 transition-colors"
+      className="lp-tour-cta group flex flex-col gap-3 rounded-lg p-5 transition-colors"
       style={{
-        border: '2px solid var(--color-lp-orange)',
+        // F2.5 round 2: softened from "2px solid var(--color-lp-orange)"
+        // to a 1px tinted border (35% mix with --lp-border). The CTA
+        // text below stays full brand orange, so the card still reads
+        // as a primary action without "screaming". Hover intensifies
+        // the border to full orange via the lp-tour-cta:hover style
+        // emitted in globals (no-op until the global ships, harmless
+        // selector otherwise).
+        border:
+          '1px solid color-mix(in srgb, var(--color-lp-orange) 35%, var(--lp-border))',
         background: 'color-mix(in srgb, var(--color-lp-orange) 4%, transparent)',
       }}
     >
