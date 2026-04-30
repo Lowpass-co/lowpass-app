@@ -63,7 +63,7 @@ export function ArtistsList({ artists: initialArtists }: { artists: Artist[] }) 
             <div className="absolute right-3 top-3 z-10" onClick={(e) => e.stopPropagation()}>
               <ContextMenu
                 items={[
-                  { label: 'Edit', icon: Pencil, onClick: () => router.push(`/artists/${artist.id}`) },
+                  { label: 'Edit', icon: Pencil, onClick: () => router.push(`/artists/${artist.id}/edit`) },
                   { label: 'Delete Artist', icon: Trash2, variant: 'danger', onClick: () => setDeleteOpen(artist) },
                 ]}
                 align="right"

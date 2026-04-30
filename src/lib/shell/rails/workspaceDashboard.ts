@@ -12,11 +12,12 @@ export function getWorkspaceDashboardRail(artistQuery: string): DashboardRail {
   return {
     kind: 'dashboard',
     tourId: 'workspace',
+    // Phase 1 §D: /dashboard folded into / (artist picker / Home), and
+    // /performance retired entirely (decision #5). Rail keeps Tours +
+    // Advance until product migrations re-skin the workspace surfaces.
     structure: [
-      { label: 'Dashboard', href: `/dashboard${q}`, icon: 'layout-grid' },
       { label: 'All tours', href: `/tours${q}`, icon: 'list-music' },
       { label: 'Advance', href: `/advance${q}`, icon: 'clipboard-list' },
-      { label: 'Performance', href: `/performance${q}`, icon: 'line-chart' },
     ],
   };
 }

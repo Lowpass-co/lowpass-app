@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+/* Product Split Phase 1 — JetBrains Mono via Google Fonts CDN
+   (no npm dep). Used by .lp-mono utility for numerics. */
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap');
+
 /* Use class-based dark mode (toggled via .dark on <html>) */
 @custom-variant dark (&:where(.dark, .dark *));
 
@@ -134,6 +138,19 @@
   --lp-budget-card-border: #E7E5E4;
   --lp-budget-card-header: #EBEBEA;
   --lp-budget-card-footer: #EEEDEC;
+
+  /* ============================================
+     Product Split Phase 1 — Foundation tokens
+     ============================================
+     New surfaces (Home + product shells) use these. Legacy
+     pages keep --lp-bg / --lp-surface / --lp-border. Light-mode
+     defaults below; dark overrides live in the `.dark` block. */
+  --lp-bg-deep: #FAFAF9;          /* deeper than --lp-bg, table backgrounds */
+  --lp-panel: #F5F5F4;            /* table headers, strip backgrounds */
+  --lp-border-subtle: #EAEAE8;    /* dense table cell borders */
+  --lp-border-strong: #D4D4D2;    /* card borders, modal edges */
+  --lp-text-mono: #404040;        /* monospace numeric content */
+  --lp-mono-font: 'JetBrains Mono', ui-monospace, 'SF Mono', 'Fira Code', monospace;
 }
 
 /* ============================================
@@ -381,6 +398,13 @@ input[type='checkbox'].lp-checkbox:focus-visible {
   --lp-shadow-xl: 0 16px 40px rgba(0, 0, 0, 0.6);
   --lp-shadow-overlay: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 8px 24px rgba(0, 0, 0, 0.5);
   --lp-shadow-focus-ring: 0 0 0 4px rgba(255, 69, 0, 0.35);
+
+  /* Product Split Phase 1 — Foundation tokens (dark) */
+  --lp-bg-deep: #0a0a0a;
+  --lp-panel: #111111;
+  --lp-border-subtle: #222222;
+  --lp-border-strong: #333333;
+  --lp-text-mono: #d1d5db;
 }
 
 /* ============================================
@@ -397,14 +421,41 @@ body {
   background: var(--lp-bg);
   color: var(--lp-text);
   font-family: var(--font-sans);
+  /* Product Split Phase 1 — body baseline shifts 14 → 13px.
+     Legacy pages keep their explicit 14px via the `main` rule
+     below; new product shells inherit 13px. */
+  font-size: 13px;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Main content typography (sidebar excluded — use `main` scope) */
+/* Main content typography (sidebar excluded — use `main` scope).
+   Legacy pages render inside <main>; the explicit 14px keeps them
+   stable while the body baseline shifts under new shell-v2 surfaces. */
 main {
   font-size: 14px;
   font-weight: 400;
+}
+
+/* ============================================
+   Product Split Phase 1 — Density + Mono utilities
+   ============================================ */
+/* .lp-dense — applied on table containers / list rows in product
+   surfaces. Drops to 12px with tight padding for tabular density. */
+.lp-dense {
+  font-size: 12px;
+  line-height: 1.4;
+}
+.lp-dense th,
+.lp-dense td {
+  padding: 4px 8px;
+}
+
+/* .lp-mono — JetBrains Mono numerics with tabular figures. Apply
+   to currency, dates, IDs, counts. Doesn't change colour. */
+.lp-mono {
+  font-family: var(--lp-mono-font);
+  font-variant-numeric: tabular-nums;
 }
 
 main h1 {

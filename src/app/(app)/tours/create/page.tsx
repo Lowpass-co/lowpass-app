@@ -22,7 +22,7 @@ export default async function CreateTourPage({
     <div className="mx-auto max-w-2xl px-2">
       <nav className="mb-8 flex items-center gap-4">
         <Link
-          href="/dashboard"
+          href="/"
           className="flex items-center gap-2 text-sm text-lp-text-secondary hover:text-lp-text transition-colors"
         >
           <ArrowLeft size={18} />
