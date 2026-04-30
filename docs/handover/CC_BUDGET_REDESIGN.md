@@ -44,12 +44,12 @@ Before writing any code:
 7. **Brand fidelity.** The variants use purple, blue, gradient accents. Lowpass uses brand orange `#FF4500` for primary actions and accents, `--color-lp-status-*` for status pills, `--color-lp-day-*` for day-type tags. Don't import variant colours.
 8. **Phased delivery.** Phase N (nav fixup) lands first as a quick-warmup commit. Phase 0 audit + scope confirmation lands second as a docs-only commit. Phases A–F are one commit each. Phase V is verification only. **Nine commits total** if Phase 0 reveals no surprises; could be more if Phase 0 surfaces blockers.
 9. Adam's product locks (do not relitigate):
-   - **Each leg is its own tour.** Phase computation is linear (Pre-Prod → Rehearsals → Show Days → Wrap), no multi-leg detection inside a tour. See Phase A.
-   - **Tour Phase Context strip is the centrepiece.** Phases auto-computed from routing day_types (see §2 of Phase A). User-defined phase overrides are out of scope for this sprint.
-   - **Single unified page.** The eight legacy tabs (Salaries / Income / Commissions / Production / Summary / Settlement / Hotels / DayView) are retired. Their content either folds into the unified page or moves to dedicated routes. **Settlement → `/tours/[id]/budget/settlement`** (Adam-confirmed); everything else inline as filterable rows unless Phase 0 surfaces another tab worth its own route.
-   - **Receipt Inbox is real but defer-able.** If the OCR backend doesn't exist (likely), Phase D ships as a manual upload + manual link UI — no OCR. Adding OCR is a separate infrastructure sprint.
-   - **Multi-currency display only.** Show actuals in tour currency with a native-currency footnote where the underlying transaction was in a different currency. Don't build live FX conversion.
-   - **No speculative features.** "Smart Alerts" sidebar from the variants is nice but skip it for v1 unless an existing rule engine surfaces. Same for the AI-tip footers.
+  - **Each leg is its own tour.** Phase computation is linear (Pre-Prod → Rehearsals → Show Days → Wrap), no multi-leg detection inside a tour. See Phase A.
+  - **Tour Phase Context strip is the centrepiece.** Phases auto-computed from routing day_types (see §2 of Phase A). User-defined phase overrides are out of scope for this sprint.
+  - **Single unified page.** The eight legacy tabs (Salaries / Income / Commissions / Production / Summary / Settlement / Hotels / DayView) are retired. Their content either folds into the unified page or moves to dedicated routes. **Settlement → `/tours/[id]/budget/settlement`** (Adam-confirmed); everything else inline as filterable rows unless Phase 0 surfaces another tab worth its own route.
+  - **Receipt Inbox is real but defer-able.** If the OCR backend doesn't exist (likely), Phase D ships as a manual upload + manual link UI — no OCR. Adding OCR is a separate infrastructure sprint.
+  - **Multi-currency display only.** Show actuals in tour currency with a native-currency footnote where the underlying transaction was in a different currency. Don't build live FX conversion.
+  - **No speculative features.** "Smart Alerts" sidebar from the variants is nice but skip it for v1 unless an existing rule engine surfaces. Same for the AI-tip footers.
 
 ---
 
@@ -77,13 +77,15 @@ const channelListSetup = channelRow !== null;
 
 While in the same file, verify each Setup chip queries its actual truth source. Expected:
 
-| Chip | Truth source | Cheap query |
-|---|---|---|
-| Routing | `routing` table | `SELECT id FROM routing WHERE tour_id = X LIMIT 1` |
-| Channel list | `channel_list_rows` | (the fix in N.1) |
-| Personnel | tour-personnel link table — likely `personnel_tour_assignments` or `tour_personnel`; check the schema | `SELECT id FROM <table> WHERE tour_id = X LIMIT 1` |
-| Rooming | `rooming_grid` table | `SELECT id FROM rooming_grid WHERE tour_id = X LIMIT 1` |
-| Riders linked | count of rider_pack→tour links via `rider_folders.tour_id` or whichever the rider system uses | `SELECT count(*) FROM <link table> WHERE tour_id = X` |
+
+| Chip          | Truth source                                                                                          | Cheap query                                             |
+| ------------- | ----------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| Routing       | `routing` table                                                                                       | `SELECT id FROM routing WHERE tour_id = X LIMIT 1`      |
+| Channel list  | `channel_list_rows`                                                                                   | (the fix in N.1)                                        |
+| Personnel     | tour-personnel link table — likely `personnel_tour_assignments` or `tour_personnel`; check the schema | `SELECT id FROM <table> WHERE tour_id = X LIMIT 1`      |
+| Rooming       | `rooming_grid` table                                                                                  | `SELECT id FROM rooming_grid WHERE tour_id = X LIMIT 1` |
+| Riders linked | count of rider_pack→tour links via `rider_folders.tour_id` or whichever the rider system uses         | `SELECT count(*) FROM <link table> WHERE tour_id = X`   |
+
 
 For each chip: read the existing implementation, confirm it's hitting the right table. If any other chip is also using a proxy, fix it the same way (real existence check). Add a brief inline comment naming the source table per chip.
 
@@ -95,11 +97,10 @@ Phase D of the nav redesign mounted `<TourBreadcrumbServer>` per-page rather tha
 
 Two things to add:
 
-1. **`CLAUDE.md` note.** In the "Critical conventions" section, add a bullet:
-   > **Tour-internal pages require `<TourBreadcrumbServer>`.** Every page under `src/app/(app)/tours/[id]/**` must mount `<TourBreadcrumbServer tourId={...} pageName="..." />` at the top of its content tree. The mount cannot live in `tours/[id]/layout.tsx` because PageShell's scroll structure puts the layout outside the sticky scroll context. See the nav redesign Phase D commit for the pattern.
-
-2. **`<TourBreadcrumbServer>` JSDoc.** Add a top-of-file comment in `src/components/tours/TourBreadcrumbServer.tsx` (find the actual file via grep):
-   ```ts
+1. `**CLAUDE.md` note.** In the "Critical conventions" section, add a bullet:
+  > **Tour-internal pages require `<TourBreadcrumbServer>`.** Every page under `src/app/(app)/tours/[id]/`** must mount `<TourBreadcrumbServer tourId={...} pageName="..." />` at the top of its content tree. The mount cannot live in `tours/[id]/layout.tsx` because PageShell's scroll structure puts the layout outside the sticky scroll context. See the nav redesign Phase D commit for the pattern.
+2. `**<TourBreadcrumbServer>` JSDoc.** Add a top-of-file comment in `src/components/tours/TourBreadcrumbServer.tsx` (find the actual file via grep):
+  ```ts
    /**
     * Mount this at the TOP of every page under src/app/(app)/tours/[id]/**.
     *
@@ -112,16 +113,16 @@ Two things to add:
     * If you're adding a new tour-internal page and forgot to mount this,
     * the user loses the [Back to tour] escape hatch. Don't.
     */
-   ```
+  ```
 
 ### N.4 Acceptance
 
-- [ ] Channel list chip queries `channel_list_rows` directly (or its actual table)
-- [ ] Every other Setup chip queries its actual truth source
-- [ ] Inline comment per chip names the source table
-- [ ] `CLAUDE.md` has the new bullet under Critical conventions
-- [ ] `<TourBreadcrumbServer>` has the top-of-file JSDoc
-- [ ] Lint + typecheck clean
+- Channel list chip queries `channel_list_rows` directly (or its actual table)
+- Every other Setup chip queries its actual truth source
+- Inline comment per chip names the source table
+- `CLAUDE.md` has the new bullet under Critical conventions
+- `<TourBreadcrumbServer>` has the top-of-file JSDoc
+- Lint + typecheck clean
 
 ### N.5 Commit
 
@@ -168,11 +169,13 @@ Sections of the audit:
 ### 0.2 Scope plan
 
 For each variant feature, classify:
+
 - **In scope, Phase X** — feature lands in this sprint, in the named phase
 - **Deferred** — feature defers to a follow-up sprint with a named reason
 - **Out of scope** — feature drops entirely with a reason
 
 Variant features to classify:
+
 - Tour Phase Context strip
 - Macro Allocation donut
 - Burn Rate / Financial Timeline chart
@@ -192,11 +195,11 @@ Variant features to classify:
 
 ### 0.3 Acceptance for Phase 0
 
-- [ ] `docs/handover/BUDGET_REDESIGN_AUDIT.md` exists with all seven audit sections + scope plan
-- [ ] Each legacy tab has a disposition (fold / move / retire)
-- [ ] OCR availability is determined; Phase D scope adjusted accordingly
-- [ ] Recharts (or equivalent) confirmed available; chart phase scoped accordingly
-- [ ] Adam reviews and approves before Phase A starts
+- `docs/handover/BUDGET_REDESIGN_AUDIT.md` exists with all seven audit sections + scope plan
+- Each legacy tab has a disposition (fold / move / retire)
+- OCR availability is determined; Phase D scope adjusted accordingly
+- Recharts (or equivalent) confirmed available; chart phase scoped accordingly
+- Adam reviews and approves before Phase A starts
 
 ### 0.4 Commit
 
@@ -233,6 +236,7 @@ Shape, top to bottom:
 ```
 
 Visual treatment:
+
 - Each phase is a clickable segment in a horizontal row (`grid-template-columns: repeat(N, 1fr)` where N is the phase count).
 - Background: `var(--lp-surface)` with thin `var(--lp-border)` border, `var(--lp-radius-md)`.
 - Active phase: `2px solid var(--lp-orange)` border + `color-mix(in srgb, var(--lp-orange) 8%, transparent)` background tint.
@@ -259,6 +263,7 @@ export async function computeTourPhases(tourId: string): Promise<TourPhase[]>;
 ```
 
 Algorithm:
+
 1. Fetch all `routing` rows for the tour ordered by date asc.
 2. **Pre-Prod** — synthetic phase from `tour.start_date` (or 30 days before the first rehearsal/show, whichever is later — confirm sensible default in audit) up to the day before the first `rehearsal` or `show`/`festival` day.
 3. **Rehearsals** — span from the first `rehearsal` day_type through the last `rehearsal` before any `show`/`festival`. If the tour has no rehearsal days, this phase is omitted.
@@ -268,6 +273,7 @@ Algorithm:
 Mark `isCurrent` based on today's date being within `[startDate, endDate]`. Mark `isPast` if `endDate < today`.
 
 Edge cases:
+
 - **No rehearsals.** Phases are Pre-Prod → Show Days → Wrap (three segments).
 - **Same-day-as-tour-start show.** Pre-Prod is a zero-day phase; render it muted with "—" date label. Don't break the layout.
 - **Tour with no shows yet (still planning).** Show Days phase pulls from `tour.start_date` to `tour.end_date` as a placeholder; mark explicitly as "no shows scheduled" in the strip.
@@ -283,14 +289,14 @@ Edge cases:
 
 ### A.4 Acceptance
 
-- [ ] `<TourPhaseContextStrip>` renders for any tour with at least one routing row
-- [ ] Phases auto-compute correctly for a tour with rehearsals + shows (Pre-Prod → Rehearsals → Show Days → Wrap)
-- [ ] Phases auto-compute correctly for a tour without rehearsals (Pre-Prod → Show Days → Wrap)
-- [ ] Phases auto-compute correctly for an unscheduled / planning-only tour (placeholder Show Days span)
-- [ ] Active phase is highlighted with brand-orange border + tint
-- [ ] Click on a phase updates active-phase state (visual selection; main table filter wiring lands in Phase C)
-- [ ] Strip is sticky below the TourBreadcrumb
-- [ ] No lint/type regressions
+- `<TourPhaseContextStrip>` renders for any tour with at least one routing row
+- Phases auto-compute correctly for a tour with rehearsals + shows (Pre-Prod → Rehearsals → Show Days → Wrap)
+- Phases auto-compute correctly for a tour without rehearsals (Pre-Prod → Show Days → Wrap)
+- Phases auto-compute correctly for an unscheduled / planning-only tour (placeholder Show Days span)
+- Active phase is highlighted with brand-orange border + tint
+- Click on a phase updates active-phase state (visual selection; main table filter wiring lands in Phase C)
+- Strip is sticky below the TourBreadcrumb
+- No lint/type regressions
 
 ### A.5 Commit
 
@@ -358,13 +364,13 @@ On narrower viewports (<1024px), stack vertically.
 
 ### B.4 Acceptance
 
-- [ ] Donut renders with category breakdown matching the live budget data
-- [ ] Burn Rate bars render with phase boundaries marked
-- [ ] Active phase tint matches `<TourPhaseContextStrip>`'s active phase
-- [ ] Hover tooltips work on both charts
-- [ ] Charts re-render correctly when budget data changes (mutate hook or revalidate)
-- [ ] Stacks on narrow viewports
-- [ ] No lint/type regressions
+- Donut renders with category breakdown matching the live budget data
+- Burn Rate bars render with phase boundaries marked
+- Active phase tint matches `<TourPhaseContextStrip>`'s active phase
+- Hover tooltips work on both charts
+- Charts re-render correctly when budget data changes (mutate hook or revalidate)
+- Stacks on narrow viewports
+- No lint/type regressions
 
 ### B.5 Commit
 
@@ -392,6 +398,7 @@ Replace the legacy budget table machinery with a single primitives-driven view. 
 ### C.1 Columns
 
 Columns left to right:
+
 1. **Checkbox** — bulk select
 2. **Item / Description** — item name (weight 500) + sub-line with phase tag pill + category
 3. **Vendor** — vendor name with `<EntityChip kind="vendor" id={...} />` if vendor canonicals exist (probably don't yet — render plain text)
@@ -400,7 +407,7 @@ Columns left to right:
 6. **Final** — currency value (only renders for closed-out items)
 7. **Variance** — percentage with up/down arrow + colour: green if under, red if over, gray if 0%
 8. **Receipts** — icon with count badge; click opens Receipt slide-over (Phase D)
-9. **Status** — pill using `--color-lp-status-*` tokens: Draft / Pending / Approved / Paid / Rejected
+9. **Status** — pill using `--color-lp-status-`* tokens: Draft / Pending / Approved / Paid / Rejected
 10. **Owner** — user avatar (the `AccountAvatar` from the nav-sprint pattern)
 11. **Actions** — `⋯` menu: Edit · Duplicate · Delete · Mark as paid · etc.
 
@@ -415,8 +422,9 @@ Click on a `<TourPhaseContextStrip>` segment filters the table to rows in that p
 ### C.4 Status filter chips above the table
 
 Mirror the advance overview's pattern (UX22 Phase 1):
+
 - Chips: All / Draft / Pending / Approved / Paid / Rejected
-- Token-driven backgrounds via `--color-lp-status-*`
+- Token-driven backgrounds via `--color-lp-status-`*
 - Active chip highlighted with the matching status colour
 
 ### C.5 Search input + column toggle + sort
@@ -428,6 +436,7 @@ Mirror the advance overview's pattern (UX22 Phase 1):
 ### C.6 Quick Add templates strip at the bottom
 
 Below the table, a horizontal strip of one-click templates that pre-fill a budget line:
+
 - 🏨 Hotel Block (category: Accommodation, suggested vendor)
 - 🚛 Freight (category: Logistics)
 - 🍽 Catering (category: Catering)
@@ -440,6 +449,7 @@ Click → opens BudgetLineSlideOver with the template's fields pre-populated.
 ### C.7 Retire the eight legacy tabs
 
 Per Phase 0 audit's per-tab disposition:
+
 - Anything that folds in: lift its data into the unified table as additional rows (filterable by category)
 - Anything that needs its own route (e.g. SettlementTab's close-out flow): create `/tours/[id]/budget/settlement` etc., add to the LeftRail's docSections variant for navigability
 - Retire the rest: delete the tab file, remove from the BudgetFolderTabsNav
@@ -448,14 +458,14 @@ Keep the legacy code in `src/components/_legacy/budget/` (move, don't delete) pe
 
 ### C.8 Acceptance
 
-- [ ] Main table renders all budget_line_items via `<DataTable>` (or `<SpreadsheetGrid>` if Phase 0 chose that)
-- [ ] Row click opens `BudgetLineSlideOver` (now using `<SlideOver>` primitive)
-- [ ] Phase filter from `<TourPhaseContextStrip>` works
-- [ ] Status filter chips work and stay consistent with row pills
-- [ ] Search, sort, column toggle work
-- [ ] Quick Add templates pre-populate the slide-over correctly
-- [ ] Eight legacy tabs are gone (moved to `_legacy/budget/` or deleted), nav reflects the new structure
-- [ ] No lint/type regressions
+- Main table renders all budget_line_items via `<DataTable>` (or `<SpreadsheetGrid>` if Phase 0 chose that)
+- Row click opens `BudgetLineSlideOver` (now using `<SlideOver>` primitive)
+- Phase filter from `<TourPhaseContextStrip>` works
+- Status filter chips work and stay consistent with row pills
+- Search, sort, column toggle work
+- Quick Add templates pre-populate the slide-over correctly
+- Eight legacy tabs are gone (moved to `_legacy/budget/` or deleted), nav reflects the new structure
+- No lint/type regressions
 
 ### C.9 Commit
 
@@ -496,6 +506,7 @@ Right-side sidebar (or SlideOver on narrower viewports) for receipt management. 
 Top section: drag-drop drop zone ("Drop receipts here or click to upload") that uploads to a known storage bucket and triggers OCR processing.
 
 List of receipts with status:
+
 - **Processing** — spinner, OCR in progress
 - **Extracted** — vendor + amount + date + confidence% shown, "Auto-link" CTA (matches against existing budget_line_items by vendor + amount)
 - **Linked** — green checkmark, shows linked item, "Unlink" option
@@ -519,13 +530,13 @@ Receipts attach to budget_line_items via `budget_line_item_attachments` (existin
 
 ### D.3 Acceptance
 
-- [ ] Receipt Inbox renders on the budget page (sidebar on wide viewports, SlideOver otherwise)
-- [ ] Drag-drop upload works
-- [ ] Receipts associate with budget_line_items via budget_line_item_attachments
-- [ ] If OCR available: auto-extract + auto-link work; confidence scores visible
-- [ ] If OCR not available: manual upload + manual link work; OCR-related UI hidden behind a feature flag
-- [ ] Linked receipts show a count badge in the main table's Receipts column
-- [ ] No lint/type regressions
+- Receipt Inbox renders on the budget page (sidebar on wide viewports, SlideOver otherwise)
+- Drag-drop upload works
+- Receipts associate with budget_line_items via budget_line_item_attachments
+- If OCR available: auto-extract + auto-link work; confidence scores visible
+- If OCR not available: manual upload + manual link work; OCR-related UI hidden behind a feature flag
+- Linked receipts show a count badge in the main table's Receipts column
+- No lint/type regressions
 
 ### D.4 Commit
 
@@ -581,10 +592,10 @@ Mark-as actions PATCH all selected rows. Delete prompts for confirmation.
 
 ### E.4 Acceptance
 
-- [ ] Duplicate detection banner appears above duplicate rows; comparison slide-over works; merge/dismiss actions work
-- [ ] Variance impact tooltips render on >5% over rows; visual escalation at >10%
-- [ ] Bulk select shows the sticky action bar; mark-as and delete actions work end-to-end
-- [ ] No lint/type regressions
+- Duplicate detection banner appears above duplicate rows; comparison slide-over works; merge/dismiss actions work
+- Variance impact tooltips render on >5% over rows; visual escalation at >10%
+- Bulk select shows the sticky action bar; mark-as and delete actions work end-to-end
+- No lint/type regressions
 
 ### E.5 Commit
 
@@ -634,11 +645,11 @@ Use the existing PDF generation pattern (search the codebase for prior PDF expor
 
 ### F.3 Acceptance
 
-- [ ] Rows with native_currency show both display and native amounts
-- [ ] Currency switcher changes display currency without mutating data
-- [ ] Export Report → PDF produces a formatted document
-- [ ] Export Report → XLSX produces a flat spreadsheet
-- [ ] No lint/type regressions
+- Rows with native_currency show both display and native amounts
+- Currency switcher changes display currency without mutating data
+- Export Report → PDF produces a formatted document
+- Export Report → XLSX produces a flat spreadsheet
+- No lint/type regressions
 
 ### F.4 Commit
 
@@ -662,29 +673,28 @@ Made-with: Claude Code (budget redesign)
 
 Smoke flows after all phases land:
 
-0. **Phase N (nav fixup)**: Tour Hub Setup chips reflect actual data sources (a tour with riders but no channel list shows Channel list = —, not ✓). `CLAUDE.md` has the breadcrumb hygiene bullet. `<TourBreadcrumbServer>` has the top-of-file JSDoc.
-
-1. **Phase strip**: open a tour with rehearsals + shows, confirm phases compute correctly (Pre-Prod → Rehearsals → Show Days → Wrap). Open a tour without rehearsals, confirm three-phase render (Pre-Prod → Show Days → Wrap). Click each phase, confirm the table filters.
-2. **Macro allocation**: confirm donut sums match the table's category totals.
-3. **Burn rate**: confirm the chart's bar sums match daily totals; phase boundaries align with the strip.
-4. **Main table**:
-   - Create a new line item via Quick Add (Hotel Block).
-   - Edit it via row click; confirm slide-over saves.
-   - Filter by status chip; confirm only matching rows show.
-   - Search; confirm haystack matches.
-5. **Receipts**:
-   - Drag-drop a file; confirm upload works.
-   - If OCR: confirm extraction completes and auto-link suggests a match.
-   - If not: confirm manual link picker works.
-6. **Smart features**:
-   - Create two near-duplicate items; confirm the duplicate banner appears.
-   - Edit a row to push variance >5%; confirm the impact tooltip appears.
-   - Multi-select; confirm bulk-edit bar appears and bulk actions work.
-7. **Currency**: switch the display currency; confirm rows reformat without losing data.
-8. **Export**: trigger PDF and XLSX exports; confirm both download successfully.
-9. **Print**: `Cmd+P` from the page; confirm sticky chrome (breadcrumb, phase strip) is hidden in print stylesheet, table prints cleanly.
-10. **No regressions on adjacent pages**: open `/tours/[id]/advance` and `/tours/[id]/routing`; confirm they still render correctly.
-11. **Lint clean (75/121 baseline). Typecheck zero. `next build --webpack` succeeds.**
+1. **Phase N (nav fixup)**: Tour Hub Setup chips reflect actual data sources (a tour with riders but no channel list shows Channel list = —, not ✓). `CLAUDE.md` has the breadcrumb hygiene bullet. `<TourBreadcrumbServer>` has the top-of-file JSDoc.
+2. **Phase strip**: open a tour with rehearsals + shows, confirm phases compute correctly (Pre-Prod → Rehearsals → Show Days → Wrap). Open a tour without rehearsals, confirm three-phase render (Pre-Prod → Show Days → Wrap). Click each phase, confirm the table filters.
+3. **Macro allocation**: confirm donut sums match the table's category totals.
+4. **Burn rate**: confirm the chart's bar sums match daily totals; phase boundaries align with the strip.
+5. **Main table**:
+  - Create a new line item via Quick Add (Hotel Block).
+  - Edit it via row click; confirm slide-over saves.
+  - Filter by status chip; confirm only matching rows show.
+  - Search; confirm haystack matches.
+6. **Receipts**:
+  - Drag-drop a file; confirm upload works.
+  - If OCR: confirm extraction completes and auto-link suggests a match.
+  - If not: confirm manual link picker works.
+7. **Smart features**:
+  - Create two near-duplicate items; confirm the duplicate banner appears.
+  - Edit a row to push variance >5%; confirm the impact tooltip appears.
+  - Multi-select; confirm bulk-edit bar appears and bulk actions work.
+8. **Currency**: switch the display currency; confirm rows reformat without losing data.
+9. **Export**: trigger PDF and XLSX exports; confirm both download successfully.
+10. **Print**: `Cmd+P` from the page; confirm sticky chrome (breadcrumb, phase strip) is hidden in print stylesheet, table prints cleanly.
+11. **No regressions on adjacent pages**: open `/tours/[id]/advance` and `/tours/[id]/routing`; confirm they still render correctly.
+12. **Lint clean (75/121 baseline). Typecheck zero. `next build --webpack` succeeds.**
 
 If any step fails, fix before declaring done.
 
@@ -724,3 +734,4 @@ If any phase needs to defer (most likely Phase D if OCR isn't ready, or Phase E.
 1. **Legacy tab disposition** — Phase 0's per-tab plan needs Adam-review before retirement. Settlement is pre-confirmed for `/tours/[id]/budget/settlement`. If any other tab carries unique flow that wasn't obvious from filenames, confirm with Adam before deleting.
 2. **OCR / FX rates** — both default to "manual / placeholder" for v1 with explicit env-flag wiring so they can flip on cleanly when infrastructure lands. Don't try to half-build either inside this sprint.
 3. **Phase A edge cases** — the §A.2 rule covers rehearsals-present, rehearsals-absent, and unscheduled tours. If a tour produces weird phase boundaries that none of those edge cases handle (e.g. multiple rehearsal blocks separated by shows, which shouldn't happen but might in real data), surface rather than guess.
+

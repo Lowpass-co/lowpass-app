@@ -1,20 +1,28 @@
 /* ============================================
-   LOWPASS — Receipt Inbox (Phase D budget redesign)
+   LOWPASS — Receipt Inbox (budget redesign Phase D + X1.3 fix-up)
 
-   Compact drop-zone + uploaded-receipt list. Files attach to
-   `budget_line_item_attachments` via the existing
-   /api/budget/line-items/attachments POST. Manual link to a budget
-   line item happens via the LineItemPicker SlideOver.
+   X1.3 fix: previous version POSTed to /api/budget/line-items/
+   attachments which doesn't exist as a top-level route — Next.js
+   resolved the request through to its 404 page (HTML body), which
+   surfaced as "drag-drop returns HTML 404" in Adam's smoke. The
+   real flow is two-step:
 
-   OCR auto-extract is deferred. The /api/budget/receipts/ocr backend
-   exists (Claude Vision) but requires an Anthropic API key; flipping
-   it on without explicit env-flag wiring would surface "billing
-   required" toasts in production. Tracked as a follow-up integration
-   sprint per BUDGET_REDESIGN_AUDIT.md §5.
+     1. POST /api/budget/receipts (JSON) → creates a receipt record,
+        returns its id + auto-generated receipt_number
+     2. POST /api/budget/receipts/upload (multipart) → uploads the
+        file under the receipt's storage path, returns the URL
+        (which we then PATCH back onto the receipt as
+        receipt_file_url so the receipt row knows where its file is)
 
-   Layout: stays inline with the page on widths < 1280px (a section
-   under the main table); on >= 1280px the parent renders it as a
-   right-side rail. This component is presentational either way.
+   Linking a receipt to a budget_line_item happens via PATCH on
+   /api/budget/receipts with linked_line_item_id; the existing
+   route already handles the side effect of bumping the line item's
+   actual_cost when in_budget toggles.
+
+   OCR auto-extract is deferred. /api/budget/receipts/ocr exists
+   (Claude Vision) but requires ANTHROPIC_API_KEY provisioning;
+   flipping it on now would surface "billing required" toasts in
+   environments without the key. Follow-up sprint.
    ============================================ */
 
 'use client';
@@ -33,8 +41,8 @@ export type InboxReceipt = {
   filename: string;
   sizeBytes: number;
   status: 'uploading' | 'unlinked' | 'linked' | 'error';
-  /** Set once the upload responds. */
-  attachmentId?: string;
+  /** Set once /api/budget/receipts has created the receipt row. */
+  receiptId?: string;
   /** Set when linked to a line item. */
   linkedLineId?: string;
   linkedLineLabel?: string;
@@ -84,31 +92,60 @@ export function ReceiptInbox({ tourId, lineItems }: ReceiptInboxProps) {
           },
         ]);
         try {
+          // 1) Create the receipt row.
+          const createRes = await fetch('/api/budget/receipts', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              tour_id: tourId,
+              vendor: file.name.replace(/\.[^.]+$/, '').slice(0, 80),
+              description: 'Uploaded receipt',
+            }),
+          });
+          if (!createRes.ok) {
+            const text = await createRes.text();
+            throw new Error(text || 'Receipt create failed');
+          }
+          const createdJson = (await createRes.json()) as { id?: string; receipt?: { id?: string } };
+          const receiptId = createdJson.id ?? createdJson.receipt?.id;
+          if (!receiptId) throw new Error('Receipt create returned no id');
+
+          // 2) Upload the file under the receipt's storage path.
           const fd = new FormData();
           fd.set('file', file);
           fd.set('tour_id', tourId);
-          // Receipt id is generated server-side when no line item is
-          // linked yet; we stash the response's path/url on the local
-          // record so the user can preview it before linking.
-          const res = await fetch(
-            `/api/budget/line-items/attachments?tour_id=${encodeURIComponent(tourId)}`,
-            {
-              method: 'POST',
-              body: fd,
-            },
-          );
-          if (!res.ok) {
-            const text = await res.text();
+          fd.set('receipt_id', receiptId);
+          const uploadRes = await fetch('/api/budget/receipts/upload', {
+            method: 'POST',
+            body: fd,
+          });
+          if (!uploadRes.ok) {
+            const text = await uploadRes.text();
             throw new Error(text || 'Upload failed');
           }
-          const json = (await res.json()) as { id?: string };
+          const uploadJson = (await uploadRes.json()) as { url?: string };
+
+          // 3) PATCH the receipt with the file URL so the row knows
+          //    where its file lives. Failure here is non-fatal — the
+          //    file is uploaded; we just lose the convenience link.
+          if (uploadJson.url) {
+            await fetch('/api/budget/receipts', {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                id: receiptId,
+                receipt_file_url: uploadJson.url,
+              }),
+            }).catch(() => undefined);
+          }
+
           setReceipts((prev) =>
             prev.map((r) =>
               r.id === localId
                 ? {
                     ...r,
                     status: 'unlinked',
-                    attachmentId: json.id,
+                    receiptId,
                   }
                 : r,
             ),
@@ -143,14 +180,14 @@ export function ReceiptInbox({ tourId, lineItems }: ReceiptInboxProps) {
   const linkTo = useCallback(
     async (receiptLocalId: string, line: BudgetLineItem) => {
       const target = receipts.find((r) => r.id === receiptLocalId);
-      if (!target?.attachmentId) return;
+      if (!target?.receiptId) return;
       try {
-        const res = await fetch('/api/budget/line-items/attachments', {
+        const res = await fetch('/api/budget/receipts', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            id: target.attachmentId,
-            line_item_id: line.id,
+            id: target.receiptId,
+            linked_line_item_id: line.id,
           }),
         });
         if (!res.ok) throw new Error(await res.text());

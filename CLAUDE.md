@@ -47,30 +47,37 @@ docs/
 ## Critical conventions
 
 ### Migrations
+
 **Read `database/migrations/README.md` before writing any migration.** TL;DR: pick the next sequential number after the highest on `main` AND across active feature branches. Mirror the number in the file's header comment. Idempotent where possible. RLS via existing helpers. Down-migration block at the end. Two real collisions have already happened — don't make a third.
 
 ### Design tokens
+
 **All visual values must reference `var(--lp-…)` tokens.** No hardcoded hex colours, font sizes, paddings, z-indexes, or shadows in component code. Token catalogue: `docs/design-tokens.md`. Tokens defined in `src/app/globals.css`.
 
 For transparent variants of brand orange, use **hex+alpha** (`#FF45001a`) or `color-mix(in srgb, var(--lp-orange) X%, transparent)` — never JS string concatenation of CSS vars (`'var(--lp-orange)' + '1a'`) — that breaks at runtime.
 
 ### Page archetypes
+
 Every page wraps in `<PageShell>` (UX02) with one of five archetypes: `list | spreadsheet | dashboard | document | builder`. The `LeftRail` variant is determined by the archetype. Don't invent bespoke layouts. See `docs/cursor-prompts/UX_OVERHAUL_ROADMAP.md` §3.
 
 ### Component primitives
+
 - **Lists** → `<DataTable>` (`docs/components/DATA_TABLE_CONTRACT.md`). No custom `<table>` HTML in pages.
 - **Spreadsheets** → `<SpreadsheetGrid>` (`docs/components/SPREADSHEET_GRID_CONTRACT.md`). Used for Budget, Payroll, Channel List, Routing.
 - **Detail panels** → `<SlideOver>` from `src/components/shell/SlideOver.tsx` (`docs/components/SLIDE_OVER_CONTRACT.md`). Context only — never the primary edit surface (admin tools like Bug Reports are the documented exception). **Do NOT roll your own backdrop/aside chrome** — the four entity slide-overs (Flight/Person/Room/Gear) currently do this and it's marked for sweep in UX13. Don't add a fifth.
 - **Inline entity references** → `<EntityChip kind={...} id={...} />` (UX08). Click opens the entity's slide-over via `useEntityRouting()`.
 
 ### Canonical entities
+
 Five canonical entity kinds: `person`, `flight`, `room`, `gear`, `show`. Each has a registry descriptor in `src/lib/entities/`. **Do not query their tables directly from UI components** — go through `getEntityDescriptor(kind).fetchById()` / `.search()`. Adding a sixth entity kind is a non-trivial change; add it to the registry, the `EntityKind` union, and write a slide-over (using the `<SlideOver>` primitive).
 
 ### Auth + RLS
+
 - Site admin gating: `getUserAndAdminStatus()` from `@/lib/site-admin`. Mirror the pattern used in `src/app/(app)/bugs/page.tsx` for any admin-only page.
 - Workspace scoping in SQL: always use `public.get_my_workspace_id()` and `public.is_workspace_admin()`. Don't inline `SELECT workspace_id FROM workspace_members WHERE user_id = auth.uid()`.
 
 ### Hex+alpha for orange tints
+
 Right: `'#FF45001a'` or `'color-mix(in srgb, var(--lp-orange) 5.1%, transparent)'`
 Wrong: `'var(--lp-orange)' + '1a'` (concatenation doesn't resolve the var)
 
@@ -79,6 +86,7 @@ Wrong: `'var(--lp-orange)' + '1a'` (concatenation doesn't resolve the var)
 The active project on this repo is the UX overhaul (UX01 through UX21). Roadmap: `docs/cursor-prompts/UX_OVERHAUL_ROADMAP.md`. Each prompt is `docs/cursor-prompts/CURSOR_PROMPT_UX<NN>_<TOPIC>.md`. Run them in numeric order; each is self-contained but later ones depend on earlier ones.
 
 State at last update (2026-04-27, after UX12 + this fix branch):
+
 - UX01–UX08 merged
 - UX08b merged (Command Palette)
 - UX09–UX12 merged on `test/partner-sync-20260420-165518` (with `fix/ux12-migration-renumber` cleanup)

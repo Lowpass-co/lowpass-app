@@ -21,7 +21,6 @@ import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 
 import { topBarOnlyAppPageShell } from '@/components/shell/app-page-shells';
-import { TourBudgetRebuildClient } from '@/components/budget/TourBudgetRebuildClient';
 import { MobileBudgetBanner } from '@/components/mobile/MobileBudgetBanner';
 import { BudgetPhaseStripClient } from '@/components/budget/BudgetPhaseStripClient';
 import { BudgetOverviewPanels } from '@/components/budget/BudgetOverviewPanels';
@@ -125,14 +124,15 @@ export default async function TourBudgetPage({
         <ReceiptInbox tourId={id} lineItems={lines} />
       </div>
       <MobileBudgetBanner />
-      {/* TourBudgetRebuildClient (UX14 section editor) preserved beneath
-         the new hub for inline section edits. Its tabs and search-by-
-         section affordances complement the new top-level table. */}
-      <TourBudgetRebuildClient
-        initialLines={lines}
-        tourDefaultCurrency={tourCurrency}
-        tourId={id}
-      />
+      {/* X1.4 fix-up: TourBudgetRebuildClient removed. PR #6's previous
+         layout rendered it BENEATH the new hub for "inline section
+         edits", which produced a doubled-up UI — Adam's smoke caught
+         the legacy "Budget workspace" + Income/Expenses sections
+         rail still visible below the new design. The new
+         BudgetMainTable + BudgetLineSlideOver own line-item edits
+         after X1.1 / X1.2; the legacy client is no longer reachable
+         from this route. The workspace-level /budget page still uses
+         BudgetDetailShell for its own layout. */}
     </div>,
   );
 }
