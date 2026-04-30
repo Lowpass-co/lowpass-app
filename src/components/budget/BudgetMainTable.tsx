@@ -17,7 +17,7 @@
 
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSearchParams } from 'next/navigation';
 import { AlertTriangle, ArrowDown, ArrowUp, Paperclip, Plus, Trash2, X } from 'lucide-react';
@@ -40,7 +40,10 @@ const VALID_PHASES: ReadonlySet<TourPhaseKey> = new Set([
   'wrap',
 ]);
 
-type StatusValue = 'draft' | 'pending' | 'approved' | 'paid' | 'rejected' | null;
+// Round 2 F1.1: status enum aligned with /api/budget/line-items
+// validation. Previous values ('pending'/'rejected') triggered 400
+// responses that blocked the entire batched auto-save.
+type StatusValue = 'draft' | 'quoted' | 'approved' | 'paid' | 'disputed' | null;
 
 const STATUS_OPTIONS: ReadonlyArray<{
   value: StatusValue;
@@ -49,10 +52,10 @@ const STATUS_OPTIONS: ReadonlyArray<{
 }> = [
   { value: null, label: 'All', tone: null },
   { value: 'draft', label: 'Draft', tone: 'var(--color-lp-status-not-started)' },
-  { value: 'pending', label: 'Pending', tone: 'var(--color-lp-status-in-progress)' },
+  { value: 'quoted', label: 'Quoted', tone: 'var(--color-lp-status-in-progress)' },
   { value: 'approved', label: 'Approved', tone: 'var(--color-lp-status-complete)' },
   { value: 'paid', label: 'Paid', tone: 'var(--color-lp-status-complete)' },
-  { value: 'rejected', label: 'Rejected', tone: 'var(--color-lp-status-needs-review)' },
+  { value: 'disputed', label: 'Disputed', tone: 'var(--color-lp-status-needs-review)' },
 ];
 
 const QUICK_ADD_TEMPLATES: Array<{
@@ -141,6 +144,14 @@ export function BudgetMainTable({
   const [openLine, setOpenLine] = useState<BudgetLineItem | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [bulkBusy, setBulkBusy] = useState<null | 'status' | 'delete'>(null);
+  // Round 2 F1.2: optimistic prepend for Quick Add. router.refresh()
+  // fires from the slide-over for canonical sync, but Next 16 can
+  // take a moment to re-stream RSC data; keeping a local cache of
+  // newly-created rows means the table updates instantly on save.
+  // Rows are deduped against the parent `lines` prop on every render
+  // (see allLines below) so once the server data arrives, the local
+  // cache transparently steps aside.
+  const [pendingCreations, setPendingCreations] = useState<BudgetLineItem[]>([]);
 
   const dateMap = useMemo(() => {
     const m = new Map<string, string>();
@@ -148,8 +159,29 @@ export function BudgetMainTable({
     return m;
   }, [routingDateById]);
 
+  // Merge optimistic creations with parent-supplied lines, deduped
+  // by id so that as soon as router.refresh() lands the server-side
+  // version, our local copy steps aside.
+  const allLines = useMemo(() => {
+    if (pendingCreations.length === 0) return lines;
+    const known = new Set(lines.map((l) => l.id));
+    const extras = pendingCreations.filter((p) => !known.has(p.id));
+    return extras.length > 0 ? [...extras, ...lines] : lines;
+  }, [lines, pendingCreations]);
+
+  // Once a pending row appears in the parent `lines` (server caught
+  // up), drop it from local state so we don't carry stale data.
+  useEffect(() => {
+    if (pendingCreations.length === 0) return;
+    const known = new Set(lines.map((l) => l.id));
+    const stillPending = pendingCreations.filter((p) => !known.has(p.id));
+    if (stillPending.length !== pendingCreations.length) {
+      setPendingCreations(stillPending);
+    }
+  }, [lines, pendingCreations]);
+
   const filtered = useMemo(() => {
-    return lines.filter((line) => {
+    return allLines.filter((line) => {
       if (phaseFilter) {
         if (phaseFor(line, dateMap, phases) !== phaseFilter) return false;
       }
@@ -158,7 +190,7 @@ export function BudgetMainTable({
       }
       return true;
     });
-  }, [lines, phaseFilter, statusFilter, dateMap, phases]);
+  }, [allLines, phaseFilter, statusFilter, dateMap, phases]);
 
   const totals = useMemo(() => {
     let proposed = 0;
@@ -476,7 +508,7 @@ export function BudgetMainTable({
           className="ml-auto text-xs tabular-nums"
           style={{ color: 'var(--lp-text-tertiary)' }}
         >
-          {filtered.length} of {lines.length} · est{' '}
+          {filtered.length} of {allLines.length} · est{' '}
           {formatCurrency(totals.proposed, displayCurrency)} · actual{' '}
           {formatCurrency(totals.actual, displayCurrency)}
         </span>
@@ -542,9 +574,19 @@ export function BudgetMainTable({
           tourId={tourId}
           tourCurrency={tourCurrency}
           onClose={() => setOpenLine(null)}
+          onSaved={(savedLine) => {
+            // F1.2 round 2: optimistic prepend so Quick-Add rows
+            // appear in the table without waiting for router.refresh().
+            // The slide-over also calls router.refresh() in parallel
+            // for canonical sync; the dedup useEffect drops local
+            // copies once the server data lands.
+            if (!savedLine?.id || savedLine.id.startsWith('pending-')) return;
+            setPendingCreations((prev) => {
+              const filtered = prev.filter((p) => p.id !== savedLine.id);
+              return [savedLine, ...filtered];
+            });
+          }}
           onApplyAmount={() => {
-            // Math scratchpad output is owned by the slide-over; we
-            // close on save so the page-level data refetches.
             setOpenLine(null);
           }}
         />

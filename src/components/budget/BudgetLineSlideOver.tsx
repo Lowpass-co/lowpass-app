@@ -1,22 +1,16 @@
 /* ============================================
    LOWPASS — Budget line edit slide-over
-   Rewritten in the budget redesign fix-up sprint (X1.1 + X1.2).
-
-   Previously the slide-over was a "context panel only" view that
-   rendered stub sections and a math scratchpad. The new
-   BudgetMainTable opens the slide-over on row click expecting an
-   actual edit form, which is what this rewrite provides.
+   Round 2 fix-up (F1.1 + F2.3 + F2.4): status enum aligned with API,
+   only-changed-fields PATCH, category dropdown, single canonical
+   title (the prominent Item input) instead of duplicating it in the
+   SlideOver header + a redundant ITEM input.
 
    Two modes:
-     - EXISTING row → fields render with the row's current values,
-       edits debounce-PATCH against /api/budget/line-items
-     - NEW row (Quick Add)  → mode="create"; fields seed from
-       template defaults, save POSTs against /api/budget/line-items
-       and the parent reloads via router.refresh()
-
-   Auto-save runs 600ms after the last change so accidental tabs
-   between fields don't fire a save per keystroke. Status indicator
-   in the footer surfaces saving / saved / error states.
+     - EXISTING row → debounced auto-save (600ms); diff-only PATCH
+       so a single bad field never blocks others
+     - NEW row (Quick Add) → POST on explicit submit, then onSaved
+       fires so BudgetMainTable can prepend it without waiting for
+       router.refresh()
    ============================================ */
 
 'use client';
@@ -32,15 +26,36 @@ import {
 } from '@/lib/budget/budgetUx14Derived';
 import type { BudgetLineItem } from '@/types';
 
+// Status enum MUST match /api/budget/line-items PATCH validation.
+// Mismatches cause a 400 response that fails the entire batched
+// auto-save, blocking all other field updates in the same request.
+// Spec round 2 F1.1 surfaced this exact bug.
 const STATUS_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
   { value: 'draft', label: 'Draft' },
-  { value: 'pending', label: 'Pending' },
+  { value: 'quoted', label: 'Quoted' },
   { value: 'approved', label: 'Approved' },
   { value: 'paid', label: 'Paid' },
-  { value: 'rejected', label: 'Rejected' },
+  { value: 'disputed', label: 'Disputed' },
 ];
 
 const CURRENCY_OPTIONS = ['GBP', 'USD', 'EUR', 'CAD', 'AUD'] as const;
+
+// Curated category list. Free-text inputs are still allowed for
+// existing rows whose category isn't in the list — those render as
+// a one-off option at the top of the dropdown so the row's current
+// value isn't silently overwritten on save.
+const CATEGORY_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
+  { value: 'production', label: 'Production' },
+  { value: 'logistics', label: 'Logistics' },
+  { value: 'travel', label: 'Travel' },
+  { value: 'crew', label: 'Crew' },
+  { value: 'accommodation', label: 'Accommodation' },
+  { value: 'catering', label: 'Catering' },
+  { value: 'marketing', label: 'Marketing' },
+  { value: 'insurance', label: 'Insurance' },
+  { value: 'contingency', label: 'Contingency' },
+  { value: 'misc', label: 'Misc' },
+];
 
 type DraftFields = {
   label: string;
@@ -55,11 +70,8 @@ type DraftFields = {
 };
 
 function fieldsFromLine(line: BudgetLineItem, fallbackCurrency: string): DraftFields {
-  // Vendor isn't a first-class column on budget_line_items; we mirror
-  // it through `notes` first line as a convention until the schema
-  // catches up. Display layer normalises both ways: any line with a
-  // single-line notes prefix that looks like a vendor name surfaces
-  // there, else it stays in notes.
+  // Vendor is mirrored through `notes` first line as "Vendor: <name>"
+  // until the schema gets a real vendor column.
   const rawNotes = line.notes ?? '';
   const [maybeVendor, ...rest] = rawNotes.split('\n');
   const isVendorPrefix =
@@ -84,11 +96,40 @@ function notesFromFields(fields: DraftFields): string {
   return baseNotes ? `Vendor: ${trimmedVendor}\n${baseNotes}` : `Vendor: ${trimmedVendor}`;
 }
 
+/** Compute the diff between current and initial; returns just the
+ *  PATCH-shape keys that actually changed. Defensive against future
+ *  API constraints that might reject one field's value while accepting
+ *  others — sending only the changed fields lets unrelated saves
+ *  succeed independently. */
+function diffPatchPayload(
+  current: DraftFields,
+  initial: DraftFields,
+): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  if (current.label !== initial.label) out.label = current.label;
+  if (current.category !== initial.category) out.category = current.category || 'misc';
+  if (current.quantity !== initial.quantity) out.quantity = current.quantity;
+  if (current.proposed_cost !== initial.proposed_cost) out.proposed_cost = current.proposed_cost;
+  if (current.actual_cost !== initial.actual_cost) out.actual_cost = current.actual_cost;
+  if (current.currency !== initial.currency) out.currency = current.currency;
+  if (current.status !== initial.status) out.status = current.status;
+  // Notes ↔ vendor: surface as `notes` because that's the underlying
+  // column. Ship a notes-only PATCH whenever vendor or notes changed.
+  if (current.notes !== initial.notes || current.vendor !== initial.vendor) {
+    out.notes = notesFromFields(current);
+  }
+  return out;
+}
+
 type BudgetLineSlideOverProps = {
   line: BudgetLineItem;
   tourId: string;
   tourCurrency: string;
   onClose: () => void;
+  /** F1.2 round 2: emitted after a successful create or save so the
+   *  parent (BudgetMainTable) can prepend the new row optimistically.
+   *  router.refresh() still fires for canonical sync. */
+  onSaved?: (line: BudgetLineItem) => void;
   /** kept for backwards-compat with older callers; no-ops on save now. */
   onApplyAmount?: (amount: number) => void;
 };
@@ -98,12 +139,11 @@ export function BudgetLineSlideOver({
   tourId,
   tourCurrency,
   onClose,
+  onSaved,
 }: BudgetLineSlideOverProps) {
   const router = useRouter();
   const { showToast } = useToast();
 
-  // Quick Add seed lines use a `pending-…` id prefix; treat those as
-  // create-mode. Real rows have a UUID.
   const isCreate = line.id.startsWith('pending-');
   const fallbackCurrency = (tourCurrency || 'GBP').toUpperCase();
 
@@ -115,10 +155,15 @@ export function BudgetLineSlideOver({
   >('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Reset draft when the parent swaps the line out without unmounting
-  // the component (rare, but defensive).
+  // Track the snapshot we last saved (for new rows the initial state
+  // is the seed values; for existing rows it's the row as fetched).
+  // diffPatchPayload(current, baseline) returns just the changed keys.
+  const baselineRef = useRef<DraftFields>(fieldsFromLine(line, fallbackCurrency));
+
   useEffect(() => {
-    setFields(fieldsFromLine(line, fallbackCurrency));
+    const next = fieldsFromLine(line, fallbackCurrency);
+    setFields(next);
+    baselineRef.current = next;
     setSaveState('idle');
     setErrorMessage(null);
   }, [line.id, fallbackCurrency, line]);
@@ -131,42 +176,42 @@ export function BudgetLineSlideOver({
     );
   }, [fields.actual_cost, fields.proposed_cost]);
 
-  // Debounced auto-save (existing rows only — create requires explicit
-  // submit because POST returns the new id we need to swap in.)
+  // Derived rows reject edits to label/cost/currency at the API level
+  // — surface that hint inline rather than letting the auto-save fail
+  // 409 every keystroke.
+  const derived = !isCreate && isUx14DerivedBudgetLine(line);
+
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const initialFieldsRef = useRef<DraftFields>(fields);
-  useEffect(() => {
-    initialFieldsRef.current = fieldsFromLine(line, fallbackCurrency);
-  }, [line.id, fallbackCurrency, line]);
 
   const flushExistingPatch = useCallback(
     async (next: DraftFields) => {
+      const diff = diffPatchPayload(next, baselineRef.current);
+      if (Object.keys(diff).length === 0) {
+        // Nothing to send.
+        return;
+      }
       setSaveState('saving');
       setErrorMessage(null);
       try {
         const res = await fetch('/api/budget/line-items', {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            id: line.id,
-            label: next.label || line.label || '(untitled)',
-            category: next.category || 'misc',
-            quantity: next.quantity,
-            proposed_cost: next.proposed_cost,
-            actual_cost: next.actual_cost,
-            currency: next.currency,
-            status: next.status,
-            notes: notesFromFields(next),
-          }),
+          body: JSON.stringify({ id: line.id, ...diff }),
         });
         if (!res.ok) {
           const payload = await res.json().catch(() => ({}));
           throw new Error(payload.error ?? `Save failed (${res.status})`);
         }
+        const updatedRow = (await res.json()) as BudgetLineItem;
+        // Move the baseline forward — the next diff measures against
+        // what the server now has.
+        baselineRef.current = next;
         setSaveState('saved');
-        // Settle the "saved" indicator after a short interval so it
-        // doesn't linger forever between edits.
-        setTimeout(() => setSaveState((cur) => (cur === 'saved' ? 'idle' : cur)), 1200);
+        setTimeout(
+          () => setSaveState((cur) => (cur === 'saved' ? 'idle' : cur)),
+          1200,
+        );
+        onSaved?.(updatedRow);
         router.refresh();
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Save failed';
@@ -175,18 +220,15 @@ export function BudgetLineSlideOver({
         showToast(msg, 'error');
       }
     },
-    [line.id, line.label, router, showToast],
+    [line.id, router, showToast, onSaved],
   );
 
   // Schedule a debounced save when fields change (existing rows only).
   useEffect(() => {
     if (isCreate) return;
     // Skip the very first effect run after mount.
-    if (
-      JSON.stringify(fields) === JSON.stringify(initialFieldsRef.current)
-    ) {
-      return;
-    }
+    const diff = diffPatchPayload(fields, baselineRef.current);
+    if (Object.keys(diff).length === 0) return;
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
       void flushExistingPatch(fields);
@@ -223,9 +265,9 @@ export function BudgetLineSlideOver({
         const payload = await res.json().catch(() => ({}));
         throw new Error(payload.error ?? `Create failed (${res.status})`);
       }
-      // Status isn't part of the POST shape; PATCH it after create
-      // so the new row picks up the user's chosen draft/pending.
-      const created = (await res.json()) as { id?: string };
+      const created = (await res.json()) as BudgetLineItem & { id?: string };
+      // Status isn't part of POST shape; PATCH it after create when the
+      // user picked something other than the default.
       if (created.id && fields.status && fields.status !== 'draft') {
         await fetch('/api/budget/line-items', {
           method: 'PATCH',
@@ -235,6 +277,7 @@ export function BudgetLineSlideOver({
       }
       setSaveState('saved');
       showToast(`Created ${fields.label}`);
+      onSaved?.({ ...created, status: fields.status } as BudgetLineItem);
       router.refresh();
       onClose();
     } catch (err) {
@@ -243,9 +286,7 @@ export function BudgetLineSlideOver({
       setErrorMessage(msg);
       showToast(msg, 'error');
     }
-  }, [fields, tourId, router, showToast, onClose]);
-
-  const derived = !isCreate && isUx14DerivedBudgetLine(line);
+  }, [fields, tourId, router, showToast, onClose, onSaved]);
 
   const setField = <K extends keyof DraftFields>(key: K, value: DraftFields[K]) =>
     setFields((cur) => ({ ...cur, [key]: value }));
@@ -268,7 +309,11 @@ export function BudgetLineSlideOver({
     outline: 'none',
   };
 
-  const subtitle = (
+  // F2.3: drop the redundant header title. The big label input below
+  // IS the canonical title — passing an empty string + the live
+  // category/cost as the only header line keeps context without
+  // showing the same name twice.
+  const subtitleSummary = (
     <>
       {isCreate ? 'New line item' : (fields.category || '—').replace(/_/g, ' ')}
       {' · '}
@@ -280,14 +325,26 @@ export function BudgetLineSlideOver({
     </>
   );
 
+  // If the row's current category isn't in the curated list (legacy
+  // values like prod_audio, transport_taxis), include it as a one-off
+  // option so saving doesn't silently change it to a curated value.
+  const categoryOptions = useMemo(() => {
+    const cur = (fields.category || '').trim();
+    if (!cur || CATEGORY_OPTIONS.some((o) => o.value === cur)) return CATEGORY_OPTIONS;
+    return [
+      { value: cur, label: `${cur} (custom)` },
+      ...CATEGORY_OPTIONS,
+    ];
+  }, [fields.category]);
+
   return (
     <SlideOver
       open
       backdrop
       onClose={onClose}
-      title={isCreate ? 'New budget line' : fields.label?.trim() || 'Budget line'}
+      title=""
       width="wide"
-      subtitle={subtitle}
+      subtitle={subtitleSummary}
     >
       {derived ? (
         <section
@@ -314,6 +371,7 @@ export function BudgetLineSlideOver({
       ) : null}
 
       <div className="space-y-4">
+        {/* The Item input IS the canonical title — large + prominent. */}
         <label className="block">
           <span style={labelStyle}>Item</span>
           <input
@@ -322,21 +380,29 @@ export function BudgetLineSlideOver({
             onChange={(e) => setField('label', e.target.value)}
             placeholder="e.g. Hotel block — Manchester"
             className="mt-1.5"
-            style={inputStyle}
+            style={{
+              ...inputStyle,
+              fontSize: 'var(--lp-text-xl)',
+              fontWeight: 'var(--lp-weight-medium)',
+            }}
           />
         </label>
 
         <div className="grid grid-cols-2 gap-3">
           <label className="block">
             <span style={labelStyle}>Category</span>
-            <input
-              type="text"
-              value={fields.category}
+            <select
+              value={fields.category || 'misc'}
               onChange={(e) => setField('category', e.target.value)}
-              placeholder="e.g. accommodation"
               className="mt-1.5"
               style={inputStyle}
-            />
+            >
+              {categoryOptions.map((c) => (
+                <option key={c.value} value={c.value}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
           </label>
           <label className="block">
             <span style={labelStyle}>Vendor</span>
@@ -455,7 +521,6 @@ export function BudgetLineSlideOver({
           />
         </label>
 
-        {/* Footer — sticky-ish action area inside the slide-over body. */}
         <div
           className="flex items-center justify-between gap-3 border-t pt-4"
           style={{ borderColor: 'var(--lp-border)' }}
