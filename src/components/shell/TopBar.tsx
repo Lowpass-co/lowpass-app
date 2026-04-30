@@ -97,9 +97,12 @@ function groupToursByArtist<T extends TopBarTour>(tours: T[]): {
 }
 
 function TourGroupHeader({ children }: { children: React.ReactNode }) {
+  // F3.2 round 2: more breathing room between artist sub-headers and
+  // the rows below; consistent spacing top + sides matches other
+  // Lowpass dropdowns (LibraryMenuList, AccountMenuContent).
   return (
     <div
-      className="px-3 pb-1 pt-2 text-[10px] font-semibold uppercase"
+      className="px-3 pb-1.5 pt-3 text-[10px] font-semibold uppercase"
       style={{
         color: 'var(--lp-text-tertiary)',
         letterSpacing: 'var(--lp-tracking-caps, 0.08em)',
@@ -121,11 +124,27 @@ function TourMenuRow({
   muted: boolean;
   onClick: () => void;
 }) {
+  // F3.2 round 2: hover + active styling. Hovered rows tint with
+  // surface-hover; the active row picks up an 8% orange tint instead
+  // of relying solely on the check icon. Padding bumped to match
+  // other dropdowns. Text truncates cleanly with ellipsis at the
+  // 320px wrapper cap.
   return (
     <button
       type="button"
-      className="flex w-full min-w-0 items-center gap-2 px-3 py-2 text-left text-sm"
-      style={{ color: muted ? 'var(--lp-text-secondary)' : 'var(--lp-text)' }}
+      className="lp-tour-menu-row flex w-full min-w-0 items-center gap-2 px-3 py-2 text-left text-sm transition-colors"
+      style={{
+        color: muted ? 'var(--lp-text-secondary)' : 'var(--lp-text)',
+        background: active
+          ? 'color-mix(in srgb, var(--color-lp-orange) 8%, transparent)'
+          : 'transparent',
+      }}
+      onMouseEnter={(e) => {
+        if (!active) e.currentTarget.style.background = 'var(--lp-surface-hover)';
+      }}
+      onMouseLeave={(e) => {
+        if (!active) e.currentTarget.style.background = 'transparent';
+      }}
       onClick={onClick}
     >
       {active ? (
@@ -625,7 +644,7 @@ export function TopBar({
               </button>
               {tourOpen && (
                 <div
-                  className="lp-dropdown-layer absolute left-0 mt-1 min-w-64 max-w-sm rounded-xl border py-1 shadow-lg"
+                  className="lp-dropdown-layer absolute left-0 mt-1 min-w-72 max-w-[20rem] overflow-hidden rounded-xl border py-1 shadow-lg"
                   style={{
                     zIndex: 'var(--lp-z-dropdown)',
                     background: 'var(--lp-surface)',

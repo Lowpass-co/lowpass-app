@@ -1,9 +1,8 @@
 'use client';
 
-import dynamic from 'next/dynamic';
 import { useCallback, useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
-import { BudgetFolderTabsNav } from '@/components/budget/BudgetFolderTabsNav';
+import { BudgetFolderTabsNav } from '@/_legacy/budget/BudgetFolderTabsNav';
 import { BUDGET_CURRENCY_OPTIONS } from '@/lib/budget-currency';
 import { StyledSelect, type StyledSelectOption } from '@/components/ui/StyledSelect';
 import { HotelsGrid } from '@/components/spreadsheet-view/HotelsGrid';
@@ -12,33 +11,15 @@ import { TransportGrid } from '@/components/spreadsheet-view/TransportGrid';
 import { ProductionGrid } from '@/components/spreadsheet-view/ProductionGrid';
 import { ReceiptsGrid } from '@/components/spreadsheet-view/ReceiptsGrid';
 import { CommissionsGrid } from '@/components/spreadsheet-view/CommissionsGrid';
-import type { TabId } from '@/components/budget/budget-tabs';
-
-const SummaryTab = dynamic(
-  () => import('@/components/budget/SummaryTab').then((m) => ({ default: m.SummaryTab })),
-  { ssr: false, loading: () => <TabLoading label="Summary" /> }
-);
-const IncomeTab = dynamic(
-  () => import('@/components/budget/IncomeTab').then((m) => ({ default: m.IncomeTab })),
-  { ssr: false, loading: () => <TabLoading label="Routing & Income" /> }
-);
-const SalariesTab = dynamic(
-  () => import('@/components/budget/SalariesTab').then((m) => ({ default: m.SalariesTab })),
-  { ssr: false, loading: () => <TabLoading label="Salaries" /> }
-);
-const SettlementTab = dynamic(
-  () => import('@/components/budget/SettlementTab').then((m) => ({ default: m.SettlementTab })),
-  { ssr: false, loading: () => <TabLoading label="Settlement" /> }
-);
-
-function TabLoading({ label }: { label: string }) {
-  return (
-    <div className="flex items-center gap-2 rounded-xl border border-lp-border bg-lp-surface px-6 py-10 text-sm text-lp-text-secondary">
-      <Loader2 className="h-5 w-5 animate-spin shrink-0" />
-      Loading {label}…
-    </div>
-  );
-}
+// Phase C of the budget redesign moved these tabs to _legacy/. Static
+// imports replace next/dynamic — React 19's generic inference drops
+// prop types through dynamic()'s loader, and code-splitting is a moot
+// optimisation for the legacy quarantine surface.
+import { SummaryTab } from '@/_legacy/budget/SummaryTab';
+import { IncomeTab } from '@/_legacy/budget/IncomeTab';
+import { SalariesTab } from '@/_legacy/budget/SalariesTab';
+import { SettlementTab } from '@/_legacy/budget/SettlementTab';
+import type { TabId } from '@/_legacy/budget/budget-tabs';
 
 const CURRENCY_SELECT_OPTIONS: StyledSelectOption<string>[] = BUDGET_CURRENCY_OPTIONS.map((o) => ({
   value: o.code,

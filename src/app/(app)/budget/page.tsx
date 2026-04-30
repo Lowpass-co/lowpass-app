@@ -6,7 +6,7 @@ import { Suspense } from 'react';
 import { listAppPageShell, spreadsheetAppPageShell } from '@/components/shell/app-page-shells';
 import { getBudgetSheetSections } from '@/lib/shell/rails/budgetSheetSections';
 import { BudgetTourRedirect } from '@/components/budget/BudgetTourRedirect';
-import { BUDGET_TABS, TabId } from '@/components/budget/budget-tabs';
+import { BUDGET_TABS, TabId } from '@/_legacy/budget/budget-tabs';
 import { TourBudgetAccordionDynamic } from '@/components/budget/TourBudgetAccordionDynamic';
 import { BudgetDetailShell } from '@/components/budget/BudgetDetailShell';
 import { BudgetOverviewToolbar } from '@/components/budget/BudgetOverviewToolbar';

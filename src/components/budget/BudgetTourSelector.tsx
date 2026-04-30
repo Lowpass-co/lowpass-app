@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { ChevronDown, Loader2 } from 'lucide-react';
 import { formatTourDateRange } from '@/lib/utils';
 import { cn } from '@/lib/utils';
-import { pushRecentTourId } from './budget-recent';
+import { pushRecentTourId } from '@/_legacy/budget/budget-recent';
 import { pushRecentTourId as pushRecentTourIdRooming } from './rooming-recent';
 
 const BUDGET_STORAGE_KEY = 'lowpass_selected_budget_tour';

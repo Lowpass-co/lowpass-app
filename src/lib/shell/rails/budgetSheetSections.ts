@@ -1,7 +1,7 @@
 import type { LeftRailVariant } from '@/components/shell/LeftRail';
 
 type SpreadsheetRail = Extract<LeftRailVariant, { kind: 'spreadsheet' }>;
-import { BUDGET_TABS } from '@/components/budget/budget-tabs';
+import { BUDGET_TABS } from '@/_legacy/budget/budget-tabs';
 
 /**
  * Left rail for Budget: tabs match BUDGET_TABS at /budget?tour_id=.

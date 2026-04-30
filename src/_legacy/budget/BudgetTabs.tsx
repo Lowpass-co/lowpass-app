@@ -1,62 +1,24 @@
 'use client';
 
-import dynamic from 'next/dynamic';
 import Link from 'next/link';
-import React, { Suspense } from 'react';
-import { Loader2 } from 'lucide-react';
+import React from 'react';
 import { cn } from '@/lib/utils';
 import { BUDGET_TABS, type TabId } from './budget-tabs';
 import { BudgetTabIcon } from './budget-tab-icons';
-
-const SummaryTab = dynamic(
-  () => import('@/components/budget/SummaryTab').then((m) => ({ default: m.SummaryTab })),
-  { ssr: false }
-);
-const IncomeTab = dynamic(
-  () => import('@/components/budget/IncomeTab').then((m) => ({ default: m.IncomeTab })),
-  { ssr: false }
-);
-const SalariesTab = dynamic(
-  () => import('@/components/budget/SalariesTab').then((m) => ({ default: m.SalariesTab })),
-  { ssr: false }
-);
-const HotelsTab = dynamic(
-  () => import('@/components/budget/HotelsTab').then((m) => ({ default: m.HotelsTab })),
-  { ssr: false }
-);
-const FlightsTab = dynamic(
-  () => import('@/components/budget/FlightsTab').then((m) => ({ default: m.FlightsTab })),
-  { ssr: false }
-);
-const TransportationTab = dynamic(
-  () => import('@/components/budget/TransportationTab').then((m) => ({ default: m.TransportationTab })),
-  { ssr: false }
-);
-const ProductionTab = dynamic(
-  () => import('@/components/budget/ProductionTab').then((m) => ({ default: m.ProductionTab })),
-  { ssr: false }
-);
-const CommissionsTab = dynamic(
-  () => import('@/components/budget/CommissionsTab').then((m) => ({ default: m.CommissionsTab })),
-  { ssr: false }
-);
-const ReceiptsTab = dynamic(
-  () => import('@/components/budget/ReceiptsTab').then((m) => ({ default: m.ReceiptsTab })),
-  { ssr: false }
-);
-const SettlementTab = dynamic(
-  () => import('@/components/budget/SettlementTab').then((m) => ({ default: m.SettlementTab })),
-  { ssr: false }
-);
-
-function TabLoader() {
-  return (
-    <div className="lp-dashboard-glass-card flex items-center gap-2 rounded-xl p-8 text-lp-text-secondary">
-      <Loader2 className="h-5 w-5 animate-spin" />
-      Loading…
-    </div>
-  );
-}
+// Phase C of the budget redesign moved these tabs to _legacy/. Static
+// imports replace next/dynamic — React 19's generic inference drops
+// prop types through dynamic()'s loader, and code-splitting is a moot
+// optimisation for the legacy quarantine surface.
+import { SummaryTab } from '@/_legacy/budget/SummaryTab';
+import { IncomeTab } from '@/_legacy/budget/IncomeTab';
+import { SalariesTab } from '@/_legacy/budget/SalariesTab';
+import { HotelsTab } from '@/_legacy/budget/HotelsTab';
+import { FlightsTab } from '@/_legacy/budget/FlightsTab';
+import { TransportationTab } from '@/_legacy/budget/TransportationTab';
+import { ProductionTab } from '@/_legacy/budget/ProductionTab';
+import { CommissionsTab } from '@/_legacy/budget/CommissionsTab';
+import { ReceiptsTab } from '@/_legacy/budget/ReceiptsTab';
+import { SettlementTab } from '@/_legacy/budget/SettlementTab';
 
 /**
  * Vertical tab list.
@@ -147,9 +109,5 @@ export function BudgetTabs({
     }
   };
 
-  return (
-    <Suspense fallback={<TabLoader />}>
-      {tabContent()}
-    </Suspense>
-  );
+  return <>{tabContent()}</>;
 }
