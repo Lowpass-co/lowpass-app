@@ -18,7 +18,7 @@ export function getDashboardLeftRail(tourId: string): DashboardRail {
     structure: [
       { label: 'Overview', href: `/tours/${tourId}`, icon: 'layout-grid' },
       { label: 'Routing', href: `/tours/${tourId}/routing`, icon: 'map' },
-      { label: 'Advance', href: `/tours/${tourId}/advance`, icon: 'calendar' },
+      { label: 'Advance', href: `/advance/${tourId}`, icon: 'calendar' },
       { label: 'Budget', href: `/tours/${tourId}/budget`, icon: 'building' },
       { label: 'Personnel', href: `/tours/${tourId}/personnel`, icon: 'users' },
       { label: 'Rooming', href: `/tours/${tourId}/rooming`, icon: 'clipboard-list' },

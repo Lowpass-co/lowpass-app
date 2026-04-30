@@ -9,7 +9,7 @@
    information they carried moved into the toolbar text + ⋯ menu).
 
    Existing features preserved end-to-end:
-   - Click row (show day) → /tours/[id]/advance/[routingId]
+   - Click row (show day) → /advance/[tourId]/[routingId]
    - Click row (off / travel / rehearsal) → DayOffNotesModal
    - Per-row context menu: Open advance / Copy advance / Mark
      complete-or-in-progress / Delete
@@ -331,7 +331,7 @@ export function AdvanceOverview({
       items.push({
         label: 'Open advance',
         icon: ExternalLink,
-        onClick: () => router.push(`/tours/${tourId}/advance/${row.routing_id}`),
+        onClick: () => router.push(`/advance/${tourId}/${row.routing_id}`),
       });
       items.push({
         label: 'Copy advance…',
@@ -476,7 +476,7 @@ export function AdvanceOverview({
 
   const onRowClick = (row: RowVm) => {
     if (row.isShow) {
-      router.push(`/tours/${tourId}/advance/${row.routing_id}`);
+      router.push(`/advance/${tourId}/${row.routing_id}`);
     } else {
       setDayOffNotesItem(row);
     }
@@ -623,7 +623,7 @@ export function AdvanceOverview({
         onClose={() => {
           setCopyModalOpen(false);
           setCopySourceRoutingId(null);
-          if (copyFromUrl) router.replace(`/tours/${tourId}/advance`, { scroll: false });
+          if (copyFromUrl) router.replace(`/advance/${tourId}`, { scroll: false });
         }}
         onSuccess={(copiedCount) => {
           showToast(`Advance copied to ${copiedCount} show${copiedCount !== 1 ? 's' : ''}`);

@@ -38,7 +38,7 @@ function AfterSaveModal({ tourId, onClose }: { tourId: string; onClose: () => vo
         <p className="text-sm text-lp-text-secondary mb-4">Choose where to go after saving routing.</p>
         <div className="space-y-3">
           <Link
-            href={`/tours/${tourId}/advance`}
+            href={`/advance/${tourId}`}
             onClick={onClose}
             className="flex items-start gap-3 w-full rounded-xl border border-lp-border bg-lp-surface-hover p-4 text-left hover:border-lp-accent transition-all group"
             style={{ transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)' }}

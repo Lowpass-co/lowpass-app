@@ -160,7 +160,7 @@ export function TourCard({ tour, onDeleted, index = 0 }: { tour: Tour; onDeleted
             <div className="flex shrink-0 items-center gap-2">
               {advancePercent != null && (
                 <Link
-                  href={`/tours/${tour.id}/advance`}
+                  href={`/advance/${tour.id}`}
                   onClick={(e) => e.stopPropagation()}
                   className="flex items-center gap-1 rounded-full border border-lp-border bg-lp-bg-secondary p-1 pr-1.5"
                   title={`Advance ${advancePercent}%`}

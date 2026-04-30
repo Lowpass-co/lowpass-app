@@ -79,7 +79,7 @@ export function AppTopBarModePill() {
     setMode(next);
     const artistQ = selectedArtistId ? `?artist_id=${selectedArtistId}` : '';
     if (next === 'advance') {
-      router.push(selectedTourId ? `/tours/${selectedTourId}/advance` : `/advance${artistQ}`);
+      router.push(selectedTourId ? `/advance/${selectedTourId}` : `/advance${artistQ}`);
     } else {
       router.push(selectedTourId ? `/budget?tour_id=${selectedTourId}` : '/budget');
     }

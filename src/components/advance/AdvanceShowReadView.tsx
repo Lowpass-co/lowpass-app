@@ -1041,8 +1041,8 @@ export function AdvanceShowReadView({
   const [loading, setLoading] = useState(!serverInitialJson);
   const [error, setError] = useState<string | null>(null);
 
-  const editHref = `/tours/${tourId}/advance/${routingId}?mode=edit`;
-  const overviewHref = `/tours/${tourId}/advance`;
+  const editHref = `/advance/${tourId}/${routingId}?mode=edit`;
+  const overviewHref = `/advance/${tourId}`;
 
   const load = useCallback(() => {
     // Public share: bundle is already in pageData via serverInitialJson; do

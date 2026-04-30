@@ -176,7 +176,7 @@ export function DashboardAdvanceNeeds() {
           {current.groups.map((g) => (
             <Link
               key={g.first.section_id}
-              href={`/tours/${current.tourId}/advance/${current.routingId}#section-${g.first.section_id}`}
+              href={`/advance/${current.tourId}/${current.routingId}#section-${g.first.section_id}`}
               className={cn(
                 'block rounded-lg border p-2 text-sm transition-colors hover:bg-lp-surface-hover',
                 current.isHigh ? 'border-amber-500/40 bg-amber-500/5' : 'border-lp-border'

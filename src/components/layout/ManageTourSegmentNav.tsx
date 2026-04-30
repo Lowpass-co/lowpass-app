@@ -178,7 +178,7 @@ export function ManageTourSegmentNav({ artistId, tourId }: Props) {
         disabled={locked}
         onClick={() => {
           if (locked || !tourId) return;
-          router.push(`/tours/${tourId}/advance`);
+          router.push(`/advance/${tourId}`);
         }}
         className={cellClass}
       >

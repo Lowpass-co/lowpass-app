@@ -447,7 +447,7 @@ export function AdvanceSectionBuilder({
     return (
       <div className="rounded-xl border border-lp-border bg-lp-surface p-8 text-center">
         <p className="text-lp-text-secondary">Advance not found.</p>
-        <Link href={`/tours/${tourId}/advance`} className="mt-4 inline-block text-sm text-lp-orange hover:text-lp-orange-hover">
+        <Link href={`/advance/${tourId}`} className="mt-4 inline-block text-sm text-lp-orange hover:text-lp-orange-hover">
           Back to advance overview
         </Link>
       </div>
@@ -531,7 +531,7 @@ export function AdvanceSectionBuilder({
             });
           }}
           onEditSections={() => setSetupMode(true)}
-          onCopyToOther={() => router.push(`/tours/${tourId}/advance?copy=${routingId}`)}
+          onCopyToOther={() => router.push(`/advance/${tourId}?copy=${routingId}`)}
           onRemoveSection={async (templateId) => {
             const sections = (data.advance?.sections ?? []).filter((s) => s.template_id !== templateId);
             const res = await fetch(`/api/tours/${tourId}/advance`, {
@@ -581,7 +581,7 @@ function AdvanceDateStrip({ tourId, routingId, dates }: { tourId: string; routin
             <button
               key={item.routing_id}
               type="button"
-              onClick={() => router.push(`/tours/${tourId}/advance/${item.routing_id}`)}
+              onClick={() => router.push(`/advance/${tourId}/${item.routing_id}`)}
               className={cn(
                 'w-full rounded-md px-1.5 py-1.5 text-left text-[11px] transition-colors',
                 isCurrent
