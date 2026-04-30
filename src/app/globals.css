@@ -421,27 +421,33 @@ body {
   background: var(--lp-bg);
   color: var(--lp-text);
   font-family: var(--font-sans);
-  /* Product Split Phase 1 — body baseline shifts 14 → 13px.
-     Legacy pages keep their explicit 14px via the `main` rule
-     below; new product shells inherit 13px. */
-  font-size: 13px;
+  /* Product Split Phase 2 §F1.1 — body baseline reset to 14px.
+     Phase 1 had this at 13px which read as cramped; the density
+     rule now lives on .lp-dense (tables/lists only) instead of
+     globally. Legacy pages also keep 14px via the `main` rule
+     below. */
+  font-size: 14px;
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
 /* Main content typography (sidebar excluded — use `main` scope).
-   Legacy pages render inside <main>; the explicit 14px keeps them
-   stable while the body baseline shifts under new shell-v2 surfaces. */
+   Same 14px as body; explicit rule kept so descendants don't inherit
+   any odd nested font-size from sidebar/header containers. */
 main {
   font-size: 14px;
   font-weight: 400;
+  line-height: 1.5;
 }
 
 /* ============================================
-   Product Split Phase 1 — Density + Mono utilities
+   Product Split Phase 2 — Density + Mono utilities + Heading scale
    ============================================ */
 /* .lp-dense — applied on table containers / list rows in product
-   surfaces. Drops to 12px with tight padding for tabular density. */
+   surfaces. Drops to 12px with tight padding for tabular density.
+   NEVER apply to body, detail pages, or forms — only to actual
+   tables and dense lists. */
 .lp-dense {
   font-size: 12px;
   line-height: 1.4;
@@ -456,6 +462,43 @@ main {
 .lp-mono {
   font-family: var(--lp-mono-font);
   font-variant-numeric: tabular-nums;
+}
+
+/* Phase 2 §F1.1 — heading scale + stat utilities for shell-v2
+   surfaces. Legacy `main h1/h2` rules below remain for pages still
+   on the old shell; product surfaces use these utilities instead. */
+.lp-h1 {
+  font-size: 28px;
+  line-height: 1.2;
+  font-weight: 600;
+  color: var(--lp-text);
+}
+.lp-h2 {
+  font-size: 20px;
+  line-height: 1.3;
+  font-weight: 500;
+  color: var(--lp-text);
+}
+.lp-h3 {
+  font-size: 16px;
+  line-height: 1.4;
+  font-weight: 500;
+  color: var(--lp-text);
+}
+
+/* Stat tile utilities — beefier numbers for the Home tiles. */
+.lp-stat-value {
+  font-size: 32px;
+  font-weight: 600;
+  line-height: 1;
+  color: var(--lp-text);
+}
+.lp-stat-label {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-weight: 600;
+  color: var(--lp-text-tertiary);
 }
 
 main h1 {
