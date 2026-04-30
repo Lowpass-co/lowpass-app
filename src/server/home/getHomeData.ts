@@ -48,8 +48,28 @@ export type HomeActivityRow = {
   product: 'budget' | 'advance' | 'operations';
   tourId: string;
   tourName: string;
+  /** Display name of who did the action — best-effort lookup; falls
+      back to email-local-part, then '—'. Phase 1 §B addition. */
+  actor: string;
   summary: string;
   occurredAt: string;
+};
+
+export type HomeCalendarCell = {
+  date: string; // YYYY-MM-DD
+  dayType: string;
+  city: string | null;
+  venue: string | null;
+  tourId: string;
+  routingId: string;
+};
+
+/** One number + label per product for the Home product cards.
+    Surface-level "what's hot" — see prompt §B.2. */
+export type HomeWhatsHot = {
+  operations: { value: number; label: string };
+  budget: { value: number; label: string };
+  advance: { value: number; label: string };
 };
 
 export type HomeData = {
@@ -57,6 +77,10 @@ export type HomeData = {
   stats: HomeStats;
   tours: HomeTourSummary[];
   recentActivity: HomeActivityRow[];
+  /** Phase 1 §B: artist-scoped calendar cells, next 30 days. */
+  calendar: HomeCalendarCell[];
+  /** Phase 1 §B: single actionable metric per product card. */
+  whatsHot: HomeWhatsHot;
 };
 
 function pickArtistImage(
@@ -161,7 +185,7 @@ export async function getHomeData(
     tourIds.length
       ? supabase
           .from('budget_line_items')
-          .select('id, tour_id, label, updated_at, status')
+          .select('id, tour_id, label, updated_at, status, created_by')
           .in('tour_id', tourIds)
           .order('updated_at', { ascending: false })
           .limit(20)
@@ -277,7 +301,15 @@ export async function getHomeData(
     label: string | null;
     updated_at: string | null;
     status: string | null;
+    created_by?: string | null;
   }>;
+  // Phase 1 §B: collect actor user-ids first; resolve display names
+  // in one batch lookup at the end. Best-effort — falls back to '—'
+  // if profiles row is missing.
+  const actorIds = new Set<string>();
+  for (const row of budgetUpdates) {
+    if (row.created_by) actorIds.add(row.created_by);
+  }
   const recentActivity: HomeActivityRow[] = [];
   for (const row of budgetUpdates) {
     if (!row.updated_at) continue;
@@ -286,25 +318,19 @@ export async function getHomeData(
       product: 'budget',
       tourId: row.tour_id,
       tourName: tourNameById.get(row.tour_id) ?? 'Tour',
+      actor: row.created_by ?? '',
       summary: `${row.label ?? 'Line item'} · ${(row.status ?? 'draft').toString()}`,
       occurredAt: row.updated_at,
     });
   }
   for (const adv of advanceUpdates) {
     if (!adv.updated_at) continue;
-    // Best effort — we don't have advance_instance.tour_id directly.
-    // Re-resolve via the routing→tour map we built earlier; if it's
-    // missing, skip rather than show "Tour" with no name.
-    const advanceRoutingIds = advanceUpdates
-      .map((a) => a.routing_id)
-      .filter(Boolean);
-    if (advanceRoutingIds.length === 0) continue;
-    // Fall through with a best-effort tour name lookup.
     recentActivity.push({
       id: `advance-${adv.id}`,
       product: 'advance',
       tourId: '',
       tourName: '',
+      actor: '',
       summary: 'Advance instance updated',
       occurredAt: adv.updated_at,
     });
@@ -317,12 +343,42 @@ export async function getHomeData(
       product: 'operations',
       tourId: t.id,
       tourName: t.name ?? 'Tour',
+      actor: '',
       summary: `Tour metadata updated`,
       occurredAt: t.updated_at,
     });
   }
   recentActivity.sort((a, b) => (a.occurredAt < b.occurredAt ? 1 : -1));
   const top10 = recentActivity.slice(0, 10);
+
+  // Phase 1 §B — Resolve actor display names. Best-effort: pulls
+  // `profiles.full_name | email`. If profiles is missing or join
+  // fails, we render '—' rather than a UUID.
+  if (actorIds.size > 0) {
+    const { data: profileRows } = await supabase
+      .from('profiles')
+      .select('id, full_name, email')
+      .in('id', Array.from(actorIds));
+    const nameById = new Map<string, string>();
+    for (const p of (profileRows ?? []) as Array<{
+      id: string;
+      full_name: string | null;
+      email: string | null;
+    }>) {
+      const display =
+        (p.full_name && p.full_name.trim()) ||
+        (p.email && p.email.split('@')[0]) ||
+        '';
+      if (display) nameById.set(p.id, display);
+    }
+    for (const row of top10) {
+      if (row.actor && nameById.has(row.actor)) {
+        row.actor = nameById.get(row.actor) as string;
+      } else if (row.actor) {
+        row.actor = '';
+      }
+    }
+  }
 
   // Default budget currency = the most-common tour currency for this
   // artist (or GBP if none).
@@ -340,6 +396,115 @@ export async function getHomeData(
     }
   });
 
+  // Phase 1 §B — Calendar widget data (next 30 days, artist-scoped) +
+  // "what's hot" metrics per product card. Two cheap queries.
+  const todayIso = new Date(
+    Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()),
+  )
+    .toISOString()
+    .slice(0, 10);
+  const in30 = new Date(
+    Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() + 30),
+  )
+    .toISOString()
+    .slice(0, 10);
+
+  const calendarRes =
+    tourIds.length > 0
+      ? await supabase
+          .from('routing')
+          .select('id, tour_id, date, day_type, city, venue_name')
+          .in('tour_id', tourIds)
+          .gte('date', todayIso)
+          .lte('date', in30)
+          .order('date', { ascending: true })
+      : { data: [] as unknown[] };
+
+  const calendar: HomeCalendarCell[] = (
+    (calendarRes.data ?? []) as Array<{
+      id: string;
+      tour_id: string;
+      date: string | null;
+      day_type: string | null;
+      city: string | null;
+      venue_name: string | null;
+    }>
+  )
+    .filter((r) => r.date)
+    .map((r) => ({
+      date: r.date as string,
+      dayType: r.day_type ?? '',
+      city: r.city,
+      venue: r.venue_name,
+      tourId: r.tour_id,
+      routingId: r.id,
+    }));
+
+  // What's hot per product:
+  //   Operations  → upcoming shows in next 30 days
+  //   Budget      → draft line items needing review
+  //   Advance     → show routings in next 30 days that lack an
+  //                 advance_instance (best-effort — counts shows
+  //                 minus advances; clamps at 0).
+  const upcomingShows = calendar.filter((c) => {
+    const dt = c.dayType.toLowerCase();
+    return dt.includes('show') || dt.includes('festival');
+  }).length;
+
+  const draftBudgetLines = budgetRows.filter(
+    (r) => (r.status ?? '').toLowerCase() === 'draft',
+  ).length;
+
+  // Pull the count of advance_instances whose routing falls in the
+  // next 30 days; subtract from upcomingShows to get "shows missing
+  // advance". Cheap-ish query — limit to the routing IDs already in
+  // the calendar window.
+  const upcomingShowRoutingIds = calendar
+    .filter((c) => {
+      const dt = c.dayType.toLowerCase();
+      return dt.includes('show') || dt.includes('festival');
+    })
+    .map((c) => c.routingId);
+  let advanceCoverage = 0;
+  if (upcomingShowRoutingIds.length > 0) {
+    const { data: advRows } = await supabase
+      .from('advance_instances')
+      .select('routing_id')
+      .in('routing_id', upcomingShowRoutingIds);
+    const covered = new Set(
+      ((advRows ?? []) as Array<{ routing_id: string }>).map((r) => r.routing_id),
+    );
+    advanceCoverage = covered.size;
+  }
+  const showsMissingAdvance = Math.max(
+    0,
+    upcomingShowRoutingIds.length - advanceCoverage,
+  );
+
+  const whatsHot: HomeWhatsHot = {
+    operations: {
+      value: upcomingShows,
+      label:
+        upcomingShows === 1
+          ? 'show in the next 30 days'
+          : 'shows in the next 30 days',
+    },
+    budget: {
+      value: draftBudgetLines,
+      label:
+        draftBudgetLines === 1
+          ? 'draft line item to review'
+          : 'draft line items to review',
+    },
+    advance: {
+      value: showsMissingAdvance,
+      label:
+        showsMissingAdvance === 1
+          ? 'show missing advance'
+          : 'shows missing advance',
+    },
+  };
+
   return {
     artist,
     stats: {
@@ -351,5 +516,7 @@ export async function getHomeData(
     },
     tours: tourSummaries,
     recentActivity: top10,
+    calendar,
+    whatsHot,
   };
 }

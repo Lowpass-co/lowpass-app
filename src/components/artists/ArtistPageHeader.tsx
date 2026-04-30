@@ -16,7 +16,7 @@ export function ArtistPageHeader({ artistId, artistName }: { artistId: string; a
   const [deletingFade, setDeletingFade] = useState(false);
 
   const menuItems = [
-    { label: 'Edit artist', icon: Pencil, onClick: () => router.push(`/artists/${artistId}`) },
+    { label: 'Edit artist', icon: Pencil, onClick: () => router.push(`/artists/${artistId}/edit`) },
     { label: 'Delete artist', icon: Trash2, variant: 'danger' as const, onClick: () => setDeleteOpen(true) },
   ];
 
