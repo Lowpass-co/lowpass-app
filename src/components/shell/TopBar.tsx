@@ -5,9 +5,12 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
+  Building2,
   Check,
   ChevronDown,
+  LayoutGrid,
   LogOut,
+  Package,
   Search,
   Settings,
   SunMoon,
@@ -30,15 +33,15 @@ const WORKSPACE_NAV: NavItem[] = [
   { label: 'Equipment', href: '/equipment', activeMatch: (p) => p.startsWith('/equipment') },
 ];
 
-/** Library dropdown — always reached through the Library button; never on the top bar surface. */
-const LIBRARY_MENU_ITEMS: NavItem[] = [
-  { label: 'Rider Packs', href: '/rider-packs', activeMatch: (p) => p.startsWith('/rider-packs') },
-  { label: 'Deal Memos', href: '/library/deal-memos', activeMatch: (p) => p.startsWith('/library/deal-memos') },
-  { label: 'Gear', href: '/gear', activeMatch: (p) => p.startsWith('/gear') },
-  { label: 'Templates', href: '/templates', activeMatch: (p) => p.startsWith('/templates') },
-  { label: 'Performance', href: '/performance', activeMatch: (p) => p.startsWith('/performance') },
-  { label: 'Venues', href: '/venues', activeMatch: (p) => p.startsWith('/venues') },
-];
+/** Library dropdown — Phase 1 §D retires this. Contents migrate per
+ *  Adam's decision #4: Rider Packs → Operations, Deal Memos → Budget,
+ *  Gear → /account/rental (per-user), Templates → /templates, Venues
+ *  → /venues, Performance → deleted entirely. The dropdown UI itself
+ *  is hidden below (libraryButton renders null). The state machinery
+ *  (libraryRef / libraryOpen) stays so other dropdowns' "close
+ *  siblings" handlers don't break — full TopBar retirement happens
+ *  when product migrations cut over to <ProductHeader>. */
+const LIBRARY_MENU_ITEMS: NavItem[] = [];
 
 export type TopBarTour = {
   id: string;
@@ -305,6 +308,63 @@ function AccountMenuContent({
           Workspace
         </span>
       </Link>
+      {/* Phase 1 §D — Foundation entries (workspace-level, not in
+          the four-product rail). Library dropdown retired; these
+          surface here per Adam's decisions #2, #3, #4. */}
+      <div className="my-1" style={{ borderTop: '1px solid var(--lp-border)' }} />
+      <Link
+        href="/personnel"
+        className="block px-3 py-2 text-sm"
+        style={{ color: 'var(--lp-text)' }}
+        onClick={onClose}
+      >
+        <span className="inline-flex items-center gap-2">
+          <Users className="h-4 w-4" style={{ color: 'var(--lp-text-tertiary)' }} />
+          Personnel directory
+        </span>
+      </Link>
+      <Link
+        href="/templates"
+        className="block px-3 py-2 text-sm"
+        style={{ color: 'var(--lp-text)' }}
+        onClick={onClose}
+      >
+        <span className="inline-flex items-center gap-2">
+          <LayoutGrid
+            className="h-4 w-4"
+            style={{ color: 'var(--lp-text-tertiary)' }}
+          />
+          Templates
+        </span>
+      </Link>
+      <Link
+        href="/venues"
+        className="block px-3 py-2 text-sm"
+        style={{ color: 'var(--lp-text)' }}
+        onClick={onClose}
+      >
+        <span className="inline-flex items-center gap-2">
+          <Building2
+            className="h-4 w-4"
+            style={{ color: 'var(--lp-text-tertiary)' }}
+          />
+          Venues
+        </span>
+      </Link>
+      <Link
+        href="/account/rental"
+        className="block px-3 py-2 text-sm"
+        style={{ color: 'var(--lp-text)' }}
+        onClick={onClose}
+      >
+        <span className="inline-flex items-center gap-2">
+          <Package
+            className="h-4 w-4"
+            style={{ color: 'var(--lp-text-tertiary)' }}
+          />
+          Rental
+        </span>
+      </Link>
       {isSiteAdmin ? (
         <Link
           href="/bugs"
@@ -349,7 +409,7 @@ function AccountMenuContent({
 }
 
 export function TopBar({
-  logoHref = '/dashboard',
+  logoHref = '/',
   activeTourId,
   tours,
   isSiteAdmin = false,
@@ -433,7 +493,13 @@ export function TopBar({
   const activeTour = tours.find((t) => t.id === activeTourId);
   const displayTourName = activeTour?.name ?? 'Select tour';
 
-  const libraryButton = (
+  // Phase 1 §D: Library dropdown retired — render nothing. The
+  // unrendered branch below stays in source so other onClick handlers
+  // that reference setLibraryOpen still typecheck; full removal lands
+  // when each product migrates onto <ProductHeader> (Phases 2-4).
+  const libraryButton: React.ReactNode = null;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const _retiredLibraryButton = (
     <div className="relative" ref={libraryRef}>
       <button
         type="button"

@@ -42,7 +42,7 @@ export default async function TourAdvancePage({
     <div className="mx-auto max-w-6xl space-y-6">
       {/* Breadcrumbs */}
       <nav className="flex items-center gap-2 text-sm text-lp-text-secondary">
-        <Link href="/dashboard" className="hover:text-lp-text">
+        <Link href="/" className="hover:text-lp-text">
           Dashboard
         </Link>
         <ChevronRight size={14} className="text-lp-text-tertiary" />

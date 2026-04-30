@@ -11,7 +11,10 @@ import { useEffect } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useArtistTourContext } from '@/contexts/ArtistTourContext';
 
-const SCOPED_PATHS = new Set(['/dashboard', '/tours', '/advance', '/performance']);
+// Phase 1 §D: /dashboard and /performance retired. Keep /tours and
+// /advance for legacy + new Advance routes; /budget and /operations
+// don't need the artist_id mirror since they're tour-scoped.
+const SCOPED_PATHS = new Set(['/tours', '/advance']);
 
 export function OverviewArtistQuerySync() {
   const pathname = usePathname() ?? '';

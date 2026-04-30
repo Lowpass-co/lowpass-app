@@ -18,7 +18,7 @@ export default function MobileShowPage() {
     return (
       <div className="mx-auto max-w-lg px-4 py-16 text-center text-[15px] text-lp-text-secondary">
         <p>Select a tour using the sidebar scope, then return here.</p>
-        <Link href="/dashboard" className="mt-4 inline-block text-lp-orange">
+        <Link href="/" className="mt-4 inline-block text-lp-orange">
           Dashboard
         </Link>
       </div>

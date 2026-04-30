@@ -111,7 +111,7 @@ export function ProfilePageClient() {
     return (
       <div className="mx-auto max-w-xl py-8">
         <p className="text-lp-text-secondary">Could not load profile.</p>
-        <Link href="/dashboard" className="mt-4 inline-flex items-center gap-2 text-sm text-lp-orange hover:underline">
+        <Link href="/" className="mt-4 inline-flex items-center gap-2 text-sm text-lp-orange hover:underline">
           <ArrowLeft className="h-4 w-4" /> Back to Dashboard
         </Link>
       </div>
@@ -128,7 +128,7 @@ export function ProfilePageClient() {
   return (
     <div className="mx-auto max-w-xl space-y-6">
       <Link
-        href="/dashboard"
+        href="/"
         className="inline-flex items-center gap-2 text-sm text-lp-text-secondary hover:text-lp-text"
       >
         <ArrowLeft className="h-4 w-4" /> Back
