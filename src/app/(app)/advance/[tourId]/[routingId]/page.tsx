@@ -24,6 +24,7 @@ import { ProductShell } from '@/components/shell-v2';
 import { AdvanceShowReadView } from '@/components/advance/AdvanceShowReadView';
 import { AdvanceShowContextBar } from '@/components/advance/AdvanceShowContextBar';
 import { AdvanceSectionBuilderDynamic } from '@/components/advance/AdvanceSectionBuilderDynamic';
+import { PreviouslyPlayedButton } from '@/components/advance/PreviouslyPlayedButton';
 
 /** Pull a likely artist image URL out of the freeform `branding` JSONB. */
 function pickArtistImageUrl(branding: unknown): string | null {
@@ -134,6 +135,15 @@ export default async function AdvanceShowPage({
       ) : (
         <div className="mx-auto w-full max-w-[1100px] space-y-4 px-6 py-6">
           {contextBar}
+          {/* Phase 2 §C — Previously Played affordance. Renders only on
+              the read view (edit view has its own copy-from-previous
+              flow inside the section builder). */}
+          <div className="advance-read-no-print flex justify-end">
+            <PreviouslyPlayedButton
+              tourId={tourId}
+              routingId={routingId}
+            />
+          </div>
           <AdvanceShowReadView tourId={tourId} routingId={routingId} />
         </div>
       )}
