@@ -120,7 +120,7 @@ export function DayAdvancePanel({ tourId, routingId }: DayAdvancePanelProps) {
       <p className="text-sm text-lp-text-secondary">
         No advance info yet.{' '}
         <Link
-          href={`/tours/${tourId}/advance/${routingId}`}
+          href={`/advance/${tourId}/${routingId}`}
           className="text-lp-orange font-semibold hover:underline"
         >
           Start advance →
@@ -195,7 +195,7 @@ export function DayAdvancePanel({ tourId, routingId }: DayAdvancePanelProps) {
       </div>
       <p className="pt-1 text-xs text-lp-text-secondary">
         <Link
-          href={`/tours/${tourId}/advance/${routingId}`}
+          href={`/advance/${tourId}/${routingId}`}
           className="text-lp-orange hover:underline"
         >
           Open full advance →

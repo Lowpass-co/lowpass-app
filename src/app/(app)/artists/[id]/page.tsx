@@ -126,7 +126,7 @@ export default async function ArtistHomePage({
   const data = await getHomeData(supabase, id);
   if (!data) notFound();
 
-  const { artist, stats, recentActivity, calendar, whatsHot } = data;
+  const { artist, stats, tours, recentActivity, calendar, whatsHot } = data;
 
   return (
     <ProductShell
@@ -167,20 +167,12 @@ export default async function ArtistHomePage({
             )}
           </div>
           <div className="min-w-0 flex-1">
-            <h1
-              style={{
-                fontSize: '24px',
-                fontWeight: 600,
-                lineHeight: 1.2,
-                color: 'var(--lp-text)',
-              }}
-            >
-              {artist.name}
-            </h1>
+            {/* Phase 2 §F1.1 — h1 uses the canonical .lp-h1 utility (28px). */}
+            <h1 className="lp-h1">{artist.name}</h1>
             <p
-              className="mt-0.5"
+              className="mt-1"
               style={{
-                fontSize: '13px',
+                fontSize: '14px',
                 color: 'var(--lp-text-secondary)',
               }}
             >
@@ -194,7 +186,7 @@ export default async function ArtistHomePage({
             style={{
               borderColor: 'var(--lp-border)',
               color: 'var(--lp-text-secondary)',
-              fontSize: '12px',
+              fontSize: '13px',
               fontWeight: 500,
             }}
           >
@@ -224,9 +216,13 @@ export default async function ArtistHomePage({
           />
         </section>
 
-        {/* Calendar widget — next 30 days, artist-scoped. Compact strip
-            so it doesn't dominate the page. */}
-        <CalendarStrip cells={calendar} />
+        {/* Calendar widget — next 30 days, artist-scoped. Phase 2 §F1.3
+            adds month header, show title + venue per cell, and tour-
+            colour stripe when this artist has multiple tours. */}
+        <CalendarStrip
+          cells={calendar}
+          tours={tours.map((t) => ({ id: t.id, name: t.name }))}
+        />
 
         {/* 3 product cards — no tour list. Single "what's hot" metric. */}
         <section
@@ -261,36 +257,18 @@ export default async function ArtistHomePage({
    ============================================ */
 
 function StatTile({ label, value }: { label: string; value: string }) {
+  // Phase 2 §F1.1 — uses .lp-stat-value (32px) + .lp-stat-label
+  // utilities so all tiles match across the app.
   return (
     <div
-      className="rounded-lg border p-3"
+      className="rounded-lg border p-4"
       style={{
         borderColor: 'var(--lp-border-strong)',
         background: 'var(--lp-surface)',
       }}
     >
-      <div
-        style={{
-          fontSize: '11px',
-          fontWeight: 600,
-          letterSpacing: '0.08em',
-          textTransform: 'uppercase',
-          color: 'var(--lp-text-tertiary)',
-        }}
-      >
-        {label}
-      </div>
-      <div
-        className="lp-mono mt-1"
-        style={{
-          fontSize: '22px',
-          fontWeight: 500,
-          lineHeight: 1.1,
-          color: 'var(--lp-text)',
-        }}
-      >
-        {value}
-      </div>
+      <div className="lp-stat-label">{label}</div>
+      <div className="lp-mono lp-stat-value mt-2">{value}</div>
     </div>
   );
 }
@@ -392,7 +370,40 @@ function ProductCard({
   );
 }
 
-function CalendarStrip({ cells }: { cells: HomeCalendarCell[] }) {
+/* ============================================
+   Phase 2 §F1.3 — enriched calendar widget
+
+   Adds:
+   - Month header above the strip (auto-toggles when the 30-day
+     window straddles a month boundary)
+   - Bigger day numbers + day-name letters
+   - Show title + venue beneath the day number on show cells
+   - Tour-colour stripe at top of each cell when the artist has
+     multiple tours (disambiguates "is this Tour A or Tour B?")
+   - Section fills its container instead of feeling stuck in a
+     fixed-width slot
+   ============================================ */
+const TOUR_PALETTE = [
+  '#3B82F6',
+  '#8B5CF6',
+  '#EC4899',
+  '#10B981',
+  '#F59E0B',
+  '#EF4444',
+];
+
+function tourColorFor(tourIndexById: Map<string, number>, tourId: string): string {
+  const idx = tourIndexById.get(tourId) ?? 0;
+  return TOUR_PALETTE[idx % TOUR_PALETTE.length];
+}
+
+function CalendarStrip({
+  cells,
+  tours,
+}: {
+  cells: HomeCalendarCell[];
+  tours: { id: string; name: string }[];
+}) {
   const byDate = new Map<string, HomeCalendarCell[]>();
   for (const c of cells) {
     const arr = byDate.get(c.date) ?? [];
@@ -400,39 +411,71 @@ function CalendarStrip({ cells }: { cells: HomeCalendarCell[] }) {
     byDate.set(c.date, arr);
   }
 
-  // Build an array of the next 30 days starting today.
+  // Tour → stripe colour mapping. Only render the stripe when the
+  // artist has more than one tour in the calendar window — single-tour
+  // artists get the day-type colour alone.
+  const tourIndexById = new Map<string, number>();
+  tours.forEach((t, i) => tourIndexById.set(t.id, i));
+  const tourIdsInWindow = new Set(cells.map((c) => c.tourId));
+  const showTourStripe = tourIdsInWindow.size > 1;
+
+  // Build the 30-day window starting today.
   const today = new Date();
   today.setUTCHours(0, 0, 0, 0);
-  const days: { date: string; label: string; weekday: string }[] = [];
+  const days: {
+    date: string;
+    dayNum: string;
+    weekday: string;
+    monthShort: string;
+    monthLong: string;
+    year: number;
+    isFirstOfMonth: boolean;
+  }[] = [];
   for (let i = 0; i < 30; i++) {
     const d = new Date(today);
     d.setUTCDate(today.getUTCDate() + i);
     const iso = d.toISOString().slice(0, 10);
     days.push({
       date: iso,
-      label: d.toLocaleDateString('en-GB', { day: '2-digit' }),
-      weekday: d.toLocaleDateString('en-GB', { weekday: 'short' }).slice(0, 1),
+      dayNum: d.toLocaleDateString('en-GB', { day: '2-digit' }),
+      weekday: d.toLocaleDateString('en-GB', { weekday: 'short' }),
+      monthShort: d.toLocaleDateString('en-GB', { month: 'short' }),
+      monthLong: d.toLocaleDateString('en-GB', { month: 'long' }),
+      year: d.getUTCFullYear(),
+      isFirstOfMonth: d.getUTCDate() === 1 || i === 0,
     });
   }
+
+  const headerLabel =
+    days.length > 0
+      ? days[days.length - 1].monthLong === days[0].monthLong
+        ? `${days[0].monthLong} ${days[0].year}`
+        : `${days[0].monthLong} ${days[0].year}  →  ${
+            days[days.length - 1].monthLong
+          } ${days[days.length - 1].year}`
+      : '';
 
   return (
     <section className="space-y-2">
       <div className="flex items-baseline justify-between">
-        <h2
-          style={{
-            fontSize: '11px',
-            fontWeight: 600,
-            letterSpacing: '0.1em',
-            textTransform: 'uppercase',
-            color: 'var(--lp-text-tertiary)',
-          }}
-        >
-          Next 30 days
-        </h2>
-        <span
-          style={{ fontSize: '11px', color: 'var(--lp-text-tertiary)' }}
-        >
-          {cells.length} dates
+        <div className="flex items-baseline gap-3">
+          <h2 className="lp-h3" style={{ margin: 0 }}>
+            {headerLabel}
+          </h2>
+          <span
+            style={{
+              fontSize: '11px',
+              fontWeight: 600,
+              letterSpacing: '0.1em',
+              textTransform: 'uppercase',
+              color: 'var(--lp-text-tertiary)',
+            }}
+          >
+            Next 30 days
+          </span>
+        </div>
+        <span style={{ fontSize: '12px', color: 'var(--lp-text-tertiary)' }}>
+          <span className="lp-mono">{cells.length}</span> dates
         </span>
       </div>
       <div
@@ -442,13 +485,23 @@ function CalendarStrip({ cells }: { cells: HomeCalendarCell[] }) {
           background: 'var(--lp-bg-deep)',
         }}
       >
-        <div className="flex gap-px p-2" style={{ minWidth: 'max-content' }}>
+        <div
+          className="grid gap-1 p-2"
+          style={{
+            gridTemplateColumns: 'repeat(30, minmax(72px, 1fr))',
+            minWidth: 'max-content',
+          }}
+        >
           {days.map((d) => {
             const cellsForDate = byDate.get(d.date) ?? [];
             const primary = cellsForDate[0];
-            const color = primary
+            const dtColor = primary
               ? dayTypeToColor(primary.dayType)
               : 'transparent';
+            const tourColor =
+              primary && showTourStripe
+                ? tourColorFor(tourIndexById, primary.tourId)
+                : null;
             const tooltip = primary
               ? `${d.date} · ${primary.dayType || 'date'}${
                   primary.city ? ` · ${primary.city}` : ''
@@ -456,47 +509,104 @@ function CalendarStrip({ cells }: { cells: HomeCalendarCell[] }) {
               : d.date;
             const cellNode = (
               <div
-                className="flex flex-col items-center gap-0.5 rounded px-1.5 py-1"
+                className="relative flex h-full flex-col gap-1 overflow-hidden rounded-md px-2 py-1.5"
                 style={{
-                  minWidth: 28,
+                  minHeight: 64,
                   background: primary
-                    ? `color-mix(in srgb, ${color} 12%, transparent)`
+                    ? `color-mix(in srgb, ${dtColor} 10%, transparent)`
                     : 'transparent',
                   border: primary
-                    ? `1px solid color-mix(in srgb, ${color} 40%, transparent)`
-                    : '1px solid transparent',
+                    ? `1px solid color-mix(in srgb, ${dtColor} 35%, transparent)`
+                    : '1px solid var(--lp-border-subtle)',
                 }}
                 title={tooltip}
               >
-                <span
-                  style={{
-                    fontSize: '9px',
-                    fontWeight: 600,
-                    color: 'var(--lp-text-tertiary)',
-                    letterSpacing: '0.05em',
-                  }}
-                >
-                  {d.weekday}
-                </span>
-                <span
-                  className="lp-mono"
-                  style={{
-                    fontSize: '12px',
-                    fontWeight: 500,
-                    color: primary ? color : 'var(--lp-text-secondary)',
-                  }}
-                >
-                  {d.label}
-                </span>
-                <span
-                  aria-hidden
-                  className="rounded-full"
-                  style={{
-                    height: 4,
-                    width: cellsForDate.length > 0 ? 16 : 0,
-                    background: color,
-                  }}
-                />
+                {/* Tour-colour stripe (multi-tour only) */}
+                {tourColor ? (
+                  <span
+                    aria-hidden
+                    className="absolute left-0 right-0 top-0"
+                    style={{ height: 2, background: tourColor }}
+                  />
+                ) : null}
+                {/* Month tick when the day is the 1st (or the very first
+                    day in the window) — keeps the user oriented when the
+                    strip crosses a month boundary. */}
+                {d.isFirstOfMonth ? (
+                  <span
+                    style={{
+                      fontSize: '9px',
+                      fontWeight: 700,
+                      letterSpacing: '0.08em',
+                      textTransform: 'uppercase',
+                      color: 'var(--color-lp-orange)',
+                    }}
+                  >
+                    {d.monthShort}
+                  </span>
+                ) : null}
+                <div className="flex items-baseline justify-between gap-1">
+                  <span
+                    style={{
+                      fontSize: '10px',
+                      fontWeight: 600,
+                      color: 'var(--lp-text-tertiary)',
+                      letterSpacing: '0.05em',
+                      textTransform: 'uppercase',
+                    }}
+                  >
+                    {d.weekday.slice(0, 3)}
+                  </span>
+                  <span
+                    className="lp-mono"
+                    style={{
+                      fontSize: '16px',
+                      fontWeight: 600,
+                      lineHeight: 1,
+                      color: primary ? dtColor : 'var(--lp-text)',
+                    }}
+                  >
+                    {d.dayNum}
+                  </span>
+                </div>
+                {/* Show / venue body — only on cells with content */}
+                {primary ? (
+                  <div className="mt-auto min-w-0 space-y-0.5">
+                    <div
+                      className="truncate"
+                      style={{
+                        fontSize: '11px',
+                        fontWeight: 500,
+                        color: 'var(--lp-text)',
+                        lineHeight: 1.2,
+                      }}
+                    >
+                      {primary.city ?? primary.dayType ?? ''}
+                    </div>
+                    {primary.venue ? (
+                      <div
+                        className="truncate"
+                        style={{
+                          fontSize: '10px',
+                          color: 'var(--lp-text-tertiary)',
+                          lineHeight: 1.2,
+                        }}
+                      >
+                        {primary.venue}
+                      </div>
+                    ) : null}
+                    {cellsForDate.length > 1 ? (
+                      <div
+                        style={{
+                          fontSize: '10px',
+                          color: 'var(--lp-text-tertiary)',
+                        }}
+                      >
+                        +{cellsForDate.length - 1} more
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
             );
 
@@ -506,6 +616,7 @@ function CalendarStrip({ cells }: { cells: HomeCalendarCell[] }) {
                   key={d.date}
                   href={`/advance/${primary.tourId}/${primary.routingId}`}
                   aria-label={tooltip}
+                  className="btn-transition"
                 >
                   {cellNode}
                 </Link>

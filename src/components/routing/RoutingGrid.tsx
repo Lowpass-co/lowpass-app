@@ -310,7 +310,7 @@ function RoutingRowWithMenu({
   const advanceInfo = advanceByDate[row.date];
   const menuItems = [
     { label: 'Clear day', icon: Eraser, onClick: () => updateRow(rowIndex, { day_type: '', city: '', address: '', venue_name: '', venue_website: '', venue_phone: '', venue_capacity: undefined, notes: '', latitude: undefined, longitude: undefined, transport_to_next: 'default' }) },
-    ...(tourId && advanceInfo?.routing_id ? [{ label: 'Open advance', icon: ExternalLink, onClick: () => window.location.assign(`/tours/${tourId}/advance/${advanceInfo.routing_id}`) }] : []),
+    ...(tourId && advanceInfo?.routing_id ? [{ label: 'Open advance', icon: ExternalLink, onClick: () => window.location.assign(`/advance/${tourId}/${advanceInfo.routing_id}`) }] : []),
     ...(onDeleteRow && rowsLength > 1 ? [{ label: 'Delete day', icon: Trash2, variant: 'danger' as const, onClick: () => setDeleteOpen(true) }] : []),
   ].filter(Boolean) as { label: string; icon: typeof Eraser; onClick: () => void; variant?: 'danger' }[];
 

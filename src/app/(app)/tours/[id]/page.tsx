@@ -279,7 +279,7 @@ export default async function TourHubPage({
           }
           progressPercent={hub.advance.percent}
           ctaText="Open advance"
-          href={`/tours/${hub.tour.id}/advance`}
+          href={`/advance/${hub.tour.id}`}
         />
         <TourPrimaryCTACard
           label="Budget"

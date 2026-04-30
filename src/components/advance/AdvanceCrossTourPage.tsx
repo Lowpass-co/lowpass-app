@@ -134,7 +134,7 @@ function AdvanceOverviewContent() {
             {needsAttention.map((item) => (
               <li key={item.routing_id}>
                 <Link
-                  href={`/tours/${item.tour_id}/advance/${item.routing_id}`}
+                  href={`/advance/${item.tour_id}/${item.routing_id}`}
                   className="flex flex-wrap items-center justify-between gap-2 py-3 text-sm hover:bg-amber-100/50 dark:hover:bg-amber-900/20"
                 >
                   <div>
@@ -166,7 +166,7 @@ function AdvanceOverviewContent() {
             {upcoming.slice(0, 20).map((item) => (
               <li key={item.routing_id}>
                 <Link
-                  href={`/tours/${item.tour_id}/advance/${item.routing_id}`}
+                  href={`/advance/${item.tour_id}/${item.routing_id}`}
                   className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-lp-border px-3 py-2 text-sm text-lp-text hover:bg-lp-surface-hover"
                 >
                   <span>
@@ -199,7 +199,7 @@ function AdvanceOverviewContent() {
             {tours.map((t) => (
               <li key={t.tour_id}>
                 <Link
-                  href={`/tours/${t.tour_id}/advance`}
+                  href={`/advance/${t.tour_id}`}
                   className="flex flex-wrap items-center justify-between gap-4 rounded-lg border border-lp-border px-4 py-3 text-sm hover:bg-lp-surface-hover"
                 >
                   <div>
@@ -425,7 +425,7 @@ function InlineAdvanceEditModal({
                 Cancel
               </button>
               <Link
-                href={`/tours/${suggestion.tour_id}/advance/${suggestion.routing_id}#section-${suggestion.section_id}`}
+                href={`/advance/${suggestion.tour_id}/${suggestion.routing_id}#section-${suggestion.section_id}`}
                 className="ml-auto text-sm font-medium text-lp-orange hover:text-lp-orange-hover"
               >
                 Open full advance →

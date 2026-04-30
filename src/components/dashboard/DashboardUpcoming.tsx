@@ -39,7 +39,7 @@ export function DashboardUpcoming({ items }: { items: UpcomingItem[] }) {
             return (
               <li key={`${item.tour_id}-${item.date}-${item.routing_id}`}>
                 <Link
-                  href={`/tours/${item.tour_id}/advance/${item.routing_id}`}
+                  href={`/advance/${item.tour_id}/${item.routing_id}`}
                   className="flex items-baseline gap-3 rounded-lg p-2 transition-colors hover:bg-lp-surface-hover"
                 >
                   <span className="text-lg font-bold tabular-nums text-lp-orange">{dayNum}</span>

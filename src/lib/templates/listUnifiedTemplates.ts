@@ -68,7 +68,7 @@ export async function listUnifiedTemplates(
   for (const s of schedules ?? []) {
     const createdAt = String(s.created_at);
     const tourId = (s.tour_id as string | null) ?? null;
-    const tourHref = tourId ? `/tours/${tourId}/advance` : '/advance';
+    const tourHref = tourId ? `/advance/${tourId}` : '/advance';
     out.push({
       id: String(s.id),
       kind: 'advance-schedule',
@@ -189,7 +189,7 @@ export async function getUnifiedTemplate(
         lastUsedAt: null,
         updatedAt: String(data.created_at),
         createdBy: null,
-        editorHref: tourId ? `/tours/${tourId}/advance` : '/advance',
+        editorHref: tourId ? `/advance/${tourId}` : '/advance',
       };
     }
     case 'other': {

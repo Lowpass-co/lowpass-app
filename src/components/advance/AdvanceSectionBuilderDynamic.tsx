@@ -6,7 +6,7 @@ import { Loader2 } from 'lucide-react';
 const AdvanceSectionBuilder = dynamic(
   () =>
     import(
-      '@/app/(app)/tours/[id]/advance/[routingId]/AdvanceSectionBuilder'
+      '@/components/advance/AdvanceSectionBuilder'
     ).then((m) => ({ default: m.AdvanceSectionBuilder })),
   {
     ssr: false,

@@ -16,9 +16,9 @@ export function MobileDesktopRedirect() {
     if (isMobile) return null;
     const tid = selectedTourId;
     if (!tid) return null;
-    if (pathname === '/m/today') return `/dashboard`;
+    if (pathname === '/m/today') return `/`;
     const showMatch = pathname.match(/^\/m\/show\/([^/]+)$/);
-    if (showMatch) return `/tours/${tid}/advance/${showMatch[1]}`;
+    if (showMatch) return `/advance/${tid}/${showMatch[1]}`;
     const showFileMatch = pathname.match(/^\/m\/show\/([^/]+)\/file\/(.+)$/);
     if (showFileMatch) return `/tours/${tid}/files`;
     if (pathname === '/m/files') return `/tours/${tid}/files`;

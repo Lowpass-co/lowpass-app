@@ -240,7 +240,7 @@ export function CalendarView() {
             </div>
             <div className="mt-4 flex flex-col gap-2">
               <Link
-                href={`/tours/${selectedEvent.tour_id}/advance/${selectedEvent.routing_id}`}
+                href={`/advance/${selectedEvent.tour_id}/${selectedEvent.routing_id}`}
                 className="flex items-center gap-2 rounded-lg border border-lp-border bg-lp-surface-hover px-3 py-2 text-sm font-medium text-lp-text hover:border-lp-orange hover:bg-lp-orange-subtle"
               >
                 <ClipboardList size={16} />

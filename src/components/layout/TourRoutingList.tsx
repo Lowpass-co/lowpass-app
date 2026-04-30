@@ -68,9 +68,9 @@ export function TourRoutingList({
         {routing.map((row) => {
           const href =
             mode === 'advance'
-              ? `/tours/${tourId}/advance/${row.id}`
+              ? `/advance/${tourId}/${row.id}`
               : `/budget?tour_id=${tourId}`;
-          const isActive = mode === 'advance' && pathname === `/tours/${tourId}/advance/${row.id}`;
+          const isActive = mode === 'advance' && pathname === `/advance/${tourId}/${row.id}`;
           const dotColor = circleColor(row.day_type);
           const dateLine = formatRowDate(row.date);
           const city = row.city?.trim() || row.venue_name?.trim() || '—';

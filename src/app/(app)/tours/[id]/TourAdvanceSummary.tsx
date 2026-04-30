@@ -77,7 +77,7 @@ export function TourAdvanceSummary({ tourId }: { tourId: string }) {
       <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
         <h2 className="text-lg font-semibold text-lp-text">Advance</h2>
         <Link
-          href={`/tours/${tourId}/advance`}
+          href={`/advance/${tourId}`}
           className="flex items-center gap-1.5 rounded-lg bg-lp-orange px-4 py-2 text-sm font-medium text-white hover:bg-lp-orange-hover"
         >
           Open advance
@@ -100,7 +100,7 @@ export function TourAdvanceSummary({ tourId }: { tourId: string }) {
             {upcomingNeedingAttention.map((d) => (
               <li key={d.routing_id}>
                 <Link
-                  href={`/tours/${tourId}/advance/${d.routing_id}`}
+                  href={`/advance/${tourId}/${d.routing_id}`}
                   className="flex items-center justify-between rounded-lg border border-lp-border px-3 py-2 text-sm text-lp-text hover:bg-lp-surface-hover"
                 >
                   <span>

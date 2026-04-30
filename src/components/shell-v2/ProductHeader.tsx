@@ -24,6 +24,7 @@
 import Link from 'next/link';
 import { ChevronRight, Search } from 'lucide-react';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { ProductHeaderAvatarMenu } from './ProductHeaderAvatarMenu';
 
 export type ProductName = 'Home' | 'Operations' | 'Budget' | 'Advance';
 
@@ -38,21 +39,46 @@ export async function ProductHeader({
   tourId,
   productName,
 }: ProductHeaderProps) {
-  let artistName: string | null = null;
-  let tourName: string | null = null;
+  const supabase = await createServerSupabaseClient();
 
-  if (artistId || tourId) {
-    const supabase = await createServerSupabaseClient();
-    const [artistRes, tourRes] = await Promise.all([
-      artistId
-        ? supabase.from('artists').select('name').eq('id', artistId).maybeSingle()
-        : Promise.resolve({ data: null }),
-      tourId
-        ? supabase.from('tours').select('name').eq('id', tourId).maybeSingle()
-        : Promise.resolve({ data: null }),
-    ]);
-    artistName = (artistRes.data as { name?: string } | null)?.name ?? null;
-    tourName = (tourRes.data as { name?: string } | null)?.name ?? null;
+  // Phase 2 §F1.2 — fetch user + admin status alongside artist/tour
+  // names so the avatar menu has what it needs.
+  const [
+    { data: { user } },
+    artistRes,
+    tourRes,
+  ] = await Promise.all([
+    supabase.auth.getUser(),
+    artistId
+      ? supabase.from('artists').select('name').eq('id', artistId).maybeSingle()
+      : Promise.resolve({ data: null }),
+    tourId
+      ? supabase.from('tours').select('name').eq('id', tourId).maybeSingle()
+      : Promise.resolve({ data: null }),
+  ]);
+
+  const artistName =
+    (artistRes.data as { name?: string } | null)?.name ?? null;
+  const tourName = (tourRes.data as { name?: string } | null)?.name ?? null;
+
+  let isSiteAdmin = false;
+  let avatarUrl: string | null = null;
+  let displayName = '';
+  const email = user?.email ?? '';
+  if (user) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('full_name, avatar_url, is_site_admin')
+      .eq('id', user.id)
+      .maybeSingle();
+    const p = (profile ?? null) as {
+      full_name?: string | null;
+      avatar_url?: string | null;
+      is_site_admin?: boolean | null;
+    } | null;
+    isSiteAdmin = !!p?.is_site_admin;
+    avatarUrl = p?.avatar_url ?? null;
+    displayName = (p?.full_name ?? '').trim();
   }
 
   return (
@@ -70,7 +96,7 @@ export async function ProductHeader({
             href={`/artists/${artistId}`}
             className="btn-transition truncate rounded-md px-2 py-1"
             style={{
-              fontSize: '13px',
+              fontSize: '14px',
               fontWeight: 500,
               color: 'var(--lp-text)',
               background: 'transparent',
@@ -83,7 +109,7 @@ export async function ProductHeader({
             href="/"
             className="btn-transition rounded-md px-2 py-1"
             style={{
-              fontSize: '13px',
+              fontSize: '14px',
               fontWeight: 500,
               color: 'var(--lp-text-secondary)',
             }}
@@ -102,7 +128,7 @@ export async function ProductHeader({
             <span
               className="truncate rounded-md px-2 py-1"
               style={{
-                fontSize: '13px',
+                fontSize: '14px',
                 fontWeight: 500,
                 color: 'var(--lp-text)',
               }}
@@ -128,9 +154,7 @@ export async function ProductHeader({
         </span>
       </div>
 
-      {/* Right: search trigger + avatar slot. Phase 1 placeholder — the
-          real ⌘K palette wiring + AccountAvatar mount happen when the
-          first product migrates onto these shells. */}
+      {/* Right: search trigger + interactive avatar menu */}
       <div className="ml-auto flex items-center gap-2">
         <button
           type="button"
@@ -144,20 +168,16 @@ export async function ProductHeader({
         >
           <Search className="h-4 w-4" strokeWidth={2} />
         </button>
-        <div
-          className="flex h-7 w-7 items-center justify-center rounded-full"
-          style={{
-            background:
-              'color-mix(in srgb, var(--color-lp-orange) 12%, transparent)',
-            color: 'var(--color-lp-orange)',
-            fontSize: '11px',
-            fontWeight: 600,
-          }}
-          aria-hidden="true"
-        >
-          {/* Static placeholder avatar mark — wired up in Phase 2+. */}
-          ·
-        </div>
+        {user ? (
+          <ProductHeaderAvatarMenu
+            user={{
+              name: displayName,
+              email,
+              avatarUrl,
+            }}
+            isSiteAdmin={isSiteAdmin}
+          />
+        ) : null}
       </div>
     </header>
   );

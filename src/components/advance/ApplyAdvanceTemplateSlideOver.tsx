@@ -23,6 +23,7 @@
 
 import { useMemo, useState } from 'react';
 import { AlertTriangle, Check, FileText } from 'lucide-react';
+import { FieldTypeIcon } from './FieldTypeIcon';
 import { SlideOver } from '@/components/shell/SlideOver';
 import { cn, parseRoutingDate } from '@/lib/utils';
 
@@ -239,28 +240,71 @@ export function ApplyAdvanceTemplateSlideOver({
             </ul>
           )}
 
-          {/* Preview of the selected template's section list */}
+          {/* Preview of the selected template's section list — Phase 2
+              §B adds field-type icon chips beneath each section so the
+              user can eyeball the field-type mix at a glance. */}
           {selectedTemplate && showPreview ? (
             <div className="rounded-lg border border-lp-border bg-lp-surface px-3 py-2">
-              <div className="mb-1 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-lp-text-tertiary">
+              <div className="mb-1.5 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-lp-text-tertiary">
                 <FileText className="h-3 w-3" /> Preview
               </div>
               {previewSections.length === 0 ? (
                 <p className="text-xs text-lp-text-tertiary">Template has no sections.</p>
               ) : (
-                <ol className="list-decimal space-y-0.5 pl-5 text-xs text-lp-text-secondary">
+                <ul className="space-y-2">
                   {previewSections.map((s, i) => (
-                    <li key={`${s.template_id ?? s.label}-${i}`}>
-                      {s.label || `Section ${i + 1}`}
-                      {s.fields?.length ? (
-                        <span className="text-lp-text-tertiary">
-                          {' '}
-                          · {s.fields.length} field{s.fields.length === 1 ? '' : 's'}
+                    <li
+                      key={`${s.template_id ?? s.label}-${i}`}
+                      className="space-y-1"
+                    >
+                      <div className="flex items-baseline gap-2 text-sm">
+                        <span
+                          className="lp-mono"
+                          style={{
+                            fontSize: '11px',
+                            color: 'var(--lp-text-tertiary)',
+                            minWidth: 16,
+                          }}
+                        >
+                          {String(i + 1).padStart(2, '0')}
                         </span>
+                        <span style={{ color: 'var(--lp-text)', fontWeight: 500 }}>
+                          {s.label || `Section ${i + 1}`}
+                        </span>
+                        {s.fields?.length ? (
+                          <span
+                            className="lp-mono"
+                            style={{
+                              fontSize: '11px',
+                              color: 'var(--lp-text-tertiary)',
+                            }}
+                          >
+                            {s.fields.length} field
+                            {s.fields.length === 1 ? '' : 's'}
+                          </span>
+                        ) : null}
+                      </div>
+                      {s.fields?.length ? (
+                        <div className="flex flex-wrap items-center gap-1 pl-6">
+                          {s.fields.slice(0, 12).map((f) => (
+                            <FieldTypeIcon key={f.id} type={f.type} />
+                          ))}
+                          {s.fields.length > 12 ? (
+                            <span
+                              className="lp-mono"
+                              style={{
+                                fontSize: '11px',
+                                color: 'var(--lp-text-tertiary)',
+                              }}
+                            >
+                              +{s.fields.length - 12}
+                            </span>
+                          ) : null}
+                        </div>
                       ) : null}
                     </li>
                   ))}
-                </ol>
+                </ul>
               )}
             </div>
           ) : null}

@@ -108,7 +108,7 @@ export default function TourSlideOver({ id, onClose }: { id: string; onClose: ()
               <Link href={`/tours/${tour.id}/overview`} className="text-lp-orange hover:underline" onClick={onClose}>
                 Overview
               </Link>
-              <Link href={`/tours/${tour.id}/advance`} className="text-lp-orange hover:underline" onClick={onClose}>
+              <Link href={`/advance/${tour.id}`} className="text-lp-orange hover:underline" onClick={onClose}>
                 Advance
               </Link>
               <Link href={`/tours/${tour.id}/personnel`} className="text-lp-orange hover:underline" onClick={onClose}>
