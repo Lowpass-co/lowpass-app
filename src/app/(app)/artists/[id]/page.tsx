@@ -383,13 +383,18 @@ function ProductCard({
    - Section fills its container instead of feeling stuck in a
      fixed-width slot
    ============================================ */
+/* Tour palette references the --color-lp-tour-color-{1..6} tokens
+   defined in globals.css. Tour 1 is brand orange (the artist's "current"
+   tour reads as Lowpass); the rest cycle around the colour wheel for
+   visual disambiguation on the calendar. Token values can be tuned in
+   one place without touching this file. */
 const TOUR_PALETTE = [
-  '#3B82F6',
-  '#8B5CF6',
-  '#EC4899',
-  '#10B981',
-  '#F59E0B',
-  '#EF4444',
+  'var(--color-lp-tour-color-1)',
+  'var(--color-lp-tour-color-2)',
+  'var(--color-lp-tour-color-3)',
+  'var(--color-lp-tour-color-4)',
+  'var(--color-lp-tour-color-5)',
+  'var(--color-lp-tour-color-6)',
 ];
 
 function tourColorFor(tourIndexById: Map<string, number>, tourId: string): string {

@@ -66,6 +66,19 @@
   --color-lp-day-tv: #EF4444;
   --color-lp-day-festival: #FF4500;
 
+  /* Tour disambiguation colours
+     Used on the Home calendar to distinguish multiple tours under the same
+     artist. Six slots; pages cycle modulo 6. Hues are deliberately distinct
+     across the wheel for accessibility, but lower-saturation than the day-
+     type tokens so the day chips remain the primary signal. Tour 1 is brand
+     orange so the active artist's "current" tour reads as Lowpass. */
+  --color-lp-tour-color-1: #FF4500;
+  --color-lp-tour-color-2: #0EA5E9;
+  --color-lp-tour-color-3: #14B8A6;
+  --color-lp-tour-color-4: #A855F7;
+  --color-lp-tour-color-5: #F59E0B;
+  --color-lp-tour-color-6: #DC2626;
+
   /* Sizing */
   --sidebar-width: 260px;
   --sidebar-collapsed-width: 72px;
