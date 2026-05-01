@@ -1,19 +1,22 @@
 /* ============================================
-   LOWPASS — Budget · Tour landing (Phase 3 §A migration)
+   LOWPASS — Budget · Tour landing (Phase 3 §C tab nav)
 
-   /budget/[tourId] — replaces /tours/[id]/budget. Wraps the existing
-   PR #6 + fix-up budget hub (Phase Context strip, Macro Allocation
-   donut, Burn Rate chart, line-item table, Receipt Inbox, export
-   controls, duplicate detection) inside <ProductShell>.
+   /budget/[tourId] — wraps the budget hub in <ProductShell> with
+   five tabs (Summary / Budget / Actuals / Reports / Settings).
+   Tab state via ?tab= searchParam; Summary is the default.
 
-   Phase 3 §A is the migration commit only — no visual restructure
-   yet. §B applies the dense spreadsheet template, §C splits the
-   surface into Summary / Budget tabs, §D wires phase tagging.
+   Layout (top → bottom):
+     <ProductShell>
+       <BudgetStatsStrip>          (sticky — always visible)
+       <BudgetPhaseStripClient>    (sticky — phase context)
+       <BudgetTabNav>              (active tab from ?tab=)
+       <tab-content>               (Summary | Budget | Actuals | Reports | Settings)
+     </ProductShell>
 
-   TourBreadcrumb (the legacy per-page chrome) retires here —
-   <ProductHeader> from shell-v2 carries artist · tour context.
-   The Phase Context strip stays at the top of the page body
-   because it's per-tour-phase context, not navigation chrome.
+   Summary tab carries the big-picture surface (charts, variance,
+   top spend, recent activity). Budget tab carries the dense
+   line-item spreadsheet from §B + Receipt Inbox sidebar. Other
+   three are placeholders this sprint.
    ============================================ */
 
 import { notFound } from 'next/navigation';
@@ -22,11 +25,16 @@ import type { Metadata } from 'next';
 import { ProductShell } from '@/components/shell-v2';
 import { MobileBudgetBanner } from '@/components/mobile/MobileBudgetBanner';
 import { BudgetPhaseStripClient } from '@/components/budget/BudgetPhaseStripClient';
-import { BudgetOverviewPanels } from '@/components/budget/BudgetOverviewPanels';
 import { BudgetStatsStrip } from '@/components/budget/BudgetStatsStrip';
 import { BudgetSpreadsheetView } from '@/components/budget/BudgetSpreadsheetView';
 import { ReceiptInbox } from '@/components/budget/ReceiptInbox';
 import { BudgetExportControls } from '@/components/budget/BudgetExportControls';
+import {
+  BudgetTabNav,
+  resolveBudgetTab,
+} from '@/components/budget/BudgetTabNav';
+import { BudgetSummaryTab } from '@/components/budget/BudgetSummaryTab';
+import { BudgetTabPlaceholder } from '@/components/budget/BudgetTabPlaceholder';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { computeTourPhases } from '@/server/budget/computeTourPhases';
 import { getBudgetPanelData } from '@/server/budget/getBudgetPanelData';
@@ -53,10 +61,14 @@ export async function generateMetadata({
 
 export default async function BudgetTourPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ tourId: string }>;
+  searchParams: Promise<{ tab?: string }>;
 }) {
   const { tourId } = await params;
+  const sp = await searchParams;
+  const tab = resolveBudgetTab(sp.tab);
   const supabase = await createServerSupabaseClient();
 
   const { data: tour, error: tourErr } = await supabase
@@ -109,39 +121,75 @@ export default async function BudgetTourPage({
       productName="Budget"
     >
       <div className="flex min-h-0 flex-1 flex-col pb-24">
-        {/* Phase 3 §B.1 — sticky stats strip lives ABOVE the §C tab
-            nav so it stays visible regardless of which tab is open. */}
         <BudgetStatsStrip lines={lines} tourCurrency={tourCurrency} />
         <BudgetPhaseStripClient phases={phases} />
+        <BudgetTabNav active={tab} />
+
         <div className="space-y-6 px-4 pt-4">
-          <BudgetExportControls
-            lines={lines}
-            tourCurrency={tourCurrency}
-            tourName={(tour.name as string | null) ?? 'Budget'}
-          />
-          {/* Phase 3 §C will move BudgetOverviewPanels onto a dedicated
-              Summary tab. Until §C lands, leaving it visible here keeps
-              the user's existing Macro Allocation + Burn Rate context. */}
-          <BudgetOverviewPanels
-            allocation={panelData.allocation}
-            burn={panelData.burn}
-            phaseBoundaries={phaseBoundaries}
-            currency={tourCurrency}
-          />
-          {/* Phase 3 §B.2 + §D — dense spreadsheet replaces the prior
-              BudgetMainTable. Carries forward Quick Add, status chips,
-              bulk select, multi-currency, slide-over editing,
-              duplicate-detection banner. */}
-          <BudgetSpreadsheetView
-            lines={lines}
-            phases={phases}
-            routingDateById={routingDateById}
-            duplicateMap={duplicatesToRecord(detectDuplicates(lines))}
-            tourCurrency={tourCurrency}
-            tourId={tourId}
-          />
-          <ReceiptInbox tourId={tourId} lineItems={lines} />
+          {tab === 'summary' ? (
+            <BudgetSummaryTab
+              tourId={tourId}
+              lines={lines}
+              allocation={panelData.allocation}
+              burn={panelData.burn}
+              phaseBoundaries={phaseBoundaries}
+              tourCurrency={tourCurrency}
+            />
+          ) : null}
+
+          {tab === 'budget' ? (
+            <>
+              {/* Export controls live above the spreadsheet so PDF/
+                  XLSX is reachable from the line-item surface itself
+                  (Reports tab also links to it). */}
+              <BudgetExportControls
+                lines={lines}
+                tourCurrency={tourCurrency}
+                tourName={(tour.name as string | null) ?? 'Budget'}
+              />
+              <BudgetSpreadsheetView
+                lines={lines}
+                phases={phases}
+                routingDateById={routingDateById}
+                duplicateMap={duplicatesToRecord(detectDuplicates(lines))}
+                tourCurrency={tourCurrency}
+                tourId={tourId}
+              />
+              <ReceiptInbox tourId={tourId} lineItems={lines} />
+            </>
+          ) : null}
+
+          {tab === 'actuals' ? (
+            <BudgetTabPlaceholder
+              subtitle="Budget · actuals"
+              title="Actuals"
+              body="A filtered view of paid + closed line items, with per-show actuals tied back to estimates. Ships in a follow-up sprint. For now, switch to the Budget tab and filter by status = paid."
+              linkLabel="Open Budget tab"
+              linkHref={`/budget/${tourId}?tab=budget`}
+            />
+          ) : null}
+
+          {tab === 'reports' ? (
+            <BudgetTabPlaceholder
+              subtitle="Budget · reports"
+              title="Reports"
+              body="Custom reports and exports across the budget will live here. The existing PDF / XLSX export from the Budget tab is wired and reachable today."
+              linkLabel="Open Budget tab + export"
+              linkHref={`/budget/${tourId}?tab=budget`}
+            />
+          ) : null}
+
+          {tab === 'settings' ? (
+            <BudgetTabPlaceholder
+              subtitle="Budget · settings"
+              title="Settings"
+              body="Per-tour budget settings (categories, currency, contingency %) will live here. The tour's currency is editable from the tour edit page today."
+              linkLabel="Open tour settings"
+              linkHref={`/operations/${tourId}/edit`}
+            />
+          ) : null}
         </div>
+
         <MobileBudgetBanner />
       </div>
     </ProductShell>
