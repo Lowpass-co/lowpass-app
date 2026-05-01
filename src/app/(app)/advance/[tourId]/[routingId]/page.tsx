@@ -1,21 +1,31 @@
 /* ============================================
-   LOWPASS — Advance · Per-show page (Phase 2 §A migration)
+   LOWPASS — Advance · Per-show page (Visual redesign §A)
 
-   /advance/[tourId]/[routingId] — replaces
-   /tours/[id]/advance/[routingId]. Both read mode (default) and
-   edit mode (?mode=edit) live here. <ProductShell> replaces the
-   legacy docDaysAppPageShell + documentSectionsAppPageShell shells.
+   /advance/[tourId]/[routingId] — three-zone layout per Adam's
+   reference HTMLs:
 
-   The legacy edit shell carried a docSections rail that linked to
-   in-page anchors. <ProductShell>'s left rail is the product rail,
-   not a per-page TOC; the section navigation is owned by
-   <AdvanceSectionBuilder> internally (its own sticky in-page nav).
-   Read mode loses the day-strip rail too — Phase 4 (Operations)
-   re-introduces a day-strip when it migrates the tour landing.
+     <ProductShell>
+       <ProductHeader>            (Phase 1 shell-v2)
+       <AdvanceSubHeader>         (sub-header: tabs + Export PDF)
+       <flex>                     (sidebar + main)
+         <AdvanceUpcomingSidebar> (280px, upcoming shows)
+         <main>
+           <AdvanceShowHeader>    (sticky big-header + progress)
+           {Show | Builder body}
+         </main>
+       </flex>
+     </ProductShell>
 
-   The sticky <AdvanceShowContextBar> still renders inside the
-   product main area as the first child so the operator always sees
-   Artist · Tour · Day · Date · Venue · City + a live progress chip.
+   Tab routing keeps ?mode=edit (Option A — minimum diff). Read mode
+   = AdvanceShowReadView; edit mode = AdvanceSectionBuilder.
+
+   Adam's locks:
+   - Advance is NOT a to-do list. The progress card reads as
+     "X / Y sections complete", not "Tasks done".
+   - No evidence-photo capture anywhere.
+   - Every existing feature carries forward (Previously Played,
+     drag-drop, custom sections, save-layout, apply-template,
+     copy-from-show via the sidebar dropdown).
    ============================================ */
 
 import { notFound } from 'next/navigation';
@@ -25,6 +35,9 @@ import { AdvanceShowReadView } from '@/components/advance/AdvanceShowReadView';
 import { AdvanceShowContextBar } from '@/components/advance/AdvanceShowContextBar';
 import { AdvanceSectionBuilderDynamic } from '@/components/advance/AdvanceSectionBuilderDynamic';
 import { PreviouslyPlayedButton } from '@/components/advance/PreviouslyPlayedButton';
+import { AdvanceSubHeader } from '@/components/advance/AdvanceSubHeader';
+import { AdvanceShowHeader } from '@/components/advance/AdvanceShowHeader';
+import { AdvanceUpcomingSidebar } from '@/components/advance/AdvanceUpcomingSidebar';
 
 /** Pull a likely artist image URL out of the freeform `branding` JSONB. */
 function pickArtistImageUrl(branding: unknown): string | null {
@@ -44,6 +57,32 @@ function pickArtistImageUrl(branding: unknown): string | null {
   return null;
 }
 
+function relativeTime(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  const diffMs = Date.now() - d.getTime();
+  const diffMin = Math.round(diffMs / 60_000);
+  if (diffMin < 1) return 'just now';
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffH = Math.round(diffMin / 60);
+  if (diffH < 24) return `${diffH}h ago`;
+  const diffD = Math.round(diffH / 24);
+  if (diffD < 30) return `${diffD}d ago`;
+  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+}
+
+function formatShowDate(iso: string | null | undefined): string | null {
+  if (!iso) return null;
+  const d = new Date(`${iso.slice(0, 10)}T12:00:00Z`);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
 export default async function AdvanceShowPage({
   params,
   searchParams,
@@ -54,10 +93,14 @@ export default async function AdvanceShowPage({
   const { tourId, routingId } = await params;
   const { mode } = await searchParams;
   const isEdit = mode === 'edit';
+  const activeTab: 'show' | 'builder' = isEdit ? 'builder' : 'show';
 
   const supabase = await createServerSupabaseClient();
 
-  const [routingRes, tourRes] = await Promise.all([
+  // Run the four reads in parallel: routing details, tour + artist,
+  // advance instance (sections + last_updated bookkeeping), and form
+  // config name (= "template" badge in the big-header).
+  const [routingRes, tourRes, advanceRes] = await Promise.all([
     supabase
       .from('routing')
       .select('date, day_type, venue_name, city')
@@ -67,6 +110,13 @@ export default async function AdvanceShowPage({
       .from('tours')
       .select('id, name, artist_id, artist:artists(id, name, branding)')
       .eq('id', tourId)
+      .maybeSingle(),
+    supabase
+      .from('advance_instances')
+      .select(
+        'id, sections, status, last_updated_at, last_updated_by_id, form_config_id, data, section_statuses',
+      )
+      .eq('routing_id', routingId)
       .maybeSingle(),
   ]);
 
@@ -96,6 +146,84 @@ export default async function AdvanceShowPage({
     ? tourRow.artist[0]
     : tourRow.artist;
 
+  // Resolve "last edited by" → display name + the form config name.
+  type AdvanceRow = {
+    id: string;
+    sections: { template_id: string; label: string; order?: number }[] | null;
+    last_updated_at: string | null;
+    last_updated_by_id: string | null;
+    form_config_id: string | null;
+    section_statuses: Record<
+      string,
+      { status: string; assigned_to?: string }
+    > | null;
+  };
+  const advance = advanceRes.data as AdvanceRow | null;
+
+  let lastEditedBy: string | null = null;
+  let templateName: string | null = null;
+  if (advance) {
+    const [profileRes, configRes] = await Promise.all([
+      advance.last_updated_by_id
+        ? supabase
+            .from('profiles')
+            .select('full_name, email')
+            .eq('id', advance.last_updated_by_id)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
+      advance.form_config_id
+        ? supabase
+            .from('advance_form_configs')
+            .select('name')
+            .eq('id', advance.form_config_id)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
+    ]);
+    const p = profileRes.data as
+      | { full_name: string | null; email: string | null }
+      | null;
+    lastEditedBy =
+      (p?.full_name && p.full_name.trim()) ||
+      (p?.email && p.email.split('@')[0]) ||
+      null;
+    const c = configRes.data as { name: string | null } | null;
+    templateName = c?.name?.trim() || null;
+  }
+
+  // Sections complete vs total.
+  const sections = (advance?.sections ?? []) as Array<{
+    template_id: string;
+    label: string;
+  }>;
+  const sectionsTotal = sections.length;
+  let sectionsComplete = 0;
+  if (advance && advance.section_statuses) {
+    for (const s of sections) {
+      const key = s.template_id ?? s.label;
+      if (advance.section_statuses[key]?.status === 'complete') {
+        sectionsComplete += 1;
+      }
+    }
+  }
+
+  // Build the header sub-strings.
+  const showName =
+    routing?.venue_name ||
+    routing?.city ||
+    tourRow.name ||
+    'Show';
+  const dateLabel = formatShowDate(routing?.date);
+  const contextLine = [
+    [routing?.city, dateLabel].filter(Boolean).join(' · '),
+  ]
+    .filter(Boolean)
+    .join('');
+
+  const builderHref = `/advance/${tourId}/${routingId}?mode=edit`;
+  const subHeaderLabel = `${dateLabel ?? routing?.date ?? ''}${
+    routing?.venue_name ? ` · ${routing.venue_name}` : ''
+  }`.trim();
+
   const contextBar =
     artistRow && routing ? (
       <AdvanceShowContextBar
@@ -124,29 +252,64 @@ export default async function AdvanceShowPage({
       tourId={tourRow.id}
       productName="Advance"
     >
-      {isEdit ? (
-        <div className="mx-auto w-full max-w-[1400px] space-y-4 px-2 pb-12 pt-4">
-          {contextBar}
-          <AdvanceSectionBuilderDynamic
-            tourId={tourId}
-            routingId={routingId}
-          />
-        </div>
-      ) : (
-        <div className="mx-auto w-full max-w-[1100px] space-y-4 px-6 py-6">
-          {contextBar}
-          {/* Phase 2 §C — Previously Played affordance. Renders only on
-              the read view (edit view has its own copy-from-previous
-              flow inside the section builder). */}
-          <div className="advance-read-no-print flex justify-end">
-            <PreviouslyPlayedButton
-              tourId={tourId}
-              routingId={routingId}
-            />
-          </div>
-          <AdvanceShowReadView tourId={tourId} routingId={routingId} />
-        </div>
-      )}
+      <AdvanceSubHeader
+        showLabel={subHeaderLabel || showName}
+        activeTab={activeTab}
+      />
+      <div className="flex min-h-0 flex-1">
+        <AdvanceUpcomingSidebar
+          tourId={tourId}
+          tourName={tourRow.name ?? 'Tour'}
+          activeRoutingId={routingId}
+        />
+        <main className="min-w-0 flex-1 overflow-y-auto">
+          {activeTab === 'builder' ? (
+            <div className="mx-auto w-full max-w-[1400px] space-y-4 px-4 pb-12 pt-4">
+              <AdvanceShowHeader
+                showName={showName}
+                contextLine={contextLine}
+                templateName={templateName}
+                lastEditedRelative={relativeTime(advance?.last_updated_at)}
+                lastEditedBy={lastEditedBy}
+                sectionsComplete={sectionsComplete}
+                sectionsTotal={sectionsTotal}
+                activeTab={activeTab}
+                builderHref={builderHref}
+              />
+              {contextBar}
+              <AdvanceSectionBuilderDynamic
+                tourId={tourId}
+                routingId={routingId}
+              />
+            </div>
+          ) : (
+            <div className="mx-auto w-full max-w-[1100px] space-y-4 px-6 py-6">
+              <AdvanceShowHeader
+                showName={showName}
+                contextLine={contextLine}
+                templateName={templateName}
+                lastEditedRelative={relativeTime(advance?.last_updated_at)}
+                lastEditedBy={lastEditedBy}
+                sectionsComplete={sectionsComplete}
+                sectionsTotal={sectionsTotal}
+                activeTab={activeTab}
+                builderHref={builderHref}
+              />
+              {contextBar}
+              {/* Phase 2 §C — Previously Played affordance lives on
+                  the read view (edit view has its own copy-from
+                  flow inside the section builder). */}
+              <div className="advance-read-no-print flex justify-end">
+                <PreviouslyPlayedButton
+                  tourId={tourId}
+                  routingId={routingId}
+                />
+              </div>
+              <AdvanceShowReadView tourId={tourId} routingId={routingId} />
+            </div>
+          )}
+        </main>
+      </div>
     </ProductShell>
   );
 }
