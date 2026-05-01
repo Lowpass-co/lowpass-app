@@ -23,7 +23,8 @@ import { ProductShell } from '@/components/shell-v2';
 import { MobileBudgetBanner } from '@/components/mobile/MobileBudgetBanner';
 import { BudgetPhaseStripClient } from '@/components/budget/BudgetPhaseStripClient';
 import { BudgetOverviewPanels } from '@/components/budget/BudgetOverviewPanels';
-import { BudgetMainTable } from '@/components/budget/BudgetMainTable';
+import { BudgetStatsStrip } from '@/components/budget/BudgetStatsStrip';
+import { BudgetSpreadsheetView } from '@/components/budget/BudgetSpreadsheetView';
 import { ReceiptInbox } from '@/components/budget/ReceiptInbox';
 import { BudgetExportControls } from '@/components/budget/BudgetExportControls';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
@@ -108,6 +109,9 @@ export default async function BudgetTourPage({
       productName="Budget"
     >
       <div className="flex min-h-0 flex-1 flex-col pb-24">
+        {/* Phase 3 §B.1 — sticky stats strip lives ABOVE the §C tab
+            nav so it stays visible regardless of which tab is open. */}
+        <BudgetStatsStrip lines={lines} tourCurrency={tourCurrency} />
         <BudgetPhaseStripClient phases={phases} />
         <div className="space-y-6 px-4 pt-4">
           <BudgetExportControls
@@ -115,13 +119,20 @@ export default async function BudgetTourPage({
             tourCurrency={tourCurrency}
             tourName={(tour.name as string | null) ?? 'Budget'}
           />
+          {/* Phase 3 §C will move BudgetOverviewPanels onto a dedicated
+              Summary tab. Until §C lands, leaving it visible here keeps
+              the user's existing Macro Allocation + Burn Rate context. */}
           <BudgetOverviewPanels
             allocation={panelData.allocation}
             burn={panelData.burn}
             phaseBoundaries={phaseBoundaries}
             currency={tourCurrency}
           />
-          <BudgetMainTable
+          {/* Phase 3 §B.2 + §D — dense spreadsheet replaces the prior
+              BudgetMainTable. Carries forward Quick Add, status chips,
+              bulk select, multi-currency, slide-over editing,
+              duplicate-detection banner. */}
+          <BudgetSpreadsheetView
             lines={lines}
             phases={phases}
             routingDateById={routingDateById}
