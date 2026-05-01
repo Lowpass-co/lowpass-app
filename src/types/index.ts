@@ -499,6 +499,10 @@ export interface BudgetLineItem {
   section?: string | null;
   sort_order?: number;
   status?: string | null;
+  /** Phase 3 §D / migration 064 — optional tour-phase tag for grouping
+   *  in the budget UI. Null = unscoped. Mirrors the four phases from
+   *  computeTourPhases() (pre_prod / rehearsals / show_days / wrap). */
+  phase_tag?: 'pre_prod' | 'rehearsals' | 'show_days' | 'wrap' | null;
   tags?: string[];
   linked_item_ids?: string[];
   source_entity_type?: string | null;
