@@ -181,7 +181,7 @@ export function AdvanceUpcomingSidebar({
         <div>
           <label
             style={{
-              fontSize: '10px',
+              fontSize: '11px',
               fontWeight: 600,
               letterSpacing: '0.1em',
               textTransform: 'uppercase',
@@ -351,7 +351,7 @@ export function AdvanceUpcomingSidebar({
                     <div
                       className="mt-1 flex items-baseline justify-between gap-2"
                       style={{
-                        fontSize: '10px',
+                        fontSize: '11px',
                         color: 'var(--lp-text-tertiary)',
                       }}
                     >

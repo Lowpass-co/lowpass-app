@@ -591,7 +591,7 @@ function AdvanceDateStrip({ tourId, routingId, dates }: { tourId: string; routin
   const cityAbbrev = (city: string) => (city ? (city.length > 4 ? city.slice(0, 4) : city) : '');
   return (
     <div className="hidden md:flex shrink-0 w-16 flex-col rounded-xl border border-lp-border bg-lp-surface overflow-hidden">
-      <div className="border-b border-lp-border px-1.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-lp-text-tertiary text-center">Dates</div>
+      <div className="border-b border-lp-border px-1.5 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-lp-text-tertiary text-center">Dates</div>
       <div className="min-h-0 flex-1 overflow-y-auto p-1.5 space-y-0.5">
         {dates.map((item) => {
           const isCurrent = item.routing_id === routingId;
@@ -1123,7 +1123,7 @@ function SetupMode({
                                 >
                                     <FieldTypeIcon type={f.type} />
                                     <span className="flex-1 truncate">{f.label}</span>
-                                    <span className={cn('shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium', (f.required ?? false) ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300' : 'text-lp-text-tertiary')}>{(f.required ?? false) ? 'Required' : 'Optional'}</span>
+                                    <span className={cn('shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium', (f.required ?? false) ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300' : 'text-lp-text-tertiary')}>{(f.required ?? false) ? 'Required' : 'Optional'}</span>
                                     {added && <Check size={14} className="shrink-0 text-lp-accent" />}
                                   </button>
                                 </li>
@@ -1233,7 +1233,7 @@ function SetupMode({
                                   >
                                     <FieldTypeIcon type={f.type} />
                                     <span className="flex-1 truncate">{f.label}</span>
-                                    <span className={cn('shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium', (f.required ?? false) ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300' : 'text-lp-text-tertiary')}>{(f.required ?? false) ? 'Required' : 'Optional'}</span>
+                                    <span className={cn('shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium', (f.required ?? false) ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300' : 'text-lp-text-tertiary')}>{(f.required ?? false) ? 'Required' : 'Optional'}</span>
                                     {added ? <Check size={14} className="shrink-0 text-lp-accent" /> : null}
                                   </button>
                                   {t.workspace_id && !added && (
@@ -1392,7 +1392,7 @@ function SetupMode({
                               <GripVertical className="shrink-0 cursor-grab text-lp-text-tertiary active:cursor-grabbing" />
                               <FieldTypeIcon type={f.type} />
                               <span className="flex-1 truncate text-sm text-lp-text">{f.label}</span>
-                              <span className={cn('shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium', (f.required ?? false) ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300' : 'bg-lp-bg-tertiary text-lp-text-tertiary')}>{(f.required ?? false) ? 'Required' : 'Optional'}</span>
+                              <span className={cn('shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium', (f.required ?? false) ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300' : 'bg-lp-bg-tertiary text-lp-text-tertiary')}>{(f.required ?? false) ? 'Required' : 'Optional'}</span>
                               <button type="button" onClick={() => removeField(secIdx, fieldIdx)} className="shrink-0 rounded p-1 text-lp-text-tertiary hover:bg-lp-bg-tertiary hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
                                 <X size={14} />
                               </button>

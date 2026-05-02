@@ -191,7 +191,7 @@ export function AdvanceShowContextBar({
           ) : (
             <span
               aria-hidden
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold"
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold"
               style={{
                 background: 'var(--color-lp-orange)',
                 color: 'var(--lp-text-inverse, #FFFFFF)',

@@ -550,7 +550,7 @@ function SectionCard({
           <span
             className="inline-flex shrink-0 items-center gap-1 rounded-full px-2 py-0.5"
             style={{
-              fontSize: '10px',
+              fontSize: '11px',
               fontWeight: 500,
               background: 'color-mix(in srgb, var(--color-lp-day-tv) 15%, transparent)',
               color: 'var(--color-lp-day-tv)',
@@ -940,7 +940,7 @@ function EmptySectionCTA({
         ) : (
           <div className="space-y-2">
             <div className="flex items-baseline justify-between">
-              <span className="text-[10px] font-semibold uppercase tracking-wider text-lp-text-tertiary">
+              <span className="text-[11px] font-semibold uppercase tracking-wider text-lp-text-tertiary">
                 Pick a source show
               </span>
               <button
@@ -986,7 +986,7 @@ function EmptySectionCTA({
                         ) : (
                           <span
                             aria-hidden
-                            className="text-[10px] font-semibold uppercase tracking-wider"
+                            className="text-[11px] font-semibold uppercase tracking-wider"
                             style={{ color: 'var(--color-lp-orange)' }}
                           >
                             Copy
@@ -1035,7 +1035,7 @@ function DocumentsSection({ docs, editHref }: {
             className="inline-flex items-center gap-2 rounded-lg border border-lp-border bg-lp-bg px-3 py-2 text-[12px] text-lp-text hover:border-lp-orange hover:text-lp-orange transition-colors group">
             <Paperclip className="h-3.5 w-3.5 shrink-0 text-lp-text-tertiary group-hover:text-lp-orange" />
             <span className="truncate">{doc?.filename}</span>
-            {doc?.size && <span className="text-lp-text-tertiary shrink-0 text-[10px]">{formatFileSize(doc.size)}</span>}
+            {doc?.size && <span className="text-lp-text-tertiary shrink-0 text-[11px]">{formatFileSize(doc.size)}</span>}
             <ExternalLink className="h-3 w-3 shrink-0 ml-auto text-lp-text-tertiary group-hover:text-lp-orange" />
           </a>
         ))}
@@ -1076,7 +1076,7 @@ function AdvanceReadStickyHeader({
             ) : (
               <>
                 <span className="font-semibold text-lp-text">{formatDate(routing.date)}</span>
-                <span className={cn('rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider', dayTypeClass(routing.day_type))}>
+                <span className={cn('rounded px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider', dayTypeClass(routing.day_type))}>
                   {dayTypeLabel(routing.day_type)}
                 </span>
                 {routing.venue_name && (
@@ -1177,7 +1177,10 @@ export function AdvanceShowReadView({
 
   if (error && !loading) {
     return (
-      <div className="p-8 text-sm text-[#EF4444]">
+      <div
+        className="p-8 text-sm"
+        style={{ color: 'var(--color-lp-error)' }}
+      >
         Failed to load: {error}
       </div>
     );

@@ -378,7 +378,7 @@ export function ApplyAdvanceTemplateSlideOver({
                       </span>
                       {hasData ? (
                         <span
-                          className="shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider"
+                          className="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider"
                           style={{
                             background: 'color-mix(in srgb, var(--color-lp-warning, #F59E0B) 12%, transparent)',
                             color: 'var(--color-lp-warning, #F59E0B)',
@@ -422,9 +422,11 @@ export function ApplyAdvanceTemplateSlideOver({
           <p
             className="rounded-lg border px-3 py-2 text-sm"
             style={{
-              borderColor: 'color-mix(in srgb, #EF4444 40%, transparent)',
-              background: 'color-mix(in srgb, #EF4444 8%, transparent)',
-              color: '#EF4444',
+              borderColor:
+                'color-mix(in srgb, var(--color-lp-error) 40%, transparent)',
+              background:
+                'color-mix(in srgb, var(--color-lp-error) 8%, transparent)',
+              color: 'var(--color-lp-error)',
             }}
           >
             {submitError}

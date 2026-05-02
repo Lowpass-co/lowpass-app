@@ -506,12 +506,29 @@ main {
   line-height: 1;
   color: var(--lp-text);
 }
+/* Variant parity §E.2 — smaller mono stat numeric for advance progress
+   strip tiles + similar dense surfaces. */
+.lp-stat-value-sm {
+  font-size: 20px;
+  font-weight: 600;
+  font-family: var(--lp-mono-font);
+  line-height: 1.1;
+  color: var(--lp-text);
+}
 .lp-stat-label {
   font-size: 11px;
   letter-spacing: 0.06em;
   text-transform: uppercase;
   font-weight: 600;
   color: var(--lp-text-tertiary);
+}
+/* Variant parity §E.2 — sentence-case 14px row label for the advance
+   read view's dense field rows. Distinct from .lp-label-caps which is
+   uppercase tracked-wider for micro-headings. */
+.lp-row-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--lp-text);
 }
 
 main h1 {
