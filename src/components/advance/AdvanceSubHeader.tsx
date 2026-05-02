@@ -172,7 +172,7 @@ function KbdHint({ chord, label }: { chord: string; label: string }) {
       <kbd
         className="lp-mono"
         style={{
-          fontSize: '10px',
+          fontSize: '11px',
           padding: '2px 5px',
           borderRadius: 4,
           border: '1px solid var(--lp-border-subtle)',

@@ -33,11 +33,15 @@ import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { ProductShell } from '@/components/shell-v2';
 import { AdvanceShowReadView } from '@/components/advance/AdvanceShowReadView';
 import { AdvanceShowContextBar } from '@/components/advance/AdvanceShowContextBar';
-import { AdvanceSectionBuilderDynamic } from '@/components/advance/AdvanceSectionBuilderDynamic';
-import { PreviouslyPlayedButton } from '@/components/advance/PreviouslyPlayedButton';
 import { AdvanceSubHeader } from '@/components/advance/AdvanceSubHeader';
 import { AdvanceShowHeader } from '@/components/advance/AdvanceShowHeader';
 import { AdvanceUpcomingSidebar } from '@/components/advance/AdvanceUpcomingSidebar';
+import {
+  AdvanceShowRightRail,
+  type SpecRow,
+} from '@/components/advance/AdvanceShowRightRail';
+import { AdvanceBuilderShellClient } from '@/components/advance/AdvanceBuilderShellClient';
+import { extractKeyContacts, type SectionDef as KeyInfoSectionDef } from '@/lib/advance/key-info';
 
 /** Pull a likely artist image URL out of the freeform `branding` JSONB. */
 function pickArtistImageUrl(branding: unknown): string | null {
@@ -72,6 +76,13 @@ function relativeTime(iso: string | null | undefined): string | null {
   return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
 }
 
+function isShowDateInPast(iso: string | null | undefined): boolean {
+  if (!iso) return false;
+  const ms = new Date(`${iso.slice(0, 10)}T23:59:59Z`).getTime();
+  if (Number.isNaN(ms)) return false;
+  return ms < Date.now();
+}
+
 function formatShowDate(iso: string | null | undefined): string | null {
   if (!iso) return null;
   const d = new Date(`${iso.slice(0, 10)}T12:00:00Z`);
@@ -103,7 +114,9 @@ export default async function AdvanceShowPage({
   const [routingRes, tourRes, advanceRes] = await Promise.all([
     supabase
       .from('routing')
-      .select('date, day_type, venue_name, city')
+      .select(
+        'date, day_type, venue_name, city, address, venue_website, venue_phone, venue_capacity',
+      )
       .eq('id', routingId)
       .maybeSingle(),
     supabase
@@ -126,6 +139,10 @@ export default async function AdvanceShowPage({
         day_type: string | null;
         venue_name: string | null;
         city: string | null;
+        address: string | null;
+        venue_website: string | null;
+        venue_phone: string | null;
+        venue_capacity: number | null;
       }
     | null;
   const tourRow = tourRes.data as
@@ -149,7 +166,15 @@ export default async function AdvanceShowPage({
   // Resolve "last edited by" → display name + the form config name.
   type AdvanceRow = {
     id: string;
-    sections: { template_id: string; label: string; order?: number }[] | null;
+    sections:
+      | {
+          template_id: string;
+          label: string;
+          order?: number;
+          fields?: { id: string; type: string; label?: string }[];
+        }[]
+      | null;
+    data: Record<string, Record<string, unknown>> | null;
     last_updated_at: string | null;
     last_updated_by_id: string | null;
     form_config_id: string | null;
@@ -190,21 +215,35 @@ export default async function AdvanceShowPage({
     templateName = c?.name?.trim() || null;
   }
 
-  // Sections complete vs total.
+  // Sections complete vs total + pending / overdue split.
+  // Overdue = not_started AND show date is in the past.
+  // Pending = everything not complete and not overdue (includes
+  //   in_progress, not_started for future shows, needs_review, and
+  //   sections with no status recorded yet).
   const sections = (advance?.sections ?? []) as Array<{
     template_id: string;
     label: string;
   }>;
   const sectionsTotal = sections.length;
   let sectionsComplete = 0;
-  if (advance && advance.section_statuses) {
+  let overdueSectionsCount = 0;
+  const showIsPast = isShowDateInPast(routing?.date);
+  if (advance) {
+    const statuses = advance.section_statuses ?? {};
     for (const s of sections) {
       const key = s.template_id ?? s.label;
-      if (advance.section_statuses[key]?.status === 'complete') {
+      const st = statuses[key]?.status ?? 'not_started';
+      if (st === 'complete') {
         sectionsComplete += 1;
+      } else if (st === 'not_started' && showIsPast) {
+        overdueSectionsCount += 1;
       }
     }
   }
+  const pendingSectionsCount = Math.max(
+    0,
+    sectionsTotal - sectionsComplete - overdueSectionsCount,
+  );
 
   // Build the header sub-strings.
   const showName =
@@ -223,6 +262,44 @@ export default async function AdvanceShowPage({
   const subHeaderLabel = `${dateLabel ?? routing?.date ?? ''}${
     routing?.venue_name ? ` · ${routing.venue_name}` : ''
   }`.trim();
+
+  // Build the right-rail's "VENUE SPECS" rows from routing data.
+  // Each entry only renders when its source column has a value, so the
+  // card never shows blank rows. Tour-level / venue-level keys (curfew,
+  // timezone, taxes, rigging) come from the advance.data once filled —
+  // not surfaced here yet; the rail just renders specs that exist.
+  const specs: SpecRow[] = [];
+  if (routing?.venue_capacity != null && Number(routing.venue_capacity) > 0) {
+    specs.push({
+      label: 'Capacity',
+      value: routing.venue_capacity.toLocaleString('en-GB'),
+    });
+  }
+  if (routing?.address) {
+    specs.push({ label: 'Address', value: routing.address });
+  }
+  if (routing?.venue_phone) {
+    specs.push({ label: 'Phone', value: routing.venue_phone });
+  }
+  if (routing?.venue_website) {
+    specs.push({ label: 'Website', value: routing.venue_website });
+  }
+
+  // Key contacts — extracted from filled contact fields in the advance.
+  // Sections shape needs `fields` for extraction; cast safely.
+  const sectionsForExtract = (advance?.sections ?? []) as KeyInfoSectionDef[];
+  const advanceData = (advance?.data ?? {}) as Record<
+    string,
+    Record<string, unknown>
+  >;
+  const keyContacts = extractKeyContacts(sectionsForExtract, advanceData);
+
+  // Section list passed to the slide-over so it can label past-show
+  // sections with the current advance's labels (template_id mapping).
+  const currentSectionsForRail = sectionsForExtract.map((s) => ({
+    template_id: s.template_id,
+    label: s.label,
+  }));
 
   const contextBar =
     artistRow && routing ? (
@@ -262,9 +339,16 @@ export default async function AdvanceShowPage({
           tourName={tourRow.name ?? 'Tour'}
           activeRoutingId={routingId}
         />
-        <main className="min-w-0 flex-1 overflow-y-auto">
-          {activeTab === 'builder' ? (
-            <div className="mx-auto w-full max-w-[1400px] space-y-4 px-4 pb-12 pt-4">
+        {activeTab === 'builder' ? (
+          /* Builder mode — Variant parity §D: three-pane shell wraps
+             the existing AdvanceSectionBuilder. Library / canvas /
+             FieldPropertiesPanel slots replace the read-mode right
+             rail in this mode. */
+          <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
+            <div
+              className="shrink-0 px-4 pt-4"
+              style={{ background: 'var(--lp-bg)' }}
+            >
               <AdvanceShowHeader
                 showName={showName}
                 contextLine={contextLine}
@@ -273,42 +357,51 @@ export default async function AdvanceShowPage({
                 lastEditedBy={lastEditedBy}
                 sectionsComplete={sectionsComplete}
                 sectionsTotal={sectionsTotal}
+                pendingSectionsCount={pendingSectionsCount}
+                overdueSectionsCount={overdueSectionsCount}
                 activeTab={activeTab}
                 builderHref={builderHref}
               />
               {contextBar}
-              <AdvanceSectionBuilderDynamic
-                tourId={tourId}
-                routingId={routingId}
-              />
             </div>
-          ) : (
-            <div className="mx-auto w-full max-w-[1100px] space-y-4 px-6 py-6">
-              <AdvanceShowHeader
-                showName={showName}
-                contextLine={contextLine}
-                templateName={templateName}
-                lastEditedRelative={relativeTime(advance?.last_updated_at)}
-                lastEditedBy={lastEditedBy}
-                sectionsComplete={sectionsComplete}
-                sectionsTotal={sectionsTotal}
-                activeTab={activeTab}
-                builderHref={builderHref}
-              />
-              {contextBar}
-              {/* Phase 2 §C — Previously Played affordance lives on
-                  the read view (edit view has its own copy-from
-                  flow inside the section builder). */}
-              <div className="advance-read-no-print flex justify-end">
-                <PreviouslyPlayedButton
-                  tourId={tourId}
-                  routingId={routingId}
+            <AdvanceBuilderShellClient
+              tourId={tourId}
+              routingId={routingId}
+              templateName={templateName}
+            />
+          </main>
+        ) : (
+          <>
+            <main className="min-w-0 flex-1 overflow-y-auto">
+              <div className="mx-auto w-full max-w-[1100px] space-y-4 px-6 py-6">
+                <AdvanceShowHeader
+                  showName={showName}
+                  contextLine={contextLine}
+                  templateName={templateName}
+                  lastEditedRelative={relativeTime(advance?.last_updated_at)}
+                  lastEditedBy={lastEditedBy}
+                  sectionsComplete={sectionsComplete}
+                  sectionsTotal={sectionsTotal}
+                  pendingSectionsCount={pendingSectionsCount}
+                  overdueSectionsCount={overdueSectionsCount}
+                  activeTab={activeTab}
+                  builderHref={builderHref}
                 />
+                {contextBar}
+                <AdvanceShowReadView tourId={tourId} routingId={routingId} />
               </div>
-              <AdvanceShowReadView tourId={tourId} routingId={routingId} />
-            </div>
-          )}
-        </main>
+            </main>
+            {/* Read-mode right rail — Specs / Contacts / Previously Played.
+                Builder mode swaps this slot for the Field Properties panel
+                (rendered inside AdvanceBuilderShellClient). */}
+            <AdvanceShowRightRail
+              routingId={routingId}
+              specs={specs}
+              contacts={keyContacts}
+              currentSections={currentSectionsForRail}
+            />
+          </>
+        )}
       </div>
     </ProductShell>
   );
