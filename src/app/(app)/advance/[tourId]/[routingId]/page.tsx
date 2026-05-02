@@ -33,7 +33,6 @@ import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { ProductShell } from '@/components/shell-v2';
 import { AdvanceShowReadView } from '@/components/advance/AdvanceShowReadView';
 import { AdvanceShowContextBar } from '@/components/advance/AdvanceShowContextBar';
-import { AdvanceSectionBuilderDynamic } from '@/components/advance/AdvanceSectionBuilderDynamic';
 import { AdvanceSubHeader } from '@/components/advance/AdvanceSubHeader';
 import { AdvanceShowHeader } from '@/components/advance/AdvanceShowHeader';
 import { AdvanceUpcomingSidebar } from '@/components/advance/AdvanceUpcomingSidebar';
@@ -41,6 +40,7 @@ import {
   AdvanceShowRightRail,
   type SpecRow,
 } from '@/components/advance/AdvanceShowRightRail';
+import { AdvanceBuilderShellClient } from '@/components/advance/AdvanceBuilderShellClient';
 import { extractKeyContacts, type SectionDef as KeyInfoSectionDef } from '@/lib/advance/key-info';
 
 /** Pull a likely artist image URL out of the freeform `branding` JSONB. */
@@ -339,9 +339,16 @@ export default async function AdvanceShowPage({
           tourName={tourRow.name ?? 'Tour'}
           activeRoutingId={routingId}
         />
-        <main className="min-w-0 flex-1 overflow-y-auto">
-          {activeTab === 'builder' ? (
-            <div className="mx-auto w-full max-w-[1400px] space-y-4 px-4 pb-12 pt-4">
+        {activeTab === 'builder' ? (
+          /* Builder mode — Variant parity §D: three-pane shell wraps
+             the existing AdvanceSectionBuilder. Library / canvas /
+             FieldPropertiesPanel slots replace the read-mode right
+             rail in this mode. */
+          <main className="flex min-w-0 flex-1 flex-col overflow-hidden">
+            <div
+              className="shrink-0 px-4 pt-4"
+              style={{ background: 'var(--lp-bg)' }}
+            >
               <AdvanceShowHeader
                 showName={showName}
                 contextLine={contextLine}
@@ -356,40 +363,45 @@ export default async function AdvanceShowPage({
                 builderHref={builderHref}
               />
               {contextBar}
-              <AdvanceSectionBuilderDynamic
-                tourId={tourId}
-                routingId={routingId}
-              />
             </div>
-          ) : (
-            <div className="mx-auto w-full max-w-[1100px] space-y-4 px-6 py-6">
-              <AdvanceShowHeader
-                showName={showName}
-                contextLine={contextLine}
-                templateName={templateName}
-                lastEditedRelative={relativeTime(advance?.last_updated_at)}
-                lastEditedBy={lastEditedBy}
-                sectionsComplete={sectionsComplete}
-                sectionsTotal={sectionsTotal}
-                pendingSectionsCount={pendingSectionsCount}
-                overdueSectionsCount={overdueSectionsCount}
-                activeTab={activeTab}
-                builderHref={builderHref}
-              />
-              {contextBar}
-              <AdvanceShowReadView tourId={tourId} routingId={routingId} />
-            </div>
-          )}
-        </main>
-        {/* Right rail — visible in both read and builder modes per
-            Variant parity §B. The slide-over open/close lives inside
-            the rail's PreviouslyPlayedRailCard client island. */}
-        <AdvanceShowRightRail
-          routingId={routingId}
-          specs={specs}
-          contacts={keyContacts}
-          currentSections={currentSectionsForRail}
-        />
+            <AdvanceBuilderShellClient
+              tourId={tourId}
+              routingId={routingId}
+              templateName={templateName}
+            />
+          </main>
+        ) : (
+          <>
+            <main className="min-w-0 flex-1 overflow-y-auto">
+              <div className="mx-auto w-full max-w-[1100px] space-y-4 px-6 py-6">
+                <AdvanceShowHeader
+                  showName={showName}
+                  contextLine={contextLine}
+                  templateName={templateName}
+                  lastEditedRelative={relativeTime(advance?.last_updated_at)}
+                  lastEditedBy={lastEditedBy}
+                  sectionsComplete={sectionsComplete}
+                  sectionsTotal={sectionsTotal}
+                  pendingSectionsCount={pendingSectionsCount}
+                  overdueSectionsCount={overdueSectionsCount}
+                  activeTab={activeTab}
+                  builderHref={builderHref}
+                />
+                {contextBar}
+                <AdvanceShowReadView tourId={tourId} routingId={routingId} />
+              </div>
+            </main>
+            {/* Read-mode right rail — Specs / Contacts / Previously Played.
+                Builder mode swaps this slot for the Field Properties panel
+                (rendered inside AdvanceBuilderShellClient). */}
+            <AdvanceShowRightRail
+              routingId={routingId}
+              specs={specs}
+              contacts={keyContacts}
+              currentSections={currentSectionsForRail}
+            />
+          </>
+        )}
       </div>
     </ProductShell>
   );
