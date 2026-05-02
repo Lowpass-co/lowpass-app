@@ -12,9 +12,10 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import {
   Pencil, FileText, Phone, Mail, Globe,
-  AlertCircle, ChevronRight, ChevronDown, GripVertical,
+  AlertCircle, ChevronRight, ChevronDown,
   Paperclip, User, ExternalLink, Flag,
   Copy, Loader2,
 } from 'lucide-react';
@@ -195,6 +196,7 @@ function SectionStatusPillSelect({
   disabled?: boolean;
 }) {
   const colour = STATUS_TOKEN[status];
+  const router = useRouter();
 
   const handleChange = async (next: SectionStatusKey) => {
     if (disabled || next === status) return;
@@ -217,6 +219,12 @@ function SectionStatusPillSelect({
         return;
       }
       onChanged();
+      // Trigger a server-side re-render so the page-level chunky progress
+      // strip (AdvanceShowHeader) refreshes its complete/pending/overdue
+      // counts. Without this the strip stays at its initial server values
+      // even though the section pill below shows the new status — the
+      // "0 / 0 / 0" gap Adam's smoke flagged.
+      router.refresh();
     } catch {
       // Same — silently fail. Refetch will re-sync if state diverges.
     }
@@ -475,14 +483,10 @@ function SectionCard({
           padding: '8px 12px',
         }}
       >
-        <GripVertical
-          className="h-4 w-4 shrink-0"
-          style={{
-            color: 'var(--lp-text-tertiary)',
-            cursor: 'not-allowed',
-          }}
-          aria-hidden
-        />
+        {/* Drag handle is hidden in read mode — section reorder is a
+            builder-mode operation. Adam's smoke (Variant parity followup
+            §G.2) flagged the disabled handle as confusing. The handle
+            still renders in builder mode where reorder is functional. */}
         <h2
           className="min-w-0 truncate"
           style={{

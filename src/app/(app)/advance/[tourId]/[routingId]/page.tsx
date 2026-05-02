@@ -41,6 +41,7 @@ import {
 } from '@/components/advance/AdvanceShowRightRail';
 import { AdvanceBuilderShellClient } from '@/components/advance/AdvanceBuilderShellClient';
 import { extractKeyContacts, type SectionDef as KeyInfoSectionDef } from '@/lib/advance/key-info';
+import { computeAdvanceProgress } from '@/lib/advance/progress';
 
 function relativeTime(iso: string | null | undefined): string | null {
   if (!iso) return null;
@@ -196,35 +197,21 @@ export default async function AdvanceShowPage({
     templateName = c?.name?.trim() || null;
   }
 
-  // Sections complete vs total + pending / overdue split.
-  // Overdue = not_started AND show date is in the past.
-  // Pending = everything not complete and not overdue (includes
-  //   in_progress, not_started for future shows, needs_review, and
-  //   sections with no status recorded yet).
+  // Single source of truth for progress math — see computeAdvanceProgress.
   const sections = (advance?.sections ?? []) as Array<{
     template_id: string;
     label: string;
   }>;
-  const sectionsTotal = sections.length;
-  let sectionsComplete = 0;
-  let overdueSectionsCount = 0;
   const showIsPast = isShowDateInPast(routing?.date);
-  if (advance) {
-    const statuses = advance.section_statuses ?? {};
-    for (const s of sections) {
-      const key = s.template_id ?? s.label;
-      const st = statuses[key]?.status ?? 'not_started';
-      if (st === 'complete') {
-        sectionsComplete += 1;
-      } else if (st === 'not_started' && showIsPast) {
-        overdueSectionsCount += 1;
-      }
-    }
-  }
-  const pendingSectionsCount = Math.max(
-    0,
-    sectionsTotal - sectionsComplete - overdueSectionsCount,
+  const progress = computeAdvanceProgress(
+    sections,
+    advance?.section_statuses ?? null,
+    showIsPast,
   );
+  const sectionsTotal = progress.total;
+  const sectionsComplete = progress.complete;
+  const overdueSectionsCount = progress.overdue;
+  const pendingSectionsCount = progress.pending;
 
   // Build the header sub-strings.
   const showName =

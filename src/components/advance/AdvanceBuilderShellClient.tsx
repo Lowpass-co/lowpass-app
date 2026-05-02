@@ -1,33 +1,58 @@
 /* ============================================
-   LOWPASS — Advance · Builder Shell (Variant parity §D)
+   LOWPASS — Advance · Builder Shell (Variant parity §D + followup §G)
 
    Three-pane wrapper around the existing AdvanceSectionBuilder:
      [AdvanceSectionLibrary 280px]
      [TemplateMetaBar (sticky) + canvas + SectionDropZone]
      [AdvanceFieldPropertiesPanel 300px]
 
-   Owns the small bits of client state needed for the new shell:
-   - Section drop refresh (router.refresh after a server mutation
-     surfaces the new section in the existing builder).
-   - Surface "wiring TODO" for interactions the existing 5346-line
-     AdvanceSectionBuilder owns internally (template name persistence,
-     apply-to-tour slide-over, copy-from-show modal, per-field
-     selection inspector). These are deliberately shallow so we don't
-     touch the builder's internals — that's the prompt's hard rule
-     "preserve every existing feature."
+   Owns:
+   - Copy-from-show modal (lazy-fetches /api/tours/[id]/advance?all=true
+     on first open, mounts CopyAdvanceModal with the current routingId
+     pre-selected as the destination — source picker is the modal's job).
+   - Field-properties selection via CustomEvent interim. The existing
+     5346-line AdvanceSectionBuilder owns its own internal field-def
+     selection state; lifting it for a clean prop-thread is a separate
+     refactor. This shell listens for `advance:field-selected` events
+     dispatched by the canvas and re-renders the properties panel.
+     Passing edits BACK requires a corresponding event the canvas
+     listens to — out of scope here; the panel's onChange currently
+     stubs.
+   - Apply-to-tours: surfaced-but-unwired. The slide-over needs both
+     a dates list AND a templates list; the templates fetch path
+     isn't reachable from this shell without touching the builder.
+     Surfaces a toast for now.
    ============================================ */
 
 'use client';
 
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
 import { AdvanceSectionLibrary } from './AdvanceSectionLibrary';
 import { TemplateMetaBar } from './TemplateMetaBar';
-import {
-  AdvanceFieldPropertiesPanel,
-} from './AdvanceFieldPropertiesPanel';
+import { AdvanceFieldPropertiesPanel } from './AdvanceFieldPropertiesPanel';
 import { SectionDropZone } from './SectionDropZone';
 import { AdvanceSectionBuilderDynamic } from './AdvanceSectionBuilderDynamic';
+import {
+  CopyAdvanceModal,
+  type AdvanceDateItem,
+} from './CopyAdvanceModal';
+import { useToast } from '@/components/ui/Toast';
+
+/** Field selection event payload — Phase G.4 CustomEvent interim.
+ *  The canvas's field-def row dispatches this on click; this shell
+ *  listens and re-renders the FieldPropertiesPanel with the payload. */
+export const ADVANCE_FIELD_SELECTED_EVENT = 'advance:field-selected';
+
+type FieldSelectionDetail = {
+  id: string;
+  type: 'text' | 'checkbox' | 'number' | 'dropdown' | 'file';
+  label: string;
+  required: boolean;
+  helpText?: string;
+  defaultAssigneeId?: string | null;
+  dueOffsetDays?: number | null;
+};
 
 interface AdvanceBuilderShellClientProps {
   tourId: string;
@@ -41,53 +66,103 @@ export function AdvanceBuilderShellClient({
   templateName,
 }: AdvanceBuilderShellClientProps) {
   const router = useRouter();
-  const [dropToast, setDropToast] = useState<string | null>(null);
+  const { showToast } = useToast();
+
+  const [copyOpen, setCopyOpen] = useState(false);
+  const [dates, setDates] = useState<AdvanceDateItem[] | null>(null);
+  const [selected, setSelected] = useState<FieldSelectionDetail | null>(null);
+
+  // Lazy-fetch dates the first time Copy opens. The `dates !== null`
+  // guard alone is the de-dupe — no separate loading-flag state, which
+  // avoids react-hooks/set-state-in-effect.
+  useEffect(() => {
+    if (!copyOpen || dates !== null) return;
+    let cancelled = false;
+    fetch(`/api/tours/${tourId}/advance?all=true`)
+      .then((res) => (res.ok ? res.json() : Promise.reject(res.statusText)))
+      .then((data: { dates?: AdvanceDateItem[]; items?: AdvanceDateItem[] }) => {
+        if (cancelled) return;
+        setDates(data.dates ?? data.items ?? []);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        showToast('Failed to load tour dates for copy', 'error');
+        setCopyOpen(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [copyOpen, dates, tourId, showToast]);
+
+  // Field-selection CustomEvent listener (Phase G.4 interim).
+  useEffect(() => {
+    function onSelect(e: Event) {
+      const ce = e as CustomEvent<FieldSelectionDetail | null>;
+      setSelected(ce.detail ?? null);
+    }
+    window.addEventListener(ADVANCE_FIELD_SELECTED_EVENT, onSelect);
+    return () => window.removeEventListener(ADVANCE_FIELD_SELECTED_EVENT, onSelect);
+  }, []);
 
   const handleSectionDrop = (seedId: string, label: string) => {
-    // Adding a section from the library to this advance touches the
-    // existing AdvanceSectionBuilder's internal add-section flow.
+    // G.3 — adding a section from the library to this advance touches
+    // the existing AdvanceSectionBuilder's internal add-section flow.
     // Wiring the drop to a server mutation + refresh is left for a
-    // follow-up; for now we surface a one-shot toast so the user
-    // knows the drag was registered.
-    setDropToast(`Drop received: ${label} — wiring to builder is a follow-up.`);
-    setTimeout(() => setDropToast(null), 4000);
+    // follow-up PR (the add-section endpoint is not reusable from
+    // outside the builder without a refactor).
+    showToast(
+      `Section "${label}" — drag wired, server add-section endpoint not yet reusable from outside the builder. Use the in-canvas "+ Add Section" trigger inside the existing setup mode for now.`,
+    );
     void seedId;
-    void router; // refresh hook stays imported for the wiring follow-up.
+    void router;
   };
 
   const handleAddBlank = () => {
-    setDropToast(
-      'Blank-section creation flow is owned by the existing builder — use its "Add custom section" affordance for now.',
+    showToast(
+      'Blank-section creation flow lives inside the existing builder — open Setup Mode and use its "Add custom section".',
     );
-    setTimeout(() => setDropToast(null), 4500);
+  };
+
+  const handleApplyToTours = () => {
+    showToast(
+      'Apply-to-tours flow needs the templates list endpoint — wiring deferred to a follow-up. Use the existing Templates page for now.',
+    );
   };
 
   return (
     <div className="flex min-h-0 flex-1">
       <AdvanceSectionLibrary onAddBlank={handleAddBlank} />
       <main className="flex min-w-0 flex-1 flex-col overflow-y-auto">
-        <TemplateMetaBar templateName={templateName} />
+        <TemplateMetaBar
+          templateName={templateName}
+          onApplyToTours={handleApplyToTours}
+          onCopyFromShow={() => setCopyOpen(true)}
+        />
         <div className="flex-1 px-4 pb-12 pt-4">
           <AdvanceSectionBuilderDynamic tourId={tourId} routingId={routingId} />
           <div className="mt-4">
             <SectionDropZone onDrop={handleSectionDrop} />
           </div>
-          {dropToast ? (
-            <div
-              className="mt-3 rounded-md border px-3 py-2"
-              style={{
-                borderColor: 'var(--lp-border-strong)',
-                background: 'var(--lp-surface)',
-                color: 'var(--lp-text-secondary)',
-                fontSize: '12px',
-              }}
-            >
-              {dropToast}
-            </div>
-          ) : null}
         </div>
       </main>
-      <AdvanceFieldPropertiesPanel selected={null} />
+      <AdvanceFieldPropertiesPanel selected={selected} />
+
+      {/* Copy-from-show modal — current routing is the destination,
+          source is picked inside the modal. */}
+      {copyOpen && dates ? (
+        <CopyAdvanceModal
+          tourId={tourId}
+          dates={dates}
+          initialSourceRoutingId={null}
+          open={copyOpen}
+          onClose={() => setCopyOpen(false)}
+          onSuccess={(copiedCount) => {
+            setCopyOpen(false);
+            showToast(`Copied ${copiedCount} show${copiedCount === 1 ? '' : 's'}.`);
+            router.refresh();
+          }}
+        />
+      ) : null}
     </div>
   );
 }
