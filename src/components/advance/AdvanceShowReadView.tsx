@@ -136,174 +136,6 @@ function shouldShowSectionInReadView(section: SectionDef): boolean {
   return prodTech.some((k) => lab.includes(k));
 }
 
-function sectionsForKeyInfoExtraction(sections: SectionDef[]): SectionDef[] {
-  return sections.filter((s) => !s.label.toLowerCase().includes('settlement'));
-}
-
-type HotelKeyInfo = { name?: string; address?: string; checkIn?: string; checkOut?: string; notes?: string };
-type KeyContactCard = { name: string; role: string; phone?: string; email?: string };
-
-function normalizeContactRows(value: unknown): ContactRow[] {
-  if (value == null) return [];
-  if (Array.isArray(value)) return (value as ContactRow[]).filter(Boolean);
-  return [value as ContactRow];
-}
-
-function extractHotelKeyInfo(
-  sections: SectionDef[],
-  data: Record<string, Record<string, unknown>>
-): HotelKeyInfo | null {
-  const pool = sectionsForKeyInfoExtraction(sections);
-  const hotelSection = pool.find((s) => {
-    const l = s.label.toLowerCase();
-    return l.includes('hotel') || l.includes('accommodation');
-  });
-  if (!hotelSection) return null;
-  const secData = data[hotelSection.template_id] ?? {};
-  const out: HotelKeyInfo = {};
-  const noteParts: string[] = [];
-  for (const f of hotelSection.fields) {
-    const lab = f.label.toLowerCase();
-    const v = secData[f.id];
-    if (isBlank(v)) continue;
-    if (typeof v === 'object' && !Array.isArray(v)) continue;
-    const str = String(v).trim();
-    if (!str) continue;
-    if (lab.includes('hotel name') || lab.includes('property name')) out.name = str;
-    else if (lab.includes('address')) out.address = str;
-    else if (lab.includes('check in') || lab.includes('check-in')) out.checkIn = str;
-    else if (lab.includes('check out') || lab.includes('check-out')) out.checkOut = str;
-    else if (lab.includes('notes') || lab.includes('parking')) noteParts.push(str);
-  }
-  if (noteParts.length) out.notes = noteParts.join('\n\n');
-  if (!out.name && !out.address && !out.checkIn && !out.checkOut && !out.notes) return null;
-  return out;
-}
-
-function contactMatchPriority(roleLower: string): number {
-  if (roleLower.includes('promoter')) return 0;
-  if (roleLower.includes('venue') || roleLower.includes('production')) return 1;
-  if (roleLower.includes('tour manager') || /\btm\b/i.test(roleLower)) return 2;
-  return 99;
-}
-
-function extractKeyContacts(
-  sections: SectionDef[],
-  data: Record<string, Record<string, unknown>>
-): KeyContactCard[] {
-  const pool = sectionsForKeyInfoExtraction(sections);
-  const out: KeyContactCard[] = [];
-  const seen = new Set<string>();
-  for (const section of pool) {
-    for (const field of section.fields) {
-      if (field.type !== 'contact') continue;
-      const rows = normalizeContactRows(data[section.template_id]?.[field.id]);
-      for (const c of rows) {
-        if (!c || (!c.first_name && !c.last_name)) continue;
-        const roleLower = (c.role ?? '').toLowerCase();
-        const match =
-          roleLower.includes('promoter') ||
-          roleLower.includes('venue') ||
-          roleLower.includes('production') ||
-          roleLower.includes('tour manager') ||
-          /\btm\b/i.test(roleLower);
-        if (!match) continue;
-        const name = [c.first_name, c.last_name].filter(Boolean).join(' ').trim();
-        if (!name) continue;
-        const key = `${name.toLowerCase()}|${(c.email ?? '').toLowerCase()}|${(c.phone ?? '').trim()}`;
-        if (seen.has(key)) continue;
-        seen.add(key);
-        out.push({
-          name,
-          role: (c.role ?? '').trim() || 'Contact',
-          phone: c.phone?.trim() || undefined,
-          email: c.email?.trim() || undefined,
-        });
-      }
-    }
-  }
-  out.sort((a, b) => {
-    const pa = contactMatchPriority(a.role.toLowerCase());
-    const pb = contactMatchPriority(b.role.toLowerCase());
-    if (pa !== pb) return pa - pb;
-    return a.name.localeCompare(b.name);
-  });
-  return out;
-}
-
-function KeyInfoBlock({ hotel, contacts }: { hotel: HotelKeyInfo | null; contacts: KeyContactCard[] }) {
-  if (!hotel && contacts.length === 0) return null;
-  return (
-    <div className="mb-1">
-      <p className="lp-label-caps mb-2 text-lp-text-tertiary">Key Info</p>
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-        {hotel && (
-          <div className="rounded-lg border border-lp-border bg-lp-surface p-5">
-            <h3 className="mb-3 text-[12px] font-semibold text-lp-text">Hotel</h3>
-            <dl className="space-y-2 text-[13px]">
-              {hotel.name && (
-                <div>
-                  <dt className="lp-label-caps text-lp-text-tertiary">Name</dt>
-                  <dd className="text-lp-text">{hotel.name}</dd>
-                </div>
-              )}
-              {hotel.address && (
-                <div>
-                  <dt className="lp-label-caps text-lp-text-tertiary">Address</dt>
-                  <dd className="text-lp-text whitespace-pre-line">{hotel.address}</dd>
-                </div>
-              )}
-              {(hotel.checkIn || hotel.checkOut) && (
-                <div className="flex flex-wrap gap-4">
-                  {hotel.checkIn && (
-                    <div>
-                      <dt className="lp-label-caps text-lp-text-tertiary">Check-in</dt>
-                      <dd className="text-lp-text">{hotel.checkIn}</dd>
-                    </div>
-                  )}
-                  {hotel.checkOut && (
-                    <div>
-                      <dt className="lp-label-caps text-lp-text-tertiary">Check-out</dt>
-                      <dd className="text-lp-text">{hotel.checkOut}</dd>
-                    </div>
-                  )}
-                </div>
-              )}
-              {hotel.notes && (
-                <div>
-                  <dt className="lp-label-caps text-lp-text-tertiary">Notes</dt>
-                  <dd className="text-lp-text whitespace-pre-line text-[12px] leading-relaxed">{hotel.notes}</dd>
-                </div>
-              )}
-            </dl>
-          </div>
-        )}
-        {contacts.length > 0 && (
-          <div className="flex flex-col gap-3">
-            {contacts.map((c, i) => (
-              <div key={`${c.name}-${c.email}-${i}`} className="rounded-lg border border-lp-border bg-lp-surface p-5">
-                <p className="text-[13px] font-bold text-lp-text">{c.name}</p>
-                <p className="mt-0.5 text-[11px] text-lp-text-tertiary">{c.role}</p>
-                <div className="mt-2 flex flex-col gap-1">
-                  {c.phone && (
-                    <a href={`tel:${c.phone}`} className="inline-flex w-fit items-center gap-1 text-[12px] text-lp-text-secondary hover:text-lp-orange">
-                      <Phone className="h-3 w-3 shrink-0" /> {c.phone}
-                    </a>
-                  )}
-                  {c.email && (
-                    <a href={`mailto:${c.email}`} className="inline-flex w-fit items-center gap-1 text-[12px] text-lp-text-secondary hover:text-lp-orange">
-                      <Mail className="h-3 w-3 shrink-0" /> {c.email}
-                    </a>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
 
 const PRINT_HIDE_CSS = `
 @media print {
@@ -1147,8 +979,8 @@ function AdvanceReadLoadedBody({
     .filter(shouldShowSectionInReadView)
     .sort((a, b) => a.order - b.order);
 
-  const hotelKeyInfo = extractHotelKeyInfo(sections, data);
-  const keyContacts = extractKeyContacts(sections, data);
+  // Hotel + key-contact digest moved to AdvanceShowRightRail
+  // (Variant parity §B). The read view is just sections now.
 
   const hasNoSections = sections.length === 0;
 
@@ -1165,8 +997,6 @@ function AdvanceReadLoadedBody({
           </Link>
         </div>
       )}
-
-      {!hasNoSections && <KeyInfoBlock hotel={hotelKeyInfo} contacts={keyContacts} />}
 
       {topLevelDocs.length > 0 && (
         <DocumentsSection docs={topLevelDocs} editHref={editHref} />

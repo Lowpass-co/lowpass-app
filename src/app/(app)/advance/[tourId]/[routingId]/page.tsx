@@ -34,10 +34,14 @@ import { ProductShell } from '@/components/shell-v2';
 import { AdvanceShowReadView } from '@/components/advance/AdvanceShowReadView';
 import { AdvanceShowContextBar } from '@/components/advance/AdvanceShowContextBar';
 import { AdvanceSectionBuilderDynamic } from '@/components/advance/AdvanceSectionBuilderDynamic';
-import { PreviouslyPlayedButton } from '@/components/advance/PreviouslyPlayedButton';
 import { AdvanceSubHeader } from '@/components/advance/AdvanceSubHeader';
 import { AdvanceShowHeader } from '@/components/advance/AdvanceShowHeader';
 import { AdvanceUpcomingSidebar } from '@/components/advance/AdvanceUpcomingSidebar';
+import {
+  AdvanceShowRightRail,
+  type SpecRow,
+} from '@/components/advance/AdvanceShowRightRail';
+import { extractKeyContacts, type SectionDef as KeyInfoSectionDef } from '@/lib/advance/key-info';
 
 /** Pull a likely artist image URL out of the freeform `branding` JSONB. */
 function pickArtistImageUrl(branding: unknown): string | null {
@@ -110,7 +114,9 @@ export default async function AdvanceShowPage({
   const [routingRes, tourRes, advanceRes] = await Promise.all([
     supabase
       .from('routing')
-      .select('date, day_type, venue_name, city')
+      .select(
+        'date, day_type, venue_name, city, address, venue_website, venue_phone, venue_capacity',
+      )
       .eq('id', routingId)
       .maybeSingle(),
     supabase
@@ -133,6 +139,10 @@ export default async function AdvanceShowPage({
         day_type: string | null;
         venue_name: string | null;
         city: string | null;
+        address: string | null;
+        venue_website: string | null;
+        venue_phone: string | null;
+        venue_capacity: number | null;
       }
     | null;
   const tourRow = tourRes.data as
@@ -156,7 +166,15 @@ export default async function AdvanceShowPage({
   // Resolve "last edited by" → display name + the form config name.
   type AdvanceRow = {
     id: string;
-    sections: { template_id: string; label: string; order?: number }[] | null;
+    sections:
+      | {
+          template_id: string;
+          label: string;
+          order?: number;
+          fields?: { id: string; type: string; label?: string }[];
+        }[]
+      | null;
+    data: Record<string, Record<string, unknown>> | null;
     last_updated_at: string | null;
     last_updated_by_id: string | null;
     form_config_id: string | null;
@@ -245,6 +263,44 @@ export default async function AdvanceShowPage({
     routing?.venue_name ? ` · ${routing.venue_name}` : ''
   }`.trim();
 
+  // Build the right-rail's "VENUE SPECS" rows from routing data.
+  // Each entry only renders when its source column has a value, so the
+  // card never shows blank rows. Tour-level / venue-level keys (curfew,
+  // timezone, taxes, rigging) come from the advance.data once filled —
+  // not surfaced here yet; the rail just renders specs that exist.
+  const specs: SpecRow[] = [];
+  if (routing?.venue_capacity != null && Number(routing.venue_capacity) > 0) {
+    specs.push({
+      label: 'Capacity',
+      value: routing.venue_capacity.toLocaleString('en-GB'),
+    });
+  }
+  if (routing?.address) {
+    specs.push({ label: 'Address', value: routing.address });
+  }
+  if (routing?.venue_phone) {
+    specs.push({ label: 'Phone', value: routing.venue_phone });
+  }
+  if (routing?.venue_website) {
+    specs.push({ label: 'Website', value: routing.venue_website });
+  }
+
+  // Key contacts — extracted from filled contact fields in the advance.
+  // Sections shape needs `fields` for extraction; cast safely.
+  const sectionsForExtract = (advance?.sections ?? []) as KeyInfoSectionDef[];
+  const advanceData = (advance?.data ?? {}) as Record<
+    string,
+    Record<string, unknown>
+  >;
+  const keyContacts = extractKeyContacts(sectionsForExtract, advanceData);
+
+  // Section list passed to the slide-over so it can label past-show
+  // sections with the current advance's labels (template_id mapping).
+  const currentSectionsForRail = sectionsForExtract.map((s) => ({
+    template_id: s.template_id,
+    label: s.label,
+  }));
+
   const contextBar =
     artistRow && routing ? (
       <AdvanceShowContextBar
@@ -321,19 +377,19 @@ export default async function AdvanceShowPage({
                 builderHref={builderHref}
               />
               {contextBar}
-              {/* Phase 2 §C — Previously Played affordance lives on
-                  the read view (edit view has its own copy-from
-                  flow inside the section builder). */}
-              <div className="advance-read-no-print flex justify-end">
-                <PreviouslyPlayedButton
-                  tourId={tourId}
-                  routingId={routingId}
-                />
-              </div>
               <AdvanceShowReadView tourId={tourId} routingId={routingId} />
             </div>
           )}
         </main>
+        {/* Right rail — visible in both read and builder modes per
+            Variant parity §B. The slide-over open/close lives inside
+            the rail's PreviouslyPlayedRailCard client island. */}
+        <AdvanceShowRightRail
+          routingId={routingId}
+          specs={specs}
+          contacts={keyContacts}
+          currentSections={currentSectionsForRail}
+        />
       </div>
     </ProductShell>
   );
