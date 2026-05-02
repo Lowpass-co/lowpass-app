@@ -49,7 +49,7 @@ export function AdvanceSubHeader({ showLabel, activeTab }: AdvanceSubHeaderProps
 
   return (
     <div
-      className="lp-advance-subheader sticky z-10 flex flex-wrap items-center gap-3 border-b px-4 py-2"
+      className="lp-advance-subheader sticky z-40 flex flex-wrap items-center gap-3 border-b px-4 py-2"
       style={{
         top: 48 /* matches ProductHeader's h-12 */,
         background: 'var(--lp-panel)',

@@ -42,7 +42,7 @@ export function TemplateMetaBar({
 
   return (
     <div
-      className="advance-read-no-print sticky top-0 z-10 grid items-center gap-3"
+      className="advance-read-no-print sticky top-0 z-30 grid items-center gap-3"
       style={{
         gridTemplateColumns: 'minmax(0, 1fr) auto auto',
         padding: '12px 16px',

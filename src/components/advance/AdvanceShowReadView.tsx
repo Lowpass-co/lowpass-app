@@ -10,7 +10,7 @@
  * Empty fields are hidden. Edit button per section drops into form mode.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 import { cn, parseRoutingDate } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/Skeleton';
-import { FieldTypeIcon, isMonoFieldType } from './FieldTypeIcon';
+import { isMonoFieldType } from './FieldTypeIcon';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -131,6 +131,8 @@ const PRINT_HIDE_CSS = `
    buttons, slide-over openers) using the same affordance markers that the
    print stylesheet uses. Public viewers get a clean read-only document. */
 .advance-read-view.is-public-readonly .advance-read-no-print { display: none !important; }
+/* Variant parity followup §H.4 — full-row hover fill on dense field rows. */
+.advance-field-row:hover { background-color: var(--lp-surface-hover); }
 `;
 
 type SectionStatusKey = 'complete' | 'in_progress' | 'needs_review' | 'not_started';
@@ -231,39 +233,192 @@ function SectionStatusPillSelect({
   };
 
   return (
+    <BrandedStatusPillDropdown
+      status={status}
+      colour={colour}
+      onChange={handleChange}
+      disabled={disabled}
+    />
+  );
+}
+
+/** Branded pill-shaped trigger + custom dropdown panel. Replaces the
+ *  native <select> overlay so the open menu reads as part of the
+ *  Lowpass design language (Variant parity followup §H.2). Keyboard
+ *  accessible (arrow keys, Enter to commit, Escape to close);
+ *  closes on outside click. */
+function BrandedStatusPillDropdown({
+  status,
+  colour,
+  onChange,
+  disabled,
+}: {
+  status: SectionStatusKey;
+  colour: string;
+  onChange: (next: SectionStatusKey) => void;
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [highlighted, setHighlighted] = useState<SectionStatusKey>(status);
+  const wrapperRef = useRef<HTMLSpanElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    function handlePointerDown(e: MouseEvent) {
+      if (!wrapperRef.current?.contains(e.target as Node)) setOpen(false);
+    }
+    function handleEsc(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpen(false);
+    }
+    document.addEventListener('mousedown', handlePointerDown);
+    document.addEventListener('keydown', handleEsc);
+    return () => {
+      document.removeEventListener('mousedown', handlePointerDown);
+      document.removeEventListener('keydown', handleEsc);
+    };
+  }, [open]);
+
+  // Reset highlight to current status whenever the menu opens. Deferred
+  // to a microtask so the setState doesn't fire synchronously within the
+  // effect (react-hooks/set-state-in-effect).
+  useEffect(() => {
+    if (open) {
+      queueMicrotask(() => setHighlighted(status));
+    }
+  }, [open, status]);
+
+  const options: SectionStatusKey[] = [
+    'not_started',
+    'in_progress',
+    'complete',
+    'needs_review',
+  ];
+
+  function commit(next: SectionStatusKey) {
+    setOpen(false);
+    onChange(next);
+  }
+
+  return (
     <span
-      className="advance-read-no-print relative inline-flex items-center"
-      style={{
-        background: `color-mix(in srgb, ${colour} 12%, transparent)`,
-        color: colour,
-        fontSize: '11px',
-        fontWeight: 600,
-        letterSpacing: '0.06em',
-        textTransform: 'uppercase',
-        borderRadius: 9999,
-        padding: '2px 8px',
-      }}
+      ref={wrapperRef}
+      className="advance-read-no-print relative inline-flex"
     >
-      <span
-        aria-hidden
-        className="mr-1.5 inline-block h-1.5 w-1.5 shrink-0 rounded-full"
-        style={{ background: colour }}
-      />
-      <span>{STATUS_LABEL[status]}</span>
-      {disabled ? null : (
-        <select
-          value={status}
-          onChange={(e) => handleChange(e.target.value as SectionStatusKey)}
-          aria-label="Section status"
-          className="absolute inset-0 cursor-pointer opacity-0"
-          style={{ color: 'inherit' }}
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => !disabled && setOpen((o) => !o)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onKeyDown={(e) => {
+          if (disabled) return;
+          if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            setOpen(true);
+          }
+        }}
+        className="inline-flex items-center gap-1.5"
+        style={{
+          background: `color-mix(in srgb, ${colour} 12%, transparent)`,
+          color: colour,
+          fontSize: '11px',
+          fontWeight: 600,
+          letterSpacing: '0.06em',
+          textTransform: 'uppercase',
+          borderRadius: 9999,
+          padding: '2px 8px',
+          border: 'none',
+          cursor: disabled ? 'default' : 'pointer',
+        }}
+      >
+        <span
+          aria-hidden
+          className="inline-block h-1.5 w-1.5 shrink-0 rounded-full"
+          style={{ background: colour }}
+        />
+        <span>{STATUS_LABEL[status]}</span>
+        <ChevronDown
+          className="h-3 w-3 shrink-0"
+          aria-hidden
+          style={{
+            transform: open ? 'rotate(180deg)' : 'rotate(0)',
+            transition: 'transform 200ms ease-out',
+          }}
+        />
+      </button>
+      {open && !disabled ? (
+        <ul
+          role="listbox"
+          aria-label="Section status options"
+          className="absolute right-0 top-full z-50 mt-1 min-w-[10rem] overflow-hidden"
+          style={{
+            background: 'var(--lp-panel)',
+            border: '1px solid var(--lp-border-strong)',
+            borderRadius: 4,
+            padding: 4,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.25)',
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'ArrowDown') {
+              e.preventDefault();
+              setHighlighted((cur) => {
+                const idx = options.indexOf(cur);
+                return options[Math.min(options.length - 1, idx + 1)];
+              });
+            } else if (e.key === 'ArrowUp') {
+              e.preventDefault();
+              setHighlighted((cur) => {
+                const idx = options.indexOf(cur);
+                return options[Math.max(0, idx - 1)];
+              });
+            } else if (e.key === 'Enter') {
+              e.preventDefault();
+              commit(highlighted);
+            }
+          }}
+          tabIndex={-1}
         >
-          <option value="not_started">Not started</option>
-          <option value="in_progress">In progress</option>
-          <option value="complete">Complete</option>
-          <option value="needs_review">Needs review</option>
-        </select>
-      )}
+          {options.map((opt) => {
+            const optColour = STATUS_TOKEN[opt];
+            const active = opt === highlighted;
+            const selected = opt === status;
+            return (
+              <li key={opt}>
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={selected}
+                  onMouseEnter={() => setHighlighted(opt)}
+                  onClick={() => commit(opt)}
+                  className="flex w-full items-center gap-2"
+                  style={{
+                    padding: '6px 10px',
+                    background: active
+                      ? 'var(--lp-surface-hover)'
+                      : 'transparent',
+                    border: 'none',
+                    borderRadius: 2,
+                    cursor: 'pointer',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    letterSpacing: '0.06em',
+                    textTransform: 'uppercase',
+                    color: optColour,
+                    textAlign: 'left',
+                  }}
+                >
+                  <span
+                    aria-hidden
+                    className="inline-block h-1.5 w-1.5 shrink-0 rounded-full"
+                    style={{ background: optColour }}
+                  />
+                  <span>{STATUS_LABEL[opt]}</span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      ) : null}
     </span>
   );
 }
@@ -563,11 +718,13 @@ function SectionCard({
             className="advance-read-no-print btn-transition inline-flex h-6 w-6 items-center justify-center rounded"
             style={{ color: 'var(--lp-text-tertiary)' }}
           >
-            {collapsed ? (
-              <ChevronRight className="h-4 w-4" />
-            ) : (
-              <ChevronDown className="h-4 w-4" />
-            )}
+            <ChevronDown
+              className="h-4 w-4"
+              style={{
+                transform: collapsed ? 'rotate(-90deg)' : 'rotate(0)',
+                transition: 'transform 200ms ease-out',
+              }}
+            />
           </button>
         </div>
       </div>
@@ -592,9 +749,18 @@ function SectionCard({
         </div>
       ))}
 
-      {!collapsed &&
-        (otherFields.length > 0 || contactFields.length > 0 || fileFields.length > 0) && (
-        <div>
+      {/* Smooth collapse animation via grid-template-rows trick: animates
+          between 1fr (open) and 0fr (closed) cleanly without measuring
+          content height. Inner div needs overflow:hidden + min-height:0. */}
+      {(otherFields.length > 0 || contactFields.length > 0 || fileFields.length > 0) && (
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateRows: collapsed ? '0fr' : '1fr',
+            transition: 'grid-template-rows 200ms ease-out',
+          }}
+        >
+          <div style={{ overflow: 'hidden', minHeight: 0 }}>
           {/* Dense field rows — Variant parity §C.2.
               4-col grid: type-icon | label | value | meta.
               Per-field assignee + due-date + status pills are not in the
@@ -613,24 +779,25 @@ function SectionCard({
             return (
               <div
                 key={field.id}
-                className="advance-field-row"
+                className="advance-field-row group"
                 style={{
                   display: 'grid',
                   gridTemplateColumns: isLong
-                    ? '24px 1fr'
-                    : '24px minmax(0, 2fr) minmax(0, 5fr)',
-                  gap: '8px',
-                  padding: '8px 12px',
+                    ? '1fr'
+                    : 'minmax(0, 2fr) minmax(0, 5fr)',
+                  gap: 0,
                   borderBottom: isLast
                     ? 'none'
                     : '1px solid var(--lp-border-subtle)',
-                  alignItems: isLong ? 'start' : 'center',
+                  alignItems: isLong ? 'start' : 'stretch',
                   transition: 'background-color 120ms ease',
                 }}
               >
-                <FieldTypeIcon type={field.type} />
                 {isLong ? (
-                  <div className="min-w-0">
+                  <div
+                    className="min-w-0"
+                    style={{ padding: '8px 12px' }}
+                  >
                     <div
                       className="lp-row-label"
                       style={{
@@ -642,7 +809,7 @@ function SectionCard({
                     >
                       {field.label}
                       {field.required ? (
-                        <span style={{ color: 'var(--color-lp-error, #EF4444)', marginLeft: 4 }}>
+                        <span style={{ color: 'var(--color-lp-error)', marginLeft: 4 }}>
                           *
                         </span>
                       ) : null}
@@ -665,20 +832,30 @@ function SectionCard({
                         fontSize: '14px',
                         fontWeight: 500,
                         color: 'var(--lp-text)',
+                        padding: '8px 12px',
+                        background: 'var(--lp-bg-deep)',
+                        borderRight: '1px solid var(--lp-border-subtle)',
+                        display: 'flex',
+                        alignItems: 'center',
                       }}
                     >
-                      {field.label}
-                      {field.required ? (
-                        <span style={{ color: 'var(--color-lp-error, #EF4444)', marginLeft: 4 }}>
-                          *
-                        </span>
-                      ) : null}
+                      <span className="truncate">
+                        {field.label}
+                        {field.required ? (
+                          <span style={{ color: 'var(--color-lp-error)', marginLeft: 4 }}>
+                            *
+                          </span>
+                        ) : null}
+                      </span>
                     </div>
                     <div
                       className={cn('min-w-0', useMono && 'lp-mono')}
                       style={{
                         fontSize: '14px',
                         color: 'var(--lp-text)',
+                        padding: '8px 12px',
+                        display: 'flex',
+                        alignItems: 'center',
                       }}
                     >
                       <FieldValue field={field} value={val} />
@@ -751,6 +928,7 @@ function SectionCard({
               ))}
             </div>
           )}
+          </div>
         </div>
       )}
     </section>
