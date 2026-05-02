@@ -1,19 +1,25 @@
 /* ============================================
-   LOWPASS — Advance · Tour overview (Phase 2 §A migration)
+   LOWPASS — Advance · Tour overview (Visual redesign §B)
 
-   /advance/[tourId] — replaces /tours/[id]/advance. Wraps the
-   existing UX22-phase-1 <AdvanceOverview> in the new <ProductShell>
-   instead of the legacy docDaysAppPageShell. The tour breadcrumb
-   from the prior page is gone — <ProductHeader> now carries
-   artist · tour context.
+   /advance/[tourId] — wraps the existing UX22-phase-1
+   <AdvanceOverview> in <ProductShell>, with the new sticky stats
+   strip beneath ProductHeader and the dense visual treatment that
+   matches the per-show advance + budget surfaces.
 
-   Phase 1 placeholder retired here.
+   Page-level data:
+     - tour identity (for ProductShell + the title)
+     - routing rows (date / day_type) for stats-strip computation
+     - advance instances (status) for stats-strip completion %
+
+   <AdvanceOverview> still owns the show list, filter chips, ⋯ menu,
+   layout-template apply, copy-from flow — none of that moves.
    ============================================ */
 
 import { notFound } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { ProductShell } from '@/components/shell-v2';
 import { AdvanceOverview } from '@/components/advance/AdvanceOverview';
+import { AdvanceOverviewStatsStrip } from '@/components/advance/AdvanceOverviewStatsStrip';
 
 export default async function AdvanceTourOverviewPage({
   params,
@@ -23,17 +29,57 @@ export default async function AdvanceTourOverviewPage({
   const { tourId } = await params;
   const supabase = await createServerSupabaseClient();
 
-  const { data: tour, error } = await supabase
-    .from('tours')
-    .select('id, name, artist_id')
-    .eq('id', tourId)
-    .maybeSingle();
+  const [{ data: tour, error: tourErr }, routingRes] = await Promise.all([
+    supabase
+      .from('tours')
+      .select('id, name, artist_id')
+      .eq('id', tourId)
+      .maybeSingle(),
+    supabase
+      .from('routing')
+      .select('id, date, day_type')
+      .eq('tour_id', tourId),
+  ]);
 
-  if (error || !tour) {
+  if (tourErr || !tour) {
     notFound();
   }
 
   const t = tour as { id: string; name: string | null; artist_id: string | null };
+
+  const routingRows =
+    (routingRes.data ?? []) as Array<{
+      id: string;
+      date: string | null;
+      day_type: string | null;
+    }>;
+
+  // Advance statuses are looked up via routing_id; depends on the
+  // routing read landing first so we can pass in the IDs.
+  const routingIds = routingRows.map((r) => r.id);
+  const { data: advanceData } =
+    routingIds.length > 0
+      ? await supabase
+          .from('advance_instances')
+          .select('routing_id, status')
+          .in('routing_id', routingIds)
+      : { data: [] as Array<{ routing_id: string; status: string | null }> };
+  const advanceRows = (advanceData ?? []) as Array<{
+    routing_id: string;
+    status: string | null;
+  }>;
+  const statusByRouting = new Map(
+    advanceRows.map((a) => [a.routing_id, a.status ?? null]),
+  );
+
+  const shows = routingRows
+    .filter((r) => r.date)
+    .map((r) => ({
+      routingId: r.id,
+      date: r.date as string,
+      dayType: r.day_type,
+      advanceStatus: statusByRouting.get(r.id) ?? null,
+    }));
 
   return (
     <ProductShell
@@ -42,6 +88,7 @@ export default async function AdvanceTourOverviewPage({
       tourId={t.id}
       productName="Advance"
     >
+      <AdvanceOverviewStatsStrip shows={shows} />
       <div className="mx-auto w-full max-w-[1280px] space-y-5 px-6 py-6">
         <header className="flex items-baseline justify-between gap-4">
           <div>
