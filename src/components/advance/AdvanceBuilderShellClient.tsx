@@ -145,7 +145,30 @@ export function AdvanceBuilderShellClient({
           </div>
         </div>
       </main>
-      <AdvanceFieldPropertiesPanel selected={selected} />
+      <AdvanceFieldPropertiesPanel
+        selected={selected}
+        onChange={(next) => {
+          // Optimistic — panel re-renders with the new value immediately.
+          setSelected(next);
+          // Tell the canvas to apply the patch to its internal field-def
+          // state. The canvas's autosave will pick it up. This is the
+          // panel → canvas direction of the G.4 dispatch loop.
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(
+              new CustomEvent('advance:field-updated', {
+                detail: {
+                  fieldId: next.id,
+                  patch: {
+                    label: next.label,
+                    required: next.required,
+                    type: next.type,
+                  },
+                },
+              }),
+            );
+          }
+        }}
+      />
 
       {/* Copy-from-show modal — current routing is the destination,
           source is picked inside the modal. */}
