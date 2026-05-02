@@ -15,7 +15,7 @@ import Link from 'next/link';
 import {
   Pencil, FileText, Phone, Mail, Globe,
   AlertCircle, ChevronRight, ChevronDown, GripVertical,
-  Paperclip, User, ExternalLink, Flag, Printer,
+  Paperclip, User, ExternalLink, Flag,
   Copy, Loader2,
 } from 'lucide-react';
 import { cn, parseRoutingDate } from '@/lib/utils';
@@ -100,30 +100,11 @@ type PageData = {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
-function formatDate(dateStr: string) {
-  const d = new Date(dateStr + 'T00:00:00');
-  return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
-}
-
 function formatFileSize(bytes?: number) {
   if (!bytes) return '';
   if (bytes < 1024) return `${bytes}B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)}KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
-}
-
-function dayTypeLabel(t: string) {
-  const map: Record<string, string> = {
-    show: 'Show Day', festival: 'Festival', off: 'Day Off',
-    travel: 'Travel Day', rehearsal: 'Rehearsal', press: 'Press Day',
-  };
-  return map[t] ?? t;
-}
-
-function dayTypeClass(t: string) {
-  if (t === 'show' || t === 'festival') return 'bg-lp-orange/15 text-lp-orange';
-  if (t === 'off') return 'bg-lp-surface text-lp-text-tertiary';
-  return 'bg-blue-500/15 text-blue-400';
 }
 
 function shouldShowSectionInReadView(section: SectionDef): boolean {
@@ -1044,74 +1025,6 @@ function DocumentsSection({ docs, editHref }: {
   );
 }
 
-function AdvanceReadStickyHeader({
-  overviewHref,
-  editHref,
-  routing,
-  headerLoading,
-}: {
-  overviewHref: string;
-  editHref: string;
-  routing: PageData['routing'] | null;
-  headerLoading: boolean;
-}) {
-  return (
-    <div className="sticky top-0 z-20 border-b border-lp-border bg-lp-bg/95 backdrop-blur-sm">
-      <div className="flex items-center justify-between gap-3 px-8 py-3">
-        <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3">
-          <div className="advance-read-no-print flex shrink-0 items-center gap-2">
-            <Link href={overviewHref} className="lp-meta transition-colors hover:text-lp-orange">
-              ← Advance
-            </Link>
-            <span className="text-lp-border">|</span>
-          </div>
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
-            {headerLoading || !routing ? (
-              <>
-                <Skeleton className="h-5 w-28" />
-                <Skeleton className="h-5 w-24 rounded-md" />
-                <Skeleton className="hidden h-5 max-w-[min(280px,45vw)] flex-1 sm:block" />
-                <Skeleton className="h-4 w-20" />
-              </>
-            ) : (
-              <>
-                <span className="font-semibold text-lp-text">{formatDate(routing.date)}</span>
-                <span className={cn('rounded px-1.5 py-0.5 text-[11px] font-semibold uppercase tracking-wider', dayTypeClass(routing.day_type))}>
-                  {dayTypeLabel(routing.day_type)}
-                </span>
-                {routing.venue_name && (
-                  <>
-                    <span className="hidden lp-meta sm:inline">—</span>
-                    <span className="truncate text-lp-text">{routing.venue_name}</span>
-                  </>
-                )}
-                {routing.city && <span className="shrink-0 lp-meta">{routing.city}</span>}
-              </>
-            )}
-          </div>
-        </div>
-        <div className="advance-read-no-print flex shrink-0 items-center gap-2">
-          <button
-            type="button"
-            onClick={() => window.print()}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-lp-border px-2.5 py-1.5 font-medium text-lp-text-secondary transition-colors hover:border-lp-orange hover:text-lp-orange"
-          >
-            <Printer className="h-3.5 w-3.5 shrink-0" />
-            Print
-          </button>
-          <Link
-            href={editHref}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-lp-orange px-3 py-1.5 font-medium text-white transition-colors hover:bg-lp-orange/90"
-          >
-            <Pencil className="h-3.5 w-3.5 shrink-0" />
-            Edit advance
-          </Link>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 function AdvanceReadLoadingSkeleton() {
   return (
     <div className="space-y-4 px-8 py-6">
@@ -1157,7 +1070,6 @@ export function AdvanceShowReadView({
   const [error, setError] = useState<string | null>(null);
 
   const editHref = `/advance/${tourId}/${routingId}?mode=edit`;
-  const overviewHref = `/advance/${tourId}`;
 
   const load = useCallback(() => {
     // Public share: bundle is already in pageData via serverInitialJson; do
@@ -1186,19 +1098,15 @@ export function AdvanceShowReadView({
     );
   }
 
-  const routing = pageData?.routing ?? null;
-  const headerLoading = loading || !routing;
-
   return (
     <div className={`advance-read-view space-y-0${publicReadOnly ? ' is-public-readonly' : ''}`}>
       <style dangerouslySetInnerHTML={{ __html: PRINT_HIDE_CSS }} />
 
-      <AdvanceReadStickyHeader
-        overviewHref={overviewHref}
-        editHref={editHref}
-        routing={routing}
-        headerLoading={headerLoading}
-      />
+      {/* Variant parity §F — page-level "← Advance | Print | Edit advance"
+          toolbar removed. Print moved to AdvanceSubHeader actions. The
+          back link is replaced by the global ProductHeader breadcrumb;
+          the "Edit advance" button is replaced by the Show / Template
+          Builder tab toggle in AdvanceSubHeader. */}
 
       {loading ? (
         <AdvanceReadLoadingSkeleton />

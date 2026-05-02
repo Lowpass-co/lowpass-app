@@ -24,7 +24,7 @@
 
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { Download } from 'lucide-react';
+import { Download, Printer } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
 
 interface AdvanceSubHeaderProps {
@@ -135,11 +135,30 @@ export function AdvanceSubHeader({ showLabel, activeTab }: AdvanceSubHeaderProps
         })}
       </nav>
 
-      {/* Right: keyboard hints + Export */}
+      {/* Right: keyboard hints + actions (Print, Export) */}
       <div className="hidden items-center gap-3 lg:flex">
         <KbdHint chord="⌘S" label="Save" />
         <KbdHint chord="⌘D" label="Duplicate" />
       </div>
+      {activeTab === 'show' ? (
+        <button
+          type="button"
+          onClick={() => {
+            if (typeof window !== 'undefined') window.print();
+          }}
+          className="btn-transition inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1"
+          style={{
+            borderColor: 'var(--lp-border-strong)',
+            background: 'var(--lp-bg)',
+            color: 'var(--lp-text-secondary)',
+            fontSize: '12px',
+            fontWeight: 500,
+          }}
+        >
+          <Printer className="h-3.5 w-3.5" />
+          Print
+        </button>
+      ) : null}
       <button
         type="button"
         onClick={() =>

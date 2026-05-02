@@ -32,7 +32,6 @@ import { notFound } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { ProductShell } from '@/components/shell-v2';
 import { AdvanceShowReadView } from '@/components/advance/AdvanceShowReadView';
-import { AdvanceShowContextBar } from '@/components/advance/AdvanceShowContextBar';
 import { AdvanceSubHeader } from '@/components/advance/AdvanceSubHeader';
 import { AdvanceShowHeader } from '@/components/advance/AdvanceShowHeader';
 import { AdvanceUpcomingSidebar } from '@/components/advance/AdvanceUpcomingSidebar';
@@ -42,24 +41,6 @@ import {
 } from '@/components/advance/AdvanceShowRightRail';
 import { AdvanceBuilderShellClient } from '@/components/advance/AdvanceBuilderShellClient';
 import { extractKeyContacts, type SectionDef as KeyInfoSectionDef } from '@/lib/advance/key-info';
-
-/** Pull a likely artist image URL out of the freeform `branding` JSONB. */
-function pickArtistImageUrl(branding: unknown): string | null {
-  if (!branding || typeof branding !== 'object') return null;
-  const b = branding as Record<string, unknown>;
-  const candidates = [
-    b.image_url,
-    b.imageUrl,
-    b.logo_url,
-    b.logoUrl,
-    b.avatar_url,
-    b.avatarUrl,
-  ];
-  for (const c of candidates) {
-    if (typeof c === 'string' && c.trim()) return c;
-  }
-  return null;
-}
 
 function relativeTime(iso: string | null | undefined): string | null {
   if (!iso) return null;
@@ -301,27 +282,6 @@ export default async function AdvanceShowPage({
     label: s.label,
   }));
 
-  const contextBar =
-    artistRow && routing ? (
-      <AdvanceShowContextBar
-        tourId={tourId}
-        routingId={routingId}
-        artist={{
-          id: artistRow.id,
-          name: artistRow.name ?? 'Artist',
-          imageUrl: pickArtistImageUrl(artistRow.branding),
-        }}
-        tour={{ id: tourRow.id, name: tourRow.name ?? 'Tour' }}
-        show={{
-          date: routing.date,
-          dayType: routing.day_type,
-          venueName: routing.venue_name,
-          city: routing.city,
-        }}
-        flush={!isEdit}
-      />
-    ) : null;
-
   return (
     <ProductShell
       active="advance"
@@ -362,7 +322,6 @@ export default async function AdvanceShowPage({
                 activeTab={activeTab}
                 builderHref={builderHref}
               />
-              {contextBar}
             </div>
             <AdvanceBuilderShellClient
               tourId={tourId}
@@ -387,7 +346,6 @@ export default async function AdvanceShowPage({
                   activeTab={activeTab}
                   builderHref={builderHref}
                 />
-                {contextBar}
                 <AdvanceShowReadView tourId={tourId} routingId={routingId} />
               </div>
             </main>
