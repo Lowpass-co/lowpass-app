@@ -907,6 +907,53 @@ function SetupMode({
     return () => window.removeEventListener('advance:field-updated', onFieldUpdated);
   }, [patchFieldById]);
 
+  /** G.3 — add a section by label (from a library card drop) or as a
+   *  blank custom section if seedId === '__blank__' or no label match. */
+  const addSectionFromDrop = useCallback(
+    (seedId: string, label: string) => {
+      const trimmedLabel = label.trim() || 'Custom Section';
+      // Try to match an existing workspace template by name first.
+      const match = seedId !== '__blank__'
+        ? templates.find(
+            (t) =>
+              (t.name ?? '').trim().toLowerCase() ===
+              trimmedLabel.toLowerCase(),
+          )
+        : undefined;
+      if (match) {
+        addAllFields(match);
+        return;
+      }
+      // No template match → create a blank section. The seed becomes
+      // a new template_id (synthesised) with no fields. Autosave picks
+      // it up; user can add fields via the existing in-canvas controls.
+      const syntheticId = `${seedId === '__blank__' ? 'custom' : seedId}_${Date.now().toString(36)}`;
+      setSections((prev) => [
+        ...prev,
+        {
+          template_id: syntheticId,
+          label: trimmedLabel,
+          fields: [],
+          order: prev.length,
+        },
+      ]);
+      setLastAddedTemplateId(syntheticId);
+    },
+    [templates, addAllFields],
+  );
+
+  // Listen for library drop events (G.3 wire from AdvanceSectionLibrary
+  // → SectionDropZone → AdvanceBuilderShellClient → canvas).
+  useEffect(() => {
+    function onSectionDrop(e: Event) {
+      const ce = e as CustomEvent<{ seedId: string; label: string } | null>;
+      if (!ce.detail) return;
+      addSectionFromDrop(ce.detail.seedId, ce.detail.label);
+    }
+    window.addEventListener('advance:section-drop', onSectionDrop);
+    return () => window.removeEventListener('advance:section-drop', onSectionDrop);
+  }, [addSectionFromDrop]);
+
   const moveSectionOrder = useCallback((from: number, to: number) => {
     if (from === to || to < 0 || to > sections.length) return;
     setSections((prev) => {

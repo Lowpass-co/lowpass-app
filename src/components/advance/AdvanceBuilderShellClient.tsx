@@ -105,22 +105,29 @@ export function AdvanceBuilderShellClient({
   }, []);
 
   const handleSectionDrop = (seedId: string, label: string) => {
-    // G.3 — adding a section from the library to this advance touches
-    // the existing AdvanceSectionBuilder's internal add-section flow.
-    // Wiring the drop to a server mutation + refresh is left for a
-    // follow-up PR (the add-section endpoint is not reusable from
-    // outside the builder without a refactor).
-    showToast(
-      `Section "${label}" — drag wired, server add-section endpoint not yet reusable from outside the builder. Use the in-canvas "+ Add Section" trigger inside the existing setup mode for now.`,
-    );
-    void seedId;
-    void router;
+    // G.3 — dispatch to the canvas. AdvanceSectionBuilder listens
+    // for advance:section-drop and either matches an existing
+    // workspace template by label (= addAllFields) or creates a
+    // blank section with that label.
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('advance:section-drop', {
+          detail: { seedId, label },
+        }),
+      );
+    }
   };
 
   const handleAddBlank = () => {
-    showToast(
-      'Blank-section creation flow lives inside the existing builder — open Setup Mode and use its "Add custom section".',
-    );
+    // Blank custom section = drop with no label match → builder creates
+    // an empty "Custom Section" via the same dispatch path.
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('advance:section-drop', {
+          detail: { seedId: '__blank__', label: 'Custom Section' },
+        }),
+      );
+    }
   };
 
   const handleApplyToTours = () => {
