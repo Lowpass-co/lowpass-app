@@ -9,7 +9,9 @@
     "build:turbopack": "next build --turbopack",
     "start": "next start",
     "lint": "eslint",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "db:migrate": "node scripts/db-migrate.mjs",
+    "db:migrate:dry-run": "node scripts/db-migrate.mjs -- --dry-run"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.78.0",
@@ -49,6 +51,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
+    "pg": "^8.20.0",
     "tailwindcss": "^4",
     "typescript": "^5"
   }
