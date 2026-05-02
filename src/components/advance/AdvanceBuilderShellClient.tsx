@@ -37,6 +37,11 @@ import {
   CopyAdvanceModal,
   type AdvanceDateItem,
 } from './CopyAdvanceModal';
+import {
+  ApplyAdvanceTemplateSlideOver,
+  type FormTemplate,
+  type AdvanceDateItem as ApplyAdvanceDateItem,
+} from './ApplyAdvanceTemplateSlideOver';
 import { useToast } from '@/components/ui/Toast';
 
 /** Field selection event payload — Phase G.4 CustomEvent interim.
@@ -70,13 +75,16 @@ export function AdvanceBuilderShellClient({
 
   const [copyOpen, setCopyOpen] = useState(false);
   const [dates, setDates] = useState<AdvanceDateItem[] | null>(null);
+  const [applyOpen, setApplyOpen] = useState(false);
+  const [templates, setTemplates] = useState<FormTemplate[] | null>(null);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
   const [selected, setSelected] = useState<FieldSelectionDetail | null>(null);
 
-  // Lazy-fetch dates the first time Copy opens. The `dates !== null`
-  // guard alone is the de-dupe — no separate loading-flag state, which
-  // avoids react-hooks/set-state-in-effect.
+  // Lazy-fetch dates the first time Copy or Apply opens. The
+  // `dates !== null` guard alone is the de-dupe — no separate
+  // loading-flag state, which avoids react-hooks/set-state-in-effect.
   useEffect(() => {
-    if (!copyOpen || dates !== null) return;
+    if ((!copyOpen && !applyOpen) || dates !== null) return;
     let cancelled = false;
     fetch(`/api/tours/${tourId}/advance?all=true`)
       .then((res) => (res.ok ? res.json() : Promise.reject(res.statusText)))
@@ -86,13 +94,45 @@ export function AdvanceBuilderShellClient({
       })
       .catch(() => {
         if (cancelled) return;
-        showToast('Failed to load tour dates for copy', 'error');
+        showToast('Failed to load tour dates', 'error');
         setCopyOpen(false);
+        setApplyOpen(false);
       });
     return () => {
       cancelled = true;
     };
-  }, [copyOpen, dates, tourId, showToast]);
+  }, [copyOpen, applyOpen, dates, tourId, showToast]);
+
+  // Lazy-fetch templates the first time Apply opens. Dedupe via
+  // `templates !== null`. The `templatesLoading` state is set inside
+  // `.then()` / `.finally()` so all setStates happen async, satisfying
+  // react-hooks/set-state-in-effect.
+  useEffect(() => {
+    if (!applyOpen || templates !== null) return;
+    let cancelled = false;
+    fetch('/api/advance/layout-templates')
+      .then((res) => (res.ok ? res.json() : Promise.reject(res.statusText)))
+      .then((data: { templates?: FormTemplate[] }) => {
+        if (cancelled) return;
+        setTemplates(data.templates ?? []);
+        setTemplatesLoading(false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        showToast('Failed to load layout templates', 'error');
+        setApplyOpen(false);
+        setTemplatesLoading(false);
+      });
+    // Show the loading flag eagerly so the slide-over's `loading` prop
+    // is true while the request is in flight. Deferred to a microtask
+    // to avoid the lint rule.
+    queueMicrotask(() => {
+      if (!cancelled) setTemplatesLoading(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [applyOpen, templates, showToast]);
 
   // Field-selection CustomEvent listener (Phase G.4 interim).
   useEffect(() => {
@@ -131,9 +171,7 @@ export function AdvanceBuilderShellClient({
   };
 
   const handleApplyToTours = () => {
-    showToast(
-      'Apply-to-tours flow needs the templates list endpoint — wiring deferred to a follow-up. Use the existing Templates page for now.',
-    );
+    setApplyOpen(true);
   };
 
   return (
@@ -189,6 +227,31 @@ export function AdvanceBuilderShellClient({
           onSuccess={(copiedCount) => {
             setCopyOpen(false);
             showToast(`Copied ${copiedCount} show${copiedCount === 1 ? '' : 's'}.`);
+            router.refresh();
+          }}
+        />
+      ) : null}
+
+      {/* Apply-to-tour slide-over (G.5). Same /api/advance/layout-templates
+          fetch the AdvanceOverview surface uses. dates list is the same
+          /api/tours/[id]/advance?all=true endpoint Copy uses; both
+          load lazily on first open. */}
+      {applyOpen ? (
+        <ApplyAdvanceTemplateSlideOver
+          open={applyOpen}
+          tourId={tourId}
+          // Same shape at runtime — CopyAdvanceModal's AdvanceDateItem
+          // types `advance.sections.fields[]` as unknown[] while
+          // ApplyAdvanceTemplateSlideOver types it more strictly. Both
+          // come from the same /api/tours/[id]/advance?all=true response,
+          // so this cast is safe.
+          dates={(dates ?? []) as unknown as ApplyAdvanceDateItem[]}
+          templates={templates ?? []}
+          loading={dates === null || templatesLoading}
+          initialTemplateId={null}
+          onClose={() => setApplyOpen(false)}
+          onDone={() => {
+            setApplyOpen(false);
             router.refresh();
           }}
         />
