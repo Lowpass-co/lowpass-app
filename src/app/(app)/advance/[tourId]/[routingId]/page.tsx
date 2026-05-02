@@ -72,6 +72,13 @@ function relativeTime(iso: string | null | undefined): string | null {
   return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
 }
 
+function isShowDateInPast(iso: string | null | undefined): boolean {
+  if (!iso) return false;
+  const ms = new Date(`${iso.slice(0, 10)}T23:59:59Z`).getTime();
+  if (Number.isNaN(ms)) return false;
+  return ms < Date.now();
+}
+
 function formatShowDate(iso: string | null | undefined): string | null {
   if (!iso) return null;
   const d = new Date(`${iso.slice(0, 10)}T12:00:00Z`);
@@ -190,21 +197,35 @@ export default async function AdvanceShowPage({
     templateName = c?.name?.trim() || null;
   }
 
-  // Sections complete vs total.
+  // Sections complete vs total + pending / overdue split.
+  // Overdue = not_started AND show date is in the past.
+  // Pending = everything not complete and not overdue (includes
+  //   in_progress, not_started for future shows, needs_review, and
+  //   sections with no status recorded yet).
   const sections = (advance?.sections ?? []) as Array<{
     template_id: string;
     label: string;
   }>;
   const sectionsTotal = sections.length;
   let sectionsComplete = 0;
-  if (advance && advance.section_statuses) {
+  let overdueSectionsCount = 0;
+  const showIsPast = isShowDateInPast(routing?.date);
+  if (advance) {
+    const statuses = advance.section_statuses ?? {};
     for (const s of sections) {
       const key = s.template_id ?? s.label;
-      if (advance.section_statuses[key]?.status === 'complete') {
+      const st = statuses[key]?.status ?? 'not_started';
+      if (st === 'complete') {
         sectionsComplete += 1;
+      } else if (st === 'not_started' && showIsPast) {
+        overdueSectionsCount += 1;
       }
     }
   }
+  const pendingSectionsCount = Math.max(
+    0,
+    sectionsTotal - sectionsComplete - overdueSectionsCount,
+  );
 
   // Build the header sub-strings.
   const showName =
@@ -273,6 +294,8 @@ export default async function AdvanceShowPage({
                 lastEditedBy={lastEditedBy}
                 sectionsComplete={sectionsComplete}
                 sectionsTotal={sectionsTotal}
+                pendingSectionsCount={pendingSectionsCount}
+                overdueSectionsCount={overdueSectionsCount}
                 activeTab={activeTab}
                 builderHref={builderHref}
               />
@@ -292,6 +315,8 @@ export default async function AdvanceShowPage({
                 lastEditedBy={lastEditedBy}
                 sectionsComplete={sectionsComplete}
                 sectionsTotal={sectionsTotal}
+                pendingSectionsCount={pendingSectionsCount}
+                overdueSectionsCount={overdueSectionsCount}
                 activeTab={activeTab}
                 builderHref={builderHref}
               />
