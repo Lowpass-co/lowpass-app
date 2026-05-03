@@ -1,101 +1,90 @@
 /* ============================================
-   LOWPASS — Budget Page
+   LOWPASS — Budget · workspace-level router
+   ============================================
+
+   Post-merge fix-up — this page used to render the legacy 8-tab
+   budget surface (BudgetDetailShell + BUDGET_TABS from
+   src/_legacy/budget/). Adam's smoke flagged it as still leaking
+   through when the rail's Budget link didn't carry a tour id.
+
+   It is now a router-only page:
+
+   - `?tour_id=X` present  → server-side redirect to /budget/X
+   - no tour_id, but context has a tour → BudgetTourRedirect
+     hard-replaces the URL to /budget/{contextTour}
+   - no tour_id and no context tour → minimal "select a tour" prompt
+     with a link to the artist picker; never renders BudgetDetailShell
+
+   The legacy 8-tab surface lives in src/_legacy/budget/ and is
+   unreachable from anywhere in the app post-Phase-3 + this commit.
+
+   The ProductRail itself now appends `/{selectedTourId}` to the
+   Budget link when a tour is selected (see shell-v2/ProductRail),
+   so this page should rarely be reached at all.
    ============================================ */
 
 import { Suspense } from 'react';
-import { listAppPageShell, spreadsheetAppPageShell } from '@/components/shell/app-page-shells';
-import { getBudgetSheetSections } from '@/lib/shell/rails/budgetSheetSections';
+import Link from 'next/link';
+import { redirect } from 'next/navigation';
+import { listAppPageShell } from '@/components/shell/app-page-shells';
 import { BudgetTourRedirect } from '@/components/budget/BudgetTourRedirect';
-import { BUDGET_TABS, TabId } from '@/_legacy/budget/budget-tabs';
-import { TourBudgetAccordionDynamic } from '@/components/budget/TourBudgetAccordionDynamic';
-import { BudgetDetailShell } from '@/components/budget/BudgetDetailShell';
-import { BudgetOverviewToolbar } from '@/components/budget/BudgetOverviewToolbar';
 
 export default async function BudgetPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tour_id?: string; tab?: string; view?: string }>;
+  searchParams: Promise<{ tour_id?: string }>;
 }) {
   const params = await searchParams;
-  const tourId = params.tour_id ?? null;
-  const rawTab = params.tab;
-  // Default to spreadsheet-style detail; use view=overview for accordion summary.
-  const view = params.view ?? 'detail';
+  const tourId = params.tour_id;
 
-  const tab =
-    rawTab === 'day-view'
-      ? 'summary'
-      : ((rawTab as TabId | undefined) ?? 'summary');
-  const validTab = BUDGET_TABS.some((t) => t.id === tab) ? tab : 'summary';
-
-  if (!tourId) {
-    return listAppPageShell(
-      <>
-        <Suspense fallback={null}>
-          <BudgetTourRedirect />
-        </Suspense>
-        <div className="-mx-6 -my-6 flex h-[calc(100vh-4rem)] items-center justify-center p-8">
-          <div className="max-w-md rounded-xl border border-lp-border bg-lp-surface p-6 text-center">
-            <p className="text-lg font-semibold text-lp-text">Select a tour to open the Budget</p>
-            <p className="mt-2 text-sm text-lp-text-secondary">
-              Use the Artist and Tour selectors in the Finance section of the sidebar.
-            </p>
-          </div>
-        </div>
-      </>
-    );
+  // Server-side redirect for explicit query-param links / bookmarks.
+  if (tourId && tourId.trim()) {
+    redirect(`/budget/${tourId.trim()}`);
   }
 
-  // ── New accordion overview (default) ──────────────────────────────────────
-  if (view === 'overview' && tourId) {
-    return spreadsheetAppPageShell(
-      <div className="lp-budget -mx-6 -my-6 h-[calc(100vh-4rem)] flex flex-col bg-transparent overflow-hidden">
+  return listAppPageShell(
+    <>
+      {/* Client-side hard-replace when localStorage has a selected
+          tour. <Suspense> wraps it because BudgetTourRedirect uses
+          useSearchParams which Next 16 wants suspended. */}
+      <Suspense fallback={null}>
+        <BudgetTourRedirect />
+      </Suspense>
+      <div className="-mx-6 -my-6 flex h-[calc(100vh-4rem)] items-center justify-center p-8">
         <div
-          className="shrink-0 flex flex-col gap-3 border-b border-lp-border/60 px-6 py-3 sm:flex-row sm:items-center sm:justify-between"
-          style={{ background: 'var(--lp-dashboard-bg)' }}
+          className="max-w-md rounded-xl border p-6 text-center"
+          style={{
+            borderColor: 'var(--lp-border-strong)',
+            background: 'var(--lp-surface)',
+          }}
         >
-          <div className="flex items-center gap-3">
-            <div className="shrink-0">
-              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-lp-table-header-text">
-                View Style
-              </p>
-              <div className="relative flex w-[14.5rem] rounded-xl border border-[var(--lp-sidebar-border)] p-1">
-                <span
-                  className="absolute bottom-1 top-1 w-[calc(50%-6px)] rounded-lg bg-lp-orange transition-[left,opacity] duration-200"
-                  style={{ left: '4px', opacity: 1 }}
-                />
-                <a
-                  href={`/budget?tour_id=${tourId}&view=overview`}
-                  className="lp-label-caps relative z-10 flex flex-1 items-center justify-center rounded-md py-2 text-[11px] text-white transition-colors"
-                >
-                  Overview
-                </a>
-                <a
-                  href={`/budget?tour_id=${tourId}&view=detail&tab=summary`}
-                  className="lp-label-caps relative z-10 flex flex-1 items-center justify-center rounded-md py-2 text-[11px] text-[var(--lp-sidebar-text-muted)] transition-colors"
-                >
-                  Spreadsheet
-                </a>
-              </div>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-4">
-            <BudgetOverviewToolbar tourId={tourId} />
-          </div>
+          <h1 className="lp-h2">Select a tour to open Budget</h1>
+          <p
+            className="mt-2"
+            style={{
+              fontSize: '14px',
+              color: 'var(--lp-text-secondary)',
+              lineHeight: 1.5,
+            }}
+          >
+            Pick an artist + tour from the Home page (the Budget link
+            in the left rail jumps to that tour&apos;s budget once one
+            is selected).
+          </p>
+          <Link
+            href="/artists"
+            className="btn-transition mt-4 inline-flex items-center gap-1.5 rounded-md px-3 py-1.5"
+            style={{
+              fontSize: '13px',
+              fontWeight: 500,
+              background: 'var(--color-lp-orange)',
+              color: 'var(--lp-text-inverse, #fff)',
+            }}
+          >
+            Go to artists →
+          </Link>
         </div>
-        <div className="flex-1 min-h-0 overflow-hidden">
-          <TourBudgetAccordionDynamic tourId={tourId} />
-        </div>
-      </div>,
-      getBudgetSheetSections(tourId, 'summary')
-    );
-  }
-
-  // ── Spreadsheet-style detail (tabs + grids + tour currency) ────────────────
-  return spreadsheetAppPageShell(
-    <div className="lp-budget -mx-6 -my-6 flex h-[calc(100vh-4rem)] flex-col overflow-hidden bg-transparent">
-      <BudgetDetailShell tourId={tourId} activeTab={validTab} />
-    </div>,
-    getBudgetSheetSections(tourId, validTab)
+      </div>
+    </>,
   );
 }
