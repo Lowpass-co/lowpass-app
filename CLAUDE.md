@@ -52,7 +52,13 @@ docs/
 
 ## Critical conventions
 
-### Migrations
+### Migrations — runner is wired
+
+`npm run db:migrate` applies every pending migration in numeric order. Applied migrations live in `public._lp_migrations` keyed by filename + sha256 checksum. Editing an applied migration file is rejected by checksum mismatch — write a new migration that supersedes it instead.
+
+The runner script is `scripts/db-migrate.mjs` (Node, ESM, ~140 lines). Connection string comes from `DATABASE_URL` or `SUPABASE_DB_URL` (service-role only — `_lp_migrations` RLS denies anon and authenticated). Run `npm run db:migrate -- --dry-run` to see what's pending without applying.
+
+The "Adam pastes SQL by hand into Supabase SQL Editor" workflow is retired except for the runner's own bootstrap pair (migrations 067 + 068) which create the tracking table + backfill historical applied rows.
 
 **Read `database/migrations/README.md` before writing any migration.** TL;DR: pick the next sequential number after the highest on `main` AND across active feature branches. Mirror the number in the file's header comment. Idempotent where possible. RLS via existing helpers. Down-migration block at the end. Two real collisions have already happened — don't make a third.
 
