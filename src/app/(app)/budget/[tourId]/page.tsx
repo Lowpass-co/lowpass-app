@@ -1,31 +1,197 @@
 /* ============================================
-   LOWPASS — Budget · Tour landing (Phase 1 §C placeholder)
+   LOWPASS — Budget · Tour landing (Phase 3 §C tab nav)
 
-   /budget/[tourId] — replaces /tours/[id]/budget. Phase 3 ports
-   the existing budget surface onto this URL.
+   /budget/[tourId] — wraps the budget hub in <ProductShell> with
+   five tabs (Summary / Budget / Actuals / Reports / Settings).
+   Tab state via ?tab= searchParam; Summary is the default.
+
+   Layout (top → bottom):
+     <ProductShell>
+       <BudgetStatsStrip>          (sticky — always visible)
+       <BudgetPhaseStripClient>    (sticky — phase context)
+       <BudgetTabNav>              (active tab from ?tab=)
+       <tab-content>               (Summary | Budget | Actuals | Reports | Settings)
+     </ProductShell>
+
+   Summary tab carries the big-picture surface (charts, variance,
+   top spend, recent activity). Budget tab carries the dense
+   line-item spreadsheet from §B + Receipt Inbox sidebar. Other
+   three are placeholders this sprint.
    ============================================ */
 
-import { ProductShell } from '@/components/shell-v2';
-import { PhaseScaffoldPlaceholder } from '@/components/shell-v2/PhaseScaffoldPlaceholder';
+import { notFound } from 'next/navigation';
+import type { Metadata } from 'next';
 
-export default async function BudgetTourLandingPage({
+import { ProductShell } from '@/components/shell-v2';
+import { MobileBudgetBanner } from '@/components/mobile/MobileBudgetBanner';
+import { BudgetPhaseStripClient } from '@/components/budget/BudgetPhaseStripClient';
+import { BudgetStatsStrip } from '@/components/budget/BudgetStatsStrip';
+import { BudgetSpreadsheetView } from '@/components/budget/BudgetSpreadsheetView';
+import { ReceiptInbox } from '@/components/budget/ReceiptInbox';
+import { BudgetExportControls } from '@/components/budget/BudgetExportControls';
+import {
+  BudgetTabNav,
+  resolveBudgetTab,
+} from '@/components/budget/BudgetTabNav';
+import { BudgetSummaryTab } from '@/components/budget/BudgetSummaryTab';
+import { BudgetTabPlaceholder } from '@/components/budget/BudgetTabPlaceholder';
+import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { computeTourPhases } from '@/server/budget/computeTourPhases';
+import { getBudgetPanelData } from '@/server/budget/getBudgetPanelData';
+import {
+  detectDuplicates,
+  duplicatesToRecord,
+} from '@/server/budget/detectDuplicates';
+import type { BudgetLineItem } from '@/types';
+
+export async function generateMetadata({
   params,
 }: {
   params: Promise<{ tourId: string }>;
+}): Promise<Metadata> {
+  const { tourId } = await params;
+  const supabase = await createServerSupabaseClient();
+  const { data: tour } = await supabase
+    .from('tours')
+    .select('name')
+    .eq('id', tourId)
+    .single();
+  return { title: tour?.name ? `${tour.name} — Budget` : 'Budget' };
+}
+
+export default async function BudgetTourPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ tourId: string }>;
+  searchParams: Promise<{ tab?: string }>;
 }) {
   const { tourId } = await params;
+  const sp = await searchParams;
+  const tab = resolveBudgetTab(sp.tab);
+  const supabase = await createServerSupabaseClient();
+
+  const { data: tour, error: tourErr } = await supabase
+    .from('tours')
+    .select('id, name, workspace_id, currency, artist_id')
+    .eq('id', tourId)
+    .single();
+
+  if (tourErr || !tour) {
+    notFound();
+  }
+
+  const workspaceId = tour.workspace_id as string;
+
+  const [phases, panelData, lineItemsRes, routingRes] = await Promise.all([
+    computeTourPhases(supabase, tourId),
+    getBudgetPanelData(supabase, tourId),
+    supabase
+      .from('budget_line_items')
+      .select('*')
+      .eq('tour_id', tourId)
+      .eq('workspace_id', workspaceId)
+      .order('section')
+      .order('sort_order', { ascending: true })
+      .order('category')
+      .order('order_index', { ascending: true }),
+    supabase.from('routing').select('id, date').eq('tour_id', tourId),
+  ]);
+
+  const phaseBoundaries = phases.map((p) => ({
+    key: p.key,
+    label: p.label,
+    startIso: p.startDate,
+  }));
+  const tourCurrency = (tour.currency as string | null) ?? 'GBP';
+  const lines: BudgetLineItem[] = (lineItemsRes.data ?? []) as BudgetLineItem[];
+  const routingDateById: Record<string, string> = {};
+  for (const r of (routingRes.data ?? []) as Array<{
+    id: string;
+    date: string | null;
+  }>) {
+    if (r.id && r.date) routingDateById[r.id] = r.date.slice(0, 10);
+  }
+
   return (
     <ProductShell
       active="budget"
-      artistId={null}
+      artistId={(tour.artist_id as string | null) ?? null}
       tourId={tourId}
       productName="Budget"
     >
-      <PhaseScaffoldPlaceholder
-        title="Budget · tour"
-        phase="Phase 3"
-        body="The Budget tour surface lists line items grouped by category, with proposed/actual costs, status, and per-line attachments. Phase 3 ports the existing /tours/[id]/budget content onto this URL."
-      />
+      <div className="flex min-h-0 flex-1 flex-col pb-24">
+        <BudgetStatsStrip lines={lines} tourCurrency={tourCurrency} />
+        <BudgetPhaseStripClient phases={phases} />
+        <BudgetTabNav active={tab} />
+
+        <div className="space-y-6 px-4 pt-4">
+          {tab === 'summary' ? (
+            <BudgetSummaryTab
+              tourId={tourId}
+              lines={lines}
+              allocation={panelData.allocation}
+              burn={panelData.burn}
+              phaseBoundaries={phaseBoundaries}
+              tourCurrency={tourCurrency}
+            />
+          ) : null}
+
+          {tab === 'budget' ? (
+            <>
+              {/* Export controls live above the spreadsheet so PDF/
+                  XLSX is reachable from the line-item surface itself
+                  (Reports tab also links to it). */}
+              <BudgetExportControls
+                lines={lines}
+                tourCurrency={tourCurrency}
+                tourName={(tour.name as string | null) ?? 'Budget'}
+              />
+              <BudgetSpreadsheetView
+                lines={lines}
+                phases={phases}
+                routingDateById={routingDateById}
+                duplicateMap={duplicatesToRecord(detectDuplicates(lines))}
+                tourCurrency={tourCurrency}
+                tourId={tourId}
+              />
+              <ReceiptInbox tourId={tourId} lineItems={lines} />
+            </>
+          ) : null}
+
+          {tab === 'actuals' ? (
+            <BudgetTabPlaceholder
+              subtitle="Budget · actuals"
+              title="Actuals"
+              body="A filtered view of paid + closed line items, with per-show actuals tied back to estimates. Ships in a follow-up sprint. For now, switch to the Budget tab and filter by status = paid."
+              linkLabel="Open Budget tab"
+              linkHref={`/budget/${tourId}?tab=budget`}
+            />
+          ) : null}
+
+          {tab === 'reports' ? (
+            <BudgetTabPlaceholder
+              subtitle="Budget · reports"
+              title="Reports"
+              body="Custom reports and exports across the budget will live here. The existing PDF / XLSX export from the Budget tab is wired and reachable today."
+              linkLabel="Open Budget tab + export"
+              linkHref={`/budget/${tourId}?tab=budget`}
+            />
+          ) : null}
+
+          {tab === 'settings' ? (
+            <BudgetTabPlaceholder
+              subtitle="Budget · settings"
+              title="Settings"
+              body="Per-tour budget settings (categories, currency, contingency %) will live here. The tour's currency is editable from the tour edit page today."
+              linkLabel="Open tour settings"
+              linkHref={`/operations/${tourId}/edit`}
+            />
+          ) : null}
+        </div>
+
+        <MobileBudgetBanner />
+      </div>
     </ProductShell>
   );
 }

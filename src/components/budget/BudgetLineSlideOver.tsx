@@ -60,6 +60,8 @@ const CATEGORY_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
 type DraftFields = {
   label: string;
   category: string;
+  /** Phase 3 §D — pre_prod / rehearsals / show_days / wrap, or '' (unscoped). */
+  phase_tag: string;
   vendor: string;
   quantity: number;
   proposed_cost: number;
@@ -68,6 +70,15 @@ type DraftFields = {
   status: string;
   notes: string;
 };
+
+/** Phase 3 §D — phase-tag dropdown options, mirrors migration 064 enum. */
+const PHASE_TAG_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
+  { value: '', label: 'Unscoped' },
+  { value: 'pre_prod', label: 'Pre-prod' },
+  { value: 'rehearsals', label: 'Rehearsals' },
+  { value: 'show_days', label: 'Show days' },
+  { value: 'wrap', label: 'Wrap' },
+];
 
 function fieldsFromLine(line: BudgetLineItem, fallbackCurrency: string): DraftFields {
   // Vendor is mirrored through `notes` first line as "Vendor: <name>"
@@ -79,6 +90,7 @@ function fieldsFromLine(line: BudgetLineItem, fallbackCurrency: string): DraftFi
   return {
     label: line.label ?? '',
     category: (line.category ?? '').toString(),
+    phase_tag: (line.phase_tag ?? '').toString(),
     vendor: isVendorPrefix ? maybeVendor.slice('Vendor: '.length) : '',
     quantity: Number(line.quantity ?? 1),
     proposed_cost: Number(line.proposed_cost ?? 0),
@@ -108,6 +120,11 @@ function diffPatchPayload(
   const out: Record<string, unknown> = {};
   if (current.label !== initial.label) out.label = current.label;
   if (current.category !== initial.category) out.category = current.category || 'misc';
+  // Phase 3 §D — '' (empty string in the dropdown) maps to NULL on the
+  // server (= unscoped). Matches migration 064's CHECK constraint.
+  if (current.phase_tag !== initial.phase_tag) {
+    out.phase_tag = current.phase_tag || null;
+  }
   if (current.quantity !== initial.quantity) out.quantity = current.quantity;
   if (current.proposed_cost !== initial.proposed_cost) out.proposed_cost = current.proposed_cost;
   if (current.actual_cost !== initial.actual_cost) out.actual_cost = current.actual_cost;
@@ -259,6 +276,8 @@ export function BudgetLineSlideOver({
           actual_cost: fields.actual_cost,
           currency: fields.currency,
           notes: notesFromFields(fields),
+          // Phase 3 §D — '' (Unscoped) maps to NULL on the server.
+          phase_tag: fields.phase_tag || null,
         }),
       });
       if (!res.ok) {
@@ -388,7 +407,7 @@ export function BudgetLineSlideOver({
           />
         </label>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-3 gap-3">
           <label className="block">
             <span style={labelStyle}>Category</span>
             <select
@@ -400,6 +419,24 @@ export function BudgetLineSlideOver({
               {categoryOptions.map((c) => (
                 <option key={c.value} value={c.value}>
                   {c.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block">
+            {/* Phase 3 §D — phase tag dropdown. '' (Unscoped) maps
+                to NULL on the server; valid values mirror migration
+                064's CHECK constraint. */}
+            <span style={labelStyle}>Phase</span>
+            <select
+              value={fields.phase_tag}
+              onChange={(e) => setField('phase_tag', e.target.value)}
+              className="mt-1.5"
+              style={inputStyle}
+            >
+              {PHASE_TAG_OPTIONS.map((opt) => (
+                <option key={opt.value || 'unscoped'} value={opt.value}>
+                  {opt.label}
                 </option>
               ))}
             </select>

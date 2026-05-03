@@ -52,7 +52,21 @@ docs/
 
 ## Critical conventions
 
-### Migrations
+### Smoke tests
+
+Per-product smoke checklists live in `docs/smoke-tests/<product>.md`
+(advance, budget, operations, etc.). Each test has a stable `XYZ-NN`
+ID. Read `docs/smoke-tests/README.md` for the format. When a sprint
+ships observable behaviour, land the new test IDs in the same PR;
+when a gap closes, move the test out of "Known broken".
+
+### Migrations — runner is now wired
+
+`npm run db:migrate` applies every pending migration in numeric order against the database in `DATABASE_URL` (or `SUPABASE_DB_URL`). Each migration runs inside its own transaction. Applied filenames + sha256 checksums are recorded in `public._lp_migrations`. Editing an applied migration file is rejected by checksum mismatch — write a new migration that supersedes it instead.
+
+Use `npm run db:migrate:dry-run` to list pending without applying.
+
+The "Adam pastes SQL by hand into Supabase SQL Editor" workflow is retired except for the runner's own bootstrap (migrations 066 + 067, which create the tracking table and backfill the historical apply state).
 
 **Read `database/migrations/README.md` before writing any migration.** TL;DR: pick the next sequential number after the highest on `main` AND across active feature branches. Mirror the number in the file's header comment. Idempotent where possible. RLS via existing helpers. Down-migration block at the end. Two real collisions have already happened — don't make a third.
 
@@ -125,7 +139,7 @@ Pre-overhaul UX01–UX22 prompts are in `docs/cursor-prompts/`. Active product-s
 ## Things that have bitten agents before
 
 1. **Migration number collisions.** Seven real duplicates exist on `main` already (017, 018, 019, 024, 025, 026, 035). Pick the next sequential number after the highest on `main` AND across active feature branches before writing a new migration. See `database/migrations/README.md` and `docs/handover/CC_MIGRATION_RENUMBER.md`.
-2. **Migrations applied by hand.** There is no migration runner. SQL files in `database/migrations/` are reference-only; Adam pastes them into Supabase SQL Editor. Anything written but unpasted is a latent bug. Always provide migration SQL as idempotent (DROP IF EXISTS / CREATE OR REPLACE / ADD COLUMN IF NOT EXISTS / ON CONFLICT DO NOTHING). See `docs/handover/SQL_DRIFT_AUDIT_2026_04_30.md`.
+2. **Migrations.** As of migration 066/067 there's a runner: `npm run db:migrate` applies pending migrations against `DATABASE_URL`/`SUPABASE_DB_URL`, recording each one in `public._lp_migrations`. Still write SQL idempotently (DROP IF EXISTS / CREATE OR REPLACE / ADD COLUMN IF NOT EXISTS / ON CONFLICT DO NOTHING) — the runner aborts if a migration throws, and idempotent SQL lets re-runs after a partial failure complete cleanly. See `docs/handover/SQL_DRIFT_AUDIT_2026_04_30.md` for the historical drift this fixed.
 3. **Direct-pasted tables that have no `CREATE TABLE` migration file.** `rental_inventory`, `rental_jobs`, `rental_job_items`, and `workspace_members` exist in production but are reproducible only by hand on a fresh clone. The rental triplet is targeted in `docs/handover/CC_RENTAL_DENORMALISE.md`. Don't pile more onto this list.
 4. **Hex+alpha string concatenation** of CSS vars. Doesn't resolve. Use literal hex+alpha or `color-mix(...)`.
 5. **Glob patterns choking on `(app)` parens.** When searching the codebase, use individual paths or grep, not brace globs.

@@ -23,6 +23,42 @@ async function ensureTourAccess(supabase: Awaited<ReturnType<typeof createServer
   return tour ?? null;
 }
 
+/** Treat null / undefined / "" / empty array / empty object as "blank" so
+ *  the user's mental model matches: a field with no entered value is fillable
+ *  regardless of the JSONB null vs absent-key distinction. */
+function isBlankValue(value: unknown): boolean {
+  if (value === null || value === undefined) return true;
+  if (typeof value === 'string') return value.trim() === '';
+  if (Array.isArray(value)) return value.length === 0;
+  if (typeof value === 'object') {
+    return Object.keys(value as Record<string, unknown>).length === 0;
+  }
+  return false;
+}
+
+/** Merge source into destination per-section / per-field, keeping any value
+ *  the destination already has. Used when the user picks "Fill blanks only"
+ *  on the copy-conflict prompt. */
+function mergeFillBlanks(
+  source: Record<string, Record<string, unknown>>,
+  destination: Record<string, Record<string, unknown>>,
+): Record<string, Record<string, unknown>> {
+  const out: Record<string, Record<string, unknown>> = { ...destination };
+  for (const [sectionId, sectionData] of Object.entries(source)) {
+    if (!sectionData || typeof sectionData !== 'object' || Array.isArray(sectionData)) {
+      continue;
+    }
+    const destSection = (out[sectionId] ?? {}) as Record<string, unknown>;
+    out[sectionId] = { ...destSection };
+    for (const [fieldId, val] of Object.entries(sectionData)) {
+      if (isBlankValue(out[sectionId][fieldId])) {
+        out[sectionId][fieldId] = val;
+      }
+    }
+  }
+  return out;
+}
+
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
@@ -43,6 +79,15 @@ export async function POST(
     target_routing_ids: string[];
     copy_data: boolean;
     copy_sections: boolean;
+    /** Merge strategy when destination already has field values:
+     *  - 'replace'     — destination data + section_statuses overwritten by source.
+     *  - 'fill_blanks' — destination keeps its existing field values; source fills
+     *    only the fields that are null / undefined / empty-string / empty-array.
+     *    section_statuses are LEFT UNCHANGED in fill_blanks mode (workflow state
+     *    on the destination shouldn't be clobbered by a partial-merge import).
+     *  Default is 'replace' — matches pre-G.6 behaviour for callers that don't
+     *  pass a mode (server-script consumers, older clients). */
+    merge_mode?: 'replace' | 'fill_blanks';
   };
   try {
     body = await request.json();
@@ -51,6 +96,7 @@ export async function POST(
   }
 
   const { source_routing_id, target_routing_ids, copy_data, copy_sections } = body;
+  const mergeMode: 'replace' | 'fill_blanks' = body.merge_mode === 'fill_blanks' ? 'fill_blanks' : 'replace';
   if (!source_routing_id || !Array.isArray(target_routing_ids)) {
     return NextResponse.json({ error: 'source_routing_id and target_routing_ids (array) are required' }, { status: 400 });
   }
@@ -171,29 +217,46 @@ export async function POST(
       const cfgId = formConfigId ?? existingTargetConfig?.id;
       if (!cfgId) continue;
 
-      const payload = sourceInstance
-        ? {
-            form_config_id: cfgId,
-            data: sourceInstance.data ?? {},
-            section_statuses: sourceInstance.section_statuses ?? {},
-            status: sourceInstance.status ?? 'not_started',
-            last_updated_by_id: user.id,
-            last_updated_at: new Date().toISOString(),
-          }
-        : {
-            form_config_id: cfgId,
-            data: {},
-            section_statuses: {},
-            status: 'not_started' as const,
-            last_updated_by_id: user.id,
-            last_updated_at: new Date().toISOString(),
-          };
-
       const { data: existingInstance } = await supabase
         .from('advance_instances')
-        .select('id')
+        .select('id, data, section_statuses, status')
         .eq('routing_id', targetRoutingId)
         .maybeSingle();
+
+      const sourceData = (sourceInstance?.data ?? {}) as Record<
+        string,
+        Record<string, unknown>
+      >;
+      const sourceStatuses = (sourceInstance?.section_statuses ?? {}) as Record<
+        string,
+        unknown
+      >;
+      const existingData =
+        ((existingInstance?.data ?? {}) as Record<string, Record<string, unknown>>);
+      const existingStatuses =
+        ((existingInstance?.section_statuses ?? {}) as Record<string, unknown>);
+
+      // Merge strategy. fill_blanks: destination wins per-field, source fills
+      // only blanks. replace (default): source wins wholesale.
+      const mergedData =
+        mergeMode === 'fill_blanks'
+          ? mergeFillBlanks(sourceData, existingData)
+          : sourceData;
+      const mergedStatuses =
+        mergeMode === 'fill_blanks' ? existingStatuses : sourceStatuses;
+      const mergedStatus =
+        mergeMode === 'fill_blanks'
+          ? (existingInstance?.status ?? sourceInstance?.status ?? 'not_started')
+          : (sourceInstance?.status ?? 'not_started');
+
+      const payload = {
+        form_config_id: cfgId,
+        data: mergedData,
+        section_statuses: mergedStatuses,
+        status: mergedStatus,
+        last_updated_by_id: user.id,
+        last_updated_at: new Date().toISOString(),
+      };
 
       if (existingInstance) {
         const { error: updErr } = await supabase

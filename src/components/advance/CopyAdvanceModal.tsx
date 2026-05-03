@@ -76,6 +76,11 @@ export function CopyAdvanceModal({
   const copyData = copyMode === 'layout_and_data';
   const [submitting, setSubmitting] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  /** G.6 — three-way merge mode for the conflict prompt. Default fill_blanks
+   *  is the least-destructive default per Adam's spec. */
+  const [mergeMode, setMergeMode] = useState<'replace' | 'fill_blanks'>(
+    'fill_blanks',
+  );
 
   useEffect(() => {
     if (open && initialSourceRoutingId && dates.some((d) => d.routing_id === initialSourceRoutingId)) {
@@ -88,6 +93,7 @@ export function CopyAdvanceModal({
   useEffect(() => {
     if (!open) {
       setConfirming(false);
+      setMergeMode('fill_blanks');
       setTargetIds(new Set());
     }
   }, [open]);
@@ -136,6 +142,9 @@ export function CopyAdvanceModal({
           target_routing_ids: Array.from(targetIds),
           copy_sections: copySections,
           copy_data: copyData,
+          // G.6 — only meaningful when destination has values; server
+          // ignores merge_mode for empty destinations.
+          merge_mode: mergeMode,
         }),
       });
       const json = res.ok ? await res.json() : null;
@@ -342,10 +351,114 @@ export function CopyAdvanceModal({
             </div>
           </div>
 
-          {/* Confirmation message when targets have existing data */}
+          {/* G.6 — three-option conflict prompt. Replaces the old binary
+              "this will overwrite, continue?" with explicit merge choices. */}
           {confirming && selectedTargetsWithData.length > 0 && (
-            <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-lp-text">
-              This will overwrite advance data for <strong>{selectedTargetsWithData.length} show{selectedTargetsWithData.length !== 1 ? 's' : ''}</strong>. Continue?
+            <div
+              className="rounded-md border px-4 py-3 text-sm"
+              style={{
+                borderColor: 'var(--lp-border-strong)',
+                background: 'var(--lp-panel)',
+                color: 'var(--lp-text)',
+              }}
+            >
+              <p className="mb-3" style={{ color: 'var(--lp-text-secondary)' }}>
+                <strong style={{ color: 'var(--lp-text)' }}>
+                  {selectedTargetsWithData.length}
+                </strong>{' '}
+                {selectedTargetsWithData.length === 1 ? 'show' : 'shows'} already
+                {selectedTargetsWithData.length === 1 ? ' has' : ' have'} advance
+                data. Choose how to merge.
+              </p>
+              <div className="flex flex-col gap-2">
+                <label
+                  className="flex cursor-pointer items-start gap-2 rounded-md border px-3 py-2"
+                  style={{
+                    borderColor:
+                      mergeMode === 'fill_blanks'
+                        ? 'var(--color-lp-orange)'
+                        : 'var(--lp-border)',
+                    background:
+                      mergeMode === 'fill_blanks'
+                        ? 'color-mix(in srgb, var(--color-lp-orange) 6%, transparent)'
+                        : 'transparent',
+                  }}
+                >
+                  <input
+                    type="radio"
+                    name="copy-merge-mode"
+                    value="fill_blanks"
+                    checked={mergeMode === 'fill_blanks'}
+                    onChange={() => setMergeMode('fill_blanks')}
+                    className="mt-0.5"
+                  />
+                  <span className="flex-1">
+                    <span
+                      style={{
+                        fontSize: '13px',
+                        fontWeight: 500,
+                        color: 'var(--lp-text)',
+                      }}
+                    >
+                      Fill blanks only
+                    </span>
+                    <span
+                      className="block"
+                      style={{
+                        fontSize: '12px',
+                        color: 'var(--lp-text-secondary)',
+                        marginTop: 2,
+                      }}
+                    >
+                      Keep every value already entered. Source fills only the
+                      empty fields. Section statuses stay unchanged.
+                    </span>
+                  </span>
+                </label>
+                <label
+                  className="flex cursor-pointer items-start gap-2 rounded-md border px-3 py-2"
+                  style={{
+                    borderColor:
+                      mergeMode === 'replace'
+                        ? 'var(--color-lp-orange)'
+                        : 'var(--lp-border)',
+                    background:
+                      mergeMode === 'replace'
+                        ? 'color-mix(in srgb, var(--color-lp-orange) 6%, transparent)'
+                        : 'transparent',
+                  }}
+                >
+                  <input
+                    type="radio"
+                    name="copy-merge-mode"
+                    value="replace"
+                    checked={mergeMode === 'replace'}
+                    onChange={() => setMergeMode('replace')}
+                    className="mt-0.5"
+                  />
+                  <span className="flex-1">
+                    <span
+                      style={{
+                        fontSize: '13px',
+                        fontWeight: 500,
+                        color: 'var(--lp-text)',
+                      }}
+                    >
+                      Replace all
+                    </span>
+                    <span
+                      className="block"
+                      style={{
+                        fontSize: '12px',
+                        color: 'var(--color-lp-day-tv)',
+                        marginTop: 2,
+                      }}
+                    >
+                      Destination data is overwritten by the source — destructive.
+                    </span>
+                  </span>
+                </label>
+              </div>
             </div>
           )}
         </div>
@@ -367,9 +480,11 @@ export function CopyAdvanceModal({
             {submitting
               ? 'Copying...'
               : confirming
-                ? `Yes, copy to ${targetIds.size} show${targetIds.size !== 1 ? 's' : ''}`
+                ? mergeMode === 'replace'
+                  ? `Replace and copy to ${targetIds.size} show${targetIds.size !== 1 ? 's' : ''}`
+                  : `Fill blanks in ${targetIds.size} show${targetIds.size !== 1 ? 's' : ''}`
                 : needsConfirmation && selectedTargetsWithData.length > 0
-                  ? `Copy to ${targetIds.size} show${targetIds.size !== 1 ? 's' : ''} (${selectedTargetsWithData.length} will be overwritten)`
+                  ? `Copy to ${targetIds.size} show${targetIds.size !== 1 ? 's' : ''} (${selectedTargetsWithData.length} ${selectedTargetsWithData.length === 1 ? 'has' : 'have'} data)`
                   : `Copy to ${targetIds.size} show${targetIds.size !== 1 ? 's' : ''}`}
           </button>
         </div>

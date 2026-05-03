@@ -1,6 +1,41 @@
 # Lowpass Database Migrations
 
-Sequential, append-only migration files. Apply in numeric order.
+Sequential, append-only migration files. Apply via `npm run db:migrate`.
+
+## The runner (canonical apply path)
+
+`scripts/db-migrate.mjs`, exposed as `npm run db:migrate`. It:
+
+1. Reads every `database/migrations/*.sql` file matching `^\d{3}.*\.sql$` in numeric order.
+2. Reads `public._lp_migrations` to see what's already applied.
+3. Verifies stored checksums match current file content. If a stored checksum differs from the file, the runner aborts — editing an applied migration is forbidden. Write a new migration that supersedes it instead.
+4. Applies each pending migration inside its own transaction. On failure, the transaction rolls back and the runner exits non-zero. Subsequent re-runs pick up where the failure happened.
+
+```bash
+# Apply all pending migrations:
+DATABASE_URL=postgres://...service-role-creds... npm run db:migrate
+
+# List pending without applying:
+DATABASE_URL=postgres://... npm run db:migrate:dry-run
+```
+
+`SUPABASE_DB_URL` is accepted as a fallback for `DATABASE_URL`. Use the **service-role** connection string — anon and authenticated roles cannot read or write `_lp_migrations`. Drop the password into a local `.env` that's gitignored; never check it in.
+
+### Bootstrap (one time, before the first runner run)
+
+The runner depends on `public._lp_migrations`, which is itself defined by a migration. Chicken and egg. Adam:
+
+1. Paste `066_lp_migrations_tracking.sql` into the Supabase SQL Editor → Run.
+2. Paste `067_backfill_lp_migrations.sql` → Run. Records every migration that was applied to production by hand before the runner existed.
+3. `npm run db:migrate:dry-run` should report `No pending migrations.`
+
+After that, the runner takes over.
+
+### Failure modes
+
+- **`ERROR: public._lp_migrations does not exist`** — bootstrap not done yet. Paste 066 + 067 first.
+- **`ERROR: ${file} checksum changed`** — someone edited a migration file that's already been applied. Restore the file from git (`git restore`) and write a NEW migration with the desired change.
+- **Migration SQL throws inside the transaction** — runner rolls back, exits non-zero, prints the Postgres error. Fix the SQL and re-run; the failed migration won't have been recorded so the runner picks it up again.
 
 ## Numbering rule (read this every time you add a migration)
 
@@ -36,10 +71,12 @@ Rules:
    -- ============================================
    ```
    Keep the migration number in the header in sync with the filename.
-5. **Idempotent where possible.** Use `CREATE TABLE IF NOT EXISTS`, `ADD COLUMN IF NOT EXISTS`, `CREATE POLICY IF NOT EXISTS` (when supported), and `ON CONFLICT DO NOTHING` for seed inserts. Lets the same migration apply on partially-converged schemas without crashing.
+5. **Idempotent where possible.** Use `CREATE TABLE IF NOT EXISTS`, `ADD COLUMN IF NOT EXISTS`, `DROP POLICY IF EXISTS` + `CREATE POLICY`, and `ON CONFLICT DO NOTHING` for seed inserts. Lets the same migration apply on partially-converged schemas without crashing.
 6. **Use existing RLS helpers.** `public.get_my_workspace_id()` and `public.is_workspace_admin()` are defined in early migrations. Don't reinvent them inline.
 7. **Down migration block at the end of every file**, commented out with `--`. Future operators should be able to invert the change.
 8. **Backfill carefully.** Back-fill steps must be safe to re-run (idempotent) and must not delete existing data.
+9. **Once applied, never edit.** The runner enforces this via checksums. Make a new migration that supersedes the change instead.
+10. **Dry-run before applying to anything you care about.** `npm run db:migrate:dry-run` lists pending without applying.
 
 ## Real-world precedent: don't repeat these mistakes
 
@@ -48,7 +85,7 @@ This repo has hit migration-number collisions twice during the UX overhaul:
 - **First collision:** UX09/UX10/UX11 numbered their migrations 033/034/035 — but those numbers were already on main as `033_bug_reports.sql`, `034_rider_pack_system.sql`, `035_bug_reports_reconcile.sql`. Renumbered to 049/050/051.
 - **Second collision:** UX12 numbered its migration 048 — but `048_bugs_2026_04_26_pending_testing.sql` was already on main. Renumbered to 052.
 
-Both happened because the feature branch was cut from a stale base and didn't check `main`'s numbering before picking a number. **The fix branch (`fix/ux12-migration-renumber`) bundles both renames + this README + `CLAUDE.md` + entity-slide-over TODOs into one comprehensive cleanup.**
+Both happened because the feature branch was cut from a stale base and didn't check `main`'s numbering before picking a number. The runner's checksum check doesn't catch this — it only catches edits to files already in the tracking table. Pre-merge, fetch main and grep `database/migrations/` on every active branch before picking a number.
 
 ## Cross-reference list
 
