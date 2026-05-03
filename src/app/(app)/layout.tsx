@@ -9,6 +9,7 @@
    Auth pages under (auth)/ do NOT.
    ============================================ */
 
+import { Suspense } from 'react';
 import { AppShell } from '@/components/layout/AppShell';
 import { ErrorBoundary } from '@/components/common/ErrorBoundary';
 import { ToastProvider } from '@/components/ui/Toast';
@@ -20,16 +21,22 @@ export default function AppLayout({
 }: {
   children: React.ReactNode;
 }) {
+  // Post-merge fix-up §C — ArtistTourProvider uses useSearchParams
+  // to read ?artist_id / ?tour_id from URL, so it needs Suspense
+  // boundary above. (app) routes are all dynamic anyway (Supabase
+  // auth) so the bailout has no SSG cost.
   return (
     <ErrorBoundary>
       <ToastProvider>
-        <ArtistTourProvider>
-          <ProductProvider>
-            <AppShell>
-              {children}
-            </AppShell>
-          </ProductProvider>
-        </ArtistTourProvider>
+        <Suspense fallback={null}>
+          <ArtistTourProvider>
+            <ProductProvider>
+              <AppShell>
+                {children}
+              </AppShell>
+            </ProductProvider>
+          </ArtistTourProvider>
+        </Suspense>
       </ToastProvider>
     </ErrorBoundary>
   );

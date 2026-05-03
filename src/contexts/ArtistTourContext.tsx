@@ -1,10 +1,16 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect, useLayoutEffect, useCallback, ReactNode } from 'react';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import type { Artist, Tour } from '@/types';
 
 const STORAGE_ARTIST = 'lp-selected-artist';
 const STORAGE_TOUR = 'lp-selected-tour';
+// Post-merge fix-up §C — URL params are the canonical source of
+// truth for artist + tour. localStorage is a fallback for first-load
+// when no URL params present.
+const QUERY_ARTIST = 'artist_id';
+const QUERY_TOUR = 'tour_id';
 
 export type TourRoutingLiteRow = {
   id: string;
@@ -45,6 +51,16 @@ export function useArtistTourContext() {
 }
 
 export function ArtistTourProvider({ children }: { children: ReactNode }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const urlSearchParams = useSearchParams();
+  // Snapshot URL params at render time. Reading them inside state-init
+  // would require a lazy initializer + useState comparison; the
+  // useLayoutEffect below picks them up synchronously before paint
+  // (and reacts when they change in-app via the deps array).
+  const urlArtistId = urlSearchParams?.get(QUERY_ARTIST) ?? null;
+  const urlTourId = urlSearchParams?.get(QUERY_TOUR) ?? null;
+
   const [selectedArtistId, setSelectedArtistIdState] = useState<string | null>(null);
   const [selectedTourId, setSelectedTourIdState] = useState<string | null>(null);
   const [artists, setArtists] = useState<Artist[]>([]);
@@ -55,32 +71,85 @@ export function ArtistTourProvider({ children }: { children: ReactNode }) {
   const [tourRouting, setTourRouting] = useState<TourRoutingLiteRow[]>([]);
   const [isRoutingLoading, setIsRoutingLoading] = useState(false);
 
+  // Post-merge fix-up §C — URL params take precedence over
+  // localStorage. Resolution order on every render:
+  //   1. ?artist_id / ?tour_id present in URL → use them
+  //   2. Otherwise, localStorage (first-load fallback)
+  //   3. Otherwise, null
+  // Runs in useLayoutEffect so the swap happens before paint, killing
+  // the race where users navigating fast hit pages before localStorage
+  // hydration completes.
   useLayoutEffect(() => {
     if (typeof window === 'undefined') return;
-    const a = localStorage.getItem(STORAGE_ARTIST);
-    const t = localStorage.getItem(STORAGE_TOUR);
-    if (a) setSelectedArtistIdState(a);
-    if (t) setSelectedTourIdState(t);
+    const lsArtist = localStorage.getItem(STORAGE_ARTIST);
+    const lsTour = localStorage.getItem(STORAGE_TOUR);
+    const nextArtist = urlArtistId ?? lsArtist ?? null;
+    const nextTour = urlTourId ?? lsTour ?? null;
+    setSelectedArtistIdState((prev) => (prev === nextArtist ? prev : nextArtist));
+    setSelectedTourIdState((prev) => (prev === nextTour ? prev : nextTour));
     setHydrated(true);
-  }, []);
+  }, [urlArtistId, urlTourId]);
 
-  const setSelectedArtistId = useCallback((id: string | null) => {
-    setSelectedArtistIdState(id);
-    setSelectedTourIdState(null);
-    if (typeof window !== 'undefined') {
-      if (id) localStorage.setItem(STORAGE_ARTIST, id);
-      else localStorage.removeItem(STORAGE_ARTIST);
-      localStorage.removeItem(STORAGE_TOUR);
-    }
-  }, []);
+  // Helper: write the current selection back to the URL via
+  // router.replace, preserving everything else in the search string.
+  // Path-segment routes like /budget/[tourId] already encode the tour;
+  // adding it as a query param too is harmless and lets shared
+  // utilities deep-link with full state.
+  const syncUrlParams = useCallback(
+    (artistId: string | null, tourId: string | null) => {
+      if (typeof window === 'undefined' || !pathname) return;
+      const next = new URLSearchParams(urlSearchParams?.toString() ?? '');
+      if (artistId) next.set(QUERY_ARTIST, artistId);
+      else next.delete(QUERY_ARTIST);
+      if (tourId) next.set(QUERY_TOUR, tourId);
+      else next.delete(QUERY_TOUR);
+      const qs = next.toString();
+      const target = qs ? `${pathname}?${qs}` : pathname;
+      // Skip the replace when it would no-op — avoids fighting Next's
+      // own back/forward handling.
+      const current =
+        window.location.pathname +
+        (window.location.search ? window.location.search : '');
+      if (target !== current) {
+        router.replace(target, { scroll: false });
+      }
+    },
+    [pathname, router, urlSearchParams],
+  );
 
-  const setSelectedTourId = useCallback((id: string | null) => {
-    setSelectedTourIdState(id);
-    if (typeof window !== 'undefined') {
-      if (id) localStorage.setItem(STORAGE_TOUR, id);
-      else localStorage.removeItem(STORAGE_TOUR);
-    }
-  }, []);
+  const setSelectedArtistId = useCallback(
+    (id: string | null) => {
+      setSelectedArtistIdState(id);
+      // Picking a new artist clears the tour selection (a tour belongs
+      // to one artist; switching the artist invalidates the tour).
+      setSelectedTourIdState(null);
+      if (typeof window !== 'undefined') {
+        if (id) localStorage.setItem(STORAGE_ARTIST, id);
+        else localStorage.removeItem(STORAGE_ARTIST);
+        localStorage.removeItem(STORAGE_TOUR);
+      }
+      syncUrlParams(id, null);
+    },
+    [syncUrlParams],
+  );
+
+  const setSelectedTourId = useCallback(
+    (id: string | null) => {
+      setSelectedTourIdState(id);
+      if (typeof window !== 'undefined') {
+        if (id) localStorage.setItem(STORAGE_TOUR, id);
+        else localStorage.removeItem(STORAGE_TOUR);
+      }
+      // Use the latest selectedArtistId for the URL write — the closure
+      // captures whatever was current when the callback was constructed,
+      // so we read from state instead.
+      setSelectedArtistIdState((currentArtist) => {
+        syncUrlParams(currentArtist, id);
+        return currentArtist;
+      });
+    },
+    [syncUrlParams],
+  );
 
   const fetchArtistsList = useCallback(async (): Promise<Artist[]> => {
     try {
