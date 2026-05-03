@@ -8,7 +8,7 @@
 
 import { useState, useEffect, useCallback, useRef, Fragment, createContext, useContext } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ChevronDown,
   ChevronRight,
@@ -404,6 +404,14 @@ export function AdvanceSectionBuilder({
   routingId: string;
 }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  // Post-merge fix-up: when the per-show page routes here with
+  // ?mode=edit, the builder must render SetupMode regardless of
+  // whether the advance already has sections — the FillMode
+  // accordion fall-through (showSetup = setupMode || !hasSections)
+  // was swallowing the builder when sections existed, leaving the
+  // user stuck on the read view via an edit URL.
+  const isBuilderMode = searchParams?.get('mode') === 'edit';
   const { user } = useAuth();
   const [data, setData] = useState<PageData | null>(null);
   const [allDates, setAllDates] = useState<AdvanceDateItem[]>([]);
@@ -444,7 +452,10 @@ export function AdvanceSectionBuilder({
   }, [tourId]);
 
   const hasSections = data?.advance?.sections?.length ? true : false;
-  const showSetup = setupMode || !hasSections;
+  // Post-merge fix-up: ?mode=edit forces SetupMode regardless of
+  // section count. FillMode (the accordion read view) is only the
+  // default for show-tab visits, never for explicit builder URLs.
+  const showSetup = isBuilderMode || setupMode || !hasSections;
 
   const [contentVisible, setContentVisible] = useState(false);
   useEffect(() => {
