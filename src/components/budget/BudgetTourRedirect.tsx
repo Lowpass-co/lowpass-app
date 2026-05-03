@@ -6,7 +6,8 @@ import { useArtistTourContext } from '@/contexts/ArtistTourContext';
 
 /**
  * When budget page has no tour_id in URL but context has a selected tour,
- * redirect to /tours/{id}/budget so the user lands on the tour budget hub.
+ * redirect to /budget/{id} so the user lands on the tour budget hub
+ * (Phase 3 §A — was /tours/{id}/budget).
  */
 export function BudgetTourRedirect() {
   const router = useRouter();
@@ -16,7 +17,7 @@ export function BudgetTourRedirect() {
 
   useEffect(() => {
     if (tourIdFromUrl || !selectedTourId) return;
-    router.replace(`/tours/${selectedTourId}/budget`);
+    router.replace(`/budget/${selectedTourId}`);
   }, [tourIdFromUrl, selectedTourId, router]);
 
   return null;

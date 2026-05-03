@@ -292,9 +292,11 @@ export function BulkStatusUpdateSlideOver({
           <p
             className="rounded-lg border px-3 py-2 text-sm"
             style={{
-              borderColor: 'color-mix(in srgb, #EF4444 40%, transparent)',
-              background: 'color-mix(in srgb, #EF4444 8%, transparent)',
-              color: '#EF4444',
+              borderColor:
+                'color-mix(in srgb, var(--color-lp-error) 40%, transparent)',
+              background:
+                'color-mix(in srgb, var(--color-lp-error) 8%, transparent)',
+              color: 'var(--color-lp-error)',
             }}
           >
             {submitError}

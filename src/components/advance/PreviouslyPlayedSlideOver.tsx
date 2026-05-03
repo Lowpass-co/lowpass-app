@@ -285,6 +285,17 @@ export function PreviouslyPlayedSlideOver({
       ) : activeShow ? (
         /* === Selected past show — section picker === */
         <div className="space-y-3">
+          <h3
+            style={{
+              fontSize: '12px',
+              fontWeight: 600,
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
+              color: 'var(--lp-text-tertiary)',
+            }}
+          >
+            Import sections from this advance
+          </h3>
           <div
             className="rounded-md border px-3 py-2"
             style={{

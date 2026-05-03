@@ -591,7 +591,7 @@ function AdvanceDateStrip({ tourId, routingId, dates }: { tourId: string; routin
   const cityAbbrev = (city: string) => (city ? (city.length > 4 ? city.slice(0, 4) : city) : '');
   return (
     <div className="hidden md:flex shrink-0 w-16 flex-col rounded-xl border border-lp-border bg-lp-surface overflow-hidden">
-      <div className="border-b border-lp-border px-1.5 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-lp-text-tertiary text-center">Dates</div>
+      <div className="border-b border-lp-border px-1.5 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-lp-text-tertiary text-center">Dates</div>
       <div className="min-h-0 flex-1 overflow-y-auto p-1.5 space-y-0.5">
         {dates.map((item) => {
           const isCurrent = item.routing_id === routingId;
@@ -748,6 +748,11 @@ function SetupMode({
   const [removingField, setRemovingField] = useState<string | null>(null);
   const [lastAddedKey, setLastAddedKey] = useState<string | null>(null);
   const [lastAddedTemplateId, setLastAddedTemplateId] = useState<string | null>(null);
+  /** G.4 — selected field-def for the right-rail Field Properties panel.
+   *  Click a row → dispatches ADVANCE_FIELD_SELECTED so the shell client
+   *  populates the panel. Click anywhere else → setSelectedFieldId(null)
+   *  via the canvas blank-space onClick lower down. */
+  const [selectedFieldId, setSelectedFieldId] = useState<string | null>(null);
 
   const fetchTemplates = useCallback(() => {
     fetch('/api/advance/templates')
@@ -866,6 +871,88 @@ function SetupMode({
       setRemovingField(null);
     }, 150);
   }, []);
+
+  /** G.4 — apply a partial patch to a field-def by id. Used by the
+   *  window-level ADVANCE_FIELD_UPDATED listener (panel → canvas wire). */
+  const patchFieldById = useCallback(
+    (
+      fieldId: string,
+      patch: Partial<Pick<FieldDef, 'label' | 'required' | 'type'>>,
+    ) => {
+      setSections((prev) =>
+        prev.map((sec) => {
+          const fieldIdx = (sec.fields ?? []).findIndex((f) => f.id === fieldId);
+          if (fieldIdx < 0) return sec;
+          const next = [...sec.fields];
+          next[fieldIdx] = { ...next[fieldIdx], ...patch };
+          return { ...sec, fields: next };
+        }),
+      );
+    },
+    [],
+  );
+
+  // Listen for panel-driven field edits (G.4 wire from
+  // AdvanceFieldPropertiesPanel → AdvanceBuilderShellClient → canvas).
+  useEffect(() => {
+    function onFieldUpdated(e: Event) {
+      const ce = e as CustomEvent<{
+        fieldId: string;
+        patch: Partial<Pick<FieldDef, 'label' | 'required' | 'type'>>;
+      } | null>;
+      if (!ce.detail) return;
+      patchFieldById(ce.detail.fieldId, ce.detail.patch);
+    }
+    window.addEventListener('advance:field-updated', onFieldUpdated);
+    return () => window.removeEventListener('advance:field-updated', onFieldUpdated);
+  }, [patchFieldById]);
+
+  /** G.3 — add a section by label (from a library card drop) or as a
+   *  blank custom section if seedId === '__blank__' or no label match. */
+  const addSectionFromDrop = useCallback(
+    (seedId: string, label: string) => {
+      const trimmedLabel = label.trim() || 'Custom Section';
+      // Try to match an existing workspace template by name first.
+      const match = seedId !== '__blank__'
+        ? templates.find(
+            (t) =>
+              (t.name ?? '').trim().toLowerCase() ===
+              trimmedLabel.toLowerCase(),
+          )
+        : undefined;
+      if (match) {
+        addAllFields(match);
+        return;
+      }
+      // No template match → create a blank section. The seed becomes
+      // a new template_id (synthesised) with no fields. Autosave picks
+      // it up; user can add fields via the existing in-canvas controls.
+      const syntheticId = `${seedId === '__blank__' ? 'custom' : seedId}_${Date.now().toString(36)}`;
+      setSections((prev) => [
+        ...prev,
+        {
+          template_id: syntheticId,
+          label: trimmedLabel,
+          fields: [],
+          order: prev.length,
+        },
+      ]);
+      setLastAddedTemplateId(syntheticId);
+    },
+    [templates, addAllFields],
+  );
+
+  // Listen for library drop events (G.3 wire from AdvanceSectionLibrary
+  // → SectionDropZone → AdvanceBuilderShellClient → canvas).
+  useEffect(() => {
+    function onSectionDrop(e: Event) {
+      const ce = e as CustomEvent<{ seedId: string; label: string } | null>;
+      if (!ce.detail) return;
+      addSectionFromDrop(ce.detail.seedId, ce.detail.label);
+    }
+    window.addEventListener('advance:section-drop', onSectionDrop);
+    return () => window.removeEventListener('advance:section-drop', onSectionDrop);
+  }, [addSectionFromDrop]);
 
   const moveSectionOrder = useCallback((from: number, to: number) => {
     if (from === to || to < 0 || to > sections.length) return;
@@ -1123,7 +1210,7 @@ function SetupMode({
                                 >
                                     <FieldTypeIcon type={f.type} />
                                     <span className="flex-1 truncate">{f.label}</span>
-                                    <span className={cn('shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium', (f.required ?? false) ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300' : 'text-lp-text-tertiary')}>{(f.required ?? false) ? 'Required' : 'Optional'}</span>
+                                    <span className={cn('shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium', (f.required ?? false) ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300' : 'text-lp-text-tertiary')}>{(f.required ?? false) ? 'Required' : 'Optional'}</span>
                                     {added && <Check size={14} className="shrink-0 text-lp-accent" />}
                                   </button>
                                 </li>
@@ -1233,7 +1320,7 @@ function SetupMode({
                                   >
                                     <FieldTypeIcon type={f.type} />
                                     <span className="flex-1 truncate">{f.label}</span>
-                                    <span className={cn('shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium', (f.required ?? false) ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300' : 'text-lp-text-tertiary')}>{(f.required ?? false) ? 'Required' : 'Optional'}</span>
+                                    <span className={cn('shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium', (f.required ?? false) ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300' : 'text-lp-text-tertiary')}>{(f.required ?? false) ? 'Required' : 'Optional'}</span>
                                     {added ? <Check size={14} className="shrink-0 text-lp-accent" /> : null}
                                   </button>
                                   {t.workspace_id && !added && (
@@ -1367,11 +1454,44 @@ function SetupMode({
                             )}
                             <li
                               className={cn(
-                                'relative flex items-center gap-2 px-3 py-2 group transition-all duration-200 ease-out',
+                                'relative flex items-center gap-2 px-3 py-2 group transition-all duration-200 ease-out cursor-pointer',
                                 removingField === `${secIdx}-${fieldIdx}` && 'opacity-0',
                                 lastAddedKey === `${sec.template_id}-${f.id}` && 'bg-lp-accent/25',
-                                isDraggingField && 'scale-105 shadow-md opacity-90 z-10 rounded-md'
+                                isDraggingField && 'scale-105 shadow-md opacity-90 z-10 rounded-md',
                               )}
+                              style={
+                                selectedFieldId === f.id
+                                  ? {
+                                      borderLeft: '2px solid var(--color-lp-orange)',
+                                      background:
+                                        'color-mix(in srgb, var(--color-lp-orange) 6%, transparent)',
+                                      paddingLeft: 10 /* compensate for the 2px border */,
+                                    }
+                                  : undefined
+                              }
+                              onClick={(e) => {
+                                // Don't intercept clicks on internal controls
+                                // (drag handle, delete X, etc.).
+                                const target = e.target as HTMLElement;
+                                if (target.closest('button, input, select, textarea')) return;
+                                setSelectedFieldId(f.id);
+                                if (typeof window !== 'undefined') {
+                                  window.dispatchEvent(
+                                    new CustomEvent('advance:field-selected', {
+                                      detail: {
+                                        id: f.id,
+                                        type: (['text', 'checkbox', 'number', 'dropdown', 'file'] as const).includes(
+                                          f.type as 'text' | 'checkbox' | 'number' | 'dropdown' | 'file',
+                                        )
+                                          ? (f.type as 'text' | 'checkbox' | 'number' | 'dropdown' | 'file')
+                                          : 'text',
+                                        label: f.label,
+                                        required: f.required ?? false,
+                                      },
+                                    }),
+                                  );
+                                }
+                              }}
                               draggable
                               onDragStart={(e) => { e.stopPropagation(); e.dataTransfer.setData('application/json', JSON.stringify({ type: 'field', sectionIndex: secIdx, fieldIndex: fieldIdx })); setDragGhost(e, f.label); setDragState({ type: 'field', sectionIndex: secIdx, fieldIndex: fieldIdx, field: f }); }}
                               onDragEnd={() => { setDragState(null); setDropTarget(null); }}
@@ -1392,7 +1512,7 @@ function SetupMode({
                               <GripVertical className="shrink-0 cursor-grab text-lp-text-tertiary active:cursor-grabbing" />
                               <FieldTypeIcon type={f.type} />
                               <span className="flex-1 truncate text-sm text-lp-text">{f.label}</span>
-                              <span className={cn('shrink-0 rounded px-1.5 py-0.5 text-[10px] font-medium', (f.required ?? false) ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300' : 'bg-lp-bg-tertiary text-lp-text-tertiary')}>{(f.required ?? false) ? 'Required' : 'Optional'}</span>
+                              <span className={cn('shrink-0 rounded px-1.5 py-0.5 text-[11px] font-medium', (f.required ?? false) ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300' : 'bg-lp-bg-tertiary text-lp-text-tertiary')}>{(f.required ?? false) ? 'Required' : 'Optional'}</span>
                               <button type="button" onClick={() => removeField(secIdx, fieldIdx)} className="shrink-0 rounded p-1 text-lp-text-tertiary hover:bg-lp-bg-tertiary hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
                                 <X size={14} />
                               </button>
