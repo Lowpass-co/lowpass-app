@@ -1,0 +1,99 @@
+/* ============================================
+   LOWPASS — Budget · Tab nav (Phase 3 §C.1)
+
+   Five-tab nav at the top of the budget product, between the stats
+   strip and the page content.
+
+   Tab routing uses ?tab=… (no replace, scroll preserved). Default
+   tab is Summary — empty / unknown ?tab= lands here too. The
+   active link picks up the brand-orange underline.
+   ============================================ */
+
+'use client';
+
+import Link from 'next/link';
+import { usePathname, useSearchParams } from 'next/navigation';
+import { cn } from '@/lib/utils';
+
+export type BudgetTab = 'summary' | 'budget' | 'actuals' | 'reports' | 'settings';
+
+const TABS: ReadonlyArray<{ id: BudgetTab; label: string }> = [
+  { id: 'summary', label: 'Summary' },
+  { id: 'budget', label: 'Budget' },
+  { id: 'actuals', label: 'Actuals' },
+  { id: 'reports', label: 'Reports' },
+  { id: 'settings', label: 'Settings' },
+];
+
+export function resolveBudgetTab(raw: string | string[] | undefined): BudgetTab {
+  const candidate = Array.isArray(raw) ? raw[0] : raw;
+  switch (candidate) {
+    case 'budget':
+    case 'actuals':
+    case 'reports':
+    case 'settings':
+      return candidate;
+    default:
+      return 'summary';
+  }
+}
+
+interface BudgetTabNavProps {
+  active: BudgetTab;
+}
+
+export function BudgetTabNav({ active }: BudgetTabNavProps) {
+  const pathname = usePathname() ?? '';
+  const searchParams = useSearchParams();
+
+  function hrefFor(tab: BudgetTab): string {
+    const params = new URLSearchParams(searchParams);
+    if (tab === 'summary') params.delete('tab');
+    else params.set('tab', tab);
+    const qs = params.toString();
+    return qs ? `${pathname}?${qs}` : pathname;
+  }
+
+  return (
+    <nav
+      className="flex items-end gap-1 border-b px-4"
+      style={{
+        borderColor: 'var(--lp-border-strong)',
+        background: 'var(--lp-bg)',
+      }}
+      aria-label="Budget tabs"
+    >
+      {TABS.map((tab) => {
+        const isActive = tab.id === active;
+        return (
+          <Link
+            key={tab.id}
+            href={hrefFor(tab.id)}
+            scroll={false}
+            className={cn('btn-transition relative px-3 py-2.5')}
+            style={{
+              fontSize: '13px',
+              fontWeight: isActive ? 600 : 500,
+              color: isActive ? 'var(--lp-text)' : 'var(--lp-text-secondary)',
+            }}
+            aria-current={isActive ? 'page' : undefined}
+          >
+            {tab.label}
+            {isActive ? (
+              <span
+                aria-hidden
+                className="absolute left-2 right-2"
+                style={{
+                  bottom: -1,
+                  height: 2,
+                  background: 'var(--color-lp-orange)',
+                  borderRadius: 1,
+                }}
+              />
+            ) : null}
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}

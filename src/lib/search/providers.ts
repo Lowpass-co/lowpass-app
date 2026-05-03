@@ -230,7 +230,7 @@ async function searchBudgetLines(query: string): Promise<SearchResult[]> {
       secondary,
       score: scored.score,
       ranges: scored.ranges,
-      action: { type: 'navigate', href: `/tours/${row.tour_id}/budget#line-${row.id}` },
+      action: { type: 'navigate', href: `/budget/${row.tour_id}#line-${row.id}` },
     });
   }
   return results;

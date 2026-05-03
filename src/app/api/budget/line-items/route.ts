@@ -195,6 +195,8 @@ export async function POST(request: Request) {
     notes?: string | null;
     section?: string | null;
     sort_order?: number;
+    /** Phase 3 §D — pre_prod / rehearsals / show_days / wrap, or null. */
+    phase_tag?: string | null;
   };
   try {
     body = await request.json();
@@ -245,6 +247,22 @@ export async function POST(request: Request) {
       ? body.section.trim().toLowerCase()
       : null;
 
+  // Phase 3 §D — phase_tag, optional, validated against migration 064 enum.
+  const PHASE_TAG_VALUES = ['pre_prod', 'rehearsals', 'show_days', 'wrap'];
+  let phaseTag: string | null = null;
+  if (body.phase_tag != null) {
+    if (!PHASE_TAG_VALUES.includes(body.phase_tag)) {
+      return NextResponse.json(
+        {
+          error:
+            'phase_tag must be one of: pre_prod, rehearsals, show_days, wrap (or null)',
+        },
+        { status: 400 },
+      );
+    }
+    phaseTag = body.phase_tag;
+  }
+
   const { data: created, error } = await supabase
     .from('budget_line_items')
     .insert({
@@ -261,6 +279,7 @@ export async function POST(request: Request) {
       order_index: orderIndex,
       section: sectionVal,
       sort_order: sortOrder,
+      phase_tag: phaseTag,
     })
     .select()
     .single();
@@ -289,6 +308,8 @@ export async function PATCH(request: Request) {
   }
 
   const STATUS_VALUES = ['draft', 'quoted', 'approved', 'paid', 'disputed'];
+  // Phase 3 §D — phase_tag enum mirrors migration 064's CHECK constraint.
+  const PHASE_TAG_VALUES = ['pre_prod', 'rehearsals', 'show_days', 'wrap'];
 
   let body: {
     id: string;
@@ -302,6 +323,8 @@ export async function PATCH(request: Request) {
     notes?: string | null;
     order_index?: number;
     status?: string;
+    /** Phase 3 §D — pre_prod / rehearsals / show_days / wrap, or null. */
+    phase_tag?: string | null;
     tags?: string[];
     linked_item_ids?: string[];
     flight_id?: string | null;
@@ -372,6 +395,22 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: 'status must be one of: draft, quoted, approved, paid, disputed' }, { status: 400 });
     }
     payload.status = updates.status;
+  }
+  // Phase 3 §D — phase_tag null = unscoped; valid values per migration 064.
+  if (updates.phase_tag !== undefined) {
+    if (
+      updates.phase_tag !== null &&
+      !PHASE_TAG_VALUES.includes(updates.phase_tag)
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            'phase_tag must be one of: pre_prod, rehearsals, show_days, wrap (or null)',
+        },
+        { status: 400 },
+      );
+    }
+    payload.phase_tag = updates.phase_tag;
   }
   if (updates.tags !== undefined) payload.tags = Array.isArray(updates.tags) ? updates.tags : [];
   if (updates.linked_item_ids !== undefined) payload.linked_item_ids = Array.isArray(updates.linked_item_ids) ? updates.linked_item_ids : [];

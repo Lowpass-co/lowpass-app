@@ -293,7 +293,7 @@ export default async function TourHubPage({
           progressColor={budgetBarColor(hub.budget.percent)}
           barWidthPercent={Math.min(100, hub.budget.percent)}
           ctaText="Open budget"
-          href={`/tours/${hub.tour.id}/budget`}
+          href={`/budget/${hub.tour.id}`}
         />
       </div>
 
