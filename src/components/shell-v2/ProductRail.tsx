@@ -24,26 +24,37 @@ import {
   Settings,
 } from 'lucide-react';
 import { useEntitlements } from '@/lib/entitlements';
+import { useArtistTourContext } from '@/contexts/ArtistTourContext';
 
 export type ProductRailActive = 'home' | 'operations' | 'budget' | 'advance';
 
 interface ProductDef {
   key: ProductRailActive;
   label: string;
+  /** Path-segment route base; gets `/{selectedTourId}` appended when a
+   *  tour is selected so clicks land on the dynamic-route page instead
+   *  of the workspace-level fall-through. The literal `/` Home base is
+   *  swapped for `/artists/[id]` via the `homeHref` prop when an artist
+   *  is selected (see ProductRailProps below). */
   href: string;
   Icon: typeof House;
   /** Entitlement flag key; rail item only renders if this is true. */
   flag: keyof ReturnType<typeof useEntitlements>;
+  /** Whether this product is tour-scoped — when true the rail appends
+   *  `/{selectedTourId}` if context has one. Home is artist-scoped, not
+   *  tour-scoped, so it stays false here. */
+  tourScoped: boolean;
 }
 
 const PRODUCTS: ReadonlyArray<ProductDef> = [
-  { key: 'home', label: 'Home', href: '/', Icon: House, flag: 'home' },
+  { key: 'home', label: 'Home', href: '/', Icon: House, flag: 'home', tourScoped: false },
   {
     key: 'operations',
     label: 'Operations',
     href: '/operations',
     Icon: Briefcase,
     flag: 'operations',
+    tourScoped: true,
   },
   {
     key: 'budget',
@@ -51,6 +62,7 @@ const PRODUCTS: ReadonlyArray<ProductDef> = [
     href: '/budget',
     Icon: DollarSign,
     flag: 'budget',
+    tourScoped: true,
   },
   {
     key: 'advance',
@@ -58,6 +70,7 @@ const PRODUCTS: ReadonlyArray<ProductDef> = [
     href: '/advance',
     Icon: ClipboardList,
     flag: 'advance',
+    tourScoped: true,
   },
 ];
 
@@ -70,6 +83,10 @@ interface ProductRailProps {
 
 export function ProductRail({ active, homeHref }: ProductRailProps) {
   const entitlements = useEntitlements();
+  // Pull the live tour selection so each product link lands on the
+  // tour-scoped route (`/budget/[tourId]`, etc.) rather than the
+  // workspace-level fall-through that renders the legacy 8-tab page.
+  const { selectedTourId } = useArtistTourContext();
 
   return (
     <nav
@@ -84,7 +101,12 @@ export function ProductRail({ active, homeHref }: ProductRailProps) {
       {PRODUCTS.map((p) => {
         if (!entitlements[p.flag]) return null;
         const isActive = active === p.key;
-        const href = p.key === 'home' && homeHref ? homeHref : p.href;
+        let href = p.href;
+        if (p.key === 'home' && homeHref) {
+          href = homeHref;
+        } else if (p.tourScoped && selectedTourId) {
+          href = `${p.href}/${selectedTourId}`;
+        }
         return (
           <Link
             key={p.key}
