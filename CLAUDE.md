@@ -52,6 +52,14 @@ docs/
 
 ## Critical conventions
 
+### Smoke tests
+
+Per-product smoke checklists live in `docs/smoke-tests/<product>.md`
+(advance, budget, operations, etc.). Each test has a stable `XYZ-NN`
+ID. Read `docs/smoke-tests/README.md` for the format. When a sprint
+ships observable behaviour, land the new test IDs in the same PR;
+when a gap closes, move the test out of "Known broken".
+
 ### Migrations — runner is now wired
 
 `npm run db:migrate` applies every pending migration in numeric order against the database in `DATABASE_URL` (or `SUPABASE_DB_URL`). Each migration runs inside its own transaction. Applied filenames + sha256 checksums are recorded in `public._lp_migrations`. Editing an applied migration file is rejected by checksum mismatch — write a new migration that supersedes it instead.

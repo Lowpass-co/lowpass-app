@@ -37,6 +37,11 @@ import {
   CopyAdvanceModal,
   type AdvanceDateItem,
 } from './CopyAdvanceModal';
+import {
+  ApplyAdvanceTemplateSlideOver,
+  type FormTemplate,
+  type AdvanceDateItem as ApplyAdvanceDateItem,
+} from './ApplyAdvanceTemplateSlideOver';
 import { useToast } from '@/components/ui/Toast';
 
 /** Field selection event payload — Phase G.4 CustomEvent interim.
@@ -70,13 +75,16 @@ export function AdvanceBuilderShellClient({
 
   const [copyOpen, setCopyOpen] = useState(false);
   const [dates, setDates] = useState<AdvanceDateItem[] | null>(null);
+  const [applyOpen, setApplyOpen] = useState(false);
+  const [templates, setTemplates] = useState<FormTemplate[] | null>(null);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
   const [selected, setSelected] = useState<FieldSelectionDetail | null>(null);
 
-  // Lazy-fetch dates the first time Copy opens. The `dates !== null`
-  // guard alone is the de-dupe — no separate loading-flag state, which
-  // avoids react-hooks/set-state-in-effect.
+  // Lazy-fetch dates the first time Copy or Apply opens. The
+  // `dates !== null` guard alone is the de-dupe — no separate
+  // loading-flag state, which avoids react-hooks/set-state-in-effect.
   useEffect(() => {
-    if (!copyOpen || dates !== null) return;
+    if ((!copyOpen && !applyOpen) || dates !== null) return;
     let cancelled = false;
     fetch(`/api/tours/${tourId}/advance?all=true`)
       .then((res) => (res.ok ? res.json() : Promise.reject(res.statusText)))
@@ -86,13 +94,45 @@ export function AdvanceBuilderShellClient({
       })
       .catch(() => {
         if (cancelled) return;
-        showToast('Failed to load tour dates for copy', 'error');
+        showToast('Failed to load tour dates', 'error');
         setCopyOpen(false);
+        setApplyOpen(false);
       });
     return () => {
       cancelled = true;
     };
-  }, [copyOpen, dates, tourId, showToast]);
+  }, [copyOpen, applyOpen, dates, tourId, showToast]);
+
+  // Lazy-fetch templates the first time Apply opens. Dedupe via
+  // `templates !== null`. The `templatesLoading` state is set inside
+  // `.then()` / `.finally()` so all setStates happen async, satisfying
+  // react-hooks/set-state-in-effect.
+  useEffect(() => {
+    if (!applyOpen || templates !== null) return;
+    let cancelled = false;
+    fetch('/api/advance/layout-templates')
+      .then((res) => (res.ok ? res.json() : Promise.reject(res.statusText)))
+      .then((data: { templates?: FormTemplate[] }) => {
+        if (cancelled) return;
+        setTemplates(data.templates ?? []);
+        setTemplatesLoading(false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        showToast('Failed to load layout templates', 'error');
+        setApplyOpen(false);
+        setTemplatesLoading(false);
+      });
+    // Show the loading flag eagerly so the slide-over's `loading` prop
+    // is true while the request is in flight. Deferred to a microtask
+    // to avoid the lint rule.
+    queueMicrotask(() => {
+      if (!cancelled) setTemplatesLoading(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [applyOpen, templates, showToast]);
 
   // Field-selection CustomEvent listener (Phase G.4 interim).
   useEffect(() => {
@@ -105,28 +145,33 @@ export function AdvanceBuilderShellClient({
   }, []);
 
   const handleSectionDrop = (seedId: string, label: string) => {
-    // G.3 — adding a section from the library to this advance touches
-    // the existing AdvanceSectionBuilder's internal add-section flow.
-    // Wiring the drop to a server mutation + refresh is left for a
-    // follow-up PR (the add-section endpoint is not reusable from
-    // outside the builder without a refactor).
-    showToast(
-      `Section "${label}" — drag wired, server add-section endpoint not yet reusable from outside the builder. Use the in-canvas "+ Add Section" trigger inside the existing setup mode for now.`,
-    );
-    void seedId;
-    void router;
+    // G.3 — dispatch to the canvas. AdvanceSectionBuilder listens
+    // for advance:section-drop and either matches an existing
+    // workspace template by label (= addAllFields) or creates a
+    // blank section with that label.
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('advance:section-drop', {
+          detail: { seedId, label },
+        }),
+      );
+    }
   };
 
   const handleAddBlank = () => {
-    showToast(
-      'Blank-section creation flow lives inside the existing builder — open Setup Mode and use its "Add custom section".',
-    );
+    // Blank custom section = drop with no label match → builder creates
+    // an empty "Custom Section" via the same dispatch path.
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('advance:section-drop', {
+          detail: { seedId: '__blank__', label: 'Custom Section' },
+        }),
+      );
+    }
   };
 
   const handleApplyToTours = () => {
-    showToast(
-      'Apply-to-tours flow needs the templates list endpoint — wiring deferred to a follow-up. Use the existing Templates page for now.',
-    );
+    setApplyOpen(true);
   };
 
   return (
@@ -145,7 +190,30 @@ export function AdvanceBuilderShellClient({
           </div>
         </div>
       </main>
-      <AdvanceFieldPropertiesPanel selected={selected} />
+      <AdvanceFieldPropertiesPanel
+        selected={selected}
+        onChange={(next) => {
+          // Optimistic — panel re-renders with the new value immediately.
+          setSelected(next);
+          // Tell the canvas to apply the patch to its internal field-def
+          // state. The canvas's autosave will pick it up. This is the
+          // panel → canvas direction of the G.4 dispatch loop.
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(
+              new CustomEvent('advance:field-updated', {
+                detail: {
+                  fieldId: next.id,
+                  patch: {
+                    label: next.label,
+                    required: next.required,
+                    type: next.type,
+                  },
+                },
+              }),
+            );
+          }
+        }}
+      />
 
       {/* Copy-from-show modal — current routing is the destination,
           source is picked inside the modal. */}
@@ -159,6 +227,31 @@ export function AdvanceBuilderShellClient({
           onSuccess={(copiedCount) => {
             setCopyOpen(false);
             showToast(`Copied ${copiedCount} show${copiedCount === 1 ? '' : 's'}.`);
+            router.refresh();
+          }}
+        />
+      ) : null}
+
+      {/* Apply-to-tour slide-over (G.5). Same /api/advance/layout-templates
+          fetch the AdvanceOverview surface uses. dates list is the same
+          /api/tours/[id]/advance?all=true endpoint Copy uses; both
+          load lazily on first open. */}
+      {applyOpen ? (
+        <ApplyAdvanceTemplateSlideOver
+          open={applyOpen}
+          tourId={tourId}
+          // Same shape at runtime — CopyAdvanceModal's AdvanceDateItem
+          // types `advance.sections.fields[]` as unknown[] while
+          // ApplyAdvanceTemplateSlideOver types it more strictly. Both
+          // come from the same /api/tours/[id]/advance?all=true response,
+          // so this cast is safe.
+          dates={(dates ?? []) as unknown as ApplyAdvanceDateItem[]}
+          templates={templates ?? []}
+          loading={dates === null || templatesLoading}
+          initialTemplateId={null}
+          onClose={() => setApplyOpen(false)}
+          onDone={() => {
+            setApplyOpen(false);
             router.refresh();
           }}
         />
