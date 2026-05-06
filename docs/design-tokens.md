@@ -116,6 +116,7 @@ Scanned: `src/app/**/*.{tsx,ts,css}`, `src/components/**/*.{tsx,ts,css}`, `src/l
 |-------|-------------------|-------|------------------------|
 | Core | `--lp-bg`, `--lp-bg-secondary`, `--lp-bg-tertiary` | #FFFFFF / greys | #0F0F0F / dark greys |
 | Surface | `--lp-surface`, `--lp-surface-hover` | cards / panels | |
+| Panel | `--lp-panel`, `--lp-panel-hover` | table headers / strips / dropdown rows; `--lp-panel-hover` is the hover state at panel elevation (`color-mix` of `--lp-panel`) | |
 | Border | `--lp-border`, `--lp-border-light` | hairlines | |
 | Text | `--lp-text`, `--lp-text-secondary`, `--lp-text-tertiary`, `--lp-text-inverse` | body hierarchy | |
 | Table header | `--lp-table-header-text` + `.lp-table-header-text` | #471300 | muted |
@@ -221,7 +222,8 @@ The `.lp-dropdown-layer` class in `globals.css` still uses `z-index: 1000` (unch
 | Token | Role |
 |-------|------|
 | `--lp-shadow-xs` … `--lp-shadow-xl` | Elevation tiers |
-| `--lp-shadow-overlay` | Modal / panel edge + drop |
+| `--lp-shadow-overlay` | Modal / slide-over edge + drop (heavier; signals "this is dimming the page") |
+| `--lp-shadow-popover` | Dropdowns / popovers — softer than `overlay`; signals "this floats above content" without dimming |
 | `--lp-shadow-focus-ring` | Focus ring (pairs with `outline` rules) |
 
 **Light** defined on `:root` (second `:root` UX01 block). **Dark** overrides in `.dark { … }` with higher rgba opacity. Preview both on `/admin/design-tokens` via the Light / Dark control.

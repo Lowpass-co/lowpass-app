@@ -1,30 +1,31 @@
 /* ============================================
    LOWPASS — Product Split Phase 1 — <ProductHeader>
+   (Sprint 5: chips replaced with <ArtistTourSwitcher>)
 
    Top header that sits above the page body inside <ProductShell>.
-   44-48px tall. Replaces the existing TopBar conceptually but lives
-   alongside until Phases 2-4 cut each product over.
+   44-48px tall.
 
    API:
      <ProductHeader
        artistId={...}
-       tourId={...}            // optional — only shown for tour-scoped products
+       tourId={...}            // optional — used to scope the
+                                  // initial-tours pre-fetch
        productName="Operations"
      />
 
    Layout:
-     [artist switcher] [tour switcher when tourId]      [product name]      [search] [avatar]
+     [ArtistTourSwitcher]      [product name]      [search] [avatar]
 
-   Phase 1 stays minimal — the switchers are read-only chips that
-   show the current artist/tour name and link to the picker pages.
-   Real interactive switchers (with dropdowns) land in Phase 2 or 3
-   when the first product migrates onto these shells.
+   The switcher reads the current selection from ArtistTourContext
+   (which hydrates from URL → path-segment → localStorage per
+   Sprint 4). Selection mutations flow back through the context's
+   setters, which sync URL + localStorage automatically.
    ============================================ */
 
-import Link from 'next/link';
-import { ChevronRight, Search } from 'lucide-react';
+import { Search } from 'lucide-react';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { ProductHeaderAvatarMenu } from './ProductHeaderAvatarMenu';
+import { ArtistTourSwitcherClientWrapper } from './ArtistTourSwitcherClientWrapper';
 
 export type ProductName = 'Home' | 'Operations' | 'Budget' | 'Advance';
 
@@ -36,30 +37,47 @@ interface ProductHeaderProps {
 
 export async function ProductHeader({
   artistId,
-  tourId,
   productName,
 }: ProductHeaderProps) {
   const supabase = await createServerSupabaseClient();
 
-  // Phase 2 §F1.2 — fetch user + admin status alongside artist/tour
-  // names so the avatar menu has what it needs.
+  // Sprint 5 §2 — pre-fetch the lists the new <ArtistTourSwitcher>
+  // needs for instant first open. Lean projection (id + name only
+  // on artists; id + name + dates on tours) so the per-page cost is
+  // negligible. Next dedups identical Supabase queries within a
+  // request boundary; the switcher is mounted on every product
+  // page so this is the canonical place to fetch.
   const [
     { data: { user } },
-    artistRes,
-    tourRes,
+    artistsRes,
+    initialToursRes,
   ] = await Promise.all([
     supabase.auth.getUser(),
+    supabase
+      .from('artists')
+      .select('id, name, branding, spotify_image_url')
+      .order('name', { ascending: true }),
     artistId
-      ? supabase.from('artists').select('name').eq('id', artistId).maybeSingle()
-      : Promise.resolve({ data: null }),
-    tourId
-      ? supabase.from('tours').select('name').eq('id', tourId).maybeSingle()
+      ? supabase
+          .from('tours')
+          .select('id, name, start_date, end_date')
+          .eq('artist_id', artistId)
+          .order('start_date', { ascending: false })
       : Promise.resolve({ data: null }),
   ]);
 
-  const artistName =
-    (artistRes.data as { name?: string } | null)?.name ?? null;
-  const tourName = (tourRes.data as { name?: string } | null)?.name ?? null;
+  const initialArtists = (artistsRes.data ?? []) as Array<{
+    id: string;
+    name: string;
+    branding: unknown;
+    spotify_image_url: string | null;
+  }>;
+  const initialTours = (initialToursRes.data ?? null) as Array<{
+    id: string;
+    name: string;
+    start_date: string | null;
+    end_date: string | null;
+  }> | null;
 
   let isSiteAdmin = false;
   let avatarUrl: string | null = null;
@@ -89,54 +107,13 @@ export async function ProductHeader({
         borderColor: 'var(--lp-border-strong)',
       }}
     >
-      {/* Left: artist + tour switcher chips */}
-      <div className="flex min-w-0 items-center gap-1.5">
-        {artistId ? (
-          <Link
-            href={`/artists/${artistId}`}
-            className="btn-transition truncate rounded-md px-2 py-1"
-            style={{
-              fontSize: '14px',
-              fontWeight: 500,
-              color: 'var(--lp-text)',
-              background: 'transparent',
-            }}
-          >
-            {artistName ?? 'Artist'}
-          </Link>
-        ) : (
-          <Link
-            href="/"
-            className="btn-transition rounded-md px-2 py-1"
-            style={{
-              fontSize: '14px',
-              fontWeight: 500,
-              color: 'var(--lp-text-secondary)',
-            }}
-          >
-            Pick artist
-          </Link>
-        )}
-
-        {tourId && (
-          <>
-            <ChevronRight
-              className="h-3.5 w-3.5"
-              style={{ color: 'var(--lp-text-tertiary)' }}
-              strokeWidth={2}
-            />
-            <span
-              className="truncate rounded-md px-2 py-1"
-              style={{
-                fontSize: '14px',
-                fontWeight: 500,
-                color: 'var(--lp-text)',
-              }}
-            >
-              {tourName ?? 'Tour'}
-            </span>
-          </>
-        )}
+      {/* Left: combined hierarchical artist→tour switcher (Sprint 5).
+          Replaces the static [Artist] · [Tour] chips. */}
+      <div className="flex min-w-0 items-center">
+        <ArtistTourSwitcherClientWrapper
+          initialArtists={initialArtists}
+          initialTours={initialTours}
+        />
       </div>
 
       {/* Center: product name */}

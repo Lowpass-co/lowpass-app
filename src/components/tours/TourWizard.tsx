@@ -18,6 +18,9 @@ import { ArtistPreviewCard } from '@/components/artists/ArtistPreviewCard';
 import { SlidingToggle } from '@/components/ui/SlidingToggle';
 import { StyledSelect } from '@/components/ui/StyledSelect';
 import { cn } from '@/lib/utils';
+// Sprint 5 §6 — extracted to src/lib/currencies.ts so the
+// TourCreateSlideOver shares one source of truth.
+import { TOUR_CURRENCIES as CURRENCIES } from '@/lib/currencies';
 
 const CONTINENTS: { value: Continent; label: string }[] = [
   { value: 'GLOBAL', label: 'Global' },
@@ -27,13 +30,6 @@ const CONTINENTS: { value: Continent; label: string }[] = [
   { value: 'AUS', label: 'AUS' },
   { value: 'ASIA', label: 'ASIA' },
   { value: 'OTHER', label: 'Other' },
-];
-
-const CURRENCIES = [
-  { value: 'GBP', label: '£ GBP' },
-  { value: 'USD', label: '$ USD' },
-  { value: 'EUR', label: '€ EUR' },
-  { value: 'AUD', label: 'A$ AUD' },
 ];
 
 interface TourWizardProps {
