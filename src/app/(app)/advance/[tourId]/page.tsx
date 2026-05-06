@@ -18,8 +18,9 @@
 import { notFound } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { ProductShell } from '@/components/shell-v2';
+import { TourHeader } from '@/components/shell-v2/TourHeader';
 import { AdvanceOverview } from '@/components/advance/AdvanceOverview';
-import { AdvanceOverviewStatsStrip } from '@/components/advance/AdvanceOverviewStatsStrip';
+import { resolveArtistLogoUrl } from '@/lib/artists/imageUrl';
 
 export default async function AdvanceTourOverviewPage({
   params,
@@ -32,7 +33,7 @@ export default async function AdvanceTourOverviewPage({
   const [{ data: tour, error: tourErr }, routingRes] = await Promise.all([
     supabase
       .from('tours')
-      .select('id, name, artist_id')
+      .select('id, name, artist_id, start_date, end_date')
       .eq('id', tourId)
       .maybeSingle(),
     supabase
@@ -45,7 +46,33 @@ export default async function AdvanceTourOverviewPage({
     notFound();
   }
 
-  const t = tour as { id: string; name: string | null; artist_id: string | null };
+  const t = tour as {
+    id: string;
+    name: string | null;
+    artist_id: string | null;
+    start_date: string | null;
+    end_date: string | null;
+  };
+
+  // Sprint 8 §2 — fetch artist for the new <TourHeader> mount
+  // on this overview page.
+  const { data: artistRow } = t.artist_id
+    ? await supabase
+        .from('artists')
+        .select('id, name, branding, spotify_id, spotify_image_url')
+        .eq('id', t.artist_id)
+        .maybeSingle()
+    : { data: null };
+  const artist = artistRow as {
+    id: string;
+    name: string;
+    branding: unknown;
+    spotify_id: string | null;
+    spotify_image_url: string | null;
+  } | null;
+  const artistLogoUrl = artist
+    ? await resolveArtistLogoUrl(artist)
+    : null;
 
   const routingRows =
     (routingRes.data ?? []) as Array<{
@@ -81,6 +108,22 @@ export default async function AdvanceTourOverviewPage({
       advanceStatus: statusByRouting.get(r.id) ?? null,
     }));
 
+  // Sprint 8 §2 — TourHeader stats. Show count, % complete from
+  // shows list, % pending from non-complete shows that haven't
+  // had advance start. Mirror the per-show TourHeader's advance
+  // stat calculation so both routes show consistent numbers.
+  const completedShows = shows.filter(
+    (s) => s.advanceStatus === 'complete',
+  ).length;
+  const advanceCompletePercent =
+    shows.length > 0 ? (completedShows / shows.length) * 100 : null;
+  const pendingShows = shows.filter(
+    (s) =>
+      s.advanceStatus === null ||
+      s.advanceStatus === 'in_progress' ||
+      s.advanceStatus === 'needs_review',
+  ).length;
+
   return (
     <ProductShell
       active="advance"
@@ -88,7 +131,29 @@ export default async function AdvanceTourOverviewPage({
       tourId={t.id}
       productName="Advance"
     >
-      <AdvanceOverviewStatsStrip shows={shows} />
+      {/* Sprint 8 §2 — replaces <AdvanceOverviewStatsStrip>.
+          TourHeader carries equivalent stats (show count, % complete,
+          pending count) plus the artist + tour identity at the
+          top of every product surface. AdvanceOverviewStatsStrip
+          file stays on disk for reference; flagged in deferred
+          section as orphaned and removable in cleanup. */}
+      {artist ? (
+        <TourHeader
+          artistId={artist.id}
+          artistName={artist.name}
+          artistLogoUrl={artistLogoUrl}
+          tourId={t.id}
+          tourName={t.name ?? 'Tour'}
+          startDate={t.start_date}
+          endDate={t.end_date}
+          product="advance"
+          stats={{
+            showCount: shows.length,
+            advanceCompletePercent,
+            advancePendingCount: pendingShows,
+          }}
+        />
+      ) : null}
       <div className="mx-auto w-full max-w-[1280px] space-y-5 px-6 py-6">
         <header className="flex items-baseline justify-between gap-4">
           <div>
