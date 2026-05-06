@@ -184,7 +184,15 @@ export function AdvanceBuilderShellClient({
           onCopyFromShow={() => setCopyOpen(true)}
         />
         <div className="flex-1 px-4 pb-12 pt-4">
-          <AdvanceSectionBuilderDynamic tourId={tourId} routingId={routingId} />
+          {/* Hotfix 3 §2 — wrappedInShell tells the embedded
+              AdvanceSectionBuilder's SetupMode to suppress its own
+              Template Library column. The shell's
+              AdvanceSectionLibrary on the left already provides one. */}
+          <AdvanceSectionBuilderDynamic
+            tourId={tourId}
+            routingId={routingId}
+            wrappedInShell
+          />
           <div className="mt-4">
             <SectionDropZone onDrop={handleSectionDrop} />
           </div>

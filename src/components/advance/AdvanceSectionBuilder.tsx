@@ -399,9 +399,16 @@ function AdvanceDropdownZProvider({ children }: { children: React.ReactNode }) {
 export function AdvanceSectionBuilder({
   tourId,
   routingId,
+  wrappedInShell = false,
 }: {
   tourId: string;
   routingId: string;
+  /** Hotfix 3 §2 — when AdvanceBuilderShellClient mounts this
+   *  builder inside the three-pane Variant-parity shell, the shell
+   *  already renders its own AdvanceSectionLibrary on the left.
+   *  This flag tells SetupMode to suppress its internal Library
+   *  column so the user sees ONE library, not two. */
+  wrappedInShell?: boolean;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -521,6 +528,7 @@ export function AdvanceSectionBuilder({
           routingId={routingId}
           currentSections={data.advance?.sections ?? []}
           defaultAdvanceTemplateId={(data.tour as { default_advance_template_id?: string })?.default_advance_template_id ?? null}
+          wrappedInShell={wrappedInShell}
           onSaved={async () => {
             const res = await fetch(`/api/tours/${tourId}/advance/${routingId}`);
             if (res.ok) {
@@ -724,6 +732,7 @@ function SetupMode({
   routingId,
   currentSections,
   defaultAdvanceTemplateId,
+  wrappedInShell = false,
   onSaved,
   onCancel,
 }: {
@@ -731,6 +740,11 @@ function SetupMode({
   routingId: string;
   currentSections: SectionDef[];
   defaultAdvanceTemplateId: string | null;
+  /** Hotfix 3 §2 — see AdvanceSectionBuilder's prop comment.
+   *  When true, the outer 2-col grid collapses to 1-col and the
+   *  internal Template Library column is suppressed (the shell
+   *  already mounts its own AdvanceSectionLibrary on the left). */
+  wrappedInShell?: boolean;
   onSaved: () => void | Promise<void>;
   onCancel: () => void;
 }) {
@@ -1156,8 +1170,19 @@ function SetupMode({
   }, [workspaceTemplates, fetchTemplates]);
 
   return (
-    <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-      {/* LEFT — Template Library */}
+    <div
+      className={cn(
+        'grid grid-cols-1 gap-6',
+        // Hotfix 3 §2 — drop the lg:2-col grid when the builder is
+        // mounted inside the AdvanceBuilderShellClient three-pane
+        // shell. The shell renders its own Library on the left;
+        // this internal Library is suppressed below for the same
+        // reason, so the grid only needs one column for the canvas.
+        wrappedInShell ? 'lg:grid-cols-1' : 'lg:grid-cols-2',
+      )}
+    >
+      {/* LEFT — Template Library — suppressed when wrappedInShell. */}
+      {!wrappedInShell && (
       <div className="flex flex-col rounded-xl border border-lp-border bg-lp-surface">
         <h3 className="border-b border-lp-border px-4 py-3 text-sm font-semibold text-lp-text">Template Library</h3>
         <div className="min-h-0 flex-1 overflow-y-auto p-3">
@@ -1367,6 +1392,7 @@ function SetupMode({
           )}
         </div>
       </div>
+      )}
 
       {/* RIGHT — This Show's Advance */}
       <div className="flex flex-col rounded-xl border border-lp-border bg-lp-surface">

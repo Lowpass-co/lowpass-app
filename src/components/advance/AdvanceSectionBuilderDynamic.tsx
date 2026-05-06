@@ -21,9 +21,20 @@ const AdvanceSectionBuilder = dynamic(
 export function AdvanceSectionBuilderDynamic({
   tourId,
   routingId,
+  wrappedInShell = false,
 }: {
   tourId: string;
   routingId: string;
+  /** Hotfix 3 §2 — passed through to AdvanceSectionBuilder so
+   *  SetupMode suppresses its internal Template Library when the
+   *  three-pane shell already renders one. */
+  wrappedInShell?: boolean;
 }) {
-  return <AdvanceSectionBuilder tourId={tourId} routingId={routingId} />;
+  return (
+    <AdvanceSectionBuilder
+      tourId={tourId}
+      routingId={routingId}
+      wrappedInShell={wrappedInShell}
+    />
+  );
 }
