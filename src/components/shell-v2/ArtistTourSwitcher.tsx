@@ -380,8 +380,16 @@ export function ArtistTourSwitcher({
       // contract — switching artist invalidates the tour).
       setSelectedArtistId(id);
       transitionToPane('tours', 'forward');
+      // Sprint 6.1 §2 — when the user is on /artists/[X]/...,
+      // clicking artist B in the dropdown updates the context but
+      // the path segment still encodes A, so the page renders A's
+      // content. Push to the new artist's home so the page
+      // actually reflects the selection.
+      if (pathname?.startsWith('/artists/')) {
+        router.push(`/artists/${id}`);
+      }
     },
-    [setSelectedArtistId, transitionToPane],
+    [setSelectedArtistId, transitionToPane, pathname, router],
   );
 
   const handleTourClick = useCallback(
@@ -398,8 +406,17 @@ export function ArtistTourSwitcher({
       );
       if (productMatch) {
         router.push(`/${productMatch[1]}/${id}`);
+        return;
       }
-      // Non-product paths (/artists/[id], /personnel, etc.) stay
+      // Sprint 6.1 §2 — picking a tour from /artists/[X]/... should
+      // also navigate. Default to /budget/[id]; the user can re-rail
+      // from there. (UX call — if Adam wants /advance or /operations
+      // as default, one-line tweak.)
+      if (pathname?.startsWith('/artists/')) {
+        router.push(`/budget/${id}`);
+        return;
+      }
+      // Other non-product paths (/personnel, /venues, etc.) stay
       // put — context update is enough.
     },
     [setSelectedTourId, closeDropdown, pathname, router],
