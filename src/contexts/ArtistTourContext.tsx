@@ -42,6 +42,27 @@ interface ArtistTourContextType {
 
 const ArtistTourContext = createContext<ArtistTourContextType | null>(null);
 
+/** Extract a tour UUID from /budget/[uuid], /advance/[uuid], or
+ *  /operations/[uuid] paths. Returns null for any other path. */
+function extractTourIdFromPath(pathname: string): string | null {
+  const m = pathname.match(
+    /^\/(?:budget|advance|operations)\/([^/?#]+)/,
+  );
+  // Skip path-segment lookups when the segment is a known
+  // non-UUID landing slug. Add to this list as new dynamic
+  // routes appear; the canonical cases today are tour UUIDs.
+  if (!m) return null;
+  const candidate = m[1];
+  if (!candidate) return null;
+  return candidate;
+}
+
+/** Extract an artist UUID from /artists/[uuid] paths. */
+function extractArtistIdFromPath(pathname: string): string | null {
+  const m = pathname.match(/^\/artists\/([^/?#]+)/);
+  return m?.[1] ?? null;
+}
+
 export function useArtistTourContext() {
   const ctx = useContext(ArtistTourContext);
   if (!ctx) {
@@ -71,11 +92,14 @@ export function ArtistTourProvider({ children }: { children: ReactNode }) {
   const [tourRouting, setTourRouting] = useState<TourRoutingLiteRow[]>([]);
   const [isRoutingLoading, setIsRoutingLoading] = useState(false);
 
-  // Post-merge fix-up §C — URL params take precedence over
-  // localStorage. Resolution order on every render:
+  // Post-merge fix-up §C + Hotfix 4 §1 — resolution order:
   //   1. ?artist_id / ?tour_id present in URL → use them
-  //   2. Otherwise, localStorage (first-load fallback)
-  //   3. Otherwise, null
+  //   2. Path segment (e.g. /budget/[tourId], /artists/[id]) →
+  //      use that. This is the Hotfix 4 fix: previously stale
+  //      localStorage could override the path the user was actually
+  //      on, surfacing as cross-artist navigation.
+  //   3. localStorage (first-load fallback)
+  //   4. Otherwise, null
   // Runs in useLayoutEffect so the swap happens before paint, killing
   // the race where users navigating fast hit pages before localStorage
   // hydration completes.
@@ -83,12 +107,27 @@ export function ArtistTourProvider({ children }: { children: ReactNode }) {
     if (typeof window === 'undefined') return;
     const lsArtist = localStorage.getItem(STORAGE_ARTIST);
     const lsTour = localStorage.getItem(STORAGE_TOUR);
-    const nextArtist = urlArtistId ?? lsArtist ?? null;
-    const nextTour = urlTourId ?? lsTour ?? null;
+    const pathArtist = pathname ? extractArtistIdFromPath(pathname) : null;
+    const pathTour = pathname ? extractTourIdFromPath(pathname) : null;
+    // Resolution: URL query → path segment → localStorage → null.
+    // Path-segment wins over localStorage so stale stored values
+    // can never override the route the user is actually on.
+    const nextArtist = urlArtistId ?? pathArtist ?? lsArtist ?? null;
+    const nextTour = urlTourId ?? pathTour ?? lsTour ?? null;
     setSelectedArtistIdState((prev) => (prev === nextArtist ? prev : nextArtist));
     setSelectedTourIdState((prev) => (prev === nextTour ? prev : nextTour));
     setHydrated(true);
-  }, [urlArtistId, urlTourId]);
+    // If the resolved values differ from localStorage, write the
+    // resolved values back. This prevents stale localStorage from
+    // re-asserting itself across navigations. Only write when there's
+    // a value to store (don't blow away an unset value).
+    if (nextArtist && nextArtist !== lsArtist) {
+      localStorage.setItem(STORAGE_ARTIST, nextArtist);
+    }
+    if (nextTour && nextTour !== lsTour) {
+      localStorage.setItem(STORAGE_TOUR, nextTour);
+    }
+  }, [urlArtistId, urlTourId, pathname]);
 
   // Helper: write the current selection back to the URL via
   // router.replace, preserving everything else in the search string.
