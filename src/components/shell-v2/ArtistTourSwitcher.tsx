@@ -404,48 +404,51 @@ export function ArtistTourSwitcher({
   /* -------- list interaction -------- */
   const handleArtistClick = useCallback(
     (id: string) => {
-      // setSelectedArtistId clears the tour selection (context
-      // contract — switching artist invalidates the tour).
-      setSelectedArtistId(id);
       transitionToPane('tours', 'forward');
-      // Sprint 6.1 §2 — when the user is on /artists/[X]/...,
-      // clicking artist B in the dropdown updates the context but
-      // the path segment still encodes A, so the page renders A's
-      // content. Push to the new artist's home so the page
-      // actually reflects the selection.
+      // Sprint 6.2 §1 — when the user is on /artists/[X]/...,
+      // navigate to the new artist's home. The path-aware
+      // hydration in ArtistTourContext (Sprint 4) reads
+      // `selectedArtistId` off the new path-segment automatically,
+      // so we DON'T also call setSelectedArtistId(id) — that
+      // would fire a syncUrlParams → router.replace BEFORE the
+      // router.push, producing two URL writes Next 16 doesn't
+      // batch cleanly (the cause of the Sprint 6.1 trigger-stale
+      // bug Adam smoke-flagged).
       if (pathname?.startsWith('/artists/')) {
         router.push(`/artists/${id}`);
+        return;
       }
+      // Stay-put case (e.g. /budget/[X], /personnel) — switcher
+      // is just changing pane state to show this artist's tours;
+      // no navigation. Context-only update is correct here.
+      setSelectedArtistId(id);
     },
     [setSelectedArtistId, transitionToPane, pathname, router],
   );
 
   const handleTourClick = useCallback(
     (id: string) => {
-      // Sprint 6 §2 sub-bug A — setSelectedTourId only writes URL
-      // params + localStorage; on tour-prefixed routes the path
-      // segment still encodes the OLD tour id, so the page renders
-      // the old tour. Push to the tour-scoped URL for the active
-      // product so the page actually navigates.
-      setSelectedTourId(id);
       closeDropdown();
       const productMatch = pathname?.match(
         /^\/(budget|advance|operations)\//,
       );
       if (productMatch) {
+        // Sprint 6.2 §1 — push to product-scoped URL only. The
+        // path-aware hydration sets context selectedTourId from
+        // the new path-segment. Calling setSelectedTourId(id)
+        // here too would fire a router.replace with the OLD path-
+        // segment + new ?tour_id= query, racing the push.
         router.push(`/${productMatch[1]}/${id}`);
         return;
       }
-      // Sprint 6.1 §2 — picking a tour from /artists/[X]/... should
-      // also navigate. Default to /budget/[id]; the user can re-rail
-      // from there. (UX call — if Adam wants /advance or /operations
-      // as default, one-line tweak.)
       if (pathname?.startsWith('/artists/')) {
+        // Default to /budget/[id] from artist home — user can
+        // re-rail from there.
         router.push(`/budget/${id}`);
         return;
       }
-      // Other non-product paths (/personnel, /venues, etc.) stay
-      // put — context update is enough.
+      // Stay-put case — context-only update.
+      setSelectedTourId(id);
     },
     [setSelectedTourId, closeDropdown, pathname, router],
   );
