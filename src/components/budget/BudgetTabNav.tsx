@@ -14,8 +14,16 @@
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { cn } from '@/lib/utils';
+import {
+  type BudgetTab,
+  resolveBudgetTab,
+} from './budget-tab-utils';
 
-export type BudgetTab = 'summary' | 'budget' | 'actuals' | 'reports' | 'settings';
+// Hotfix 3 §1 — type + helper moved to budget-tab-utils.ts (no
+// 'use client') so the per-tour server page can call them without
+// crossing the server→client boundary. Re-exported here for any
+// existing client-side imports that read them off this module.
+export { type BudgetTab, resolveBudgetTab };
 
 const TABS: ReadonlyArray<{ id: BudgetTab; label: string }> = [
   { id: 'summary', label: 'Summary' },
@@ -24,19 +32,6 @@ const TABS: ReadonlyArray<{ id: BudgetTab; label: string }> = [
   { id: 'reports', label: 'Reports' },
   { id: 'settings', label: 'Settings' },
 ];
-
-export function resolveBudgetTab(raw: string | string[] | undefined): BudgetTab {
-  const candidate = Array.isArray(raw) ? raw[0] : raw;
-  switch (candidate) {
-    case 'budget':
-    case 'actuals':
-    case 'reports':
-    case 'settings':
-      return candidate;
-    default:
-      return 'summary';
-  }
-}
 
 interface BudgetTabNavProps {
   active: BudgetTab;

@@ -29,10 +29,13 @@ import { BudgetStatsStrip } from '@/components/budget/BudgetStatsStrip';
 import { BudgetSpreadsheetView } from '@/components/budget/BudgetSpreadsheetView';
 import { ReceiptInbox } from '@/components/budget/ReceiptInbox';
 import { BudgetExportControls } from '@/components/budget/BudgetExportControls';
-import {
-  BudgetTabNav,
-  resolveBudgetTab,
-} from '@/components/budget/BudgetTabNav';
+// Hotfix 3 §1 — resolveBudgetTab is a server-safe pure helper now,
+// imported directly from the utils module. The BudgetTabNav React
+// component itself is a client component and stays imported from
+// its own file (it's referenced as JSX, which doesn't cross the
+// server→client function-call boundary).
+import { BudgetTabNav } from '@/components/budget/BudgetTabNav';
+import { resolveBudgetTab } from '@/components/budget/budget-tab-utils';
 import { BudgetSummaryTab } from '@/components/budget/BudgetSummaryTab';
 import { BudgetTabPlaceholder } from '@/components/budget/BudgetTabPlaceholder';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
