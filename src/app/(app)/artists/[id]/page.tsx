@@ -24,16 +24,19 @@
 
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import {
-  Briefcase,
-  ChevronRight,
-  ClipboardList,
-  DollarSign,
-  Pencil,
-} from 'lucide-react';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { getHomeData } from '@/server/home/getHomeData';
 import { ProductShell } from '@/components/shell-v2';
+import { ArtistHero } from '@/components/artists/ArtistHero';
+import { ArtistProductCards } from '@/components/artists/ArtistProductCards';
+import { ArtistHomeStagger } from '@/components/artists/ArtistHomeStagger';
+import { NewReleasesGrid } from '@/components/artists/NewReleasesGrid';
+import {
+  resolveArtistLogoUrl,
+  resolveArtistBannerUrl,
+  getArtistGradient,
+} from '@/lib/artists/imageUrl';
+import { getSpotifyArtistMeta } from '@/lib/spotify/server';
 import type {
   HomeActivityRow,
   HomeCalendarCell,
@@ -53,14 +56,6 @@ function abbrevCurrency(value: number, currency: string): string {
   if (abs >= 1_000_000) return `${sym}${(value / 1_000_000).toFixed(1)}M`;
   if (abs >= 1_000) return `${sym}${Math.round(value / 1_000)}K`;
   return `${sym}${Math.round(value)}`;
-}
-
-function deriveInitials(name: string | null | undefined): string {
-  const t = (name ?? '').trim();
-  if (!t) return '?';
-  const tokens = t.split(/\s+/).filter(Boolean);
-  if (tokens.length === 1) return tokens[0].slice(0, 2).toUpperCase();
-  return (tokens[0][0] + tokens[tokens.length - 1][0]).toUpperCase();
 }
 
 function formatRelative(iso: string): string {
@@ -91,31 +86,6 @@ function dayTypeToColor(dt: string): string {
   return 'var(--lp-text-tertiary)';
 }
 
-const PRODUCT_CARDS = [
-  {
-    key: 'operations' as const,
-    label: 'Operations',
-    Icon: Briefcase,
-    href: '/operations',
-    description:
-      'Routing, channel list, rooming, files, personnel, gear, riders.',
-  },
-  {
-    key: 'budget' as const,
-    label: 'Budget',
-    Icon: DollarSign,
-    href: '/budget',
-    description: 'Line items, settlement, payroll, deal memos.',
-  },
-  {
-    key: 'advance' as const,
-    label: 'Advance',
-    Icon: ClipboardList,
-    href: '/advance',
-    description: 'Per-show advance forms, day-view, contacts.',
-  },
-];
-
 export default async function ArtistHomePage({
   params,
 }: {
@@ -126,7 +96,43 @@ export default async function ArtistHomePage({
   const data = await getHomeData(supabase, id);
   if (!data) notFound();
 
-  const { artist, stats, tours, recentActivity, calendar, whatsHot } = data;
+  const { artist, stats, tours, recentActivity, calendar } = data;
+
+  // Sprint 7 §4 — extra fields for the redesigned hero. getHomeData
+  // returns the resolved imageUrl already; we need branding +
+  // spotify_id + spotify_banner_url separately so the hero can run
+  // its full fallback chain (logo → spotify image → live fetch)
+  // and the banner equivalent.
+  const { data: artistRaw } = await supabase
+    .from('artists')
+    .select(
+      'branding, spotify_id, spotify_image_url, spotify_banner_url',
+    )
+    .eq('id', id)
+    .maybeSingle();
+
+  type ArtistImageFields = {
+    branding: unknown;
+    spotify_id: string | null;
+    spotify_image_url: string | null;
+    spotify_banner_url: string | null;
+  };
+  const imageFields = (artistRaw as ArtistImageFields | null) ?? {
+    branding: null,
+    spotify_id: null,
+    spotify_image_url: null,
+    spotify_banner_url: null,
+  };
+
+  const [logoUrl, bannerUrl, spotifyMeta] = await Promise.all([
+    resolveArtistLogoUrl(imageFields),
+    resolveArtistBannerUrl(imageFields),
+    imageFields.spotify_id
+      ? getSpotifyArtistMeta(imageFields.spotify_id)
+      : Promise.resolve(null),
+  ]);
+
+  const recentTourId = tours[0]?.id ?? null;
 
   return (
     <ProductShell
@@ -135,132 +141,100 @@ export default async function ArtistHomePage({
       productName="Home"
       homeHref={`/artists/${artist.id}`}
     >
-      <div className="mx-auto w-full max-w-[1280px] space-y-6 px-6 py-6">
-        {/* Hero */}
-        <header className="flex items-center gap-4">
-          <div
-            className="flex h-14 w-14 shrink-0 items-center justify-center overflow-hidden rounded-full"
-            style={{
-              background: artist.imageUrl
-                ? 'var(--lp-bg-tertiary)'
-                : 'var(--color-lp-orange)',
-            }}
-          >
-            {artist.imageUrl ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={artist.imageUrl}
-                alt=""
-                className="h-full w-full object-cover"
-              />
-            ) : (
-              <span
-                aria-hidden
-                style={{
-                  color: 'var(--lp-text-inverse, #FFFFFF)',
-                  fontSize: 'var(--lp-text-lg)',
-                  fontWeight: 'var(--lp-weight-semibold)',
-                }}
-              >
-                {deriveInitials(artist.name)}
-              </span>
-            )}
-          </div>
-          <div className="min-w-0 flex-1">
-            {/* Phase 2 §F1.1 — h1 uses the canonical .lp-h1 utility (28px). */}
-            <h1 className="lp-h1">{artist.name}</h1>
-            <p
-              className="mt-1"
-              style={{
-                fontSize: '14px',
-                color: 'var(--lp-text-secondary)',
-              }}
-            >
-              <span className="lp-mono">{stats.activeTours}</span> active ·{' '}
-              <span className="lp-mono">{stats.showsThisMonth}</span> shows this month
-            </p>
-          </div>
-          <Link
-            href={`/artists/${artist.id}/edit`}
-            className="btn-transition inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5"
-            style={{
-              borderColor: 'var(--lp-border)',
-              color: 'var(--lp-text-secondary)',
-              fontSize: '13px',
-              fontWeight: 500,
-            }}
-          >
-            <Pencil className="h-3.5 w-3.5" />
-            Edit
-          </Link>
-        </header>
-
-        {/* 4 dense stat tiles — Phase 1 keeps stats but reduces vertical
-            footprint (smaller padding + smaller numbers vs. Phase 0). */}
-        <section
-          className="grid gap-3"
-          style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}
-        >
-          <StatTile label="Active tours" value={String(stats.activeTours)} />
-          <StatTile
-            label="Shows this month"
-            value={String(stats.showsThisMonth)}
-          />
-          <StatTile
-            label="Personnel assigned"
-            value={String(stats.personnelActive)}
-          />
-          <StatTile
-            label="Budget committed"
-            value={abbrevCurrency(stats.budgetCommitted, stats.budgetCurrency)}
-          />
-        </section>
-
-        {/* Calendar widget — next 30 days, artist-scoped. Phase 2 §F1.3
-            adds month header, show title + venue per cell, and tour-
-            colour stripe when this artist has multiple tours. */}
-        <CalendarStrip
-          cells={calendar}
-          tours={tours.map((t) => ({ id: t.id, name: t.name }))}
+      <ArtistHomeStagger>
+        {/* Hero — full-width banner + logo + identity strip. */}
+        <ArtistHero
+          artistId={artist.id}
+          artistName={artist.name}
+          logoUrl={logoUrl}
+          bannerUrl={bannerUrl}
+          bannerGradient={getArtistGradient(artist.name)}
+          spotifyLinked={!!imageFields.spotify_id}
+          primaryGenre={spotifyMeta?.genres[0] ?? null}
+          monthlyListeners={spotifyMeta?.followers ?? null}
         />
 
-        {/* 3 product cards — no tour list. Single "what's hot" metric.
-            Hotfix v2 §D 2026-05-04: each card's href now appends the
-            artist's most recent tour id (via path segment, since the
-            destination routes are /budget/[tourId] / /advance/[tourId]
-            / /operations/[tourId]) AND ?artist_id= as a query param so
-            ArtistTourContext can hydrate the artist from URL on the
-            destination page without a tour→artist DB lookup. Falls
-            through to bare path + ?artist_id= when the artist has no
-            tours; the redirect routers handle that case. */}
-        <section
-          className="grid gap-3"
-          style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' }}
+        {/* Sections below — page-edge padding mirrors the rest of
+            the app. The banner above is full-width on purpose. */}
+        <div
+          className="mx-auto w-full"
+          style={{
+            maxWidth: 1280,
+            padding:
+              'var(--lp-space-6) var(--lp-space-6) var(--lp-space-6)',
+          }}
         >
-          {PRODUCT_CARDS.map((p) => {
-            const hot = whatsHot[p.key];
-            const recentTourId = tours[0]?.id ?? null;
-            const artistQs = `?artist_id=${encodeURIComponent(artist.id)}`;
-            const href = recentTourId
-              ? `${p.href}/${recentTourId}${artistQs}`
-              : `${p.href}${artistQs}`;
-            return (
-              <ProductCard
-                key={p.key}
-                href={href}
-                label={p.label}
-                Icon={p.Icon}
-                description={p.description}
-                metricValue={hot.value}
-                metricLabel={hot.label}
-              />
-            );
-          })}
-        </section>
+          <section
+            className="grid"
+            style={{
+              gap: 'var(--lp-space-3)',
+              gridTemplateColumns:
+                'repeat(auto-fit, minmax(200px, 1fr))',
+            }}
+          >
+            <StatTile label="Active tours" value={String(stats.activeTours)} />
+            <StatTile
+              label="Shows this month"
+              value={String(stats.showsThisMonth)}
+            />
+            <StatTile
+              label="Personnel assigned"
+              value={String(stats.personnelActive)}
+            />
+            <StatTile
+              label="Budget committed"
+              value={abbrevCurrency(stats.budgetCommitted, stats.budgetCurrency)}
+            />
+          </section>
 
-        {/* Recent activity — 5 rows + actor column. */}
-        <RecentActivityTable rows={recentActivity.slice(0, 5)} />
-      </div>
+          <div style={{ height: 'var(--lp-space-6)' }} />
+
+          <CalendarStrip
+            cells={calendar}
+            tours={tours.map((t) => ({ id: t.id, name: t.name }))}
+          />
+
+          <div style={{ height: 'var(--lp-space-6)' }} />
+
+          <ArtistProductCards
+            artistId={artist.id}
+            recentTourId={recentTourId}
+          />
+
+          {imageFields.spotify_id ? (
+            <>
+              <div style={{ height: 'var(--lp-space-6)' }} />
+              <section className="space-y-2">
+                <div className="flex items-baseline justify-between">
+                  <h2
+                    className="lp-label-caps"
+                    style={{
+                      margin: 0,
+                      color: 'var(--lp-text-tertiary)',
+                    }}
+                  >
+                    New releases
+                  </h2>
+                  <span
+                    className="lp-label-caps"
+                    style={{
+                      color: 'var(--lp-text-tertiary)',
+                    }}
+                  >
+                    From Spotify
+                  </span>
+                </div>
+                <NewReleasesGrid artistName={artist.name} />
+              </section>
+            </>
+          ) : null}
+
+          <div style={{ height: 'var(--lp-space-6)' }} />
+
+          {/* Recent activity — 5 rows + actor column. */}
+          <RecentActivityTable rows={recentActivity.slice(0, 5)} />
+        </div>
+      </ArtistHomeStagger>
     </ProductShell>
   );
 }
@@ -283,103 +257,6 @@ function StatTile({ label, value }: { label: string; value: string }) {
       <div className="lp-stat-label">{label}</div>
       <div className="lp-mono lp-stat-value mt-2">{value}</div>
     </div>
-  );
-}
-
-function ProductCard({
-  href,
-  label,
-  Icon,
-  description,
-  metricValue,
-  metricLabel,
-}: {
-  href: string;
-  label: string;
-  Icon: typeof Briefcase;
-  description: string;
-  metricValue: number;
-  metricLabel: string;
-}) {
-  return (
-    <Link
-      href={href}
-      className="btn-transition flex flex-col gap-3 rounded-lg border p-4"
-      style={{
-        borderColor: 'var(--lp-border-strong)',
-        background: 'var(--lp-surface)',
-      }}
-    >
-      <div className="flex items-start gap-2">
-        <span
-          aria-hidden
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md"
-          style={{
-            background:
-              'color-mix(in srgb, var(--color-lp-orange) 8%, transparent)',
-            color: 'var(--color-lp-orange)',
-          }}
-        >
-          <Icon className="h-4 w-4" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <div
-            style={{
-              fontSize: '13px',
-              fontWeight: 600,
-              color: 'var(--lp-text)',
-            }}
-          >
-            {label}
-          </div>
-          <div
-            style={{
-              fontSize: '11px',
-              color: 'var(--lp-text-tertiary)',
-              lineHeight: 1.4,
-            }}
-          >
-            {description}
-          </div>
-        </div>
-        <ChevronRight
-          aria-hidden
-          className="h-4 w-4 shrink-0"
-          style={{ color: 'var(--lp-text-tertiary)' }}
-        />
-      </div>
-      {/* "What's hot" — single actionable metric. */}
-      <div
-        className="flex items-baseline gap-2 rounded-md border px-3 py-2"
-        style={{
-          borderColor: 'var(--lp-border-subtle)',
-          background: 'var(--lp-bg-deep)',
-        }}
-      >
-        <span
-          className="lp-mono"
-          style={{
-            fontSize: '20px',
-            fontWeight: 500,
-            color:
-              metricValue > 0
-                ? 'var(--color-lp-orange)'
-                : 'var(--lp-text-tertiary)',
-            lineHeight: 1,
-          }}
-        >
-          {metricValue}
-        </span>
-        <span
-          style={{
-            fontSize: '11px',
-            color: 'var(--lp-text-secondary)',
-          }}
-        >
-          {metricLabel}
-        </span>
-      </div>
-    </Link>
   );
 }
 
