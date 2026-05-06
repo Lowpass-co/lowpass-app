@@ -1,0 +1,664 @@
+/* ============================================
+   LOWPASS — Sprint 8 §5 — <ArtistCreateSlideOver>
+
+   Quick-create flow for a new artist, opened from the
+   "+ Create new artist" CTA at the bottom of the artists pane
+   in <ArtistTourSwitcher>. Posts to the existing
+   POST /api/artists route (no new API surface needed —
+   pre-Sprint-8 audit confirmed the route already accepts
+   spotify_id / spotify_image_url / spotify_banner_url + a
+   branding JSONB into which we tuck `genre`).
+
+   Form layout:
+     NAME *                                              (autofocus)
+     LINK ON SPOTIFY  (search input · debounce 300ms)
+       → search results dropdown when query.length >= 2
+       → selected card with [×] to clear
+     GENRE  (auto-fills from Spotify result's genres[0])
+
+   On success:
+     - close slide-over
+     - toast "Artist created"
+     - onCreated(artist) — wrapper appends to switcher's
+       artists state + navigates to /artists/[new-id]
+
+   The full-page legacy artist-create flow at /artists/[id]/edit
+   stays for any deep-link bookmarks; this slide-over is the
+   canonical creation UX going forward.
+   ============================================ */
+
+'use client';
+
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+} from 'react';
+import { Search, X as XIcon } from 'lucide-react';
+import { SlideOver } from '@/components/shell/SlideOver';
+import { useToast } from '@/components/ui/Toast';
+
+interface ArtistCreateSlideOverProps {
+  open: boolean;
+  onClose: () => void;
+  /** Sprint 8 §5 — fired with the freshly-created artist's
+   *  lean projection so the wrapper can optimistically prepend
+   *  it to the switcher's artists list AND navigate to
+   *  /artists/[new-id]. Mirrors TourCreateSlideOver's
+   *  onCreated callback shape. */
+  onCreated?: (artist: {
+    id: string;
+    name: string;
+    branding: unknown;
+    spotify_id: string | null;
+    spotify_image_url: string | null;
+  }) => void;
+}
+
+interface SpotifySearchResult {
+  id: string;
+  name: string;
+  image_url: string | null;
+  banner_url: string | null;
+}
+
+interface SelectedSpotify {
+  id: string;
+  name: string;
+  image_url: string | null;
+  banner_url: string | null;
+  /** Captured at select-time so genre auto-fill is available
+   *  without a follow-up API call. The /api/spotify/search
+   *  endpoint doesn't return genres today; if we later add it,
+   *  this becomes non-empty. */
+  primaryGenre: string | null;
+}
+
+export function ArtistCreateSlideOver({
+  open,
+  onClose,
+  onCreated,
+}: ArtistCreateSlideOverProps) {
+  const { showToast } = useToast();
+  const formId = useId();
+
+  /* -------- form state -------- */
+  // Re-mount inner on `open` flip (key trick) so per-open state
+  // resets without a useEffect setState (matches
+  // TourCreateSlideOver's pattern from Sprint 5).
+  return (
+    <ArtistCreateSlideOverInner
+      key={open ? 'open' : 'closed'}
+      open={open}
+      onClose={onClose}
+      formId={formId}
+      showToast={showToast}
+      onCreated={onCreated}
+    />
+  );
+}
+
+interface InnerProps {
+  open: boolean;
+  onClose: () => void;
+  formId: string;
+  showToast: ReturnType<typeof useToast>['showToast'];
+  onCreated?: ArtistCreateSlideOverProps['onCreated'];
+}
+
+function ArtistCreateSlideOverInner({
+  open,
+  onClose,
+  formId,
+  showToast,
+  onCreated,
+}: InnerProps) {
+  const [name, setName] = useState('');
+  const [genre, setGenre] = useState('');
+  const [spotifyQuery, setSpotifyQuery] = useState('');
+  const [searchResults, setSearchResults] = useState<
+    SpotifySearchResult[]
+  >([]);
+  const [searching, setSearching] = useState(false);
+  const [selected, setSelected] = useState<SelectedSpotify | null>(
+    null,
+  );
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /* -------- spotify search (debounced) -------- */
+  function onQueryChange(next: string) {
+    setSpotifyQuery(next);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (next.trim().length < 2) {
+      setSearchResults([]);
+      setSearching(false);
+      return;
+    }
+    setSearching(true);
+    debounceRef.current = setTimeout(() => {
+      runSearch(next.trim());
+    }, 300);
+  }
+
+  async function runSearch(q: string) {
+    try {
+      const res = await fetch(
+        `/api/spotify/search?q=${encodeURIComponent(q)}`,
+      );
+      if (!res.ok) {
+        setSearchResults([]);
+        setSearching(false);
+        return;
+      }
+      const data = (await res.json()) as SpotifySearchResult[];
+      setSearchResults(Array.isArray(data) ? data.slice(0, 5) : []);
+      setSearching(false);
+    } catch {
+      setSearchResults([]);
+      setSearching(false);
+    }
+  }
+
+  const onSelectSpotify = useCallback(
+    (r: SpotifySearchResult) => {
+      setSelected({
+        id: r.id,
+        name: r.name,
+        image_url: r.image_url,
+        banner_url: r.banner_url,
+        primaryGenre: null,
+      });
+      // Sprint 8 §5 sign-off — auto-fill name when empty.
+      // Otherwise leave the user's input alone.
+      if (!name.trim()) setName(r.name);
+      // Genre auto-fill deferred — /api/spotify/search doesn't
+      // currently return genres. Left empty; user can type
+      // manually.
+      setSpotifyQuery('');
+      setSearchResults([]);
+    },
+    [name],
+  );
+
+  const clearSpotify = useCallback(() => {
+    setSelected(null);
+  }, []);
+
+  // Cleanup debounce timer on unmount.
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
+
+  const trimmedName = name.trim();
+  const canSubmit = !!trimmedName && !submitting;
+
+  /* -------- submit -------- */
+  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!canSubmit) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      // Sprint 8 §5 sign-off — genre tucked into branding JSONB
+      // (no schema column for genre).
+      const branding: Record<string, unknown> = {};
+      if (genre.trim()) branding.genre = genre.trim();
+
+      const payload: Record<string, unknown> = {
+        name: trimmedName,
+        branding,
+      };
+      if (selected) {
+        payload.spotify_id = selected.id;
+        if (selected.image_url) payload.spotify_image_url = selected.image_url;
+        if (selected.banner_url) payload.spotify_banner_url = selected.banner_url;
+      }
+
+      const res = await fetch('/api/artists', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const body = (await res.json().catch(() => null)) as
+        | {
+            error?: string;
+            id?: string;
+            name?: string;
+            branding?: unknown;
+            spotify_id?: string | null;
+            spotify_image_url?: string | null;
+          }
+        | null;
+      if (!res.ok) {
+        setError(body?.error ?? `Create failed (${res.status})`);
+        setSubmitting(false);
+        return;
+      }
+      const newId = body?.id;
+      if (newId) {
+        onCreated?.({
+          id: newId,
+          name: body?.name ?? trimmedName,
+          branding: body?.branding ?? branding,
+          spotify_id: body?.spotify_id ?? selected?.id ?? null,
+          spotify_image_url:
+            body?.spotify_image_url ?? selected?.image_url ?? null,
+        });
+      }
+      showToast('Artist created');
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Network error');
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <SlideOver
+      open={open}
+      onClose={onClose}
+      title="New artist"
+      footer={
+        <div
+          className="flex items-center justify-end"
+          style={{ gap: 'var(--lp-space-3)' }}
+        >
+          <button
+            type="button"
+            onClick={onClose}
+            className="btn-transition"
+            style={{
+              padding: 'var(--lp-space-2) var(--lp-space-4)',
+              fontSize: 'var(--lp-text-sm)',
+              fontWeight: 'var(--lp-weight-medium)',
+              color: 'var(--lp-text-secondary)',
+              background: 'transparent',
+              border: '1px solid var(--lp-border-strong)',
+              borderRadius: 'var(--lp-radius-md)',
+              cursor: 'pointer',
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            type="submit"
+            form={formId}
+            disabled={!canSubmit}
+            className="btn-transition"
+            style={{
+              padding: 'var(--lp-space-2) var(--lp-space-4)',
+              fontSize: 'var(--lp-text-sm)',
+              fontWeight: 'var(--lp-weight-semibold)',
+              color: canSubmit
+                ? 'var(--lp-text-inverse)'
+                : 'var(--lp-text-tertiary)',
+              background: canSubmit
+                ? 'var(--color-lp-orange)'
+                : 'var(--lp-surface-hover)',
+              border: '1px solid transparent',
+              borderRadius: 'var(--lp-radius-md)',
+              cursor: canSubmit ? 'pointer' : 'not-allowed',
+              opacity: canSubmit ? 1 : 0.7,
+            }}
+          >
+            {submitting ? 'Creating…' : 'Create artist'}
+          </button>
+        </div>
+      }
+    >
+      <form
+        id={formId}
+        onSubmit={onSubmit}
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 'var(--lp-space-4)',
+        }}
+      >
+        {error ? (
+          <div
+            role="alert"
+            style={{
+              padding: 'var(--lp-space-3)',
+              fontSize: 'var(--lp-text-sm)',
+              color: 'var(--color-lp-error)',
+              background:
+                'color-mix(in srgb, var(--color-lp-error) 10%, transparent)',
+              border:
+                '1px solid color-mix(in srgb, var(--color-lp-error) 30%, transparent)',
+              borderRadius: 'var(--lp-radius-md)',
+            }}
+          >
+            {error}
+          </div>
+        ) : null}
+
+        <Field label="Name" htmlFor={`${formId}-name`} required>
+          <input
+            id={`${formId}-name`}
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g. Good Neighbours"
+            autoFocus
+            data-autofocus
+            required
+            style={inputStyle()}
+          />
+        </Field>
+
+        <Field label="Link on Spotify" htmlFor={`${formId}-spotify`}>
+          {selected ? (
+            <SelectedSpotifyCard
+              selected={selected}
+              onClear={clearSpotify}
+            />
+          ) : (
+            <>
+              <div style={{ position: 'relative' }}>
+                <input
+                  id={`${formId}-spotify`}
+                  type="search"
+                  value={spotifyQuery}
+                  onChange={(e) => onQueryChange(e.target.value)}
+                  placeholder="Search Spotify…"
+                  style={{
+                    ...inputStyle(),
+                    paddingRight: 36,
+                  }}
+                />
+                <Search
+                  aria-hidden
+                  size={16}
+                  strokeWidth={2}
+                  style={{
+                    position: 'absolute',
+                    right: 'var(--lp-space-3)',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    color: 'var(--lp-text-tertiary)',
+                    pointerEvents: 'none',
+                  }}
+                />
+              </div>
+              {searching && spotifyQuery.trim().length >= 2 ? (
+                <div
+                  style={{
+                    fontSize: 'var(--lp-text-xs)',
+                    color: 'var(--lp-text-tertiary)',
+                  }}
+                >
+                  Searching Spotify…
+                </div>
+              ) : null}
+              {!searching &&
+              searchResults.length > 0 &&
+              spotifyQuery.trim().length >= 2 ? (
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 2,
+                    background: 'var(--lp-panel)',
+                    border: '1px solid var(--lp-border-strong)',
+                    borderRadius: 'var(--lp-radius-md)',
+                    overflow: 'hidden',
+                  }}
+                >
+                  {searchResults.map((r) => (
+                    <button
+                      key={r.id}
+                      type="button"
+                      onClick={() => onSelectSpotify(r)}
+                      className="btn-transition"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 'var(--lp-space-2)',
+                        padding: 'var(--lp-space-2) var(--lp-space-3)',
+                        background: 'transparent',
+                        border: 'none',
+                        textAlign: 'left',
+                        cursor: 'pointer',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background =
+                          'var(--lp-panel-hover)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'transparent';
+                      }}
+                    >
+                      {r.image_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={r.image_url}
+                          alt=""
+                          width={32}
+                          height={32}
+                          style={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: 'var(--lp-radius-full)',
+                            objectFit: 'cover',
+                            flexShrink: 0,
+                            background: 'var(--lp-bg-deep)',
+                          }}
+                        />
+                      ) : (
+                        <span
+                          aria-hidden
+                          style={{
+                            width: 32,
+                            height: 32,
+                            borderRadius: 'var(--lp-radius-full)',
+                            background:
+                              'color-mix(in srgb, var(--color-lp-orange) 25%, transparent)',
+                            flexShrink: 0,
+                          }}
+                        />
+                      )}
+                      <span
+                        className="min-w-0 flex-1 truncate"
+                        style={{
+                          fontSize: 'var(--lp-text-sm)',
+                          color: 'var(--lp-text)',
+                        }}
+                      >
+                        {r.name}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+              {!searching &&
+              spotifyQuery.trim().length >= 2 &&
+              searchResults.length === 0 ? (
+                <div
+                  style={{
+                    fontSize: 'var(--lp-text-xs)',
+                    color: 'var(--lp-text-tertiary)',
+                  }}
+                >
+                  No Spotify matches for &ldquo;{spotifyQuery}&rdquo;.
+                </div>
+              ) : null}
+            </>
+          )}
+        </Field>
+
+        <Field label="Genre" htmlFor={`${formId}-genre`}>
+          <input
+            id={`${formId}-genre`}
+            type="text"
+            value={genre}
+            onChange={(e) => setGenre(e.target.value)}
+            placeholder="e.g. indie folk (optional)"
+            style={inputStyle()}
+          />
+        </Field>
+      </form>
+    </SlideOver>
+  );
+}
+
+/* ----- selected-spotify card subcomponent ----- */
+function SelectedSpotifyCard({
+  selected,
+  onClear,
+}: {
+  selected: SelectedSpotify;
+  onClear: () => void;
+}) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 'var(--lp-space-3)',
+        padding: 'var(--lp-space-3)',
+        background: 'var(--lp-panel)',
+        border: '1px solid var(--lp-border-strong)',
+        borderRadius: 'var(--lp-radius-md)',
+      }}
+    >
+      {selected.image_url ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={selected.image_url}
+          alt=""
+          width={48}
+          height={48}
+          style={{
+            width: 48,
+            height: 48,
+            borderRadius: 'var(--lp-radius-md)',
+            objectFit: 'cover',
+            flexShrink: 0,
+            background: 'var(--lp-bg-deep)',
+          }}
+        />
+      ) : (
+        <span
+          aria-hidden
+          style={{
+            width: 48,
+            height: 48,
+            borderRadius: 'var(--lp-radius-md)',
+            background:
+              'color-mix(in srgb, var(--color-lp-orange) 25%, transparent)',
+            flexShrink: 0,
+          }}
+        />
+      )}
+      <div className="min-w-0 flex-1">
+        <div
+          className="truncate"
+          style={{
+            fontSize: 'var(--lp-text-sm)',
+            fontWeight: 'var(--lp-weight-medium)',
+            color: 'var(--lp-text)',
+          }}
+        >
+          {selected.name}
+        </div>
+        <div
+          style={{
+            fontSize: 'var(--lp-text-xs)',
+            color: 'var(--lp-text-tertiary)',
+            marginTop: 2,
+          }}
+        >
+          Banner + image will pull from Spotify
+        </div>
+      </div>
+      <button
+        type="button"
+        onClick={onClear}
+        aria-label="Clear Spotify link"
+        className="btn-transition flex shrink-0 items-center justify-center"
+        style={{
+          width: 28,
+          height: 28,
+          borderRadius: 'var(--lp-radius-sm)',
+          background: 'transparent',
+          color: 'var(--lp-text-tertiary)',
+          border: 'none',
+          cursor: 'pointer',
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = 'var(--lp-panel-hover)';
+          e.currentTarget.style.color = 'var(--lp-text)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = 'transparent';
+          e.currentTarget.style.color = 'var(--lp-text-tertiary)';
+        }}
+      >
+        <XIcon size={16} strokeWidth={2} />
+      </button>
+    </div>
+  );
+}
+
+/* ----- shared field + input helpers (mirror TourCreateSlideOver) ----- */
+function Field({
+  label,
+  htmlFor,
+  required,
+  children,
+}: {
+  label: string;
+  htmlFor: string;
+  required?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <label
+      htmlFor={htmlFor}
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 'var(--lp-space-1)',
+      }}
+    >
+      <span
+        className="lp-label-caps"
+        style={{ color: 'var(--lp-text-secondary)' }}
+      >
+        {label}
+        {required ? (
+          <span
+            aria-hidden
+            style={{
+              marginLeft: 'var(--lp-space-1)',
+              color: 'var(--color-lp-orange)',
+            }}
+          >
+            *
+          </span>
+        ) : null}
+      </span>
+      {children}
+    </label>
+  );
+}
+
+function inputStyle(): React.CSSProperties {
+  return {
+    width: '100%',
+    padding: 'var(--lp-space-2) var(--lp-space-3)',
+    fontSize: 'var(--lp-text-base)',
+    color: 'var(--lp-text)',
+    background: 'var(--lp-bg)',
+    border: '1px solid var(--lp-border-strong)',
+    borderRadius: 'var(--lp-radius-md)',
+    outline: 'none',
+  };
+}

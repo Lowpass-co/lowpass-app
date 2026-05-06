@@ -87,6 +87,10 @@ interface ArtistTourSwitcherProps {
   /** Called when the user clicks "+ Create new tour" — wired to
    *  the slide-over by the wrapper. */
   onCreateTour: () => void;
+  /** Sprint 8 §5 — called when the user clicks "+ Create new
+   *  artist" at the bottom of the artists pane. Wrapper opens
+   *  the artist slide-over. */
+  onCreateArtist: () => void;
 }
 
 /** Sprint 6.1 §3 — animations are now driven by the Web
@@ -240,6 +244,7 @@ export function ArtistTourSwitcher({
   tours,
   toursLoading,
   onCreateTour,
+  onCreateArtist,
 }: ArtistTourSwitcherProps) {
   const {
     selectedArtistId,
@@ -732,6 +737,7 @@ export function ArtistTourSwitcher({
                   onPick={handleArtistClick}
                   onClose={closeDropdown}
                   onAllArtists={handleAllArtists}
+                  onCreateArtist={onCreateArtist}
                 />
               ) : (
                 <ToursPane
@@ -771,6 +777,9 @@ export function ArtistTourSwitcher({
                       /* exiting pane: ignored */
                     }}
                     onAllArtists={() => {
+                      /* exiting pane: ignored */
+                    }}
+                    onCreateArtist={() => {
                       /* exiting pane: ignored */
                     }}
                   />
@@ -934,6 +943,7 @@ function ArtistsPane({
   onPick,
   onClose,
   onAllArtists,
+  onCreateArtist,
 }: {
   artists: ArtistMin[];
   selectedArtistId: string | null;
@@ -943,6 +953,9 @@ function ArtistsPane({
    *  Click navigates to /artists (workspace landing). The
    *  parent passes a function that does router.push + close. */
   onAllArtists: () => void;
+  /** Sprint 8 §5 — opens the ArtistCreateSlideOver. Wired by
+   *  the parent from the wrapper's setIsCreateArtistOpen. */
+  onCreateArtist: () => void;
 }) {
   return (
     <>
@@ -1057,6 +1070,41 @@ function ArtistsPane({
             );
           })
         )}
+        {/* Sprint 8 §5 — "+ Create new artist" CTA mirrors the
+            "+ Create new tour" CTA at the bottom of the tours
+            pane. Same orange-text + Plus icon styling. */}
+        <button
+          type="button"
+          onClick={onCreateArtist}
+          className="btn-transition"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 'var(--lp-space-2)',
+            width: '100%',
+            height: 36,
+            marginTop: 'var(--lp-space-2)',
+            padding: '0 var(--lp-space-2)',
+            borderRadius: 'var(--lp-radius-sm)',
+            background: 'transparent',
+            color: 'var(--color-lp-orange)',
+            cursor: 'pointer',
+            textAlign: 'left',
+            fontSize: 'var(--lp-text-base)',
+            fontWeight: 'var(--lp-weight-medium)',
+            border: 'none',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background =
+              'var(--color-lp-orange-subtle-hover)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = 'transparent';
+          }}
+        >
+          <Plus size={14} strokeWidth={2.25} aria-hidden />
+          Create new artist
+        </button>
       </div>
     </>
   );
