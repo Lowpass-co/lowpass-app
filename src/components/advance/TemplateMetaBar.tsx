@@ -1,22 +1,31 @@
 /* ============================================
-   LOWPASS — Advance · Template Meta Bar (Variant parity §D.3)
+   LOWPASS — Advance · Template Meta Bar (Variant parity §D.3 + Hotfix 3 §3)
 
-   Sticky strip at the top of the builder canvas. Three columns:
-     1. Template name input (inline-editable, focus-ring orange)
-     2. Apply To Tour(s) — opens the existing
-        ApplyAdvanceTemplateSlideOver
-     3. Copy from Show… — opens the existing CopyAdvanceModal
+   Sticky strip at the top of the advance canvas. Sits inside the inner
+   <main overflow-y-auto> scroll context so it tracks the canvas (the
+   prior outer-anchored AdvanceSubHeader, sticky against the page-level
+   scroll context, drifted out of sync with content scrolled in the
+   inner context — Hotfix 3 §3 root cause).
 
-   Wiring is shallow on purpose: the existing builder owns the
-   template-name persistence path, the apply-to-tour flow, and
-   the copy-from-show modal. This bar provides a unified entry
+   Layout (left → right):
+     [ Show / Template Builder tabs ]
+     [ Template name input — flex 1 ]
+     [ Apply to tour(s) · Copy from show… · Duplicate · Print · Export PDF ]
+
+   Save is gone — autosave already handles it; the explicit button was
+   display-only chrome.
+
+   Wiring is shallow: the existing builder owns template-name persistence
+   and the Apply / Copy modal slots; this bar provides a unified entry
    point per the Variant spec without taking ownership.
    ============================================ */
 
 'use client';
 
 import { useState } from 'react';
-import { LayoutTemplate, Copy } from 'lucide-react';
+import Link from 'next/link';
+import { Copy, Download, LayoutTemplate, Printer } from 'lucide-react';
+import { useToast } from '@/components/ui/Toast';
 
 interface TemplateMetaBarProps {
   /** Initial template name. May be null when no layout template is
@@ -30,6 +39,17 @@ interface TemplateMetaBarProps {
   onApplyToTours?: () => void;
   /** Triggers the existing CopyAdvanceModal. */
   onCopyFromShow?: () => void;
+  /** Duplicate the current template/show. Currently aliased to
+   *  onCopyFromShow — the old AdvanceSubHeader's ⌘D chip pointed at
+   *  the same flow. A future "duplicate to other shows" surface can
+   *  split this. */
+  onDuplicate?: () => void;
+  /** Active tab — 'show' = read view, 'builder' = template builder. */
+  activeTab: 'show' | 'builder';
+  /** Href for the Show tab (read mode). */
+  showHref: string;
+  /** Href for the Template Builder tab (?mode=edit). */
+  builderHref: string;
 }
 
 export function TemplateMetaBar({
@@ -37,19 +57,66 @@ export function TemplateMetaBar({
   onRename,
   onApplyToTours,
   onCopyFromShow,
+  onDuplicate,
+  activeTab,
+  showHref,
+  builderHref,
 }: TemplateMetaBarProps) {
   const [draft, setDraft] = useState(templateName ?? '');
+  const { showToast } = useToast();
+
+  const tabs = [
+    { key: 'show' as const, label: 'Show', href: showHref },
+    { key: 'builder' as const, label: 'Template Builder', href: builderHref },
+  ];
 
   return (
     <div
       className="advance-read-no-print sticky top-0 z-30 grid items-center gap-3"
       style={{
-        gridTemplateColumns: 'minmax(0, 1fr) auto auto',
+        gridTemplateColumns: 'auto minmax(0, 1fr) auto',
         padding: '12px 16px',
         background: 'var(--lp-panel)',
         borderBottom: '1px solid var(--lp-border-strong)',
       }}
     >
+      {/* Left: Show / Template Builder tabs */}
+      <nav
+        className="inline-flex items-center gap-0.5 rounded-md border p-0.5"
+        style={{
+          borderColor: 'var(--lp-border-strong)',
+          background: 'var(--lp-bg-deep)',
+        }}
+        role="tablist"
+        aria-label="Advance tabs"
+      >
+        {tabs.map((tab) => {
+          const active = tab.key === activeTab;
+          return (
+            <Link
+              key={tab.key}
+              href={tab.href}
+              role="tab"
+              aria-selected={active}
+              scroll={false}
+              className="btn-transition rounded-sm px-2.5 py-1"
+              style={{
+                fontSize: '12px',
+                fontWeight: active ? 600 : 500,
+                background: active ? 'var(--lp-surface)' : 'transparent',
+                color: active ? 'var(--lp-text)' : 'var(--lp-text-secondary)',
+                boxShadow: active
+                  ? `inset 0 -2px 0 var(--color-lp-orange)`
+                  : 'none',
+              }}
+            >
+              {tab.label}
+            </Link>
+          );
+        })}
+      </nav>
+
+      {/* Middle: template name input */}
       <div className="min-w-0">
         <input
           type="text"
@@ -84,49 +151,76 @@ export function TemplateMetaBar({
         />
       </div>
 
-      <button
-        type="button"
-        onClick={onApplyToTours}
-        disabled={!onApplyToTours}
-        className="btn-transition inline-flex items-center gap-1.5"
-        style={{
-          padding: '6px 10px',
-          fontSize: '13px',
-          fontWeight: 500,
-          color: onApplyToTours
-            ? 'var(--lp-text-secondary)'
-            : 'var(--lp-text-tertiary)',
-          background: 'var(--lp-bg)',
-          border: '1px solid var(--lp-border-strong)',
-          borderRadius: 4,
-          cursor: onApplyToTours ? 'pointer' : 'not-allowed',
-        }}
-      >
-        <LayoutTemplate className="h-3.5 w-3.5" />
-        Apply to tour(s)
-      </button>
-
-      <button
-        type="button"
-        onClick={onCopyFromShow}
-        disabled={!onCopyFromShow}
-        className="btn-transition inline-flex items-center gap-1.5"
-        style={{
-          padding: '6px 10px',
-          fontSize: '13px',
-          fontWeight: 500,
-          color: onCopyFromShow
-            ? 'var(--lp-text-secondary)'
-            : 'var(--lp-text-tertiary)',
-          background: 'var(--lp-bg)',
-          border: '1px solid var(--lp-border-strong)',
-          borderRadius: 4,
-          cursor: onCopyFromShow ? 'pointer' : 'not-allowed',
-        }}
-      >
-        <Copy className="h-3.5 w-3.5" />
-        Copy from show…
-      </button>
+      {/* Right: action buttons. Apply / Copy preserved from §D.3.
+          Duplicate / Print / Export PDF preserved from the retired
+          AdvanceSubHeader (Hotfix 3 §3). Save dropped — autosave. */}
+      <div className="flex items-center gap-2">
+        <MetaButton
+          label="Apply to tour(s)"
+          icon={<LayoutTemplate className="h-3.5 w-3.5" />}
+          onClick={onApplyToTours}
+        />
+        <MetaButton
+          label="Copy from show…"
+          icon={<Copy className="h-3.5 w-3.5" />}
+          onClick={onCopyFromShow}
+        />
+        <MetaButton
+          label="Duplicate"
+          icon={<Copy className="h-3.5 w-3.5" />}
+          onClick={onDuplicate ?? onCopyFromShow}
+        />
+        <MetaButton
+          label="Print"
+          icon={<Printer className="h-3.5 w-3.5" />}
+          onClick={() => {
+            if (typeof window !== 'undefined') window.print();
+          }}
+        />
+        <MetaButton
+          label="Export PDF"
+          icon={<Download className="h-3.5 w-3.5" />}
+          onClick={() =>
+            showToast(
+              'PDF export for advance is wired through the read-view print flow — use ⌘P for now.',
+            )
+          }
+        />
+      </div>
     </div>
+  );
+}
+
+function MetaButton({
+  label,
+  icon,
+  onClick,
+}: {
+  label: string;
+  icon: React.ReactNode;
+  onClick?: () => void;
+}) {
+  const enabled = !!onClick;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={!enabled}
+      className="btn-transition inline-flex items-center gap-1.5"
+      style={{
+        padding: '6px 10px',
+        fontSize: '13px',
+        fontWeight: 500,
+        color: enabled ? 'var(--lp-text-secondary)' : 'var(--lp-text-tertiary)',
+        background: 'var(--lp-bg)',
+        border: '1px solid var(--lp-border-strong)',
+        borderRadius: 4,
+        cursor: enabled ? 'pointer' : 'not-allowed',
+        whiteSpace: 'nowrap',
+      }}
+    >
+      {icon}
+      {label}
+    </button>
   );
 }

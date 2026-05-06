@@ -63,12 +63,21 @@ interface AdvanceBuilderShellClientProps {
   tourId: string;
   routingId: string;
   templateName: string | null;
+  /** Active tab for the toggle inside TemplateMetaBar (Hotfix 3 §3
+   *  — moved here from the retired AdvanceSubHeader). */
+  activeTab: 'show' | 'builder';
+  /** Hrefs for the Show/Builder toggle inside TemplateMetaBar. */
+  showHref: string;
+  builderHref: string;
 }
 
 export function AdvanceBuilderShellClient({
   tourId,
   routingId,
   templateName,
+  activeTab,
+  showHref,
+  builderHref,
 }: AdvanceBuilderShellClientProps) {
   const router = useRouter();
   const { showToast } = useToast();
@@ -182,9 +191,20 @@ export function AdvanceBuilderShellClient({
           templateName={templateName}
           onApplyToTours={handleApplyToTours}
           onCopyFromShow={() => setCopyOpen(true)}
+          activeTab={activeTab}
+          showHref={showHref}
+          builderHref={builderHref}
         />
         <div className="flex-1 px-4 pb-12 pt-4">
-          <AdvanceSectionBuilderDynamic tourId={tourId} routingId={routingId} />
+          {/* Hotfix 3 §2 — wrappedInShell tells the embedded
+              AdvanceSectionBuilder's SetupMode to suppress its own
+              Template Library column. The shell's
+              AdvanceSectionLibrary on the left already provides one. */}
+          <AdvanceSectionBuilderDynamic
+            tourId={tourId}
+            routingId={routingId}
+            wrappedInShell
+          />
           <div className="mt-4">
             <SectionDropZone onDrop={handleSectionDrop} />
           </div>

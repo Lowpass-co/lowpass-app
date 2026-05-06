@@ -1414,10 +1414,12 @@ export function AdvanceShowReadView({
       <style dangerouslySetInnerHTML={{ __html: PRINT_HIDE_CSS }} />
 
       {/* Variant parity §F — page-level "← Advance | Print | Edit advance"
-          toolbar removed. Print moved to AdvanceSubHeader actions. The
-          back link is replaced by the global ProductHeader breadcrumb;
-          the "Edit advance" button is replaced by the Show / Template
-          Builder tab toggle in AdvanceSubHeader. */}
+          toolbar removed. Print moved to TemplateMetaBar actions
+          (Hotfix 3 §3 — was AdvanceSubHeader before the sub-header was
+          retired). The back link is replaced by the global
+          ProductHeader breadcrumb; the "Edit advance" button is
+          replaced by the Show / Template Builder tab toggle now living
+          in TemplateMetaBar. */}
 
       {/* Hotfix v2 §A — autosave indicator for in-place field edits. */}
       {!publicReadOnly && autosaveStatus !== 'idle' ? (
