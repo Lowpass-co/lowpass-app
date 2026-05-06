@@ -23,6 +23,9 @@ interface ReleaseItem {
   url: string;
   release_date: string;
   type: string;
+  /** Sprint 8 §3 — cover art URL, populated by the API. May be
+   *  null when Spotify omits images for an album/single. */
+  image_url: string | null;
 }
 
 export function NewReleasesGrid({ artistName }: { artistName: string }) {
@@ -46,7 +49,9 @@ export function NewReleasesGrid({ artistName }: { artistName: string }) {
               r.artist_name &&
               r.artist_name.toLowerCase() === artistName.toLowerCase(),
           )
-          .slice(0, 6);
+          // Sprint 8 §3 — cap at 5 (was 6). Adam's smoke: "lets
+          // limit to five latest releases".
+          .slice(0, 5);
         setItems(mine);
         setLoading(false);
       })
@@ -112,22 +117,40 @@ export function NewReleasesGrid({ artistName }: { artistName: string }) {
             textDecoration: 'none',
           }}
         >
-          {/* Cover thumb — Spotify includes images on the album
-              record but the existing endpoint strips them down to
-              meta only. Keeping a token square placeholder for
-              visual rhythm; future revision can pass image_url
-              through the endpoint. */}
-          <span
-            aria-hidden
-            style={{
-              width: 56,
-              height: 56,
-              borderRadius: 'var(--lp-radius-sm)',
-              background:
-                'color-mix(in srgb, var(--color-lp-orange) 15%, transparent)',
-              flexShrink: 0,
-            }}
-          />
+          {/* Cover thumb — Sprint 8 §3 — uses image_url projected
+              by /api/artists/spotify-releases (Sprint 8 added it
+              to the response). Falls back to an orange-tinted
+              gradient square when Spotify omits images. */}
+          {r.image_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={r.image_url}
+              alt=""
+              width={56}
+              height={56}
+              style={{
+                width: 56,
+                height: 56,
+                borderRadius: 'var(--lp-radius-sm)',
+                objectFit: 'cover',
+                flexShrink: 0,
+                background: 'var(--lp-bg-deep)',
+                display: 'block',
+              }}
+            />
+          ) : (
+            <span
+              aria-hidden
+              style={{
+                width: 56,
+                height: 56,
+                borderRadius: 'var(--lp-radius-sm)',
+                background:
+                  'linear-gradient(135deg, color-mix(in srgb, var(--color-lp-orange) 30%, transparent) 0%, color-mix(in srgb, var(--color-lp-orange) 8%, transparent) 100%)',
+                flexShrink: 0,
+              }}
+            />
+          )}
           <div className="min-w-0 flex-1">
             <div
               className="truncate"

@@ -19,6 +19,11 @@ export type SpotifyReleaseItem = {
   url: string;
   release_date: string;
   type: string;
+  /** Sprint 8 §3 — album/single cover art. Picks the medium-size
+   *  image (~300px) from Spotify's response when available, falls
+   *  back to the largest, falls back to null. Consumer renders an
+   *  80px thumbnail so the medium size is the right balance. */
+  image_url: string | null;
 };
 
 export async function GET() {
@@ -71,6 +76,15 @@ export async function GET() {
       const items = data.items ?? [];
       const artistName = artistNames.get(spotifyId) ?? '';
       for (const item of items) {
+        // Sprint 8 §3 — project the cover art. Spotify orders
+        // images largest → smallest; index 1 (~300px) fits the
+        // 80px thumbnail without optimizer overhead. Fall back
+        // to the largest, then null.
+        const imgs = (item.images ?? []) as Array<{ url?: string }>;
+        const imageUrl =
+          (imgs[1]?.url as string | undefined) ??
+          (imgs[0]?.url as string | undefined) ??
+          null;
         allReleases.push({
           id: item.id,
           name: item.name ?? '—',
@@ -78,6 +92,7 @@ export async function GET() {
           url: item.external_urls?.spotify ?? `https://open.spotify.com/album/${item.id}`,
           release_date: item.release_date ?? '',
           type: item.album_type ?? 'album',
+          image_url: imageUrl,
         });
       }
     } catch {
