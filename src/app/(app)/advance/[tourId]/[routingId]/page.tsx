@@ -6,7 +6,6 @@
 
      <ProductShell>
        <ProductHeader>            (Phase 1 shell-v2)
-       <AdvanceSubHeader>         (sub-header: tabs + Export PDF)
        <flex>                     (sidebar + main)
          <AdvanceUpcomingSidebar> (280px, upcoming shows)
          <main>
@@ -32,7 +31,6 @@ import { notFound } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { ProductShell } from '@/components/shell-v2';
 import { AdvanceShowReadView } from '@/components/advance/AdvanceShowReadView';
-import { AdvanceSubHeader } from '@/components/advance/AdvanceSubHeader';
 import { AdvanceShowHeader } from '@/components/advance/AdvanceShowHeader';
 import { AdvanceUpcomingSidebar } from '@/components/advance/AdvanceUpcomingSidebar';
 import {
@@ -227,9 +225,7 @@ export default async function AdvanceShowPage({
     .join('');
 
   const builderHref = `/advance/${tourId}/${routingId}?mode=edit`;
-  const subHeaderLabel = `${dateLabel ?? routing?.date ?? ''}${
-    routing?.venue_name ? ` · ${routing.venue_name}` : ''
-  }`.trim();
+  const showHref = `/advance/${tourId}/${routingId}`;
 
   // Build the right-rail's "VENUE SPECS" rows from routing data.
   // Each entry only renders when its source column has a value, so the
@@ -276,22 +272,13 @@ export default async function AdvanceShowPage({
       tourId={tourRow.id}
       productName="Advance"
     >
-      {/* Hotfix v2 §C — AdvanceSubHeader (sticky "ADVANCE / show
-          name" + tabs + Print) used to sit ABOVE the flex row in
-          both modes, stacking against AdvanceShowHeader's chunky
-          h1 below. Adam's v1 smoke flagged the duplicate. Show mode
-          drops it now — AdvanceShowHeader's "Edit template" right-
-          rail action is the path to builder mode, and the chunky
-          show-header subsumes the sticky strip's role. Builder mode
-          keeps it because SetupMode doesn't render its own header
-          and the Show / Template Builder toggle still needs a home
-          there. */}
-      {activeTab === 'builder' ? (
-        <AdvanceSubHeader
-          showLabel={subHeaderLabel || showName}
-          activeTab={activeTab}
-        />
-      ) : null}
+      {/* Hotfix 3 §3 — AdvanceSubHeader retired. The Show / Template
+          Builder toggle and Duplicate / Print / Export PDF actions
+          moved into TemplateMetaBar (which sits inside the inner
+          <main overflow-y-auto> scroll context, so it tracks the
+          canvas — the previous outer-anchored sticky drifted out
+          of sync). Read mode never mounted the sub-header post-v2;
+          builder mode no longer needs it either. */}
       <div className="flex min-h-0 flex-1">
         <AdvanceUpcomingSidebar
           tourId={tourId}
@@ -326,6 +313,9 @@ export default async function AdvanceShowPage({
               tourId={tourId}
               routingId={routingId}
               templateName={templateName}
+              activeTab={activeTab}
+              showHref={showHref}
+              builderHref={builderHref}
             />
           </main>
         ) : (
