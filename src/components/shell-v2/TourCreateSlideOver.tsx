@@ -36,6 +36,18 @@ interface TourCreateSlideOverProps {
    *  If both are null, the form surfaces a "pick an artist first"
    *  state — no insert is attempted. */
   artistId?: string | null;
+  /** Sprint 6 §2 sub-bug C — fired with the freshly-created
+   *  tour's lean projection so the wrapper can optimistically
+   *  prepend it to the switcher's tour list. Without this the
+   *  new tour wouldn't appear until the next server roundtrip
+   *  refreshed initialTours, which router.refresh() doesn't
+   *  reliably trigger across product navigation in Next 16. */
+  onCreated?: (tour: {
+    id: string;
+    name: string;
+    start_date: string | null;
+    end_date: string | null;
+  }) => void;
 }
 
 function todayIsoDate(): string {
@@ -52,6 +64,7 @@ export function TourCreateSlideOver({
   open,
   onClose,
   artistId,
+  onCreated,
 }: TourCreateSlideOverProps) {
   const router = useRouter();
   const { showToast } = useToast();
@@ -78,6 +91,7 @@ export function TourCreateSlideOver({
       router={router}
       showToast={showToast}
       setSelectedTourId={setSelectedTourId}
+      onCreated={onCreated}
     />
   );
 }
@@ -91,6 +105,7 @@ interface InnerProps {
   router: ReturnType<typeof useRouter>;
   showToast: ReturnType<typeof useToast>['showToast'];
   setSelectedTourId: (id: string | null) => void;
+  onCreated?: TourCreateSlideOverProps['onCreated'];
 }
 
 function TourCreateSlideOverInner({
@@ -102,6 +117,7 @@ function TourCreateSlideOverInner({
   router,
   showToast,
   setSelectedTourId,
+  onCreated,
 }: InnerProps) {
   const [name, setName] = useState('');
   const [startDate, setStartDate] = useState(today);
@@ -137,8 +153,18 @@ function TourCreateSlideOverInner({
           // continent + counts left to API defaults (UK / 0).
         }),
       });
+      // The existing /api/tours POST returns the inserted row
+      // directly (NextResponse.json(data)) rather than { tour: data }
+      // — Sprint 5 noted the inconsistency. Read the relevant
+      // fields off the row.
       const body = (await res.json().catch(() => null)) as
-        | { error?: string; id?: string }
+        | {
+            error?: string;
+            id?: string;
+            name?: string;
+            start_date?: string | null;
+            end_date?: string | null;
+          }
         | null;
       if (!res.ok) {
         setError(body?.error ?? `Create failed (${res.status})`);
@@ -147,10 +173,18 @@ function TourCreateSlideOverInner({
       }
       const newTourId = body?.id;
       if (newTourId) {
-        // Auto-select the new tour. The setter syncs URL +
-        // localStorage. router.refresh() re-runs the server
-        // header fetches so the switcher's tours list picks up
-        // the new row.
+        // Sprint 6 §2 sub-bug C — optimistic prepend so the new
+        // tour appears in the switcher immediately. Without this
+        // the switcher would only show it after a manual refresh
+        // (router.refresh() doesn't reliably re-run ProductHeader's
+        // server fetch in Next 16 across product navigations).
+        onCreated?.({
+          id: newTourId,
+          name: body?.name ?? trimmedName,
+          start_date: body?.start_date ?? startDate,
+          end_date: body?.end_date ?? endDate,
+        });
+        // Auto-select the new tour. Setter syncs URL + localStorage.
         setSelectedTourId(newTourId);
       }
       showToast('Tour created');

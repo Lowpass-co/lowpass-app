@@ -34,11 +34,13 @@ import {
   useRef,
   useState,
 } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   ChevronDown,
   ChevronUp,
   ChevronRight,
   ChevronLeft,
+  Loader2,
   Plus,
 } from 'lucide-react';
 import { useArtistTourContext } from '@/contexts/ArtistTourContext';
@@ -65,12 +67,17 @@ interface ArtistTourSwitcherProps {
    *  dropdown is instant on first open. The context's own artists
    *  list takes over once it loads. */
   initialArtists: ArtistMin[];
-  /** Optional pre-fetched tours for the currently-selected artist.
-   *  Context tours take over when they're available for the active
-   *  artist. */
-  initialTours?: TourMin[] | null;
-  /** Called when the user clicks "+ Create new tour" — Phase 2
-   *  wires this to the new-tour slide-over (Phase 3). */
+  /** Tours for the currently-selected artist (Sprint 6 §2: owned
+   *  by the wrapper now). Updates immediately on artist change
+   *  to clear the previous artist's stale entries, and again
+   *  optimistically when a new tour is created via the slide-over. */
+  tours: TourMin[];
+  /** True while the wrapper is fetching tours for a newly-selected
+   *  artist. The tours pane shows a loading state instead of an
+   *  empty list. */
+  toursLoading: boolean;
+  /** Called when the user clicks "+ Create new tour" — wired to
+   *  the slide-over by the wrapper. */
   onCreateTour: () => void;
 }
 
@@ -163,13 +170,21 @@ function groupToursByYear(tours: TourMin[]): YearGroup[] {
     if (b[0] === null) return -1;
     return (b[0] as number) - (a[0] as number);
   });
-  // Within each year, sort tours by start_date desc.
+  // Sprint 6 §2 sub-bug D — sort tours within each year by
+  // start_date desc (most-recent first). Use a parsed timestamp
+  // rather than localeCompare on the raw string so any DATE/
+  // ISO-with-time mix in the column doesn't fall through to
+  // an alphabetical compare. Nulls sink to the bottom of the
+  // year (rare, since tours without a start_date go to the
+  // 'undated' bucket — but defensive).
   for (const [, list] of entries) {
     list.sort((a, b) => {
-      if (!a.start_date && !b.start_date) return 0;
-      if (!a.start_date) return 1;
-      if (!b.start_date) return -1;
-      return b.start_date.localeCompare(a.start_date);
+      const aMs = a.start_date ? parseDateUTC(a.start_date)?.getTime() ?? null : null;
+      const bMs = b.start_date ? parseDateUTC(b.start_date)?.getTime() ?? null : null;
+      if (aMs === null && bMs === null) return 0;
+      if (aMs === null) return 1;
+      if (bMs === null) return -1;
+      return bMs - aMs;
     });
   }
   return entries.map(([year, list]) => ({ year, tours: list }));
@@ -177,7 +192,8 @@ function groupToursByYear(tours: TourMin[]): YearGroup[] {
 
 export function ArtistTourSwitcher({
   initialArtists,
-  initialTours,
+  tours,
+  toursLoading,
   onCreateTour,
 }: ArtistTourSwitcherProps) {
   const {
@@ -188,16 +204,13 @@ export function ArtistTourSwitcher({
     setSelectedArtistId,
     setSelectedTourId,
     artists: ctxArtists,
-    tours: ctxTours,
   } = useArtistTourContext();
+  const router = useRouter();
+  const pathname = usePathname();
 
   // Live artist list: prefer context once it has loaded; fall back
-  // to server-prefetched list. Same for tours — context auto-fetches
-  // when an artist is selected; until then `initialTours` primes the
-  // tours pane (most common case: navigated TO a tour-prefixed page,
-  // server pre-fetched the relevant tours so first dropdown open is
-  // instant). Both lists are memoised so consumers (useMemo for
-  // year-grouping, the .find() lookups) get stable references.
+  // to server-prefetched list. Tours come from props now (Sprint 6
+  // §2 — wrapper owns them).
   const artists: ArtistMin[] = useMemo(
     () =>
       ctxArtists.length > 0
@@ -209,19 +222,6 @@ export function ArtistTourSwitcher({
           }))
         : initialArtists,
     [ctxArtists, initialArtists],
-  );
-
-  const tours: TourMin[] = useMemo(
-    () =>
-      ctxTours.length > 0
-        ? ctxTours.map((t) => ({
-            id: t.id,
-            name: t.name,
-            start_date: t.start_date ?? null,
-            end_date: t.end_date ?? null,
-          }))
-        : initialTours ?? [],
-    [ctxTours, initialTours],
   );
 
   // Selected-display fallbacks: if the context hasn't loaded the
@@ -385,10 +385,23 @@ export function ArtistTourSwitcher({
 
   const handleTourClick = useCallback(
     (id: string) => {
+      // Sprint 6 §2 sub-bug A — setSelectedTourId only writes URL
+      // params + localStorage; on tour-prefixed routes the path
+      // segment still encodes the OLD tour id, so the page renders
+      // the old tour. Push to the tour-scoped URL for the active
+      // product so the page actually navigates.
       setSelectedTourId(id);
       closeDropdown();
+      const productMatch = pathname?.match(
+        /^\/(budget|advance|operations)\//,
+      );
+      if (productMatch) {
+        router.push(`/${productMatch[1]}/${id}`);
+      }
+      // Non-product paths (/artists/[id], /personnel, etc.) stay
+      // put — context update is enough.
     },
-    [setSelectedTourId, closeDropdown],
+    [setSelectedTourId, closeDropdown, pathname, router],
   );
 
   const handleBackToArtists = useCallback(() => {
@@ -564,6 +577,7 @@ export function ArtistTourSwitcher({
                   artistName={dropdownArtistName}
                   yearGroups={yearGroups}
                   totalTours={tours.length}
+                  loading={toursLoading}
                   selectedTourId={selectedTourId}
                   onPick={handleTourClick}
                   onBack={handleBackToArtists}
@@ -824,6 +838,7 @@ function ToursPane({
   artistName,
   yearGroups,
   totalTours,
+  loading = false,
   selectedTourId,
   onPick,
   onBack,
@@ -833,6 +848,11 @@ function ToursPane({
   artistName: string;
   yearGroups: YearGroup[];
   totalTours: number;
+  /** Sprint 6 §2 sub-bug B — wrapper sets this true while it
+   *  fetches a newly-selected artist's tours. The pane shows a
+   *  small spinner instead of an empty list so the user
+   *  doesn't see the previous artist's tours linger. */
+  loading?: boolean;
   selectedTourId: string | null;
   onPick: (id: string) => void;
   onBack: () => void;
@@ -906,7 +926,26 @@ function ToursPane({
             'var(--lp-space-1) var(--lp-space-2) var(--lp-space-2)',
         }}
       >
-        {totalTours === 0 ? (
+        {loading ? (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 'var(--lp-space-2)',
+              padding: 'var(--lp-space-6) var(--lp-space-3)',
+              fontSize: 'var(--lp-text-sm)',
+              color: 'var(--lp-text-tertiary)',
+            }}
+          >
+            <Loader2
+              size={14}
+              strokeWidth={2}
+              className="animate-spin"
+            />
+            Loading tours…
+          </div>
+        ) : totalTours === 0 ? (
           <EmptyState message="No tours yet." />
         ) : (
           yearGroups.map((g) => (

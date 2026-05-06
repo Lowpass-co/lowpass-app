@@ -113,6 +113,7 @@ export async function ProductHeader({
         <ArtistTourSwitcherClientWrapper
           initialArtists={initialArtists}
           initialTours={initialTours}
+          initialArtistId={artistId ?? null}
         />
       </div>
 
