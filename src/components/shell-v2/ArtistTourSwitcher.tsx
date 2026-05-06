@@ -131,6 +131,17 @@ function prefersReducedMotion(): boolean {
   );
 }
 
+/** Sprint 6.2 §2 — cancel an animation, but only if it hasn't
+ *  already finished. Cancelling a finished animation removes
+ *  its persisted-fill effect (the spec calls it "associated
+ *  effect") and reverts the element to its un-animated state.
+ *  For our use, that means a finished enter animation suddenly
+ *  flashes back to opacity:0/translateX(8px) when the parent
+ *  re-renders and the effect re-runs with mountAnim='idle'. */
+function safeCancel(a: Animation | null): void {
+  if (a && a.playState !== 'finished') a.cancel();
+}
+
 const MONTHS = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
@@ -773,10 +784,22 @@ function SwitcherPane({
   const ref = useRef<HTMLDivElement | null>(null);
   const animRef = useRef<Animation | null>(null);
 
+  // Sprint 6.2 §2 — keep the latest onExitDone in a ref so the
+  // animation effect can read it from inside onfinish without
+  // depending on it. onExitDone IS stable in current callers
+  // (handlePaneExitDone is useCallback with empty deps), but
+  // the ref is defensive against future inline () => {...}
+  // callers that would re-create the function on every parent
+  // render and re-trigger the effect → cancel/restart loop.
+  const onExitDoneRef = useRef(onExitDone);
+  useEffect(() => {
+    onExitDoneRef.current = onExitDone;
+  }, [onExitDone]);
+
   useLayoutEffect(() => {
     const el = ref.current;
     if (!el) return;
-    animRef.current?.cancel();
+    safeCancel(animRef.current);
     if (mountAnim === 'idle') return;
     const reduce = prefersReducedMotion();
     const duration = reduce ? ANIM.reducedMs : ANIM.paneSwitchMs;
@@ -806,15 +829,21 @@ function SwitcherPane({
 
     if (mountAnim === 'exit-to-left' || mountAnim === 'exit-to-right') {
       animRef.current.onfinish = () => {
-        onExitDone();
+        onExitDoneRef.current();
       };
     }
 
     return () => {
-      animRef.current?.cancel();
+      // Sprint 6.2 §2 — safeCancel skips finished animations so
+      // the persisted-fill effect isn't removed when the parent
+      // re-renders post-transition (mountAnim flips from
+      // enter-from-* to idle). Without this, the entering pane
+      // would flash back to opacity:0 / translateX(8px) at the
+      // moment exitingPane goes null.
+      safeCancel(animRef.current);
       animRef.current = null;
     };
-  }, [mountAnim, onExitDone]);
+  }, [mountAnim]);
 
   // Initial inline opacity matches the from-keyframe so any race
   // with the .animate() establishment doesn't flash full-opacity
