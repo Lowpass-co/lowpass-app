@@ -438,82 +438,37 @@ input[type='checkbox'].lp-checkbox:focus-visible {
 }
 
 /* ============================================
-   Sprint 5 — ArtistTourSwitcher animations
-   Open/close (panel) + state-transition (pane).
-   Reduced-motion variants below collapse to opacity-only.
+   ArtistTourSwitcher — surface hooks only.
+
+   Sprint 6.1 §3: animations moved to JS via the Web Animations
+   API (element.animate()) inside useLayoutEffect. The
+   data-state= / data-pane-state= attribute-driven transitions
+   that lived here are gone — Sprint 6's two-frame raf pattern
+   couldn't survive React 19's automatic batching, which
+   collapsed the mount-state and animate-state renders into one
+   paint and let no transition fire. The Web Animations API
+   runs on the compositor and doesn't depend on React's render
+   cycle. prefers-reduced-motion is detected via window.matchMedia
+   inline, not @media here.
+
+   These class rules retain only the structural styles each
+   element needs at rest — sizing, positioning, default opacity.
+   The component sets initial inline opacity to match the
+   animation's from-frame so any race with .animate()
+   establishment doesn't flash full-opacity content.
    ============================================ */
 .lp-ats-panel {
-  opacity: 0;
-  transform: translateY(-4px);
-  transition:
-    opacity var(--lp-duration-slow) var(--lp-ease-decelerate),
-    transform var(--lp-duration-slow) var(--lp-ease-decelerate);
-  pointer-events: none;
-}
-.lp-ats-panel[data-state='open'] {
-  opacity: 1;
-  transform: translateY(0);
   pointer-events: auto;
 }
-.lp-ats-panel[data-state='closing'] {
-  opacity: 0;
-  transform: translateY(-4px);
-  transition:
-    opacity var(--lp-duration-base) var(--lp-ease-accelerate),
-    transform var(--lp-duration-base) var(--lp-ease-accelerate);
-  pointer-events: none;
+
+.lp-ats-pane {
+  /* No animation rules here — JS drives them. */
 }
 
-@keyframes lp-ats-enter-from-right {
-  from { opacity: 0; transform: translateX(8px); }
-  to   { opacity: 1; transform: translateX(0); }
-}
-@keyframes lp-ats-enter-from-left {
-  from { opacity: 0; transform: translateX(-8px); }
-  to   { opacity: 1; transform: translateX(0); }
-}
-@keyframes lp-ats-exit-to-left {
-  from { opacity: 1; transform: translateX(0); }
-  to   { opacity: 0; transform: translateX(-8px); }
-}
-@keyframes lp-ats-exit-to-right {
-  from { opacity: 1; transform: translateX(0); }
-  to   { opacity: 0; transform: translateX(8px); }
-}
-.lp-ats-pane[data-pane-anim='enter-right'] {
-  animation: lp-ats-enter-from-right var(--lp-duration-slower) var(--lp-ease-standard) both;
-}
-.lp-ats-pane[data-pane-anim='enter-left'] {
-  animation: lp-ats-enter-from-left var(--lp-duration-slower) var(--lp-ease-standard) both;
-}
-.lp-ats-pane[data-pane-anim='exit-left'] {
-  animation: lp-ats-exit-to-left var(--lp-duration-slower) var(--lp-ease-standard) both;
-}
-.lp-ats-pane[data-pane-anim='exit-right'] {
-  animation: lp-ats-exit-to-right var(--lp-duration-slower) var(--lp-ease-standard) both;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .lp-ats-panel,
-  .lp-ats-panel[data-state='closing'] {
-    transition-duration: 50ms !important;
-    transform: none !important;
-  }
-  .lp-ats-panel[data-state='open'] {
-    transform: none !important;
-  }
-  .lp-ats-pane[data-pane-anim='enter-right'],
-  .lp-ats-pane[data-pane-anim='enter-left'],
-  .lp-ats-pane[data-pane-anim='exit-left'],
-  .lp-ats-pane[data-pane-anim='exit-right'] {
-    animation-duration: 50ms !important;
-    animation-name: none !important;
-  }
-  .lp-ats-pane[data-pane-anim='exit-left'],
-  .lp-ats-pane[data-pane-anim='exit-right'] {
-    opacity: 0 !important;
-  }
-}
+/* prefers-reduced-motion: handled inline in
+   ArtistTourSwitcher.tsx via window.matchMedia in the animation
+   effects (ANIM.reducedMs = 50ms). No CSS @media block needed
+   here — the JS read is the source of truth. */
 
 /* ============================================
    Universal smooth transitions (macOS/iOS feel)

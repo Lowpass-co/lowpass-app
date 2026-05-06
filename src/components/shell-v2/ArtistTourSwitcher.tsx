@@ -19,20 +19,37 @@
      - "+ Create new tour" CTA wiring (callback only — slide-over
        in Phase 3)
 
-   Animations live in globals.css under the .lp-ats-* prefix so
-   prefers-reduced-motion can override them via @media. CSS class
-   only — no inline animation values.
+   Animations (Sprint 6.1 §3) are driven by the Web Animations
+   API (element.animate()) inside useLayoutEffect, NOT CSS
+   transitions or keyframes. Background: Sprint 6's CSS-transition
+   approach with a two-frame raf pattern relied on React giving
+   the browser a paint frame between the mount-state and the
+   animate-state, but React 19's automatic batching collapsed the
+   two state updates into a single render → only the final state
+   painted → no transition. Web Animations escapes the React
+   render lifecycle entirely. prefers-reduced-motion handled via
+   matchMedia inline, not @media in globals.css.
    ============================================ */
 
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   ChevronDown,
   ChevronUp,
   ChevronRight,
   ChevronLeft,
+  Loader2,
   Plus,
+  User,
 } from 'lucide-react';
 import { useArtistTourContext } from '@/contexts/ArtistTourContext';
 
@@ -58,17 +75,72 @@ interface ArtistTourSwitcherProps {
    *  dropdown is instant on first open. The context's own artists
    *  list takes over once it loads. */
   initialArtists: ArtistMin[];
-  /** Optional pre-fetched tours for the currently-selected artist.
-   *  Context tours take over when they're available for the active
-   *  artist. */
-  initialTours?: TourMin[] | null;
-  /** Called when the user clicks "+ Create new tour" — Phase 2
-   *  wires this to the new-tour slide-over (Phase 3). */
+  /** Tours for the currently-selected artist (Sprint 6 §2: owned
+   *  by the wrapper now). Updates immediately on artist change
+   *  to clear the previous artist's stale entries, and again
+   *  optimistically when a new tour is created via the slide-over. */
+  tours: TourMin[];
+  /** True while the wrapper is fetching tours for a newly-selected
+   *  artist. The tours pane shows a loading state instead of an
+   *  empty list. */
+  toursLoading: boolean;
+  /** Called when the user clicks "+ Create new tour" — wired to
+   *  the slide-over by the wrapper. */
   onCreateTour: () => void;
 }
 
+/** Sprint 6.1 §3 — animations are now driven by the Web
+ *  Animations API (element.animate()) inside useLayoutEffect, so
+ *  React's render cycle never gets in the way of the from-frame
+ *  paint. State machine reverts to plain closed/open/closing —
+ *  no two-frame intermediate needed. */
 type DropdownState = 'closed' | 'open' | 'closing';
 type Pane = 'artists' | 'tours';
+type PaneAnim =
+  | 'idle'
+  | 'enter-from-right'
+  | 'enter-from-left'
+  | 'exit-to-left'
+  | 'exit-to-right';
+
+/** Animation timing — matches the durations + easings the CSS used
+ *  to declare. Inlined here because they're consumed by
+ *  Element.animate() which doesn't accept CSS variables. Source of
+ *  truth is still globals.css; if those tokens change, mirror here.
+ *
+ *  --lp-duration-base = 150ms       (close)
+ *  --lp-duration-slow = 200ms       (open)
+ *  --lp-duration-slower = 250ms     (pane transition)
+ *  --lp-ease-decelerate = cubic-bezier(0, 0, 0.2, 1)
+ *  --lp-ease-accelerate = cubic-bezier(0.4, 0, 1, 1)
+ *  --lp-ease-standard   = cubic-bezier(0.4, 0, 0.2, 1) */
+const ANIM = {
+  panelOpenMs: 200,
+  panelCloseMs: 150,
+  paneSwitchMs: 250,
+  reducedMs: 50,
+  easeDecelerate: 'cubic-bezier(0, 0, 0.2, 1)',
+  easeAccelerate: 'cubic-bezier(0.4, 0, 1, 1)',
+  easeStandard: 'cubic-bezier(0.4, 0, 0.2, 1)',
+} as const;
+
+function prefersReducedMotion(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  );
+}
+
+/** Sprint 6.2 §2 — cancel an animation, but only if it hasn't
+ *  already finished. Cancelling a finished animation removes
+ *  its persisted-fill effect (the spec calls it "associated
+ *  effect") and reverts the element to its un-animated state.
+ *  For our use, that means a finished enter animation suddenly
+ *  flashes back to opacity:0/translateX(8px) when the parent
+ *  re-renders and the effect re-runs with mountAnim='idle'. */
+function safeCancel(a: Animation | null): void {
+  if (a && a.playState !== 'finished') a.cancel();
+}
 
 const MONTHS = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -143,13 +215,21 @@ function groupToursByYear(tours: TourMin[]): YearGroup[] {
     if (b[0] === null) return -1;
     return (b[0] as number) - (a[0] as number);
   });
-  // Within each year, sort tours by start_date desc.
+  // Sprint 6 §2 sub-bug D — sort tours within each year by
+  // start_date desc (most-recent first). Use a parsed timestamp
+  // rather than localeCompare on the raw string so any DATE/
+  // ISO-with-time mix in the column doesn't fall through to
+  // an alphabetical compare. Nulls sink to the bottom of the
+  // year (rare, since tours without a start_date go to the
+  // 'undated' bucket — but defensive).
   for (const [, list] of entries) {
     list.sort((a, b) => {
-      if (!a.start_date && !b.start_date) return 0;
-      if (!a.start_date) return 1;
-      if (!b.start_date) return -1;
-      return b.start_date.localeCompare(a.start_date);
+      const aMs = a.start_date ? parseDateUTC(a.start_date)?.getTime() ?? null : null;
+      const bMs = b.start_date ? parseDateUTC(b.start_date)?.getTime() ?? null : null;
+      if (aMs === null && bMs === null) return 0;
+      if (aMs === null) return 1;
+      if (bMs === null) return -1;
+      return bMs - aMs;
     });
   }
   return entries.map(([year, list]) => ({ year, tours: list }));
@@ -157,7 +237,8 @@ function groupToursByYear(tours: TourMin[]): YearGroup[] {
 
 export function ArtistTourSwitcher({
   initialArtists,
-  initialTours,
+  tours,
+  toursLoading,
   onCreateTour,
 }: ArtistTourSwitcherProps) {
   const {
@@ -168,16 +249,13 @@ export function ArtistTourSwitcher({
     setSelectedArtistId,
     setSelectedTourId,
     artists: ctxArtists,
-    tours: ctxTours,
   } = useArtistTourContext();
+  const router = useRouter();
+  const pathname = usePathname();
 
   // Live artist list: prefer context once it has loaded; fall back
-  // to server-prefetched list. Same for tours — context auto-fetches
-  // when an artist is selected; until then `initialTours` primes the
-  // tours pane (most common case: navigated TO a tour-prefixed page,
-  // server pre-fetched the relevant tours so first dropdown open is
-  // instant). Both lists are memoised so consumers (useMemo for
-  // year-grouping, the .find() lookups) get stable references.
+  // to server-prefetched list. Tours come from props now (Sprint 6
+  // §2 — wrapper owns them).
   const artists: ArtistMin[] = useMemo(
     () =>
       ctxArtists.length > 0
@@ -189,19 +267,6 @@ export function ArtistTourSwitcher({
           }))
         : initialArtists,
     [ctxArtists, initialArtists],
-  );
-
-  const tours: TourMin[] = useMemo(
-    () =>
-      ctxTours.length > 0
-        ? ctxTours.map((t) => ({
-            id: t.id,
-            name: t.name,
-            start_date: t.start_date ?? null,
-            end_date: t.end_date ?? null,
-          }))
-        : initialTours ?? [],
-    [ctxTours, initialTours],
   );
 
   // Selected-display fallbacks: if the context hasn't loaded the
@@ -225,12 +290,13 @@ export function ArtistTourSwitcher({
   // pane during the 250ms cross-fade). null when no transition.
   const [exitingPane, setExitingPane] = useState<Pane | null>(null);
   // Direction of the in-flight pane transition. Determines which
-  // keyframes the entering / exiting panes use.
+  // CSS data-pane-state value each pane uses.
   const [paneDirection, setPaneDirection] =
     useState<'forward' | 'back'>('forward');
 
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
+  const panelAnimRef = useRef<Animation | null>(null);
 
   const open = dropdownState === 'open' || dropdownState === 'closing';
 
@@ -246,17 +312,58 @@ export function ArtistTourSwitcher({
     setDropdownState((prev) => (prev === 'open' ? 'closing' : prev));
   }, []);
 
-  // When the close transition ends, fully unmount the panel.
-  const handlePanelTransitionEnd = useCallback(
-    (e: React.TransitionEvent<HTMLDivElement>) => {
-      if (e.target !== panelRef.current) return;
-      if (e.propertyName !== 'opacity') return;
-      if (dropdownState === 'closing') {
-        setDropdownState('closed');
-      }
-    },
-    [dropdownState],
-  );
+  // Sprint 6.1 §3 — Web Animations API drives the panel open/close.
+  // useLayoutEffect is required: it runs synchronously after DOM
+  // mutations but BEFORE the browser paints, so .animate() lands
+  // before the panel's first paint. With useEffect (post-paint) the
+  // browser would paint once at default styles → animate to start
+  // → animate to end, producing a backwards flash. fill: 'forwards'
+  // only persists the END state after the animation completes; it
+  // doesn't paint the start state pre-animation.
+  useLayoutEffect(() => {
+    const el = panelRef.current;
+    if (!el) return;
+    panelAnimRef.current?.cancel();
+    const reduce = prefersReducedMotion();
+    if (dropdownState === 'open') {
+      panelAnimRef.current = el.animate(
+        [
+          { opacity: 0, transform: 'translateY(-4px)' },
+          { opacity: 1, transform: 'translateY(0)' },
+        ],
+        {
+          duration: reduce ? ANIM.reducedMs : ANIM.panelOpenMs,
+          easing: ANIM.easeDecelerate,
+          fill: 'forwards',
+        },
+      );
+    } else if (dropdownState === 'closing') {
+      panelAnimRef.current = el.animate(
+        [
+          { opacity: 1, transform: 'translateY(0)' },
+          { opacity: 0, transform: 'translateY(-4px)' },
+        ],
+        {
+          duration: reduce ? ANIM.reducedMs : ANIM.panelCloseMs,
+          easing: ANIM.easeAccelerate,
+          fill: 'forwards',
+        },
+      );
+      panelAnimRef.current.onfinish = () => {
+        // onfinish fires async after the animation completes;
+        // flip to 'closed' to unmount the panel.
+        setDropdownState((prev) => (prev === 'closing' ? 'closed' : prev));
+      };
+    }
+  }, [dropdownState]);
+
+  // Cancel any in-flight animation on unmount.
+  useEffect(() => {
+    return () => {
+      panelAnimRef.current?.cancel();
+      panelAnimRef.current = null;
+    };
+  }, []);
 
   /* -------- Esc + click-outside -------- */
   useEffect(() => {
@@ -296,38 +403,65 @@ export function ArtistTourSwitcher({
     [],
   );
 
-  // After the entering pane's animation completes, drop the
-  // exiting one from the DOM.
-  const handlePaneAnimationEnd = useCallback(
-    (e: React.AnimationEvent<HTMLDivElement>) => {
-      // Both entering and exiting fire animationend; use the
-      // entering pane (data-pane-anim starts with 'enter-') as the
-      // signal to clear.
-      const animName = e.animationName;
-      if (animName.startsWith('lp-ats-enter')) {
-        setExitingPane(null);
-      }
-    },
-    [],
-  );
+  // After the exiting pane's transition completes, drop it from
+  // the DOM. Sprint 6 §1: switched from animationend (keyframes)
+  // Sprint 6.1 §3 — exit animation finished, drop the exiting
+  // pane from the DOM. Called by SwitcherPane's onfinish hook
+  // when its mountAnim is exit-to-left/right.
+  const handlePaneExitDone = useCallback(() => {
+    setExitingPane(null);
+  }, []);
 
   /* -------- list interaction -------- */
   const handleArtistClick = useCallback(
     (id: string) => {
-      // setSelectedArtistId clears the tour selection (context
-      // contract — switching artist invalidates the tour).
-      setSelectedArtistId(id);
       transitionToPane('tours', 'forward');
+      // Sprint 6.2 §1 — when the user is on /artists/[X]/...,
+      // navigate to the new artist's home. The path-aware
+      // hydration in ArtistTourContext (Sprint 4) reads
+      // `selectedArtistId` off the new path-segment automatically,
+      // so we DON'T also call setSelectedArtistId(id) — that
+      // would fire a syncUrlParams → router.replace BEFORE the
+      // router.push, producing two URL writes Next 16 doesn't
+      // batch cleanly (the cause of the Sprint 6.1 trigger-stale
+      // bug Adam smoke-flagged).
+      if (pathname?.startsWith('/artists/')) {
+        router.push(`/artists/${id}`);
+        return;
+      }
+      // Stay-put case (e.g. /budget/[X], /personnel) — switcher
+      // is just changing pane state to show this artist's tours;
+      // no navigation. Context-only update is correct here.
+      setSelectedArtistId(id);
     },
-    [setSelectedArtistId, transitionToPane],
+    [setSelectedArtistId, transitionToPane, pathname, router],
   );
 
   const handleTourClick = useCallback(
     (id: string) => {
-      setSelectedTourId(id);
       closeDropdown();
+      const productMatch = pathname?.match(
+        /^\/(budget|advance|operations)\//,
+      );
+      if (productMatch) {
+        // Sprint 6.2 §1 — push to product-scoped URL only. The
+        // path-aware hydration sets context selectedTourId from
+        // the new path-segment. Calling setSelectedTourId(id)
+        // here too would fire a router.replace with the OLD path-
+        // segment + new ?tour_id= query, racing the push.
+        router.push(`/${productMatch[1]}/${id}`);
+        return;
+      }
+      if (pathname?.startsWith('/artists/')) {
+        // Default to /budget/[id] from artist home — user can
+        // re-rail from there.
+        router.push(`/budget/${id}`);
+        return;
+      }
+      // Stay-put case — context-only update.
+      setSelectedTourId(id);
     },
-    [setSelectedTourId, closeDropdown],
+    [setSelectedTourId, closeDropdown, pathname, router],
   );
 
   const handleBackToArtists = useCallback(() => {
@@ -336,10 +470,12 @@ export function ArtistTourSwitcher({
 
   /* -------- derived render data -------- */
   const yearGroups = useMemo(() => groupToursByYear(tours), [tours]);
+  const triggerArtist = useMemo(
+    () => artists.find((a) => a.id === selectedArtistId) ?? null,
+    [artists, selectedArtistId],
+  );
   const dropdownArtistName =
-    artists.find((a) => a.id === selectedArtistId)?.name ??
-    displayArtistName ??
-    'Artist';
+    triggerArtist?.name ?? displayArtistName ?? 'Artist';
 
   const triggerEmpty = !displayArtistName;
   const tourEmpty = !!displayArtistName && !displayTourName;
@@ -356,33 +492,88 @@ export function ArtistTourSwitcher({
         onClick={() => (open ? closeDropdown() : openDropdown())}
         aria-haspopup="menu"
         aria-expanded={open}
-        className="btn-transition flex min-w-0 items-center gap-2 truncate"
+        data-active={open || undefined}
+        className="lp-ats-trigger btn-transition flex min-w-0 items-center"
         style={{
-          padding: 'var(--lp-space-1) var(--lp-space-3)',
-          height: 32,
-          maxWidth: 360,
+          gap: 'var(--lp-space-2)',
+          padding: 'var(--lp-space-2) var(--lp-space-3)',
+          // Sprint 6.2 §3 — 36px chip-style trigger. The Sprint 6.1
+          // two-row 56px design overflowed the 48px ProductHeader.
+          // Single row keeps the trigger inside the bar.
+          height: 36,
+          maxWidth: 380,
           fontSize: 'var(--lp-text-base)',
           fontWeight: 'var(--lp-weight-medium)',
           color: triggerEmpty
             ? 'var(--lp-text-secondary)'
             : 'var(--lp-text)',
-          background: 'var(--lp-panel)',
+          background: open ? 'var(--lp-panel-hover)' : 'var(--lp-panel)',
+          // 1px border, with a 2px orange left-edge when the
+          // dropdown is open. Toggling just the colour + width on
+          // the single edge keeps the trigger from layout-shifting
+          // between rest and active states.
           border: '1px solid var(--lp-border-strong)',
+          borderLeft: open
+            ? '2px solid var(--color-lp-orange)'
+            : '1px solid var(--lp-border-strong)',
           borderRadius: 'var(--lp-radius-md)',
+          cursor: 'pointer',
+          textAlign: 'left',
         }}
         onMouseEnter={(e) => {
           e.currentTarget.style.background = 'var(--lp-panel-hover)';
         }}
         onMouseLeave={(e) => {
-          e.currentTarget.style.background = 'var(--lp-panel)';
+          e.currentTarget.style.background = open
+            ? 'var(--lp-panel-hover)'
+            : 'var(--lp-panel)';
         }}
       >
-        <span className="min-w-0 truncate">
+        {/* 24px avatar slot — image / initials chip for selected
+            artist; dashed-border User placeholder for the no-artist
+            empty state. */}
+        {triggerArtist ? (
+          <ArtistAvatar
+            imageUrl={pickArtistImage(triggerArtist)}
+            name={triggerArtist.name}
+          />
+        ) : (
+          <span
+            aria-hidden
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 24,
+              height: 24,
+              borderRadius: 'var(--lp-radius-full)',
+              background: 'var(--lp-bg-deep)',
+              border: '1px dashed var(--lp-border-strong)',
+              color: 'var(--lp-text-tertiary)',
+              flexShrink: 0,
+            }}
+          >
+            <User size={14} strokeWidth={2} />
+          </span>
+        )}
+
+        {/* Single-row label: "Artist · Tour" with a centred-dot
+            separator. Empty states collapse to "Pick an artist…"
+            or "Artist · Pick a tour…". */}
+        <span
+          className="min-w-0 flex-1 truncate"
+          style={{ textAlign: 'left' }}
+        >
           {triggerEmpty ? (
             'Pick an artist…'
           ) : tourEmpty ? (
             <>
-              <span style={{ color: 'var(--lp-text)' }}>
+              <span
+                style={{
+                  color: 'var(--lp-text)',
+                  fontWeight: 'var(--lp-weight-medium)',
+                }}
+              >
                 {displayArtistName}
               </span>
               <span
@@ -394,13 +585,23 @@ export function ArtistTourSwitcher({
               >
                 ·
               </span>
-              <span style={{ color: 'var(--lp-text-secondary)' }}>
+              <span
+                style={{
+                  color: 'var(--lp-text-tertiary)',
+                  fontWeight: 'var(--lp-weight-regular)',
+                }}
+              >
                 Pick a tour…
               </span>
             </>
           ) : (
             <>
-              <span style={{ color: 'var(--lp-text)' }}>
+              <span
+                style={{
+                  color: 'var(--lp-text)',
+                  fontWeight: 'var(--lp-weight-medium)',
+                }}
+              >
                 {displayArtistName}
               </span>
               <span
@@ -412,16 +613,23 @@ export function ArtistTourSwitcher({
               >
                 ·
               </span>
-              <span style={{ color: 'var(--lp-text)' }}>
+              <span
+                style={{
+                  color: 'var(--lp-text-secondary)',
+                  fontWeight: 'var(--lp-weight-regular)',
+                }}
+              >
                 {displayTourName}
               </span>
             </>
           )}
         </span>
+
+        {/* Trailing chevron — 12px, proportionate to the 36px chip. */}
         {open ? (
           <ChevronUp
             aria-hidden
-            size={14}
+            size={12}
             strokeWidth={2}
             style={{
               color: 'var(--lp-text-tertiary)',
@@ -431,7 +639,7 @@ export function ArtistTourSwitcher({
         ) : (
           <ChevronDown
             aria-hidden
-            size={14}
+            size={12}
             strokeWidth={2}
             style={{
               color: 'var(--lp-text-tertiary)',
@@ -445,9 +653,12 @@ export function ArtistTourSwitcher({
         <div
           ref={panelRef}
           className="lp-ats-panel"
-          data-state={dropdownState}
-          onTransitionEnd={handlePanelTransitionEnd}
           role="menu"
+          /* Sprint 6.1 §3 — animation comes from element.animate()
+             in a useLayoutEffect above. No CSS data-state, no
+             onTransitionEnd. Initial inline opacity:0 so the
+             pre-animation paint (if any racing condition slips
+             through) doesn't show full-opacity content. */
           style={{
             position: 'absolute',
             top: 'calc(100% + var(--lp-space-1))',
@@ -463,6 +674,7 @@ export function ArtistTourSwitcher({
             overflow: 'hidden',
             display: 'flex',
             flexDirection: 'column',
+            opacity: 0,
           }}
         >
           <div
@@ -476,15 +688,15 @@ export function ArtistTourSwitcher({
             {/* Active pane */}
             <SwitcherPane
               key={`active-${pane}`}
-              animState={
+              mountAnim={
                 exitingPane
                   ? paneDirection === 'forward'
-                    ? 'enter-right'
-                    : 'enter-left'
-                  : null
+                    ? 'enter-from-right'
+                    : 'enter-from-left'
+                  : 'idle'
               }
               absolute={!!exitingPane}
-              onAnimationEnd={handlePaneAnimationEnd}
+              onExitDone={handlePaneExitDone}
             >
               {pane === 'artists' ? (
                 <ArtistsPane
@@ -498,6 +710,7 @@ export function ArtistTourSwitcher({
                   artistName={dropdownArtistName}
                   yearGroups={yearGroups}
                   totalTours={tours.length}
+                  loading={toursLoading}
                   selectedTourId={selectedTourId}
                   onPick={handleTourClick}
                   onBack={handleBackToArtists}
@@ -511,11 +724,13 @@ export function ArtistTourSwitcher({
             {exitingPane ? (
               <SwitcherPane
                 key={`exiting-${exitingPane}`}
-                animState={
-                  paneDirection === 'forward' ? 'exit-left' : 'exit-right'
+                mountAnim={
+                  paneDirection === 'forward'
+                    ? 'exit-to-left'
+                    : 'exit-to-right'
                 }
                 absolute
-                onAnimationEnd={handlePaneAnimationEnd}
+                onExitDone={handlePaneExitDone}
               >
                 {exitingPane === 'artists' ? (
                   <ArtistsPane
@@ -558,26 +773,111 @@ export function ArtistTourSwitcher({
 }
 
 /* ============================================================
-   Pane wrapper — handles absolute positioning + animation class
-   so the two child views (artists / tours) only need to render
-   their content.
+   Pane wrapper — handles absolute positioning + the enter/exit
+   animation via the Web Animations API.
+
+   Sprint 6.1 §3: animations driven by element.animate() inside
+   useLayoutEffect (NOT useEffect). useLayoutEffect runs
+   synchronously after DOM mutations but BEFORE the browser
+   paints, so .animate() is established before the first paint —
+   no backwards flash.
+
+   `mountAnim`:
+     'idle'             — no animation. Pane appears static.
+     'enter-from-right' — animates from translateX(8px) opacity 0
+                          to translateX(0) opacity 1.
+     'enter-from-left'  — mirrored.
+     'exit-to-left'     — animates from active to translateX(-8px)
+                          opacity 0; calls onExitDone on finish.
+     'exit-to-right'    — mirrored.
    ============================================================ */
 function SwitcherPane({
   children,
-  animState,
+  mountAnim,
   absolute,
-  onAnimationEnd,
+  onExitDone,
 }: {
   children: React.ReactNode;
-  animState: 'enter-right' | 'enter-left' | 'exit-left' | 'exit-right' | null;
+  mountAnim: PaneAnim;
   absolute: boolean;
-  onAnimationEnd: (e: React.AnimationEvent<HTMLDivElement>) => void;
+  /** Called when an exit-* animation finishes — parent uses
+   *  this to drop the exiting pane from the DOM. */
+  onExitDone: () => void;
 }) {
+  const ref = useRef<HTMLDivElement | null>(null);
+  const animRef = useRef<Animation | null>(null);
+
+  // Sprint 6.2 §2 — keep the latest onExitDone in a ref so the
+  // animation effect can read it from inside onfinish without
+  // depending on it. onExitDone IS stable in current callers
+  // (handlePaneExitDone is useCallback with empty deps), but
+  // the ref is defensive against future inline () => {...}
+  // callers that would re-create the function on every parent
+  // render and re-trigger the effect → cancel/restart loop.
+  const onExitDoneRef = useRef(onExitDone);
+  useEffect(() => {
+    onExitDoneRef.current = onExitDone;
+  }, [onExitDone]);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    safeCancel(animRef.current);
+    if (mountAnim === 'idle') return;
+    const reduce = prefersReducedMotion();
+    const duration = reduce ? ANIM.reducedMs : ANIM.paneSwitchMs;
+
+    let from: Keyframe;
+    let to: Keyframe;
+    if (mountAnim === 'enter-from-right') {
+      from = { opacity: 0, transform: 'translateX(8px)' };
+      to = { opacity: 1, transform: 'translateX(0)' };
+    } else if (mountAnim === 'enter-from-left') {
+      from = { opacity: 0, transform: 'translateX(-8px)' };
+      to = { opacity: 1, transform: 'translateX(0)' };
+    } else if (mountAnim === 'exit-to-left') {
+      from = { opacity: 1, transform: 'translateX(0)' };
+      to = { opacity: 0, transform: 'translateX(-8px)' };
+    } else {
+      // exit-to-right
+      from = { opacity: 1, transform: 'translateX(0)' };
+      to = { opacity: 0, transform: 'translateX(8px)' };
+    }
+
+    animRef.current = el.animate([from, to], {
+      duration,
+      easing: ANIM.easeStandard,
+      fill: 'forwards',
+    });
+
+    if (mountAnim === 'exit-to-left' || mountAnim === 'exit-to-right') {
+      animRef.current.onfinish = () => {
+        onExitDoneRef.current();
+      };
+    }
+
+    return () => {
+      // Sprint 6.2 §2 — safeCancel skips finished animations so
+      // the persisted-fill effect isn't removed when the parent
+      // re-renders post-transition (mountAnim flips from
+      // enter-from-* to idle). Without this, the entering pane
+      // would flash back to opacity:0 / translateX(8px) at the
+      // moment exitingPane goes null.
+      safeCancel(animRef.current);
+      animRef.current = null;
+    };
+  }, [mountAnim]);
+
+  // Initial inline opacity matches the from-keyframe so any race
+  // with the .animate() establishment doesn't flash full-opacity
+  // content for one frame. Idle panes start at opacity 1.
+  const initialOpacity =
+    mountAnim === 'idle' || mountAnim.startsWith('exit-') ? 1 : 0;
+
   return (
     <div
+      ref={ref}
       className="lp-ats-pane"
-      data-pane-anim={animState ?? undefined}
-      onAnimationEnd={onAnimationEnd}
       style={{
         position: absolute ? 'absolute' : 'relative',
         inset: absolute ? 0 : undefined,
@@ -586,6 +886,7 @@ function SwitcherPane({
         width: '100%',
         height: '100%',
         minHeight: 0,
+        opacity: initialOpacity,
       }}
     >
       {children}
@@ -702,6 +1003,7 @@ function ToursPane({
   artistName,
   yearGroups,
   totalTours,
+  loading = false,
   selectedTourId,
   onPick,
   onBack,
@@ -711,6 +1013,11 @@ function ToursPane({
   artistName: string;
   yearGroups: YearGroup[];
   totalTours: number;
+  /** Sprint 6 §2 sub-bug B — wrapper sets this true while it
+   *  fetches a newly-selected artist's tours. The pane shows a
+   *  small spinner instead of an empty list so the user
+   *  doesn't see the previous artist's tours linger. */
+  loading?: boolean;
   selectedTourId: string | null;
   onPick: (id: string) => void;
   onBack: () => void;
@@ -784,7 +1091,26 @@ function ToursPane({
             'var(--lp-space-1) var(--lp-space-2) var(--lp-space-2)',
         }}
       >
-        {totalTours === 0 ? (
+        {loading ? (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 'var(--lp-space-2)',
+              padding: 'var(--lp-space-6) var(--lp-space-3)',
+              fontSize: 'var(--lp-text-sm)',
+              color: 'var(--lp-text-tertiary)',
+            }}
+          >
+            <Loader2
+              size={14}
+              strokeWidth={2}
+              className="animate-spin"
+            />
+            Loading tours…
+          </div>
+        ) : totalTours === 0 ? (
           <EmptyState message="No tours yet." />
         ) : (
           yearGroups.map((g) => (
@@ -1017,9 +1343,6 @@ function ArtistAvatar({
   name: string;
 }) {
   if (imageUrl) {
-    // Arbitrary remote URLs from artist branding / Spotify; next/image
-    // needs per-domain config and these are 24px decorative thumbnails
-    // so the optimizer adds no value.
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img

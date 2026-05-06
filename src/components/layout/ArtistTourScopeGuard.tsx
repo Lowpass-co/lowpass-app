@@ -13,6 +13,17 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useArtistTourContext } from '@/contexts/ArtistTourContext';
 
 const TOUR_PATH_RE = /^\/tours\/([0-9a-f-]{36})(\/.*)?$/i;
+/** Sprint 6.1 §1 — the new product-prefixed routes
+ *  (/budget/[uuid], /advance/[uuid], /operations/[uuid]) encode
+ *  the tour id in the path segment. The legacy normalization
+ *  logic below was written before these routes existed and
+ *  assumes the canonical Budget URL is /budget?tour_id=. When
+ *  the user lands on /budget/[uuid], the guard tries to bounce
+ *  them to /budget?tour_id=[uuid], which the server immediately
+ *  redirects back to /budget/[uuid] → infinite navigation loop
+ *  (Chrome throttle warning, Safari white-screen client
+ *  exception). Skip the guard entirely on these paths. */
+const PRODUCT_PREFIXED_RE = /^\/(budget|advance|operations)\/[0-9a-f-]{36}/i;
 
 export function ArtistTourScopeGuard() {
   const pathname = usePathname() ?? '';
@@ -30,6 +41,9 @@ export function ArtistTourScopeGuard() {
 
   useEffect(() => {
     if (!hydrated || isLoading) return;
+    // Sprint 6.1 §1 — bail out for /budget/[uuid] etc. See the
+    // PRODUCT_PREFIXED_RE comment for the loop these routes cause.
+    if (PRODUCT_PREFIXED_RE.test(pathname)) return;
 
     const allowedTourIds = new Set(tours.map((t) => t.id));
     const tab = searchParams.get('tab') ?? 'summary';
