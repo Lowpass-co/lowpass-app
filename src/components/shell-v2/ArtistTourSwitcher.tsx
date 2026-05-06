@@ -365,20 +365,23 @@ export function ArtistTourSwitcher({
     };
   }, []);
 
-  // Sprint 7 §1.A — close the dropdown on any path change.
-  // The wrapper persists across same-product navigation in
-  // Next 16 (ProductHeader stays mounted), so dropdownState
-  // can carry over from the previous page. Browser back/fwd
-  // would otherwise reopen the panel on the destination page
-  // because state was left mid-transition. Hard-close on path
-  // change; queueMicrotask defers the setState past the
-  // current render to satisfy react-hooks/set-state-in-effect.
+  // Sprint 8 §4 — replaces Sprint 7 §1.A's pathname-change
+  // effect (which closed the dropdown on any path mutation,
+  // including programmatic router.push from inside the
+  // switcher itself, breaking the artist→tour pane transition
+  // on /artists/[X]). popstate fires only on browser back/fwd
+  // and history.back/forward calls — NOT on router.push or
+  // router.replace. That's the precise "wanted close"
+  // semantics: external navigation closes the dropdown,
+  // internal switcher actions don't.
   useEffect(() => {
-    queueMicrotask(() => {
+    function onPopState() {
       setDropdownState('closed');
       setExitingPane(null);
-    });
-  }, [pathname]);
+    }
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
 
   /* -------- Esc + click-outside -------- */
   useEffect(() => {
@@ -482,6 +485,14 @@ export function ArtistTourSwitcher({
   const handleBackToArtists = useCallback(() => {
     transitionToPane('artists', 'back');
   }, [transitionToPane]);
+
+  // Sprint 8 §4 — "All artists" link at the top of the artists
+  // pane. Closes the dropdown, navigates to the workspace
+  // landing.
+  const handleAllArtists = useCallback(() => {
+    closeDropdown();
+    router.push('/artists');
+  }, [closeDropdown, router]);
 
   /* -------- derived render data -------- */
   const yearGroups = useMemo(() => groupToursByYear(tours), [tours]);
@@ -720,6 +731,7 @@ export function ArtistTourSwitcher({
                   selectedArtistId={selectedArtistId}
                   onPick={handleArtistClick}
                   onClose={closeDropdown}
+                  onAllArtists={handleAllArtists}
                 />
               ) : (
                 <ToursPane
@@ -756,6 +768,9 @@ export function ArtistTourSwitcher({
                       /* exiting pane: clicks ignored */
                     }}
                     onClose={() => {
+                      /* exiting pane: ignored */
+                    }}
+                    onAllArtists={() => {
                       /* exiting pane: ignored */
                     }}
                   />
@@ -918,14 +933,49 @@ function ArtistsPane({
   selectedArtistId,
   onPick,
   onClose,
+  onAllArtists,
 }: {
   artists: ArtistMin[];
   selectedArtistId: string | null;
   onPick: (id: string) => void;
   onClose: () => void;
+  /** Sprint 8 §4 — small button at the top of the artists pane.
+   *  Click navigates to /artists (workspace landing). The
+   *  parent passes a function that does router.push + close. */
+  onAllArtists: () => void;
 }) {
   return (
     <>
+      {/* Sprint 8 §4 — "← All artists" link at the top of the
+          artists pane only. Click jumps to the workspace landing.
+          Subtle styling so it doesn't dominate the pane header. */}
+      <button
+        type="button"
+        onClick={onAllArtists}
+        className="btn-transition flex items-center"
+        style={{
+          gap: 'var(--lp-space-1)',
+          width: '100%',
+          padding:
+            'var(--lp-space-2) var(--lp-space-3)',
+          fontSize: 'var(--lp-text-sm)',
+          color: 'var(--lp-text-secondary)',
+          background: 'transparent',
+          border: 'none',
+          borderBottom: '1px solid var(--lp-border-subtle)',
+          textAlign: 'left',
+          cursor: 'pointer',
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.color = 'var(--lp-text)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.color = 'var(--lp-text-secondary)';
+        }}
+      >
+        <ChevronLeft aria-hidden size={12} strokeWidth={2} />
+        All artists
+      </button>
       <PaneHeader
         leading={null}
         labelLeft="Artists"
