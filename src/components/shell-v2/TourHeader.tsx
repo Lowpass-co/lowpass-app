@@ -27,7 +27,6 @@ import { Pencil } from 'lucide-react';
 import {
   TourHeaderAnimator,
   TourHeaderLogo,
-  TourHeaderScrollContainer,
 } from './TourHeaderClient';
 
 const CURRENCY_SYMBOL: Record<string, string> = {
@@ -152,35 +151,13 @@ export function TourHeader({
 
   const statsLine = parts.join(' · ');
 
-  // Sprint 8 §2 — single key stat picked per product for the
-  // compressed sticky bar that reveals on scroll. Falls through
-  // to null when the relevant stat field is empty/zero.
-  let keyStat: string | null = null;
-  if (product === 'budget' && stats.spentPercent != null) {
-    keyStat = `${Math.round(stats.spentPercent)}% SPENT`;
-  } else if (
-    product === 'advance' &&
-    stats.advanceCompletePercent != null
-  ) {
-    keyStat = `${Math.round(stats.advanceCompletePercent)}% COMPLETE`;
-  } else if (
-    product === 'operations' &&
-    stats.crewCount != null &&
-    stats.crewCount > 0
-  ) {
-    keyStat = `${stats.crewCount} CREW`;
-  }
+  // Sprint 8.1 §1 — keyStat moved to the switcher trigger.
+  // The Sprint 8 §2 compressed bar that consumed it has been
+  // deleted (it overlapped ProductRail and duplicated info now
+  // visible in the trigger). The expanded TourHeader retains
+  // the full statsLine row 3.
 
   return (
-    <TourHeaderScrollContainer
-      compressed={{
-        artistLogoUrl,
-        artistName,
-        tourName,
-        keyStat,
-        tourId,
-      }}
-    >
     <TourHeaderAnimator>
       <header
         className="lp-tour-header flex shrink-0 items-center"
@@ -282,6 +259,5 @@ export function TourHeader({
         </Link>
       </header>
     </TourHeaderAnimator>
-    </TourHeaderScrollContainer>
   );
 }

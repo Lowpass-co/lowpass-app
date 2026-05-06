@@ -46,6 +46,13 @@ type TourMin = {
   end_date: string | null;
 };
 
+/** Sprint 8.1 §1 — pre-formatted key-stat string for the
+ *  switcher trigger's third dot-segment on tour-scoped pages.
+ *  Computed by the page (the same data the TourHeader consumes)
+ *  and threaded through the wrapper. Null when not on a tour-
+ *  scoped page or when the relevant stat is empty/zero. */
+export type CurrentTourKeyStat = string | null;
+
 interface ArtistTourSwitcherClientWrapperProps {
   initialArtists: ArtistMin[];
   initialTours: TourMin[] | null;
@@ -53,12 +60,19 @@ interface ArtistTourSwitcherClientWrapperProps {
    *  for. When the live selectedArtistId in context differs, we
    *  refetch via /api/artists/[id]/tours. */
   initialArtistId: string | null;
+  /** Sprint 8.1 §1 — when the current page is tour-scoped
+   *  (/budget/[X], /advance/[X]/*, /operations/[X]/*), the page
+   *  passes a pre-formatted key-stat string for the trigger to
+   *  display as a third dot-segment. Examples: "67% SPENT",
+   *  "82% COMPLETE", "12 CREW". Null on non-tour pages. */
+  currentTourKeyStat?: CurrentTourKeyStat;
 }
 
 export function ArtistTourSwitcherClientWrapper({
   initialArtists,
   initialTours,
   initialArtistId,
+  currentTourKeyStat = null,
 }: ArtistTourSwitcherClientWrapperProps) {
   const { selectedArtistId } = useArtistTourContext();
   const router = useRouter();
@@ -247,6 +261,7 @@ export function ArtistTourSwitcherClientWrapper({
         initialArtists={mergedArtists}
         tours={tours}
         toursLoading={toursLoading}
+        currentTourKeyStat={currentTourKeyStat}
         onCreateTour={() => setIsCreateTourOpen(true)}
         onCreateArtist={() => setIsCreateArtistOpen(true)}
       />

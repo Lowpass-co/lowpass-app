@@ -19,6 +19,7 @@ import { notFound } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { ProductShell } from '@/components/shell-v2';
 import { TourHeader } from '@/components/shell-v2/TourHeader';
+import { formatTourKeyStat } from '@/components/shell-v2/tour-key-stat';
 import { AdvanceOverview } from '@/components/advance/AdvanceOverview';
 import { resolveArtistLogoUrl } from '@/lib/artists/imageUrl';
 
@@ -130,6 +131,9 @@ export default async function AdvanceTourOverviewPage({
       artistId={t.artist_id}
       tourId={t.id}
       productName="Advance"
+      currentTourKeyStat={formatTourKeyStat('advance', {
+        advanceCompletePercent,
+      })}
     >
       {/* Sprint 8 §2 — replaces <AdvanceOverviewStatsStrip>.
           TourHeader carries equivalent stats (show count, % complete,

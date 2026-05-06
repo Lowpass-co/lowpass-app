@@ -24,6 +24,7 @@ import type { Metadata } from 'next';
 
 import { ProductShell } from '@/components/shell-v2';
 import { TourHeader } from '@/components/shell-v2/TourHeader';
+import { formatTourKeyStat } from '@/components/shell-v2/tour-key-stat';
 import { resolveArtistLogoUrl } from '@/lib/artists/imageUrl';
 import { MobileBudgetBanner } from '@/components/mobile/MobileBudgetBanner';
 import { BudgetPhaseStripClient } from '@/components/budget/BudgetPhaseStripClient';
@@ -176,6 +177,7 @@ export default async function BudgetTourPage({
       artistId={(tour.artist_id as string | null) ?? null}
       tourId={tourId}
       productName="Budget"
+      currentTourKeyStat={formatTourKeyStat('budget', { spentPercent })}
     >
       {artistRow ? (
         <TourHeader

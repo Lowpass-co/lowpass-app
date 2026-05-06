@@ -31,6 +31,7 @@ import { notFound } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { ProductShell } from '@/components/shell-v2';
 import { TourHeader } from '@/components/shell-v2/TourHeader';
+import { formatTourKeyStat } from '@/components/shell-v2/tour-key-stat';
 import { resolveArtistLogoUrl } from '@/lib/artists/imageUrl';
 import { AdvanceShowReadView } from '@/components/advance/AdvanceShowReadView';
 import { AdvanceShowHeader } from '@/components/advance/AdvanceShowHeader';
@@ -293,6 +294,12 @@ export default async function AdvanceShowPage({
       artistId={tourRow.artist_id ?? artistRow?.id ?? null}
       tourId={tourRow.id}
       productName="Advance"
+      currentTourKeyStat={formatTourKeyStat('advance', {
+        advanceCompletePercent:
+          sectionsTotal > 0
+            ? (sectionsComplete / sectionsTotal) * 100
+            : null,
+      })}
     >
       {/* Sprint 7 §3 — <TourHeader> on every product surface. */}
       {artistRow ? (

@@ -16,6 +16,7 @@ import { notFound } from 'next/navigation';
 import { ProductShell } from '@/components/shell-v2';
 import { PhaseScaffoldPlaceholder } from '@/components/shell-v2/PhaseScaffoldPlaceholder';
 import { TourHeader } from '@/components/shell-v2/TourHeader';
+import { formatTourKeyStat } from '@/components/shell-v2/tour-key-stat';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { resolveArtistLogoUrl } from '@/lib/artists/imageUrl';
 
@@ -86,6 +87,9 @@ export default async function OperationsTourLandingPage({
       artistId={tourRow.artist_id}
       tourId={tourId}
       productName="Operations"
+      currentTourKeyStat={formatTourKeyStat('operations', {
+        crewCount: crewCount > 0 ? crewCount : null,
+      })}
     >
       {artistRow ? (
         <TourHeader

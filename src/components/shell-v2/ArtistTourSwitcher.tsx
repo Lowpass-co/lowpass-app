@@ -91,6 +91,10 @@ interface ArtistTourSwitcherProps {
    *  artist" at the bottom of the artists pane. Wrapper opens
    *  the artist slide-over. */
   onCreateArtist: () => void;
+  /** Sprint 8.1 §1 — pre-formatted key-stat string for the
+   *  trigger's third dot-segment on tour-scoped pages. Null on
+   *  non-tour pages. */
+  currentTourKeyStat?: string | null;
 }
 
 /** Sprint 6.1 §3 — animations are now driven by the Web
@@ -245,6 +249,7 @@ export function ArtistTourSwitcher({
   toursLoading,
   onCreateTour,
   onCreateArtist,
+  currentTourKeyStat = null,
 }: ArtistTourSwitcherProps) {
   const {
     selectedArtistId,
@@ -653,6 +658,33 @@ export function ArtistTourSwitcher({
               >
                 {displayTourName}
               </span>
+              {/* Sprint 8.1 §1 — third dot-segment carrying the
+                  per-product key stat on tour-scoped pages.
+                  Provided by the wrapper from page-level data
+                  the TourHeader already consumes. Hidden when
+                  null (non-tour pages or empty stat). */}
+              {currentTourKeyStat ? (
+                <>
+                  <span
+                    aria-hidden
+                    style={{
+                      margin: '0 var(--lp-space-2)',
+                      color: 'var(--lp-text-tertiary)',
+                    }}
+                  >
+                    ·
+                  </span>
+                  <span
+                    style={{
+                      color: 'var(--lp-text-secondary)',
+                      fontWeight: 'var(--lp-weight-regular)',
+                      fontVariantNumeric: 'tabular-nums',
+                    }}
+                  >
+                    {currentTourKeyStat}
+                  </span>
+                </>
+              ) : null}
             </>
           )}
         </span>
