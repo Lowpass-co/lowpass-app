@@ -42,6 +42,7 @@ import {
   ChevronLeft,
   Loader2,
   Plus,
+  User,
 } from 'lucide-react';
 import { useArtistTourContext } from '@/contexts/ArtistTourContext';
 
@@ -410,10 +411,12 @@ export function ArtistTourSwitcher({
 
   /* -------- derived render data -------- */
   const yearGroups = useMemo(() => groupToursByYear(tours), [tours]);
+  const triggerArtist = useMemo(
+    () => artists.find((a) => a.id === selectedArtistId) ?? null,
+    [artists, selectedArtistId],
+  );
   const dropdownArtistName =
-    artists.find((a) => a.id === selectedArtistId)?.name ??
-    displayArtistName ??
-    'Artist';
+    triggerArtist?.name ?? displayArtistName ?? 'Artist';
 
   const triggerEmpty = !displayArtistName;
   const tourEmpty = !!displayArtistName && !displayTourName;
@@ -430,33 +433,77 @@ export function ArtistTourSwitcher({
         onClick={() => (open ? closeDropdown() : openDropdown())}
         aria-haspopup="menu"
         aria-expanded={open}
-        className="btn-transition flex min-w-0 items-center gap-2 truncate"
+        data-active={open || undefined}
+        className="lp-ats-trigger btn-transition flex min-w-0 items-center"
         style={{
-          padding: 'var(--lp-space-1) var(--lp-space-3)',
-          height: 32,
-          maxWidth: 360,
+          gap: 'var(--lp-space-2)',
+          padding: 'var(--lp-space-2) var(--lp-space-3)',
+          height: 36,
+          maxWidth: 380,
           fontSize: 'var(--lp-text-base)',
           fontWeight: 'var(--lp-weight-medium)',
           color: triggerEmpty
             ? 'var(--lp-text-secondary)'
             : 'var(--lp-text)',
-          background: 'var(--lp-panel)',
+          background: open ? 'var(--lp-panel-hover)' : 'var(--lp-panel)',
           border: '1px solid var(--lp-border-strong)',
           borderRadius: 'var(--lp-radius-md)',
+          cursor: 'pointer',
         }}
         onMouseEnter={(e) => {
           e.currentTarget.style.background = 'var(--lp-panel-hover)';
         }}
         onMouseLeave={(e) => {
-          e.currentTarget.style.background = 'var(--lp-panel)';
+          e.currentTarget.style.background = open
+            ? 'var(--lp-panel-hover)'
+            : 'var(--lp-panel)';
         }}
       >
-        <span className="min-w-0 truncate">
+        {/* Leading avatar — artist image / initials chip / generic User
+            icon for the no-artist empty state. Sized 24px to match
+            the artists-pane row avatar so the trigger visually echoes
+            the dropdown content. */}
+        {triggerArtist ? (
+          <ArtistAvatar
+            imageUrl={pickArtistImage(triggerArtist)}
+            name={triggerArtist.name}
+          />
+        ) : (
+          <span
+            aria-hidden
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 24,
+              height: 24,
+              borderRadius: 'var(--lp-radius-full)',
+              background: 'var(--lp-bg-deep)',
+              border: '1px dashed var(--lp-border-strong)',
+              color: 'var(--lp-text-tertiary)',
+              flexShrink: 0,
+            }}
+          >
+            <User size={14} strokeWidth={2} />
+          </span>
+        )}
+
+        {/* Label group — fills remaining horizontal space, truncates
+            the tour name first since artist names are usually shorter. */}
+        <span
+          className="min-w-0 flex-1 truncate"
+          style={{ textAlign: 'left' }}
+        >
           {triggerEmpty ? (
             'Pick an artist…'
           ) : tourEmpty ? (
             <>
-              <span style={{ color: 'var(--lp-text)' }}>
+              <span
+                style={{
+                  color: 'var(--lp-text)',
+                  fontWeight: 'var(--lp-weight-medium)',
+                }}
+              >
                 {displayArtistName}
               </span>
               <span
@@ -468,13 +515,23 @@ export function ArtistTourSwitcher({
               >
                 ·
               </span>
-              <span style={{ color: 'var(--lp-text-secondary)' }}>
+              <span
+                style={{
+                  color: 'var(--lp-text-tertiary)',
+                  fontWeight: 'var(--lp-weight-regular)',
+                }}
+              >
                 Pick a tour…
               </span>
             </>
           ) : (
             <>
-              <span style={{ color: 'var(--lp-text)' }}>
+              <span
+                style={{
+                  color: 'var(--lp-text)',
+                  fontWeight: 'var(--lp-weight-medium)',
+                }}
+              >
                 {displayArtistName}
               </span>
               <span
@@ -486,16 +543,23 @@ export function ArtistTourSwitcher({
               >
                 ·
               </span>
-              <span style={{ color: 'var(--lp-text)' }}>
+              <span
+                style={{
+                  color: 'var(--lp-text-secondary)',
+                  fontWeight: 'var(--lp-weight-regular)',
+                }}
+              >
                 {displayTourName}
               </span>
             </>
           )}
         </span>
+
+        {/* Trailing chevron — flips up when open. */}
         {open ? (
           <ChevronUp
             aria-hidden
-            size={14}
+            size={12}
             strokeWidth={2}
             style={{
               color: 'var(--lp-text-tertiary)',
@@ -505,7 +569,7 @@ export function ArtistTourSwitcher({
         ) : (
           <ChevronDown
             aria-hidden
-            size={14}
+            size={12}
             strokeWidth={2}
             style={{
               color: 'var(--lp-text-tertiary)',
