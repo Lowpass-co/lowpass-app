@@ -438,109 +438,37 @@ input[type='checkbox'].lp-checkbox:focus-visible {
 }
 
 /* ============================================
-   Sprint 5 — ArtistTourSwitcher animations
-   (Sprint 6 §1: switched panes from CSS keyframes to CSS
-   transitions so the two-frame raf pattern in <SwitcherPane>
-   has a clean before/after to interpolate between.)
+   ArtistTourSwitcher — surface hooks only.
 
-   Panel:
-     - Base styles (no data-state)  → opacity 0, translateY(-4px).
-       Component mounts here for one frame ('opening' state).
-     - data-state='open'            → opacity 1, translateY(0).
-       Set on next raf so the transition fires.
-     - data-state='closing'         → opacity 0, translateY(-4px).
-       Set on close. Transition fires; transitionend → unmount.
+   Sprint 6.1 §3: animations moved to JS via the Web Animations
+   API (element.animate()) inside useLayoutEffect. The
+   data-state= / data-pane-state= attribute-driven transitions
+   that lived here are gone — Sprint 6's two-frame raf pattern
+   couldn't survive React 19's automatic batching, which
+   collapsed the mount-state and animate-state renders into one
+   paint and let no transition fire. The Web Animations API
+   runs on the compositor and doesn't depend on React's render
+   cycle. prefers-reduced-motion is detected via window.matchMedia
+   inline, not @media here.
 
-   Pane:
-     - data-pane-state='enter-from-right' / 'enter-from-left'
-                                     → start position, transition off.
-     - data-pane-state='active'     → opacity 1, translateX(0).
-       Set on next raf; transition kicks in.
-     - data-pane-state='exit-to-left' / 'exit-to-right'
-                                     → exit position. Set on next raf
-       after the exiting pane mounts in 'active' state.
-
-   prefers-reduced-motion: collapse all to ≤50ms opacity-only.
+   These class rules retain only the structural styles each
+   element needs at rest — sizing, positioning, default opacity.
+   The component sets initial inline opacity to match the
+   animation's from-frame so any race with .animate()
+   establishment doesn't flash full-opacity content.
    ============================================ */
 .lp-ats-panel {
-  opacity: 0;
-  transform: translateY(-4px);
-  transition:
-    opacity var(--lp-duration-slow) var(--lp-ease-decelerate),
-    transform var(--lp-duration-slow) var(--lp-ease-decelerate);
-  pointer-events: none;
-}
-.lp-ats-panel[data-state='open'] {
-  opacity: 1;
-  transform: translateY(0);
   pointer-events: auto;
-}
-.lp-ats-panel[data-state='closing'] {
-  opacity: 0;
-  transform: translateY(-4px);
-  transition:
-    opacity var(--lp-duration-base) var(--lp-ease-accelerate),
-    transform var(--lp-duration-base) var(--lp-ease-accelerate);
-  pointer-events: none;
 }
 
 .lp-ats-pane {
-  /* Default = active. Components override via data-pane-state on
-     mount + raf to drive the enter/exit transition. */
-  opacity: 1;
-  transform: translateX(0);
-  transition:
-    opacity var(--lp-duration-slower) var(--lp-ease-standard),
-    transform var(--lp-duration-slower) var(--lp-ease-standard);
-}
-.lp-ats-pane[data-pane-state='enter-from-right'] {
-  opacity: 0;
-  transform: translateX(8px);
-  /* No transition into the start position — that paint is the
-     "before" frame for the next-raf flip to active. */
-  transition: none;
-}
-.lp-ats-pane[data-pane-state='enter-from-left'] {
-  opacity: 0;
-  transform: translateX(-8px);
-  transition: none;
-}
-.lp-ats-pane[data-pane-state='active'] {
-  opacity: 1;
-  transform: translateX(0);
-}
-.lp-ats-pane[data-pane-state='exit-to-left'] {
-  opacity: 0;
-  transform: translateX(-8px);
-}
-.lp-ats-pane[data-pane-state='exit-to-right'] {
-  opacity: 0;
-  transform: translateX(8px);
+  /* No animation rules here — JS drives them. */
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .lp-ats-panel,
-  .lp-ats-panel[data-state='closing'] {
-    transition-duration: 50ms !important;
-    transform: none !important;
-  }
-  .lp-ats-panel[data-state='open'] {
-    transform: none !important;
-  }
-  .lp-ats-pane,
-  .lp-ats-pane[data-pane-state='enter-from-right'],
-  .lp-ats-pane[data-pane-state='enter-from-left'],
-  .lp-ats-pane[data-pane-state='active'],
-  .lp-ats-pane[data-pane-state='exit-to-left'],
-  .lp-ats-pane[data-pane-state='exit-to-right'] {
-    transition-duration: 50ms !important;
-    transform: none !important;
-  }
-  .lp-ats-pane[data-pane-state='exit-to-left'],
-  .lp-ats-pane[data-pane-state='exit-to-right'] {
-    opacity: 0 !important;
-  }
-}
+/* prefers-reduced-motion: handled inline in
+   ArtistTourSwitcher.tsx via window.matchMedia in the animation
+   effects (ANIM.reducedMs = 50ms). No CSS @media block needed
+   here — the JS read is the source of truth. */
 
 /* ============================================
    Universal smooth transitions (macOS/iOS feel)
