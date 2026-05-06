@@ -47,7 +47,7 @@ export type SlideOverProps = {
   headerActions?: ReactNode;
   children: ReactNode;
   footer?: ReactNode;
-  width?: 'default' | 'wide';
+  width?: 'default' | 'wide' | 'xwide';
   /** Default `false` — page remains visible; opt in for high-stakes flows. */
   backdrop?: boolean;
   ariaLabel?: string;
@@ -77,7 +77,11 @@ export function SlideOver({
   const [animateIn, setAnimateIn] = useState(false);
 
   const widthVar =
-    width === 'wide' ? 'var(--lp-slideover-width-wide)' : 'var(--lp-slideover-width)';
+    width === 'xwide'
+      ? 'var(--lp-slideover-width-xwide)'
+      : width === 'wide'
+        ? 'var(--lp-slideover-width-wide)'
+        : 'var(--lp-slideover-width)';
 
   /* Slide-over enter/exit: keep portal mounted for exit transform; raf runs enter after first paint. */
   useLayoutEffect(() => {

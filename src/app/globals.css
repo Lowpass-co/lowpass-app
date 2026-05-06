@@ -95,6 +95,10 @@
   --lp-rail-collapsed: 56px;
   --lp-slideover-width: 480px;
   --lp-slideover-width-wide: 640px;
+  /* Sprint 8.1 §4 — xwide variant for the multi-step TourCreateSlideOver
+     when on its routing-builder page (the embedded RoutingGrid needs
+     ~7 columns + drive-time bands and feels cramped at 640px). */
+  --lp-slideover-width-xwide: 800px;
   --lp-content-padding-x: 24px;
   --lp-content-padding-y: 24px;
   --lp-content-max-width: 1440px;

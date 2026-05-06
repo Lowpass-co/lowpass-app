@@ -205,6 +205,7 @@ export function RoutingGrid({
   tourId,
   advanceByDate = {},
   onDeleteRow,
+  compact = false,
 }: {
   rows: RoutingRow[];
   onChange: (rows: RoutingRow[]) => void;
@@ -215,28 +216,39 @@ export function RoutingGrid({
   tourId?: string;
   advanceByDate?: Record<string, { routing_id: string; status: string }>;
   onDeleteRow?: (index: number) => void;
+  /** Sprint 8.1 §4 — compact variant for embedding inside the
+   *  multi-step <TourCreateSlideOver>. Renames the Venue column
+   *  header to "Location" (matches Adam's spec for the merged
+   *  Place/Address autocomplete) and tightens cell padding so
+   *  the grid fits inside the 800px xwide slide-over without
+   *  feeling cramped. All RoutingGrid behaviours (autocomplete,
+   *  drive-time bands, day-type colors, transport pills, row
+   *  context menu) are preserved. */
+  compact?: boolean;
 }) {
+  const cellPadX = compact ? 'px-2' : 'px-4';
+  const cellPadY = compact ? 'py-2' : 'py-3';
   return (
     <div className="relative z-0 overflow-x-auto rounded-xl border border-lp-border">
       <table className="w-full min-w-[640px] text-sm">
         <thead>
           <tr className="border-b border-lp-border bg-lp-bg-secondary">
-            <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">
+            <th className={cn(cellPadX, cellPadY, 'text-left text-[10px] font-semibold uppercase tracking-widest lp-table-header-text')}>
               Date
             </th>
-            <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">
+            <th className={cn(cellPadX, cellPadY, 'text-left text-[10px] font-semibold uppercase tracking-widest lp-table-header-text')}>
               Day type
             </th>
-            <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">
-              Venue
+            <th className={cn(cellPadX, cellPadY, 'text-left text-[10px] font-semibold uppercase tracking-widest lp-table-header-text')}>
+              {compact ? 'Location' : 'Venue'}
             </th>
-            <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">
+            <th className={cn(cellPadX, cellPadY, 'text-left text-[10px] font-semibold uppercase tracking-widest lp-table-header-text')}>
               Address
             </th>
-            <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">
+            <th className={cn(cellPadX, cellPadY, 'text-left text-[10px] font-semibold uppercase tracking-widest lp-table-header-text')}>
               Notes
             </th>
-            <th className="px-4 py-3 text-left text-[10px] font-semibold uppercase tracking-widest lp-table-header-text">
+            <th className={cn(cellPadX, cellPadY, 'text-left text-[10px] font-semibold uppercase tracking-widest lp-table-header-text')}>
               Transport mode
             </th>
             <th className="w-10 px-2 py-3" aria-label="Actions" />
@@ -246,7 +258,7 @@ export function RoutingGrid({
           {rows.map((row, i) => {
             const nextRow = rows[i + 1];
             return (
-              <Fragment key={row.date}>
+              <Fragment key={row.date || `row-${i}`}>
                 <RoutingRowWithMenu
                   row={row}
                   nextRow={nextRow}
@@ -259,6 +271,7 @@ export function RoutingGrid({
                   customDayTypes={customDayTypes}
                   onAddCustomDayType={onAddCustomDayType}
                   rowsLength={rows.length}
+                  compact={compact}
                 />
                 {nextRow && (
                   <tr className="border-b border-lp-border bg-lp-bg-secondary/50">
@@ -293,6 +306,7 @@ function RoutingRowWithMenu({
   customDayTypes,
   onAddCustomDayType,
   rowsLength,
+  compact = false,
 }: {
   row: RoutingRow;
   nextRow?: RoutingRow;
@@ -305,7 +319,10 @@ function RoutingRowWithMenu({
   customDayTypes?: string[];
   onAddCustomDayType?: (newType: string) => void;
   rowsLength: number;
+  compact?: boolean;
 }) {
+  const cellPadX = compact ? 'px-2' : 'px-4';
+  const cellPadY = compact ? 'py-1.5' : 'py-2.5';
   const [deleteOpen, setDeleteOpen] = useState(false);
   const advanceInfo = advanceByDate[row.date];
   const menuItems = [
@@ -321,17 +338,17 @@ function RoutingRowWithMenu({
         className="border-b border-lp-border last:border-0 hover:bg-lp-surface-hover animate-fade-in transition-colors duration-150"
         style={{ animationDelay: `${rowIndex * 30}ms` }}
       >
-        <td className="px-4 py-2.5 whitespace-nowrap text-sm font-medium text-lp-text">
+        <td className={cn(cellPadX, cellPadY, 'whitespace-nowrap text-sm font-medium text-lp-text')}>
           {formatRoutingDateShort(row.date)}
         </td>
-        <td className="px-4 py-2.5">
+        <td className={cn(cellPadX, cellPadY)}>
           <DayTypeDropdown
             value={row.day_type ?? ''}
             onChange={(v) => updateRow(rowIndex, { day_type: v })}
             customTypes={customDayTypes}
           />
         </td>
-        <td className="px-4 py-2.5">
+        <td className={cn(cellPadX, cellPadY)}>
           <VenueAutocomplete
             value={row.venue_name ?? ''}
             onChange={(venue_name) => updateRow(rowIndex, { venue_name })}
@@ -347,10 +364,10 @@ function RoutingRowWithMenu({
                 venue_capacity: result.capacity ?? undefined,
               })
             }
-            placeholder="Venue"
+            placeholder={compact ? 'Location' : 'Venue'}
           />
         </td>
-        <td className="px-4 py-2.5">
+        <td className={cn(cellPadX, cellPadY)}>
           <input
             type="text"
             value={row.address ?? row.city}
@@ -359,7 +376,7 @@ function RoutingRowWithMenu({
             className="w-full min-w-[100px] rounded-xl border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:border-lp-orange focus:outline-none focus:ring-2 focus:ring-lp-orange/20"
           />
         </td>
-        <td className="px-4 py-2.5">
+        <td className={cn(cellPadX, cellPadY)}>
           <input
             type="text"
             value={row.notes ?? ''}
@@ -368,7 +385,7 @@ function RoutingRowWithMenu({
             className="w-full min-w-[120px] rounded-xl border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:border-lp-orange focus:outline-none focus:ring-2 focus:ring-lp-orange/20"
           />
         </td>
-        <td className="px-4 py-2.5">
+        <td className={cn(cellPadX, cellPadY)}>
           {nextRow ? (
             <TransportPills
               transportToNext={row.transport_to_next ?? 'default'}
@@ -378,7 +395,7 @@ function RoutingRowWithMenu({
             <span className="text-lp-text-tertiary">—</span>
           )}
         </td>
-        <td className="w-10 px-2 py-2.5">
+        <td className={cn('w-10', cellPadY, 'px-2')}>
           <ContextMenu items={menuItems} align="right" />
         </td>
       </tr>
