@@ -22,6 +22,7 @@ import {
 import { cn, parseRoutingDate } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { isMonoFieldType } from './FieldTypeIcon';
+import { EditableFieldValue, isEditableFieldType } from './EditableFieldValue';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -568,6 +569,7 @@ function SectionCard({
   fullData,
   allowCopy,
   onCopied,
+  onFieldChange,
 }: {
   section: SectionDef;
   sectionData: Record<string, unknown>;
@@ -580,15 +582,31 @@ function SectionCard({
   fullData: Record<string, Record<string, unknown> | undefined>;
   allowCopy: boolean;
   onCopied: () => void;
+  /** Hotfix v2 §A — when defined, regular field rows render as
+   *  inline editable inputs. Undefined = display-only path used by
+   *  the /share/advance/[token] public surface. */
+  onFieldChange?: (
+    sectionTemplateId: string,
+    fieldId: string,
+    nextValue: unknown,
+  ) => void;
 }) {
   const statusKey = (status?.status ?? 'not_started') as SectionStatusKey;
   const [collapsed, setCollapsed] = useState(false);
+  const editable = !!onFieldChange;
 
-  // Filter to fields that have actual values for the rendered table.
+  // Hotfix v2 §A — when editable, render every field in the section
+  // template (so users can type into empty fields). Display-only
+  // (public share) keeps the original "filled fields only" filter so
+  // the public view stays compact.
+  const renderableFields = editable
+    ? section.fields
+    : section.fields.filter((f) => !isBlank(sectionData[f.id]));
+  // Filled set still drives empty-state CTAs + status math below.
   const filledFields = section.fields.filter(f => !isBlank(sectionData[f.id]));
-  const fileFields = filledFields.filter(f => f.type === 'file');
-  const contactFields = filledFields.filter(f => f.type === 'contact');
-  const otherFields = filledFields.filter(f => f.type !== 'file' && f.type !== 'contact');
+  const fileFields = renderableFields.filter(f => f.type === 'file');
+  const contactFields = renderableFields.filter(f => f.type === 'contact');
+  const otherFields = renderableFields.filter(f => f.type !== 'file' && f.type !== 'contact');
 
   // Done-count badge / mini-progress-bar denominators are based on the
   // full template field count, not just non-blank ones — that's the
@@ -600,8 +618,12 @@ function SectionCard({
   const activeFlags = flags.filter(f => !f.resolved);
   const isEmpty = filledFields.length === 0;
 
-  // UX22 §7.1 — empty section + no flags → thin "copy from previous show" CTA.
-  if (isEmpty && activeFlags.length === 0) {
+  // UX22 §7.1 — empty section + no flags → thin "copy from previous
+  // show" CTA. Hotfix v2 §A: when editing is enabled (auth flow), we
+  // render the section's empty fields as editable inputs instead so
+  // the user can type without bouncing through a copy modal. The CTA
+  // remains the public-share fall-through.
+  if (isEmpty && activeFlags.length === 0 && !editable) {
     if (!allowCopy) return null;
     return (
       <EmptySectionCTA
@@ -821,7 +843,22 @@ function SectionCard({
                         color: 'var(--lp-text-secondary)',
                       }}
                     >
-                      <FieldValue field={field} value={val} />
+                      {/* Hotfix v2 §A — inline editable input when
+                          onFieldChange is wired (auth flow); falls back
+                          to FieldValue display for /share public surface
+                          and for non-editable types (contact, file). */}
+                      {onFieldChange && isEditableFieldType(field.type) ? (
+                        <EditableFieldValue
+                          field={field}
+                          value={val}
+                          mono={useMono}
+                          onChange={(next) =>
+                            onFieldChange(section.template_id, field.id, next)
+                          }
+                        />
+                      ) : (
+                        <FieldValue field={field} value={val} />
+                      )}
                     </div>
                   </div>
                 ) : (
@@ -858,7 +895,18 @@ function SectionCard({
                         alignItems: 'center',
                       }}
                     >
-                      <FieldValue field={field} value={val} />
+                      {onFieldChange && isEditableFieldType(field.type) ? (
+                        <EditableFieldValue
+                          field={field}
+                          value={val}
+                          mono={useMono}
+                          onChange={(next) =>
+                            onFieldChange(section.template_id, field.id, next)
+                          }
+                        />
+                      ) : (
+                        <FieldValue field={field} value={val} />
+                      )}
                     </div>
                   </>
                 )}
@@ -1251,6 +1299,18 @@ export function AdvanceShowReadView({
   const [loading, setLoading] = useState(!serverInitialJson);
   const [error, setError] = useState<string | null>(null);
 
+  // Hotfix v2 §A — autosave state for in-place field edits. Read mode
+  // IS the edit surface (Adam's lock); editable cells PATCH the
+  // /api/tours/{id}/advance/{routingId} endpoint with `{ data }`,
+  // debounced 600ms after the last keystroke.
+  const [autosaveStatus, setAutosaveStatus] = useState<
+    'idle' | 'saving' | 'saved' | 'error'
+  >('idle');
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingPatchRef = useRef<Record<string, Record<string, unknown>> | null>(
+    null,
+  );
+
   const editHref = `/advance/${tourId}/${routingId}?mode=edit`;
 
   const load = useCallback(() => {
@@ -1268,6 +1328,75 @@ export function AdvanceShowReadView({
   }, [tourId, routingId, publicReadOnly]);
 
   useEffect(() => { load(); }, [load]);
+
+  /**
+   * Hotfix v2 §A — flushes the pending data PATCH and clears the
+   * "Saved ✓" indicator after a beat. Called by the debounce timer
+   * once the user stops typing for 600ms.
+   */
+  const flushPatch = useCallback(async () => {
+    const data = pendingPatchRef.current;
+    pendingPatchRef.current = null;
+    if (!data) return;
+    setAutosaveStatus('saving');
+    try {
+      const res = await fetch(`/api/tours/${tourId}/advance/${routingId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data }),
+      });
+      if (!res.ok) throw new Error(`${res.status}`);
+      setAutosaveStatus('saved');
+      // Drop the indicator back to idle after 1.5s so the next edit
+      // re-runs the saving→saved cycle visibly.
+      window.setTimeout(() => {
+        setAutosaveStatus((s) => (s === 'saved' ? 'idle' : s));
+      }, 1500);
+    } catch {
+      setAutosaveStatus('error');
+    }
+  }, [tourId, routingId]);
+
+  /**
+   * Hotfix v2 §A — called by EditableFieldValue on every committed
+   * change. Optimistically merges the new value into pageData.advance.data,
+   * stamps the pending patch ref, and (re-)arms the debounce.
+   */
+  const onFieldChange = useCallback(
+    (sectionTemplateId: string, fieldId: string, nextValue: unknown) => {
+      if (publicReadOnly) return;
+      setPageData((prev) => {
+        if (!prev?.advance) return prev;
+        const prevData = prev.advance.data ?? {};
+        const prevSection =
+          (prevData[sectionTemplateId] as Record<string, unknown>) ?? {};
+        const nextSection = { ...prevSection, [fieldId]: nextValue };
+        const nextData = { ...prevData, [sectionTemplateId]: nextSection };
+        // Stamp pending patch with the FULL data map — the API expects
+        // the whole `data` JSONB, not a per-field PATCH.
+        pendingPatchRef.current = nextData as Record<
+          string,
+          Record<string, unknown>
+        >;
+        return {
+          ...prev,
+          advance: { ...prev.advance, data: nextData },
+        } as PageData;
+      });
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      debounceRef.current = setTimeout(() => {
+        debounceRef.current = null;
+        void flushPatch();
+      }, 600);
+    },
+    [publicReadOnly, flushPatch],
+  );
+
+  useEffect(() => {
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+  }, []);
 
   if (error && !loading) {
     return (
@@ -1290,6 +1419,11 @@ export function AdvanceShowReadView({
           the "Edit advance" button is replaced by the Show / Template
           Builder tab toggle in AdvanceSubHeader. */}
 
+      {/* Hotfix v2 §A — autosave indicator for in-place field edits. */}
+      {!publicReadOnly && autosaveStatus !== 'idle' ? (
+        <AutosaveBadge status={autosaveStatus} />
+      ) : null}
+
       {loading ? (
         <AdvanceReadLoadingSkeleton />
       ) : pageData ? (
@@ -1300,8 +1434,44 @@ export function AdvanceShowReadView({
           routingId={routingId}
           allowCopy={!publicReadOnly}
           onCopied={load}
+          onFieldChange={publicReadOnly ? undefined : onFieldChange}
         />
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * Hotfix v2 §A — small fixed-position pill that surfaces the
+ * autosave state. Sits top-right, out of the way of section content.
+ */
+function AutosaveBadge({
+  status,
+}: {
+  status: 'saving' | 'saved' | 'error';
+}) {
+  const map: Record<typeof status, { label: string; tone: string }> = {
+    saving: { label: 'Saving…', tone: 'var(--lp-text-secondary)' },
+    saved: { label: 'Saved ✓', tone: 'var(--color-lp-status-complete)' },
+    error: { label: 'Save failed', tone: 'var(--color-lp-error)' },
+  };
+  const { label, tone } = map[status];
+  return (
+    <div
+      className="advance-read-no-print pointer-events-none fixed z-40 rounded-full border px-3 py-1"
+      style={{
+        top: 116, // beneath ProductHeader (48px) + sub-header (~52px)
+        right: 24,
+        borderColor: 'var(--lp-border-strong)',
+        background: 'var(--lp-surface)',
+        color: tone,
+        fontSize: '11px',
+        fontWeight: 500,
+      }}
+      aria-live="polite"
+      role="status"
+    >
+      {label}
     </div>
   );
 }
@@ -1313,6 +1483,7 @@ function AdvanceReadLoadedBody({
   routingId,
   allowCopy,
   onCopied,
+  onFieldChange,
 }: {
   pageData: PageData;
   editHref: string;
@@ -1323,6 +1494,14 @@ function AdvanceReadLoadedBody({
    *  triggers an authenticated PATCH. */
   allowCopy: boolean;
   onCopied: () => void;
+  /** Hotfix v2 §A — when defined, fields render as in-place editable
+   *  inputs that PATCH on commit. Undefined = display-only (public
+   *  share). */
+  onFieldChange?: (
+    sectionTemplateId: string,
+    fieldId: string,
+    nextValue: unknown,
+  ) => void;
 }) {
   const { tour, advance } = pageData;
   const sections = advance?.sections ?? [];
@@ -1373,6 +1552,7 @@ function AdvanceReadLoadedBody({
           fullData={data}
           allowCopy={allowCopy}
           onCopied={onCopied}
+          onFieldChange={onFieldChange}
         />
       ))}
 

@@ -276,10 +276,22 @@ export default async function AdvanceShowPage({
       tourId={tourRow.id}
       productName="Advance"
     >
-      <AdvanceSubHeader
-        showLabel={subHeaderLabel || showName}
-        activeTab={activeTab}
-      />
+      {/* Hotfix v2 §C — AdvanceSubHeader (sticky "ADVANCE / show
+          name" + tabs + Print) used to sit ABOVE the flex row in
+          both modes, stacking against AdvanceShowHeader's chunky
+          h1 below. Adam's v1 smoke flagged the duplicate. Show mode
+          drops it now — AdvanceShowHeader's "Edit template" right-
+          rail action is the path to builder mode, and the chunky
+          show-header subsumes the sticky strip's role. Builder mode
+          keeps it because SetupMode doesn't render its own header
+          and the Show / Template Builder toggle still needs a home
+          there. */}
+      {activeTab === 'builder' ? (
+        <AdvanceSubHeader
+          showLabel={subHeaderLabel || showName}
+          activeTab={activeTab}
+        />
+      ) : null}
       <div className="flex min-h-0 flex-1">
         <AdvanceUpcomingSidebar
           tourId={tourId}

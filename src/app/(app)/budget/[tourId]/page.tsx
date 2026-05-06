@@ -71,17 +71,30 @@ export default async function BudgetTourPage({
   const tab = resolveBudgetTab(sp.tab);
   const supabase = await createServerSupabaseClient();
 
+  // Hotfix v2 §B 2026-05-04 — was .single() which THROWS when zero
+  // rows match (RLS silently filtering one out reads as a thrown
+  // "JSON object requested, multiple (or no) rows returned" error
+  // that escapes to the root error boundary as "Refresh, something
+  // went wrong"). .maybeSingle() returns { data: null } on no-row,
+  // which we explicitly notFound() below.
   const { data: tour, error: tourErr } = await supabase
     .from('tours')
     .select('id, name, workspace_id, currency, artist_id')
     .eq('id', tourId)
-    .single();
+    .maybeSingle();
 
   if (tourErr || !tour) {
     notFound();
   }
 
-  const workspaceId = tour.workspace_id as string;
+  // workspace_id is NOT NULL on tours, but cast-as-string would
+  // silently propagate a null if RLS / a future schema change ever
+  // surfaces one. Guard explicitly + notFound for the malformed-row
+  // case so it degrades to a 404 not a crash.
+  const workspaceId = tour.workspace_id as string | null;
+  if (!workspaceId) {
+    notFound();
+  }
 
   const [phases, panelData, lineItemsRes, routingRes] = await Promise.all([
     computeTourPhases(supabase, tourId),

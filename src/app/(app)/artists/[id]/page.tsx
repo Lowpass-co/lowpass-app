@@ -224,17 +224,30 @@ export default async function ArtistHomePage({
           tours={tours.map((t) => ({ id: t.id, name: t.name }))}
         />
 
-        {/* 3 product cards — no tour list. Single "what's hot" metric. */}
+        {/* 3 product cards — no tour list. Single "what's hot" metric.
+            Hotfix v2 §D 2026-05-04: each card's href now appends the
+            artist's most recent tour id (via path segment, since the
+            destination routes are /budget/[tourId] / /advance/[tourId]
+            / /operations/[tourId]) AND ?artist_id= as a query param so
+            ArtistTourContext can hydrate the artist from URL on the
+            destination page without a tour→artist DB lookup. Falls
+            through to bare path + ?artist_id= when the artist has no
+            tours; the redirect routers handle that case. */}
         <section
           className="grid gap-3"
           style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' }}
         >
           {PRODUCT_CARDS.map((p) => {
             const hot = whatsHot[p.key];
+            const recentTourId = tours[0]?.id ?? null;
+            const artistQs = `?artist_id=${encodeURIComponent(artist.id)}`;
+            const href = recentTourId
+              ? `${p.href}/${recentTourId}${artistQs}`
+              : `${p.href}${artistQs}`;
             return (
               <ProductCard
                 key={p.key}
-                href={p.href}
+                href={href}
                 label={p.label}
                 Icon={p.Icon}
                 description={p.description}
