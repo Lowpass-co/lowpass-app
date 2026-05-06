@@ -439,8 +439,28 @@ input[type='checkbox'].lp-checkbox:focus-visible {
 
 /* ============================================
    Sprint 5 — ArtistTourSwitcher animations
-   Open/close (panel) + state-transition (pane).
-   Reduced-motion variants below collapse to opacity-only.
+   (Sprint 6 §1: switched panes from CSS keyframes to CSS
+   transitions so the two-frame raf pattern in <SwitcherPane>
+   has a clean before/after to interpolate between.)
+
+   Panel:
+     - Base styles (no data-state)  → opacity 0, translateY(-4px).
+       Component mounts here for one frame ('opening' state).
+     - data-state='open'            → opacity 1, translateY(0).
+       Set on next raf so the transition fires.
+     - data-state='closing'         → opacity 0, translateY(-4px).
+       Set on close. Transition fires; transitionend → unmount.
+
+   Pane:
+     - data-pane-state='enter-from-right' / 'enter-from-left'
+                                     → start position, transition off.
+     - data-pane-state='active'     → opacity 1, translateX(0).
+       Set on next raf; transition kicks in.
+     - data-pane-state='exit-to-left' / 'exit-to-right'
+                                     → exit position. Set on next raf
+       after the exiting pane mounts in 'active' state.
+
+   prefers-reduced-motion: collapse all to ≤50ms opacity-only.
    ============================================ */
 .lp-ats-panel {
   opacity: 0;
@@ -464,33 +484,38 @@ input[type='checkbox'].lp-checkbox:focus-visible {
   pointer-events: none;
 }
 
-@keyframes lp-ats-enter-from-right {
-  from { opacity: 0; transform: translateX(8px); }
-  to   { opacity: 1; transform: translateX(0); }
+.lp-ats-pane {
+  /* Default = active. Components override via data-pane-state on
+     mount + raf to drive the enter/exit transition. */
+  opacity: 1;
+  transform: translateX(0);
+  transition:
+    opacity var(--lp-duration-slower) var(--lp-ease-standard),
+    transform var(--lp-duration-slower) var(--lp-ease-standard);
 }
-@keyframes lp-ats-enter-from-left {
-  from { opacity: 0; transform: translateX(-8px); }
-  to   { opacity: 1; transform: translateX(0); }
+.lp-ats-pane[data-pane-state='enter-from-right'] {
+  opacity: 0;
+  transform: translateX(8px);
+  /* No transition into the start position — that paint is the
+     "before" frame for the next-raf flip to active. */
+  transition: none;
 }
-@keyframes lp-ats-exit-to-left {
-  from { opacity: 1; transform: translateX(0); }
-  to   { opacity: 0; transform: translateX(-8px); }
+.lp-ats-pane[data-pane-state='enter-from-left'] {
+  opacity: 0;
+  transform: translateX(-8px);
+  transition: none;
 }
-@keyframes lp-ats-exit-to-right {
-  from { opacity: 1; transform: translateX(0); }
-  to   { opacity: 0; transform: translateX(8px); }
+.lp-ats-pane[data-pane-state='active'] {
+  opacity: 1;
+  transform: translateX(0);
 }
-.lp-ats-pane[data-pane-anim='enter-right'] {
-  animation: lp-ats-enter-from-right var(--lp-duration-slower) var(--lp-ease-standard) both;
+.lp-ats-pane[data-pane-state='exit-to-left'] {
+  opacity: 0;
+  transform: translateX(-8px);
 }
-.lp-ats-pane[data-pane-anim='enter-left'] {
-  animation: lp-ats-enter-from-left var(--lp-duration-slower) var(--lp-ease-standard) both;
-}
-.lp-ats-pane[data-pane-anim='exit-left'] {
-  animation: lp-ats-exit-to-left var(--lp-duration-slower) var(--lp-ease-standard) both;
-}
-.lp-ats-pane[data-pane-anim='exit-right'] {
-  animation: lp-ats-exit-to-right var(--lp-duration-slower) var(--lp-ease-standard) both;
+.lp-ats-pane[data-pane-state='exit-to-right'] {
+  opacity: 0;
+  transform: translateX(8px);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -502,15 +527,17 @@ input[type='checkbox'].lp-checkbox:focus-visible {
   .lp-ats-panel[data-state='open'] {
     transform: none !important;
   }
-  .lp-ats-pane[data-pane-anim='enter-right'],
-  .lp-ats-pane[data-pane-anim='enter-left'],
-  .lp-ats-pane[data-pane-anim='exit-left'],
-  .lp-ats-pane[data-pane-anim='exit-right'] {
-    animation-duration: 50ms !important;
-    animation-name: none !important;
+  .lp-ats-pane,
+  .lp-ats-pane[data-pane-state='enter-from-right'],
+  .lp-ats-pane[data-pane-state='enter-from-left'],
+  .lp-ats-pane[data-pane-state='active'],
+  .lp-ats-pane[data-pane-state='exit-to-left'],
+  .lp-ats-pane[data-pane-state='exit-to-right'] {
+    transition-duration: 50ms !important;
+    transform: none !important;
   }
-  .lp-ats-pane[data-pane-anim='exit-left'],
-  .lp-ats-pane[data-pane-anim='exit-right'] {
+  .lp-ats-pane[data-pane-state='exit-to-left'],
+  .lp-ats-pane[data-pane-state='exit-to-right'] {
     opacity: 0 !important;
   }
 }

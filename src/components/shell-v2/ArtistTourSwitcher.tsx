@@ -26,7 +26,14 @@
 
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   ChevronDown,
   ChevronUp,
@@ -67,8 +74,21 @@ interface ArtistTourSwitcherProps {
   onCreateTour: () => void;
 }
 
-type DropdownState = 'closed' | 'open' | 'closing';
+/** Sprint 6 §1 — 'opening' is the one-frame mount state where the
+ *  panel renders without data-state so the base CSS (opacity 0,
+ *  translateY(-4px)) paints. The next requestAnimationFrame flips
+ *  to 'open', giving the CSS transition a real "before" frame to
+ *  interpolate from. Without this intermediate state the panel
+ *  mounts with data-state='open' already set and the transition
+ *  never fires (visible as a flash on open). */
+type DropdownState = 'closed' | 'opening' | 'open' | 'closing';
 type Pane = 'artists' | 'tours';
+type PaneAnim =
+  | 'idle'
+  | 'enter-from-right'
+  | 'enter-from-left'
+  | 'exit-to-left'
+  | 'exit-to-right';
 
 const MONTHS = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -225,28 +245,56 @@ export function ArtistTourSwitcher({
   // pane during the 250ms cross-fade). null when no transition.
   const [exitingPane, setExitingPane] = useState<Pane | null>(null);
   // Direction of the in-flight pane transition. Determines which
-  // keyframes the entering / exiting panes use.
+  // CSS data-pane-state value each pane uses.
   const [paneDirection, setPaneDirection] =
     useState<'forward' | 'back'>('forward');
 
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
+  const openRafRef = useRef<number | null>(null);
 
-  const open = dropdownState === 'open' || dropdownState === 'closing';
+  const open =
+    dropdownState === 'opening' ||
+    dropdownState === 'open' ||
+    dropdownState === 'closing';
 
   const initialPaneOnOpen: Pane = selectedArtistId ? 'tours' : 'artists';
 
   const openDropdown = useCallback(() => {
+    // Two-frame raf pattern (Sprint 6 §1): mount the panel first
+    // with no data-state so the CSS base styles (opacity 0,
+    // translateY(-4px)) paint. Then on the next frame flip to
+    // 'open' — the transition fires from the painted base state
+    // to the open state. Without this intermediate frame the
+    // panel mounts with data-state='open' already set and no
+    // transition runs (the "open is a flash" smoke from Adam's
+    // Sprint 5 SR).
     setPane(initialPaneOnOpen);
     setExitingPane(null);
-    setDropdownState('open');
+    setDropdownState('opening');
+    if (openRafRef.current !== null) {
+      cancelAnimationFrame(openRafRef.current);
+    }
+    openRafRef.current = requestAnimationFrame(() => {
+      openRafRef.current = null;
+      setDropdownState((prev) => (prev === 'opening' ? 'open' : prev));
+    });
   }, [initialPaneOnOpen]);
 
   const closeDropdown = useCallback(() => {
-    setDropdownState((prev) => (prev === 'open' ? 'closing' : prev));
+    if (openRafRef.current !== null) {
+      cancelAnimationFrame(openRafRef.current);
+      openRafRef.current = null;
+    }
+    setDropdownState((prev) => {
+      // If still 'opening' (raf hasn't fired), unmount immediately
+      // — there's no painted 'open' state to transition out of.
+      if (prev === 'opening') return 'closed';
+      return prev === 'open' ? 'closing' : prev;
+    });
   }, []);
 
-  // When the close transition ends, fully unmount the panel.
+  // Unmount the panel when the close transition completes.
   const handlePanelTransitionEnd = useCallback(
     (e: React.TransitionEvent<HTMLDivElement>) => {
       if (e.target !== panelRef.current) return;
@@ -257,6 +305,16 @@ export function ArtistTourSwitcher({
     },
     [dropdownState],
   );
+
+  // Cancel any pending raf on unmount.
+  useEffect(() => {
+    return () => {
+      if (openRafRef.current !== null) {
+        cancelAnimationFrame(openRafRef.current);
+        openRafRef.current = null;
+      }
+    };
+  }, []);
 
   /* -------- Esc + click-outside -------- */
   useEffect(() => {
@@ -296,15 +354,18 @@ export function ArtistTourSwitcher({
     [],
   );
 
-  // After the entering pane's animation completes, drop the
-  // exiting one from the DOM.
-  const handlePaneAnimationEnd = useCallback(
-    (e: React.AnimationEvent<HTMLDivElement>) => {
-      // Both entering and exiting fire animationend; use the
-      // entering pane (data-pane-anim starts with 'enter-') as the
-      // signal to clear.
-      const animName = e.animationName;
-      if (animName.startsWith('lp-ats-enter')) {
+  // After the exiting pane's transition completes, drop it from
+  // the DOM. Sprint 6 §1: switched from animationend (keyframes)
+  // to transitionend (CSS transitions). The exiting pane signals
+  // via its data-pane-state — we listen for the 'opacity' end on
+  // either pane and check the data-pane-state to identify which
+  // one finished.
+  const handlePaneTransitionEnd = useCallback(
+    (e: React.TransitionEvent<HTMLDivElement>) => {
+      if (e.propertyName !== 'opacity') return;
+      const target = e.currentTarget;
+      const state = target.getAttribute('data-pane-state');
+      if (state === 'exit-to-left' || state === 'exit-to-right') {
         setExitingPane(null);
       }
     },
@@ -445,7 +506,12 @@ export function ArtistTourSwitcher({
         <div
           ref={panelRef}
           className="lp-ats-panel"
-          data-state={dropdownState}
+          /* Sprint 6 §1: omit data-state during 'opening' so the
+             base CSS paints for one frame (opacity 0, translateY).
+             Next-raf flips to 'open'; transition fires. */
+          data-state={
+            dropdownState === 'opening' ? undefined : dropdownState
+          }
           onTransitionEnd={handlePanelTransitionEnd}
           role="menu"
           style={{
@@ -476,15 +542,15 @@ export function ArtistTourSwitcher({
             {/* Active pane */}
             <SwitcherPane
               key={`active-${pane}`}
-              animState={
+              mountAnim={
                 exitingPane
                   ? paneDirection === 'forward'
-                    ? 'enter-right'
-                    : 'enter-left'
-                  : null
+                    ? 'enter-from-right'
+                    : 'enter-from-left'
+                  : 'idle'
               }
               absolute={!!exitingPane}
-              onAnimationEnd={handlePaneAnimationEnd}
+              onTransitionEnd={handlePaneTransitionEnd}
             >
               {pane === 'artists' ? (
                 <ArtistsPane
@@ -511,11 +577,13 @@ export function ArtistTourSwitcher({
             {exitingPane ? (
               <SwitcherPane
                 key={`exiting-${exitingPane}`}
-                animState={
-                  paneDirection === 'forward' ? 'exit-left' : 'exit-right'
+                mountAnim={
+                  paneDirection === 'forward'
+                    ? 'exit-to-left'
+                    : 'exit-to-right'
                 }
                 absolute
-                onAnimationEnd={handlePaneAnimationEnd}
+                onTransitionEnd={handlePaneTransitionEnd}
               >
                 {exitingPane === 'artists' ? (
                   <ArtistsPane
@@ -558,26 +626,80 @@ export function ArtistTourSwitcher({
 }
 
 /* ============================================================
-   Pane wrapper — handles absolute positioning + animation class
-   so the two child views (artists / tours) only need to render
-   their content.
+   Pane wrapper — handles absolute positioning + the two-frame
+   raf pattern that drives the enter/exit CSS transitions.
+
+   Sprint 6 §1: the parent passes one of five `mountAnim` values:
+
+     'idle'              — no transition. Pane mounts in active
+                           state and stays there.
+     'enter-from-right'  — mount at translateX(8px), opacity 0
+                           (transition: none in CSS). Next raf
+                           flips data-pane-state to 'active' →
+                           transition slides+fades to active.
+     'enter-from-left'   — same, mirrored.
+     'exit-to-left'      — mount at translateX(0), opacity 1
+                           ('active' state). Next raf flips to
+                           'exit-to-left' → transition slides+
+                           fades out.
+     'exit-to-right'     — same, mirrored.
+
+   Without the raf the entering pane mounts already at its final
+   position (no transition) — Adam's Sprint 5 SR "jumps both
+   ways" smoke. The raf gives the browser one paint frame at the
+   start state before the transition target is set.
    ============================================================ */
 function SwitcherPane({
   children,
-  animState,
+  mountAnim,
   absolute,
-  onAnimationEnd,
+  onTransitionEnd,
 }: {
   children: React.ReactNode;
-  animState: 'enter-right' | 'enter-left' | 'exit-left' | 'exit-right' | null;
+  mountAnim: PaneAnim;
   absolute: boolean;
-  onAnimationEnd: (e: React.AnimationEvent<HTMLDivElement>) => void;
+  onTransitionEnd: (e: React.TransitionEvent<HTMLDivElement>) => void;
 }) {
+  // 'mount' = first paint frame at the start position (or 'active'
+  // for exit anims). 'animate' = next raf, target position set,
+  // CSS transition fires.
+  const [phase, setPhase] = useState<'mount' | 'animate'>(
+    mountAnim === 'idle' ? 'animate' : 'mount',
+  );
+
+  // useLayoutEffect runs synchronously after DOM mutations but
+  // BEFORE the browser paints. We schedule the raf from inside
+  // it so the request lands AFTER React has painted the mount
+  // frame. The raf callback flips phase to 'animate', triggering
+  // a re-render that sets the target data-pane-state and the CSS
+  // transition fires.
+  useLayoutEffect(() => {
+    if (mountAnim === 'idle') return;
+    let raf = 0;
+    raf = requestAnimationFrame(() => {
+      setPhase('animate');
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [mountAnim]);
+
+  let dataPaneState: string | undefined;
+  if (mountAnim === 'idle') {
+    dataPaneState = undefined; // base CSS = active
+  } else if (
+    mountAnim === 'enter-from-right' ||
+    mountAnim === 'enter-from-left'
+  ) {
+    dataPaneState = phase === 'mount' ? mountAnim : 'active';
+  } else {
+    // exit-to-left / exit-to-right
+    dataPaneState = phase === 'mount' ? 'active' : mountAnim;
+  }
+
   return (
     <div
       className="lp-ats-pane"
-      data-pane-anim={animState ?? undefined}
-      onAnimationEnd={onAnimationEnd}
+      data-pane-state={dataPaneState}
+      onTransitionEnd={onTransitionEnd}
       style={{
         position: absolute ? 'absolute' : 'relative',
         inset: absolute ? 0 : undefined,
