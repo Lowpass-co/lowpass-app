@@ -140,6 +140,24 @@ export function ArtistTourSwitcherClientWrapper({
     fetchToursForArtist(selectedArtistId);
   }, [selectedArtistId, fetchToursForArtist]);
 
+  // Sprint 7 §1.B — when the server-side initialTours prop
+  // changes (e.g. after router.push to a new tour-scoped URL
+  // following tour creation), merge it into local state. Any
+  // optimistic-only entries (created locally but not yet in
+  // the server response) are preserved by id-set diff.
+  // Without this, the wrapper's local `tours` lags behind
+  // the server fetch on cross-product nav, and the trigger
+  // shows "Pick a tour…" until manual refresh.
+  useEffect(() => {
+    queueMicrotask(() => {
+      setTours((prev) => {
+        const incomingIds = new Set(initialTours?.map((t) => t.id) ?? []);
+        const optimisticOnly = prev.filter((t) => !incomingIds.has(t.id));
+        return [...optimisticOnly, ...(initialTours ?? [])];
+      });
+    });
+  }, [initialTours]);
+
   const handleTourCreated = useCallback(
     (tour: TourMin) => {
       // Optimistic prepend so the new tour appears in the

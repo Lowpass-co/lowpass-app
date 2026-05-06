@@ -3,28 +3,14 @@
 
    GET — Returns recent albums/singles for artists that have spotify_id.
    Requires SPOTIFY_CLIENT_ID + SPOTIFY_CLIENT_SECRET.
+
+   Sprint 7 §2 — token helper + caching extracted to
+   src/lib/spotify/server.ts. This route just imports.
    ============================================ */
 
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
-
-async function getSpotifyToken(): Promise<string | null> {
-  const id = process.env.SPOTIFY_CLIENT_ID;
-  const secret = process.env.SPOTIFY_CLIENT_SECRET;
-  if (!id || !secret) return null;
-  const auth = Buffer.from(`${id}:${secret}`).toString('base64');
-  const res = await fetch('https://accounts.spotify.com/api/token', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      Authorization: `Basic ${auth}`,
-    },
-    body: 'grant_type=client_credentials',
-  });
-  if (!res.ok) return null;
-  const data = await res.json();
-  return data.access_token ?? null;
-}
+import { getSpotifyToken } from '@/lib/spotify/server';
 
 export type SpotifyReleaseItem = {
   id: string;

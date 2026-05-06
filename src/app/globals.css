@@ -470,6 +470,33 @@ input[type='checkbox'].lp-checkbox:focus-visible {
    effects (ANIM.reducedMs = 50ms). No CSS @media block needed
    here — the JS read is the source of truth. */
 
+/* Sprint 7 §4 — hover lift utility for artist surface cards
+   (ArtistProductCards, the workspace artist grid). Transform
+   only — no layout shift. Reduced-motion disables the lift. */
+.lp-artist-product-card,
+.lp-artist-grid-card {
+  transition:
+    transform var(--lp-duration-base) var(--lp-ease-standard),
+    box-shadow var(--lp-duration-base) var(--lp-ease-standard),
+    background-color var(--lp-duration-base) var(--lp-ease-standard);
+}
+.lp-artist-product-card:hover,
+.lp-artist-grid-card:hover {
+  transform: translateY(-1px);
+  background: var(--lp-panel-hover);
+  box-shadow: var(--lp-shadow-md);
+}
+@media (prefers-reduced-motion: reduce) {
+  .lp-artist-product-card,
+  .lp-artist-grid-card {
+    transition-duration: 50ms !important;
+  }
+  .lp-artist-product-card:hover,
+  .lp-artist-grid-card:hover {
+    transform: none !important;
+  }
+}
+
 /* ============================================
    Universal smooth transitions (macOS/iOS feel)
    ============================================ */

@@ -44,6 +44,31 @@ export type BurnRateChartProps = {
   currency?: string;
 };
 
+/** Sprint 7 §1.D — pure helper. Decides which phase-boundary
+ *  text labels to render. Drops a label whose x position is
+ *  within 56px (viewBox units) of the previous drawn label.
+ *  Lives at file scope so the running `lastX` reassignment is in
+ *  a plain JS function, not in a React render or hook body —
+ *  React 19's compiler rejects in-render variable reassignment. */
+function computeLabelVisibility(
+  boundaries: BurnPhaseBoundary[],
+  buckets: BurnBucket[],
+  paddingX: number,
+  slot: number,
+): boolean[] {
+  let lastX = -Infinity;
+  return boundaries.map((p) => {
+    const idx = buckets.findIndex((b) => b.key >= p.startIso);
+    if (idx < 0 || buckets.length === 0) return false;
+    const x = paddingX + idx * slot;
+    if (x - lastX >= 56) {
+      lastX = x;
+      return true;
+    }
+    return false;
+  });
+}
+
 function abbreviate(value: number, currency: string): string {
   const sym: Record<string, string> = { GBP: '£', USD: '$', EUR: '€' };
   const s = sym[currency.toUpperCase()] ?? `${currency} `;
@@ -127,6 +152,26 @@ export function BurnRateChart({
   // readable; min 2px so very long tours don't collapse.
   const barW = Math.min(10, Math.max(2, slot * 0.6));
 
+  // Sprint 7 §1.D — decide which phase boundary text labels to
+  // render. Labels collide when phases are tightly spaced (short
+  // tours); we drop a label whose x is within 56px (viewBox
+  // units) of the previous drawn one. The vertical line itself
+  // is always drawn — it's narrow enough not to overlap visually.
+  // The decision logic lives in computeLabelVisibility (file-
+  // scope, below) so the running `lastX` reassignment is in a
+  // plain JS function, not inside a React render or hook body
+  // (React 19's compiler rejects in-render variable reassignment).
+  const boundaryLabelVisibility = useMemo<boolean[]>(
+    () =>
+      computeLabelVisibility(
+        phaseBoundaries,
+        buckets,
+        PADDING_X,
+        slot,
+      ),
+    [phaseBoundaries, buckets, slot],
+  );
+
   return (
     <div
       className="flex flex-col gap-4 rounded-xl border p-4"
@@ -170,11 +215,26 @@ export function BurnRateChart({
           aria-label="Daily burn rate"
           style={{ display: 'block', maxHeight: 180 }}
         >
-          {/* Phase boundary verticals */}
+          {/* Phase boundary verticals
+              Sprint 7 §1.D — labels can collide when phases are
+              close together (short tours). Truncate to 8 chars +
+              ellipsis, and skip a label whose x is within 56px
+              of the previous drawn label. The vertical line is
+              still drawn (it's narrow, doesn't overlap); only
+              the text label is suppressed for the colliding
+              boundary. The visibility decisions are computed in
+              boundaryLabelVisibility (useMemo above) so the
+              loop's running lastX doesn't mutate during render
+              (React 19 compiler restriction). */}
           {phaseBoundaries.map((p, i) => {
             const idx = buckets.findIndex((b) => b.key >= p.startIso);
             if (idx < 0 || buckets.length === 0) return null;
             const x = PADDING_X + idx * slot;
+            const showLabel = boundaryLabelVisibility[i] ?? false;
+            const truncated =
+              p.label.length > 8
+                ? `${p.label.slice(0, 8)}…`
+                : p.label;
             return (
               <g key={`boundary-${p.key}-${i}`}>
                 <line
@@ -185,15 +245,17 @@ export function BurnRateChart({
                   stroke="var(--lp-border)"
                   strokeDasharray="3 3"
                 />
-                <text
-                  x={x + 4}
-                  y={PADDING_TOP + 12}
-                  fontSize={10}
-                  fill="var(--lp-text-tertiary)"
-                  fontFamily="var(--font-sans)"
-                >
-                  {p.label.toUpperCase()}
-                </text>
+                {showLabel ? (
+                  <text
+                    x={x + 4}
+                    y={PADDING_TOP + 12}
+                    fontSize={10}
+                    fill="var(--lp-text-tertiary)"
+                    fontFamily="var(--font-sans)"
+                  >
+                    {truncated.toUpperCase()}
+                  </text>
+                ) : null}
               </g>
             );
           })}
