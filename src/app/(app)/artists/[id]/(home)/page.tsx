@@ -26,7 +26,6 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { getHomeData } from '@/server/home/getHomeData';
-import { ProductShell } from '@/components/shell-v2';
 import { ArtistHero } from '@/components/artists/ArtistHero';
 import { ArtistProductCards } from '@/components/artists/ArtistProductCards';
 import { ArtistHomeStagger } from '@/components/artists/ArtistHomeStagger';
@@ -135,13 +134,7 @@ export default async function ArtistHomePage({
   const recentTourId = tours[0]?.id ?? null;
 
   return (
-    <ProductShell
-      active="home"
-      artistId={artist.id}
-      productName="Home"
-      homeHref={`/artists/${artist.id}`}
-    >
-      <ArtistHomeStagger>
+    <ArtistHomeStagger>
         {/* Hero — full-width banner + logo + identity strip. */}
         <ArtistHero
           artistId={artist.id}
@@ -235,7 +228,6 @@ export default async function ArtistHomePage({
           <RecentActivityTable rows={recentActivity.slice(0, 5)} />
         </div>
       </ArtistHomeStagger>
-    </ProductShell>
   );
 }
 

@@ -22,10 +22,6 @@
 import { notFound } from 'next/navigation';
 import type { Metadata } from 'next';
 
-import { ProductShell } from '@/components/shell-v2';
-import { TourHeader } from '@/components/shell-v2/TourHeader';
-import { formatTourKeyStat } from '@/components/shell-v2/tour-key-stat';
-import { resolveArtistLogoUrl } from '@/lib/artists/imageUrl';
 import { MobileBudgetBanner } from '@/components/mobile/MobileBudgetBanner';
 import { BudgetPhaseStripClient } from '@/components/budget/BudgetPhaseStripClient';
 import { BudgetStatsStrip } from '@/components/budget/BudgetStatsStrip';
@@ -104,7 +100,7 @@ export default async function BudgetTourPage({
     notFound();
   }
 
-  const [phases, panelData, lineItemsRes, routingRes, artistRes] = await Promise.all([
+  const [phases, panelData, lineItemsRes, routingRes] = await Promise.all([
     computeTourPhases(supabase, tourId),
     getBudgetPanelData(supabase, tourId),
     supabase
@@ -117,14 +113,6 @@ export default async function BudgetTourPage({
       .order('category')
       .order('order_index', { ascending: true }),
     supabase.from('routing').select('id, date').eq('tour_id', tourId),
-    // Sprint 7 §3 — artist row needed for the new <TourHeader>.
-    tour.artist_id
-      ? supabase
-          .from('artists')
-          .select('id, name, branding, spotify_id, spotify_image_url')
-          .eq('id', tour.artist_id as string)
-          .maybeSingle()
-      : Promise.resolve({ data: null }),
   ]);
 
   const phaseBoundaries = phases.map((p) => ({
@@ -142,62 +130,8 @@ export default async function BudgetTourPage({
     if (r.id && r.date) routingDateById[r.id] = r.date.slice(0, 10);
   }
 
-  // Sprint 7 §3 — TourHeader data prep.
-  const artistRow = artistRes.data as {
-    id: string;
-    name: string;
-    branding: unknown;
-    spotify_id: string | null;
-    spotify_image_url: string | null;
-  } | null;
-  const artistLogoUrl = artistRow
-    ? await resolveArtistLogoUrl(artistRow)
-    : null;
-  const showCount = Array.isArray(routingRes.data)
-    ? routingRes.data.length
-    : 0;
-  // Budget total + spent percent — sum the line items'
-  // proposed_cost (the budget number) and actual_cost (spent
-  // so far). Both are numeric in the schema; null-coalesce to
-  // 0 for safety.
-  const budgetTotal = lines.reduce(
-    (sum, l) => sum + (Number(l.proposed_cost) || 0),
-    0,
-  );
-  const spentTotal = lines.reduce(
-    (sum, l) => sum + (Number(l.actual_cost) || 0),
-    0,
-  );
-  const spentPercent =
-    budgetTotal > 0 ? (spentTotal / budgetTotal) * 100 : null;
-
   return (
-    <ProductShell
-      active="budget"
-      artistId={(tour.artist_id as string | null) ?? null}
-      tourId={tourId}
-      productName="Budget"
-      currentTourKeyStat={formatTourKeyStat('budget', { spentPercent })}
-    >
-      {artistRow ? (
-        <TourHeader
-          artistId={artistRow.id}
-          artistName={artistRow.name}
-          artistLogoUrl={artistLogoUrl}
-          tourId={tourId}
-          tourName={(tour.name as string | null) ?? 'Tour'}
-          startDate={(tour.start_date as string | null) ?? null}
-          endDate={(tour.end_date as string | null) ?? null}
-          product="budget"
-          stats={{
-            showCount,
-            budgetTotal,
-            budgetCurrency: tourCurrency,
-            spentPercent,
-          }}
-        />
-      ) : null}
-      <div className="flex min-h-0 flex-1 flex-col pb-24">
+    <div className="flex min-h-0 flex-1 flex-col pb-24">
         <BudgetStatsStrip lines={lines} tourCurrency={tourCurrency} />
         <BudgetPhaseStripClient phases={phases} />
         <BudgetTabNav active={tab} />
@@ -268,7 +202,6 @@ export default async function BudgetTourPage({
         </div>
 
         <MobileBudgetBanner />
-      </div>
-    </ProductShell>
+    </div>
   );
 }

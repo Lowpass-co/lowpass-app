@@ -29,10 +29,6 @@
 
 import { notFound } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
-import { ProductShell } from '@/components/shell-v2';
-import { TourHeader } from '@/components/shell-v2/TourHeader';
-import { formatTourKeyStat } from '@/components/shell-v2/tour-key-stat';
-import { resolveArtistLogoUrl } from '@/lib/artists/imageUrl';
 import { AdvanceShowReadView } from '@/components/advance/AdvanceShowReadView';
 import { AdvanceShowHeader } from '@/components/advance/AdvanceShowHeader';
 import { AdvanceUpcomingSidebar } from '@/components/advance/AdvanceUpcomingSidebar';
@@ -91,10 +87,11 @@ export default async function AdvanceShowPage({
 
   const supabase = await createServerSupabaseClient();
 
-  // Run the four reads in parallel: routing details, tour + artist,
-  // advance instance (sections + last_updated bookkeeping), and form
-  // config name (= "template" badge in the big-header).
-  const [routingRes, tourRes, advanceRes, routingCountRes] = await Promise.all([
+  // Sprint 8.1 §2 — TourHeader hoisted to the layout, so this
+  // page only needs routing details + tour identity (for the
+  // big show-name) + the advance instance. Show count and artist
+  // are fetched in /advance/[tourId]/layout.tsx.
+  const [routingRes, tourRes, advanceRes] = await Promise.all([
     supabase
       .from('routing')
       .select(
@@ -104,9 +101,7 @@ export default async function AdvanceShowPage({
       .maybeSingle(),
     supabase
       .from('tours')
-      .select(
-        'id, name, artist_id, start_date, end_date, artist:artists(id, name, branding, spotify_id, spotify_image_url)',
-      )
+      .select('id, name')
       .eq('id', tourId)
       .maybeSingle(),
     supabase
@@ -116,13 +111,6 @@ export default async function AdvanceShowPage({
       )
       .eq('routing_id', routingId)
       .maybeSingle(),
-    // Sprint 7 §3 — show-count for the new <TourHeader>'s
-    // stats line. count: 'exact' returns the row count without
-    // hauling row data.
-    supabase
-      .from('routing')
-      .select('id', { count: 'exact', head: true })
-      .eq('tour_id', tourId),
   ]);
 
   const routing = routingRes.data as
@@ -137,29 +125,11 @@ export default async function AdvanceShowPage({
         venue_capacity: number | null;
       }
     | null;
-  type ArtistInline = {
-    id: string;
-    name: string;
-    branding: unknown;
-    spotify_id: string | null;
-    spotify_image_url: string | null;
-  };
   const tourRow = tourRes.data as
-    | {
-        id: string;
-        name: string;
-        artist_id: string | null;
-        start_date: string | null;
-        end_date: string | null;
-        artist: ArtistInline | ArtistInline[] | null;
-      }
+    | { id: string; name: string }
     | null;
 
   if (!tourRow) notFound();
-
-  const artistRow = Array.isArray(tourRow.artist)
-    ? tourRow.artist[0]
-    : tourRow.artist;
 
   // Resolve "last edited by" → display name + the form config name.
   type AdvanceRow = {
@@ -283,53 +253,8 @@ export default async function AdvanceShowPage({
     label: s.label,
   }));
 
-  // Sprint 7 §3 — resolve artist logo for the new <TourHeader>.
-  const artistLogoUrl = artistRow
-    ? await resolveArtistLogoUrl(artistRow)
-    : null;
-
   return (
-    <ProductShell
-      active="advance"
-      artistId={tourRow.artist_id ?? artistRow?.id ?? null}
-      tourId={tourRow.id}
-      productName="Advance"
-      currentTourKeyStat={formatTourKeyStat('advance', {
-        advanceCompletePercent:
-          sectionsTotal > 0
-            ? (sectionsComplete / sectionsTotal) * 100
-            : null,
-      })}
-    >
-      {/* Sprint 7 §3 — <TourHeader> on every product surface. */}
-      {artistRow ? (
-        <TourHeader
-          artistId={artistRow.id}
-          artistName={artistRow.name}
-          artistLogoUrl={artistLogoUrl}
-          tourId={tourRow.id}
-          tourName={tourRow.name}
-          startDate={tourRow.start_date}
-          endDate={tourRow.end_date}
-          product="advance"
-          stats={{
-            showCount: routingCountRes.count ?? null,
-            advanceCompletePercent:
-              sectionsTotal > 0
-                ? (sectionsComplete / sectionsTotal) * 100
-                : null,
-            advancePendingCount: pendingSectionsCount,
-          }}
-        />
-      ) : null}
-      {/* Hotfix 3 §3 — AdvanceSubHeader retired. The Show / Template
-          Builder toggle and Duplicate / Print / Export PDF actions
-          moved into TemplateMetaBar (which sits inside the inner
-          <main overflow-y-auto> scroll context, so it tracks the
-          canvas — the previous outer-anchored sticky drifted out
-          of sync). Read mode never mounted the sub-header post-v2;
-          builder mode no longer needs it either. */}
-      <div className="flex min-h-0 flex-1">
+    <div className="flex min-h-0 flex-1">
         <AdvanceUpcomingSidebar
           tourId={tourId}
           tourName={tourRow.name ?? 'Tour'}
@@ -399,7 +324,6 @@ export default async function AdvanceShowPage({
             />
           </>
         )}
-      </div>
-    </ProductShell>
+    </div>
   );
 }
