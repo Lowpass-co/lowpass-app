@@ -495,19 +495,23 @@ export function ArtistTourSwitcher({
         data-active={open || undefined}
         className="lp-ats-trigger btn-transition flex min-w-0 items-center"
         style={{
-          gap: 'var(--lp-space-3)',
+          gap: 'var(--lp-space-2)',
           padding: 'var(--lp-space-2) var(--lp-space-3)',
-          minHeight: 56,
+          // Sprint 6.2 §3 — 36px chip-style trigger. The Sprint 6.1
+          // two-row 56px design overflowed the 48px ProductHeader.
+          // Single row keeps the trigger inside the bar.
+          height: 36,
           maxWidth: 380,
+          fontSize: 'var(--lp-text-base)',
+          fontWeight: 'var(--lp-weight-medium)',
           color: triggerEmpty
             ? 'var(--lp-text-secondary)'
             : 'var(--lp-text)',
           background: open ? 'var(--lp-panel-hover)' : 'var(--lp-panel)',
-          // Sprint 6.1 §4 — 1px border on three sides; the LEFT
-          // border becomes a 2px orange accent when the dropdown
-          // is open. Adjusting just the colour + width on the
-          // single border edge keeps the trigger from layout-
-          // shifting between rest and active states.
+          // 1px border, with a 2px orange left-edge when the
+          // dropdown is open. Toggling just the colour + width on
+          // the single edge keeps the trigger from layout-shifting
+          // between rest and active states.
           border: '1px solid var(--lp-border-strong)',
           borderLeft: open
             ? '2px solid var(--color-lp-orange)'
@@ -525,14 +529,13 @@ export function ArtistTourSwitcher({
             : 'var(--lp-panel)';
         }}
       >
-        {/* Sprint 6.1 §4 — 40px avatar slot. Image / initials chip
-            for selected artist; dashed-border User placeholder for
-            the no-artist empty state. */}
+        {/* 24px avatar slot — image / initials chip for selected
+            artist; dashed-border User placeholder for the no-artist
+            empty state. */}
         {triggerArtist ? (
           <ArtistAvatar
             imageUrl={pickArtistImage(triggerArtist)}
             name={triggerArtist.name}
-            size={40}
           />
         ) : (
           <span
@@ -541,8 +544,8 @@ export function ArtistTourSwitcher({
               display: 'inline-flex',
               alignItems: 'center',
               justifyContent: 'center',
-              width: 40,
-              height: 40,
+              width: 24,
+              height: 24,
               borderRadius: 'var(--lp-radius-full)',
               background: 'var(--lp-bg-deep)',
               border: '1px dashed var(--lp-border-strong)',
@@ -550,63 +553,83 @@ export function ArtistTourSwitcher({
               flexShrink: 0,
             }}
           >
-            <User size={18} strokeWidth={2} />
+            <User size={14} strokeWidth={2} />
           </span>
         )}
 
-        {/* Two-row label block. Row 1 (15px medium): artist name.
-            Row 2 (13px regular, secondary): tour name (or "Pick a
-            tour…", tertiary). Empty-state collapses to single row. */}
+        {/* Single-row label: "Artist · Tour" with a centred-dot
+            separator. Empty states collapse to "Pick an artist…"
+            or "Artist · Pick a tour…". */}
         <span
-          className="flex min-w-0 flex-1 flex-col"
-          style={{ gap: 2 }}
+          className="min-w-0 flex-1 truncate"
+          style={{ textAlign: 'left' }}
         >
           {triggerEmpty ? (
-            <span
-              className="truncate"
-              style={{
-                fontSize: 'var(--lp-text-md)',
-                fontWeight: 'var(--lp-weight-medium)',
-                color: 'var(--lp-text-secondary)',
-              }}
-            >
-              Pick an artist…
-            </span>
-          ) : (
+            'Pick an artist…'
+          ) : tourEmpty ? (
             <>
               <span
-                className="truncate"
                 style={{
-                  fontSize: 'var(--lp-text-md)',
-                  fontWeight: 'var(--lp-weight-medium)',
                   color: 'var(--lp-text)',
-                  lineHeight: 'var(--lp-leading-tight)',
+                  fontWeight: 'var(--lp-weight-medium)',
                 }}
               >
                 {displayArtistName}
               </span>
               <span
-                className="truncate"
+                aria-hidden
                 style={{
-                  fontSize: 'var(--lp-text-sm)',
-                  fontWeight: 'var(--lp-weight-regular)',
-                  color: tourEmpty
-                    ? 'var(--lp-text-tertiary)'
-                    : 'var(--lp-text-secondary)',
-                  lineHeight: 'var(--lp-leading-tight)',
+                  margin: '0 var(--lp-space-2)',
+                  color: 'var(--lp-text-tertiary)',
                 }}
               >
-                {tourEmpty ? 'Pick a tour…' : displayTourName}
+                ·
+              </span>
+              <span
+                style={{
+                  color: 'var(--lp-text-tertiary)',
+                  fontWeight: 'var(--lp-weight-regular)',
+                }}
+              >
+                Pick a tour…
+              </span>
+            </>
+          ) : (
+            <>
+              <span
+                style={{
+                  color: 'var(--lp-text)',
+                  fontWeight: 'var(--lp-weight-medium)',
+                }}
+              >
+                {displayArtistName}
+              </span>
+              <span
+                aria-hidden
+                style={{
+                  margin: '0 var(--lp-space-2)',
+                  color: 'var(--lp-text-tertiary)',
+                }}
+              >
+                ·
+              </span>
+              <span
+                style={{
+                  color: 'var(--lp-text-secondary)',
+                  fontWeight: 'var(--lp-weight-regular)',
+                }}
+              >
+                {displayTourName}
               </span>
             </>
           )}
         </span>
 
-        {/* Trailing chevron — flips up when open. */}
+        {/* Trailing chevron — 12px, proportionate to the 36px chip. */}
         {open ? (
           <ChevronUp
             aria-hidden
-            size={14}
+            size={12}
             strokeWidth={2}
             style={{
               color: 'var(--lp-text-tertiary)',
@@ -616,7 +639,7 @@ export function ArtistTourSwitcher({
         ) : (
           <ChevronDown
             aria-hidden
-            size={14}
+            size={12}
             strokeWidth={2}
             style={{
               color: 'var(--lp-text-tertiary)',
@@ -1315,27 +1338,21 @@ function CloseChevron({
 function ArtistAvatar({
   imageUrl,
   name,
-  size = 24,
 }: {
   imageUrl: string | null;
   name: string;
-  /** Sprint 6.1 §4 — 24 for dropdown rows, 40 for the trigger. */
-  size?: 24 | 40;
 }) {
-  // Initials font scales with avatar size — 11px for 24, 14px for 40.
-  const initialsFontSize =
-    size === 40 ? 'var(--lp-text-base)' : 'var(--lp-text-2xs)';
   if (imageUrl) {
     return (
       // eslint-disable-next-line @next/next/no-img-element
       <img
         src={imageUrl}
         alt=""
-        width={size}
-        height={size}
+        width={24}
+        height={24}
         style={{
-          width: size,
-          height: size,
+          width: 24,
+          height: 24,
           borderRadius: 'var(--lp-radius-full)',
           objectFit: 'cover',
           flexShrink: 0,
@@ -1351,12 +1368,12 @@ function ArtistAvatar({
         display: 'inline-flex',
         alignItems: 'center',
         justifyContent: 'center',
-        width: size,
-        height: size,
+        width: 24,
+        height: 24,
         borderRadius: 'var(--lp-radius-full)',
         background: 'var(--color-lp-orange)',
         color: 'var(--lp-text-inverse)',
-        fontSize: initialsFontSize,
+        fontSize: 'var(--lp-text-2xs)',
         fontWeight: 'var(--lp-weight-bold)',
         flexShrink: 0,
       }}
