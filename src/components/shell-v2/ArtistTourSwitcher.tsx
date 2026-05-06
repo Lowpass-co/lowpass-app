@@ -365,6 +365,21 @@ export function ArtistTourSwitcher({
     };
   }, []);
 
+  // Sprint 7 §1.A — close the dropdown on any path change.
+  // The wrapper persists across same-product navigation in
+  // Next 16 (ProductHeader stays mounted), so dropdownState
+  // can carry over from the previous page. Browser back/fwd
+  // would otherwise reopen the panel on the destination page
+  // because state was left mid-transition. Hard-close on path
+  // change; queueMicrotask defers the setState past the
+  // current render to satisfy react-hooks/set-state-in-effect.
+  useEffect(() => {
+    queueMicrotask(() => {
+      setDropdownState('closed');
+      setExitingPane(null);
+    });
+  }, [pathname]);
+
   /* -------- Esc + click-outside -------- */
   useEffect(() => {
     if (!open) return;
@@ -508,14 +523,15 @@ export function ArtistTourSwitcher({
             ? 'var(--lp-text-secondary)'
             : 'var(--lp-text)',
           background: open ? 'var(--lp-panel-hover)' : 'var(--lp-panel)',
-          // 1px border, with a 2px orange left-edge when the
-          // dropdown is open. Toggling just the colour + width on
-          // the single edge keeps the trigger from layout-shifting
-          // between rest and active states.
+          // Sprint 7 §1.C — orange accent applied via inset
+          // box-shadow instead of a 2px border-left. The 1px↔2px
+          // border swap shifted contents by 1px on open (Adam's
+          // smoke "1px jiggle"); inset shadow paints inside the
+          // border-box without affecting layout.
           border: '1px solid var(--lp-border-strong)',
-          borderLeft: open
-            ? '2px solid var(--color-lp-orange)'
-            : '1px solid var(--lp-border-strong)',
+          boxShadow: open
+            ? 'inset 2px 0 0 var(--color-lp-orange)'
+            : undefined,
           borderRadius: 'var(--lp-radius-md)',
           cursor: 'pointer',
           textAlign: 'left',
