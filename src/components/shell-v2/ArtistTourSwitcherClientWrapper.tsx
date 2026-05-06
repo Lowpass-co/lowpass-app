@@ -26,6 +26,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 import { ArtistTourSwitcher } from './ArtistTourSwitcher';
 import { TourCreateSlideOver } from './TourCreateSlideOver';
 import { useArtistTourContext } from '@/contexts/ArtistTourContext';
@@ -59,6 +60,8 @@ export function ArtistTourSwitcherClientWrapper({
   initialArtistId,
 }: ArtistTourSwitcherClientWrapperProps) {
   const { selectedArtistId } = useArtistTourContext();
+  const router = useRouter();
+  const pathname = usePathname();
   const [isCreateTourOpen, setIsCreateTourOpen] = useState(false);
 
   // Tours list — owned here so:
@@ -137,16 +140,47 @@ export function ArtistTourSwitcherClientWrapper({
     fetchToursForArtist(selectedArtistId);
   }, [selectedArtistId, fetchToursForArtist]);
 
-  const handleTourCreated = useCallback((tour: TourMin) => {
-    // Optimistic prepend. The new tour is always for the
-    // currently-selected artist (the slide-over uses
-    // selectedArtistId as the artist_id), so adding it here is
-    // the right place. Edge case noted for a future sprint:
-    // a stale slide-over closure could in theory POST for
-    // artist A while the user has already switched to artist
-    // B; the response would land in B's list. Defer.
-    setTours((prev) => [tour, ...prev]);
-  }, []);
+  const handleTourCreated = useCallback(
+    (tour: TourMin) => {
+      // Optimistic prepend so the new tour appears in the
+      // switcher's tours pane immediately. Edge case noted for
+      // a future sprint: a stale slide-over closure could in
+      // theory POST for artist A while the user has already
+      // switched to artist B; the response would land in B's
+      // list. Defer.
+      setTours((prev) => [tour, ...prev]);
+
+      // Sprint 6.2 §4 — navigate to the new tour's surface so
+      // the page actually reflects the new selection. Without
+      // this, the slide-over would close but the page would
+      // stay on the previous tour (or artist home), and the
+      // user would have to manually click the new tour in the
+      // switcher to navigate. Adam's smoke: "PASS - but could
+      // only select the tour in the picker after refresh."
+      //
+      // Mirrors the product-match logic in handleTourClick.
+      // Path-aware hydration on the new URL handles the
+      // selectedTourId state update — no explicit setter call
+      // needed (the slide-over previously called
+      // setSelectedTourId which fired a syncUrlParams
+      // router.replace racing the navigation; that's been
+      // removed in this sprint too).
+      const productMatch = pathname?.match(
+        /^\/(budget|advance|operations)\//,
+      );
+      if (productMatch) {
+        router.push(`/${productMatch[1]}/${tour.id}`);
+        return;
+      }
+      if (pathname?.startsWith('/artists/')) {
+        router.push(`/budget/${tour.id}`);
+        return;
+      }
+      // Other paths — keep the new tour in the list, no forced
+      // navigation. User can pick it from the switcher.
+    },
+    [pathname, router],
+  );
 
   return (
     <>
