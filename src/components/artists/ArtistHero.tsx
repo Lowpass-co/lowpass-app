@@ -91,8 +91,14 @@ export function ArtistHero({
             aria-hidden
             className="absolute inset-0"
             style={{
-              backdropFilter: 'blur(2px) brightness(0.85)',
-              WebkitBackdropFilter: 'blur(2px) brightness(0.85)',
+              // Sprint 8 §1 — bumped from blur(2px) brightness(0.85)
+              // to blur(12px) brightness(0.7). Spotify images are
+              // ~640px native; scaling to a 1400px-wide banner
+              // pixelated noticeably with the lighter blur. 12px
+              // masks the upscale; 0.7 brightness keeps the
+              // overlay text readable.
+              backdropFilter: 'blur(12px) brightness(0.7)',
+              WebkitBackdropFilter: 'blur(12px) brightness(0.7)',
             }}
           />
         ) : null}
