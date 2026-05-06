@@ -25,10 +25,11 @@
 
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { ArtistTourSwitcher } from './ArtistTourSwitcher';
 import { TourCreateSlideOver } from './TourCreateSlideOver';
+import { ArtistCreateSlideOver } from './ArtistCreateSlideOver';
 import { useArtistTourContext } from '@/contexts/ArtistTourContext';
 
 type ArtistMin = {
@@ -63,6 +64,15 @@ export function ArtistTourSwitcherClientWrapper({
   const router = useRouter();
   const pathname = usePathname();
   const [isCreateTourOpen, setIsCreateTourOpen] = useState(false);
+  // Sprint 8 §5 — artist creation slide-over state, parallel
+  // to the tour creation state above.
+  const [isCreateArtistOpen, setIsCreateArtistOpen] = useState(false);
+  // Local optimistic-prepend list of newly-created artists. The
+  // ArtistTourContext fetches its own artists list on mount; we
+  // prepend to a local override here so newly-created artists
+  // appear in the switcher immediately, ahead of the next
+  // context refetch.
+  const [createdArtists, setCreatedArtists] = useState<ArtistMin[]>([]);
 
   // Tours list — owned here so:
   //   1) the slide-over can optimistically prepend a newly-created
@@ -200,18 +210,56 @@ export function ArtistTourSwitcherClientWrapper({
     [pathname, router],
   );
 
+  // Sprint 8 §5 — artist creation success path. Prepend the new
+  // artist to local state so the switcher's artists pane shows
+  // it immediately, then navigate to its workspace surface so
+  // the user lands on the new artist.
+  const handleArtistCreated = useCallback(
+    (artist: ArtistMin) => {
+      setCreatedArtists((prev) => [artist, ...prev]);
+      router.push(`/artists/${artist.id}`);
+    },
+    [router],
+  );
+
+  // Merge: optimistic creates first, then the server-fetched
+  // list (de-duped by id). Keeps newly-created artists at the
+  // top of the switcher's pane until the next page-level refetch.
+  const mergedArtists = useMemo<ArtistMin[]>(() => {
+    if (createdArtists.length === 0) return initialArtists;
+    const seen = new Set(createdArtists.map((a) => a.id));
+    return [
+      ...createdArtists,
+      ...initialArtists.filter((a) => !seen.has(a.id)),
+    ];
+  }, [createdArtists, initialArtists]);
+
+  // Lean projection for the tour slide-over's artist picker
+  // fallback — only id+name needed.
+  const tourArtistOptions = useMemo(
+    () => mergedArtists.map((a) => ({ id: a.id, name: a.name })),
+    [mergedArtists],
+  );
+
   return (
     <>
       <ArtistTourSwitcher
-        initialArtists={initialArtists}
+        initialArtists={mergedArtists}
         tours={tours}
         toursLoading={toursLoading}
         onCreateTour={() => setIsCreateTourOpen(true)}
+        onCreateArtist={() => setIsCreateArtistOpen(true)}
       />
       <TourCreateSlideOver
         open={isCreateTourOpen}
         onClose={() => setIsCreateTourOpen(false)}
+        artists={tourArtistOptions}
         onCreated={handleTourCreated}
+      />
+      <ArtistCreateSlideOver
+        open={isCreateArtistOpen}
+        onClose={() => setIsCreateArtistOpen(false)}
+        onCreated={handleArtistCreated}
       />
     </>
   );

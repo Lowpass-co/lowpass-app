@@ -1,18 +1,24 @@
 /* ============================================
-   LOWPASS — Sprint 5 §3 — <TourCreateSlideOver>
+   LOWPASS — Sprint 5 §3 / Sprint 8 §5 — <TourCreateSlideOver>
 
-   In-context quick-create flow for a new tour, opened from the
+   In-context create flow for a new tour, opened from the
    "+ Create new tour" CTA in <ArtistTourSwitcher>. Posts to the
-   existing /api/tours route (no new API surface). Required fields
-   per the schema: name, artist_id, start_date, end_date. Currency
-   defaults to GBP. continent / counts use the API's defaults
-   (UK / 0).
+   existing /api/tours route.
 
-   On success: closes, re-selects the new tour via context (URL +
-   localStorage sync flow inherits Sprint 4 hydration).
+   Sprint 8 §5 expansion: full field set mirroring TourWizard.
+   Adam's intent — slide-overs become the canonical creation
+   UX, the legacy /tours/create page becomes a fallback for
+   any deep-linked bookmarks. Fields:
 
-   The full-page <TourWizard> stays for the all-fields creation
-   flow; this slide-over is the quick path.
+     - artist (auto from selectedArtistId, falls back to picker)
+     - name (required)
+     - start_date / end_date (required, end >= start)
+     - continent (single-select, defaults UK; matches schema)
+     - currency (default GBP)
+     - personnel: principal / band / crew counts (default 0)
+
+   On success: optimistic prepend via onCreated, navigate via
+   wrapper, toast.
    ============================================ */
 
 'use client';
@@ -27,14 +33,39 @@ import {
   DEFAULT_TOUR_CURRENCY,
 } from '@/lib/currencies';
 
+/** Continents matching the schema's TEXT enum — see
+ *  src/types/index.ts Continent type. Single-select per Sprint 8
+ *  §5 sign-off (schema is single-continent; the wizard's multi-
+ *  select stored only the first one anyway). */
+const CONTINENT_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
+  { value: 'UK', label: 'UK' },
+  { value: 'EU', label: 'EU' },
+  { value: 'US', label: 'US' },
+  { value: 'AUS', label: 'AUS' },
+  { value: 'ASIA', label: 'ASIA' },
+  { value: 'GLOBAL', label: 'Global' },
+  { value: 'OTHER', label: 'Other' },
+] as const;
+
+interface ArtistOption {
+  id: string;
+  name: string;
+}
+
 interface TourCreateSlideOverProps {
   open: boolean;
   onClose: () => void;
-  /** Artist this tour belongs to. Required by the API. Default
-   *  comes from ArtistTourContext (currently selected artist).
-   *  If both are null, the form surfaces a "pick an artist first"
-   *  state — no insert is attempted. */
+  /** Artist this tour belongs to. Default comes from
+   *  ArtistTourContext (currently selected artist). When null,
+   *  the form renders an artist <select> populated from
+   *  workspace artists. */
   artistId?: string | null;
+  /** Sprint 8 §5 — workspace artists for the picker fallback
+   *  when no context artist is set. The wrapper passes the
+   *  same list it already maintains for the switcher's artists
+   *  pane. Empty array = no artists yet → form surfaces the
+   *  "create an artist first" state. */
+  artists?: ArtistOption[];
   /** Sprint 6 §2 sub-bug C — fired with the freshly-created
    *  tour's lean projection so the wrapper can optimistically
    *  prepend it to the switcher's tour list. Without this the
@@ -63,27 +94,23 @@ export function TourCreateSlideOver({
   open,
   onClose,
   artistId,
+  artists,
   onCreated,
 }: TourCreateSlideOverProps) {
   const { showToast } = useToast();
   const { selectedArtistId } = useArtistTourContext();
-  const effectiveArtistId = artistId ?? selectedArtistId ?? null;
+  const contextArtistId = artistId ?? selectedArtistId ?? null;
 
   const formId = useId();
   const today = useMemo(() => todayIsoDate(), []);
 
-  /* -------- form state -------- */
-  // Re-mount the form-state when `open` flips false→true by keying
-  // a sub-component on `open`. That gives us per-open state reset
-  // without the react-hooks/set-state-in-effect violation that a
-  // useEffect-based reset would trip. While `open === false` we
-  // render no form, so its state is naturally GC'd.
   return (
     <TourCreateSlideOverInner
       key={open ? 'open' : 'closed'}
       open={open}
       onClose={onClose}
-      effectiveArtistId={effectiveArtistId}
+      contextArtistId={contextArtistId}
+      artists={artists ?? []}
       formId={formId}
       today={today}
       showToast={showToast}
@@ -95,7 +122,10 @@ export function TourCreateSlideOver({
 interface InnerProps {
   open: boolean;
   onClose: () => void;
-  effectiveArtistId: string | null;
+  /** Artist id pre-selected from context, if any. When null the
+   *  form lets the user pick from `artists`. */
+  contextArtistId: string | null;
+  artists: ArtistOption[];
   formId: string;
   today: string;
   showToast: ReturnType<typeof useToast>['showToast'];
@@ -105,7 +135,8 @@ interface InnerProps {
 function TourCreateSlideOverInner({
   open,
   onClose,
-  effectiveArtistId,
+  contextArtistId,
+  artists,
   formId,
   today,
   showToast,
@@ -115,11 +146,35 @@ function TourCreateSlideOverInner({
   const [startDate, setStartDate] = useState(today);
   const [endDate, setEndDate] = useState(today);
   const [currency, setCurrency] = useState<string>(DEFAULT_TOUR_CURRENCY);
+  const [continent, setContinent] = useState<string>('UK');
+  const [principalCount, setPrincipalCount] = useState('0');
+  const [bandCount, setBandCount] = useState('0');
+  const [crewCount, setCrewCount] = useState('0');
+  // When no context artist, user must pick from the workspace
+  // artists list. Initial value is the first artist in the list
+  // so the form has a valid default; falls back to '' when the
+  // workspace has zero artists.
+  const [pickedArtistId, setPickedArtistId] = useState<string>(
+    () => contextArtistId ?? artists[0]?.id ?? '',
+  );
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Effective artist for submit + display. Context wins if set,
+  // otherwise the picker value.
+  const effectiveArtistId = contextArtistId ?? pickedArtistId ?? null;
+  const effectiveArtistName = useMemo(() => {
+    if (!effectiveArtistId) return null;
+    return (
+      artists.find((a) => a.id === effectiveArtistId)?.name ?? null
+    );
+  }, [artists, effectiveArtistId]);
+
   const trimmedName = name.trim();
   const datesValid = !!startDate && !!endDate && startDate <= endDate;
+  const principalNum = Math.max(0, parseInt(principalCount, 10) || 0);
+  const bandNum = Math.max(0, parseInt(bandCount, 10) || 0);
+  const crewNum = Math.max(0, parseInt(crewCount, 10) || 0);
   const canSubmit =
     !!effectiveArtistId &&
     !!trimmedName &&
@@ -142,7 +197,11 @@ function TourCreateSlideOverInner({
           start_date: startDate,
           end_date: endDate,
           currency,
-          // continent + counts left to API defaults (UK / 0).
+          // Sprint 8 §5 — full field set, mirroring TourWizard.
+          continent,
+          principal_count: principalNum,
+          band_count: bandNum,
+          crew_count: crewNum,
         }),
       });
       // The existing /api/tours POST returns the inserted row
@@ -212,7 +271,9 @@ function TourCreateSlideOverInner({
                   color: 'var(--color-lp-error)',
                 }}
               >
-                Pick an artist first.
+                {artists.length === 0
+                  ? 'No artists yet. Create an artist first.'
+                  : 'Pick an artist below.'}
               </span>
             )
       }
@@ -291,7 +352,43 @@ function TourCreateSlideOverInner({
           </div>
         ) : null}
 
-        <Field label="Name" htmlFor={`${formId}-name`} required>
+        {/* Artist — context-locked or picker fallback. */}
+        <Field label="Artist" htmlFor={`${formId}-artist`} required>
+          {contextArtistId && effectiveArtistName ? (
+            <div
+              id={`${formId}-artist`}
+              style={{
+                ...inputStyle(),
+                color: 'var(--lp-text-secondary)',
+                background: 'var(--lp-panel)',
+                cursor: 'not-allowed',
+              }}
+            >
+              {effectiveArtistName}
+            </div>
+          ) : (
+            <select
+              id={`${formId}-artist`}
+              value={pickedArtistId}
+              onChange={(e) => setPickedArtistId(e.target.value)}
+              required
+              disabled={artists.length === 0}
+              style={inputStyle()}
+            >
+              {artists.length === 0 ? (
+                <option value="">No artists yet</option>
+              ) : (
+                artists.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                  </option>
+                ))
+              )}
+            </select>
+          )}
+        </Field>
+
+        <Field label="Tour name" htmlFor={`${formId}-name`} required>
           <input
             id={`${formId}-name`}
             type="text"
@@ -345,20 +442,97 @@ function TourCreateSlideOverInner({
           </div>
         ) : null}
 
-        <Field label="Currency" htmlFor={`${formId}-currency`}>
-          <select
-            id={`${formId}-currency`}
-            value={currency}
-            onChange={(e) => setCurrency(e.target.value)}
-            style={inputStyle()}
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap: 'var(--lp-space-3)',
+          }}
+        >
+          <Field label="Continent" htmlFor={`${formId}-continent`} required>
+            <select
+              id={`${formId}-continent`}
+              value={continent}
+              onChange={(e) => setContinent(e.target.value)}
+              required
+              style={inputStyle()}
+            >
+              {CONTINENT_OPTIONS.map((c) => (
+                <option key={c.value} value={c.value}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Currency" htmlFor={`${formId}-currency`}>
+            <select
+              id={`${formId}-currency`}
+              value={currency}
+              onChange={(e) => setCurrency(e.target.value)}
+              style={inputStyle()}
+            >
+              {TOUR_CURRENCIES.map((c) => (
+                <option key={c.value} value={c.value}>
+                  {c.label}
+                </option>
+              ))}
+            </select>
+          </Field>
+        </div>
+
+        {/* Personnel triplet — Sprint 8 §5 expansion. All default
+            0; HTML <input min={0}> nudges users away from negatives,
+            but submission also clamps via Math.max. */}
+        <div>
+          <span
+            className="lp-label-caps"
+            style={{
+              display: 'block',
+              color: 'var(--lp-text-secondary)',
+              marginBottom: 'var(--lp-space-1)',
+            }}
           >
-            {TOUR_CURRENCIES.map((c) => (
-              <option key={c.value} value={c.value}>
-                {c.label}
-              </option>
-            ))}
-          </select>
-        </Field>
+            Personnel
+          </span>
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 1fr 1fr',
+              gap: 'var(--lp-space-3)',
+            }}
+          >
+            <Field label="Principal" htmlFor={`${formId}-principal`}>
+              <input
+                id={`${formId}-principal`}
+                type="number"
+                min={0}
+                value={principalCount}
+                onChange={(e) => setPrincipalCount(e.target.value)}
+                style={inputStyle()}
+              />
+            </Field>
+            <Field label="Band" htmlFor={`${formId}-band`}>
+              <input
+                id={`${formId}-band`}
+                type="number"
+                min={0}
+                value={bandCount}
+                onChange={(e) => setBandCount(e.target.value)}
+                style={inputStyle()}
+              />
+            </Field>
+            <Field label="Crew" htmlFor={`${formId}-crew`}>
+              <input
+                id={`${formId}-crew`}
+                type="number"
+                min={0}
+                value={crewCount}
+                onChange={(e) => setCrewCount(e.target.value)}
+                style={inputStyle()}
+              />
+            </Field>
+          </div>
+        </div>
 
         <p
           style={{
@@ -367,14 +541,14 @@ function TourCreateSlideOverInner({
             color: 'var(--lp-text-tertiary)',
           }}
         >
-          Need region, crew counts, or a new artist? Use the{' '}
+          Or use the{' '}
           <Link
             href="/tours/create"
             style={{ color: 'var(--color-lp-orange)' }}
           >
             full tour wizard
           </Link>
-          .
+          {' '}for the legacy multi-step flow.
         </p>
       </form>
     </SlideOver>
