@@ -49,9 +49,11 @@ import {
   ChevronLeft,
   Loader2,
   Plus,
+  Trash2,
   User,
 } from 'lucide-react';
 import { useArtistTourContext } from '@/contexts/ArtistTourContext';
+import { ContextMenu } from '@/components/ui/ContextMenu';
 
 /** Minimum artist shape the switcher needs. Wider than this is
  *  fine — extra fields are ignored. `branding` is unknown because
@@ -95,6 +97,10 @@ interface ArtistTourSwitcherProps {
    *  trigger's third dot-segment on tour-scoped pages. Null on
    *  non-tour pages. */
   currentTourKeyStat?: string | null;
+  /** Sprint 8.1 §5 — called when the user picks "Delete tour"
+   *  from the per-row ⋮ menu in the tours pane. The wrapper
+   *  opens <TourDeleteConfirmationModal> with the chosen tour. */
+  onDeleteTour?: (tour: { id: string; name: string }) => void;
 }
 
 /** Sprint 6.1 §3 — animations are now driven by the Web
@@ -250,6 +256,7 @@ export function ArtistTourSwitcher({
   onCreateTour,
   onCreateArtist,
   currentTourKeyStat = null,
+  onDeleteTour,
 }: ArtistTourSwitcherProps) {
   const {
     selectedArtistId,
@@ -782,6 +789,18 @@ export function ArtistTourSwitcher({
                   onBack={handleBackToArtists}
                   onClose={closeDropdown}
                   onCreateTour={onCreateTour}
+                  onDeleteTour={
+                    onDeleteTour
+                      ? (tour) => {
+                          // Sprint 8.1 §5 — close the dropdown first
+                          // so the modal owns the user's focus, then
+                          // hand off to the wrapper which mounts
+                          // <TourDeleteConfirmationModal>.
+                          closeDropdown();
+                          onDeleteTour(tour);
+                        }
+                      : undefined
+                  }
                 />
               )}
             </SwitcherPane>
@@ -1155,6 +1174,7 @@ function ToursPane({
   onBack,
   onClose,
   onCreateTour,
+  onDeleteTour,
 }: {
   artistName: string;
   yearGroups: YearGroup[];
@@ -1169,6 +1189,10 @@ function ToursPane({
   onBack: () => void;
   onClose: () => void;
   onCreateTour: () => void;
+  /** Sprint 8.1 §5 — when defined, each tour row shows a ⋮
+   *  overflow menu with a "Delete tour" item. Undefined =
+   *  no menu (read-only context). */
+  onDeleteTour?: (tour: { id: string; name: string }) => void;
 }) {
   return (
     <>
@@ -1274,73 +1298,15 @@ function ToursPane({
                   {g.year ?? 'Undated'}
                 </span>
               </div>
-              {g.tours.map((t) => {
-                const selected = t.id === selectedTourId;
-                const range = formatTourDateRange(
-                  t.start_date,
-                  t.end_date,
-                );
-                return (
-                  <button
-                    key={t.id}
-                    type="button"
-                    onClick={() => onPick(t.id)}
-                    className="btn-transition"
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'flex-start',
-                      gap: 2,
-                      width: '100%',
-                      minHeight: 44,
-                      padding:
-                        'var(--lp-space-2) var(--lp-space-2)',
-                      borderRadius: 'var(--lp-radius-sm)',
-                      background: selected
-                        ? 'var(--color-lp-orange-subtle-hover)'
-                        : 'transparent',
-                      borderLeft: selected
-                        ? '2px solid var(--color-lp-orange)'
-                        : '2px solid transparent',
-                      cursor: 'pointer',
-                      textAlign: 'left',
-                    }}
-                    onMouseEnter={(e) => {
-                      if (!selected) {
-                        e.currentTarget.style.background =
-                          'var(--lp-panel-hover)';
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (!selected) {
-                        e.currentTarget.style.background = 'transparent';
-                      }
-                    }}
-                  >
-                    <span
-                      className="truncate"
-                      style={{
-                        fontSize: 'var(--lp-text-base)',
-                        color: 'var(--lp-text)',
-                        fontWeight: 'var(--lp-weight-medium)',
-                        maxWidth: '100%',
-                      }}
-                    >
-                      {t.name}
-                    </span>
-                    {range ? (
-                      <span
-                        style={{
-                          fontSize: 'var(--lp-text-xs)',
-                          color: 'var(--lp-text-secondary)',
-                        }}
-                      >
-                        {range}
-                      </span>
-                    ) : null}
-                  </button>
-                );
-              })}
+              {g.tours.map((t) => (
+                <SwitcherTourRow
+                  key={t.id}
+                  tour={t}
+                  selected={t.id === selectedTourId}
+                  onPick={onPick}
+                  onDeleteTour={onDeleteTour}
+                />
+              ))}
             </div>
           ))
         )}
@@ -1385,6 +1351,128 @@ function ToursPane({
 /* ============================================================
    Smaller pieces
    ============================================================ */
+
+/* ============================================
+   Sprint 8.1 §5 — <SwitcherTourRow>
+
+   Tour row in the tours pane. Two-element flex layout:
+     [── click target (tour name + dates) ──][⋮ menu]
+
+   The click target is a real <button>; the ⋮ menu is a separate
+   real <button> via <ContextMenu>. They live as siblings inside
+   a flex div so neither is nested inside the other (HTML doesn't
+   permit button-in-button) — that's the rationale for the
+   refactor away from the original "whole row is a button" shape.
+
+   The outer flex div owns the hover / selected background so the
+   highlight covers BOTH the click area and the ⋮ slot, matching
+   the visual feedback users had before the refactor. The inner
+   button is transparent and inherits.
+   ============================================ */
+
+function SwitcherTourRow({
+  tour,
+  selected,
+  onPick,
+  onDeleteTour,
+}: {
+  tour: TourMin;
+  selected: boolean;
+  onPick: (id: string) => void;
+  onDeleteTour?: (tour: { id: string; name: string }) => void;
+}) {
+  const range = formatTourDateRange(tour.start_date, tour.end_date);
+  return (
+    <div
+      className="btn-transition"
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        width: '100%',
+        minHeight: 44,
+        borderRadius: 'var(--lp-radius-sm)',
+        background: selected
+          ? 'var(--color-lp-orange-subtle-hover)'
+          : 'transparent',
+        borderLeft: selected
+          ? '2px solid var(--color-lp-orange)'
+          : '2px solid transparent',
+      }}
+      onMouseEnter={(e) => {
+        if (!selected) {
+          e.currentTarget.style.background = 'var(--lp-panel-hover)';
+        }
+      }}
+      onMouseLeave={(e) => {
+        if (!selected) {
+          e.currentTarget.style.background = 'transparent';
+        }
+      }}
+    >
+      <button
+        type="button"
+        onClick={() => onPick(tour.id)}
+        style={{
+          flex: 1,
+          minWidth: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'flex-start',
+          gap: 2,
+          padding: 'var(--lp-space-2) var(--lp-space-2)',
+          background: 'transparent',
+          border: 'none',
+          cursor: 'pointer',
+          textAlign: 'left',
+        }}
+      >
+        <span
+          className="truncate"
+          style={{
+            fontSize: 'var(--lp-text-base)',
+            color: 'var(--lp-text)',
+            fontWeight: 'var(--lp-weight-medium)',
+            maxWidth: '100%',
+          }}
+        >
+          {tour.name}
+        </span>
+        {range ? (
+          <span
+            style={{
+              fontSize: 'var(--lp-text-xs)',
+              color: 'var(--lp-text-secondary)',
+            }}
+          >
+            {range}
+          </span>
+        ) : null}
+      </button>
+      {onDeleteTour ? (
+        <div
+          style={{
+            paddingRight: 'var(--lp-space-1)',
+            display: 'flex',
+            alignItems: 'center',
+          }}
+        >
+          <ContextMenu
+            items={[
+              {
+                label: 'Delete tour',
+                icon: Trash2,
+                variant: 'danger',
+                onClick: () =>
+                  onDeleteTour({ id: tour.id, name: tour.name }),
+              },
+            ]}
+            align="right"
+          />
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 function PaneHeader({
   leading,

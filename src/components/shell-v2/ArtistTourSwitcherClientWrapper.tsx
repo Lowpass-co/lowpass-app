@@ -30,6 +30,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { ArtistTourSwitcher } from './ArtistTourSwitcher';
 import { TourCreateSlideOver } from './TourCreateSlideOver';
 import { ArtistCreateSlideOver } from './ArtistCreateSlideOver';
+import { TourDeleteConfirmationModal } from './TourDeleteConfirmationModal';
 import { useArtistTourContext } from '@/contexts/ArtistTourContext';
 
 type ArtistMin = {
@@ -81,6 +82,13 @@ export function ArtistTourSwitcherClientWrapper({
   // Sprint 8 §5 — artist creation slide-over state, parallel
   // to the tour creation state above.
   const [isCreateArtistOpen, setIsCreateArtistOpen] = useState(false);
+  // Sprint 8.1 §5 — tour deletion modal state. The wrapper owns
+  // the modal so the switcher itself can stay focused on its
+  // navigation role; opens via the per-row ⋮ menu.
+  const [tourToDelete, setTourToDelete] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
   // Local optimistic-prepend list of newly-created artists. The
   // ArtistTourContext fetches its own artists list on mount; we
   // prepend to a local override here so newly-created artists
@@ -236,6 +244,28 @@ export function ArtistTourSwitcherClientWrapper({
     [router],
   );
 
+  // Sprint 8.1 §5 — tour deletion success path. Optimistically
+  // remove the deleted tour from the local list so the switcher
+  // doesn't show a stale row, then navigate the user to the
+  // artist landing (which is always a safe destination — never
+  // tour-scoped, so no broken-URL state).
+  const handleTourDeleted = useCallback(() => {
+    if (!tourToDelete) return;
+    const deletedId = tourToDelete.id;
+    setTours((prev) => prev.filter((t) => t.id !== deletedId));
+    setTourToDelete(null);
+    // Navigate away if we're currently ON the deleted tour's URL.
+    // Detect via /budget/[id], /advance/[id], /operations/[id].
+    const productMatch = pathname?.match(
+      new RegExp(`^/(budget|advance|operations)/${deletedId}(/|$)`),
+    );
+    if (productMatch && selectedArtistId) {
+      router.push(`/artists/${selectedArtistId}`);
+    } else if (productMatch) {
+      router.push('/artists');
+    }
+  }, [tourToDelete, pathname, router, selectedArtistId]);
+
   // Merge: optimistic creates first, then the server-fetched
   // list (de-duped by id). Keeps newly-created artists at the
   // top of the switcher's pane until the next page-level refetch.
@@ -264,6 +294,7 @@ export function ArtistTourSwitcherClientWrapper({
         currentTourKeyStat={currentTourKeyStat}
         onCreateTour={() => setIsCreateTourOpen(true)}
         onCreateArtist={() => setIsCreateArtistOpen(true)}
+        onDeleteTour={(tour) => setTourToDelete(tour)}
       />
       <TourCreateSlideOver
         open={isCreateTourOpen}
@@ -276,6 +307,15 @@ export function ArtistTourSwitcherClientWrapper({
         onClose={() => setIsCreateArtistOpen(false)}
         onCreated={handleArtistCreated}
       />
+      {tourToDelete ? (
+        <TourDeleteConfirmationModal
+          open
+          tourId={tourToDelete.id}
+          tourName={tourToDelete.name}
+          onClose={() => setTourToDelete(null)}
+          onDeleted={handleTourDeleted}
+        />
+      ) : null}
     </>
   );
 }
