@@ -18,13 +18,12 @@
    ============================================ */
 
 import { redirect } from 'next/navigation';
-import Link from 'next/link';
-import { Plus } from 'lucide-react';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { WorkspaceTopBar } from '@/components/shell-v2/WorkspaceTopBar';
 import { PickUpCard } from '@/components/artists/PickUpCard';
 import { ArtistGridCard } from '@/components/artists/ArtistGridCard';
 import { ArtistHomeStagger } from '@/components/artists/ArtistHomeStagger';
+import { WorkspaceNewArtistButton } from '@/components/artists/WorkspaceNewArtistButton';
 import { getWorkspaceLandingData } from '@/server/workspace/getWorkspaceLandingData';
 
 const CURRENCY_SYMBOL: Record<string, string> = {
@@ -180,23 +179,11 @@ export default async function ArtistsLandingPage() {
                   {data.artists.length}
                 </span>
               </h2>
-              <Link
-                href="/artists/new"
-                className="btn-transition inline-flex items-center"
-                style={{
-                  gap: 'var(--lp-space-2)',
-                  padding: 'var(--lp-space-2) var(--lp-space-3)',
-                  fontSize: 'var(--lp-text-sm)',
-                  fontWeight: 'var(--lp-weight-medium)',
-                  color: 'var(--lp-text-secondary)',
-                  background: 'var(--lp-panel)',
-                  border: '1px solid var(--lp-border-strong)',
-                  borderRadius: 'var(--lp-radius-md)',
-                }}
-              >
-                <Plus aria-hidden size={14} strokeWidth={2.25} />
-                New artist
-              </Link>
+              {/* Sprint 8.1 §3 (8a) — replaces the Sprint 7
+                  placeholder Link to /artists/new (which 404'd).
+                  Client wrapper owns open-state + mounts the
+                  ArtistCreateSlideOver. */}
+              <WorkspaceNewArtistButton />
             </div>
             {data.artists.length === 0 ? (
               <div
