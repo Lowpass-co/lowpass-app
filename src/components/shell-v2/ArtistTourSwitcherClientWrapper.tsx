@@ -4,6 +4,15 @@
    optimistically append a freshly-created tour and so the
    switcher can clear stale tours immediately when the user
    clicks a different artist.)
+   (Sprint 6.1 §1: replaced the state-based effect guard with
+   a ref so the wrapper's tours-fetch effect doesn't loop on
+   itself. Sprint 6's effect put `tours.length` and
+   `toursArtistId` in its deps array, which combined with the
+   queueMicrotask state writes inside fetchToursForArtist let
+   the effect re-fire with stale state in some interleavings —
+   visible as a flashing <div hidden> in DevTools and, in
+   Safari, escalated into "Maximum update depth exceeded" →
+   client-side exception → white screen on /budget/[X].)
 
    Bridges the server-component <ProductHeader> and the client
    <ArtistTourSwitcher> + <TourCreateSlideOver>.
@@ -11,7 +20,6 @@
    Owns:
      - isCreateTourOpen — whether the create slide-over is open.
      - tours — the tour list shown in the switcher's tours pane.
-     - toursArtistId — which artist `tours` belong to.
      - toursLoading — whether a tours-by-artist fetch is in flight.
    ============================================ */
 
@@ -59,26 +67,29 @@ export function ArtistTourSwitcherClientWrapper({
   //   2) the switcher can clear the previous artist's tours and
   //      show a loading state immediately on artist change.
   const [tours, setTours] = useState<TourMin[]>(initialTours ?? []);
-  const [toursArtistId, setToursArtistId] = useState<string | null>(
-    initialArtistId,
-  );
   const [toursLoading, setToursLoading] = useState(false);
 
-  // Track the in-flight request so a quick double-switch (A → B → C)
-  // doesn't race the older fetch into state.
+  // Sprint 6.1 §1 — ref-based guard. Tracks the artistId the
+  // effect last initiated a fetch for. Lives in a ref so the
+  // effect can read+write it synchronously without depending on
+  // React state (which would put `toursArtistId` back in the
+  // deps array, the structural cause of the Sprint 6 loop).
+  const lastFetchedArtistIdRef = useRef<string | null>(initialArtistId);
+
+  // Token guards against stale fetches racing into state on
+  // quick A → B → C double-switches.
   const fetchTokenRef = useRef(0);
 
   // Fetch a different artist's tours via the dedicated API route.
   // Same lean projection the server-side initial fetch uses.
-  // The pre-fetch setStates are queued via queueMicrotask so this
+  // Pre-fetch setStates wrapped in queueMicrotask so this
   // function can be called from a useEffect without tripping
-  // react-hooks/set-state-in-effect; functionally identical, the
-  // microtask runs before the next paint.
+  // react-hooks/set-state-in-effect; functionally equivalent,
+  // the microtask runs before the next paint.
   const fetchToursForArtist = useCallback(
     (artistId: string) => {
       const token = ++fetchTokenRef.current;
       queueMicrotask(() => {
-        setToursArtistId(artistId);
         setTours([]); // immediate stale clear
         setToursLoading(true);
       });
@@ -107,32 +118,33 @@ export function ArtistTourSwitcherClientWrapper({
     [],
   );
 
-  // When the context's selectedArtistId drifts away from the
-  // artist whose tours we currently hold, refetch. Triggered by
-  // the switcher's handleArtistClick (which calls
-  // setSelectedArtistId via the context, propagating here).
+  // Sprint 6.1 §1 — runs only when selectedArtistId changes.
+  // Ref-based guard prevents re-fire when the effect's setState
+  // calls cascade through queueMicrotask back into state changes.
   useEffect(() => {
     if (!selectedArtistId) {
-      // No artist → clear list. queueMicrotask defers the setStates
-      // past this render to satisfy react-hooks/set-state-in-effect.
-      if (toursArtistId !== null || tours.length > 0) {
+      if (lastFetchedArtistIdRef.current !== null) {
+        lastFetchedArtistIdRef.current = null;
         queueMicrotask(() => {
-          setToursArtistId(null);
           setTours([]);
           setToursLoading(false);
         });
       }
       return;
     }
-    if (selectedArtistId === toursArtistId) return;
+    if (selectedArtistId === lastFetchedArtistIdRef.current) return;
+    lastFetchedArtistIdRef.current = selectedArtistId;
     fetchToursForArtist(selectedArtistId);
-  }, [selectedArtistId, toursArtistId, tours.length, fetchToursForArtist]);
+  }, [selectedArtistId, fetchToursForArtist]);
 
   const handleTourCreated = useCallback((tour: TourMin) => {
     // Optimistic prepend. The new tour is always for the
     // currently-selected artist (the slide-over uses
     // selectedArtistId as the artist_id), so adding it here is
-    // the right place — no artist-mismatch check needed.
+    // the right place. Edge case noted for a future sprint:
+    // a stale slide-over closure could in theory POST for
+    // artist A while the user has already switched to artist
+    // B; the response would land in B's list. Defer.
     setTours((prev) => [tour, ...prev]);
   }, []);
 
