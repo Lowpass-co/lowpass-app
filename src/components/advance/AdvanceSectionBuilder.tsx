@@ -593,7 +593,11 @@ export function AdvanceSectionBuilder({
 
   return (
     <div className={cn('transition-opacity duration-300', contentVisible ? 'opacity-100' : 'opacity-0')}>
-      {allDates.length > 0 ? (
+      {/* Hotfix 4 §2 — suppress the in-canvas AdvanceDateStrip when
+          wrappedInShell. The three-pane shell already renders
+          AdvanceUpcomingSidebar as the canonical day picker; without
+          this gate the user sees two day columns side-by-side. */}
+      {allDates.length > 0 && !wrappedInShell ? (
         <div className="flex gap-4">
           <AdvanceDateStrip tourId={tourId} routingId={routingId} dates={allDates} />
           <div className="flex-1 min-w-0 space-y-6">{mainContent}</div>
