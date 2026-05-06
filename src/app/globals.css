@@ -160,6 +160,10 @@
      defaults below; dark overrides live in the `.dark` block. */
   --lp-bg-deep: #FAFAF9;          /* deeper than --lp-bg, table backgrounds */
   --lp-panel: #F5F5F4;            /* table headers, strip backgrounds */
+  /* Sprint 5 — hover state for surfaces sitting at panel elevation
+     (dropdown rows, panel-elevation list rows). color-mix tracks any
+     future re-tune of --lp-panel automatically. */
+  --lp-panel-hover: color-mix(in srgb, var(--lp-panel) 96%, black 4%);
   --lp-border-subtle: #EAEAE8;    /* dense table cell borders */
   --lp-border-strong: #D4D4D2;    /* card borders, modal edges */
   --lp-text-mono: #404040;        /* monospace numeric content */
@@ -252,6 +256,11 @@
   --lp-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.1);
   --lp-shadow-xl: 0 16px 40px rgba(0, 0, 0, 0.12);
   --lp-shadow-overlay: 0 0 0 1px rgba(0, 0, 0, 0.04), 0 8px 24px rgba(0, 0, 0, 0.1);
+  /* Sprint 5 — softer than shadow-overlay; reads as "floating above
+     content" rather than "modal is dimming everything". Used by
+     dropdowns + popovers; shadow-overlay stays reserved for
+     modals + slide-overs. */
+  --lp-shadow-popover: 0 0 0 1px rgba(0, 0, 0, 0.05), 0 6px 16px rgba(0, 0, 0, 0.08);
   --lp-shadow-focus-ring: 0 0 0 4px rgba(255, 69, 0, 0.22);
 
   /* 4.7 Row density (DataTable / SpreadsheetGrid) */
@@ -410,14 +419,100 @@ input[type='checkbox'].lp-checkbox:focus-visible {
   --lp-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
   --lp-shadow-xl: 0 16px 40px rgba(0, 0, 0, 0.6);
   --lp-shadow-overlay: 0 0 0 1px rgba(255, 255, 255, 0.06), 0 8px 24px rgba(0, 0, 0, 0.5);
+  /* Sprint 5 — softer than shadow-overlay (dark). Two-layer with a
+     5% white rim so the popover edge reads against the panel
+     beneath it. */
+  --lp-shadow-popover: 0 0 0 1px rgba(255, 255, 255, 0.05), 0 6px 16px rgba(0, 0, 0, 0.4);
   --lp-shadow-focus-ring: 0 0 0 4px rgba(255, 69, 0, 0.35);
 
   /* Product Split Phase 1 — Foundation tokens (dark) */
   --lp-bg-deep: #0a0a0a;
   --lp-panel: #111111;
+  /* Sprint 5 — hover state for panel-elevation surfaces (dark).
+     Bigger lift than the light-mode version (~11 lightness vs ~6) —
+     dark UI eyes need the larger jump to perceive the hover. */
+  --lp-panel-hover: color-mix(in srgb, var(--lp-panel) 92%, white 8%);
   --lp-border-subtle: #222222;
   --lp-border-strong: #333333;
   --lp-text-mono: #d1d5db;
+}
+
+/* ============================================
+   Sprint 5 — ArtistTourSwitcher animations
+   Open/close (panel) + state-transition (pane).
+   Reduced-motion variants below collapse to opacity-only.
+   ============================================ */
+.lp-ats-panel {
+  opacity: 0;
+  transform: translateY(-4px);
+  transition:
+    opacity var(--lp-duration-slow) var(--lp-ease-decelerate),
+    transform var(--lp-duration-slow) var(--lp-ease-decelerate);
+  pointer-events: none;
+}
+.lp-ats-panel[data-state='open'] {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+.lp-ats-panel[data-state='closing'] {
+  opacity: 0;
+  transform: translateY(-4px);
+  transition:
+    opacity var(--lp-duration-base) var(--lp-ease-accelerate),
+    transform var(--lp-duration-base) var(--lp-ease-accelerate);
+  pointer-events: none;
+}
+
+@keyframes lp-ats-enter-from-right {
+  from { opacity: 0; transform: translateX(8px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes lp-ats-enter-from-left {
+  from { opacity: 0; transform: translateX(-8px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes lp-ats-exit-to-left {
+  from { opacity: 1; transform: translateX(0); }
+  to   { opacity: 0; transform: translateX(-8px); }
+}
+@keyframes lp-ats-exit-to-right {
+  from { opacity: 1; transform: translateX(0); }
+  to   { opacity: 0; transform: translateX(8px); }
+}
+.lp-ats-pane[data-pane-anim='enter-right'] {
+  animation: lp-ats-enter-from-right var(--lp-duration-slower) var(--lp-ease-standard) both;
+}
+.lp-ats-pane[data-pane-anim='enter-left'] {
+  animation: lp-ats-enter-from-left var(--lp-duration-slower) var(--lp-ease-standard) both;
+}
+.lp-ats-pane[data-pane-anim='exit-left'] {
+  animation: lp-ats-exit-to-left var(--lp-duration-slower) var(--lp-ease-standard) both;
+}
+.lp-ats-pane[data-pane-anim='exit-right'] {
+  animation: lp-ats-exit-to-right var(--lp-duration-slower) var(--lp-ease-standard) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lp-ats-panel,
+  .lp-ats-panel[data-state='closing'] {
+    transition-duration: 50ms !important;
+    transform: none !important;
+  }
+  .lp-ats-panel[data-state='open'] {
+    transform: none !important;
+  }
+  .lp-ats-pane[data-pane-anim='enter-right'],
+  .lp-ats-pane[data-pane-anim='enter-left'],
+  .lp-ats-pane[data-pane-anim='exit-left'],
+  .lp-ats-pane[data-pane-anim='exit-right'] {
+    animation-duration: 50ms !important;
+    animation-name: none !important;
+  }
+  .lp-ats-pane[data-pane-anim='exit-left'],
+  .lp-ats-pane[data-pane-anim='exit-right'] {
+    opacity: 0 !important;
+  }
 }
 
 /* ============================================

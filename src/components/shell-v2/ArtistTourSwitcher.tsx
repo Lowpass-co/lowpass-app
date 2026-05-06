@@ -1,0 +1,1077 @@
+/* ============================================
+   LOWPASS — Sprint 5 §1 — <ArtistTourSwitcher>
+
+   Combined hierarchical artist→tour dropdown that replaces the
+   static `[Artist] › [Tour]` chips in <ProductHeader>. Trigger
+   shows current selection; dropdown panel switches between an
+   artists state and a tours-grouped-by-year state.
+
+   Selection state (selectedArtistId / selectedTourId) lives in
+   ArtistTourContext — the switcher reads from it and writes via
+   the context's setters. The setters already handle URL +
+   localStorage sync (Sprint 4 path-aware hydration). This
+   component owns:
+
+     - dropdown open/close state machine
+     - artists ↔ tours pane transition
+     - artist-image fallback (logo_url → spotify_image_url → initials)
+     - year grouping for tours
+     - "+ Create new tour" CTA wiring (callback only — slide-over
+       in Phase 3)
+
+   Animations live in globals.css under the .lp-ats-* prefix so
+   prefers-reduced-motion can override them via @media. CSS class
+   only — no inline animation values.
+   ============================================ */
+
+'use client';
+
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  ChevronDown,
+  ChevronUp,
+  ChevronRight,
+  ChevronLeft,
+  Plus,
+} from 'lucide-react';
+import { useArtistTourContext } from '@/contexts/ArtistTourContext';
+
+/** Minimum artist shape the switcher needs. Wider than this is
+ *  fine — extra fields are ignored. `branding` is unknown because
+ *  we narrow inside `pickArtistImage`. */
+type ArtistMin = {
+  id: string;
+  name: string;
+  branding: unknown;
+  spotify_image_url?: string | null;
+};
+
+type TourMin = {
+  id: string;
+  name: string;
+  start_date: string | null;
+  end_date: string | null;
+};
+
+interface ArtistTourSwitcherProps {
+  /** Pre-fetched artist list — server-side initial data so the
+   *  dropdown is instant on first open. The context's own artists
+   *  list takes over once it loads. */
+  initialArtists: ArtistMin[];
+  /** Optional pre-fetched tours for the currently-selected artist.
+   *  Context tours take over when they're available for the active
+   *  artist. */
+  initialTours?: TourMin[] | null;
+  /** Called when the user clicks "+ Create new tour" — Phase 2
+   *  wires this to the new-tour slide-over (Phase 3). */
+  onCreateTour: () => void;
+}
+
+type DropdownState = 'closed' | 'open' | 'closing';
+type Pane = 'artists' | 'tours';
+
+const MONTHS = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
+
+function parseDateUTC(iso: string): Date | null {
+  const d = new Date(`${iso.slice(0, 10)}T12:00:00Z`);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function formatSingleDate(iso: string): string | null {
+  const d = parseDateUTC(iso);
+  if (!d) return null;
+  return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+}
+
+/** "Jan – Mar 2026" / "12 Apr 2026" / "Sep 2025 – Feb 2026" / null. */
+function formatTourDateRange(
+  start: string | null,
+  end: string | null,
+): string | null {
+  if (!start && !end) return null;
+  if (start && !end) return formatSingleDate(start);
+  if (!start && end) return formatSingleDate(end);
+  if (start === end) return formatSingleDate(start!);
+  const s = parseDateUTC(start!);
+  const e = parseDateUTC(end!);
+  if (!s || !e) return null;
+  if (s.getUTCFullYear() === e.getUTCFullYear()) {
+    return `${MONTHS[s.getUTCMonth()]} – ${MONTHS[e.getUTCMonth()]} ${s.getUTCFullYear()}`;
+  }
+  return `${MONTHS[s.getUTCMonth()]} ${s.getUTCFullYear()} – ${MONTHS[e.getUTCMonth()]} ${e.getUTCFullYear()}`;
+}
+
+/** Inline equivalent of the (non-existent) pickArtistImageUrl helper.
+ *  Prefer branding.logo_url, fall back to spotify_image_url, else null. */
+function pickArtistImage(artist: ArtistMin): string | null {
+  const branding = (artist.branding ?? null) as
+    | { logo_url?: string | null; banner_url?: string | null }
+    | null;
+  if (branding?.logo_url) return branding.logo_url;
+  if (artist.spotify_image_url) return artist.spotify_image_url;
+  return null;
+}
+
+function getInitials(name: string): string {
+  const trimmed = name.trim();
+  if (!trimmed) return '?';
+  const parts = trimmed.split(/\s+/);
+  return parts.map((w) => w[0]).join('').slice(0, 2).toUpperCase();
+}
+
+interface YearGroup {
+  /** null = no start_date — UNDATED bucket. */
+  year: number | null;
+  tours: TourMin[];
+}
+
+function groupToursByYear(tours: TourMin[]): YearGroup[] {
+  const map = new Map<number | null, TourMin[]>();
+  for (const t of tours) {
+    const d = t.start_date ? parseDateUTC(t.start_date) : null;
+    const year = d?.getUTCFullYear() ?? null;
+    const list = map.get(year) ?? [];
+    list.push(t);
+    map.set(year, list);
+  }
+  // Sort: years desc, null (undated) last.
+  const entries = Array.from(map.entries()).sort((a, b) => {
+    if (a[0] === null) return 1;
+    if (b[0] === null) return -1;
+    return (b[0] as number) - (a[0] as number);
+  });
+  // Within each year, sort tours by start_date desc.
+  for (const [, list] of entries) {
+    list.sort((a, b) => {
+      if (!a.start_date && !b.start_date) return 0;
+      if (!a.start_date) return 1;
+      if (!b.start_date) return -1;
+      return b.start_date.localeCompare(a.start_date);
+    });
+  }
+  return entries.map(([year, list]) => ({ year, tours: list }));
+}
+
+export function ArtistTourSwitcher({
+  initialArtists,
+  initialTours,
+  onCreateTour,
+}: ArtistTourSwitcherProps) {
+  const {
+    selectedArtistId,
+    selectedTourId,
+    selectedArtist,
+    selectedTour,
+    setSelectedArtistId,
+    setSelectedTourId,
+    artists: ctxArtists,
+    tours: ctxTours,
+  } = useArtistTourContext();
+
+  // Live artist list: prefer context once it has loaded; fall back
+  // to server-prefetched list. Same for tours — context auto-fetches
+  // when an artist is selected; until then `initialTours` primes the
+  // tours pane (most common case: navigated TO a tour-prefixed page,
+  // server pre-fetched the relevant tours so first dropdown open is
+  // instant). Both lists are memoised so consumers (useMemo for
+  // year-grouping, the .find() lookups) get stable references.
+  const artists: ArtistMin[] = useMemo(
+    () =>
+      ctxArtists.length > 0
+        ? ctxArtists.map((a) => ({
+            id: a.id,
+            name: a.name,
+            branding: a.branding,
+            spotify_image_url: a.spotify_image_url ?? null,
+          }))
+        : initialArtists,
+    [ctxArtists, initialArtists],
+  );
+
+  const tours: TourMin[] = useMemo(
+    () =>
+      ctxTours.length > 0
+        ? ctxTours.map((t) => ({
+            id: t.id,
+            name: t.name,
+            start_date: t.start_date ?? null,
+            end_date: t.end_date ?? null,
+          }))
+        : initialTours ?? [],
+    [ctxTours, initialTours],
+  );
+
+  // Selected-display fallbacks: if the context hasn't loaded the
+  // selected artist/tour yet, look them up in the prefetched lists
+  // so the trigger button never flashes "Pick an artist…" between
+  // renders.
+  const displayArtistName =
+    selectedArtist?.name ??
+    artists.find((a) => a.id === selectedArtistId)?.name ??
+    null;
+  const displayTourName =
+    selectedTour?.name ??
+    tours.find((t) => t.id === selectedTourId)?.name ??
+    null;
+
+  /* -------- dropdown state machine -------- */
+  const [dropdownState, setDropdownState] =
+    useState<DropdownState>('closed');
+  const [pane, setPane] = useState<Pane>('artists');
+  // The pane currently animating OUT (rendered alongside the new
+  // pane during the 250ms cross-fade). null when no transition.
+  const [exitingPane, setExitingPane] = useState<Pane | null>(null);
+  // Direction of the in-flight pane transition. Determines which
+  // keyframes the entering / exiting panes use.
+  const [paneDirection, setPaneDirection] =
+    useState<'forward' | 'back'>('forward');
+
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+
+  const open = dropdownState === 'open' || dropdownState === 'closing';
+
+  const initialPaneOnOpen: Pane = selectedArtistId ? 'tours' : 'artists';
+
+  const openDropdown = useCallback(() => {
+    setPane(initialPaneOnOpen);
+    setExitingPane(null);
+    setDropdownState('open');
+  }, [initialPaneOnOpen]);
+
+  const closeDropdown = useCallback(() => {
+    setDropdownState((prev) => (prev === 'open' ? 'closing' : prev));
+  }, []);
+
+  // When the close transition ends, fully unmount the panel.
+  const handlePanelTransitionEnd = useCallback(
+    (e: React.TransitionEvent<HTMLDivElement>) => {
+      if (e.target !== panelRef.current) return;
+      if (e.propertyName !== 'opacity') return;
+      if (dropdownState === 'closing') {
+        setDropdownState('closed');
+      }
+    },
+    [dropdownState],
+  );
+
+  /* -------- Esc + click-outside -------- */
+  useEffect(() => {
+    if (!open) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        closeDropdown();
+      }
+    }
+    function onPointerDown(e: PointerEvent) {
+      const target = e.target as Node | null;
+      if (!target) return;
+      // Click-inside the panel or trigger → ignore. Anywhere else → close.
+      if (panelRef.current?.contains(target)) return;
+      if (triggerRef.current?.contains(target)) return;
+      closeDropdown();
+    }
+    document.addEventListener('keydown', onKey);
+    document.addEventListener('pointerdown', onPointerDown);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.removeEventListener('pointerdown', onPointerDown);
+    };
+  }, [open, closeDropdown]);
+
+  /* -------- pane transitions -------- */
+  const transitionToPane = useCallback(
+    (next: Pane, direction: 'forward' | 'back') => {
+      setPane((current) => {
+        if (current === next) return current;
+        setExitingPane(current);
+        setPaneDirection(direction);
+        return next;
+      });
+    },
+    [],
+  );
+
+  // After the entering pane's animation completes, drop the
+  // exiting one from the DOM.
+  const handlePaneAnimationEnd = useCallback(
+    (e: React.AnimationEvent<HTMLDivElement>) => {
+      // Both entering and exiting fire animationend; use the
+      // entering pane (data-pane-anim starts with 'enter-') as the
+      // signal to clear.
+      const animName = e.animationName;
+      if (animName.startsWith('lp-ats-enter')) {
+        setExitingPane(null);
+      }
+    },
+    [],
+  );
+
+  /* -------- list interaction -------- */
+  const handleArtistClick = useCallback(
+    (id: string) => {
+      // setSelectedArtistId clears the tour selection (context
+      // contract — switching artist invalidates the tour).
+      setSelectedArtistId(id);
+      transitionToPane('tours', 'forward');
+    },
+    [setSelectedArtistId, transitionToPane],
+  );
+
+  const handleTourClick = useCallback(
+    (id: string) => {
+      setSelectedTourId(id);
+      closeDropdown();
+    },
+    [setSelectedTourId, closeDropdown],
+  );
+
+  const handleBackToArtists = useCallback(() => {
+    transitionToPane('artists', 'back');
+  }, [transitionToPane]);
+
+  /* -------- derived render data -------- */
+  const yearGroups = useMemo(() => groupToursByYear(tours), [tours]);
+  const dropdownArtistName =
+    artists.find((a) => a.id === selectedArtistId)?.name ??
+    displayArtistName ??
+    'Artist';
+
+  const triggerEmpty = !displayArtistName;
+  const tourEmpty = !!displayArtistName && !displayTourName;
+
+  /* -------- render -------- */
+  return (
+    <div
+      style={{ position: 'relative' }}
+      data-component="ArtistTourSwitcher"
+    >
+      <button
+        ref={triggerRef}
+        type="button"
+        onClick={() => (open ? closeDropdown() : openDropdown())}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        className="btn-transition flex min-w-0 items-center gap-2 truncate"
+        style={{
+          padding: 'var(--lp-space-1) var(--lp-space-3)',
+          height: 32,
+          maxWidth: 360,
+          fontSize: 'var(--lp-text-base)',
+          fontWeight: 'var(--lp-weight-medium)',
+          color: triggerEmpty
+            ? 'var(--lp-text-secondary)'
+            : 'var(--lp-text)',
+          background: 'var(--lp-panel)',
+          border: '1px solid var(--lp-border-strong)',
+          borderRadius: 'var(--lp-radius-md)',
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = 'var(--lp-panel-hover)';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = 'var(--lp-panel)';
+        }}
+      >
+        <span className="min-w-0 truncate">
+          {triggerEmpty ? (
+            'Pick an artist…'
+          ) : tourEmpty ? (
+            <>
+              <span style={{ color: 'var(--lp-text)' }}>
+                {displayArtistName}
+              </span>
+              <span
+                aria-hidden
+                style={{
+                  margin: '0 var(--lp-space-2)',
+                  color: 'var(--lp-text-tertiary)',
+                }}
+              >
+                ·
+              </span>
+              <span style={{ color: 'var(--lp-text-secondary)' }}>
+                Pick a tour…
+              </span>
+            </>
+          ) : (
+            <>
+              <span style={{ color: 'var(--lp-text)' }}>
+                {displayArtistName}
+              </span>
+              <span
+                aria-hidden
+                style={{
+                  margin: '0 var(--lp-space-2)',
+                  color: 'var(--lp-text-tertiary)',
+                }}
+              >
+                ·
+              </span>
+              <span style={{ color: 'var(--lp-text)' }}>
+                {displayTourName}
+              </span>
+            </>
+          )}
+        </span>
+        {open ? (
+          <ChevronUp
+            aria-hidden
+            size={14}
+            strokeWidth={2}
+            style={{
+              color: 'var(--lp-text-tertiary)',
+              flexShrink: 0,
+            }}
+          />
+        ) : (
+          <ChevronDown
+            aria-hidden
+            size={14}
+            strokeWidth={2}
+            style={{
+              color: 'var(--lp-text-tertiary)',
+              flexShrink: 0,
+            }}
+          />
+        )}
+      </button>
+
+      {dropdownState !== 'closed' ? (
+        <div
+          ref={panelRef}
+          className="lp-ats-panel"
+          data-state={dropdownState}
+          onTransitionEnd={handlePanelTransitionEnd}
+          role="menu"
+          style={{
+            position: 'absolute',
+            top: 'calc(100% + var(--lp-space-1))',
+            left: 0,
+            zIndex: 'var(--lp-z-dropdown)',
+            minWidth: 320,
+            maxWidth: 360,
+            maxHeight: 'min(420px, 60vh)',
+            background: 'var(--lp-panel)',
+            border: '1px solid var(--lp-border-strong)',
+            borderRadius: 'var(--lp-radius-md)',
+            boxShadow: 'var(--lp-shadow-popover)',
+            overflow: 'hidden',
+            display: 'flex',
+            flexDirection: 'column',
+          }}
+        >
+          <div
+            style={{
+              position: 'relative',
+              flex: 1,
+              minHeight: 0,
+              overflow: 'hidden',
+            }}
+          >
+            {/* Active pane */}
+            <SwitcherPane
+              key={`active-${pane}`}
+              animState={
+                exitingPane
+                  ? paneDirection === 'forward'
+                    ? 'enter-right'
+                    : 'enter-left'
+                  : null
+              }
+              absolute={!!exitingPane}
+              onAnimationEnd={handlePaneAnimationEnd}
+            >
+              {pane === 'artists' ? (
+                <ArtistsPane
+                  artists={artists}
+                  selectedArtistId={selectedArtistId}
+                  onPick={handleArtistClick}
+                  onClose={closeDropdown}
+                />
+              ) : (
+                <ToursPane
+                  artistName={dropdownArtistName}
+                  yearGroups={yearGroups}
+                  totalTours={tours.length}
+                  selectedTourId={selectedTourId}
+                  onPick={handleTourClick}
+                  onBack={handleBackToArtists}
+                  onClose={closeDropdown}
+                  onCreateTour={onCreateTour}
+                />
+              )}
+            </SwitcherPane>
+
+            {/* Exiting pane (mounted only during transition) */}
+            {exitingPane ? (
+              <SwitcherPane
+                key={`exiting-${exitingPane}`}
+                animState={
+                  paneDirection === 'forward' ? 'exit-left' : 'exit-right'
+                }
+                absolute
+                onAnimationEnd={handlePaneAnimationEnd}
+              >
+                {exitingPane === 'artists' ? (
+                  <ArtistsPane
+                    artists={artists}
+                    selectedArtistId={selectedArtistId}
+                    onPick={() => {
+                      /* exiting pane: clicks ignored */
+                    }}
+                    onClose={() => {
+                      /* exiting pane: ignored */
+                    }}
+                  />
+                ) : (
+                  <ToursPane
+                    artistName={dropdownArtistName}
+                    yearGroups={yearGroups}
+                    totalTours={tours.length}
+                    selectedTourId={selectedTourId}
+                    onPick={() => {
+                      /* exiting pane */
+                    }}
+                    onBack={() => {
+                      /* exiting pane */
+                    }}
+                    onClose={() => {
+                      /* exiting pane */
+                    }}
+                    onCreateTour={() => {
+                      /* exiting pane */
+                    }}
+                  />
+                )}
+              </SwitcherPane>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/* ============================================================
+   Pane wrapper — handles absolute positioning + animation class
+   so the two child views (artists / tours) only need to render
+   their content.
+   ============================================================ */
+function SwitcherPane({
+  children,
+  animState,
+  absolute,
+  onAnimationEnd,
+}: {
+  children: React.ReactNode;
+  animState: 'enter-right' | 'enter-left' | 'exit-left' | 'exit-right' | null;
+  absolute: boolean;
+  onAnimationEnd: (e: React.AnimationEvent<HTMLDivElement>) => void;
+}) {
+  return (
+    <div
+      className="lp-ats-pane"
+      data-pane-anim={animState ?? undefined}
+      onAnimationEnd={onAnimationEnd}
+      style={{
+        position: absolute ? 'absolute' : 'relative',
+        inset: absolute ? 0 : undefined,
+        display: 'flex',
+        flexDirection: 'column',
+        width: '100%',
+        height: '100%',
+        minHeight: 0,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+/* ============================================================
+   Artists pane
+   ============================================================ */
+function ArtistsPane({
+  artists,
+  selectedArtistId,
+  onPick,
+  onClose,
+}: {
+  artists: ArtistMin[];
+  selectedArtistId: string | null;
+  onPick: (id: string) => void;
+  onClose: () => void;
+}) {
+  return (
+    <>
+      <PaneHeader
+        leading={null}
+        labelLeft="Artists"
+        countRight={artists.length}
+        trailing={
+          <CloseChevron onClick={onClose} ariaLabel="Close artist list" />
+        }
+      />
+      <div
+        style={{
+          overflowY: 'auto',
+          flex: 1,
+          minHeight: 0,
+          padding: 'var(--lp-space-1) var(--lp-space-2) var(--lp-space-2)',
+        }}
+      >
+        {artists.length === 0 ? (
+          <EmptyState message="No artists yet." />
+        ) : (
+          artists.map((a) => {
+            const selected = a.id === selectedArtistId;
+            const img = pickArtistImage(a);
+            return (
+              <button
+                key={a.id}
+                type="button"
+                onClick={() => onPick(a.id)}
+                className="btn-transition"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 'var(--lp-space-3)',
+                  width: '100%',
+                  height: 36,
+                  padding: '0 var(--lp-space-2)',
+                  borderRadius: 'var(--lp-radius-sm)',
+                  background: selected
+                    ? 'var(--color-lp-orange-subtle-hover)'
+                    : 'transparent',
+                  borderLeft: selected
+                    ? '2px solid var(--color-lp-orange)'
+                    : '2px solid transparent',
+                  cursor: 'pointer',
+                  textAlign: 'left',
+                }}
+                onMouseEnter={(e) => {
+                  if (!selected) {
+                    e.currentTarget.style.background =
+                      'var(--lp-panel-hover)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!selected) {
+                    e.currentTarget.style.background = 'transparent';
+                  }
+                }}
+              >
+                <ArtistAvatar imageUrl={img} name={a.name} />
+                <span
+                  className="min-w-0 truncate"
+                  style={{
+                    flex: 1,
+                    fontSize: 'var(--lp-text-base)',
+                    color: 'var(--lp-text)',
+                  }}
+                >
+                  {a.name}
+                </span>
+                <ChevronRight
+                  aria-hidden
+                  size={12}
+                  strokeWidth={2}
+                  style={{
+                    color: 'var(--lp-text-tertiary)',
+                    flexShrink: 0,
+                  }}
+                />
+              </button>
+            );
+          })
+        )}
+      </div>
+    </>
+  );
+}
+
+/* ============================================================
+   Tours pane
+   ============================================================ */
+function ToursPane({
+  artistName,
+  yearGroups,
+  totalTours,
+  selectedTourId,
+  onPick,
+  onBack,
+  onClose,
+  onCreateTour,
+}: {
+  artistName: string;
+  yearGroups: YearGroup[];
+  totalTours: number;
+  selectedTourId: string | null;
+  onPick: (id: string) => void;
+  onBack: () => void;
+  onClose: () => void;
+  onCreateTour: () => void;
+}) {
+  return (
+    <>
+      <PaneHeader
+        leading={
+          <button
+            type="button"
+            onClick={onBack}
+            aria-label="Back to artists"
+            className="btn-transition flex items-center justify-center"
+            style={{
+              width: 24,
+              height: 24,
+              borderRadius: 'var(--lp-radius-sm)',
+              background: 'transparent',
+              cursor: 'pointer',
+              color: 'var(--lp-text-secondary)',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.background = 'var(--lp-panel-hover)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.background = 'transparent';
+            }}
+          >
+            <ChevronLeft size={16} strokeWidth={2} />
+          </button>
+        }
+        labelLeft={artistName}
+        labelLeftIsBody
+        trailing={
+          <CloseChevron onClick={onClose} ariaLabel="Close tour list" />
+        }
+      />
+      <div
+        style={{
+          padding:
+            'var(--lp-space-2) var(--lp-space-4) var(--lp-space-1)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}
+      >
+        <span
+          className="lp-label-caps"
+          style={{ color: 'var(--lp-text-tertiary)' }}
+        >
+          Tours
+        </span>
+        <span
+          style={{
+            fontSize: 'var(--lp-text-2xs)',
+            color: 'var(--lp-text-tertiary)',
+            fontVariantNumeric: 'tabular-nums',
+          }}
+        >
+          {totalTours}
+        </span>
+      </div>
+      <div
+        style={{
+          overflowY: 'auto',
+          flex: 1,
+          minHeight: 0,
+          padding:
+            'var(--lp-space-1) var(--lp-space-2) var(--lp-space-2)',
+        }}
+      >
+        {totalTours === 0 ? (
+          <EmptyState message="No tours yet." />
+        ) : (
+          yearGroups.map((g) => (
+            <div key={g.year ?? 'undated'}>
+              <div
+                style={{
+                  padding:
+                    'var(--lp-space-2) var(--lp-space-2) var(--lp-space-1)',
+                }}
+              >
+                <span
+                  className="lp-label-caps"
+                  style={{ color: 'var(--lp-text-tertiary)' }}
+                >
+                  {g.year ?? 'Undated'}
+                </span>
+              </div>
+              {g.tours.map((t) => {
+                const selected = t.id === selectedTourId;
+                const range = formatTourDateRange(
+                  t.start_date,
+                  t.end_date,
+                );
+                return (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => onPick(t.id)}
+                    className="btn-transition"
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'flex-start',
+                      gap: 2,
+                      width: '100%',
+                      minHeight: 44,
+                      padding:
+                        'var(--lp-space-2) var(--lp-space-2)',
+                      borderRadius: 'var(--lp-radius-sm)',
+                      background: selected
+                        ? 'var(--color-lp-orange-subtle-hover)'
+                        : 'transparent',
+                      borderLeft: selected
+                        ? '2px solid var(--color-lp-orange)'
+                        : '2px solid transparent',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!selected) {
+                        e.currentTarget.style.background =
+                          'var(--lp-panel-hover)';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!selected) {
+                        e.currentTarget.style.background = 'transparent';
+                      }
+                    }}
+                  >
+                    <span
+                      className="truncate"
+                      style={{
+                        fontSize: 'var(--lp-text-base)',
+                        color: 'var(--lp-text)',
+                        fontWeight: 'var(--lp-weight-medium)',
+                        maxWidth: '100%',
+                      }}
+                    >
+                      {t.name}
+                    </span>
+                    {range ? (
+                      <span
+                        style={{
+                          fontSize: 'var(--lp-text-xs)',
+                          color: 'var(--lp-text-secondary)',
+                        }}
+                      >
+                        {range}
+                      </span>
+                    ) : null}
+                  </button>
+                );
+              })}
+            </div>
+          ))
+        )}
+        {/* "+ Create new tour" CTA — at the bottom, OUTSIDE every
+            year group. */}
+        <button
+          type="button"
+          onClick={onCreateTour}
+          className="btn-transition"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 'var(--lp-space-2)',
+            width: '100%',
+            height: 36,
+            marginTop: 'var(--lp-space-2)',
+            padding: '0 var(--lp-space-2)',
+            borderRadius: 'var(--lp-radius-sm)',
+            background: 'transparent',
+            color: 'var(--color-lp-orange)',
+            cursor: 'pointer',
+            textAlign: 'left',
+            fontSize: 'var(--lp-text-base)',
+            fontWeight: 'var(--lp-weight-medium)',
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.background =
+              'var(--color-lp-orange-subtle-hover)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.background = 'transparent';
+          }}
+        >
+          <Plus size={14} strokeWidth={2.25} aria-hidden />
+          Create new tour
+        </button>
+      </div>
+    </>
+  );
+}
+
+/* ============================================================
+   Smaller pieces
+   ============================================================ */
+
+function PaneHeader({
+  leading,
+  labelLeft,
+  labelLeftIsBody,
+  countRight,
+  trailing,
+}: {
+  leading: React.ReactNode;
+  labelLeft: string;
+  /** When true, render labelLeft as body text (used for the
+   *  artist name in the tours-pane header). Default is the
+   *  uppercase tracked-wider label-caps treatment. */
+  labelLeftIsBody?: boolean;
+  countRight?: number;
+  trailing: React.ReactNode;
+}) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 'var(--lp-space-2)',
+        padding: 'var(--lp-space-2) var(--lp-space-3)',
+        borderBottom: '1px solid var(--lp-border-subtle)',
+        flexShrink: 0,
+      }}
+    >
+      {leading}
+      <span
+        className={labelLeftIsBody ? 'min-w-0 truncate' : 'lp-label-caps'}
+        style={
+          labelLeftIsBody
+            ? {
+                flex: 1,
+                fontSize: 'var(--lp-text-base)',
+                color: 'var(--lp-text)',
+                fontWeight: 'var(--lp-weight-medium)',
+              }
+            : {
+                flex: 1,
+                color: 'var(--lp-text-tertiary)',
+              }
+        }
+      >
+        {labelLeft}
+      </span>
+      {countRight !== undefined ? (
+        <span
+          style={{
+            fontSize: 'var(--lp-text-2xs)',
+            color: 'var(--lp-text-tertiary)',
+            fontVariantNumeric: 'tabular-nums',
+          }}
+        >
+          {countRight}
+        </span>
+      ) : null}
+      {trailing}
+    </div>
+  );
+}
+
+function CloseChevron({
+  onClick,
+  ariaLabel,
+}: {
+  onClick: () => void;
+  ariaLabel: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={ariaLabel}
+      className="btn-transition flex items-center justify-center"
+      style={{
+        width: 24,
+        height: 24,
+        borderRadius: 'var(--lp-radius-sm)',
+        background: 'transparent',
+        cursor: 'pointer',
+        color: 'var(--lp-text-secondary)',
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.background = 'var(--lp-panel-hover)';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = 'transparent';
+      }}
+    >
+      <ChevronUp size={14} strokeWidth={2} />
+    </button>
+  );
+}
+
+function ArtistAvatar({
+  imageUrl,
+  name,
+}: {
+  imageUrl: string | null;
+  name: string;
+}) {
+  if (imageUrl) {
+    // Arbitrary remote URLs from artist branding / Spotify; next/image
+    // needs per-domain config and these are 24px decorative thumbnails
+    // so the optimizer adds no value.
+    return (
+      // eslint-disable-next-line @next/next/no-img-element
+      <img
+        src={imageUrl}
+        alt=""
+        width={24}
+        height={24}
+        style={{
+          width: 24,
+          height: 24,
+          borderRadius: 'var(--lp-radius-full)',
+          objectFit: 'cover',
+          flexShrink: 0,
+          background: 'var(--lp-bg-deep)',
+        }}
+      />
+    );
+  }
+  return (
+    <span
+      aria-hidden
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: 24,
+        height: 24,
+        borderRadius: 'var(--lp-radius-full)',
+        background: 'var(--color-lp-orange)',
+        color: 'var(--lp-text-inverse)',
+        fontSize: 'var(--lp-text-2xs)',
+        fontWeight: 'var(--lp-weight-bold)',
+        flexShrink: 0,
+      }}
+    >
+      {getInitials(name)}
+    </span>
+  );
+}
+
+function EmptyState({ message }: { message: string }) {
+  return (
+    <div
+      style={{
+        padding:
+          'var(--lp-space-4) var(--lp-space-3)',
+        textAlign: 'center',
+        fontSize: 'var(--lp-text-sm)',
+        color: 'var(--lp-text-tertiary)',
+      }}
+    >
+      {message}
+    </div>
+  );
+}
