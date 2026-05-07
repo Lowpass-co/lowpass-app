@@ -78,6 +78,7 @@ import { ContextMenu } from '@/components/ui/ContextMenu';
 import { DeleteConfirmationModal } from '@/components/ui/DeleteConfirmationModal';
 import { BrandedSelect } from '@/components/ui/BrandedSelect';
 import { useAuth } from '@/hooks/useAuth';
+import { AddPlatformFieldModal } from './AddPlatformFieldModal';
 
 function relativeTime(iso: string): string {
   const d = new Date(iso);
@@ -766,6 +767,14 @@ function SetupMode({
   const [customSectionOpen, setCustomSectionOpen] = useState(false);
   const [customFieldOpen, setCustomFieldOpen] = useState(false);
   const [customFieldContext, setCustomFieldContext] = useState<{ templateId: string; templateName: string } | 'standalone' | null>(null);
+  /* Sprint 8.6 §6 — "+ Add custom field" pinned at the bottom
+     of every section card forks the section's platform template
+     into a workspace-scoped copy. Setting this state opens the
+     <AddPlatformFieldModal>; null when the modal is closed. */
+  const [platformFieldTarget, setPlatformFieldTarget] = useState<{
+    templateId: string;
+    sectionName: string;
+  } | null>(null);
   const [templateToDelete, setTemplateToDelete] = useState<ApiTemplate | null>(null);
   const [deletingTemplate, setDeletingTemplate] = useState(false);
   const [fieldToDeleteFromLibrary, setFieldToDeleteFromLibrary] = useState<{ template: ApiTemplate; field: FieldDef } | null>(null);
@@ -1700,6 +1709,28 @@ function SetupMode({
                         );
                       })}
                     </ul>
+                    {/* Sprint 8.6 §6 — "+ Add custom field" pinned at
+                        the bottom of every section card. Forks the
+                        section's template into a workspace-scoped copy
+                        with the new field appended; future tours that
+                        drag this section from the library inherit the
+                        customization. Existing tours' sections are NOT
+                        retroactively updated (Adam's UX guarantee). */}
+                    <div className="border-t border-lp-border px-3 py-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPlatformFieldTarget({
+                            templateId: sec.template_id,
+                            sectionName: sec.label,
+                          });
+                        }}
+                        className="btn-transition flex w-full items-center justify-center gap-1.5 rounded-md border border-dashed border-lp-border px-3 py-1.5 text-xs font-medium text-lp-text-secondary hover:border-lp-orange hover:text-lp-orange"
+                      >
+                        <Plus size={12} />
+                        Add custom field
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1773,6 +1804,49 @@ function SetupMode({
             </div>
           </div>
         </div>
+      )}
+
+      {/* Sprint 8.6 §6 — Platform-template "+ Add custom field"
+          modal. Forks the section's library template into a
+          workspace-scoped copy with the new field appended.
+          Existing per-show advance_form_configs sections are
+          NOT retroactively updated — only the library entry is
+          customized. The modal's warning text makes that
+          guarantee explicit. */}
+      {platformFieldTarget && (
+        <AddPlatformFieldModal
+          open
+          templateId={platformFieldTarget.templateId}
+          sectionName={platformFieldTarget.sectionName}
+          onClose={() => setPlatformFieldTarget(null)}
+          onFielded={(template) => {
+            // Refresh the library so future renders pick up
+            // the workspace fork (and the platform original is
+            // filtered out per the GET handler dedup logic).
+            fetchTemplates();
+            // Append the newly added field to the current
+            // section's fields locally so the canvas reflects
+            // the change immediately. The fork API appends to
+            // the end, so the new field is the last element.
+            const newField = template.fields[template.fields.length - 1];
+            if (newField) {
+              setSections((prev) =>
+                prev.map((s) =>
+                  s.template_id === platformFieldTarget.templateId
+                    ? {
+                        ...s,
+                        // Re-point at the workspace fork so any
+                        // future "+ Add custom field" on this
+                        // section hits the extend path.
+                        template_id: template.id,
+                        fields: [...(s.fields ?? []), newField as FieldDef],
+                      }
+                    : s,
+                ),
+              );
+            }
+          }}
+        />
       )}
 
       {/* Custom field modal */}

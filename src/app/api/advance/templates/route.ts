@@ -29,7 +29,9 @@ export async function GET() {
 
   const { data: templates, error } = await supabase
     .from('advance_templates')
-    .select('id, name, description, icon, fields, suggested_for_day_types, workspace_id, sort_order, tm_only')
+    .select(
+      'id, name, description, icon, fields, suggested_for_day_types, workspace_id, sort_order, tm_only, forked_from_id',
+    )
     .or(`workspace_id.is.null,workspace_id.eq.${workspaceId}`)
     .order('workspace_id', { ascending: true, nullsFirst: true })
     .order('sort_order', { ascending: true, nullsFirst: false })
@@ -39,9 +41,27 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({
-    templates: templates ?? [],
-  });
+  // Sprint 8.6 §6 — when the workspace has a fork of a platform
+  // template (workspace_id = $w AND forked_from_id = $platformId),
+  // filter the platform original out of the listing. The fork
+  // replaces the parent so each section appears once in the
+  // library.
+  type Row = {
+    id: string;
+    forked_from_id: string | null;
+    workspace_id: string | null;
+  };
+  const allRows = (templates ?? []) as Row[];
+  const forkedPlatformIds = new Set<string>(
+    allRows
+      .filter((t) => t.workspace_id != null && t.forked_from_id != null)
+      .map((t) => t.forked_from_id as string),
+  );
+  const filtered = allRows.filter(
+    (t) => !(t.workspace_id == null && forkedPlatformIds.has(t.id)),
+  );
+
+  return NextResponse.json({ templates: filtered });
 }
 
 export async function POST(request: Request) {
