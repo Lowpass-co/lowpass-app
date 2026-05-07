@@ -352,18 +352,28 @@ function RoutingRowWithMenu({
           <VenueAutocomplete
             value={row.venue_name ?? ''}
             onChange={(venue_name) => updateRow(rowIndex, { venue_name })}
-            onPlaceSelect={(result) =>
-              updateRow(rowIndex, {
+            onPlaceSelect={(result) => {
+              // Sprint 8.6 §3 — only overwrite address when the
+              // pick actually returned one. VenueAutocomplete
+              // passes empty string when /api/places/details has
+              // no formattedAddress; preserving the existing
+              // row.address in that case matches Adam's UX
+              // expectation that "the pick filled what it could,
+              // and didn't blank what it couldn't."
+              const updates: Partial<RoutingRow> = {
                 venue_name: result.venue_name,
-                address: result.address,
                 city: result.city ?? row.city,
                 latitude: result.latitude,
                 longitude: result.longitude,
                 venue_website: result.website,
                 venue_phone: result.phone,
                 venue_capacity: result.capacity ?? undefined,
-              })
-            }
+              };
+              if (result.address && result.address.trim()) {
+                updates.address = result.address;
+              }
+              updateRow(rowIndex, updates);
+            }}
             placeholder={compact ? 'Location' : 'Venue'}
           />
         </td>

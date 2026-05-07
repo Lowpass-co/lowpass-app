@@ -175,14 +175,46 @@ export function VenueAutocomplete({
         return;
       }
       const d = await res.json();
+      // Sprint 8.6 §3 — verbose logging so Adam can see the
+      // actual response shape when address fails to fill.
+      // Adam's smoke against 8.5 §3: clicking a suggestion fills
+      // location but not address. The 8.5 §3 toast covers the
+      // 503/error paths; this logs the 200-but-empty path that
+      // could also leave address blank.
+      console.log('[VenueAutocomplete] /api/places/details ok:', {
+        placeId,
+        displayName: d.displayName,
+        formattedAddress: d.formattedAddress,
+        hasLocation: !!d.latitude && !!d.longitude,
+      });
       const venueName = d.displayName || text;
+      // Sprint 8.6 §3 — explicit null fallback (was empty
+      // string). The receiver writes whatever is passed; if the
+      // address is null, the receiver's spread leaves row.address
+      // untouched. Empty string would have OVERWRITTEN existing
+      // row.address with '' — visible "address cleared" effect.
+      const formattedAddress: string | null =
+        typeof d.formattedAddress === 'string' && d.formattedAddress.trim()
+          ? d.formattedAddress
+          : null;
+      if (!formattedAddress) {
+        console.warn(
+          '[VenueAutocomplete] place returned without formattedAddress — leaving row.address unchanged',
+          { placeId, displayName: d.displayName },
+        );
+        showToast(
+          'No address available for this place — fill manually if needed.',
+        );
+      }
       // Single update — onPlaceSelect's payload covers venue_name
       // plus address, city, lat/lng, etc. Dropping the redundant
       // onChange(venueName) eliminates the batching window where
       // onBlur could fire between the two updates.
       onPlaceSelect?.({
         venue_name: venueName,
-        address: d.formattedAddress || '',
+        // Pass null when no address — receiver should preserve
+        // existing row.address rather than clobber with ''.
+        address: formattedAddress ?? '',
         city: d.locality,
         country: d.country,
         latitude: d.latitude,
