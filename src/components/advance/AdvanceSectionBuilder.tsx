@@ -936,19 +936,36 @@ function SetupMode({
     return () => window.removeEventListener('advance:field-updated', onFieldUpdated);
   }, [patchFieldById]);
 
-  /** G.3 — add a section by label (from a library card drop) or as a
-   *  blank custom section if seedId === '__blank__' or no label match. */
+  /** G.3 — add a section by id (Sprint 8.5 §6b: AdvanceSectionLibrary
+   *  now passes the template's UUID as seedId) OR by label (legacy
+   *  callers / fallback) OR as a blank custom section if seedId
+   *  is '__blank__' or no template match.
+   *
+   *  Sprint 8.5 §6b — Adam's smoke against 8.4: "adding section
+   *  adds only header (no fields)." Root cause was that the
+   *  hardcoded library labels didn't match the seeded template
+   *  names ("Technical & Power" ≠ "Production"), so the name
+   *  lookup failed and the handler fell through to the empty-
+   *  fields path. Now seedId is a real template UUID; we match
+   *  by ID first for an unambiguous lookup, then by name for any
+   *  legacy caller that still passes a slug. */
   const addSectionFromDrop = useCallback(
     (seedId: string, label: string) => {
       const trimmedLabel = label.trim() || 'Custom Section';
-      // Try to match an existing workspace template by name first.
-      const match = seedId !== '__blank__'
-        ? templates.find(
+      let match: ApiTemplate | undefined;
+      if (seedId !== '__blank__') {
+        // Sprint 8.5 §6b — match by id first (8.5 §6a passes
+        // template UUIDs; the lookup is unambiguous).
+        match = templates.find((t) => t.id === seedId);
+        if (!match) {
+          // Fallback for any legacy caller that passes a name/slug.
+          match = templates.find(
             (t) =>
               (t.name ?? '').trim().toLowerCase() ===
               trimmedLabel.toLowerCase(),
-          )
-        : undefined;
+          );
+        }
+      }
       if (match) {
         addAllFields(match);
         return;
@@ -956,7 +973,7 @@ function SetupMode({
       // No template match → create a blank section. The seed becomes
       // a new template_id (synthesised) with no fields. Autosave picks
       // it up; user can add fields via the existing in-canvas controls.
-      const syntheticId = `${seedId === '__blank__' ? 'custom' : seedId}_${Date.now().toString(36)}`;
+      const syntheticId = `${seedId === '__blank__' ? 'custom' : 'orphan'}_${Date.now().toString(36)}`;
       setSections((prev) => [
         ...prev,
         {
