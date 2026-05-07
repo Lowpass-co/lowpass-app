@@ -55,6 +55,7 @@ import { useArtistTourContext } from '@/contexts/ArtistTourContext';
 import { useProductContext } from '@/contexts/ProductContext';
 import {
   useSwitcherState,
+  type DropdownState,
   type Pane as SwitcherPane,
 } from '@/contexts/SwitcherStateContext';
 import { ContextMenu } from '@/components/ui/ContextMenu';
@@ -363,10 +364,31 @@ export function ArtistTourSwitcher({
   // → animate to end, producing a backwards flash. fill: 'forwards'
   // only persists the END state after the animation completes; it
   // doesn't paint the start state pre-animation.
+  //
+  // Sprint 8.6 §1 — Adam's smoke against 8.5: "It closes, reopens,
+  // then the artist page changes and it stays open." Defensive
+  // fix for the close+reopen flash on same-product navigation:
+  //
+  //   1. lastAnimatedStateRef guard — bail early if dropdownState
+  //      hasn't changed since last animation. Catches any
+  //      spurious re-fire of this effect (e.g. setDropdownState
+  //      reference changing through context destructuring under
+  //      a parent re-render).
+  //
+  //   2. safeCancel instead of raw .cancel() — only cancels
+  //      animations whose playState is still 'running' /
+  //      'finishing'. Preserves the persisted-fill of finished
+  //      animations so the panel doesn't briefly revert to the
+  //      from-frame (opacity 0) when the effect re-fires.
+  //      Sprint 6.2 §2 used safeCancel for the same reason on
+  //      pane animations; line 369's raw cancel() was missed.
+  const lastAnimatedStateRef = useRef<DropdownState | null>(null);
   useLayoutEffect(() => {
+    if (lastAnimatedStateRef.current === dropdownState) return;
+    lastAnimatedStateRef.current = dropdownState;
     const el = panelRef.current;
     if (!el) return;
-    panelAnimRef.current?.cancel();
+    safeCancel(panelAnimRef.current);
     const reduce = prefersReducedMotion();
     if (dropdownState === 'open') {
       panelAnimRef.current = el.animate(
