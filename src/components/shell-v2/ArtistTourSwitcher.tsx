@@ -783,18 +783,20 @@ export function ArtistTourSwitcher({
             zIndex: 'var(--lp-z-dropdown)',
             minWidth: 320,
             maxWidth: 360,
-            // Sprint 8.5 §2 — bumped from min(420px, 60vh) to
-            // min(600px, 70vh) per Adam's spec. Combined with
-            // the Create-CTA-out-of-scroll refactor below, this
-            // gives ~10 visible rows before scrolling kicks in.
-            // Sprint 8.6 §2 — minHeight: 0 so the inner flex
-            // chain can resolve correctly under maxHeight clamp.
-            // Without this, position:absolute panels with
-            // maxHeight (no fixed height) compute children at
-            // their natural sizes and overflow:auto never
-            // triggers.
-            maxHeight: 'min(600px, 70vh)',
-            minHeight: 0,
+            // Sprint 8.6.1 — drop the panel-level maxHeight + flex
+            // chain. Sprint 8.6 §2 attempted to make the inner
+            // scroll list resolve from `flex: 1 1 0` under a
+            // `maxHeight: min(600px, 70vh)` clamp, but the
+            // position:absolute panel never gets a resolved height
+            // (intrinsic, not laid out by a flex/grid parent), so
+            // children with `flex: 1` collapse to ~200px and the
+            // scroll bar sits on a too-short list.
+            //
+            // New approach: panel sizes to its content. The inner
+            // artists/tours scroll lists have `maxHeight: 400` +
+            // `overflowY: auto` directly — they cap at 400px and
+            // scroll past that, otherwise the panel grows to fit.
+            // No flex height inheritance required.
             background: 'var(--lp-panel)',
             border: '1px solid var(--lp-border-strong)',
             borderRadius: 'var(--lp-radius-md)',
@@ -808,8 +810,11 @@ export function ArtistTourSwitcher({
           <div
             style={{
               position: 'relative',
-              flex: 1,
-              minHeight: 0,
+              // Sprint 8.6.1 — wrapper sizes to the active pane's
+              // content. The exiting pane is position:absolute +
+              // inset:0 so it overlays this box during the
+              // pane-switch animation; that still works with an
+              // intrinsic-height parent.
               overflow: 'hidden',
             }}
           >
@@ -1044,8 +1049,10 @@ function SwitcherPane({
         display: 'flex',
         flexDirection: 'column',
         width: '100%',
-        height: '100%',
-        minHeight: 0,
+        // Sprint 8.6.1 — pane sizes to content. The active pane
+        // (position:relative) defines the parent's height; the
+        // exiting pane (position:absolute, inset:0) overlays
+        // exactly that box for the swap animation.
         opacity: initialOpacity,
       }}
     >
@@ -1129,18 +1136,18 @@ function ArtistsPane({
           list grew past ~8 entries. Now the scroll area is rows-
           only; the CTA sits in a flexShrink: 0 sibling row that
           stays pinned to the pane's bottom regardless of scroll.
-          Sprint 8.6 §2 — `flex: '1 1 0'` (explicit basis 0) so the
-          scroll container's main-axis size is computed from the
-          parent's max-height rather than its own content height
-          (which prevents overflow:auto from triggering). Plus
-          overscrollBehavior: 'contain' so wheel events that hit
-          the dropdown don't chain to the page when the dropdown
-          itself isn't scrollable. */}
+          Sprint 8.6.1 — direct maxHeight + overflowY:auto. The
+          §2 flex-chain attempt was defeated by the panel's lack
+          of a resolved height (position:absolute panels don't
+          inherit one). Putting the cap on the scroll list itself
+          sidesteps the flex-inheritance problem entirely: the
+          list grows to its content up to 400px and scrolls past
+          that, the panel sizes to fit. overscrollBehavior:contain
+          keeps wheel events scoped to the dropdown. */}
       <div
         style={{
           overflowY: 'auto',
-          flex: '1 1 0',
-          minHeight: 0,
+          maxHeight: 400,
           overscrollBehavior: 'contain',
           padding: 'var(--lp-space-1) var(--lp-space-2) var(--lp-space-1)',
         }}
@@ -1299,13 +1306,13 @@ function ToursPane({
       </div>
       {/* Sprint 8.5 §2 — tour rows scroll independently of the
           create CTA (mirrors the artists pane refactor).
-          Sprint 8.6 §2 — explicit flex basis 0 + overscrollBehavior
-          contain (see artists pane for full rationale). */}
+          Sprint 8.6.1 — direct maxHeight: 400 + overflowY:auto +
+          overscrollBehavior:contain (see artists pane for full
+          rationale). */}
       <div
         style={{
           overflowY: 'auto',
-          flex: '1 1 0',
-          minHeight: 0,
+          maxHeight: 400,
           overscrollBehavior: 'contain',
           padding:
             'var(--lp-space-1) var(--lp-space-2) var(--lp-space-1)',
