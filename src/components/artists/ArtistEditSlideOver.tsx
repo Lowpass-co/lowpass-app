@@ -34,10 +34,12 @@ import {
   useRef,
   useState,
 } from 'react';
-import { Search, X as XIcon } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Search, Trash2, X as XIcon } from 'lucide-react';
 import { SlideOver } from '@/components/shell/SlideOver';
 import { useToast } from '@/components/ui/Toast';
 import { ArtistImageUploader } from './ArtistImageUploader';
+import { ArtistDeleteConfirmationModal } from './ArtistDeleteConfirmationModal';
 
 interface SpotifySearchResult {
   id: string;
@@ -113,6 +115,10 @@ function ArtistEditSlideOverInner({
   artist,
   onSaved,
 }: InnerProps) {
+  const router = useRouter();
+  /* -------- delete confirmation modal state (Sprint 8.4 §3) -------- */
+  const [deleteOpen, setDeleteOpen] = useState(false);
+
   /* -------- form state — initialised from the artist row -------- */
   const [name, setName] = useState(artist.name);
   const [genre, setGenre] = useState(artist.branding?.genre ?? '');
@@ -527,7 +533,79 @@ function ArtistEditSlideOverInner({
             disabled={submitting}
           />
         </Field>
+
+        {/* Sprint 8.4 §3 — Danger zone. Sits at the bottom of
+            the form so users have to scroll past the editable
+            fields to reach it. Visually red-bordered so it
+            doesn't get clicked by mistake. */}
+        <div
+          style={{
+            marginTop: 'var(--lp-space-4)',
+            padding: 'var(--lp-space-3)',
+            background:
+              'color-mix(in srgb, var(--color-lp-error) 5%, transparent)',
+            border:
+              '1px solid color-mix(in srgb, var(--color-lp-error) 30%, transparent)',
+            borderRadius: 'var(--lp-radius-md)',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 'var(--lp-space-2)',
+          }}
+        >
+          <span
+            className="lp-label-caps"
+            style={{ color: 'var(--color-lp-error)' }}
+          >
+            Danger zone
+          </span>
+          <p
+            style={{
+              margin: 0,
+              fontSize: 'var(--lp-text-xs)',
+              color: 'var(--lp-text-secondary)',
+              lineHeight: 1.5,
+            }}
+          >
+            Deleting this artist permanently removes every tour
+            under them and all tour-scoped data. Cannot be undone.
+          </p>
+          <button
+            type="button"
+            onClick={() => setDeleteOpen(true)}
+            disabled={submitting}
+            className="btn-transition inline-flex items-center self-start"
+            style={{
+              gap: 'var(--lp-space-2)',
+              padding: 'var(--lp-space-2) var(--lp-space-3)',
+              fontSize: 'var(--lp-text-sm)',
+              fontWeight: 'var(--lp-weight-medium)',
+              color: 'var(--color-lp-error)',
+              background: 'transparent',
+              border:
+                '1px solid color-mix(in srgb, var(--color-lp-error) 50%, transparent)',
+              borderRadius: 'var(--lp-radius-md)',
+              cursor: submitting ? 'not-allowed' : 'pointer',
+              opacity: submitting ? 0.55 : 1,
+            }}
+          >
+            <Trash2 aria-hidden size={14} strokeWidth={2} />
+            Delete artist…
+          </button>
+        </div>
       </form>
+
+      <ArtistDeleteConfirmationModal
+        open={deleteOpen}
+        artistId={artist.id}
+        artistName={artist.name}
+        onClose={() => setDeleteOpen(false)}
+        onDeleted={() => {
+          // Slide-over close + navigate to workspace landing.
+          // Don't call onSaved here — the artist is GONE.
+          onClose();
+          router.push('/artists');
+        }}
+      />
     </SlideOver>
   );
 }
