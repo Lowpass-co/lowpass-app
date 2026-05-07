@@ -231,7 +231,14 @@ export function VenueAutocomplete({
         onChange(venueName);
       }
     } catch (err) {
-      if ((err as Error).name === 'AbortError') return;
+      // Sprint 8.6.2 — also bail when our signal was aborted by a
+      // newer handleSelect call. The aborted stream can throw
+      // inside res.json() as a generic TypeError (not AbortError),
+      // which previously fell through to the failure toast even
+      // though the newer call was about to succeed and fill the
+      // address. Symptom Adam reported: toast fires on a pick that
+      // visibly filled correctly.
+      if ((err as Error).name === 'AbortError' || signal.aborted) return;
       console.error('[VenueAutocomplete] place details threw:', err);
       showToast('Network error fetching venue details.');
       onChange(text);
