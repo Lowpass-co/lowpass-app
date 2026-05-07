@@ -32,8 +32,9 @@ import { TourCreateSlideOver } from './TourCreateSlideOver';
 import { ArtistCreateSlideOver } from './ArtistCreateSlideOver';
 import { TourDeleteConfirmationModal } from './TourDeleteConfirmationModal';
 import { useArtistTourContext } from '@/contexts/ArtistTourContext';
+import { useSwitcherState } from '@/contexts/SwitcherStateContext';
 
-type ArtistMin = {
+export type ArtistMin = {
   id: string;
   name: string;
   branding: unknown;
@@ -46,56 +47,6 @@ type TourMin = {
   start_date: string | null;
   end_date: string | null;
 };
-
-/* ============================================
-   Sprint 8.2 §3 — sessionStorage persistence for createdArtists
-
-   Mirrors the pattern in ArtistTourSwitcher.tsx for dropdown
-   state. Same rationale: Next 16 RSC remounts the wrapper on
-   /artists/[id] navigation, dropping the optimistic-prepend
-   list. Persisted entries age out naturally once the server-
-   side fetch includes them (mergedArtists dedupes by id).
-
-   Per-tab scope; clears on tab close. No logout cleanup needed.
-   ============================================ */
-
-const CREATED_ARTISTS_KEY = 'lp-switcher-created-artists';
-
-function readCreatedArtists(): ArtistMin[] {
-  if (typeof window === 'undefined') return [];
-  try {
-    const raw = window.sessionStorage.getItem(CREATED_ARTISTS_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw) as unknown;
-    if (!Array.isArray(parsed)) return [];
-    // Whitelist the shape — drop any malformed entries.
-    return parsed
-      .filter(
-        (a): a is ArtistMin =>
-          !!a &&
-          typeof a === 'object' &&
-          typeof (a as ArtistMin).id === 'string' &&
-          typeof (a as ArtistMin).name === 'string',
-      )
-      .map((a) => ({
-        id: a.id,
-        name: a.name,
-        branding: a.branding,
-        spotify_image_url: a.spotify_image_url ?? null,
-      }));
-  } catch {
-    return [];
-  }
-}
-
-function writeCreatedArtists(list: ArtistMin[]): void {
-  if (typeof window === 'undefined') return;
-  try {
-    window.sessionStorage.setItem(CREATED_ARTISTS_KEY, JSON.stringify(list));
-  } catch {
-    // Quota / privacy-mode failures: silently no-op.
-  }
-}
 
 interface ArtistTourSwitcherClientWrapperProps {
   initialArtists: ArtistMin[];
@@ -125,30 +76,20 @@ export function ArtistTourSwitcherClientWrapper({
     id: string;
     name: string;
   } | null>(null);
-  // Local optimistic-prepend list of newly-created artists. The
-  // ArtistTourContext fetches its own artists list on mount; we
-  // prepend to a local override here so newly-created artists
-  // appear in the switcher immediately, ahead of the next
-  // context refetch.
+  // Optimistic-prepend list of newly-created artists.
   //
-  // Sprint 8.2 §3 — Adam's smoke against 8.1: "added new artist,
-  // on their home page, but not seeing them in the selector."
-  // Same root cause as Sprint 8.2 §2: the wrapper remounts on
-  // /artists/[new-id] navigation, dropping createdArtists back
-  // to []. Persist to sessionStorage so the new instance
-  // recovers the optimistic prepend list. The persisted entries
-  // age out naturally once the server-side ProductHeader fetch
-  // includes them (mergedArtists below dedupes by id).
-  const [createdArtists, setCreatedArtists] = useState<ArtistMin[]>(() =>
-    readCreatedArtists(),
-  );
-
-  // Persist the optimistic-prepend list on every change. One
-  // write per change is fine — the list grows by ~1 entry per
-  // artist creation, not per render.
-  useEffect(() => {
-    writeCreatedArtists(createdArtists);
-  }, [createdArtists]);
+  // Sprint 8.3 §1 — moved out of local useState into the
+  // workspace-level <SwitcherStateProvider> so the list survives
+  // the wrapper remount that fires on /artists/[new-id] navigation
+  // (Next 16 RSC remounts everything below the dynamic segment).
+  // Replaces Sprint 8.2 §3's sessionStorage rehydration which
+  // worked but kept the wrapper remounting; with state in a
+  // never-unmounting provider, no rehydration needed.
+  //
+  // Entries age out naturally — once the server-side ProductHeader
+  // fetch returns the new artist in initialArtists, mergedArtists
+  // below dedupes by id so the same artist doesn't appear twice.
+  const { createdArtists, setCreatedArtists } = useSwitcherState();
 
   // Tours list — owned here so:
   //   1) the slide-over can optimistically prepend a newly-created
@@ -295,7 +236,7 @@ export function ArtistTourSwitcherClientWrapper({
       setCreatedArtists((prev) => [artist, ...prev]);
       router.push(`/artists/${artist.id}`);
     },
-    [router],
+    [router, setCreatedArtists],
   );
 
   // Sprint 8.1 §5 — tour deletion success path. Optimistically

@@ -39,7 +39,6 @@ import {
   useLayoutEffect,
   useMemo,
   useRef,
-  useState,
 } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import {
@@ -53,6 +52,10 @@ import {
   User,
 } from 'lucide-react';
 import { useArtistTourContext } from '@/contexts/ArtistTourContext';
+import {
+  useSwitcherState,
+  type Pane as SwitcherPane,
+} from '@/contexts/SwitcherStateContext';
 import { ContextMenu } from '@/components/ui/ContextMenu';
 
 /** Minimum artist shape the switcher needs. Wider than this is
@@ -103,78 +106,14 @@ interface ArtistTourSwitcherProps {
  *  Animations API (element.animate()) inside useLayoutEffect, so
  *  React's render cycle never gets in the way of the from-frame
  *  paint. State machine reverts to plain closed/open/closing —
- *  no two-frame intermediate needed. */
-type DropdownState = 'closed' | 'open' | 'closing';
-type Pane = 'artists' | 'tours';
+ *  no two-frame intermediate needed.
+ *
+ *  Sprint 8.3 §1 — DropdownState now lives in
+ *  src/contexts/SwitcherStateContext.tsx (via the provider).
+ *  Pane stays as a local alias because several internal types
+ *  (PaneAnim, SwitcherPane prop signatures) still reference it. */
+type Pane = SwitcherPane;
 
-/* ============================================
-   Sprint 8.2 §2 — sessionStorage persistence
-
-   Survives remounts caused by Next 16 re-rendering the dynamic-
-   segment subtree on /artists/[A] → /artists/[B] navigation.
-   sessionStorage scope is per-tab and clears on tab close, so
-   no logout hook needed.
-   ============================================ */
-
-const SWITCHER_STATE_KEY = 'lp-switcher-state';
-
-interface PersistedSwitcherState {
-  dropdownState?: DropdownState;
-  pane?: Pane;
-  exitingPane?: Pane | null;
-  paneDirection?: 'forward' | 'back';
-}
-
-function readSwitcherState(): PersistedSwitcherState {
-  if (typeof window === 'undefined') return {};
-  try {
-    const raw = window.sessionStorage.getItem(SWITCHER_STATE_KEY);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw) as unknown;
-    if (!parsed || typeof parsed !== 'object') return {};
-    const obj = parsed as Record<string, unknown>;
-    // Whitelist fields + values to defend against malformed
-    // storage from a previous build. Validation is cheap and
-    // means a stale shape never crashes the switcher.
-    const ds = obj.dropdownState;
-    const p = obj.pane;
-    const ep = obj.exitingPane;
-    const pd = obj.paneDirection;
-    return {
-      dropdownState:
-        ds === 'closed' || ds === 'open' || ds === 'closing'
-          ? (ds as DropdownState)
-          : undefined,
-      pane: p === 'artists' || p === 'tours' ? (p as Pane) : undefined,
-      exitingPane:
-        ep === 'artists' || ep === 'tours'
-          ? (ep as Pane)
-          : ep === null
-            ? null
-            : undefined,
-      paneDirection:
-        pd === 'forward' || pd === 'back'
-          ? (pd as 'forward' | 'back')
-          : undefined,
-    };
-  } catch {
-    return {};
-  }
-}
-
-function writeSwitcherState(state: PersistedSwitcherState): void {
-  if (typeof window === 'undefined') return;
-  try {
-    window.sessionStorage.setItem(
-      SWITCHER_STATE_KEY,
-      JSON.stringify(state),
-    );
-  } catch {
-    // Quota / privacy-mode failures: silently no-op. The
-    // switcher works without persistence; it just won't
-    // survive remounts.
-  }
-}
 type PaneAnim =
   | 'idle'
   | 'enter-from-right'
@@ -365,52 +304,32 @@ export function ArtistTourSwitcher({
 
   /* -------- dropdown state machine --------
    *
-   * Sprint 8.2 §2 — Adam's smoke against 8.1: "dropdown closes
-   * once new artist selected. still no animation on the selector
-   * menu." Layout-instance preservation didn't hold in practice
-   * (Next 16 RSC re-render of the dynamic-segment subtree
-   * remounts client components below it, even though React
-   * reconciliation in theory should preserve them).
+   * Sprint 8.3 §1 — state is held in <SwitcherStateProvider>
+   * mounted at (app)/layout.tsx. The provider lives above the
+   * dynamic-segment subtree, so its useState values survive
+   * /artists/[id], /budget/[tourId], etc. navigation. The
+   * switcher itself can still remount on those nav events,
+   * but its state lives in the never-unmounting context.
    *
-   * Fix: persist the dropdown state to sessionStorage. If the
-   * switcher remounts mid-navigation, the new instance reads
-   * the persisted state and re-enters the same pane in the same
-   * open/closing/closed state. Bug becomes independent of
-   * whether layout preservation actually works.
-   *
-   * Storage scope: sessionStorage clears on tab close (per Adam's
-   * sign-off, no logout cleanup needed). Single combined key
-   * `lp-switcher-state` holds {dropdownState, pane, exitingPane,
-   * paneDirection} as a JSON blob. One write per state change
-   * — no debouncing (the state-change frequency during a single
-   * open animation is ~3 transitions, well within budget). */
-  const [dropdownState, setDropdownState] = useState<DropdownState>(() =>
-    readSwitcherState().dropdownState ?? 'closed',
-  );
-  const [pane, setPane] = useState<Pane>(() =>
-    readSwitcherState().pane ?? 'artists',
-  );
-  // The pane currently animating OUT (rendered alongside the new
-  // pane during the 250ms cross-fade). null when no transition.
-  const [exitingPane, setExitingPane] = useState<Pane | null>(() =>
-    readSwitcherState().exitingPane ?? null,
-  );
-  // Direction of the in-flight pane transition. Determines which
-  // CSS data-pane-state value each pane uses.
-  const [paneDirection, setPaneDirection] = useState<'forward' | 'back'>(() =>
-    readSwitcherState().paneDirection ?? 'forward',
-  );
-
-  // Persist the four state slices to sessionStorage on every
-  // change. The reads above are the recovery path on a remount.
-  useEffect(() => {
-    writeSwitcherState({
-      dropdownState,
-      pane,
-      exitingPane,
-      paneDirection,
-    });
-  }, [dropdownState, pane, exitingPane, paneDirection]);
+   * Replaces Sprint 8.2 §2's sessionStorage rehydration —
+   * which worked but produced a visible close+reopen flash
+   * because the wrapper still remounted and re-read storage
+   * mid-paint. Adam's smoke: "still doesn't animate." */
+  const {
+    dropdownState,
+    setDropdownState,
+    pane,
+    setPane,
+    // The pane currently animating OUT (rendered alongside the
+    // new pane during the 250ms cross-fade). null when no
+    // transition.
+    exitingPane,
+    setExitingPane,
+    // Direction of the in-flight pane transition. Determines
+    // which CSS data-pane-state value each pane uses.
+    paneDirection,
+    setPaneDirection,
+  } = useSwitcherState();
 
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -424,11 +343,11 @@ export function ArtistTourSwitcher({
     setPane(initialPaneOnOpen);
     setExitingPane(null);
     setDropdownState('open');
-  }, [initialPaneOnOpen]);
+  }, [initialPaneOnOpen, setPane, setExitingPane, setDropdownState]);
 
   const closeDropdown = useCallback(() => {
     setDropdownState((prev) => (prev === 'open' ? 'closing' : prev));
-  }, []);
+  }, [setDropdownState]);
 
   // Sprint 6.1 §3 — Web Animations API drives the panel open/close.
   // useLayoutEffect is required: it runs synchronously after DOM
@@ -473,7 +392,7 @@ export function ArtistTourSwitcher({
         setDropdownState((prev) => (prev === 'closing' ? 'closed' : prev));
       };
     }
-  }, [dropdownState]);
+  }, [dropdownState, setDropdownState]);
 
   // Cancel any in-flight animation on unmount.
   useEffect(() => {
@@ -499,7 +418,7 @@ export function ArtistTourSwitcher({
     }
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
-  }, []);
+  }, [setDropdownState, setExitingPane]);
 
   /* -------- Esc + click-outside -------- */
   useEffect(() => {
@@ -536,7 +455,7 @@ export function ArtistTourSwitcher({
         return next;
       });
     },
-    [],
+    [setPane, setExitingPane, setPaneDirection],
   );
 
   // After the exiting pane's transition completes, drop it from
@@ -546,7 +465,7 @@ export function ArtistTourSwitcher({
   // when its mountAnim is exit-to-left/right.
   const handlePaneExitDone = useCallback(() => {
     setExitingPane(null);
-  }, []);
+  }, [setExitingPane]);
 
   /* -------- list interaction -------- */
   const handleArtistClick = useCallback(
