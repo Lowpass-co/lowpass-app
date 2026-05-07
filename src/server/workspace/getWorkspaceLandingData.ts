@@ -112,6 +112,31 @@ export async function getWorkspaceLandingData(
   const monthStart = startOfMonthISO();
   const monthEnd = endOfMonthISO();
 
+  /* ============================================
+     Sprint 8.4 §4 — workspace activity feed.
+
+     Approach (per Adam's prompt sign-off): SQL UNION across
+     existing tables — no new schema. Each source supplies
+     up to 10 most-recent rows; we merge in JS, sort by
+     timestamp DESC, take top 10.
+
+     Tables in scope:
+       - tours             (updated_at)        action: "tour updated"
+       - routing           (created_at — no updated_at on this
+                            table per migration 001; "show
+                            added" is the meaningful event)
+       - budget_line_items (updated_at)        action: "budget line updated"
+       - advance_instances (last_updated_at, last_updated_by_id)
+       - deal_memos        (updated_at)        action: "deal memo updated"
+
+     Workspace scoping: tours / budget_line_items / deal_memos
+     have workspace_id directly. routing + advance_instances
+     don't — they scope via tour_id → tours.workspace_id, which
+     RLS already enforces (we still pass tour_id IN (...) for
+     index hits + clarity).
+     ============================================ */
+  const ACTIVITY_PER_SOURCE = 10;
+
   const [
     workspaceRes,
     artistsRes,
@@ -120,6 +145,9 @@ export async function getWorkspaceLandingData(
     monthRoutingRes,
     pickUpRes,
     budgetRes,
+    actToursRes,
+    actBudgetRes,
+    actDealMemosRes,
   ] = await Promise.all([
     supabase
       .from('workspaces')
@@ -170,6 +198,26 @@ export async function getWorkspaceLandingData(
       .from('budget_line_items')
       .select('proposed_cost')
       .eq('workspace_id', workspaceId),
+    // Sprint 8.4 §4 — activity sources (limit per-source so
+    // the merge step has bounded work).
+    supabase
+      .from('tours')
+      .select('id, name, artist_id, updated_at')
+      .eq('workspace_id', workspaceId)
+      .order('updated_at', { ascending: false })
+      .limit(ACTIVITY_PER_SOURCE),
+    supabase
+      .from('budget_line_items')
+      .select('id, description, category, tour_id, updated_at')
+      .eq('workspace_id', workspaceId)
+      .order('updated_at', { ascending: false })
+      .limit(ACTIVITY_PER_SOURCE),
+    supabase
+      .from('deal_memos')
+      .select('id, title, tour_id, updated_at')
+      .eq('workspace_id', workspaceId)
+      .order('updated_at', { ascending: false })
+      .limit(ACTIVITY_PER_SOURCE),
   ]);
 
   type ArtistRow = {
@@ -325,6 +373,254 @@ export async function getWorkspaceLandingData(
     0,
   );
 
+  /* ============================================
+     Sprint 8.4 §4 — assemble activity rows.
+
+     The first wave (in the Promise.all above) covered the three
+     workspace_id-scoped tables. routing + advance_instances
+     scope through tours.workspace_id only, so we run them
+     here against the tour_ids we already have.
+     ============================================ */
+  type ActTourRow = {
+    id: string;
+    name: string;
+    artist_id: string | null;
+    updated_at: string | null;
+  };
+  type ActBudgetRow = {
+    id: string;
+    description: string | null;
+    category: string | null;
+    tour_id: string | null;
+    updated_at: string | null;
+  };
+  type ActDealMemoRow = {
+    id: string;
+    title: string | null;
+    tour_id: string | null;
+    updated_at: string | null;
+  };
+  const actTours = (actToursRes.data ?? []) as ActTourRow[];
+  const actBudget = (actBudgetRes.data ?? []) as ActBudgetRow[];
+  const actDealMemos = (actDealMemosRes.data ?? []) as ActDealMemoRow[];
+
+  // Lookup maps for entity_href construction.
+  const tourById = new Map<string, TourRow>(
+    tourRows.map((t) => [t.id, t]),
+  );
+  const artistById = new Map<string, ArtistRow>(
+    artistRows.map((a) => [a.id, a]),
+  );
+
+  const tourIdsInWorkspace = tourRows.map((t) => t.id);
+
+  // Second wave: tour_id-scoped sources. Skip when the workspace
+  // has no tours (no FK to query against).
+  const [actRoutingRes, actAdvanceRes] =
+    tourIdsInWorkspace.length > 0
+      ? await Promise.all([
+          supabase
+            .from('routing')
+            .select('id, tour_id, date, venue_name, city, created_at')
+            .in('tour_id', tourIdsInWorkspace)
+            .order('created_at', { ascending: false })
+            .limit(ACTIVITY_PER_SOURCE),
+          supabase
+            .from('advance_instances')
+            .select(
+              'id, routing_id, status, last_updated_at, last_updated_by_id',
+            )
+            .in(
+              'routing_id',
+              // Pass routing_ids — RLS still scopes via the tour
+              // chain, but supabase needs a value list. We don't
+              // have routing_ids cached, so pass the empty array
+              // when none — the IN clause then matches nothing.
+              [], // populated immediately below
+            )
+            .order('last_updated_at', { ascending: false })
+            .limit(0),
+        ])
+      : [{ data: [] as unknown[] }, { data: [] as unknown[] }];
+
+  type ActRoutingRow = {
+    id: string;
+    tour_id: string | null;
+    date: string;
+    venue_name: string | null;
+    city: string | null;
+    created_at: string | null;
+  };
+  const actRouting = (actRoutingRes.data ?? []) as ActRoutingRow[];
+
+  // Advance instances need routing_ids to query. Re-query with
+  // the routing_ids gathered from the routing source above so
+  // the .in() clause hits real data.
+  const routingIds = actRouting.map((r) => r.id);
+  type ActAdvanceRow = {
+    id: string;
+    routing_id: string | null;
+    status: string | null;
+    last_updated_at: string | null;
+    last_updated_by_id: string | null;
+  };
+  let actAdvance: ActAdvanceRow[] = [];
+  // Skip the dummy advance query; it returned 0 rows. Re-query
+  // properly when we have routing_ids.
+  void actAdvanceRes;
+  if (routingIds.length > 0) {
+    const { data: advanceData } = await supabase
+      .from('advance_instances')
+      .select(
+        'id, routing_id, status, last_updated_at, last_updated_by_id',
+      )
+      .in('routing_id', routingIds)
+      .order('last_updated_at', { ascending: false })
+      .limit(ACTIVITY_PER_SOURCE);
+    actAdvance = (advanceData ?? []) as ActAdvanceRow[];
+  }
+
+  // Collect actor user ids that need name resolution.
+  const actorIds = new Set<string>();
+  for (const a of actAdvance) {
+    if (a.last_updated_by_id) actorIds.add(a.last_updated_by_id);
+  }
+
+  let profilesById = new Map<string, string>();
+  if (actorIds.size > 0) {
+    const { data: profileData } = await supabase
+      .from('profiles')
+      .select('id, full_name, email')
+      .in('id', Array.from(actorIds));
+    const profiles = (profileData ?? []) as Array<{
+      id: string;
+      full_name: string | null;
+      email: string | null;
+    }>;
+    profilesById = new Map(
+      profiles.map((p) => {
+        const display =
+          (p.full_name && p.full_name.trim()) ||
+          (p.email && p.email.split('@')[0]) ||
+          '—';
+        return [p.id, display];
+      }),
+    );
+  }
+
+  // Build rows from each source. Action copy is short and
+  // present-tense per the dot-density visual language.
+  function tourCtxLabel(tourId: string | null): string {
+    if (!tourId) return '';
+    const t = tourById.get(tourId);
+    if (!t) return '';
+    const a = t.artist_id ? artistById.get(t.artist_id) : null;
+    return a?.name ? `${a.name} · ${t.name}` : t.name;
+  }
+  function tourArtistHref(tourId: string | null): string | null {
+    if (!tourId) return null;
+    const t = tourById.get(tourId);
+    if (!t) return null;
+    return `/budget/${t.id}`;
+  }
+
+  const activityCandidates: WorkspaceLandingActivityRow[] = [];
+
+  for (const t of actTours) {
+    if (!t.updated_at) continue;
+    const a = t.artist_id ? artistById.get(t.artist_id) : null;
+    activityCandidates.push({
+      id: `tour-${t.id}-${t.updated_at}`,
+      occurredAt: t.updated_at,
+      actor: '—',
+      action: 'tour updated',
+      entity: a?.name ? `${a.name} · ${t.name}` : t.name,
+      href: `/budget/${t.id}`,
+    });
+  }
+
+  for (const b of actBudget) {
+    if (!b.updated_at) continue;
+    const ctx = tourCtxLabel(b.tour_id);
+    const label =
+      b.description?.trim() ||
+      b.category?.trim() ||
+      'budget line';
+    activityCandidates.push({
+      id: `budget-${b.id}-${b.updated_at}`,
+      occurredAt: b.updated_at,
+      actor: '—',
+      action: 'budget line updated',
+      entity: ctx ? `${ctx} · ${label}` : label,
+      href: tourArtistHref(b.tour_id),
+    });
+  }
+
+  for (const d of actDealMemos) {
+    if (!d.updated_at) continue;
+    const ctx = tourCtxLabel(d.tour_id);
+    const label = d.title?.trim() || 'deal memo';
+    activityCandidates.push({
+      id: `deal-${d.id}-${d.updated_at}`,
+      occurredAt: d.updated_at,
+      actor: '—',
+      action: 'deal memo updated',
+      entity: ctx ? `${ctx} · ${label}` : label,
+      href: tourArtistHref(d.tour_id),
+    });
+  }
+
+  for (const r of actRouting) {
+    if (!r.created_at) continue;
+    const ctx = tourCtxLabel(r.tour_id);
+    const showLabel = r.venue_name?.trim() || r.city?.trim() || r.date;
+    activityCandidates.push({
+      id: `routing-${r.id}-${r.created_at}`,
+      occurredAt: r.created_at,
+      actor: '—',
+      action: 'show added',
+      entity: ctx ? `${ctx} · ${showLabel}` : showLabel,
+      href: r.tour_id ? `/advance/${r.tour_id}/${r.id}` : null,
+    });
+  }
+
+  // Build a routing→tour_id map so advance rows can resolve to
+  // the parent tour's context label.
+  const tourIdByRoutingId = new Map<string, string>(
+    actRouting
+      .filter((r) => r.tour_id)
+      .map((r) => [r.id, r.tour_id as string]),
+  );
+
+  for (const a of actAdvance) {
+    if (!a.last_updated_at) continue;
+    const tourId = a.routing_id
+      ? tourIdByRoutingId.get(a.routing_id) ?? null
+      : null;
+    const ctx = tourCtxLabel(tourId);
+    const actor = a.last_updated_by_id
+      ? profilesById.get(a.last_updated_by_id) ?? '—'
+      : '—';
+    activityCandidates.push({
+      id: `advance-${a.id}-${a.last_updated_at}`,
+      occurredAt: a.last_updated_at,
+      actor,
+      action: 'advance updated',
+      entity: ctx || 'show advance',
+      href:
+        tourId && a.routing_id
+          ? `/advance/${tourId}/${a.routing_id}`
+          : null,
+    });
+  }
+
+  // Sort by timestamp DESC + take top 10. The merge is the
+  // "UNION ORDER BY timestamp DESC LIMIT 10" final pass.
+  activityCandidates.sort((x, y) =>
+    y.occurredAt.localeCompare(x.occurredAt),
+  );
+  const activity = activityCandidates.slice(0, 10);
+
   return {
     workspaceId,
     workspaceName: workspaceRow?.name ?? 'Workspace',
@@ -337,12 +633,6 @@ export async function getWorkspaceLandingData(
     },
     pickUp,
     artists,
-    // Activity feed deferred to a follow-up iteration; the existing
-    // RecentActivityTable on /artists/[id] is artist-scoped and
-    // doesn't generalize cleanly to workspace-wide. Returning an
-    // empty list lets the page render the section as "No recent
-    // activity" until a workspace-scoped feed lands. Noted in the
-    // sprint report's deferred section.
-    activity: [],
+    activity,
   };
 }
