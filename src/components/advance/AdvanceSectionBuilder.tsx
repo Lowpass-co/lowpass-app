@@ -803,11 +803,77 @@ function SetupMode({
         if (cancelled) return;
         const list = (j.templates ?? []) as { id: string; name: string; sections: SectionDef[] }[];
         const t = list.find((x) => x.id === defaultAdvanceTemplateId);
-        if (t?.sections?.length) setSections(t.sections.map((s, i) => ({ ...s, order: i })));
+        if (t?.sections?.length) {
+          const seeded = t.sections.map((s, i) => ({ ...s, order: i }));
+          setSections(seeded);
+          // Sprint 8.5 §6c — update the autosave baseline so this
+          // server-driven seed doesn't trigger a redundant POST.
+          lastSavedSectionsRef.current = JSON.stringify(seeded);
+        }
       })
       .catch(() => {});
     return () => { cancelled = true; };
   }, [defaultAdvanceTemplateId, currentSections.length]);
+
+  /* ============================================
+     Sprint 8.5 §6c — sections autosave.
+
+     Adam's smoke against Sprint 8.4: "drag-reorder doesn't
+     persist." Root cause: the `sections` array is only saved
+     by the manual Save Layout button; setSections updates
+     local state but no PATCH/POST fires. The data autosave
+     (flushPatch) PATCHes /api/tours/[id]/advance/[routingId]
+     but its body schema doesn't accept `sections`.
+
+     Fix: 800ms debounced POST to /api/tours/[id]/advance
+     whenever sections changes vs the last-saved baseline.
+     The baseline is initialised to JSON.stringify(currentSections)
+     on mount + updated by the layout-template seed effect above
+     + updated by every successful save. JSON.stringify-based
+     equality keeps the per-call-site dirty tracking out of
+     individual setSections call sites — works for ALL setters
+     (moveSectionOrder, moveFieldOrder, addSectionFromDrop,
+     addField, removeField, etc.) without per-touch
+     instrumentation.
+
+     Manual Save Layout button (line 1011, saveLayout) stays
+     for users who want immediate save / explicit confirmation.
+     Both paths POST the same payload to the same endpoint.
+     ============================================ */
+  const lastSavedSectionsRef = useRef<string>(
+    JSON.stringify(currentSections),
+  );
+
+  useEffect(() => {
+    const current = JSON.stringify(sections);
+    if (current === lastSavedSectionsRef.current) return;
+    const handle = setTimeout(() => {
+      void (async () => {
+        try {
+          const res = await fetch(`/api/tours/${tourId}/advance`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ routing_id: routingId, sections }),
+          });
+          if (res.ok) {
+            lastSavedSectionsRef.current = current;
+          } else {
+            // Don't reset the baseline on failure — the next
+            // sections change (or no change) will retry.
+            console.error(
+              `[advance-sections autosave] POST failed: ${res.status}`,
+            );
+          }
+        } catch (err) {
+          console.error(
+            '[advance-sections autosave] network error:',
+            err,
+          );
+        }
+      })();
+    }, 800);
+    return () => clearTimeout(handle);
+  }, [sections, tourId, routingId]);
 
   useEffect(() => {
     if (!lastAddedTemplateId) return;
