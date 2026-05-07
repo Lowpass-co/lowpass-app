@@ -101,6 +101,10 @@ interface ArtistTourSwitcherProps {
    *  from the per-row ⋮ menu in the tours pane. The wrapper
    *  opens <TourDeleteConfirmationModal> with the chosen tour. */
   onDeleteTour?: (tour: { id: string; name: string }) => void;
+  /** Sprint 8.4 §3 — called when the user picks "Delete artist…"
+   *  from the per-row ⋮ menu in the artists pane. The wrapper
+   *  opens <ArtistDeleteConfirmationModal>. */
+  onDeleteArtist?: (artist: { id: string; name: string }) => void;
 }
 
 /** Sprint 6.1 §3 — animations are now driven by the Web
@@ -261,6 +265,7 @@ export function ArtistTourSwitcher({
   onCreateTour,
   onCreateArtist,
   onDeleteTour,
+  onDeleteArtist,
 }: ArtistTourSwitcherProps) {
   const {
     selectedArtistId,
@@ -796,6 +801,18 @@ export function ArtistTourSwitcher({
                   onClose={closeDropdown}
                   onAllArtists={handleAllArtists}
                   onCreateArtist={onCreateArtist}
+                  onDeleteArtist={
+                    onDeleteArtist
+                      ? (artist) => {
+                          // Sprint 8.4 §3 — close the dropdown
+                          // first so the modal owns focus, then
+                          // hand off to the wrapper which mounts
+                          // <ArtistDeleteConfirmationModal>.
+                          closeDropdown();
+                          onDeleteArtist(artist);
+                        }
+                      : undefined
+                  }
                 />
               ) : (
                 <ToursPane
@@ -1014,6 +1031,7 @@ function ArtistsPane({
   onClose,
   onAllArtists,
   onCreateArtist,
+  onDeleteArtist,
 }: {
   artists: ArtistMin[];
   selectedArtistId: string | null;
@@ -1026,6 +1044,11 @@ function ArtistsPane({
   /** Sprint 8 §5 — opens the ArtistCreateSlideOver. Wired by
    *  the parent from the wrapper's setIsCreateArtistOpen. */
   onCreateArtist: () => void;
+  /** Sprint 8.4 §3 — when defined, each artist row shows a ⋮
+   *  overflow menu with a "Delete artist…" item. Wrapper
+   *  mounts <ArtistDeleteConfirmationModal> with the chosen
+   *  artist. Undefined = no menu. */
+  onDeleteArtist?: (artist: { id: string; name: string }) => void;
 }) {
   return (
     <>
@@ -1078,67 +1101,15 @@ function ArtistsPane({
         {artists.length === 0 ? (
           <EmptyState message="No artists yet." />
         ) : (
-          artists.map((a) => {
-            const selected = a.id === selectedArtistId;
-            const img = pickArtistImage(a);
-            return (
-              <button
-                key={a.id}
-                type="button"
-                onClick={() => onPick(a.id)}
-                className="btn-transition"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 'var(--lp-space-3)',
-                  width: '100%',
-                  height: 36,
-                  padding: '0 var(--lp-space-2)',
-                  borderRadius: 'var(--lp-radius-sm)',
-                  background: selected
-                    ? 'var(--color-lp-orange-subtle-hover)'
-                    : 'transparent',
-                  borderLeft: selected
-                    ? '2px solid var(--color-lp-orange)'
-                    : '2px solid transparent',
-                  cursor: 'pointer',
-                  textAlign: 'left',
-                }}
-                onMouseEnter={(e) => {
-                  if (!selected) {
-                    e.currentTarget.style.background =
-                      'var(--lp-panel-hover)';
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (!selected) {
-                    e.currentTarget.style.background = 'transparent';
-                  }
-                }}
-              >
-                <ArtistAvatar imageUrl={img} name={a.name} />
-                <span
-                  className="min-w-0 truncate"
-                  style={{
-                    flex: 1,
-                    fontSize: 'var(--lp-text-base)',
-                    color: 'var(--lp-text)',
-                  }}
-                >
-                  {a.name}
-                </span>
-                <ChevronRight
-                  aria-hidden
-                  size={12}
-                  strokeWidth={2}
-                  style={{
-                    color: 'var(--lp-text-tertiary)',
-                    flexShrink: 0,
-                  }}
-                />
-              </button>
-            );
-          })
+          artists.map((a) => (
+            <SwitcherArtistRow
+              key={a.id}
+              artist={a}
+              selected={a.id === selectedArtistId}
+              onPick={onPick}
+              onDeleteArtist={onDeleteArtist}
+            />
+          ))
         )}
         {/* Sprint 8 §5 — "+ Create new artist" CTA mirrors the
             "+ Create new tour" CTA at the bottom of the tours
@@ -1388,6 +1359,118 @@ function ToursPane({
    the visual feedback users had before the refactor. The inner
    button is transparent and inherits.
    ============================================ */
+
+/* ============================================
+   Sprint 8.4 §3 — <SwitcherArtistRow>
+
+   Mirrors <SwitcherTourRow>'s flex layout: real <button> for the
+   click target alongside a real <button> for the ⋮ menu (HTML
+   doesn't allow nested buttons). Outer flex div owns hover/
+   selected highlighting so it covers both halves.
+   ============================================ */
+
+function SwitcherArtistRow({
+  artist,
+  selected,
+  onPick,
+  onDeleteArtist,
+}: {
+  artist: ArtistMin;
+  selected: boolean;
+  onPick: (id: string) => void;
+  onDeleteArtist?: (artist: { id: string; name: string }) => void;
+}) {
+  const img = pickArtistImage(artist);
+  return (
+    <div
+      className="btn-transition"
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        width: '100%',
+        height: 36,
+        borderRadius: 'var(--lp-radius-sm)',
+        background: selected
+          ? 'var(--color-lp-orange-subtle-hover)'
+          : 'transparent',
+        borderLeft: selected
+          ? '2px solid var(--color-lp-orange)'
+          : '2px solid transparent',
+      }}
+      onMouseEnter={(e) => {
+        if (!selected) {
+          e.currentTarget.style.background = 'var(--lp-panel-hover)';
+        }
+      }}
+      onMouseLeave={(e) => {
+        if (!selected) {
+          e.currentTarget.style.background = 'transparent';
+        }
+      }}
+    >
+      <button
+        type="button"
+        onClick={() => onPick(artist.id)}
+        style={{
+          flex: 1,
+          minWidth: 0,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 'var(--lp-space-3)',
+          height: '100%',
+          padding: '0 var(--lp-space-2)',
+          background: 'transparent',
+          border: 'none',
+          cursor: 'pointer',
+          textAlign: 'left',
+        }}
+      >
+        <ArtistAvatar imageUrl={img} name={artist.name} />
+        <span
+          className="min-w-0 truncate"
+          style={{
+            flex: 1,
+            fontSize: 'var(--lp-text-base)',
+            color: 'var(--lp-text)',
+          }}
+        >
+          {artist.name}
+        </span>
+        <ChevronRight
+          aria-hidden
+          size={12}
+          strokeWidth={2}
+          style={{
+            color: 'var(--lp-text-tertiary)',
+            flexShrink: 0,
+          }}
+        />
+      </button>
+      {onDeleteArtist ? (
+        <div
+          style={{
+            paddingRight: 'var(--lp-space-1)',
+            display: 'flex',
+            alignItems: 'center',
+          }}
+        >
+          <ContextMenu
+            items={[
+              {
+                label: 'Delete artist…',
+                icon: Trash2,
+                variant: 'danger',
+                onClick: () =>
+                  onDeleteArtist({ id: artist.id, name: artist.name }),
+              },
+            ]}
+            align="right"
+          />
+        </div>
+      ) : null}
+    </div>
+  );
+}
 
 function SwitcherTourRow({
   tour,

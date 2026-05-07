@@ -31,6 +31,7 @@ import { ArtistTourSwitcher } from './ArtistTourSwitcher';
 import { TourCreateSlideOver } from './TourCreateSlideOver';
 import { ArtistCreateSlideOver } from './ArtistCreateSlideOver';
 import { TourDeleteConfirmationModal } from './TourDeleteConfirmationModal';
+import { ArtistDeleteConfirmationModal } from '@/components/artists/ArtistDeleteConfirmationModal';
 import { useArtistTourContext } from '@/contexts/ArtistTourContext';
 import { useSwitcherState } from '@/contexts/SwitcherStateContext';
 
@@ -73,6 +74,12 @@ export function ArtistTourSwitcherClientWrapper({
   // the modal so the switcher itself can stay focused on its
   // navigation role; opens via the per-row ⋮ menu.
   const [tourToDelete, setTourToDelete] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
+  // Sprint 8.4 §3 — artist deletion modal state, mirror of
+  // tourToDelete. Opens via the switcher's per-row ⋮ menu.
+  const [artistToDelete, setArtistToDelete] = useState<{
     id: string;
     name: string;
   } | null>(null);
@@ -269,6 +276,21 @@ export function ArtistTourSwitcherClientWrapper({
     }
   }, [tourToDelete, pathname, router, selectedArtistId]);
 
+  // Sprint 8.4 §3 — artist deletion success path. Mirror of
+  // tourToDelete: optimistically scrub the artist from the
+  // local createdArtists list (in case the deleted artist was
+  // there), invalidate cache, navigate to /artists.
+  const handleArtistDeleted = useCallback(() => {
+    if (!artistToDelete) return;
+    const deletedId = artistToDelete.id;
+    setCreatedArtists((prev) => prev.filter((a) => a.id !== deletedId));
+    setArtistToDelete(null);
+    router.refresh();
+    // Navigate away from any URL scoped to this artist (or its
+    // tours). Safe destination: workspace landing.
+    router.push('/artists');
+  }, [artistToDelete, router, setCreatedArtists]);
+
   // Merge: optimistic creates first, then the server-fetched
   // list (de-duped by id). Keeps newly-created artists at the
   // top of the switcher's pane until the next page-level refetch.
@@ -297,6 +319,7 @@ export function ArtistTourSwitcherClientWrapper({
         onCreateTour={() => setIsCreateTourOpen(true)}
         onCreateArtist={() => setIsCreateArtistOpen(true)}
         onDeleteTour={(tour) => setTourToDelete(tour)}
+        onDeleteArtist={(artist) => setArtistToDelete(artist)}
       />
       <TourCreateSlideOver
         open={isCreateTourOpen}
@@ -316,6 +339,15 @@ export function ArtistTourSwitcherClientWrapper({
           tourName={tourToDelete.name}
           onClose={() => setTourToDelete(null)}
           onDeleted={handleTourDeleted}
+        />
+      ) : null}
+      {artistToDelete ? (
+        <ArtistDeleteConfirmationModal
+          open
+          artistId={artistToDelete.id}
+          artistName={artistToDelete.name}
+          onClose={() => setArtistToDelete(null)}
+          onDeleted={handleArtistDeleted}
         />
       ) : null}
     </>

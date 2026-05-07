@@ -1,5 +1,6 @@
 /* ============================================
    LOWPASS — Sprint 7 §5 — <ArtistGridCard>
+                Sprint 8.4 §3 — added ⋮ overflow menu
 
    Card in the workspace landing's artist grid. 280×320 with
    banner half on top + content half on bottom; 88px logo
@@ -7,10 +8,23 @@
 
    Click anywhere on the card → navigates to /artists/[id].
    Hover lift via .lp-artist-grid-card class in globals.css.
+
+   Sprint 8.4 §3 — top-right ⋮ overflow menu (becomes visible
+   on hover via the .lp-artist-grid-card-menu class) opens a
+   small popover with "Delete artist…". Refactored from a single
+   <Link> to a <div role="link"> with an inner clickable
+   surface so the menu button can live as a sibling — HTML
+   doesn't allow nested <button>s inside <a>s.
    ============================================ */
 
-import Link from 'next/link';
+'use client';
+
+import { useRouter } from 'next/navigation';
+import { useState } from 'react';
+import { Trash2 } from 'lucide-react';
+import { ContextMenu } from '@/components/ui/ContextMenu';
 import { ArtistInitialsChip } from './ArtistInitialsChip';
+import { ArtistDeleteConfirmationModal } from './ArtistDeleteConfirmationModal';
 import type { WorkspaceLandingArtist } from '@/server/workspace/getWorkspaceLandingData';
 
 const MONTHS = [
@@ -33,128 +47,189 @@ export function ArtistGridCard({
 }: {
   artist: WorkspaceLandingArtist;
 }) {
+  const router = useRouter();
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const navigate = () => router.push(`/artists/${artist.id}`);
+
   return (
-    <Link
-      href={`/artists/${artist.id}`}
-      className="lp-artist-grid-card relative block"
-      style={{
-        background: 'var(--lp-panel)',
-        border: '1px solid var(--lp-border-strong)',
-        borderRadius: 'var(--lp-radius-lg)',
-        overflow: 'hidden',
-        textDecoration: 'none',
-        height: 320,
-      }}
-    >
-      {/* Banner — top half. Spotify image cover or gradient
-          fallback. */}
+    <>
       <div
+        className="lp-artist-grid-card lp-artist-grid-card-hover relative"
         style={{
-          height: 160,
-          background: artist.bannerUrl
-            ? `url(${artist.bannerUrl}) center / cover no-repeat`
-            : artist.bannerGradient,
-          position: 'relative',
-        }}
-      >
-        {artist.bannerUrl ? (
-          <div
-            aria-hidden
-            className="absolute inset-0"
-            style={{
-              backdropFilter: 'brightness(0.9)',
-              WebkitBackdropFilter: 'brightness(0.9)',
-            }}
-          />
-        ) : null}
-      </div>
-
-      {/* Logo overlay — half-extends from banner into content. */}
-      <div
-        className="absolute"
-        style={{
-          left: 'var(--lp-space-3)',
-          top: 160 - 44,
-          width: 88,
-          height: 88,
-          borderRadius: 'var(--lp-radius-full)',
-          border: '2px solid var(--lp-bg)',
-          boxShadow: 'var(--lp-shadow-sm)',
+          background: 'var(--lp-panel)',
+          border: '1px solid var(--lp-border-strong)',
+          borderRadius: 'var(--lp-radius-lg)',
           overflow: 'hidden',
-          background: 'var(--lp-bg-deep)',
+          height: 320,
         }}
       >
-        {artist.logoUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={artist.logoUrl}
-            alt=""
-            width={88}
-            height={88}
-            style={{
-              width: '100%',
-              height: '100%',
-              objectFit: 'cover',
-              display: 'block',
-            }}
-          />
-        ) : (
-          <ArtistInitialsChip name={artist.name} size={88} fontSize={28} />
-        )}
-      </div>
+        {/* Click target — covers the whole card via absolute fill,
+            sits BELOW the menu button via z-index. The menu's
+            stopPropagation prevents the card's navigate from firing
+            when the menu icon is clicked. */}
+        <button
+          type="button"
+          onClick={navigate}
+          aria-label={`Open ${artist.name}`}
+          className="absolute inset-0 cursor-pointer"
+          style={{
+            zIndex: 1,
+            background: 'transparent',
+            border: 'none',
+            padding: 0,
+          }}
+        />
 
-      {/* Content — bottom half. Top padding accommodates the
-          half-extending logo. */}
-      <div
-        className="flex flex-col"
-        style={{
-          padding: '52px var(--lp-space-3) var(--lp-space-3)',
-          gap: 'var(--lp-space-1)',
-        }}
-      >
-        <div
-          className="lp-label-caps truncate"
-          style={{
-            color: 'var(--lp-text)',
-            fontWeight: 'var(--lp-weight-medium)',
-            letterSpacing: 'var(--lp-tracking-caps)',
-            fontSize: 'var(--lp-text-base)',
-            textTransform: 'uppercase',
-          }}
-        >
-          {artist.name}
-        </div>
+        {/* Banner — top half. Spotify image cover or gradient
+            fallback. */}
         <div
           style={{
-            fontSize: 'var(--lp-text-xs)',
-            color: 'var(--lp-text-secondary)',
-            fontVariantNumeric: 'tabular-nums',
+            height: 160,
+            background: artist.bannerUrl
+              ? `url(${artist.bannerUrl}) center / cover no-repeat`
+              : artist.bannerGradient,
+            position: 'relative',
+            pointerEvents: 'none',
           }}
         >
-          <span className="lp-mono">{artist.activeTourCount}</span>{' '}
-          active ·{' '}
-          <span className="lp-mono">{artist.monthsUpcoming}</span>{' '}
-          {artist.monthsUpcoming === 1 ? 'month' : 'months'} upcoming
+          {artist.bannerUrl ? (
+            <div
+              aria-hidden
+              className="absolute inset-0"
+              style={{
+                backdropFilter: 'brightness(0.9)',
+                WebkitBackdropFilter: 'brightness(0.9)',
+              }}
+            />
+          ) : null}
         </div>
-        {artist.nextShow ? (
+
+        {/* ⋮ overflow menu — top-right, above the click target. */}
+        <div
+          className="absolute"
+          style={{
+            top: 'var(--lp-space-2)',
+            right: 'var(--lp-space-2)',
+            zIndex: 2,
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <ContextMenu
+            items={[
+              {
+                label: 'Delete artist…',
+                icon: Trash2,
+                variant: 'danger',
+                onClick: () => setDeleteOpen(true),
+              },
+            ]}
+            align="right"
+          />
+        </div>
+
+        {/* Logo overlay — half-extends from banner into content. */}
+        <div
+          className="absolute"
+          style={{
+            left: 'var(--lp-space-3)',
+            top: 160 - 44,
+            width: 88,
+            height: 88,
+            borderRadius: 'var(--lp-radius-full)',
+            border: '2px solid var(--lp-bg)',
+            boxShadow: 'var(--lp-shadow-sm)',
+            overflow: 'hidden',
+            background: 'var(--lp-bg-deep)',
+            pointerEvents: 'none',
+          }}
+        >
+          {artist.logoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={artist.logoUrl}
+              alt=""
+              width={88}
+              height={88}
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+                display: 'block',
+              }}
+            />
+          ) : (
+            <ArtistInitialsChip name={artist.name} size={88} fontSize={28} />
+          )}
+        </div>
+
+        {/* Content — bottom half. Top padding accommodates the
+            half-extending logo. */}
+        <div
+          className="flex flex-col"
+          style={{
+            padding: '52px var(--lp-space-3) var(--lp-space-3)',
+            gap: 'var(--lp-space-1)',
+            pointerEvents: 'none',
+          }}
+        >
           <div
-            className="truncate"
+            className="lp-label-caps truncate"
             style={{
-              fontSize: 'var(--lp-text-2xs)',
-              fontWeight: 'var(--lp-weight-bold)',
+              color: 'var(--lp-text)',
+              fontWeight: 'var(--lp-weight-medium)',
               letterSpacing: 'var(--lp-tracking-caps)',
+              fontSize: 'var(--lp-text-base)',
               textTransform: 'uppercase',
-              color: 'var(--lp-text-tertiary)',
-              marginTop: 4,
             }}
           >
-            Next: {formatNextDate(artist.nextShow.date)}
-            {artist.nextShow.venue
-              ? ` · ${shortenVenue(artist.nextShow.venue)}`
-              : ''}
+            {artist.name}
           </div>
-        ) : null}
+          <div
+            style={{
+              fontSize: 'var(--lp-text-xs)',
+              color: 'var(--lp-text-secondary)',
+              fontVariantNumeric: 'tabular-nums',
+            }}
+          >
+            <span className="lp-mono">{artist.activeTourCount}</span>{' '}
+            active ·{' '}
+            <span className="lp-mono">{artist.monthsUpcoming}</span>{' '}
+            {artist.monthsUpcoming === 1 ? 'month' : 'months'} upcoming
+          </div>
+          {artist.nextShow ? (
+            <div
+              className="truncate"
+              style={{
+                fontSize: 'var(--lp-text-2xs)',
+                fontWeight: 'var(--lp-weight-bold)',
+                letterSpacing: 'var(--lp-tracking-caps)',
+                textTransform: 'uppercase',
+                color: 'var(--lp-text-tertiary)',
+                marginTop: 4,
+              }}
+            >
+              Next: {formatNextDate(artist.nextShow.date)}
+              {artist.nextShow.venue
+                ? ` · ${shortenVenue(artist.nextShow.venue)}`
+                : ''}
+            </div>
+          ) : null}
+        </div>
       </div>
-    </Link>
+
+      {/* Delete confirmation modal — local to this card. */}
+      <ArtistDeleteConfirmationModal
+        open={deleteOpen}
+        artistId={artist.id}
+        artistName={artist.name}
+        onClose={() => setDeleteOpen(false)}
+        onDeleted={() => {
+          // After deletion, refresh the workspace landing so the
+          // grid drops this card. router.refresh() re-fetches the
+          // server-rendered data on the current page.
+          router.refresh();
+        }}
+      />
+    </>
   );
 }

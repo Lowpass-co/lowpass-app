@@ -22,9 +22,9 @@
    page (which awaits the Spotify fetch); the hero just renders.
    ============================================ */
 
-import Link from 'next/link';
-import { Pencil } from 'lucide-react';
 import { ArtistInitialsChip } from './ArtistInitialsChip';
+import { EditArtistButton } from './EditArtistButton';
+import type { ArtistEditSlideOverArtist } from './ArtistEditSlideOver';
 
 const FOLLOWER_THRESHOLD = 1000;
 
@@ -50,6 +50,10 @@ interface ArtistHeroProps {
    *  "Linked on Spotify" with genre + monthly listeners. */
   primaryGenre: string | null;
   monthlyListeners: number | null;
+  /** Sprint 8.4 §2 — full artist row (lean projection) for the
+   *  Edit profile slide-over. Passed through to <EditArtistButton>
+   *  which mounts <ArtistEditSlideOver> with all current values. */
+  editArtist: ArtistEditSlideOverArtist;
 }
 
 export function ArtistHero({
@@ -61,7 +65,11 @@ export function ArtistHero({
   spotifyLinked,
   primaryGenre,
   monthlyListeners,
+  editArtist,
 }: ArtistHeroProps) {
+  // artistId param kept for future use (analytics/data-attrs);
+  // EditArtistButton reads the id off editArtist.
+  void artistId;
   // Build the meta line — dot-separated micro-labels.
   const metaParts: string[] = [];
   if (primaryGenre) metaParts.push(primaryGenre.toUpperCase());
@@ -185,23 +193,7 @@ export function ArtistHero({
             {metaLine}
           </div>
         </div>
-        <Link
-          href={`/artists/${artistId}/edit`}
-          className="btn-transition inline-flex shrink-0 items-center"
-          style={{
-            gap: 'var(--lp-space-2)',
-            padding: 'var(--lp-space-2) var(--lp-space-3)',
-            fontSize: 'var(--lp-text-sm)',
-            fontWeight: 'var(--lp-weight-medium)',
-            color: 'var(--lp-text-secondary)',
-            background: 'var(--lp-panel)',
-            border: '1px solid var(--lp-border-strong)',
-            borderRadius: 'var(--lp-radius-md)',
-          }}
-        >
-          <Pencil aria-hidden size={14} strokeWidth={2} />
-          Edit profile
-        </Link>
+        <EditArtistButton artist={editArtist} />
       </div>
     </div>
   );

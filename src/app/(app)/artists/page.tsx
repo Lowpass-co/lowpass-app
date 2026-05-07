@@ -22,6 +22,7 @@ import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { WorkspaceTopBar } from '@/components/shell-v2/WorkspaceTopBar';
 import { PickUpCard } from '@/components/artists/PickUpCard';
 import { ArtistGridCard } from '@/components/artists/ArtistGridCard';
+import { WorkspaceActivityList } from '@/components/artists/WorkspaceActivityList';
 import { ArtistHomeStagger } from '@/components/artists/ArtistHomeStagger';
 import { WorkspaceNewArtistButton } from '@/components/artists/WorkspaceNewArtistButton';
 import { getWorkspaceLandingData } from '@/server/workspace/getWorkspaceLandingData';
@@ -223,9 +224,11 @@ export default async function ArtistsLandingPage() {
             )}
           </section>
 
-          {/* Activity feed — placeholder until workspace-wide
-              activity is implemented; see deferred section in
-              sprint report. */}
+          {/* Sprint 8.4 §4 — workspace activity feed.
+              Populated via UNION across tours / routing /
+              budget_line_items / advance_instances / deal_memos
+              in getWorkspaceLandingData. Empty state remains for
+              brand-new workspaces. */}
           <section>
             <div
               className="flex items-baseline justify-between"
@@ -244,22 +247,26 @@ export default async function ArtistsLandingPage() {
                 className="lp-label-caps"
                 style={{ color: 'var(--lp-text-tertiary)' }}
               >
-                Last 24 hours
+                Last <span className="lp-mono">{data.activity.length}</span> changes
               </span>
             </div>
-            <div
-              style={{
-                padding: 'var(--lp-space-6)',
-                textAlign: 'center',
-                fontSize: 'var(--lp-text-sm)',
-                color: 'var(--lp-text-tertiary)',
-                background: 'var(--lp-panel)',
-                border: '1px solid var(--lp-border-strong)',
-                borderRadius: 'var(--lp-radius-lg)',
-              }}
-            >
-              No recent activity.
-            </div>
+            {data.activity.length === 0 ? (
+              <div
+                style={{
+                  padding: 'var(--lp-space-6)',
+                  textAlign: 'center',
+                  fontSize: 'var(--lp-text-sm)',
+                  color: 'var(--lp-text-tertiary)',
+                  background: 'var(--lp-panel)',
+                  border: '1px solid var(--lp-border-strong)',
+                  borderRadius: 'var(--lp-radius-lg)',
+                }}
+              >
+                No recent activity.
+              </div>
+            ) : (
+              <WorkspaceActivityList rows={data.activity} />
+            )}
           </section>
         </div>
       </ArtistHomeStagger>
