@@ -27,7 +27,6 @@ import { Pencil } from 'lucide-react';
 import {
   TourHeaderAnimator,
   TourHeaderLogo,
-  TourHeaderScrollContainer,
 } from './TourHeaderClient';
 
 const CURRENCY_SYMBOL: Record<string, string> = {
@@ -152,35 +151,15 @@ export function TourHeader({
 
   const statsLine = parts.join(' · ');
 
-  // Sprint 8 §2 — single key stat picked per product for the
-  // compressed sticky bar that reveals on scroll. Falls through
-  // to null when the relevant stat field is empty/zero.
-  let keyStat: string | null = null;
-  if (product === 'budget' && stats.spentPercent != null) {
-    keyStat = `${Math.round(stats.spentPercent)}% SPENT`;
-  } else if (
-    product === 'advance' &&
-    stats.advanceCompletePercent != null
-  ) {
-    keyStat = `${Math.round(stats.advanceCompletePercent)}% COMPLETE`;
-  } else if (
-    product === 'operations' &&
-    stats.crewCount != null &&
-    stats.crewCount > 0
-  ) {
-    keyStat = `${stats.crewCount} CREW`;
-  }
+  // Sprint 8 §2 compressed bar deleted (Sprint 8.1 §1) —
+  // overlapped ProductRail and duplicated identity info from
+  // the switcher. The keyStat third dot-segment briefly added
+  // to the trigger in 8.1 §1 was also removed (Sprint 8.2 §1)
+  // — Adam's smoke: "irrelevant". The expanded TourHeader's
+  // statsLine row 3 below remains the canonical surface for
+  // per-product progress numbers.
 
   return (
-    <TourHeaderScrollContainer
-      compressed={{
-        artistLogoUrl,
-        artistName,
-        tourName,
-        keyStat,
-        tourId,
-      }}
-    >
     <TourHeaderAnimator>
       <header
         className="lp-tour-header flex shrink-0 items-center"
@@ -282,6 +261,5 @@ export function TourHeader({
         </Link>
       </header>
     </TourHeaderAnimator>
-    </TourHeaderScrollContainer>
   );
 }

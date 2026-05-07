@@ -97,6 +97,102 @@ export async function DELETE(
 
   const { id } = await params;
   const workspaceId = profile.workspace_id;
+
+  /* ============================================
+     Sprint 8.2 §5 — storage cleanup (closes 8.1 deferred #1)
+
+     The DB CASCADE wipes all 22 tour-scoped tables, but Supabase
+     Storage objects don't cascade. Enumerate paths from the
+     tables that store storage paths directly, then bulk-remove
+     before the DB delete.
+
+     Buckets cleaned:
+       - rider-assets   ← rider_assets.storage_path (tour_id FK)
+       - deal-memos     ← deal_memos.document_url (tour_id FK;
+                          stores the path, not the public URL —
+                          see /api/deal-memos/[id]/upload)
+       - receipts       ← expenses.receipt_url (tour_id FK;
+                          stores the path — see /api/expenses)
+
+     Buckets DEFERRED (more complex extraction; tracked for a
+     follow-up):
+       - budget-files   ← budget_line_item_attachments.file_url
+                          stores a full public URL; needs extraction
+                          via the `/storage/v1/object/public/<bucket>/`
+                          marker pattern.
+       - advance-files  ← URLs embedded in advance_instances.data
+                          JSON; would need per-field path extraction.
+
+     Failures here are LOGGED but do NOT block the DB delete.
+     Orphaned storage objects are recoverable later via admin
+     cleanup; a half-deleted tour (DB delete failed after some
+     storage cleanup) is much harder to recover, so the DB
+     delete must always proceed.
+     ============================================ */
+  const [
+    riderAssetsRes,
+    dealMemosRes,
+    expensesRes,
+  ] = await Promise.all([
+    supabase
+      .from('rider_assets')
+      .select('storage_path')
+      .eq('tour_id', id),
+    supabase
+      .from('deal_memos')
+      .select('document_url')
+      .eq('tour_id', id),
+    supabase
+      .from('expenses')
+      .select('receipt_url')
+      .eq('tour_id', id),
+  ]);
+
+  const riderPaths = ((riderAssetsRes.data ?? []) as Array<{
+    storage_path: string | null;
+  }>)
+    .map((r) => r.storage_path)
+    .filter((p): p is string => typeof p === 'string' && p.length > 0);
+
+  const dealMemoPaths = ((dealMemosRes.data ?? []) as Array<{
+    document_url: string | null;
+  }>)
+    .map((d) => d.document_url)
+    .filter((p): p is string => typeof p === 'string' && p.length > 0);
+
+  const receiptPaths = ((expensesRes.data ?? []) as Array<{
+    receipt_url: string | null;
+  }>)
+    .map((e) => e.receipt_url)
+    .filter((p): p is string => typeof p === 'string' && p.length > 0);
+
+  async function cleanBucket(bucket: string, paths: string[]): Promise<void> {
+    if (paths.length === 0) return;
+    try {
+      const { error: rmErr } = await supabase.storage
+        .from(bucket)
+        .remove(paths);
+      if (rmErr) {
+        console.error(
+          `[delete-tour ${id}] storage.${bucket}.remove failed:`,
+          rmErr.message,
+        );
+      }
+    } catch (err) {
+      console.error(
+        `[delete-tour ${id}] storage.${bucket}.remove threw:`,
+        err,
+      );
+    }
+  }
+
+  await Promise.all([
+    cleanBucket('rider-assets', riderPaths),
+    cleanBucket('deal-memos', dealMemoPaths),
+    cleanBucket('receipts', receiptPaths),
+  ]);
+
+  // DB delete — cascades through all 22 tour-scoped tables.
   const { data: deleted, error } = await supabase
     .from('tours')
     .delete()

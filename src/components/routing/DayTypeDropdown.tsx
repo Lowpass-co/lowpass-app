@@ -111,7 +111,12 @@ export function DayTypeDropdown({
         createPortal(
           <div
             ref={dropdownRef}
-            className="lp-dropdown-layer fixed z-[70] max-h-64 overflow-y-auto rounded-xl border border-lp-border bg-lp-surface py-2 shadow-xl"
+            // Sprint 8.2 §4 — dropped the inline `z-[70]` Tailwind
+            // class. It overrode `lp-dropdown-layer`'s z-index
+            // (now 1300) and forced the dropdown behind any
+            // slide-over (z-index 1210). lp-dropdown-layer alone
+            // is the right layer.
+            className="lp-dropdown-layer fixed max-h-64 overflow-y-auto rounded-xl border border-lp-border bg-lp-surface py-2 shadow-xl"
             style={{
               top: dropdownRect.top,
               left: dropdownRect.left,

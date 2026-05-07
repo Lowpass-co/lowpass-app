@@ -115,9 +115,13 @@ function ArtistCreateSlideOverInner({
   showToast,
   onCreated,
 }: InnerProps) {
+  // Sprint 8.1 §3 (8b) — name and Spotify search merged into one
+  // input. The single source of truth is `name`; typing debounces
+  // a search, results render in a dropdown below the input. Picking
+  // a result locks the name to the picked artist + sets `selected`
+  // (Spotify-linked mode). Editing while linked auto-unlinks.
   const [name, setName] = useState('');
   const [genre, setGenre] = useState('');
-  const [spotifyQuery, setSpotifyQuery] = useState('');
   const [searchResults, setSearchResults] = useState<
     SpotifySearchResult[]
   >([]);
@@ -128,21 +132,6 @@ function ArtistCreateSlideOverInner({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  /* -------- spotify search (debounced) -------- */
-  function onQueryChange(next: string) {
-    setSpotifyQuery(next);
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (next.trim().length < 2) {
-      setSearchResults([]);
-      setSearching(false);
-      return;
-    }
-    setSearching(true);
-    debounceRef.current = setTimeout(() => {
-      runSearch(next.trim());
-    }, 300);
-  }
 
   async function runSearch(q: string) {
     try {
@@ -163,26 +152,40 @@ function ArtistCreateSlideOverInner({
     }
   }
 
-  const onSelectSpotify = useCallback(
-    (r: SpotifySearchResult) => {
-      setSelected({
-        id: r.id,
-        name: r.name,
-        image_url: r.image_url,
-        banner_url: r.banner_url,
-        primaryGenre: null,
-      });
-      // Sprint 8 §5 sign-off — auto-fill name when empty.
-      // Otherwise leave the user's input alone.
-      if (!name.trim()) setName(r.name);
-      // Genre auto-fill deferred — /api/spotify/search doesn't
-      // currently return genres. Left empty; user can type
-      // manually.
-      setSpotifyQuery('');
+  function onNameChange(next: string) {
+    setName(next);
+    // Editing while linked auto-unlinks (the user is overriding
+    // the picked name, so the Spotify link is no longer valid).
+    if (selected && next !== selected.name) {
+      setSelected(null);
+    }
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (next.trim().length < 2 || selected) {
+      // Don't search while linked (user has already picked an
+      // artist) or when query too short.
       setSearchResults([]);
-    },
-    [name],
-  );
+      setSearching(false);
+      return;
+    }
+    setSearching(true);
+    debounceRef.current = setTimeout(() => {
+      runSearch(next.trim());
+    }, 300);
+  }
+
+  const onSelectSpotify = useCallback((r: SpotifySearchResult) => {
+    setSelected({
+      id: r.id,
+      name: r.name,
+      image_url: r.image_url,
+      banner_url: r.banner_url,
+      primaryGenre: null,
+    });
+    // Lock name to the picked artist's name.
+    setName(r.name);
+    setSearchResults([]);
+    setSearching(false);
+  }, []);
 
   const clearSpotify = useCallback(() => {
     setSelected(null);
@@ -339,158 +342,216 @@ function ArtistCreateSlideOverInner({
           </div>
         ) : null}
 
-        <Field label="Name" htmlFor={`${formId}-name`} required>
-          <input
-            id={`${formId}-name`}
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            placeholder="e.g. Good Neighbours"
-            autoFocus
-            data-autofocus
-            required
-            style={inputStyle()}
-          />
-        </Field>
-
-        <Field label="Link on Spotify" htmlFor={`${formId}-spotify`}>
-          {selected ? (
-            <SelectedSpotifyCard
-              selected={selected}
-              onClear={clearSpotify}
+        {/* Sprint 8.1 §3 (8b) — name and Spotify search merged
+            into one input. Typing debounces a Spotify search;
+            results render in a dropdown below the input. Picking
+            a result locks the input to the picked artist's name
+            and sets `selected`. Editing while linked auto-unlinks
+            (handled in onNameChange). */}
+        <Field
+          label="Artist name / Search Spotify"
+          htmlFor={`${formId}-name`}
+          required
+        >
+          <div style={{ position: 'relative' }}>
+            <input
+              id={`${formId}-name`}
+              type="text"
+              value={name}
+              onChange={(e) => onNameChange(e.target.value)}
+              placeholder="e.g. Good Neighbours"
+              autoFocus
+              data-autofocus
+              required
+              autoComplete="off"
+              style={{
+                ...inputStyle(),
+                paddingRight: 36,
+              }}
             />
-          ) : (
-            <>
-              <div style={{ position: 'relative' }}>
-                <input
-                  id={`${formId}-spotify`}
-                  type="search"
-                  value={spotifyQuery}
-                  onChange={(e) => onQueryChange(e.target.value)}
-                  placeholder="Search Spotify…"
+            <Search
+              aria-hidden
+              size={16}
+              strokeWidth={2}
+              style={{
+                position: 'absolute',
+                right: 'var(--lp-space-3)',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                color: 'var(--lp-text-tertiary)',
+                pointerEvents: 'none',
+              }}
+            />
+          </div>
+
+          {/* Linked-state indicator: subtle line under the input
+              with image thumb + checkmark + Unlink button. */}
+          {selected ? (
+            <div
+              className="flex items-center"
+              style={{
+                gap: 'var(--lp-space-2)',
+                padding: 'var(--lp-space-2) var(--lp-space-3)',
+                fontSize: 'var(--lp-text-xs)',
+                color: 'var(--lp-text-secondary)',
+                background: 'var(--lp-panel)',
+                border: '1px solid var(--lp-border-strong)',
+                borderRadius: 'var(--lp-radius-sm)',
+              }}
+            >
+              {selected.image_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={selected.image_url}
+                  alt=""
+                  width={20}
+                  height={20}
                   style={{
-                    ...inputStyle(),
-                    paddingRight: 36,
+                    width: 20,
+                    height: 20,
+                    borderRadius: 'var(--lp-radius-full)',
+                    objectFit: 'cover',
+                    flexShrink: 0,
                   }}
                 />
-                <Search
-                  aria-hidden
-                  size={16}
-                  strokeWidth={2}
-                  style={{
-                    position: 'absolute',
-                    right: 'var(--lp-space-3)',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    color: 'var(--lp-text-tertiary)',
-                    pointerEvents: 'none',
-                  }}
-                />
-              </div>
-              {searching && spotifyQuery.trim().length >= 2 ? (
-                <div
-                  style={{
-                    fontSize: 'var(--lp-text-xs)',
-                    color: 'var(--lp-text-tertiary)',
-                  }}
-                >
-                  Searching Spotify…
-                </div>
               ) : null}
-              {!searching &&
-              searchResults.length > 0 &&
-              spotifyQuery.trim().length >= 2 ? (
-                <div
+              <span style={{ color: 'var(--color-lp-orange)' }}>✓</span>
+              <span className="min-w-0 flex-1 truncate">
+                Linked to Spotify
+              </span>
+              <button
+                type="button"
+                onClick={clearSpotify}
+                className="btn-transition inline-flex items-center"
+                style={{
+                  gap: 4,
+                  padding: '2px 6px',
+                  fontSize: 'var(--lp-text-xs)',
+                  color: 'var(--lp-text-tertiary)',
+                  background: 'transparent',
+                  border: 'none',
+                  cursor: 'pointer',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.color = 'var(--lp-text)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.color = 'var(--lp-text-tertiary)';
+                }}
+              >
+                <XIcon size={12} strokeWidth={2} />
+                Unlink
+              </button>
+            </div>
+          ) : null}
+
+          {/* Free-text search results dropdown — only when not
+              linked + query is long enough + we have results. */}
+          {!selected && searching && name.trim().length >= 2 ? (
+            <div
+              style={{
+                fontSize: 'var(--lp-text-xs)',
+                color: 'var(--lp-text-tertiary)',
+              }}
+            >
+              Searching Spotify…
+            </div>
+          ) : null}
+          {!selected &&
+          !searching &&
+          searchResults.length > 0 &&
+          name.trim().length >= 2 ? (
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 2,
+                background: 'var(--lp-panel)',
+                border: '1px solid var(--lp-border-strong)',
+                borderRadius: 'var(--lp-radius-md)',
+                overflow: 'hidden',
+              }}
+            >
+              {searchResults.map((r) => (
+                <button
+                  key={r.id}
+                  type="button"
+                  onClick={() => onSelectSpotify(r)}
+                  className="btn-transition"
                   style={{
                     display: 'flex',
-                    flexDirection: 'column',
-                    gap: 2,
-                    background: 'var(--lp-panel)',
-                    border: '1px solid var(--lp-border-strong)',
-                    borderRadius: 'var(--lp-radius-md)',
-                    overflow: 'hidden',
+                    alignItems: 'center',
+                    gap: 'var(--lp-space-2)',
+                    padding: 'var(--lp-space-2) var(--lp-space-3)',
+                    background: 'transparent',
+                    border: 'none',
+                    textAlign: 'left',
+                    cursor: 'pointer',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background =
+                      'var(--lp-panel-hover)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'transparent';
                   }}
                 >
-                  {searchResults.map((r) => (
-                    <button
-                      key={r.id}
-                      type="button"
-                      onClick={() => onSelectSpotify(r)}
-                      className="btn-transition"
+                  {r.image_url ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={r.image_url}
+                      alt=""
+                      width={32}
+                      height={32}
                       style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 'var(--lp-space-2)',
-                        padding: 'var(--lp-space-2) var(--lp-space-3)',
-                        background: 'transparent',
-                        border: 'none',
-                        textAlign: 'left',
-                        cursor: 'pointer',
+                        width: 32,
+                        height: 32,
+                        borderRadius: 'var(--lp-radius-full)',
+                        objectFit: 'cover',
+                        flexShrink: 0,
+                        background: 'var(--lp-bg-deep)',
                       }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background =
-                          'var(--lp-panel-hover)';
+                    />
+                  ) : (
+                    <span
+                      aria-hidden
+                      style={{
+                        width: 32,
+                        height: 32,
+                        borderRadius: 'var(--lp-radius-full)',
+                        background:
+                          'color-mix(in srgb, var(--color-lp-orange) 25%, transparent)',
+                        flexShrink: 0,
                       }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = 'transparent';
-                      }}
-                    >
-                      {r.image_url ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={r.image_url}
-                          alt=""
-                          width={32}
-                          height={32}
-                          style={{
-                            width: 32,
-                            height: 32,
-                            borderRadius: 'var(--lp-radius-full)',
-                            objectFit: 'cover',
-                            flexShrink: 0,
-                            background: 'var(--lp-bg-deep)',
-                          }}
-                        />
-                      ) : (
-                        <span
-                          aria-hidden
-                          style={{
-                            width: 32,
-                            height: 32,
-                            borderRadius: 'var(--lp-radius-full)',
-                            background:
-                              'color-mix(in srgb, var(--color-lp-orange) 25%, transparent)',
-                            flexShrink: 0,
-                          }}
-                        />
-                      )}
-                      <span
-                        className="min-w-0 flex-1 truncate"
-                        style={{
-                          fontSize: 'var(--lp-text-sm)',
-                          color: 'var(--lp-text)',
-                        }}
-                      >
-                        {r.name}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              ) : null}
-              {!searching &&
-              spotifyQuery.trim().length >= 2 &&
-              searchResults.length === 0 ? (
-                <div
-                  style={{
-                    fontSize: 'var(--lp-text-xs)',
-                    color: 'var(--lp-text-tertiary)',
-                  }}
-                >
-                  No Spotify matches for &ldquo;{spotifyQuery}&rdquo;.
-                </div>
-              ) : null}
-            </>
-          )}
+                    />
+                  )}
+                  <span
+                    className="min-w-0 flex-1 truncate"
+                    style={{
+                      fontSize: 'var(--lp-text-sm)',
+                      color: 'var(--lp-text)',
+                    }}
+                  >
+                    {r.name}
+                  </span>
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {!selected &&
+          !searching &&
+          name.trim().length >= 2 &&
+          searchResults.length === 0 ? (
+            <div
+              style={{
+                fontSize: 'var(--lp-text-xs)',
+                color: 'var(--lp-text-tertiary)',
+              }}
+            >
+              No Spotify matches for &ldquo;{name}&rdquo;. Submit
+              anyway to create as free-text.
+            </div>
+          ) : null}
         </Field>
 
         <Field label="Genre" htmlFor={`${formId}-genre`}>
@@ -505,105 +566,6 @@ function ArtistCreateSlideOverInner({
         </Field>
       </form>
     </SlideOver>
-  );
-}
-
-/* ----- selected-spotify card subcomponent ----- */
-function SelectedSpotifyCard({
-  selected,
-  onClear,
-}: {
-  selected: SelectedSpotify;
-  onClear: () => void;
-}) {
-  return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 'var(--lp-space-3)',
-        padding: 'var(--lp-space-3)',
-        background: 'var(--lp-panel)',
-        border: '1px solid var(--lp-border-strong)',
-        borderRadius: 'var(--lp-radius-md)',
-      }}
-    >
-      {selected.image_url ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={selected.image_url}
-          alt=""
-          width={48}
-          height={48}
-          style={{
-            width: 48,
-            height: 48,
-            borderRadius: 'var(--lp-radius-md)',
-            objectFit: 'cover',
-            flexShrink: 0,
-            background: 'var(--lp-bg-deep)',
-          }}
-        />
-      ) : (
-        <span
-          aria-hidden
-          style={{
-            width: 48,
-            height: 48,
-            borderRadius: 'var(--lp-radius-md)',
-            background:
-              'color-mix(in srgb, var(--color-lp-orange) 25%, transparent)',
-            flexShrink: 0,
-          }}
-        />
-      )}
-      <div className="min-w-0 flex-1">
-        <div
-          className="truncate"
-          style={{
-            fontSize: 'var(--lp-text-sm)',
-            fontWeight: 'var(--lp-weight-medium)',
-            color: 'var(--lp-text)',
-          }}
-        >
-          {selected.name}
-        </div>
-        <div
-          style={{
-            fontSize: 'var(--lp-text-xs)',
-            color: 'var(--lp-text-tertiary)',
-            marginTop: 2,
-          }}
-        >
-          Banner + image will pull from Spotify
-        </div>
-      </div>
-      <button
-        type="button"
-        onClick={onClear}
-        aria-label="Clear Spotify link"
-        className="btn-transition flex shrink-0 items-center justify-center"
-        style={{
-          width: 28,
-          height: 28,
-          borderRadius: 'var(--lp-radius-sm)',
-          background: 'transparent',
-          color: 'var(--lp-text-tertiary)',
-          border: 'none',
-          cursor: 'pointer',
-        }}
-        onMouseEnter={(e) => {
-          e.currentTarget.style.background = 'var(--lp-panel-hover)';
-          e.currentTarget.style.color = 'var(--lp-text)';
-        }}
-        onMouseLeave={(e) => {
-          e.currentTarget.style.background = 'transparent';
-          e.currentTarget.style.color = 'var(--lp-text-tertiary)';
-        }}
-      >
-        <XIcon size={16} strokeWidth={2} />
-      </button>
-    </div>
   );
 }
 

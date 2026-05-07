@@ -2,7 +2,10 @@
    LOWPASS — Budget · Settlement (Phase 3 §A migration)
 
    /budget/[tourId]/settlement — replaces /tours/[id]/budget/settlement.
-   Wraps the existing legacy SettlementTab inside <ProductShell>.
+
+   Sprint 8.1 §2 — ProductShell + TourHeader hoisted to
+   /budget/[tourId]/layout.tsx. This page renders only the
+   settlement body content.
 
    The settlement surface keeps its current substance — Phase 3
    §A is a migration commit only. A standalone settlement redesign
@@ -10,7 +13,6 @@
    ============================================ */
 
 import { notFound } from 'next/navigation';
-import { ProductShell } from '@/components/shell-v2';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { SettlementTab } from '@/_legacy/budget/SettlementTab';
 
@@ -24,7 +26,7 @@ export default async function BudgetSettlementPage({
 
   const { data: tour, error } = await supabase
     .from('tours')
-    .select('id, currency, artist_id')
+    .select('id, currency')
     .eq('id', tourId)
     .single();
 
@@ -33,42 +35,35 @@ export default async function BudgetSettlementPage({
   const currency = (tour.currency as string | null) ?? 'GBP';
 
   return (
-    <ProductShell
-      active="budget"
-      artistId={(tour.artist_id as string | null) ?? null}
-      tourId={tourId}
-      productName="Budget"
-    >
-      <div className="flex min-h-0 flex-1 flex-col px-4 pb-12 pt-6">
-        <header className="mb-4 flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <p
-              style={{
-                fontSize: '11px',
-                fontWeight: 600,
-                letterSpacing: '0.1em',
-                textTransform: 'uppercase',
-                color: 'var(--lp-text-tertiary)',
-              }}
-            >
-              Budget · settlement
-            </p>
-            <h1 className="lp-h1 mt-1">Settlement</h1>
-            <p
-              className="mt-1"
-              style={{
-                fontSize: '14px',
-                color: 'var(--lp-text-secondary)',
-                lineHeight: 1.5,
-              }}
-            >
-              Close-out flow: per-show day-of vs reconciled guarantees,
-              overage, merch, deductions.
-            </p>
-          </div>
-        </header>
-        <SettlementTab tourId={tourId} currency={currency} />
-      </div>
-    </ProductShell>
+    <div className="flex min-h-0 flex-1 flex-col px-4 pb-12 pt-6">
+      <header className="mb-4 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p
+            style={{
+              fontSize: '11px',
+              fontWeight: 600,
+              letterSpacing: '0.1em',
+              textTransform: 'uppercase',
+              color: 'var(--lp-text-tertiary)',
+            }}
+          >
+            Budget · settlement
+          </p>
+          <h1 className="lp-h1 mt-1">Settlement</h1>
+          <p
+            className="mt-1"
+            style={{
+              fontSize: '14px',
+              color: 'var(--lp-text-secondary)',
+              lineHeight: 1.5,
+            }}
+          >
+            Close-out flow: per-show day-of vs reconciled guarantees,
+            overage, merch, deductions.
+          </p>
+        </div>
+      </header>
+      <SettlementTab tourId={tourId} currency={currency} />
+    </div>
   );
 }

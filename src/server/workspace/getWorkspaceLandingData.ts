@@ -148,11 +148,21 @@ export async function getWorkspaceLandingData(
       .select('id', { count: 'exact', head: true })
       .gte('date', monthStart)
       .lte('date', monthEnd),
-    // Most-recently-updated tour as the "pick up" proxy.
+    // Sprint 8.2 §6 — order by last_visited_at DESC NULLS LAST,
+    // updated_at as the secondary sort. last_visited_at is bumped
+    // by POST /api/tours/[id]/touch on each tour-scoped page
+    // load (workspace-shared scope: any member's visit moves
+    // the column). updated_at is the fallback for tours that
+    // have never been visited via the new tracker (rows
+    // pre-dating migration 069).
     supabase
       .from('tours')
-      .select('id, name, artist_id, updated_at')
+      .select('id, name, artist_id, updated_at, last_visited_at')
       .eq('workspace_id', workspaceId)
+      .order('last_visited_at', {
+        ascending: false,
+        nullsFirst: false,
+      })
       .order('updated_at', { ascending: false })
       .limit(1)
       .maybeSingle(),
@@ -266,14 +276,22 @@ export async function getWorkspaceLandingData(
     name: string;
     artist_id: string | null;
     updated_at: string | null;
+    last_visited_at: string | null;
   };
   const pickUpTour = pickUpRes.data as PickUpTourRow | null;
   let pickUp: WorkspaceLandingPickUp | null = null;
-  if (pickUpTour && pickUpTour.artist_id && pickUpTour.updated_at) {
+  // Sprint 8.2 §6 — prefer last_visited_at, fall back to
+  // updated_at when the tour has never been visited via the
+  // new tracker. The card's "Last edit" copy still reads
+  // accurately because the visit timestamp implies "someone
+  // worked on this tour at" that time.
+  const lastTouchAt =
+    pickUpTour?.last_visited_at ?? pickUpTour?.updated_at ?? null;
+  if (pickUpTour && pickUpTour.artist_id && lastTouchAt) {
     const artist = artistRows.find((a) => a.id === pickUpTour.artist_id);
     if (artist) {
       const artistLogoUrl = await resolveArtistLogoUrl(artist);
-      const lastEditAt = pickUpTour.updated_at;
+      const lastEditAt = lastTouchAt;
       const ms = Date.now() - new Date(lastEditAt).getTime();
       const min = Math.round(ms / 60_000);
       const hours = Math.round(min / 60);

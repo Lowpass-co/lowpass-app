@@ -95,6 +95,10 @@
   --lp-rail-collapsed: 56px;
   --lp-slideover-width: 480px;
   --lp-slideover-width-wide: 640px;
+  /* Sprint 8.1 §4 — xwide variant for the multi-step TourCreateSlideOver
+     when on its routing-builder page (the embedded RoutingGrid needs
+     ~7 columns + drive-time bands and feels cramped at 640px). */
+  --lp-slideover-width-xwide: 800px;
   --lp-content-padding-x: 24px;
   --lp-content-padding-y: 24px;
   --lp-content-max-width: 1440px;
@@ -216,7 +220,12 @@
   --lp-z-elevated: 10;
   --lp-z-sticky: 30;
   --lp-z-overlay: 50;
-  --lp-z-dropdown: 1000;
+  /* Sprint 8.2 §4 — bumped from 1000 to 1300 so dropdowns
+     (DayTypeDropdown, VenueAutocomplete suggestions) render
+     above slide-over content (--lp-z-slide-over = 1210) when
+     used inside <TourCreateSlideOver>'s page-2 RoutingGrid.
+     Below tooltip (1400) so tooltips still win. */
+  --lp-z-dropdown: 1300;
   --lp-z-modal-backdrop: 1100;
   --lp-z-modal: 1110;
   --lp-z-slide-over-backdrop: 1200;
@@ -356,9 +365,15 @@ input[type='checkbox'].lp-checkbox:focus-visible {
   line-height: inherit;
 }
 
-/* Dropdowns / popovers — render above sidebar, header, and card stacking contexts */
+/* Dropdowns / popovers — render above sidebar, header, and card stacking contexts.
+   Sprint 8.3 §2 — was a hardcoded `z-index: 1000`. Sprint 8.2 §4 bumped
+   --lp-z-dropdown to 1300 to clear the slide-over panel (1210), but the
+   class never read the variable — so DayTypeDropdown / VenueAutocomplete
+   suggestions kept rendering BEHIND any open <SlideOver>. Now uses the
+   token chain (--lp-dropdown-layer → --lp-z-dropdown → 1300) so the
+   8.2 §4 bump actually takes effect. */
 .lp-dropdown-layer {
-  z-index: 1000;
+  z-index: var(--lp-dropdown-layer);
 }
 
 /* Dashboard glass cards — forced so UI matches Figma mockup (translucent + frosted + glassy border) */

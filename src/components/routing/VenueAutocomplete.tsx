@@ -173,6 +173,20 @@ export function VenueAutocomplete({
           queryFromUserRef.current = true;
           setQuery(e.target.value);
         }}
+        onBlur={() => {
+          // Sprint 8.2 §4 — sync free-text edits to the parent's
+          // onChange on blur. Previously typing only updated
+          // local `query` state; the parent's venue_name was
+          // only written via handleSelect (autocomplete pick),
+          // so any typed-but-not-picked text was silently lost
+          // on save. Sync at blur (not on every keystroke) to
+          // avoid round-tripping through the [value] useEffect
+          // that resets queryFromUserRef and would close the
+          // dropdown mid-typing.
+          if (query !== value) {
+            onChange(query);
+          }
+        }}
         onKeyDown={(e) => {
           if (!open || suggestions.length === 0) return;
           if (e.key === 'ArrowDown') {
@@ -190,10 +204,15 @@ export function VenueAutocomplete({
             selectByIndex(highlightedIndex);
             return;
           }
-          if (e.key === 'Tab') {
-            selectByIndex(highlightedIndex);
-            return;
-          }
+          // Sprint 8.3 §2 — Tab no longer auto-picks the highlighted
+          // suggestion. Adam's smoke against 8.2 §4d: editing the
+          // location post-pick and tabbing away overwrote the address
+          // because Tab was interpreted as "confirm the highlighted
+          // suggestion" (highlightedIndex defaults to 0 — the first
+          // result). Common autocomplete UX: only Enter or click
+          // commits a pick. Tab now blurs normally; the onBlur sync
+          // (8.2 §4d) writes the typed venue_name without touching
+          // the address column.
         }}
         onFocus={() => {
           if (query.length >= 2) {
