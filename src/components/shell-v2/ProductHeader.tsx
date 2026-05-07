@@ -1,83 +1,45 @@
 /* ============================================
    LOWPASS — Product Split Phase 1 — <ProductHeader>
    (Sprint 5: chips replaced with <ArtistTourSwitcher>)
+   (Sprint 8.5 §1: switcher hoisted out of ProductHeader to
+    workspace-level <AppShell>; this header is now
+    [product name] [search] [avatar] only)
 
    Top header that sits above the page body inside <ProductShell>.
    44-48px tall.
 
+   Sprint 8.5 §1 — the artist/tour switcher used to live here on
+   the left, but it remounted on every dynamic-segment change.
+   The switcher is now mounted in <AppShell> (workspace level)
+   inline above ProductHeader. ProductHeader keeps the per-product
+   chrome: product name + search + avatar. The avatar still needs
+   a server-side user/profile fetch, so this stays an async
+   server component.
+
    API:
-     <ProductHeader
-       artistId={...}
-       tourId={...}            // optional — used to scope the
-                                  // initial-tours pre-fetch
-       productName="Operations"
-     />
-
-   Layout:
-     [ArtistTourSwitcher]      [product name]      [search] [avatar]
-
-   The switcher reads the current selection from ArtistTourContext
-   (which hydrates from URL → path-segment → localStorage per
-   Sprint 4). Selection mutations flow back through the context's
-   setters, which sync URL + localStorage automatically.
+     <ProductHeader productName="Operations" />
    ============================================ */
 
 import { Search } from 'lucide-react';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { ProductHeaderAvatarMenu } from './ProductHeaderAvatarMenu';
-import { ArtistTourSwitcherClientWrapper } from './ArtistTourSwitcherClientWrapper';
 
 export type ProductName = 'Home' | 'Operations' | 'Budget' | 'Advance';
 
 interface ProductHeaderProps {
-  artistId: string | null;
-  tourId?: string | null;
   productName: ProductName;
 }
 
-export async function ProductHeader({
-  artistId,
-  productName,
-}: ProductHeaderProps) {
+export async function ProductHeader({ productName }: ProductHeaderProps) {
   const supabase = await createServerSupabaseClient();
 
-  // Sprint 5 §2 — pre-fetch the lists the new <ArtistTourSwitcher>
-  // needs for instant first open. Lean projection (id + name only
-  // on artists; id + name + dates on tours) so the per-page cost is
-  // negligible. Next dedups identical Supabase queries within a
-  // request boundary; the switcher is mounted on every product
-  // page so this is the canonical place to fetch.
-  const [
-    { data: { user } },
-    artistsRes,
-    initialToursRes,
-  ] = await Promise.all([
-    supabase.auth.getUser(),
-    supabase
-      .from('artists')
-      .select('id, name, branding, spotify_image_url')
-      .order('name', { ascending: true }),
-    artistId
-      ? supabase
-          .from('tours')
-          .select('id, name, start_date, end_date')
-          .eq('artist_id', artistId)
-          .order('start_date', { ascending: false })
-      : Promise.resolve({ data: null }),
-  ]);
-
-  const initialArtists = (artistsRes.data ?? []) as Array<{
-    id: string;
-    name: string;
-    branding: unknown;
-    spotify_image_url: string | null;
-  }>;
-  const initialTours = (initialToursRes.data ?? null) as Array<{
-    id: string;
-    name: string;
-    start_date: string | null;
-    end_date: string | null;
-  }> | null;
+  // Sprint 8.5 §1 — only user/profile fetch remains (for the
+  // avatar menu). The Sprint 5 §2 initialArtists / initialTours
+  // pre-fetch is gone — the workspace-level switcher mounts in
+  // AppShell with initialArtists threaded through (app)/layout.tsx.
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   let isSiteAdmin = false;
   let avatarUrl: string | null = null;
@@ -107,18 +69,8 @@ export async function ProductHeader({
         borderColor: 'var(--lp-border-strong)',
       }}
     >
-      {/* Left: combined hierarchical artist→tour switcher (Sprint 5).
-          Replaces the static [Artist] · [Tour] chips. */}
-      <div className="flex min-w-0 items-center">
-        <ArtistTourSwitcherClientWrapper
-          initialArtists={initialArtists}
-          initialTours={initialTours}
-          initialArtistId={artistId ?? null}
-        />
-      </div>
-
-      {/* Center: product name */}
-      <div className="ml-2 flex items-center">
+      {/* Left: product name */}
+      <div className="flex items-center">
         <span
           style={{
             fontSize: '11px',

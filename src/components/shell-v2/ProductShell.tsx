@@ -47,6 +47,14 @@ export function ProductShell({
   homeHref,
   children,
 }: ProductShellProps) {
+  // Sprint 8.5 §1 — artistId and tourId are no longer consumed
+  // by ProductShell now that the switcher lives at workspace
+  // level. The props stay on the interface for backward
+  // compatibility with the four per-product layouts that pass
+  // them; future cleanup can drop them entirely once all call
+  // sites are updated.
+  void artistId;
+  void tourId;
   return (
     <div
       className="lp-product-shell flex h-screen overflow-hidden"
@@ -57,11 +65,7 @@ export function ProductShell({
     >
       <ProductRail active={active} homeHref={homeHref} />
       <div className="flex min-w-0 flex-1 flex-col">
-        <ProductHeader
-          artistId={artistId}
-          tourId={tourId}
-          productName={productName}
-        />
+        <ProductHeader productName={productName} />
         <main
           className="flex-1 overflow-y-auto"
           style={{

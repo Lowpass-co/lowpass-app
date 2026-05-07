@@ -1,14 +1,33 @@
 /* ============================================
    LOWPASS — App Shell (Client)
 
-   Global client-only app chrome: context guards, toasts, floating bug
-   report. Per-page navigation chrome lives in <PageShell> (TopBar + LeftRail)
-   on each route after UX04.
+   Global client-only app chrome: context guards, toasts,
+   floating bug report, and (Sprint 8.5 §1) the workspace-level
+   switcher mount.
+
+   Sprint 8.5 §1 — the artist/tour switcher used to live inside
+   <ProductHeader> (per-product, in the dynamic-segment subtree),
+   which caused the wrapper + dropdown to remount on every
+   /artists/[A] → /artists/[B] navigation. State persistence
+   (Sprint 8.3 §1) survived but the DOM element didn't, producing
+   a visible close+reopen flash on artist switch.
+
+   Real fix: the switcher is now rendered inside AppShell — at
+   workspace level, above the dynamic-segment subtree. Same DOM
+   element across all (app)/* navigation. No flash.
+
+   The switcher renders inline as the first row of chrome in
+   AppShell's flex column, above {children}. ProductHeader stays
+   per-product but no longer carries the switcher (it keeps
+   product name + search + avatar). On workspace landing
+   (/artists exact), the switcher is hidden via a pathname check
+   — there's no selected artist/tour at that scope.
    ============================================ */
 
 'use client';
 
 import { Suspense, useEffect } from 'react';
+import { usePathname } from 'next/navigation';
 import { ArtistTourScopeGuard } from '@/components/layout/ArtistTourScopeGuard';
 import { OverviewArtistQuerySync } from '@/components/layout/OverviewArtistQuerySync';
 import { FloatingBugReport } from '@/components/bug-report/FloatingBugReport';
@@ -19,6 +38,14 @@ import {
   useCommandPalette,
 } from '@/components/command-palette/CommandPaletteContext';
 import { CommandPalette } from '@/components/command-palette/CommandPalette';
+import { ArtistTourSwitcherClientWrapper } from '@/components/shell-v2/ArtistTourSwitcherClientWrapper';
+
+interface InitialArtist {
+  id: string;
+  name: string;
+  branding: unknown;
+  spotify_image_url: string | null;
+}
 
 /**
  * UX08b — Global ⌘K listener. Mounted inside CommandPaletteProvider so it
@@ -40,7 +67,59 @@ function CommandPaletteShortcut() {
   return null;
 }
 
-export function AppShell({ children }: { children: React.ReactNode }) {
+/**
+ * Sprint 8.5 §1 — workspace-level switcher mount.
+ * Renders inline as the first row of AppShell's flex column.
+ * Visibility: hidden on /artists workspace landing (no selected
+ * artist/tour at that scope). Always rendered on artist-scoped
+ * + tour-scoped pages (/artists/[id]/*, /budget/[X]/*,
+ * /advance/[X]/*, /operations/[X]/*).
+ *
+ * The switcher's actual chrome (the trigger button + dropdown)
+ * is rendered by <ArtistTourSwitcherClientWrapper>; we just
+ * provide a stable container at workspace level so React never
+ * unmounts it.
+ */
+function WorkspaceSwitcherSlot({
+  initialArtists,
+}: {
+  initialArtists: InitialArtist[];
+}) {
+  const pathname = usePathname();
+  // Hide on workspace landing — no artist/tour selected at this
+  // scope. Pathname is `/artists` exactly (no /[id] segment).
+  const onWorkspaceLanding = pathname === '/artists';
+  if (onWorkspaceLanding) return null;
+
+  return (
+    <div
+      className="lp-workspace-switcher-slot"
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        height: 48,
+        padding: '0 var(--lp-space-3)',
+        background: 'var(--lp-panel)',
+        borderBottom: '1px solid var(--lp-border-strong)',
+        flexShrink: 0,
+      }}
+    >
+      <ArtistTourSwitcherClientWrapper
+        initialArtists={initialArtists}
+        initialTours={null}
+        initialArtistId={null}
+      />
+    </div>
+  );
+}
+
+export function AppShell({
+  children,
+  initialArtists,
+}: {
+  children: React.ReactNode;
+  initialArtists: InitialArtist[];
+}) {
   return (
     <EntityRoutingProvider>
       <CommandPaletteProvider>
@@ -54,6 +133,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <Suspense fallback={null}>
             <OverviewArtistQuerySync />
           </Suspense>
+          {/* Sprint 8.5 §1 — workspace-level switcher mount.
+              Sits above the dynamic-segment subtree so the
+              dropdown DOM persists across all (app)/* nav. */}
+          <WorkspaceSwitcherSlot initialArtists={initialArtists} />
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">{children}</div>
           <FloatingBugReport />
           {/* UX18: PWA shell — registers SW (production only) and renders the install prompt. */}
