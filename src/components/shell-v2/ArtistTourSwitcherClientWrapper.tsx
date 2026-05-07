@@ -308,6 +308,14 @@ export function ArtistTourSwitcherClientWrapper({
     const deletedId = tourToDelete.id;
     setTours((prev) => prev.filter((t) => t.id !== deletedId));
     setTourToDelete(null);
+    // Sprint 8.2 §6 — invalidate the workspace landing's
+    // server-rendered cache so the Pick Up Where You Left Off
+    // card no longer surfaces the deleted tour. router.refresh()
+    // re-fetches data on the current route in the next render
+    // pass; combined with the navigation below for the on-tour-
+    // URL case, the next visit to /artists also lands on fresh
+    // data.
+    router.refresh();
     // Navigate away if we're currently ON the deleted tour's URL.
     // Detect via /budget/[id], /advance/[id], /operations/[id].
     const productMatch = pathname?.match(

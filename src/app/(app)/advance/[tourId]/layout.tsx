@@ -15,6 +15,7 @@ import type { ReactNode } from 'react';
 import { notFound } from 'next/navigation';
 import { ProductShell } from '@/components/shell-v2';
 import { TourHeader } from '@/components/shell-v2/TourHeader';
+import { TourVisitTracker } from '@/components/shell-v2/TourVisitTracker';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { resolveArtistLogoUrl } from '@/lib/artists/imageUrl';
 
@@ -132,6 +133,7 @@ export default async function AdvanceTourLayout({
           }}
         />
       ) : null}
+      <TourVisitTracker tourId={tourId} />
       {children}
     </ProductShell>
   );
