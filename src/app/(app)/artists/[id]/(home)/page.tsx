@@ -133,6 +133,28 @@ export default async function ArtistHomePage({
 
   const recentTourId = tours[0]?.id ?? null;
 
+  // Sprint 8.4 §2 — lean projection for the Edit profile slide-over,
+  // mounted via <EditArtistButton> inside <ArtistHero>. Branding is
+  // narrowed to the three fields the slide-over edits.
+  const branding = (imageFields.branding ?? {}) as Record<string, unknown>;
+  const editArtist = {
+    id: artist.id,
+    name: artist.name,
+    spotify_id: imageFields.spotify_id,
+    spotify_image_url: imageFields.spotify_image_url,
+    spotify_banner_url: imageFields.spotify_banner_url,
+    branding: {
+      logo_url:
+        typeof branding.logo_url === 'string' ? branding.logo_url : null,
+      banner_url:
+        typeof branding.banner_url === 'string'
+          ? branding.banner_url
+          : null,
+      genre:
+        typeof branding.genre === 'string' ? branding.genre : null,
+    },
+  };
+
   return (
     <ArtistHomeStagger>
         {/* Hero — full-width banner + logo + identity strip. */}
@@ -145,6 +167,7 @@ export default async function ArtistHomePage({
           spotifyLinked={!!imageFields.spotify_id}
           primaryGenre={spotifyMeta?.genres[0] ?? null}
           monthlyListeners={spotifyMeta?.followers ?? null}
+          editArtist={editArtist}
         />
 
         {/* Sections below — page-edge padding mirrors the rest of
