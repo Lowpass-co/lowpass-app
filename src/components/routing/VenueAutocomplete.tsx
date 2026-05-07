@@ -173,6 +173,20 @@ export function VenueAutocomplete({
           queryFromUserRef.current = true;
           setQuery(e.target.value);
         }}
+        onBlur={() => {
+          // Sprint 8.2 §4 — sync free-text edits to the parent's
+          // onChange on blur. Previously typing only updated
+          // local `query` state; the parent's venue_name was
+          // only written via handleSelect (autocomplete pick),
+          // so any typed-but-not-picked text was silently lost
+          // on save. Sync at blur (not on every keystroke) to
+          // avoid round-tripping through the [value] useEffect
+          // that resets queryFromUserRef and would close the
+          // dropdown mid-typing.
+          if (query !== value) {
+            onChange(query);
+          }
+        }}
         onKeyDown={(e) => {
           if (!open || suggestions.length === 0) return;
           if (e.key === 'ArrowDown') {

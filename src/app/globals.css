@@ -220,7 +220,12 @@
   --lp-z-elevated: 10;
   --lp-z-sticky: 30;
   --lp-z-overlay: 50;
-  --lp-z-dropdown: 1000;
+  /* Sprint 8.2 §4 — bumped from 1000 to 1300 so dropdowns
+     (DayTypeDropdown, VenueAutocomplete suggestions) render
+     above slide-over content (--lp-z-slide-over = 1210) when
+     used inside <TourCreateSlideOver>'s page-2 RoutingGrid.
+     Below tooltip (1400) so tooltips still win. */
+  --lp-z-dropdown: 1300;
   --lp-z-modal-backdrop: 1100;
   --lp-z-modal: 1110;
   --lp-z-slide-over-backdrop: 1200;
