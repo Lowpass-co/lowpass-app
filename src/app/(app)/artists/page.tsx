@@ -79,6 +79,14 @@ export default async function ArtistsLandingPage() {
                 fontWeight: 'var(--lp-weight-semibold)',
                 color: 'var(--lp-text)',
                 lineHeight: 1.1,
+                // Sprint 8.2 §7 — Adam's smoke: "my name isnt
+                // capitalised on this screen." Workspaces are
+                // auto-provisioned with the user's name (per
+                // migration 002), and that name is sometimes
+                // stored lowercase. CSS `capitalize` title-cases
+                // each word for display without mutating the
+                // stored value (Option A from the prompt).
+                textTransform: 'capitalize',
               }}
             >
               {data.workspaceName}
