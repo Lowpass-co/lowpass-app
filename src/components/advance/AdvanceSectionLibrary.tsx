@@ -1,75 +1,145 @@
 /* ============================================
    LOWPASS — Advance · Section Library (Variant parity §D)
+                 Sprint 8.5 §6a — fetch + expand rewrite
 
    280px left rail in builder mode. Search input + scrollable list
-   of LibraryCards (drag-source) + bottom CTA for blank custom
-   sections. Each card represents a section template the user can
-   drag onto the canvas drop zone.
+   of LibraryCards (drag-source, click-to-expand) + bottom CTA for
+   blank custom sections.
 
-   The seed library is hardcoded for now — these names mirror the
-   defaults in advance_templates seeding (003_seed_advance_templates.sql).
-   Workspace-custom templates and per-tour overrides are NOT shown
-   here yet; that's a follow-up that requires loading from
-   advance_form_configs / advance_layout_templates.
+   Sprint 8.5 §6a — replaces the hardcoded LIBRARY_SEEDS array
+   with a fetch from GET /api/advance/templates, which returns
+   both platform-wide seeded templates (workspace_id IS NULL —
+   from migration 003_seed_advance_templates.sql) AND workspace-
+   custom templates created via "Save as template." Each card
+   maps to a real template object — clicking the card expands it
+   to show the section's actual field list (label + type icon).
 
-   Drag mechanism: cards expose draggable="true" + write the section
-   id into the dataTransfer payload. The SectionDropZone sibling
-   reads it on drop. Touching the existing AdvanceSectionBuilder's
-   internal add-section flow is out of scope; on drop, the page
-   triggers a router.refresh() so any server mutation is reflected.
+   Sprint 8.5 §6b — drag payload now carries the template's UUID
+   (was hardcoded slug like "hospitality"). The receiver
+   (AdvanceSectionBuilder.addSectionFromDrop) matches by ID first
+   for an unambiguous lookup, then falls back to name-match for
+   safety.
+
+   Drag mechanism: cards expose draggable="true" + write the
+   template id into the dataTransfer payload. The SectionDropZone
+   sibling reads it on drop.
    ============================================ */
 
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   Search,
   GripVertical,
   Plus,
-  UtensilsCrossed,
+  ChevronDown,
+  ChevronRight,
+  ClipboardList,
   Speaker,
-  ShieldCheck,
+  UtensilsCrossed,
+  Clock,
   Truck,
+  Bed,
+  Plane,
+  Building,
   ShoppingBag,
+  ShieldCheck,
   MapPin,
   Banknote,
-  ClipboardList,
+  type LucideIcon,
 } from 'lucide-react';
+import { FieldTypeIcon } from './FieldTypeIcon';
 
-type LibrarySectionSeed = {
+type FieldDef = {
   id: string;
   label: string;
-  fieldCount: number;
-  Icon: React.ComponentType<{ className?: string; size?: number }>;
+  type: string;
+  required?: boolean;
 };
 
-const LIBRARY_SEEDS: LibrarySectionSeed[] = [
-  { id: 'hospitality', label: 'Hospitality', fieldCount: 8, Icon: UtensilsCrossed },
-  { id: 'tech_power', label: 'Technical & Power', fieldCount: 12, Icon: Speaker },
-  { id: 'security_labor', label: 'Security & Labor', fieldCount: 6, Icon: ShieldCheck },
-  { id: 'load_in', label: 'Load-in', fieldCount: 10, Icon: Truck },
-  { id: 'load_out', label: 'Load-out', fieldCount: 10, Icon: Truck },
-  { id: 'merchandise', label: 'Merchandise', fieldCount: 6, Icon: ShoppingBag },
-  { id: 'logistics', label: 'Logistics', fieldCount: 15, Icon: MapPin },
-  { id: 'settlement', label: 'Settlement', fieldCount: 10, Icon: Banknote },
-];
+type ApiTemplate = {
+  id: string;
+  name: string;
+  description: string | null;
+  icon: string | null;
+  fields: FieldDef[];
+  workspace_id: string | null;
+  sort_order: number | null;
+  tm_only?: boolean;
+};
 
+/** Map the seed migration's `icon` string → lucide component.
+ *  Unknown icons fall back to ClipboardList. */
+const ICON_BY_NAME: Record<string, LucideIcon> = {
+  speaker: Speaker,
+  utensils: UtensilsCrossed,
+  clock: Clock,
+  truck: Truck,
+  bed: Bed,
+  plane: Plane,
+  building: Building,
+  'shopping-bag': ShoppingBag,
+  shield: ShieldCheck,
+  'map-pin': MapPin,
+  banknote: Banknote,
+};
+
+/** dataTransfer key. Sprint 8.5 §6 keeps the same key but the
+ *  value is now a template UUID (not a hardcoded slug). */
 export const SECTION_LIBRARY_DRAG_TYPE = 'application/x-lp-section-library-id';
 
 export function AdvanceSectionLibrary({
   onAddBlank,
 }: {
-  /** Optional: invoked when the user clicks "+ Blank Custom Section".
-   *  Wiring is left to the page; the existing builder owns the
-   *  internal add-section endpoint. */
+  /** Optional: invoked when the user clicks "+ Blank Custom Section". */
   onAddBlank?: () => void;
 }) {
+  const [templates, setTemplates] = useState<ApiTemplate[]>([]);
+  const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
-  const filtered = query.trim()
-    ? LIBRARY_SEEDS.filter((s) =>
-        s.label.toLowerCase().includes(query.trim().toLowerCase()),
-      )
-    : LIBRARY_SEEDS;
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  // Fetch on mount. /api/advance/templates returns platform-wide
+  // (workspace_id IS NULL) + workspace-custom templates in one
+  // payload, ordered platform-first then by sort_order/name.
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/api/advance/templates')
+      .then((r) => (r.ok ? r.json() : { templates: [] }))
+      .then((j: { templates?: ApiTemplate[] }) => {
+        if (cancelled) return;
+        setTemplates(j.templates ?? []);
+        setLoading(false);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setTemplates([]);
+        setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return templates;
+    return templates.filter((t) =>
+      (t.name ?? '').toLowerCase().includes(q),
+    );
+  }, [templates, query]);
+
+  // Sprint 8.5 §6a — split into platform vs custom for the
+  // micro-label dividers Adam approved. workspace_id IS NULL ⇒
+  // platform; non-null ⇒ workspace custom.
+  const platform = useMemo(
+    () => filtered.filter((t) => t.workspace_id == null),
+    [filtered],
+  );
+  const custom = useMemo(
+    () => filtered.filter((t) => t.workspace_id != null),
+    [filtered],
+  );
 
   return (
     <aside
@@ -120,26 +190,62 @@ export function AdvanceSectionLibrary({
 
       {/* Scrollable library list */}
       <div className="flex-1 overflow-y-auto p-3" style={{ minHeight: 0 }}>
-        <ul className="flex flex-col gap-2">
-          {filtered.length === 0 ? (
-            <li
-              style={{
-                fontSize: '12px',
-                color: 'var(--lp-text-tertiary)',
-                padding: 6,
-                fontStyle: 'italic',
-              }}
-            >
-              No matches.
-            </li>
-          ) : (
-            filtered.map((seed) => (
-              <li key={seed.id}>
-                <LibraryCard seed={seed} />
-              </li>
-            ))
-          )}
-        </ul>
+        {loading ? (
+          <div
+            style={{
+              padding: 12,
+              fontSize: '12px',
+              color: 'var(--lp-text-tertiary)',
+              fontStyle: 'italic',
+            }}
+          >
+            Loading templates…
+          </div>
+        ) : filtered.length === 0 ? (
+          <div
+            style={{
+              padding: 12,
+              fontSize: '12px',
+              color: 'var(--lp-text-tertiary)',
+              fontStyle: 'italic',
+            }}
+          >
+            {query.trim() ? 'No matches.' : 'No templates available.'}
+          </div>
+        ) : (
+          <>
+            {platform.length > 0 ? (
+              <SectionDivider label="Platform" first />
+            ) : null}
+            <ul className="flex flex-col" style={{ gap: 6 }}>
+              {platform.map((t) => (
+                <li key={t.id}>
+                  <LibraryCard
+                    template={t}
+                    expanded={expandedId === t.id}
+                    onToggle={() =>
+                      setExpandedId((cur) => (cur === t.id ? null : t.id))
+                    }
+                  />
+                </li>
+              ))}
+            </ul>
+            {custom.length > 0 ? <SectionDivider label="Custom" /> : null}
+            <ul className="flex flex-col" style={{ gap: 6 }}>
+              {custom.map((t) => (
+                <li key={t.id}>
+                  <LibraryCard
+                    template={t}
+                    expanded={expandedId === t.id}
+                    onToggle={() =>
+                      setExpandedId((cur) => (cur === t.id ? null : t.id))
+                    }
+                  />
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
       </div>
 
       {/* Bottom CTA — blank custom section */}
@@ -173,70 +279,200 @@ export function AdvanceSectionLibrary({
   );
 }
 
-function LibraryCard({ seed }: { seed: LibrarySectionSeed }) {
-  const Icon = seed.Icon;
+function SectionDivider({
+  label,
+  first = false,
+}: {
+  label: string;
+  first?: boolean;
+}) {
   return (
     <div
-      draggable
-      onDragStart={(e) => {
-        e.dataTransfer.setData(SECTION_LIBRARY_DRAG_TYPE, seed.id);
-        e.dataTransfer.setData('text/plain', seed.label);
-        e.dataTransfer.effectAllowed = 'copy';
+      className="lp-label-caps"
+      style={{
+        marginTop: first ? 0 : 12,
+        marginBottom: 6,
+        padding: '0 4px',
+        color: 'var(--lp-text-tertiary)',
       }}
-      className="btn-transition flex items-center gap-2"
+    >
+      {label}
+    </div>
+  );
+}
+
+function LibraryCard({
+  template,
+  expanded,
+  onToggle,
+}: {
+  template: ApiTemplate;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const Icon = template.icon
+    ? (ICON_BY_NAME[template.icon] ?? ClipboardList)
+    : ClipboardList;
+  const fieldCount = template.fields?.length ?? 0;
+
+  return (
+    <div
+      className="btn-transition"
       style={{
         background: 'var(--lp-bg-deep)',
         border: '1px solid var(--lp-border-strong)',
         borderRadius: 4,
-        padding: '8px 10px',
-        cursor: 'grab',
+        overflow: 'hidden',
       }}
     >
-      <GripVertical
-        className="h-4 w-4 shrink-0"
-        style={{ color: 'var(--color-lp-orange)' }}
-        aria-hidden
-      />
-      <span
-        className="flex shrink-0 items-center justify-center"
+      {/* Header row — drag-source + click to expand. The whole
+          row is draggable so the user can grab anywhere; the
+          click-to-expand is wired to a button (so screen readers
+          announce the expanded state) but mousedown inside the
+          card still initiates a drag. */}
+      <div
+        draggable
+        onDragStart={(e) => {
+          e.dataTransfer.setData(SECTION_LIBRARY_DRAG_TYPE, template.id);
+          e.dataTransfer.setData('text/plain', template.name);
+          e.dataTransfer.effectAllowed = 'copy';
+        }}
+        className="flex items-center"
         style={{
-          width: 28,
-          height: 28,
-          background: 'var(--lp-surface)',
-          color: 'var(--color-lp-orange)',
-          borderRadius: 4,
+          gap: 8,
+          padding: '8px 10px',
+          cursor: 'grab',
         }}
       >
-        <Icon size={14} />
-      </span>
-      <div className="min-w-0 flex-1">
-        <div
+        <GripVertical
+          className="h-4 w-4 shrink-0"
+          style={{ color: 'var(--color-lp-orange)' }}
+          aria-hidden
+        />
+        <span
+          className="flex shrink-0 items-center justify-center"
           style={{
-            fontSize: '13px',
-            fontWeight: 500,
-            color: 'var(--lp-text)',
-            whiteSpace: 'nowrap',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
+            width: 28,
+            height: 28,
+            background: 'var(--lp-surface)',
+            color: 'var(--color-lp-orange)',
+            borderRadius: 4,
           }}
         >
-          {seed.label}
+          <Icon size={14} />
+        </span>
+        <div className="min-w-0 flex-1">
+          <div
+            style={{
+              fontSize: '13px',
+              fontWeight: 500,
+              color: 'var(--lp-text)',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+            }}
+          >
+            {template.name}
+          </div>
+          <div
+            style={{
+              fontSize: '11px',
+              color: 'var(--lp-text-tertiary)',
+            }}
+          >
+            <span className="lp-mono">{fieldCount}</span>{' '}
+            {fieldCount === 1 ? 'field' : 'fields'}
+          </div>
         </div>
-        <div
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggle();
+          }}
+          aria-label={expanded ? 'Collapse fields' : 'Expand fields'}
+          aria-expanded={expanded}
+          className="flex shrink-0 items-center justify-center"
           style={{
-            fontSize: '11px',
+            width: 24,
+            height: 24,
+            background: 'transparent',
+            border: 'none',
+            cursor: 'pointer',
             color: 'var(--lp-text-tertiary)',
+            borderRadius: 2,
+          }}
+          onMouseEnter={(e) => {
+            e.currentTarget.style.color = 'var(--lp-text)';
+          }}
+          onMouseLeave={(e) => {
+            e.currentTarget.style.color = 'var(--lp-text-tertiary)';
           }}
         >
-          {seed.fieldCount} fields
-        </div>
+          {expanded ? (
+            <ChevronDown size={14} aria-hidden />
+          ) : (
+            <ChevronRight size={14} aria-hidden />
+          )}
+        </button>
       </div>
-      {/* Default-icons grid placeholder for the iconBar utility import */}
-      <ClipboardList
-        className="hidden h-3 w-3"
-        aria-hidden
-        style={{ color: 'var(--lp-text-tertiary)' }}
-      />
+
+      {/* Expanded field list — full labels + type icons. */}
+      {expanded ? (
+        <div
+          style={{
+            borderTop: '1px solid var(--lp-border-subtle)',
+            background: 'var(--lp-panel)',
+            padding: '8px 10px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 6,
+          }}
+        >
+          {fieldCount === 0 ? (
+            <div
+              style={{
+                fontSize: '11px',
+                color: 'var(--lp-text-tertiary)',
+                fontStyle: 'italic',
+              }}
+            >
+              No fields defined.
+            </div>
+          ) : (
+            template.fields.map((f) => (
+              <div
+                key={f.id}
+                className="flex items-center"
+                style={{ gap: 8 }}
+              >
+                <FieldTypeIcon type={f.type} size={12} />
+                <span
+                  className="min-w-0 flex-1 truncate"
+                  style={{
+                    fontSize: '12px',
+                    color: 'var(--lp-text)',
+                  }}
+                >
+                  {f.label}
+                </span>
+                {f.required ? (
+                  <span
+                    aria-label="Required"
+                    title="Required"
+                    style={{
+                      fontSize: '10px',
+                      color: 'var(--color-lp-orange)',
+                    }}
+                  >
+                    *
+                  </span>
+                ) : null}
+              </div>
+            ))
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }
