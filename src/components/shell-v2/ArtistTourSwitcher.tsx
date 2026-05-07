@@ -761,7 +761,11 @@ export function ArtistTourSwitcher({
             zIndex: 'var(--lp-z-dropdown)',
             minWidth: 320,
             maxWidth: 360,
-            maxHeight: 'min(420px, 60vh)',
+            // Sprint 8.5 §2 — bumped from min(420px, 60vh) to
+            // min(600px, 70vh) per Adam's spec. Combined with
+            // the Create-CTA-out-of-scroll refactor below, this
+            // gives ~10 visible rows before scrolling kicks in.
+            maxHeight: 'min(600px, 70vh)',
             background: 'var(--lp-panel)',
             border: '1px solid var(--lp-border-strong)',
             borderRadius: 'var(--lp-radius-md)',
@@ -1090,12 +1094,18 @@ function ArtistsPane({
           <CloseChevron onClick={onClose} ariaLabel="Close artist list" />
         }
       />
+      {/* Sprint 8.5 §2 — artist rows scroll independently of the
+          create CTA. Previously both shared an overflow-y container
+          which pushed the Create button below the fold once the
+          list grew past ~8 entries. Now the scroll area is rows-
+          only; the CTA sits in a flexShrink: 0 sibling row that
+          stays pinned to the pane's bottom regardless of scroll. */}
       <div
         style={{
           overflowY: 'auto',
           flex: 1,
           minHeight: 0,
-          padding: 'var(--lp-space-1) var(--lp-space-2) var(--lp-space-2)',
+          padding: 'var(--lp-space-1) var(--lp-space-2) var(--lp-space-1)',
         }}
       >
         {artists.length === 0 ? (
@@ -1111,9 +1121,18 @@ function ArtistsPane({
             />
           ))
         )}
+      </div>
+      <div
+        style={{
+          flexShrink: 0,
+          padding: 'var(--lp-space-1) var(--lp-space-2) var(--lp-space-2)',
+          borderTop: '1px solid var(--lp-border-subtle)',
+        }}
+      >
         {/* Sprint 8 §5 — "+ Create new artist" CTA mirrors the
             "+ Create new tour" CTA at the bottom of the tours
-            pane. Same orange-text + Plus icon styling. */}
+            pane. Same orange-text + Plus icon styling.
+            Sprint 8.5 §2 — pinned outside the scroll area. */}
         <button
           type="button"
           onClick={onCreateArtist}
@@ -1124,7 +1143,6 @@ function ArtistsPane({
             gap: 'var(--lp-space-2)',
             width: '100%',
             height: 36,
-            marginTop: 'var(--lp-space-2)',
             padding: '0 var(--lp-space-2)',
             borderRadius: 'var(--lp-radius-sm)',
             background: 'transparent',
@@ -1242,13 +1260,15 @@ function ToursPane({
           {totalTours}
         </span>
       </div>
+      {/* Sprint 8.5 §2 — tour rows scroll independently of the
+          create CTA (mirrors the artists pane refactor). */}
       <div
         style={{
           overflowY: 'auto',
           flex: 1,
           minHeight: 0,
           padding:
-            'var(--lp-space-1) var(--lp-space-2) var(--lp-space-2)',
+            'var(--lp-space-1) var(--lp-space-2) var(--lp-space-1)',
         }}
       >
         {loading ? (
@@ -1300,8 +1320,15 @@ function ToursPane({
             </div>
           ))
         )}
-        {/* "+ Create new tour" CTA — at the bottom, OUTSIDE every
-            year group. */}
+      </div>
+      <div
+        style={{
+          flexShrink: 0,
+          padding: 'var(--lp-space-1) var(--lp-space-2) var(--lp-space-2)',
+          borderTop: '1px solid var(--lp-border-subtle)',
+        }}
+      >
+        {/* "+ Create new tour" CTA — pinned outside the scroll area. */}
         <button
           type="button"
           onClick={onCreateTour}
@@ -1312,7 +1339,6 @@ function ToursPane({
             gap: 'var(--lp-space-2)',
             width: '100%',
             height: 36,
-            marginTop: 'var(--lp-space-2)',
             padding: '0 var(--lp-space-2)',
             borderRadius: 'var(--lp-radius-sm)',
             background: 'transparent',
@@ -1321,6 +1347,7 @@ function ToursPane({
             textAlign: 'left',
             fontSize: 'var(--lp-text-base)',
             fontWeight: 'var(--lp-weight-medium)',
+            border: 'none',
           }}
           onMouseEnter={(e) => {
             e.currentTarget.style.background =
