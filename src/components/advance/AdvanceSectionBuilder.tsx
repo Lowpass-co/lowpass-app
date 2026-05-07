@@ -1780,6 +1780,15 @@ function SetupMode({
         <CustomFieldModal
           onClose={() => { setCustomFieldOpen(false); setCustomFieldContext(null); }}
           onAdd={handleAddCustomField}
+          /* Sprint 8.6 §5 — restrict 'contact' field type to
+             the Key Contacts section. The migration enforces
+             this server-side via CHECK; the modal hides it
+             from the picker so the user never tries. */
+          targetSectionLabel={
+            customFieldContext === 'standalone' || customFieldContext === null
+              ? null
+              : customFieldContext.templateName
+          }
         />
       )}
 
@@ -1885,7 +1894,23 @@ function DropdownOptionsEditor({ value, onChange }: { value: string; onChange: (
   );
 }
 
-function CustomFieldModal({ onClose, onAdd }: { onClose: () => void; onAdd: (field: FieldDef) => void | Promise<void> }) {
+function CustomFieldModal({
+  onClose,
+  onAdd,
+  targetSectionLabel,
+}: {
+  onClose: () => void;
+  onAdd: (field: FieldDef) => void | Promise<void>;
+  /** Sprint 8.6 §5 — when present and not "Key Contacts",
+   *  the 'contact' field type is hidden from the picker. */
+  targetSectionLabel?: string | null;
+}) {
+  // Sprint 8.6 §5 — filter 'contact' out of the picker when
+  // adding to a non-Key-Contacts section. Adam's call: contact
+  // fields ONLY allowed in Key Contacts.
+  const fieldTypeOptions = targetSectionLabel === 'Key Contacts' || targetSectionLabel == null
+    ? FIELD_TYPE_OPTIONS
+    : FIELD_TYPE_OPTIONS.filter((o) => o.id !== 'contact');
   const [label, setLabel] = useState('');
   const [type, setType] = useState('text');
   const [required, setRequired] = useState(false);
@@ -1906,7 +1931,7 @@ function CustomFieldModal({ onClose, onAdd }: { onClose: () => void; onAdd: (fie
     return () => document.removeEventListener('mousedown', close);
   }, [typeDropdownOpen]);
 
-  const selectedOption = FIELD_TYPE_OPTIONS.find((o) => o.id === type) ?? FIELD_TYPE_OPTIONS[0];
+  const selectedOption = fieldTypeOptions.find((o) => o.id === type) ?? fieldTypeOptions[0];
 
   const handleSubmit = () => {
     if (!label.trim()) return;
@@ -1953,7 +1978,7 @@ function CustomFieldModal({ onClose, onAdd }: { onClose: () => void; onAdd: (fie
           </button>
           {typeDropdownOpen && (
             <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-64 overflow-y-auto rounded-xl border border-lp-border bg-lp-surface py-1 shadow-xl context-menu-dropdown">
-              {FIELD_TYPE_OPTIONS.map((opt) => (
+              {fieldTypeOptions.map((opt) => (
                 <button
                   key={opt.id}
                   type="button"
