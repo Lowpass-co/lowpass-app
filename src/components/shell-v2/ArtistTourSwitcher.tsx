@@ -52,6 +52,7 @@ import {
   User,
 } from 'lucide-react';
 import { useArtistTourContext } from '@/contexts/ArtistTourContext';
+import { useProductContext } from '@/contexts/ProductContext';
 import {
   useSwitcherState,
   type Pane as SwitcherPane,
@@ -419,6 +420,26 @@ export function ArtistTourSwitcher({
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
   }, [setDropdownState, setExitingPane]);
+
+  // Sprint 8.3 §3 — close the dropdown on cross-product nav.
+  // After Sprint 8.3 §1 lifted state into the workspace-level
+  // SwitcherStateProvider, the dropdown stays open by default
+  // across ANY navigation — including jumping from /artists/[X]
+  // to /budget/[Y] which Adam's prompt expects to close it
+  // ("V.3: cross-product nav (/artists → /budget/[X]) closes
+  // dropdown (expected)"). Watch the product silo from
+  // ProductContext (whose `current` is derived from pathname);
+  // when it changes, close. The popstate handler above stays
+  // for browser back/fwd within the same product silo.
+  const product = useProductContext().current;
+  const lastProductRef = useRef(product);
+  useEffect(() => {
+    if (lastProductRef.current !== product) {
+      lastProductRef.current = product;
+      setDropdownState('closed');
+      setExitingPane(null);
+    }
+  }, [product, setDropdownState, setExitingPane]);
 
   /* -------- Esc + click-outside -------- */
   useEffect(() => {
