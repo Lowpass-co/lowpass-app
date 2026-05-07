@@ -514,12 +514,23 @@ function ArtistEditSlideOverInner({
           />
         </Field>
 
+        {/* Sprint 8.5 §4 — image uploaders also call router.refresh()
+            on change. The /api/artists/[id]/image/[kind] route commits
+            branding.{logo_url|banner_url} to the DB before this
+            callback fires, so the (server) hero on /artists/[id]
+            re-renders with the new image even if the user closes the
+            slide-over without clicking Save. Adam's smoke against
+            8.4: banner upload only showed "PASS on refresh" — this
+            removes the manual-refresh requirement. */}
         <Field label="Logo" htmlFor={`${formId}-logo`}>
           <ArtistImageUploader
             artistId={artist.id}
             kind="logo"
             currentUrl={logoUrl}
-            onChange={setLogoUrl}
+            onChange={(url) => {
+              setLogoUrl(url);
+              router.refresh();
+            }}
             disabled={submitting}
           />
         </Field>
@@ -529,7 +540,10 @@ function ArtistEditSlideOverInner({
             artistId={artist.id}
             kind="banner"
             currentUrl={bannerUrl}
-            onChange={setBannerUrl}
+            onChange={(url) => {
+              setBannerUrl(url);
+              router.refresh();
+            }}
             disabled={submitting}
           />
         </Field>
