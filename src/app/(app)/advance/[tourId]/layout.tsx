@@ -5,17 +5,16 @@
    one shared layout so the <ArtistTourSwitcher> wrapper persists
    across [routingId] navigation and across [tourId] changes.
 
-   currentTourKeyStat: tour-level advance completion %, which
-   matches the [tourId] root page's stat. The [routingId] page
-   inherits this layout's value rather than computing its own
-   per-section stat (Sprint 8.1 protocol: no override island).
+   Sprint 8.2 §1 — the per-product currentTourKeyStat third
+   dot-segment was dropped from the switcher trigger. TourHeader
+   still renders advance completion + pending counts on its
+   own stats line beneath the tour name.
    ============================================ */
 
 import type { ReactNode } from 'react';
 import { notFound } from 'next/navigation';
 import { ProductShell } from '@/components/shell-v2';
 import { TourHeader } from '@/components/shell-v2/TourHeader';
-import { formatTourKeyStat } from '@/components/shell-v2/tour-key-stat';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { resolveArtistLogoUrl } from '@/lib/artists/imageUrl';
 
@@ -115,9 +114,6 @@ export default async function AdvanceTourLayout({
       artistId={tourRow.artist_id}
       tourId={tourId}
       productName="Advance"
-      currentTourKeyStat={formatTourKeyStat('advance', {
-        advanceCompletePercent,
-      })}
     >
       {artistRow ? (
         <TourHeader

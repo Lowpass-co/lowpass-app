@@ -93,10 +93,6 @@ interface ArtistTourSwitcherProps {
    *  artist" at the bottom of the artists pane. Wrapper opens
    *  the artist slide-over. */
   onCreateArtist: () => void;
-  /** Sprint 8.1 §1 — pre-formatted key-stat string for the
-   *  trigger's third dot-segment on tour-scoped pages. Null on
-   *  non-tour pages. */
-  currentTourKeyStat?: string | null;
   /** Sprint 8.1 §5 — called when the user picks "Delete tour"
    *  from the per-row ⋮ menu in the tours pane. The wrapper
    *  opens <TourDeleteConfirmationModal> with the chosen tour. */
@@ -255,7 +251,6 @@ export function ArtistTourSwitcher({
   toursLoading,
   onCreateTour,
   onCreateArtist,
-  currentTourKeyStat = null,
   onDeleteTour,
 }: ArtistTourSwitcherProps) {
   const {
@@ -665,33 +660,11 @@ export function ArtistTourSwitcher({
               >
                 {displayTourName}
               </span>
-              {/* Sprint 8.1 §1 — third dot-segment carrying the
-                  per-product key stat on tour-scoped pages.
-                  Provided by the wrapper from page-level data
-                  the TourHeader already consumes. Hidden when
-                  null (non-tour pages or empty stat). */}
-              {currentTourKeyStat ? (
-                <>
-                  <span
-                    aria-hidden
-                    style={{
-                      margin: '0 var(--lp-space-2)',
-                      color: 'var(--lp-text-tertiary)',
-                    }}
-                  >
-                    ·
-                  </span>
-                  <span
-                    style={{
-                      color: 'var(--lp-text-secondary)',
-                      fontWeight: 'var(--lp-weight-regular)',
-                      fontVariantNumeric: 'tabular-nums',
-                    }}
-                  >
-                    {currentTourKeyStat}
-                  </span>
-                </>
-              ) : null}
+              {/* Sprint 8.1 §1 added a third dot-segment with a
+                  per-product key stat (67% SPENT / 82% COMPLETE /
+                  12 CREW). Sprint 8.2 §1 — Adam's smoke: "PASS BUT
+                  the info is irrelevant. remove it." Trigger goes
+                  back to [avatar] Artist · Tour [chevron]. */}
             </>
           )}
         </span>

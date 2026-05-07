@@ -33,16 +33,11 @@ interface ProductHeaderProps {
   artistId: string | null;
   tourId?: string | null;
   productName: ProductName;
-  /** Sprint 8.1 §1 — pre-formatted key-stat string for the
-   *  switcher trigger's third dot-segment on tour-scoped pages.
-   *  Threaded through from ProductShell; the page is the source. */
-  currentTourKeyStat?: string | null;
 }
 
 export async function ProductHeader({
   artistId,
   productName,
-  currentTourKeyStat,
 }: ProductHeaderProps) {
   const supabase = await createServerSupabaseClient();
 
@@ -119,7 +114,6 @@ export async function ProductHeader({
           initialArtists={initialArtists}
           initialTours={initialTours}
           initialArtistId={artistId ?? null}
-          currentTourKeyStat={currentTourKeyStat ?? null}
         />
       </div>
 

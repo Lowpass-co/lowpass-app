@@ -36,12 +36,6 @@ interface ProductShellProps {
       Home root lives at `/artists/[artistId]` rather than `/`. Pass
       that through for the rail's Home icon. */
   homeHref?: string;
-  /** Sprint 8.1 §1 — pre-formatted key-stat string the switcher
-   *  trigger displays as a third dot-segment on tour-scoped
-   *  pages. Examples: "67% SPENT", "82% COMPLETE", "12 CREW".
-   *  Computed page-side from the same data the TourHeader
-   *  consumes; null on non-tour pages. */
-  currentTourKeyStat?: string | null;
   children: React.ReactNode;
 }
 
@@ -51,7 +45,6 @@ export function ProductShell({
   tourId,
   productName,
   homeHref,
-  currentTourKeyStat,
   children,
 }: ProductShellProps) {
   return (
@@ -68,7 +61,6 @@ export function ProductShell({
           artistId={artistId}
           tourId={tourId}
           productName={productName}
-          currentTourKeyStat={currentTourKeyStat}
         />
         <main
           className="flex-1 overflow-y-auto"

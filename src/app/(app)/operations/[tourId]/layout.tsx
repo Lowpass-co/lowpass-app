@@ -11,17 +11,18 @@
    Sub-routes' page.tsx files render only their body content;
    chrome (rail + header + tour identity strip) is here.
 
-   currentTourKeyStat: layout-level coarse default. The route
-   group accepts that sub-routes (e.g. /personnel) don't override
-   the value — Sprint 8.1 protocol explicitly says no override
-   island for v1.
+   Sprint 8.2 §1 — the per-product currentTourKeyStat third
+   dot-segment was dropped from the switcher trigger after Adam's
+   smoke ("PASS BUT the info is irrelevant. remove it."). The
+   layout no longer threads a keyStat string — TourHeader still
+   renders the equivalent info on its stats line beneath the
+   tour name.
    ============================================ */
 
 import type { ReactNode } from 'react';
 import { notFound } from 'next/navigation';
 import { ProductShell } from '@/components/shell-v2';
 import { TourHeader } from '@/components/shell-v2/TourHeader';
-import { formatTourKeyStat } from '@/components/shell-v2/tour-key-stat';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { resolveArtistLogoUrl } from '@/lib/artists/imageUrl';
 
@@ -94,9 +95,6 @@ export default async function OperationsTourLayout({
       artistId={tourRow.artist_id}
       tourId={tourId}
       productName="Operations"
-      currentTourKeyStat={formatTourKeyStat('operations', {
-        crewCount: crewCount > 0 ? crewCount : null,
-      })}
     >
       {artistRow ? (
         <TourHeader

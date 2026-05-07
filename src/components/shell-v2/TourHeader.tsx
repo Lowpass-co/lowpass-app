@@ -151,11 +151,13 @@ export function TourHeader({
 
   const statsLine = parts.join(' · ');
 
-  // Sprint 8.1 §1 — keyStat moved to the switcher trigger.
-  // The Sprint 8 §2 compressed bar that consumed it has been
-  // deleted (it overlapped ProductRail and duplicated info now
-  // visible in the trigger). The expanded TourHeader retains
-  // the full statsLine row 3.
+  // Sprint 8 §2 compressed bar deleted (Sprint 8.1 §1) —
+  // overlapped ProductRail and duplicated identity info from
+  // the switcher. The keyStat third dot-segment briefly added
+  // to the trigger in 8.1 §1 was also removed (Sprint 8.2 §1)
+  // — Adam's smoke: "irrelevant". The expanded TourHeader's
+  // statsLine row 3 below remains the canonical surface for
+  // per-product progress numbers.
 
   return (
     <TourHeaderAnimator>

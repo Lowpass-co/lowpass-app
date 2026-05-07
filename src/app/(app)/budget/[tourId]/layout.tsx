@@ -10,15 +10,16 @@
    (BudgetDetailPanelLayout). Order: BudgetDetailPanelLayout →
    ProductShell → TourHeader → page body.
 
-   currentTourKeyStat: tour-level spent percent. Sub-routes do
-   not override (Sprint 8.1 protocol: no override island).
+   Sprint 8.2 §1 — the per-product currentTourKeyStat third
+   dot-segment was dropped from the switcher trigger. TourHeader
+   still renders the spent % on its stats line beneath the
+   tour name.
    ============================================ */
 
 import type { ReactNode } from 'react';
 import { notFound } from 'next/navigation';
 import { ProductShell } from '@/components/shell-v2';
 import { TourHeader } from '@/components/shell-v2/TourHeader';
-import { formatTourKeyStat } from '@/components/shell-v2/tour-key-stat';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { resolveArtistLogoUrl } from '@/lib/artists/imageUrl';
 import type { BudgetLineItem } from '@/types';
@@ -109,7 +110,6 @@ export default async function BudgetTourLayout({
       artistId={tourRow.artist_id}
       tourId={tourId}
       productName="Budget"
-      currentTourKeyStat={formatTourKeyStat('budget', { spentPercent })}
     >
       {artistRow ? (
         <TourHeader
