@@ -765,7 +765,14 @@ export function ArtistTourSwitcher({
             // min(600px, 70vh) per Adam's spec. Combined with
             // the Create-CTA-out-of-scroll refactor below, this
             // gives ~10 visible rows before scrolling kicks in.
+            // Sprint 8.6 §2 — minHeight: 0 so the inner flex
+            // chain can resolve correctly under maxHeight clamp.
+            // Without this, position:absolute panels with
+            // maxHeight (no fixed height) compute children at
+            // their natural sizes and overflow:auto never
+            // triggers.
             maxHeight: 'min(600px, 70vh)',
+            minHeight: 0,
             background: 'var(--lp-panel)',
             border: '1px solid var(--lp-border-strong)',
             borderRadius: 'var(--lp-radius-md)',
@@ -1099,12 +1106,20 @@ function ArtistsPane({
           which pushed the Create button below the fold once the
           list grew past ~8 entries. Now the scroll area is rows-
           only; the CTA sits in a flexShrink: 0 sibling row that
-          stays pinned to the pane's bottom regardless of scroll. */}
+          stays pinned to the pane's bottom regardless of scroll.
+          Sprint 8.6 §2 — `flex: '1 1 0'` (explicit basis 0) so the
+          scroll container's main-axis size is computed from the
+          parent's max-height rather than its own content height
+          (which prevents overflow:auto from triggering). Plus
+          overscrollBehavior: 'contain' so wheel events that hit
+          the dropdown don't chain to the page when the dropdown
+          itself isn't scrollable. */}
       <div
         style={{
           overflowY: 'auto',
-          flex: 1,
+          flex: '1 1 0',
           minHeight: 0,
+          overscrollBehavior: 'contain',
           padding: 'var(--lp-space-1) var(--lp-space-2) var(--lp-space-1)',
         }}
       >
@@ -1261,12 +1276,15 @@ function ToursPane({
         </span>
       </div>
       {/* Sprint 8.5 §2 — tour rows scroll independently of the
-          create CTA (mirrors the artists pane refactor). */}
+          create CTA (mirrors the artists pane refactor).
+          Sprint 8.6 §2 — explicit flex basis 0 + overscrollBehavior
+          contain (see artists pane for full rationale). */}
       <div
         style={{
           overflowY: 'auto',
-          flex: 1,
+          flex: '1 1 0',
           minHeight: 0,
+          overscrollBehavior: 'contain',
           padding:
             'var(--lp-space-1) var(--lp-space-2) var(--lp-space-1)',
         }}
