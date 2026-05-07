@@ -1603,6 +1603,39 @@ function SetupMode({
                   via: dropTarget && !('fieldIndex' in dropTarget) ? 'dropTarget' : 'append-fallback',
                 });
                 moveSectionOrder(data.sectionIndex, targetIdx);
+              } else if (data.type === 'field' && typeof data.sectionIndex === 'number' && typeof data.fieldIndex === 'number') {
+                // Sprint 8.6.4 §1 — field drop bubbled to canvas
+                // because the section onDragOver no longer accepts
+                // field drags (gated to type === 'section'). The
+                // user dropped a field on section dead space —
+                // header, gap above first field, "+ Add custom
+                // field" button area, etc. Use the last-hovered
+                // field row from dropTarget for placement; if
+                // none, log + no-op so at least the failure is
+                // visible instead of silent.
+                if (dropTarget && 'fieldIndex' in dropTarget) {
+                  if (dropTarget.sectionIndex === data.sectionIndex) {
+                    console.log('[advance-builder] field drop on canvas — using field dropTarget', {
+                      sectionIndex: dropTarget.sectionIndex,
+                      from: data.fieldIndex,
+                      to: dropTarget.fieldIndex,
+                    });
+                    moveFieldOrder(dropTarget.sectionIndex, data.fieldIndex, dropTarget.fieldIndex);
+                  } else {
+                    // Cross-section field drop. moveFieldOrder is
+                    // within-section only; warn so we know if
+                    // Adam's UX expects this (next sprint).
+                    console.warn('[advance-builder] cross-section field drop not yet supported (canvas)', {
+                      from: { sectionIndex: data.sectionIndex, fieldIndex: data.fieldIndex },
+                      to: dropTarget,
+                    });
+                  }
+                } else {
+                  console.warn('[advance-builder] field drop on canvas with no field dropTarget — drop in dead space, no-op', {
+                    data,
+                    dropTarget,
+                  });
+                }
               } else if (data.templateId && data.field) {
                 const t = templates.find((x) => x.id === data.templateId);
                 if (t) {
@@ -1640,7 +1673,35 @@ function SetupMode({
             return (
               <Fragment key={`${sec.template_id}-${secIdx}`}>
                 {isSectionDropTarget && (
-                  <div className="rounded-lg border-2 border-dashed border-lp-orange bg-lp-orange/10 min-h-[52px] flex items-center justify-center my-0.5 transition-all duration-200" aria-hidden />
+                  <div
+                    className="rounded-lg border-2 border-dashed border-lp-orange bg-lp-orange/10 min-h-[52px] flex items-center justify-center my-0.5 transition-all duration-200"
+                    aria-hidden
+                    onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                    onDrop={(e) => {
+                      // Sprint 8.6 patch — the section drop indicator
+                      // displaces the target section card down by 52px+
+                      // when it renders, so the user's cursor lands on
+                      // the indicator (not the real card). Without its
+                      // own onDrop, the event bubbled to canvas onDrop
+                      // and hit the wrong-type guard. Mirror the section
+                      // card's onDrop here so drops on the indicator
+                      // resolve to the correct target index.
+                      e.preventDefault();
+                      e.stopPropagation();
+                      const raw = e.dataTransfer.getData('application/json');
+                      if (!raw) return;
+                      try {
+                        const data = JSON.parse(raw);
+                        if (data.type === 'section' && typeof data.sectionIndex === 'number') {
+                          moveSectionOrder(data.sectionIndex, secIdx);
+                        }
+                      } catch (err) {
+                        console.error('[advance-builder] section indicator drop parse failed', err, { raw });
+                      }
+                      setDragState(null);
+                      setDropTarget(null);
+                    }}
+                  />
                 )}
               <div
                 className={cn(
@@ -1661,7 +1722,26 @@ function SetupMode({
                   setDragState({ type: 'section', sectionIndex: secIdx });
                 }}
                 onDragEnd={() => { setDragState(null); setDropTarget(null); }}
-                onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); if (dragState?.type === 'section' && dragState.sectionIndex !== secIdx) setDropTarget({ sectionIndex: secIdx }); }}
+                onDragOver={(e) => {
+                  // Sprint 8.6.4 §1 — gate the section's drop-target
+                  // acceptance on dragState.type === 'section'. The
+                  // pre-fix code unconditionally preventDefault'd,
+                  // making the section card a valid drop target for
+                  // FIELD drags too — so when a field was released
+                  // on section dead space (header / gap / new "+ Add
+                  // custom field" button area), section onDrop fired
+                  // with field-type data and the bail-warn killed
+                  // the field reorder. With this gate, the section
+                  // card is no longer a drop target for field drags;
+                  // drop bubbles to the canvas onDrop fallback.
+                  if (dragState?.type !== 'section') {
+                    e.dataTransfer.dropEffect = 'none';
+                    return;
+                  }
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (dragState.sectionIndex !== secIdx) setDropTarget({ sectionIndex: secIdx });
+                }}
                 onDragLeave={() => setDropTarget((t) => (t && !('fieldIndex' in t) && t.sectionIndex === secIdx ? null : t))}
                 onDrop={(e) => {
                   e.preventDefault();
@@ -1678,12 +1758,17 @@ function SetupMode({
                   }
                   try {
                     const data = JSON.parse(raw);
-                    console.log('[advance-builder] section onDrop', { targetIdx: secIdx, data });
-                    if (data.type === 'section' && typeof data.sectionIndex === 'number') {
-                      moveSectionOrder(data.sectionIndex, secIdx);
-                    } else {
-                      console.warn('[advance-builder] section drop payload not a section move', { data });
+                    // Sprint 8.6.4 §1 — defensive: if a non-section
+                    // payload reaches us anyway (e.g. browser fired
+                    // drop here despite onDragOver returning early),
+                    // stay silent and don't claim ownership. The
+                    // canvas onDrop fallback handles field/library
+                    // drops; warning here would just be noise.
+                    if (data.type !== 'section' || typeof data.sectionIndex !== 'number') {
+                      return;
                     }
+                    console.log('[advance-builder] section onDrop', { targetIdx: secIdx, data });
+                    moveSectionOrder(data.sectionIndex, secIdx);
                   } catch (err) {
                     console.error('[advance-builder] section drop parse failed', err, { raw });
                   }
@@ -1717,7 +1802,36 @@ function SetupMode({
                         return (
                           <Fragment key={f.id}>
                             {isDropTarget && (
-                              <li className="mx-2 my-0.5 h-10 rounded border-2 border-dashed border-lp-orange bg-lp-orange/10 flex items-center px-3 transition-all duration-200" aria-hidden />
+                              <li
+                                className="mx-2 my-0.5 h-10 rounded border-2 border-dashed border-lp-orange bg-lp-orange/10 flex items-center px-3 transition-all duration-200"
+                                aria-hidden
+                                onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                                onDrop={(e) => {
+                                  // Sprint 8.6 patch — the field drop indicator
+                                  // displaces the target field li down by ~40px
+                                  // when it renders, so the user's cursor lands
+                                  // on the indicator. Without its own onDrop,
+                                  // the event bubbled past the field row's
+                                  // stopPropagation, up to the section card's
+                                  // onDrop, where data.type === 'field' bailed
+                                  // with "payload not a section move". Mirror
+                                  // the real field li's onDrop logic here.
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  const raw = e.dataTransfer.getData('application/json');
+                                  if (!raw) return;
+                                  try {
+                                    const data = JSON.parse(raw);
+                                    if (data.type === 'field' && data.sectionIndex === secIdx && typeof data.fieldIndex === 'number') {
+                                      moveFieldOrder(secIdx, data.fieldIndex, fieldIdx);
+                                    }
+                                  } catch (err) {
+                                    console.error('[advance-builder] field indicator drop parse failed', err, { raw });
+                                  }
+                                  setDragState(null);
+                                  setDropTarget(null);
+                                }}
+                              />
                             )}
                             <li
                               className={cn(
