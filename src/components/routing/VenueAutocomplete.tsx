@@ -204,10 +204,15 @@ export function VenueAutocomplete({
             selectByIndex(highlightedIndex);
             return;
           }
-          if (e.key === 'Tab') {
-            selectByIndex(highlightedIndex);
-            return;
-          }
+          // Sprint 8.3 §2 — Tab no longer auto-picks the highlighted
+          // suggestion. Adam's smoke against 8.2 §4d: editing the
+          // location post-pick and tabbing away overwrote the address
+          // because Tab was interpreted as "confirm the highlighted
+          // suggestion" (highlightedIndex defaults to 0 — the first
+          // result). Common autocomplete UX: only Enter or click
+          // commits a pick. Tab now blurs normally; the onBlur sync
+          // (8.2 §4d) writes the typed venue_name without touching
+          // the address column.
         }}
         onFocus={() => {
           if (query.length >= 2) {

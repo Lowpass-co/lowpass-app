@@ -365,9 +365,15 @@ input[type='checkbox'].lp-checkbox:focus-visible {
   line-height: inherit;
 }
 
-/* Dropdowns / popovers — render above sidebar, header, and card stacking contexts */
+/* Dropdowns / popovers — render above sidebar, header, and card stacking contexts.
+   Sprint 8.3 §2 — was a hardcoded `z-index: 1000`. Sprint 8.2 §4 bumped
+   --lp-z-dropdown to 1300 to clear the slide-over panel (1210), but the
+   class never read the variable — so DayTypeDropdown / VenueAutocomplete
+   suggestions kept rendering BEHIND any open <SlideOver>. Now uses the
+   token chain (--lp-dropdown-layer → --lp-z-dropdown → 1300) so the
+   8.2 §4 bump actually takes effect. */
 .lp-dropdown-layer {
-  z-index: 1000;
+  z-index: var(--lp-dropdown-layer);
 }
 
 /* Dashboard glass cards — forced so UI matches Figma mockup (translucent + frosted + glassy border) */
