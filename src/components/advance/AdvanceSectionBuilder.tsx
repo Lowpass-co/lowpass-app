@@ -847,21 +847,41 @@ function SetupMode({
   useEffect(() => {
     const current = JSON.stringify(sections);
     if (current === lastSavedSectionsRef.current) return;
+    // Sprint 8.6 §4 — log every autosave kickoff so Adam can
+    // confirm the effect is firing on drag-reorder. The static
+    // trace can't tell us whether the dirty-detection passes
+    // or the POST fires; this surfaces both.
+    console.log(
+      '[advance-sections autosave] sections changed, scheduling POST in 800ms',
+      {
+        sectionCount: sections.length,
+        firstThreeLabels: sections.slice(0, 3).map((s) => s.label),
+      },
+    );
     const handle = setTimeout(() => {
       void (async () => {
         try {
+          console.log(
+            '[advance-sections autosave] POSTing /api/tours/.../advance',
+            { tourId, routingId, sectionCount: sections.length },
+          );
           const res = await fetch(`/api/tours/${tourId}/advance`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ routing_id: routingId, sections }),
           });
+          console.log(
+            `[advance-sections autosave] POST response: ${res.status}`,
+          );
           if (res.ok) {
             lastSavedSectionsRef.current = current;
           } else {
             // Don't reset the baseline on failure — the next
             // sections change (or no change) will retry.
+            const errBody = await res.text().catch(() => '');
             console.error(
               `[advance-sections autosave] POST failed: ${res.status}`,
+              errBody,
             );
           }
         } catch (err) {
@@ -1067,7 +1087,18 @@ function SetupMode({
   }, [addSectionFromDrop]);
 
   const moveSectionOrder = useCallback((from: number, to: number) => {
-    if (from === to || to < 0 || to > sections.length) return;
+    // Sprint 8.6 §4 — diagnostic log so Adam can confirm the
+    // reorder fires + see from/to values. Static-trace can't
+    // tell whether the drop event is reaching this handler;
+    // the log surfaces the call-site for runtime DevTools.
+    console.log('[advance-builder] moveSectionOrder', { from, to, total: sections.length });
+    if (from === to || to < 0 || to > sections.length) {
+      console.warn('[advance-builder] moveSectionOrder bailed', {
+        from, to, total: sections.length,
+        reason: from === to ? 'same' : to < 0 ? 'negative' : 'out-of-bounds',
+      });
+      return;
+    }
     setSections((prev) => {
       const next = [...prev];
       const [item] = next.splice(from, 1);
@@ -1539,11 +1570,26 @@ function SetupMode({
                   e.preventDefault();
                   e.stopPropagation();
                   const raw = e.dataTransfer.getData('application/json');
-                  if (!raw) return;
+                  // Sprint 8.6 §4 — un-silence the catch so drop
+                  // failures surface in console instead of being
+                  // swallowed. Adam's smoke against 8.5 §6c:
+                  // "drag-reorder doesn't persist" — the silent
+                  // catch may have been hiding a parse error.
+                  if (!raw) {
+                    console.warn('[advance-builder] section drop missing application/json data', { secIdx });
+                    return;
+                  }
                   try {
                     const data = JSON.parse(raw);
-                    if (data.type === 'section' && typeof data.sectionIndex === 'number') moveSectionOrder(data.sectionIndex, secIdx);
-                  } catch (_) { /* ignore */ }
+                    console.log('[advance-builder] section onDrop', { targetIdx: secIdx, data });
+                    if (data.type === 'section' && typeof data.sectionIndex === 'number') {
+                      moveSectionOrder(data.sectionIndex, secIdx);
+                    } else {
+                      console.warn('[advance-builder] section drop payload not a section move', { data });
+                    }
+                  } catch (err) {
+                    console.error('[advance-builder] section drop parse failed', err, { raw });
+                  }
                   setDragState(null);
                   setDropTarget(null);
                 }}
@@ -1624,11 +1670,20 @@ function SetupMode({
                                 e.preventDefault();
                                 e.stopPropagation();
                                 const raw = e.dataTransfer.getData('application/json');
-                                if (!raw) return;
+                                if (!raw) {
+                                  console.warn('[advance-builder] field drop missing data');
+                                  return;
+                                }
                                 try {
                                   const data = JSON.parse(raw);
-                                  if (data.type === 'field' && data.sectionIndex === secIdx && typeof data.fieldIndex === 'number') moveFieldOrder(secIdx, data.fieldIndex, fieldIdx);
-                                } catch (_) { /* ignore */ }
+                                  console.log('[advance-builder] field onDrop', { targetSec: secIdx, targetField: fieldIdx, data });
+                                  if (data.type === 'field' && data.sectionIndex === secIdx && typeof data.fieldIndex === 'number') {
+                                    moveFieldOrder(secIdx, data.fieldIndex, fieldIdx);
+                                  }
+                                } catch (err) {
+                                  // Sprint 8.6 §4 — un-silenced from `catch (_)` so failures surface.
+                                  console.error('[advance-builder] field drop parse failed', err, { raw });
+                                }
                                 setDragState(null);
                                 setDropTarget(null);
                               }}
