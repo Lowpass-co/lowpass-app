@@ -21,6 +21,7 @@ import { redirect } from 'next/navigation';
 import { listAppPageShell } from '@/components/shell/app-page-shells';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { MembersListClient } from '@/components/settings/members/MembersListClient';
+import { SettingsSubNav } from '@/components/settings/SettingsSubNav';
 
 export const dynamic = 'force-dynamic';
 
@@ -60,10 +61,12 @@ export default async function SettingsMembersPage() {
   }
 
   return listAppPageShell(
-    <div
-      className="mx-auto w-full"
-      style={{ maxWidth: 880, padding: 'var(--lp-space-4)' }}
-    >
+    <>
+      <SettingsSubNav pathname="/settings/members" />
+      <div
+        className="mx-auto w-full"
+        style={{ maxWidth: 880, padding: 'var(--lp-space-4)' }}
+      >
       <header style={{ marginBottom: 'var(--lp-space-4)' }}>
         <h1
           style={{
@@ -131,6 +134,7 @@ export default async function SettingsMembersPage() {
       ) : (
         <MembersListClient currentUserId={user.id} />
       )}
-    </div>
+      </div>
+    </>
   );
 }
