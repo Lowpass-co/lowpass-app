@@ -39,6 +39,7 @@ import {
 } from '@/components/command-palette/CommandPaletteContext';
 import { CommandPalette } from '@/components/command-palette/CommandPalette';
 import { ArtistTourSwitcherClientWrapper } from '@/components/shell-v2/ArtistTourSwitcherClientWrapper';
+import { WorkspaceSwitcher } from '@/components/shell-v2/WorkspaceSwitcher';
 
 interface InitialArtist {
   id: string;
@@ -97,6 +98,7 @@ function WorkspaceSwitcherSlot({
       style={{
         display: 'flex',
         alignItems: 'center',
+        gap: 'var(--lp-space-2)',
         height: 48,
         padding: '0 var(--lp-space-3)',
         background: 'var(--lp-panel)',
@@ -104,6 +106,20 @@ function WorkspaceSwitcherSlot({
         flexShrink: 0,
       }}
     >
+      {/* Sprint 9 §3 — workspace switcher mounted to the LEFT
+          of the artist/tour switcher per the approved mockup.
+          Always shown (static label for single-workspace
+          users, dropdown for 2+) so users get a "you are HERE"
+          anchor before the artist/tour scope. */}
+      <WorkspaceSwitcher />
+      <span
+        aria-hidden
+        style={{
+          width: 1,
+          height: 16,
+          background: 'var(--lp-border-subtle)',
+        }}
+      />
       <ArtistTourSwitcherClientWrapper
         initialArtists={initialArtists}
         initialTours={null}
