@@ -125,11 +125,18 @@ export function RoutingEditor({
   startDate,
   endDate,
   initialCustomDayTypes = [],
+  readOnly = false,
 }: {
   tourId: string;
   startDate: string;
   endDate: string;
   initialCustomDayTypes?: string[];
+  /** Sprint 9 §5 — when true, suppresses the Save button and
+   *  blocks updateRow + addCustomDayType writes. Used by the
+   *  Operations Routing page when the caller has read but not
+   *  write permission for operations.routing. Realtime sync +
+   *  view toggle still work. */
+  readOnly?: boolean;
 }) {
   const [rows, setRows] = useState<RoutingRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -156,6 +163,7 @@ export function RoutingEditor({
 
   const handleAddCustomDayType = useCallback(
     async (newType: string) => {
+      if (readOnly) return;
       setCustomDayTypes((prev) => {
         const next = prev.includes(newType) ? prev : [...prev, newType];
         fetch(`/api/tours/${tourId}`, {
@@ -166,10 +174,11 @@ export function RoutingEditor({
         return next;
       });
     },
-    [tourId]
+    [tourId, readOnly]
   );
 
   const updateRow = useCallback((index: number, updates: Partial<RoutingRow>) => {
+    if (readOnly) return;
     hasUserEditedRef.current = true;
     setSaveError(null);
     setRows((prev) => {
@@ -192,7 +201,7 @@ export function RoutingEditor({
       }
       return prev.map((r, i) => (i === index ? merged : r));
     });
-  }, []);
+  }, [readOnly]);
 
   useEffect(() => {
     if (view !== 'grid' || !selectedDate || !gridWrapperRef.current) return;
@@ -356,7 +365,7 @@ export function RoutingEditor({
             <Download size={16} />
             iCal feed
           </button>
-          {(view === 'grid' || view === 'calendar') && (
+          {!readOnly && (view === 'grid' || view === 'calendar') && (
             <button
               type="button"
               onClick={handleSave}
@@ -373,6 +382,22 @@ export function RoutingEditor({
               )}
             </button>
           )}
+          {readOnly ? (
+            <span
+              className="lp-label-caps"
+              style={{
+                padding: '6px 10px',
+                fontSize: 'var(--lp-text-2xs)',
+                color: 'var(--lp-text-tertiary)',
+                background: 'var(--lp-panel)',
+                border: '1px solid var(--lp-border-subtle)',
+                borderRadius: 'var(--lp-radius-md)',
+              }}
+              title="You have read-only access to routing in this workspace."
+            >
+              Read-only
+            </span>
+          ) : null}
         </div>
       </div>
 

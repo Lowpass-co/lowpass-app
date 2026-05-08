@@ -133,5 +133,36 @@ export async function POST(
   if (insertError) {
     return NextResponse.json({ error: insertError.message }, { status: 500 });
   }
+
+  // Sprint 9 §5 — audit_log row so the Routing page's
+  // "Last edit by X, Yh ago" line populates. One row per save
+  // (not per row) — entity_id points at the first row of the
+  // saved batch as a representative anchor; field_changes
+  // carries the count + tour_id for context.
+  const insertedRows = (inserted ?? []) as Array<{ id: string; tour_id: string }>;
+  const anchorId = insertedRows[0]?.id ?? null;
+  if (anchorId) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('workspace_id')
+      .eq('id', user.id)
+      .maybeSingle();
+    const workspaceId =
+      (profile as { workspace_id?: string | null } | null)?.workspace_id ?? null;
+    if (workspaceId) {
+      await supabase.from('audit_log').insert({
+        workspace_id: workspaceId,
+        actor_user_id: user.id,
+        action: 'updated',
+        entity_type: 'routing',
+        entity_id: anchorId,
+        field_changes: {
+          tour_id: tourId,
+          rows_saved: insertedRows.length,
+        },
+      });
+    }
+  }
+
   return NextResponse.json(inserted ?? []);
 }
