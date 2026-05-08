@@ -1409,7 +1409,7 @@ function SetupMode({
                                 <button
                                   type="button"
                                   draggable
-                                  onDragStart={(e) => { e.dataTransfer.setData('application/json', JSON.stringify({ templateId: t.id, field: f })); e.dataTransfer.effectAllowed = 'copy'; setDragGhost(e, f.label); setDragState({ type: 'field', templateId: t.id, field: f }); }}
+                                  onDragStart={(e) => { e.dataTransfer.setData('application/x-lowpass-library', ''); e.dataTransfer.setData('application/json', JSON.stringify({ templateId: t.id, field: f })); e.dataTransfer.effectAllowed = 'copy'; setDragGhost(e, f.label); setDragState({ type: 'field', templateId: t.id, field: f }); }}
                                   onDragEnd={() => setDragState(null)}
                                   onClick={() => {
                                     if (added) removeFieldByTemplateAndFieldId(t.id, f.id);
@@ -1519,7 +1519,7 @@ function SetupMode({
                                   <button
                                     type="button"
                                     draggable
-                                    onDragStart={(e) => { e.dataTransfer.setData('application/json', JSON.stringify({ templateId: t.id, field: f })); e.dataTransfer.effectAllowed = 'copy'; setDragGhost(e, f.label); setDragState({ type: 'field', templateId: t.id, field: f }); }}
+                                    onDragStart={(e) => { e.dataTransfer.setData('application/x-lowpass-library', ''); e.dataTransfer.setData('application/json', JSON.stringify({ templateId: t.id, field: f })); e.dataTransfer.effectAllowed = 'copy'; setDragGhost(e, f.label); setDragState({ type: 'field', templateId: t.id, field: f }); }}
                                     onDragEnd={() => setDragState(null)}
                                     onClick={() => {
                                       if (added) removeFieldByTemplateAndFieldId(t.id, f.id);
@@ -1717,30 +1717,39 @@ function SetupMode({
                   // we needed to know whether dragstart even
                   // fired before chasing drop-side culprits.
                   console.log('[advance-builder] section onDragStart', { sectionIndex: secIdx, label: sec.label });
+                  // Sprint 8.6.5 — marker MIME for the dragOver gate
+                  // on every drop target. dataTransfer.types is set
+                  // synchronously at dragstart and visible in every
+                  // subsequent dragover, unlike React state which
+                  // lags one render behind. The 8.6.4 fix gated on
+                  // dragState.type but the first dragover events
+                  // after dragstart fired before the re-render
+                  // propagated → dragState was still null in the
+                  // closure → gate rejected → section never became
+                  // a drop target. Marker MIME fixes that without
+                  // any state plumbing.
+                  e.dataTransfer.setData('application/x-lowpass-section', '');
                   e.dataTransfer.setData('application/json', JSON.stringify({ type: 'section', sectionIndex: secIdx }));
                   setDragGhost(e, sec.label);
                   setDragState({ type: 'section', sectionIndex: secIdx });
                 }}
                 onDragEnd={() => { setDragState(null); setDropTarget(null); }}
                 onDragOver={(e) => {
-                  // Sprint 8.6.4 §1 — gate the section's drop-target
-                  // acceptance on dragState.type === 'section'. The
-                  // pre-fix code unconditionally preventDefault'd,
-                  // making the section card a valid drop target for
-                  // FIELD drags too — so when a field was released
-                  // on section dead space (header / gap / new "+ Add
-                  // custom field" button area), section onDrop fired
-                  // with field-type data and the bail-warn killed
-                  // the field reorder. With this gate, the section
-                  // card is no longer a drop target for field drags;
-                  // drop bubbles to the canvas onDrop fallback.
-                  if (dragState?.type !== 'section') {
+                  // Sprint 8.6.5 — gate on dataTransfer.types (sync
+                  // at dragstart) instead of dragState.type (React
+                  // state, async). Field drags don't carry the
+                  // section marker so the section card refuses to
+                  // accept them, bubbling field drops to canvas as
+                  // intended by 8.6.4 §1's separation-of-concerns.
+                  if (!e.dataTransfer.types.includes('application/x-lowpass-section')) {
                     e.dataTransfer.dropEffect = 'none';
                     return;
                   }
                   e.preventDefault();
                   e.stopPropagation();
-                  if (dragState.sectionIndex !== secIdx) setDropTarget({ sectionIndex: secIdx });
+                  if (dragState?.type === 'section' && dragState.sectionIndex !== secIdx) {
+                    setDropTarget({ sectionIndex: secIdx });
+                  }
                 }}
                 onDragLeave={() => setDropTarget((t) => (t && !('fieldIndex' in t) && t.sectionIndex === secIdx ? null : t))}
                 onDrop={(e) => {
@@ -1874,7 +1883,7 @@ function SetupMode({
                                 }
                               }}
                               draggable
-                              onDragStart={(e) => { e.stopPropagation(); e.dataTransfer.setData('application/json', JSON.stringify({ type: 'field', sectionIndex: secIdx, fieldIndex: fieldIdx })); setDragGhost(e, f.label); setDragState({ type: 'field', sectionIndex: secIdx, fieldIndex: fieldIdx, field: f }); }}
+                              onDragStart={(e) => { e.stopPropagation(); e.dataTransfer.setData('application/x-lowpass-field', ''); e.dataTransfer.setData('application/json', JSON.stringify({ type: 'field', sectionIndex: secIdx, fieldIndex: fieldIdx })); setDragGhost(e, f.label); setDragState({ type: 'field', sectionIndex: secIdx, fieldIndex: fieldIdx, field: f }); }}
                               onDragEnd={() => { setDragState(null); setDropTarget(null); }}
                               onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); if (dragState?.type === 'field' && (dragState.sectionIndex !== secIdx || dragState.fieldIndex !== fieldIdx)) setDropTarget({ sectionIndex: secIdx, fieldIndex: fieldIdx }); }}
                               onDrop={(e) => {
