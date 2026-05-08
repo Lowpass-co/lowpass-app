@@ -40,7 +40,7 @@ const SUB_NAV: Array<{
   slug: string;
   resource_id: string;
 }> = [
-  { id: 'personnel', label: 'Personnel', slug: 'personnel', resource_id: 'operations.personnel' },
+  { id: 'personnel', label: 'Tour Personnel', slug: 'personnel', resource_id: 'operations.personnel' },
   { id: 'routing', label: 'Routing', slug: 'routing', resource_id: 'operations.routing' },
   { id: 'channel-list', label: 'Channel list', slug: 'channel-list', resource_id: 'operations.channel_list' },
   { id: 'payroll', label: 'Payroll', slug: 'payroll', resource_id: 'operations.payroll' },
