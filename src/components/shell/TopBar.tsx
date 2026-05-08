@@ -826,6 +826,28 @@ export function TopBar({
               >
                 <AccountAvatar user={user} size={28} />
                 <span className="truncate text-sm font-medium">{user.name}</span>
+                {/* Sprint 9 §10 — subtle "Admin" pill for site
+                    admins. Informational, not alarming —
+                    var(--lp-bg-tertiary) bg + lp-text. Title
+                    explains scope. */}
+                {isSiteAdmin ? (
+                  <span
+                    className="lp-label-caps"
+                    title="You have site admin access — visible across all workspaces"
+                    style={{
+                      flexShrink: 0,
+                      padding: '1px 6px',
+                      fontSize: 'var(--lp-text-2xs)',
+                      fontWeight: 'var(--lp-weight-semibold)',
+                      color: 'var(--lp-text)',
+                      background: 'var(--lp-bg-tertiary)',
+                      border: '1px solid var(--lp-border-subtle)',
+                      borderRadius: 999,
+                    }}
+                  >
+                    Admin
+                  </span>
+                ) : null}
               </button>
               {accountOpen && (
                 <div
