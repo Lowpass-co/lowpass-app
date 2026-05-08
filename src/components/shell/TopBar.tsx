@@ -25,12 +25,21 @@ type NavItem = {
   activeMatch: (pathname: string) => boolean;
 };
 
-/** Workspace-level destinations — top-level on desktop, fold into Library on narrow viewports. */
+/** Sprint 9 §7.4 — workspace-level destinations rebuilt for the
+ *  modernised TopBar. "Dashboard" was removed (Product Split moved
+ *  Home to /artists/[id]); "Home" now points at /artists. Calendar
+ *  link only renders if the route exists (currently false in this
+ *  branch — kept in the array but hidden via the `available` flag
+ *  consumed by the renderer). Personnel / Equipment continue to
+ *  link to existing workspace surfaces. Settings is exposed
+ *  explicitly so users have a top-level entry point. */
 const WORKSPACE_NAV: NavItem[] = [
-  { label: 'Dashboard', href: '/dashboard', activeMatch: (p) => p === '/dashboard' || p === '/' },
+  { label: 'Home', href: '/artists', activeMatch: (p) => p === '/' || p.startsWith('/artists') },
   { label: 'Personnel', href: '/personnel', activeMatch: (p) => p.startsWith('/personnel') },
-  { label: 'Calendar', href: '/calendar', activeMatch: (p) => p.startsWith('/calendar') },
   { label: 'Equipment', href: '/equipment', activeMatch: (p) => p.startsWith('/equipment') },
+  // Calendar: route doesn't exist yet. Excluded from the array
+  // until it does — don't ship dead links.
+  { label: 'Settings', href: '/settings', activeMatch: (p) => p.startsWith('/settings') },
 ];
 
 /** Library dropdown — Phase 1 §D retires this. Contents migrate per
@@ -736,31 +745,32 @@ export function TopBar({
                   <Link
                     key={item.href}
                     href={item.href}
-                    // No rounded-* on top-level nav links — bottom corners
-                    // stay square so the active 2px orange underline runs
-                    // edge-to-edge instead of tapering. Transparent border
-                    // on inactive items keeps row height stable when an
-                    // item activates.
-                    className="btn-transition px-3 py-2 text-sm font-medium"
+                    /* Sprint 9 §7.4 — visual style aligned with
+                       OperationsSubNav: orange text + 2px underline
+                       when active, secondary text otherwise, hover
+                       to var(--lp-text). No background tint —
+                       sub-nav style is underline only. */
+                    className="btn-transition px-3 py-2 text-sm"
                     style={{
-                      color: active ? 'var(--lp-text)' : 'var(--lp-text-secondary)',
+                      color: active
+                        ? 'var(--color-lp-orange)'
+                        : 'var(--lp-text-secondary)',
+                      fontWeight: active
+                        ? 'var(--lp-weight-semibold)'
+                        : 'var(--lp-weight-medium)',
                       borderBottom: active
                         ? '2px solid var(--color-lp-orange)'
                         : '2px solid transparent',
-                      background: active
-                        ? 'color-mix(in srgb, var(--color-lp-orange) 6%, transparent)'
-                        : 'transparent',
+                      background: 'transparent',
                     }}
                     onMouseEnter={(e) => {
                       if (!active) {
                         e.currentTarget.style.color = 'var(--lp-text)';
-                        e.currentTarget.style.background = 'var(--lp-surface-hover)';
                       }
                     }}
                     onMouseLeave={(e) => {
                       if (!active) {
                         e.currentTarget.style.color = 'var(--lp-text-secondary)';
-                        e.currentTarget.style.background = 'transparent';
                       }
                     }}
                   >

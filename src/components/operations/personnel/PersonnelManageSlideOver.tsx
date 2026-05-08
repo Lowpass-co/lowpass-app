@@ -217,15 +217,20 @@ export function PersonnelManageSlideOver({
             />
           </div>
 
-          {/* Window dates */}
+          {/* Window dates — Sprint 9 §7.2: minmax(0, 1fr) +
+              min-width: 0 on each cell so the two date inputs
+              actually fit side-by-side at narrow slide-over
+              widths. The plain `1fr 1fr` grid lets <input>'s
+              intrinsic min-content width force one cell off-grid
+              when the slide-over is narrower than ~520px. */}
           <div
             style={{
               display: 'grid',
-              gridTemplateColumns: '1fr 1fr',
+              gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
               gap: 'var(--lp-space-3)',
             }}
           >
-            <div>
+            <div style={{ minWidth: 0 }}>
               <label
                 htmlFor="lp-personnel-starts"
                 className="lp-label-caps"
@@ -245,6 +250,7 @@ export function PersonnelManageSlideOver({
                 onChange={(e) => setStartsOn(e.target.value)}
                 style={{
                   width: '100%',
+                  minWidth: 0,
                   padding: 'var(--lp-space-2) var(--lp-space-3)',
                   fontSize: 'var(--lp-text-sm)',
                   color: 'var(--lp-text)',
@@ -255,7 +261,7 @@ export function PersonnelManageSlideOver({
                 }}
               />
             </div>
-            <div>
+            <div style={{ minWidth: 0 }}>
               <label
                 htmlFor="lp-personnel-ends"
                 className="lp-label-caps"
@@ -275,6 +281,7 @@ export function PersonnelManageSlideOver({
                 onChange={(e) => setEndsOn(e.target.value)}
                 style={{
                   width: '100%',
+                  minWidth: 0,
                   padding: 'var(--lp-space-2) var(--lp-space-3)',
                   fontSize: 'var(--lp-text-sm)',
                   color: 'var(--lp-text)',
@@ -287,8 +294,16 @@ export function PersonnelManageSlideOver({
             </div>
           </div>
 
-          {/* Status */}
-          <fieldset style={{ border: 'none', padding: 0, margin: 0 }}>
+          {/* Status — Sprint 9 §7.6: pills replace the radio
+              dots. Active pill uses orange (or red for cancelled
+              / fired destructive states). Click selects.
+              <button role="radio"> mimics radio-group semantics
+              with custom visuals for accessibility. */}
+          <fieldset
+            role="radiogroup"
+            aria-label="Status"
+            style={{ border: 'none', padding: 0, margin: 0 }}
+          >
             <legend
               className="lp-label-caps"
               style={{
@@ -301,30 +316,45 @@ export function PersonnelManageSlideOver({
             </legend>
             <div
               className="flex flex-wrap"
-              style={{ gap: 'var(--lp-space-3)' }}
+              style={{ gap: 'var(--lp-space-2)' }}
             >
-              {STATUS_OPTIONS.map((s) => (
-                <label
-                  key={s.value}
-                  className="inline-flex items-center"
-                  style={{
-                    gap: 6,
-                    fontSize: 'var(--lp-text-sm)',
-                    color: 'var(--lp-text)',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <input
-                    type="radio"
-                    name="lp-personnel-status"
-                    value={s.value}
-                    checked={status === s.value}
-                    onChange={() => setStatus(s.value)}
-                    style={{ accentColor: 'var(--color-lp-orange)' }}
-                  />
-                  {s.label}
-                </label>
-              ))}
+              {STATUS_OPTIONS.map((s) => {
+                const active = status === s.value;
+                const destructive = s.value === 'cancelled' || s.value === 'fired';
+                return (
+                  <button
+                    key={s.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={active}
+                    onClick={() => setStatus(s.value)}
+                    className="btn-transition"
+                    style={{
+                      padding: 'var(--lp-space-1) var(--lp-space-3)',
+                      fontSize: 'var(--lp-text-sm)',
+                      fontWeight: active
+                        ? 'var(--lp-weight-semibold)'
+                        : 'var(--lp-weight-medium)',
+                      color: active
+                        ? 'var(--lp-text-inverse)'
+                        : 'var(--lp-text-secondary)',
+                      background: active
+                        ? destructive
+                          ? 'var(--color-lp-error)'
+                          : 'var(--color-lp-orange)'
+                        : 'var(--lp-bg-tertiary)',
+                      border: '1px solid transparent',
+                      borderRadius: 999,
+                      cursor: 'pointer',
+                      boxShadow: active
+                        ? '0 1px 2px color-mix(in srgb, black 15%, transparent)'
+                        : 'none',
+                    }}
+                  >
+                    {s.label}
+                  </button>
+                );
+              })}
             </div>
           </fieldset>
 

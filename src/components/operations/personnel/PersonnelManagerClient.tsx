@@ -23,6 +23,7 @@ import { Loader2, Plus, RefreshCw } from 'lucide-react';
 import { useRealtimeRows } from '@/lib/realtime/useRealtimeRows';
 import { RealtimeIndicator } from '@/components/realtime/RealtimeIndicator';
 import { useToast } from '@/components/ui/Toast';
+import { toTitleCase } from '@/lib/text/toTitleCase';
 import { ConflictBanner } from './ConflictBanner';
 import { PersonnelManageSlideOver } from './PersonnelManageSlideOver';
 import { AddPersonnelSlideOver } from './AddPersonnelSlideOver';
@@ -434,7 +435,7 @@ export function PersonnelManagerClient({
                           color: 'var(--lp-text)',
                         }}
                       >
-                        {p.display_name}
+                        {toTitleCase(p.display_name)}
                       </span>
                       <span
                         style={{
@@ -474,7 +475,7 @@ export function PersonnelManagerClient({
                   </span>
                 </button>
                 {personConflicts.length > 0 ? (
-                  <ConflictBanner personName={p.display_name} conflicts={personConflicts} />
+                  <ConflictBanner personName={toTitleCase(p.display_name)} conflicts={personConflicts} />
                 ) : null}
               </li>
             );

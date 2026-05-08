@@ -54,6 +54,9 @@ export interface ConflictRow {
   workspace_name: string;
   tour_id: string;
   tour_name: string;
+  /** Sprint 9 §7.3 — role on the conflicting tour. Required by
+   *  ConflictBanner copy ("…as Sound Engineer in WorkspaceX"). */
+  role: string;
   start_date: string | null;
   end_date: string | null;
   status: string;

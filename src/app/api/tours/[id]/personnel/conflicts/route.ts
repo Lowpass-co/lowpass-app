@@ -37,6 +37,8 @@ interface ConflictRow {
   workspace_name: string;
   tour_id: string;
   tour_name: string;
+  /** Sprint 9 §7.3 — surfaced in ConflictBanner copy. */
+  role: string;
   start_date: string | null;
   end_date: string | null;
   status: string;
@@ -48,6 +50,8 @@ interface CanonicalRpcRow {
   conflict_workspace_name: string;
   conflict_tour_id: string;
   conflict_tour_name: string;
+  /** Sprint 9 §7.3 — added by migration 084. */
+  conflict_role: string;
   conflict_start_date: string | null;
   conflict_end_date: string | null;
   conflict_status: string;
@@ -59,6 +63,7 @@ interface EmailRpcRow {
   conflict_workspace_name: string;
   conflict_tour_id: string;
   conflict_tour_name: string;
+  conflict_role: string;
   conflict_start_date: string | null;
   conflict_end_date: string | null;
   conflict_status: string;
@@ -151,6 +156,7 @@ export async function POST(
         workspace_name: r.conflict_workspace_name,
         tour_id: r.conflict_tour_id,
         tour_name: r.conflict_tour_name,
+        role: r.conflict_role,
         start_date: r.conflict_start_date,
         end_date: r.conflict_end_date,
         status: r.conflict_status,
@@ -180,6 +186,7 @@ export async function POST(
         workspace_name: r.conflict_workspace_name,
         tour_id: r.conflict_tour_id,
         tour_name: r.conflict_tour_name,
+        role: r.conflict_role,
         start_date: r.conflict_start_date,
         end_date: r.conflict_end_date,
         status: r.conflict_status,

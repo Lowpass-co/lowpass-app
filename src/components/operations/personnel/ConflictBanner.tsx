@@ -71,7 +71,8 @@ export function ConflictBanner({ personName, conflicts }: ConflictBannerProps) {
           />
           <span style={{ flex: 1, minWidth: 0, lineHeight: 1.5 }}>
             <strong>{personName}</strong> is also assigned to{' '}
-            <strong>{c.tour_name}</strong> in <strong>{c.workspace_name}</strong>
+            <strong>{c.tour_name}</strong> as <strong>{c.role}</strong> in{' '}
+            <strong>{c.workspace_name}</strong>
             {formatRange(c.start_date, c.end_date)
               ? ` on ${formatRange(c.start_date, c.end_date)}`
               : ''}

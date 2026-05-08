@@ -72,6 +72,15 @@ export function useRealtimeRows({
 }: UseRealtimeRowsOptions): { connected: boolean } {
   const [connected, setConnected] = useState(false);
 
+  // Sprint 9 §7.1 — stable dep for the events array. Default
+  // value `['INSERT','UPDATE','DELETE']` is a fresh literal
+  // every render; if it lived in the effect deps directly,
+  // React would tear down + re-establish the channel on every
+  // parent render and the Live pill would flicker. Joining
+  // into a string gives us a stable primitive identity per
+  // unique event-set.
+  const eventsKey = events.join(',');
+
   // Keep latest onChange in a ref so we don't tear down the
   // channel every time the parent re-renders with a new
   // closure. Same defensive pattern as SwitcherPane.onExitDone.
@@ -133,7 +142,8 @@ export function useRealtimeRows({
       }
       setConnected(false);
     };
-  }, [table, filterColumn, filterValue, enabled, events]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- events is intentionally tracked via eventsKey (stable join string)
+  }, [table, filterColumn, filterValue, enabled, eventsKey]);
 
   return { connected };
 }

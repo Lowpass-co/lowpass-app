@@ -15,6 +15,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Loader2, Plus, RefreshCw } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
+import { toTitleCase } from '@/lib/text/toTitleCase';
 import { MemberManageSlideOver } from './MemberManageSlideOver';
 import { InviteMemberSlideOver } from './InviteMemberSlideOver';
 import type {
@@ -481,7 +482,9 @@ function MemberCard({ member, isCallerSelf, onManage }: MemberCardProps) {
               color: 'var(--lp-text)',
             }}
           >
-            {member.display_name?.trim() || member.email || 'Unnamed'}
+            {member.display_name?.trim()
+              ? toTitleCase(member.display_name)
+              : member.email || 'Unnamed'}
           </span>
           {isCallerSelf ? (
             <span

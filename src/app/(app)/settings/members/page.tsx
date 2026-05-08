@@ -32,7 +32,10 @@ export default async function SettingsMembersPage() {
   } = await supabase.auth.getUser();
   if (!user) redirect('/login?next=/settings/members');
 
-  // Resolve active workspace + admin role for this workspace.
+  // Sprint 9 §7.5 — parallelize the workspace lookups. Profile
+  // fetch is the only one that takes user.id alone; once we have
+  // workspace_id from profile, membership + workspace name fire
+  // in parallel via Promise.all (both keyed on workspaceId).
   const { data: profile } = await supabase
     .from('profiles')
     .select('workspace_id')
@@ -44,19 +47,20 @@ export default async function SettingsMembersPage() {
   let isAdmin = false;
   let workspaceName = '';
   if (workspaceId) {
-    const { data: membership } = await supabase
-      .from('workspace_members')
-      .select('role')
-      .eq('user_id', user.id)
-      .eq('workspace_id', workspaceId)
-      .maybeSingle();
+    const [{ data: membership }, { data: ws }] = await Promise.all([
+      supabase
+        .from('workspace_members')
+        .select('role')
+        .eq('user_id', user.id)
+        .eq('workspace_id', workspaceId)
+        .maybeSingle(),
+      supabase
+        .from('workspaces')
+        .select('name')
+        .eq('id', workspaceId)
+        .maybeSingle(),
+    ]);
     isAdmin = (membership as { role?: string } | null)?.role === 'admin';
-
-    const { data: ws } = await supabase
-      .from('workspaces')
-      .select('name')
-      .eq('id', workspaceId)
-      .maybeSingle();
     workspaceName = (ws as { name?: string } | null)?.name ?? '';
   }
 
