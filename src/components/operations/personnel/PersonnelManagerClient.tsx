@@ -19,6 +19,7 @@
    ============================================ */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Loader2, Plus, RefreshCw } from 'lucide-react';
 import { useRealtimeRows } from '@/lib/realtime/useRealtimeRows';
 import { RealtimeIndicator } from '@/components/realtime/RealtimeIndicator';
@@ -100,6 +101,8 @@ export function PersonnelManagerClient({
   tourEndDate,
 }: PersonnelManagerClientProps) {
   const { showToast } = useToast();
+  const searchParams = useSearchParams();
+  const conflictsOnly = searchParams?.get('filter') === 'conflicts';
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -176,7 +179,6 @@ export function PersonnelManagerClient({
 
   useEffect(() => {
     let cancelled = false;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     void fetchList().finally(() => {
       if (!cancelled) setLoading(false);
     });
@@ -185,11 +187,8 @@ export function PersonnelManagerClient({
     };
   }, [fetchList]);
 
-  // Re-run conflict check whenever the list changes. fetchConflicts
-  // setStates conflicts internally; the rule flags it but this is
-  // the canonical "subscribe-derived-from-prop" pattern.
+  // Re-run conflict check whenever the list changes.
   useEffect(() => {
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     void fetchConflicts(list);
   }, [list, fetchConflicts]);
 
@@ -216,17 +215,6 @@ export function PersonnelManagerClient({
     return Array.from(set).sort();
   }, [list]);
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return list.filter((p) => {
-      if (statusFilter !== 'all' && p.status !== statusFilter) return false;
-      if (tagFilter !== 'all' && !p.tags.includes(tagFilter)) return false;
-      if (!q) return true;
-      const hay = `${p.display_name} ${p.email ?? ''} ${p.role}`.toLowerCase();
-      return hay.includes(q);
-    });
-  }, [list, search, statusFilter, tagFilter]);
-
   function conflictsFor(p: PersonnelListItem): ConflictRow[] {
     if (p.canonical_person_id) {
       return conflicts.by_canonical[p.canonical_person_id] ?? [];
@@ -236,6 +224,23 @@ export function PersonnelManagerClient({
     }
     return [];
   }
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return list.filter((p) => {
+      // Sprint 9 §8 — ?filter=conflicts narrows to people with
+      // at least one cross-tour conflict. Linked from the
+      // Operations summary's Conflicts card.
+      if (conflictsOnly && conflictsFor(p).length === 0) return false;
+      if (statusFilter !== 'all' && p.status !== statusFilter) return false;
+      if (tagFilter !== 'all' && !p.tags.includes(tagFilter)) return false;
+      if (!q) return true;
+      const hay = `${p.display_name} ${p.email ?? ''} ${p.role}`.toLowerCase();
+      return hay.includes(q);
+    });
+    // conflictsFor closes over `conflicts` state; include it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- conflictsFor is a closure over conflicts state
+  }, [list, search, statusFilter, tagFilter, conflictsOnly, conflicts]);
 
   const manageMember = manageId ? list.find((p) => p.id === manageId) ?? null : null;
   const excludePersonIds = useMemo(() => list.map((p) => p.person_id), [list]);
@@ -291,6 +296,25 @@ export function PersonnelManagerClient({
           >
             {list.length} assigned
           </span>
+          {conflictsOnly ? (
+            <a
+              href={`/operations/${tourId}/personnel`}
+              className="lp-label-caps inline-flex items-center"
+              style={{
+                gap: 4,
+                padding: '2px 8px',
+                fontSize: 'var(--lp-text-2xs)',
+                color: 'var(--color-lp-orange)',
+                background: 'color-mix(in srgb, var(--color-lp-orange) 10%, transparent)',
+                border: '1px solid color-mix(in srgb, var(--color-lp-orange) 30%, transparent)',
+                borderRadius: 999,
+                textDecoration: 'none',
+              }}
+              title="Click to clear filter"
+            >
+              Conflicts only · clear ✕
+            </a>
+          ) : null}
         </div>
         <div className="flex items-center" style={{ gap: 'var(--lp-space-2)' }}>
           <button
