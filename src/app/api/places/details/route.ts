@@ -19,14 +19,35 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'placeId required' }, { status: 400 });
   }
 
+  // Sprint 8.6 patch — opt-in iataCode via ?includeIata=1.
+  // Google's Places API (New) returns 400 INVALID_ARGUMENT for
+  // non-airport place types when iataCode is in the field mask.
+  // This cascaded to a 502 here and broke the venue picker for
+  // every venue lookup. Default mask omits iataCode; airport-
+  // autocomplete callers (FlightsGrid) pass ?includeIata=1.
+  const includeIata = searchParams.get('includeIata') === '1';
+
+  const fieldMask = [
+    'displayName',
+    'formattedAddress',
+    'addressComponents',
+    'location',
+    'websiteUri',
+    'internationalPhoneNumber',
+    'rating',
+    'currentOpeningHours',
+    'types',
+    'primaryType',
+    ...(includeIata ? ['iataCode'] : []),
+  ].join(',');
+
   const url = `https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}`;
   const res = await fetch(url, {
     method: 'GET',
     headers: {
       'Content-Type': 'application/json',
       'X-Goog-Api-Key': key,
-      'X-Goog-FieldMask':
-        'displayName,formattedAddress,addressComponents,location,websiteUri,internationalPhoneNumber,rating,currentOpeningHours,iataCode,types,primaryType',
+      'X-Goog-FieldMask': fieldMask,
     },
   });
 
