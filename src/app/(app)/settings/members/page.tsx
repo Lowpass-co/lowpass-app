@@ -18,10 +18,8 @@
 
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { documentSectionsAppPageShell } from '@/components/shell/app-page-shells';
-import { getSettingsLeftRail } from '@/lib/shell/rails/settingsSections';
+import { listAppPageShell } from '@/components/shell/app-page-shells';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
-import { getUserAndAdminStatus } from '@/lib/site-admin';
 import { MembersListClient } from '@/components/settings/members/MembersListClient';
 
 export const dynamic = 'force-dynamic';
@@ -61,9 +59,7 @@ export default async function SettingsMembersPage() {
     workspaceName = (ws as { name?: string } | null)?.name ?? '';
   }
 
-  const { isAdmin: isSiteAdmin } = await getUserAndAdminStatus();
-
-  return documentSectionsAppPageShell(
+  return listAppPageShell(
     <div
       className="mx-auto w-full"
       style={{ maxWidth: 880, padding: 'var(--lp-space-4)' }}
@@ -135,7 +131,6 @@ export default async function SettingsMembersPage() {
       ) : (
         <MembersListClient currentUserId={user.id} />
       )}
-    </div>,
-    getSettingsLeftRail('members', { isSiteAdmin }),
+    </div>
   );
 }
