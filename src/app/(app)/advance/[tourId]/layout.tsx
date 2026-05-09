@@ -16,8 +16,6 @@ import { notFound } from 'next/navigation';
 import { ProductShell } from '@/components/shell-v2';
 import { TourHeader } from '@/components/shell-v2/TourHeader';
 import { TourVisitTracker } from '@/components/shell-v2/TourVisitTracker';
-import { SubNavStrip } from '@/components/shell/SubNavStrip';
-import { advanceSubNavLinks } from '@/lib/shell/subNavLinks';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { resolveArtistLogoUrl } from '@/lib/artists/imageUrl';
 
@@ -135,7 +133,6 @@ export default async function AdvanceTourLayout({
           }}
         />
       ) : null}
-      <SubNavStrip links={advanceSubNavLinks(tourId, () => true)} />
       <TourVisitTracker tourId={tourId} />
       {children}
     </ProductShell>

@@ -1,18 +1,16 @@
 'use client';
 
 /* ============================================
-   LOWPASS — SettingsSubNav (Sprint 9 §3 + Sprint 10 §1.7)
+   LOWPASS — SettingsSubNav (Sprint 9 §3 chrome fix)
 
    Horizontal sub-nav under the TopBar on every /settings/*
    page. Mirrors the OperationsSubNav pattern from Phase 5 so
    Settings behaves and looks like the rest of the app.
 
-   Sprint 10 §1.7 — extends to four entries per the IA reframe
-   (General · Members · Billing · Integrations). Billing +
-   Integrations are placeholders rendered today; their bodies
-   say "Coming soon" until Sprint 11 (Stripe billing wires
-   Billing). Adam's tweak #2 kept settings at /settings/* —
-   no route move.
+   v1 has two real pages (General + Members). Future settings
+   pages (Account, Workspace, Billing, Integrations) get added
+   as separate routes ship; do NOT add placeholder links to
+   non-existent routes.
    ============================================ */
 
 import Link from 'next/link';
@@ -42,18 +40,6 @@ const SETTINGS_LINKS: SettingsSubNavLink[] = [
     label: 'Members',
     href: '/settings/members',
     activePathPrefix: '/settings/members',
-  },
-  {
-    id: 'billing',
-    label: 'Billing',
-    href: '/settings/billing',
-    activePathPrefix: '/settings/billing',
-  },
-  {
-    id: 'integrations',
-    label: 'Integrations',
-    href: '/settings/integrations',
-    activePathPrefix: '/settings/integrations',
   },
 ];
 

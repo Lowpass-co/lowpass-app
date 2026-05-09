@@ -78,13 +78,6 @@ type TourMin = {
 };
 
 interface ArtistTourSwitcherProps {
-  /** Sprint 10 §1.3 — trigger style. 'chip' (default) is the
-   *  existing chip-style row used by ProductHeader; 'avatar-only'
-   *  is the BreadcrumbPill mount where the trigger collapses to
-   *  just the artist avatar (the pill itself supplies the visible
-   *  segments). The dropdown content + behaviour is identical
-   *  across variants. */
-  triggerVariant?: 'chip' | 'avatar-only';
   /** Pre-fetched artist list — server-side initial data so the
    *  dropdown is instant on first open. The context's own artists
    *  list takes over once it loads. */
@@ -267,7 +260,6 @@ function groupToursByYear(tours: TourMin[]): YearGroup[] {
 }
 
 export function ArtistTourSwitcher({
-  triggerVariant = 'chip',
   initialArtists,
   tours,
   toursLoading,
@@ -611,97 +603,44 @@ export function ArtistTourSwitcher({
         onClick={() => (open ? closeDropdown() : openDropdown())}
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label={triggerVariant === 'avatar-only' ? 'Switch artist or tour' : undefined}
         data-active={open || undefined}
         className="lp-ats-trigger btn-transition flex min-w-0 items-center"
-        style={
-          triggerVariant === 'avatar-only'
-            ? {
-                /* Sprint 10 §1.3 — collapsed avatar trigger.
-                   Inside the BreadcrumbPill, the visible
-                   segments live in the pill chrome (rendered
-                   alongside this trigger by the parent), so
-                   the trigger only needs to host the avatar +
-                   click target. Unstyled background so the
-                   pill's outer border carries the visual
-                   weight. */
-                width: 28,
-                height: 28,
-                padding: 2,
-                background: 'transparent',
-                border: 'none',
-                borderRadius: 'var(--lp-radius-full)',
-                cursor: 'pointer',
-                outline: open
-                  ? '2px solid var(--color-lp-orange)'
-                  : 'none',
-                outlineOffset: 1,
-              }
-            : {
-                gap: 'var(--lp-space-2)',
-                padding: 'var(--lp-space-2) var(--lp-space-3)',
-                // Sprint 6.2 §3 — 36px chip-style trigger. The Sprint 6.1
-                // two-row 56px design overflowed the 48px ProductHeader.
-                // Single row keeps the trigger inside the bar.
-                height: 36,
-                maxWidth: 380,
-                fontSize: 'var(--lp-text-base)',
-                fontWeight: 'var(--lp-weight-medium)',
-                color: triggerEmpty
-                  ? 'var(--lp-text-secondary)'
-                  : 'var(--lp-text)',
-                background: open ? 'var(--lp-panel-hover)' : 'var(--lp-panel)',
-                // Sprint 7 §1.C — orange accent applied via inset
-                // box-shadow instead of a 2px border-left. The 1px↔2px
-                // border swap shifted contents by 1px on open (Adam's
-                // smoke "1px jiggle"); inset shadow paints inside the
-                // border-box without affecting layout.
-                border: '1px solid var(--lp-border-strong)',
-                boxShadow: open
-                  ? 'inset 2px 0 0 var(--color-lp-orange)'
-                  : undefined,
-                borderRadius: 'var(--lp-radius-md)',
-                cursor: 'pointer',
-                textAlign: 'left',
-              }
-        }
+        style={{
+          gap: 'var(--lp-space-2)',
+          padding: 'var(--lp-space-2) var(--lp-space-3)',
+          // Sprint 6.2 §3 — 36px chip-style trigger. The Sprint 6.1
+          // two-row 56px design overflowed the 48px ProductHeader.
+          // Single row keeps the trigger inside the bar.
+          height: 36,
+          maxWidth: 380,
+          fontSize: 'var(--lp-text-base)',
+          fontWeight: 'var(--lp-weight-medium)',
+          color: triggerEmpty
+            ? 'var(--lp-text-secondary)'
+            : 'var(--lp-text)',
+          background: open ? 'var(--lp-panel-hover)' : 'var(--lp-panel)',
+          // Sprint 7 §1.C — orange accent applied via inset
+          // box-shadow instead of a 2px border-left. The 1px↔2px
+          // border swap shifted contents by 1px on open (Adam's
+          // smoke "1px jiggle"); inset shadow paints inside the
+          // border-box without affecting layout.
+          border: '1px solid var(--lp-border-strong)',
+          boxShadow: open
+            ? 'inset 2px 0 0 var(--color-lp-orange)'
+            : undefined,
+          borderRadius: 'var(--lp-radius-md)',
+          cursor: 'pointer',
+          textAlign: 'left',
+        }}
         onMouseEnter={(e) => {
-          if (triggerVariant === 'avatar-only') return;
           e.currentTarget.style.background = 'var(--lp-panel-hover)';
         }}
         onMouseLeave={(e) => {
-          if (triggerVariant === 'avatar-only') return;
           e.currentTarget.style.background = open
             ? 'var(--lp-panel-hover)'
             : 'var(--lp-panel)';
         }}
       >
-        {triggerVariant === 'avatar-only' ? (
-          triggerArtist ? (
-            <ArtistAvatar
-              imageUrl={pickArtistImage(triggerArtist)}
-              name={triggerArtist.name}
-            />
-          ) : (
-            <span
-              aria-hidden
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: 24,
-                height: 24,
-                borderRadius: 'var(--lp-radius-full)',
-                background: 'var(--lp-bg-deep)',
-                border: '1px dashed var(--lp-border-strong)',
-                color: 'var(--lp-text-tertiary)',
-              }}
-            >
-              <User size={14} strokeWidth={2} />
-            </span>
-          )
-        ) : (
-          <>
         {/* 24px avatar slot — image / initials chip for selected
             artist; dashed-border User placeholder for the no-artist
             empty state. */}
@@ -824,8 +763,6 @@ export function ArtistTourSwitcher({
               flexShrink: 0,
             }}
           />
-        )}
-          </>
         )}
       </button>
 
