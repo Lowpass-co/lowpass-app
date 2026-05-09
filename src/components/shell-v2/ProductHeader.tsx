@@ -31,6 +31,7 @@ import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { ProductHeaderAvatarMenu } from './ProductHeaderAvatarMenu';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 import { ArtistTourSwitcherClientWrapper } from './ArtistTourSwitcherClientWrapper';
+import { ConnectionIndicator } from '@/components/realtime/ConnectionIndicator';
 
 export type ProductName = 'Home' | 'Operations' | 'Budget' | 'Advance';
 
@@ -130,8 +131,13 @@ export async function ProductHeader({ productName }: ProductHeaderProps) {
         </span>
       </div>
 
-      {/* Right: search trigger + interactive avatar menu */}
+      {/* Right: connection state + search trigger + avatar menu.
+          Sprint 9 §13.A.14 — ConnectionIndicator persists status
+          on Operations / Budget / Advance per Adam's spec
+          (toast pattern doesn't fit — needs to be persistently
+          visible). Provider lives in <AppShell>. */}
       <div className="ml-auto flex items-center gap-2">
+        <ConnectionIndicator />
         <button
           type="button"
           className="btn-transition flex h-8 w-8 items-center justify-center rounded-md"

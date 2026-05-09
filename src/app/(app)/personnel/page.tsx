@@ -26,6 +26,10 @@ import {
   PersonnelLibraryClient,
   type PersonnelLibraryRow,
 } from '@/components/personnel/PersonnelLibraryClient';
+import {
+  computeCompleteness,
+  parseExtendedProfile,
+} from '@/lib/personnel-extended-profile';
 
 export const dynamic = 'force-dynamic';
 
@@ -125,13 +129,29 @@ export default async function PersonnelPage() {
   // that's the entity the existing detail slide-over edits and
   // where issue indicators (passport / visa) are computed from.
   // The persons table is a downstream canonical sibling.
-  const { data: personnel } = await supabase
-    .from('personnel')
-    .select(
-      'id, workspace_id, lp_id, name, email, phone, role, passport_info, extended_profile, created_at, updated_at',
-    )
-    .eq('workspace_id', profile.workspace_id)
-    .order('name', { ascending: true });
+  // Sprint 9 §13.B.2 — added home_airport + standard_rates so
+  // computeCompleteness can score the row server-side AND read
+  // the viewer's role to decide whether the Pay weight applies.
+  const [{ data: personnel }, { data: viewerMembership }] = await Promise.all([
+    supabase
+      .from('personnel')
+      .select(
+        'id, workspace_id, lp_id, name, email, phone, role, home_airport, standard_rates, passport_info, extended_profile, created_at, updated_at',
+      )
+      .eq('workspace_id', profile.workspace_id)
+      .order('name', { ascending: true }),
+    supabase
+      .from('workspace_members')
+      .select('role')
+      .eq('workspace_id', profile.workspace_id)
+      .eq('user_id', user.id)
+      .maybeSingle(),
+  ]);
+
+  // Q5 — non-admin viewers re-normalise the completeness ring
+  // without the Pay weight. Site admins always see Pay.
+  const viewerRole = (viewerMembership as { role?: string } | null)?.role ?? null;
+  const viewerCanSeePay = viewerRole === 'admin' || viewerRole === 'manager';
 
   const personnelList = (personnel ?? []) as Array<{
     id: string;
@@ -140,6 +160,8 @@ export default async function PersonnelPage() {
     email: string | null;
     phone: string | null;
     role: string | null;
+    home_airport: string | null;
+    standard_rates: Record<string, unknown> | null;
     passport_info: Record<string, unknown> | null;
     extended_profile: ExtendedProfile | null;
     updated_at: string;
@@ -188,6 +210,23 @@ export default async function PersonnelPage() {
   const rows: PersonnelLibraryRow[] = personnelList.map((p) => {
     const stat = usage.get(p.id) ?? { totalTours: 0, lastTouredAt: null };
     const issues = deriveIssues(p.passport_info, p.extended_profile);
+    // Sprint 9 §13.B.2 — completeness scored server-side per
+    // viewer role (Q5 re-normalisation). The slide-over uses
+    // firstMissingId to scroll to the first missing section
+    // when the operator clicks the ring.
+    const completeness = computeCompleteness(
+      {
+        name: p.name,
+        email: p.email,
+        phone: p.phone,
+        homeAirport: p.home_airport,
+        standardRates: p.standard_rates as
+          | { show_day_rate?: number | null }
+          | null,
+        ext: parseExtendedProfile(p.extended_profile),
+      },
+      { canSeePay: viewerCanSeePay },
+    );
     return {
       id: p.id,
       workspaceId: p.workspace_id,
@@ -201,6 +240,9 @@ export default async function PersonnelPage() {
       lastTouredAt: stat.lastTouredAt,
       totalTours: stat.totalTours,
       updatedAt: p.updated_at,
+      completenessPercent: completeness.percent,
+      completenessMissingLabels: completeness.missingLabels,
+      completenessFirstMissingId: completeness.firstMissingId,
     };
   });
 
@@ -218,7 +260,7 @@ export default async function PersonnelPage() {
           <div className="h-48 animate-pulse rounded-xl border border-lp-border bg-lp-surface/50" />
         }
       >
-        <PersonnelLibraryClient initial={rows} />
+        <PersonnelLibraryClient initial={rows} viewerCanSeePay={viewerCanSeePay} />
       </Suspense>
     </div>,
   );

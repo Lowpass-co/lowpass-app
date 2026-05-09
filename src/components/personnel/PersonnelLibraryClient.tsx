@@ -39,7 +39,8 @@
 
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AlertTriangle, Plus, Trash2, Upload, UserPlus } from 'lucide-react';
+import { AlertTriangle, Plus, Trash2, Upload, UserCog, UserPlus } from 'lucide-react';
+import { ContextMenu } from '@/components/ui/ContextMenu';
 import { useToast } from '@/components/ui/Toast';
 import { DataTable } from '@/components/data-table/DataTable';
 import type { ColumnDef } from '@/components/data-table/types';
@@ -50,6 +51,7 @@ import {
   type PersonnelPanelState,
 } from './PersonnelDetailSlideOver';
 import { FilterChips, type FilterChipOption } from '@/components/ui/FilterChips';
+import { CompletenessRing } from './CompletenessRing';
 import { toTitleCase } from '@/lib/text/toTitleCase';
 
 export interface PersonnelLibraryRow {
@@ -66,10 +68,24 @@ export interface PersonnelLibraryRow {
   lastTouredAt: string | null;
   totalTours: number;
   updatedAt: string;
+  /** Sprint 9 §13.B.2 — profile completeness scored server-side
+   *  per viewer role (Q5 re-normalisation already applied). */
+  completenessPercent: number;
+  completenessMissingLabels: string[];
+  /** Stable section id of the FIRST missing section, used to
+   *  scroll the slide-over to that section on ring click. Null
+   *  when the row is at 100%. */
+  completenessFirstMissingId: string | null;
 }
 
 interface PersonnelLibraryClientProps {
   initial: PersonnelLibraryRow[];
+  /** Sprint 9 §13.B.2 (Q5) — admin / manager viewers see the
+   *  Pay section in the detail slide-over and the Pay weight in
+   *  the completeness ring. Non-admin viewers re-normalise
+   *  without it. Page server-fetches the role and threads it
+   *  down. */
+  viewerCanSeePay?: boolean;
 }
 
 type FilterKey = 'all' | 'conflicts' | 'issues' | 'recent' | 'untouched';
@@ -119,6 +135,7 @@ function relativeTime(iso: string): string {
 
 export function PersonnelLibraryClient({
   initial,
+  viewerCanSeePay = false,
 }: PersonnelLibraryClientProps) {
   const router = useRouter();
   const { showToast } = useToast();
@@ -131,6 +148,33 @@ export function PersonnelLibraryClient({
   const [filter, setFilter] = useState<FilterKey>('all');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [deleting, setDeleting] = useState(false);
+
+  // Per-row delete handler — fronted by window.confirm (matches
+  // bulk delete + the repo's existing slide-over delete
+  // convention). Reuses the same /api/personnel/bulk-delete
+  // endpoint with a single-id array so we don't need a sibling
+  // single-row delete route.
+  const deleteOne = async (id: string, displayName: string) => {
+    if (!window.confirm(`Delete "${displayName}" from this workspace? This cannot be undone.`)) {
+      return;
+    }
+    try {
+      const res = await fetch('/api/personnel/bulk-delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: [id] }),
+      });
+      const body = (await res.json().catch(() => null)) as { error?: string } | null;
+      if (!res.ok) {
+        showToast(body?.error ?? 'Could not delete personnel.');
+        return;
+      }
+      showToast(`${displayName} deleted.`);
+      router.refresh();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Network error');
+    }
+  };
 
   // Spec 13.A.10 thresholds (CC_SPRINT_09_PHASE_13.md §13.A.10):
   //   - Recently updated = updated_at within the last 7 days
@@ -241,27 +285,99 @@ export function PersonnelLibraryClient({
         accessor: (p) => toTitleCase(p.preferredName ?? p.fullName),
         sortable: true,
         frozen: true,
-        cell: (value, row) => {
+        cell: (value) => <span>{String(value ?? '—')}</span>,
+      },
+      {
+        id: 'status',
+        header: 'Status',
+        accessor: (p) => (p.hasIssue ? 1 : 0),
+        sortable: true,
+        cell: (_value, row) => {
           const r = row as PersonnelLibraryRow;
+          if (!r.hasIssue) {
+            // Bug Reports-style "OK" pill — neutral, low-key —
+            // so the column reads at a glance even on healthy
+            // rows (otherwise an empty cell is ambiguous).
+            return (
+              <span
+                className="inline-flex items-center"
+                style={{
+                  gap: 6,
+                  padding: '2px 8px',
+                  fontSize: 'var(--lp-text-xs)',
+                  fontWeight: 'var(--lp-weight-medium)',
+                  color: 'var(--lp-text-tertiary)',
+                  background: 'var(--lp-bg-tertiary)',
+                  border: '1px solid var(--lp-border-subtle)',
+                  borderRadius: 999,
+                }}
+              >
+                <span
+                  aria-hidden
+                  style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: 999,
+                    background: 'var(--lp-text-tertiary)',
+                  }}
+                />
+                OK
+              </span>
+            );
+          }
           return (
             <span
               className="inline-flex items-center"
-              style={{ gap: 6 }}
+              role="status"
               title={r.issueLabels.join(' · ')}
+              style={{
+                gap: 6,
+                padding: '2px 8px',
+                fontSize: 'var(--lp-text-xs)',
+                fontWeight: 'var(--lp-weight-semibold)',
+                color: 'var(--color-lp-orange)',
+                background: 'color-mix(in srgb, var(--color-lp-orange) 10%, transparent)',
+                border: '1px solid color-mix(in srgb, var(--color-lp-orange) 35%, transparent)',
+                borderRadius: 999,
+              }}
             >
-              {r.hasIssue ? (
-                <AlertTriangle
-                  size={12}
-                  strokeWidth={2.4}
+              <AlertTriangle size={12} strokeWidth={2.4} aria-hidden />
+              {r.issueLabels[0] ?? 'Action required'}
+              {r.issueLabels.length > 1 ? (
+                <span
                   style={{
+                    marginLeft: 2,
                     color: 'var(--color-lp-orange)',
-                    flexShrink: 0,
+                    opacity: 0.7,
                   }}
-                  aria-label="Action required"
-                />
+                >
+                  +{r.issueLabels.length - 1}
+                </span>
               ) : null}
-              <span>{String(value ?? '—')}</span>
             </span>
+          );
+        },
+      },
+      {
+        id: 'completeness',
+        header: 'Profile',
+        accessor: 'completenessPercent',
+        align: 'left',
+        sortable: true,
+        cell: (_value, row) => {
+          const r = row as PersonnelLibraryRow;
+          return (
+            <CompletenessRing
+              percent={r.completenessPercent}
+              missingLabels={r.completenessMissingLabels}
+              onClick={() =>
+                setPanel({
+                  mode: 'edit',
+                  id: r.id,
+                  scrollToSection: r.completenessFirstMissingId,
+                })
+              }
+            />
           );
         },
       },
@@ -293,7 +409,45 @@ export function PersonnelLibraryClient({
         sortable: true,
         cell: (value) => relativeTime(String(value ?? new Date().toISOString())),
       },
+      {
+        id: 'actions',
+        header: '',
+        accessor: () => '',
+        align: 'right',
+        cell: (_value, row) => {
+          const r = row as PersonnelLibraryRow;
+          const displayName = toTitleCase(r.preferredName ?? r.fullName);
+          return (
+            <ContextMenu
+              align="right"
+              items={[
+                {
+                  label: 'Open profile',
+                  icon: UserCog,
+                  onClick: () => setPanel({ mode: 'edit', id: r.id }),
+                },
+                {
+                  label: 'Assign to tour',
+                  icon: UserPlus,
+                  onClick: () =>
+                    setAssignOpen({
+                      personId: r.id,
+                      personName: displayName,
+                    }),
+                },
+                {
+                  label: 'Delete',
+                  icon: Trash2,
+                  variant: 'danger',
+                  onClick: () => void deleteOne(r.id, displayName),
+                },
+              ]}
+            />
+          );
+        },
+      },
     ],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
 
@@ -490,6 +644,7 @@ export function PersonnelLibraryClient({
           so we don't need a placeholder row in the table. */}
       <PersonnelDetailSlideOver
         panel={panel}
+        viewerCanSeePay={viewerCanSeePay}
         onClose={() => setPanel(null)}
         onSaved={() => {
           // Refresh server data so the new/edited row reflects

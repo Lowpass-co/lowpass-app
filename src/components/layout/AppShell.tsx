@@ -43,6 +43,7 @@ import {
   useCommandPalette,
 } from '@/components/command-palette/CommandPaletteContext';
 import { CommandPalette } from '@/components/command-palette/CommandPalette';
+import { ConnectionStatusProvider } from '@/components/realtime/ConnectionIndicator';
 
 /**
  * UX08b — Global ⌘K listener. Mounted inside CommandPaletteProvider so it
@@ -72,6 +73,7 @@ export function AppShell({
   return (
     <EntityRoutingProvider>
       <CommandPaletteProvider>
+        <ConnectionStatusProvider>
         <div
           className="flex min-h-screen min-w-0 flex-1 flex-col"
           style={{ background: 'var(--lp-dashboard-bg)' }}
@@ -94,6 +96,7 @@ export function AppShell({
           <CommandPaletteShortcut />
           <CommandPalette />
         </div>
+        </ConnectionStatusProvider>
       </CommandPaletteProvider>
     </EntityRoutingProvider>
   );

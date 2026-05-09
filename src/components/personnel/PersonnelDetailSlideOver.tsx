@@ -16,15 +16,45 @@ import {
 import { cn } from '@/lib/utils';
 import { BrandedSelect } from '@/components/ui/BrandedSelect';
 
-export type PersonnelPanelState = null | { mode: 'create' } | { mode: 'edit'; id: string };
+export type PersonnelPanelState =
+  | null
+  | { mode: 'create' }
+  /** Optional `scrollToSection` is the data-section id the
+   *  slide-over should scroll into view on open. Used by the
+   *  CompletenessRing click-through to land the operator on
+   *  the first missing section. Sections are tagged with
+   *  `data-section="<id>"` matching the ids returned by
+   *  computeCompleteness (identity / contact / passports /
+   *  emergency / home-airport / dietary / merch-sizes /
+   *  frequent-flier / pay). */
+  | { mode: 'edit'; id: string; scrollToSection?: string | null };
 
 const IC =
   'w-full rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text outline-none focus:border-lp-orange';
 const CUR = ['GBP', 'EUR', 'USD'] as const;
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  id,
+  title,
+  defaultOpen = false,
+  children,
+}: {
+  /** Sprint 9 §13.B.2 — stable section id matching the
+   *  computeCompleteness output so the CompletenessRing's
+   *  click-through can scroll directly here. */
+  id: string;
+  title: string;
+  /** Sprint 9 §13.B.1 spec: PERSONAL + CONTACT open by default,
+   *  others collapsed. */
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
   return (
-    <details open className="group border-b border-lp-border/80 pb-4 last:border-0">
+    <details
+      data-section={id}
+      open={defaultOpen}
+      className="group border-b border-lp-border/80 pb-4 last:border-0"
+    >
       <summary className="cursor-pointer list-none py-2 text-xs font-bold uppercase tracking-wider text-lp-text-secondary marker:content-none [&::-webkit-details-marker]:hidden">
         <span className="inline-flex items-center gap-2">
           <span className="text-lp-orange">▸</span>
@@ -81,14 +111,23 @@ function PassportFields({
 
 export function PersonnelDetailSlideOver({
   panel,
+  viewerCanSeePay = true,
   onClose,
   onSaved,
 }: {
   panel: PersonnelPanelState;
+  /** Sprint 9 §13.B.2 (Q5) — gate the Pay section. When false,
+   *  the section doesn't render and the slide-over doesn't send
+   *  pay-related fields back on save. Default true so existing
+   *  callers (admin tools, bug reports) keep seeing it; the
+   *  /personnel page passes the role-derived value. */
+  viewerCanSeePay?: boolean;
   onClose: () => void;
   onSaved: (row: Personnel, meta?: { source?: 'form' | 'document' }) => void;
 }) {
   const open = panel !== null;
+  const scrollToSection = panel?.mode === 'edit' ? panel.scrollToSection ?? null : null;
+  const scrollHostRef = useRef<HTMLDivElement | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -223,6 +262,28 @@ export function PersonnelDetailSlideOver({
     setExt(parseExtendedProfile(p.extended_profile));
   }, []);
 
+  // Sprint 9 §13.B.2 — when the operator opens the slide-over
+  // by clicking a CompletenessRing, scroll the matching section
+  // into view + open it. Runs after content has loaded so the
+  // <details data-section> element actually exists. The
+  // dependency on `loading` covers the edit-mode path which
+  // sets loading=true while fetching.
+  useEffect(() => {
+    if (!open || !scrollToSection || loading) return;
+    const host = scrollHostRef.current;
+    if (!host) return;
+    const target = host.querySelector<HTMLDetailsElement>(
+      `details[data-section="${scrollToSection}"]`,
+    );
+    if (!target) return;
+    target.open = true;
+    // Defer one frame so the section is open before scrolling.
+    const raf = requestAnimationFrame(() => {
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [open, scrollToSection, loading]);
+
   useEffect(() => {
     if (!open) return;
     if (panel?.mode === 'create') {
@@ -268,8 +329,12 @@ export function PersonnelDetailSlideOver({
         passports: [pp[0] ?? {}, pp[1] ?? {}],
         date_of_birth: pp[0]?.date_of_birth || ext.date_of_birth,
       };
-      const standard_rates = { ...rates };
-      const payload = {
+      // Sprint 9 §13.B.1 / Q5 — Pay section is gated; strip
+      // standard_rates from the payload when the viewer can't
+      // see it so a non-admin can't accidentally zero out rates
+      // by saving from a panel where the Pay section was hidden.
+      const standard_rates = viewerCanSeePay ? { ...rates } : undefined;
+      const payload: Record<string, unknown> = {
         name: n,
         role,
         email: email.trim() || null,
@@ -278,10 +343,10 @@ export function PersonnelDetailSlideOver({
         dietary_needs: dietary.trim() || null,
         merch_size: merchSize.trim() || null,
         preferences: preferences.trim() || null,
-        standard_rates,
         passport_info,
         extended_profile,
       };
+      if (standard_rates !== undefined) payload.standard_rates = standard_rates;
       const isCreate = panel?.mode === 'create';
       const url = isCreate ? '/api/personnel' : `/api/personnel/${(panel as { id: string }).id}`;
       const res = await fetch(url, {
@@ -378,7 +443,7 @@ export function PersonnelDetailSlideOver({
           </button>
         </header>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+        <div ref={scrollHostRef} className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
           {loading ? (
             <p className="text-sm text-lp-text-secondary">Loading…</p>
           ) : (
@@ -557,7 +622,12 @@ export function PersonnelDetailSlideOver({
                 </div>
               </div>
 
-              <Section title="General info">
+              {/* Sprint 9 §13.B.1 — Identity (PERSONAL) is the
+                  default-open landing section per spec. id maps
+                  to computeCompleteness's "identity" weight so
+                  the CompletenessRing's click-to-section flow
+                  lands here when name/DOB are missing. */}
+              <Section id="identity" title="General info" defaultOpen>
                 {lpId && (
                   <div>
                     <L>LP ID</L>
@@ -649,7 +719,7 @@ export function PersonnelDetailSlideOver({
                 </div>
               </Section>
 
-              <Section title="US only">
+              <Section id="us-only" title="US only">
                 <div>
                   <L>Social Security #</L>
                   <input value={ext.us_only?.social_security_number ?? ''} onChange={(e) => setUs('social_security_number', e.target.value)} className={IC} />
@@ -660,7 +730,7 @@ export function PersonnelDetailSlideOver({
                 </div>
               </Section>
 
-              <Section title="Passport 1 & passport 2">
+              <Section id="passports" title="Passport 1 & passport 2">
                 <div className="grid gap-4 lg:grid-cols-2">
                   <PassportFields label="Passport 1" p={pp[0] ?? {}} onChange={(k, v) => setPass(0, k, v)} />
                   <PassportFields label="Passport 2" p={pp[1] ?? {}} onChange={(k, v) => setPass(1, k, v)} />
@@ -676,7 +746,13 @@ export function PersonnelDetailSlideOver({
                 </div>
               </Section>
 
-              <Section title="Transport">
+              {/* Transport groups Home airport + Frequent flier
+                  + TSA / aisle preferences. Either of the two
+                  completeness section ids ("home-airport" /
+                  "frequent-flier") can land here; we tag with
+                  "home-airport" since that's the higher-weighted
+                  click target. */}
+              <Section id="home-airport" title="Transport">
                 <div>
                   <L>Home airport</L>
                   <input value={homeAirport} onChange={(e) => setHomeAirport(e.target.value)} className={IC} />
@@ -702,7 +778,7 @@ export function PersonnelDetailSlideOver({
                 </div>
               </Section>
 
-              <Section title="Important / emergency">
+              <Section id="emergency" title="Important / emergency">
                 <div>
                   <L>Dietary requirements / allergies</L>
                   <input value={dietary} onChange={(e) => setDietary(e.target.value)} className={IC} />
@@ -750,7 +826,7 @@ export function PersonnelDetailSlideOver({
                 </div>
               </Section>
 
-              <Section title="Merch etc">
+              <Section id="merch-sizes" title="Merch etc">
                 <div className="grid gap-3 sm:grid-cols-3">
                   <div>
                     <L>T-shirt size</L>
@@ -806,7 +882,7 @@ export function PersonnelDetailSlideOver({
                 </div>
               </Section>
 
-              <Section title="Notes for travel">
+              <Section id="travel-notes" title="Notes for travel">
                 <textarea
                   value={ext.travel_notes ?? ''}
                   onChange={(e) => setExt((p) => ({ ...p, travel_notes: e.target.value }))}
@@ -816,7 +892,11 @@ export function PersonnelDetailSlideOver({
                 />
               </Section>
 
-              <Section title="Default day rates">
+              {/* Sprint 9 §13.B.1 — Pay section is admin /
+                  manager only per spec + Q5. The gate is set
+                  at the slide-over root via viewerCanSeePay. */}
+              {viewerCanSeePay ? (
+              <Section id="pay" title="Default day rates">
                 <div>
                   <L>Currency</L>
                   <BrandedSelect
@@ -850,8 +930,9 @@ export function PersonnelDetailSlideOver({
                   ))}
                 </div>
               </Section>
+              ) : null}
 
-              <Section title="Other">
+              <Section id="other" title="Other">
                 <div>
                   <L>Instruments / skills</L>
                   <input value={ext.instruments ?? ''} onChange={(e) => setExt((p) => ({ ...p, instruments: e.target.value }))} className={IC} />
