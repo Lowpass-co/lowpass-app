@@ -321,6 +321,20 @@ export function PersonnelDetailSlideOver({
   /* Sprint 10 §2.2 — group keys multi-select. Saves into
      extended_profile.groups[]. */
   const [groups, setGroups] = useState<string[]>([]);
+  /* Sprint 10 Phase 2.1 §2.3 — auto-save the Groups multi-
+     select on each chip toggle, debounced 600ms. The PATCH
+     uses the existing /api/personnel/[id] route which merges
+     extended_profile server-side, so we only send the groups
+     field. On success, fire onSaved so the parent list
+     refreshes to pick up the new badges. */
+  const [groupsSaving, setGroupsSaving] = useState(false);
+  const [groupsSaveError, setGroupsSaveError] = useState<string | null>(null);
+  const groupsSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    return () => {
+      if (groupsSaveTimerRef.current) clearTimeout(groupsSaveTimerRef.current);
+    };
+  }, []);
 
   const headFileRef = useRef<HTMLInputElement>(null);
   const passFileRef = useRef<HTMLInputElement>(null);
@@ -788,6 +802,14 @@ export function PersonnelDetailSlideOver({
                         <img
                           src={ext.documents.head_shot.url}
                           alt=""
+                          /* Sprint 10 Phase 2.1 §2.2 — hide on
+                             load failure so old public-bucket
+                             URLs (broken after migration 085's
+                             non-public flip) don't render the
+                             browser's "?" placeholder. */
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                          }}
                           className="h-20 w-20 rounded-lg border border-lp-border object-cover"
                         />
                       ) : null}
@@ -897,6 +919,12 @@ export function PersonnelDetailSlideOver({
                           <img
                             src={doc.url}
                             alt=""
+                            /* Sprint 10 Phase 2.1 §2.2 — same
+                               broken-URL guard as the head shot
+                               above. */
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                            }}
                             style={{
                               width: 32,
                               height: 32,
@@ -1087,7 +1115,56 @@ export function PersonnelDetailSlideOver({
                   Tag this person with one or more workspace groups. Shows
                   as colored chips on the personnel grid.
                 </p>
-                <GroupsEditor value={groups} onChange={setGroups} />
+                <GroupsEditor
+                  value={groups}
+                  onChange={(next) => {
+                    setGroups(next);
+                    if (!rosterPersonnelId) return;
+                    if (groupsSaveTimerRef.current) {
+                      clearTimeout(groupsSaveTimerRef.current);
+                    }
+                    groupsSaveTimerRef.current = setTimeout(async () => {
+                      setGroupsSaving(true);
+                      setGroupsSaveError(null);
+                      try {
+                        const res = await fetch(`/api/personnel/${rosterPersonnelId}`, {
+                          method: 'PATCH',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            extended_profile: { groups: next },
+                          }),
+                        });
+                        const body = (await res.json().catch(() => null)) as
+                          | { error?: string }
+                          | (Personnel & { error?: undefined })
+                          | null;
+                        if (!res.ok) {
+                          setGroupsSaveError(body?.error ?? `Save failed (${res.status})`);
+                          return;
+                        }
+                        /* Surface the saved row to the parent
+                           list so the new group badges appear
+                           in the grid without a hard refresh. */
+                        if (body && !('error' in body) && body) {
+                          onSaved(body as Personnel);
+                        }
+                      } catch (err) {
+                        setGroupsSaveError(
+                          err instanceof Error ? err.message : 'Network error',
+                        );
+                      } finally {
+                        setGroupsSaving(false);
+                      }
+                    }, 600);
+                  }}
+                />
+                {groupsSaving ? (
+                  <p className="mt-2 text-xs text-lp-text-tertiary">Saving…</p>
+                ) : groupsSaveError ? (
+                  <p className="mt-2 text-xs" style={{ color: 'var(--color-lp-error)' }}>
+                    {groupsSaveError}
+                  </p>
+                ) : null}
               </Section>
 
               <Section id="us-only" title="US only">

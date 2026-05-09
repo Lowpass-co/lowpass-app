@@ -127,9 +127,25 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: uploadError.message }, { status: 500 });
   }
 
-  const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(uploadData.path);
+  /* Sprint 10 Phase 2.1 §5.2 — migration 085 flipped the
+     personnel-files bucket to public=false. getPublicUrl()
+     returned a /object/public/... URL that 404s ("Bucket not
+     found") for non-public buckets. Switch to createSignedUrl
+     with a 1-year expiry; the signed URL embeds a JWT and
+     remains valid against the workspace-scoped RLS policies.
+     Long-term refactor (Sprint 11): drop URL storage in JSONB
+     and re-sign on each read via a dedicated endpoint. */
+  const { data: signed, error: signError } = await supabase.storage
+    .from(BUCKET)
+    .createSignedUrl(uploadData.path, 60 * 60 * 24 * 365);
+  if (signError || !signed?.signedUrl) {
+    return NextResponse.json(
+      { error: signError?.message ?? 'Could not generate signed URL.' },
+      { status: 500 },
+    );
+  }
   const ref: PersonnelStoredDocument = {
-    url: urlData.publicUrl,
+    url: signed.signedUrl,
     path: uploadData.path,
     file_name: file.name,
     uploaded_at: new Date().toISOString(),

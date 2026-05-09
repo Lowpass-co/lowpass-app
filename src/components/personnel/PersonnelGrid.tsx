@@ -30,6 +30,7 @@
    onRowClick + onSelectionChange.
    ============================================ */
 
+import { useState } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { CompletenessRing } from './CompletenessRing';
 import { ContextMenu, type ContextMenuItem } from '@/components/ui/ContextMenu';
@@ -124,6 +125,13 @@ function GroupBadge({ group }: { group: PersonnelGroupKey }) {
 }
 
 function Avatar({ name, imageUrl, recentlyActive }: { name: string; imageUrl: string | null; recentlyActive: boolean }) {
+  /* Sprint 10 Phase 2.1 §2.2 — when imageUrl is set but the
+     image fails to load (e.g. an old public-bucket URL that
+     started 404ing after migration 085 flipped the bucket
+     non-public), swap to the initials chip rather than showing
+     the browser's broken-image "?" placeholder. */
+  const [imgFailed, setImgFailed] = useState(false);
+  const showImage = !!imageUrl && !imgFailed;
   return (
     <span
       style={{
@@ -140,11 +148,12 @@ function Avatar({ name, imageUrl, recentlyActive }: { name: string; imageUrl: st
         flexShrink: 0,
       }}
     >
-      {imageUrl ? (
+      {showImage ? (
         // eslint-disable-next-line @next/next/no-img-element
         <img
-          src={imageUrl}
+          src={imageUrl as string}
           alt=""
+          onError={() => setImgFailed(true)}
           style={{
             width: '100%',
             height: '100%',

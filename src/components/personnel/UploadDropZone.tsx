@@ -48,14 +48,22 @@ export function UploadDropZone({ onFile, accept = [], children }: UploadDropZone
 
   return (
     <div
+      /* Sprint 10 Phase 2.1 §5.3 — preventDefault on EVERY
+         drag event regardless of dataTransfer.types contents.
+         The previous gating ("only preventDefault when 'Files'
+         present") let the browser's default file-open behaviour
+         fire when types wasn't populated yet (Safari quirk).
+         Always-preventing is safe because the handler still
+         only acts on file drops. */
       onDragEnter={(e) => {
+        e.preventDefault();
         if (!e.dataTransfer.types.includes('Files')) return;
         dragDepthRef.current += 1;
         setHovering(true);
       }}
       onDragOver={(e) => {
+        e.preventDefault();
         if (e.dataTransfer.types.includes('Files')) {
-          e.preventDefault();
           e.dataTransfer.dropEffect = 'copy';
         }
       }}
@@ -64,10 +72,10 @@ export function UploadDropZone({ onFile, accept = [], children }: UploadDropZone
         if (dragDepthRef.current === 0) setHovering(false);
       }}
       onDrop={(e) => {
-        if (!e.dataTransfer.types.includes('Files')) return;
         e.preventDefault();
         dragDepthRef.current = 0;
         setHovering(false);
+        if (!e.dataTransfer.types.includes('Files')) return;
         const file = e.dataTransfer.files[0];
         if (!file) return;
         if (!matchesAccept(file, accept)) return;

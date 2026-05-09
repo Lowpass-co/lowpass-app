@@ -151,16 +151,9 @@ export function Tooltip({
                 padding: '6px 10px',
                 fontSize: 'var(--lp-text-xs)',
                 lineHeight: 1.35,
-                /* Sprint 10 §5.2 — darker tooltip surface.
-                   Adam's smoke (13bG2) said the v1 var(--lp-text)
-                   wasn't dark enough; switching to lp-text-strong
-                   (or the lp-bg-deep token via inversion) gives
-                   the panel real contrast against light + dark
-                   themes. Falling back to var(--lp-text) when
-                   the strong variant isn't defined preserves
-                   the previous behaviour as a safety net. */
+                /* Hardcoded dark surface; --lp-text-strong token isn't defined yet. */
                 color: '#ffffff',
-                background: 'var(--lp-text-strong, #0a0a0a)',
+                background: '#0a0a0a',
                 borderRadius: 'var(--lp-radius-sm)',
                 boxShadow: 'var(--lp-shadow-md, 0 4px 12px rgba(0, 0, 0, 0.18))',
                 pointerEvents: 'none',

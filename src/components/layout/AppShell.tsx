@@ -65,6 +65,33 @@ function CommandPaletteShortcut() {
   return null;
 }
 
+/**
+ * Sprint 10 Phase 2.1 §5.3 — global drop-on-document guard.
+ * Without this, dragging a file from Finder onto the page
+ * (anywhere outside an UploadDropZone) triggers the browser's
+ * default behaviour of opening the file in a new tab. This
+ * suppresses that for all non-zone drops; UploadDropZone's
+ * own handlers intercept drops over registered zones first
+ * (event bubbles up only when the inner handler doesn't
+ * stopPropagation, which we want — the inner zone fires its
+ * onFile callback then the bubbling default-prevent here
+ * keeps the browser from following the file).
+ */
+function GlobalDropGuard() {
+  useEffect(() => {
+    const prevent = (e: DragEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener('dragover', prevent);
+    window.addEventListener('drop', prevent);
+    return () => {
+      window.removeEventListener('dragover', prevent);
+      window.removeEventListener('drop', prevent);
+    };
+  }, []);
+  return null;
+}
+
 export function AppShell({
   children,
 }: {
@@ -95,6 +122,7 @@ export function AppShell({
           {/* UX08b: ⌘K command palette — global mount + keyboard shortcut. */}
           <CommandPaletteShortcut />
           <CommandPalette />
+          <GlobalDropGuard />
         </div>
         </ConnectionStatusProvider>
       </CommandPaletteProvider>

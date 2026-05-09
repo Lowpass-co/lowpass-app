@@ -20,6 +20,7 @@ interface IntakePageProps {
 }
 
 export const dynamic = 'force-dynamic';
+export const metadata = { title: 'Personnel info form — Lowpass' };
 
 function Frame({ children }: { children: React.ReactNode }) {
   return (
@@ -60,7 +61,7 @@ export default async function IntakePage({ params }: IntakePageProps) {
     return (
       <Frame>
         <h1 style={{ margin: 0, fontSize: 'var(--lp-text-xl)', fontWeight: 700 }}>
-          This intake link isn&apos;t valid
+          This personnel info form link isn&apos;t valid
         </h1>
         <p
           style={{
@@ -97,9 +98,10 @@ export default async function IntakePage({ params }: IntakePageProps) {
             color: 'var(--lp-text-secondary)',
           }}
         >
-          {row.workspace_name} has received your intake form. You
-          can close this window. If anything needs to change, ask
-          the person who sent the link to generate a fresh one.
+          {row.workspace_name} has received your personnel info
+          form. You can close this window. If anything needs to
+          change, ask the person who sent the link to generate
+          a fresh one.
         </p>
       </Frame>
     );
@@ -108,7 +110,7 @@ export default async function IntakePage({ params }: IntakePageProps) {
   return (
     <Frame>
       <h1 style={{ margin: 0, fontSize: 'var(--lp-text-xl)', fontWeight: 700 }}>
-        Welcome to {row.workspace_name}
+        {row.workspace_name} — Personnel info form
       </h1>
       <p
         style={{

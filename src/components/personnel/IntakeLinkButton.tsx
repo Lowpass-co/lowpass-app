@@ -37,7 +37,7 @@ export function IntakeLinkButton({ personnelId }: IntakeLinkButtonProps) {
         | { url?: string; error?: string }
         | null;
       if (!res.ok || !body?.url) {
-        showToast(body?.error ?? 'Could not generate intake link.');
+        showToast(body?.error ?? 'Could not generate personnel info form link.');
         return;
       }
       setGeneratedUrl(body.url);
@@ -46,9 +46,9 @@ export function IntakeLinkButton({ personnelId }: IntakeLinkButtonProps) {
       try {
         await navigator.clipboard.writeText(body.url);
         setCopied(true);
-        showToast('Intake link copied to clipboard.');
+        showToast('Personnel info form link copied to clipboard.');
       } catch {
-        showToast('Intake link generated. Click Copy to share.');
+        showToast('Personnel info form link generated. Click Copy to share.');
       }
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Network error');
@@ -96,7 +96,7 @@ export function IntakeLinkButton({ personnelId }: IntakeLinkButtonProps) {
         <button
           type="button"
           onClick={handleCopy}
-          aria-label="Copy intake link"
+          aria-label="Copy personnel info form link"
           style={{
             display: 'inline-flex',
             alignItems: 'center',
@@ -142,7 +142,7 @@ export function IntakeLinkButton({ personnelId }: IntakeLinkButtonProps) {
       ) : (
         <Link2 size={12} strokeWidth={2.4} />
       )}
-      Generate intake link
+      Request Personnel Info Form
     </button>
   );
 }
