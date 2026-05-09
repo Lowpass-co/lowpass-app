@@ -284,6 +284,19 @@ export function PersonnelDetailSlideOver({
     per_diem_rate: 0,
     currency: 'GBP',
   });
+  /* Sprint 9 §14.1 — parallel string state for the four rate
+     inputs. Without it, a controlled type=number input bound
+     to numeric state can't be cleared: deleting the "0" gives
+     value="" → Number("")||0 = 0 → React re-renders the
+     stuck "0". Tracking a string per field lets the user type
+     freely (including transient empty / "0." prefixes) while
+     `rates` stays numeric for downstream save / sync logic. */
+  const [rateInputs, setRateInputs] = useState<Record<string, string>>({
+    show_day_rate: '0',
+    off_day_rate: '0',
+    travel_day_rate: '0',
+    per_diem_rate: '0',
+  });
   const [lpId, setLpId] = useState<string | null>(null);
 
   const [pp, setPp] = useState<[PersonnelPassportDetail, PersonnelPassportDetail]>([{}, {}]);
@@ -382,6 +395,12 @@ export function PersonnelDetailSlideOver({
       per_diem_rate: 0,
       currency: 'GBP',
     });
+    setRateInputs({
+      show_day_rate: '0',
+      off_day_rate: '0',
+      travel_day_rate: '0',
+      per_diem_rate: '0',
+    });
     setLpId(null);
     setPp([{}, {}]);
     setExt({});
@@ -407,12 +426,21 @@ export function PersonnelDetailSlideOver({
     setMerchSize(p.merch_size ?? '');
     setPreferences(p.preferences ?? '');
     const sr = p.standard_rates as PersonnelRates | undefined;
-    setRates({
+    const next = {
       show_day_rate: Number(sr?.show_day_rate) || 0,
       off_day_rate: Number(sr?.off_day_rate) || 0,
       travel_day_rate: Number(sr?.travel_day_rate) || 0,
       per_diem_rate: Number(sr?.per_diem_rate) || 0,
+    };
+    setRates({
+      ...next,
       currency: typeof sr?.currency === 'string' ? sr.currency : 'GBP',
+    });
+    setRateInputs({
+      show_day_rate: String(next.show_day_rate),
+      off_day_rate: String(next.off_day_rate),
+      travel_day_rate: String(next.travel_day_rate),
+      per_diem_rate: String(next.per_diem_rate),
     });
     setLpId(p.lp_id);
     setPp(passportsFromPerson(p));
@@ -1114,10 +1142,38 @@ export function PersonnelDetailSlideOver({
                     <div key={key}>
                       <L>{label}</L>
                       <input
-                        type="number"
-                        min={0}
-                        value={rates[key]}
-                        onChange={(e) => setRates((r) => ({ ...r, [key]: Number(e.target.value) || 0 }))}
+                        /* Sprint 9 §14.1 — type=text + inputMode
+                           decimal so the user can clear the
+                           leading 0 without React re-stamping it.
+                           Numeric `rates` syncs whenever the
+                           string parses; transient empty / "0."
+                           input is preserved verbatim until then. */
+                        type="text"
+                        inputMode="decimal"
+                        value={rateInputs[key] ?? String(rates[key])}
+                        placeholder="0"
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          setRateInputs((m) => ({ ...m, [key]: raw }));
+                          if (raw === '') {
+                            setRates((r) => ({ ...r, [key]: 0 }));
+                            return;
+                          }
+                          const parsed = Number(raw);
+                          if (!Number.isNaN(parsed)) {
+                            setRates((r) => ({ ...r, [key]: parsed }));
+                          }
+                        }}
+                        onBlur={() => {
+                          // Normalise on blur: re-render the
+                          // canonical numeric value so empty /
+                          // partial inputs settle to a clean
+                          // string representation.
+                          setRateInputs((m) => ({
+                            ...m,
+                            [key]: String(rates[key]),
+                          }));
+                        }}
                         className={IC}
                       />
                     </div>

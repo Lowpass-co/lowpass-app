@@ -29,6 +29,7 @@ import {
 import { AccountAvatar } from '@/components/shell/AccountAvatar';
 import { DarkModeToggle } from '@/components/layout/DarkModeToggle';
 import { createClient as createBrowserSupabase } from '@/lib/supabase-client';
+import { toTitleCase } from '@/lib/text/toTitleCase';
 
 interface ProductHeaderAvatarMenuProps {
   user: { name: string; email: string; avatarUrl?: string | null };
@@ -83,7 +84,14 @@ export function ProductHeaderAvatarMenu({
      wider rounded-md pill that shows the display name. Falls
      back to the email local-part when no display name is set
      so the pill never reads as empty. */
-  const displayLabel = user.name?.trim() || user.email.split('@')[0] || 'Account';
+  /* Sprint 9 §14.1 — title-case the display label so workspace
+     names stored as "adam's workspace" or names entered without
+     capitalisation render as "Adam's Workspace" / "Adam Growley".
+     Email local-parts get the same treatment when used as
+     fallback. */
+  const displayLabel = toTitleCase(
+    user.name?.trim() || user.email.split('@')[0] || 'Account',
+  );
 
   return (
     <div className="flex items-center" style={{ gap: 'var(--lp-space-2)' }}>

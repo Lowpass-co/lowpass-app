@@ -280,11 +280,29 @@ export function PersonnelLibraryClient({
         accessor: (p) => toTitleCase(p.preferredName ?? p.fullName),
         sortable: true,
         frozen: true,
-        cell: (value) => <span>{String(value ?? '—')}</span>,
+        minWidth: 200,
+        /* Sprint 9 §14.1 — title cell formatted to match the
+           Bug Reports list pattern: text-sm semibold lp-text.
+           Truncation applied so long names don't push the
+           remaining columns. */
+        cell: (value) => (
+          <span
+            className="block truncate"
+            style={{
+              fontSize: 'var(--lp-text-sm)',
+              fontWeight: 'var(--lp-weight-semibold)',
+              color: 'var(--lp-text)',
+            }}
+          >
+            {String(value ?? '—')}
+          </span>
+        ),
       },
       {
         id: 'status',
         header: 'Status',
+        width: 160,
+        minWidth: 140,
         /* Sprint 9 §14.1 — pill reflects the row's actual
            combined state. Action-required when EITHER (a) there
            are expiring docs (passport ≤180d, visa expired —
@@ -377,6 +395,8 @@ export function PersonnelLibraryClient({
         accessor: 'completenessPercent',
         align: 'left',
         sortable: true,
+        width: 110,
+        minWidth: 100,
         cell: (_value, row) => {
           const r = row as PersonnelLibraryRow;
           return (
@@ -395,17 +415,45 @@ export function PersonnelLibraryClient({
         },
       },
       {
+        /* Sprint 9 §14.1 — email gets a fixed-width column so
+           long addresses don't push into Last toured (Adam's
+           smoke: the two were overlapping at default viewport).
+           Text formatting matches the Bug Reports list:
+           text-xs lp-text-tertiary truncate. */
         id: 'email',
         header: 'Email',
         accessor: (p) => p.email ?? '',
-        cell: (value) => String(value || '—'),
+        width: 240,
+        minWidth: 200,
+        cell: (value) => (
+          <span
+            className="block truncate"
+            style={{
+              fontSize: 'var(--lp-text-xs)',
+              color: 'var(--lp-text-tertiary)',
+            }}
+          >
+            {String(value || '—')}
+          </span>
+        ),
       },
       {
         id: 'last_toured',
         header: 'Last toured',
         accessor: (p) => p.lastTouredAt ?? '',
         sortable: true,
-        cell: (value) => formatDate((value as string) || null),
+        width: 140,
+        minWidth: 120,
+        cell: (value) => (
+          <span
+            style={{
+              fontSize: 'var(--lp-text-xs)',
+              color: 'var(--lp-text-secondary)',
+            }}
+          >
+            {formatDate((value as string) || null)}
+          </span>
+        ),
       },
       {
         id: 'total_tours',
@@ -413,20 +461,44 @@ export function PersonnelLibraryClient({
         accessor: 'totalTours',
         align: 'right',
         sortable: true,
-        cell: (value) => Number(value ?? 0).toLocaleString(),
+        width: 80,
+        minWidth: 70,
+        cell: (value) => (
+          <span
+            style={{
+              fontSize: 'var(--lp-text-xs)',
+              color: 'var(--lp-text-secondary)',
+            }}
+          >
+            {Number(value ?? 0).toLocaleString()}
+          </span>
+        ),
       },
       {
         id: 'updated',
         header: 'Last updated',
         accessor: 'updatedAt',
         sortable: true,
-        cell: (value) => relativeTime(String(value ?? new Date().toISOString())),
+        width: 140,
+        minWidth: 120,
+        cell: (value) => (
+          <span
+            style={{
+              fontSize: 'var(--lp-text-xs)',
+              color: 'var(--lp-text-tertiary)',
+            }}
+          >
+            {relativeTime(String(value ?? new Date().toISOString()))}
+          </span>
+        ),
       },
       {
         id: 'actions',
         header: '',
         accessor: () => '',
         align: 'right',
+        width: 56,
+        minWidth: 48,
         cell: (_value, row) => {
           const r = row as PersonnelLibraryRow;
           const displayName = toTitleCase(r.preferredName ?? r.fullName);
