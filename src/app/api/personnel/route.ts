@@ -118,5 +118,34 @@ export async function POST(request: Request) {
     }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  // Sprint 9 §13.A.5 — keep the personnel.id == persons.id
+  // convention (codified by migration 050) for NEW rows. Without
+  // a parallel persons row, entityRouting.open({ kind: 'person',
+  // id }) would surface "Person not found" because the entity
+  // registry queries the persons table. Best-effort UPSERT
+  // (ignore failure — the personnel row is still usable; the
+  // detail slide-over via personnel routes still works).
+  if (data?.id) {
+    const { error: personErr } = await supabase
+      .from('persons')
+      .upsert(
+        {
+          id: data.id as string,
+          workspace_id: profile.workspace_id,
+          full_name: name,
+          email: typeof body.email === 'string' ? body.email.trim() || null : null,
+          phone: typeof body.phone === 'string' ? body.phone.trim() || null : null,
+        },
+        { onConflict: 'id', ignoreDuplicates: false },
+      );
+    if (personErr) {
+      // Don't fail the create — log + continue. Worst case the
+      // user lands on the personnel row but entity routing
+      // briefly says "not found" until they refresh.
+      console.error('[personnel POST] persons sibling upsert failed:', personErr);
+    }
+  }
+
   return NextResponse.json(data);
 }

@@ -231,5 +231,31 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
+  // Sprint 9 §13.A.13 — same fix as POST /api/personnel: keep
+  // the personnel.id == persons.id convention so entityRouting
+  // doesn't surface "Person not found" on click. Best-effort
+  // bulk upsert; failures don't block the import.
+  const insertedRows = (inserted ?? []) as Array<{
+    id: string;
+    name: string;
+    email: string | null;
+    phone: string | null;
+  }>;
+  if (insertedRows.length > 0) {
+    const personRows = insertedRows.map((r) => ({
+      id: r.id,
+      workspace_id: profile.workspace_id,
+      full_name: r.name,
+      email: r.email,
+      phone: r.phone,
+    }));
+    const { error: personsErr } = await supabase
+      .from('persons')
+      .upsert(personRows, { onConflict: 'id', ignoreDuplicates: false });
+    if (personsErr) {
+      console.error('[personnel import] persons sibling upsert failed:', personsErr);
+    }
+  }
+
   return NextResponse.json({ created: inserted?.length ?? 0, personnel: inserted ?? [] });
 }

@@ -233,12 +233,18 @@ export function PersonnelManageSlideOver({
             <div style={{ minWidth: 0 }}>
               <label
                 htmlFor="lp-personnel-starts"
+                /* Sprint 9 §13.A.11 — bumped from text-2xs +
+                   lp-text-secondary so the label reads as a
+                   label, not as decoration above the date input.
+                   Spec said: if labels render but feel hidden,
+                   make them more obvious. */
                 className="lp-label-caps"
                 style={{
                   display: 'block',
                   marginBottom: 'var(--lp-space-1)',
-                  fontSize: 'var(--lp-text-2xs)',
-                  color: 'var(--lp-text-secondary)',
+                  fontSize: 'var(--lp-text-xs)',
+                  fontWeight: 'var(--lp-weight-semibold)',
+                  color: 'var(--lp-text)',
                 }}
               >
                 Start date
@@ -264,12 +270,18 @@ export function PersonnelManageSlideOver({
             <div style={{ minWidth: 0 }}>
               <label
                 htmlFor="lp-personnel-ends"
+                /* Sprint 9 §13.A.11 — bumped from text-2xs +
+                   lp-text-secondary so the label reads as a
+                   label, not as decoration above the date input.
+                   Spec said: if labels render but feel hidden,
+                   make them more obvious. */
                 className="lp-label-caps"
                 style={{
                   display: 'block',
                   marginBottom: 'var(--lp-space-1)',
-                  fontSize: 'var(--lp-text-2xs)',
-                  color: 'var(--lp-text-secondary)',
+                  fontSize: 'var(--lp-text-xs)',
+                  fontWeight: 'var(--lp-weight-semibold)',
+                  color: 'var(--lp-text)',
                 }}
               >
                 End date

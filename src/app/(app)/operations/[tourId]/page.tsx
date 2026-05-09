@@ -195,8 +195,12 @@ export default async function OperationsTourLandingPage({
     ),
   );
 
-  // Conflict count via batch RPC. Empty canonical-id list returns
-  // zero rows so this is safe to call unconditionally.
+  // Sprint 9 §13.A.7 — sum results from BOTH RPCs (canonical
+  // + email fallback). Personnel whose persons.canonical_person_id
+  // is NULL (pre-backfill rows) only resolve via the email path.
+  // The previous version called only the canonical RPC, so any
+  // tour with un-linked persons reported 0 conflicts even when
+  // /personnel showed warnings.
   const canonicalIds = Array.from(
     new Set(
       tourPersonnel
@@ -204,22 +208,48 @@ export default async function OperationsTourLandingPage({
         .filter((v): v is string => !!v),
     ),
   );
+  const fallbackEmails = Array.from(
+    new Set(
+      tourPersonnel
+        .map((tp) => {
+          const p = personById.get(tp.person_id);
+          // Only include emails for persons WITHOUT a canonical
+          // link — otherwise we'd double-count.
+          if (!p || p.canonical_person_id) return null;
+          return p.email ? p.email.trim().toLowerCase() : null;
+        })
+        .filter((v): v is string => !!v && v.length > 0),
+    ),
+  );
   let conflictCount = 0;
-  if (
-    canonicalIds.length > 0 &&
-    tourRow.start_date &&
-    tourRow.end_date
-  ) {
-    const { data: conflicts } = await supabase.rpc(
-      'check_personnel_conflicts_batch',
-      {
-        p_canonical_person_ids: canonicalIds,
-        p_start_date: tourRow.start_date,
-        p_end_date: tourRow.end_date,
-        p_excluding_tour_id: tourId,
-      },
-    );
-    conflictCount = (conflicts ?? []).length;
+  if (tourRow.start_date && tourRow.end_date) {
+    const calls: Array<Promise<{ data: unknown[] | null }>> = [];
+    if (canonicalIds.length > 0) {
+      calls.push(
+        supabase.rpc('check_personnel_conflicts_batch', {
+          p_canonical_person_ids: canonicalIds,
+          p_start_date: tourRow.start_date,
+          p_end_date: tourRow.end_date,
+          p_excluding_tour_id: tourId,
+        }) as unknown as Promise<{ data: unknown[] | null }>,
+      );
+    }
+    if (fallbackEmails.length > 0) {
+      calls.push(
+        supabase.rpc('check_personnel_conflicts_by_email_batch', {
+          p_emails: fallbackEmails,
+          p_start_date: tourRow.start_date,
+          p_end_date: tourRow.end_date,
+          p_excluding_tour_id: tourId,
+        }) as unknown as Promise<{ data: unknown[] | null }>,
+      );
+    }
+    if (calls.length > 0) {
+      const results = await Promise.all(calls);
+      for (const r of results) {
+        conflictCount += (r.data ?? []).length;
+      }
+    }
   }
 
   // Pending tasks

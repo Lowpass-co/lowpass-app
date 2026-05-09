@@ -2,32 +2,37 @@
    LOWPASS — App Shell (Client)
 
    Global client-only app chrome: context guards, toasts,
-   floating bug report, and (Sprint 8.5 §1) the workspace-level
-   switcher mount.
+   floating bug report, ⌘K palette, PWA shell.
 
-   Sprint 8.5 §1 — the artist/tour switcher used to live inside
-   <ProductHeader> (per-product, in the dynamic-segment subtree),
-   which caused the wrapper + dropdown to remount on every
-   /artists/[A] → /artists/[B] navigation. State persistence
-   (Sprint 8.3 §1) survived but the DOM element didn't, producing
-   a visible close+reopen flash on artist switch.
+   Sprint 9 §13.A.2 — the workspace + artist/tour switcher slot
+   that used to render here has been removed. The previous mount
+   produced a duplicate header above shell-v1's <TopBar> and
+   shell-v2's <ProductHeader> (the "double TopBar" complaint on
+   the smoke list). Each shell now owns its complete chrome:
 
-   Real fix: the switcher is now rendered inside AppShell — at
-   workspace level, above the dynamic-segment subtree. Same DOM
-   element across all (app)/* navigation. No flash.
+     - shell-v1 (<TopBar>): renders <WorkspaceSwitcher> inline
+       on its left side, alongside the existing tours dropdown.
+       Workspace-scoped routes don't need an artist/tour switcher.
 
-   The switcher renders inline as the first row of chrome in
-   AppShell's flex column, above {children}. ProductHeader stays
-   per-product but no longer carries the switcher (it keeps
-   product name + search + avatar). On workspace landing
-   (/artists exact), the switcher is hidden via a pathname check
-   — there's no selected artist/tour at that scope.
+     - shell-v2 (<ProductHeader>): renders <WorkspaceSwitcher> +
+       <ArtistTourSwitcherClientWrapper> on its left side. The
+       initialArtists prefetch lives on ProductHeader directly.
+
+   Sprint 8.5 §1's hoisted-mount fix (artist/tour switcher state
+   persistence across /artists/[A]→/artists/[B] navigation) is
+   superseded — switcher state survives via SwitcherStateContext
+   (mounted in (app)/layout.tsx, above this component), so DOM
+   remount on dynamic-segment change still preserves the open
+   dropdown's open/close state and selection. Any visible flash
+   on artist switch is a separate polish item, not in 13.A scope.
+
+   AppShell is now a pure pass-through wrapper for providers and
+   global non-chrome ambient elements.
    ============================================ */
 
 'use client';
 
 import { Suspense, useEffect } from 'react';
-import { usePathname } from 'next/navigation';
 import { ArtistTourScopeGuard } from '@/components/layout/ArtistTourScopeGuard';
 import { OverviewArtistQuerySync } from '@/components/layout/OverviewArtistQuerySync';
 import { FloatingBugReport } from '@/components/bug-report/FloatingBugReport';
@@ -38,15 +43,6 @@ import {
   useCommandPalette,
 } from '@/components/command-palette/CommandPaletteContext';
 import { CommandPalette } from '@/components/command-palette/CommandPalette';
-import { ArtistTourSwitcherClientWrapper } from '@/components/shell-v2/ArtistTourSwitcherClientWrapper';
-import { WorkspaceSwitcher } from '@/components/shell-v2/WorkspaceSwitcher';
-
-interface InitialArtist {
-  id: string;
-  name: string;
-  branding: unknown;
-  spotify_image_url: string | null;
-}
 
 /**
  * UX08b — Global ⌘K listener. Mounted inside CommandPaletteProvider so it
@@ -68,73 +64,10 @@ function CommandPaletteShortcut() {
   return null;
 }
 
-/**
- * Sprint 8.5 §1 — workspace-level switcher mount.
- * Renders inline as the first row of AppShell's flex column.
- * Visibility: hidden on /artists workspace landing (no selected
- * artist/tour at that scope). Always rendered on artist-scoped
- * + tour-scoped pages (/artists/[id]/*, /budget/[X]/*,
- * /advance/[X]/*, /operations/[X]/*).
- *
- * The switcher's actual chrome (the trigger button + dropdown)
- * is rendered by <ArtistTourSwitcherClientWrapper>; we just
- * provide a stable container at workspace level so React never
- * unmounts it.
- */
-function WorkspaceSwitcherSlot({
-  initialArtists,
-}: {
-  initialArtists: InitialArtist[];
-}) {
-  const pathname = usePathname();
-  // Hide on workspace landing — no artist/tour selected at this
-  // scope. Pathname is `/artists` exactly (no /[id] segment).
-  const onWorkspaceLanding = pathname === '/artists';
-  if (onWorkspaceLanding) return null;
-
-  return (
-    <div
-      className="lp-workspace-switcher-slot"
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 'var(--lp-space-2)',
-        height: 48,
-        padding: '0 var(--lp-space-3)',
-        background: 'var(--lp-panel)',
-        borderBottom: '1px solid var(--lp-border-strong)',
-        flexShrink: 0,
-      }}
-    >
-      {/* Sprint 9 §3 — workspace switcher mounted to the LEFT
-          of the artist/tour switcher per the approved mockup.
-          Always shown (static label for single-workspace
-          users, dropdown for 2+) so users get a "you are HERE"
-          anchor before the artist/tour scope. */}
-      <WorkspaceSwitcher />
-      <span
-        aria-hidden
-        style={{
-          width: 1,
-          height: 16,
-          background: 'var(--lp-border-subtle)',
-        }}
-      />
-      <ArtistTourSwitcherClientWrapper
-        initialArtists={initialArtists}
-        initialTours={null}
-        initialArtistId={null}
-      />
-    </div>
-  );
-}
-
 export function AppShell({
   children,
-  initialArtists,
 }: {
   children: React.ReactNode;
-  initialArtists: InitialArtist[];
 }) {
   return (
     <EntityRoutingProvider>
@@ -149,10 +82,10 @@ export function AppShell({
           <Suspense fallback={null}>
             <OverviewArtistQuerySync />
           </Suspense>
-          {/* Sprint 8.5 §1 — workspace-level switcher mount.
-              Sits above the dynamic-segment subtree so the
-              dropdown DOM persists across all (app)/* nav. */}
-          <WorkspaceSwitcherSlot initialArtists={initialArtists} />
+          {/* Sprint 9 §13.A.2 — workspace + artist/tour switcher
+              moved into per-shell chrome (TopBar, ProductHeader)
+              to eliminate the duplicate-header bar that lived
+              here. AppShell is now a pure pass-through. */}
           <div className="flex min-h-0 min-w-0 flex-1 flex-col">{children}</div>
           <FloatingBugReport />
           {/* UX18: PWA shell — registers SW (production only) and renders the install prompt. */}

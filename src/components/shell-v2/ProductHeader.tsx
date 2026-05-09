@@ -2,19 +2,25 @@
    LOWPASS — Product Split Phase 1 — <ProductHeader>
    (Sprint 5: chips replaced with <ArtistTourSwitcher>)
    (Sprint 8.5 §1: switcher hoisted out of ProductHeader to
-    workspace-level <AppShell>; this header is now
-    [product name] [search] [avatar] only)
+    workspace-level <AppShell>; this header was [product name]
+    [search] [avatar] only)
+   (Sprint 9 §13.A.2: switcher mount returns to ProductHeader.
+    The AppShell hoist eliminated remount-flash on artist
+    switch but produced a duplicate header bar above this one
+    on every shell-v2 page — the "double TopBar" smoke
+    complaint. Each shell now owns its complete chrome.)
 
    Top header that sits above the page body inside <ProductShell>.
-   44-48px tall.
+   48px tall. Layout:
 
-   Sprint 8.5 §1 — the artist/tour switcher used to live here on
-   the left, but it remounted on every dynamic-segment change.
-   The switcher is now mounted in <AppShell> (workspace level)
-   inline above ProductHeader. ProductHeader keeps the per-product
-   chrome: product name + search + avatar. The avatar still needs
-   a server-side user/profile fetch, so this stays an async
-   server component.
+     [WorkspaceSwitcher] | [ArtistTourSwitcher] | [Product]
+                                                ... [Search] [Avatar]
+
+   The artist/tour switcher wrapper still lives inside
+   SwitcherStateProvider (mounted in (app)/layout.tsx) so its
+   open/close state and active selection survive the dynamic-
+   segment remount. Visual flash on /artists/[A]→/artists/[B]
+   navigation is acknowledged as a polish item, not 13.A scope.
 
    API:
      <ProductHeader productName="Operations" />
@@ -23,6 +29,8 @@
 import { Search } from 'lucide-react';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { ProductHeaderAvatarMenu } from './ProductHeaderAvatarMenu';
+import { WorkspaceSwitcher } from './WorkspaceSwitcher';
+import { ArtistTourSwitcherClientWrapper } from './ArtistTourSwitcherClientWrapper';
 
 export type ProductName = 'Home' | 'Operations' | 'Budget' | 'Advance';
 
@@ -30,16 +38,30 @@ interface ProductHeaderProps {
   productName: ProductName;
 }
 
+type SwitcherArtistMin = {
+  id: string;
+  name: string;
+  branding: unknown;
+  spotify_image_url: string | null;
+};
+
 export async function ProductHeader({ productName }: ProductHeaderProps) {
   const supabase = await createServerSupabaseClient();
 
-  // Sprint 8.5 §1 — only user/profile fetch remains (for the
-  // avatar menu). The Sprint 5 §2 initialArtists / initialTours
-  // pre-fetch is gone — the workspace-level switcher mounts in
-  // AppShell with initialArtists threaded through (app)/layout.tsx.
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Sprint 9 §13.A.2 — fetch user/profile AND the workspace's
+  // artist list in parallel. The artist list feeds the
+  // ArtistTourSwitcher's initial render so the dropdown's
+  // artists pane is never empty on first paint. RLS scopes
+  // both queries to the caller's workspace.
+  const [{ data: userData }, { data: artistsRes }] = await Promise.all([
+    supabase.auth.getUser(),
+    supabase
+      .from('artists')
+      .select('id, name, branding, spotify_image_url')
+      .order('name', { ascending: true }),
+  ]);
+  const user = userData?.user ?? null;
+  const initialArtists = (artistsRes ?? []) as SwitcherArtistMin[];
 
   let isSiteAdmin = false;
   let avatarUrl: string | null = null;
@@ -69,8 +91,32 @@ export async function ProductHeader({ productName }: ProductHeaderProps) {
         borderColor: 'var(--lp-border-strong)',
       }}
     >
-      {/* Left: product name */}
-      <div className="flex items-center">
+      {/* Left cluster: workspace + artist/tour scope, then a
+          subtle separator, then the product name. */}
+      <div className="flex min-w-0 items-center" style={{ gap: 'var(--lp-space-2)' }}>
+        <WorkspaceSwitcher />
+        <span
+          aria-hidden
+          style={{
+            width: 1,
+            height: 16,
+            background: 'var(--lp-border-subtle)',
+          }}
+        />
+        <ArtistTourSwitcherClientWrapper
+          initialArtists={initialArtists}
+          initialTours={null}
+          initialArtistId={null}
+        />
+        <span
+          aria-hidden
+          style={{
+            width: 1,
+            height: 16,
+            background: 'var(--lp-border-subtle)',
+            marginInline: 'var(--lp-space-1)',
+          }}
+        />
         <span
           style={{
             fontSize: '11px',

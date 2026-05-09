@@ -174,8 +174,9 @@ export function OperationsSummaryClient({
         }}
       >
         <Card
+          title="Shows"
           icon={<MapPin size={16} strokeWidth={2} />}
-          headline={`${shows.count} shows`}
+          headline={`${shows.count}`}
           subline={
             shows.nextShowDate
               ? `next ${formatShowDate(shows.nextShowDate)}`
@@ -185,24 +186,31 @@ export function OperationsSummaryClient({
           ctaLabel="Routing →"
         />
         <Card
+          title="Crew"
           icon={<Users size={16} strokeWidth={2} />}
-          headline={`${crew.count} crew`}
+          headline={`${crew.count}`}
           subline={tourWindow}
           href={`/operations/${tourId}/personnel`}
           ctaLabel="Personnel →"
         />
         <Card
+          title="Conflicts"
           icon={<AlertTriangle size={16} strokeWidth={2} />}
-          headline={`${conflicts.count} conflict${conflicts.count === 1 ? '' : 's'}`}
-          subline={conflicts.count > 0 ? 'cross-tour overlap' : '—'}
+          headline={`${conflicts.count}`}
+          subline={conflicts.count > 0 ? 'cross-tour overlap' : 'none'}
           href={`/operations/${tourId}/personnel?filter=conflicts`}
           ctaLabel={conflicts.count > 0 ? 'Review →' : 'Personnel →'}
           tone={conflicts.count > 0 ? 'warning' : 'neutral'}
         />
         <CardButton
+          title="Pending tasks"
           icon={<ListChecks size={16} strokeWidth={2} />}
-          headline={`${pendingCount} pending`}
-          subline={pendingCount === 0 ? '—' : 'tasks'}
+          headline={`${pendingCount}`}
+          subline={
+            pendingCount === 0
+              ? 'all clear'
+              : `${pendingCount} item${pendingCount === 1 ? '' : 's'} need attention`
+          }
           ctaLabel={pendingOpen ? 'Hide ▾' : 'Review →'}
           tone={pendingCount > 0 ? 'warning' : 'neutral'}
           onClick={() => setPendingOpen((o) => !o)}
@@ -442,6 +450,10 @@ export function OperationsSummaryClient({
 }
 
 interface CardProps {
+  /** Sprint 9 §13.A.8 — explicit per-card title (e.g. "Shows",
+   *  "Crew", "Conflicts", "Pending tasks") replacing the prior
+   *  generic "Overview" / "Attention" labels. */
+  title: string;
   icon: React.ReactNode;
   headline: string;
   subline: string;
@@ -450,7 +462,7 @@ interface CardProps {
   tone?: 'neutral' | 'warning';
 }
 
-function Card({ icon, headline, subline, href, ctaLabel, tone = 'neutral' }: CardProps) {
+function Card({ title, icon, headline, subline, href, ctaLabel, tone = 'neutral' }: CardProps) {
   const accentColor =
     tone === 'warning' ? 'var(--color-lp-orange)' : 'var(--lp-text-tertiary)';
   return (
@@ -476,7 +488,7 @@ function Card({ icon, headline, subline, href, ctaLabel, tone = 'neutral' }: Car
             color: accentColor,
           }}
         >
-          {tone === 'warning' ? 'Attention' : 'Overview'}
+          {title}
         </span>
       </div>
       <div
@@ -511,6 +523,8 @@ function Card({ icon, headline, subline, href, ctaLabel, tone = 'neutral' }: Car
 }
 
 interface CardButtonProps {
+  /** Sprint 9 §13.A.8 — explicit per-card title. */
+  title: string;
   icon: React.ReactNode;
   headline: string;
   subline: string;
@@ -520,6 +534,7 @@ interface CardButtonProps {
 }
 
 function CardButton({
+  title,
   icon,
   headline,
   subline,
@@ -552,7 +567,7 @@ function CardButton({
             color: accentColor,
           }}
         >
-          {tone === 'warning' ? 'Attention' : 'Overview'}
+          {title}
         </span>
       </div>
       <div

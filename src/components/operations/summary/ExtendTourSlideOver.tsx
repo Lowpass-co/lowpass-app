@@ -13,6 +13,7 @@
    ============================================ */
 
 import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
 import { SlideOver } from '@/components/shell/SlideOver';
@@ -55,6 +56,7 @@ export function ExtendTourSlideOver({
   onSaved,
 }: ExtendTourSlideOverProps) {
   const { showToast } = useToast();
+  const router = useRouter();
   const [startDate, setStartDate] = useState(initialStartDate ?? '');
   const [endDate, setEndDate] = useState(initialEndDate ?? '');
   const [saving, setSaving] = useState(false);
@@ -97,6 +99,14 @@ export function ExtendTourSlideOver({
         return;
       }
       showToast('Tour window updated.');
+      // Sprint 9 §13.A.9 — invalidate the route's server
+      // components so the operations layout re-fetches the tour
+      // row and <TourHeader> renders the new dates immediately.
+      // Belt-and-braces: callers also call router.refresh() in
+      // their onSaved, but landing it here means future call
+      // sites can't accidentally drop the refresh and produce
+      // the same stale-dates symptom (E5).
+      router.refresh();
       onSaved();
       onClose();
     } catch (err) {
