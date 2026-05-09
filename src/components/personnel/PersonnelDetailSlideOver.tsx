@@ -34,6 +34,7 @@ import { cn } from '@/lib/utils';
 import { BrandedSelect } from '@/components/ui/BrandedSelect';
 import { IntakeLinkButton } from './IntakeLinkButton';
 import { GroupsEditor } from './GroupsEditor';
+import { UploadDropZone } from './UploadDropZone';
 
 export type PersonnelPanelState =
   | null
@@ -831,24 +832,34 @@ export function PersonnelDetailSlideOver({
                       </div>
                     </div>
                   ) : (
-                    <button
-                      type="button"
-                      disabled={!rosterPersonnelId || docUploadKind !== null || docDeleting !== null}
-                      onClick={() => headFileRef.current?.click()}
-                      className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-lp-border py-6 text-xs font-medium text-lp-text-secondary hover:border-lp-orange/50 hover:text-lp-text disabled:opacity-50"
+                    /* Sprint 10 §5.4 — wrap the click-to-pick
+                       button in <UploadDropZone> so a dragged
+                       file from Finder / a browser tab also
+                       triggers the upload path. The button
+                       itself stays the click target. */
+                    <UploadDropZone
+                      accept={['image/jpeg', 'image/png', 'image/gif', 'image/webp']}
+                      onFile={(f) => void postDocument(f, 'head_shot')}
                     >
-                      {docUploadKind === 'head' ? (
-                        <>
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          Uploading…
-                        </>
-                      ) : (
-                        <>
-                          <ImageIcon className="h-4 w-4" />
-                          Drop or click to upload (JPEG, PNG, GIF, WebP)
-                        </>
-                      )}
-                    </button>
+                      <button
+                        type="button"
+                        disabled={!rosterPersonnelId || docUploadKind !== null || docDeleting !== null}
+                        onClick={() => headFileRef.current?.click()}
+                        className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-lp-border py-6 text-xs font-medium text-lp-text-secondary hover:border-lp-orange/50 hover:text-lp-text disabled:opacity-50"
+                      >
+                        {docUploadKind === 'head' ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Uploading…
+                          </>
+                        ) : (
+                          <>
+                            <ImageIcon className="h-4 w-4" />
+                            Drop or click to upload (JPEG, PNG, GIF, WebP)
+                          </>
+                        )}
+                      </button>
+                    </UploadDropZone>
                   )}
                 </div>
 
@@ -874,6 +885,46 @@ export function PersonnelDetailSlideOver({
                         key={doc.path}
                         className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-lp-border/60 bg-lp-surface/40 px-2 py-2"
                       >
+                        {/* Sprint 10 §5.3 — preview thumbnail.
+                            Image MIME types render the actual
+                            image; PDF + others fall back to a
+                            file icon. PDF page-1 thumbnails are
+                            deferred to Sprint 11 (needs server-
+                            side processing or pdf-thumbnail
+                            dep, neither in scope here). */}
+                        {doc.content_type?.startsWith('image/') ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={doc.url}
+                            alt=""
+                            style={{
+                              width: 32,
+                              height: 32,
+                              objectFit: 'cover',
+                              borderRadius: 'var(--lp-radius-sm)',
+                              border: '1px solid var(--lp-border)',
+                              flexShrink: 0,
+                            }}
+                          />
+                        ) : (
+                          <span
+                            aria-hidden
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              width: 32,
+                              height: 32,
+                              borderRadius: 'var(--lp-radius-sm)',
+                              background: 'var(--lp-bg-tertiary)',
+                              border: '1px solid var(--lp-border)',
+                              color: 'var(--lp-text-tertiary)',
+                              flexShrink: 0,
+                            }}
+                          >
+                            <FileText className="h-4 w-4" />
+                          </span>
+                        )}
                         <span className="min-w-0 flex-1 truncate text-xs text-lp-text">{doc.file_name}</span>
                         <div className="flex shrink-0 items-center gap-1">
                           <a
@@ -902,24 +953,32 @@ export function PersonnelDetailSlideOver({
                       </li>
                     ))}
                   </ul>
-                  <button
-                    type="button"
-                    disabled={!rosterPersonnelId || docUploadKind !== null || docDeleting !== null}
-                    onClick={() => passFileRef.current?.click()}
-                    className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-lp-border py-4 text-xs font-medium text-lp-text-secondary hover:border-lp-orange/50 hover:text-lp-text disabled:opacity-50"
+                  {/* Sprint 10 §5.4 — passport upload supports
+                      drag-and-drop too. Same UploadDropZone
+                      pattern as the head shot button above. */}
+                  <UploadDropZone
+                    accept={['application/pdf', 'image/jpeg', 'image/png', 'image/gif', 'image/webp']}
+                    onFile={(f) => void postDocument(f, 'passport_scan')}
                   >
-                    {docUploadKind === 'passport' ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Uploading…
-                      </>
-                    ) : (
-                      <>
-                        <FileText className="h-4 w-4" />
-                        Add passport scan (PDF or image)
-                      </>
-                    )}
-                  </button>
+                    <button
+                      type="button"
+                      disabled={!rosterPersonnelId || docUploadKind !== null || docDeleting !== null}
+                      onClick={() => passFileRef.current?.click()}
+                      className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-lp-border py-4 text-xs font-medium text-lp-text-secondary hover:border-lp-orange/50 hover:text-lp-text disabled:opacity-50"
+                    >
+                      {docUploadKind === 'passport' ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Uploading…
+                        </>
+                      ) : (
+                        <>
+                          <FileText className="h-4 w-4" />
+                          Add passport scan (PDF or image)
+                        </>
+                      )}
+                    </button>
+                  </UploadDropZone>
                 </div>
               </div>
 

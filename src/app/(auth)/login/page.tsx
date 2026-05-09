@@ -194,9 +194,16 @@ function LoginPageInner() {
   };
 
   const handleGoogleLogin = async () => {
+    /* Sprint 10 §5.1 — thread `next` through the OAuth
+       callback so deep-links (e.g. /invite/accept?token=...)
+       survive Google's redirect. The callback route's
+       safeNextPath() guard prevents open-redirect abuse. */
+    const callbackParams = new URLSearchParams();
+    if (nextPath) callbackParams.set('next', nextPath);
+    const callbackUrl = `${window.location.origin}/auth/callback${callbackParams.toString() ? `?${callbackParams.toString()}` : ''}`;
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
+      options: { redirectTo: callbackUrl },
     });
     if (error) setError(error.message);
   };
