@@ -1,17 +1,24 @@
 'use client';
 
 /* ============================================
-   LOWPASS — OperationsSubNav (Sprint 9 §5)
+   LOWPASS — OperationsSubNav (Sprint 9 §5 + §13.C.2)
 
    Horizontal sub-nav under TourHeader on every Operations
-   sub-page. Renders 7 fixed links in this order:
-     Personnel · Routing · Channel List · Payroll · Rooming ·
-     Files · Riders
+   sub-page. Renders the Summary entry first, then up to 7
+   fixed sub-page links:
+     Summary · Personnel · Routing · Channel List · Payroll ·
+     Rooming · Files · Riders
 
    Active link gets orange underline; others get a subtle
    hover. Links are filtered by per-resource read access —
    readonly users only see what they're granted for. Admin/
    manager pass everything.
+
+   Sprint 9 §13.C.2 — added optional `href` override on each
+   link so the Summary entry can target the tour root
+   /operations/[tourId] (no trailing slug) without each call
+   site special-casing it. Default behaviour
+   (`/operations/${tourId}/${slug}`) is unchanged.
    ============================================ */
 
 import Link from 'next/link';
@@ -21,8 +28,13 @@ import { cn } from '@/lib/utils';
 export interface OperationsSubNavLink {
   id: string;
   label: string;
-  /** Path under /operations/[tourId]/. e.g. 'routing'. */
+  /** Path under /operations/[tourId]/. e.g. 'routing'. The
+   *  Summary entry passes slug='' and an explicit `href`. */
   slug: string;
+  /** Optional href override — bypasses the default
+   *  `/operations/${tourId}/${slug}` construction. Used by
+   *  the Summary entry to target the tour root. */
+  href?: string;
   /** True when the caller has read access for this resource. */
   visible: boolean;
 }
@@ -65,7 +77,7 @@ export function OperationsSubNav({
         return (
           <Link
             key={link.id}
-            href={`/operations/${tourId}/${link.slug}`}
+            href={link.href ?? `/operations/${tourId}/${link.slug}`}
             aria-current={active ? 'page' : undefined}
             className={cn(
               'btn-transition',

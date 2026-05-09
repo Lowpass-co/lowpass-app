@@ -1,17 +1,34 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { ExternalLink, FileText, ImageIcon, Loader2, Trash2, X } from 'lucide-react';
+import { ExternalLink, FileText, ImageIcon, Loader2, Plus, Trash2, X } from 'lucide-react';
 import type { Personnel, PersonnelRates } from '@/types';
 import type {
+  PersonnelDietaryType,
+  PersonnelDietaryV2,
+  PersonnelEmergencyContactV2,
   PersonnelExtendedProfile,
+  PersonnelFrequentFlierTier,
+  PersonnelFrequentFlierV2,
+  PersonnelGarment,
+  PersonnelMerchSizeV2,
   PersonnelPassportDetail,
+  PersonnelPassportV2,
   PersonnelStoredDocument,
+  PersonnelVisaV2,
 } from '@/lib/personnel-extended-profile';
 import {
   legacyPassportInfoFromPrimary,
+  liftDietary,
+  liftEmergencyContacts,
+  liftFrequentFlier,
+  liftMerchSizes,
+  liftPassportsV2,
+  liftVisas,
   parseExtendedProfile,
   passportsFromPerson,
+  syncEmergencyContactLegacy,
+  syncPassportsLegacy,
 } from '@/lib/personnel-extended-profile';
 import { cn } from '@/lib/utils';
 import { BrandedSelect } from '@/components/ui/BrandedSelect';
@@ -73,6 +90,90 @@ function L({ children, className }: { children: React.ReactNode; className?: str
     </label>
   );
 }
+
+/* Sprint 9 §13.D — shared multi-of-each list UI. Renders each
+   entry inside a card with a Remove button at the top-right and
+   a "+ Add <kind>" button at the bottom. The fields-per-entry
+   render is delegated to `renderEntry` so each section's shape
+   can stay close to its data definition. */
+function MultiList<T>({
+  items,
+  empty,
+  addLabel,
+  onAdd,
+  onRemove,
+  renderEntry,
+}: {
+  items: T[];
+  /** Copy shown when the list is empty. The Add button still
+   *  renders below it. */
+  empty: string;
+  addLabel: string;
+  onAdd: () => void;
+  onRemove: (index: number) => void;
+  renderEntry: (entry: T, index: number) => React.ReactNode;
+}) {
+  return (
+    <div className="space-y-3">
+      {items.length === 0 ? (
+        <p className="text-xs italic text-lp-text-tertiary">{empty}</p>
+      ) : (
+        <ul className="space-y-3" aria-label={`${addLabel} list`}>
+          {items.map((item, i) => (
+            <li
+              key={i}
+              className="rounded-lg border border-lp-border/80 bg-lp-surface/30 p-3"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">{renderEntry(item, i)}</div>
+                <button
+                  type="button"
+                  onClick={() => onRemove(i)}
+                  aria-label="Remove entry"
+                  className="shrink-0 rounded-lg border border-red-500/40 p-1.5 text-red-600 hover:bg-red-500/10 dark:text-red-400"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+      <button
+        type="button"
+        onClick={onAdd}
+        className="inline-flex items-center gap-1 rounded-lg border border-dashed border-lp-border px-3 py-2 text-xs font-medium text-lp-text-secondary hover:border-lp-orange/50 hover:text-lp-text"
+      >
+        <Plus className="h-3.5 w-3.5" />
+        {addLabel}
+      </button>
+    </div>
+  );
+}
+
+const DIETARY_TYPES: ReadonlyArray<{ value: PersonnelDietaryType; label: string }> = [
+  { value: 'vegetarian', label: 'Vegetarian' },
+  { value: 'vegan', label: 'Vegan' },
+  { value: 'gluten_free', label: 'Gluten-free' },
+  { value: 'kosher', label: 'Kosher' },
+  { value: 'halal', label: 'Halal' },
+  { value: 'custom', label: 'Other / custom' },
+];
+
+const GARMENTS: ReadonlyArray<{ value: PersonnelGarment; label: string }> = [
+  { value: 't_shirt', label: 'T-shirt' },
+  { value: 'hoodie', label: 'Hoodie' },
+  { value: 'jacket', label: 'Jacket' },
+  { value: 'pants', label: 'Pants' },
+  { value: 'shoes', label: 'Shoes' },
+];
+
+const FLIER_TIERS: ReadonlyArray<{ value: PersonnelFrequentFlierTier; label: string }> = [
+  { value: 'basic', label: 'Basic' },
+  { value: 'silver', label: 'Silver' },
+  { value: 'gold', label: 'Gold' },
+  { value: 'platinum', label: 'Platinum' },
+];
 
 function PassportFields({
   label,
@@ -151,6 +252,20 @@ export function PersonnelDetailSlideOver({
 
   const [pp, setPp] = useState<[PersonnelPassportDetail, PersonnelPassportDetail]>([{}, {}]);
   const [ext, setExt] = useState<PersonnelExtendedProfile>({});
+
+  // Sprint 9 §13.D — Daysheets-style multi-of-each state. Lifted
+  // from legacy fields on first load (lift helpers in
+  // personnel-extended-profile.ts handle the translation), so
+  // existing rows show their data in the new sections without a
+  // backfill. Save flow writes BOTH the v2 arrays AND mirrors
+  // them to the legacy fields via the sync helpers so legacy
+  // readers (rooming, advance, exports) keep working.
+  const [emergencyContactsV2, setEmergencyContactsV2] = useState<PersonnelEmergencyContactV2[]>([]);
+  const [passportsV2, setPassportsV2] = useState<PersonnelPassportV2[]>([]);
+  const [frequentFlierV2, setFrequentFlierV2] = useState<PersonnelFrequentFlierV2[]>([]);
+  const [visasV2, setVisasV2] = useState<PersonnelVisaV2[]>([]);
+  const [dietaryV2, setDietaryV2] = useState<PersonnelDietaryV2[]>([]);
+  const [merchSizesV2, setMerchSizesV2] = useState<PersonnelMerchSizeV2[]>([]);
 
   const headFileRef = useRef<HTMLInputElement>(null);
   const passFileRef = useRef<HTMLInputElement>(null);
@@ -234,6 +349,12 @@ export function PersonnelDetailSlideOver({
     setLpId(null);
     setPp([{}, {}]);
     setExt({});
+    setEmergencyContactsV2([]);
+    setPassportsV2([]);
+    setFrequentFlierV2([]);
+    setVisasV2([]);
+    setDietaryV2([]);
+    setMerchSizesV2([]);
     setError(null);
     setDocErr(null);
     setDocUploadKind(null);
@@ -259,7 +380,19 @@ export function PersonnelDetailSlideOver({
     });
     setLpId(p.lp_id);
     setPp(passportsFromPerson(p));
-    setExt(parseExtendedProfile(p.extended_profile));
+    const parsedExt = parseExtendedProfile(p.extended_profile);
+    setExt(parsedExt);
+    // Sprint 9 §13.D — lift legacy data into v2 arrays so the
+    // multi-of-each sections show existing rows the first time
+    // a user opens them. The lift helpers no-op when the v2
+    // arrays are already populated, so re-saving doesn't lose
+    // data.
+    setEmergencyContactsV2(liftEmergencyContacts(parsedExt));
+    setPassportsV2(liftPassportsV2(parsedExt));
+    setFrequentFlierV2(liftFrequentFlier(parsedExt));
+    setVisasV2(liftVisas(parsedExt));
+    setDietaryV2(liftDietary(p.dietary_needs ?? null, parsedExt));
+    setMerchSizesV2(liftMerchSizes(p.merch_size ?? null, parsedExt));
   }, []);
 
   // Sprint 9 §13.B.2 — when the operator opens the slide-over
@@ -324,11 +457,85 @@ export function PersonnelDetailSlideOver({
     setSaving(true);
     try {
       const passport_info = legacyPassportInfoFromPrimary(pp[0] ?? {});
-      const extended_profile: PersonnelExtendedProfile = {
+      // Sprint 9 §13.D — write the v2 arrays AND mirror the
+      // critical ones back to the legacy fields via the sync
+      // helpers, so rooming + advance + exports keep reading
+      // unchanged. Order matters: start from `ext` (carries the
+      // legacy single-emergency_contact / passports[]), then
+      // overlay the v2 arrays + mirror, then layer on the
+      // form-style two-passport array (legacy form path).
+      const cleanedEmergency = emergencyContactsV2.filter(
+        (e) => (e.name ?? '').trim().length > 0,
+      );
+      const cleanedPassportsV2 = passportsV2.filter(
+        (p) => (p.number ?? '').trim().length > 0,
+      );
+      const cleanedFlier = frequentFlierV2.filter(
+        (f) => (f.airline ?? '').trim().length > 0 || (f.member_number ?? '').trim().length > 0,
+      );
+      const cleanedVisas = visasV2.filter(
+        (v) => (v.country ?? '').trim().length > 0 || (v.valid_to ?? '').trim().length > 0,
+      );
+      const cleanedDietary = dietaryV2.filter((d) => !!d.type);
+      const cleanedMerch = merchSizesV2.filter((m) => (m.size ?? '').trim().length > 0);
+
+      let extWithV2: PersonnelExtendedProfile = {
         ...ext,
+        // Form-style passport array (the legacy "Passport 1 &
+        // 2" section is still wired). Will be re-overwritten
+        // by syncPassportsLegacy below if there are v2 entries.
         passports: [pp[0] ?? {}, pp[1] ?? {}],
         date_of_birth: pp[0]?.date_of_birth || ext.date_of_birth,
+        frequent_flier: cleanedFlier,
+        visas: cleanedVisas,
+        dietary: cleanedDietary,
+        merch_sizes: cleanedMerch,
       };
+      extWithV2 = syncEmergencyContactLegacy(extWithV2, cleanedEmergency);
+      if (cleanedPassportsV2.length > 0) {
+        extWithV2 = syncPassportsLegacy(extWithV2, cleanedPassportsV2);
+      }
+
+      // Sprint 9 §13.D — clear legacy mirror fields whose
+      // canonical edit surface has moved to v2 arrays. Once a
+      // workspace's data is fully migrated through v2 saves,
+      // legacy readers will read v2 mirrors (where set) or null
+      // (where the operator hasn't filled the v2 list yet).
+      if (cleanedFlier.length > 0 && extWithV2.transport_extra) {
+        const tx = { ...extWithV2.transport_extra };
+        delete tx.frequent_flyer_1;
+        delete tx.frequent_flyer_2;
+        delete tx.frequent_flyer_3;
+        delete tx.frequent_flyer_4;
+        extWithV2.transport_extra = tx;
+      }
+      if (cleanedVisas.length > 0) {
+        // Drop the legacy single visa block — visa notes are
+        // now per-entry in cleanedVisas.
+        delete extWithV2.visa;
+      }
+      if (cleanedMerch.length > 0) {
+        delete extWithV2.clothing_sizes;
+      }
+
+      // Derive top-level column values from v2 arrays when they
+      // have entries (canonical), else fall back to the loaded
+      // legacy state slots. Lets payroll / rooming readers that
+      // pull dietary_needs / merch_size keep working.
+      const dietaryColumn = cleanedDietary.length > 0
+        ? cleanedDietary
+            .map((d) =>
+              d.notes && d.notes.trim()
+                ? `${d.type.replace(/_/g, ' ')}: ${d.notes.trim()}`
+                : d.type.replace(/_/g, ' '),
+            )
+            .join('; ')
+        : (dietary.trim() || null);
+      const merchSizeColumn = cleanedMerch.length > 0
+        ? cleanedMerch.map((m) => `${m.garment.replace(/_/g, ' ')}: ${m.size}`).join('; ')
+        : (merchSize.trim() || null);
+
+      const extended_profile: PersonnelExtendedProfile = extWithV2;
       // Sprint 9 §13.B.1 / Q5 — Pay section is gated; strip
       // standard_rates from the payload when the viewer can't
       // see it so a non-admin can't accidentally zero out rates
@@ -340,8 +547,8 @@ export function PersonnelDetailSlideOver({
         email: email.trim() || null,
         phone: phone.trim() || null,
         home_airport: homeAirport.trim() || null,
-        dietary_needs: dietary.trim() || null,
-        merch_size: merchSize.trim() || null,
+        dietary_needs: dietaryColumn,
+        merch_size: merchSizeColumn,
         preferences: preferences.trim() || null,
         passport_info,
         extended_profile,
@@ -376,12 +583,8 @@ export function PersonnelDetailSlideOver({
     }));
   };
 
-  const setEm = (k: keyof NonNullable<PersonnelExtendedProfile['emergency_contact']>, v: string) => {
-    setExt((prev) => ({
-      ...prev,
-      emergency_contact: { ...prev.emergency_contact, [k]: v },
-    }));
-  };
+  // Sprint 9 §13.D — setEm helper retired; emergency_contact is
+  // now driven exclusively by the v2 multi section + sync helper.
 
   const setNp = (k: keyof NonNullable<PersonnelExtendedProfile['name_parts']>, v: string) => {
     setExt((prev) => ({
@@ -730,19 +933,18 @@ export function PersonnelDetailSlideOver({
                 </div>
               </Section>
 
-              <Section id="passports" title="Passport 1 & passport 2">
+              {/* Sprint 9 §13.D — legacy form-style "Passport 1
+                  & 2" stays for the form fields the Daysheets v2
+                  shape doesn't carry (authority, empty pages,
+                  type, code). The Daysheets-style passports
+                  multi section below is the canonical edit
+                  surface; this section's fields write back to
+                  passports[] as a mirror. Visa notes moved to
+                  the per-entry Visas section below. */}
+              <Section id="passports-form" title="Passport (form-style legacy fields)">
                 <div className="grid gap-4 lg:grid-cols-2">
                   <PassportFields label="Passport 1" p={pp[0] ?? {}} onChange={(k, v) => setPass(0, k, v)} />
                   <PassportFields label="Passport 2" p={pp[1] ?? {}} onChange={(k, v) => setPass(1, k, v)} />
-                </div>
-                <div>
-                  <L>Visa / ESTA (notes)</L>
-                  <textarea
-                    value={ext.visa?.notes ?? ''}
-                    onChange={(e) => setExt((p) => ({ ...p, visa: { ...p.visa, notes: e.target.value } }))}
-                    rows={2}
-                    className={cn(IC, 'resize-none')}
-                  />
                 </div>
               </Section>
 
@@ -767,22 +969,21 @@ export function PersonnelDetailSlideOver({
                     <input value={ext.transport_extra?.aisle_window ?? ''} onChange={(e) => setTx('aisle_window', e.target.value)} className={IC} />
                   </div>
                 </div>
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-lp-text-tertiary">Frequent flyer</p>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {(['frequent_flyer_1', 'frequent_flyer_2', 'frequent_flyer_3', 'frequent_flyer_4'] as const).map((k) => (
-                    <div key={k}>
-                      <L>{k.replace('frequent_flyer_', 'Line ')}</L>
-                      <input value={ext.transport_extra?.[k] ?? ''} onChange={(e) => setTx(k, e.target.value)} className={IC} />
-                    </div>
-                  ))}
-                </div>
+                {/* Sprint 9 §13.D — Frequent flier moved to a
+                    dedicated multi-of-each section below. */}
+                <p className="text-[10px] italic text-lp-text-tertiary">
+                  Frequent flier programmes are now managed in their own
+                  Daysheets-style section below.
+                </p>
               </Section>
 
-              <Section id="emergency" title="Important / emergency">
-                <div>
-                  <L>Dietary requirements / allergies</L>
-                  <input value={dietary} onChange={(e) => setDietary(e.target.value)} className={IC} />
-                </div>
+              {/* Sprint 9 §13.D — Emergency contacts + dietary
+                  moved to dedicated multi-of-each sections below.
+                  This section is now Health / Medical only. The
+                  setEm helper lives in this file but is no longer
+                  invoked here; kept exported because future health
+                  fields (e.g. blood type) may reuse the pattern. */}
+              <Section id="health" title="Health & medical">
                 <div>
                   <L>Allergies to medicine?</L>
                   <input value={ext.health?.allergies_medicine ?? ''} onChange={(e) => setHl('allergies_medicine', e.target.value)} className={IC} />
@@ -794,22 +995,6 @@ export function PersonnelDetailSlideOver({
                 <div>
                   <L>Criminal convictions?</L>
                   <input value={ext.health?.criminal_convictions ?? ''} onChange={(e) => setHl('criminal_convictions', e.target.value)} className={IC} />
-                </div>
-                <div>
-                  <L>Emergency contact</L>
-                  <input value={ext.emergency_contact?.name ?? ''} onChange={(e) => setEm('name', e.target.value)} className={IC} />
-                </div>
-                <div>
-                  <L>Relation to you</L>
-                  <input value={ext.emergency_contact?.relationship ?? ''} onChange={(e) => setEm('relationship', e.target.value)} className={IC} />
-                </div>
-                <div>
-                  <L>Contact number</L>
-                  <input value={ext.emergency_contact?.phone ?? ''} onChange={(e) => setEm('phone', e.target.value)} className={IC} />
-                </div>
-                <div>
-                  <L>Emergency email</L>
-                  <input value={ext.emergency_contact?.email ?? ''} onChange={(e) => setEm('email', e.target.value)} className={IC} />
                 </div>
                 <div>
                   <L>Insurance info (crew only)</L>
@@ -826,52 +1011,10 @@ export function PersonnelDetailSlideOver({
                 </div>
               </Section>
 
-              <Section id="merch-sizes" title="Merch etc">
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <div>
-                    <L>T-shirt size</L>
-                    <input
-                      value={ext.clothing_sizes?.shirt ?? ''}
-                      onChange={(e) =>
-                        setExt((p) => ({
-                          ...p,
-                          clothing_sizes: { ...p.clothing_sizes, shirt: e.target.value },
-                        }))
-                      }
-                      className={IC}
-                    />
-                  </div>
-                  <div>
-                    <L>Hoody / jacket</L>
-                    <input
-                      value={ext.clothing_sizes?.jacket ?? ''}
-                      onChange={(e) =>
-                        setExt((p) => ({
-                          ...p,
-                          clothing_sizes: { ...p.clothing_sizes, jacket: e.target.value },
-                        }))
-                      }
-                      className={IC}
-                    />
-                  </div>
-                  <div>
-                    <L>Shoes</L>
-                    <input
-                      value={ext.clothing_sizes?.shoe ?? ''}
-                      onChange={(e) =>
-                        setExt((p) => ({
-                          ...p,
-                          clothing_sizes: { ...p.clothing_sizes, shoe: e.target.value },
-                        }))
-                      }
-                      className={IC}
-                    />
-                  </div>
-                </div>
-                <div>
-                  <L>Merch size (legacy single field)</L>
-                  <input value={merchSize} onChange={(e) => setMerchSize(e.target.value)} className={IC} />
-                </div>
+              {/* Sprint 9 §13.D — Merch sizes moved to a
+                  dedicated multi-of-each section below. This
+                  section now carries food/beverage extras only. */}
+              <Section id="merch-extras" title="Food & drink preferences">
                 <div>
                   <L>Coffee order</L>
                   <textarea value={ext.merch_extras?.coffee_order ?? ''} onChange={(e) => setMx('coffee_order', e.target.value)} rows={2} className={cn(IC, 'resize-none')} />
@@ -963,6 +1106,423 @@ export function PersonnelDetailSlideOver({
                   <L>Internal notes (TM only)</L>
                   <textarea value={ext.internal_notes ?? ''} onChange={(e) => setExt((p) => ({ ...p, internal_notes: e.target.value }))} rows={2} className={cn(IC, 'resize-none')} />
                 </div>
+              </Section>
+
+              {/* Sprint 9 §13.D — Daysheets-style multi-of-each
+                  sections. Each writes to its v2 array on
+                  extended_profile + the legacy mirror via the
+                  sync helpers in personnel-extended-profile.ts.
+                  All six default-collapsed (Identity / "General
+                  info" is the only default-open section per
+                  §13.B.1 spec). */}
+              <Section id="emergency" title="Emergency contacts">
+                <MultiList<PersonnelEmergencyContactV2>
+                  items={emergencyContactsV2}
+                  empty="No emergency contacts yet."
+                  addLabel="Add emergency contact"
+                  onAdd={() =>
+                    setEmergencyContactsV2((arr) => [
+                      ...arr,
+                      { name: '', relationship: '', phone: '', email: '' },
+                    ])
+                  }
+                  onRemove={(i) =>
+                    setEmergencyContactsV2((arr) => arr.filter((_, idx) => idx !== i))
+                  }
+                  renderEntry={(entry, i) => (
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <L>Name</L>
+                        <input
+                          value={entry.name}
+                          onChange={(e) =>
+                            setEmergencyContactsV2((arr) =>
+                              arr.map((row, idx) =>
+                                idx === i ? { ...row, name: e.target.value } : row,
+                              ),
+                            )
+                          }
+                          className={IC}
+                        />
+                      </div>
+                      <div>
+                        <L>Relationship</L>
+                        <input
+                          value={entry.relationship}
+                          onChange={(e) =>
+                            setEmergencyContactsV2((arr) =>
+                              arr.map((row, idx) =>
+                                idx === i
+                                  ? { ...row, relationship: e.target.value }
+                                  : row,
+                              ),
+                            )
+                          }
+                          className={IC}
+                        />
+                      </div>
+                      <div>
+                        <L>Phone</L>
+                        <input
+                          value={entry.phone}
+                          onChange={(e) =>
+                            setEmergencyContactsV2((arr) =>
+                              arr.map((row, idx) =>
+                                idx === i ? { ...row, phone: e.target.value } : row,
+                              ),
+                            )
+                          }
+                          className={IC}
+                        />
+                      </div>
+                      <div>
+                        <L>Email (optional)</L>
+                        <input
+                          type="email"
+                          value={entry.email ?? ''}
+                          onChange={(e) =>
+                            setEmergencyContactsV2((arr) =>
+                              arr.map((row, idx) =>
+                                idx === i ? { ...row, email: e.target.value } : row,
+                              ),
+                            )
+                          }
+                          className={IC}
+                        />
+                      </div>
+                    </div>
+                  )}
+                />
+              </Section>
+
+              <Section id="passports" title="Passports (Daysheets-style)">
+                <MultiList<PersonnelPassportV2>
+                  items={passportsV2}
+                  empty="No passports yet."
+                  addLabel="Add passport"
+                  onAdd={() =>
+                    setPassportsV2((arr) => [
+                      ...arr,
+                      {
+                        country: '',
+                        number: '',
+                        given_names: '',
+                        surname: '',
+                        date_of_expiry: '',
+                      },
+                    ])
+                  }
+                  onRemove={(i) =>
+                    setPassportsV2((arr) => arr.filter((_, idx) => idx !== i))
+                  }
+                  renderEntry={(entry, i) => {
+                    const update = (patch: Partial<PersonnelPassportV2>) =>
+                      setPassportsV2((arr) =>
+                        arr.map((row, idx) => (idx === i ? { ...row, ...patch } : row)),
+                      );
+                    return (
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div>
+                          <L>Country</L>
+                          <input
+                            value={entry.country}
+                            onChange={(e) => update({ country: e.target.value })}
+                            className={IC}
+                          />
+                        </div>
+                        <div>
+                          <L>Passport #</L>
+                          <input
+                            value={entry.number}
+                            onChange={(e) => update({ number: e.target.value })}
+                            className={IC}
+                          />
+                        </div>
+                        <div>
+                          <L>Given names</L>
+                          <input
+                            value={entry.given_names}
+                            onChange={(e) => update({ given_names: e.target.value })}
+                            className={IC}
+                          />
+                        </div>
+                        <div>
+                          <L>Surname</L>
+                          <input
+                            value={entry.surname}
+                            onChange={(e) => update({ surname: e.target.value })}
+                            className={IC}
+                          />
+                        </div>
+                        <div>
+                          <L>Date of issue</L>
+                          <input
+                            type="date"
+                            value={entry.date_of_issue ?? ''}
+                            onChange={(e) => update({ date_of_issue: e.target.value })}
+                            className={IC}
+                          />
+                        </div>
+                        <div>
+                          <L>Date of expiry</L>
+                          <input
+                            type="date"
+                            value={entry.date_of_expiry}
+                            onChange={(e) => update({ date_of_expiry: e.target.value })}
+                            className={IC}
+                          />
+                        </div>
+                        <div className="sm:col-span-2">
+                          <L>Place of birth</L>
+                          <input
+                            value={entry.place_of_birth ?? ''}
+                            onChange={(e) => update({ place_of_birth: e.target.value })}
+                            className={IC}
+                          />
+                        </div>
+                      </div>
+                    );
+                  }}
+                />
+              </Section>
+
+              <Section id="frequent-flier" title="Frequent flier">
+                <MultiList<PersonnelFrequentFlierV2>
+                  items={frequentFlierV2}
+                  empty="No frequent flier programmes yet."
+                  addLabel="Add airline"
+                  onAdd={() =>
+                    setFrequentFlierV2((arr) => [
+                      ...arr,
+                      { airline: '', member_number: '' },
+                    ])
+                  }
+                  onRemove={(i) =>
+                    setFrequentFlierV2((arr) => arr.filter((_, idx) => idx !== i))
+                  }
+                  renderEntry={(entry, i) => {
+                    const update = (patch: Partial<PersonnelFrequentFlierV2>) =>
+                      setFrequentFlierV2((arr) =>
+                        arr.map((row, idx) => (idx === i ? { ...row, ...patch } : row)),
+                      );
+                    return (
+                      <div className="grid gap-3 sm:grid-cols-3">
+                        <div>
+                          <L>Airline</L>
+                          <input
+                            value={entry.airline}
+                            onChange={(e) => update({ airline: e.target.value })}
+                            className={IC}
+                          />
+                        </div>
+                        <div>
+                          <L>Member #</L>
+                          <input
+                            value={entry.member_number}
+                            onChange={(e) => update({ member_number: e.target.value })}
+                            className={IC}
+                          />
+                        </div>
+                        <div>
+                          <L>Tier</L>
+                          <select
+                            value={entry.tier ?? ''}
+                            onChange={(e) =>
+                              update({
+                                tier:
+                                  e.target.value === ''
+                                    ? undefined
+                                    : (e.target.value as PersonnelFrequentFlierTier),
+                              })
+                            }
+                            className={IC}
+                          >
+                            <option value="">—</option>
+                            {FLIER_TIERS.map((t) => (
+                              <option key={t.value} value={t.value}>
+                                {t.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    );
+                  }}
+                />
+              </Section>
+
+              <Section id="visas" title="Visas">
+                <MultiList<PersonnelVisaV2>
+                  items={visasV2}
+                  empty="No visas on file."
+                  addLabel="Add visa"
+                  onAdd={() =>
+                    setVisasV2((arr) => [
+                      ...arr,
+                      { country: '', type: '', valid_to: '' },
+                    ])
+                  }
+                  onRemove={(i) =>
+                    setVisasV2((arr) => arr.filter((_, idx) => idx !== i))
+                  }
+                  renderEntry={(entry, i) => {
+                    const update = (patch: Partial<PersonnelVisaV2>) =>
+                      setVisasV2((arr) =>
+                        arr.map((row, idx) => (idx === i ? { ...row, ...patch } : row)),
+                      );
+                    return (
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div>
+                          <L>Country</L>
+                          <input
+                            value={entry.country}
+                            onChange={(e) => update({ country: e.target.value })}
+                            className={IC}
+                          />
+                        </div>
+                        <div>
+                          <L>Type</L>
+                          <input
+                            value={entry.type}
+                            onChange={(e) => update({ type: e.target.value })}
+                            className={IC}
+                          />
+                        </div>
+                        <div>
+                          <L>Valid from</L>
+                          <input
+                            type="date"
+                            value={entry.valid_from ?? ''}
+                            onChange={(e) => update({ valid_from: e.target.value })}
+                            className={IC}
+                          />
+                        </div>
+                        <div>
+                          <L>Valid to</L>
+                          <input
+                            type="date"
+                            value={entry.valid_to}
+                            onChange={(e) => update({ valid_to: e.target.value })}
+                            className={IC}
+                          />
+                        </div>
+                        <div className="sm:col-span-2">
+                          <L>Notes</L>
+                          <textarea
+                            value={entry.notes ?? ''}
+                            onChange={(e) => update({ notes: e.target.value })}
+                            rows={2}
+                            className={cn(IC, 'resize-none')}
+                          />
+                        </div>
+                      </div>
+                    );
+                  }}
+                />
+              </Section>
+
+              <Section id="dietary" title="Dietary requirements">
+                <MultiList<PersonnelDietaryV2>
+                  items={dietaryV2}
+                  empty="No dietary requirements specified."
+                  addLabel="Add dietary requirement"
+                  onAdd={() =>
+                    setDietaryV2((arr) => [
+                      ...arr,
+                      { type: 'vegetarian' },
+                    ])
+                  }
+                  onRemove={(i) =>
+                    setDietaryV2((arr) => arr.filter((_, idx) => idx !== i))
+                  }
+                  renderEntry={(entry, i) => {
+                    const update = (patch: Partial<PersonnelDietaryV2>) =>
+                      setDietaryV2((arr) =>
+                        arr.map((row, idx) => (idx === i ? { ...row, ...patch } : row)),
+                      );
+                    return (
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div>
+                          <L>Type</L>
+                          <select
+                            value={entry.type}
+                            onChange={(e) =>
+                              update({ type: e.target.value as PersonnelDietaryType })
+                            }
+                            className={IC}
+                          >
+                            {DIETARY_TYPES.map((t) => (
+                              <option key={t.value} value={t.value}>
+                                {t.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <L>Notes / details</L>
+                          <input
+                            value={entry.notes ?? ''}
+                            onChange={(e) => update({ notes: e.target.value })}
+                            className={IC}
+                            placeholder="e.g. severe nut allergy"
+                          />
+                        </div>
+                      </div>
+                    );
+                  }}
+                />
+              </Section>
+
+              <Section id="merch-sizes" title="Merch sizes (Daysheets-style)">
+                <MultiList<PersonnelMerchSizeV2>
+                  items={merchSizesV2}
+                  empty="No merch sizes recorded."
+                  addLabel="Add size"
+                  onAdd={() =>
+                    setMerchSizesV2((arr) => [
+                      ...arr,
+                      { garment: 't_shirt', size: '' },
+                    ])
+                  }
+                  onRemove={(i) =>
+                    setMerchSizesV2((arr) => arr.filter((_, idx) => idx !== i))
+                  }
+                  renderEntry={(entry, i) => {
+                    const update = (patch: Partial<PersonnelMerchSizeV2>) =>
+                      setMerchSizesV2((arr) =>
+                        arr.map((row, idx) => (idx === i ? { ...row, ...patch } : row)),
+                      );
+                    return (
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div>
+                          <L>Garment</L>
+                          <select
+                            value={entry.garment}
+                            onChange={(e) =>
+                              update({ garment: e.target.value as PersonnelGarment })
+                            }
+                            className={IC}
+                          >
+                            {GARMENTS.map((g) => (
+                              <option key={g.value} value={g.value}>
+                                {g.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <L>Size</L>
+                          <input
+                            value={entry.size}
+                            onChange={(e) => update({ size: e.target.value })}
+                            className={IC}
+                            placeholder="XS / S / M / L / XL / 30 / 10 etc."
+                          />
+                        </div>
+                      </div>
+                    );
+                  }}
+                />
               </Section>
 
               <div className="mt-6 rounded-lg border border-lp-border bg-lp-surface/40 p-4 text-[11px] leading-relaxed text-lp-text-secondary">

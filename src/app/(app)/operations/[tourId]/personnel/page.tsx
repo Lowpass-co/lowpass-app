@@ -68,12 +68,22 @@ export default async function OperationsTourPersonnelPage({
 
   const grants = await fetchActiveGrants(supabase, membership, user.id);
 
-  const subNavLinks = SUB_NAV.map((s) => ({
-    id: s.id,
-    label: s.label,
-    slug: s.slug,
-    visible: canAccess(membership, grants, 'page', s.resource_id, 'read'),
-  }));
+  // Sprint 9 §13.C.2 — Summary entry leads the sub-nav.
+  const subNavLinks = [
+    {
+      id: 'summary',
+      label: 'Summary',
+      slug: '',
+      href: `/operations/${tourId}`,
+      visible: true,
+    },
+    ...SUB_NAV.map((s) => ({
+      id: s.id,
+      label: s.label,
+      slug: s.slug,
+      visible: canAccess(membership, grants, 'page', s.resource_id, 'read'),
+    })),
+  ];
 
   // Manager surface: admin/manager get it via role; readonly
   // gets it only with the explicit operations.personnel grant.

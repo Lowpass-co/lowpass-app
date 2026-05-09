@@ -19,17 +19,17 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   AlertTriangle,
-  Calendar,
   Download,
   ListChecks,
   MapPin,
   Plus,
+  Settings,
   Users,
 } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
 import { toTitleCase } from '@/lib/text/toTitleCase';
 import { AddPersonnelSlideOver } from '@/components/operations/personnel/AddPersonnelSlideOver';
-import { ExtendTourSlideOver } from './ExtendTourSlideOver';
+import { EditTourSlideOver } from './EditTourSlideOver';
 
 interface ActivityRow {
   id: string;
@@ -70,6 +70,11 @@ interface PendingShow {
 
 interface OperationsSummaryClientProps {
   tourId: string;
+  /** Sprint 9 §13.C.1 — tour-level fields the new
+   *  EditTourSlideOver edits in addition to the date window. */
+  tourName: string;
+  tourCurrency: string | null;
+  tourContinent: string | null;
   tourStartDate: string | null;
   tourEndDate: string | null;
   shows: { count: number; nextShowDate: string | null };
@@ -132,6 +137,9 @@ function actionLabel(row: ActivityRow): string {
 
 export function OperationsSummaryClient({
   tourId,
+  tourName,
+  tourCurrency,
+  tourContinent,
   tourStartDate,
   tourEndDate,
   shows,
@@ -145,7 +153,8 @@ export function OperationsSummaryClient({
 }: OperationsSummaryClientProps) {
   const router = useRouter();
   const { showToast } = useToast();
-  const [extendOpen, setExtendOpen] = useState(false);
+  // Sprint 9 §13.C.1 — Extend tour is folded into Edit tour.
+  const [editOpen, setEditOpen] = useState(false);
   const [addPersonnelOpen, setAddPersonnelOpen] = useState(false);
   const [pendingOpen, setPendingOpen] = useState(false);
 
@@ -256,7 +265,7 @@ export function OperationsSummaryClient({
         </button>
         <button
           type="button"
-          onClick={() => setExtendOpen(true)}
+          onClick={() => setEditOpen(true)}
           disabled={!canWrite}
           className="btn-transition inline-flex items-center"
           style={{
@@ -273,8 +282,8 @@ export function OperationsSummaryClient({
           }}
           title={canWrite ? undefined : 'Read-only — ask your admin for write access'}
         >
-          <Calendar size={14} strokeWidth={2} />
-          Extend tour
+          <Settings size={14} strokeWidth={2} />
+          Edit tour
         </button>
         <button
           type="button"
@@ -422,16 +431,22 @@ export function OperationsSummaryClient({
       </Section>
 
       {/* Slide-overs */}
-      <ExtendTourSlideOver
-        open={extendOpen}
+      <EditTourSlideOver
+        open={editOpen}
         tourId={tourId}
-        initialStartDate={tourStartDate}
-        initialEndDate={tourEndDate}
+        initial={{
+          name: tourName,
+          start_date: tourStartDate,
+          end_date: tourEndDate,
+          currency: tourCurrency,
+          continent: tourContinent,
+        }}
         routingDates={allRoutingDates}
-        onClose={() => setExtendOpen(false)}
+        onClose={() => setEditOpen(false)}
         onSaved={() => {
-          showToast('Tour window updated.');
-          router.refresh();
+          // Slide-over already calls router.refresh() and shows
+          // a toast; nothing to do here other than the
+          // close-on-success which the slide-over handles.
         }}
       />
 

@@ -82,12 +82,22 @@ export default async function OperationsTourRoutingPage({
 
   const grants = await fetchActiveGrants(supabase, membership, user.id);
 
-  const subNavLinks = SUB_NAV.map((s) => ({
-    id: s.id,
-    label: s.label,
-    slug: s.slug,
-    visible: canAccess(membership, grants, 'page', s.resource_id, 'read'),
-  }));
+  // Sprint 9 §13.C.2 — Summary entry leads the sub-nav.
+  const subNavLinks = [
+    {
+      id: 'summary',
+      label: 'Summary',
+      slug: '',
+      href: `/operations/${tourId}`,
+      visible: true,
+    },
+    ...SUB_NAV.map((s) => ({
+      id: s.id,
+      label: s.label,
+      slug: s.slug,
+      visible: canAccess(membership, grants, 'page', s.resource_id, 'read'),
+    })),
+  ];
 
   const canRead = canAccess(membership, grants, 'page', 'operations.routing', 'read');
   const canWrite = canAccess(membership, grants, 'page', 'operations.routing', 'write');

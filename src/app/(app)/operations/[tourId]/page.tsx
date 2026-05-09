@@ -78,12 +78,26 @@ export default async function OperationsTourLandingPage({
   }
   const grants = await fetchActiveGrants(supabase, membership, user.id);
 
-  const subNavLinks = SUB_NAV.map((s) => ({
-    id: s.id,
-    label: s.label,
-    slug: s.slug,
-    visible: canAccess(membership, grants, 'page', s.resource_id, 'read'),
-  }));
+  // Sprint 9 §13.C.2 — Summary is the first sub-nav entry,
+  // links to /operations/[tourId] (the summary page itself),
+  // and is always visible (anyone with any operations read
+  // grant lands here). On the summary page, activeSlug='' so
+  // this entry is the active one.
+  const subNavLinks = [
+    {
+      id: 'summary',
+      label: 'Summary',
+      slug: '',
+      href: `/operations/${tourId}`,
+      visible: true,
+    },
+    ...SUB_NAV.map((s) => ({
+      id: s.id,
+      label: s.label,
+      slug: s.slug,
+      visible: canAccess(membership, grants, 'page', s.resource_id, 'read'),
+    })),
+  ];
 
   const canReadRouting = canAccess(membership, grants, 'page', 'operations.routing', 'read');
   const canReadPersonnel = canAccess(membership, grants, 'page', 'operations.personnel', 'read');
@@ -92,15 +106,19 @@ export default async function OperationsTourLandingPage({
   const canWritePersonnel = canAccess(membership, grants, 'page', 'operations.personnel', 'write');
   const canWrite = canWriteRouting || canWritePersonnel;
 
+  // Sprint 9 §13.C.1 — load currency + continent so the new
+  // EditTourSlideOver can edit them alongside name + window.
   const { data: tour } = await supabase
     .from('tours')
-    .select('id, name, start_date, end_date')
+    .select('id, name, start_date, end_date, currency, continent')
     .eq('id', tourId)
     .maybeSingle();
   if (!tour) notFound();
   const tourRow = tour as {
     id: string;
     name: string;
+    currency: string | null;
+    continent: string | null;
     start_date: string | null;
     end_date: string | null;
   };
@@ -359,6 +377,9 @@ export default async function OperationsTourLandingPage({
         </header>
         <OperationsSummaryClient
           tourId={tourId}
+          tourName={tourRow.name}
+          tourCurrency={tourRow.currency}
+          tourContinent={tourRow.continent}
           tourStartDate={tourRow.start_date}
           tourEndDate={tourRow.end_date}
           shows={{ count: showRows.length, nextShowDate }}
