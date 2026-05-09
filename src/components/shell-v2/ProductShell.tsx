@@ -1,40 +1,38 @@
 /* ============================================
-   LOWPASS — Product Split Phase 1 — <ProductShell>
+   LOWPASS — <ProductShell> (Sprint 10 §1.6 — pass-through)
 
-   Wraps a product surface with the rail + header + scroll-contained
-   main area. Composition primitive — pages don't roll their own
-   chrome.
+   Was: ProductRail + ProductHeader + main scroll container.
+   Sprint 10 §1 collapses chrome into the (app)/layout's
+   <UnifiedTopBar> + <ScopeNavStrip>. The four per-product
+   layouts (operations, budget, advance, artists) still wrap
+   their page body in <ProductShell>; keeping the export as a
+   pass-through lets the IA reframe ship without touching every
+   layout in the same commit.
 
-   API:
-     <ProductShell
-       active="operations"
-       artistId={artistId}
-       tourId={tourId}                // optional
-       productName="Operations"
-       homeHref={`/artists/${artistId}`}   // optional
-     >
-       {page body}
-     </ProductShell>
+   ProductRail is gone — replaced by the top-level
+   <ScopeNavStrip>. ProductHeader is gone — replaced by
+   <UnifiedTopBar>.
 
-   Scroll containment: the rail and header sit on the flex frame,
-   which is `h-screen overflow-hidden`. The <main> is the only
-   scroll surface, so `position: sticky` inside the page body
-   anchors against <main>'s viewport — not against the document.
-   This is the same fix CLAUDE.md notes the legacy TourBreadcrumb
-   ran into.
+   The scroll-containment behaviour those layouts depended on
+   (h-screen + main overflow-y-auto) now needs to be supplied
+   by the page or per-product layout itself. To avoid breaking
+   sticky positioning inside page bodies, this pass-through
+   still produces the same flex frame structure (just without
+   the chrome).
+
+   `active` / `artistId` / `tourId` / `productName` /
+   `homeHref` props stay accepted but unused so existing call
+   sites compile without edit.
    ============================================ */
 
-import { ProductHeader, type ProductName } from './ProductHeader';
-import { ProductRail, type ProductRailActive } from './ProductRail';
+import type { ProductRailActive } from './ProductRail';
+import type { ProductName } from './ProductHeader';
 
 interface ProductShellProps {
   active: ProductRailActive;
   artistId: string | null;
   tourId?: string | null;
   productName: ProductName;
-  /** When the active product is "home" and an artist is selected, the
-      Home root lives at `/artists/[artistId]` rather than `/`. Pass
-      that through for the rail's Home icon. */
   homeHref?: string;
   children: React.ReactNode;
 }
@@ -47,35 +45,29 @@ export function ProductShell({
   homeHref,
   children,
 }: ProductShellProps) {
-  // Sprint 8.5 §1 — artistId and tourId are no longer consumed
-  // by ProductShell now that the switcher lives at workspace
-  // level. The props stay on the interface for backward
-  // compatibility with the four per-product layouts that pass
-  // them; future cleanup can drop them entirely once all call
-  // sites are updated.
+  // Sprint 10 §1.6 — props retained for backward compat.
+  void active;
   void artistId;
   void tourId;
+  void productName;
+  void homeHref;
   return (
     <div
-      className="lp-product-shell flex h-screen overflow-hidden"
+      className="lp-product-shell flex min-h-0 flex-1 flex-col"
       style={{
         background: 'var(--lp-bg)',
         color: 'var(--lp-text)',
       }}
     >
-      <ProductRail active={active} homeHref={homeHref} />
-      <div className="flex min-w-0 flex-1 flex-col">
-        <ProductHeader productName={productName} />
-        <main
-          className="flex-1 overflow-y-auto"
-          style={{
-            minHeight: 0,
-            background: 'var(--lp-bg)',
-          }}
-        >
-          {children}
-        </main>
-      </div>
+      <main
+        className="flex-1 overflow-y-auto"
+        style={{
+          minHeight: 0,
+          background: 'var(--lp-bg)',
+        }}
+      >
+        {children}
+      </main>
     </div>
   );
 }

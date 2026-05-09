@@ -50,6 +50,10 @@ type TourMin = {
 };
 
 interface ArtistTourSwitcherClientWrapperProps {
+  /** Sprint 10 §1.3 — passed through to <ArtistTourSwitcher>.
+   *  Default 'chip' preserves existing chip-style trigger;
+   *  'avatar-only' is the BreadcrumbPill mount. */
+  triggerVariant?: 'chip' | 'avatar-only';
   initialArtists: ArtistMin[];
   initialTours: TourMin[] | null;
   /** The artist whose tours `initialTours` were server-fetched
@@ -59,6 +63,7 @@ interface ArtistTourSwitcherClientWrapperProps {
 }
 
 export function ArtistTourSwitcherClientWrapper({
+  triggerVariant = 'chip',
   initialArtists,
   initialTours,
   initialArtistId,
@@ -313,6 +318,7 @@ export function ArtistTourSwitcherClientWrapper({
   return (
     <>
       <ArtistTourSwitcher
+        triggerVariant={triggerVariant}
         initialArtists={mergedArtists}
         tours={tours}
         toursLoading={toursLoading}

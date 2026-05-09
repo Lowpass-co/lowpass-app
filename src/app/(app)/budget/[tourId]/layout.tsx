@@ -21,8 +21,15 @@ import { notFound } from 'next/navigation';
 import { ProductShell } from '@/components/shell-v2';
 import { TourHeader } from '@/components/shell-v2/TourHeader';
 import { TourVisitTracker } from '@/components/shell-v2/TourVisitTracker';
+import { SubNavStrip } from '@/components/shell/SubNavStrip';
+import { budgetSubNavLinks } from '@/lib/shell/subNavLinks';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { resolveArtistLogoUrl } from '@/lib/artists/imageUrl';
+import {
+  canAccess,
+  fetchActiveGrants,
+  getActiveMembership,
+} from '@/lib/permissions/server';
 import type { BudgetLineItem } from '@/types';
 
 export default async function BudgetTourLayout({
@@ -34,6 +41,16 @@ export default async function BudgetTourLayout({
 }) {
   const { tourId } = await params;
   const supabase = await createServerSupabaseClient();
+
+  /* Sprint 10 §1.4 — fetch user + membership/grants for the
+     SubNavStrip. Skip when unauth — SubNavStrip falls back to
+     all-hidden. */
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const membership = user ? await getActiveMembership(supabase, user.id) : null;
+  const grants =
+    membership && user ? await fetchActiveGrants(supabase, membership, user.id) : [];
 
   const { data: tour } = await supabase
     .from('tours')
@@ -105,6 +122,10 @@ export default async function BudgetTourLayout({
 
   const tourCurrency = tourRow.currency ?? 'GBP';
 
+  const subNavLinks = budgetSubNavLinks(tourId, (resource) =>
+    membership ? canAccess(membership, grants, 'page', resource, 'read') : false,
+  );
+
   return (
     <ProductShell
       active="budget"
@@ -130,6 +151,7 @@ export default async function BudgetTourLayout({
           }}
         />
       ) : null}
+      <SubNavStrip links={subNavLinks} />
       <TourVisitTracker tourId={tourId} />
       {children}
     </ProductShell>
