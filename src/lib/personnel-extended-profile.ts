@@ -241,6 +241,13 @@ export interface PersonnelExtendedProfile {
   social?: { instagram?: string; twitter?: string };
   /** TM-only notes — not shown to the person */
   internal_notes?: string;
+  /** Sprint 10 §2.2 — workspace-defined group keys driving the
+   *  personnel grid badges + the by-group filter chip. v1 set:
+   *  admin / artist / band / crew / mgmt / tour_manager /
+   *  production. The set is intentionally open — workspaces
+   *  can extend with custom keys (rendered as a fallback grey
+   *  chip in the grid). */
+  groups?: string[];
   /** Head shot + passport scan uploads (URLs in personnel-files bucket) */
   documents?: PersonnelDocumentsBlock;
 

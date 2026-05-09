@@ -163,9 +163,27 @@ export default async function PersonnelPage() {
     home_airport: string | null;
     standard_rates: Record<string, unknown> | null;
     passport_info: Record<string, unknown> | null;
-    extended_profile: ExtendedProfile | null;
+    extended_profile: (ExtendedProfile & {
+      /* Sprint 10 §2.2 — group badges + head shot URL surfaced
+         from the JSONB extended_profile. */
+      groups?: string[];
+      documents?: { head_shot?: { url?: string | null } | null };
+    }) | null;
     updated_at: string;
   }>;
+
+  /* Sprint 10 §2.2 — narrow extended_profile.groups[] to the
+     known group key set; unknown keys are dropped (grid renders
+     known chips only). */
+  const KNOWN_GROUPS = new Set<string>([
+    'admin',
+    'artist',
+    'band',
+    'crew',
+    'mgmt',
+    'tour_manager',
+    'production',
+  ]);
 
   const personnelIds = personnelList.map((p) => p.id);
   const { data: tourPersonnel } =
@@ -227,6 +245,12 @@ export default async function PersonnelPage() {
       },
       { canSeePay: viewerCanSeePay },
     );
+    const ext = p.extended_profile ?? {};
+    const groupsRaw = Array.isArray(ext.groups) ? ext.groups : [];
+    const groups = groupsRaw
+      .filter((g): g is string => typeof g === 'string' && KNOWN_GROUPS.has(g))
+      .map((g) => g as 'admin' | 'artist' | 'band' | 'crew' | 'mgmt' | 'tour_manager' | 'production');
+    const headShotUrl = ext.documents?.head_shot?.url ?? null;
     return {
       id: p.id,
       workspaceId: p.workspace_id,
@@ -235,6 +259,9 @@ export default async function PersonnelPage() {
       email: p.email,
       phone: p.phone,
       pronouns: null,
+      jobTitle: p.role,
+      avatarUrl: headShotUrl,
+      groups,
       hasIssue: issues.hasIssue,
       issueLabels: issues.labels,
       lastTouredAt: stat.lastTouredAt,

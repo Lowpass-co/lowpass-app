@@ -39,11 +39,8 @@
 
 import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AlertTriangle, Plus, Trash2, Upload, UserCog, UserPlus } from 'lucide-react';
-import { ContextMenu } from '@/components/ui/ContextMenu';
+import { Plus, Trash2, Upload, UserCog, UserPlus } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
-import { DataTable } from '@/components/data-table/DataTable';
-import type { ColumnDef } from '@/components/data-table/types';
 import { PersonnelImportModal } from './PersonnelImportModal';
 import { AssignToTourSlideOver } from './AssignToTourSlideOver';
 import {
@@ -51,8 +48,8 @@ import {
   type PersonnelPanelState,
 } from './PersonnelDetailSlideOver';
 import { FilterChips, type FilterChipOption } from '@/components/ui/FilterChips';
-import { CompletenessRing } from './CompletenessRing';
 import { DeleteConfirmationModal } from '@/components/ui/DeleteConfirmationModal';
+import { PersonnelGrid } from './PersonnelGrid';
 import { toTitleCase } from '@/lib/text/toTitleCase';
 
 export interface PersonnelLibraryRow {
@@ -63,6 +60,18 @@ export interface PersonnelLibraryRow {
   email: string | null;
   phone: string | null;
   pronouns: string | null;
+  /** Sprint 10 §2.1 — job title (e.g. "Sound Engineer") shown
+   *  on the second line under the display name in the new
+   *  PersonnelGrid. Lifted from personnel.role. */
+  jobTitle: string | null;
+  /** Sprint 10 §2.1 — head shot URL for the row avatar. Null
+   *  when no head shot uploaded — avatar falls back to
+   *  initials chip. */
+  avatarUrl: string | null;
+  /** Sprint 10 §2.2 — group keys from extended_profile.groups.
+   *  Drives the colored badges on each row + the new "by
+   *  group" filter chips. */
+  groups: import('./PersonnelGrid').PersonnelGroupKey[];
   /** Combined "issue" flag derived server-side. */
   hasIssue: boolean;
   issueLabels: string[];
@@ -89,7 +98,21 @@ interface PersonnelLibraryClientProps {
   viewerCanSeePay?: boolean;
 }
 
-type FilterKey = 'all' | 'conflicts' | 'issues' | 'recent' | 'untouched';
+type FilterKey =
+  | 'all'
+  | 'conflicts'
+  | 'issues'
+  | 'recent'
+  | 'untouched'
+  /* Sprint 10 §2.1 — by-group filter keys. Match a value in
+     personnel.extended_profile.groups[]. */
+  | 'group:admin'
+  | 'group:artist'
+  | 'group:band'
+  | 'group:crew'
+  | 'group:mgmt'
+  | 'group:tour_manager'
+  | 'group:production';
 
 const FILTER_LABELS: Record<FilterKey, string> = {
   all: 'All',
@@ -97,42 +120,39 @@ const FILTER_LABELS: Record<FilterKey, string> = {
   issues: 'Issues',
   recent: 'Recently updated',
   untouched: 'Untouched',
+  'group:admin': 'Admin',
+  'group:artist': 'Artist',
+  'group:band': 'Band',
+  'group:crew': 'Crew',
+  'group:mgmt': 'Mgmt',
+  'group:tour_manager': 'TM',
+  'group:production': 'Prod',
 };
 
-/** Stable chip order presented to the user. The corresponding
- *  count for each chip is computed in the component body and
- *  merged into the option list passed to <FilterChips>. */
 const FILTER_KEYS: ReadonlyArray<FilterKey> = [
   'all',
   'conflicts',
   'issues',
   'recent',
   'untouched',
+  'group:admin',
+  'group:artist',
+  'group:band',
+  'group:crew',
+  'group:mgmt',
+  'group:tour_manager',
+  'group:production',
 ];
 
-function formatDate(value: string | null): string {
-  if (!value) return '—';
-  const dt = new Date(value);
-  if (Number.isNaN(dt.getTime())) return '—';
-  return dt.toLocaleDateString(undefined, {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-  });
+function groupKeyFromFilter(filter: FilterKey): string | null {
+  return filter.startsWith('group:') ? filter.slice('group:'.length) : null;
 }
 
-function relativeTime(iso: string): string {
-  const d = new Date(iso);
-  const diff = Date.now() - d.getTime();
-  const m = Math.floor(diff / 60000);
-  const h = Math.floor(diff / 3600000);
-  const day = Math.floor(diff / 86400000);
-  if (m < 1) return 'just now';
-  if (m < 60) return `${m}m ago`;
-  if (h < 24) return `${h}h ago`;
-  if (day < 30) return `${day}d ago`;
-  return d.toLocaleDateString();
-}
+/* Sprint 10 §2.1 — formatDate + relativeTime helpers retired
+   alongside the DataTable mount. PersonnelGrid renders avatar +
+   two-line name + groups + email + phone + ring; no date
+   columns remain. updated_at is still read by the recent /
+   untouched filter chips above. */
 
 export function PersonnelLibraryClient({
   initial,
@@ -219,14 +239,13 @@ export function PersonnelLibraryClient({
 
   const filteredRows = useMemo(() => {
     if (filter === 'all') return initial;
+    const groupKey = groupKeyFromFilter(filter);
+    if (groupKey) {
+      return initial.filter((r) => r.groups.includes(groupKey as never));
+    }
     return initial.filter((r) => {
       switch (filter) {
         case 'conflicts':
-          // Wired against issueLabels so it activates when the
-          // server starts surfacing conflict-typed labels (Sprint
-          // 10). Currently the server only emits passport/visa
-          // labels so this filter naturally yields zero rows on
-          // /personnel — but the chip is still wired.
           return r.issueLabels.some((l) => l.toLowerCase().includes('conflict'));
         case 'issues':
           return r.hasIssue;
@@ -249,15 +268,27 @@ export function PersonnelLibraryClient({
     let issues = 0;
     let recent = 0;
     let untouched = 0;
+    const groupCounts: Record<string, number> = {};
     for (const r of initial) {
       if (r.issueLabels.some((l) => l.toLowerCase().includes('conflict'))) conflicts++;
       if (r.hasIssue) issues++;
       const t = new Date(r.updatedAt).getTime();
-      if (!Number.isFinite(t)) continue;
-      if (t >= recentlyUpdatedCutoff) recent++;
-      if (t < untouchedCutoff) untouched++;
+      if (Number.isFinite(t)) {
+        if (t >= recentlyUpdatedCutoff) recent++;
+        if (t < untouchedCutoff) untouched++;
+      }
+      for (const g of r.groups) {
+        groupCounts[g] = (groupCounts[g] ?? 0) + 1;
+      }
     }
-    return { all: initial.length, conflicts, issues, recent, untouched };
+    return {
+      all: initial.length,
+      conflicts,
+      issues,
+      recent,
+      untouched,
+      group: groupCounts,
+    };
   }, [initial, recentlyUpdatedCutoff, untouchedCutoff]);
 
   const totals = useMemo(() => {
@@ -272,268 +303,6 @@ export function PersonnelLibraryClient({
     return { issues, passport };
   }, [initial]);
 
-  const columns = useMemo<ColumnDef<PersonnelLibraryRow>[]>(
-    () => [
-      {
-        id: 'name',
-        header: 'Name',
-        accessor: (p) => toTitleCase(p.preferredName ?? p.fullName),
-        sortable: true,
-        frozen: true,
-        minWidth: 200,
-        /* Sprint 9 §14.1 — title cell formatted to match the
-           Bug Reports list pattern: text-sm semibold lp-text.
-           Truncation applied so long names don't push the
-           remaining columns. */
-        cell: (value) => (
-          <span
-            className="block truncate"
-            style={{
-              fontSize: 'var(--lp-text-sm)',
-              fontWeight: 'var(--lp-weight-semibold)',
-              color: 'var(--lp-text)',
-            }}
-          >
-            {String(value ?? '—')}
-          </span>
-        ),
-      },
-      {
-        id: 'status',
-        header: 'Status',
-        width: 160,
-        minWidth: 140,
-        /* Sprint 9 §14.1 — pill reflects the row's actual
-           combined state. Action-required when EITHER (a) there
-           are expiring docs (passport ≤180d, visa expired —
-           deriveIssues server-side), OR (b) profile completeness
-           is < 70% (the same threshold the ring uses). When
-           neither applies the row is genuinely "OK". The
-           combined accessor lets the column sort attention-first
-           rows to the top by default. */
-        accessor: (p) => {
-          const incomplete = p.completenessPercent < 70 ? 1 : 0;
-          return p.hasIssue ? 2 : incomplete;
-        },
-        sortable: true,
-        cell: (_value, row) => {
-          const r = row as PersonnelLibraryRow;
-          const incomplete = r.completenessPercent < 70;
-          const needsAttention = r.hasIssue || incomplete;
-          if (!needsAttention) {
-            return (
-              <span
-                className="inline-flex items-center"
-                style={{
-                  gap: 6,
-                  padding: '2px 8px',
-                  fontSize: 'var(--lp-text-xs)',
-                  fontWeight: 'var(--lp-weight-medium)',
-                  color: 'var(--lp-text-tertiary)',
-                  background: 'var(--lp-bg-tertiary)',
-                  border: '1px solid var(--lp-border-subtle)',
-                  borderRadius: 999,
-                }}
-              >
-                <span
-                  aria-hidden
-                  style={{
-                    width: 6,
-                    height: 6,
-                    borderRadius: 999,
-                    background: 'var(--lp-text-tertiary)',
-                  }}
-                />
-                OK
-              </span>
-            );
-          }
-          // Pick the dominant cause for the pill label. Expiring
-          // docs (issueLabels) win over profile-incomplete since
-          // they have a deadline. Tooltip carries the full list.
-          const labels: string[] = [...r.issueLabels];
-          if (incomplete) {
-            labels.push(`Profile ${r.completenessPercent}%`);
-          }
-          const headline = r.issueLabels[0] ?? 'Profile incomplete';
-          return (
-            <span
-              className="inline-flex items-center"
-              role="status"
-              title={labels.join(' · ')}
-              style={{
-                gap: 6,
-                padding: '2px 8px',
-                fontSize: 'var(--lp-text-xs)',
-                fontWeight: 'var(--lp-weight-semibold)',
-                color: 'var(--color-lp-orange)',
-                background: 'color-mix(in srgb, var(--color-lp-orange) 10%, transparent)',
-                border: '1px solid color-mix(in srgb, var(--color-lp-orange) 35%, transparent)',
-                borderRadius: 999,
-              }}
-            >
-              <AlertTriangle size={12} strokeWidth={2.4} aria-hidden />
-              {headline}
-              {labels.length > 1 ? (
-                <span
-                  style={{
-                    marginLeft: 2,
-                    color: 'var(--color-lp-orange)',
-                    opacity: 0.7,
-                  }}
-                >
-                  +{labels.length - 1}
-                </span>
-              ) : null}
-            </span>
-          );
-        },
-      },
-      {
-        id: 'completeness',
-        header: 'Profile',
-        accessor: 'completenessPercent',
-        align: 'left',
-        sortable: true,
-        width: 110,
-        minWidth: 100,
-        cell: (_value, row) => {
-          const r = row as PersonnelLibraryRow;
-          return (
-            <CompletenessRing
-              percent={r.completenessPercent}
-              missingLabels={r.completenessMissingLabels}
-              onClick={() =>
-                setPanel({
-                  mode: 'edit',
-                  id: r.id,
-                  scrollToSection: r.completenessFirstMissingId,
-                })
-              }
-            />
-          );
-        },
-      },
-      {
-        /* Sprint 9 §14.1 — email gets a fixed-width column so
-           long addresses don't push into Last toured (Adam's
-           smoke: the two were overlapping at default viewport).
-           Text formatting matches the Bug Reports list:
-           text-xs lp-text-tertiary truncate. */
-        id: 'email',
-        header: 'Email',
-        accessor: (p) => p.email ?? '',
-        width: 240,
-        minWidth: 200,
-        cell: (value) => (
-          <span
-            className="block truncate"
-            style={{
-              fontSize: 'var(--lp-text-xs)',
-              color: 'var(--lp-text-tertiary)',
-            }}
-          >
-            {String(value || '—')}
-          </span>
-        ),
-      },
-      {
-        id: 'last_toured',
-        header: 'Last toured',
-        accessor: (p) => p.lastTouredAt ?? '',
-        sortable: true,
-        width: 140,
-        minWidth: 120,
-        cell: (value) => (
-          <span
-            style={{
-              fontSize: 'var(--lp-text-xs)',
-              color: 'var(--lp-text-secondary)',
-            }}
-          >
-            {formatDate((value as string) || null)}
-          </span>
-        ),
-      },
-      {
-        id: 'total_tours',
-        header: 'Tours',
-        accessor: 'totalTours',
-        align: 'right',
-        sortable: true,
-        width: 80,
-        minWidth: 70,
-        cell: (value) => (
-          <span
-            style={{
-              fontSize: 'var(--lp-text-xs)',
-              color: 'var(--lp-text-secondary)',
-            }}
-          >
-            {Number(value ?? 0).toLocaleString()}
-          </span>
-        ),
-      },
-      {
-        id: 'updated',
-        header: 'Last updated',
-        accessor: 'updatedAt',
-        sortable: true,
-        width: 140,
-        minWidth: 120,
-        cell: (value) => (
-          <span
-            style={{
-              fontSize: 'var(--lp-text-xs)',
-              color: 'var(--lp-text-tertiary)',
-            }}
-          >
-            {relativeTime(String(value ?? new Date().toISOString()))}
-          </span>
-        ),
-      },
-      {
-        id: 'actions',
-        header: '',
-        accessor: () => '',
-        align: 'right',
-        width: 56,
-        minWidth: 48,
-        cell: (_value, row) => {
-          const r = row as PersonnelLibraryRow;
-          const displayName = toTitleCase(r.preferredName ?? r.fullName);
-          return (
-            <ContextMenu
-              align="right"
-              items={[
-                {
-                  label: 'Open profile',
-                  icon: UserCog,
-                  onClick: () => setPanel({ mode: 'edit', id: r.id }),
-                },
-                {
-                  label: 'Assign to tour',
-                  icon: UserPlus,
-                  onClick: () =>
-                    setAssignOpen({
-                      personId: r.id,
-                      personName: displayName,
-                    }),
-                },
-                {
-                  label: 'Delete',
-                  icon: Trash2,
-                  variant: 'danger',
-                  onClick: () => requestDeleteOne(r.id, displayName),
-                },
-              ]}
-            />
-          );
-        },
-      },
-    ],
-    [],
-  );
 
   // Open the rich PersonnelDetailSlideOver directly in `create`
   // mode. The slide-over owns the POST /api/personnel call in its
@@ -655,45 +424,108 @@ export function PersonnelLibraryClient({
         options={FILTER_KEYS.map<FilterChipOption<FilterKey>>((key) => ({
           value: key,
           label: FILTER_LABELS[key],
-          count: filterCounts[key],
+          count: (() => {
+            const g = groupKeyFromFilter(key);
+            if (g) return filterCounts.group[g] ?? 0;
+            const slot = filterCounts[key as keyof typeof filterCounts];
+            return typeof slot === 'number' ? slot : 0;
+          })(),
         }))}
       />
 
-      {/* Table */}
-      <DataTable<PersonnelLibraryRow>
-        rows={filteredRows}
-        columns={columns}
-        rowKey={(row) => row.id}
-        searchPlaceholder="Search by name, email, or phone…"
-        onRowClick={(row) => setPanel({ mode: 'edit', id: row.id })}
-        selectable
+      {/* Sprint 10 §2.1 — bulk action row replaces DataTable's
+          built-in selectionActions slot. */}
+      {selectedIds.length > 0 ? (
+        <div
+          className="flex items-center justify-between"
+          style={{
+            gap: 'var(--lp-space-3)',
+            padding: 'var(--lp-space-2) var(--lp-space-3)',
+            background: 'color-mix(in srgb, var(--color-lp-orange) 6%, transparent)',
+            border: '1px solid color-mix(in srgb, var(--color-lp-orange) 30%, transparent)',
+            borderRadius: 'var(--lp-radius-md)',
+          }}
+        >
+          <span style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text)' }}>
+            {selectedIds.length} selected
+          </span>
+          <button
+            type="button"
+            onClick={requestBulkDelete}
+            disabled={deleting}
+            className="btn-transition inline-flex items-center"
+            style={{
+              gap: 6,
+              padding: 'var(--lp-space-2) var(--lp-space-3)',
+              fontSize: 'var(--lp-text-sm)',
+              fontWeight: 'var(--lp-weight-semibold)',
+              color: 'var(--lp-text-inverse)',
+              background: 'var(--color-lp-error)',
+              border: '1px solid transparent',
+              borderRadius: 'var(--lp-radius-md)',
+              cursor: deleting ? 'not-allowed' : 'pointer',
+              opacity: deleting ? 0.7 : 1,
+            }}
+          >
+            <Trash2 size={14} strokeWidth={2.4} />
+            Delete {selectedIds.length} selected
+          </button>
+        </div>
+      ) : null}
+
+      {/* Sprint 10 §2.1 — Bug-Reports-style div grid replaces
+          the prior <DataTable> mount. Avatar + status dot,
+          two-line name+role, group badges, email, phone,
+          completeness ring, kebab. */}
+      <PersonnelGrid
+        rows={filteredRows.map((r) => ({
+          id: r.id,
+          fullName: r.fullName,
+          preferredName: r.preferredName,
+          email: r.email,
+          phone: r.phone,
+          jobTitle: r.jobTitle,
+          avatarUrl: r.avatarUrl,
+          groups: r.groups,
+          hasIssue: r.hasIssue,
+          issueLabels: r.issueLabels,
+          updatedAt: r.updatedAt,
+          completenessPercent: r.completenessPercent,
+          completenessMissingLabels: r.completenessMissingLabels,
+          completenessFirstMissingId: r.completenessFirstMissingId,
+        }))}
         selectedIds={selectedIds}
         onSelectionChange={setSelectedIds}
-        selectionActions={
-          selectedIds.length > 0 ? (
-            <button
-              type="button"
-              onClick={requestBulkDelete}
-              disabled={deleting}
-              className="btn-transition inline-flex items-center"
-              style={{
-                gap: 6,
-                padding: 'var(--lp-space-2) var(--lp-space-3)',
-                fontSize: 'var(--lp-text-sm)',
-                fontWeight: 'var(--lp-weight-semibold)',
-                color: 'var(--lp-text-inverse)',
-                background: 'var(--color-lp-error)',
-                border: '1px solid transparent',
-                borderRadius: 'var(--lp-radius-md)',
-                cursor: deleting ? 'not-allowed' : 'pointer',
-                opacity: deleting ? 0.7 : 1,
-              }}
-            >
-              <Trash2 size={14} strokeWidth={2.4} />
-              Delete {selectedIds.length} selected
-            </button>
-          ) : null
+        onRowClick={(row) => setPanel({ mode: 'edit', id: row.id })}
+        onRingClick={(row) =>
+          setPanel({
+            mode: 'edit',
+            id: row.id,
+            scrollToSection: row.completenessFirstMissingId,
+          })
         }
+        rowMenuItems={(row) => {
+          const displayName = toTitleCase(row.preferredName ?? row.fullName);
+          return [
+            {
+              label: 'Open profile',
+              icon: UserCog,
+              onClick: () => setPanel({ mode: 'edit', id: row.id }),
+            },
+            {
+              label: 'Assign to tour',
+              icon: UserPlus,
+              onClick: () =>
+                setAssignOpen({ personId: row.id, personName: displayName }),
+            },
+            {
+              label: 'Delete',
+              icon: Trash2,
+              variant: 'danger',
+              onClick: () => requestDeleteOne(row.id, displayName),
+            },
+          ];
+        }}
         emptyState={
           initial.length === 0
             ? 'No people in this workspace yet — click + Add new or Import to get started.'

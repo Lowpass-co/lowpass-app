@@ -32,6 +32,8 @@ import {
 } from '@/lib/personnel-extended-profile';
 import { cn } from '@/lib/utils';
 import { BrandedSelect } from '@/components/ui/BrandedSelect';
+import { IntakeLinkButton } from './IntakeLinkButton';
+import { GroupsEditor } from './GroupsEditor';
 
 export type PersonnelPanelState =
   | null
@@ -315,6 +317,9 @@ export function PersonnelDetailSlideOver({
   const [visasV2, setVisasV2] = useState<PersonnelVisaV2[]>([]);
   const [dietaryV2, setDietaryV2] = useState<PersonnelDietaryV2[]>([]);
   const [merchSizesV2, setMerchSizesV2] = useState<PersonnelMerchSizeV2[]>([]);
+  /* Sprint 10 §2.2 — group keys multi-select. Saves into
+     extended_profile.groups[]. */
+  const [groups, setGroups] = useState<string[]>([]);
 
   const headFileRef = useRef<HTMLInputElement>(null);
   const passFileRef = useRef<HTMLInputElement>(null);
@@ -410,6 +415,7 @@ export function PersonnelDetailSlideOver({
     setVisasV2([]);
     setDietaryV2([]);
     setMerchSizesV2([]);
+    setGroups([]);
     setError(null);
     setDocErr(null);
     setDocUploadKind(null);
@@ -457,6 +463,8 @@ export function PersonnelDetailSlideOver({
     setVisasV2(liftVisas(parsedExt));
     setDietaryV2(liftDietary(p.dietary_needs ?? null, parsedExt));
     setMerchSizesV2(liftMerchSizes(p.merch_size ?? null, parsedExt));
+    /* Sprint 10 §2.2 — load groups from extended_profile. */
+    setGroups(Array.isArray(parsedExt.groups) ? parsedExt.groups.filter((g): g is string => typeof g === 'string') : []);
   }, []);
 
   // Sprint 9 §13.B.2 — when the operator opens the slide-over
@@ -554,6 +562,8 @@ export function PersonnelDetailSlideOver({
         visas: cleanedVisas,
         dietary: cleanedDietary,
         merch_sizes: cleanedMerch,
+        // Sprint 10 §2.2 — workspace group keys.
+        groups,
       };
       extWithV2 = syncEmergencyContactLegacy(extWithV2, cleanedEmergency);
       if (cleanedPassportsV2.length > 0) {
@@ -715,14 +725,23 @@ export function PersonnelDetailSlideOver({
             </h2>
             <p className="mt-1 text-xs text-lp-text-secondary">Workspace roster · matches standard touring paperwork.</p>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg p-1.5 text-lp-text-secondary hover:bg-lp-surface hover:text-lp-text"
-            aria-label="Close"
-          >
-            <X className="h-5 w-5" />
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            {/* Sprint 10 §2.4 — generate a public intake-form
+                link for this personnel record. Visible only in
+                edit mode (a saved personnel id is required to
+                bind the token to). */}
+            {rosterPersonnelId ? (
+              <IntakeLinkButton personnelId={rosterPersonnelId} />
+            ) : null}
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg p-1.5 text-lp-text-secondary hover:bg-lp-surface hover:text-lp-text"
+              aria-label="Close"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
         </header>
 
         <div ref={scrollHostRef} className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
@@ -999,6 +1018,17 @@ export function PersonnelDetailSlideOver({
                   <L>Nationality (general)</L>
                   <input value={ext.nationality ?? ''} onChange={(e) => setExt((p) => ({ ...p, nationality: e.target.value }))} className={IC} />
                 </div>
+              </Section>
+
+              {/* Sprint 10 §2.2 — workspace group multi-select.
+                  Drives the colored chips in the personnel grid
+                  + the by-group filter chips. */}
+              <Section id="groups" title="Groups" defaultOpen>
+                <p className="mb-2 text-xs text-lp-text-secondary">
+                  Tag this person with one or more workspace groups. Shows
+                  as colored chips on the personnel grid.
+                </p>
+                <GroupsEditor value={groups} onChange={setGroups} />
               </Section>
 
               <Section id="us-only" title="US only">
