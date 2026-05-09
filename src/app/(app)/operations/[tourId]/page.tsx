@@ -16,7 +16,6 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
-import { OperationsSubNav } from '@/components/operations/OperationsSubNav';
 import { OperationsSummaryClient } from '@/components/operations/summary/OperationsSummaryClient';
 import {
   canAccess,
@@ -30,20 +29,9 @@ interface OperationsTourPageProps {
   params: Promise<{ tourId: string }>;
 }
 
-const SUB_NAV: Array<{
-  id: string;
-  label: string;
-  slug: string;
-  resource_id: string;
-}> = [
-  { id: 'personnel', label: 'Tour Personnel', slug: 'personnel', resource_id: 'operations.personnel' },
-  { id: 'routing', label: 'Routing', slug: 'routing', resource_id: 'operations.routing' },
-  { id: 'channel-list', label: 'Channel list', slug: 'channel-list', resource_id: 'operations.channel_list' },
-  { id: 'payroll', label: 'Payroll', slug: 'payroll', resource_id: 'operations.payroll' },
-  { id: 'rooming', label: 'Rooming', slug: 'rooming', resource_id: 'operations.rooming' },
-  { id: 'files', label: 'Files', slug: 'files', resource_id: 'operations.files' },
-  { id: 'riders', label: 'Riders', slug: 'riders', resource_id: 'operations.riders' },
-];
+/* Sprint 9 §14.11 — SUB_NAV constant + subNavLinks builder
+   moved to /operations/[tourId]/layout.tsx so all sub-pages
+   (including placeholders) inherit the sub-nav. */
 
 interface TourPersonnelJoined {
   id: string;
@@ -78,27 +66,6 @@ export default async function OperationsTourLandingPage({
   }
   const grants = await fetchActiveGrants(supabase, membership, user.id);
 
-  // Sprint 9 §13.C.2 — Summary is the first sub-nav entry,
-  // links to /operations/[tourId] (the summary page itself),
-  // and is always visible (anyone with any operations read
-  // grant lands here). On the summary page, activeSlug='' so
-  // this entry is the active one.
-  const subNavLinks = [
-    {
-      id: 'summary',
-      label: 'Summary',
-      slug: '',
-      href: `/operations/${tourId}`,
-      visible: true,
-    },
-    ...SUB_NAV.map((s) => ({
-      id: s.id,
-      label: s.label,
-      slug: s.slug,
-      visible: canAccess(membership, grants, 'page', s.resource_id, 'read'),
-    })),
-  ];
-
   const canReadRouting = canAccess(membership, grants, 'page', 'operations.routing', 'read');
   const canReadPersonnel = canAccess(membership, grants, 'page', 'operations.personnel', 'read');
   const canRead = canReadRouting || canReadPersonnel;
@@ -126,7 +93,10 @@ export default async function OperationsTourLandingPage({
   if (!canRead) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column' }}>
-        <OperationsSubNav tourId={tourId} activeSlug="" links={subNavLinks} />
+        {/* Sprint 9 §14.11 — sub-nav now mounted by the layout
+            (OperationsSubNavClient). This branch only renders
+            the no-access panel; the layout's sub-nav still
+            shows above. */}
         <div className="mx-auto w-full" style={{ padding: 'var(--lp-space-4)' }}>
           <NoAccessPanel />
         </div>
@@ -345,7 +315,9 @@ export default async function OperationsTourLandingPage({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-      <OperationsSubNav tourId={tourId} activeSlug="" links={subNavLinks} />
+      {/* Sprint 9 §14.11 — sub-nav now mounted by the layout
+          (OperationsSubNavClient). Removed the per-page mount
+          to avoid double-rendering. */}
       <div
         className="mx-auto w-full"
         style={{

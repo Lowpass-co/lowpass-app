@@ -21,7 +21,6 @@ import { notFound, redirect } from 'next/navigation';
 import Link from 'next/link';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { RoutingEditor } from '@/components/routing/RoutingEditor';
-import { OperationsSubNav } from '@/components/operations/OperationsSubNav';
 import {
   getActiveMembership,
   fetchActiveGrants,
@@ -34,20 +33,7 @@ interface OperationsRoutingPageProps {
   params: Promise<{ tourId: string }>;
 }
 
-const SUB_NAV: Array<{
-  id: string;
-  label: string;
-  slug: string;
-  resource_id: string;
-}> = [
-  { id: 'personnel', label: 'Tour Personnel', slug: 'personnel', resource_id: 'operations.personnel' },
-  { id: 'routing', label: 'Routing', slug: 'routing', resource_id: 'operations.routing' },
-  { id: 'channel-list', label: 'Channel list', slug: 'channel-list', resource_id: 'operations.channel_list' },
-  { id: 'payroll', label: 'Payroll', slug: 'payroll', resource_id: 'operations.payroll' },
-  { id: 'rooming', label: 'Rooming', slug: 'rooming', resource_id: 'operations.rooming' },
-  { id: 'files', label: 'Files', slug: 'files', resource_id: 'operations.files' },
-  { id: 'riders', label: 'Riders', slug: 'riders', resource_id: 'operations.riders' },
-];
+/* Sprint 9 §14.11 — SUB_NAV moved to layout. */
 
 function relativeTime(iso: string | null): string {
   if (!iso) return '—';
@@ -81,23 +67,6 @@ export default async function OperationsTourRoutingPage({
   }
 
   const grants = await fetchActiveGrants(supabase, membership, user.id);
-
-  // Sprint 9 §13.C.2 — Summary entry leads the sub-nav.
-  const subNavLinks = [
-    {
-      id: 'summary',
-      label: 'Summary',
-      slug: '',
-      href: `/operations/${tourId}`,
-      visible: true,
-    },
-    ...SUB_NAV.map((s) => ({
-      id: s.id,
-      label: s.label,
-      slug: s.slug,
-      visible: canAccess(membership, grants, 'page', s.resource_id, 'read'),
-    })),
-  ];
 
   const canRead = canAccess(membership, grants, 'page', 'operations.routing', 'read');
   const canWrite = canAccess(membership, grants, 'page', 'operations.routing', 'write');
@@ -153,11 +122,7 @@ export default async function OperationsTourRoutingPage({
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-      <OperationsSubNav
-        tourId={tourId}
-        activeSlug="routing"
-        links={subNavLinks}
-      />
+      {/* Sprint 9 §14.11 — sub-nav now mounted by the layout. */}
       <div
         className="mx-auto w-full"
         style={{

@@ -52,6 +52,7 @@ import {
 } from './PersonnelDetailSlideOver';
 import { FilterChips, type FilterChipOption } from '@/components/ui/FilterChips';
 import { CompletenessRing } from './CompletenessRing';
+import { DeleteConfirmationModal } from '@/components/ui/DeleteConfirmationModal';
 import { toTitleCase } from '@/lib/text/toTitleCase';
 
 export interface PersonnelLibraryRow {
@@ -148,32 +149,32 @@ export function PersonnelLibraryClient({
   const [filter, setFilter] = useState<FilterKey>('all');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [deleting, setDeleting] = useState(false);
+  /* Sprint 9 §14.4 — replaced the prior window.confirm with the
+     repo's <DeleteConfirmationModal> primitive (type-DELETE-to-
+     confirm + shake animation). Tracks a single pending deletion
+     target as either a per-row id or a "bulk" sentinel so the
+     same modal serves both flows. */
+  const [pendingDelete, setPendingDelete] = useState<
+    | null
+    | { kind: 'one'; id: string; displayName: string }
+    | { kind: 'bulk'; ids: string[] }
+  >(null);
 
-  // Per-row delete handler — fronted by window.confirm (matches
-  // bulk delete + the repo's existing slide-over delete
-  // convention). Reuses the same /api/personnel/bulk-delete
-  // endpoint with a single-id array so we don't need a sibling
-  // single-row delete route.
-  const deleteOne = async (id: string, displayName: string) => {
-    if (!window.confirm(`Delete "${displayName}" from this workspace? This cannot be undone.`)) {
-      return;
+  const requestDeleteOne = (id: string, displayName: string) =>
+    setPendingDelete({ kind: 'one', id, displayName });
+
+  const performDeleteOne = async (id: string, displayName: string) => {
+    const res = await fetch('/api/personnel/bulk-delete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: [id] }),
+    });
+    const body = (await res.json().catch(() => null)) as { error?: string } | null;
+    if (!res.ok) {
+      throw new Error(body?.error ?? 'Could not delete personnel.');
     }
-    try {
-      const res = await fetch('/api/personnel/bulk-delete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: [id] }),
-      });
-      const body = (await res.json().catch(() => null)) as { error?: string } | null;
-      if (!res.ok) {
-        showToast(body?.error ?? 'Could not delete personnel.');
-        return;
-      }
-      showToast(`${displayName} deleted.`);
-      router.refresh();
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Network error');
-    }
+    showToast(`${displayName} deleted.`);
+    router.refresh();
   };
 
   // Spec 13.A.10 thresholds (CC_SPRINT_09_PHASE_13.md §13.A.10):
@@ -184,39 +185,33 @@ export function PersonnelLibraryClient({
   const recentlyUpdatedCutoff = Date.now() - 7 * 86400000;
   const untouchedCutoff = Date.now() - 90 * 86400000;
 
-  // Bulk delete via the existing /api/personnel/bulk-delete route.
-  // window.confirm matches the convention in PersonSlideOver,
-  // GearSlideOver, DealMemoSlideOver, and LineItemDetailPanel.
-  const handleBulkDelete = async () => {
+  /* Sprint 9 §14.4 — bulk delete now also goes through
+     <DeleteConfirmationModal>. The modal owns the deleting +
+     error state via its onConfirm contract. The component-level
+     `deleting` flag stays for disabling the trigger button. */
+  const requestBulkDelete = () => {
     if (deleting || selectedIds.length === 0) return;
-    const n = selectedIds.length;
-    if (
-      !window.confirm(
-        `Delete ${n} ${n === 1 ? 'person' : 'people'} from this workspace? This cannot be undone.`,
-      )
-    ) {
-      return;
-    }
+    setPendingDelete({ kind: 'bulk', ids: [...selectedIds] });
+  };
+
+  const performBulkDelete = async (ids: string[]) => {
     setDeleting(true);
     try {
       const res = await fetch('/api/personnel/bulk-delete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: selectedIds }),
+        body: JSON.stringify({ ids }),
       });
       const body = (await res.json().catch(() => null)) as
         | { deleted?: number; error?: string }
         | null;
       if (!res.ok) {
-        showToast(body?.error ?? 'Could not delete personnel.');
-        return;
+        throw new Error(body?.error ?? 'Could not delete personnel.');
       }
-      const deleted = typeof body?.deleted === 'number' ? body.deleted : n;
+      const deleted = typeof body?.deleted === 'number' ? body.deleted : ids.length;
       showToast(`${deleted} ${deleted === 1 ? 'person' : 'people'} deleted.`);
       setSelectedIds([]);
       router.refresh();
-    } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Network error');
     } finally {
       setDeleting(false);
     }
@@ -290,14 +285,24 @@ export function PersonnelLibraryClient({
       {
         id: 'status',
         header: 'Status',
-        accessor: (p) => (p.hasIssue ? 1 : 0),
+        /* Sprint 9 §14.1 — pill reflects the row's actual
+           combined state. Action-required when EITHER (a) there
+           are expiring docs (passport ≤180d, visa expired —
+           deriveIssues server-side), OR (b) profile completeness
+           is < 70% (the same threshold the ring uses). When
+           neither applies the row is genuinely "OK". The
+           combined accessor lets the column sort attention-first
+           rows to the top by default. */
+        accessor: (p) => {
+          const incomplete = p.completenessPercent < 70 ? 1 : 0;
+          return p.hasIssue ? 2 : incomplete;
+        },
         sortable: true,
         cell: (_value, row) => {
           const r = row as PersonnelLibraryRow;
-          if (!r.hasIssue) {
-            // Bug Reports-style "OK" pill — neutral, low-key —
-            // so the column reads at a glance even on healthy
-            // rows (otherwise an empty cell is ambiguous).
+          const incomplete = r.completenessPercent < 70;
+          const needsAttention = r.hasIssue || incomplete;
+          if (!needsAttention) {
             return (
               <span
                 className="inline-flex items-center"
@@ -325,11 +330,19 @@ export function PersonnelLibraryClient({
               </span>
             );
           }
+          // Pick the dominant cause for the pill label. Expiring
+          // docs (issueLabels) win over profile-incomplete since
+          // they have a deadline. Tooltip carries the full list.
+          const labels: string[] = [...r.issueLabels];
+          if (incomplete) {
+            labels.push(`Profile ${r.completenessPercent}%`);
+          }
+          const headline = r.issueLabels[0] ?? 'Profile incomplete';
           return (
             <span
               className="inline-flex items-center"
               role="status"
-              title={r.issueLabels.join(' · ')}
+              title={labels.join(' · ')}
               style={{
                 gap: 6,
                 padding: '2px 8px',
@@ -342,8 +355,8 @@ export function PersonnelLibraryClient({
               }}
             >
               <AlertTriangle size={12} strokeWidth={2.4} aria-hidden />
-              {r.issueLabels[0] ?? 'Action required'}
-              {r.issueLabels.length > 1 ? (
+              {headline}
+              {labels.length > 1 ? (
                 <span
                   style={{
                     marginLeft: 2,
@@ -351,7 +364,7 @@ export function PersonnelLibraryClient({
                     opacity: 0.7,
                   }}
                 >
-                  +{r.issueLabels.length - 1}
+                  +{labels.length - 1}
                 </span>
               ) : null}
             </span>
@@ -439,7 +452,7 @@ export function PersonnelLibraryClient({
                   label: 'Delete',
                   icon: Trash2,
                   variant: 'danger',
-                  onClick: () => void deleteOne(r.id, displayName),
+                  onClick: () => requestDeleteOne(r.id, displayName),
                 },
               ]}
             />
@@ -447,7 +460,6 @@ export function PersonnelLibraryClient({
         },
       },
     ],
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
 
@@ -589,7 +601,7 @@ export function PersonnelLibraryClient({
           selectedIds.length > 0 ? (
             <button
               type="button"
-              onClick={() => void handleBulkDelete()}
+              onClick={requestBulkDelete}
               disabled={deleting}
               className="btn-transition inline-flex items-center"
               style={{
@@ -646,10 +658,48 @@ export function PersonnelLibraryClient({
         panel={panel}
         viewerCanSeePay={viewerCanSeePay}
         onClose={() => setPanel(null)}
-        onSaved={() => {
-          // Refresh server data so the new/edited row reflects
-          // in the table. Slide-over closes itself on save.
+        onSaved={(_row, meta) => {
+          // Sprint 9 §14.5 — skip router.refresh() on
+          // document uploads. The slide-over already
+          // applied the new file metadata to its local
+          // `ext.documents` state, so the file appears
+          // inline immediately. Refreshing here was
+          // causing the slide-over to flicker / appear
+          // to close while the page rerendered. Form
+          // saves still refresh so the grid picks up
+          // name / role / completeness changes.
+          if (meta?.source === 'document') return;
           router.refresh();
+        }}
+      />
+
+      {/* Sprint 9 §14.4 — type-DELETE-to-confirm modal serves
+          both the row kebab and the bulk-delete button. The
+          modal owns the deleting + error state during its
+          onConfirm; we surface either the per-row name or a
+          "N people" count as the itemName. */}
+      <DeleteConfirmationModal
+        open={pendingDelete !== null}
+        itemName={
+          pendingDelete?.kind === 'one'
+            ? pendingDelete.displayName
+            : pendingDelete?.kind === 'bulk'
+              ? `${pendingDelete.ids.length} ${pendingDelete.ids.length === 1 ? 'person' : 'people'}`
+              : ''
+        }
+        description={
+          pendingDelete?.kind === 'bulk'
+            ? `${pendingDelete.ids.length} workspace personnel ${pendingDelete.ids.length === 1 ? 'row' : 'rows'} will be removed from this workspace.`
+            : 'Removes the workspace personnel row. Tour assignments referencing this person will retain their snapshot data.'
+        }
+        onClose={() => setPendingDelete(null)}
+        onConfirm={async () => {
+          if (!pendingDelete) return;
+          if (pendingDelete.kind === 'one') {
+            await performDeleteOne(pendingDelete.id, pendingDelete.displayName);
+          } else {
+            await performBulkDelete(pendingDelete.ids);
+          }
         }}
       />
     </div>

@@ -146,6 +146,15 @@ export interface PersonnelFrequentFlierV2 {
 export interface PersonnelVisaV2 {
   country: string;
   type: string;
+  /** Sprint 9 §14.14 — visa identifier as printed on the
+   *  document. Distinct from passport number. */
+  visa_number?: string;
+  /** Sprint 9 §14.14 — issuing consulate / embassy / agency. */
+  issuing_authority?: string;
+  /** Sprint 9 §14.14 — true when the visa permits multiple
+   *  entries during its validity window. False / undefined =
+   *  single entry. Surfaced in routing + advance docs. */
+  multi_entry?: boolean;
   valid_from?: string;
   valid_to: string;
   /** Path inside the personnel-files bucket. */

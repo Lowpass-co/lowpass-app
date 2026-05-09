@@ -15,6 +15,7 @@
 import { Search } from 'lucide-react';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { ProductHeaderAvatarMenu } from './ProductHeaderAvatarMenu';
+import { toTitleCase } from '@/lib/text/toTitleCase';
 
 interface WorkspaceTopBarProps {
   workspaceName: string;
@@ -110,7 +111,7 @@ export async function WorkspaceTopBar({
         >
           ·
         </span>
-        {workspaceName}
+        {toTitleCase(workspaceName)}
       </span>
 
       {/* Right-side actions */}

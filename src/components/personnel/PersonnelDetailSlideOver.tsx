@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ExternalLink, FileText, ImageIcon, Loader2, Plus, Trash2, X } from 'lucide-react';
 import type { Personnel, PersonnelRates } from '@/types';
 import type {
@@ -48,6 +48,14 @@ export type PersonnelPanelState =
 
 const IC =
   'w-full rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text outline-none focus:border-lp-orange';
+/* Sprint 9 §14.6 — native <select> elements have a different
+   intrinsic height than text <input>s under the IC class (the
+   browser adds vendor padding for the dropdown arrow). Set an
+   explicit height that matches an IC-styled input — `text-sm`
+   (14px) + `py-2` (8px top + 8px bottom) + 1px×2 border + the
+   line-height of the font ≈ 38px. Applied alongside `IC` so
+   selects stay flush in any horizontal grid. */
+const SELECT_HEIGHT_PX = 38;
 const CUR = ['GBP', 'EUR', 'USD'] as const;
 
 function Section({
@@ -232,6 +240,34 @@ export function PersonnelDetailSlideOver({
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  /* Sprint 9 §14.7 — mount-deferred close animation. Mirrors the
+     SlideOver primitive's lifecycle so closing the slide-over
+     animates out (slide right + fade) instead of disappearing
+     instantly. The previous `if (!open) return null` short-
+     circuited the exit transition before the browser could
+     paint the closed-state styles. */
+  const [mounted, setMounted] = useState(open);
+  const [animateIn, setAnimateIn] = useState(false);
+  const panelAnimRef = useRef<HTMLDivElement | null>(null);
+
+  useLayoutEffect(() => {
+    if (open) setMounted(true);
+  }, [open]);
+
+  useEffect(() => {
+    if (open) {
+      const r = requestAnimationFrame(() => setAnimateIn(true));
+      return () => cancelAnimationFrame(r);
+    }
+    setAnimateIn(false);
+  }, [open]);
+
+  const handlePanelTransitionEnd = (e: React.TransitionEvent<HTMLDivElement>) => {
+    if (e.target !== panelAnimRef.current) return;
+    if (e.propertyName !== 'transform') return;
+    if (!open) setMounted(false);
+  };
 
   const [name, setName] = useState('');
   const [role, setRole] = useState('');
@@ -572,7 +608,7 @@ export function PersonnelDetailSlideOver({
     }
   };
 
-  if (!open) return null;
+  if (!mounted) return null;
 
   const displayTitleName = name.trim() || 'New person';
 
@@ -623,11 +659,26 @@ export function PersonnelDetailSlideOver({
 
   return (
     <>
-      <div className="fixed inset-0 z-[85] bg-black/20 md:block" aria-hidden onClick={onClose} />
       <div
+        className="fixed inset-0 z-[85] bg-black/20 md:block"
+        aria-hidden
+        onClick={onClose}
+        style={{
+          opacity: animateIn ? 1 : 0,
+          transition: 'opacity 200ms ease-out',
+        }}
+      />
+      <div
+        ref={panelAnimRef}
+        onTransitionEnd={handlePanelTransitionEnd}
         className={cn(
-          'fixed top-0 right-0 z-[90] flex h-full w-full flex-col border-l border-lp-border bg-lp-bg shadow-2xl transition-transform duration-200 ease-out md:w-[min(100vw,720px)]'
+          'fixed top-0 right-0 z-[90] flex h-full w-full flex-col border-l border-lp-border bg-lp-bg shadow-2xl md:w-[min(100vw,720px)]'
         )}
+        style={{
+          transform: animateIn ? 'translateX(0)' : 'translateX(100%)',
+          opacity: animateIn ? 1 : 0,
+          transition: 'transform 200ms ease-out, opacity 200ms ease-out',
+        }}
       >
         <header className="flex shrink-0 items-start justify-between gap-3 border-b border-lp-border bg-lp-bg p-4">
           <div className="min-w-0">
@@ -1120,11 +1171,23 @@ export function PersonnelDetailSlideOver({
                   items={emergencyContactsV2}
                   empty="No emergency contacts yet."
                   addLabel="Add emergency contact"
+                  /* Sprint 9 §14.2 — first +Add lifts legacy
+                     emergency_contact into the new entry so the
+                     operator gets a populated starting point
+                     instead of a blank form. Legacy is empty →
+                     entry is blank. Subsequent +Adds always
+                     blank. */
                   onAdd={() =>
-                    setEmergencyContactsV2((arr) => [
-                      ...arr,
-                      { name: '', relationship: '', phone: '', email: '' },
-                    ])
+                    setEmergencyContactsV2((arr) => {
+                      if (arr.length === 0) {
+                        const lifted = liftEmergencyContacts(ext);
+                        if (lifted.length > 0) return lifted;
+                      }
+                      return [
+                        ...arr,
+                        { name: '', relationship: '', phone: '', email: '' },
+                      ];
+                    })
                   }
                   onRemove={(i) =>
                     setEmergencyContactsV2((arr) => arr.filter((_, idx) => idx !== i))
@@ -1200,17 +1263,27 @@ export function PersonnelDetailSlideOver({
                   items={passportsV2}
                   empty="No passports yet."
                   addLabel="Add passport"
+                  /* Sprint 9 §14.2 — first +Add lifts legacy
+                     form-style passports[] entries into v2
+                     shape so the operator doesn't re-enter
+                     country / number / dates. */
                   onAdd={() =>
-                    setPassportsV2((arr) => [
-                      ...arr,
-                      {
-                        country: '',
-                        number: '',
-                        given_names: '',
-                        surname: '',
-                        date_of_expiry: '',
-                      },
-                    ])
+                    setPassportsV2((arr) => {
+                      if (arr.length === 0) {
+                        const lifted = liftPassportsV2(ext);
+                        if (lifted.length > 0) return lifted;
+                      }
+                      return [
+                        ...arr,
+                        {
+                          country: '',
+                          number: '',
+                          given_names: '',
+                          surname: '',
+                          date_of_expiry: '',
+                        },
+                      ];
+                    })
                   }
                   onRemove={(i) =>
                     setPassportsV2((arr) => arr.filter((_, idx) => idx !== i))
@@ -1291,11 +1364,21 @@ export function PersonnelDetailSlideOver({
                   items={frequentFlierV2}
                   empty="No frequent flier programmes yet."
                   addLabel="Add airline"
+                  /* Sprint 9 §14.2 — first +Add lifts ALL legacy
+                     frequent_flyer_1..4 entries (not just one)
+                     since the legacy shape carried up to four
+                     lines. Subsequent +Adds always blank. */
                   onAdd={() =>
-                    setFrequentFlierV2((arr) => [
-                      ...arr,
-                      { airline: '', member_number: '' },
-                    ])
+                    setFrequentFlierV2((arr) => {
+                      if (arr.length === 0) {
+                        const lifted = liftFrequentFlier(ext);
+                        if (lifted.length > 0) return lifted;
+                      }
+                      return [
+                        ...arr,
+                        { airline: '', member_number: '' },
+                      ];
+                    })
                   }
                   onRemove={(i) =>
                     setFrequentFlierV2((arr) => arr.filter((_, idx) => idx !== i))
@@ -1336,6 +1419,7 @@ export function PersonnelDetailSlideOver({
                               })
                             }
                             className={IC}
+                            style={{ height: SELECT_HEIGHT_PX }}
                           >
                             <option value="">—</option>
                             {FLIER_TIERS.map((t) => (
@@ -1356,11 +1440,20 @@ export function PersonnelDetailSlideOver({
                   items={visasV2}
                   empty="No visas on file."
                   addLabel="Add visa"
+                  /* Sprint 9 §14.2 — first +Add lifts legacy
+                     ext.visa block (single object) into a v2
+                     entry. */
                   onAdd={() =>
-                    setVisasV2((arr) => [
-                      ...arr,
-                      { country: '', type: '', valid_to: '' },
-                    ])
+                    setVisasV2((arr) => {
+                      if (arr.length === 0) {
+                        const lifted = liftVisas(ext);
+                        if (lifted.length > 0) return lifted;
+                      }
+                      return [
+                        ...arr,
+                        { country: '', type: '', valid_to: '' },
+                      ];
+                    })
                   }
                   onRemove={(i) =>
                     setVisasV2((arr) => arr.filter((_, idx) => idx !== i))
@@ -1370,6 +1463,12 @@ export function PersonnelDetailSlideOver({
                       setVisasV2((arr) =>
                         arr.map((row, idx) => (idx === i ? { ...row, ...patch } : row)),
                       );
+                    /* Sprint 9 §14.14 — extended visa fields:
+                       visa number, multi-entry flag, issuing
+                       authority. Layout order matches the spec:
+                       country → type → number → multi-entry
+                       checkbox → issuing authority → dates →
+                       notes. */
                     return (
                       <div className="grid gap-3 sm:grid-cols-2">
                         <div>
@@ -1386,6 +1485,49 @@ export function PersonnelDetailSlideOver({
                             value={entry.type}
                             onChange={(e) => update({ type: e.target.value })}
                             className={IC}
+                            placeholder="e.g. Tourist B1/B2"
+                          />
+                        </div>
+                        <div>
+                          <L>Visa number</L>
+                          <input
+                            value={entry.visa_number ?? ''}
+                            onChange={(e) => update({ visa_number: e.target.value })}
+                            className={IC}
+                          />
+                        </div>
+                        <div>
+                          <L>Entries</L>
+                          <label
+                            className="inline-flex items-center"
+                            style={{
+                              gap: 8,
+                              padding: 'var(--lp-space-2) var(--lp-space-3)',
+                              background: 'var(--lp-surface)',
+                              border: '1px solid var(--lp-border)',
+                              borderRadius: 'var(--lp-radius-md)',
+                              cursor: 'pointer',
+                              fontSize: 'var(--lp-text-sm)',
+                              color: 'var(--lp-text)',
+                              height: SELECT_HEIGHT_PX,
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={!!entry.multi_entry}
+                              onChange={(e) => update({ multi_entry: e.target.checked })}
+                              style={{ accentColor: 'var(--color-lp-orange)' }}
+                            />
+                            <span>Multi-entry</span>
+                          </label>
+                        </div>
+                        <div className="sm:col-span-2">
+                          <L>Issuing authority</L>
+                          <input
+                            value={entry.issuing_authority ?? ''}
+                            onChange={(e) => update({ issuing_authority: e.target.value })}
+                            className={IC}
+                            placeholder="Embassy / consulate / agency"
                           />
                         </div>
                         <div>
@@ -1426,11 +1568,22 @@ export function PersonnelDetailSlideOver({
                   items={dietaryV2}
                   empty="No dietary requirements specified."
                   addLabel="Add dietary requirement"
+                  /* Sprint 9 §14.2 — first +Add lifts the legacy
+                     dietary_needs string (top-level personnel
+                     column, held in `dietary` state) into a
+                     custom-typed entry so the operator can
+                     refine without retyping. */
                   onAdd={() =>
-                    setDietaryV2((arr) => [
-                      ...arr,
-                      { type: 'vegetarian' },
-                    ])
+                    setDietaryV2((arr) => {
+                      if (arr.length === 0) {
+                        const lifted = liftDietary(dietary, ext);
+                        if (lifted.length > 0) return lifted;
+                      }
+                      return [
+                        ...arr,
+                        { type: 'vegetarian' },
+                      ];
+                    })
                   }
                   onRemove={(i) =>
                     setDietaryV2((arr) => arr.filter((_, idx) => idx !== i))
@@ -1450,6 +1603,7 @@ export function PersonnelDetailSlideOver({
                               update({ type: e.target.value as PersonnelDietaryType })
                             }
                             className={IC}
+                            style={{ height: SELECT_HEIGHT_PX }}
                           >
                             {DIETARY_TYPES.map((t) => (
                               <option key={t.value} value={t.value}>
@@ -1478,11 +1632,22 @@ export function PersonnelDetailSlideOver({
                   items={merchSizesV2}
                   empty="No merch sizes recorded."
                   addLabel="Add size"
+                  /* Sprint 9 §14.2 — first +Add lifts legacy
+                     clothing_sizes block + merch_size string
+                     into v2 entries (one per filled garment)
+                     so the operator doesn't re-enter every
+                     size. */
                   onAdd={() =>
-                    setMerchSizesV2((arr) => [
-                      ...arr,
-                      { garment: 't_shirt', size: '' },
-                    ])
+                    setMerchSizesV2((arr) => {
+                      if (arr.length === 0) {
+                        const lifted = liftMerchSizes(merchSize, ext);
+                        if (lifted.length > 0) return lifted;
+                      }
+                      return [
+                        ...arr,
+                        { garment: 't_shirt', size: '' },
+                      ];
+                    })
                   }
                   onRemove={(i) =>
                     setMerchSizesV2((arr) => arr.filter((_, idx) => idx !== i))
@@ -1502,6 +1667,7 @@ export function PersonnelDetailSlideOver({
                               update({ garment: e.target.value as PersonnelGarment })
                             }
                             className={IC}
+                            style={{ height: SELECT_HEIGHT_PX }}
                           >
                             {GARMENTS.map((g) => (
                               <option key={g.value} value={g.value}>

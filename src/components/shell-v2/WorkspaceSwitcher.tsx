@@ -25,6 +25,7 @@ import { useRouter } from 'next/navigation';
 import { Building2, ChevronDown, Loader2, Check } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
 import type { WorkspaceListItem, WorkspaceRole } from '@/lib/permissions/types';
+import { toTitleCase } from '@/lib/text/toTitleCase';
 
 function roleLabel(r: WorkspaceRole, isOwner: boolean): string {
   if (isOwner) return 'Owner';
@@ -139,11 +140,11 @@ export function WorkspaceSwitcher() {
           fontWeight: 'var(--lp-weight-medium)',
           color: 'var(--lp-text-secondary)',
         }}
-        title={active?.name}
+        title={toTitleCase(active?.name)}
       >
         <Building2 size={12} strokeWidth={2.4} />
         <span className="truncate" style={{ maxWidth: 180 }}>
-          {active?.name ?? '—'}
+          {toTitleCase(active?.name) || '—'}
         </span>
       </span>
     );
@@ -172,7 +173,7 @@ export function WorkspaceSwitcher() {
       >
         <Building2 size={12} strokeWidth={2.4} style={{ color: 'var(--lp-text-tertiary)' }} />
         <span className="truncate" style={{ maxWidth: 180 }}>
-          {active?.name ?? 'Workspace'}
+          {toTitleCase(active?.name) || 'Workspace'}
         </span>
         <ChevronDown size={12} strokeWidth={2.4} style={{ color: 'var(--lp-text-tertiary)' }} />
       </button>
@@ -254,7 +255,7 @@ export function WorkspaceSwitcher() {
                     className="block truncate"
                     style={{ fontWeight: 'var(--lp-weight-medium)' }}
                   >
-                    {w.name}
+                    {toTitleCase(w.name)}
                   </span>
                   <span
                     className="block"

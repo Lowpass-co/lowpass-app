@@ -202,15 +202,23 @@ export function OperationsSummaryClient({
           href={`/operations/${tourId}/personnel`}
           ctaLabel="Personnel →"
         />
-        <Card
-          title="Conflicts"
-          icon={<AlertTriangle size={16} strokeWidth={2} />}
-          headline={`${conflicts.count}`}
-          subline={conflicts.count > 0 ? 'cross-tour overlap' : 'none'}
-          href={`/operations/${tourId}/personnel?filter=conflicts`}
-          ctaLabel={conflicts.count > 0 ? 'Review →' : 'Personnel →'}
-          tone={conflicts.count > 0 ? 'warning' : 'neutral'}
-        />
+        {/* Sprint 9 §14.12 — Conflicts is a low-frequency
+            kickoff-time concern. Hide the card when there's
+            nothing to surface so the remaining 3 cards
+            (Shows / Crew / Pending tasks) reflow to fill the
+            grid. When a conflict exists the card reappears in
+            warning tone. */}
+        {conflicts.count > 0 ? (
+          <Card
+            title="Conflicts"
+            icon={<AlertTriangle size={16} strokeWidth={2} />}
+            headline={`${conflicts.count}`}
+            subline="cross-tour overlap"
+            href={`/operations/${tourId}/personnel?filter=conflicts`}
+            ctaLabel="Review →"
+            tone="warning"
+          />
+        ) : null}
         <CardButton
           title="Pending tasks"
           icon={<ListChecks size={16} strokeWidth={2} />}

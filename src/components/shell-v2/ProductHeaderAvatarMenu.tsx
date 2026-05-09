@@ -75,24 +75,61 @@ export function ProductHeaderAvatarMenu({
     router.refresh();
   };
 
+  /* Sprint 9 §14.13 — match the TopBar (shell-v1) user pill so
+     shell-v2 chrome (Operations / Budget / Advance) carries
+     the same avatar + name + ADMIN badge treatment. ADMIN is
+     a sibling element on the left of the trigger (matches
+     §13.A.3's TopBar layout); the trigger itself is now a
+     wider rounded-md pill that shows the display name. Falls
+     back to the email local-part when no display name is set
+     so the pill never reads as empty. */
+  const displayLabel = user.name?.trim() || user.email.split('@')[0] || 'Account';
+
   return (
-    <div className="relative" ref={wrapperRef}>
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="btn-transition flex items-center justify-center overflow-hidden rounded-full border"
-        style={{
-          height: 32,
-          width: 32,
-          borderColor: 'var(--lp-border-strong)',
-          background: 'transparent',
-        }}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-label="Account menu"
-      >
-        <AccountAvatar user={user} size={28} />
-      </button>
+    <div className="flex items-center" style={{ gap: 'var(--lp-space-2)' }}>
+      {isSiteAdmin ? (
+        <span
+          className="lp-label-caps"
+          title="You have site admin access — visible across all workspaces"
+          style={{
+            flexShrink: 0,
+            padding: '2px 8px',
+            fontSize: 'var(--lp-text-2xs)',
+            fontWeight: 'var(--lp-weight-semibold)',
+            color: 'var(--lp-text)',
+            background: 'var(--lp-bg-tertiary)',
+            border: '1px solid var(--lp-border-subtle)',
+            borderRadius: 999,
+          }}
+        >
+          Admin
+        </span>
+      ) : null}
+      <div className="relative" ref={wrapperRef}>
+        <button
+          type="button"
+          onClick={() => setOpen((o) => !o)}
+          className="btn-transition flex max-w-[200px] min-w-0 items-center gap-2 rounded-md border px-2 py-1.5"
+          style={{
+            borderColor: 'var(--lp-border)',
+            color: 'var(--lp-text)',
+            background: 'transparent',
+          }}
+          aria-haspopup="menu"
+          aria-expanded={open}
+          aria-label="Account menu"
+        >
+          <AccountAvatar user={user} size={28} />
+          <span
+            className="truncate"
+            style={{
+              fontSize: 'var(--lp-text-sm)',
+              fontWeight: 'var(--lp-weight-medium)',
+            }}
+          >
+            {displayLabel}
+          </span>
+        </button>
       {open ? (
         <div
           className="absolute right-0 mt-1 w-60 rounded-xl border py-1 shadow-lg"
@@ -214,6 +251,7 @@ export function ProductHeaderAvatarMenu({
           </button>
         </div>
       ) : null}
+      </div>
     </div>
   );
 }

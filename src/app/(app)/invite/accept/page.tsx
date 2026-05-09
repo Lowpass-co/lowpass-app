@@ -1,11 +1,16 @@
 /* ============================================
-   LOWPASS — Invite acceptance landing (Sprint 9 §3)
+   LOWPASS — Invite acceptance landing (Sprint 9 §3 + §14.3)
 
    /invite/accept?token=<token>
 
    When the admin shares an invite link, the invitee lands here.
    Two paths:
-     - Not authed: bounce to /login?next=/invite/accept?token=...
+     - Not authed: render <InviteAcceptUnauth> with sign-in /
+       sign-up buttons that preserve the token via a fully-
+       encoded `next` param. After auth the post-login redirect
+       lands back here. Sprint 9 §14.3 — replaces the previous
+       redirect-to-login that silently dropped the token because
+       its `next` URL wasn't fully encoded.
      - Authed: server doesn't auto-accept (we want the invitee
        to consciously click Accept). The page renders an
        <InviteAcceptClient> client component that calls POST
@@ -16,9 +21,9 @@
    gets clear feedback instead of a stack trace.
    ============================================ */
 
-import { redirect } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { InviteAcceptClient } from '@/components/settings/members/InviteAcceptClient';
+import { InviteAcceptUnauth } from '@/components/settings/members/InviteAcceptUnauth';
 
 export const dynamic = 'force-dynamic';
 
@@ -46,8 +51,13 @@ export default async function InviteAcceptPage({
   const {
     data: { user },
   } = await supabase.auth.getUser();
+
   if (!user) {
-    redirect(`/login?next=/invite/accept?token=${encodeURIComponent(token)}`);
+    return (
+      <Frame title="You&rsquo;ve been invited">
+        <InviteAcceptUnauth token={token} />
+      </Frame>
+    );
   }
 
   return (
