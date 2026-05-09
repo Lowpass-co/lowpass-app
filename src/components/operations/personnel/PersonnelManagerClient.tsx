@@ -523,6 +523,8 @@ export function PersonnelManagerClient({
         open={addOpen}
         tourId={tourId}
         excludePersonIds={excludePersonIds}
+        tourStartDate={tourStartDate}
+        tourEndDate={tourEndDate}
         onClose={() => setAddOpen(false)}
         onAdded={() => {
           showToast('Personnel added.');

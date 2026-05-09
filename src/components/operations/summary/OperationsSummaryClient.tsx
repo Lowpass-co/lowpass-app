@@ -454,6 +454,8 @@ export function OperationsSummaryClient({
         open={addPersonnelOpen}
         tourId={tourId}
         excludePersonIds={crew.excludePersonIds}
+        tourStartDate={tourStartDate}
+        tourEndDate={tourEndDate}
         onClose={() => setAddPersonnelOpen(false)}
         onAdded={() => {
           showToast('Personnel added.');

@@ -1,22 +1,36 @@
 'use client';
 
 /* ============================================
-   LOWPASS — AddPersonnelSlideOver (Sprint 9 §6)
+   LOWPASS — AddPersonnelSlideOver (Sprint 9 §6 + §11.1 + §11.2)
 
-   Search-only "+ Add personnel" flow per Phase 6 sign-off
-   refinement #2. Searches existing persons in the tour's
-   workspace via /api/tours/[id]/personnel/search?q=...&exclude=...
-   When the user finds nobody, the slide-over footer links to
-   the Personnel library page in a new tab to create a new
-   person there.
+   Search-first "+ Add personnel" flow. Searches existing
+   persons in the tour's workspace via
+   /api/tours/[id]/personnel/search?q=...&exclude=...
+
+   Sprint 9 §11.1 — when the slide-over opens, the assignment
+   form's start_date / end_date default to the tour's window
+   (passed in as props) so the operator doesn't retype them on
+   every assignment. Both fields stay editable.
+
+   Sprint 9 §11.2 — when the search returns no matches, an
+   inline "+ Create new person" panel expands a tiny form
+   (name + email + role) and on submit:
+     1. POSTs /api/personnel (workspace personnel)
+     2. POSTs /api/tours/[id]/personnel using the new person's id
+        + the assignment defaults (role from the inline form,
+        tour-window dates, status='confirmed', no rate).
+   The two calls happen sequentially; if step 2 fails, the
+   workspace person row still exists (operator can manually
+   assign from the manage flow). The flow lets ops add a new
+   crew member without leaving the tour context.
 
    On click of a search result, the slide-over expands to show
-   the assignment form (role / employment_type / rate / window
-   / status). Submit POSTs to /api/tours/[id]/personnel.
+   the full assignment form (role / window / status / rate).
+   Submit POSTs to /api/tours/[id]/personnel.
    ============================================ */
 
 import { useEffect, useRef, useState } from 'react';
-import { ExternalLink, Loader2, Search } from 'lucide-react';
+import { ExternalLink, Loader2, Plus, Search, UserPlus } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
 import { SlideOver } from '@/components/shell/SlideOver';
 import type {
@@ -37,6 +51,12 @@ interface AddPersonnelSlideOverProps {
   tourId: string;
   /** person_ids already assigned — excluded from search results. */
   excludePersonIds: string[];
+  /** Sprint 9 §11.1 — defaults for the assignment window. When
+   *  the operator opens the slide-over, the start/end date
+   *  inputs are pre-filled with the tour's window. Both stay
+   *  editable. Pass null when the tour has no window set. */
+  tourStartDate?: string | null;
+  tourEndDate?: string | null;
   onClose: () => void;
   onAdded: () => void;
 }
@@ -45,6 +65,8 @@ export function AddPersonnelSlideOver({
   open,
   tourId,
   excludePersonIds,
+  tourStartDate = null,
+  tourEndDate = null,
   onClose,
   onAdded,
 }: AddPersonnelSlideOverProps) {
@@ -66,24 +88,41 @@ export function AddPersonnelSlideOver({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Sprint 9 §11.2 — inline create-new-person flow when search
+  // turns up nothing. State is segregated from the search /
+  // pick path so toggling between modes doesn't bleed values.
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createName, setCreateName] = useState('');
+  const [createEmail, setCreateEmail] = useState('');
+  const [createRole, setCreateRole] = useState('Crew');
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Reset everything when the slide-over closes/reopens.
+  // Sprint 9 §11.1 — start/end default to the tour window.
   useEffect(() => {
     if (!open) return;
     setQ('');
     setHits([]);
     setPicked(null);
     setRole('Crew');
-    setStartsOn('');
-    setEndsOn('');
+    setStartsOn(tourStartDate ?? '');
+    setEndsOn(tourEndDate ?? '');
     setStatus('confirmed');
     setRateAmount('');
     setRateCurrency('GBP');
     setRatePeriod('day');
     setSubmitting(false);
     setError(null);
-  }, [open]);
+    setCreateOpen(false);
+    setCreateName('');
+    setCreateEmail('');
+    setCreateRole('Crew');
+    setCreating(false);
+    setCreateError(null);
+  }, [open, tourStartDate, tourEndDate]);
 
   // Debounced search.
   useEffect(() => {
@@ -112,6 +151,77 @@ export function AddPersonnelSlideOver({
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
   }, [q, open, picked, tourId, excludePersonIds]);
+
+  /* Sprint 9 §11.2 — inline create-new-person submit. Two
+     sequential POSTs: workspace personnel first, then tour
+     assignment. If step 2 fails the workspace person row
+     still exists (operator can assign manually); we surface
+     a softer error message in that case so they know what
+     happened. Defaults: tour-window dates, status='confirmed',
+     no rate. The operator can edit later via the manage
+     slide-over. */
+  async function handleCreateAndAssign() {
+    setCreateError(null);
+    const name = createName.trim();
+    const email = createEmail.trim() || null;
+    const inlineRole = createRole.trim() || 'Crew';
+    if (!name) {
+      setCreateError('Name is required.');
+      return;
+    }
+    setCreating(true);
+    try {
+      // Step 1: workspace personnel.
+      const personRes = await fetch('/api/personnel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email, role: inlineRole }),
+      });
+      const personBody = (await personRes.json().catch(() => null)) as
+        | { id?: string; error?: string }
+        | null;
+      if (!personRes.ok || !personBody?.id) {
+        setCreateError(personBody?.error ?? 'Could not create personnel.');
+        return;
+      }
+
+      // Step 2: tour_personnel assignment with defaults.
+      const assignRes = await fetch(`/api/tours/${tourId}/personnel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          person_id: personBody.id,
+          role: inlineRole,
+          starts_on: tourStartDate ?? null,
+          ends_on: tourEndDate ?? null,
+          status: 'confirmed',
+          rate_amount: null,
+          rate_currency: null,
+          rate_period: null,
+        }),
+      });
+      if (!assignRes.ok) {
+        const assignBody = (await assignRes.json().catch(() => null)) as
+          | { error?: string }
+          | null;
+        // Workspace person row was created — surface that so
+        // the operator knows where to find them.
+        setCreateError(
+          `${name} was added to the workspace but couldn't be assigned to this tour: ${
+            assignBody?.error ?? `${assignRes.status}`
+          }. Open Personnel from the side panel to assign manually.`,
+        );
+        return;
+      }
+      showToast(`${name} created and added to tour.`);
+      onAdded();
+      onClose();
+    } catch (err) {
+      setCreateError(err instanceof Error ? err.message : 'Network error');
+    } finally {
+      setCreating(false);
+    }
+  }
 
   async function handleAdd() {
     if (!picked) return;
@@ -307,14 +417,253 @@ export function AddPersonnelSlideOver({
               )}
             </div>
 
-            {/* Library escape-hatch */}
+            {/* Sprint 9 §11.2 — inline create-new-person panel.
+                The collapsed state shows the prompt + button;
+                the expanded state shows a tiny form (name +
+                email + role) with submit/cancel. The Personnel
+                library escape-hatch link stays as a secondary
+                fallback for operators who want the full editor. */}
+            <div
+              style={{
+                padding: 'var(--lp-space-3)',
+                background: 'var(--lp-panel)',
+                border: '1px solid var(--lp-border-subtle)',
+                borderRadius: 'var(--lp-radius-md)',
+              }}
+            >
+              {!createOpen ? (
+                <div className="flex items-center justify-between" style={{ gap: 'var(--lp-space-2)' }}>
+                  <div
+                    style={{
+                      fontSize: 'var(--lp-text-sm)',
+                      color: 'var(--lp-text-secondary)',
+                    }}
+                  >
+                    Person not in this workspace?
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setCreateOpen(true)}
+                    className="btn-transition inline-flex items-center"
+                    style={{
+                      gap: 4,
+                      padding: 'var(--lp-space-1) var(--lp-space-3)',
+                      fontSize: 'var(--lp-text-sm)',
+                      fontWeight: 'var(--lp-weight-semibold)',
+                      color: 'var(--color-lp-orange)',
+                      background: 'transparent',
+                      border: '1px solid color-mix(in srgb, var(--color-lp-orange) 35%, transparent)',
+                      borderRadius: 'var(--lp-radius-md)',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    <Plus size={12} strokeWidth={2.4} />
+                    Create new person
+                  </button>
+                </div>
+              ) : (
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 'var(--lp-space-3)',
+                  }}
+                >
+                  <div className="inline-flex items-center" style={{ gap: 6 }}>
+                    <UserPlus size={14} strokeWidth={2.4} style={{ color: 'var(--color-lp-orange)' }} />
+                    <span
+                      style={{
+                        fontSize: 'var(--lp-text-sm)',
+                        fontWeight: 'var(--lp-weight-semibold)',
+                        color: 'var(--lp-text)',
+                      }}
+                    >
+                      Create new person
+                    </span>
+                  </div>
+                  <div>
+                    <label
+                      htmlFor="lp-add-personnel-create-name"
+                      className="lp-label-caps"
+                      style={{
+                        display: 'block',
+                        marginBottom: 'var(--lp-space-1)',
+                        fontSize: 'var(--lp-text-2xs)',
+                        color: 'var(--lp-text-secondary)',
+                      }}
+                    >
+                      Name
+                    </label>
+                    <input
+                      id="lp-add-personnel-create-name"
+                      type="text"
+                      value={createName}
+                      onChange={(e) => setCreateName(e.target.value)}
+                      placeholder="Full name"
+                      style={{
+                        width: '100%',
+                        padding: 'var(--lp-space-2) var(--lp-space-3)',
+                        fontSize: 'var(--lp-text-sm)',
+                        color: 'var(--lp-text)',
+                        background: 'var(--lp-bg)',
+                        border: '1px solid var(--lp-border-strong)',
+                        borderRadius: 'var(--lp-radius-md)',
+                        outline: 'none',
+                      }}
+                    />
+                  </div>
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: '1fr 1fr',
+                      gap: 'var(--lp-space-2)',
+                    }}
+                  >
+                    <div>
+                      <label
+                        htmlFor="lp-add-personnel-create-email"
+                        className="lp-label-caps"
+                        style={{
+                          display: 'block',
+                          marginBottom: 'var(--lp-space-1)',
+                          fontSize: 'var(--lp-text-2xs)',
+                          color: 'var(--lp-text-secondary)',
+                        }}
+                      >
+                        Email (optional)
+                      </label>
+                      <input
+                        id="lp-add-personnel-create-email"
+                        type="email"
+                        value={createEmail}
+                        onChange={(e) => setCreateEmail(e.target.value)}
+                        placeholder="name@example.com"
+                        style={{
+                          width: '100%',
+                          padding: 'var(--lp-space-2) var(--lp-space-3)',
+                          fontSize: 'var(--lp-text-sm)',
+                          color: 'var(--lp-text)',
+                          background: 'var(--lp-bg)',
+                          border: '1px solid var(--lp-border-strong)',
+                          borderRadius: 'var(--lp-radius-md)',
+                          outline: 'none',
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <label
+                        htmlFor="lp-add-personnel-create-role"
+                        className="lp-label-caps"
+                        style={{
+                          display: 'block',
+                          marginBottom: 'var(--lp-space-1)',
+                          fontSize: 'var(--lp-text-2xs)',
+                          color: 'var(--lp-text-secondary)',
+                        }}
+                      >
+                        Role on tour
+                      </label>
+                      <input
+                        id="lp-add-personnel-create-role"
+                        type="text"
+                        value={createRole}
+                        onChange={(e) => setCreateRole(e.target.value)}
+                        placeholder="e.g. Crew"
+                        style={{
+                          width: '100%',
+                          padding: 'var(--lp-space-2) var(--lp-space-3)',
+                          fontSize: 'var(--lp-text-sm)',
+                          color: 'var(--lp-text)',
+                          background: 'var(--lp-bg)',
+                          border: '1px solid var(--lp-border-strong)',
+                          borderRadius: 'var(--lp-radius-md)',
+                          outline: 'none',
+                        }}
+                      />
+                    </div>
+                  </div>
+                  <p
+                    style={{
+                      margin: 0,
+                      fontSize: 'var(--lp-text-xs)',
+                      color: 'var(--lp-text-tertiary)',
+                    }}
+                  >
+                    {tourStartDate && tourEndDate
+                      ? `Will be assigned for the full tour window (${tourStartDate} → ${tourEndDate}) with status “Confirmed”. Edit later from the manage panel.`
+                      : 'Will be assigned with status “Confirmed”. Edit dates + rate later from the manage panel.'}
+                  </p>
+                  {createError ? (
+                    <div
+                      role="alert"
+                      style={{
+                        padding: 'var(--lp-space-2) var(--lp-space-3)',
+                        fontSize: 'var(--lp-text-sm)',
+                        color: 'var(--color-lp-error)',
+                        background: 'color-mix(in srgb, var(--color-lp-error) 8%, transparent)',
+                        border: '1px solid color-mix(in srgb, var(--color-lp-error) 25%, transparent)',
+                        borderRadius: 'var(--lp-radius-md)',
+                      }}
+                    >
+                      {createError}
+                    </div>
+                  ) : null}
+                  <div className="flex justify-end" style={{ gap: 'var(--lp-space-2)' }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCreateOpen(false);
+                        setCreateError(null);
+                      }}
+                      disabled={creating}
+                      className="btn-transition"
+                      style={{
+                        padding: 'var(--lp-space-1) var(--lp-space-3)',
+                        fontSize: 'var(--lp-text-sm)',
+                        color: 'var(--lp-text-secondary)',
+                        background: 'transparent',
+                        border: '1px solid var(--lp-border-strong)',
+                        borderRadius: 'var(--lp-radius-md)',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleCreateAndAssign()}
+                      disabled={creating}
+                      className="btn-transition btn-primary-press inline-flex items-center"
+                      style={{
+                        gap: 6,
+                        padding: 'var(--lp-space-1) var(--lp-space-3)',
+                        fontSize: 'var(--lp-text-sm)',
+                        fontWeight: 'var(--lp-weight-semibold)',
+                        color: 'var(--lp-text-inverse)',
+                        background: 'var(--color-lp-orange)',
+                        border: '1px solid transparent',
+                        borderRadius: 'var(--lp-radius-md)',
+                        cursor: creating ? 'not-allowed' : 'pointer',
+                        opacity: creating ? 0.7 : 1,
+                      }}
+                    >
+                      {creating ? <Loader2 size={14} className="animate-spin" /> : null}
+                      Create &amp; assign
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Library escape-hatch — secondary fallback for the
+                full editor (passport, files, etc.). */}
             <div
               style={{
                 fontSize: 'var(--lp-text-xs)',
                 color: 'var(--lp-text-tertiary)',
               }}
             >
-              Person not in this workspace?{' '}
+              Need to fill in passport / files / pay rates first?{' '}
               <a
                 href="/personnel"
                 target="_blank"
@@ -326,7 +675,7 @@ export function AddPersonnelSlideOver({
                   textDecoration: 'underline',
                 }}
               >
-                Add them in Personnel library
+                Open Personnel library
                 <ExternalLink size={10} strokeWidth={2.4} />
               </a>
             </div>

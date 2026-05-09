@@ -166,6 +166,14 @@ export function SlideOver({
       ? 'translateX(0)'
       : 'translateX(100%)';
 
+  /* Sprint 9 §12.1 — opacity rides alongside the existing
+     transform animation so the panel fades in/out as it
+     slides. Spec asked for both transform and opacity at the
+     primitive level so every consumer (Manage personnel,
+     Add personnel, Edit tour, etc.) inherits the polish for
+     free. The transitionEnd handler that fires `finishExit`
+     keys on `transform` so adding opacity to the transition
+     list doesn't double-fire it. */
   const basePanel: React.CSSProperties = {
     zIndex: 'var(--lp-z-slide-over)',
     background: 'var(--lp-surface)',
@@ -174,7 +182,8 @@ export function SlideOver({
     flexDirection: 'column',
     overflow: 'hidden',
     transform: panelTransform,
-    transition: `transform var(--lp-duration-slower) var(--lp-ease-emphasized)`,
+    opacity: animateIn ? 1 : 0,
+    transition: `transform var(--lp-duration-slower) var(--lp-ease-emphasized), opacity var(--lp-duration-slower) var(--lp-ease-emphasized)`,
   };
 
   const panelStyle: React.CSSProperties = isMobile
