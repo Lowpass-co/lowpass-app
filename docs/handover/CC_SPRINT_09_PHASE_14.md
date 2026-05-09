@@ -258,16 +258,28 @@ These are real items — Adam wants them, but they're too big for a Sprint 9 wra
 ### Sprint 10 §2 — Personnel grid like Bug Reports + comprehensive profile
 
 - Grid matches Bug Reports chrome exactly: row hover state, status badges, density, filtering UX.
+- **Compact list pattern (Adam's reference screenshot)** — name + role on two lines next to a small headshot+status-dot avatar. Group badges (ADMIN / ARTIST / BAND / CREW) with distinct colours. Tighter row height than current.
 - Each row shows a small headshot profile photo (not just initials).
-- Each row shows group tags (Crew / Band / Admin / Mgr) as chips.
+- Each row shows group tags (Crew / Band / Admin / Mgr) as colour-coded chips.
+- **Swap "Tours" column for "Phone number"** — phone is more useful at a glance.
+- **Drop the redundant "Profile incomplete" status pill** — the completeness ring next to it shows the same info. Keep only the ring + a "Connected" / "Disconnected" sync state pill (matches the green-dot-by-avatar pattern in Adam's reference).
 - Fix overlap between "last toured" and email columns at narrow viewports.
 - Remove "Daysheets-style" labels from copy app-wide — branding should be Lowpass-native.
 - Replace form-style legacy passport with v2 multi-of-each as the only path. Add fields: description, birthplace, nationality, blank pages count, etc. (full passport schema).
+- **Optional fields = add-as-needed** — basic info (name, email, phone, role) is the default profile. Other fields (passport, visa, freq flier, dietary, merch, emergency contact, etc.) appear only when added via `[+ Add X]`. Empty optional sections don't render.
+- **Personnel survey/intake form generator** — admin can generate a public-shareable form link for any personnel record. Form lets the person fill in their own info (passport, contact, dietary, merch sizes, etc.). Submission writes back to that personnel record. Replaces the current Google Forms workflow (`https://docs.google.com/forms/d/e/1FAIpQLScDzlWGwEjr-Bx9dGHfJDVF1BloZFVyFyk1BzhezW4s3NOzLQ/viewform`). Token-gated, single-use or time-bounded.
 
 ### Sprint 10 §3 — Stripe billing + workspace creation UI
 
 - "+ Create workspace" entry point (currently hidden v1).
 - Stripe billing integration for workspace owners.
+
+### Sprint 10 §3a — Auto-save semantics with cancel-revert
+
+- Personnel detail slide-over (and any other multi-field edit surface) should auto-save changes on field blur or after a debounce, NOT require explicit Save.
+- `[Cancel]` button reverts ALL changes made during the session, including auto-saved ones — capture the original state on slide-over open, restore on cancel.
+- Pattern applies to: PersonnelDetailSlideOver, EditTourSlideOver, MemberManageSlideOver, anywhere else a multi-field edit form lives.
+- Save indicator (small "Saved 2s ago" type label) replaces the explicit Save button or sits alongside as a status.
 
 ### Sprint 10 §4 — Email/SMS notification dispatcher
 
