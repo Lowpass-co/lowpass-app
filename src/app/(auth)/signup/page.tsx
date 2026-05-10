@@ -8,14 +8,34 @@
 
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase-client';
 import { LowpassLogo } from '@/components/common/LowpassLogo';
 import { cn } from '@/lib/utils';
 
+/* Sprint 10 §5.1 — open-redirect guard mirrors the login
+   page's safeNextPath (Sprint 9 §14.3). */
+function safeNextPath(raw: string | null): string | null {
+  if (!raw) return null;
+  if (!raw.startsWith('/')) return null;
+  if (raw.startsWith('//')) return null;
+  return raw;
+}
+
 export default function SignupPage() {
+  return (
+    <Suspense fallback={null}>
+      <SignupPageInner />
+    </Suspense>
+  );
+}
+
+function SignupPageInner() {
   const supabase = createClient();
+  const searchParams = useSearchParams();
+  const nextPath = safeNextPath(searchParams?.get('next') ?? null);
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -28,6 +48,13 @@ export default function SignupPage() {
     setLoading(true);
     setError(null);
 
+    /* Sprint 10 §5.1 — thread `next` through the email-
+       confirmation callback so post-confirm redirect lands on
+       the deep-link (e.g. /invite/accept?token=...). */
+    const callbackParams = new URLSearchParams();
+    if (nextPath) callbackParams.set('next', nextPath);
+    const callbackUrl = `${window.location.origin}/auth/callback${callbackParams.toString() ? `?${callbackParams.toString()}` : ''}`;
+
     const { error } = await supabase.auth.signUp({
       email,
       password,
@@ -35,7 +62,7 @@ export default function SignupPage() {
         data: {
           name,
         },
-        emailRedirectTo: `${window.location.origin}/auth/callback`,
+        emailRedirectTo: callbackUrl,
       },
     });
 

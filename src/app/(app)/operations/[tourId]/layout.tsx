@@ -24,8 +24,34 @@ import { notFound } from 'next/navigation';
 import { ProductShell } from '@/components/shell-v2';
 import { TourHeader } from '@/components/shell-v2/TourHeader';
 import { TourVisitTracker } from '@/components/shell-v2/TourVisitTracker';
+import { OperationsSubNavClient } from '@/components/operations/OperationsSubNavClient';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { resolveArtistLogoUrl } from '@/lib/artists/imageUrl';
+import {
+  canAccess,
+  fetchActiveGrants,
+  getActiveMembership,
+} from '@/lib/permissions/server';
+
+/* Sprint 9 §14.11 — single source of truth for the Operations
+   sub-nav links. Mirrors the per-page SUB_NAV constant the
+   summary / personnel / routing pages used to declare locally;
+   hoisting here means placeholder pages get the sub-nav for
+   free + the active highlight follows pathname. */
+const SUB_NAV: ReadonlyArray<{
+  id: string;
+  label: string;
+  slug: string;
+  resource_id: string;
+}> = [
+  { id: 'personnel', label: 'Tour Personnel', slug: 'personnel', resource_id: 'operations.personnel' },
+  { id: 'routing', label: 'Routing', slug: 'routing', resource_id: 'operations.routing' },
+  { id: 'channel-list', label: 'Channel list', slug: 'channel-list', resource_id: 'operations.channel_list' },
+  { id: 'payroll', label: 'Payroll', slug: 'payroll', resource_id: 'operations.payroll' },
+  { id: 'rooming', label: 'Rooming', slug: 'rooming', resource_id: 'operations.rooming' },
+  { id: 'files', label: 'Files', slug: 'files', resource_id: 'operations.files' },
+  { id: 'riders', label: 'Riders', slug: 'riders', resource_id: 'operations.riders' },
+];
 
 export default async function OperationsTourLayout({
   children,
@@ -36,6 +62,10 @@ export default async function OperationsTourLayout({
 }) {
   const { tourId } = await params;
   const supabase = await createServerSupabaseClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   const { data: tour } = await supabase
     .from('tours')
@@ -90,6 +120,33 @@ export default async function OperationsTourLayout({
     (tourRow.crew_count ?? 0) +
     (tourRow.principal_count ?? 0);
 
+  /* Sprint 9 §14.11 — build sub-nav links once at the layout
+     level. Summary entry leads, then each sub-page link gated
+     by per-resource read access. Layout fetches membership +
+     grants now (was per-page); the page-level constructions
+     can drop their own SUB_NAV mounts but leaving them in
+     place is harmless — the layout's instance is the
+     persistent one and renders identical chrome regardless. */
+  const membership = user ? await getActiveMembership(supabase, user.id) : null;
+  const grants = membership && user ? await fetchActiveGrants(supabase, membership, user.id) : [];
+  const subNavLinks = [
+    {
+      id: 'summary',
+      label: 'Summary',
+      slug: '',
+      href: `/operations/${tourId}`,
+      visible: true,
+    },
+    ...SUB_NAV.map((s) => ({
+      id: s.id,
+      label: s.label,
+      slug: s.slug,
+      visible: membership
+        ? canAccess(membership, grants, 'page', s.resource_id, 'read')
+        : false,
+    })),
+  ];
+
   return (
     <ProductShell
       active="operations"
@@ -117,6 +174,7 @@ export default async function OperationsTourLayout({
           }}
         />
       ) : null}
+      <OperationsSubNavClient tourId={tourId} links={subNavLinks} />
       <TourVisitTracker tourId={tourId} />
       {children}
     </ProductShell>

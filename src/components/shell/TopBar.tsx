@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { AccountAvatar } from '@/components/shell/AccountAvatar';
 import { DarkModeToggle } from '@/components/layout/DarkModeToggle';
+import { WorkspaceSwitcher } from '@/components/shell-v2/WorkspaceSwitcher';
 
 type NavItem = {
   label: string;
@@ -25,12 +26,21 @@ type NavItem = {
   activeMatch: (pathname: string) => boolean;
 };
 
-/** Workspace-level destinations — top-level on desktop, fold into Library on narrow viewports. */
+/** Sprint 9 §7.4 — workspace-level destinations rebuilt for the
+ *  modernised TopBar. "Dashboard" was removed (Product Split moved
+ *  Home to /artists/[id]); "Home" now points at /artists. Calendar
+ *  link only renders if the route exists (currently false in this
+ *  branch — kept in the array but hidden via the `available` flag
+ *  consumed by the renderer). Personnel / Equipment continue to
+ *  link to existing workspace surfaces. Settings is exposed
+ *  explicitly so users have a top-level entry point. */
 const WORKSPACE_NAV: NavItem[] = [
-  { label: 'Dashboard', href: '/dashboard', activeMatch: (p) => p === '/dashboard' || p === '/' },
+  { label: 'Home', href: '/artists', activeMatch: (p) => p === '/' || p.startsWith('/artists') },
   { label: 'Personnel', href: '/personnel', activeMatch: (p) => p.startsWith('/personnel') },
-  { label: 'Calendar', href: '/calendar', activeMatch: (p) => p.startsWith('/calendar') },
   { label: 'Equipment', href: '/equipment', activeMatch: (p) => p.startsWith('/equipment') },
+  // Calendar: route doesn't exist yet. Excluded from the array
+  // until it does — don't ship dead links.
+  { label: 'Settings', href: '/settings', activeMatch: (p) => p.startsWith('/settings') },
 ];
 
 /** Library dropdown — Phase 1 §D retires this. Contents migrate per
@@ -459,25 +469,44 @@ export function TopBar({
   };
 
   /**
+   * Sprint 9 §13.A.4 — site admins get an extra "Admin" entry
+   * appended to the workspace nav. Pathname /admin → active.
+   * Only rendered when isSiteAdmin is true; non-admins never
+   * see the link (defense in depth — the /admin layout 403s
+   * non-admins anyway).
+   */
+  const navItemsWithAdmin = useMemo<NavItem[]>(() => {
+    if (!isSiteAdmin) return navItems;
+    return [
+      ...navItems,
+      {
+        label: 'Admin',
+        href: '/admin',
+        activeMatch: (p) => p === '/admin' || p.startsWith('/admin/'),
+      },
+    ];
+  }, [navItems, isSiteAdmin]);
+
+  /**
    * Top-level workspace items shown directly on the bar.
    * - Desktop (≥1024): all four (Dashboard / Personnel / Calendar / Equipment)
    * - Mid (640–1023): Dashboard + Personnel only (Calendar + Equipment fold into Library)
    * - Mobile (<640): none (everything goes into Library)
    */
   const topLevelItems = useMemo<NavItem[]>(() => {
-    if (viewportW === undefined) return navItems;
+    if (viewportW === undefined) return navItemsWithAdmin;
     if (isMobile) return [];
-    if (isCompact) return navItems.slice(0, 2);
-    return navItems;
-  }, [navItems, viewportW, isMobile, isCompact]);
+    if (isCompact) return navItemsWithAdmin.slice(0, 2);
+    return navItemsWithAdmin;
+  }, [navItemsWithAdmin, viewportW, isMobile, isCompact]);
 
   /** Workspace items to fold INTO the Library dropdown (above a divider). */
   const foldedWorkspaceItems = useMemo<NavItem[]>(() => {
     if (viewportW === undefined) return [];
-    if (isMobile) return navItems;
-    if (isCompact) return navItems.slice(2);
+    if (isMobile) return navItemsWithAdmin;
+    if (isCompact) return navItemsWithAdmin.slice(2);
     return [];
-  }, [navItems, viewportW, isMobile, isCompact]);
+  }, [navItemsWithAdmin, viewportW, isMobile, isCompact]);
 
   /** Library button is active when pathname matches any of its dropdown items. */
   const libraryActive = useMemo(() => {
@@ -691,6 +720,23 @@ export function TopBar({
             <Link href={logoHref} className="shrink-0" aria-label="Home">
               <Image src="/lowpass-logo.png" alt="Lowpass" width={64} height={50} className="h-9 w-auto" />
             </Link>
+            {/* Sprint 9 §13.A.2 — workspace switcher inline in
+                the TopBar (the AppShell-level slot it used to
+                share with the artist/tour switcher was removed
+                to kill the duplicate-bar). Shell-v1 routes
+                (/personnel, /settings, /admin, /equipment) are
+                workspace-scoped so they don't carry the artist/
+                tour switcher; only the workspace switcher lands
+                here. */}
+            <WorkspaceSwitcher />
+            <span
+              aria-hidden
+              style={{
+                width: 1,
+                height: 20,
+                background: 'var(--lp-border-subtle)',
+              }}
+            />
             <div className="relative" ref={tourRef}>
               <button
                 type="button"
@@ -736,31 +782,32 @@ export function TopBar({
                   <Link
                     key={item.href}
                     href={item.href}
-                    // No rounded-* on top-level nav links — bottom corners
-                    // stay square so the active 2px orange underline runs
-                    // edge-to-edge instead of tapering. Transparent border
-                    // on inactive items keeps row height stable when an
-                    // item activates.
-                    className="btn-transition px-3 py-2 text-sm font-medium"
+                    /* Sprint 9 §7.4 — visual style aligned with
+                       OperationsSubNav: orange text + 2px underline
+                       when active, secondary text otherwise, hover
+                       to var(--lp-text). No background tint —
+                       sub-nav style is underline only. */
+                    className="btn-transition px-3 py-2 text-sm"
                     style={{
-                      color: active ? 'var(--lp-text)' : 'var(--lp-text-secondary)',
+                      color: active
+                        ? 'var(--color-lp-orange)'
+                        : 'var(--lp-text-secondary)',
+                      fontWeight: active
+                        ? 'var(--lp-weight-semibold)'
+                        : 'var(--lp-weight-medium)',
                       borderBottom: active
                         ? '2px solid var(--color-lp-orange)'
                         : '2px solid transparent',
-                      background: active
-                        ? 'color-mix(in srgb, var(--color-lp-orange) 6%, transparent)'
-                        : 'transparent',
+                      background: 'transparent',
                     }}
                     onMouseEnter={(e) => {
                       if (!active) {
                         e.currentTarget.style.color = 'var(--lp-text)';
-                        e.currentTarget.style.background = 'var(--lp-surface-hover)';
                       }
                     }}
                     onMouseLeave={(e) => {
                       if (!active) {
                         e.currentTarget.style.color = 'var(--lp-text-secondary)';
-                        e.currentTarget.style.background = 'transparent';
                       }
                     }}
                   >
@@ -800,6 +847,28 @@ export function TopBar({
                 ⌘K
               </kbd>
             </button>
+            {/* Sprint 9 §13.A.3 — ADMIN pill is now a sibling
+                element between the Search trigger and the user
+                pill, not nested inside the user button. Per Q2:
+                "outside the user-pill button, on its left." */}
+            {isSiteAdmin ? (
+              <span
+                className="lp-label-caps"
+                title="You have site admin access — visible across all workspaces"
+                style={{
+                  flexShrink: 0,
+                  padding: '2px 8px',
+                  fontSize: 'var(--lp-text-2xs)',
+                  fontWeight: 'var(--lp-weight-semibold)',
+                  color: 'var(--lp-text)',
+                  background: 'var(--lp-bg-tertiary)',
+                  border: '1px solid var(--lp-border-subtle)',
+                  borderRadius: 999,
+                }}
+              >
+                Admin
+              </span>
+            ) : null}
             <div className="relative" ref={accountRef}>
               <button
                 type="button"

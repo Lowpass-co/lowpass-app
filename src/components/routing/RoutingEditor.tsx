@@ -16,6 +16,8 @@ import { StyledSelect } from '@/components/ui/StyledSelect';
 import { RoutingGrid, type RoutingRow } from './RoutingGrid';
 import { RoutingCalendar } from './RoutingCalendar';
 import type { PrimaryTransit } from './RoutingMap';
+import { useRealtimeRows } from '@/lib/realtime/useRealtimeRows';
+import { RealtimeIndicator } from '@/components/realtime/RealtimeIndicator';
 
 const RoutingMap = dynamic(() => import('./RoutingMap').then((m) => m.RoutingMap), { ssr: false });
 
@@ -123,11 +125,18 @@ export function RoutingEditor({
   startDate,
   endDate,
   initialCustomDayTypes = [],
+  readOnly = false,
 }: {
   tourId: string;
   startDate: string;
   endDate: string;
   initialCustomDayTypes?: string[];
+  /** Sprint 9 §5 — when true, suppresses the Save button and
+   *  blocks updateRow + addCustomDayType writes. Used by the
+   *  Operations Routing page when the caller has read but not
+   *  write permission for operations.routing. Realtime sync +
+   *  view toggle still work. */
+  readOnly?: boolean;
 }) {
   const [rows, setRows] = useState<RoutingRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -154,6 +163,7 @@ export function RoutingEditor({
 
   const handleAddCustomDayType = useCallback(
     async (newType: string) => {
+      if (readOnly) return;
       setCustomDayTypes((prev) => {
         const next = prev.includes(newType) ? prev : [...prev, newType];
         fetch(`/api/tours/${tourId}`, {
@@ -164,10 +174,11 @@ export function RoutingEditor({
         return next;
       });
     },
-    [tourId]
+    [tourId, readOnly]
   );
 
   const updateRow = useCallback((index: number, updates: Partial<RoutingRow>) => {
+    if (readOnly) return;
     hasUserEditedRef.current = true;
     setSaveError(null);
     setRows((prev) => {
@@ -190,7 +201,7 @@ export function RoutingEditor({
       }
       return prev.map((r, i) => (i === index ? merged : r));
     });
-  }, []);
+  }, [readOnly]);
 
   useEffect(() => {
     if (view !== 'grid' || !selectedDate || !gridWrapperRef.current) return;
@@ -199,17 +210,38 @@ export function RoutingEditor({
     setSelectedDate(null);
   }, [view, selectedDate]);
 
-  useEffect(() => {
-    hasUserEditedRef.current = false;
-    fetch(`/api/tours/${tourId}/routing`)
+  /* Sprint 9 §4 — refetch routing rows from the server. Used
+     by the initial-load effect and by the realtime hook below
+     when a collaborator's INSERT/UPDATE/DELETE arrives. */
+  const refetchRouting = useCallback(() => {
+    return fetch(`/api/tours/${tourId}/routing`)
       .then((res) => res.json())
       .then((data) => {
         const list = Array.isArray(data) ? data : [];
         setRows(buildInitialRows(startDate, endDate, list));
       })
-      .catch(() => setRows(buildInitialRows(startDate, endDate, [])))
-      .finally(() => setLoading(false));
+      .catch(() => setRows(buildInitialRows(startDate, endDate, [])));
   }, [tourId, startDate, endDate]);
+
+  useEffect(() => {
+    hasUserEditedRef.current = false;
+    void refetchRouting().finally(() => setLoading(false));
+  }, [refetchRouting]);
+
+  /* Sprint 9 §4 — realtime sync. When a collaborator edits a
+     routing row for this tour in another tab/device, refetch.
+     Suppresses the refetch if the local user is mid-edit
+     (hasUserEditedRef) so we don't clobber unsaved keystrokes;
+     they re-sync on the next event after Save flushes. */
+  const { connected: realtimeConnected } = useRealtimeRows({
+    table: 'routing',
+    filterColumn: 'tour_id',
+    filterValue: tourId,
+    onChange: () => {
+      if (hasUserEditedRef.current) return;
+      void refetchRouting();
+    },
+  });
 
   useEffect(() => {
     fetch(`/api/tours/${tourId}/advance`)
@@ -283,26 +315,33 @@ export function RoutingEditor({
         />
       )}
       <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex rounded-lg border border-lp-border p-1">
-          {[
-            { mode: 'grid' as ViewMode, label: 'Grid', icon: LayoutGrid },
-            { mode: 'calendar' as ViewMode, label: 'Calendar', icon: Calendar },
-            { mode: 'map' as ViewMode, label: 'Map', icon: MapPin },
-          ].map(({ mode, label, icon: Icon }) => (
-            <button
-              key={mode}
-              type="button"
-              onClick={() => setView(mode)}
-              className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                view === mode
-                  ? 'bg-lp-orange text-white'
-                  : 'text-lp-text-secondary hover:text-lp-text hover:bg-lp-surface-hover'
-              }`}
-            >
-              <Icon size={16} />
-              {label}
-            </button>
-          ))}
+        <div className="flex items-center gap-3">
+          <div className="flex rounded-lg border border-lp-border p-1">
+            {[
+              { mode: 'grid' as ViewMode, label: 'Grid', icon: LayoutGrid },
+              { mode: 'calendar' as ViewMode, label: 'Calendar', icon: Calendar },
+              { mode: 'map' as ViewMode, label: 'Map', icon: MapPin },
+            ].map(({ mode, label, icon: Icon }) => (
+              <button
+                key={mode}
+                type="button"
+                onClick={() => setView(mode)}
+                className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                  view === mode
+                    ? 'bg-lp-orange text-white'
+                    : 'text-lp-text-secondary hover:text-lp-text hover:bg-lp-surface-hover'
+                }`}
+              >
+                <Icon size={16} />
+                {label}
+              </button>
+            ))}
+          </div>
+          {/* Sprint 9 §4 — Realtime "Live" indicator. Surfaces
+              the Supabase Realtime channel state so collaborators
+              know if cross-device sync is wired up. Edits keep
+              working offline; this is informational only. */}
+          <RealtimeIndicator connected={realtimeConnected} />
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -326,7 +365,7 @@ export function RoutingEditor({
             <Download size={16} />
             iCal feed
           </button>
-          {(view === 'grid' || view === 'calendar') && (
+          {!readOnly && (view === 'grid' || view === 'calendar') && (
             <button
               type="button"
               onClick={handleSave}
@@ -343,6 +382,22 @@ export function RoutingEditor({
               )}
             </button>
           )}
+          {readOnly ? (
+            <span
+              className="lp-label-caps"
+              style={{
+                padding: '6px 10px',
+                fontSize: 'var(--lp-text-2xs)',
+                color: 'var(--lp-text-tertiary)',
+                background: 'var(--lp-panel)',
+                border: '1px solid var(--lp-border-subtle)',
+                borderRadius: 'var(--lp-radius-md)',
+              }}
+              title="You have read-only access to routing in this workspace."
+            >
+              Read-only
+            </span>
+          ) : null}
         </div>
       </div>
 

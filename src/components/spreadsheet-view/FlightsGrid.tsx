@@ -142,7 +142,12 @@ function AirportSearchCell({
                   onClick={() => {
                     setLoading(true);
                     fetch(
-                      `/api/places/details?placeId=${encodeURIComponent(s.placeId)}`
+                      // Airport autocomplete only returns airport
+                      // place IDs, so opting in to iataCode here is
+                      // safe. Venue picker uses the default mask
+                      // (no iataCode) to avoid the 400 INVALID_ARGUMENT
+                      // for non-airport place types.
+                      `/api/places/details?placeId=${encodeURIComponent(s.placeId)}&includeIata=1`
                     )
                       .then((r) => (r.ok ? r.json() : null))
                       .then((d: { iataCode?: string; displayName?: string } | null) => {

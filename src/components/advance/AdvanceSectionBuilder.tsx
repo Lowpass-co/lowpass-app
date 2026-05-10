@@ -78,6 +78,7 @@ import { ContextMenu } from '@/components/ui/ContextMenu';
 import { DeleteConfirmationModal } from '@/components/ui/DeleteConfirmationModal';
 import { BrandedSelect } from '@/components/ui/BrandedSelect';
 import { useAuth } from '@/hooks/useAuth';
+import { AddPlatformFieldModal } from './AddPlatformFieldModal';
 
 function relativeTime(iso: string): string {
   const d = new Date(iso);
@@ -766,6 +767,14 @@ function SetupMode({
   const [customSectionOpen, setCustomSectionOpen] = useState(false);
   const [customFieldOpen, setCustomFieldOpen] = useState(false);
   const [customFieldContext, setCustomFieldContext] = useState<{ templateId: string; templateName: string } | 'standalone' | null>(null);
+  /* Sprint 8.6 §6 — "+ Add custom field" pinned at the bottom
+     of every section card forks the section's platform template
+     into a workspace-scoped copy. Setting this state opens the
+     <AddPlatformFieldModal>; null when the modal is closed. */
+  const [platformFieldTarget, setPlatformFieldTarget] = useState<{
+    templateId: string;
+    sectionName: string;
+  } | null>(null);
   const [templateToDelete, setTemplateToDelete] = useState<ApiTemplate | null>(null);
   const [deletingTemplate, setDeletingTemplate] = useState(false);
   const [fieldToDeleteFromLibrary, setFieldToDeleteFromLibrary] = useState<{ template: ApiTemplate; field: FieldDef } | null>(null);
@@ -803,11 +812,111 @@ function SetupMode({
         if (cancelled) return;
         const list = (j.templates ?? []) as { id: string; name: string; sections: SectionDef[] }[];
         const t = list.find((x) => x.id === defaultAdvanceTemplateId);
-        if (t?.sections?.length) setSections(t.sections.map((s, i) => ({ ...s, order: i })));
+        if (t?.sections?.length) {
+          const seeded = t.sections.map((s, i) => ({ ...s, order: i }));
+          setSections(seeded);
+          // Sprint 8.5 §6c — update the autosave baseline so this
+          // server-driven seed doesn't trigger a redundant POST.
+          lastSavedSectionsRef.current = JSON.stringify(seeded);
+        }
       })
       .catch(() => {});
     return () => { cancelled = true; };
   }, [defaultAdvanceTemplateId, currentSections.length]);
+
+  /* ============================================
+     Sprint 8.5 §6c — sections autosave.
+
+     Adam's smoke against Sprint 8.4: "drag-reorder doesn't
+     persist." Root cause: the `sections` array is only saved
+     by the manual Save Layout button; setSections updates
+     local state but no PATCH/POST fires. The data autosave
+     (flushPatch) PATCHes /api/tours/[id]/advance/[routingId]
+     but its body schema doesn't accept `sections`.
+
+     Fix: 800ms debounced POST to /api/tours/[id]/advance
+     whenever sections changes vs the last-saved baseline.
+     The baseline is initialised to JSON.stringify(currentSections)
+     on mount + updated by the layout-template seed effect above
+     + updated by every successful save. JSON.stringify-based
+     equality keeps the per-call-site dirty tracking out of
+     individual setSections call sites — works for ALL setters
+     (moveSectionOrder, moveFieldOrder, addSectionFromDrop,
+     addField, removeField, etc.) without per-touch
+     instrumentation.
+
+     Manual Save Layout button (line 1011, saveLayout) stays
+     for users who want immediate save / explicit confirmation.
+     Both paths POST the same payload to the same endpoint.
+     ============================================ */
+  const lastSavedSectionsRef = useRef<string>(
+    JSON.stringify(currentSections),
+  );
+
+  useEffect(() => {
+    const current = JSON.stringify(sections);
+    if (current === lastSavedSectionsRef.current) return;
+    // Sprint 8.6 §4 — log every autosave kickoff so Adam can
+    // confirm the effect is firing on drag-reorder. The static
+    // trace can't tell us whether the dirty-detection passes
+    // or the POST fires; this surfaces both.
+    console.log(
+      '[advance-sections autosave] sections changed, scheduling POST in 800ms',
+      {
+        sectionCount: sections.length,
+        firstThreeLabels: sections.slice(0, 3).map((s) => s.label),
+      },
+    );
+    const handle = setTimeout(() => {
+      void (async () => {
+        try {
+          // Sprint 8.6.3 §A — log the POST body's section/field
+          // structure (compact summary, not full JSON to avoid
+          // console noise) so we can verify the autosave is
+          // sending the LATEST field order, not a stale closure.
+          // Distinguishes "POST contained new order" from "POST
+          // contained old order" — root cause for §4 mystery.
+          console.log(
+            '[advance-sections autosave] POSTing /api/tours/.../advance',
+            {
+              tourId,
+              routingId,
+              sectionCount: sections.length,
+              sectionsSummary: sections.map((s) => ({
+                label: s.label,
+                fieldIds: (s.fields ?? []).map((f) => f.id),
+              })),
+            },
+          );
+          const res = await fetch(`/api/tours/${tourId}/advance`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ routing_id: routingId, sections }),
+          });
+          console.log(
+            `[advance-sections autosave] POST response: ${res.status}`,
+          );
+          if (res.ok) {
+            lastSavedSectionsRef.current = current;
+          } else {
+            // Don't reset the baseline on failure — the next
+            // sections change (or no change) will retry.
+            const errBody = await res.text().catch(() => '');
+            console.error(
+              `[advance-sections autosave] POST failed: ${res.status}`,
+              errBody,
+            );
+          }
+        } catch (err) {
+          console.error(
+            '[advance-sections autosave] network error:',
+            err,
+          );
+        }
+      })();
+    }, 800);
+    return () => clearTimeout(handle);
+  }, [sections, tourId, routingId]);
 
   useEffect(() => {
     if (!lastAddedTemplateId) return;
@@ -936,19 +1045,36 @@ function SetupMode({
     return () => window.removeEventListener('advance:field-updated', onFieldUpdated);
   }, [patchFieldById]);
 
-  /** G.3 — add a section by label (from a library card drop) or as a
-   *  blank custom section if seedId === '__blank__' or no label match. */
+  /** G.3 — add a section by id (Sprint 8.5 §6b: AdvanceSectionLibrary
+   *  now passes the template's UUID as seedId) OR by label (legacy
+   *  callers / fallback) OR as a blank custom section if seedId
+   *  is '__blank__' or no template match.
+   *
+   *  Sprint 8.5 §6b — Adam's smoke against 8.4: "adding section
+   *  adds only header (no fields)." Root cause was that the
+   *  hardcoded library labels didn't match the seeded template
+   *  names ("Technical & Power" ≠ "Production"), so the name
+   *  lookup failed and the handler fell through to the empty-
+   *  fields path. Now seedId is a real template UUID; we match
+   *  by ID first for an unambiguous lookup, then by name for any
+   *  legacy caller that still passes a slug. */
   const addSectionFromDrop = useCallback(
     (seedId: string, label: string) => {
       const trimmedLabel = label.trim() || 'Custom Section';
-      // Try to match an existing workspace template by name first.
-      const match = seedId !== '__blank__'
-        ? templates.find(
+      let match: ApiTemplate | undefined;
+      if (seedId !== '__blank__') {
+        // Sprint 8.5 §6b — match by id first (8.5 §6a passes
+        // template UUIDs; the lookup is unambiguous).
+        match = templates.find((t) => t.id === seedId);
+        if (!match) {
+          // Fallback for any legacy caller that passes a name/slug.
+          match = templates.find(
             (t) =>
               (t.name ?? '').trim().toLowerCase() ===
               trimmedLabel.toLowerCase(),
-          )
-        : undefined;
+          );
+        }
+      }
       if (match) {
         addAllFields(match);
         return;
@@ -956,7 +1082,7 @@ function SetupMode({
       // No template match → create a blank section. The seed becomes
       // a new template_id (synthesised) with no fields. Autosave picks
       // it up; user can add fields via the existing in-canvas controls.
-      const syntheticId = `${seedId === '__blank__' ? 'custom' : seedId}_${Date.now().toString(36)}`;
+      const syntheticId = `${seedId === '__blank__' ? 'custom' : 'orphan'}_${Date.now().toString(36)}`;
       setSections((prev) => [
         ...prev,
         {
@@ -984,7 +1110,18 @@ function SetupMode({
   }, [addSectionFromDrop]);
 
   const moveSectionOrder = useCallback((from: number, to: number) => {
-    if (from === to || to < 0 || to > sections.length) return;
+    // Sprint 8.6 §4 — diagnostic log so Adam can confirm the
+    // reorder fires + see from/to values. Static-trace can't
+    // tell whether the drop event is reaching this handler;
+    // the log surfaces the call-site for runtime DevTools.
+    console.log('[advance-builder] moveSectionOrder', { from, to, total: sections.length });
+    if (from === to || to < 0 || to > sections.length) {
+      console.warn('[advance-builder] moveSectionOrder bailed', {
+        from, to, total: sections.length,
+        reason: from === to ? 'same' : to < 0 ? 'negative' : 'out-of-bounds',
+      });
+      return;
+    }
     setSections((prev) => {
       const next = [...prev];
       const [item] = next.splice(from, 1);
@@ -996,12 +1133,47 @@ function SetupMode({
   }, [sections.length]);
 
   const moveFieldOrder = useCallback((sectionIndex: number, from: number, to: number) => {
+    // Sprint 8.6.3 §A — moveFieldOrder instrumentation. Sprint
+    // 8.6 §4 added a log to moveSectionOrder but not here, so the
+    // autosave-200-but-no-reorder symptom couldn't be narrowed to
+    // (a) handler not running, (b) handler ran with bad args,
+    // (c) handler ran correctly but React mis-reconciled. The
+    // logs below resolve all three.
     setSections((prev) => {
       const sec = prev[sectionIndex];
-      if (!sec || from === to) return prev;
+      if (!sec) {
+        console.warn('[advance-builder] moveFieldOrder bailed: section not found', { sectionIndex });
+        return prev;
+      }
+      if (from === to) {
+        console.warn('[advance-builder] moveFieldOrder bailed: from === to', { sectionIndex, from, to });
+        return prev;
+      }
+      const beforeIds = (sec.fields ?? []).map((f) => f.id);
+      // Sprint 8.6.3 §A — duplicate field IDs collide on the
+      // React key={f.id} render path → React reuses the wrong
+      // node and the visual order doesn't change even though the
+      // underlying array did. Surface this so it's diagnosable
+      // instead of silent.
+      const dupeIds = beforeIds.filter((id, i) => beforeIds.indexOf(id) !== i);
+      if (dupeIds.length > 0) {
+        console.error(
+          '[advance-builder] moveFieldOrder: DUPLICATE FIELD IDS in section — React key collisions will prevent visible reorder',
+          { sectionIndex, sectionLabel: sec.label, dupeIds },
+        );
+      }
       const fields = [...(sec.fields ?? [])];
       const [item] = fields.splice(from, 1);
       fields.splice(to, 0, item);
+      const afterIds = fields.map((f) => f.id);
+      console.log('[advance-builder] moveFieldOrder', {
+        sectionIndex,
+        sectionLabel: sec.label,
+        from,
+        to,
+        beforeIds,
+        afterIds,
+      });
       return prev.map((s, i) => (i === sectionIndex ? { ...s, fields } : s));
     });
     setDragState(null);
@@ -1237,7 +1409,7 @@ function SetupMode({
                                 <button
                                   type="button"
                                   draggable
-                                  onDragStart={(e) => { e.dataTransfer.setData('application/json', JSON.stringify({ templateId: t.id, field: f })); e.dataTransfer.effectAllowed = 'copy'; setDragGhost(e, f.label); setDragState({ type: 'field', templateId: t.id, field: f }); }}
+                                  onDragStart={(e) => { e.dataTransfer.setData('application/x-lowpass-library', ''); e.dataTransfer.setData('application/json', JSON.stringify({ templateId: t.id, field: f })); e.dataTransfer.effectAllowed = 'copy'; setDragGhost(e, f.label); setDragState({ type: 'field', templateId: t.id, field: f }); }}
                                   onDragEnd={() => setDragState(null)}
                                   onClick={() => {
                                     if (added) removeFieldByTemplateAndFieldId(t.id, f.id);
@@ -1347,7 +1519,7 @@ function SetupMode({
                                   <button
                                     type="button"
                                     draggable
-                                    onDragStart={(e) => { e.dataTransfer.setData('application/json', JSON.stringify({ templateId: t.id, field: f })); e.dataTransfer.effectAllowed = 'copy'; setDragGhost(e, f.label); setDragState({ type: 'field', templateId: t.id, field: f }); }}
+                                    onDragStart={(e) => { e.dataTransfer.setData('application/x-lowpass-library', ''); e.dataTransfer.setData('application/json', JSON.stringify({ templateId: t.id, field: f })); e.dataTransfer.effectAllowed = 'copy'; setDragGhost(e, f.label); setDragState({ type: 'field', templateId: t.id, field: f }); }}
                                     onDragEnd={() => setDragState(null)}
                                     onClick={() => {
                                       if (added) removeFieldByTemplateAndFieldId(t.id, f.id);
@@ -1410,7 +1582,61 @@ function SetupMode({
             if (!raw) return;
             try {
               const data = JSON.parse(raw);
-              if (data.templateId && data.field) {
+              // Sprint 8.6.3 §B — section drops landing in the
+              // canvas gap (between section cards) used to be
+              // swallowed silently here because the only branch
+              // handled `data.templateId && data.field` (library
+              // drops). The user would see "headers flash, types
+              // nothing" because the dropTarget orange bar showed
+              // during hover and disappeared at release. Now the
+              // canvas onDrop also delegates section moves —
+              // using the last-hovered section card's index from
+              // dropTarget if available, else appending to end.
+              if (data.type === 'section' && typeof data.sectionIndex === 'number') {
+                const targetIdx =
+                  dropTarget && !('fieldIndex' in dropTarget)
+                    ? dropTarget.sectionIndex
+                    : sections.length - 1;
+                console.log('[advance-builder] section drop on canvas', {
+                  from: data.sectionIndex,
+                  to: targetIdx,
+                  via: dropTarget && !('fieldIndex' in dropTarget) ? 'dropTarget' : 'append-fallback',
+                });
+                moveSectionOrder(data.sectionIndex, targetIdx);
+              } else if (data.type === 'field' && typeof data.sectionIndex === 'number' && typeof data.fieldIndex === 'number') {
+                // Sprint 8.6.4 §1 — field drop bubbled to canvas
+                // because the section onDragOver no longer accepts
+                // field drags (gated to type === 'section'). The
+                // user dropped a field on section dead space —
+                // header, gap above first field, "+ Add custom
+                // field" button area, etc. Use the last-hovered
+                // field row from dropTarget for placement; if
+                // none, log + no-op so at least the failure is
+                // visible instead of silent.
+                if (dropTarget && 'fieldIndex' in dropTarget) {
+                  if (dropTarget.sectionIndex === data.sectionIndex) {
+                    console.log('[advance-builder] field drop on canvas — using field dropTarget', {
+                      sectionIndex: dropTarget.sectionIndex,
+                      from: data.fieldIndex,
+                      to: dropTarget.fieldIndex,
+                    });
+                    moveFieldOrder(dropTarget.sectionIndex, data.fieldIndex, dropTarget.fieldIndex);
+                  } else {
+                    // Cross-section field drop. moveFieldOrder is
+                    // within-section only; warn so we know if
+                    // Adam's UX expects this (next sprint).
+                    console.warn('[advance-builder] cross-section field drop not yet supported (canvas)', {
+                      from: { sectionIndex: data.sectionIndex, fieldIndex: data.fieldIndex },
+                      to: dropTarget,
+                    });
+                  }
+                } else {
+                  console.warn('[advance-builder] field drop on canvas with no field dropTarget — drop in dead space, no-op', {
+                    data,
+                    dropTarget,
+                  });
+                }
+              } else if (data.templateId && data.field) {
                 const t = templates.find((x) => x.id === data.templateId);
                 if (t) {
                   addField(t, data.field);
@@ -1425,8 +1651,15 @@ function SetupMode({
                     });
                   }, 50);
                 }
+              } else {
+                // Sprint 8.6.3 §B — surface unhandled drops on
+                // canvas so we don't silently swallow them again.
+                console.warn('[advance-builder] canvas onDrop: unhandled payload', { data });
               }
-            } catch (_) { /* ignore */ }
+            } catch (err) {
+              // Sprint 8.6.3 §B — un-silenced from `catch (_)`.
+              console.error('[advance-builder] canvas drop parse failed', err, { raw });
+            }
             setDragState(null);
             setDropTarget(null);
           }}
@@ -1440,7 +1673,35 @@ function SetupMode({
             return (
               <Fragment key={`${sec.template_id}-${secIdx}`}>
                 {isSectionDropTarget && (
-                  <div className="rounded-lg border-2 border-dashed border-lp-orange bg-lp-orange/10 min-h-[52px] flex items-center justify-center my-0.5 transition-all duration-200" aria-hidden />
+                  <div
+                    className="rounded-lg border-2 border-dashed border-lp-orange bg-lp-orange/10 min-h-[52px] flex items-center justify-center my-0.5 transition-all duration-200"
+                    aria-hidden
+                    onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                    onDrop={(e) => {
+                      // Sprint 8.6 patch — the section drop indicator
+                      // displaces the target section card down by 52px+
+                      // when it renders, so the user's cursor lands on
+                      // the indicator (not the real card). Without its
+                      // own onDrop, the event bubbled to canvas onDrop
+                      // and hit the wrong-type guard. Mirror the section
+                      // card's onDrop here so drops on the indicator
+                      // resolve to the correct target index.
+                      e.preventDefault();
+                      e.stopPropagation();
+                      const raw = e.dataTransfer.getData('application/json');
+                      if (!raw) return;
+                      try {
+                        const data = JSON.parse(raw);
+                        if (data.type === 'section' && typeof data.sectionIndex === 'number') {
+                          moveSectionOrder(data.sectionIndex, secIdx);
+                        }
+                      } catch (err) {
+                        console.error('[advance-builder] section indicator drop parse failed', err, { raw });
+                      }
+                      setDragState(null);
+                      setDropTarget(null);
+                    }}
+                  />
                 )}
               <div
                 className={cn(
@@ -1448,19 +1709,78 @@ function SetupMode({
                   isDraggingSection && 'scale-[1.02] shadow-lg opacity-90 z-20'
                 )}
                 draggable
-                onDragStart={(e) => { e.dataTransfer.setData('application/json', JSON.stringify({ type: 'section', sectionIndex: secIdx })); setDragGhost(e, sec.label); setDragState({ type: 'section', sectionIndex: secIdx }); }}
+                onDragStart={(e) => {
+                  // Sprint 8.6.3 §B — log section dragstart so
+                  // we can confirm it fires (parallel to the
+                  // existing field/section onDrop logs). When
+                  // §4's onDrop log was missing for sections,
+                  // we needed to know whether dragstart even
+                  // fired before chasing drop-side culprits.
+                  console.log('[advance-builder] section onDragStart', { sectionIndex: secIdx, label: sec.label });
+                  // Sprint 8.6.5 — marker MIME for the dragOver gate
+                  // on every drop target. dataTransfer.types is set
+                  // synchronously at dragstart and visible in every
+                  // subsequent dragover, unlike React state which
+                  // lags one render behind. The 8.6.4 fix gated on
+                  // dragState.type but the first dragover events
+                  // after dragstart fired before the re-render
+                  // propagated → dragState was still null in the
+                  // closure → gate rejected → section never became
+                  // a drop target. Marker MIME fixes that without
+                  // any state plumbing.
+                  e.dataTransfer.setData('application/x-lowpass-section', '');
+                  e.dataTransfer.setData('application/json', JSON.stringify({ type: 'section', sectionIndex: secIdx }));
+                  setDragGhost(e, sec.label);
+                  setDragState({ type: 'section', sectionIndex: secIdx });
+                }}
                 onDragEnd={() => { setDragState(null); setDropTarget(null); }}
-                onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); if (dragState?.type === 'section' && dragState.sectionIndex !== secIdx) setDropTarget({ sectionIndex: secIdx }); }}
+                onDragOver={(e) => {
+                  // Sprint 8.6.5 — gate on dataTransfer.types (sync
+                  // at dragstart) instead of dragState.type (React
+                  // state, async). Field drags don't carry the
+                  // section marker so the section card refuses to
+                  // accept them, bubbling field drops to canvas as
+                  // intended by 8.6.4 §1's separation-of-concerns.
+                  if (!e.dataTransfer.types.includes('application/x-lowpass-section')) {
+                    e.dataTransfer.dropEffect = 'none';
+                    return;
+                  }
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (dragState?.type === 'section' && dragState.sectionIndex !== secIdx) {
+                    setDropTarget({ sectionIndex: secIdx });
+                  }
+                }}
                 onDragLeave={() => setDropTarget((t) => (t && !('fieldIndex' in t) && t.sectionIndex === secIdx ? null : t))}
                 onDrop={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
                   const raw = e.dataTransfer.getData('application/json');
-                  if (!raw) return;
+                  // Sprint 8.6 §4 — un-silence the catch so drop
+                  // failures surface in console instead of being
+                  // swallowed. Adam's smoke against 8.5 §6c:
+                  // "drag-reorder doesn't persist" — the silent
+                  // catch may have been hiding a parse error.
+                  if (!raw) {
+                    console.warn('[advance-builder] section drop missing application/json data', { secIdx });
+                    return;
+                  }
                   try {
                     const data = JSON.parse(raw);
-                    if (data.type === 'section' && typeof data.sectionIndex === 'number') moveSectionOrder(data.sectionIndex, secIdx);
-                  } catch (_) { /* ignore */ }
+                    // Sprint 8.6.4 §1 — defensive: if a non-section
+                    // payload reaches us anyway (e.g. browser fired
+                    // drop here despite onDragOver returning early),
+                    // stay silent and don't claim ownership. The
+                    // canvas onDrop fallback handles field/library
+                    // drops; warning here would just be noise.
+                    if (data.type !== 'section' || typeof data.sectionIndex !== 'number') {
+                      return;
+                    }
+                    console.log('[advance-builder] section onDrop', { targetIdx: secIdx, data });
+                    moveSectionOrder(data.sectionIndex, secIdx);
+                  } catch (err) {
+                    console.error('[advance-builder] section drop parse failed', err, { raw });
+                  }
                   setDragState(null);
                   setDropTarget(null);
                 }}
@@ -1491,7 +1811,36 @@ function SetupMode({
                         return (
                           <Fragment key={f.id}>
                             {isDropTarget && (
-                              <li className="mx-2 my-0.5 h-10 rounded border-2 border-dashed border-lp-orange bg-lp-orange/10 flex items-center px-3 transition-all duration-200" aria-hidden />
+                              <li
+                                className="mx-2 my-0.5 h-10 rounded border-2 border-dashed border-lp-orange bg-lp-orange/10 flex items-center px-3 transition-all duration-200"
+                                aria-hidden
+                                onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
+                                onDrop={(e) => {
+                                  // Sprint 8.6 patch — the field drop indicator
+                                  // displaces the target field li down by ~40px
+                                  // when it renders, so the user's cursor lands
+                                  // on the indicator. Without its own onDrop,
+                                  // the event bubbled past the field row's
+                                  // stopPropagation, up to the section card's
+                                  // onDrop, where data.type === 'field' bailed
+                                  // with "payload not a section move". Mirror
+                                  // the real field li's onDrop logic here.
+                                  e.preventDefault();
+                                  e.stopPropagation();
+                                  const raw = e.dataTransfer.getData('application/json');
+                                  if (!raw) return;
+                                  try {
+                                    const data = JSON.parse(raw);
+                                    if (data.type === 'field' && data.sectionIndex === secIdx && typeof data.fieldIndex === 'number') {
+                                      moveFieldOrder(secIdx, data.fieldIndex, fieldIdx);
+                                    }
+                                  } catch (err) {
+                                    console.error('[advance-builder] field indicator drop parse failed', err, { raw });
+                                  }
+                                  setDragState(null);
+                                  setDropTarget(null);
+                                }}
+                              />
                             )}
                             <li
                               className={cn(
@@ -1534,18 +1883,51 @@ function SetupMode({
                                 }
                               }}
                               draggable
-                              onDragStart={(e) => { e.stopPropagation(); e.dataTransfer.setData('application/json', JSON.stringify({ type: 'field', sectionIndex: secIdx, fieldIndex: fieldIdx })); setDragGhost(e, f.label); setDragState({ type: 'field', sectionIndex: secIdx, fieldIndex: fieldIdx, field: f }); }}
+                              onDragStart={(e) => { e.stopPropagation(); e.dataTransfer.setData('application/x-lowpass-field', ''); e.dataTransfer.setData('application/json', JSON.stringify({ type: 'field', sectionIndex: secIdx, fieldIndex: fieldIdx })); setDragGhost(e, f.label); setDragState({ type: 'field', sectionIndex: secIdx, fieldIndex: fieldIdx, field: f }); }}
                               onDragEnd={() => { setDragState(null); setDropTarget(null); }}
                               onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); if (dragState?.type === 'field' && (dragState.sectionIndex !== secIdx || dragState.fieldIndex !== fieldIdx)) setDropTarget({ sectionIndex: secIdx, fieldIndex: fieldIdx }); }}
                               onDrop={(e) => {
                                 e.preventDefault();
                                 e.stopPropagation();
                                 const raw = e.dataTransfer.getData('application/json');
-                                if (!raw) return;
+                                if (!raw) {
+                                  console.warn('[advance-builder] field drop missing data');
+                                  return;
+                                }
                                 try {
                                   const data = JSON.parse(raw);
-                                  if (data.type === 'field' && data.sectionIndex === secIdx && typeof data.fieldIndex === 'number') moveFieldOrder(secIdx, data.fieldIndex, fieldIdx);
-                                } catch (_) { /* ignore */ }
+                                  console.log('[advance-builder] field onDrop', { targetSec: secIdx, targetField: fieldIdx, data });
+                                  if (data.type === 'field' && data.sectionIndex === secIdx && typeof data.fieldIndex === 'number') {
+                                    moveFieldOrder(secIdx, data.fieldIndex, fieldIdx);
+                                  } else if (data.type === 'section' && typeof data.sectionIndex === 'number') {
+                                    // Sprint 8.6.3 §B — section drag landing
+                                    // on a field row (drop target inside an
+                                    // expanded section card) used to be
+                                    // silently swallowed because field's
+                                    // stopPropagation blocked the section
+                                    // card's onDrop. Treat the parent
+                                    // section's index as the destination so
+                                    // the user's intent (drop section on/in
+                                    // section X) lands correctly.
+                                    console.log('[advance-builder] section drop intercepted by field row — delegating', {
+                                      from: data.sectionIndex,
+                                      to: secIdx,
+                                    });
+                                    moveSectionOrder(data.sectionIndex, secIdx);
+                                  } else if (data.type === 'field' && data.sectionIndex !== secIdx) {
+                                    // Sprint 8.6.3 §A — log the cross-section
+                                    // field drop case (unsupported today) so
+                                    // we know if Adam is doing this and the
+                                    // silent-no-op explains "didn't reorder".
+                                    console.warn('[advance-builder] cross-section field drop not yet supported', {
+                                      fromSec: data.sectionIndex,
+                                      toSec: secIdx,
+                                    });
+                                  }
+                                } catch (err) {
+                                  // Sprint 8.6 §4 — un-silenced from `catch (_)` so failures surface.
+                                  console.error('[advance-builder] field drop parse failed', err, { raw });
+                                }
                                 setDragState(null);
                                 setDropTarget(null);
                               }}
@@ -1562,6 +1944,28 @@ function SetupMode({
                         );
                       })}
                     </ul>
+                    {/* Sprint 8.6 §6 — "+ Add custom field" pinned at
+                        the bottom of every section card. Forks the
+                        section's template into a workspace-scoped copy
+                        with the new field appended; future tours that
+                        drag this section from the library inherit the
+                        customization. Existing tours' sections are NOT
+                        retroactively updated (Adam's UX guarantee). */}
+                    <div className="border-t border-lp-border px-3 py-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPlatformFieldTarget({
+                            templateId: sec.template_id,
+                            sectionName: sec.label,
+                          });
+                        }}
+                        className="btn-transition flex w-full items-center justify-center gap-1.5 rounded-md border border-dashed border-lp-border px-3 py-1.5 text-xs font-medium text-lp-text-secondary hover:border-lp-orange hover:text-lp-orange"
+                      >
+                        <Plus size={12} />
+                        Add custom field
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1637,11 +2041,63 @@ function SetupMode({
         </div>
       )}
 
+      {/* Sprint 8.6 §6 — Platform-template "+ Add custom field"
+          modal. Forks the section's library template into a
+          workspace-scoped copy with the new field appended.
+          Existing per-show advance_form_configs sections are
+          NOT retroactively updated — only the library entry is
+          customized. The modal's warning text makes that
+          guarantee explicit. */}
+      {platformFieldTarget && (
+        <AddPlatformFieldModal
+          open
+          templateId={platformFieldTarget.templateId}
+          sectionName={platformFieldTarget.sectionName}
+          onClose={() => setPlatformFieldTarget(null)}
+          onFielded={(template) => {
+            // Refresh the library so future renders pick up
+            // the workspace fork (and the platform original is
+            // filtered out per the GET handler dedup logic).
+            fetchTemplates();
+            // Append the newly added field to the current
+            // section's fields locally so the canvas reflects
+            // the change immediately. The fork API appends to
+            // the end, so the new field is the last element.
+            const newField = template.fields[template.fields.length - 1];
+            if (newField) {
+              setSections((prev) =>
+                prev.map((s) =>
+                  s.template_id === platformFieldTarget.templateId
+                    ? {
+                        ...s,
+                        // Re-point at the workspace fork so any
+                        // future "+ Add custom field" on this
+                        // section hits the extend path.
+                        template_id: template.id,
+                        fields: [...(s.fields ?? []), newField as FieldDef],
+                      }
+                    : s,
+                ),
+              );
+            }
+          }}
+        />
+      )}
+
       {/* Custom field modal */}
       {customFieldOpen && (
         <CustomFieldModal
           onClose={() => { setCustomFieldOpen(false); setCustomFieldContext(null); }}
           onAdd={handleAddCustomField}
+          /* Sprint 8.6 §5 — restrict 'contact' field type to
+             the Key Contacts section. The migration enforces
+             this server-side via CHECK; the modal hides it
+             from the picker so the user never tries. */
+          targetSectionLabel={
+            customFieldContext === 'standalone' || customFieldContext === null
+              ? null
+              : customFieldContext.templateName
+          }
         />
       )}
 
@@ -1747,7 +2203,23 @@ function DropdownOptionsEditor({ value, onChange }: { value: string; onChange: (
   );
 }
 
-function CustomFieldModal({ onClose, onAdd }: { onClose: () => void; onAdd: (field: FieldDef) => void | Promise<void> }) {
+function CustomFieldModal({
+  onClose,
+  onAdd,
+  targetSectionLabel,
+}: {
+  onClose: () => void;
+  onAdd: (field: FieldDef) => void | Promise<void>;
+  /** Sprint 8.6 §5 — when present and not "Key Contacts",
+   *  the 'contact' field type is hidden from the picker. */
+  targetSectionLabel?: string | null;
+}) {
+  // Sprint 8.6 §5 — filter 'contact' out of the picker when
+  // adding to a non-Key-Contacts section. Adam's call: contact
+  // fields ONLY allowed in Key Contacts.
+  const fieldTypeOptions = targetSectionLabel === 'Key Contacts' || targetSectionLabel == null
+    ? FIELD_TYPE_OPTIONS
+    : FIELD_TYPE_OPTIONS.filter((o) => o.id !== 'contact');
   const [label, setLabel] = useState('');
   const [type, setType] = useState('text');
   const [required, setRequired] = useState(false);
@@ -1768,7 +2240,7 @@ function CustomFieldModal({ onClose, onAdd }: { onClose: () => void; onAdd: (fie
     return () => document.removeEventListener('mousedown', close);
   }, [typeDropdownOpen]);
 
-  const selectedOption = FIELD_TYPE_OPTIONS.find((o) => o.id === type) ?? FIELD_TYPE_OPTIONS[0];
+  const selectedOption = fieldTypeOptions.find((o) => o.id === type) ?? fieldTypeOptions[0];
 
   const handleSubmit = () => {
     if (!label.trim()) return;
@@ -1815,7 +2287,7 @@ function CustomFieldModal({ onClose, onAdd }: { onClose: () => void; onAdd: (fie
           </button>
           {typeDropdownOpen && (
             <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-64 overflow-y-auto rounded-xl border border-lp-border bg-lp-surface py-1 shadow-xl context-menu-dropdown">
-              {FIELD_TYPE_OPTIONS.map((opt) => (
+              {fieldTypeOptions.map((opt) => (
                 <button
                   key={opt.id}
                   type="button"

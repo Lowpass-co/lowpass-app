@@ -55,6 +55,7 @@ import { useArtistTourContext } from '@/contexts/ArtistTourContext';
 import { useProductContext } from '@/contexts/ProductContext';
 import {
   useSwitcherState,
+  type DropdownState,
   type Pane as SwitcherPane,
 } from '@/contexts/SwitcherStateContext';
 import { ContextMenu } from '@/components/ui/ContextMenu';
@@ -363,10 +364,31 @@ export function ArtistTourSwitcher({
   // → animate to end, producing a backwards flash. fill: 'forwards'
   // only persists the END state after the animation completes; it
   // doesn't paint the start state pre-animation.
+  //
+  // Sprint 8.6 §1 — Adam's smoke against 8.5: "It closes, reopens,
+  // then the artist page changes and it stays open." Defensive
+  // fix for the close+reopen flash on same-product navigation:
+  //
+  //   1. lastAnimatedStateRef guard — bail early if dropdownState
+  //      hasn't changed since last animation. Catches any
+  //      spurious re-fire of this effect (e.g. setDropdownState
+  //      reference changing through context destructuring under
+  //      a parent re-render).
+  //
+  //   2. safeCancel instead of raw .cancel() — only cancels
+  //      animations whose playState is still 'running' /
+  //      'finishing'. Preserves the persisted-fill of finished
+  //      animations so the panel doesn't briefly revert to the
+  //      from-frame (opacity 0) when the effect re-fires.
+  //      Sprint 6.2 §2 used safeCancel for the same reason on
+  //      pane animations; line 369's raw cancel() was missed.
+  const lastAnimatedStateRef = useRef<DropdownState | null>(null);
   useLayoutEffect(() => {
+    if (lastAnimatedStateRef.current === dropdownState) return;
+    lastAnimatedStateRef.current = dropdownState;
     const el = panelRef.current;
     if (!el) return;
-    panelAnimRef.current?.cancel();
+    safeCancel(panelAnimRef.current);
     const reduce = prefersReducedMotion();
     if (dropdownState === 'open') {
       panelAnimRef.current = el.animate(
@@ -761,7 +783,20 @@ export function ArtistTourSwitcher({
             zIndex: 'var(--lp-z-dropdown)',
             minWidth: 320,
             maxWidth: 360,
-            maxHeight: 'min(420px, 60vh)',
+            // Sprint 8.6.1 — drop the panel-level maxHeight + flex
+            // chain. Sprint 8.6 §2 attempted to make the inner
+            // scroll list resolve from `flex: 1 1 0` under a
+            // `maxHeight: min(600px, 70vh)` clamp, but the
+            // position:absolute panel never gets a resolved height
+            // (intrinsic, not laid out by a flex/grid parent), so
+            // children with `flex: 1` collapse to ~200px and the
+            // scroll bar sits on a too-short list.
+            //
+            // New approach: panel sizes to its content. The inner
+            // artists/tours scroll lists have `maxHeight: 400` +
+            // `overflowY: auto` directly — they cap at 400px and
+            // scroll past that, otherwise the panel grows to fit.
+            // No flex height inheritance required.
             background: 'var(--lp-panel)',
             border: '1px solid var(--lp-border-strong)',
             borderRadius: 'var(--lp-radius-md)',
@@ -775,8 +810,11 @@ export function ArtistTourSwitcher({
           <div
             style={{
               position: 'relative',
-              flex: 1,
-              minHeight: 0,
+              // Sprint 8.6.1 — wrapper sizes to the active pane's
+              // content. The exiting pane is position:absolute +
+              // inset:0 so it overlays this box during the
+              // pane-switch animation; that still works with an
+              // intrinsic-height parent.
               overflow: 'hidden',
             }}
           >
@@ -1011,8 +1049,10 @@ function SwitcherPane({
         display: 'flex',
         flexDirection: 'column',
         width: '100%',
-        height: '100%',
-        minHeight: 0,
+        // Sprint 8.6.1 — pane sizes to content. The active pane
+        // (position:relative) defines the parent's height; the
+        // exiting pane (position:absolute, inset:0) overlays
+        // exactly that box for the swap animation.
         opacity: initialOpacity,
       }}
     >
@@ -1090,12 +1130,26 @@ function ArtistsPane({
           <CloseChevron onClick={onClose} ariaLabel="Close artist list" />
         }
       />
+      {/* Sprint 8.5 §2 — artist rows scroll independently of the
+          create CTA. Previously both shared an overflow-y container
+          which pushed the Create button below the fold once the
+          list grew past ~8 entries. Now the scroll area is rows-
+          only; the CTA sits in a flexShrink: 0 sibling row that
+          stays pinned to the pane's bottom regardless of scroll.
+          Sprint 8.6.1 — direct maxHeight + overflowY:auto. The
+          §2 flex-chain attempt was defeated by the panel's lack
+          of a resolved height (position:absolute panels don't
+          inherit one). Putting the cap on the scroll list itself
+          sidesteps the flex-inheritance problem entirely: the
+          list grows to its content up to 400px and scrolls past
+          that, the panel sizes to fit. overscrollBehavior:contain
+          keeps wheel events scoped to the dropdown. */}
       <div
         style={{
           overflowY: 'auto',
-          flex: 1,
-          minHeight: 0,
-          padding: 'var(--lp-space-1) var(--lp-space-2) var(--lp-space-2)',
+          maxHeight: 400,
+          overscrollBehavior: 'contain',
+          padding: 'var(--lp-space-1) var(--lp-space-2) var(--lp-space-1)',
         }}
       >
         {artists.length === 0 ? (
@@ -1111,9 +1165,18 @@ function ArtistsPane({
             />
           ))
         )}
+      </div>
+      <div
+        style={{
+          flexShrink: 0,
+          padding: 'var(--lp-space-1) var(--lp-space-2) var(--lp-space-2)',
+          borderTop: '1px solid var(--lp-border-subtle)',
+        }}
+      >
         {/* Sprint 8 §5 — "+ Create new artist" CTA mirrors the
             "+ Create new tour" CTA at the bottom of the tours
-            pane. Same orange-text + Plus icon styling. */}
+            pane. Same orange-text + Plus icon styling.
+            Sprint 8.5 §2 — pinned outside the scroll area. */}
         <button
           type="button"
           onClick={onCreateArtist}
@@ -1124,7 +1187,6 @@ function ArtistsPane({
             gap: 'var(--lp-space-2)',
             width: '100%',
             height: 36,
-            marginTop: 'var(--lp-space-2)',
             padding: '0 var(--lp-space-2)',
             borderRadius: 'var(--lp-radius-sm)',
             background: 'transparent',
@@ -1242,13 +1304,18 @@ function ToursPane({
           {totalTours}
         </span>
       </div>
+      {/* Sprint 8.5 §2 — tour rows scroll independently of the
+          create CTA (mirrors the artists pane refactor).
+          Sprint 8.6.1 — direct maxHeight: 400 + overflowY:auto +
+          overscrollBehavior:contain (see artists pane for full
+          rationale). */}
       <div
         style={{
           overflowY: 'auto',
-          flex: 1,
-          minHeight: 0,
+          maxHeight: 400,
+          overscrollBehavior: 'contain',
           padding:
-            'var(--lp-space-1) var(--lp-space-2) var(--lp-space-2)',
+            'var(--lp-space-1) var(--lp-space-2) var(--lp-space-1)',
         }}
       >
         {loading ? (
@@ -1300,8 +1367,15 @@ function ToursPane({
             </div>
           ))
         )}
-        {/* "+ Create new tour" CTA — at the bottom, OUTSIDE every
-            year group. */}
+      </div>
+      <div
+        style={{
+          flexShrink: 0,
+          padding: 'var(--lp-space-1) var(--lp-space-2) var(--lp-space-2)',
+          borderTop: '1px solid var(--lp-border-subtle)',
+        }}
+      >
+        {/* "+ Create new tour" CTA — pinned outside the scroll area. */}
         <button
           type="button"
           onClick={onCreateTour}
@@ -1312,7 +1386,6 @@ function ToursPane({
             gap: 'var(--lp-space-2)',
             width: '100%',
             height: 36,
-            marginTop: 'var(--lp-space-2)',
             padding: '0 var(--lp-space-2)',
             borderRadius: 'var(--lp-radius-sm)',
             background: 'transparent',
@@ -1321,6 +1394,7 @@ function ToursPane({
             textAlign: 'left',
             fontSize: 'var(--lp-text-base)',
             fontWeight: 'var(--lp-weight-medium)',
+            border: 'none',
           }}
           onMouseEnter={(e) => {
             e.currentTarget.style.background =

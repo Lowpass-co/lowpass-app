@@ -9,6 +9,7 @@
 
 import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { useToast } from '@/components/ui/Toast';
 
 export interface VenuePlaceResult {
   venue_name: string;
@@ -36,6 +37,7 @@ export function VenueAutocomplete({
   placeholder?: string;
   className?: string;
 }) {
+  const { showToast } = useToast();
   const [query, setQuery] = useState(value);
   const [suggestions, setSuggestions] = useState<{ placeId: string; text: string }[]>([]);
   const [open, setOpen] = useState(false);
@@ -45,6 +47,14 @@ export function VenueAutocomplete({
   const containerRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
   const abortRef = useRef<AbortController | null>(null);
+  // Sprint 8.5 §3 — set true while a click-pick is in flight so
+  // the input's onBlur (added in Sprint 8.2 §4d to sync free-
+  // text edits) doesn't fire onChange(query) BEFORE handleSelect's
+  // /api/places/details fetch resolves and overwrites the picked
+  // venue_name + address with the partially-typed text. Cleared
+  // in finally so any failure path (including aborted fetch)
+  // releases the suppression.
+  const isPickingRef = useRef(false);
 
   useEffect(() => {
     setHighlightedIndex((i) => (suggestions.length ? Math.min(i, suggestions.length - 1) : 0));
@@ -126,6 +136,17 @@ export function VenueAutocomplete({
   };
 
   const handleSelect = async (placeId: string, text: string) => {
+    // Sprint 8.5 §3 — defensive fixes for "click-pick doesn't fill
+    // address" (Adam's smoke against 8.3 §2). Three changes:
+    //   1. isPickingRef true throughout to suppress onBlur sync.
+    //   2. No redundant onChange(venueName) before onPlaceSelect —
+    //      onPlaceSelect's payload already includes venue_name,
+    //      so the second update is sufficient and avoids any
+    //      batching race where the first state update wins.
+    //   3. Failure paths surface a toast + console.error so the
+    //      cause (missing API key, rate limit, network) is visible
+    //      instead of silently leaving address blank.
+    isPickingRef.current = true;
     setOpen(false);
     setSuggestions([]);
     queryFromUserRef.current = false;
@@ -133,17 +154,67 @@ export function VenueAutocomplete({
     abortRef.current = new AbortController();
     const signal = abortRef.current.signal;
     try {
-      const res = await fetch(`/api/places/details?placeId=${encodeURIComponent(placeId)}`, { signal });
+      const res = await fetch(
+        `/api/places/details?placeId=${encodeURIComponent(placeId)}`,
+        { signal },
+      );
       if (!res.ok) {
+        const errBody = await res.text().catch(() => '');
+        console.error(
+          `[VenueAutocomplete] /api/places/details failed: ${res.status}`,
+          errBody,
+        );
+        showToast(
+          res.status === 503
+            ? 'Places API not configured. Address autofill unavailable.'
+            : 'Could not fetch venue details. Address not filled.',
+        );
+        // Still write the typed text as venue_name so the user
+        // doesn't lose their input. Address stays untouched.
         onChange(text);
         return;
       }
       const d = await res.json();
+      // Sprint 8.6 §3 — verbose logging so Adam can see the
+      // actual response shape when address fails to fill.
+      // Adam's smoke against 8.5 §3: clicking a suggestion fills
+      // location but not address. The 8.5 §3 toast covers the
+      // 503/error paths; this logs the 200-but-empty path that
+      // could also leave address blank.
+      console.log('[VenueAutocomplete] /api/places/details ok:', {
+        placeId,
+        displayName: d.displayName,
+        formattedAddress: d.formattedAddress,
+        hasLocation: !!d.latitude && !!d.longitude,
+      });
       const venueName = d.displayName || text;
-      onChange(venueName);
+      // Sprint 8.6 §3 — explicit null fallback (was empty
+      // string). The receiver writes whatever is passed; if the
+      // address is null, the receiver's spread leaves row.address
+      // untouched. Empty string would have OVERWRITTEN existing
+      // row.address with '' — visible "address cleared" effect.
+      const formattedAddress: string | null =
+        typeof d.formattedAddress === 'string' && d.formattedAddress.trim()
+          ? d.formattedAddress
+          : null;
+      if (!formattedAddress) {
+        console.warn(
+          '[VenueAutocomplete] place returned without formattedAddress — leaving row.address unchanged',
+          { placeId, displayName: d.displayName },
+        );
+        showToast(
+          'No address available for this place — fill manually if needed.',
+        );
+      }
+      // Single update — onPlaceSelect's payload covers venue_name
+      // plus address, city, lat/lng, etc. Dropping the redundant
+      // onChange(venueName) eliminates the batching window where
+      // onBlur could fire between the two updates.
       onPlaceSelect?.({
         venue_name: venueName,
-        address: d.formattedAddress || '',
+        // Pass null when no address — receiver should preserve
+        // existing row.address rather than clobber with ''.
+        address: formattedAddress ?? '',
         city: d.locality,
         country: d.country,
         latitude: d.latitude,
@@ -153,9 +224,26 @@ export function VenueAutocomplete({
         rating: d.rating,
         capacity: null,
       });
+      // Fallback: when onPlaceSelect isn't wired (component used
+      // standalone), still write venue_name via onChange so the
+      // pick isn't lost.
+      if (!onPlaceSelect) {
+        onChange(venueName);
+      }
     } catch (err) {
-      if ((err as Error).name === 'AbortError') return;
+      // Sprint 8.6.2 — also bail when our signal was aborted by a
+      // newer handleSelect call. The aborted stream can throw
+      // inside res.json() as a generic TypeError (not AbortError),
+      // which previously fell through to the failure toast even
+      // though the newer call was about to succeed and fill the
+      // address. Symptom Adam reported: toast fires on a pick that
+      // visibly filled correctly.
+      if ((err as Error).name === 'AbortError' || signal.aborted) return;
+      console.error('[VenueAutocomplete] place details threw:', err);
+      showToast('Network error fetching venue details.');
       onChange(text);
+    } finally {
+      isPickingRef.current = false;
     }
   };
 
@@ -179,10 +267,16 @@ export function VenueAutocomplete({
           // local `query` state; the parent's venue_name was
           // only written via handleSelect (autocomplete pick),
           // so any typed-but-not-picked text was silently lost
-          // on save. Sync at blur (not on every keystroke) to
-          // avoid round-tripping through the [value] useEffect
-          // that resets queryFromUserRef and would close the
-          // dropdown mid-typing.
+          // on save.
+          //
+          // Sprint 8.5 §3 — suppress sync while a click-pick is
+          // in flight. handleSelect awaits /api/places/details;
+          // if blur fires during that await, this would write
+          // the partially-typed text as venue_name and (via the
+          // [value] effect) clobber any pick result that arrives
+          // moments later. isPickingRef releases in handleSelect's
+          // finally block — including aborted/failed paths.
+          if (isPickingRef.current) return;
           if (query !== value) {
             onChange(query);
           }

@@ -3,7 +3,19 @@
 
    Layout for authenticated pages.
    Global: toasts, artist/tour context, bug reporter.
-   Per-route chrome: <PageShell> (TopBar + LeftRail) in each `page.tsx` (UX04).
+
+   Sprint 9 §13.A.2 — initialArtists prefetch removed from this
+   layout. The workspace-level switcher slot it fed (mounted in
+   <AppShell>) was producing a duplicate header above shell-v1's
+   <TopBar> and shell-v2's <ProductHeader>. Each shell now owns
+   its complete chrome and prefetches whatever switcher data it
+   needs — see <ProductHeader> for the new initialArtists fetch
+   site. This layout is back to a clean providers-only wrapper.
+
+   Per-route chrome: <PageShell> (TopBar + LeftRail) in each
+   `page.tsx` (shell-v1, UX04), or <ProductShell> (rail + header
+   + main) wrapping each per-product page (shell-v2, Product
+   Split Phase 1+).
 
    All pages under (app)/ get this layout.
    Auth pages under (auth)/ do NOT.
@@ -17,7 +29,7 @@ import { ArtistTourProvider } from '@/contexts/ArtistTourContext';
 import { ProductProvider } from '@/contexts/ProductContext';
 import { SwitcherStateProvider } from '@/contexts/SwitcherStateContext';
 
-export default function AppLayout({
+export default async function AppLayout({
   children,
 }: {
   children: React.ReactNode;
@@ -38,9 +50,7 @@ export default function AppLayout({
                   remounts the wrapper/switcher on /artists/[id]
                   changes; the provider above the segment doesn't). */}
               <SwitcherStateProvider>
-                <AppShell>
-                  {children}
-                </AppShell>
+                <AppShell>{children}</AppShell>
               </SwitcherStateProvider>
             </ProductProvider>
           </ArtistTourProvider>

@@ -41,8 +41,22 @@ export async function updateSession(request: NextRequest) {
   const isAuthRoute = request.nextUrl.pathname.startsWith('/login') ||
     request.nextUrl.pathname.startsWith('/signup') ||
     request.nextUrl.pathname.startsWith('/auth');
-  // Public routes accessible without a session (public rider links).
-  const isPublicRoute = request.nextUrl.pathname.startsWith('/r/');
+  /* Sprint 10 Phase 2.1 §5.4 — public-by-token routes that
+     legitimately render to unauth visitors:
+       /r/             rider-pack public share links
+       /invite/accept  workspace-invite landing (Sprint 9 §3 +
+                       §14.3 — InviteAcceptUnauth panel offers
+                       sign-in / sign-up with the token preserved
+                       via `next`)
+       /intake/        personnel intake forms (Sprint 10 §2.4 —
+                       token-gated public form)
+     Without these, the middleware redirected unauth visitors
+     to /login, dropping them on a login page with no path back
+     to the InviteAcceptUnauth panel. Per Adam's smoke 5.4. */
+  const isPublicRoute =
+    request.nextUrl.pathname.startsWith('/r/') ||
+    request.nextUrl.pathname.startsWith('/invite/accept') ||
+    request.nextUrl.pathname.startsWith('/intake/');
 
   if (!user && !isAuthRoute && !isPublicRoute) {
     const url = request.nextUrl.clone();

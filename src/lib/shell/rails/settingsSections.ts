@@ -6,6 +6,11 @@ export function getSettingsLeftRail(activeId: string, opts?: { isSiteAdmin?: boo
   const sections: DocSectionsRail['sections'] = [
     { id: 'account', label: 'Account', href: '/settings#account' },
     { id: 'workspace', label: 'Workspace', href: '/settings#workspace' },
+    /* Sprint 9 §3 — Members management. Admin-only page; the link
+       is shown to everyone (the page itself 403s non-admins) so
+       rail layout stays consistent and admins navigate without
+       a role-conditional render. */
+    { id: 'members', label: 'Members', href: '/settings/members' },
     { id: 'billing', label: 'Billing', href: '/settings#billing' },
     { id: 'integrations', label: 'Integrations', href: '/settings#integrations' },
   ];

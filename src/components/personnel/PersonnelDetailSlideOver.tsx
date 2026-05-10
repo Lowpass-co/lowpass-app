@@ -1,30 +1,88 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { ExternalLink, FileText, ImageIcon, Loader2, Trash2, X } from 'lucide-react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { ExternalLink, FileText, ImageIcon, Loader2, Plus, Trash2, X } from 'lucide-react';
 import type { Personnel, PersonnelRates } from '@/types';
 import type {
+  PersonnelDietaryType,
+  PersonnelDietaryV2,
+  PersonnelEmergencyContactV2,
   PersonnelExtendedProfile,
+  PersonnelFrequentFlierTier,
+  PersonnelFrequentFlierV2,
+  PersonnelGarment,
+  PersonnelMerchSizeV2,
   PersonnelPassportDetail,
+  PersonnelPassportV2,
   PersonnelStoredDocument,
+  PersonnelVisaV2,
 } from '@/lib/personnel-extended-profile';
 import {
   legacyPassportInfoFromPrimary,
+  liftDietary,
+  liftEmergencyContacts,
+  liftFrequentFlier,
+  liftMerchSizes,
+  liftPassportsV2,
+  liftVisas,
   parseExtendedProfile,
   passportsFromPerson,
+  syncEmergencyContactLegacy,
+  syncPassportsLegacy,
 } from '@/lib/personnel-extended-profile';
 import { cn } from '@/lib/utils';
 import { BrandedSelect } from '@/components/ui/BrandedSelect';
+import { IntakeLinkButton } from './IntakeLinkButton';
+import { GroupsEditor } from './GroupsEditor';
+import { UploadDropZone } from './UploadDropZone';
 
-export type PersonnelPanelState = null | { mode: 'create' } | { mode: 'edit'; id: string };
+export type PersonnelPanelState =
+  | null
+  | { mode: 'create' }
+  /** Optional `scrollToSection` is the data-section id the
+   *  slide-over should scroll into view on open. Used by the
+   *  CompletenessRing click-through to land the operator on
+   *  the first missing section. Sections are tagged with
+   *  `data-section="<id>"` matching the ids returned by
+   *  computeCompleteness (identity / contact / passports /
+   *  emergency / home-airport / dietary / merch-sizes /
+   *  frequent-flier / pay). */
+  | { mode: 'edit'; id: string; scrollToSection?: string | null };
 
 const IC =
   'w-full rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text outline-none focus:border-lp-orange';
+/* Sprint 9 §14.6 — native <select> elements have a different
+   intrinsic height than text <input>s under the IC class (the
+   browser adds vendor padding for the dropdown arrow). Set an
+   explicit height that matches an IC-styled input — `text-sm`
+   (14px) + `py-2` (8px top + 8px bottom) + 1px×2 border + the
+   line-height of the font ≈ 38px. Applied alongside `IC` so
+   selects stay flush in any horizontal grid. */
+const SELECT_HEIGHT_PX = 38;
 const CUR = ['GBP', 'EUR', 'USD'] as const;
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Section({
+  id,
+  title,
+  defaultOpen = false,
+  children,
+}: {
+  /** Sprint 9 §13.B.2 — stable section id matching the
+   *  computeCompleteness output so the CompletenessRing's
+   *  click-through can scroll directly here. */
+  id: string;
+  title: string;
+  /** Sprint 9 §13.B.1 spec: PERSONAL + CONTACT open by default,
+   *  others collapsed. */
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
   return (
-    <details open className="group border-b border-lp-border/80 pb-4 last:border-0">
+    <details
+      data-section={id}
+      open={defaultOpen}
+      className="group border-b border-lp-border/80 pb-4 last:border-0"
+    >
       <summary className="cursor-pointer list-none py-2 text-xs font-bold uppercase tracking-wider text-lp-text-secondary marker:content-none [&::-webkit-details-marker]:hidden">
         <span className="inline-flex items-center gap-2">
           <span className="text-lp-orange">▸</span>
@@ -43,6 +101,90 @@ function L({ children, className }: { children: React.ReactNode; className?: str
     </label>
   );
 }
+
+/* Sprint 9 §13.D — shared multi-of-each list UI. Renders each
+   entry inside a card with a Remove button at the top-right and
+   a "+ Add <kind>" button at the bottom. The fields-per-entry
+   render is delegated to `renderEntry` so each section's shape
+   can stay close to its data definition. */
+function MultiList<T>({
+  items,
+  empty,
+  addLabel,
+  onAdd,
+  onRemove,
+  renderEntry,
+}: {
+  items: T[];
+  /** Copy shown when the list is empty. The Add button still
+   *  renders below it. */
+  empty: string;
+  addLabel: string;
+  onAdd: () => void;
+  onRemove: (index: number) => void;
+  renderEntry: (entry: T, index: number) => React.ReactNode;
+}) {
+  return (
+    <div className="space-y-3">
+      {items.length === 0 ? (
+        <p className="text-xs italic text-lp-text-tertiary">{empty}</p>
+      ) : (
+        <ul className="space-y-3" aria-label={`${addLabel} list`}>
+          {items.map((item, i) => (
+            <li
+              key={i}
+              className="rounded-lg border border-lp-border/80 bg-lp-surface/30 p-3"
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0 flex-1">{renderEntry(item, i)}</div>
+                <button
+                  type="button"
+                  onClick={() => onRemove(i)}
+                  aria-label="Remove entry"
+                  className="shrink-0 rounded-lg border border-red-500/40 p-1.5 text-red-600 hover:bg-red-500/10 dark:text-red-400"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+      <button
+        type="button"
+        onClick={onAdd}
+        className="inline-flex items-center gap-1 rounded-lg border border-dashed border-lp-border px-3 py-2 text-xs font-medium text-lp-text-secondary hover:border-lp-orange/50 hover:text-lp-text"
+      >
+        <Plus className="h-3.5 w-3.5" />
+        {addLabel}
+      </button>
+    </div>
+  );
+}
+
+const DIETARY_TYPES: ReadonlyArray<{ value: PersonnelDietaryType; label: string }> = [
+  { value: 'vegetarian', label: 'Vegetarian' },
+  { value: 'vegan', label: 'Vegan' },
+  { value: 'gluten_free', label: 'Gluten-free' },
+  { value: 'kosher', label: 'Kosher' },
+  { value: 'halal', label: 'Halal' },
+  { value: 'custom', label: 'Other / custom' },
+];
+
+const GARMENTS: ReadonlyArray<{ value: PersonnelGarment; label: string }> = [
+  { value: 't_shirt', label: 'T-shirt' },
+  { value: 'hoodie', label: 'Hoodie' },
+  { value: 'jacket', label: 'Jacket' },
+  { value: 'pants', label: 'Pants' },
+  { value: 'shoes', label: 'Shoes' },
+];
+
+const FLIER_TIERS: ReadonlyArray<{ value: PersonnelFrequentFlierTier; label: string }> = [
+  { value: 'basic', label: 'Basic' },
+  { value: 'silver', label: 'Silver' },
+  { value: 'gold', label: 'Gold' },
+  { value: 'platinum', label: 'Platinum' },
+];
 
 function PassportFields({
   label,
@@ -81,17 +223,54 @@ function PassportFields({
 
 export function PersonnelDetailSlideOver({
   panel,
+  viewerCanSeePay = true,
   onClose,
   onSaved,
 }: {
   panel: PersonnelPanelState;
+  /** Sprint 9 §13.B.2 (Q5) — gate the Pay section. When false,
+   *  the section doesn't render and the slide-over doesn't send
+   *  pay-related fields back on save. Default true so existing
+   *  callers (admin tools, bug reports) keep seeing it; the
+   *  /personnel page passes the role-derived value. */
+  viewerCanSeePay?: boolean;
   onClose: () => void;
   onSaved: (row: Personnel, meta?: { source?: 'form' | 'document' }) => void;
 }) {
   const open = panel !== null;
+  const scrollToSection = panel?.mode === 'edit' ? panel.scrollToSection ?? null : null;
+  const scrollHostRef = useRef<HTMLDivElement | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  /* Sprint 9 §14.7 — mount-deferred close animation. Mirrors the
+     SlideOver primitive's lifecycle so closing the slide-over
+     animates out (slide right + fade) instead of disappearing
+     instantly. The previous `if (!open) return null` short-
+     circuited the exit transition before the browser could
+     paint the closed-state styles. */
+  const [mounted, setMounted] = useState(open);
+  const [animateIn, setAnimateIn] = useState(false);
+  const panelAnimRef = useRef<HTMLDivElement | null>(null);
+
+  useLayoutEffect(() => {
+    if (open) setMounted(true);
+  }, [open]);
+
+  useEffect(() => {
+    if (open) {
+      const r = requestAnimationFrame(() => setAnimateIn(true));
+      return () => cancelAnimationFrame(r);
+    }
+    setAnimateIn(false);
+  }, [open]);
+
+  const handlePanelTransitionEnd = (e: React.TransitionEvent<HTMLDivElement>) => {
+    if (e.target !== panelAnimRef.current) return;
+    if (e.propertyName !== 'transform') return;
+    if (!open) setMounted(false);
+  };
 
   const [name, setName] = useState('');
   const [role, setRole] = useState('');
@@ -108,10 +287,54 @@ export function PersonnelDetailSlideOver({
     per_diem_rate: 0,
     currency: 'GBP',
   });
+  /* Sprint 9 §14.1 — parallel string state for the four rate
+     inputs. Without it, a controlled type=number input bound
+     to numeric state can't be cleared: deleting the "0" gives
+     value="" → Number("")||0 = 0 → React re-renders the
+     stuck "0". Tracking a string per field lets the user type
+     freely (including transient empty / "0." prefixes) while
+     `rates` stays numeric for downstream save / sync logic. */
+  const [rateInputs, setRateInputs] = useState<Record<string, string>>({
+    show_day_rate: '0',
+    off_day_rate: '0',
+    travel_day_rate: '0',
+    per_diem_rate: '0',
+  });
   const [lpId, setLpId] = useState<string | null>(null);
 
   const [pp, setPp] = useState<[PersonnelPassportDetail, PersonnelPassportDetail]>([{}, {}]);
   const [ext, setExt] = useState<PersonnelExtendedProfile>({});
+
+  // Sprint 9 §13.D — Daysheets-style multi-of-each state. Lifted
+  // from legacy fields on first load (lift helpers in
+  // personnel-extended-profile.ts handle the translation), so
+  // existing rows show their data in the new sections without a
+  // backfill. Save flow writes BOTH the v2 arrays AND mirrors
+  // them to the legacy fields via the sync helpers so legacy
+  // readers (rooming, advance, exports) keep working.
+  const [emergencyContactsV2, setEmergencyContactsV2] = useState<PersonnelEmergencyContactV2[]>([]);
+  const [passportsV2, setPassportsV2] = useState<PersonnelPassportV2[]>([]);
+  const [frequentFlierV2, setFrequentFlierV2] = useState<PersonnelFrequentFlierV2[]>([]);
+  const [visasV2, setVisasV2] = useState<PersonnelVisaV2[]>([]);
+  const [dietaryV2, setDietaryV2] = useState<PersonnelDietaryV2[]>([]);
+  const [merchSizesV2, setMerchSizesV2] = useState<PersonnelMerchSizeV2[]>([]);
+  /* Sprint 10 §2.2 — group keys multi-select. Saves into
+     extended_profile.groups[]. */
+  const [groups, setGroups] = useState<string[]>([]);
+  /* Sprint 10 Phase 2.1 §2.3 — auto-save the Groups multi-
+     select on each chip toggle, debounced 600ms. The PATCH
+     uses the existing /api/personnel/[id] route which merges
+     extended_profile server-side, so we only send the groups
+     field. On success, fire onSaved so the parent list
+     refreshes to pick up the new badges. */
+  const [groupsSaving, setGroupsSaving] = useState(false);
+  const [groupsSaveError, setGroupsSaveError] = useState<string | null>(null);
+  const groupsSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    return () => {
+      if (groupsSaveTimerRef.current) clearTimeout(groupsSaveTimerRef.current);
+    };
+  }, []);
 
   const headFileRef = useRef<HTMLInputElement>(null);
   const passFileRef = useRef<HTMLInputElement>(null);
@@ -192,9 +415,22 @@ export function PersonnelDetailSlideOver({
       per_diem_rate: 0,
       currency: 'GBP',
     });
+    setRateInputs({
+      show_day_rate: '0',
+      off_day_rate: '0',
+      travel_day_rate: '0',
+      per_diem_rate: '0',
+    });
     setLpId(null);
     setPp([{}, {}]);
     setExt({});
+    setEmergencyContactsV2([]);
+    setPassportsV2([]);
+    setFrequentFlierV2([]);
+    setVisasV2([]);
+    setDietaryV2([]);
+    setMerchSizesV2([]);
+    setGroups([]);
     setError(null);
     setDocErr(null);
     setDocUploadKind(null);
@@ -211,17 +447,62 @@ export function PersonnelDetailSlideOver({
     setMerchSize(p.merch_size ?? '');
     setPreferences(p.preferences ?? '');
     const sr = p.standard_rates as PersonnelRates | undefined;
-    setRates({
+    const next = {
       show_day_rate: Number(sr?.show_day_rate) || 0,
       off_day_rate: Number(sr?.off_day_rate) || 0,
       travel_day_rate: Number(sr?.travel_day_rate) || 0,
       per_diem_rate: Number(sr?.per_diem_rate) || 0,
+    };
+    setRates({
+      ...next,
       currency: typeof sr?.currency === 'string' ? sr.currency : 'GBP',
+    });
+    setRateInputs({
+      show_day_rate: String(next.show_day_rate),
+      off_day_rate: String(next.off_day_rate),
+      travel_day_rate: String(next.travel_day_rate),
+      per_diem_rate: String(next.per_diem_rate),
     });
     setLpId(p.lp_id);
     setPp(passportsFromPerson(p));
-    setExt(parseExtendedProfile(p.extended_profile));
+    const parsedExt = parseExtendedProfile(p.extended_profile);
+    setExt(parsedExt);
+    // Sprint 9 §13.D — lift legacy data into v2 arrays so the
+    // multi-of-each sections show existing rows the first time
+    // a user opens them. The lift helpers no-op when the v2
+    // arrays are already populated, so re-saving doesn't lose
+    // data.
+    setEmergencyContactsV2(liftEmergencyContacts(parsedExt));
+    setPassportsV2(liftPassportsV2(parsedExt));
+    setFrequentFlierV2(liftFrequentFlier(parsedExt));
+    setVisasV2(liftVisas(parsedExt));
+    setDietaryV2(liftDietary(p.dietary_needs ?? null, parsedExt));
+    setMerchSizesV2(liftMerchSizes(p.merch_size ?? null, parsedExt));
+    /* Sprint 10 §2.2 — load groups from extended_profile. */
+    setGroups(Array.isArray(parsedExt.groups) ? parsedExt.groups.filter((g): g is string => typeof g === 'string') : []);
   }, []);
+
+  // Sprint 9 §13.B.2 — when the operator opens the slide-over
+  // by clicking a CompletenessRing, scroll the matching section
+  // into view + open it. Runs after content has loaded so the
+  // <details data-section> element actually exists. The
+  // dependency on `loading` covers the edit-mode path which
+  // sets loading=true while fetching.
+  useEffect(() => {
+    if (!open || !scrollToSection || loading) return;
+    const host = scrollHostRef.current;
+    if (!host) return;
+    const target = host.querySelector<HTMLDetailsElement>(
+      `details[data-section="${scrollToSection}"]`,
+    );
+    if (!target) return;
+    target.open = true;
+    // Defer one frame so the section is open before scrolling.
+    const raf = requestAnimationFrame(() => {
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [open, scrollToSection, loading]);
 
   useEffect(() => {
     if (!open) return;
@@ -263,25 +544,105 @@ export function PersonnelDetailSlideOver({
     setSaving(true);
     try {
       const passport_info = legacyPassportInfoFromPrimary(pp[0] ?? {});
-      const extended_profile: PersonnelExtendedProfile = {
+      // Sprint 9 §13.D — write the v2 arrays AND mirror the
+      // critical ones back to the legacy fields via the sync
+      // helpers, so rooming + advance + exports keep reading
+      // unchanged. Order matters: start from `ext` (carries the
+      // legacy single-emergency_contact / passports[]), then
+      // overlay the v2 arrays + mirror, then layer on the
+      // form-style two-passport array (legacy form path).
+      const cleanedEmergency = emergencyContactsV2.filter(
+        (e) => (e.name ?? '').trim().length > 0,
+      );
+      const cleanedPassportsV2 = passportsV2.filter(
+        (p) => (p.number ?? '').trim().length > 0,
+      );
+      const cleanedFlier = frequentFlierV2.filter(
+        (f) => (f.airline ?? '').trim().length > 0 || (f.member_number ?? '').trim().length > 0,
+      );
+      const cleanedVisas = visasV2.filter(
+        (v) => (v.country ?? '').trim().length > 0 || (v.valid_to ?? '').trim().length > 0,
+      );
+      const cleanedDietary = dietaryV2.filter((d) => !!d.type);
+      const cleanedMerch = merchSizesV2.filter((m) => (m.size ?? '').trim().length > 0);
+
+      let extWithV2: PersonnelExtendedProfile = {
         ...ext,
+        // Form-style passport array (the legacy "Passport 1 &
+        // 2" section is still wired). Will be re-overwritten
+        // by syncPassportsLegacy below if there are v2 entries.
         passports: [pp[0] ?? {}, pp[1] ?? {}],
         date_of_birth: pp[0]?.date_of_birth || ext.date_of_birth,
+        frequent_flier: cleanedFlier,
+        visas: cleanedVisas,
+        dietary: cleanedDietary,
+        merch_sizes: cleanedMerch,
+        // Sprint 10 §2.2 — workspace group keys.
+        groups,
       };
-      const standard_rates = { ...rates };
-      const payload = {
+      extWithV2 = syncEmergencyContactLegacy(extWithV2, cleanedEmergency);
+      if (cleanedPassportsV2.length > 0) {
+        extWithV2 = syncPassportsLegacy(extWithV2, cleanedPassportsV2);
+      }
+
+      // Sprint 9 §13.D — clear legacy mirror fields whose
+      // canonical edit surface has moved to v2 arrays. Once a
+      // workspace's data is fully migrated through v2 saves,
+      // legacy readers will read v2 mirrors (where set) or null
+      // (where the operator hasn't filled the v2 list yet).
+      if (cleanedFlier.length > 0 && extWithV2.transport_extra) {
+        const tx = { ...extWithV2.transport_extra };
+        delete tx.frequent_flyer_1;
+        delete tx.frequent_flyer_2;
+        delete tx.frequent_flyer_3;
+        delete tx.frequent_flyer_4;
+        extWithV2.transport_extra = tx;
+      }
+      if (cleanedVisas.length > 0) {
+        // Drop the legacy single visa block — visa notes are
+        // now per-entry in cleanedVisas.
+        delete extWithV2.visa;
+      }
+      if (cleanedMerch.length > 0) {
+        delete extWithV2.clothing_sizes;
+      }
+
+      // Derive top-level column values from v2 arrays when they
+      // have entries (canonical), else fall back to the loaded
+      // legacy state slots. Lets payroll / rooming readers that
+      // pull dietary_needs / merch_size keep working.
+      const dietaryColumn = cleanedDietary.length > 0
+        ? cleanedDietary
+            .map((d) =>
+              d.notes && d.notes.trim()
+                ? `${d.type.replace(/_/g, ' ')}: ${d.notes.trim()}`
+                : d.type.replace(/_/g, ' '),
+            )
+            .join('; ')
+        : (dietary.trim() || null);
+      const merchSizeColumn = cleanedMerch.length > 0
+        ? cleanedMerch.map((m) => `${m.garment.replace(/_/g, ' ')}: ${m.size}`).join('; ')
+        : (merchSize.trim() || null);
+
+      const extended_profile: PersonnelExtendedProfile = extWithV2;
+      // Sprint 9 §13.B.1 / Q5 — Pay section is gated; strip
+      // standard_rates from the payload when the viewer can't
+      // see it so a non-admin can't accidentally zero out rates
+      // by saving from a panel where the Pay section was hidden.
+      const standard_rates = viewerCanSeePay ? { ...rates } : undefined;
+      const payload: Record<string, unknown> = {
         name: n,
         role,
         email: email.trim() || null,
         phone: phone.trim() || null,
         home_airport: homeAirport.trim() || null,
-        dietary_needs: dietary.trim() || null,
-        merch_size: merchSize.trim() || null,
+        dietary_needs: dietaryColumn,
+        merch_size: merchSizeColumn,
         preferences: preferences.trim() || null,
-        standard_rates,
         passport_info,
         extended_profile,
       };
+      if (standard_rates !== undefined) payload.standard_rates = standard_rates;
       const isCreate = panel?.mode === 'create';
       const url = isCreate ? '/api/personnel' : `/api/personnel/${(panel as { id: string }).id}`;
       const res = await fetch(url, {
@@ -300,7 +661,7 @@ export function PersonnelDetailSlideOver({
     }
   };
 
-  if (!open) return null;
+  if (!mounted) return null;
 
   const displayTitleName = name.trim() || 'New person';
 
@@ -311,12 +672,8 @@ export function PersonnelDetailSlideOver({
     }));
   };
 
-  const setEm = (k: keyof NonNullable<PersonnelExtendedProfile['emergency_contact']>, v: string) => {
-    setExt((prev) => ({
-      ...prev,
-      emergency_contact: { ...prev.emergency_contact, [k]: v },
-    }));
-  };
+  // Sprint 9 §13.D — setEm helper retired; emergency_contact is
+  // now driven exclusively by the v2 multi section + sync helper.
 
   const setNp = (k: keyof NonNullable<PersonnelExtendedProfile['name_parts']>, v: string) => {
     setExt((prev) => ({
@@ -355,11 +712,26 @@ export function PersonnelDetailSlideOver({
 
   return (
     <>
-      <div className="fixed inset-0 z-[85] bg-black/20 md:block" aria-hidden onClick={onClose} />
       <div
+        className="fixed inset-0 z-[85] bg-black/20 md:block"
+        aria-hidden
+        onClick={onClose}
+        style={{
+          opacity: animateIn ? 1 : 0,
+          transition: 'opacity 200ms ease-out',
+        }}
+      />
+      <div
+        ref={panelAnimRef}
+        onTransitionEnd={handlePanelTransitionEnd}
         className={cn(
-          'fixed top-0 right-0 z-[90] flex h-full w-full flex-col border-l border-lp-border bg-lp-bg shadow-2xl transition-transform duration-200 ease-out md:w-[min(100vw,720px)]'
+          'fixed top-0 right-0 z-[90] flex h-full w-full flex-col border-l border-lp-border bg-lp-bg shadow-2xl md:w-[min(100vw,720px)]'
         )}
+        style={{
+          transform: animateIn ? 'translateX(0)' : 'translateX(100%)',
+          opacity: animateIn ? 1 : 0,
+          transition: 'transform 200ms ease-out, opacity 200ms ease-out',
+        }}
       >
         <header className="flex shrink-0 items-start justify-between gap-3 border-b border-lp-border bg-lp-bg p-4">
           <div className="min-w-0">
@@ -368,17 +740,26 @@ export function PersonnelDetailSlideOver({
             </h2>
             <p className="mt-1 text-xs text-lp-text-secondary">Workspace roster · matches standard touring paperwork.</p>
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg p-1.5 text-lp-text-secondary hover:bg-lp-surface hover:text-lp-text"
-            aria-label="Close"
-          >
-            <X className="h-5 w-5" />
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            {/* Sprint 10 §2.4 — generate a public intake-form
+                link for this personnel record. Visible only in
+                edit mode (a saved personnel id is required to
+                bind the token to). */}
+            {rosterPersonnelId ? (
+              <IntakeLinkButton personnelId={rosterPersonnelId} />
+            ) : null}
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-lg p-1.5 text-lp-text-secondary hover:bg-lp-surface hover:text-lp-text"
+              aria-label="Close"
+            >
+              <X className="h-5 w-5" />
+            </button>
+          </div>
         </header>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+        <div ref={scrollHostRef} className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
           {loading ? (
             <p className="text-sm text-lp-text-secondary">Loading…</p>
           ) : (
@@ -421,6 +802,14 @@ export function PersonnelDetailSlideOver({
                         <img
                           src={ext.documents.head_shot.url}
                           alt=""
+                          /* Sprint 10 Phase 2.1 §2.2 — hide on
+                             load failure so old public-bucket
+                             URLs (broken after migration 085's
+                             non-public flip) don't render the
+                             browser's "?" placeholder. */
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                          }}
                           className="h-20 w-20 rounded-lg border border-lp-border object-cover"
                         />
                       ) : null}
@@ -465,24 +854,34 @@ export function PersonnelDetailSlideOver({
                       </div>
                     </div>
                   ) : (
-                    <button
-                      type="button"
-                      disabled={!rosterPersonnelId || docUploadKind !== null || docDeleting !== null}
-                      onClick={() => headFileRef.current?.click()}
-                      className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-lp-border py-6 text-xs font-medium text-lp-text-secondary hover:border-lp-orange/50 hover:text-lp-text disabled:opacity-50"
+                    /* Sprint 10 §5.4 — wrap the click-to-pick
+                       button in <UploadDropZone> so a dragged
+                       file from Finder / a browser tab also
+                       triggers the upload path. The button
+                       itself stays the click target. */
+                    <UploadDropZone
+                      accept={['image/jpeg', 'image/png', 'image/gif', 'image/webp']}
+                      onFile={(f) => void postDocument(f, 'head_shot')}
                     >
-                      {docUploadKind === 'head' ? (
-                        <>
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          Uploading…
-                        </>
-                      ) : (
-                        <>
-                          <ImageIcon className="h-4 w-4" />
-                          Drop or click to upload (JPEG, PNG, GIF, WebP)
-                        </>
-                      )}
-                    </button>
+                      <button
+                        type="button"
+                        disabled={!rosterPersonnelId || docUploadKind !== null || docDeleting !== null}
+                        onClick={() => headFileRef.current?.click()}
+                        className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-lp-border py-6 text-xs font-medium text-lp-text-secondary hover:border-lp-orange/50 hover:text-lp-text disabled:opacity-50"
+                      >
+                        {docUploadKind === 'head' ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            Uploading…
+                          </>
+                        ) : (
+                          <>
+                            <ImageIcon className="h-4 w-4" />
+                            Drop or click to upload (JPEG, PNG, GIF, WebP)
+                          </>
+                        )}
+                      </button>
+                    </UploadDropZone>
                   )}
                 </div>
 
@@ -508,6 +907,52 @@ export function PersonnelDetailSlideOver({
                         key={doc.path}
                         className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-lp-border/60 bg-lp-surface/40 px-2 py-2"
                       >
+                        {/* Sprint 10 §5.3 — preview thumbnail.
+                            Image MIME types render the actual
+                            image; PDF + others fall back to a
+                            file icon. PDF page-1 thumbnails are
+                            deferred to Sprint 11 (needs server-
+                            side processing or pdf-thumbnail
+                            dep, neither in scope here). */}
+                        {doc.content_type?.startsWith('image/') ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={doc.url}
+                            alt=""
+                            /* Sprint 10 Phase 2.1 §2.2 — same
+                               broken-URL guard as the head shot
+                               above. */
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                            }}
+                            style={{
+                              width: 32,
+                              height: 32,
+                              objectFit: 'cover',
+                              borderRadius: 'var(--lp-radius-sm)',
+                              border: '1px solid var(--lp-border)',
+                              flexShrink: 0,
+                            }}
+                          />
+                        ) : (
+                          <span
+                            aria-hidden
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              width: 32,
+                              height: 32,
+                              borderRadius: 'var(--lp-radius-sm)',
+                              background: 'var(--lp-bg-tertiary)',
+                              border: '1px solid var(--lp-border)',
+                              color: 'var(--lp-text-tertiary)',
+                              flexShrink: 0,
+                            }}
+                          >
+                            <FileText className="h-4 w-4" />
+                          </span>
+                        )}
                         <span className="min-w-0 flex-1 truncate text-xs text-lp-text">{doc.file_name}</span>
                         <div className="flex shrink-0 items-center gap-1">
                           <a
@@ -536,28 +981,41 @@ export function PersonnelDetailSlideOver({
                       </li>
                     ))}
                   </ul>
-                  <button
-                    type="button"
-                    disabled={!rosterPersonnelId || docUploadKind !== null || docDeleting !== null}
-                    onClick={() => passFileRef.current?.click()}
-                    className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-lp-border py-4 text-xs font-medium text-lp-text-secondary hover:border-lp-orange/50 hover:text-lp-text disabled:opacity-50"
+                  {/* Sprint 10 §5.4 — passport upload supports
+                      drag-and-drop too. Same UploadDropZone
+                      pattern as the head shot button above. */}
+                  <UploadDropZone
+                    accept={['application/pdf', 'image/jpeg', 'image/png', 'image/gif', 'image/webp']}
+                    onFile={(f) => void postDocument(f, 'passport_scan')}
                   >
-                    {docUploadKind === 'passport' ? (
-                      <>
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                        Uploading…
-                      </>
-                    ) : (
-                      <>
-                        <FileText className="h-4 w-4" />
-                        Add passport scan (PDF or image)
-                      </>
-                    )}
-                  </button>
+                    <button
+                      type="button"
+                      disabled={!rosterPersonnelId || docUploadKind !== null || docDeleting !== null}
+                      onClick={() => passFileRef.current?.click()}
+                      className="flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-lp-border py-4 text-xs font-medium text-lp-text-secondary hover:border-lp-orange/50 hover:text-lp-text disabled:opacity-50"
+                    >
+                      {docUploadKind === 'passport' ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Uploading…
+                        </>
+                      ) : (
+                        <>
+                          <FileText className="h-4 w-4" />
+                          Add passport scan (PDF or image)
+                        </>
+                      )}
+                    </button>
+                  </UploadDropZone>
                 </div>
               </div>
 
-              <Section title="General info">
+              {/* Sprint 9 §13.B.1 — Identity (PERSONAL) is the
+                  default-open landing section per spec. id maps
+                  to computeCompleteness's "identity" weight so
+                  the CompletenessRing's click-to-section flow
+                  lands here when name/DOB are missing. */}
+              <Section id="identity" title="General info" defaultOpen>
                 {lpId && (
                   <div>
                     <L>LP ID</L>
@@ -649,7 +1107,67 @@ export function PersonnelDetailSlideOver({
                 </div>
               </Section>
 
-              <Section title="US only">
+              {/* Sprint 10 §2.2 — workspace group multi-select.
+                  Drives the colored chips in the personnel grid
+                  + the by-group filter chips. */}
+              <Section id="groups" title="Groups" defaultOpen>
+                <p className="mb-2 text-xs text-lp-text-secondary">
+                  Tag this person with one or more workspace groups. Shows
+                  as colored chips on the personnel grid.
+                </p>
+                <GroupsEditor
+                  value={groups}
+                  onChange={(next) => {
+                    setGroups(next);
+                    if (!rosterPersonnelId) return;
+                    if (groupsSaveTimerRef.current) {
+                      clearTimeout(groupsSaveTimerRef.current);
+                    }
+                    groupsSaveTimerRef.current = setTimeout(async () => {
+                      setGroupsSaving(true);
+                      setGroupsSaveError(null);
+                      try {
+                        const res = await fetch(`/api/personnel/${rosterPersonnelId}`, {
+                          method: 'PATCH',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            extended_profile: { groups: next },
+                          }),
+                        });
+                        const body = (await res.json().catch(() => null)) as
+                          | { error?: string }
+                          | (Personnel & { error?: undefined })
+                          | null;
+                        if (!res.ok) {
+                          setGroupsSaveError(body?.error ?? `Save failed (${res.status})`);
+                          return;
+                        }
+                        /* Surface the saved row to the parent
+                           list so the new group badges appear
+                           in the grid without a hard refresh. */
+                        if (body && !('error' in body) && body) {
+                          onSaved(body as Personnel);
+                        }
+                      } catch (err) {
+                        setGroupsSaveError(
+                          err instanceof Error ? err.message : 'Network error',
+                        );
+                      } finally {
+                        setGroupsSaving(false);
+                      }
+                    }, 600);
+                  }}
+                />
+                {groupsSaving ? (
+                  <p className="mt-2 text-xs text-lp-text-tertiary">Saving…</p>
+                ) : groupsSaveError ? (
+                  <p className="mt-2 text-xs" style={{ color: 'var(--color-lp-error)' }}>
+                    {groupsSaveError}
+                  </p>
+                ) : null}
+              </Section>
+
+              <Section id="us-only" title="US only">
                 <div>
                   <L>Social Security #</L>
                   <input value={ext.us_only?.social_security_number ?? ''} onChange={(e) => setUs('social_security_number', e.target.value)} className={IC} />
@@ -660,23 +1178,28 @@ export function PersonnelDetailSlideOver({
                 </div>
               </Section>
 
-              <Section title="Passport 1 & passport 2">
+              {/* Sprint 9 §13.D — legacy form-style "Passport 1
+                  & 2" stays for the form fields the Daysheets v2
+                  shape doesn't carry (authority, empty pages,
+                  type, code). The Daysheets-style passports
+                  multi section below is the canonical edit
+                  surface; this section's fields write back to
+                  passports[] as a mirror. Visa notes moved to
+                  the per-entry Visas section below. */}
+              <Section id="passports-form" title="Passport (form-style legacy fields)">
                 <div className="grid gap-4 lg:grid-cols-2">
                   <PassportFields label="Passport 1" p={pp[0] ?? {}} onChange={(k, v) => setPass(0, k, v)} />
                   <PassportFields label="Passport 2" p={pp[1] ?? {}} onChange={(k, v) => setPass(1, k, v)} />
                 </div>
-                <div>
-                  <L>Visa / ESTA (notes)</L>
-                  <textarea
-                    value={ext.visa?.notes ?? ''}
-                    onChange={(e) => setExt((p) => ({ ...p, visa: { ...p.visa, notes: e.target.value } }))}
-                    rows={2}
-                    className={cn(IC, 'resize-none')}
-                  />
-                </div>
               </Section>
 
-              <Section title="Transport">
+              {/* Transport groups Home airport + Frequent flier
+                  + TSA / aisle preferences. Either of the two
+                  completeness section ids ("home-airport" /
+                  "frequent-flier") can land here; we tag with
+                  "home-airport" since that's the higher-weighted
+                  click target. */}
+              <Section id="home-airport" title="Transport">
                 <div>
                   <L>Home airport</L>
                   <input value={homeAirport} onChange={(e) => setHomeAirport(e.target.value)} className={IC} />
@@ -691,22 +1214,21 @@ export function PersonnelDetailSlideOver({
                     <input value={ext.transport_extra?.aisle_window ?? ''} onChange={(e) => setTx('aisle_window', e.target.value)} className={IC} />
                   </div>
                 </div>
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-lp-text-tertiary">Frequent flyer</p>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {(['frequent_flyer_1', 'frequent_flyer_2', 'frequent_flyer_3', 'frequent_flyer_4'] as const).map((k) => (
-                    <div key={k}>
-                      <L>{k.replace('frequent_flyer_', 'Line ')}</L>
-                      <input value={ext.transport_extra?.[k] ?? ''} onChange={(e) => setTx(k, e.target.value)} className={IC} />
-                    </div>
-                  ))}
-                </div>
+                {/* Sprint 9 §13.D — Frequent flier moved to a
+                    dedicated multi-of-each section below. */}
+                <p className="text-[10px] italic text-lp-text-tertiary">
+                  Frequent flier programmes are now managed in their own
+                  Daysheets-style section below.
+                </p>
               </Section>
 
-              <Section title="Important / emergency">
-                <div>
-                  <L>Dietary requirements / allergies</L>
-                  <input value={dietary} onChange={(e) => setDietary(e.target.value)} className={IC} />
-                </div>
+              {/* Sprint 9 §13.D — Emergency contacts + dietary
+                  moved to dedicated multi-of-each sections below.
+                  This section is now Health / Medical only. The
+                  setEm helper lives in this file but is no longer
+                  invoked here; kept exported because future health
+                  fields (e.g. blood type) may reuse the pattern. */}
+              <Section id="health" title="Health & medical">
                 <div>
                   <L>Allergies to medicine?</L>
                   <input value={ext.health?.allergies_medicine ?? ''} onChange={(e) => setHl('allergies_medicine', e.target.value)} className={IC} />
@@ -718,22 +1240,6 @@ export function PersonnelDetailSlideOver({
                 <div>
                   <L>Criminal convictions?</L>
                   <input value={ext.health?.criminal_convictions ?? ''} onChange={(e) => setHl('criminal_convictions', e.target.value)} className={IC} />
-                </div>
-                <div>
-                  <L>Emergency contact</L>
-                  <input value={ext.emergency_contact?.name ?? ''} onChange={(e) => setEm('name', e.target.value)} className={IC} />
-                </div>
-                <div>
-                  <L>Relation to you</L>
-                  <input value={ext.emergency_contact?.relationship ?? ''} onChange={(e) => setEm('relationship', e.target.value)} className={IC} />
-                </div>
-                <div>
-                  <L>Contact number</L>
-                  <input value={ext.emergency_contact?.phone ?? ''} onChange={(e) => setEm('phone', e.target.value)} className={IC} />
-                </div>
-                <div>
-                  <L>Emergency email</L>
-                  <input value={ext.emergency_contact?.email ?? ''} onChange={(e) => setEm('email', e.target.value)} className={IC} />
                 </div>
                 <div>
                   <L>Insurance info (crew only)</L>
@@ -750,52 +1256,10 @@ export function PersonnelDetailSlideOver({
                 </div>
               </Section>
 
-              <Section title="Merch etc">
-                <div className="grid gap-3 sm:grid-cols-3">
-                  <div>
-                    <L>T-shirt size</L>
-                    <input
-                      value={ext.clothing_sizes?.shirt ?? ''}
-                      onChange={(e) =>
-                        setExt((p) => ({
-                          ...p,
-                          clothing_sizes: { ...p.clothing_sizes, shirt: e.target.value },
-                        }))
-                      }
-                      className={IC}
-                    />
-                  </div>
-                  <div>
-                    <L>Hoody / jacket</L>
-                    <input
-                      value={ext.clothing_sizes?.jacket ?? ''}
-                      onChange={(e) =>
-                        setExt((p) => ({
-                          ...p,
-                          clothing_sizes: { ...p.clothing_sizes, jacket: e.target.value },
-                        }))
-                      }
-                      className={IC}
-                    />
-                  </div>
-                  <div>
-                    <L>Shoes</L>
-                    <input
-                      value={ext.clothing_sizes?.shoe ?? ''}
-                      onChange={(e) =>
-                        setExt((p) => ({
-                          ...p,
-                          clothing_sizes: { ...p.clothing_sizes, shoe: e.target.value },
-                        }))
-                      }
-                      className={IC}
-                    />
-                  </div>
-                </div>
-                <div>
-                  <L>Merch size (legacy single field)</L>
-                  <input value={merchSize} onChange={(e) => setMerchSize(e.target.value)} className={IC} />
-                </div>
+              {/* Sprint 9 §13.D — Merch sizes moved to a
+                  dedicated multi-of-each section below. This
+                  section now carries food/beverage extras only. */}
+              <Section id="merch-extras" title="Food & drink preferences">
                 <div>
                   <L>Coffee order</L>
                   <textarea value={ext.merch_extras?.coffee_order ?? ''} onChange={(e) => setMx('coffee_order', e.target.value)} rows={2} className={cn(IC, 'resize-none')} />
@@ -806,7 +1270,7 @@ export function PersonnelDetailSlideOver({
                 </div>
               </Section>
 
-              <Section title="Notes for travel">
+              <Section id="travel-notes" title="Notes for travel">
                 <textarea
                   value={ext.travel_notes ?? ''}
                   onChange={(e) => setExt((p) => ({ ...p, travel_notes: e.target.value }))}
@@ -816,7 +1280,11 @@ export function PersonnelDetailSlideOver({
                 />
               </Section>
 
-              <Section title="Default day rates">
+              {/* Sprint 9 §13.B.1 — Pay section is admin /
+                  manager only per spec + Q5. The gate is set
+                  at the slide-over root via viewerCanSeePay. */}
+              {viewerCanSeePay ? (
+              <Section id="pay" title="Default day rates">
                 <div>
                   <L>Currency</L>
                   <BrandedSelect
@@ -840,18 +1308,47 @@ export function PersonnelDetailSlideOver({
                     <div key={key}>
                       <L>{label}</L>
                       <input
-                        type="number"
-                        min={0}
-                        value={rates[key]}
-                        onChange={(e) => setRates((r) => ({ ...r, [key]: Number(e.target.value) || 0 }))}
+                        /* Sprint 9 §14.1 — type=text + inputMode
+                           decimal so the user can clear the
+                           leading 0 without React re-stamping it.
+                           Numeric `rates` syncs whenever the
+                           string parses; transient empty / "0."
+                           input is preserved verbatim until then. */
+                        type="text"
+                        inputMode="decimal"
+                        value={rateInputs[key] ?? String(rates[key])}
+                        placeholder="0"
+                        onChange={(e) => {
+                          const raw = e.target.value;
+                          setRateInputs((m) => ({ ...m, [key]: raw }));
+                          if (raw === '') {
+                            setRates((r) => ({ ...r, [key]: 0 }));
+                            return;
+                          }
+                          const parsed = Number(raw);
+                          if (!Number.isNaN(parsed)) {
+                            setRates((r) => ({ ...r, [key]: parsed }));
+                          }
+                        }}
+                        onBlur={() => {
+                          // Normalise on blur: re-render the
+                          // canonical numeric value so empty /
+                          // partial inputs settle to a clean
+                          // string representation.
+                          setRateInputs((m) => ({
+                            ...m,
+                            [key]: String(rates[key]),
+                          }));
+                        }}
                         className={IC}
                       />
                     </div>
                   ))}
                 </div>
               </Section>
+              ) : null}
 
-              <Section title="Other">
+              <Section id="other" title="Other">
                 <div>
                   <L>Instruments / skills</L>
                   <input value={ext.instruments ?? ''} onChange={(e) => setExt((p) => ({ ...p, instruments: e.target.value }))} className={IC} />
@@ -882,6 +1379,538 @@ export function PersonnelDetailSlideOver({
                   <L>Internal notes (TM only)</L>
                   <textarea value={ext.internal_notes ?? ''} onChange={(e) => setExt((p) => ({ ...p, internal_notes: e.target.value }))} rows={2} className={cn(IC, 'resize-none')} />
                 </div>
+              </Section>
+
+              {/* Sprint 9 §13.D — Daysheets-style multi-of-each
+                  sections. Each writes to its v2 array on
+                  extended_profile + the legacy mirror via the
+                  sync helpers in personnel-extended-profile.ts.
+                  All six default-collapsed (Identity / "General
+                  info" is the only default-open section per
+                  §13.B.1 spec). */}
+              <Section id="emergency" title="Emergency contacts">
+                <MultiList<PersonnelEmergencyContactV2>
+                  items={emergencyContactsV2}
+                  empty="No emergency contacts yet."
+                  addLabel="Add emergency contact"
+                  /* Sprint 9 §14.2 — first +Add lifts legacy
+                     emergency_contact into the new entry so the
+                     operator gets a populated starting point
+                     instead of a blank form. Legacy is empty →
+                     entry is blank. Subsequent +Adds always
+                     blank. */
+                  onAdd={() =>
+                    setEmergencyContactsV2((arr) => {
+                      if (arr.length === 0) {
+                        const lifted = liftEmergencyContacts(ext);
+                        if (lifted.length > 0) return lifted;
+                      }
+                      return [
+                        ...arr,
+                        { name: '', relationship: '', phone: '', email: '' },
+                      ];
+                    })
+                  }
+                  onRemove={(i) =>
+                    setEmergencyContactsV2((arr) => arr.filter((_, idx) => idx !== i))
+                  }
+                  renderEntry={(entry, i) => (
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <L>Name</L>
+                        <input
+                          value={entry.name}
+                          onChange={(e) =>
+                            setEmergencyContactsV2((arr) =>
+                              arr.map((row, idx) =>
+                                idx === i ? { ...row, name: e.target.value } : row,
+                              ),
+                            )
+                          }
+                          className={IC}
+                        />
+                      </div>
+                      <div>
+                        <L>Relationship</L>
+                        <input
+                          value={entry.relationship}
+                          onChange={(e) =>
+                            setEmergencyContactsV2((arr) =>
+                              arr.map((row, idx) =>
+                                idx === i
+                                  ? { ...row, relationship: e.target.value }
+                                  : row,
+                              ),
+                            )
+                          }
+                          className={IC}
+                        />
+                      </div>
+                      <div>
+                        <L>Phone</L>
+                        <input
+                          value={entry.phone}
+                          onChange={(e) =>
+                            setEmergencyContactsV2((arr) =>
+                              arr.map((row, idx) =>
+                                idx === i ? { ...row, phone: e.target.value } : row,
+                              ),
+                            )
+                          }
+                          className={IC}
+                        />
+                      </div>
+                      <div>
+                        <L>Email (optional)</L>
+                        <input
+                          type="email"
+                          value={entry.email ?? ''}
+                          onChange={(e) =>
+                            setEmergencyContactsV2((arr) =>
+                              arr.map((row, idx) =>
+                                idx === i ? { ...row, email: e.target.value } : row,
+                              ),
+                            )
+                          }
+                          className={IC}
+                        />
+                      </div>
+                    </div>
+                  )}
+                />
+              </Section>
+
+              <Section id="passports" title="Passports (Daysheets-style)">
+                <MultiList<PersonnelPassportV2>
+                  items={passportsV2}
+                  empty="No passports yet."
+                  addLabel="Add passport"
+                  /* Sprint 9 §14.2 — first +Add lifts legacy
+                     form-style passports[] entries into v2
+                     shape so the operator doesn't re-enter
+                     country / number / dates. */
+                  onAdd={() =>
+                    setPassportsV2((arr) => {
+                      if (arr.length === 0) {
+                        const lifted = liftPassportsV2(ext);
+                        if (lifted.length > 0) return lifted;
+                      }
+                      return [
+                        ...arr,
+                        {
+                          country: '',
+                          number: '',
+                          given_names: '',
+                          surname: '',
+                          date_of_expiry: '',
+                        },
+                      ];
+                    })
+                  }
+                  onRemove={(i) =>
+                    setPassportsV2((arr) => arr.filter((_, idx) => idx !== i))
+                  }
+                  renderEntry={(entry, i) => {
+                    const update = (patch: Partial<PersonnelPassportV2>) =>
+                      setPassportsV2((arr) =>
+                        arr.map((row, idx) => (idx === i ? { ...row, ...patch } : row)),
+                      );
+                    return (
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div>
+                          <L>Country</L>
+                          <input
+                            value={entry.country}
+                            onChange={(e) => update({ country: e.target.value })}
+                            className={IC}
+                          />
+                        </div>
+                        <div>
+                          <L>Passport #</L>
+                          <input
+                            value={entry.number}
+                            onChange={(e) => update({ number: e.target.value })}
+                            className={IC}
+                          />
+                        </div>
+                        <div>
+                          <L>Given names</L>
+                          <input
+                            value={entry.given_names}
+                            onChange={(e) => update({ given_names: e.target.value })}
+                            className={IC}
+                          />
+                        </div>
+                        <div>
+                          <L>Surname</L>
+                          <input
+                            value={entry.surname}
+                            onChange={(e) => update({ surname: e.target.value })}
+                            className={IC}
+                          />
+                        </div>
+                        <div>
+                          <L>Date of issue</L>
+                          <input
+                            type="date"
+                            value={entry.date_of_issue ?? ''}
+                            onChange={(e) => update({ date_of_issue: e.target.value })}
+                            className={IC}
+                          />
+                        </div>
+                        <div>
+                          <L>Date of expiry</L>
+                          <input
+                            type="date"
+                            value={entry.date_of_expiry}
+                            onChange={(e) => update({ date_of_expiry: e.target.value })}
+                            className={IC}
+                          />
+                        </div>
+                        <div className="sm:col-span-2">
+                          <L>Place of birth</L>
+                          <input
+                            value={entry.place_of_birth ?? ''}
+                            onChange={(e) => update({ place_of_birth: e.target.value })}
+                            className={IC}
+                          />
+                        </div>
+                      </div>
+                    );
+                  }}
+                />
+              </Section>
+
+              <Section id="frequent-flier" title="Frequent flier">
+                <MultiList<PersonnelFrequentFlierV2>
+                  items={frequentFlierV2}
+                  empty="No frequent flier programmes yet."
+                  addLabel="Add airline"
+                  /* Sprint 9 §14.2 — first +Add lifts ALL legacy
+                     frequent_flyer_1..4 entries (not just one)
+                     since the legacy shape carried up to four
+                     lines. Subsequent +Adds always blank. */
+                  onAdd={() =>
+                    setFrequentFlierV2((arr) => {
+                      if (arr.length === 0) {
+                        const lifted = liftFrequentFlier(ext);
+                        if (lifted.length > 0) return lifted;
+                      }
+                      return [
+                        ...arr,
+                        { airline: '', member_number: '' },
+                      ];
+                    })
+                  }
+                  onRemove={(i) =>
+                    setFrequentFlierV2((arr) => arr.filter((_, idx) => idx !== i))
+                  }
+                  renderEntry={(entry, i) => {
+                    const update = (patch: Partial<PersonnelFrequentFlierV2>) =>
+                      setFrequentFlierV2((arr) =>
+                        arr.map((row, idx) => (idx === i ? { ...row, ...patch } : row)),
+                      );
+                    return (
+                      <div className="grid gap-3 sm:grid-cols-3">
+                        <div>
+                          <L>Airline</L>
+                          <input
+                            value={entry.airline}
+                            onChange={(e) => update({ airline: e.target.value })}
+                            className={IC}
+                          />
+                        </div>
+                        <div>
+                          <L>Member #</L>
+                          <input
+                            value={entry.member_number}
+                            onChange={(e) => update({ member_number: e.target.value })}
+                            className={IC}
+                          />
+                        </div>
+                        <div>
+                          <L>Tier</L>
+                          <select
+                            value={entry.tier ?? ''}
+                            onChange={(e) =>
+                              update({
+                                tier:
+                                  e.target.value === ''
+                                    ? undefined
+                                    : (e.target.value as PersonnelFrequentFlierTier),
+                              })
+                            }
+                            className={IC}
+                            style={{ height: SELECT_HEIGHT_PX }}
+                          >
+                            <option value="">—</option>
+                            {FLIER_TIERS.map((t) => (
+                              <option key={t.value} value={t.value}>
+                                {t.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    );
+                  }}
+                />
+              </Section>
+
+              <Section id="visas" title="Visas">
+                <MultiList<PersonnelVisaV2>
+                  items={visasV2}
+                  empty="No visas on file."
+                  addLabel="Add visa"
+                  /* Sprint 9 §14.2 — first +Add lifts legacy
+                     ext.visa block (single object) into a v2
+                     entry. */
+                  onAdd={() =>
+                    setVisasV2((arr) => {
+                      if (arr.length === 0) {
+                        const lifted = liftVisas(ext);
+                        if (lifted.length > 0) return lifted;
+                      }
+                      return [
+                        ...arr,
+                        { country: '', type: '', valid_to: '' },
+                      ];
+                    })
+                  }
+                  onRemove={(i) =>
+                    setVisasV2((arr) => arr.filter((_, idx) => idx !== i))
+                  }
+                  renderEntry={(entry, i) => {
+                    const update = (patch: Partial<PersonnelVisaV2>) =>
+                      setVisasV2((arr) =>
+                        arr.map((row, idx) => (idx === i ? { ...row, ...patch } : row)),
+                      );
+                    /* Sprint 9 §14.14 — extended visa fields:
+                       visa number, multi-entry flag, issuing
+                       authority. Layout order matches the spec:
+                       country → type → number → multi-entry
+                       checkbox → issuing authority → dates →
+                       notes. */
+                    return (
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div>
+                          <L>Country</L>
+                          <input
+                            value={entry.country}
+                            onChange={(e) => update({ country: e.target.value })}
+                            className={IC}
+                          />
+                        </div>
+                        <div>
+                          <L>Type</L>
+                          <input
+                            value={entry.type}
+                            onChange={(e) => update({ type: e.target.value })}
+                            className={IC}
+                            placeholder="e.g. Tourist B1/B2"
+                          />
+                        </div>
+                        <div>
+                          <L>Visa number</L>
+                          <input
+                            value={entry.visa_number ?? ''}
+                            onChange={(e) => update({ visa_number: e.target.value })}
+                            className={IC}
+                          />
+                        </div>
+                        <div>
+                          <L>Entries</L>
+                          <label
+                            className="inline-flex items-center"
+                            style={{
+                              gap: 8,
+                              padding: 'var(--lp-space-2) var(--lp-space-3)',
+                              background: 'var(--lp-surface)',
+                              border: '1px solid var(--lp-border)',
+                              borderRadius: 'var(--lp-radius-md)',
+                              cursor: 'pointer',
+                              fontSize: 'var(--lp-text-sm)',
+                              color: 'var(--lp-text)',
+                              height: SELECT_HEIGHT_PX,
+                            }}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={!!entry.multi_entry}
+                              onChange={(e) => update({ multi_entry: e.target.checked })}
+                              style={{ accentColor: 'var(--color-lp-orange)' }}
+                            />
+                            <span>Multi-entry</span>
+                          </label>
+                        </div>
+                        <div className="sm:col-span-2">
+                          <L>Issuing authority</L>
+                          <input
+                            value={entry.issuing_authority ?? ''}
+                            onChange={(e) => update({ issuing_authority: e.target.value })}
+                            className={IC}
+                            placeholder="Embassy / consulate / agency"
+                          />
+                        </div>
+                        <div>
+                          <L>Valid from</L>
+                          <input
+                            type="date"
+                            value={entry.valid_from ?? ''}
+                            onChange={(e) => update({ valid_from: e.target.value })}
+                            className={IC}
+                          />
+                        </div>
+                        <div>
+                          <L>Valid to</L>
+                          <input
+                            type="date"
+                            value={entry.valid_to}
+                            onChange={(e) => update({ valid_to: e.target.value })}
+                            className={IC}
+                          />
+                        </div>
+                        <div className="sm:col-span-2">
+                          <L>Notes</L>
+                          <textarea
+                            value={entry.notes ?? ''}
+                            onChange={(e) => update({ notes: e.target.value })}
+                            rows={2}
+                            className={cn(IC, 'resize-none')}
+                          />
+                        </div>
+                      </div>
+                    );
+                  }}
+                />
+              </Section>
+
+              <Section id="dietary" title="Dietary requirements">
+                <MultiList<PersonnelDietaryV2>
+                  items={dietaryV2}
+                  empty="No dietary requirements specified."
+                  addLabel="Add dietary requirement"
+                  /* Sprint 9 §14.2 — first +Add lifts the legacy
+                     dietary_needs string (top-level personnel
+                     column, held in `dietary` state) into a
+                     custom-typed entry so the operator can
+                     refine without retyping. */
+                  onAdd={() =>
+                    setDietaryV2((arr) => {
+                      if (arr.length === 0) {
+                        const lifted = liftDietary(dietary, ext);
+                        if (lifted.length > 0) return lifted;
+                      }
+                      return [
+                        ...arr,
+                        { type: 'vegetarian' },
+                      ];
+                    })
+                  }
+                  onRemove={(i) =>
+                    setDietaryV2((arr) => arr.filter((_, idx) => idx !== i))
+                  }
+                  renderEntry={(entry, i) => {
+                    const update = (patch: Partial<PersonnelDietaryV2>) =>
+                      setDietaryV2((arr) =>
+                        arr.map((row, idx) => (idx === i ? { ...row, ...patch } : row)),
+                      );
+                    return (
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div>
+                          <L>Type</L>
+                          <select
+                            value={entry.type}
+                            onChange={(e) =>
+                              update({ type: e.target.value as PersonnelDietaryType })
+                            }
+                            className={IC}
+                            style={{ height: SELECT_HEIGHT_PX }}
+                          >
+                            {DIETARY_TYPES.map((t) => (
+                              <option key={t.value} value={t.value}>
+                                {t.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <L>Notes / details</L>
+                          <input
+                            value={entry.notes ?? ''}
+                            onChange={(e) => update({ notes: e.target.value })}
+                            className={IC}
+                            placeholder="e.g. severe nut allergy"
+                          />
+                        </div>
+                      </div>
+                    );
+                  }}
+                />
+              </Section>
+
+              <Section id="merch-sizes" title="Merch sizes (Daysheets-style)">
+                <MultiList<PersonnelMerchSizeV2>
+                  items={merchSizesV2}
+                  empty="No merch sizes recorded."
+                  addLabel="Add size"
+                  /* Sprint 9 §14.2 — first +Add lifts legacy
+                     clothing_sizes block + merch_size string
+                     into v2 entries (one per filled garment)
+                     so the operator doesn't re-enter every
+                     size. */
+                  onAdd={() =>
+                    setMerchSizesV2((arr) => {
+                      if (arr.length === 0) {
+                        const lifted = liftMerchSizes(merchSize, ext);
+                        if (lifted.length > 0) return lifted;
+                      }
+                      return [
+                        ...arr,
+                        { garment: 't_shirt', size: '' },
+                      ];
+                    })
+                  }
+                  onRemove={(i) =>
+                    setMerchSizesV2((arr) => arr.filter((_, idx) => idx !== i))
+                  }
+                  renderEntry={(entry, i) => {
+                    const update = (patch: Partial<PersonnelMerchSizeV2>) =>
+                      setMerchSizesV2((arr) =>
+                        arr.map((row, idx) => (idx === i ? { ...row, ...patch } : row)),
+                      );
+                    return (
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div>
+                          <L>Garment</L>
+                          <select
+                            value={entry.garment}
+                            onChange={(e) =>
+                              update({ garment: e.target.value as PersonnelGarment })
+                            }
+                            className={IC}
+                            style={{ height: SELECT_HEIGHT_PX }}
+                          >
+                            {GARMENTS.map((g) => (
+                              <option key={g.value} value={g.value}>
+                                {g.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <L>Size</L>
+                          <input
+                            value={entry.size}
+                            onChange={(e) => update({ size: e.target.value })}
+                            className={IC}
+                            placeholder="XS / S / M / L / XL / 30 / 10 etc."
+                          />
+                        </div>
+                      </div>
+                    );
+                  }}
+                />
               </Section>
 
               <div className="mt-6 rounded-lg border border-lp-border bg-lp-surface/40 p-4 text-[11px] leading-relaxed text-lp-text-secondary">

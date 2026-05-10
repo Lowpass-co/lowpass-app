@@ -7,16 +7,38 @@
 
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { Suspense, useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase-client';
 import { LowpassLogo } from '@/components/common/LowpassLogo';
 import { cn } from '@/lib/utils';
 
+/* Sprint 9 §14.3 — honor `next` query param after auth so the
+   invite-accept landing (and any other deep-link redirect)
+   picks up where it left off. The `next` value MUST be a same-
+   origin path (starts with "/" but not "//") to prevent open
+   redirects to attacker-controlled hosts. */
+function safeNextPath(raw: string | null): string | null {
+  if (!raw) return null;
+  if (!raw.startsWith('/')) return null;
+  if (raw.startsWith('//')) return null;
+  return raw;
+}
+
 export default function LoginPage() {
+  return (
+    <Suspense fallback={null}>
+      <LoginPageInner />
+    </Suspense>
+  );
+}
+
+function LoginPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const supabase = createClient();
+  const nextPath = safeNextPath(searchParams?.get('next') ?? null);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -153,7 +175,7 @@ export default function LoginPage() {
       }
     }, 4500);
     setTimeout(() => {
-      router.push('/dashboard');
+      router.push(nextPath ?? '/dashboard');
       router.refresh();
     }, 420);
   };
@@ -172,9 +194,16 @@ export default function LoginPage() {
   };
 
   const handleGoogleLogin = async () => {
+    /* Sprint 10 §5.1 — thread `next` through the OAuth
+       callback so deep-links (e.g. /invite/accept?token=...)
+       survive Google's redirect. The callback route's
+       safeNextPath() guard prevents open-redirect abuse. */
+    const callbackParams = new URLSearchParams();
+    if (nextPath) callbackParams.set('next', nextPath);
+    const callbackUrl = `${window.location.origin}/auth/callback${callbackParams.toString() ? `?${callbackParams.toString()}` : ''}`;
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
+      options: { redirectTo: callbackUrl },
     });
     if (error) setError(error.message);
   };
