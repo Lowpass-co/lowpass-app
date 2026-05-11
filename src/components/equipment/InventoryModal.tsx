@@ -12,7 +12,7 @@ import {
   dayRateFromPurchase,
   isDayRateManual,
 } from '@/lib/rental-pricing';
-import { CATEGORIES, type RentalInventoryItem } from './types';
+import { CATEGORIES, INVENTORY_STATUS_OPTIONS, type InventoryStatus, type RentalInventoryItem } from './types';
 
 interface Props {
   userId: string;
@@ -43,6 +43,13 @@ export function InventoryModal({ userId, editing, onSave, onClose }: Props) {
   });
   const [imageUrl, setImageUrl]     = useState(editing?.image_url        ?? '');
   const [notes, setNotes]           = useState(editing?.notes            ?? '');
+  /* Sprint 11 §6 — status field exposed on the single-item
+     modal so operators can set lifecycle state on add / edit
+     without going through bulk-edit. Mirrors the column
+     surfaced in InventoryTab. */
+  const [status, setStatus]         = useState<InventoryStatus>(
+    (editing?.status ?? 'available') as InventoryStatus,
+  );
   const [saving, setSaving]         = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
   const supabase = createClient();
@@ -51,6 +58,11 @@ export function InventoryModal({ userId, editing, onSave, onClose }: Props) {
     { value: '', label: '— select —' },
     ...CATEGORIES.map((c) => ({ value: c, label: c })),
   ];
+
+  const statusOptions: StyledSelectOption<string>[] = INVENTORY_STATUS_OPTIONS.map((o) => ({
+    value: o.value,
+    label: o.label,
+  }));
 
   useEffect(() => { nameRef.current?.focus(); }, []);
 
@@ -115,6 +127,7 @@ export function InventoryModal({ userId, editing, onSave, onClose }: Props) {
       day_rate_manual:   finalManual,
       image_url:         imageUrl.trim() || null,
       notes:             notes.trim() || null,
+      status:            status,
     };
 
     let result;
@@ -181,6 +194,17 @@ export function InventoryModal({ userId, editing, onSave, onClose }: Props) {
               <input value={serial} onChange={e => setSerial(e.target.value)} placeholder="SN-00000" className="lp-input" />
             </Field>
           </div>
+
+          {/* Sprint 11 §6 — Status. Single-item add/edit can
+              now set the lifecycle state directly instead of
+              going through bulk-edit. */}
+          <Field label="Status">
+            <StyledSelect
+              value={status}
+              onChange={(v) => setStatus((v || 'available') as InventoryStatus)}
+              options={statusOptions}
+            />
+          </Field>
 
           {/* Origin + Weight */}
           <div className="grid grid-cols-2 gap-4">
