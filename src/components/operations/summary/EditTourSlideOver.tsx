@@ -1,38 +1,61 @@
 'use client';
 
 /* ============================================
-   LOWPASS — EditTourSlideOver (Sprint 9 §13.C.1)
+   LOWPASS — EditTourSlideOver
+   (Sprint 9 §13.C.1 baseline; Sprint 11 §4c hybrid auto-save)
 
-   Canonical tour-settings editor (per Q7). Supersedes the
-   prior <ExtendTourSlideOver> single-purpose date editor —
-   wraps name + start_date + end_date + currency + continent
-   into one slide-over so the operator doesn't bounce between
-   "Edit tour" and "Extend tour" surfaces.
+   Canonical tour-settings editor (per Q7). Wraps name +
+   start_date + end_date + currency + continent into one
+   slide-over so the operator doesn't bounce between "Edit
+   tour" and "Extend tour" surfaces.
 
-   Behaviour parity with ExtendTourSlideOver for the date
+   Sprint 11 §4c — HYBRID auto-save pattern. Two field groups:
+
+     Safe fields (auto-saved, debounced 600ms):
+       - name
+       - currency
+       - continent
+     These all have one-shot effects. Auto-saving them matches
+     the pattern from §4a/§4b.
+
+     Destructive fields (explicit Save, gated by confirmation):
+       - start_date
+       - end_date
+     Narrowing the window can ORPHAN routing rows (rows fall
+     outside the new window and won't appear in default views).
+     The Save flow surfaces a confirmation modal listing every
+     out-of-window row before committing. Auto-save would
+     bypass that gate — typing "06" while editing a date would
+     fire a PATCH at the half-typed value.
+
+   Footer in edit mode:
+     [SaveStatus pill]  [Cancel]  [Save dates]
+     - SaveStatus reflects only the auto-saved subset.
+     - Cancel restores BOTH groups (snapshot for safe fields
+       via the hook; explicit reset for date fields).
+     - "Save dates" is enabled when start_date / end_date
+       differs from the open-time snapshot. Triggers the
+       existing out-of-window confirmation when needed.
+
+   Hybrid pattern documented in CLAUDE.md so future slide-overs
+   with destructive paths know how to opt out of full auto-save.
+
+   Behaviour parity with the original ExtendTourSlideOver date
    path: validates end_date >= start_date and surfaces a
    warning + confirmation modal when routing rows fall outside
    the new window (rows aren't auto-deleted — operator decides).
 
    The legacy /tours/[id]/edit route is intentionally untouched
    (Phase 4 of Operations migration formally retires it).
-
-   API:
-     <EditTourSlideOver
-       open={...}
-       tourId={...}
-       initial={{ name, start_date, end_date, currency, continent }}
-       routingDates={...}
-       onClose={...}
-       onSaved={...}
-     />
    ============================================ */
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
 import { SlideOver } from '@/components/shell/SlideOver';
+import { useAutoSave } from '@/lib/forms/useAutoSave';
+import { SaveStatus } from '@/components/forms/SaveStatus';
 
 interface OutOfWindowRow {
   id: string;
@@ -55,7 +78,7 @@ interface EditTourSlideOverProps {
   initial: EditTourInitial;
   /** Routing rows for this tour — used to warn about
    *  out-of-window dates when the operator narrows the
-   *  window. Same shape as ExtendTourSlideOver consumed. */
+   *  window. */
   routingDates: ReadonlyArray<OutOfWindowRow>;
   onClose: () => void;
   onSaved: () => void;
@@ -81,7 +104,47 @@ function formatDate(iso: string): string {
   });
 }
 
+/** Auto-saved subset. */
+interface SafeFields {
+  name: string;
+  currency: string;
+  continent: string;
+}
+
+function initialSafeFields(initial: EditTourInitial): SafeFields {
+  return {
+    name: initial.name ?? '',
+    currency: initial.currency ?? 'GBP',
+    continent: initial.continent ?? '',
+  };
+}
+
 export function EditTourSlideOver({
+  open,
+  tourId,
+  initial,
+  routingDates,
+  onClose,
+  onSaved,
+}: EditTourSlideOverProps) {
+  /* The hook captures `initialState` once. Remount the editor
+     via key= whenever the slide-over opens or the initial
+     props change so the snapshot reflects the freshly-loaded
+     server state. */
+  return (
+    <EditTourSlideOverInner
+      key={`${tourId}:${open ? 'open' : 'closed'}:${initial.start_date ?? ''}:${initial.end_date ?? ''}`}
+      open={open}
+      tourId={tourId}
+      initial={initial}
+      routingDates={routingDates}
+      onClose={onClose}
+      onSaved={onSaved}
+    />
+  );
+}
+
+function EditTourSlideOverInner({
   open,
   tourId,
   initial,
@@ -92,29 +155,57 @@ export function EditTourSlideOver({
   const { showToast } = useToast();
   const router = useRouter();
 
-  const [name, setName] = useState(initial.name ?? '');
+  /* Date fields stay in conventional state — destructive
+     narrowing path uses an explicit Save with confirmation
+     modal (see top-of-file comment). */
   const [startDate, setStartDate] = useState(initial.start_date ?? '');
   const [endDate, setEndDate] = useState(initial.end_date ?? '');
-  const [currency, setCurrency] = useState(initial.currency ?? 'GBP');
-  const [continent, setContinent] = useState(initial.continent ?? '');
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [datesSaving, setDatesSaving] = useState(false);
+  const [datesError, setDatesError] = useState<string | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
 
-  // Reset local state whenever the slide-over reopens or the
-  // server-provided initial values change.
-  useEffect(() => {
-    if (!open) return;
-    setName(initial.name ?? '');
-    setStartDate(initial.start_date ?? '');
-    setEndDate(initial.end_date ?? '');
-    setCurrency(initial.currency ?? 'GBP');
-    setContinent(initial.continent ?? '');
-    setError(null);
-    setConfirmOpen(false);
-  }, [open, initial.name, initial.start_date, initial.end_date, initial.currency, initial.continent]);
+  /* Safe fields auto-save via the hook. onSave PATCHes only
+     these three fields — the date fields go through the
+     explicit save path so they're omitted here. */
+  const {
+    state: safe,
+    set: setSafe,
+    status,
+    lastSavedAt,
+    errorMessage,
+    cancel: cancelSafe,
+    flushSave: flushSafe,
+  } = useAutoSave<SafeFields>({
+    initialState: initialSafeFields(initial),
+    onSave: async (s) => {
+      const trimmedName = s.name.trim();
+      if (!trimmedName) {
+        setValidationError('Tour name is required.');
+        // Don't throw — soft validation while user keeps typing.
+        return;
+      }
+      setValidationError(null);
+      const res = await fetch(`/api/tours/${tourId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: trimmedName,
+          currency: s.currency || null,
+          continent: s.continent || null,
+        }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as
+          | { error?: string }
+          | null;
+        throw new Error(body?.error ?? `Save failed (${res.status})`);
+      }
+      router.refresh();
+      onSaved();
+    },
+  });
 
-  const trimmedName = name.trim();
   const validRange =
     !!startDate && !!endDate && new Date(endDate) >= new Date(startDate);
   const datesChanged =
@@ -133,49 +224,43 @@ export function EditTourSlideOver({
     });
   })();
 
-  async function commit() {
-    setSaving(true);
-    setError(null);
+  async function commitDates() {
+    setDatesSaving(true);
+    setDatesError(null);
     try {
       const res = await fetch(`/api/tours/${tourId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: trimmedName,
           start_date: startDate || null,
           end_date: endDate || null,
-          currency: currency || null,
-          continent: continent || null,
         }),
       });
       if (!res.ok) {
         const body = (await res.json().catch(() => null)) as { error?: string } | null;
-        setError(body?.error ?? `Save failed (${res.status})`);
+        setDatesError(body?.error ?? `Save failed (${res.status})`);
         return;
       }
-      showToast('Tour settings updated.');
+      showToast('Tour dates updated.');
       // Sprint 9 §13.A.9 — invalidate the route's server
       // components so TourHeader re-renders with the new
-      // dates / name immediately.
+      // dates immediately.
       router.refresh();
       onSaved();
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Network error');
+      setDatesError(err instanceof Error ? err.message : 'Network error');
     } finally {
-      setSaving(false);
+      setDatesSaving(false);
       setConfirmOpen(false);
     }
   }
 
-  function handleSaveClick() {
-    if (!trimmedName) {
-      setError('Tour name is required.');
-      return;
-    }
+  function handleSaveDatesClick() {
+    setDatesError(null);
     if (startDate || endDate) {
       if (!validRange) {
-        setError('End date must be on or after start date.');
+        setDatesError('End date must be on or after start date.');
         return;
       }
     }
@@ -183,12 +268,30 @@ export function EditTourSlideOver({
       setConfirmOpen(true);
       return;
     }
-    void commit();
+    void commitDates();
   }
 
-  // Shared input style — kept inline to match the existing
-  // ExtendTourSlideOver visual language without adding a
-  // dependency on a new primitive.
+  /* Close path: flush any pending safe-fields save so the
+     last keystroke isn't lost. Date changes that haven't been
+     explicitly saved are abandoned (the explicit-Save flow
+     gates them by design). */
+  const handleClose = async () => {
+    await flushSafe();
+    onClose();
+  };
+
+  const handleCancel = async () => {
+    // Restore safe fields via hook snapshot.
+    await cancelSafe();
+    // Reset dates locally — no PATCH needed because the user
+    // never explicitly saved them.
+    setStartDate(initial.start_date ?? '');
+    setEndDate(initial.end_date ?? '');
+    showToast('Changes reverted.');
+    onClose();
+  };
+
+  // Shared input style.
   const inputStyle: React.CSSProperties = {
     width: '100%',
     minWidth: 0,
@@ -210,7 +313,7 @@ export function EditTourSlideOver({
 
   return (
     <>
-      <SlideOver open={open} onClose={onClose} title="Edit tour" width="default">
+      <SlideOver open={open} onClose={() => void handleClose()} title="Edit tour" width="default">
         <div
           style={{
             display: 'flex',
@@ -231,6 +334,7 @@ export function EditTourSlideOver({
             database but won&apos;t appear in default views.
           </p>
 
+          {/* Auto-saved field: name */}
           <div>
             <label htmlFor="lp-edit-tour-name" className="lp-label-caps" style={labelStyle}>
               Name
@@ -238,12 +342,17 @@ export function EditTourSlideOver({
             <input
               id="lp-edit-tour-name"
               type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
+              value={safe.name}
+              onChange={(e) => setSafe((p) => ({ ...p, name: e.target.value }))}
               style={inputStyle}
             />
           </div>
 
+          {/* Explicit-save fields: dates. The "Save dates"
+              button at the bottom of the date block is enabled
+              when the dates differ from the open-time snapshot;
+              clicking commits via the same out-of-window
+              confirmation flow as the original Save button. */}
           <div
             style={{
               display: 'grid',
@@ -277,49 +386,6 @@ export function EditTourSlideOver({
             </div>
           </div>
 
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
-              gap: 'var(--lp-space-3)',
-            }}
-          >
-            <div style={{ minWidth: 0 }}>
-              <label htmlFor="lp-edit-tour-currency" className="lp-label-caps" style={labelStyle}>
-                Currency
-              </label>
-              <select
-                id="lp-edit-tour-currency"
-                value={currency}
-                onChange={(e) => setCurrency(e.target.value)}
-                style={inputStyle}
-              >
-                {CURRENCIES.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div style={{ minWidth: 0 }}>
-              <label htmlFor="lp-edit-tour-continent" className="lp-label-caps" style={labelStyle}>
-                Continent
-              </label>
-              <select
-                id="lp-edit-tour-continent"
-                value={continent}
-                onChange={(e) => setContinent(e.target.value)}
-                style={inputStyle}
-              >
-                {CONTINENTS.map((c) => (
-                  <option key={c.value} value={c.value}>
-                    {c.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
           {!validRange && (startDate || endDate) ? (
             <div
               role="alert"
@@ -336,7 +402,100 @@ export function EditTourSlideOver({
             </div>
           ) : null}
 
-          {error ? (
+          {/* Save-dates button — only appears when dates have
+              been edited. Auto-saved fields don't need a
+              button. */}
+          {datesChanged ? (
+            <div
+              className="flex items-center justify-between"
+              style={{
+                gap: 'var(--lp-space-2)',
+                padding: 'var(--lp-space-2) var(--lp-space-3)',
+                background: 'color-mix(in srgb, var(--color-lp-warning, #c97a1d) 6%, transparent)',
+                border:
+                  '1px solid color-mix(in srgb, var(--color-lp-warning, #c97a1d) 25%, transparent)',
+                borderRadius: 'var(--lp-radius-md)',
+              }}
+            >
+              <p
+                style={{
+                  margin: 0,
+                  fontSize: 'var(--lp-text-xs)',
+                  color: 'var(--lp-text-secondary)',
+                }}
+              >
+                Date changes need explicit Save — the orphan-row
+                check runs first.
+              </p>
+              <button
+                type="button"
+                onClick={handleSaveDatesClick}
+                disabled={datesSaving || (!validRange && (!!startDate || !!endDate))}
+                className="btn-transition btn-primary-press inline-flex items-center"
+                style={{
+                  gap: 6,
+                  padding: 'var(--lp-space-2) var(--lp-space-4)',
+                  fontSize: 'var(--lp-text-sm)',
+                  fontWeight: 'var(--lp-weight-semibold)',
+                  color: 'var(--lp-text-inverse)',
+                  background: 'var(--color-lp-orange)',
+                  border: '1px solid transparent',
+                  borderRadius: 'var(--lp-radius-md)',
+                  cursor: datesSaving ? 'not-allowed' : 'pointer',
+                  opacity: datesSaving ? 0.7 : 1,
+                }}
+              >
+                {datesSaving ? <Loader2 size={14} className="animate-spin" /> : null}
+                Save dates
+              </button>
+            </div>
+          ) : null}
+
+          {/* Auto-saved fields: currency + continent */}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
+              gap: 'var(--lp-space-3)',
+            }}
+          >
+            <div style={{ minWidth: 0 }}>
+              <label htmlFor="lp-edit-tour-currency" className="lp-label-caps" style={labelStyle}>
+                Currency
+              </label>
+              <select
+                id="lp-edit-tour-currency"
+                value={safe.currency}
+                onChange={(e) => setSafe((p) => ({ ...p, currency: e.target.value }))}
+                style={inputStyle}
+              >
+                {CURRENCIES.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div style={{ minWidth: 0 }}>
+              <label htmlFor="lp-edit-tour-continent" className="lp-label-caps" style={labelStyle}>
+                Continent
+              </label>
+              <select
+                id="lp-edit-tour-continent"
+                value={safe.continent}
+                onChange={(e) => setSafe((p) => ({ ...p, continent: e.target.value }))}
+                style={inputStyle}
+              >
+                {CONTINENTS.map((c) => (
+                  <option key={c.value} value={c.value}>
+                    {c.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {validationError ? (
             <div
               role="alert"
               style={{
@@ -348,15 +507,41 @@ export function EditTourSlideOver({
                 borderRadius: 'var(--lp-radius-md)',
               }}
             >
-              {error}
+              {validationError}
             </div>
           ) : null}
 
-          <div className="flex justify-end" style={{ gap: 'var(--lp-space-2)' }}>
+          {datesError ? (
+            <div
+              role="alert"
+              style={{
+                padding: 'var(--lp-space-2) var(--lp-space-3)',
+                fontSize: 'var(--lp-text-sm)',
+                color: 'var(--color-lp-error)',
+                background: 'color-mix(in srgb, var(--color-lp-error) 8%, transparent)',
+                border: '1px solid color-mix(in srgb, var(--color-lp-error) 25%, transparent)',
+                borderRadius: 'var(--lp-radius-md)',
+              }}
+            >
+              {datesError}
+            </div>
+          ) : null}
+
+          {/* Footer: SaveStatus pill (auto-saved fields) +
+              Cancel + Done. The "Save dates" button lives
+              inline next to the date inputs since it's a
+              field-group-specific action. */}
+          <div className="flex items-center justify-end" style={{ gap: 'var(--lp-space-2)' }}>
+            <SaveStatus
+              status={status}
+              lastSavedAt={lastSavedAt}
+              errorMessage={errorMessage}
+              onRetry={() => void flushSafe()}
+            />
             <button
               type="button"
-              onClick={onClose}
-              disabled={saving}
+              onClick={() => void handleCancel()}
+              disabled={datesSaving}
               className="btn-transition"
               style={{
                 padding: 'var(--lp-space-2) var(--lp-space-4)',
@@ -367,13 +552,14 @@ export function EditTourSlideOver({
                 borderRadius: 'var(--lp-radius-md)',
                 cursor: 'pointer',
               }}
+              title="Discard auto-saved changes (and abandon any unsaved date edits)."
             >
               Cancel
             </button>
             <button
               type="button"
-              onClick={handleSaveClick}
-              disabled={saving || (!validRange && (!!startDate || !!endDate))}
+              onClick={() => void handleClose()}
+              disabled={datesSaving}
               className="btn-transition btn-primary-press inline-flex items-center"
               style={{
                 gap: 6,
@@ -384,12 +570,10 @@ export function EditTourSlideOver({
                 background: 'var(--color-lp-orange)',
                 border: '1px solid transparent',
                 borderRadius: 'var(--lp-radius-md)',
-                cursor: saving ? 'not-allowed' : 'pointer',
-                opacity: saving ? 0.7 : 1,
+                cursor: 'pointer',
               }}
             >
-              {saving ? <Loader2 size={14} className="animate-spin" /> : null}
-              Save
+              Done
             </button>
           </div>
         </div>
@@ -486,7 +670,7 @@ export function EditTourSlideOver({
               <button
                 type="button"
                 onClick={() => setConfirmOpen(false)}
-                disabled={saving}
+                disabled={datesSaving}
                 className="btn-transition"
                 style={{
                   padding: 'var(--lp-space-2) var(--lp-space-4)',
@@ -502,8 +686,8 @@ export function EditTourSlideOver({
               </button>
               <button
                 type="button"
-                onClick={() => void commit()}
-                disabled={saving}
+                onClick={() => void commitDates()}
+                disabled={datesSaving}
                 className="btn-transition btn-primary-press inline-flex items-center"
                 style={{
                   gap: 6,
@@ -514,11 +698,11 @@ export function EditTourSlideOver({
                   background: 'var(--color-lp-orange)',
                   border: '1px solid transparent',
                   borderRadius: 'var(--lp-radius-md)',
-                  cursor: saving ? 'not-allowed' : 'pointer',
-                  opacity: saving ? 0.7 : 1,
+                  cursor: datesSaving ? 'not-allowed' : 'pointer',
+                  opacity: datesSaving ? 0.7 : 1,
                 }}
               >
-                {saving ? <Loader2 size={14} className="animate-spin" /> : null}
+                {datesSaving ? <Loader2 size={14} className="animate-spin" /> : null}
                 Save anyway
               </button>
             </div>

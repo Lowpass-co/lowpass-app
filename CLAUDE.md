@@ -96,6 +96,34 @@ Phase 4 (Operations migration) ports the rest. Until then: new pages under `/ope
 
 Five canonical entity kinds: `person`, `flight`, `room`, `gear`, `show`. Each has a registry descriptor in `src/lib/entities/`. **Do not query their tables directly from UI components** — go through `getEntityDescriptor(kind).fetchById()` / `.search()`. Adding a sixth entity kind is a non-trivial change; add it to the registry, the `EntityKind` union, and write a slide-over (using the `<SlideOver>` primitive).
 
+### Multi-field slide-overs — auto-save vs explicit Save
+
+Sprint 11 §4 adopted `useAutoSave` (`src/lib/forms/useAutoSave.ts`) + `<SaveStatus>` (`src/components/forms/SaveStatus.tsx`) across the four big multi-field slide-overs. Pattern:
+
+- All editable fields fold into a single state shape `T` owned by the hook. Snapshot at open, debounced PATCH on each change, `cancel()` restores the snapshot via one final PATCH.
+- Footer becomes `[Remove?] [SaveStatus pill] [Cancel] [Done]`. Cancel restores snapshot + closes; Done flushes any pending save + closes; X / overlay click flushes too (so the last keystroke isn't lost).
+- Slide-overs remount via `key={`${id}:${open}`}` so the snapshot resets on entity switch.
+- Validation that's hard (network failure, schema mismatch) → throw → `error` pill + Retry. Validation that's transient (mid-typing a number) → `setValidationError` + skip the PATCH; don't throw.
+
+**Hybrid pattern for slide-overs with destructive paths** (`EditTourSlideOver` is the canonical example):
+
+Some fields have cascading consequences — narrowing a tour window orphans routing rows; toggling a sensitive grant exposes data. Auto-saving them would bypass safety gates.
+
+The hybrid pattern splits state into two groups:
+
+1. **Safe fields** (one-shot effects) → `useAutoSave` with `T = { /* safe subset */ }`.
+2. **Destructive fields** (cascading effects) → conventional `useState` + an inline explicit Save button next to the field group, gated by the existing confirmation modal.
+
+Example (`EditTourSlideOver`):
+- Safe: `name`, `currency`, `continent` → auto-saved.
+- Destructive: `start_date`, `end_date` → explicit "Save dates" button + out-of-window confirmation modal listing every routing row that would fall outside the new window.
+
+Cancel restores BOTH groups (snapshot for safe fields via the hook; explicit reset for the destructive ones, which were never PATCHed). The SaveStatus pill in the footer only reflects the auto-saved subset.
+
+When introducing a new slide-over with a destructive path, opt for hybrid rather than full auto-save. Document the safe / destructive split at the top of the file.
+
+**Sensitive-grants policy** (`MemberManageSlideOver`): the visible warning panel + Cancel-restores-snapshot replaces the Sprint 9 confirm-on-Save modal. Future slide-overs that toggle visible-warning state should follow the same pattern — show the consequence inline the moment it's triggered, and rely on Cancel for the safety gate.
+
 ### `_legacy/` directories — leaky on purpose
 
 Two `_legacy/` trees exist:
