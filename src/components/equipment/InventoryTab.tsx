@@ -5,7 +5,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Plus, Pencil, Trash2, Search, Upload, SquarePen, Check, X as XIcon, ImageIcon, Loader2, Briefcase } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, Upload, SquarePen, Check, X as XIcon, ImageIcon, Loader2, Briefcase, Printer } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { createClient } from '@/lib/supabase-client';
 import { InventoryModal } from './InventoryModal';
@@ -580,6 +580,36 @@ export function InventoryTab({ userId, workspaceId, inventory, setInventory }: P
             )}
           </span>
           <div className="flex flex-wrap items-center justify-end gap-2">
+            {/* Sprint 12 §2 — bulk QR print. Surfaces only when
+                rows are selected. Routes to the print-labels
+                page with the ids in the URL; that page renders
+                the grid + fires window.print() on click. */}
+            {selectedIds.size > 0 && (
+              <a
+                href={`/rental/print-labels?ids=${encodeURIComponent(Array.from(selectedIds).join(','))}`}
+                target="_blank"
+                rel="noopener"
+                className="flex shrink-0 items-center gap-1.5 rounded-lg border px-3 py-2 text-xs font-semibold transition-colors"
+                style={{
+                  borderColor: 'var(--lp-border)',
+                  color: 'var(--lp-text-secondary)',
+                  backgroundColor: 'transparent',
+                  textDecoration: 'none',
+                }}
+                onMouseOver={(e) => {
+                  e.currentTarget.style.borderColor = '#FF4500';
+                  e.currentTarget.style.color = '#FF4500';
+                }}
+                onMouseOut={(e) => {
+                  e.currentTarget.style.borderColor = 'var(--lp-border)';
+                  e.currentTarget.style.color = 'var(--lp-text-secondary)';
+                }}
+                title="Open the print sheet for the selected items"
+              >
+                <Printer size={13} strokeWidth={2.5} />
+                Print {selectedIds.size} label{selectedIds.size === 1 ? '' : 's'}
+              </a>
+            )}
             {selectedIds.size > 0 && (
               <button
                 type="button"

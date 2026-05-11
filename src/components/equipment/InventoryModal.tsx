@@ -13,6 +13,7 @@ import {
   isDayRateManual,
 } from '@/lib/rental-pricing';
 import { CATEGORIES, INVENTORY_STATUS_OPTIONS, type InventoryStatus, type RentalInventoryItem } from './types';
+import { QRPreview } from '@/components/rental/QRPreview';
 
 interface Props {
   userId: string;
@@ -292,6 +293,18 @@ export function InventoryModal({ userId, workspaceId, editing, onSave, onClose }
               placeholder="Condition, accessories, quirks…"
               rows={2}
               className="lp-input resize-none"
+            />
+          </Field>
+
+          {/* Sprint 12 §2 — QR preview + print button. Edit
+              mode shows the rendered SVG + qr_token; Add mode
+              shows a placeholder ("generated on first save").
+              The print button opens /rental/print-labels for
+              this single item. */}
+          <Field label="QR label">
+            <QRPreview
+              inventoryId={editing?.id ?? null}
+              qrToken={editing?.qr_token ?? null}
             />
           </Field>
         </div>
