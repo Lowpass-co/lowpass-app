@@ -241,6 +241,11 @@ export const HISTORY_CHANGE_TYPES = [
   'section.updated',
   'section.removed',
   'section.reordered',
+  /* Sprint 12 §7 — fired when an artist-scope template is
+     instantiated onto a tour via the AssignToTourDialog.
+     newValue carries { template_pack_id, template_folder_id,
+     tour_id, tour_name, kind, sections_copied }. */
+  'pack.assigned_from_template',
 ] as const;
 
 export type HistoryChangeType = (typeof HISTORY_CHANGE_TYPES)[number];
