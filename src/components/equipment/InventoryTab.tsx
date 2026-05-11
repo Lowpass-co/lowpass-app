@@ -22,9 +22,33 @@ import {
 import {
   CATEGORIES,
   EQUIPMENT_TABLE_MIN_CLASS,
+  INVENTORY_STATUS_OPTIONS,
+  INVENTORY_STATUS_STYLES,
   fmtUSD,
+  type InventoryStatus,
   type RentalInventoryItem,
 } from './types';
+
+/* ============================================
+   Sprint 11 §5 — relative-time formatter for the "Last used"
+   column. Returns "—" when never used (last_used_at is null),
+   else a coarse relative window matching the personnel grid's
+   activity dot semantics ("today" / "Xd ago" / etc.).
+   ============================================ */
+function fmtLastUsed(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  const t = new Date(iso).getTime();
+  if (!Number.isFinite(t)) return '—';
+  const diffMs = Date.now() - t;
+  if (diffMs < 0) return 'today';
+  const days = Math.floor(diffMs / 86400000);
+  if (days === 0) return 'today';
+  if (days === 1) return 'yesterday';
+  if (days < 7) return `${days}d ago`;
+  if (days < 30) return `${Math.floor(days / 7)}w ago`;
+  if (days < 365) return `${Math.floor(days / 30)}mo ago`;
+  return `${Math.floor(days / 365)}y ago`;
+}
 
 type TourOpt = { id: string; name: string };
 
@@ -46,11 +70,23 @@ interface Props {
 export function InventoryTab({ userId, inventory, setInventory }: Props) {
   const [search, setSearch]     = useState('');
   const [catFilter, setCat]     = useState('');
+  /* Sprint 11 §5 — status filter as a chip-strip above the
+     toolbar. Multi-select: empty set means "all statuses". */
+  const [statusFilter, setStatusFilter] = useState<Set<InventoryStatus>>(new Set());
   const [modalOpen, setModal]   = useState(false);
   const [importOpen, setImport] = useState(false);
   const [editing, setEditing]   = useState<RentalInventoryItem | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const selectAllRef = useRef<HTMLInputElement>(null);
+
+  function toggleStatusFilter(status: InventoryStatus) {
+    setStatusFilter((prev) => {
+      const next = new Set(prev);
+      if (next.has(status)) next.delete(status);
+      else next.add(status);
+      return next;
+    });
+  }
 
   /* ── Bulk edit mode ── */
   const [editMode, setEditMode] = useState(false);
@@ -115,7 +151,13 @@ export function InventoryTab({ userId, inventory, setInventory }: Props) {
     const q = search.toLowerCase();
     const matchQ = !q || i.name?.toLowerCase().includes(q) || i.serial_number?.toLowerCase().includes(q) || i.category?.toLowerCase().includes(q);
     const matchC = !catFilter || i.category === catFilter;
-    return matchQ && matchC;
+    /* Sprint 11 §5 — status chip filter. Empty set means "all".
+       Untagged rows (status null) treat as 'available' so they
+       still appear under the Available chip selection — old data
+       predating the migration shouldn't drop out of view. */
+    const itemStatus: InventoryStatus = (i.status ?? 'available') as InventoryStatus;
+    const matchS = statusFilter.size === 0 || statusFilter.has(itemStatus);
+    return matchQ && matchC && matchS;
   });
 
   const dirtyCount = Object.keys(drafts).length;
@@ -435,6 +477,79 @@ export function InventoryTab({ userId, inventory, setInventory }: Props) {
   return (
     <div className="flex w-full min-w-0 flex-col gap-4">
 
+      {/* Sprint 11 §5 — status filter chips. Multi-select.
+          Click toggles; "All" clears the filter. Hidden in edit
+          mode because filtering during a bulk edit is confusing
+          (rows disappear under the editor's feet). */}
+      {!editMode ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setStatusFilter(new Set())}
+            className="btn-transition inline-flex items-center"
+            style={{
+              gap: 6,
+              padding: '4px 10px',
+              fontSize: 'var(--lp-text-xs)',
+              fontWeight: 'var(--lp-weight-semibold)',
+              color:
+                statusFilter.size === 0
+                  ? 'var(--lp-text-inverse)'
+                  : 'var(--lp-text-secondary)',
+              background:
+                statusFilter.size === 0
+                  ? 'var(--color-lp-orange)'
+                  : 'transparent',
+              border:
+                statusFilter.size === 0
+                  ? '1px solid transparent'
+                  : '1px solid var(--lp-border-strong)',
+              borderRadius: 999,
+              cursor: 'pointer',
+            }}
+          >
+            All ({inventory.length})
+          </button>
+          {INVENTORY_STATUS_OPTIONS.map((opt) => {
+            const active = statusFilter.has(opt.value);
+            const tone = INVENTORY_STATUS_STYLES[opt.value];
+            const count = inventory.filter(
+              (i) => (i.status ?? 'available') === opt.value,
+            ).length;
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                onClick={() => toggleStatusFilter(opt.value)}
+                className="btn-transition inline-flex items-center"
+                style={{
+                  gap: 6,
+                  padding: '4px 10px',
+                  fontSize: 'var(--lp-text-xs)',
+                  fontWeight: 'var(--lp-weight-semibold)',
+                  color: active ? tone.text : 'var(--lp-text-secondary)',
+                  background: active ? tone.bg : 'transparent',
+                  border: `1px solid ${active ? tone.border : 'var(--lp-border)'}`,
+                  borderRadius: 999,
+                  cursor: 'pointer',
+                }}
+              >
+                <span
+                  aria-hidden
+                  style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: 999,
+                    background: tone.text,
+                  }}
+                />
+                {opt.label} ({count})
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+
       {/* ── Controls row ── */}
       {!editMode ? (
         <div className={INVENTORY_TOOLBAR_CLASS}>
@@ -637,12 +752,12 @@ export function InventoryTab({ userId, inventory, setInventory }: Props) {
                     ) : null}
                   </th>
                   <th className="w-14 px-4 py-3 text-left text-xs font-extrabold uppercase tracking-wider" style={{ color: 'var(--lp-text-tertiary)' }} />
-                  {(['Name', 'Category', 'Serial No.', 'Origin', 'Weight (kg)', 'Purchase Cost', 'Day Rate', ''] as const).map((h, i) => (
+                  {(['Name', 'Category', 'Status', 'Last used', 'Serial No.', 'Origin', 'Weight (kg)', 'Purchase Cost', 'Day Rate', ''] as const).map((h, i, arr) => (
                     <th
                       key={h || `col-${i}`}
                       className={cn(
                         'px-4 py-3 text-left text-xs font-extrabold uppercase tracking-wider',
-                        i === 7 && 'w-20 text-right'
+                        i === arr.length - 1 && 'w-20 text-right'
                       )}
                       style={{ color: 'var(--lp-text-tertiary)' }}
                     >
@@ -730,6 +845,52 @@ export function InventoryTab({ userId, inventory, setInventory }: Props) {
                             ? <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium" style={{ backgroundColor: 'rgba(255,69,0,0.08)', color: '#FF4500' }}>{item.category}</span>
                             : <span style={{ color: 'var(--lp-text-tertiary)' }}>—</span>
                         )}
+                      </td>
+
+                      {/* Sprint 11 §5 — Status pill. Inline edit
+                          uses BrandedSelect (Category pattern);
+                          read-mode renders the tone-coded pill
+                          from INVENTORY_STATUS_STYLES. Untagged
+                          rows fall back to 'available' so old
+                          data predating migration 091 reads
+                          sensibly. */}
+                      <td className="px-4 py-2.5">
+                        {editMode ? (
+                          <BrandedSelect
+                            value={String(getDraft(item, 'status') ?? 'available')}
+                            onChange={(v) => updateDraft(item.id, 'status', (v || 'available') as InventoryStatus)}
+                            options={INVENTORY_STATUS_OPTIONS.map((o) => ({ value: o.value, label: o.label }))}
+                            ariaLabel="Status"
+                            size="sm"
+                            className="w-full"
+                            minWidth={130}
+                          />
+                        ) : (() => {
+                          const s = (item.status ?? 'available') as InventoryStatus;
+                          const tone = INVENTORY_STATUS_STYLES[s];
+                          const label = INVENTORY_STATUS_OPTIONS.find((o) => o.value === s)?.label ?? s;
+                          return (
+                            <span
+                              className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium"
+                              style={{
+                                gap: 6,
+                                backgroundColor: tone.bg,
+                                color: tone.text,
+                                border: `1px solid ${tone.border}`,
+                              }}
+                            >
+                              <span aria-hidden style={{ width: 6, height: 6, borderRadius: 999, background: tone.text }} />
+                              {label}
+                            </span>
+                          );
+                        })()}
+                      </td>
+
+                      {/* Sprint 11 §5 — Last used relative time.
+                          Read-only — the column is server-stamped
+                          when an item lands on a confirmed job. */}
+                      <td className="px-4 py-2.5 text-sm" style={{ color: 'var(--lp-text-secondary)' }}>
+                        {fmtLastUsed(item.last_used_at)}
                       </td>
 
                       {/* Serial */}
