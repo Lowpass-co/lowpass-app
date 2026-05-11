@@ -200,6 +200,22 @@ export type ChannelListRow = {
   phantom_power: boolean | null;
   provider: 'band' | 'venue' | 'hire' | null;
   notes: string;
+  /* Sprint 12 §8a — output-row support. row_kind='input'
+     rows use the mic/di/stand/phantom_power columns above
+     and ignore the output_* columns. row_kind='output' rows
+     populate the output_* columns and leave input fields
+     NULL. The editor renders the two kinds in stacked sub-
+     tables; the migration adds row_kind with default 'input'
+     so existing rows backfill correctly. */
+  row_kind: 'input' | 'output';
+  output_item: string | null;
+  output_destination: string | null;
+  output_qty: number | null;
+  output_notes: string | null;
+  /* Sprint 12 §8a — cable length feeding the Cables
+     aggregate. Stored as text so the editor's hardcoded
+     options round-trip exactly. */
+  cable_length: string | null;
   created_at: string;
   updated_at: string;
 };
