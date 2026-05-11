@@ -2,7 +2,14 @@ import { calcRentalBillableDays } from '@/lib/rental-pricing';
 
 export interface RentalInventoryItem {
   id: string;
+  /** Legacy user-scope ownership column. Migration 095 added
+   *  workspace_id as the canonical scoping field; user_id is
+   *  kept for FK / historical fidelity but no longer drives
+   *  RLS or app-side filtering. */
   user_id: string;
+  /** Sprint 12 §1 — canonical workspace scoping. Added in
+   *  migration 095 with the denormalisation backfill. */
+  workspace_id?: string | null;
   name: string;
   category: string | null;
   serial_number: string | null;
@@ -23,6 +30,14 @@ export interface RentalInventoryItem {
    *  the "Last used" relative time on each grid row. NULL when
    *  the item has never been on a confirmed job. */
   last_used_at?: string | null;
+  /** Sprint 12 §1 / §2 — Carnet + scanning fields (migration
+   *  093). qr_token is the stable 8-char short ID encoded in
+   *  the printed QR label. */
+  customs_hs_code?: string | null;
+  value_amount?: number | null;
+  value_currency?: string | null;
+  dimensions_cm?: { l?: number; w?: number; h?: number } | null;
+  qr_token?: string | null;
   created_at: string;
 }
 

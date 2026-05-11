@@ -63,11 +63,16 @@ const INVENTORY_CHECKBOX_CLASS = 'lp-checkbox';
 
 interface Props {
   userId: string;
+  /** Sprint 12 §1 — required so client-side INSERTs include the
+   *  workspace_id column that migration 095's RLS WITH CHECK
+   *  clause now demands. May be null in rare bootstrap cases
+   *  (no workspace yet); the modal disables Add in that case. */
+  workspaceId: string | null;
   inventory: RentalInventoryItem[];
   setInventory: (items: RentalInventoryItem[]) => void;
 }
 
-export function InventoryTab({ userId, inventory, setInventory }: Props) {
+export function InventoryTab({ userId, workspaceId, inventory, setInventory }: Props) {
   const [search, setSearch]     = useState('');
   const [catFilter, setCat]     = useState('');
   /* Sprint 11 §5 — status filter as a chip-strip above the
@@ -1032,6 +1037,7 @@ export function InventoryTab({ userId, inventory, setInventory }: Props) {
         <InventoryModal
           key={editing?.id ?? 'new'}
           userId={userId}
+          workspaceId={workspaceId}
           editing={editing}
           onSave={onSave}
           onClose={() => setModal(false)}

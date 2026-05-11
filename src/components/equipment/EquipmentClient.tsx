@@ -95,6 +95,7 @@ export function EquipmentClient({
       {activeTab === 'inventory' && (
         <InventoryTab
           userId={userId}
+          workspaceId={workspaceId}
           inventory={inventory}
           setInventory={setInventory}
         />

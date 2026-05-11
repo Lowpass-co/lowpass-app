@@ -104,7 +104,7 @@ export function JobModal({
     }
     setSaving(true);
 
-    const payload = {
+    const payload: Record<string, unknown> = {
       user_id: userId,
       name: name.trim(),
       client_name: client.trim() || null,
@@ -118,6 +118,12 @@ export function JobModal({
       billing_phone:   billingPhone.trim()   || null,
       billing_tax_id:  billingTaxId.trim()   || null,
     };
+    /* Sprint 12 §1 — workspace_id required by the canonical
+       RLS WITH CHECK clause from migration 095. Only set on
+       INSERT. */
+    if (!editing && workspaceId) {
+      payload.workspace_id = workspaceId;
+    }
 
     let result;
     if (editing) {

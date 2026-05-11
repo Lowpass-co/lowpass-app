@@ -16,12 +16,15 @@ import { CATEGORIES, INVENTORY_STATUS_OPTIONS, type InventoryStatus, type Rental
 
 interface Props {
   userId: string;
+  /** Sprint 12 §1 — required for INSERT (RLS WITH CHECK now
+   *  demands workspace_id). null disables Save on Add. */
+  workspaceId: string | null;
   editing: RentalInventoryItem | null;
   onSave: (item: RentalInventoryItem) => void;
   onClose: () => void;
 }
 
-export function InventoryModal({ userId, editing, onSave, onClose }: Props) {
+export function InventoryModal({ userId, workspaceId, editing, onSave, onClose }: Props) {
   const [name, setName]             = useState(editing?.name             ?? '');
   const [category, setCategory]     = useState(editing?.category         ?? '');
   const [serial, setSerial]         = useState(editing?.serial_number    ?? '');
@@ -115,7 +118,7 @@ export function InventoryModal({ userId, editing, onSave, onClose }: Props) {
             : null;
     }
 
-    const payload = {
+    const payload: Record<string, unknown> = {
       user_id:           userId,
       name:              name.trim(),
       category:          category || null,
@@ -129,6 +132,13 @@ export function InventoryModal({ userId, editing, onSave, onClose }: Props) {
       notes:             notes.trim() || null,
       status:            status,
     };
+    /* Sprint 12 §1 — workspace_id required by the canonical
+       RLS WITH CHECK clause from migration 095. Only set on
+       INSERT — the column is non-nullable and mutating it on
+       UPDATE would just no-op. */
+    if (!editing && workspaceId) {
+      payload.workspace_id = workspaceId;
+    }
 
     let result;
     if (editing) {
@@ -297,9 +307,10 @@ export function InventoryModal({ userId, editing, onSave, onClose }: Props) {
           </button>
           <button
             onClick={handleSave}
-            disabled={saving || !name.trim()}
+            disabled={saving || !name.trim() || (!editing && !workspaceId)}
             className="rounded-lg px-4 py-2 text-sm font-semibold text-white transition-colors disabled:opacity-50"
             style={{ backgroundColor: '#FF4500' }}
+            title={!editing && !workspaceId ? 'No active workspace — Add disabled.' : undefined}
           >
             {saving ? 'Saving…' : editing ? 'Save Changes' : 'Add Item'}
           </button>

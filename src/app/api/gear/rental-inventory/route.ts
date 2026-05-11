@@ -3,9 +3,10 @@
  * yet linked to a canonical Gear, for display under "From your rental
  * inventory" in the gear picker and in GearSlideOver's link picker.
  *
- * Workspace scoping: rental_inventory rows are owned by `user_id`. We list
- * rows owned by anyone in the same workspace as the caller. RLS on
- * rental_inventory + the gear NOT EXISTS check enforces the boundary.
+ * Sprint 12 §1 — workspace_id denormalised onto rental_inventory (migration
+ * 095). The legacy workspace_members JOIN dance is gone — we now filter
+ * directly by workspace_id. RLS still enforces the boundary; this filter
+ * is the application-side narrowing that drives the actual query.
  */
 
 import { NextResponse } from 'next/server';
@@ -29,16 +30,6 @@ export async function GET(request: Request) {
   const q = (searchParams.get('q') ?? '').trim();
   const limit = Math.min(Math.max(Number(searchParams.get('limit') ?? 50) || 50, 1), 200);
 
-  // Workspace siblings (anyone in the same workspace).
-  const { data: members } = await supabase
-    .from('workspace_members')
-    .select('user_id')
-    .eq('workspace_id', profile.workspace_id);
-  const memberIds = (members ?? []).map((m: { user_id: string }) => m.user_id);
-  if (memberIds.length === 0) {
-    return NextResponse.json({ items: [] });
-  }
-
   // Already-linked rental_inventory ids for this workspace.
   const { data: linked } = await supabase
     .from('gear')
@@ -53,8 +44,10 @@ export async function GET(request: Request) {
 
   let inventoryQuery = supabase
     .from('rental_inventory')
-    .select('id, user_id, name, category, serial_number, country_of_origin, purchase_cost, day_rate, day_rate_manual, weight_kg, image_url, notes, created_at')
-    .in('user_id', memberIds)
+    .select(
+      'id, user_id, workspace_id, name, category, serial_number, country_of_origin, purchase_cost, day_rate, day_rate_manual, weight_kg, image_url, notes, status, last_used_at, created_at',
+    )
+    .eq('workspace_id', profile.workspace_id)
     .order('name', { ascending: true })
     .limit(limit);
 
