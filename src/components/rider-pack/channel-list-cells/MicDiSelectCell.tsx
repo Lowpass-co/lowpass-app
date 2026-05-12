@@ -107,6 +107,12 @@ export function MicDiSelectCell({
           size="sm"
           className="w-full min-w-0"
           triggerClassName="min-h-8 w-full"
+          /* Sprint 12 §8b4 — type-to-filter mode. The mic
+             library is ~100 entries; jump-to-match makes
+             reaching Sennheiser past 17 Shure rows tedious.
+             All other BrandedSelect mounts stay on the
+             default (filterable=false). */
+          filterable
         />
       </div>
     </div>
