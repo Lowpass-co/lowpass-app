@@ -18,6 +18,17 @@ type RowPatch = Partial<
     | 'phantom_power'
     | 'provider'
     | 'notes'
+    /* Sprint 12 §8 — input rows can now carry a cable_length
+       (feeds the Cables inventory aggregate). Output rows use
+       the output_* fields below. row_kind is settable when
+       converting a row's type but defaults at the schema
+       level so most callers ignore it. */
+    | 'cable_length'
+    | 'row_kind'
+    | 'output_item'
+    | 'output_destination'
+    | 'output_qty'
+    | 'output_notes'
   >
 >;
 
@@ -208,6 +219,41 @@ export async function appendRow(
       pack_id: args.packId,
       section_id: args.sectionId,
       row_index: next,
+    })
+    .select('*')
+    .single();
+  if (error) throw new Error(error.message);
+  return data as ChannelListRow;
+}
+
+/* Sprint 12 §8 — append an OUTPUT row. row_kind='output' so
+   the editor renders it in the outputs sub-grid alongside
+   IEM mixes / drive lines / send loops. Input-only columns
+   stay at their defaults (mic='', stand='', etc.) and are
+   ignored by the output UI.
+
+   row_index is shared across the section (inputs and outputs
+   compete for the same sequence) so the UNIQUE (section_id,
+   row_index) constraint still holds. The editor renders the
+   two kinds in stacked sub-tables but the underlying ordering
+   is one stream. */
+export async function appendOutputRow(
+  supabase: SupabaseClient,
+  args: { packId: string; sectionId: string },
+): Promise<ChannelListRow> {
+  const { data: existing } = await supabase
+    .from('channel_list_rows')
+    .select('row_index')
+    .eq('section_id', args.sectionId);
+  const next =
+    existing && existing.length > 0 ? Math.max(...existing.map((r) => r.row_index)) + 1 : 1;
+  const { data, error } = await supabase
+    .from('channel_list_rows')
+    .insert({
+      pack_id: args.packId,
+      section_id: args.sectionId,
+      row_index: next,
+      row_kind: 'output',
     })
     .select('*')
     .single();
