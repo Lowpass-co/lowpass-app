@@ -16,7 +16,12 @@ import { createServiceSupabaseClient } from '@/lib/supabase-server';
 import { resolvePack } from '@/lib/rider-packs/resolve';
 import { signedUrlsForAssets } from '@/lib/rider-packs/assets';
 import { verifyPassword, type PublicRiderPayload } from '@/lib/rider-packs/web-links';
-import type { Field, FieldAsset, RiderPack } from '@/lib/rider-packs/types';
+import type { Field, FieldAsset, FieldText, RiderPack } from '@/lib/rider-packs/types';
+import {
+  resolveVariableMap,
+  substituteInText,
+  substituteInTiptapDoc,
+} from '@/lib/rider-packs/variable-resolver';
 
 export async function POST(
   request: Request,
@@ -115,29 +120,72 @@ export async function POST(
     coverLogoResolved = signed?.signedUrl ?? null;
   }
 
+  /* Sprint 12 §9c1.a — build the variable map once per page
+     render and apply it to every text-bearing field before
+     building the payload. Plain-text fields (cover, legacy
+     FieldText.value, section titles) get regex substitution;
+     rich-text sections get a Tiptap doc walk that replaces
+     VariableNode instances with text nodes carrying the
+     resolved value. */
+  const varMap = await resolveVariableMap(service, pack);
+
+  const sectionsResolved = resolved.sections.map((s) => {
+    let fields = s.fields;
+    /* Walk Field[] arrays. Only the FieldText variant carries
+       a `.value` string that's worth substituting. Other field
+       types pass through unchanged. */
+    if (Array.isArray(fields)) {
+      fields = (fields as Field[]).map((f) => {
+        if (f.type === 'text' && typeof (f as FieldText).value === 'string') {
+          return {
+            ...(f as FieldText),
+            value: substituteInText((f as FieldText).value, varMap),
+          };
+        }
+        return f;
+      });
+    }
+    /* Rich-text sections store the Tiptap doc on
+       metadata.content. Walk + transform; surface the new
+       content back on the metadata object so the reader
+       sees pre-resolved text. */
+    let metadata = s.metadata ?? null;
+    if (s.section_type === 'rich_text' && metadata && typeof metadata === 'object') {
+      const meta = metadata as Record<string, unknown>;
+      const content = meta.content;
+      if (content && typeof content === 'object') {
+        metadata = {
+          ...meta,
+          content: substituteInTiptapDoc(content as Parameters<typeof substituteInTiptapDoc>[0], varMap),
+        };
+      }
+    }
+    return {
+      id: s.id,
+      section_key: s.section_key,
+      title: substituteInText(s.title, varMap),
+      sort_order: s.sort_order,
+      section_type: s.section_type,
+      fields,
+      metadata,
+      inherited_from: s.inherited_from,
+      source_pack_id: s.source_pack_id,
+    };
+  });
+
   const payload: PublicRiderPayload = {
     pack: {
       id: pack.id,
-      title: pack.title,
+      title: substituteInText(pack.title, varMap) || null,
       scope: pack.scope,
       artist_id: pack.artist_id,
       artist_name: artist?.name ?? 'Unknown artist',
       cover_logo_url: coverLogoResolved,
-      cover_subtitle: pack.cover_subtitle ?? null,
-      cover_disclaimer: pack.cover_disclaimer ?? null,
+      cover_subtitle: substituteInText(pack.cover_subtitle, varMap) || null,
+      cover_disclaimer: substituteInText(pack.cover_disclaimer, varMap) || null,
       updated_at: pack.updated_at,
     },
-    sections: resolved.sections.map((s) => ({
-      id: s.id,
-      section_key: s.section_key,
-      title: s.title,
-      sort_order: s.sort_order,
-      section_type: s.section_type,
-      fields: s.fields,
-      metadata: s.metadata ?? null,
-      inherited_from: s.inherited_from,
-      source_pack_id: s.source_pack_id,
-    })),
+    sections: sectionsResolved,
     signedUrls,
   };
 
