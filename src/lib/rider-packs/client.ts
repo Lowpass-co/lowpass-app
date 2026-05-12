@@ -122,7 +122,9 @@ export async function createSection(
 export async function updateSection(
   packId: string,
   sectionId: string,
-  body: Partial<Pick<RiderSection, 'title' | 'sort_order' | 'fields' | 'section_key' | 'section_type'>>,
+  body: Partial<
+    Pick<RiderSection, 'title' | 'sort_order' | 'fields' | 'section_key' | 'section_type' | 'metadata'>
+  >,
 ): Promise<RiderSection> {
   const res = await fetch(`/api/rider-packs/${packId}/sections/${sectionId}`, {
     method: 'PATCH',

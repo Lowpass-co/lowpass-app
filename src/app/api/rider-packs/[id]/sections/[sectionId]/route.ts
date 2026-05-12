@@ -15,6 +15,12 @@ const ALLOWED_SECTION_FIELDS = new Set<string>([
   'fields',
   'section_key', // allow rename (e.g. user renames 'technical' -> 'technical_audio')
   'section_type',
+  /* Sprint 12 §9a — free-shaped per-section JSONB. Holds
+     Tiptap content for rich_text sections, summary rows for
+     advance_summary sections, and inventory notes for
+     channel_list sections (the latter wired in a follow-up
+     after §9 core). */
+  'metadata',
 ]);
 
 export async function PATCH(

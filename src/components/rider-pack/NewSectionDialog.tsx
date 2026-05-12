@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { LayoutGrid, LayoutList } from 'lucide-react';
+import { LayoutGrid, LayoutList, Type } from 'lucide-react';
 import type { SectionType } from '@/lib/rider-packs/types';
 
 type Props = {
@@ -97,6 +97,27 @@ export default function NewSectionDialog({ open, onClose, onSubmit }: Props) {
               <span className="block text-sm font-medium text-lp-text">Channel list</span>
               <span className="mt-0.5 block text-xs text-lp-text-secondary">
                 Inputs and routing — drag to reorder, sub-snakes, mics, phantom, provider.
+              </span>
+            </span>
+          </button>
+          {/* Sprint 12 §9a — Tiptap-backed rich-text section.
+              Structured prose with H2/H3 headings + bullet
+              lists. Variable substitution (§9c) lands on top of
+              this. */}
+          <button
+            type="button"
+            onClick={() => setSectionType('rich_text')}
+            className={`flex w-full items-start gap-3 rounded-xl border p-3 text-left transition-colors hover:bg-lp-surface-hover ${
+              sectionType === 'rich_text' ? 'border-lp-orange' : 'border-lp-border'
+            }`}
+          >
+            <span className="mt-0.5 shrink-0 text-lp-orange">
+              <Type className="h-5 w-5" strokeWidth={1.75} />
+            </span>
+            <span>
+              <span className="block text-sm font-medium text-lp-text">Rich text</span>
+              <span className="mt-0.5 block text-xs text-lp-text-secondary">
+                Structured prose — headings + bullets. Best for advance summaries, schedules, and policies.
               </span>
             </span>
           </button>

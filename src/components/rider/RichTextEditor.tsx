@@ -1,0 +1,284 @@
+'use client';
+
+/* ============================================
+   LOWPASS — <RichTextEditor> (Sprint 12 §9a)
+
+   Tiptap-backed rich text editor for rider sections of
+   section_type='rich_text'. Constrained block set per the §9
+   spec — Adam said riders are scanned, so structure (heading
+   + bullet) carries the weight, not inline emphasis:
+
+     - paragraph    (default body)
+     - heading      level 2 and level 3 only (h1 is reserved
+                    for the rider title; h2 = section like
+                    "Schedule", h3 = sub-section)
+     - bulletList   + listItem
+
+   No inline marks. No bold/italic/code/links. The toolbar
+   surfaces three buttons (H2, H3, Bullet List) and a
+   character count for orientation.
+
+   Data shape — Tiptap's default JSON output stored on
+   rider_sections.metadata.content. Read at mount, written via
+   debounced PATCH from the parent editor.
+
+   Variable substitution (Sprint 12 §9c) layers on top of this
+   in a follow-up commit — typing `{` will open an autocomplete
+   menu. Out of scope for §9a; the editor body stays
+   substitution-naive for now.
+   ============================================ */
+
+import { useEffect, useRef } from 'react';
+import { useEditor, EditorContent } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
+import Placeholder from '@tiptap/extension-placeholder';
+import { Heading2, Heading3, List } from 'lucide-react';
+
+export interface RichTextEditorProps {
+  /** Tiptap document JSON. Pass null/undefined for an empty
+   *  editor. The editor takes the value as initial content
+   *  only — subsequent updates flow through onChange. */
+  value: object | null | undefined;
+  onChange: (doc: object) => void;
+  placeholder?: string;
+  /** Disables typing + toolbar. Used for the inherited-from-
+   *  parent-scope state. */
+  disabled?: boolean;
+}
+
+export function RichTextEditor({
+  value,
+  onChange,
+  placeholder = 'Start typing…',
+  disabled = false,
+}: RichTextEditorProps) {
+  const onChangeRef = useRef(onChange);
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
+
+  const editor = useEditor({
+    /* Tiptap v3 — set immediatelyRender:false so Next.js's
+       SSR pass doesn't try to instantiate the editor on the
+       server (Tiptap's view layer is DOM-only). */
+    immediatelyRender: false,
+    editable: !disabled,
+    extensions: [
+      StarterKit.configure({
+        /* Disable the marks/nodes we don't want — leaves only
+           paragraph, heading (configured below), bulletList,
+           listItem, document, text, hardBreak. */
+        bold: false,
+        italic: false,
+        strike: false,
+        code: false,
+        codeBlock: false,
+        blockquote: false,
+        horizontalRule: false,
+        orderedList: false,
+        link: false,
+        underline: false,
+        heading: { levels: [2, 3] },
+      }),
+      Placeholder.configure({
+        placeholder,
+      }),
+    ],
+    content: value ?? '',
+    onUpdate: ({ editor: ed }) => {
+      onChangeRef.current(ed.getJSON());
+    },
+  });
+
+  /* If the parent's `disabled` flag flips after mount, update
+     the Tiptap editor's editable state to match. */
+  useEffect(() => {
+    if (!editor) return;
+    editor.setEditable(!disabled);
+  }, [editor, disabled]);
+
+  if (!editor) {
+    /* SSR / pre-hydration placeholder. Renders the same chrome
+       as the active editor so layout doesn't shift on mount. */
+    return (
+      <div
+        style={{
+          minHeight: 220,
+          padding: 'var(--lp-space-3)',
+          fontSize: 'var(--lp-text-sm)',
+          color: 'var(--lp-text-tertiary)',
+          fontStyle: 'italic',
+          border: '1px solid var(--lp-border)',
+          borderRadius: 'var(--lp-radius-md)',
+          background: 'var(--lp-bg)',
+        }}
+      >
+        Loading editor…
+      </div>
+    );
+  }
+
+  /* Toolbar buttons reflect the active state of the current
+     selection so the operator sees what they're inside. */
+  const isH2 = editor.isActive('heading', { level: 2 });
+  const isH3 = editor.isActive('heading', { level: 3 });
+  const isList = editor.isActive('bulletList');
+
+  return (
+    <div
+      style={{
+        border: '1px solid var(--lp-border)',
+        borderRadius: 'var(--lp-radius-md)',
+        background: 'var(--lp-bg)',
+      }}
+    >
+      <div
+        className="flex items-center"
+        style={{
+          gap: 'var(--lp-space-1)',
+          padding: 'var(--lp-space-1) var(--lp-space-2)',
+          borderBottom: '1px solid var(--lp-border-light)',
+          background: 'var(--lp-panel)',
+        }}
+      >
+        <ToolbarButton
+          active={isH2}
+          disabled={disabled}
+          ariaLabel="Heading 2"
+          title="Heading 2 (section)"
+          onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+        >
+          <Heading2 size={14} />
+        </ToolbarButton>
+        <ToolbarButton
+          active={isH3}
+          disabled={disabled}
+          ariaLabel="Heading 3"
+          title="Heading 3 (sub-section)"
+          onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+        >
+          <Heading3 size={14} />
+        </ToolbarButton>
+        <span
+          aria-hidden
+          style={{ width: 1, height: 16, background: 'var(--lp-border)' }}
+        />
+        <ToolbarButton
+          active={isList}
+          disabled={disabled}
+          ariaLabel="Bullet list"
+          title="Bullet list"
+          onClick={() => editor.chain().focus().toggleBulletList().run()}
+        >
+          <List size={14} />
+        </ToolbarButton>
+        <span
+          className="ml-auto text-[10px] font-semibold uppercase tracking-wider"
+          style={{ color: 'var(--lp-text-tertiary)' }}
+        >
+          {editor.storage.characterCount?.characters?.() ??
+            editor.getText().length}{' '}
+          chars
+        </span>
+      </div>
+      <EditorContent
+        editor={editor}
+        className="lp-richtext"
+        style={{
+          minHeight: 220,
+          padding: 'var(--lp-space-3)',
+          fontSize: 'var(--lp-text-sm)',
+          color: 'var(--lp-text)',
+          lineHeight: 1.55,
+        }}
+      />
+      {/* Inline-styles can't reach the ProseMirror content's
+          headings + paragraphs + lists because those render
+          inside an inner div. A small scoped <style> block
+          applies the token-clean defaults the editor surface
+          needs. */}
+      <style>{`
+        .lp-richtext .ProseMirror {
+          outline: none;
+          min-height: 200px;
+        }
+        .lp-richtext .ProseMirror p {
+          margin: 0 0 0.6em 0;
+        }
+        .lp-richtext .ProseMirror h2 {
+          margin: 0.8em 0 0.3em 0;
+          font-size: var(--lp-text-lg);
+          font-weight: var(--lp-weight-semibold);
+          color: var(--lp-text);
+          letter-spacing: -0.01em;
+        }
+        .lp-richtext .ProseMirror h3 {
+          margin: 0.6em 0 0.25em 0;
+          font-size: var(--lp-text-base);
+          font-weight: var(--lp-weight-semibold);
+          color: var(--lp-text);
+        }
+        .lp-richtext .ProseMirror ul {
+          margin: 0.3em 0 0.6em 1.4em;
+          padding: 0;
+          list-style: disc;
+        }
+        .lp-richtext .ProseMirror li {
+          margin: 0.15em 0;
+        }
+        .lp-richtext .ProseMirror p.is-editor-empty:first-child::before {
+          content: attr(data-placeholder);
+          color: var(--lp-text-tertiary);
+          font-style: italic;
+          pointer-events: none;
+          float: left;
+          height: 0;
+        }
+      `}</style>
+    </div>
+  );
+}
+
+interface ToolbarButtonProps {
+  active: boolean;
+  disabled: boolean;
+  ariaLabel: string;
+  title: string;
+  onClick: () => void;
+  children: React.ReactNode;
+}
+
+function ToolbarButton({
+  active,
+  disabled,
+  ariaLabel,
+  title,
+  onClick,
+  children,
+}: ToolbarButtonProps) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={ariaLabel}
+      aria-pressed={active}
+      title={title}
+      className="btn-transition inline-flex items-center justify-center"
+      style={{
+        width: 28,
+        height: 28,
+        borderRadius: 'var(--lp-radius-sm)',
+        color: active ? 'var(--color-lp-orange)' : 'var(--lp-text-secondary)',
+        background: active
+          ? 'color-mix(in srgb, var(--color-lp-orange) 12%, transparent)'
+          : 'transparent',
+        border: '1px solid transparent',
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        opacity: disabled ? 0.5 : 1,
+      }}
+    >
+      {children}
+    </button>
+  );
+}

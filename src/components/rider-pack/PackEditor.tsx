@@ -44,12 +44,15 @@ import { formatRelativeTime } from '@/lib/format-relative';
 import { SaveStatePill, type SavePillState } from './SaveStatePill';
 import ChannelListEditor from './ChannelListEditor';
 import { makeUniqueSectionKey } from '@/lib/rider-packs/templates';
+import { RichTextSectionEditor } from '@/components/rider/RichTextSectionEditor';
 
 type Props = {
   packId: string;
 };
 
-type SectionSavePayload = Partial<Pick<ResolvedSection, 'title' | 'sort_order' | 'fields' | 'section_key'>> & {
+type SectionSavePayload = Partial<
+  Pick<ResolvedSection, 'title' | 'sort_order' | 'fields' | 'section_key' | 'metadata'>
+> & {
   sectionId: string;
 };
 
@@ -190,8 +193,8 @@ export function PackEditor({ packId }: Props) {
   /** Field-level saves are optimistic; structural changes (add/remove/reorder) call `refresh()` separately. */
   const saveSection = useCallback(
     async (payload: SectionSavePayload) => {
-      const { sectionId, title, sort_order, fields, section_key } = payload;
-      const restCount = [title, sort_order, fields, section_key].filter((v) => v !== undefined).length;
+      const { sectionId, title, sort_order, fields, section_key, metadata } = payload;
+      const restCount = [title, sort_order, fields, section_key, metadata].filter((v) => v !== undefined).length;
       if (restCount === 0) return;
       const sec = dataRef.current?.sections.find((x) => x.id === sectionId);
       if (!sec || sec.inherited_from) {
@@ -200,11 +203,12 @@ export function PackEditor({ packId }: Props) {
         }
         return;
       }
-      const body: Partial<Pick<RiderSection, 'title' | 'sort_order' | 'fields' | 'section_key'>> = {};
+      const body: Partial<Pick<RiderSection, 'title' | 'sort_order' | 'fields' | 'section_key' | 'metadata'>> = {};
       if (title !== undefined) body.title = title;
       if (sort_order !== undefined) body.sort_order = sort_order;
       if (fields !== undefined) body.fields = fields;
       if (section_key !== undefined) body.section_key = section_key;
+      if (metadata !== undefined) body.metadata = metadata;
       if (Object.keys(body).length === 0) return;
       const updated = await updateSection(packId, sectionId, body);
       setData((prev) => {
@@ -284,7 +288,9 @@ export function PackEditor({ packId }: Props) {
   }: {
     sectionKey: string;
     title: string;
-    section_type?: 'fields' | 'channel_list';
+    /* Sprint 12 §9a — widen to accept the new section types
+       so NewSectionDialog can hand them through. */
+    section_type?: 'fields' | 'channel_list' | 'rich_text' | 'advance_summary';
   }) => {
     if (!data) return;
     const normalizedKey = sectionKey.trim();
@@ -600,6 +606,51 @@ export function PackEditor({ packId }: Props) {
             onMoveUp={() => handleMoveSection(selectedSection, -1)}
             onMoveDown={() => handleMoveSection(selectedSection, 1)}
             onStructureChange={() => void refresh()}
+          />
+        ) : (selectedSection.section_type ?? 'fields') === 'rich_text' ? (
+          /* Sprint 12 §9a — Tiptap-backed rich text section.
+             Content lives at section.metadata.content (added in
+             migration 100). Debounced saves merge into the
+             metadata object so future per-section metadata keys
+             (e.g. variable bindings, AI summary cache) coexist. */
+          <RichTextSectionEditor
+            key={selectedSection.id}
+            section={selectedSection}
+            savePill={savePill}
+            onTitleCommit={(title) => {
+              setData((prev) => {
+                if (!prev) return prev;
+                return {
+                  ...prev,
+                  sections: prev.sections.map((s) =>
+                    s.id === selectedSection.id ? { ...s, title } : s,
+                  ),
+                };
+              });
+              scheduleSectionSave({ sectionId: selectedSection.id, title });
+            }}
+            onContentChange={(content) => {
+              const existingMeta =
+                (selectedSection.metadata ?? {}) as Record<string, unknown>;
+              const nextMeta = { ...existingMeta, content };
+              setData((prev) => {
+                if (!prev) return prev;
+                return {
+                  ...prev,
+                  sections: prev.sections.map((s) =>
+                    s.id === selectedSection.id ? { ...s, metadata: nextMeta } : s,
+                  ),
+                };
+              });
+              scheduleSectionSave({
+                sectionId: selectedSection.id,
+                metadata: nextMeta,
+              });
+            }}
+            onRemove={() => handleRemoveSection(selectedSection)}
+            onOverride={() => handleOverrideSection(selectedSection)}
+            onMoveUp={() => handleMoveSection(selectedSection, -1)}
+            onMoveDown={() => handleMoveSection(selectedSection, 1)}
           />
         ) : (
           <SectionEditor
