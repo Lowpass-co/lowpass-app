@@ -28,6 +28,7 @@ import { StandSelectCell } from './channel-list-cells/StandSelectCell';
 import { CableLengthSelectCell } from './channel-list-cells/CableLengthSelectCell';
 import { MicDiSelectCell } from './channel-list-cells/MicDiSelectCell';
 import { OutputBlock, OUTPUT_GRID, OUTPUT_COL_COUNT } from './channel-list-cells/OutputBlock';
+import { InventoryAggregates } from './channel-list-cells/InventoryAggregates';
 import { CellNavProvider, NavCell } from '@/lib/hooks/useCellNav';
 
 /* Sprint 12 §8b2 — colCount across input-grid cells (Name,
@@ -486,6 +487,19 @@ export default function ChannelListEditor({
             </div>
           )}
         </div>
+
+        {/* Sprint 12 §8b3 — 5 inventory aggregate render
+            tables. Recompute from rows / stageBoxes / subSnakes
+            as the operator edits. Render-only; no schema
+            additions. Editable per-row notes on the Mics/DIs
+            aggregate is deferred (rider_sections.fields can't
+            hold non-Field metadata cleanly; flagged for §9 or
+            a dedicated schema commit). */}
+        <InventoryAggregates
+          rows={rows}
+          stageBoxes={stageBoxes}
+          subSnakes={subSnakes}
+        />
       </div>
 
       <SubSnakeDialog
