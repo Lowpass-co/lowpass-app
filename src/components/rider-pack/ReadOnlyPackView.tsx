@@ -24,6 +24,8 @@ import type {
   FieldUrl,
   FieldText,
 } from '@/lib/rider-packs/types';
+import { CoverPageRender } from '@/components/rider/CoverPageRender';
+import { TableOfContents } from '@/components/rider/TableOfContents';
 
 type Props = {
   payload: PublicRiderPayload;
@@ -34,32 +36,59 @@ export function ReadOnlyPackView({ payload }: Props) {
   const ordered = [...sections].sort((a, b) => a.sort_order - b.sort_order);
 
   return (
-    <div className="max-w-3xl mx-auto p-6 space-y-6 bg-white text-neutral-900">
-      <header className="space-y-1">
-        <div className="text-xs uppercase tracking-wide text-neutral-500">{pack.artist_name}</div>
-        <h1 className="text-2xl font-semibold">{pack.title || 'Rider'}</h1>
-      </header>
+    <div className="bg-white text-neutral-900">
+      {/* Sprint 12 §9b — cover page (logo + artist + title +
+          subtitle + updated date + disclaimer). Logo URL is
+          pre-resolved server-side (override → artist default →
+          null). */}
+      <CoverPageRender
+        artistName={pack.artist_name}
+        title={pack.title}
+        subtitle={pack.cover_subtitle}
+        disclaimer={pack.cover_disclaimer}
+        logoUrl={pack.cover_logo_url}
+        updatedAt={pack.updated_at}
+      />
 
-      {ordered.length === 0 ? (
-        <div className="text-sm text-neutral-500">This pack has no sections yet.</div>
-      ) : (
-        ordered.map((s) => (
-          <section key={s.id} className="rounded border border-neutral-200 bg-white">
-            <h2 className="border-b border-neutral-200 px-4 py-2 text-sm font-medium">{s.title}</h2>
-            <div className="p-4 space-y-3">
-              {(s.fields as Field[]).length === 0 ? (
-                <div className="text-xs text-neutral-400">(empty)</div>
-              ) : (
-                (s.fields as Field[]).map((field, idx) => (
-                  <FieldRow key={`${field.key}-${idx}`} field={field} signedUrls={signedUrls} />
-                ))
-              )}
-            </div>
-          </section>
-        ))
-      )}
+      {/* Sprint 12 §9b — auto-generated TOC. Page numbers
+          render as placeholders ("Page —"); each entry is an
+          in-document anchor link to #section-<key>. PDF
+          pagination (§10) will replace the placeholders. */}
+      <TableOfContents
+        sections={ordered.map((s) => ({
+          id: s.id,
+          section_key: s.section_key,
+          title: s.title,
+          section_type: s.section_type,
+        }))}
+      />
 
-      <footer className="pt-4 text-[10px] text-neutral-400 text-center">Shared via Lowpass</footer>
+      <div className="max-w-3xl mx-auto p-6 space-y-6">
+        {ordered.length === 0 ? (
+          <div className="text-sm text-neutral-500">This pack has no sections yet.</div>
+        ) : (
+          ordered.map((s) => (
+            <section
+              key={s.id}
+              id={`section-${s.section_key}`}
+              className="rounded border border-neutral-200 bg-white scroll-mt-4"
+            >
+              <h2 className="border-b border-neutral-200 px-4 py-2 text-sm font-medium">{s.title}</h2>
+              <div className="p-4 space-y-3">
+                {(s.fields as Field[]).length === 0 ? (
+                  <div className="text-xs text-neutral-400">(empty)</div>
+                ) : (
+                  (s.fields as Field[]).map((field, idx) => (
+                    <FieldRow key={`${field.key}-${idx}`} field={field} signedUrls={signedUrls} />
+                  ))
+                )}
+              </div>
+            </section>
+          ))
+        )}
+
+        <footer className="pt-4 text-[10px] text-neutral-400 text-center">Shared via Lowpass</footer>
+      </div>
     </div>
   );
 }

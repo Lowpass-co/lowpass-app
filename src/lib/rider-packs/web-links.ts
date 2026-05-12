@@ -75,13 +75,29 @@ export type PublicRiderPayload = {
     scope: 'artist' | 'tour' | 'show';
     artist_id: string;
     artist_name: string;
+    /* Sprint 12 §9b — cover page fields. cover_logo_url
+       resolves on the server: rider-level override falls back
+       to artists.default_logo_url, which falls back to null.
+       Always a signed URL when present; the client renders
+       it directly without further resolution. updated_at
+       drives the "Rider Updated — <ordinal date>" timestamp. */
+    cover_logo_url: string | null;
+    cover_subtitle: string | null;
+    cover_disclaimer: string | null;
+    updated_at: string;
   };
   sections: Array<{
     id: string;
     section_key: string;
     title: string;
     sort_order: number;
+    section_type?: string;
     fields: unknown[];
+    /* Sprint 12 §9b — surfaced so the TOC can see rich_text
+       + advance_summary sections too. The legacy fields-only
+       render path stays unchanged for sections without a
+       rich-text body. */
+    metadata?: Record<string, unknown> | null;
     inherited_from: 'artist' | 'tour' | 'show' | null;
     source_pack_id: string;
   }>;

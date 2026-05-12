@@ -14,6 +14,10 @@ const ALLOWED_PATCH_FIELDS = new Set<string>([
   'title',
   'google_doc_id',
   'google_doc_url',
+  /* Sprint 12 §9b — cover-page columns added in migration 100. */
+  'cover_logo_url',
+  'cover_subtitle',
+  'cover_disclaimer',
 ]);
 
 export async function GET(

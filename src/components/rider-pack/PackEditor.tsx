@@ -45,6 +45,13 @@ import { SaveStatePill, type SavePillState } from './SaveStatePill';
 import ChannelListEditor from './ChannelListEditor';
 import { makeUniqueSectionKey } from '@/lib/rider-packs/templates';
 import { RichTextSectionEditor } from '@/components/rider/RichTextSectionEditor';
+import { CoverPagePanel } from '@/components/rider/CoverPagePanel';
+
+/* Sprint 12 §9b — sentinel `selected` value for the Cover
+   Page pseudo-section. Section keys are never empty strings
+   in practice (slugify always produces something), so a
+   double-underscore prefix is collision-safe. */
+const COVER_SENTINEL = '__cover__';
 
 type Props = {
   packId: string;
@@ -544,6 +551,28 @@ export function PackEditor({ packId }: Props) {
           </button>
         </div>
         <ul>
+          {/* Sprint 12 §9b — Cover Page pseudo-section. Stays
+              at the top of the list so it's the first thing the
+              operator sees and can edit. Selecting it sets
+              `selected = COVER_SENTINEL` and mounts the
+              CoverPagePanel in the main area instead of a real
+              section editor. */}
+          <li key={COVER_SENTINEL}>
+            <button
+              type="button"
+              onClick={() => setSelected(COVER_SENTINEL)}
+              className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between gap-2 border-l-2 ${
+                selected === COVER_SENTINEL
+                  ? 'border-[var(--lp-orange)] bg-lp-surface-hover'
+                  : 'border-transparent hover:bg-lp-surface-hover'
+              }`}
+            >
+              <span className="truncate font-semibold">Cover page</span>
+              <span className="text-[10px] uppercase tracking-wide text-lp-text-tertiary">
+                cover
+              </span>
+            </button>
+          </li>
           {data.sections.map((s) => (
             <li key={s.section_key}>
               <button
@@ -575,7 +604,46 @@ export function PackEditor({ packId }: Props) {
             : 'min-w-0 flex-1 bg-lp-surface-hover p-4 lg:p-6'
         }
       >
-        {!selectedSection ? (
+        {selected === COVER_SENTINEL ? (
+          /* Sprint 12 §9b — Cover Page editor. PATCHes
+             rider_packs (not rider_sections) via updatePack,
+             so its save chain runs in parallel to the per-
+             section save pill above. We pipe the cover-pack
+             save through the same scheduleSectionSave debounce
+             machinery to keep the SaveStatePill consistent,
+             but the underlying call is updatePack(packId, …)
+             not updateSection(…). */
+          <CoverPagePanel
+            pack={data.pack}
+            savePill={savePill}
+            onPatch={(body) => {
+              setData((prev) => {
+                if (!prev) return prev;
+                return { ...prev, pack: { ...prev.pack, ...body } };
+              });
+              void (async () => {
+                if (savedResetTimer.current) {
+                  clearTimeout(savedResetTimer.current);
+                  savedResetTimer.current = null;
+                }
+                setSavePill({ state: 'saving', error: null });
+                try {
+                  await updatePack(data.pack.id, body);
+                  setSavePill({ state: 'saved', error: null });
+                  savedResetTimer.current = setTimeout(
+                    () => setSavePill({ state: 'idle', error: null }),
+                    1500,
+                  );
+                } catch (e) {
+                  setSavePill({
+                    state: 'error',
+                    error: e instanceof Error ? e.message : 'Save failed',
+                  });
+                }
+              })();
+            }}
+          />
+        ) : !selectedSection ? (
           <div className="p-2 text-sm text-lp-text-secondary sm:p-4">
             Select a section, or add a new one.
           </div>

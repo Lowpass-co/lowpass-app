@@ -71,9 +71,9 @@ export async function POST(
 
   const { data: artist } = await service
     .from('artists')
-    .select('name')
+    .select('name, default_logo_url')
     .eq('id', pack.artist_id)
-    .maybeSingle();
+    .maybeSingle<{ name: string; default_logo_url: string | null }>();
 
   const resolved = await resolvePack(service, pack);
 
@@ -98,6 +98,23 @@ export async function POST(
     }
   }
 
+  /* Sprint 12 §9b — resolve cover logo with the spec cascade:
+       cover_logo_url override → artists.default_logo_url → null.
+     If the resolved value looks like a storage-bucket path
+     rather than an external URL, sign it through the
+     rider-assets bucket so the public reader can render it
+     without an authenticated session. External URLs (http(s)://
+     prefix) pass through unchanged. */
+  const rawCoverLogo =
+    pack.cover_logo_url ?? artist?.default_logo_url ?? null;
+  let coverLogoResolved: string | null = rawCoverLogo;
+  if (rawCoverLogo && !/^https?:\/\//i.test(rawCoverLogo)) {
+    const { data: signed } = await service.storage
+      .from('rider-assets')
+      .createSignedUrl(rawCoverLogo, 60 * 60);
+    coverLogoResolved = signed?.signedUrl ?? null;
+  }
+
   const payload: PublicRiderPayload = {
     pack: {
       id: pack.id,
@@ -105,13 +122,19 @@ export async function POST(
       scope: pack.scope,
       artist_id: pack.artist_id,
       artist_name: artist?.name ?? 'Unknown artist',
+      cover_logo_url: coverLogoResolved,
+      cover_subtitle: pack.cover_subtitle ?? null,
+      cover_disclaimer: pack.cover_disclaimer ?? null,
+      updated_at: pack.updated_at,
     },
     sections: resolved.sections.map((s) => ({
       id: s.id,
       section_key: s.section_key,
       title: s.title,
       sort_order: s.sort_order,
+      section_type: s.section_type,
       fields: s.fields,
+      metadata: s.metadata ?? null,
       inherited_from: s.inherited_from,
       source_pack_id: s.source_pack_id,
     })),
