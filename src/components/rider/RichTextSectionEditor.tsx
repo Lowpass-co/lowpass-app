@@ -23,6 +23,9 @@ import { RichTextEditor } from './RichTextEditor';
 
 interface RichTextSectionEditorProps {
   section: ResolvedSection;
+  /** Sprint 12 §9c1.b — pack scope drives the variable
+   *  autocomplete filter inside the rich-text body. */
+  packScope: 'artist' | 'tour' | 'show';
   savePill: { state: SavePillState; error: string | null };
   onTitleCommit: (title: string) => void;
   onContentChange: (content: object) => void;
@@ -34,6 +37,7 @@ interface RichTextSectionEditorProps {
 
 export function RichTextSectionEditor({
   section,
+  packScope,
   savePill,
   onTitleCommit,
   onContentChange,
@@ -133,6 +137,7 @@ export function RichTextSectionEditor({
           onChange={onContentChange}
           disabled={inherited}
           placeholder="Start typing the section body…"
+          packScope={packScope}
         />
       </div>
     </div>

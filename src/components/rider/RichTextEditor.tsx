@@ -28,11 +28,13 @@
    substitution-naive for now.
    ============================================ */
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import { Heading2, Heading3, List } from 'lucide-react';
+import { VariableNode } from './VariableNode';
+import { VariableAutocomplete } from './VariableAutocomplete';
 
 export interface RichTextEditorProps {
   /** Tiptap document JSON. Pass null/undefined for an empty
@@ -44,6 +46,24 @@ export interface RichTextEditorProps {
   /** Disables typing + toolbar. Used for the inherited-from-
    *  parent-scope state. */
   disabled?: boolean;
+  /** Sprint 12 §9c1.b — pack scope drives the variable
+   *  autocomplete filter. Artist-scope packs hide tour +
+   *  contact variables from suggestions; tour/show-scope
+   *  packs see the full registry. Optional — when omitted,
+   *  the autocomplete renders the full list (tour scope
+   *  treated as default). */
+  packScope?: 'artist' | 'tour' | 'show';
+}
+
+/* Sprint 12 §9c1.b — autocomplete state shape. `triggerPos` is
+   the Tiptap document position immediately AFTER the `{`
+   character that opened the autocomplete; the editor's
+   onUpdate handler reads document text between triggerPos and
+   the current selection.from to compute the live query. */
+interface AutocompleteState {
+  triggerPos: number;
+  query: string;
+  anchor: { top: number; left: number; lineHeight: number } | null;
 }
 
 export function RichTextEditor({
@@ -51,11 +71,18 @@ export function RichTextEditor({
   onChange,
   placeholder = 'Start typing…',
   disabled = false,
+  packScope = 'tour',
 }: RichTextEditorProps) {
   const onChangeRef = useRef(onChange);
   useEffect(() => {
     onChangeRef.current = onChange;
   }, [onChange]);
+
+  /* Sprint 12 §9c1.b — autocomplete state. Lives in the
+     parent because the popover must position itself relative
+     to the editor's caret coords (resolved on each query
+     change via editor.view.coordsAtPos). */
+  const [autocomplete, setAutocomplete] = useState<AutocompleteState | null>(null);
 
   const editor = useEditor({
     /* Tiptap v3 — set immediatelyRender:false so Next.js's
@@ -83,10 +110,53 @@ export function RichTextEditor({
       Placeholder.configure({
         placeholder,
       }),
+      /* Sprint 12 §9c1.b — atomic inline variable node. */
+      VariableNode,
     ],
     content: value ?? '',
     onUpdate: ({ editor: ed }) => {
       onChangeRef.current(ed.getJSON());
+      /* If the autocomplete is open, recompute the live query
+         from the text between the trigger position and the
+         current selection. If the cursor moved before the
+         trigger or text was deleted past the `{`, close. */
+      setAutocomplete((cur) => {
+        if (!cur) return cur;
+        const { from } = ed.state.selection;
+        if (from < cur.triggerPos) return null;
+        const queryRaw = ed.state.doc.textBetween(cur.triggerPos, from, '', '');
+        /* Bail out of the autocomplete when the query
+           contains whitespace or punctuation that wouldn't
+           appear in a variable token. Brackets, dots, and
+           letters are valid. */
+        if (/[\s,]/.test(queryRaw)) return null;
+        return { ...cur, query: queryRaw };
+      });
+    },
+    editorProps: {
+      handleKeyDown(view, event) {
+        if (disabled) return false;
+        if (event.key === '{') {
+          /* Defer the open one tick so the `{` lands in the
+             doc first; that way the trigger position points
+             at the character JUST AFTER the brace, which is
+             where typing accumulates the query. */
+          const pos = view.state.selection.from + 1;
+          requestAnimationFrame(() => {
+            const coords = view.coordsAtPos(pos);
+            setAutocomplete({
+              triggerPos: pos,
+              query: '',
+              anchor: {
+                top: coords.top,
+                left: coords.left,
+                lineHeight: coords.bottom - coords.top,
+              },
+            });
+          });
+        }
+        return false;
+      },
     },
   });
 
@@ -191,6 +261,37 @@ export function RichTextEditor({
           color: 'var(--lp-text)',
           lineHeight: 1.55,
         }}
+      />
+      {/* Sprint 12 §9c1.b — variable autocomplete. Renders as
+          a fixed-position popover anchored at the `{` coords.
+          On pick: replace the trigger range (the `{` + typed
+          query) with a VariableNode. On close: leave the
+          typed text intact so the operator can backspace
+          manually if they decide not to use a variable. */}
+      <VariableAutocomplete
+        anchor={autocomplete?.anchor ?? null}
+        query={autocomplete?.query ?? ''}
+        packScope={packScope}
+        onPick={(token) => {
+          if (!editor || !autocomplete) return;
+          /* Replace `{` + query text with the variable node.
+             triggerPos is the position AFTER the `{`, so the
+             range to remove is [triggerPos - 1, triggerPos + query.length]. */
+          const from = autocomplete.triggerPos - 1;
+          const to = autocomplete.triggerPos + autocomplete.query.length;
+          const bare = token.startsWith('{') ? token.slice(1, -1) : token;
+          editor
+            .chain()
+            .focus()
+            .deleteRange({ from, to })
+            .insertContent({
+              type: 'variableNode',
+              attrs: { token: bare },
+            })
+            .run();
+          setAutocomplete(null);
+        }}
+        onClose={() => setAutocomplete(null)}
       />
       {/* Inline-styles can't reach the ProseMirror content's
           headings + paragraphs + lists because those render

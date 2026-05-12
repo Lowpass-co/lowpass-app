@@ -684,6 +684,7 @@ export function PackEditor({ packId }: Props) {
           <RichTextSectionEditor
             key={selectedSection.id}
             section={selectedSection}
+            packScope={data.pack.scope}
             savePill={savePill}
             onTitleCommit={(title) => {
               setData((prev) => {
