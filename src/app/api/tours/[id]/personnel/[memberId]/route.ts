@@ -12,6 +12,7 @@
 
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { isRoleTag, type RoleTag } from '@/lib/personnel/role-tags';
 import {
   getActiveMembership,
   fetchActiveGrants,
@@ -37,6 +38,8 @@ const VALID_STATUSES: ReadonlySet<Status> = new Set([
 
 interface PatchPayload {
   role?: string;
+  /** Sprint 12 §9c.0 — structured role discriminator. */
+  role_tag?: RoleTag;
   employment_type?: string | null;
   rate_amount?: number | null;
   rate_currency?: string | null;
@@ -79,6 +82,18 @@ export async function PATCH(
   const patch: PatchPayload = {};
   if (typeof body.role === 'string' && body.role.trim().length > 0) {
     patch.role = body.role.trim();
+  }
+  /* Sprint 12 §9c.0 — role_tag PATCH. CHECK constraint on the
+     column would catch a bad value at the DB layer; validating
+     here gives a 400 + clear error message instead of a 500. */
+  if ('role_tag' in body) {
+    if (!isRoleTag(body.role_tag)) {
+      return NextResponse.json(
+        { error: 'role_tag must be one of tm|tm2|pm|foh|mons|ld|backline|management|other' },
+        { status: 400 },
+      );
+    }
+    patch.role_tag = body.role_tag;
   }
   if (body.employment_type === null || typeof body.employment_type === 'string') {
     patch.employment_type = (body.employment_type as string | null) ?? null;

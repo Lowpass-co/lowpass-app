@@ -13,6 +13,7 @@
 
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { isRoleTag } from '@/lib/personnel/role-tags';
 import {
   getActiveMembership,
   fetchActiveGrants,
@@ -44,6 +45,9 @@ interface PersonnelListItem {
   email: string | null;
   phone: string | null;
   role: string;
+  /** Sprint 12 §9c.0 — structured role discriminator. Mirrors
+   *  the shape in src/lib/personnel/types.ts. */
+  role_tag: 'tm' | 'tm2' | 'pm' | 'foh' | 'mons' | 'ld' | 'backline' | 'management' | 'other';
   employment_type: string | null;
   rate_amount: number | null;
   rate_currency: string | null;
@@ -88,7 +92,9 @@ export async function GET(
   const { data: rows, error } = await supabase
     .from('tour_personnel')
     .select(
-      'id, workspace_id, person_id, role, employment_type, rate_amount, rate_currency, rate_period, starts_on, ends_on, status',
+      /* Sprint 12 §9c.0 — role_tag added to the select so the
+         PersonnelListItem shape (and downstream UI) sees it. */
+      'id, workspace_id, person_id, role, role_tag, employment_type, rate_amount, rate_currency, rate_period, starts_on, ends_on, status',
     )
     .eq('tour_id', tourId)
     .order('role', { ascending: true });
@@ -134,6 +140,7 @@ export async function GET(
     workspace_id: string;
     person_id: string;
     role: string;
+    role_tag: PersonnelListItem['role_tag'] | null;
     employment_type: string | null;
     rate_amount: number | null;
     rate_currency: string | null;
@@ -151,6 +158,11 @@ export async function GET(
       email: p?.email ?? null,
       phone: p?.phone ?? null,
       role: r.role,
+      /* Sprint 12 §9c.0 — defaults to 'other' for safety
+         in case a row predates migration 101 (shouldn't
+         happen — DEFAULT 'other' on the column — but
+         resilient). */
+      role_tag: r.role_tag ?? 'other',
       employment_type: r.employment_type,
       rate_amount: r.rate_amount,
       rate_currency: r.rate_currency,
@@ -193,6 +205,10 @@ export async function POST(
   let body: {
     person_id?: unknown;
     role?: unknown;
+    /* Sprint 12 §9c.0 — structured role discriminator. Defaults
+       to 'other' when omitted so existing API callers continue
+       working. */
+    role_tag?: unknown;
     employment_type?: unknown;
     rate_amount?: unknown;
     rate_currency?: unknown;
@@ -214,6 +230,14 @@ export async function POST(
   const role = typeof body.role === 'string' && body.role.trim().length > 0
     ? body.role.trim()
     : 'Crew';
+
+  /* Sprint 12 §9c.0 — role_tag validation. Falls back to
+     'other' when the field is missing or doesn't match the
+     CHECK-constrained enum. The DB constraint would catch a
+     bad value, but surfacing here gives a 400 with a clear
+     message instead of a 500. */
+  const roleTagRaw = body.role_tag;
+  const roleTag = isRoleTag(roleTagRaw) ? roleTagRaw : 'other';
 
   const status =
     typeof body.status === 'string' && VALID_STATUSES.has(body.status as Status)
@@ -251,6 +275,7 @@ export async function POST(
     tour_id: tourId,
     person_id: personId,
     role,
+    role_tag: roleTag,
     employment_type: typeof body.employment_type === 'string' ? body.employment_type : null,
     rate_amount: typeof body.rate_amount === 'number' ? body.rate_amount : null,
     rate_currency: typeof body.rate_currency === 'string' ? body.rate_currency : 'GBP',

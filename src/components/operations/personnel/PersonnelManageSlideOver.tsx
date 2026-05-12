@@ -28,6 +28,8 @@ import { SlideOver } from '@/components/shell/SlideOver';
 import { DeleteConfirmationModal } from '@/components/ui/DeleteConfirmationModal';
 import { useAutoSave } from '@/lib/forms/useAutoSave';
 import { SaveStatus } from '@/components/forms/SaveStatus';
+import { BrandedSelect } from '@/components/ui/BrandedSelect';
+import { ROLE_TAG_OPTIONS, type RoleTag } from '@/lib/personnel/role-tags';
 import type {
   PersonnelListItem,
   PersonnelStatus,
@@ -52,6 +54,8 @@ interface PersonnelManageSlideOverProps {
 
 interface EditState {
   role: string;
+  /** Sprint 12 §9c.0 — structured role discriminator. */
+  roleTag: RoleTag;
   startsOn: string;
   endsOn: string;
   status: PersonnelStatus;
@@ -63,6 +67,7 @@ interface EditState {
 function memberToState(m: PersonnelListItem): EditState {
   return {
     role: m.role ?? '',
+    roleTag: (m.role_tag ?? 'other') as RoleTag,
     startsOn: m.starts_on ?? '',
     endsOn: m.ends_on ?? '',
     status: m.status,
@@ -171,6 +176,7 @@ function PersonnelManageEditor({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             role: s.role.trim() || 'Crew',
+            role_tag: s.roleTag,
             starts_on: s.startsOn || null,
             ends_on: s.endsOn || null,
             status: s.status,
@@ -286,6 +292,36 @@ function PersonnelManageEditor({
                 borderRadius: 'var(--lp-radius-md)',
                 outline: 'none',
               }}
+            />
+          </div>
+
+          {/* Sprint 12 §9c.0 — Role tag select. Filter target
+              for the variable resolver; freeform Role above
+              stays the canonical Key Contacts display value. */}
+          <div>
+            <label
+              htmlFor="lp-personnel-role-tag"
+              className="lp-label-caps"
+              style={{
+                display: 'block',
+                marginBottom: 'var(--lp-space-1)',
+                fontSize: 'var(--lp-text-2xs)',
+                color: 'var(--lp-text-secondary)',
+              }}
+            >
+              Role tag (for rider variables)
+            </label>
+            <BrandedSelect
+              value={state.roleTag}
+              onChange={(v) => set((p) => ({ ...p, roleTag: v as RoleTag }))}
+              options={ROLE_TAG_OPTIONS.map((o) => ({
+                value: o.value,
+                label: `${o.label} — ${o.description}`,
+              }))}
+              ariaLabel="Role tag"
+              size="sm"
+              className="w-full"
+              triggerClassName="min-h-9 w-full"
             />
           </div>
 
