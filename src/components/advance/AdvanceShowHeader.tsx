@@ -17,7 +17,7 @@
    ============================================ */
 
 import Link from 'next/link';
-import { LayoutTemplate, Pencil } from 'lucide-react';
+import { LayoutTemplate, Package, Pencil } from 'lucide-react';
 import { CircularProgressRing } from './CircularProgressRing';
 
 interface AdvanceShowHeaderProps {
@@ -40,6 +40,9 @@ interface AdvanceShowHeaderProps {
   activeTab: 'show' | 'builder';
   /** Href for the "Edit template" action (toggles tab to builder). */
   builderHref: string;
+  /** Sprint 12 §11b — href for the Advance Packet view, the
+   *  shareable docs manifest at /advance/[tour]/[show]/packet. */
+  packetHref: string;
 }
 
 export function AdvanceShowHeader({
@@ -54,6 +57,7 @@ export function AdvanceShowHeader({
   overdueSectionsCount,
   activeTab,
   builderHref,
+  packetHref,
 }: AdvanceShowHeaderProps) {
   const pct =
     sectionsTotal > 0
@@ -135,8 +139,25 @@ export function AdvanceShowHeader({
         </div>
 
         {/* Right rail — Edit template action. NO "Mark All Complete"
-            (Adam's lock: advance is not a to-do list). */}
-        <div className="shrink-0">
+            (Adam's lock: advance is not a to-do list).
+            §11b adds a Packet link beside it so operators can
+            jump straight to the share view from the advance. */}
+        <div className="flex shrink-0 items-center gap-2">
+          <Link
+            href={packetHref}
+            className="btn-transition inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5"
+            style={{
+              borderColor: 'var(--lp-border-strong)',
+              background: 'var(--lp-bg)',
+              color: 'var(--lp-text)',
+              fontSize: '13px',
+              fontWeight: 500,
+            }}
+            title="Open the Advance Packet share view"
+          >
+            <Package className="h-3.5 w-3.5" />
+            Packet
+          </Link>
           {activeTab === 'show' ? (
             <Link
               href={builderHref}
