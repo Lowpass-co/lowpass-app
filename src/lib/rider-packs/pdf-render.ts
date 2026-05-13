@@ -69,12 +69,8 @@ interface FieldLike {
 }
 
 export function buildRiderPdfHtml(payload: PublicRiderPayload): string {
-  const { pack, sections, signedUrls, mics } = payload;
-  const ordered = [...sections].sort((a, b) => a.sort_order - b.sort_order);
-  const micsByName = buildMicsByName(mics);
-
-  const artistName = escapeHtml(pack.artist_name);
-  const riderTitle = escapeHtml(pack.title ?? 'Rider');
+  const artistName = escapeHtml(payload.pack.artist_name);
+  const riderTitle = escapeHtml(payload.pack.title ?? 'Rider');
   const footerText = `${artistName} — ${riderTitle}`;
 
   return `<!doctype html>
@@ -86,12 +82,52 @@ export function buildRiderPdfHtml(payload: PublicRiderPayload): string {
 <style>${PRINT_CSS}</style>
 </head>
 <body>
-${renderCover(pack)}
+${buildRiderBodyHtml(payload)}
+<div class="lp-pdf-footer" aria-hidden="true">${footerText}</div>
+</body>
+</html>`;
+}
+
+/** Body-only render of a single rider payload — used by the
+ *  bundled-packet PDF (§11c) to concatenate multiple riders
+ *  into one HTML document without duplicating the head/footer
+ *  scaffolding. Each rider's cover starts on a fresh page via
+ *  the .lp-pdf-cover break-after rule already in PRINT_CSS. */
+export function buildRiderBodyHtml(payload: PublicRiderPayload): string {
+  const { pack, sections, signedUrls, mics } = payload;
+  const ordered = [...sections].sort((a, b) => a.sort_order - b.sort_order);
+  const micsByName = buildMicsByName(mics);
+  return `${renderCover(pack)}
 ${renderToc(ordered)}
 <main class="lp-pdf-body">
 ${ordered.map((s) => renderSection(s, signedUrls, micsByName)).join('\n')}
-</main>
-<div class="lp-pdf-footer" aria-hidden="true">${footerText}</div>
+</main>`;
+}
+
+/** Bundle multiple rider payloads into a single packet PDF
+ *  HTML document. Each rider body is wrapped in a .lp-pdf-bundle-
+ *  doc div so the print stylesheet can force a page break
+ *  between riders. The footer carries the packet meta (tour +
+ *  routing label) rather than per-rider info — distinct from
+ *  the single-rider case. */
+export function buildPacketPdfHtml(
+  payloads: PublicRiderPayload[],
+  meta: { tourName: string; routingLabel: string },
+): string {
+  const title = escapeHtml(`${meta.tourName} — ${meta.routingLabel}`);
+  const footer = escapeHtml(`${meta.tourName} · ${meta.routingLabel}`);
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>${title}</title>
+<style>${BASE_CSS}</style>
+<style>${PRINT_CSS}</style>
+</head>
+<body>
+${payloads.map((p) => `<div class="lp-pdf-bundle-doc">${buildRiderBodyHtml(p)}</div>`).join('\n')}
+<div class="lp-pdf-footer" aria-hidden="true">${footer}</div>
 </body>
 </html>`;
 }
@@ -893,6 +929,12 @@ const PRINT_CSS = `
 
 /* Avoid orphan headings hanging at page bottom. */
 h2, h3 { break-after: avoid; }
+
+/* Sprint 12 §11c — bundled packet: each rider doc starts on
+   a fresh page (except the first, which absorbs the natural
+   page-1 origin). */
+.lp-pdf-bundle-doc { break-before: page; }
+.lp-pdf-bundle-doc:first-child { break-before: avoid; }
 
 /* Channel-list breaks: individual rows shouldn't split mid-
    cell. Aggregates and the output block start on a fresh
