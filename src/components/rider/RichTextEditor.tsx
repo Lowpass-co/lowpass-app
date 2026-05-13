@@ -53,6 +53,12 @@ export interface RichTextEditorProps {
    *  the autocomplete renders the full list (tour scope
    *  treated as default). */
   packScope?: 'artist' | 'tour' | 'show';
+  /** Sprint 12 §9c2 — resolved variable values for the pack
+   *  this editor sits inside. The VariableNode's double-click
+   *  handler reads from this map to compute the literal text
+   *  that replaces the chip when the operator override-breaks.
+   *  Passed through to Tiptap's storage on mount + on change. */
+  variableMap?: Record<string, string>;
 }
 
 /* Sprint 12 §9c1.b — autocomplete state shape. `triggerPos` is
@@ -72,6 +78,7 @@ export function RichTextEditor({
   placeholder = 'Start typing…',
   disabled = false,
   packScope = 'tour',
+  variableMap,
 }: RichTextEditorProps) {
   const onChangeRef = useRef(onChange);
   useEffect(() => {
@@ -166,6 +173,26 @@ export function RichTextEditor({
     if (!editor) return;
     editor.setEditable(!disabled);
   }, [editor, disabled]);
+
+  /* Sprint 12 §9c2 — push the variable map into Tiptap
+     storage whenever the parent's fetched values change. The
+     VariableNode NodeView reads from editor.storage to
+     compute the override-break replacement text.
+
+     Tiptap's storage API is designed to be mutated in place
+     (see https://tiptap.dev/docs/editor/extensions/custom-extensions/extension-storage) —
+     the editor instance is a stateful object, not a
+     React-managed value. React Compiler's immutability rule
+     doesn't model that exception, so we disable it on the
+     specific mutation line with the rationale captured here. */
+  useEffect(() => {
+    if (!editor) return;
+    const storage = editor.storage as { variableNode?: { resolvedMap: Record<string, string> } };
+    if (storage.variableNode) {
+      // eslint-disable-next-line react-hooks/immutability -- Tiptap storage is an intentionally mutable per-extension state bag
+      storage.variableNode.resolvedMap = variableMap ?? {};
+    }
+  }, [editor, variableMap]);
 
   if (!editor) {
     /* SSR / pre-hydration placeholder. Renders the same chrome

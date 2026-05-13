@@ -685,6 +685,7 @@ export function PackEditor({ packId }: Props) {
             key={selectedSection.id}
             section={selectedSection}
             packScope={data.pack.scope}
+            packId={data.pack.id}
             savePill={savePill}
             onTitleCommit={(title) => {
               setData((prev) => {

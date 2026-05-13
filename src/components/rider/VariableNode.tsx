@@ -24,6 +24,7 @@
    scope here.
    ============================================ */
 
+import { useState } from 'react';
 import { Node, mergeAttributes, type RawCommands } from '@tiptap/core';
 import { NodeViewWrapper, ReactNodeViewRenderer } from '@tiptap/react';
 import type { NodeViewProps } from '@tiptap/react';
@@ -47,11 +48,59 @@ interface VariableNodeAttrs {
 
 /* Component rendered as the chip in the editor. Tiptap calls
    it via ReactNodeViewRenderer; props.node.attrs carries the
-   token string. */
-function VariableChip({ node }: NodeViewProps) {
+   token string. The NodeView receives `editor` + `getPos` so
+   the double-click handler (override-break) can convert the
+   chip in-place to a plain text node holding the resolved
+   value. */
+function VariableChip({ node, editor, getPos }: NodeViewProps) {
   const attrs = node.attrs as VariableNodeAttrs;
   const bracketed = bracket(attrs.token);
   const label = LABEL_BY_TOKEN[bracketed] ?? bracketed;
+
+  /* Sprint 12 §9c2 — converting flash. The chip briefly
+     pulses orange when the operator double-clicks to break
+     the binding, so the conversion is visible before the
+     node replaces with text. The setTimeout chain handles
+     the conversion sequencing: set the flash flag, wait
+     220ms for the animation to peak, then dispatch the
+     replace command. */
+  const [converting, setConverting] = useState(false);
+
+  const handleDoubleClick = () => {
+    if (converting) return;
+    if (typeof getPos !== 'function') return;
+    /* Read the resolved map from Tiptap's storage. Empty
+       string when the token isn't in the map (e.g.
+       tour-scope variable on an artist-scope pack). Adam's
+       spec says "convert to plain text containing the
+       currently-resolved value" — for unresolved tokens we
+       fall back to the bracketed literal so the operator
+       gets a sensible static string. */
+    const storage = (editor.storage as { variableNode?: { resolvedMap?: Record<string, string> } })
+      .variableNode;
+    const resolvedMap = storage?.resolvedMap ?? {};
+    const literal = resolvedMap[bracketed] ?? bracketed;
+    setConverting(true);
+    /* Wait one animation cycle then run the replace. The
+       getPos call must happen INSIDE the setTimeout so the
+       position is current at replace time (the doc may have
+       changed underneath us). */
+    setTimeout(() => {
+      const from = getPos();
+      if (typeof from !== 'number') {
+        setConverting(false);
+        return;
+      }
+      const to = from + node.nodeSize;
+      editor
+        .chain()
+        .focus()
+        .deleteRange({ from, to })
+        .insertContentAt(from, literal || ' ')
+        .run();
+    }, 220);
+  };
+
   return (
     <NodeViewWrapper
       as="span"
@@ -66,15 +115,22 @@ function VariableChip({ node }: NodeViewProps) {
         fontWeight: 600,
         lineHeight: 1.5,
         color: 'var(--color-lp-orange)',
-        background: 'color-mix(in srgb, var(--color-lp-orange) 12%, transparent)',
-        border: '1px solid color-mix(in srgb, var(--color-lp-orange) 35%, transparent)',
+        background: converting
+          ? 'color-mix(in srgb, var(--color-lp-orange) 35%, transparent)'
+          : 'color-mix(in srgb, var(--color-lp-orange) 12%, transparent)',
+        border: `1px solid color-mix(in srgb, var(--color-lp-orange) ${converting ? '70%' : '35%'}, transparent)`,
+        boxShadow: converting
+          ? '0 0 0 3px color-mix(in srgb, var(--color-lp-orange) 20%, transparent)'
+          : 'none',
         borderRadius: 4,
         verticalAlign: 'baseline',
-        cursor: 'default',
+        cursor: 'pointer',
         userSelect: 'all',
+        transition: 'background 200ms ease-out, border-color 200ms ease-out, box-shadow 200ms ease-out',
       }}
       data-token={attrs.token}
-      title={bracketed}
+      title={`${bracketed} — double-click to convert to static text`}
+      onDoubleClick={handleDoubleClick}
     >
       {label}
     </NodeViewWrapper>
@@ -95,13 +151,28 @@ declare module '@tiptap/core' {
   }
 }
 
-export const VariableNode = Node.create({
+interface VariableNodeStorage {
+  /** Sprint 12 §9c2 — resolved-value map populated by
+   *  RichTextEditor when its parent fetches the values for
+   *  this pack. The NodeView's double-click handler reads
+   *  from here to compute the static literal that replaces
+   *  the chip on override-break. */
+  resolvedMap: Record<string, string>;
+}
+
+export const VariableNode = Node.create<unknown, VariableNodeStorage>({
   name: 'variableNode',
   group: 'inline',
   inline: true,
   atom: true,
   selectable: true,
   draggable: false,
+
+  addStorage() {
+    return {
+      resolvedMap: {},
+    };
+  },
 
   addAttributes() {
     return {

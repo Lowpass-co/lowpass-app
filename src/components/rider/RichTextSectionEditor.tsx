@@ -26,6 +26,12 @@ interface RichTextSectionEditorProps {
   /** Sprint 12 §9c1.b — pack scope drives the variable
    *  autocomplete filter inside the rich-text body. */
   packScope: 'artist' | 'tour' | 'show';
+  /** Sprint 12 §9c2 — pack id for the variable-resolve fetch.
+   *  The editor calls GET /api/rider-packs/[id]/variables on
+   *  mount and feeds the map into RichTextEditor so
+   *  double-clicking a chip can convert it to a static
+   *  literal carrying the live value. */
+  packId: string;
   savePill: { state: SavePillState; error: string | null };
   onTitleCommit: (title: string) => void;
   onContentChange: (content: object) => void;
@@ -38,6 +44,7 @@ interface RichTextSectionEditorProps {
 export function RichTextSectionEditor({
   section,
   packScope,
+  packId,
   savePill,
   onTitleCommit,
   onContentChange,
@@ -46,6 +53,32 @@ export function RichTextSectionEditor({
   onMoveUp,
   onMoveDown,
 }: RichTextSectionEditorProps) {
+  /* Sprint 12 §9c2 — fetch resolved variable values on mount.
+     One round-trip per editor open; cached for the session.
+     If Adam edits a tour personnel row in another tab mid-
+     session, the override-break will use the (slightly
+     stale) cached value — refresh fixes it. */
+  const [variableMap, setVariableMap] = useState<Record<string, string>>({});
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/rider-packs/${packId}/variables`);
+        if (!res.ok) return;
+        const body = (await res.json()) as { variables?: Record<string, string> };
+        if (cancelled) return;
+        setVariableMap(body.variables ?? {});
+      } catch {
+        /* Silent — the editor still works without resolved
+           values; double-click just inserts the literal
+           token string instead of the resolved text. */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [packId]);
+
   const [titleDraft, setTitleDraft] = useState(section.title);
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect -- sync title draft when the server-side section row changes externally
@@ -138,6 +171,7 @@ export function RichTextSectionEditor({
           disabled={inherited}
           placeholder="Start typing the section body…"
           packScope={packScope}
+          variableMap={variableMap}
         />
       </div>
     </div>
