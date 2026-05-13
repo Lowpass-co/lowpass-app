@@ -45,6 +45,19 @@
 
 import type { PublicRiderPayload } from '@/lib/rider-packs/web-links';
 import { formatOrdinalDate } from '@/lib/text/ordinalDate';
+import type {
+  ChannelListRow,
+  MicLibraryEntry,
+  StageBox,
+  SubSnake,
+} from '@/lib/rider-packs/types';
+import {
+  aggregateCables,
+  aggregateMicsByProvider,
+  aggregateStands,
+  aggregateStageBoxes,
+  aggregateSubSnakes,
+} from '@/lib/rider-packs/aggregates';
 
 type Section = PublicRiderPayload['sections'][number];
 
@@ -56,8 +69,9 @@ interface FieldLike {
 }
 
 export function buildRiderPdfHtml(payload: PublicRiderPayload): string {
-  const { pack, sections, signedUrls } = payload;
+  const { pack, sections, signedUrls, mics } = payload;
   const ordered = [...sections].sort((a, b) => a.sort_order - b.sort_order);
+  const micsByName = buildMicsByName(mics);
 
   const artistName = escapeHtml(pack.artist_name);
   const riderTitle = escapeHtml(pack.title ?? 'Rider');
@@ -75,7 +89,7 @@ export function buildRiderPdfHtml(payload: PublicRiderPayload): string {
 ${renderCover(pack)}
 ${renderToc(ordered)}
 <main class="lp-pdf-body">
-${ordered.map((s) => renderSection(s, signedUrls)).join('\n')}
+${ordered.map((s) => renderSection(s, signedUrls, micsByName)).join('\n')}
 </main>
 <div class="lp-pdf-footer" aria-hidden="true">${footerText}</div>
 </body>
@@ -137,16 +151,24 @@ function fallbackTitle(s: Section): string {
 /* ----------------------------------------------------------
    Sections — dispatch on section_type.
    ---------------------------------------------------------- */
-function renderSection(s: Section, signedUrls: Record<string, string | null>): string {
+function renderSection(
+  s: Section,
+  signedUrls: Record<string, string | null>,
+  micsByName: Map<string, MicLibraryEntry>,
+): string {
   const title = escapeHtml(s.title?.trim() || fallbackTitle(s));
-  const body = renderSectionBody(s, signedUrls);
+  const body = renderSectionBody(s, signedUrls, micsByName);
   return `<section id="section-${escapeAttr(s.section_key)}" class="lp-pdf-section">
   <h2 class="lp-section-heading">${title}</h2>
   <div class="lp-section-body">${body}</div>
 </section>`;
 }
 
-function renderSectionBody(s: Section, signedUrls: Record<string, string | null>): string {
+function renderSectionBody(
+  s: Section,
+  signedUrls: Record<string, string | null>,
+  micsByName: Map<string, MicLibraryEntry>,
+): string {
   const type = s.section_type ?? 'fields';
 
   if (type === 'rich_text') {
@@ -162,9 +184,12 @@ function renderSectionBody(s: Section, signedUrls: Record<string, string | null>
   }
 
   if (type === 'channel_list') {
-    /* See header note — channel list rendering requires data
-     * the public payload doesn't currently carry. */
-    return `<div class="lp-section-stub">Channel list — open in app for full routing detail.</div>`;
+    return renderChannelList(
+      s.rows ?? [],
+      s.sub_snakes ?? [],
+      s.stage_boxes ?? [],
+      micsByName,
+    );
   }
 
   const fields = (s.fields as FieldLike[]) ?? [];
@@ -309,6 +334,219 @@ function renderAdvanceSummary(rows: Array<{ subject?: unknown; body?: unknown }>
     })
     .filter(Boolean);
   return `<table class="lp-summary"><tbody>${trs.join('')}</tbody></table>`;
+}
+
+/* ----------------------------------------------------------
+   Channel list — full grid render.
+
+   Three stacked blocks:
+     1. Input grid     11 cols (# / Name / Pos / Stage Box /
+                                Loom / Cable / Mic-DI / Stand
+                                / Phantom / Provider / Notes)
+     2. Output grid    5 cols  (# / Item / Destination / Pos
+                                / QTY + Notes column)
+     3. Aggregates     5 sub-tables (Mics-DIs / Stands /
+                                     Cables / Stage boxes /
+                                     Snakes)
+
+   The 11-col input grid is dense for A4; we lean on small
+   font + tight padding + word-break to keep it readable.
+   The first column is the sub-snake colour stripe (so the
+   loom assignment is visible at a glance) and the channel
+   index sits in the second column.
+
+   Mic kind badge comes from a workspace mic_library lookup
+   (matches the editor's KIND_BADGE colours). When a row
+   carries a free-text mic name not in the library, no badge
+   renders — matches editor behaviour.
+   ---------------------------------------------------------- */
+function renderChannelList(
+  rows: ChannelListRow[],
+  subSnakes: SubSnake[],
+  stageBoxes: StageBox[],
+  micsByName: Map<string, MicLibraryEntry>,
+): string {
+  const inputs = rows.filter((r) => (r.row_kind ?? 'input') === 'input');
+  const outputs = rows.filter((r) => r.row_kind === 'output');
+  const subById = new Map(subSnakes.map((s) => [s.id, s]));
+  const stageById = new Map(stageBoxes.map((s) => [s.id, s]));
+
+  const inputsBlock = inputs.length === 0
+    ? `<div class="lp-empty">No channels.</div>`
+    : `<div class="lp-cl-block">
+  <div class="lp-cl-input-grid lp-cl-head">
+    <div></div><div>#</div><div>Name</div><div>Pos</div><div>Stage Box</div><div>Loom</div><div>Cable</div><div>Mic / DI</div><div>Stand</div><div class="lp-cl-center">+48</div><div>Prov</div><div>Notes</div>
+  </div>
+  ${inputs.map((r) => renderInputRow(r, subById, stageById, micsByName)).join('')}
+</div>`;
+
+  const outputsBlock = outputs.length === 0
+    ? ''
+    : `<div class="lp-cl-block lp-cl-outputs">
+  <h4 class="lp-cl-subheading">Outputs (${outputs.length})</h4>
+  <div class="lp-cl-output-grid lp-cl-head">
+    <div>#</div><div>Item</div><div>Destination</div><div>Pos</div><div class="lp-cl-center">QTY</div><div>Notes</div>
+  </div>
+  ${outputs.map((r) => renderOutputRow(r)).join('')}
+</div>`;
+
+  const aggregatesBlock = renderChannelAggregates(rows, subSnakes, stageBoxes);
+
+  return `<div class="lp-channel-list">
+${inputsBlock}
+${outputsBlock}
+${aggregatesBlock}
+</div>`;
+}
+
+function renderInputRow(
+  r: ChannelListRow,
+  subById: Map<string, SubSnake>,
+  stageById: Map<string, StageBox>,
+  micsByName: Map<string, MicLibraryEntry>,
+): string {
+  const sub = r.sub_snake_id ? subById.get(r.sub_snake_id) ?? null : null;
+  const stage = r.stage_box_id ? stageById.get(r.stage_box_id) ?? null : null;
+  const subLabel = sub && r.sub_snake_position != null ? `${sub.label}-${r.sub_snake_position}` : '';
+  const stageLabel = stage && r.stage_box_position != null ? `${stage.label}-${r.stage_box_position}` : '';
+  const stripe = sub?.colour ?? 'transparent';
+  const phantom =
+    r.phantom_power === true ? '✓' : r.phantom_power === false ? '·' : '—';
+  const phantomClass = r.phantom_power === true ? 'lp-cl-phantom-on' : 'lp-cl-phantom-muted';
+  const provider = r.provider ? capitalise(r.provider) : '—';
+  const providerClass = r.provider ? '' : 'lp-cl-muted';
+  const mic = (r.mic || r.di || '').trim();
+  const micEntry = mic ? micsByName.get(mic.toLowerCase()) ?? null : null;
+  const micBadge = micEntry ? renderMicBadge(micEntry.type) : '';
+  return `<div class="lp-cl-input-grid lp-cl-row">
+  <div class="lp-cl-stripe" style="background:${escapeAttr(stripe)};"></div>
+  <div class="lp-cl-idx">${r.row_index}</div>
+  <div class="lp-cl-name">${escapeHtml(r.channel_name || '')}</div>
+  <div>${escapeHtml(r.position || '')}</div>
+  <div>${escapeHtml(stageLabel)}</div>
+  <div>${escapeHtml(subLabel)}</div>
+  <div>${escapeHtml(r.cable_length || '')}</div>
+  <div class="lp-cl-mic">${micBadge}<span>${escapeHtml(mic)}</span></div>
+  <div>${escapeHtml(r.stand || '')}</div>
+  <div class="lp-cl-center ${phantomClass}">${phantom}</div>
+  <div class="${providerClass}">${escapeHtml(provider)}</div>
+  <div class="lp-cl-notes">${escapeHtml(r.notes || '')}</div>
+</div>`;
+}
+
+function renderOutputRow(r: ChannelListRow): string {
+  return `<div class="lp-cl-output-grid lp-cl-row">
+  <div class="lp-cl-idx">${r.row_index}</div>
+  <div>${escapeHtml(r.output_item ?? '')}</div>
+  <div>${escapeHtml(r.output_destination ?? '')}</div>
+  <div>${escapeHtml(r.position || '')}</div>
+  <div class="lp-cl-center">${r.output_qty == null ? '' : escapeHtml(String(r.output_qty))}</div>
+  <div class="lp-cl-notes">${escapeHtml(r.output_notes ?? '')}</div>
+</div>`;
+}
+
+function renderChannelAggregates(
+  rows: ChannelListRow[],
+  subSnakes: SubSnake[],
+  stageBoxes: StageBox[],
+): string {
+  const mics = aggregateMicsByProvider(rows);
+  const stands = aggregateStands(rows);
+  const cables = aggregateCables(rows);
+  const boxes = aggregateStageBoxes(stageBoxes);
+  const snakes = aggregateSubSnakes(subSnakes);
+
+  const providerLabel: Record<string, string> = {
+    band: 'Band',
+    venue: 'Venue',
+    hire: 'Hire',
+    unspecified: 'Unspecified',
+  };
+
+  const renderSub = (title: string, content: string): string =>
+    `<section class="lp-cl-agg-section">
+  <h4 class="lp-cl-subheading">${escapeHtml(title)}</h4>
+  ${content}
+</section>`;
+
+  const tableOrEmpty = (
+    head: string[],
+    body: string,
+    cols: string,
+    empty: string,
+  ): string =>
+    body
+      ? `<div class="lp-cl-agg-table" style="--cols:${escapeAttr(cols)};">
+  <div class="lp-cl-agg-head">${head.map((h) => `<div>${escapeHtml(h)}</div>`).join('')}</div>
+  ${body}
+</div>`
+      : `<div class="lp-empty">${escapeHtml(empty)}</div>`;
+
+  const micRows = mics
+    .map(
+      (m) =>
+        `<div class="lp-cl-agg-row"><span class="lp-cl-num">${m.qty}</span><span>${escapeHtml(m.item)}</span><span class="${m.provider === 'unspecified' ? 'lp-cl-muted' : ''}">${escapeHtml(providerLabel[m.provider] ?? m.provider)}</span></div>`,
+    )
+    .join('');
+  const standRows = stands
+    .map(
+      (s) =>
+        `<div class="lp-cl-agg-row"><span class="lp-cl-num">${s.qty}</span><span>${escapeHtml(s.item)}</span></div>`,
+    )
+    .join('');
+  const cableRows = cables
+    .map(
+      (c) =>
+        `<div class="lp-cl-agg-row"><span class="lp-cl-num">${c.qty}</span><span>${escapeHtml(c.length)}</span></div>`,
+    )
+    .join('');
+  const boxRows = boxes
+    .map(
+      (b) =>
+        `<div class="lp-cl-agg-row"><span>${escapeHtml(b.label)}</span><span class="lp-cl-swatch"><span style="background:${escapeAttr(b.colour)};"></span>${escapeHtml(b.colour)}</span><span class="lp-cl-num">${b.capacity}</span></div>`,
+    )
+    .join('');
+  const snakeRows = snakes
+    .map(
+      (s) =>
+        `<div class="lp-cl-agg-row"><span>${escapeHtml(s.label)}</span><span class="lp-cl-swatch"><span style="background:${escapeAttr(s.colour)};"></span>${escapeHtml(s.colour)}</span><span class="lp-cl-num">${s.capacity}</span></div>`,
+    )
+    .join('');
+
+  return `<div class="lp-cl-aggregates">
+${renderSub(`Mics / DIs (${mics.length})`, tableOrEmpty(['QTY', 'ITEM', 'PROVIDER'], micRows, '3rem 1fr 5rem', 'No mics or DIs assigned.'))}
+${renderSub(`Mic stands (${stands.length})`, tableOrEmpty(['QTY', 'ITEM'], standRows, '3rem 1fr', 'No mic stands assigned.'))}
+${renderSub(`Cables (${cables.length})`, tableOrEmpty(['QTY', 'LENGTH'], cableRows, '3rem 1fr', 'No cable lengths recorded.'))}
+${renderSub(`Stage boxes (${boxes.length})`, tableOrEmpty(['NAME', 'COLOR', 'CAPACITY'], boxRows, '1fr auto 4rem', 'No stage boxes.'))}
+${renderSub(`Snakes / Looms (${snakes.length})`, tableOrEmpty(['LABEL', 'COLOR', 'CAPACITY'], snakeRows, '1fr auto 4rem', 'No sub-snakes.'))}
+</div>`;
+}
+
+/* Mirror of editor's KIND_BADGE colours. Kept as plain HTML
+   spans so the print stylesheet can colour them via class. */
+function renderMicBadge(type: MicLibraryEntry['type']): string {
+  const map: Record<MicLibraryEntry['type'], { label: string; cls: string }> = {
+    dynamic: { label: 'DYN', cls: 'lp-cl-badge-mute' },
+    condenser: { label: 'CON', cls: 'lp-cl-badge-orange' },
+    ribbon: { label: 'RIB', cls: 'lp-cl-badge-mute' },
+    di_active: { label: 'DI+', cls: 'lp-cl-badge-orange' },
+    di_passive: { label: 'DI', cls: 'lp-cl-badge-mute' },
+  };
+  const b = map[type];
+  return `<span class="lp-cl-badge ${b.cls}">${b.label}</span>`;
+}
+
+function buildMicsByName(mics: MicLibraryEntry[]): Map<string, MicLibraryEntry> {
+  const m = new Map<string, MicLibraryEntry>();
+  for (const entry of mics) {
+    m.set(entry.name.trim().toLowerCase(), entry);
+  }
+  return m;
+}
+
+function capitalise(s: string): string {
+  if (!s) return '';
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 /* ----------------------------------------------------------
@@ -544,6 +782,104 @@ a { color: var(--lp-orange); text-decoration: none; }
   font-weight: 600;
 }
 .lp-summary-body { font-size: 0.9rem; }
+
+/* Channel list (§10 follow-up) ---------------------- */
+.lp-channel-list { display: flex; flex-direction: column; gap: 0.75rem; }
+.lp-cl-block { border: 1px solid var(--lp-border); border-radius: 0.25rem; overflow: hidden; }
+.lp-cl-head { background: #fafafa; }
+.lp-cl-head > div {
+  font-size: 0.55rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--lp-text-tertiary);
+  font-weight: 600;
+  padding: 0.3rem 0.25rem;
+  border-bottom: 1px solid var(--lp-border);
+}
+.lp-cl-input-grid {
+  display: grid;
+  grid-template-columns: 4px 1.8rem minmax(0, 1.4fr) minmax(0, 0.55fr) minmax(0, 0.7fr) minmax(0, 0.7fr) minmax(0, 0.55fr) minmax(0, 1fr) minmax(0, 0.55fr) 1.2rem minmax(0, 0.55fr) minmax(0, 1.1fr);
+  align-items: center;
+}
+.lp-cl-output-grid {
+  display: grid;
+  grid-template-columns: 1.8rem minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 0.55fr) 2.2rem minmax(0, 1.2fr);
+  align-items: center;
+}
+.lp-cl-row { font-size: 0.65rem; border-bottom: 1px solid #f5f5f5; }
+.lp-cl-row:last-child { border-bottom: 0; }
+.lp-cl-row > div {
+  padding: 0.25rem 0.25rem;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.lp-cl-stripe { padding: 0 !important; align-self: stretch; min-width: 4px; }
+.lp-cl-idx { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--lp-text-tertiary); font-size: 0.6rem; text-align: center; padding: 0.25rem 0.1rem !important; }
+.lp-cl-name { font-weight: 600; }
+.lp-cl-notes { color: var(--lp-text-secondary); }
+.lp-cl-mic { display: flex; align-items: center; gap: 3px; }
+.lp-cl-center { text-align: center; }
+.lp-cl-muted { color: var(--lp-text-tertiary); font-style: italic; }
+.lp-cl-phantom-on { color: #10b981; font-weight: 700; }
+.lp-cl-phantom-muted { color: var(--lp-text-tertiary); }
+.lp-cl-badge {
+  display: inline-block;
+  font-size: 0.5rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  padding: 1px 3px;
+  border-radius: 2px;
+  color: #ffffff;
+  min-width: 18px;
+  text-align: center;
+}
+.lp-cl-badge-orange { background: var(--lp-orange); }
+.lp-cl-badge-mute { background: var(--lp-text-secondary); }
+.lp-cl-subheading {
+  margin: 0 0 0.4rem;
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--lp-text-tertiary);
+}
+.lp-cl-outputs { padding-top: 0.5rem; }
+.lp-cl-outputs .lp-cl-subheading { padding: 0 0.5rem; }
+
+.lp-cl-aggregates { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem 1rem; padding-top: 0.5rem; }
+.lp-cl-agg-section { break-inside: avoid; }
+.lp-cl-agg-table {
+  border: 1px solid var(--lp-border);
+  border-radius: 0.25rem;
+  overflow: hidden;
+  background: #ffffff;
+}
+.lp-cl-agg-head, .lp-cl-agg-row {
+  display: grid;
+  grid-template-columns: var(--cols);
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.5rem;
+}
+.lp-cl-agg-head {
+  font-size: 0.55rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--lp-text-tertiary);
+  font-weight: 600;
+  border-bottom: 1px solid var(--lp-border);
+  background: #fafafa;
+}
+.lp-cl-agg-row { font-size: 0.7rem; border-bottom: 1px solid #f5f5f5; }
+.lp-cl-agg-row:last-child { border-bottom: 0; }
+.lp-cl-num { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 600; }
+.lp-cl-swatch { display: inline-flex; align-items: center; gap: 6px; font-size: 0.6rem; color: var(--lp-text-secondary); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.lp-cl-swatch > span:first-child {
+  display: inline-block;
+  width: 10px; height: 10px;
+  border-radius: 2px;
+  border: 1px solid var(--lp-border);
+}
 `;
 
 const PRINT_CSS = `
@@ -557,6 +893,15 @@ const PRINT_CSS = `
 
 /* Avoid orphan headings hanging at page bottom. */
 h2, h3 { break-after: avoid; }
+
+/* Channel-list breaks: individual rows shouldn't split mid-
+   cell. Aggregates and the output block start on a fresh
+   page when the inputs grid overflows so each sub-block
+   reads as a unit. */
+.lp-cl-row { break-inside: avoid; }
+.lp-cl-outputs { break-before: auto; }
+.lp-cl-aggregates { break-before: auto; }
+.lp-cl-agg-section { break-inside: avoid; }
 
 /* Footer — fixed at the bottom of every printed page. */
 .lp-pdf-footer {
