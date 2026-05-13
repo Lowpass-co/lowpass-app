@@ -11,6 +11,7 @@
    no hooks beyond what's needed for presentation.
    ============================================ */
 
+import React from 'react';
 import type { PublicRiderPayload } from '@/lib/rider-packs/web-links';
 import type {
   Field,
@@ -29,9 +30,14 @@ import { TableOfContents } from '@/components/rider/TableOfContents';
 
 type Props = {
   payload: PublicRiderPayload;
+  /** Sprint 12 §10 — set when rendering for PDF/print. Adds
+   *  the .lp-pdf-* class hooks the print stylesheet uses for
+   *  page breaks + footer placement. No visual change in the
+   *  web reader. */
+  printMode?: boolean;
 };
 
-export function ReadOnlyPackView({ payload }: Props) {
+export function ReadOnlyPackView({ payload, printMode = false }: Props) {
   const { pack, sections, signedUrls } = payload;
   const ordered = [...sections].sort((a, b) => a.sort_order - b.sort_order);
 
@@ -41,27 +47,31 @@ export function ReadOnlyPackView({ payload }: Props) {
           subtitle + updated date + disclaimer). Logo URL is
           pre-resolved server-side (override → artist default →
           null). */}
-      <CoverPageRender
-        artistName={pack.artist_name}
-        title={pack.title}
-        subtitle={pack.cover_subtitle}
-        disclaimer={pack.cover_disclaimer}
-        logoUrl={pack.cover_logo_url}
-        updatedAt={pack.updated_at}
-      />
+      <div className={printMode ? 'lp-pdf-cover' : undefined}>
+        <CoverPageRender
+          artistName={pack.artist_name}
+          title={pack.title}
+          subtitle={pack.cover_subtitle}
+          disclaimer={pack.cover_disclaimer}
+          logoUrl={pack.cover_logo_url}
+          updatedAt={pack.updated_at}
+        />
+      </div>
 
       {/* Sprint 12 §9b — auto-generated TOC. Page numbers
           render as placeholders ("Page —"); each entry is an
           in-document anchor link to #section-<key>. PDF
           pagination (§10) will replace the placeholders. */}
-      <TableOfContents
-        sections={ordered.map((s) => ({
-          id: s.id,
-          section_key: s.section_key,
-          title: s.title,
-          section_type: s.section_type,
-        }))}
-      />
+      <div className={printMode ? 'lp-pdf-toc' : undefined}>
+        <TableOfContents
+          sections={ordered.map((s) => ({
+            id: s.id,
+            section_key: s.section_key,
+            title: s.title,
+            section_type: s.section_type,
+          }))}
+        />
+      </div>
 
       <div className="max-w-3xl mx-auto p-6 space-y-6">
         {ordered.length === 0 ? (
@@ -75,13 +85,7 @@ export function ReadOnlyPackView({ payload }: Props) {
             >
               <h2 className="border-b border-neutral-200 px-4 py-2 text-sm font-medium">{s.title}</h2>
               <div className="p-4 space-y-3">
-                {(s.fields as Field[]).length === 0 ? (
-                  <div className="text-xs text-neutral-400">(empty)</div>
-                ) : (
-                  (s.fields as Field[]).map((field, idx) => (
-                    <FieldRow key={`${field.key}-${idx}`} field={field} signedUrls={signedUrls} />
-                  ))
-                )}
+                <SectionBody section={s} signedUrls={signedUrls} />
               </div>
             </section>
           ))
@@ -90,6 +94,137 @@ export function ReadOnlyPackView({ payload }: Props) {
         <footer className="pt-4 text-[10px] text-neutral-400 text-center">Shared via Lowpass</footer>
       </div>
     </div>
+  );
+}
+
+/* Sprint 12 §10 — dispatch on section_type. Pre-§10 the public
+   reader rendered only the legacy `fields` array and showed
+   "(empty)" for rich_text + advance_summary sections. Now each
+   gets its own minimal renderer based on what §9 put on
+   `metadata`. channel_list still falls through to fields-or-
+   empty because its data lives in separate tables that aren't
+   currently surfaced on PublicRiderPayload — tracked as a §10
+   follow-up. */
+function SectionBody({
+  section,
+  signedUrls,
+}: {
+  section: PublicRiderPayload['sections'][number];
+  signedUrls: Record<string, string | null>;
+}) {
+  const type = section.section_type ?? 'fields';
+
+  if (type === 'rich_text') {
+    const content = (section.metadata as { content?: unknown } | null)?.content;
+    if (!content) return <div className="text-xs text-neutral-400">(empty)</div>;
+    return <RichTextBody node={content} />;
+  }
+
+  if (type === 'advance_summary') {
+    const summary = (section.metadata as { summary?: unknown } | null)?.summary;
+    if (!Array.isArray(summary) || summary.length === 0) {
+      return <div className="text-xs text-neutral-400">(empty)</div>;
+    }
+    return <AdvanceSummaryBody rows={summary as Array<{ subject?: string; body?: string }>} />;
+  }
+
+  const fields = (section.fields as Field[]) ?? [];
+  if (fields.length === 0) {
+    return <div className="text-xs text-neutral-400">(empty)</div>;
+  }
+  return (
+    <>
+      {fields.map((field, idx) => (
+        <FieldRow key={`${field.key}-${idx}`} field={field} signedUrls={signedUrls} />
+      ))}
+    </>
+  );
+}
+
+/* ----------------------------------------------------------
+   Rich-text (Tiptap doc) renderer.
+
+   Recognises the doc shapes our editor produces: heading
+   (levels 2 + 3), paragraph, bullet_list, list_item, text,
+   variableNode (chip). Anything else falls through as nested
+   children, so unrecognised marks don't drop content.
+   ---------------------------------------------------------- */
+interface TiptapNodeLike {
+  type?: string;
+  attrs?: Record<string, unknown>;
+  content?: TiptapNodeLike[];
+  text?: string;
+}
+
+function RichTextBody({ node }: { node: unknown }) {
+  return <div className="lp-prose">{renderTiptapNode(node, 'root')}</div>;
+}
+
+function renderTiptapNode(node: unknown, key: string): React.ReactNode {
+  if (node === null || typeof node !== 'object') return null;
+  const n = node as TiptapNodeLike;
+  const children = Array.isArray(n.content)
+    ? n.content.map((c, i) => renderTiptapNode(c, `${key}-${i}`))
+    : null;
+
+  switch (n.type) {
+    case 'doc':
+      return <React.Fragment key={key}>{children}</React.Fragment>;
+    case 'heading': {
+      const level = Number(n.attrs?.level) === 3 ? 3 : 2;
+      return level === 3 ? <h3 key={key}>{children}</h3> : <h2 key={key}>{children}</h2>;
+    }
+    case 'paragraph':
+      return <p key={key}>{children}</p>;
+    case 'bulletList':
+    case 'bullet_list':
+      return <ul key={key}>{children}</ul>;
+    case 'listItem':
+    case 'list_item':
+      return <li key={key}>{children}</li>;
+    case 'text':
+      return <React.Fragment key={key}>{n.text ?? ''}</React.Fragment>;
+    case 'variableNode': {
+      /* Public reader pre-resolves variable nodes into text
+         (see /api/public/rider/[token]/route.ts). Anything
+         that slips through unresolved we render as a labelled
+         chip so the reader can see the gap. */
+      const label = typeof n.attrs?.label === 'string'
+        ? n.attrs.label
+        : typeof n.attrs?.token === 'string'
+          ? n.attrs.token
+          : 'variable';
+      return <span key={key} className="lp-var">{`{${label}}`}</span>;
+    }
+    default:
+      return <React.Fragment key={key}>{children}</React.Fragment>;
+  }
+}
+
+/* ----------------------------------------------------------
+   Advance summary renderer — 9-line scannable table.
+   ---------------------------------------------------------- */
+function AdvanceSummaryBody({
+  rows,
+}: {
+  rows: Array<{ subject?: string; body?: string }>;
+}) {
+  return (
+    <table className="lp-summary">
+      <tbody>
+        {rows.map((row, i) => {
+          const subject = (row.subject ?? '').trim();
+          const body = (row.body ?? '').trim();
+          if (!subject && !body) return null;
+          return (
+            <tr key={i}>
+              <td className="lp-summary-subject">{subject || '—'}</td>
+              <td className="lp-summary-body">{body || '—'}</td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
   );
 }
 
