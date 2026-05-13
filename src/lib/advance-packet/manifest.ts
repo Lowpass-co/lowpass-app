@@ -1,0 +1,155 @@
+/* ============================================
+   LOWPASS — Advance packet manifest (Sprint 12 §11a)
+
+   Resolves the list of documents that make up the advance
+   packet for a (tour, routing?) pair:
+
+     - Riders         (rider_packs WHERE kind='rider' AND
+                       tour_id=$ ORDER BY scope, title)
+     - Channel lists  (rider_packs WHERE kind='channel_list'
+                       AND tour_id=$)
+     - Hire jobs      (rental_jobs WHERE tour_id=$)
+     - Assets         (rider_assets attached to any pack above)
+
+   Pure server-side helper — call with either the cookie-bound
+   server client (auth-gated /api/advance-packets/.../route)
+   or the service-role client (public /a/[token] reader).
+
+   The shape mirrors what the §11b packet page renders + what
+   §11c's PDF bundler iterates over. Keeping a single canonical
+   shape means the auth-gated UI, public reader, and PDF
+   renderer all see the same data.
+   ============================================ */
+
+import type { SupabaseClient } from '@supabase/supabase-js';
+
+export interface PacketDoc {
+  kind: 'rider' | 'channel_list' | 'rental_job';
+  id: string;
+  title: string;
+  /** Free-form sub-info shown beneath the title in the UI
+   *  (e.g. "Tech rider · 8 sections", "24 items"). */
+  subtitle?: string | null;
+  /** Set for rider_packs only — pack scope for sort order
+   *  (show-scope first, then tour, then artist). */
+  scope?: 'artist' | 'tour' | 'show';
+}
+
+export interface PacketManifest {
+  tour: {
+    id: string;
+    name: string;
+    currency: string;
+    artist_id: string | null;
+    artist_name: string | null;
+  };
+  routing: {
+    id: string;
+    date: string;
+    day_type: string;
+    venue_name?: string | null;
+    city?: string | null;
+  } | null;
+  docs: PacketDoc[];
+}
+
+/** Build the packet manifest. routingId can be null for a
+ *  whole-tour packet (no routing scope). */
+export async function getPacketManifest(
+  supabase: SupabaseClient,
+  tourId: string,
+  routingId: string | null,
+): Promise<PacketManifest | null> {
+  /* Tour + artist lookup. Bail if RLS hides the tour from
+     the caller — null lets the route return 404. */
+  const { data: tour } = await supabase
+    .from('tours')
+    .select('id, name, currency, artist_id, artists(name)')
+    .eq('id', tourId)
+    .maybeSingle<{
+      id: string;
+      name: string;
+      currency: string;
+      artist_id: string | null;
+      artists: { name: string } | { name: string }[] | null;
+    }>();
+  if (!tour) return null;
+
+  /* artists embed comes back as object OR array depending on
+     PostgREST cardinality inference. Normalise. */
+  const artistRow = Array.isArray(tour.artists) ? tour.artists[0] : tour.artists;
+  const artistName = artistRow?.name ?? null;
+
+  let routing: PacketManifest['routing'] = null;
+  if (routingId) {
+    const { data: r } = await supabase
+      .from('routing')
+      .select('id, date, day_type, venue_name, city')
+      .eq('id', routingId)
+      .eq('tour_id', tourId)
+      .maybeSingle<{
+        id: string;
+        date: string;
+        day_type: string;
+        venue_name: string | null;
+        city: string | null;
+      }>();
+    if (r) routing = r;
+  }
+
+  /* Riders + channel lists. rider_packs.kind discriminates
+     between 'rider' and 'channel_list'. Scope sort gives a
+     stable "more specific first" order (show → tour → artist). */
+  const { data: packs } = await supabase
+    .from('rider_packs')
+    .select('id, title, kind, scope')
+    .eq('tour_id', tourId)
+    .order('scope', { ascending: true })
+    .order('title', { ascending: true });
+
+  const docs: PacketDoc[] = [];
+  for (const p of (packs ?? []) as Array<{
+    id: string;
+    title: string | null;
+    kind: 'rider' | 'channel_list';
+    scope: 'artist' | 'tour' | 'show';
+  }>) {
+    docs.push({
+      kind: p.kind,
+      id: p.id,
+      title: p.title?.trim() || (p.kind === 'rider' ? 'Rider' : 'Channel list'),
+      scope: p.scope,
+    });
+  }
+
+  /* Rental / hire jobs. Filter to the tour. Routing-scoped
+     filtering isn't supported by the rental_jobs schema yet
+     (jobs attach to tour, not to a specific show), so the
+     same list shows for every routing under the tour. */
+  const { data: jobs } = await supabase
+    .from('rental_jobs')
+    .select('id, name, status')
+    .eq('tour_id', tourId)
+    .order('created_at', { ascending: false });
+
+  for (const j of (jobs ?? []) as Array<{ id: string; name: string; status: string | null }>) {
+    docs.push({
+      kind: 'rental_job',
+      id: j.id,
+      title: j.name || 'Hire job',
+      subtitle: j.status ?? null,
+    });
+  }
+
+  return {
+    tour: {
+      id: tour.id,
+      name: tour.name,
+      currency: tour.currency,
+      artist_id: tour.artist_id,
+      artist_name: artistName,
+    },
+    routing,
+    docs,
+  };
+}
