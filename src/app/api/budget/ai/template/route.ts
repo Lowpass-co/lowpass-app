@@ -8,8 +8,15 @@
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import Anthropic from '@anthropic-ai/sdk';
+import { checkRateLimit, markRateLimit } from '@/lib/rate-limit';
 
 const n = (x: number | null | undefined): number => (x == null ? 0 : Number(x) || 0);
+
+/* Sprint 12 §SAFE — per-tour 60s window. The "auto-fill from
+   past tours" button shouldn't be hammerable; 60s lets a
+   tour-manager retry within reason but blocks runaway clicks. */
+const RATE_LIMIT_MS = 60_000;
+const lastCallByTour = new Map<string, number>();
 
 export async function POST(request: Request) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -52,6 +59,11 @@ export async function POST(request: Request) {
   if (!tour_id || !workspace_id) {
     return NextResponse.json({ error: 'tour_id and workspace_id required' }, { status: 400 });
   }
+
+  /* Rate-limit BEFORE the SQL fan-out — pointless to load
+     history just to 429 at the AI call. */
+  const limited = checkRateLimit(lastCallByTour, tour_id, RATE_LIMIT_MS);
+  if (limited) return limited;
 
   const wid = profile.workspace_id;
 
@@ -166,7 +178,10 @@ export async function POST(request: Request) {
 
   try {
     const response = await client.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      /* Sprint 12 §SAFE — Haiku 4.5. This route does template
+         arithmetic + structured JSON output, no chain-of-
+         thought reasoning that needs Sonnet. */
+      model: 'claude-haiku-4-5-20251001',
       max_tokens: 2048,
       messages: [
         {
@@ -207,6 +222,7 @@ Use category values: hotels, prod_misc, prod_audio, transport_misc, transport_bu
     }
 
     const parsed = JSON.parse(jsonMatch[0]);
+    markRateLimit(lastCallByTour, tour_id);
     return NextResponse.json({
       ...parsed,
       _meta: { past_tour_count: pastTours.length },

@@ -8,6 +8,15 @@
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import Anthropic from '@anthropic-ai/sdk';
+import { getCached, setCached } from '@/lib/rate-limit';
+
+/* Sprint 12 §SAFE — server-side dedupe. The detail panel
+   auto-fires this endpoint on open, so opening + closing +
+   reopening the same line item would burn the AI key per
+   round-trip. 30s cache keyed on (user_id, line_item_id)
+   returns the most recent suggestions silently. */
+const SUGGEST_CACHE_MS = 30_000;
+const suggestCache = new Map<string, { at: number; value: { suggestions: string[] } }>();
 
 export async function POST(request: Request) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -46,6 +55,12 @@ export async function POST(request: Request) {
   if (!tour_id) {
     return NextResponse.json({ error: 'tour_id required' }, { status: 400 });
   }
+
+  /* Cache check before any SQL — same (user, line_item)
+     within the window returns the cached suggestions. */
+  const cacheKey = `${user.id}:${line_item?.id ?? 'unknown'}`;
+  const cached = getCached(suggestCache, cacheKey, SUGGEST_CACHE_MS);
+  if (cached) return NextResponse.json(cached);
 
   const context = body.context ?? line_item;
   const category = context.category ?? line_item.category ?? '';
@@ -87,7 +102,9 @@ export async function POST(request: Request) {
 
   try {
     const response = await client.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      /* Sprint 12 §SAFE — Haiku 4.5. 1-3 short suggestions
+         on a structured prompt; Haiku is the right tier. */
+      model: 'claude-haiku-4-5-20251001',
       max_tokens: 512,
       messages: [
         {
@@ -112,9 +129,13 @@ Return ONLY a JSON array of 1-3 strings, each a short suggestion (e.g. "You usua
     }
 
     const suggestions = JSON.parse(jsonMatch[0]);
-    return NextResponse.json({
-      suggestions: Array.isArray(suggestions) ? suggestions.filter((s: unknown) => typeof s === 'string').slice(0, 3) : [],
-    });
+    const result = {
+      suggestions: Array.isArray(suggestions)
+        ? suggestions.filter((s: unknown) => typeof s === 'string').slice(0, 3)
+        : [],
+    };
+    setCached(suggestCache, cacheKey, result);
+    return NextResponse.json(result);
   } catch (err) {
     console.error('AI suggest error:', err);
     return NextResponse.json({ suggestions: [] });

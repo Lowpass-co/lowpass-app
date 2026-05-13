@@ -10,6 +10,17 @@
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import Anthropic from '@anthropic-ai/sdk';
+import {
+  requireUserAndWorkspace,
+  requireTourInWorkspace,
+} from '@/lib/auth/workspace-check';
+import { checkRateLimit, markRateLimit } from '@/lib/rate-limit';
+
+/* Sprint 12 §SAFE — 3s per-user window. Document uploads are
+   intentional one-off actions; the limit just prevents
+   accidental double-clicks burning the key on big files. */
+const RATE_LIMIT_MS = 3_000;
+const lastCallByUser = new Map<string, number>();
 
 const ALLOWED_DOC_TYPES = ['Deal Memo', 'Tech Rider', 'Flight Ticket', 'Hotel Confirmation', 'Other'];
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
@@ -42,18 +53,24 @@ async function extractTextFromPdf(buffer: Buffer): Promise<string> {
 
 export async function POST(request: Request) {
   const supabase = await createServerSupabaseClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
+  /* Sprint 12 §SAFE — workspace gate. Pre-§SAFE this route
+     accepted any signed-in user without validating the
+     embedded tour_id, so a hostile workspace member could feed
+     in another workspace's tour id and burn its AI budget. */
+  const auth = await requireUserAndWorkspace(supabase);
+  if ('error' in auth) return auth.error;
+  const { user, workspaceId } = auth;
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     return NextResponse.json(
-      { error: 'AI extraction is not configured (ANTHROPIC_API_KEY missing)' },
+      { error: 'AI service unavailable — contact support.' },
       { status: 503 }
     );
   }
+
+  const limited = checkRateLimit(lastCallByUser, user.id, RATE_LIMIT_MS);
+  if (limited) return limited;
 
   let formData: FormData;
   try {
@@ -61,6 +78,10 @@ export async function POST(request: Request) {
   } catch {
     return NextResponse.json({ error: 'Invalid form data' }, { status: 400 });
   }
+
+  const tourId = (formData.get('tour_id') as string | null) ?? '';
+  const tourGate = await requireTourInWorkspace(supabase, tourId, workspaceId);
+  if (tourGate) return tourGate;
 
   const documentType = formData.get('document_type') as string | null;
   if (!documentType || !ALLOWED_DOC_TYPES.includes(documentType)) {
@@ -142,7 +163,10 @@ No markdown, no explanation, only valid JSON.`;
   const anthropic = new Anthropic({ apiKey });
   try {
     const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      /* Sprint 12 §SAFE — Haiku 4.5 supports vision and PDF
+         extraction. Deal memo / rider parsing is structured
+         field extraction, not reasoning; Haiku is fine. */
+      model: 'claude-haiku-4-5-20251001',
       max_tokens: 1024,
       system: systemPrompt,
       messages: [
@@ -167,6 +191,7 @@ No markdown, no explanation, only valid JSON.`;
       return NextResponse.json({ error: 'Could not parse extracted JSON' }, { status: 502 });
     }
 
+    markRateLimit(lastCallByUser, user.id);
     return NextResponse.json({ extracted });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Extraction failed';

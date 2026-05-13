@@ -3484,7 +3484,15 @@ function PersonnelMultiSelect({
 
 const DEAL_MEMO_DOC_TYPES = ['Deal Memo', 'Tech Rider', 'Flight Ticket', 'Hotel Confirmation', 'Other'] as const;
 
-function DealInfoUploadBlock({ onFieldChange }: { onFieldChange: (fieldId: string, value: unknown) => void }) {
+function DealInfoUploadBlock({
+  onFieldChange,
+  tourId,
+}: {
+  onFieldChange: (fieldId: string, value: unknown) => void;
+  /* Sprint 12 §SAFE — server validates the tour belongs to
+     the user's workspace before billing the AI key. */
+  tourId?: string;
+}) {
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<1 | 2>(1);
   const [documentType, setDocumentType] = useState<string>(DEAL_MEMO_DOC_TYPES[0]);
@@ -3500,8 +3508,15 @@ function DealInfoUploadBlock({ onFieldChange }: { onFieldChange: (fieldId: strin
     setError(null);
     setLoading(true);
     try {
+      if (!tourId) {
+        setError('Tour context missing — reload and try again.');
+        return;
+      }
       const form = new FormData();
       form.set('document_type', documentType);
+      /* Sprint 12 §SAFE — server validates the tour belongs to
+         the user's workspace before billing the AI key. */
+      form.set('tour_id', tourId);
       files.forEach((f) => form.append('files', f));
       const res = await fetch('/api/advance/extract-deal-memo', { method: 'POST', body: form });
       const j = await res.json().catch(() => ({}));
@@ -5106,7 +5121,10 @@ function SectionCard({
             )}
             {section.label === 'Deal Info' && (
               <div className="flex flex-wrap items-center gap-2 pb-2 border-b border-lp-border">
-                <DealInfoUploadBlock onFieldChange={(fieldId, value) => onFieldChange(fieldId, value)} />
+                <DealInfoUploadBlock
+                  onFieldChange={(fieldId, value) => onFieldChange(fieldId, value)}
+                  tourId={tourId}
+                />
               </div>
             )}
             {scheduleSaveOpen && section.label === 'Schedule' && (

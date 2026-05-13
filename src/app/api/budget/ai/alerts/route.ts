@@ -7,8 +7,16 @@
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import Anthropic from '@anthropic-ai/sdk';
+import { getCached, setCached } from '@/lib/rate-limit';
 
 const n = (x: number | null | undefined): number => (x == null ? 0 : Number(x) || 0);
+
+/* Sprint 12 §SAFE — server-side belt-and-braces dedupe. The
+   client also disables the "Check my budget" button for 30s
+   after click; this cache catches multi-tab + multi-user-on-
+   same-tour spam. 5-minute window keyed on (user, tour). */
+const ALERTS_CACHE_MS = 5 * 60_000;
+const alertsCache = new Map<string, { at: number; value: { alerts: unknown[] } }>();
 
 export async function GET(request: Request) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -37,6 +45,10 @@ export async function GET(request: Request) {
   if (!tourId) {
     return NextResponse.json({ error: 'tour_id required' }, { status: 400 });
   }
+
+  const cacheKey = `${user.id}:${tourId}`;
+  const cached = getCached(alertsCache, cacheKey, ALERTS_CACHE_MS);
+  if (cached) return NextResponse.json(cached);
 
   const wid = profile.workspace_id;
 
@@ -114,7 +126,10 @@ Tour budget analysis. Data:
 
   try {
     const response = await client.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      /* Sprint 12 §SAFE — Haiku 4.5. Pattern-match the variance
+         data into 3-8 alert objects; structured output task, no
+         reasoning needed. */
+      model: 'claude-haiku-4-5-20251001',
       max_tokens: 1024,
       messages: [
         {
@@ -142,7 +157,9 @@ Focus on: cost anomalies, missing data, category imbalances, withholding tax iss
     }
 
     const alerts = JSON.parse(jsonMatch[0]);
-    return NextResponse.json({ alerts: Array.isArray(alerts) ? alerts : [] });
+    const result = { alerts: Array.isArray(alerts) ? alerts : [] };
+    setCached(alertsCache, cacheKey, result);
+    return NextResponse.json(result);
   } catch (err) {
     console.error('AI alerts error:', err);
     return NextResponse.json({ alerts: [] });

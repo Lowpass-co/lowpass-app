@@ -157,6 +157,9 @@ export function ReceiptsGrid({ tourId, currency }: { tourId: string; currency: s
         const formData = new FormData();
         formData.set('file', file);
         formData.set('currency', currency);
+        /* Sprint 12 §SAFE — server now validates the tour
+           belongs to the user's workspace before running OCR. */
+        formData.set('tour_id', tourId);
         const ocrRes = await fetch('/api/budget/receipts/ocr', {
           method: 'POST',
           body: formData,
