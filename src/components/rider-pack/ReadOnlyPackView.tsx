@@ -24,7 +24,18 @@ import type {
   FieldCheckboxList,
   FieldUrl,
   FieldText,
+  ChannelListRow,
+  MicLibraryEntry,
+  StageBox,
+  SubSnake,
 } from '@/lib/rider-packs/types';
+import {
+  aggregateCables,
+  aggregateMicsByProvider,
+  aggregateStands,
+  aggregateStageBoxes,
+  aggregateSubSnakes,
+} from '@/lib/rider-packs/aggregates';
 import { CoverPageRender } from '@/components/rider/CoverPageRender';
 import { TableOfContents } from '@/components/rider/TableOfContents';
 
@@ -38,8 +49,18 @@ type Props = {
 };
 
 export function ReadOnlyPackView({ payload, printMode = false }: Props) {
-  const { pack, sections, signedUrls } = payload;
+  const { pack, sections, signedUrls, mics } = payload;
   const ordered = [...sections].sort((a, b) => a.sort_order - b.sort_order);
+  /* Sprint 12 §10 follow-up — mic kind-tag lookup. Empty when
+     the pack has no channel_list sections (the producer
+     routes skip the fetch in that case). */
+  const micsByName = React.useMemo(() => {
+    const m = new Map<string, MicLibraryEntry>();
+    for (const entry of mics ?? []) {
+      m.set(entry.name.trim().toLowerCase(), entry);
+    }
+    return m;
+  }, [mics]);
 
   return (
     <div className="bg-white text-neutral-900">
@@ -85,7 +106,7 @@ export function ReadOnlyPackView({ payload, printMode = false }: Props) {
             >
               <h2 className="border-b border-neutral-200 px-4 py-2 text-sm font-medium">{s.title}</h2>
               <div className="p-4 space-y-3">
-                <SectionBody section={s} signedUrls={signedUrls} />
+                <SectionBody section={s} signedUrls={signedUrls} micsByName={micsByName} />
               </div>
             </section>
           ))
@@ -108,9 +129,11 @@ export function ReadOnlyPackView({ payload, printMode = false }: Props) {
 function SectionBody({
   section,
   signedUrls,
+  micsByName,
 }: {
   section: PublicRiderPayload['sections'][number];
   signedUrls: Record<string, string | null>;
+  micsByName: Map<string, MicLibraryEntry>;
 }) {
   const type = section.section_type ?? 'fields';
 
@@ -128,6 +151,17 @@ function SectionBody({
     return <AdvanceSummaryBody rows={summary as Array<{ subject?: string; body?: string }>} />;
   }
 
+  if (type === 'channel_list') {
+    return (
+      <ChannelListBody
+        rows={section.rows ?? []}
+        subSnakes={section.sub_snakes ?? []}
+        stageBoxes={section.stage_boxes ?? []}
+        micsByName={micsByName}
+      />
+    );
+  }
+
   const fields = (section.fields as Field[]) ?? [];
   if (fields.length === 0) {
     return <div className="text-xs text-neutral-400">(empty)</div>;
@@ -138,6 +172,349 @@ function SectionBody({
         <FieldRow key={`${field.key}-${idx}`} field={field} signedUrls={signedUrls} />
       ))}
     </>
+  );
+}
+
+/* ----------------------------------------------------------
+   Channel list — read-only mirror of the editor's grid.
+
+   Shares Tiptap-of-channel-list intent with the PDF render in
+   pdf-render.ts: 11-col input grid + 5-col output grid + 5
+   inventory aggregate sub-tables. The PDF + the web view
+   should look the same — both share the data shape on
+   PublicRiderPayload, and both compute aggregates from the
+   same helpers (lib/rider-packs/aggregates).
+
+   READ-ONLY: no edit affordances, no select dropdowns. Values
+   render as plain text + colour-coded badges (mic kind /
+   phantom / sub-snake stripe).
+   ---------------------------------------------------------- */
+const MIC_KIND_BADGE: Record<MicLibraryEntry['type'], { label: string; tone: string }> = {
+  dynamic: { label: 'DYN', tone: 'var(--lp-text-secondary)' },
+  condenser: { label: 'CON', tone: 'var(--lp-orange)' },
+  ribbon: { label: 'RIB', tone: 'var(--lp-text-secondary)' },
+  di_active: { label: 'DI+', tone: 'var(--lp-orange)' },
+  di_passive: { label: 'DI', tone: 'var(--lp-text-secondary)' },
+};
+
+const PROVIDER_LABEL: Record<string, string> = {
+  band: 'Band',
+  venue: 'Venue',
+  hire: 'Hire',
+  unspecified: 'Unspecified',
+};
+
+const INPUT_COLS =
+  '4px 1.8rem minmax(0,1.4fr) minmax(0,0.55fr) minmax(0,0.7fr) minmax(0,0.7fr) minmax(0,0.55fr) minmax(0,1fr) minmax(0,0.55fr) 1.4rem minmax(0,0.55fr) minmax(0,1.1fr)';
+const OUTPUT_COLS =
+  '1.8rem minmax(0,1.4fr) minmax(0,1fr) minmax(0,0.55fr) 2.2rem minmax(0,1.2fr)';
+
+function ChannelListBody({
+  rows,
+  subSnakes,
+  stageBoxes,
+  micsByName,
+}: {
+  rows: ChannelListRow[];
+  subSnakes: SubSnake[];
+  stageBoxes: StageBox[];
+  micsByName: Map<string, MicLibraryEntry>;
+}) {
+  const inputs = rows.filter((r) => (r.row_kind ?? 'input') === 'input');
+  const outputs = rows.filter((r) => r.row_kind === 'output');
+  const subById = React.useMemo(
+    () => new Map(subSnakes.map((s) => [s.id, s])),
+    [subSnakes],
+  );
+  const stageById = React.useMemo(
+    () => new Map(stageBoxes.map((s) => [s.id, s])),
+    [stageBoxes],
+  );
+
+  return (
+    <div className="space-y-3 text-[11px]">
+      {inputs.length === 0 ? (
+        <div className="text-xs text-neutral-400">No channels.</div>
+      ) : (
+        <div className="overflow-hidden rounded border border-neutral-200">
+          <div
+            className="grid bg-neutral-50 text-[9px] font-semibold uppercase tracking-wider text-neutral-500"
+            style={{ gridTemplateColumns: INPUT_COLS }}
+          >
+            <div />
+            <div className="px-1 py-1.5">#</div>
+            <div className="px-1 py-1.5">Name</div>
+            <div className="px-1 py-1.5">Pos</div>
+            <div className="px-1 py-1.5">Stage Box</div>
+            <div className="px-1 py-1.5">Loom</div>
+            <div className="px-1 py-1.5">Cable</div>
+            <div className="px-1 py-1.5">Mic / DI</div>
+            <div className="px-1 py-1.5">Stand</div>
+            <div className="px-1 py-1.5 text-center">+48</div>
+            <div className="px-1 py-1.5">Prov</div>
+            <div className="px-1 py-1.5">Notes</div>
+          </div>
+          {inputs.map((r) => (
+            <InputRow
+              key={r.id}
+              row={r}
+              sub={r.sub_snake_id ? subById.get(r.sub_snake_id) ?? null : null}
+              stage={r.stage_box_id ? stageById.get(r.stage_box_id) ?? null : null}
+              micEntry={micsByName.get((r.mic || r.di || '').trim().toLowerCase()) ?? null}
+            />
+          ))}
+        </div>
+      )}
+
+      {outputs.length > 0 && (
+        <div className="overflow-hidden rounded border border-neutral-200">
+          <h4 className="border-b border-neutral-200 bg-neutral-50 px-2 py-1 text-[9px] font-semibold uppercase tracking-wider text-neutral-500">
+            Outputs ({outputs.length})
+          </h4>
+          <div
+            className="grid bg-neutral-50 text-[9px] font-semibold uppercase tracking-wider text-neutral-500"
+            style={{ gridTemplateColumns: OUTPUT_COLS }}
+          >
+            <div className="px-1 py-1.5">#</div>
+            <div className="px-1 py-1.5">Item</div>
+            <div className="px-1 py-1.5">Destination</div>
+            <div className="px-1 py-1.5">Pos</div>
+            <div className="px-1 py-1.5 text-center">QTY</div>
+            <div className="px-1 py-1.5">Notes</div>
+          </div>
+          {outputs.map((r) => (
+            <OutputRow key={r.id} row={r} />
+          ))}
+        </div>
+      )}
+
+      <ChannelAggregates rows={rows} subSnakes={subSnakes} stageBoxes={stageBoxes} />
+    </div>
+  );
+}
+
+function InputRow({
+  row,
+  sub,
+  stage,
+  micEntry,
+}: {
+  row: ChannelListRow;
+  sub: SubSnake | null;
+  stage: StageBox | null;
+  micEntry: MicLibraryEntry | null;
+}) {
+  const subLabel = sub && row.sub_snake_position != null ? `${sub.label}-${row.sub_snake_position}` : '';
+  const stageLabel =
+    stage && row.stage_box_position != null ? `${stage.label}-${row.stage_box_position}` : '';
+  const mic = (row.mic || row.di || '').trim();
+  const badge = micEntry ? MIC_KIND_BADGE[micEntry.type] : null;
+  const provider = row.provider ? PROVIDER_LABEL[row.provider] ?? row.provider : '—';
+  return (
+    <div
+      className="grid items-center border-t border-neutral-100 text-[11px]"
+      style={{ gridTemplateColumns: INPUT_COLS }}
+    >
+      <div
+        className="h-full self-stretch"
+        style={{ background: sub?.colour ?? 'transparent', minWidth: 4 }}
+        aria-hidden
+      />
+      <div className="px-1 py-1 text-center font-mono text-[10px] text-neutral-500 tabular-nums">{row.row_index}</div>
+      <div className="truncate px-1 py-1 font-medium">{row.channel_name}</div>
+      <div className="truncate px-1 py-1">{row.position}</div>
+      <div className="truncate px-1 py-1">{stageLabel}</div>
+      <div className="truncate px-1 py-1">{subLabel}</div>
+      <div className="truncate px-1 py-1">{row.cable_length ?? ''}</div>
+      <div className="flex min-w-0 items-center gap-1 px-1 py-1">
+        {badge && (
+          <span
+            aria-hidden
+            className="inline-flex shrink-0 items-center justify-center rounded text-white"
+            style={{
+              background: badge.tone,
+              padding: '1px 3px',
+              fontSize: 8,
+              fontWeight: 700,
+              letterSpacing: '0.04em',
+              minWidth: 18,
+            }}
+          >
+            {badge.label}
+          </span>
+        )}
+        <span className="truncate">{mic}</span>
+      </div>
+      <div className="truncate px-1 py-1">{row.stand ?? ''}</div>
+      <div className="px-1 py-1 text-center">
+        {row.phantom_power === true ? (
+          <span className="font-semibold text-emerald-600">✓</span>
+        ) : row.phantom_power === false ? (
+          <span className="text-neutral-400">·</span>
+        ) : (
+          <span className="text-neutral-300">—</span>
+        )}
+      </div>
+      <div
+        className={`truncate px-1 py-1 ${row.provider ? '' : 'italic text-neutral-400'}`}
+      >
+        {provider}
+      </div>
+      <div className="truncate px-1 py-1 text-neutral-600">{row.notes}</div>
+    </div>
+  );
+}
+
+function OutputRow({ row }: { row: ChannelListRow }) {
+  return (
+    <div
+      className="grid items-center border-t border-neutral-100 text-[11px]"
+      style={{ gridTemplateColumns: OUTPUT_COLS }}
+    >
+      <div className="px-1 py-1 text-center font-mono text-[10px] text-neutral-500 tabular-nums">{row.row_index}</div>
+      <div className="truncate px-1 py-1">{row.output_item ?? ''}</div>
+      <div className="truncate px-1 py-1">{row.output_destination ?? ''}</div>
+      <div className="truncate px-1 py-1">{row.position}</div>
+      <div className="px-1 py-1 text-center tabular-nums">
+        {row.output_qty == null ? '' : row.output_qty}
+      </div>
+      <div className="truncate px-1 py-1 text-neutral-600">{row.output_notes ?? ''}</div>
+    </div>
+  );
+}
+
+function ChannelAggregates({
+  rows,
+  subSnakes,
+  stageBoxes,
+}: {
+  rows: ChannelListRow[];
+  subSnakes: SubSnake[];
+  stageBoxes: StageBox[];
+}) {
+  const mics = aggregateMicsByProvider(rows);
+  const stands = aggregateStands(rows);
+  const cables = aggregateCables(rows);
+  const boxes = aggregateStageBoxes(stageBoxes);
+  const snakes = aggregateSubSnakes(subSnakes);
+
+  return (
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+      <AggBlock title={`Mics / DIs (${mics.length})`} cols="3rem 1fr 5rem" head={['QTY', 'ITEM', 'PROVIDER']} empty="No mics or DIs assigned.">
+        {mics.map((m, i) => (
+          <AggRow key={`${m.item}|${m.provider}|${i}`}>
+            <span className="font-mono font-semibold tabular-nums">{m.qty}</span>
+            <span className="truncate">{m.item}</span>
+            <span className={m.provider === 'unspecified' ? 'italic text-neutral-400' : ''}>
+              {PROVIDER_LABEL[m.provider] ?? m.provider}
+            </span>
+          </AggRow>
+        ))}
+      </AggBlock>
+      <AggBlock title={`Mic stands (${stands.length})`} cols="3rem 1fr" head={['QTY', 'ITEM']} empty="No mic stands assigned.">
+        {stands.map((s, i) => (
+          <AggRow key={`${s.item}|${i}`}>
+            <span className="font-mono font-semibold tabular-nums">{s.qty}</span>
+            <span className="truncate">{s.item}</span>
+          </AggRow>
+        ))}
+      </AggBlock>
+      <AggBlock title={`Cables (${cables.length})`} cols="3rem 1fr" head={['QTY', 'LENGTH']} empty="No cable lengths recorded.">
+        {cables.map((c, i) => (
+          <AggRow key={`${c.length}|${i}`}>
+            <span className="font-mono font-semibold tabular-nums">{c.qty}</span>
+            <span className="truncate">{c.length}</span>
+          </AggRow>
+        ))}
+      </AggBlock>
+      <AggBlock title={`Stage boxes (${boxes.length})`} cols="1fr auto 4rem" head={['NAME', 'COLOR', 'CAPACITY']} empty="No stage boxes.">
+        {boxes.map((b) => (
+          <AggRow key={b.id}>
+            <span className="truncate">{b.label}</span>
+            <Swatch hex={b.colour} />
+            <span className="font-mono font-semibold tabular-nums">{b.capacity}</span>
+          </AggRow>
+        ))}
+      </AggBlock>
+      <AggBlock title={`Snakes / Looms (${snakes.length})`} cols="1fr auto 4rem" head={['LABEL', 'COLOR', 'CAPACITY']} empty="No sub-snakes.">
+        {snakes.map((s) => (
+          <AggRow key={s.id}>
+            <span className="truncate">{s.label}</span>
+            <Swatch hex={s.colour} />
+            <span className="font-mono font-semibold tabular-nums">{s.capacity}</span>
+          </AggRow>
+        ))}
+      </AggBlock>
+    </div>
+  );
+}
+
+function AggBlock({
+  title,
+  cols,
+  head,
+  empty,
+  children,
+}: {
+  title: string;
+  cols: string;
+  head: string[];
+  empty: string;
+  children: React.ReactNode;
+}) {
+  const arr = React.Children.toArray(children);
+  return (
+    <section className="space-y-1.5">
+      <h4 className="text-[9px] font-semibold uppercase tracking-wider text-neutral-500">{title}</h4>
+      {arr.length === 0 ? (
+        <div className="rounded border border-dashed border-neutral-300 bg-neutral-50 px-3 py-2 text-center text-[11px] italic text-neutral-500">
+          {empty}
+        </div>
+      ) : (
+        <div
+          className="overflow-hidden rounded border border-neutral-200 bg-white text-[11px]"
+          style={{ ['--cols' as string]: cols } as React.CSSProperties}
+        >
+          <div
+            className="grid items-center border-b border-neutral-200 bg-neutral-50 px-2 py-1 text-[9px] font-semibold uppercase tracking-wider text-neutral-500"
+            style={{ gridTemplateColumns: 'var(--cols)', gap: '0.5rem' }}
+          >
+            {head.map((h, i) => (
+              <div key={`${h}-${i}`}>{h}</div>
+            ))}
+          </div>
+          <div>{arr}</div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function AggRow({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      className="grid items-center border-b border-neutral-100 px-2 py-1 last:border-b-0"
+      style={{ gridTemplateColumns: 'var(--cols)', gap: '0.5rem' }}
+    >
+      {React.Children.map(children, (c, i) => (
+        <div key={i} className="min-w-0">
+          {c}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function Swatch({ hex }: { hex: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 font-mono text-[10px] text-neutral-500">
+      <span
+        aria-hidden
+        className="inline-block rounded-sm border border-neutral-200"
+        style={{ width: 10, height: 10, background: hex }}
+      />
+      {hex}
+    </span>
   );
 }
 
