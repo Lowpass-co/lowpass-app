@@ -45,6 +45,10 @@ import { SaveStatePill, type SavePillState } from './SaveStatePill';
 import ChannelListEditor from './ChannelListEditor';
 import { makeUniqueSectionKey } from '@/lib/rider-packs/templates';
 import { RichTextSectionEditor } from '@/components/rider/RichTextSectionEditor';
+import {
+  AdvanceSummarySectionEditor,
+  type AdvanceSummaryRow,
+} from '@/components/rider/AdvanceSummarySectionEditor';
 import { CoverPagePanel } from '@/components/rider/CoverPagePanel';
 
 /* Sprint 12 §9b — sentinel `selected` value for the Cover
@@ -674,6 +678,52 @@ export function PackEditor({ packId }: Props) {
             onMoveUp={() => handleMoveSection(selectedSection, -1)}
             onMoveDown={() => handleMoveSection(selectedSection, 1)}
             onStructureChange={() => void refresh()}
+          />
+        ) : (selectedSection.section_type ?? 'fields') === 'advance_summary' ? (
+          /* Sprint 12 §9d.a — advance summary section. Body
+             is an Array<{subject, body}> on
+             section.metadata.summary. Save path mirrors the
+             rich_text branch — debounce + merge into the
+             existing metadata object so future per-section
+             keys coexist. */
+          <AdvanceSummarySectionEditor
+            key={selectedSection.id}
+            section={selectedSection}
+            savePill={savePill}
+            onTitleCommit={(title) => {
+              setData((prev) => {
+                if (!prev) return prev;
+                return {
+                  ...prev,
+                  sections: prev.sections.map((s) =>
+                    s.id === selectedSection.id ? { ...s, title } : s,
+                  ),
+                };
+              });
+              scheduleSectionSave({ sectionId: selectedSection.id, title });
+            }}
+            onSummaryChange={(rows: AdvanceSummaryRow[]) => {
+              const existingMeta =
+                (selectedSection.metadata ?? {}) as Record<string, unknown>;
+              const nextMeta = { ...existingMeta, summary: rows };
+              setData((prev) => {
+                if (!prev) return prev;
+                return {
+                  ...prev,
+                  sections: prev.sections.map((s) =>
+                    s.id === selectedSection.id ? { ...s, metadata: nextMeta } : s,
+                  ),
+                };
+              });
+              scheduleSectionSave({
+                sectionId: selectedSection.id,
+                metadata: nextMeta,
+              });
+            }}
+            onRemove={() => handleRemoveSection(selectedSection)}
+            onOverride={() => handleOverrideSection(selectedSection)}
+            onMoveUp={() => handleMoveSection(selectedSection, -1)}
+            onMoveDown={() => handleMoveSection(selectedSection, 1)}
           />
         ) : (selectedSection.section_type ?? 'fields') === 'rich_text' ? (
           /* Sprint 12 §9a — Tiptap-backed rich text section.
