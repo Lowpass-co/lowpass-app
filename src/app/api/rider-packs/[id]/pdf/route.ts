@@ -44,7 +44,14 @@ import { createServerSupabaseClient, createServiceSupabaseClient } from '@/lib/s
 import { resolvePack } from '@/lib/rider-packs/resolve';
 import { signedUrlsForAssets } from '@/lib/rider-packs/assets';
 import { verifyPassword, type PublicRiderPayload } from '@/lib/rider-packs/web-links';
-import type { Field, FieldAsset, FieldText, RiderPack } from '@/lib/rider-packs/types';
+import { listMics } from '@/lib/rider-packs/mic-library';
+import type {
+  Field,
+  FieldAsset,
+  FieldText,
+  MicLibraryEntry,
+  RiderPack,
+} from '@/lib/rider-packs/types';
 import {
   resolveVariableMap,
   substituteInText,
@@ -188,6 +195,10 @@ async function renderPdf(client: SupabaseClient, packId: string): Promise<NextRe
         };
       }
     }
+    /* Sprint 12 §10 follow-up — surface channel_list data so
+       the PDF renderer has rows / sub-snakes / stage-boxes
+       available. Mirror of the public route's pass-through. */
+    const isChannelList = s.section_type === 'channel_list';
     return {
       id: s.id,
       section_key: s.section_key,
@@ -198,8 +209,23 @@ async function renderPdf(client: SupabaseClient, packId: string): Promise<NextRe
       metadata,
       inherited_from: s.inherited_from,
       source_pack_id: s.source_pack_id,
+      sub_snakes: isChannelList ? s.subSnakes ?? [] : undefined,
+      stage_boxes: isChannelList ? s.stageBoxes ?? [] : undefined,
+      rows: isChannelList ? s.rows ?? [] : undefined,
     };
   });
+
+  /* Sprint 12 §10 follow-up — mic library for the kind-tag
+     badge lookup. Only fetched if a channel_list section
+     exists; errors degrade to empty (no badges). */
+  let mics: MicLibraryEntry[] = [];
+  if (sectionsResolved.some((s) => s.section_type === 'channel_list')) {
+    try {
+      mics = await listMics(client, pack.workspace_id);
+    } catch {
+      mics = [];
+    }
+  }
 
   const payload: PublicRiderPayload = {
     pack: {
@@ -215,6 +241,7 @@ async function renderPdf(client: SupabaseClient, packId: string): Promise<NextRe
     },
     sections: sectionsResolved,
     signedUrls,
+    mics,
   };
 
   const html = buildRiderPdfHtml(payload);

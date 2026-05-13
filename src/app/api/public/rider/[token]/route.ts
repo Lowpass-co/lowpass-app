@@ -16,7 +16,14 @@ import { createServiceSupabaseClient } from '@/lib/supabase-server';
 import { resolvePack } from '@/lib/rider-packs/resolve';
 import { signedUrlsForAssets } from '@/lib/rider-packs/assets';
 import { verifyPassword, type PublicRiderPayload } from '@/lib/rider-packs/web-links';
-import type { Field, FieldAsset, FieldText, RiderPack } from '@/lib/rider-packs/types';
+import { listMics } from '@/lib/rider-packs/mic-library';
+import type {
+  Field,
+  FieldAsset,
+  FieldText,
+  MicLibraryEntry,
+  RiderPack,
+} from '@/lib/rider-packs/types';
 import {
   resolveVariableMap,
   substituteInText,
@@ -160,6 +167,12 @@ export async function POST(
         };
       }
     }
+    /* Sprint 12 §10 follow-up — surface channel_list section
+       data. resolve.ts already attaches sub-snakes / stage-
+       boxes / rows for channel_list sections; pre-§10 this
+       endpoint dropped them on the floor. Pass them through
+       so the public reader + PDF can render the full grid. */
+    const isChannelList = s.section_type === 'channel_list';
     return {
       id: s.id,
       section_key: s.section_key,
@@ -170,8 +183,24 @@ export async function POST(
       metadata,
       inherited_from: s.inherited_from,
       source_pack_id: s.source_pack_id,
+      sub_snakes: isChannelList ? s.subSnakes ?? [] : undefined,
+      stage_boxes: isChannelList ? s.stageBoxes ?? [] : undefined,
+      rows: isChannelList ? s.rows ?? [] : undefined,
     };
   });
+
+  /* Sprint 12 §10 follow-up — fetch the mic library for the
+     pack's workspace if any section is a channel_list. The
+     render uses entries to map row.mic -> kind badge. Errors
+     are non-fatal (empty list just means no badges). */
+  let mics: MicLibraryEntry[] = [];
+  if (sectionsResolved.some((s) => s.section_type === 'channel_list')) {
+    try {
+      mics = await listMics(service, pack.workspace_id);
+    } catch {
+      mics = [];
+    }
+  }
 
   const payload: PublicRiderPayload = {
     pack: {
@@ -187,6 +216,7 @@ export async function POST(
     },
     sections: sectionsResolved,
     signedUrls,
+    mics,
   };
 
   return NextResponse.json(payload);
