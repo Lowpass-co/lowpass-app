@@ -689,6 +689,7 @@ export function PackEditor({ packId }: Props) {
           <AdvanceSummarySectionEditor
             key={selectedSection.id}
             section={selectedSection}
+            packId={data.pack.id}
             savePill={savePill}
             onTitleCommit={(title) => {
               setData((prev) => {

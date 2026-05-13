@@ -28,7 +28,7 @@
    ============================================ */
 
 import { useEffect, useState } from 'react';
-import { Plus, Trash2, Sparkles } from 'lucide-react';
+import { Plus, Trash2, Sparkles, Loader2 } from 'lucide-react';
 import { SaveStatePill, type SavePillState } from '@/components/rider-pack/SaveStatePill';
 import type { ResolvedSection } from '@/lib/rider-packs/types';
 
@@ -54,6 +54,9 @@ export const DEFAULT_SUMMARY_ROWS: ReadonlyArray<AdvanceSummaryRow> = [
 
 interface AdvanceSummarySectionEditorProps {
   section: ResolvedSection;
+  /** Sprint 12 §9d.b — pack id for the AI Generate endpoint
+   *  (POST /api/rider-packs/[id]/advance-summary/generate). */
+  packId: string;
   savePill: { state: SavePillState; error: string | null };
   onTitleCommit: (title: string) => void;
   onSummaryChange: (rows: AdvanceSummaryRow[]) => void;
@@ -80,6 +83,7 @@ function parseSummary(metadata: ResolvedSection['metadata']): AdvanceSummaryRow[
 
 export function AdvanceSummarySectionEditor({
   section,
+  packId,
   savePill,
   onTitleCommit,
   onSummaryChange,
@@ -115,6 +119,53 @@ export function AdvanceSummarySectionEditor({
   const commit = (next: AdvanceSummaryRow[]) => {
     setRows(next);
     onSummaryChange(next);
+  };
+
+  /* Sprint 12 §9d.b — Generate-from-rider-content button.
+     POSTs to /api/rider-packs/[id]/advance-summary/generate;
+     on 200, replaces the body field of each row at the same
+     POSITION (the server preserves subject order). Operators
+     get the option to edit before saving — we commit
+     immediately to the parent save chain so a slow
+     reconsider still ends up on disk as the AI version. */
+  const [generating, setGenerating] = useState(false);
+  const [generateError, setGenerateError] = useState<string | null>(null);
+
+  const handleGenerate = async () => {
+    if (generating) return;
+    setGenerating(true);
+    setGenerateError(null);
+    try {
+      const res = await fetch(
+        `/api/rider-packs/${packId}/advance-summary/generate`,
+        { method: 'POST' },
+      );
+      const body = (await res.json().catch(() => null)) as
+        | { rows?: AdvanceSummaryRow[]; error?: string; retry_after_seconds?: number }
+        | null;
+      if (!res.ok) {
+        const msg = body?.error
+          ? body.retry_after_seconds
+            ? `${body.error}`
+            : body.error
+          : `Generate failed (${res.status})`;
+        setGenerateError(msg);
+        return;
+      }
+      const next = (body?.rows ?? []).map((r) => ({
+        subject: r.subject,
+        body: r.body,
+      }));
+      if (next.length === 0) {
+        setGenerateError('Empty response from AI. Try again.');
+        return;
+      }
+      commit(next);
+    } catch (e) {
+      setGenerateError(e instanceof Error ? e.message : 'Network error');
+    } finally {
+      setGenerating(false);
+    }
   };
 
   const updateRow = (i: number, patch: Partial<AdvanceSummaryRow>) => {
@@ -200,8 +251,10 @@ export function AdvanceSummarySectionEditor({
         className={inherited ? 'pointer-events-none opacity-60' : ''}
         style={{ padding: 'var(--lp-space-4)', background: 'var(--lp-bg)' }}
       >
-        {/* Generate-from-rider-content button. v1 placeholder
-            — §9d.b wires the Claude endpoint. */}
+        {/* Sprint 12 §9d.b — Generate-from-rider-content
+            button wired to the Claude API. Rate-limited to
+            60s per pack server-side; the client surfaces the
+            429 wait-time when relevant. */}
         <div
           className="flex items-center justify-between"
           style={{ gap: 'var(--lp-space-2)', marginBottom: 'var(--lp-space-3)' }}
@@ -217,26 +270,45 @@ export function AdvanceSummarySectionEditor({
           </p>
           <button
             type="button"
-            disabled
-            title="AI generate lands in §9d.b — wires this to the Claude API."
+            onClick={() => void handleGenerate()}
+            disabled={generating}
+            title="Fill each row's body from the rider's other section content."
             className="btn-transition inline-flex items-center"
             style={{
               gap: 6,
               padding: 'var(--lp-space-1) var(--lp-space-3)',
               fontSize: 'var(--lp-text-xs)',
               fontWeight: 'var(--lp-weight-semibold)',
-              color: 'var(--lp-text-tertiary)',
-              background: 'transparent',
-              border: '1px solid var(--lp-border)',
+              color: generating ? 'var(--lp-text-tertiary)' : 'var(--color-lp-orange)',
+              background: generating
+                ? 'transparent'
+                : 'color-mix(in srgb, var(--color-lp-orange) 8%, transparent)',
+              border: `1px solid ${generating ? 'var(--lp-border)' : 'color-mix(in srgb, var(--color-lp-orange) 35%, transparent)'}`,
               borderRadius: 'var(--lp-radius-md)',
-              cursor: 'not-allowed',
-              opacity: 0.7,
+              cursor: generating ? 'not-allowed' : 'pointer',
             }}
           >
-            <Sparkles size={12} />
-            Generate from rider content
+            {generating ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}
+            {generating ? 'Generating…' : 'Generate from rider content'}
           </button>
         </div>
+
+        {generateError ? (
+          <div
+            role="alert"
+            style={{
+              marginBottom: 'var(--lp-space-3)',
+              padding: 'var(--lp-space-2) var(--lp-space-3)',
+              fontSize: 'var(--lp-text-xs)',
+              color: 'var(--color-lp-error)',
+              background: 'color-mix(in srgb, var(--color-lp-error) 8%, transparent)',
+              border: '1px solid color-mix(in srgb, var(--color-lp-error) 25%, transparent)',
+              borderRadius: 'var(--lp-radius-md)',
+            }}
+          >
+            {generateError}
+          </div>
+        ) : null}
 
         {rows.length === 0 ? (
           <div
