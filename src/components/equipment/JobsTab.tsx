@@ -138,6 +138,7 @@ export function JobsTab({
       <div className="w-full min-w-0">
         <JobDetail
           job={activeJob}
+          workspaceId={workspaceId}
           inventory={inventory}
           artists={artists}
           tours={tours}

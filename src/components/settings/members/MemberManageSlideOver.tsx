@@ -1,21 +1,36 @@
 'use client';
 
 /* ============================================
-   LOWPASS — MemberManageSlideOver (Sprint 9 §3)
+   LOWPASS — MemberManageSlideOver (Sprint 9 §3,
+   Sprint 11 §4 auto-save adoption)
 
    Per-member admin Manage slide-over: role radio + tag editor +
    permission matrix + sensitive-grants warning + remove. Saves
    via PATCH /api/workspaces/members/[id], which calls the
    update_workspace_member RPC for atomic role+tags+grants.
+
+   Sprint 11 §4 — adopts useAutoSave: state lives in the hook
+   (snapshot at open time), each role/tag/grant change debounces
+   a PATCH. The Save button is removed; the SaveStatus pill +
+   Cancel-restores-snapshot replace it.
+
+   Sensitive-grants policy: the Sprint 9 design used a
+   confirm-on-Save modal. With auto-save the modal is dropped —
+   the visible "⚠ Sensitive grants" warning panel already shows
+   the consequence the moment a sensitive grant is toggled, and
+   Cancel reverts the open-time snapshot via one final PATCH.
+   The visible+revertable pair is the safety gate.
    ============================================ */
 
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Loader2, X } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import { useToast } from '@/components/ui/Toast';
+import { Loader2, X } from 'lucide-react';
 import { SlideOver } from '@/components/shell/SlideOver';
 import { TagEditor } from './TagEditor';
 import { PermissionMatrix } from './PermissionMatrix';
 import { RESOURCE_BY_ID } from '@/lib/permissions/resources';
+import { useAutoSave } from '@/lib/forms/useAutoSave';
+import { SaveStatus } from '@/components/forms/SaveStatus';
 import type {
   GrantInput,
   Member,
@@ -31,6 +46,20 @@ interface MemberManageSlideOverProps {
   onClose: () => void;
   onSaved: () => void;
   onRemoved: () => void;
+}
+
+interface EditState {
+  role: WorkspaceRole;
+  tags: string[];
+  grants: GrantInput[];
+}
+
+function memberToState(m: Member): EditState {
+  return {
+    role: m.role,
+    tags: m.tags,
+    grants: m.grants,
+  };
 }
 
 function relativeTime(iso: string | null): string {
@@ -57,32 +86,83 @@ export function MemberManageSlideOver({
   onSaved,
   onRemoved,
 }: MemberManageSlideOverProps) {
+  if (!member) return null;
+  return (
+    <MemberManageEditor
+      key={`${member.member_id}:${open ? 'open' : 'closed'}`}
+      open={open}
+      member={member}
+      knownTags={knownTags}
+      suggestedTags={suggestedTags}
+      isCallerSelf={isCallerSelf}
+      onClose={onClose}
+      onSaved={onSaved}
+      onRemoved={onRemoved}
+    />
+  );
+}
+
+interface EditorProps {
+  open: boolean;
+  member: Member;
+  knownTags: string[];
+  suggestedTags: string[];
+  isCallerSelf: boolean;
+  onClose: () => void;
+  onSaved: () => void;
+  onRemoved: () => void;
+}
+
+function MemberManageEditor({
+  open,
+  member,
+  knownTags,
+  suggestedTags,
+  isCallerSelf,
+  onClose,
+  onSaved,
+  onRemoved,
+}: EditorProps) {
   const { showToast } = useToast();
-  const [role, setRole] = useState<WorkspaceRole>('readonly');
-  const [tags, setTags] = useState<string[]>([]);
-  const [grants, setGrants] = useState<GrantInput[]>([]);
-  const [sensitiveSelected, setSensitiveSelected] = useState<string[]>([]);
-  const [saving, setSaving] = useState(false);
-  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [removeBusy, setRemoveBusy] = useState(false);
   const [removeConfirm, setRemoveConfirm] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [removeError, setRemoveError] = useState<string | null>(null);
+  const [sensitiveSelected, setSensitiveSelected] = useState<string[]>([]);
 
-  // Reset state when the member prop changes / slide-over opens.
-  const memberKey = member?.member_id ?? null;
-  const lastKey = useRef<string | null>(null);
-  useEffect(() => {
-    if (!open || !member) return;
-    if (lastKey.current === memberKey) return;
-    lastKey.current = memberKey;
-    setRole(member.role);
-    setTags(member.tags);
-    setGrants(member.grants);
-    setError(null);
-    setConfirmOpen(false);
-    setRemoveConfirm(false);
-  }, [open, member, memberKey]);
+  const {
+    state,
+    set,
+    status,
+    lastSavedAt,
+    errorMessage,
+    cancel,
+    flushSave,
+  } = useAutoSave<EditState>({
+    initialState: memberToState(member),
+    onSave: async (s) => {
+      // For non-readonly roles, persist an empty grants array —
+      // role check inside can_access() handles access.
+      const payload = {
+        role: s.role,
+        tags: s.tags,
+        grants: s.role === 'readonly' ? s.grants : [],
+      };
+      const res = await fetch(`/api/workspaces/members/${member.member_id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => null)) as
+          | { error?: string }
+          | null;
+        throw new Error(body?.error ?? `Save failed (${res.status})`);
+      }
+      onSaved();
+    },
+  });
 
-  const matrixDisabled = role !== 'readonly';
+  const matrixDisabled = state.role !== 'readonly';
 
   const sensitiveLabels = useMemo(
     () =>
@@ -92,82 +172,52 @@ export function MemberManageSlideOver({
     [sensitiveSelected],
   );
 
-  async function commitSave() {
-    if (!member) return;
-    setSaving(true);
-    setError(null);
-    try {
-      // For non-readonly roles, persist an empty grants array —
-      // role check inside can_access() handles access.
-      const payload = {
-        role,
-        tags,
-        grants: role === 'readonly' ? grants : [],
-      };
-      const res = await fetch(`/api/workspaces/members/${member.member_id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-      const body = (await res.json().catch(() => null)) as
-        | { ok?: boolean; error?: string }
-        | null;
-      if (!res.ok) {
-        setError(body?.error ?? `Save failed (${res.status})`);
-        return;
-      }
-      showToast('Member updated.');
-      onSaved();
-      onClose();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Network error');
-    } finally {
-      setSaving(false);
-      setConfirmOpen(false);
-    }
-  }
+  const handleClose = async () => {
+    await flushSave();
+    onClose();
+  };
 
-  function handleSaveClick() {
-    if (role === 'readonly' && sensitiveSelected.length > 0) {
-      setConfirmOpen(true);
-      return;
-    }
-    void commitSave();
-  }
+  const handleCancel = async () => {
+    await cancel();
+    showToast('Changes reverted.');
+    onClose();
+  };
 
   async function handleRemove() {
-    if (!member) return;
-    setSaving(true);
-    setError(null);
+    setRemoveBusy(true);
+    setRemoveError(null);
     try {
       const res = await fetch(`/api/workspaces/members/${member.member_id}`, {
         method: 'DELETE',
       });
-      const body = (await res.json().catch(() => null)) as
-        | { ok?: boolean; error?: string }
-        | null;
       if (!res.ok) {
-        setError(body?.error ?? `Remove failed (${res.status})`);
+        const body = (await res.json().catch(() => null)) as
+          | { error?: string }
+          | null;
+        setRemoveError(body?.error ?? `Remove failed (${res.status})`);
         return;
       }
       showToast('Member removed.');
       onRemoved();
       onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Network error');
+      setRemoveError(err instanceof Error ? err.message : 'Network error');
     } finally {
-      setSaving(false);
+      setRemoveBusy(false);
       setRemoveConfirm(false);
     }
   }
-
-  if (!member) return null;
 
   const cannotRemove = isCallerSelf || member.is_workspace_owner;
 
   return (
     <>
-      <SlideOver open={open} onClose={onClose} title="Manage member" width="wide">
+      <SlideOver
+        open={open}
+        onClose={() => void handleClose()}
+        title="Manage member"
+        width="wide"
+      >
         <div
           style={{
             display: 'flex',
@@ -238,8 +288,8 @@ export function MemberManageSlideOver({
                     type="radio"
                     name="role"
                     value={r}
-                    checked={role === r}
-                    onChange={() => setRole(r)}
+                    checked={state.role === r}
+                    onChange={() => set((p) => ({ ...p, role: r }))}
                     style={{ accentColor: 'var(--color-lp-orange)' }}
                   />
                   <span style={{ textTransform: 'capitalize' }}>
@@ -284,8 +334,8 @@ export function MemberManageSlideOver({
               Tags
             </div>
             <TagEditor
-              value={tags}
-              onChange={setTags}
+              value={state.tags}
+              onChange={(next) => set((p) => ({ ...p, tags: next }))}
               knownTags={knownTags}
               suggestedTags={suggestedTags}
             />
@@ -313,15 +363,20 @@ export function MemberManageSlideOver({
               Read-only users see ONLY what&apos;s checked here. Admin/manager have implicit access to everything.
             </div>
             <PermissionMatrix
-              value={grants}
-              onChange={setGrants}
+              value={state.grants}
+              onChange={(next) => set((p) => ({ ...p, grants: next }))}
               disabled={matrixDisabled}
               onSensitiveGrantsChange={setSensitiveSelected}
             />
           </div>
 
-          {/* Sensitive grants warning */}
-          {role === 'readonly' && sensitiveSelected.length > 0 ? (
+          {/* Sensitive grants warning — visible the moment a
+              sensitive grant flips on. With auto-save, this panel
+              IS the gate: the user sees what they just enabled,
+              and Cancel restores the snapshot if they don't
+              actually want it. The Sprint 9 confirm-on-Save modal
+              is removed. */}
+          {state.role === 'readonly' && sensitiveSelected.length > 0 ? (
             <div
               style={{
                 padding: 'var(--lp-space-3)',
@@ -355,12 +410,12 @@ export function MemberManageSlideOver({
                   color: 'var(--lp-text-secondary)',
                 }}
               >
-                You&apos;ll be asked to confirm on Save.
+                Hit Cancel to revert if this isn&apos;t what you intended.
               </div>
             </div>
           ) : null}
 
-          {error ? (
+          {removeError ? (
             <div
               role="alert"
               style={{
@@ -372,7 +427,7 @@ export function MemberManageSlideOver({
                 borderRadius: 'var(--lp-radius-md)',
               }}
             >
-              {error}
+              {removeError}
             </div>
           ) : null}
 
@@ -384,7 +439,7 @@ export function MemberManageSlideOver({
             <button
               type="button"
               onClick={() => setRemoveConfirm(true)}
-              disabled={saving || cannotRemove}
+              disabled={cannotRemove}
               className="btn-transition"
               style={{
                 padding: 'var(--lp-space-2) var(--lp-space-3)',
@@ -408,10 +463,15 @@ export function MemberManageSlideOver({
               Remove member
             </button>
             <div className="flex items-center" style={{ gap: 'var(--lp-space-2)' }}>
+              <SaveStatus
+                status={status}
+                lastSavedAt={lastSavedAt}
+                errorMessage={errorMessage}
+                onRetry={() => void flushSave()}
+              />
               <button
                 type="button"
-                onClick={onClose}
-                disabled={saving}
+                onClick={() => void handleCancel()}
                 className="btn-transition"
                 style={{
                   padding: 'var(--lp-space-2) var(--lp-space-4)',
@@ -422,13 +482,13 @@ export function MemberManageSlideOver({
                   borderRadius: 'var(--lp-radius-md)',
                   cursor: 'pointer',
                 }}
+                title="Discard the changes you just made."
               >
                 Cancel
               </button>
               <button
                 type="button"
-                onClick={handleSaveClick}
-                disabled={saving}
+                onClick={() => void handleClose()}
                 className="btn-transition btn-primary-press inline-flex items-center"
                 style={{
                   gap: 6,
@@ -440,43 +500,14 @@ export function MemberManageSlideOver({
                   border: '1px solid transparent',
                   borderRadius: 'var(--lp-radius-md)',
                   cursor: 'pointer',
-                  opacity: saving ? 0.7 : 1,
                 }}
               >
-                {saving ? <Loader2 size={14} className="animate-spin" /> : null}
-                Save
+                Done
               </button>
             </div>
           </div>
         </div>
       </SlideOver>
-
-      {/* Sensitive-grants confirmation modal */}
-      {confirmOpen ? (
-        <ConfirmModal
-          title="Grant sensitive access?"
-          body={
-            <>
-              <p style={{ margin: 0 }}>
-                You&apos;re granting this member access to sensitive data:
-              </p>
-              <ul style={{ marginTop: 6, marginLeft: 18, lineHeight: 1.6 }}>
-                {sensitiveLabels.map((l) => (
-                  <li key={l}>{l}</li>
-                ))}
-              </ul>
-              <p style={{ marginTop: 8 }}>
-                They&apos;ll see amounts, files, and rates. Continue?
-              </p>
-            </>
-          }
-          confirmLabel="Grant access"
-          confirmDestructive
-          busy={saving}
-          onCancel={() => setConfirmOpen(false)}
-          onConfirm={() => void commitSave()}
-        />
-      ) : null}
 
       {/* Remove confirmation modal */}
       {removeConfirm ? (
@@ -490,7 +521,7 @@ export function MemberManageSlideOver({
           }
           confirmLabel="Remove"
           confirmDestructive
-          busy={saving}
+          busy={removeBusy}
           onCancel={() => setRemoveConfirm(false)}
           onConfirm={() => void handleRemove()}
         />

@@ -208,8 +208,13 @@ export function TourWideCosts({
   }, [tourId]);
 
   const fetchTemplate = useCallback(async () => {
+    /* Sprint 12 §SAFE — keep the disabled state for at least
+       5s after click even if the request returns faster. The
+       server enforces 60s per-tour; this client lock-out just
+       discourages rapid clicks while the result is settling. */
     setTemplateLoading(true);
     setTemplateModal(null);
+    const minDisableUntil = Date.now() + 5_000;
     try {
       const res = await fetch('/api/budget/ai/template', {
         method: 'POST',
@@ -229,7 +234,12 @@ export function TourWideCosts({
         setTemplateSelected(new Set((data.line_items ?? []).map((_: unknown, i: number) => i)));
       }
     } finally {
-      setTemplateLoading(false);
+      const remaining = minDisableUntil - Date.now();
+      if (remaining > 0) {
+        setTimeout(() => setTemplateLoading(false), remaining);
+      } else {
+        setTemplateLoading(false);
+      }
     }
   }, [tourId, artistId, workspaceId, showCount, crewCount]);
 

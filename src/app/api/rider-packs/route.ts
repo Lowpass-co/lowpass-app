@@ -78,6 +78,18 @@ export async function POST(request: Request) {
   const routingId = (body.routing_id as string | undefined) ?? null;
   const title = (body.title as string | undefined) ?? null;
   const inheritFromClient = (body.inherit_from_folder_id as string | null | undefined) ?? undefined;
+  /* Sprint 12 §7 — kind discriminator. Optional; defaults to
+     'rider' so legacy callers continue working unchanged.
+     Channel-list templates from the artist library pass
+     'channel_list' explicitly. */
+  const kindClient = body.kind as string | undefined;
+  if (kindClient !== undefined && kindClient !== 'rider' && kindClient !== 'channel_list') {
+    return NextResponse.json(
+      { error: "kind must be 'rider' or 'channel_list'" },
+      { status: 400 },
+    );
+  }
+  const kind: 'rider' | 'channel_list' = (kindClient as 'rider' | 'channel_list' | undefined) ?? 'rider';
 
   if (!scope || !SCOPES.includes(scope)) {
     return NextResponse.json({ error: 'scope must be artist|tour|show' }, { status: 400 });
@@ -221,6 +233,7 @@ export async function POST(request: Request) {
       tour_id: tourId,
       routing_id: routingId,
       title,
+      kind,
       created_by: user.id,
     })
     .select('*')

@@ -22,7 +22,18 @@ type State =
   | { kind: 'error'; message: string }
   | { kind: 'ok'; payload: PublicRiderPayload };
 
-export function PublicRiderView({ token }: { token: string }) {
+export function PublicRiderView({
+  token,
+  printMode = false,
+}: {
+  token: string;
+  /* Sprint 12 §10 — set when /r/[token]?print=1. Strips
+     loading/error/password chrome to plain text (so a
+     browser-driven "Save as PDF" doesn't put a card around
+     them) and passes the flag through to ReadOnlyPackView so
+     it can apply the lp-pdf-* page-break hooks. */
+  printMode?: boolean;
+}) {
   const [state, setState] = useState<State>({ kind: 'loading' });
 
   const attempt = useCallback(
@@ -111,7 +122,7 @@ export function PublicRiderView({ token }: { token: string }) {
     return <PasswordForm invalid={state.invalid} onSubmit={(p) => attempt(p)} />;
   }
 
-  return <ReadOnlyPackView payload={state.payload} />;
+  return <ReadOnlyPackView payload={state.payload} printMode={printMode} />;
 }
 
 function PasswordForm({

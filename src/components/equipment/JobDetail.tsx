@@ -19,6 +19,9 @@ import { exportJobPdf, type PdfMode } from './exportJobPdf';
 
 interface Props {
   job: RentalJob;
+  /** Sprint 12 §1 — required for rental_job_items INSERTs after
+   *  the canonical RLS swap in migration 095. */
+  workspaceId: string | null;
   inventory: RentalInventoryItem[];
   artists: EquipmentArtistOption[];
   tours: EquipmentTourOption[];
@@ -28,7 +31,7 @@ interface Props {
   onJobUpdated: (job: RentalJob) => void;
 }
 
-export function JobDetail({ job, inventory, artists, tours, onBack, onEdit, onDelete, onJobUpdated }: Props) {
+export function JobDetail({ job, workspaceId, inventory, artists, tours, onBack, onEdit, onDelete, onJobUpdated }: Props) {
   const [jobItems, setJobItems] = useState<RentalJobItem[]>([]);
   const [loading, setLoading]   = useState(true);
 
@@ -97,14 +100,20 @@ export function JobDetail({ job, inventory, artists, tours, onBack, onEdit, onDe
   async function handleAdd() {
     if (!selInv) return;
     setAdding(true);
+    /* Sprint 12 §1 — workspace_id required by the canonical RLS
+       WITH CHECK clause from migration 095. */
+    const insertPayload: Record<string, unknown> = {
+      job_id: job.id,
+      inventory_id: selInv,
+      quantity: parseInt(qty) || 1,
+      day_rate_override: rateOvr ? parseFloat(rateOvr) : null,
+    };
+    if (workspaceId) {
+      insertPayload.workspace_id = workspaceId;
+    }
     const { data, error } = await supabase
       .from('rental_job_items')
-      .insert({
-        job_id: job.id,
-        inventory_id: selInv,
-        quantity: parseInt(qty) || 1,
-        day_rate_override: rateOvr ? parseFloat(rateOvr) : null,
-      })
+      .insert(insertPayload)
       .select().single();
     setAdding(false);
     if (error) { alert('Failed to add: ' + error.message); return; }

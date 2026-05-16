@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { isRoleTag } from '@/lib/personnel/role-tags';
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -27,6 +28,19 @@ export async function PATCH(request: Request, { params }: Params) {
       return NextResponse.json({ error: 'role must be a non-empty string' }, { status: 400 });
     }
     patch.role = body.role;
+  }
+  /* Sprint 12 §9c.0 — role_tag PATCH. The CHECK constraint
+     in migration 101 would reject invalid values at the DB
+     layer; validating here gives a clear 400 + a stable
+     error shape ahead of the round-trip. */
+  if ('role_tag' in body) {
+    if (!isRoleTag(body.role_tag)) {
+      return NextResponse.json(
+        { error: 'role_tag must be one of tm|tm2|pm|foh|mons|ld|backline|management|other' },
+        { status: 400 },
+      );
+    }
+    patch.role_tag = body.role_tag;
   }
   if ('employment_type' in body) {
     const v = body.employment_type;

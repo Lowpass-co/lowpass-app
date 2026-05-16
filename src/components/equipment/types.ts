@@ -2,7 +2,14 @@ import { calcRentalBillableDays } from '@/lib/rental-pricing';
 
 export interface RentalInventoryItem {
   id: string;
+  /** Legacy user-scope ownership column. Migration 095 added
+   *  workspace_id as the canonical scoping field; user_id is
+   *  kept for FK / historical fidelity but no longer drives
+   *  RLS or app-side filtering. */
   user_id: string;
+  /** Sprint 12 §1 — canonical workspace scoping. Added in
+   *  migration 095 with the denormalisation backfill. */
+  workspace_id?: string | null;
   name: string;
   category: string | null;
   serial_number: string | null;
@@ -14,8 +21,45 @@ export interface RentalInventoryItem {
   weight_kg: number | null;
   image_url: string | null;
   notes: string | null;
+  /** Sprint 11 §5 — lifecycle state. CHECK-constrained to one
+   *  of available / in_use / maintenance / retired. Defaults to
+   *  'available' on insert. */
+  status?: InventoryStatus | null;
+  /** Sprint 11 §5 — stamped each time the item lands on a
+   *  confirmed / invoiced / completed rental_jobs row. Drives
+   *  the "Last used" relative time on each grid row. NULL when
+   *  the item has never been on a confirmed job. */
+  last_used_at?: string | null;
+  /** Sprint 12 §1 / §2 — Carnet + scanning fields (migration
+   *  093). qr_token is the stable 8-char short ID encoded in
+   *  the printed QR label. */
+  customs_hs_code?: string | null;
+  value_amount?: number | null;
+  value_currency?: string | null;
+  dimensions_cm?: { l?: number; w?: number; h?: number } | null;
+  qr_token?: string | null;
   created_at: string;
 }
+
+/** Sprint 11 §5 — rental_inventory.status enum (CHECK-constrained
+ *  in migration 091). */
+export type InventoryStatus = 'available' | 'in_use' | 'maintenance' | 'retired';
+
+export const INVENTORY_STATUS_OPTIONS: ReadonlyArray<{ value: InventoryStatus; label: string }> = [
+  { value: 'available',   label: 'Available' },
+  { value: 'in_use',      label: 'In use' },
+  { value: 'maintenance', label: 'Maintenance' },
+  { value: 'retired',     label: 'Retired' },
+];
+
+/** Pill colour-tones per status. Mirrors STATUS_STYLES (jobs)
+ *  for visual continuity across the equipment surfaces. */
+export const INVENTORY_STATUS_STYLES: Record<InventoryStatus, { bg: string; text: string; border: string }> = {
+  available:   { bg: 'rgba(31,138,76,0.10)',  text: '#1f8a4c', border: 'rgba(31,138,76,0.35)' },
+  in_use:      { bg: '#FF45001a',             text: '#b85a00', border: '#FF450055' },
+  maintenance: { bg: 'rgba(201,122,29,0.12)', text: '#c97a1d', border: 'rgba(201,122,29,0.40)' },
+  retired:     { bg: 'rgba(107,114,128,0.12)', text: '#6B7280', border: 'rgba(107,114,128,0.40)' },
+};
 
 export interface RentalJob {
   id: string;

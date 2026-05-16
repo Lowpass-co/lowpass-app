@@ -106,8 +106,21 @@ export const FIELD_TYPES = [
 
 export type FieldType = (typeof FIELD_TYPES)[number];
 
-/** How section content is stored and edited. */
-export type SectionType = 'fields' | 'channel_list';
+/** How section content is stored and edited.
+ *
+ *  Sprint 12 §9a extension:
+ *    - 'rich_text'        Tiptap document stored in
+ *                         rider_sections.metadata.content.
+ *                         The legacy `fields` array stays
+ *                         empty for rich_text sections.
+ *    - 'advance_summary'  9-line subject/body summary panel
+ *                         (Sprint 12 §9d). Stored in
+ *                         rider_sections.metadata.summary
+ *                         as an ordered array.
+ *  Both new types live alongside the existing 'fields' and
+ *  'channel_list' values; the DB column is plain TEXT so no
+ *  enum migration is needed. */
+export type SectionType = 'fields' | 'channel_list' | 'rich_text' | 'advance_summary';
 
 /** Grouping for rider content: many per artist / tour / show; one pack per folder (migration 039). */
 export type RiderFolder = {
@@ -138,6 +151,12 @@ export type RiderPack = {
   google_doc_id: string | null;
   google_doc_url: string | null;
   created_by: string | null;
+  /** Sprint 12 §9a — cover-page columns added in migration 100.
+   *  All optional; cover_logo_url falls back to the artist's
+   *  default_logo_url at render time when null. */
+  cover_logo_url?: string | null;
+  cover_subtitle?: string | null;
+  cover_disclaimer?: string | null;
   created_at: string;
   updated_at: string;
   /** Set when list/detail embeds the folder (optional on older clients). */
@@ -154,6 +173,15 @@ export type RiderSection = {
   /** Defaults to `fields` when missing (pre-migration rows). */
   section_type?: SectionType;
   fields: Field[];
+  /** Sprint 12 §9a — free-shaped per-section JSONB column
+   *  added in migration 100. Used by:
+   *    - section_type='rich_text': `{ content: <Tiptap doc JSON> }`
+   *    - section_type='advance_summary': `{ summary: Array<{subject, body}> }`
+   *    - section_type='channel_list': `{ inventory_notes: Record<key, string> }`
+   *      (deferred from §8b3; lands in a follow-up after §9 core)
+   *  Defaults to `{}` on the DB side; consumers should treat
+   *  missing keys as the empty/default state. */
+  metadata?: Record<string, unknown> | null;
   created_at: string;
   updated_at: string;
 };
@@ -200,6 +228,22 @@ export type ChannelListRow = {
   phantom_power: boolean | null;
   provider: 'band' | 'venue' | 'hire' | null;
   notes: string;
+  /* Sprint 12 §8a — output-row support. row_kind='input'
+     rows use the mic/di/stand/phantom_power columns above
+     and ignore the output_* columns. row_kind='output' rows
+     populate the output_* columns and leave input fields
+     NULL. The editor renders the two kinds in stacked sub-
+     tables; the migration adds row_kind with default 'input'
+     so existing rows backfill correctly. */
+  row_kind: 'input' | 'output';
+  output_item: string | null;
+  output_destination: string | null;
+  output_qty: number | null;
+  output_notes: string | null;
+  /* Sprint 12 §8a — cable length feeding the Cables
+     aggregate. Stored as text so the editor's hardcoded
+     options round-trip exactly. */
+  cable_length: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -241,6 +285,11 @@ export const HISTORY_CHANGE_TYPES = [
   'section.updated',
   'section.removed',
   'section.reordered',
+  /* Sprint 12 §7 — fired when an artist-scope template is
+     instantiated onto a tour via the AssignToTourDialog.
+     newValue carries { template_pack_id, template_folder_id,
+     tour_id, tour_name, kind, sections_copied }. */
+  'pack.assigned_from_template',
 ] as const;
 
 export type HistoryChangeType = (typeof HISTORY_CHANGE_TYPES)[number];

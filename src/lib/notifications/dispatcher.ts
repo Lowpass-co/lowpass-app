@@ -1,10 +1,11 @@
 /* ============================================
-   LOWPASS — notification dispatcher (Sprint 10 §4.2)
+   LOWPASS — notification dispatcher (Sprint 10 §4.2 +
+   Sprint 11 §3 trigger expansion)
 
    Reads un-dispatched audit_log rows + workspace_invites rows
    + personnel_intake_tokens rows since last run, fans them out
-   into emails via Resend, and stamps notification_dispatched_at
-   so the next pass doesn't re-process.
+   into emails via Resend, and stamps a per-source dedup
+   column so the next pass doesn't re-process.
 
    Called from:
      - /api/cron/dispatch-notifications (Vercel cron, every 5 min)
@@ -13,17 +14,40 @@
    Resend API key read from process.env.RESEND_API_KEY
    (confirmed present in both Vercel + .env.local per Adam).
 
+   Sprint 11 §3 trigger set (now wired):
+
+     - assignment_cancelled  (audit_log status_changed
+                              tour_personnel — Sprint 10)
+     - conflict_detected     (audit_log created tour_personnel
+                              with a same-person overlap in the
+                              same workspace — Sprint 11)
+     - invite_accepted       (workspace_invites.accepted_at set
+                              and notification_email_sent_to
+                              still NULL — Sprint 11)
+     - intake_submitted      (personnel_intake_tokens.submitted_at
+                              set and notification_email_sent_to
+                              still NULL — Sprint 11)
+
    Design notes:
      - Dispatcher uses the SERVICE-ROLE Supabase client because
        the cron caller has no auth user. Caller must own the
        service-role key handoff.
      - Per-trigger composition is intentionally inline — the
-       set is small (5 triggers), and a lookup table would
-       obscure the actual data shape each one reads. If the
-       set grows, refactor to a registry.
+       set is small (4 wired triggers + invite_sent which is
+       still handled by Supabase Auth's own invite mail), and a
+       lookup table would obscure the actual data shape each
+       one reads. If the set grows past ~6, refactor to a
+       registry.
      - Failures dispatching one row don't block other rows.
        The dispatcher logs + skips, leaving the un-stamped row
        to retry on the next run.
+     - Dedup model:
+         * audit_log triggers stamp `notification_dispatched_at`
+           (column added in 089).
+         * workspace_invites + personnel_intake_tokens triggers
+           stamp `notification_email_sent_to` with the user_id
+           of the recipient (column added in 090). NULL means
+           pending.
    ============================================ */
 
 import { Resend } from 'resend';
@@ -32,6 +56,7 @@ import {
   inviteSent,
   inviteAccepted,
   intakeSubmitted,
+  conflictDetected,
   wrapShell,
   type NotificationTemplate,
 } from '@/lib/notifications/templates';
@@ -67,21 +92,79 @@ async function sendEmail(
   }
 }
 
+/* ============================================
+   Resolve an auth user's email + display name. Used by
+   inviter-recipient triggers (invite_accepted, intake_submitted)
+   and the conflict_detected trigger (sends to the manager who
+   created the assignment).
+
+   profiles.full_name is the human-friendly name; we fall back
+   to the email local-part if the profile row has no name.
+   Returns null when the user can't be resolved (deleted /
+   disabled), in which case the caller should mark the row
+   dispatched without sending.
+   ============================================ */
+interface ResolvedUser {
+  email: string;
+  name: string;
+}
+async function lookupUserEmailAndName(
+  supabase: SupabaseClient,
+  userId: string,
+): Promise<ResolvedUser | null> {
+  const { data, error } = await supabase.auth.admin.getUserById(userId);
+  if (error || !data?.user?.email) {
+    return null;
+  }
+  const email = data.user.email;
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('full_name')
+    .eq('id', userId)
+    .maybeSingle();
+  const fullName = ((profile as { full_name?: string | null } | null)?.full_name ?? '').trim();
+  return {
+    email,
+    name: fullName || email.split('@')[0] || 'A teammate',
+  };
+}
+
+function formatOverlap(startA: string, endA: string, startB: string, endB: string): string {
+  /* Show the intersection of [startA,endA] and [startB,endB] when
+     possible; otherwise fall back to "ranges A and B" so the
+     recipient can see what was double-booked. */
+  const start = startA > startB ? startA : startB;
+  const end = endA < endB ? endA : endB;
+  return `${start} – ${end}`;
+}
+
 interface AuditRow {
   id: string;
   action: string;
   entity_type: string;
   entity_id: string;
   workspace_id: string;
+  actor_user_id: string | null;
   field_changes: Record<string, unknown> | null;
   created_at: string;
 }
 
+interface TourLite {
+  id: string;
+  name: string;
+}
+function unwrapTour(t: TourLite | TourLite[] | null | undefined): TourLite | null {
+  if (!t) return null;
+  return Array.isArray(t) ? (t[0] ?? null) : t;
+}
+
 /* ============================================
-   Process audit_log rows (assignment cancelled, conflict
-   detected, etc.). Reads the next batch of un-dispatched
-   rows. After each successful send (or skip), stamps the
-   row's notification_dispatched_at.
+   Process audit_log rows. Two wired triggers:
+     - status_changed tour_personnel confirmed→cancelled
+       → assignment_cancelled (sends to personnel.email)
+     - created tour_personnel with same-workspace, same-person,
+       date-overlapping non-cancelled assignment
+       → conflict_detected (sends to actor_user_id)
 
    Limit per batch: 50. Cron runs every 5min; backlogs drain
    in ~5min × (count / 50).
@@ -93,7 +176,9 @@ async function processAuditRows(
 ): Promise<void> {
   const { data: rows } = await supabase
     .from('audit_log')
-    .select('id, action, entity_type, entity_id, workspace_id, field_changes, created_at')
+    .select(
+      'id, action, entity_type, entity_id, workspace_id, actor_user_id, field_changes, created_at',
+    )
     .is('notification_dispatched_at', null)
     .in('action', ['status_changed', 'created'])
     .order('created_at', { ascending: true })
@@ -108,61 +193,12 @@ async function processAuditRows(
         row.action === 'status_changed' &&
         row.entity_type === 'tour_personnel'
       ) {
-        const fc = row.field_changes ?? {};
-        const status = (fc as { status?: { from?: string; to?: string } }).status;
-        if (status?.from === 'confirmed' && status?.to === 'cancelled') {
-          /* Look up the personnel + tour + workspace + the
-             person's email. Skip if no email on record. */
-          const { data: tp } = await supabase
-            .from('tour_personnel')
-            .select('person_id, role, starts_on, ends_on, tours(id, name)')
-            .eq('id', row.entity_id)
-            .maybeSingle();
-          const tpRow = tp as
-            | {
-                person_id: string;
-                starts_on: string | null;
-                ends_on: string | null;
-                tours: { id: string; name: string } | { id: string; name: string }[] | null;
-              }
-            | null;
-          if (!tpRow) {
-            // Tour personnel row deleted — nothing to email.
-            dispatched = true;
-          } else {
-            const tour = Array.isArray(tpRow.tours) ? tpRow.tours[0] : tpRow.tours;
-            const { data: person } = await supabase
-              .from('personnel')
-              .select('name, email')
-              .eq('id', tpRow.person_id)
-              .maybeSingle();
-            const personRow = person as { name: string; email: string | null } | null;
-            const { data: ws } = await supabase
-              .from('workspaces')
-              .select('name')
-              .eq('id', row.workspace_id)
-              .maybeSingle();
-            const wsName = (ws as { name?: string } | null)?.name ?? 'Lowpass';
-            if (personRow?.email && tour?.name) {
-              await sendEmail(
-                resend,
-                personRow.email,
-                assignmentCancelled({
-                  personnelName: personRow.name,
-                  tourName: tour.name,
-                  startDate: tpRow.starts_on,
-                  endDate: tpRow.ends_on,
-                  workspaceName: wsName,
-                }),
-              );
-              summary.sent++;
-            }
-            dispatched = true;
-          }
-        } else {
-          // Other status transitions don't trigger email.
-          dispatched = true;
-        }
+        dispatched = await handleAssignmentCancelled(supabase, resend, row, summary);
+      } else if (
+        row.action === 'created' &&
+        row.entity_type === 'tour_personnel'
+      ) {
+        dispatched = await handleConflictDetected(supabase, resend, row, summary);
       } else {
         // Action not in our trigger set — mark dispatched so
         // it doesn't keep re-processing.
@@ -185,55 +221,346 @@ async function processAuditRows(
   }
 }
 
-/* ============================================
-   Process workspace_invites — invite_sent emails fire on
-   row insert. The invites table doesn't have a stamp column
-   in this sprint; we use a composite "sent if created within
-   last hour AND not already accepted" heuristic. Long-term
-   replace with an invite_email_sent_at column (Sprint 11).
+async function handleAssignmentCancelled(
+  supabase: SupabaseClient,
+  resend: Resend,
+  row: AuditRow,
+  summary: DispatchSummary,
+): Promise<boolean> {
+  const fc = row.field_changes ?? {};
+  const status = (fc as { status?: { from?: string; to?: string } }).status;
+  if (!(status?.from === 'confirmed' && status?.to === 'cancelled')) {
+    // Other status transitions don't trigger email.
+    return true;
+  }
+  const { data: tp } = await supabase
+    .from('tour_personnel')
+    .select('person_id, role, starts_on, ends_on, tours(id, name)')
+    .eq('id', row.entity_id)
+    .maybeSingle();
+  const tpRow = tp as
+    | {
+        person_id: string;
+        starts_on: string | null;
+        ends_on: string | null;
+        tours: TourLite | TourLite[] | null;
+      }
+    | null;
+  if (!tpRow) {
+    return true; // Tour personnel row deleted — nothing to email.
+  }
+  const tour = unwrapTour(tpRow.tours);
+  const { data: person } = await supabase
+    .from('personnel')
+    .select('name, email')
+    .eq('id', tpRow.person_id)
+    .maybeSingle();
+  const personRow = person as { name: string; email: string | null } | null;
+  const { data: ws } = await supabase
+    .from('workspaces')
+    .select('name')
+    .eq('id', row.workspace_id)
+    .maybeSingle();
+  const wsName = (ws as { name?: string } | null)?.name ?? 'Lowpass';
+  if (personRow?.email && tour?.name) {
+    await sendEmail(
+      resend,
+      personRow.email,
+      assignmentCancelled({
+        personnelName: personRow.name,
+        tourName: tour.name,
+        startDate: tpRow.starts_on,
+        endDate: tpRow.ends_on,
+        workspaceName: wsName,
+      }),
+    );
+    summary.sent++;
+  }
+  return true;
+}
 
-   Skipped in v1 — Supabase Auth's built-in invite email is
-   the v1 path and Adam's invite generation route already
-   triggers it. This dispatcher slot stays here as a no-op
-   placeholder so the trigger list in §4.1 is honoured at
-   the code level.
+async function handleConflictDetected(
+  supabase: SupabaseClient,
+  resend: Resend,
+  row: AuditRow,
+  summary: DispatchSummary,
+): Promise<boolean> {
+  /* Conflict semantics: the new tour_personnel row overlaps
+     another non-cancelled tour_personnel row for the same
+     person within the same workspace. Cross-workspace
+     conflicts are out of scope for this trigger — they're
+     surfaced in the UI via check_personnel_conflicts_batch
+     but the dispatcher doesn't have the standing to email
+     across workspace boundaries.
+
+     Recipient: actor_user_id on the audit row (the manager
+     who created the assignment). If actor is null (system
+     insert), we mark dispatched and skip. */
+  if (!row.actor_user_id) {
+    return true;
+  }
+  const { data: tpData } = await supabase
+    .from('tour_personnel')
+    .select('person_id, starts_on, ends_on, tour_id, status, tours(id, name)')
+    .eq('id', row.entity_id)
+    .maybeSingle();
+  const tp = tpData as
+    | {
+        person_id: string;
+        starts_on: string | null;
+        ends_on: string | null;
+        tour_id: string;
+        status: string;
+        tours: TourLite | TourLite[] | null;
+      }
+    | null;
+  if (!tp || !tp.starts_on || !tp.ends_on) {
+    // No row, or no date window — can't compute overlap.
+    return true;
+  }
+  if (tp.status === 'cancelled') {
+    return true; // Cancelled-on-create — no conflict.
+  }
+  const { data: overlapsData } = await supabase
+    .from('tour_personnel')
+    .select('id, tour_id, starts_on, ends_on, status, tours(id, name)')
+    .eq('workspace_id', row.workspace_id)
+    .eq('person_id', tp.person_id)
+    .neq('id', row.entity_id)
+    .neq('status', 'cancelled')
+    .lte('starts_on', tp.ends_on)
+    .gte('ends_on', tp.starts_on);
+  const overlaps = (overlapsData ?? []) as Array<{
+    id: string;
+    tour_id: string;
+    starts_on: string | null;
+    ends_on: string | null;
+    tours: TourLite | TourLite[] | null;
+  }>;
+  if (overlaps.length === 0) {
+    return true; // No conflict — nothing to email.
+  }
+  const tourA = unwrapTour(tp.tours);
+  if (!tourA) {
+    return true;
+  }
+  const { data: person } = await supabase
+    .from('personnel')
+    .select('name')
+    .eq('id', tp.person_id)
+    .maybeSingle();
+  const personName = (person as { name?: string } | null)?.name ?? 'Personnel';
+  const recipient = await lookupUserEmailAndName(supabase, row.actor_user_id);
+  if (!recipient) {
+    return true; // Actor disabled / deleted.
+  }
+  /* Email once per source audit row even if multiple
+     overlaps were found — the body lists the first
+     conflict's tour name, which is enough to drive the
+     manager back to the UI. */
+  const first = overlaps[0];
+  const tourB = unwrapTour(first.tours);
+  if (!tourB) {
+    return true;
+  }
+  const overlap =
+    first.starts_on && first.ends_on
+      ? formatOverlap(tp.starts_on, tp.ends_on, first.starts_on, first.ends_on)
+      : `${tp.starts_on} – ${tp.ends_on}`;
+  await sendEmail(
+    resend,
+    recipient.email,
+    conflictDetected({
+      personnelName: personName,
+      tourAName: tourA.name,
+      tourBName: tourB.name,
+      overlapDates: overlap,
+    }),
+  );
+  summary.sent++;
+  return true;
+}
+
+/* ============================================
+   Process workspace_invites — invite_accepted fires when
+   accepted_at is non-null AND notification_email_sent_to is
+   still NULL. Recipient: the inviter (invited_by_user_id).
+
+   invite_sent emails are still handled by Supabase Auth's
+   built-in invite mail; this dispatcher slot exists for the
+   accept-side notification only.
    ============================================ */
+interface InviteRow {
+  id: string;
+  workspace_id: string;
+  invited_by_user_id: string | null;
+  accepted_user_id: string | null;
+  invited_email: string;
+  accepted_at: string | null;
+}
 async function processInviteRows(
-  _supabase: SupabaseClient,
-  _resend: Resend,
-  _summary: DispatchSummary,
+  supabase: SupabaseClient,
+  resend: Resend,
+  summary: DispatchSummary,
 ): Promise<void> {
-  /* No-op v1 — Supabase Auth handles invite emails directly
-     during the invite POST. Re-implement here when the
-     workspace_invites table grows the email_sent_at column. */
+  const { data: rows } = await supabase
+    .from('workspace_invites')
+    .select(
+      'id, workspace_id, invited_by_user_id, accepted_user_id, invited_email, accepted_at',
+    )
+    .not('accepted_at', 'is', null)
+    .is('notification_email_sent_to', null)
+    .order('accepted_at', { ascending: true })
+    .limit(50);
+
+  const inviteRows = (rows ?? []) as InviteRow[];
+  for (const row of inviteRows) {
+    summary.attempted++;
+    try {
+      if (!row.invited_by_user_id || !row.accepted_user_id) {
+        // Inviter or accepter unknown — mark sent (with NULL
+        // would re-process). We use a sentinel of the accepted
+        // user when present, otherwise stamp with the invite's
+        // own row id is impossible (column is auth.users FK).
+        // Skip: mark by stamping the accepted user when present;
+        // when both are null we leave the row alone — dispatcher
+        // will revisit if data fills in later.
+        if (row.accepted_user_id) {
+          await supabase
+            .from('workspace_invites')
+            .update({ notification_email_sent_to: row.accepted_user_id })
+            .eq('id', row.id);
+        }
+        continue;
+      }
+      const inviter = await lookupUserEmailAndName(supabase, row.invited_by_user_id);
+      const accepter = await lookupUserEmailAndName(supabase, row.accepted_user_id);
+      if (!inviter || !accepter) {
+        // One side missing — mark dispatched so we don't loop.
+        await supabase
+          .from('workspace_invites')
+          .update({ notification_email_sent_to: row.invited_by_user_id })
+          .eq('id', row.id);
+        continue;
+      }
+      const { data: ws } = await supabase
+        .from('workspaces')
+        .select('name')
+        .eq('id', row.workspace_id)
+        .maybeSingle();
+      const wsName = (ws as { name?: string } | null)?.name ?? 'Lowpass';
+      await sendEmail(
+        resend,
+        inviter.email,
+        inviteAccepted({
+          acceptedByName: accepter.name,
+          workspaceName: wsName,
+        }),
+      );
+      summary.sent++;
+      await supabase
+        .from('workspace_invites')
+        .update({ notification_email_sent_to: row.invited_by_user_id })
+        .eq('id', row.id);
+    } catch (err) {
+      summary.failed++;
+      summary.failedReasons.push(
+        `invite ${row.id}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      // Don't stamp — leave for retry.
+      continue;
+    }
+  }
 }
 
 /* ============================================
-   Process intake_submitted — fires when
-   personnel_intake_tokens.submitted_at goes from NULL → set.
-   We can't currently observe that transition without a
-   trigger or change-feed, so we use a "submitted within last
-   N minutes AND not already notified" heuristic via a tiny
-   scratch column. Skipped in v1 for the same reason as
-   invites — wire when intake table grows email_sent_at
-   (Sprint 11).
+   Process personnel_intake_tokens — intake_submitted fires
+   when submitted_at is non-null AND notification_email_sent_to
+   is still NULL. Recipient: the inviter (invited_by_user_id).
    ============================================ */
+interface IntakeRow {
+  id: string;
+  workspace_id: string;
+  personnel_id: string;
+  invited_by_user_id: string | null;
+  submitted_at: string | null;
+}
 async function processIntakeRows(
-  _supabase: SupabaseClient,
-  _resend: Resend,
-  _summary: DispatchSummary,
+  supabase: SupabaseClient,
+  resend: Resend,
+  summary: DispatchSummary,
 ): Promise<void> {
-  /* No-op v1 — wired in Sprint 11 with a dedicated tracking
-     column. */
+  const { data: rows } = await supabase
+    .from('personnel_intake_tokens')
+    .select('id, workspace_id, personnel_id, invited_by_user_id, submitted_at')
+    .not('submitted_at', 'is', null)
+    .is('notification_email_sent_to', null)
+    .order('submitted_at', { ascending: true })
+    .limit(50);
+
+  const intakeRows = (rows ?? []) as IntakeRow[];
+  for (const row of intakeRows) {
+    summary.attempted++;
+    try {
+      if (!row.invited_by_user_id) {
+        // No inviter on record — token was created by a
+        // service path with no auth user. Nothing to do; we
+        // can't stamp without a uuid, so we leave the row
+        // alone. Dispatcher won't re-attempt because
+        // invited_by_user_id will stay null forever.
+        // Mark by writing a noop: skip, don't loop.
+        continue;
+      }
+      const inviter = await lookupUserEmailAndName(supabase, row.invited_by_user_id);
+      if (!inviter) {
+        // Inviter disabled / deleted — stamp with the inviter
+        // id anyway so we don't keep retrying.
+        await supabase
+          .from('personnel_intake_tokens')
+          .update({ notification_email_sent_to: row.invited_by_user_id })
+          .eq('id', row.id);
+        continue;
+      }
+      const { data: person } = await supabase
+        .from('personnel')
+        .select('name')
+        .eq('id', row.personnel_id)
+        .maybeSingle();
+      const personName = (person as { name?: string } | null)?.name ?? 'Your contact';
+      const { data: ws } = await supabase
+        .from('workspaces')
+        .select('name')
+        .eq('id', row.workspace_id)
+        .maybeSingle();
+      const wsName = (ws as { name?: string } | null)?.name ?? 'Lowpass';
+      await sendEmail(
+        resend,
+        inviter.email,
+        intakeSubmitted({
+          personnelName: personName,
+          workspaceName: wsName,
+        }),
+      );
+      summary.sent++;
+      await supabase
+        .from('personnel_intake_tokens')
+        .update({ notification_email_sent_to: row.invited_by_user_id })
+        .eq('id', row.id);
+    } catch (err) {
+      summary.failed++;
+      summary.failedReasons.push(
+        `intake ${row.id}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      // Don't stamp — leave for retry.
+      continue;
+    }
+  }
 }
 
-/* Public alias to silence unused warnings for the v1
-   placeholders. */
-void processInviteRows;
-void processIntakeRows;
+/* Public alias to silence unused warnings for the templates
+   that aren't used directly here (invite_sent is sent by
+   Supabase Auth's invite endpoint, not this dispatcher). */
 void inviteSent;
-void inviteAccepted;
-void intakeSubmitted;
 
 /* ============================================
    Top-level entry point. Caller supplies a service-role
@@ -257,10 +584,8 @@ export async function dispatchPendingNotifications(
   };
 
   await processAuditRows(supabase, resend, summary);
-  // processInviteRows + processIntakeRows are v1 no-ops; the
-  // trigger list in §4.1 names them so they exist in the
-  // dispatcher even though Supabase Auth handles invite mail
-  // directly today.
+  await processInviteRows(supabase, resend, summary);
+  await processIntakeRows(supabase, resend, summary);
 
   return summary;
 }

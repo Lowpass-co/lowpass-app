@@ -12,16 +12,20 @@ import {
   dayRateFromPurchase,
   isDayRateManual,
 } from '@/lib/rental-pricing';
-import { CATEGORIES, type RentalInventoryItem } from './types';
+import { CATEGORIES, INVENTORY_STATUS_OPTIONS, type InventoryStatus, type RentalInventoryItem } from './types';
+import { QRPreview } from '@/components/rental/QRPreview';
 
 interface Props {
   userId: string;
+  /** Sprint 12 §1 — required for INSERT (RLS WITH CHECK now
+   *  demands workspace_id). null disables Save on Add. */
+  workspaceId: string | null;
   editing: RentalInventoryItem | null;
   onSave: (item: RentalInventoryItem) => void;
   onClose: () => void;
 }
 
-export function InventoryModal({ userId, editing, onSave, onClose }: Props) {
+export function InventoryModal({ userId, workspaceId, editing, onSave, onClose }: Props) {
   const [name, setName]             = useState(editing?.name             ?? '');
   const [category, setCategory]     = useState(editing?.category         ?? '');
   const [serial, setSerial]         = useState(editing?.serial_number    ?? '');
@@ -43,6 +47,13 @@ export function InventoryModal({ userId, editing, onSave, onClose }: Props) {
   });
   const [imageUrl, setImageUrl]     = useState(editing?.image_url        ?? '');
   const [notes, setNotes]           = useState(editing?.notes            ?? '');
+  /* Sprint 11 §6 — status field exposed on the single-item
+     modal so operators can set lifecycle state on add / edit
+     without going through bulk-edit. Mirrors the column
+     surfaced in InventoryTab. */
+  const [status, setStatus]         = useState<InventoryStatus>(
+    (editing?.status ?? 'available') as InventoryStatus,
+  );
   const [saving, setSaving]         = useState(false);
   const nameRef = useRef<HTMLInputElement>(null);
   const supabase = createClient();
@@ -51,6 +62,11 @@ export function InventoryModal({ userId, editing, onSave, onClose }: Props) {
     { value: '', label: '— select —' },
     ...CATEGORIES.map((c) => ({ value: c, label: c })),
   ];
+
+  const statusOptions: StyledSelectOption<string>[] = INVENTORY_STATUS_OPTIONS.map((o) => ({
+    value: o.value,
+    label: o.label,
+  }));
 
   useEffect(() => { nameRef.current?.focus(); }, []);
 
@@ -103,7 +119,7 @@ export function InventoryModal({ userId, editing, onSave, onClose }: Props) {
             : null;
     }
 
-    const payload = {
+    const payload: Record<string, unknown> = {
       user_id:           userId,
       name:              name.trim(),
       category:          category || null,
@@ -115,7 +131,15 @@ export function InventoryModal({ userId, editing, onSave, onClose }: Props) {
       day_rate_manual:   finalManual,
       image_url:         imageUrl.trim() || null,
       notes:             notes.trim() || null,
+      status:            status,
     };
+    /* Sprint 12 §1 — workspace_id required by the canonical
+       RLS WITH CHECK clause from migration 095. Only set on
+       INSERT — the column is non-nullable and mutating it on
+       UPDATE would just no-op. */
+    if (!editing && workspaceId) {
+      payload.workspace_id = workspaceId;
+    }
 
     let result;
     if (editing) {
@@ -181,6 +205,17 @@ export function InventoryModal({ userId, editing, onSave, onClose }: Props) {
               <input value={serial} onChange={e => setSerial(e.target.value)} placeholder="SN-00000" className="lp-input" />
             </Field>
           </div>
+
+          {/* Sprint 11 §6 — Status. Single-item add/edit can
+              now set the lifecycle state directly instead of
+              going through bulk-edit. */}
+          <Field label="Status">
+            <StyledSelect
+              value={status}
+              onChange={(v) => setStatus((v || 'available') as InventoryStatus)}
+              options={statusOptions}
+            />
+          </Field>
 
           {/* Origin + Weight */}
           <div className="grid grid-cols-2 gap-4">
@@ -260,6 +295,18 @@ export function InventoryModal({ userId, editing, onSave, onClose }: Props) {
               className="lp-input resize-none"
             />
           </Field>
+
+          {/* Sprint 12 §2 — QR preview + print button. Edit
+              mode shows the rendered SVG + qr_token; Add mode
+              shows a placeholder ("generated on first save").
+              The print button opens /rental/print-labels for
+              this single item. */}
+          <Field label="QR label">
+            <QRPreview
+              inventoryId={editing?.id ?? null}
+              qrToken={editing?.qr_token ?? null}
+            />
+          </Field>
         </div>
 
         {/* Footer */}
@@ -273,9 +320,10 @@ export function InventoryModal({ userId, editing, onSave, onClose }: Props) {
           </button>
           <button
             onClick={handleSave}
-            disabled={saving || !name.trim()}
+            disabled={saving || !name.trim() || (!editing && !workspaceId)}
             className="rounded-lg px-4 py-2 text-sm font-semibold text-white transition-colors disabled:opacity-50"
             style={{ backgroundColor: '#FF4500' }}
+            title={!editing && !workspaceId ? 'No active workspace — Add disabled.' : undefined}
           >
             {saving ? 'Saving…' : editing ? 'Save Changes' : 'Add Item'}
           </button>

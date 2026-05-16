@@ -33,6 +33,8 @@ import { useEffect, useRef, useState } from 'react';
 import { ExternalLink, Loader2, Plus, Search, UserPlus } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
 import { SlideOver } from '@/components/shell/SlideOver';
+import { BrandedSelect } from '@/components/ui/BrandedSelect';
+import { ROLE_TAG_OPTIONS, type RoleTag } from '@/lib/personnel/role-tags';
 import type {
   PersonnelSearchHit,
   PersonnelStatus,
@@ -78,6 +80,11 @@ export function AddPersonnelSlideOver({
 
   // Form state (post-pick)
   const [role, setRole] = useState('Crew');
+  /* Sprint 12 §9c.0 — structured role_tag. Defaults to 'other'
+     so the operator gets a sensible no-tag baseline; the
+     freeform role text above stays the canonical display
+     string in the rider Key Contacts table. */
+  const [roleTag, setRoleTag] = useState<RoleTag>('other');
   const [startsOn, setStartsOn] = useState('');
   const [endsOn, setEndsOn] = useState('');
   const [status, setStatus] = useState<PersonnelStatus>('confirmed');
@@ -108,6 +115,7 @@ export function AddPersonnelSlideOver({
     setHits([]);
     setPicked(null);
     setRole('Crew');
+    setRoleTag('other');
     setStartsOn(tourStartDate ?? '');
     setEndsOn(tourEndDate ?? '');
     setStatus('confirmed');
@@ -241,6 +249,7 @@ export function AddPersonnelSlideOver({
         body: JSON.stringify({
           person_id: picked.id,
           role: role.trim() || 'Crew',
+          role_tag: roleTag,
           starts_on: startsOn || null,
           ends_on: endsOn || null,
           status,
@@ -752,6 +761,39 @@ export function AddPersonnelSlideOver({
                   borderRadius: 'var(--lp-radius-md)',
                   outline: 'none',
                 }}
+              />
+            </div>
+
+            {/* Sprint 12 §9c.0 — Role tag select.
+                Structured discriminator for the variable
+                resolver. The freeform "Role on tour" above
+                still renders in the rider's Key Contacts
+                table — this dropdown only feeds
+                {contact.<tag>.*} substitution. */}
+            <div>
+              <label
+                htmlFor="lp-add-personnel-role-tag"
+                className="lp-label-caps"
+                style={{
+                  display: 'block',
+                  marginBottom: 'var(--lp-space-1)',
+                  fontSize: 'var(--lp-text-2xs)',
+                  color: 'var(--lp-text-secondary)',
+                }}
+              >
+                Role tag (for rider variables)
+              </label>
+              <BrandedSelect
+                value={roleTag}
+                onChange={(v) => setRoleTag(v as RoleTag)}
+                options={ROLE_TAG_OPTIONS.map((o) => ({
+                  value: o.value,
+                  label: `${o.label} — ${o.description}`,
+                }))}
+                ariaLabel="Role tag"
+                size="sm"
+                className="w-full"
+                triggerClassName="min-h-9 w-full"
               />
             </div>
 

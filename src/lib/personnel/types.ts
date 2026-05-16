@@ -23,6 +23,10 @@ export interface PersonnelListItem {
   email: string | null;
   phone: string | null;
   role: string;
+  /** Sprint 12 §9c.0 — structured role discriminator (added
+   *  in migration 101). Filter target for the §9c1 variable
+   *  resolver. Existing rows default to 'other'. */
+  role_tag: 'tm' | 'tm2' | 'pm' | 'foh' | 'mons' | 'ld' | 'backline' | 'management' | 'other';
   employment_type: string | null;
   rate_amount: number | null;
   rate_currency: string | null;

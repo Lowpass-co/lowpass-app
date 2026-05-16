@@ -213,6 +213,7 @@ export default async function AdvanceShowPage({
     .join('');
 
   const builderHref = `/advance/${tourId}/${routingId}?mode=edit`;
+  const packetHref = `/advance/${tourId}/${routingId}/packet`;
   const showHref = `/advance/${tourId}/${routingId}`;
 
   // Build the right-rail's "VENUE SPECS" rows from routing data.
@@ -282,6 +283,7 @@ export default async function AdvanceShowPage({
                 overdueSectionsCount={overdueSectionsCount}
                 activeTab={activeTab}
                 builderHref={builderHref}
+                packetHref={packetHref}
               />
             </div>
             <AdvanceBuilderShellClient
@@ -309,6 +311,7 @@ export default async function AdvanceShowPage({
                   overdueSectionsCount={overdueSectionsCount}
                   activeTab={activeTab}
                   builderHref={builderHref}
+                  packetHref={packetHref}
                 />
                 <AdvanceShowReadView tourId={tourId} routingId={routingId} />
               </div>

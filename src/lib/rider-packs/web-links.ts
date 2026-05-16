@@ -17,6 +17,12 @@
 
 import crypto from 'crypto';
 import { promisify } from 'util';
+import type {
+  ChannelListRow,
+  MicLibraryEntry,
+  StageBox,
+  SubSnake,
+} from './types';
 
 const scryptAsync = promisify(crypto.scrypt) as (
   password: string | Buffer,
@@ -75,15 +81,50 @@ export type PublicRiderPayload = {
     scope: 'artist' | 'tour' | 'show';
     artist_id: string;
     artist_name: string;
+    /* Sprint 12 §9b — cover page fields. cover_logo_url
+       resolves on the server: rider-level override falls back
+       to artists.default_logo_url, which falls back to null.
+       Always a signed URL when present; the client renders
+       it directly without further resolution. updated_at
+       drives the "Rider Updated — <ordinal date>" timestamp. */
+    cover_logo_url: string | null;
+    cover_subtitle: string | null;
+    cover_disclaimer: string | null;
+    updated_at: string;
   };
   sections: Array<{
     id: string;
     section_key: string;
     title: string;
     sort_order: number;
+    section_type?: string;
     fields: unknown[];
+    /* Sprint 12 §9b — surfaced so the TOC can see rich_text
+       + advance_summary sections too. The legacy fields-only
+       render path stays unchanged for sections without a
+       rich-text body. */
+    metadata?: Record<string, unknown> | null;
     inherited_from: 'artist' | 'tour' | 'show' | null;
     source_pack_id: string;
+    /* Sprint 12 §10 follow-up — channel_list sections carry
+       their structured data inline so the public reader + PDF
+       can render the full grid (inputs, outputs, sub-snakes,
+       stage boxes, inventory aggregates) without a second
+       round-trip. Always undefined for non-channel_list
+       sections. Field names mirror the DB tables (sub_snakes /
+       stage_boxes / channel_list_rows) so consumers can reuse
+       the SubSnake / StageBox / ChannelListRow types from
+       @/lib/rider-packs/types directly. */
+    sub_snakes?: SubSnake[];
+    stage_boxes?: StageBox[];
+    rows?: ChannelListRow[];
   }>;
   signedUrls: Record<string, string | null>;
+  /* Sprint 12 §10 follow-up — mic library entries for the
+     pack's workspace (workspace-scoped + globals). Used by the
+     channel-list render to look up a mic's `type` for the
+     kind-tag badge (DYN / CON / RIB / DI+ / DI). Top-level
+     rather than per-section so we fetch once. Empty when the
+     pack has no channel_list sections. */
+  mics: MicLibraryEntry[];
 };

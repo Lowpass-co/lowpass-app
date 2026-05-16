@@ -18,7 +18,7 @@
 
 'use client';
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, ChevronDown } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -45,6 +45,7 @@ export function BrandedSelect({
   size = 'md',
   autoOpen = false,
   onOpenChange,
+  filterable = false,
 }: {
   value: string;
   onChange: (v: string) => void;
@@ -63,6 +64,18 @@ export function BrandedSelect({
   /** Notified when the dropdown opens or closes. Useful for parents that
    *  need to detect "user dismissed without picking" (cancel). */
   onOpenChange?: (open: boolean) => void;
+  /** Sprint 12 §8b4 — opt-in type-to-filter mode for dropdowns
+   *  with long option lists (e.g. the mic library ~100 entries).
+   *  When true, the open dropdown captures letter / digit
+   *  keypresses as filter text; Backspace chops one char;
+   *  Escape clears the filter AND closes (the close happens
+   *  via the existing document-level Escape handler). The
+   *  filter chip renders at the top of the dropdown so the
+   *  user sees what they've typed.
+   *
+   *  Default false — preserves the existing behaviour for the
+   *  30 other mounts across the app. */
+  filterable?: boolean;
 }) {
   const [open, setOpenState] = useState(autoOpen);
   const setOpen = useCallback(
@@ -82,6 +95,22 @@ export function BrandedSelect({
   const menuRef = useRef<HTMLDivElement>(null);
 
   const current = options.find((o) => o.value === value);
+
+  /* Sprint 12 §8b4 — filter state. Only consulted when
+     `filterable` is true and the dropdown is open. Resets to
+     empty string whenever the dropdown closes so the next
+     open starts fresh. */
+  const [filter, setFilter] = useState('');
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- derived state reset on open→close (no infinite loop: setFilter is a no-op when filter is already '')
+    if (!open) setFilter('');
+  }, [open]);
+
+  const visibleOptions = useMemo(() => {
+    if (!filterable || !filter) return options;
+    const needle = filter.toLowerCase();
+    return options.filter((o) => o.label.toLowerCase().includes(needle));
+  }, [filterable, filter, options]);
 
   const close = useCallback(() => setOpen(false), [setOpen]);
 
@@ -122,32 +151,71 @@ export function BrandedSelect({
 
   useEffect(() => {
     if (!open || !menuRef.current) return;
-    const active =
-      (menuRef.current.querySelector('[data-active="true"]') as HTMLButtonElement | null) ||
-      (menuRef.current.querySelector('button:not(:disabled)') as HTMLButtonElement | null);
+    /* When filtering, the previously-focused option may have
+       dropped out of view — jump to the first visible match.
+       When NOT filtering, the existing behaviour (focus
+       selected option, else first option) holds. The
+       `filter` dependency makes this fire on every filter
+       keystroke. */
+    const active = filter
+      ? (menuRef.current.querySelector('button:not(:disabled)') as HTMLButtonElement | null)
+      : (menuRef.current.querySelector('[data-active="true"]') as HTMLButtonElement | null) ||
+        (menuRef.current.querySelector('button:not(:disabled)') as HTMLButtonElement | null);
     active?.focus();
-  }, [open]);
+  }, [open, filter]);
 
   const onMenuKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (!menuRef.current) return;
     const buttons = Array.from(
       menuRef.current.querySelectorAll('button:not(:disabled)')
     ) as HTMLButtonElement[];
-    if (!buttons.length) return;
+    /* Arrow / Home / End run even when buttons.length === 0
+       (no-op) — but the early return above made them skip.
+       Move the length check inside the navigation branches so
+       filter keys still work on an empty result set. */
     const active = document.activeElement as HTMLButtonElement | null;
     const idx = buttons.findIndex((el) => el === active);
     if (e.key === 'ArrowDown') {
+      if (!buttons.length) return;
       e.preventDefault();
       buttons[(idx + 1 + buttons.length) % buttons.length]?.focus();
     } else if (e.key === 'ArrowUp') {
+      if (!buttons.length) return;
       e.preventDefault();
       buttons[(idx - 1 + buttons.length) % buttons.length]?.focus();
     } else if (e.key === 'Home') {
+      if (!buttons.length) return;
       e.preventDefault();
       buttons[0]?.focus();
     } else if (e.key === 'End') {
+      if (!buttons.length) return;
       e.preventDefault();
       buttons[buttons.length - 1]?.focus();
+    } else if (filterable) {
+      /* Sprint 12 §8b4 — filter capture. Single-character
+         printable keys append to the filter; Backspace chops
+         one char. Escape is handled by the document-level
+         listener (clears + closes via the existing close()).
+         Modifier-key presses (Ctrl/Meta/Alt) are passed
+         through so OS shortcuts still work. */
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.key === 'Backspace') {
+        if (filter.length === 0) return;
+        e.preventDefault();
+        setFilter((f) => f.slice(0, -1));
+      } else if (e.key.length === 1 && /\S/.test(e.key)) {
+        /* Only intercept printable chars (length 1 catches
+           letters, digits, punctuation). The /\S/ guard
+           rejects spaces from starting the filter but allows
+           them mid-filter — handled below. */
+        e.preventDefault();
+        setFilter((f) => f + e.key);
+      } else if (e.key === ' ' && filter.length > 0) {
+        /* Allow space inside an already-started filter so
+           "she 5" matches "Shure KSM5". */
+        e.preventDefault();
+        setFilter((f) => f + ' ');
+      }
     }
   };
 
@@ -224,7 +292,29 @@ export function BrandedSelect({
               transformOrigin: rect.flipUp ? 'bottom' : 'top',
             }}
           >
-            {options.map((opt) => {
+            {filterable && filter ? (
+              <div
+                className="border-b px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider"
+                style={{
+                  borderColor: 'var(--lp-border)',
+                  color: 'var(--lp-text-tertiary)',
+                }}
+              >
+                Filter: <span style={{ color: 'var(--lp-text)' }}>{filter}</span>
+                <span className="ml-2 text-[var(--lp-text-tertiary)]">
+                  ({visibleOptions.length})
+                </span>
+              </div>
+            ) : null}
+            {visibleOptions.length === 0 ? (
+              <div
+                className="px-3 py-2 text-xs italic"
+                style={{ color: 'var(--lp-text-tertiary)' }}
+              >
+                No matches.
+              </div>
+            ) : null}
+            {visibleOptions.map((opt) => {
               const selected = opt.value === value;
               return (
                 <button

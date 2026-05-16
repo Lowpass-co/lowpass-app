@@ -44,12 +44,26 @@ import { formatRelativeTime } from '@/lib/format-relative';
 import { SaveStatePill, type SavePillState } from './SaveStatePill';
 import ChannelListEditor from './ChannelListEditor';
 import { makeUniqueSectionKey } from '@/lib/rider-packs/templates';
+import { RichTextSectionEditor } from '@/components/rider/RichTextSectionEditor';
+import {
+  AdvanceSummarySectionEditor,
+  type AdvanceSummaryRow,
+} from '@/components/rider/AdvanceSummarySectionEditor';
+import { CoverPagePanel } from '@/components/rider/CoverPagePanel';
+
+/* Sprint 12 §9b — sentinel `selected` value for the Cover
+   Page pseudo-section. Section keys are never empty strings
+   in practice (slugify always produces something), so a
+   double-underscore prefix is collision-safe. */
+const COVER_SENTINEL = '__cover__';
 
 type Props = {
   packId: string;
 };
 
-type SectionSavePayload = Partial<Pick<ResolvedSection, 'title' | 'sort_order' | 'fields' | 'section_key'>> & {
+type SectionSavePayload = Partial<
+  Pick<ResolvedSection, 'title' | 'sort_order' | 'fields' | 'section_key' | 'metadata'>
+> & {
   sectionId: string;
 };
 
@@ -190,8 +204,8 @@ export function PackEditor({ packId }: Props) {
   /** Field-level saves are optimistic; structural changes (add/remove/reorder) call `refresh()` separately. */
   const saveSection = useCallback(
     async (payload: SectionSavePayload) => {
-      const { sectionId, title, sort_order, fields, section_key } = payload;
-      const restCount = [title, sort_order, fields, section_key].filter((v) => v !== undefined).length;
+      const { sectionId, title, sort_order, fields, section_key, metadata } = payload;
+      const restCount = [title, sort_order, fields, section_key, metadata].filter((v) => v !== undefined).length;
       if (restCount === 0) return;
       const sec = dataRef.current?.sections.find((x) => x.id === sectionId);
       if (!sec || sec.inherited_from) {
@@ -200,11 +214,12 @@ export function PackEditor({ packId }: Props) {
         }
         return;
       }
-      const body: Partial<Pick<RiderSection, 'title' | 'sort_order' | 'fields' | 'section_key'>> = {};
+      const body: Partial<Pick<RiderSection, 'title' | 'sort_order' | 'fields' | 'section_key' | 'metadata'>> = {};
       if (title !== undefined) body.title = title;
       if (sort_order !== undefined) body.sort_order = sort_order;
       if (fields !== undefined) body.fields = fields;
       if (section_key !== undefined) body.section_key = section_key;
+      if (metadata !== undefined) body.metadata = metadata;
       if (Object.keys(body).length === 0) return;
       const updated = await updateSection(packId, sectionId, body);
       setData((prev) => {
@@ -284,7 +299,9 @@ export function PackEditor({ packId }: Props) {
   }: {
     sectionKey: string;
     title: string;
-    section_type?: 'fields' | 'channel_list';
+    /* Sprint 12 §9a — widen to accept the new section types
+       so NewSectionDialog can hand them through. */
+    section_type?: 'fields' | 'channel_list' | 'rich_text' | 'advance_summary';
   }) => {
     if (!data) return;
     const normalizedKey = sectionKey.trim();
@@ -538,6 +555,28 @@ export function PackEditor({ packId }: Props) {
           </button>
         </div>
         <ul>
+          {/* Sprint 12 §9b — Cover Page pseudo-section. Stays
+              at the top of the list so it's the first thing the
+              operator sees and can edit. Selecting it sets
+              `selected = COVER_SENTINEL` and mounts the
+              CoverPagePanel in the main area instead of a real
+              section editor. */}
+          <li key={COVER_SENTINEL}>
+            <button
+              type="button"
+              onClick={() => setSelected(COVER_SENTINEL)}
+              className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between gap-2 border-l-2 ${
+                selected === COVER_SENTINEL
+                  ? 'border-[var(--lp-orange)] bg-lp-surface-hover'
+                  : 'border-transparent hover:bg-lp-surface-hover'
+              }`}
+            >
+              <span className="truncate font-semibold">Cover page</span>
+              <span className="text-[10px] uppercase tracking-wide text-lp-text-tertiary">
+                cover
+              </span>
+            </button>
+          </li>
           {data.sections.map((s) => (
             <li key={s.section_key}>
               <button
@@ -569,7 +608,46 @@ export function PackEditor({ packId }: Props) {
             : 'min-w-0 flex-1 bg-lp-surface-hover p-4 lg:p-6'
         }
       >
-        {!selectedSection ? (
+        {selected === COVER_SENTINEL ? (
+          /* Sprint 12 §9b — Cover Page editor. PATCHes
+             rider_packs (not rider_sections) via updatePack,
+             so its save chain runs in parallel to the per-
+             section save pill above. We pipe the cover-pack
+             save through the same scheduleSectionSave debounce
+             machinery to keep the SaveStatePill consistent,
+             but the underlying call is updatePack(packId, …)
+             not updateSection(…). */
+          <CoverPagePanel
+            pack={data.pack}
+            savePill={savePill}
+            onPatch={(body) => {
+              setData((prev) => {
+                if (!prev) return prev;
+                return { ...prev, pack: { ...prev.pack, ...body } };
+              });
+              void (async () => {
+                if (savedResetTimer.current) {
+                  clearTimeout(savedResetTimer.current);
+                  savedResetTimer.current = null;
+                }
+                setSavePill({ state: 'saving', error: null });
+                try {
+                  await updatePack(data.pack.id, body);
+                  setSavePill({ state: 'saved', error: null });
+                  savedResetTimer.current = setTimeout(
+                    () => setSavePill({ state: 'idle', error: null }),
+                    1500,
+                  );
+                } catch (e) {
+                  setSavePill({
+                    state: 'error',
+                    error: e instanceof Error ? e.message : 'Save failed',
+                  });
+                }
+              })();
+            }}
+          />
+        ) : !selectedSection ? (
           <div className="p-2 text-sm text-lp-text-secondary sm:p-4">
             Select a section, or add a new one.
           </div>
@@ -600,6 +678,100 @@ export function PackEditor({ packId }: Props) {
             onMoveUp={() => handleMoveSection(selectedSection, -1)}
             onMoveDown={() => handleMoveSection(selectedSection, 1)}
             onStructureChange={() => void refresh()}
+          />
+        ) : (selectedSection.section_type ?? 'fields') === 'advance_summary' ? (
+          /* Sprint 12 §9d.a — advance summary section. Body
+             is an Array<{subject, body}> on
+             section.metadata.summary. Save path mirrors the
+             rich_text branch — debounce + merge into the
+             existing metadata object so future per-section
+             keys coexist. */
+          <AdvanceSummarySectionEditor
+            key={selectedSection.id}
+            section={selectedSection}
+            packId={data.pack.id}
+            savePill={savePill}
+            onTitleCommit={(title) => {
+              setData((prev) => {
+                if (!prev) return prev;
+                return {
+                  ...prev,
+                  sections: prev.sections.map((s) =>
+                    s.id === selectedSection.id ? { ...s, title } : s,
+                  ),
+                };
+              });
+              scheduleSectionSave({ sectionId: selectedSection.id, title });
+            }}
+            onSummaryChange={(rows: AdvanceSummaryRow[]) => {
+              const existingMeta =
+                (selectedSection.metadata ?? {}) as Record<string, unknown>;
+              const nextMeta = { ...existingMeta, summary: rows };
+              setData((prev) => {
+                if (!prev) return prev;
+                return {
+                  ...prev,
+                  sections: prev.sections.map((s) =>
+                    s.id === selectedSection.id ? { ...s, metadata: nextMeta } : s,
+                  ),
+                };
+              });
+              scheduleSectionSave({
+                sectionId: selectedSection.id,
+                metadata: nextMeta,
+              });
+            }}
+            onRemove={() => handleRemoveSection(selectedSection)}
+            onOverride={() => handleOverrideSection(selectedSection)}
+            onMoveUp={() => handleMoveSection(selectedSection, -1)}
+            onMoveDown={() => handleMoveSection(selectedSection, 1)}
+          />
+        ) : (selectedSection.section_type ?? 'fields') === 'rich_text' ? (
+          /* Sprint 12 §9a — Tiptap-backed rich text section.
+             Content lives at section.metadata.content (added in
+             migration 100). Debounced saves merge into the
+             metadata object so future per-section metadata keys
+             (e.g. variable bindings, AI summary cache) coexist. */
+          <RichTextSectionEditor
+            key={selectedSection.id}
+            section={selectedSection}
+            packScope={data.pack.scope}
+            packId={data.pack.id}
+            savePill={savePill}
+            onTitleCommit={(title) => {
+              setData((prev) => {
+                if (!prev) return prev;
+                return {
+                  ...prev,
+                  sections: prev.sections.map((s) =>
+                    s.id === selectedSection.id ? { ...s, title } : s,
+                  ),
+                };
+              });
+              scheduleSectionSave({ sectionId: selectedSection.id, title });
+            }}
+            onContentChange={(content) => {
+              const existingMeta =
+                (selectedSection.metadata ?? {}) as Record<string, unknown>;
+              const nextMeta = { ...existingMeta, content };
+              setData((prev) => {
+                if (!prev) return prev;
+                return {
+                  ...prev,
+                  sections: prev.sections.map((s) =>
+                    s.id === selectedSection.id ? { ...s, metadata: nextMeta } : s,
+                  ),
+                };
+              });
+              scheduleSectionSave({
+                sectionId: selectedSection.id,
+                metadata: nextMeta,
+              });
+            }}
+            onRemove={() => handleRemoveSection(selectedSection)}
+            onOverride={() => handleOverrideSection(selectedSection)}
+            onMoveUp={() => handleMoveSection(selectedSection, -1)}
+            onMoveDown={() => handleMoveSection(selectedSection, 1)}
           />
         ) : (
           <SectionEditor

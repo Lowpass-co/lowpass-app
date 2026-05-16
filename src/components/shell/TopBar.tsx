@@ -8,7 +8,6 @@ import {
   Building2,
   Check,
   ChevronDown,
-  LayoutGrid,
   LogOut,
   Package,
   Search,
@@ -45,8 +44,10 @@ const WORKSPACE_NAV: NavItem[] = [
 
 /** Library dropdown — Phase 1 §D retires this. Contents migrate per
  *  Adam's decision #4: Rider Packs → Operations, Deal Memos → Budget,
- *  Gear → /account/rental (per-user), Templates → /templates, Venues
- *  → /venues, Performance → deleted entirely. The dropdown UI itself
+ *  Gear → /account/rental (per-user), Templates → retired entirely in
+ *  Sprint 12 §7 (artist-level templates now live under
+ *  /artists/[id]/{riders,channel-lists}), Venues → /venues,
+ *  Performance → deleted entirely. The dropdown UI itself
  *  is hidden below (libraryButton renders null). The state machinery
  *  (libraryRef / libraryOpen) stays so other dropdowns' "close
  *  siblings" handlers don't break — full TopBar retirement happens
@@ -352,20 +353,13 @@ function AccountMenuContent({
           Personnel directory
         </span>
       </Link>
-      <Link
-        href="/templates"
-        className="block px-3 py-2 text-sm"
-        style={{ color: 'var(--lp-text)' }}
-        onClick={onClose}
-      >
-        <span className="inline-flex items-center gap-2">
-          <LayoutGrid
-            className="h-4 w-4"
-            style={{ color: 'var(--lp-text-tertiary)' }}
-          />
-          Templates
-        </span>
-      </Link>
+      {/* Sprint 12 §7 — workspace-level /templates page retired.
+          Rider + channel-list templates now live under
+          /artists/[id]/{riders,channel-lists}. The
+          advance_templates / advance_layout_templates /
+          advance_schedule_templates tables stay intact and
+          power the Advance product as before; the unified
+          /templates VIEW over them is what's gone. */}
       <Link
         href="/venues"
         className="block px-3 py-2 text-sm"

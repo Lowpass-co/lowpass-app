@@ -84,7 +84,17 @@ export async function getPackResolved(id: string): Promise<ResolvedPack> {
 
 export async function updatePack(
   id: string,
-  body: Partial<Pick<RiderPack, 'title' | 'google_doc_id' | 'google_doc_url'>>,
+  body: Partial<
+    Pick<
+      RiderPack,
+      | 'title'
+      | 'google_doc_id'
+      | 'google_doc_url'
+      | 'cover_logo_url'
+      | 'cover_subtitle'
+      | 'cover_disclaimer'
+    >
+  >,
 ): Promise<RiderPack> {
   const res = await fetch(`/api/rider-packs/${id}`, {
     method: 'PATCH',
@@ -122,7 +132,9 @@ export async function createSection(
 export async function updateSection(
   packId: string,
   sectionId: string,
-  body: Partial<Pick<RiderSection, 'title' | 'sort_order' | 'fields' | 'section_key' | 'section_type'>>,
+  body: Partial<
+    Pick<RiderSection, 'title' | 'sort_order' | 'fields' | 'section_key' | 'section_type' | 'metadata'>
+  >,
 ): Promise<RiderSection> {
   const res = await fetch(`/api/rider-packs/${packId}/sections/${sectionId}`, {
     method: 'PATCH',
