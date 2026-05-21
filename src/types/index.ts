@@ -489,6 +489,17 @@ export interface BudgetLineItem {
   receipt_id: string | null;
   routing_id: string | null;
   notes: string | null;
+  /** Budget Phase A §A2 — sum of budget_line_item_transactions
+   *  for this line. Falls back to `actual_cost` when no
+   *  transactions exist (§A1 derivation rule). Optional
+   *  because pre-§A2 fetch paths don't attach it; views
+   *  should call getEffectiveActual(line) from
+   *  lib/budget/transactions for the fallback-aware read. */
+  effective_actual_cost?: number;
+  /** Budget Phase A §A2 — count of transactions for the row.
+   *  When ≥ 2 the Actual cell in the grid is read-only +
+   *  shows a "click slide-over to edit" indicator. */
+  transaction_count?: number;
   flight_id?: string | null;
   hotel_id?: string | null;
   room_id?: string | null;

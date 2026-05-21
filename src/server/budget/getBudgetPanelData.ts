@@ -13,6 +13,7 @@
    ============================================ */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { fetchTransactionAggregates } from '@/lib/budget/transactions';
 
 export type AllocationSegment = { label: string; amount: number };
 export type BurnBucket = { key: string; amount: number };
@@ -27,6 +28,7 @@ export type BudgetPanelData = {
 };
 
 type LineItemRow = {
+  id: string;
   category: string | null;
   actual_cost: number | null;
   proposed_cost: number | null;
@@ -89,7 +91,7 @@ export async function getBudgetPanelData(
   const [linesRes, routingRes] = await Promise.all([
     supabase
       .from('budget_line_items')
-      .select('category, actual_cost, proposed_cost, routing_id, created_at')
+      .select('id, category, actual_cost, proposed_cost, routing_id, created_at')
       .eq('tour_id', tourId),
     supabase
       .from('routing')
@@ -103,10 +105,24 @@ export async function getBudgetPanelData(
     if (r.id && r.date) routingMap.set(r.id, r.date.slice(0, 10));
   }
 
+  /* Budget Phase A §A2 — overlay vendor-breakdown transactions
+     so the donut + burn chart reflect the same effective actual
+     the grid + slide-over show. Lines with zero transactions
+     fall back to actual_cost (§A1 derivation rule). */
+  const txnAggregates = await fetchTransactionAggregates(
+    supabase,
+    lines.map((l) => l.id),
+  );
+  const effectiveActual = (line: LineItemRow): number => {
+    const agg = txnAggregates.get(line.id);
+    if (agg) return agg.sum;
+    return Number(line.actual_cost ?? 0);
+  };
+
   // Allocation aggregate.
   const allocationMap = new Map<string, number>();
   for (const line of lines) {
-    const amt = Number(line.actual_cost ?? 0);
+    const amt = effectiveActual(line);
     if (!Number.isFinite(amt)) continue;
     const cat = (line.category ?? 'uncategorised').toString();
     allocationMap.set(cat, (allocationMap.get(cat) ?? 0) + amt);
@@ -128,7 +144,7 @@ export async function getBudgetPanelData(
   // routing_id, falling back to created_at when no routing_id is set.
   const burnMap = new Map<string, number>();
   for (const line of lines) {
-    const amt = Number(line.actual_cost ?? 0);
+    const amt = effectiveActual(line);
     if (!Number.isFinite(amt) || amt === 0) continue;
     const date =
       (line.routing_id && routingMap.get(line.routing_id)) ||

@@ -24,6 +24,7 @@
 import { useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { convertToCurrency } from '@/lib/budget/fx';
+import { getEffectiveActual } from '@/lib/budget/transactions';
 import type { BudgetLineItem } from '@/types';
 
 interface BudgetStatsStripProps {
@@ -79,8 +80,10 @@ export function BudgetStatsStrip({ lines, tourCurrency }: BudgetStatsStripProps)
         lineCurrency,
         displayCurrency,
       );
+      /* Budget Phase A §A2 — effective actual = sum of transactions
+         when present, else actual_cost fallback. */
       const actual = convertToCurrency(
-        Number(line.actual_cost ?? 0),
+        getEffectiveActual(line),
         lineCurrency,
         displayCurrency,
       );

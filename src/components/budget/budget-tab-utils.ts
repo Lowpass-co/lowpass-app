@@ -10,10 +10,13 @@
    existing client-side imports.
    ============================================ */
 
+/* Budget Phase A §A2 — 'actuals' removed. Proposed / Actual /
+   Variance now live side-by-side on the Budget tab grid. Stale
+   bookmarks with ?tab=actuals fall through to 'summary' by the
+   default branch below. */
 export type BudgetTab =
   | 'summary'
   | 'budget'
-  | 'actuals'
   | 'reports'
   | 'settings';
 
@@ -23,7 +26,6 @@ export function resolveBudgetTab(
   const candidate = Array.isArray(raw) ? raw[0] : raw;
   switch (candidate) {
     case 'budget':
-    case 'actuals':
     case 'reports':
     case 'settings':
       return candidate;

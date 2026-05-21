@@ -25,10 +25,11 @@ import {
 // existing client-side imports that read them off this module.
 export { type BudgetTab, resolveBudgetTab };
 
+/* Budget Phase A §A2 — Actuals tab removed. Proposed / Actual /
+   Variance render side-by-side per row on the Budget tab grid. */
 const TABS: ReadonlyArray<{ id: BudgetTab; label: string }> = [
   { id: 'summary', label: 'Summary' },
   { id: 'budget', label: 'Budget' },
-  { id: 'actuals', label: 'Actuals' },
   { id: 'reports', label: 'Reports' },
   { id: 'settings', label: 'Settings' },
 ];
