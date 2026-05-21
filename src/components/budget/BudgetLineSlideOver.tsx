@@ -24,6 +24,7 @@ import {
   isUx14DerivedBudgetLine,
   ux14BudgetLineDerivedHint,
 } from '@/lib/budget/budgetUx14Derived';
+import { TransactionsSection } from '@/components/budget/TransactionsSection';
 import type { BudgetLineItem } from '@/types';
 
 // Status enum MUST match /api/budget/line-items PATCH validation.
@@ -557,6 +558,17 @@ export function BudgetLineSlideOver({
             style={{ ...inputStyle, resize: 'vertical' }}
           />
         </label>
+
+        {/* Budget Phase A §A1 — vendor-breakdown transactions.
+            Only mount once the row exists server-side; create
+            mode has a pending- prefixed id with no transactions
+            to load. */}
+        {!isCreate && (
+          <TransactionsSection
+            lineItemId={line.id}
+            currency={line.currency ?? null}
+          />
+        )}
 
         <div
           className="flex items-center justify-between gap-3 border-t pt-4"
