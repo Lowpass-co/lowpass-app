@@ -10,6 +10,7 @@ import {
 } from '@/lib/hotel-rate';
 import { InlineEditCell } from '@/components/spreadsheet-view/InlineEditCell';
 import { RoutingDateField } from '@/components/spreadsheet-view/RoutingDateField';
+import { TransactionsSection } from '@/components/budget/TransactionsSection';
 import { cn } from '@/lib/utils';
 
 const STATUS_OPTIONS = [
@@ -61,6 +62,12 @@ interface LineItemRow {
   routing_id?: string | null;
   source_entity_type?: string | null;
   source_entity_id?: string | null;
+  /** Budget Phase A §A1 — passed through to the
+   *  Transactions section so amount totals render in the
+   *  line item's currency. The details API already
+   *  selects(*), so this just surfaces an existing field
+   *  on the TS interface. */
+  currency?: string | null;
 }
 
 interface HotelRoomAssignmentRow {
@@ -665,6 +672,15 @@ export function LineItemDetailPanel({ lineItemId, tourId, onClose }: LineItemDet
                       </div>
                     </div>
                   ) : null}
+
+                  {/* Budget Phase A §A1 — vendor-breakdown
+                      transactions. Sum becomes the effective
+                      actual_cost when rows exist (the spec's
+                      derivation rule). */}
+                  <TransactionsSection
+                    lineItemId={lineItem.id}
+                    currency={lineItem.currency ?? null}
+                  />
 
                   <div>
                     <h3 className="text-xs font-bold uppercase tracking-wider text-lp-text-secondary mb-2">Notes</h3>
