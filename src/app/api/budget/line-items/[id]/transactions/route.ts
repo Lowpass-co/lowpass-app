@@ -24,6 +24,7 @@ import {
 } from '@/lib/auth/workspace-check';
 import {
   resolveLineItemContext,
+  syncActualCostIfNoOverride,
   type BudgetLineItemTransaction,
 } from '@/lib/budget/transactions';
 
@@ -135,6 +136,9 @@ export async function POST(
       { status: 500 },
     );
   }
+  /* §A3 — keep the line's actual_cost in lockstep with the new
+     sum unless the user has a manual override in place. */
+  await syncActualCostIfNoOverride(supabase, lineItemId, Number(data.amount || 0));
   return NextResponse.json({ transaction: data }, { status: 201 });
 }
 

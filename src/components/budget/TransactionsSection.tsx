@@ -57,9 +57,15 @@ interface Props {
   /** Line item's currency; falls back to GBP. Transaction
    *  rows with a NULL currency inherit this. */
   currency?: string | null;
+  /** §A3 — fired after every successful POST / PATCH / DELETE
+   *  so the host slide-over can router.refresh() and pull the
+   *  newly auto-synced budget_line_items.actual_cost +
+   *  transaction_sum. Without this the ACTUAL field stays
+   *  stale and the override marker fails to update. */
+  onChange?: () => void;
 }
 
-export function TransactionsSection({ lineItemId, currency }: Props) {
+export function TransactionsSection({ lineItemId, currency, onChange }: Props) {
   const [rows, setRows] = useState<BudgetLineItemTransaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -117,10 +123,11 @@ export function TransactionsSection({ lineItemId, currency }: Props) {
         return;
       }
       setRows((prev) => [...prev, json.transaction!]);
+      onChange?.();
     } finally {
       setAdding(false);
     }
-  }, [lineItemId]);
+  }, [lineItemId, onChange]);
 
   /* Single PATCH for inline edits — optimistic local update
      then network. On failure, refetch to converge. */
@@ -139,13 +146,18 @@ export function TransactionsSection({ lineItemId, currency }: Props) {
           const json = (await res.json().catch(() => ({}))) as { error?: string };
           setError(json.error ?? 'Save failed.');
           void load();
+          return;
         }
+        /* Notify parent so the slide-over's ACTUAL field can
+           refresh — server-side auto-sync may have updated
+           actual_cost when patch.amount changed. */
+        if (patch.amount !== undefined) onChange?.();
       } catch {
         setError('Network error saving transaction.');
         void load();
       }
     },
-    [load],
+    [load, onChange],
   );
 
   const deleteRow = useCallback(async (id: string) => {
@@ -160,12 +172,14 @@ export function TransactionsSection({ lineItemId, currency }: Props) {
         const json = (await res.json().catch(() => ({}))) as { error?: string };
         setError(json.error ?? 'Delete failed.');
         setRows(prev);
+        return;
       }
+      onChange?.();
     } catch {
       setError('Network error deleting.');
       setRows(prev);
     }
-  }, [rows]);
+  }, [rows, onChange]);
 
   /* Reorder: optimistic local move + PATCH /reorder for each
      affected row. Simple O(n) — fine for the small lists

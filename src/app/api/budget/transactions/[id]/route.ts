@@ -18,6 +18,7 @@ import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { requireUserAndWorkspace } from '@/lib/auth/workspace-check';
 import {
   resolveTransactionLineItem,
+  syncActualCostIfNoOverride,
   type BudgetLineItemTransaction,
   type TransactionInput,
 } from '@/lib/budget/transactions';
@@ -105,6 +106,14 @@ export async function PATCH(
       { status: 500 },
     );
   }
+  /* §A3 — if the amount changed, sync the line's actual_cost
+     unless an override is active. patch.amount is only set when
+     the PATCH body included an amount; other-field edits (vendor /
+     notes / paid_at / sort_order) leave the sum untouched. */
+  if (patch.amount !== undefined) {
+    const delta = Number(data.amount) - Number(ctx.transaction.amount);
+    await syncActualCostIfNoOverride(supabase, ctx.line_item_id, delta);
+  }
   return NextResponse.json({ transaction: data });
 }
 
@@ -141,5 +150,13 @@ export async function DELETE(
       { status: 403 },
     );
   }
+  /* §A3 — delta is negative since we removed the row's amount.
+     Auto-sync the line's actual_cost unless an override is in
+     place. */
+  await syncActualCostIfNoOverride(
+    supabase,
+    ctx.line_item_id,
+    -Number(ctx.transaction.amount || 0),
+  );
   return NextResponse.json({ ok: true });
 }

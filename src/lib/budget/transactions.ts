@@ -54,16 +54,107 @@ export function effectiveActualCost(
   return Number(fallbackActual ?? 0);
 }
 
-/** Render-time helper for any view that has an enriched line
- *  (`effective_actual_cost` set) but wants a single number to
- *  display. Falls back to `actual_cost` when the line wasn't
- *  enriched, so legacy code paths keep working. */
-export function getEffectiveActual(line: {
-  effective_actual_cost?: number | null;
+/** Render-time state for the Actual cell + slide-over field.
+ *  Phase A §A3:
+ *
+ *  - `value` is what the grid + slide-over render. After §A3's
+ *    server-side auto-sync, `value === actual_cost` always
+ *    (the auto-sync keeps actual_cost in lockstep with the
+ *    transaction sum unless the user has typed a manual
+ *    override).
+ *  - `isOverride` is true iff transactions exist AND
+ *    actual_cost differs from their sum. Drives the warning
+ *    marker + "Sync to transactions sum" affordance.
+ *  - `transactionSum` is the target value of the Sync action.
+ *  - `transactionCount` powers the multi-txn 📎 indicator
+ *    (`>= 2` = breakdown must be edited in the slide-over). */
+export interface ActualState {
+  value: number;
+  isOverride: boolean;
+  transactionSum: number;
+  transactionCount: number;
+}
+
+export function getActualState(line: {
   actual_cost?: number | null;
+  transaction_sum?: number | null;
+  transaction_count?: number | null;
+}): ActualState {
+  const actual = Number(line.actual_cost ?? 0);
+  const count = Number(line.transaction_count ?? 0);
+  const sum = Number(line.transaction_sum ?? 0);
+  const isOverride = count > 0 && !numericEqual(actual, sum);
+  return {
+    value: actual,
+    isOverride,
+    transactionSum: sum,
+    transactionCount: count,
+  };
+}
+
+/** Single-source-of-truth value for legacy call sites that just
+ *  want the number to render. Equivalent to getActualState(line).value
+ *  — kept as a thin wrapper so the 6 §A2 call sites can stay
+ *  one-liners. */
+export function getEffectiveActual(line: {
+  actual_cost?: number | null;
+  transaction_sum?: number | null;
+  transaction_count?: number | null;
 }): number {
-  if (line.effective_actual_cost != null) return Number(line.effective_actual_cost);
-  return Number(line.actual_cost ?? 0);
+  return getActualState(line).value;
+}
+
+/** Cent-precision equality. NUMERIC(12, 2) round-trips through
+ *  JS Number losslessly for any realistic budget value, but
+ *  accumulated float arithmetic (e.g. summing 100+ transactions)
+ *  can drift sub-cent. Compare as fixed-2 strings to avoid
+ *  false "override" markers from $0.001 drift. */
+function numericEqual(a: number, b: number): boolean {
+  if (!Number.isFinite(a) || !Number.isFinite(b)) return a === b;
+  return a.toFixed(2) === b.toFixed(2);
+}
+
+/** §A3 — server-side auto-sync. When the transactions for a
+ *  line item change, update the line's actual_cost to the new
+ *  sum IF the user didn't already have a manual override in
+ *  place (i.e. previous actual_cost matched previous sum).
+ *
+ *  Caller passes the `deltaApplied` — how this write changed
+ *  the sum. POST: +newAmount. DELETE: -oldAmount. PATCH (amount
+ *  edit): newAmount - oldAmount. The helper derives previous
+ *  sum from (newSum - deltaApplied) and only syncs if the
+ *  previous actual_cost matched that. Result: legitimate user
+ *  overrides survive transaction edits; no-override lines stay
+ *  in lockstep with the sum.
+ *
+ *  Called from the 3 transaction CRUD endpoints. Reorder doesn't
+ *  call this (sort-order changes don't affect amounts). */
+export async function syncActualCostIfNoOverride(
+  supabase: SupabaseClient,
+  lineItemId: string,
+  deltaApplied: number,
+): Promise<void> {
+  if (deltaApplied === 0) return;
+  const aggregates = await fetchTransactionAggregates(supabase, [lineItemId]);
+  const newSum = aggregates.get(lineItemId)?.sum ?? 0;
+  const previousSum = newSum - deltaApplied;
+  const { data: line } = await supabase
+    .from('budget_line_items')
+    .select('actual_cost')
+    .eq('id', lineItemId)
+    .maybeSingle<{ actual_cost: number | null }>();
+  if (!line) return;
+  const currentActual = Number(line.actual_cost ?? 0);
+  if (!numericEqual(currentActual, previousSum)) {
+    /* User had a manual override before this write — preserve
+       it. The slide-over surfaces the (now-shifted) Sync button
+       so the user can re-align manually if they want. */
+    return;
+  }
+  await supabase
+    .from('budget_line_items')
+    .update({ actual_cost: newSum })
+    .eq('id', lineItemId);
 }
 
 /** Aggregate of transactions for a single line item. */
@@ -110,26 +201,25 @@ export async function fetchTransactionAggregates(
   return map;
 }
 
-/** Decorate a line-items array with effective_actual_cost +
- *  transaction_count. Lines with zero transactions keep their
- *  original actual_cost as the fallback (the §A1 derivation
- *  rule). Returns a new array; original lines untouched. */
+/** Decorate a line-items array with transaction_sum +
+ *  transaction_count. §A3 renamed `effective_actual_cost` →
+ *  `transaction_sum` because the "displayed value" lives on
+ *  `actual_cost` post-auto-sync — `transaction_sum` is the
+ *  separate piece the helper uses to detect overrides + drive
+ *  the Sync button. Returns a new array; originals untouched. */
 export async function enrichLinesWithTransactionAggregates<
-  L extends { id: string; actual_cost?: number | null },
+  L extends { id: string },
 >(supabase: SupabaseClient, lines: L[]): Promise<
-  Array<L & { effective_actual_cost: number; transaction_count: number }>
+  Array<L & { transaction_sum: number; transaction_count: number }>
 > {
   const ids = lines.map((l) => l.id);
   const aggregates = await fetchTransactionAggregates(supabase, ids);
   return lines.map((line) => {
     const agg = aggregates.get(line.id);
-    if (agg) {
-      return { ...line, effective_actual_cost: agg.sum, transaction_count: agg.count };
-    }
     return {
       ...line,
-      effective_actual_cost: Number(line.actual_cost ?? 0),
-      transaction_count: 0,
+      transaction_sum: agg?.sum ?? 0,
+      transaction_count: agg?.count ?? 0,
     };
   });
 }
