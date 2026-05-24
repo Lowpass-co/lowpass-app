@@ -42,6 +42,7 @@ import { BudgetLineSlideOver } from '@/components/budget/BudgetLineSlideOver';
 import { useToast } from '@/components/ui/Toast';
 import { convertToCurrency } from '@/lib/budget/fx';
 import { getEffectiveActual, getActualState } from '@/lib/budget/transactions';
+import { isIncomeRow, varianceColor } from '@/lib/budget/income-rows';
 import { cn } from '@/lib/utils';
 import type { BudgetLineItem } from '@/types';
 import type { TourPhase, TourPhaseKey } from '@/server/budget/computeTourPhases';
@@ -755,6 +756,10 @@ export function BudgetSpreadsheetView({
               const next = prev.filter((p) => p.id !== savedLine.id);
               return [savedLine, ...next];
             });
+            /* §B1.1 — swap the open line so the slide-over
+               transitions create → edit in place (isCreate
+               flips to false, Transactions section unlocks). */
+            setOpenLine(savedLine);
           }}
           onApplyAmount={() => setOpenLine(null)}
         />
@@ -937,6 +942,12 @@ function GroupRows({
   gActual,
 }: GroupRowsProps) {
   const gDelta = gActual - gProposed;
+  /* §B1.3 — group total inherits income semantics when every
+     row in the group is income. Mixed groups fall back to
+     expense semantics (over = bad red). */
+  const groupIsIncome = group.rows.length > 0 && group.rows.every(isIncomeRow);
+  const gVarPct = gProposed > 0 ? (gDelta / gProposed) * 100 : null;
+  const gVarColor = varianceColor(gVarPct, groupIsIncome);
   return (
     <>
       <tr
@@ -983,16 +994,7 @@ function GroupRows({
               {gProposed > 0 ? (
                 <>
                   {' '}· var{' '}
-                  <span
-                    style={{
-                      color:
-                        gDelta > 0
-                          ? 'var(--color-lp-error, #EF4444)'
-                          : gDelta < 0
-                            ? 'var(--color-lp-status-complete)'
-                            : 'var(--lp-text-tertiary)',
-                    }}
-                  >
+                  <span style={{ color: gVarColor }}>
                     {gDelta >= 0 ? '+' : ''}
                     {formatCurrency(gDelta, displayCurrency)}
                   </span>
@@ -1031,14 +1033,15 @@ function GroupRows({
         const hasMultiTxns = txnCount >= 2;
         const isOverride = actualState.isOverride;
         const v = variance(row, displayCurrency, tourCurrency);
-        const isOver = v.delta > 0;
-        const isUnder = v.delta < 0;
-        const varColor = isOver
-          ? 'var(--color-lp-error, #EF4444)'
-          : isUnder
-            ? 'var(--color-lp-status-complete)'
-            : 'var(--lp-text-tertiary)';
-        const Icon = isOver ? ArrowUp : isUnder ? ArrowDown : null;
+        /* §B1.3 — variance color through the income-aware
+           helper. Expense rows: over budget = red. Income
+           rows: over forecast = green. Helper handles the
+           threshold ladder + null case. */
+        const varColor = varianceColor(v.pct, isIncomeRow(row));
+        /* §B1.3 — Arrow icon direction reflects the
+           sign-flip too: income row over-forecast = up = good
+           (matches the green tone); expense over = up = bad. */
+        const Icon = v.delta > 0 ? ArrowUp : v.delta < 0 ? ArrowDown : null;
         const status = (row.status ?? '').toLowerCase();
         const statusOpt = STATUS_OPTIONS.find((o) => o.value === status);
         const phaseTag = phaseTagOf(row);

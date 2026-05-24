@@ -25,7 +25,9 @@ import {
   ux14BudgetLineDerivedHint,
 } from '@/lib/budget/budgetUx14Derived';
 import { TransactionsSection } from '@/components/budget/TransactionsSection';
+import { CurrencyNumericInput } from '@/components/budget/cells/CurrencyNumericInput';
 import { getActualState } from '@/lib/budget/transactions';
+import { isIncomeRow, varianceColor } from '@/lib/budget/income-rows';
 import type { BudgetLineItem } from '@/types';
 
 // Status enum MUST match /api/budget/line-items PATCH validation.
@@ -299,6 +301,33 @@ export function BudgetLineSlideOver({
     };
   }, [fields, isCreate, flushExistingPatch]);
 
+  /* §B1.1 — debounced auto-save for CREATE mode. Same 600ms
+     window as the edit effect above. Fires submitCreate as
+     soon as the user types a label (the only required field
+     at create time). Parent's onSaved swaps openLine to the
+     real server row → isCreate flips to false → this effect
+     deregisters and the existing-row debounce takes over.
+     Slide-over stays open through the transition; the
+     Transactions placeholder below becomes interactive once
+     line.id is no longer pending-. */
+  const createAttemptInFlightRef = useRef(false);
+  useEffect(() => {
+    if (!isCreate) return;
+    if (!fields.label.trim()) return;
+    if (createAttemptInFlightRef.current) return;
+    const t = setTimeout(() => {
+      createAttemptInFlightRef.current = true;
+      void submitCreate().finally(() => {
+        createAttemptInFlightRef.current = false;
+      });
+    }, 600);
+    return () => clearTimeout(t);
+    // submitCreate is intentionally NOT in deps — it changes
+    // every render via useCallback's fields deps, which would
+    // reset this timer on every keystroke and never fire.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isCreate, fields.label]);
+
   const submitCreate = useCallback(async () => {
     setSaveState('saving');
     setErrorMessage(null);
@@ -340,16 +369,21 @@ export function BudgetLineSlideOver({
       }
       setSaveState('saved');
       showToast(`Created ${fields.label}`);
+      /* §B1.1 — leave the slide-over open after create.
+         Parent's onSaved swaps openLine to the real server
+         row, isCreate flips to false, the Transactions
+         section unlocks in place. */
       onSaved?.({ ...created, status: fields.status } as BudgetLineItem);
       router.refresh();
-      onClose();
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Create failed';
       setSaveState('error');
       setErrorMessage(msg);
       showToast(msg, 'error');
     }
-  }, [fields, tourId, router, showToast, onClose, onSaved]);
+    /* §B1.1 — no onClose dep since submitCreate no longer
+       dismisses the slide-over (transitions in place). */
+  }, [fields, tourId, router, showToast, onSaved]);
 
   const setField = <K extends keyof DraftFields>(key: K, value: DraftFields[K]) =>
     setFields((cur) => ({ ...cur, [key]: value }));
@@ -549,15 +583,15 @@ export function BudgetLineSlideOver({
           </label>
           <label className="block">
             <span style={labelStyle}>Estimated</span>
-            <input
-              type="number"
-              step="0.01"
+            {/* §B1.4 — currency-symbol prefix. Quantity above
+                stays a plain numeric (not a money field). */}
+            <CurrencyNumericInput
               value={fields.proposed_cost}
-              onChange={(e) =>
-                setField('proposed_cost', Number(e.target.value) || 0)
-              }
-              className="mt-1.5"
+              onChange={(v) => setField('proposed_cost', v)}
+              currency={fields.currency}
+              className="mt-1.5 block"
               style={inputStyle}
+              ariaLabel="Estimated cost"
             />
           </label>
           <label className="block">
@@ -609,21 +643,20 @@ export function BudgetLineSlideOver({
                 </span>
               ) : null}
             </span>
-            <input
-              type="number"
-              step="0.01"
+            {/* §B1.4 — currency-symbol prefix. Same override
+                border tint applied via inputStyle merge. */}
+            <CurrencyNumericInput
               value={fields.actual_cost}
-              onChange={(e) => applyActualEdit(Number(e.target.value) || 0)}
-              className="mt-1.5"
+              onChange={(v) => applyActualEdit(v)}
+              currency={fields.currency}
+              className="mt-1.5 block"
               style={{
                 ...inputStyle,
-                /* Slight orange-tinted border when override is
-                   active so the field reads as "modified" even
-                   without scrolling to the marker. */
                 borderColor: actualState.isOverride
                   ? 'var(--color-lp-status-needs-review)'
                   : (inputStyle as { borderColor?: string }).borderColor,
               }}
+              ariaLabel="Actual cost"
             />
           </label>
         </div>
@@ -664,16 +697,9 @@ export function BudgetLineSlideOver({
             <div
               className="mt-1.5 inline-flex items-center rounded-md px-3 py-2 text-base tabular-nums"
               style={{
-                color:
-                  variancePct === null
-                    ? 'var(--lp-text-tertiary)'
-                    : variancePct > 10
-                      ? 'var(--color-lp-error, #EF4444)'
-                      : variancePct > 5
-                        ? 'var(--color-lp-status-needs-review)'
-                        : variancePct < -5
-                          ? 'var(--color-lp-status-complete)'
-                          : 'var(--lp-text-secondary)',
+                /* §B1.3 — colour via the shared income-aware
+                   helper so the rule lives in one place. */
+                color: varianceColor(variancePct, isIncomeRow(line)),
               }}
             >
               {variancePct === null ? '—' : `${variancePct.toFixed(1)}%`}
@@ -693,15 +719,29 @@ export function BudgetLineSlideOver({
         </label>
 
         {/* Budget Phase A §A1 — vendor-breakdown transactions.
-            Only mount once the row exists server-side; create
-            mode has a pending- prefixed id with no transactions
-            to load.
             §A3 — onChange triggers router.refresh() so the
             slide-over's `line` prop refetches after every txn
-            write. The new prop value carries the
-            auto-synced actual_cost + updated transaction_sum,
-            which re-derives the override marker. */}
-        {!isCreate && (
+            write. The new prop value carries the auto-synced
+            actual_cost + updated transaction_sum, which
+            re-derives the override marker.
+            §B1.1 — in create mode (pending- id), show a
+            placeholder section so the user sees Transactions
+            is coming. Auto-save on label blur transitions the
+            slide-over to edit mode in place; the section
+            unlocks automatically once isCreate flips. */}
+        {isCreate ? (
+          <section>
+            <h3 className="text-xs font-bold uppercase tracking-wider text-lp-text-secondary mb-2">
+              Transactions
+            </h3>
+            <div
+              className="rounded-xl border border-dashed border-lp-border bg-lp-surface/50 px-4 py-5 text-center text-xs text-lp-text-secondary"
+            >
+              Save the line item to start adding vendor breakdowns. The label
+              field auto-saves after a moment of inactivity.
+            </div>
+          </section>
+        ) : (
           <TransactionsSection
             lineItemId={line.id}
             currency={line.currency ?? null}
