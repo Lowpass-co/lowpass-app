@@ -55,19 +55,20 @@ export function effectiveActualCost(
 }
 
 /** Render-time state for the Actual cell + slide-over field.
- *  Phase A §A3:
+ *  Phase B §B0 — `isOverride` reads the explicit
+ *  `actual_cost_override` flag from the row (migration 105),
+ *  replacing the §A3 inference of "actual_cost differs from
+ *  sum." The inference broke the create-then-add flow: typing
+ *  $1000 in Actual, then adding transactions summing to
+ *  $1300, looked like an override but the user never asked
+ *  for one — they wanted the sum to win.
  *
- *  - `value` is what the grid + slide-over render. After §A3's
- *    server-side auto-sync, `value === actual_cost` always
- *    (the auto-sync keeps actual_cost in lockstep with the
- *    transaction sum unless the user has typed a manual
- *    override).
- *  - `isOverride` is true iff transactions exist AND
- *    actual_cost differs from their sum. Drives the warning
- *    marker + "Sync to transactions sum" affordance.
+ *  - `value` is what the grid + slide-over render
+ *    (= actual_cost; auto-sync keeps it == transaction_sum
+ *    unless the flag is true).
+ *  - `isOverride` reflects the explicit flag.
  *  - `transactionSum` is the target value of the Sync action.
- *  - `transactionCount` powers the multi-txn 📎 indicator
- *    (`>= 2` = breakdown must be edited in the slide-over). */
+ *  - `transactionCount` powers the multi-txn 📎 indicator. */
 export interface ActualState {
   value: number;
   isOverride: boolean;
@@ -77,13 +78,17 @@ export interface ActualState {
 
 export function getActualState(line: {
   actual_cost?: number | null;
+  actual_cost_override?: boolean | null;
   transaction_sum?: number | null;
   transaction_count?: number | null;
 }): ActualState {
   const actual = Number(line.actual_cost ?? 0);
   const count = Number(line.transaction_count ?? 0);
   const sum = Number(line.transaction_sum ?? 0);
-  const isOverride = count > 0 && !numericEqual(actual, sum);
+  /* Override flag is the source of truth. Transient drift
+     between actual and sum (e.g. between server auto-sync and
+     client refetch) is not treated as override. */
+  const isOverride = Boolean(line.actual_cost_override);
   return {
     value: actual,
     isOverride,
@@ -94,10 +99,11 @@ export function getActualState(line: {
 
 /** Single-source-of-truth value for legacy call sites that just
  *  want the number to render. Equivalent to getActualState(line).value
- *  — kept as a thin wrapper so the 6 §A2 call sites can stay
+ *  — kept as a thin wrapper so the §A2 call sites stay
  *  one-liners. */
 export function getEffectiveActual(line: {
   actual_cost?: number | null;
+  actual_cost_override?: boolean | null;
   transaction_sum?: number | null;
   transaction_count?: number | null;
 }): number {
@@ -114,43 +120,64 @@ function numericEqual(a: number, b: number): boolean {
   return a.toFixed(2) === b.toFixed(2);
 }
 
-/** §A3 — server-side auto-sync. When the transactions for a
+/** §B0 — server-side auto-sync. When the transactions for a
  *  line item change, update the line's actual_cost to the new
- *  sum IF the user didn't already have a manual override in
- *  place (i.e. previous actual_cost matched previous sum).
+ *  sum UNLESS the explicit actual_cost_override flag is set.
  *
- *  Caller passes the `deltaApplied` — how this write changed
- *  the sum. POST: +newAmount. DELETE: -oldAmount. PATCH (amount
- *  edit): newAmount - oldAmount. The helper derives previous
- *  sum from (newSum - deltaApplied) and only syncs if the
- *  previous actual_cost matched that. Result: legitimate user
- *  overrides survive transaction edits; no-override lines stay
- *  in lockstep with the sum.
+ *  Reads the flag from the row (migration 105). Replaces the
+ *  §A3 "previous actual matched previous sum" inference which
+ *  broke the create-then-add flow (typing $1000 in Actual,
+ *  then adding $1300 in transactions, looked like an override
+ *  but wasn't).
  *
- *  Called from the 3 transaction CRUD endpoints. Reorder doesn't
- *  call this (sort-order changes don't affect amounts). */
+ *  The `deltaApplied` parameter is kept in the signature so
+ *  the call sites in the 3 transaction CRUD endpoints don't
+ *  need a rewrite — it's used only to skip the work when the
+ *  write was a no-op (reorder etc.). The actual sync decision
+ *  is now flag-driven, not delta-driven.
+ *
+ *  The slide-over's "Sync to transactions sum" button is how
+ *  the user clears the override. */
 export async function syncActualCostIfNoOverride(
   supabase: SupabaseClient,
   lineItemId: string,
   deltaApplied: number,
 ): Promise<void> {
   if (deltaApplied === 0) return;
-  const aggregates = await fetchTransactionAggregates(supabase, [lineItemId]);
-  const newSum = aggregates.get(lineItemId)?.sum ?? 0;
-  const previousSum = newSum - deltaApplied;
   const { data: line } = await supabase
     .from('budget_line_items')
-    .select('actual_cost')
+    .select('actual_cost, actual_cost_override')
     .eq('id', lineItemId)
-    .maybeSingle<{ actual_cost: number | null }>();
+    .maybeSingle<{ actual_cost: number | null; actual_cost_override: boolean }>();
   if (!line) return;
-  const currentActual = Number(line.actual_cost ?? 0);
-  if (!numericEqual(currentActual, previousSum)) {
-    /* User had a manual override before this write — preserve
-       it. The slide-over surfaces the (now-shifted) Sync button
-       so the user can re-align manually if they want. */
+
+  const aggregates = await fetchTransactionAggregates(supabase, [lineItemId]);
+  const newCount = aggregates.get(lineItemId)?.count ?? 0;
+
+  /* §B0 spec: "cleared by deleting all transactions". The
+     override concept doesn't apply with zero transactions —
+     actual_cost is just whatever the user typed. Silently
+     clear a stale override flag here so the marker doesn't
+     keep rendering on a no-txn line. actual_cost itself is
+     preserved (deleting all txns shouldn't zero the user's
+     value). */
+  if (newCount === 0) {
+    if (line.actual_cost_override) {
+      await supabase
+        .from('budget_line_items')
+        .update({ actual_cost_override: false })
+        .eq('id', lineItemId);
+    }
     return;
   }
+
+  /* Explicit override — preserve actual_cost regardless of the
+     transaction change. The slide-over's Sync button is how
+     the user clears the override. */
+  if (line.actual_cost_override) return;
+
+  const newSum = aggregates.get(lineItemId)?.sum ?? 0;
+  if (numericEqual(Number(line.actual_cost ?? 0), newSum)) return;
   await supabase
     .from('budget_line_items')
     .update({ actual_cost: newSum })

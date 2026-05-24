@@ -68,6 +68,11 @@ type DraftFields = {
   quantity: number;
   proposed_cost: number;
   actual_cost: number;
+  /** Phase B §B0 — explicit override flag mirroring the row's
+   *  actual_cost_override column (migration 105). Diff'd against
+   *  the baseline so the PATCH only carries it when the user
+   *  changed override state. */
+  actual_cost_override: boolean;
   currency: string;
   status: string;
   notes: string;
@@ -103,6 +108,7 @@ function fieldsFromLine(line: BudgetLineItem, fallbackCurrency: string): DraftFi
     quantity: Number(line.quantity ?? 1),
     proposed_cost: Number(line.proposed_cost ?? 0),
     actual_cost: actualState.value,
+    actual_cost_override: actualState.isOverride,
     currency: (line.currency || fallbackCurrency).toUpperCase(),
     status: (line.status ?? 'draft').toString(),
     notes: isVendorPrefix ? rest.join('\n') : rawNotes,
@@ -136,6 +142,14 @@ function diffPatchPayload(
   if (current.quantity !== initial.quantity) out.quantity = current.quantity;
   if (current.proposed_cost !== initial.proposed_cost) out.proposed_cost = current.proposed_cost;
   if (current.actual_cost !== initial.actual_cost) out.actual_cost = current.actual_cost;
+  /* §B0 — explicit override flag. Only ship when it changes
+     so a quantity-only edit doesn't accidentally flip the
+     server flag. Slide-over edit handler computes the desired
+     flag from (txnCount, newValue, transactionSum) before
+     calling setField — see actualEditHandlers below. */
+  if (current.actual_cost_override !== initial.actual_cost_override) {
+    out.actual_cost_override = current.actual_cost_override;
+  }
   if (current.currency !== initial.currency) out.currency = current.currency;
   if (current.status !== initial.status) out.status = current.status;
   // Notes ↔ vendor: surface as `notes` because that's the underlying
@@ -201,20 +215,26 @@ export function BudgetLineSlideOver({
     );
   }, [fields.actual_cost, fields.proposed_cost]);
 
-  /* §A3 — derive the actual state from the LIVE fields draft so
-     the marker reacts to the user typing (live override
-     detection) without waiting for the next line prop refresh.
-     transaction_sum + transaction_count come from the line prop
-     (server-attached at page-fetch time, refreshed via
-     router.refresh() after any transaction CRUD below). */
+  /* §B0 — actualState reads the LIVE override flag from the
+     fields draft (which the actual-edit handler keeps in sync
+     with the value-vs-sum rule). transaction_sum +
+     transaction_count come from the line prop (server-attached
+     at page-fetch time, refreshed via router.refresh() after
+     any transaction CRUD below). */
   const actualState = useMemo(
     () =>
       getActualState({
         actual_cost: fields.actual_cost,
+        actual_cost_override: fields.actual_cost_override,
         transaction_sum: line.transaction_sum,
         transaction_count: line.transaction_count,
       }),
-    [fields.actual_cost, line.transaction_sum, line.transaction_count],
+    [
+      fields.actual_cost,
+      fields.actual_cost_override,
+      line.transaction_sum,
+      line.transaction_count,
+    ],
   );
 
   // Derived rows reject edits to label/cost/currency at the API level
@@ -333,6 +353,43 @@ export function BudgetLineSlideOver({
 
   const setField = <K extends keyof DraftFields>(key: K, value: DraftFields[K]) =>
     setFields((cur) => ({ ...cur, [key]: value }));
+
+  /* §B0 — edit handler for the ACTUAL field. Computes the
+     override flag per the spec rules in one atomic setFields
+     so the diff sender ships actual_cost + actual_cost_override
+     together (avoids a transient state where the value changed
+     but the flag hasn't caught up — would cause a brief
+     marker flicker).
+
+     Rules:
+       - 0 transactions: override concept doesn't apply; flag false.
+       - N>0 transactions AND newValue === sum: clear override.
+       - N>0 transactions AND newValue !== sum: set override. */
+  const applyActualEdit = (rawValue: number): void => {
+    setFields((cur) => {
+      const next: DraftFields = { ...cur, actual_cost: rawValue };
+      const sum = Number(line.transaction_sum ?? 0);
+      const count = Number(line.transaction_count ?? 0);
+      if (count === 0) {
+        next.actual_cost_override = false;
+      } else {
+        /* fixed-2 compare to match numericEqual on the server. */
+        next.actual_cost_override = rawValue.toFixed(2) !== sum.toFixed(2);
+      }
+      return next;
+    });
+  };
+
+  /* §B0 — Sync button: set actual_cost = transaction_sum AND
+     clear the override flag. Shipped as one PATCH via the
+     debounced auto-save. */
+  const applySyncToSum = (): void => {
+    setFields((cur) => ({
+      ...cur,
+      actual_cost: Number(line.transaction_sum ?? 0),
+      actual_cost_override: false,
+    }));
+  };
 
   const labelStyle: React.CSSProperties = {
     color: 'var(--lp-text-tertiary)',
@@ -538,7 +595,7 @@ export function BudgetLineSlideOver({
                   </span>
                   <button
                     type="button"
-                    onClick={() => setField('actual_cost', actualState.transactionSum)}
+                    onClick={applySyncToSum}
                     className="underline"
                     style={{
                       color: 'var(--color-lp-orange)',
@@ -556,9 +613,7 @@ export function BudgetLineSlideOver({
               type="number"
               step="0.01"
               value={fields.actual_cost}
-              onChange={(e) =>
-                setField('actual_cost', Number(e.target.value) || 0)
-              }
+              onChange={(e) => applyActualEdit(Number(e.target.value) || 0)}
               className="mt-1.5"
               style={{
                 ...inputStyle,
