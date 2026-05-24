@@ -39,10 +39,12 @@ import {
   X,
 } from 'lucide-react';
 import { BudgetLineSlideOver } from '@/components/budget/BudgetLineSlideOver';
+import { BudgetCellInput } from '@/components/budget/cells/BudgetCellInput';
 import { useToast } from '@/components/ui/Toast';
 import { convertToCurrency } from '@/lib/budget/fx';
 import { getEffectiveActual, getActualState } from '@/lib/budget/transactions';
 import { isIncomeRow, varianceColor } from '@/lib/budget/income-rows';
+import { isUx14DerivedBudgetLine } from '@/lib/budget/budgetUx14Derived';
 import { cn } from '@/lib/utils';
 import type { BudgetLineItem } from '@/types';
 import type { TourPhase, TourPhaseKey } from '@/server/budget/computeTourPhases';
@@ -402,6 +404,60 @@ export function BudgetSpreadsheetView({
     } as BudgetLineItem);
   };
 
+  /* §B1.5 — open the slide-over in create mode with section
+     + category pre-filled from the group the user clicked.
+     The global "Add line item" button still opens a
+     section-less new row. */
+  const handleAddToSection = (section: string | null, defaultCategory: string) => {
+    const now = new Date().toISOString();
+    setOpenLine({
+      id: `pending-section-${section ?? 'all'}-${Date.now()}`,
+      tour_id: tourId,
+      workspace_id: '',
+      category: defaultCategory,
+      label: '',
+      quantity: 1,
+      proposed_cost: 0,
+      actual_cost: 0,
+      currency: tourCurrency,
+      receipt_id: null,
+      routing_id: null,
+      notes: null,
+      order_index: 0,
+      section: section ?? undefined,
+      created_at: now,
+      updated_at: now,
+    } as BudgetLineItem);
+  };
+
+  /* §B1.2 — inline-edit commit handler. Used by Proposed +
+     Actual cell edits in the grid. Fire-and-refresh; toast on
+     failure. router.refresh re-fetches the page so the auto-
+     synced actual_cost + override flag come back fresh. */
+  const commitLineEdit = async (
+    id: string,
+    patch: Record<string, unknown>,
+  ): Promise<void> => {
+    try {
+      const res = await fetch('/api/budget/line-items', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, ...patch }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        showToast(body.error ?? 'Save failed', 'error');
+        return;
+      }
+      router.refresh();
+    } catch (err) {
+      showToast(
+        err instanceof Error ? err.message : 'Save failed',
+        'error',
+      );
+    }
+  };
+
   const totalRowCount = filtered.length;
   let runningIndex = 0;
 
@@ -701,6 +757,8 @@ export function BudgetSpreadsheetView({
                     displayCurrency={displayCurrency}
                     gProposed={gProposed}
                     gActual={gActual}
+                    onCommitLine={commitLineEdit}
+                    onAddRowToSection={handleAddToSection}
                   />
                 );
               })
@@ -919,6 +977,12 @@ interface GroupRowsProps {
   runningStart: number;
   bumpRunning: (n: number) => void;
   selectedIds: string[];
+  /** §B1.2 — inline-edit commit. Caller wraps the network
+   *  write + toast + router.refresh. */
+  onCommitLine: (id: string, patch: Record<string, unknown>) => Promise<void>;
+  /** §B1.5 — open create slide with section + category
+   *  pre-filled from this group's row context. */
+  onAddRowToSection: (section: string | null, defaultCategory: string) => void;
   setSelectedIds: (ids: string[]) => void;
   onOpenLine: (line: BudgetLineItem) => void;
   duplicateMap?: Record<string, string[]>;
@@ -940,6 +1004,8 @@ function GroupRows({
   displayCurrency,
   gProposed,
   gActual,
+  onCommitLine,
+  onAddRowToSection,
 }: GroupRowsProps) {
   const gDelta = gActual - gProposed;
   /* §B1.3 — group total inherits income semantics when every
@@ -1145,7 +1211,27 @@ function GroupRows({
                 : '—'}
             </Td>
             <Td align="right" className="lp-mono" style={{ color: 'var(--lp-text)' }}>
-              {formatCurrency(proposed, displayCurrency)}
+              {/* §B1.2 — inline-edit Proposed. Derived rows
+                  (flight / hotel / gear-link) are read-only;
+                  the slide-over surfaces a hint for those. */}
+              <BudgetCellInput
+                value={Number(row.proposed_cost ?? 0)}
+                currency={(row.currency || tourCurrency).toUpperCase()}
+                formatDisplay={(n) =>
+                  formatCurrency(
+                    convertToCurrency(
+                      n,
+                      (row.currency || tourCurrency).toUpperCase(),
+                      displayCurrency,
+                    ),
+                    displayCurrency,
+                  )
+                }
+                onCommit={(next) =>
+                  void onCommitLine(row.id, { proposed_cost: next })
+                }
+                readOnly={isUx14DerivedBudgetLine(row)}
+              />
             </Td>
             <Td
               align="right"
@@ -1156,35 +1242,73 @@ function GroupRows({
                 fontWeight: 500,
               }}
             >
-              <span className="inline-flex items-center justify-end gap-1">
-                {isOverride ? (
-                  <span
-                    aria-label={`Manual override — does not match transactions sum (${actualState.transactionSum.toFixed(2)})`}
-                    title={`Manual override — does not match transactions sum (${actualState.transactionSum.toFixed(2)})`}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      color: 'var(--color-lp-status-needs-review)',
-                    }}
-                  >
-                    <AlertTriangle className="h-3 w-3" aria-hidden />
-                  </span>
-                ) : null}
-                {hasMultiTxns ? (
-                  <span
-                    aria-label={`${txnCount} transactions — open detail to edit`}
-                    title={`${txnCount} transactions — open detail to edit`}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      color: 'var(--lp-text-tertiary)',
-                    }}
-                  >
-                    <Paperclip className="h-3 w-3" aria-hidden />
-                  </span>
-                ) : null}
-                {formatCurrency(actual, displayCurrency)}
-              </span>
+              {/* §B1.2 — inline-edit Actual with §B0 override
+                  rules. The displayPrefix slot carries the
+                  override + multi-txn indicators so they
+                  render in front of the editable value (and
+                  disappear cleanly during edit mode since the
+                  input takes the full cell width). */}
+              <BudgetCellInput
+                value={Number(actualState.value ?? 0)}
+                currency={(row.currency || tourCurrency).toUpperCase()}
+                formatDisplay={(n) =>
+                  formatCurrency(
+                    convertToCurrency(
+                      n,
+                      (row.currency || tourCurrency).toUpperCase(),
+                      displayCurrency,
+                    ),
+                    displayCurrency,
+                  )
+                }
+                onCommit={(next) => {
+                  /* §B0 flag rules: 0 txns → no override.
+                     N>0 + value===sum → clear. N>0 + value!==sum
+                     → set. Same logic as the slide-over's
+                     applyActualEdit. */
+                  const patch: Record<string, unknown> = { actual_cost: next };
+                  if (txnCount === 0) {
+                    patch.actual_cost_override = false;
+                  } else {
+                    const sumStr = actualState.transactionSum.toFixed(2);
+                    patch.actual_cost_override = next.toFixed(2) !== sumStr;
+                  }
+                  void onCommitLine(row.id, patch);
+                }}
+                readOnly={isUx14DerivedBudgetLine(row)}
+                displayPrefix={
+                  <>
+                    {isOverride ? (
+                      <span
+                        aria-label={`Manual override — does not match transactions sum (${actualState.transactionSum.toFixed(2)})`}
+                        title={`Manual override — does not match transactions sum (${actualState.transactionSum.toFixed(2)})`}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          color: 'var(--color-lp-status-needs-review)',
+                          marginRight: 4,
+                        }}
+                      >
+                        <AlertTriangle className="h-3 w-3" aria-hidden />
+                      </span>
+                    ) : null}
+                    {hasMultiTxns ? (
+                      <span
+                        aria-label={`${txnCount} transactions — open detail to edit`}
+                        title={`${txnCount} transactions — open detail to edit`}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          color: 'var(--lp-text-tertiary)',
+                          marginRight: 4,
+                        }}
+                      >
+                        <Paperclip className="h-3 w-3" aria-hidden />
+                      </span>
+                    ) : null}
+                  </>
+                }
+              />
             </Td>
             <Td align="right" className="lp-mono">
               {v.pct === null ? (
@@ -1241,6 +1365,57 @@ function GroupRows({
           </tr>
         );
       })}
+
+      {/* §B1.5 — per-section "+ Add row" affordance. Inherits
+          section + category from the group's first row so the
+          new line lands in the right bucket. Muted styling
+          (matches the spec — discoverable, not noisy). The
+          global "Add line item" button at the top stays for
+          users who want to add a line without committing to a
+          section yet. */}
+      {(() => {
+        const firstRow = group.rows[0];
+        if (!firstRow) return null;
+        const section = (firstRow.section ?? null) as string | null;
+        const defaultCategory = (firstRow.category ?? 'production').toString();
+        return (
+          <tr>
+            <td
+              colSpan={12}
+              style={{
+                padding: '4px 12px',
+                background: 'var(--lp-bg)',
+                borderBottom: '1px solid var(--lp-border-subtle)',
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => onAddRowToSection(section, defaultCategory)}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  fontSize: '11px',
+                  color: 'var(--lp-text-tertiary)',
+                  background: 'transparent',
+                  border: 0,
+                  padding: '2px 0',
+                  cursor: 'pointer',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.color = 'var(--color-lp-orange)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.color = 'var(--lp-text-tertiary)';
+                }}
+              >
+                <Plus className="h-3 w-3" aria-hidden />
+                Add row to {group.label.toLowerCase()}
+              </button>
+            </td>
+          </tr>
+        );
+      })()}
     </>
   );
 }
