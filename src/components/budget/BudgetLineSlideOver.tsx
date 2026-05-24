@@ -17,13 +17,15 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2 } from 'lucide-react';
+import { AlertTriangle, Loader2 } from 'lucide-react';
 import { SlideOver } from '@/components/shell/SlideOver';
 import { useToast } from '@/components/ui/Toast';
 import {
   isUx14DerivedBudgetLine,
   ux14BudgetLineDerivedHint,
 } from '@/lib/budget/budgetUx14Derived';
+import { TransactionsSection } from '@/components/budget/TransactionsSection';
+import { getActualState } from '@/lib/budget/transactions';
 import type { BudgetLineItem } from '@/types';
 
 // Status enum MUST match /api/budget/line-items PATCH validation.
@@ -87,6 +89,12 @@ function fieldsFromLine(line: BudgetLineItem, fallbackCurrency: string): DraftFi
   const [maybeVendor, ...rest] = rawNotes.split('\n');
   const isVendorPrefix =
     maybeVendor.startsWith('Vendor: ') && maybeVendor.length < 80;
+  /* §A3 — pull the displayed actual from getActualState so the
+     field reflects the effective value (sum when no override,
+     override when set). value === actual_cost after the
+     server-side auto-sync; the helper just keeps the rule in
+     one place. */
+  const actualState = getActualState(line);
   return {
     label: line.label ?? '',
     category: (line.category ?? '').toString(),
@@ -94,7 +102,7 @@ function fieldsFromLine(line: BudgetLineItem, fallbackCurrency: string): DraftFi
     vendor: isVendorPrefix ? maybeVendor.slice('Vendor: '.length) : '',
     quantity: Number(line.quantity ?? 1),
     proposed_cost: Number(line.proposed_cost ?? 0),
-    actual_cost: Number(line.actual_cost ?? 0),
+    actual_cost: actualState.value,
     currency: (line.currency || fallbackCurrency).toUpperCase(),
     status: (line.status ?? 'draft').toString(),
     notes: isVendorPrefix ? rest.join('\n') : rawNotes,
@@ -192,6 +200,22 @@ export function BudgetLineSlideOver({
       100
     );
   }, [fields.actual_cost, fields.proposed_cost]);
+
+  /* §A3 — derive the actual state from the LIVE fields draft so
+     the marker reacts to the user typing (live override
+     detection) without waiting for the next line prop refresh.
+     transaction_sum + transaction_count come from the line prop
+     (server-attached at page-fetch time, refreshed via
+     router.refresh() after any transaction CRUD below). */
+  const actualState = useMemo(
+    () =>
+      getActualState({
+        actual_cost: fields.actual_cost,
+        transaction_sum: line.transaction_sum,
+        transaction_count: line.transaction_count,
+      }),
+    [fields.actual_cost, line.transaction_sum, line.transaction_count],
+  );
 
   // Derived rows reject edits to label/cost/currency at the API level
   // — surface that hint inline rather than letting the auto-save fail
@@ -480,7 +504,54 @@ export function BudgetLineSlideOver({
             />
           </label>
           <label className="block">
-            <span style={labelStyle}>Actual</span>
+            <span
+              style={labelStyle}
+              className="flex items-center justify-between gap-2"
+            >
+              <span>Actual</span>
+              {/* §A3 — override marker + one-click Sync. Shown
+                  only when transactions exist AND the displayed
+                  value diverges from their sum. Clicking Sync
+                  pushes the txn sum into the field, which the
+                  debounced auto-save sends as actual_cost
+                  PATCH — clearing the override. */}
+              {actualState.isOverride ? (
+                <span
+                  className="inline-flex items-center gap-1.5"
+                  style={{ fontSize: '10px' }}
+                >
+                  <span
+                    title={`Manual override — does not match transactions sum (${actualState.transactionSum.toFixed(2)})`}
+                    aria-label="Manual override"
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      color: 'var(--color-lp-status-needs-review)',
+                      fontWeight: 600,
+                      textTransform: 'none',
+                      letterSpacing: 0,
+                    }}
+                  >
+                    <AlertTriangle className="h-3 w-3" aria-hidden />
+                    Override
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setField('actual_cost', actualState.transactionSum)}
+                    className="underline"
+                    style={{
+                      color: 'var(--color-lp-orange)',
+                      fontWeight: 500,
+                      textTransform: 'none',
+                      letterSpacing: 0,
+                    }}
+                  >
+                    Sync to {actualState.transactionSum.toFixed(2)}
+                  </button>
+                </span>
+              ) : null}
+            </span>
             <input
               type="number"
               step="0.01"
@@ -489,7 +560,15 @@ export function BudgetLineSlideOver({
                 setField('actual_cost', Number(e.target.value) || 0)
               }
               className="mt-1.5"
-              style={inputStyle}
+              style={{
+                ...inputStyle,
+                /* Slight orange-tinted border when override is
+                   active so the field reads as "modified" even
+                   without scrolling to the marker. */
+                borderColor: actualState.isOverride
+                  ? 'var(--color-lp-status-needs-review)'
+                  : (inputStyle as { borderColor?: string }).borderColor,
+              }}
             />
           </label>
         </div>
@@ -557,6 +636,23 @@ export function BudgetLineSlideOver({
             style={{ ...inputStyle, resize: 'vertical' }}
           />
         </label>
+
+        {/* Budget Phase A §A1 — vendor-breakdown transactions.
+            Only mount once the row exists server-side; create
+            mode has a pending- prefixed id with no transactions
+            to load.
+            §A3 — onChange triggers router.refresh() so the
+            slide-over's `line` prop refetches after every txn
+            write. The new prop value carries the
+            auto-synced actual_cost + updated transaction_sum,
+            which re-derives the override marker. */}
+        {!isCreate && (
+          <TransactionsSection
+            lineItemId={line.id}
+            currency={line.currency ?? null}
+            onChange={() => router.refresh()}
+          />
+        )}
 
         <div
           className="flex items-center justify-between gap-3 border-t pt-4"

@@ -41,6 +41,7 @@ import {
 import { BudgetLineSlideOver } from '@/components/budget/BudgetLineSlideOver';
 import { useToast } from '@/components/ui/Toast';
 import { convertToCurrency } from '@/lib/budget/fx';
+import { getEffectiveActual, getActualState } from '@/lib/budget/transactions';
 import { cn } from '@/lib/utils';
 import type { BudgetLineItem } from '@/types';
 import type { TourPhase, TourPhaseKey } from '@/server/budget/computeTourPhases';
@@ -152,8 +153,11 @@ function variance(line: BudgetLineItem, displayCurrency: string, tourCurrency: s
     cur,
     displayCurrency,
   );
+  /* Budget Phase A §A2 — effective actual = sum of
+     budget_line_item_transactions when present, else
+     actual_cost fallback (§A1 derivation rule). */
   const actual = convertToCurrency(
-    Number(line.actual_cost ?? 0),
+    getEffectiveActual(line),
     cur,
     displayCurrency,
   );
@@ -345,7 +349,7 @@ export function BudgetSpreadsheetView({
         displayCurrency,
       );
       actual += convertToCurrency(
-        Number(line.actual_cost ?? 0),
+        getEffectiveActual(line),
         cur,
         displayCurrency,
       );
@@ -675,7 +679,7 @@ export function BudgetSpreadsheetView({
                     displayCurrency,
                   );
                   gActual += convertToCurrency(
-                    Number(r.actual_cost ?? 0),
+                    getEffectiveActual(r),
                     cur,
                     displayCurrency,
                   );
@@ -1010,10 +1014,22 @@ function GroupRows({
           displayCurrency,
         );
         const actual = convertToCurrency(
-          Number(row.actual_cost ?? 0),
+          getEffectiveActual(row),
           cur,
           displayCurrency,
         );
+        /* Budget Phase A §A2 — indicator next to the Actual cell
+           when 2+ transactions exist. Signals "click the row to
+           open the slide-over to edit the breakdown" since the
+           grid cell renders the sum of all transactions.
+           §A3 — separate override marker when actual_cost
+           diverges from the transaction sum. Both indicators
+           can render together (e.g., a 3-txn line with a manual
+           override active). */
+        const actualState = getActualState(row);
+        const txnCount = actualState.transactionCount;
+        const hasMultiTxns = txnCount >= 2;
+        const isOverride = actualState.isOverride;
         const v = variance(row, displayCurrency, tourCurrency);
         const isOver = v.delta > 0;
         const isUnder = v.delta < 0;
@@ -1137,7 +1153,35 @@ function GroupRows({
                 fontWeight: 500,
               }}
             >
-              {formatCurrency(actual, displayCurrency)}
+              <span className="inline-flex items-center justify-end gap-1">
+                {isOverride ? (
+                  <span
+                    aria-label={`Manual override — does not match transactions sum (${actualState.transactionSum.toFixed(2)})`}
+                    title={`Manual override — does not match transactions sum (${actualState.transactionSum.toFixed(2)})`}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      color: 'var(--color-lp-status-needs-review)',
+                    }}
+                  >
+                    <AlertTriangle className="h-3 w-3" aria-hidden />
+                  </span>
+                ) : null}
+                {hasMultiTxns ? (
+                  <span
+                    aria-label={`${txnCount} transactions — open detail to edit`}
+                    title={`${txnCount} transactions — open detail to edit`}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      color: 'var(--lp-text-tertiary)',
+                    }}
+                  >
+                    <Paperclip className="h-3 w-3" aria-hidden />
+                  </span>
+                ) : null}
+                {formatCurrency(actual, displayCurrency)}
+              </span>
             </Td>
             <Td align="right" className="lp-mono">
               {v.pct === null ? (

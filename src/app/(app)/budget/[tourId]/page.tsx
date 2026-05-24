@@ -35,6 +35,7 @@ import { BudgetExportControls } from '@/components/budget/BudgetExportControls';
 // server→client function-call boundary).
 import { BudgetTabNav } from '@/components/budget/BudgetTabNav';
 import { resolveBudgetTab } from '@/components/budget/budget-tab-utils';
+import { enrichLinesWithTransactionAggregates } from '@/lib/budget/transactions';
 import { BudgetSummaryTab } from '@/components/budget/BudgetSummaryTab';
 import { BudgetTabPlaceholder } from '@/components/budget/BudgetTabPlaceholder';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
@@ -121,7 +122,15 @@ export default async function BudgetTourPage({
     startIso: p.startDate,
   }));
   const tourCurrency = (tour.currency as string | null) ?? 'GBP';
-  const lines: BudgetLineItem[] = (lineItemsRes.data ?? []) as BudgetLineItem[];
+  /* Budget Phase A §A2 — enrich every line with effective_actual_cost
+     + transaction_count. Sum of transactions overrides actual_cost
+     when present (§A1 derivation rule). One extra round-trip; cheap
+     because we only fetch (line_item_id, amount). */
+  const rawLines = (lineItemsRes.data ?? []) as BudgetLineItem[];
+  const lines: BudgetLineItem[] = await enrichLinesWithTransactionAggregates(
+    supabase,
+    rawLines,
+  );
   const routingDateById: Record<string, string> = {};
   for (const r of (routingRes.data ?? []) as Array<{
     id: string;
@@ -170,15 +179,10 @@ export default async function BudgetTourPage({
             </>
           ) : null}
 
-          {tab === 'actuals' ? (
-            <BudgetTabPlaceholder
-              subtitle="Budget · actuals"
-              title="Actuals"
-              body="A filtered view of paid + closed line items, with per-show actuals tied back to estimates. Ships in a follow-up sprint. For now, switch to the Budget tab and filter by status = paid."
-              linkLabel="Open Budget tab"
-              linkHref={`/budget/${tourId}?tab=budget`}
-            />
-          ) : null}
+          {/* Budget Phase A §A2 — Actuals tab removed; the
+              Budget grid now shows Proposed / Actual / Variance
+              per row + per-section + tour-wide. Stale ?tab=actuals
+              URLs resolve to 'summary' via resolveBudgetTab. */}
 
           {tab === 'reports' ? (
             <BudgetTabPlaceholder
