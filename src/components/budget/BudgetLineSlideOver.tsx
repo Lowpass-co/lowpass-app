@@ -26,6 +26,7 @@ import {
 } from '@/lib/budget/budgetUx14Derived';
 import { TransactionsSection } from '@/components/budget/TransactionsSection';
 import { CurrencyNumericInput } from '@/components/budget/cells/CurrencyNumericInput';
+import { CategoryChipDropdown } from '@/components/budget/cells/CategoryChip';
 import { getActualState } from '@/lib/budget/transactions';
 import { isIncomeRow, varianceColor } from '@/lib/budget/income-rows';
 import type { BudgetLineItem } from '@/types';
@@ -46,20 +47,9 @@ const CURRENCY_OPTIONS = ['GBP', 'USD', 'EUR', 'CAD', 'AUD'] as const;
 
 // Curated category list. Free-text inputs are still allowed for
 // existing rows whose category isn't in the list — those render as
-// a one-off option at the top of the dropdown so the row's current
-// value isn't silently overwritten on save.
-const CATEGORY_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
-  { value: 'production', label: 'Production' },
-  { value: 'logistics', label: 'Logistics' },
-  { value: 'travel', label: 'Travel' },
-  { value: 'crew', label: 'Crew' },
-  { value: 'accommodation', label: 'Accommodation' },
-  { value: 'catering', label: 'Catering' },
-  { value: 'marketing', label: 'Marketing' },
-  { value: 'insurance', label: 'Insurance' },
-  { value: 'contingency', label: 'Contingency' },
-  { value: 'misc', label: 'Misc' },
-];
+/* §B3.1 — CATEGORY_OPTIONS list retired here; canonical
+   source is now lib/budget/category-colors.ts (used by
+   <CategoryChipDropdown>). */
 
 type DraftFields = {
   label: string;
@@ -459,17 +449,9 @@ export function BudgetLineSlideOver({
     </>
   );
 
-  // If the row's current category isn't in the curated list (legacy
-  // values like prod_audio, transport_taxis), include it as a one-off
-  // option so saving doesn't silently change it to a curated value.
-  const categoryOptions = useMemo(() => {
-    const cur = (fields.category || '').trim();
-    if (!cur || CATEGORY_OPTIONS.some((o) => o.value === cur)) return CATEGORY_OPTIONS;
-    return [
-      { value: cur, label: `${cur} (custom)` },
-      ...CATEGORY_OPTIONS,
-    ];
-  }, [fields.category]);
+  /* §B3.1 — categoryOptions memo retired with the select.
+     <CategoryChipDropdown> handles the (custom) legacy-value
+     surfacing internally via lib/budget/category-colors. */
 
   return (
     <SlideOver
@@ -525,18 +507,17 @@ export function BudgetLineSlideOver({
         <div className="grid grid-cols-3 gap-3">
           <label className="block">
             <span style={labelStyle}>Category</span>
-            <select
-              value={fields.category || 'misc'}
-              onChange={(e) => setField('category', e.target.value)}
-              className="mt-1.5"
-              style={inputStyle}
-            >
-              {categoryOptions.map((c) => (
-                <option key={c.value} value={c.value}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
+            {/* §B3.1 — chip + dropdown replaces the plain
+                select. Legacy / custom categories surface at
+                the top of the menu as "(custom)" options so
+                the row's stored value isn't clobbered. */}
+            <div className="mt-1.5">
+              <CategoryChipDropdown
+                value={fields.category || 'misc'}
+                onChange={(v) => setField('category', v)}
+                size="md"
+              />
+            </div>
           </label>
           <label className="block">
             {/* Phase 3 §D — phase tag dropdown. '' (Unscoped) maps

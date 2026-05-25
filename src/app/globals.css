@@ -56,6 +56,25 @@
   --color-lp-budget-card: var(--lp-budget-card-bg);
   --color-lp-budget-card-border: var(--lp-budget-card-border);
 
+  /* Budget category palette (Phase B §B3.1)
+     One token per canonical Lowpass category (10 values).
+     Used by the CategoryChip cell + future per-category
+     surfaces. Picked to be tonally distinct in both light
+     and dark UI; values chosen for ~similar perceived
+     saturation. Foreground (chip text) is the full hex;
+     background and border tint via color-mix() at the
+     consumer. */
+  --color-lp-cat-production: #FF4500;
+  --color-lp-cat-logistics: #B45309;
+  --color-lp-cat-travel: #3B82F6;
+  --color-lp-cat-crew: #8B5CF6;
+  --color-lp-cat-accommodation: #0EA5E9;
+  --color-lp-cat-catering: #10B981;
+  --color-lp-cat-marketing: #EC4899;
+  --color-lp-cat-insurance: #6B7280;
+  --color-lp-cat-contingency: #EF4444;
+  --color-lp-cat-misc: #94A3B8;
+
   /* Day type colours (matching Daysheets style) */
   --color-lp-day-show: #10B981;
   --color-lp-day-off: #6B7280;
