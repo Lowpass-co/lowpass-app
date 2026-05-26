@@ -1,78 +1,20 @@
 /* ============================================
-   LOWPASS — Account · Rental (Phase 1 §D placeholder)
+   LOWPASS — /account/rental → /equipment redirect
+   (IA Cleanup §I4.2)
 
-   Per Adam's migration-map decision #3: per-user rental business
-   lives at the account level — not the workspace level. Accessed
-   via the avatar dropdown alongside Settings + Bug reports, not
-   from the four-product rail.
+   Phase 1 §D's "per-user rental" decision was reversed by
+   Sprint 12 §1 (migration 095 — rental_inventory +
+   rental_jobs scoped back to workspace). The canonical
+   rental surface is /equipment, now a workspace dashboard
+   tab via §I3. /account/rental survives only as a
+   permanent redirect so stale bookmarks land cleanly.
 
-   Phase 1 ships an empty placeholder. Future phases bring in the
-   gear/equipment management UI from src/components/equipment/*
-   (currently mounted at /equipment, which gets folded here per
-   decision #13).
+   The avatar-dropdown entry that linked here is removed in
+   the same §I4 commit.
    ============================================ */
 
-import { listAppPageShell } from '@/components/shell/app-page-shells';
+import { redirect } from 'next/navigation';
 
-export default function AccountRentalPage() {
-  return listAppPageShell(
-    <div className="mx-auto max-w-3xl space-y-4 py-6">
-      <header>
-        <p
-          style={{
-            fontSize: '11px',
-            fontWeight: 600,
-            letterSpacing: '0.1em',
-            textTransform: 'uppercase',
-            color: 'var(--lp-text-tertiary)',
-          }}
-        >
-          Account · per-user feature
-        </p>
-        <h1
-          style={{
-            fontSize: '20px',
-            fontWeight: 600,
-            lineHeight: 1.2,
-            color: 'var(--lp-text)',
-          }}
-        >
-          Rental
-        </h1>
-      </header>
-      <div
-        className="rounded-lg border p-5"
-        style={{
-          borderColor: 'var(--lp-border-strong)',
-          background: 'var(--lp-surface)',
-        }}
-      >
-        <p
-          style={{
-            fontSize: '13px',
-            color: 'var(--lp-text-secondary)',
-            lineHeight: 1.5,
-          }}
-        >
-          Per-user rental business management. Inventory, rate cards,
-          customer history, and rental quotes will live here. Migrated
-          out of the workspace-level <code>/equipment</code> route per
-          Adam&apos;s decision #3 — rental is a personal feature, not
-          a tour-management surface.
-        </p>
-        <p
-          className="mt-3"
-          style={{
-            fontSize: '12px',
-            color: 'var(--lp-text-tertiary)',
-            lineHeight: 1.5,
-          }}
-        >
-          Scaffolded in Phase 1. Real UI lands when the rental product
-          is greenlit — until then this route exists for stable links
-          from the avatar dropdown.
-        </p>
-      </div>
-    </div>,
-  );
+export default function AccountRentalPage(): never {
+  redirect('/equipment');
 }

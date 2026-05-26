@@ -33,7 +33,19 @@ import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 import { ArtistTourSwitcherClientWrapper } from './ArtistTourSwitcherClientWrapper';
 import { ConnectionIndicator } from '@/components/realtime/ConnectionIndicator';
 
-export type ProductName = 'Home' | 'Operations' | 'Budget' | 'Advance';
+/* IA Cleanup §I4 — neutral-chrome surfaces (Settings, Venues,
+ * Bugs) reuse ProductShell with active=null. They surface
+ * their own display name here ("Settings" / "Venues" / "Bug
+ * reports") so the header still reads as the user's
+ * destination. */
+export type ProductName =
+  | 'Home'
+  | 'Operations'
+  | 'Budget'
+  | 'Advance'
+  | 'Settings'
+  | 'Venues'
+  | 'Bug reports';
 
 interface ProductHeaderProps {
   productName: ProductName;

@@ -76,14 +76,56 @@ The "Adam pastes SQL by hand into Supabase SQL Editor" workflow is retired excep
 
 For transparent variants of brand orange, use **hex+alpha** (`#FF45001a`) or `color-mix(in srgb, var(--lp-orange) X%, transparent)` — never JS string concatenation of CSS vars (`'var(--lp-orange)' + '1a'`) — that breaks at runtime.
 
-### Page archetypes — two shells coexist during the Product Split
+### Two-tier IA + chrome (post IA Cleanup sprint)
 
-Two shell systems are both load-bearing right now:
+Canonical hierarchy:
 
-- **`<PageShell>` (shell-v1, UX02-era)** — the original archetype-based shell. Five archetypes: `list | spreadsheet | dashboard | document | builder`. Used by ~44 pages: workspace-level surfaces (Personnel, Templates, Venues, Bug Reports), legacy `/tours/[id]/*` (unreachable via redirects but still mounted on disk), and the old query-string `/budget?tour_id=` surface.
-- **`<ProductShell>` (shell-v2, Product Split)** — the new product-prefixed shell with `ProductRail` + `ProductHeader`. Used by ~17 pages: `/artists/[id]` (Home), `/operations/[tourId]/*`, `/budget/[tourId]/*`, `/advance/[tourId]/*`. Wraps in `ProductProvider` so `useProductContext()` works.
+```
+Tier 1 — Workspace (no tour context)
+  /artists      ← workspace dashboard, Artists tab (default)
+  /personnel    ← workspace dashboard, Personnel tab
+  /equipment    ← workspace dashboard, Equipment tab
+  /settings     ← gear icon + avatar dropdown
+  /venues       ← avatar dropdown
+  /bugs         ← avatar dropdown (admin)
 
-Phase 4 (Operations migration) ports the rest. Until then: new pages under `/operations/`, `/budget/`, `/advance/`, `/artists/[id]` use `ProductShell`. Anything else uses `PageShell`. Don't invent a third.
+Tier 2 — Artist (one artist, multiple tours)
+  /artists/[id]                       ← artist home
+  /artists/[id]/(library)/*           ← artist library surfaces
+
+Tier 3 — Tour (one tour, multiple shows)
+  /operations/[tourId]/*    ← Operations product
+  /budget/[tourId]/*        ← Budget product
+  /advance/[tourId]/[routingId]
+```
+
+The three workspace tabs share chrome via the `(workspace)`
+route group at `src/app/(app)/(workspace)/`. Layout
+(`(workspace)/layout.tsx`) mounts `WorkspaceTopBar` +
+`WorkspaceTabs`. NO `ProductRail` on the workspace tier.
+
+Artist + tour tiers use `<ProductShell>` (shell-v2:
+`ProductRail` + `ProductHeader`). Settings / Venues / Bugs
+also use `ProductShell` but with `active={null}` — the rail
+renders without any product highlighted.
+
+**Adding a new surface:**
+- **Workspace tab** (sibling of Artists / Personnel /
+  Equipment): create `src/app/(app)/(workspace)/<name>/page.tsx`
+  and add the tab entry to `WorkspaceTabs.tsx`. Chrome
+  inherits.
+- **Tour-scoped product page**: mount under `/operations/`,
+  `/budget/`, or `/advance/` with `<ProductShell active="…">`.
+- **Neutral surface** (settings-adjacent / admin /
+  low-traffic): `<ProductShell active={null} productName="…">`.
+- Don't add to shell-v1 (`<PageShell>` / `listAppPageShell`)
+  for anything new.
+
+**Shell-v1 (`src/components/shell/*`) is scoped to:** auth
+flows, public share / intake pages, a few unmigrated
+mobile / legacy surfaces. New code should not use it.
+
+See `docs/handover/IA_HIERARCHY.md` for the full reference.
 
 ### Component primitives
 

@@ -26,7 +26,12 @@ import {
 import { useEntitlements } from '@/lib/entitlements';
 import { useArtistTourContext } from '@/contexts/ArtistTourContext';
 
-export type ProductRailActive = 'home' | 'operations' | 'budget' | 'advance';
+/* IA Cleanup §I4 — `null` is the "neutral chrome" state used
+ * by Settings / Venues / Bugs. ProductShell still renders the
+ * rail so users have one-click jump-back navigation, but no
+ * rail item is highlighted (none of the four products is the
+ * caller's surface). */
+export type ProductRailActive = 'home' | 'operations' | 'budget' | 'advance' | null;
 
 interface ProductDef {
   key: ProductRailActive;

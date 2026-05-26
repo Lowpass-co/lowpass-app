@@ -1,13 +1,24 @@
+/* ============================================
+   LOWPASS — /settings (IA Cleanup §I4.1)
+
+   Workspace settings root. Migrated from shell-v1 PageShell
+   to ProductShell with active=null per the two-tier IA — no
+   product is the destination, but ProductRail stays visible
+   so users get one-click jump-back. Reachable from:
+     - WorkspaceTopBar avatar dropdown
+     - ProductRail bottom gear icon (artist + tour tiers)
+   ============================================ */
+
 import { getUserAndAdminStatus } from '@/lib/site-admin';
-import { listAppPageShell } from '@/components/shell/app-page-shells';
+import { ProductShell } from '@/components/shell-v2';
 import { SiteAdminsCard } from '@/components/settings/SiteAdminsCard';
 import { SettingsSubNav } from '@/components/settings/SettingsSubNav';
 
 export default async function SettingsPage() {
   const { user, isAdmin } = await getUserAndAdminStatus();
 
-  return listAppPageShell(
-    <>
+  return (
+    <ProductShell active={null} artistId={null} productName="Settings">
       <SettingsSubNav pathname="/settings" />
       <div
         className="mx-auto w-full max-w-3xl"
@@ -26,6 +37,6 @@ export default async function SettingsPage() {
           </div>
         )}
       </div>
-    </>
+    </ProductShell>
   );
 }

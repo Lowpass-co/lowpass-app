@@ -20,7 +20,6 @@ import {
   Building2,
   Bug,
   LogOut,
-  Package,
   Settings,
   SunMoon,
   Users,
@@ -189,12 +188,11 @@ export function ProductHeaderAvatarMenu({
             Icon={Building2}
             onClose={close}
           />
-          <MenuLink
-            href="/account/rental"
-            label="Rental"
-            Icon={Package}
-            onClose={close}
-          />
+          {/* IA Cleanup §I4 — Rental entry retired.
+              /account/rental is a permanent redirect to
+              /equipment, which is now a workspace dashboard
+              tab. Keeping the entry would duplicate the
+              tab nav. */}
 
           <div
             className="my-1"

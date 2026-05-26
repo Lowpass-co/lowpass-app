@@ -18,7 +18,8 @@
 
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-import { listAppPageShell } from '@/components/shell/app-page-shells';
+/* IA Cleanup §I4.1 — ProductShell with active=null. */
+import { ProductShell } from '@/components/shell-v2';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { MembersListClient } from '@/components/settings/members/MembersListClient';
 import { SettingsSubNav } from '@/components/settings/SettingsSubNav';
@@ -64,8 +65,8 @@ export default async function SettingsMembersPage() {
     workspaceName = (ws as { name?: string } | null)?.name ?? '';
   }
 
-  return listAppPageShell(
-    <>
+  return (
+    <ProductShell active={null} artistId={null} productName="Settings">
       <SettingsSubNav pathname="/settings/members" />
       <div
         className="mx-auto w-full"
@@ -139,6 +140,6 @@ export default async function SettingsMembersPage() {
         <MembersListClient currentUserId={user.id} />
       )}
       </div>
-    </>
+    </ProductShell>
   );
 }
