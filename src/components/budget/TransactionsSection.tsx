@@ -50,6 +50,8 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, Loader2, Paperclip, Plus, Trash2 } from 'lucide-react';
+import { budgetCurrencySymbol } from '@/lib/budget-currency';
+import { VendorCombobox } from '@/components/budget/cells/VendorCombobox';
 import type { BudgetLineItemTransaction } from '@/lib/budget/transactions';
 
 interface Props {
@@ -63,9 +65,20 @@ interface Props {
    *  transaction_sum. Without this the ACTUAL field stays
    *  stale and the override marker fails to update. */
   onChange?: () => void;
+  /** §B3.2 — parent line item's vendor (from notes encoding
+   *  "Vendor: <name>"). New transactions seed with this value;
+   *  the per-row VendorCombobox surfaces it at the top of the
+   *  autocomplete list. Empty string when the line has no
+   *  vendor set. */
+  defaultVendor?: string;
 }
 
-export function TransactionsSection({ lineItemId, currency, onChange }: Props) {
+export function TransactionsSection({
+  lineItemId,
+  currency,
+  onChange,
+  defaultVendor,
+}: Props) {
   const [rows, setRows] = useState<BudgetLineItemTransaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -111,7 +124,13 @@ export function TransactionsSection({ lineItemId, currency, onChange }: Props) {
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ vendor_name: 'New vendor', amount: 0 }),
+          /* §B3.2 — seed the new transaction's vendor with
+             the parent line's vendor when available. User
+             can override via the combobox before save. */
+          body: JSON.stringify({
+            vendor_name: (defaultVendor ?? '').trim() || 'New vendor',
+            amount: 0,
+          }),
         },
       );
       const json = (await res.json().catch(() => ({}))) as {
@@ -127,7 +146,7 @@ export function TransactionsSection({ lineItemId, currency, onChange }: Props) {
     } finally {
       setAdding(false);
     }
-  }, [lineItemId, onChange]);
+  }, [lineItemId, onChange, defaultVendor]);
 
   /* Single PATCH for inline edits — optimistic local update
      then network. On failure, refetch to converge. */
@@ -251,6 +270,7 @@ export function TransactionsSection({ lineItemId, currency, onChange }: Props) {
                   tourCurrency={tourCurrency}
                   onPatch={patchRow}
                   onDelete={deleteRow}
+                  defaultVendor={defaultVendor}
                 />
               ))}
             </SortableContext>
@@ -282,11 +302,15 @@ function TransactionRow({
   tourCurrency,
   onPatch,
   onDelete,
+  defaultVendor,
 }: {
   row: BudgetLineItemTransaction;
   tourCurrency: string;
   onPatch: (id: string, patch: Partial<BudgetLineItemTransaction>) => void;
   onDelete: (id: string) => void;
+  /** §B3.2 — parent line item's vendor, surfaced at the top
+   *  of the per-row VendorCombobox autocomplete list. */
+  defaultVendor?: string;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: row.id,
@@ -333,37 +357,64 @@ function TransactionRow({
           <GripVertical className="h-3.5 w-3.5" aria-hidden />
         </button>
 
-        <input
-          type="text"
+        {/* §B3.2 — VendorCombobox with parent-vendor + workspace
+            history autocomplete. Free-text typing still wins
+            (the dropdown is non-modal); selecting an option
+            commits via onChange. Commit-on-blur logic same as
+            before via onCommit + the wrapper effect below. */}
+        <VendorCombobox
           value={vendor}
-          onChange={(e) => setVendor(e.target.value)}
-          onBlur={() => {
-            const next = vendor.trim();
-            if (next && next !== row.vendor_name) onPatch(row.id, { vendor_name: next });
-            else if (!next) setVendor(row.vendor_name);
-          }}
+          onChange={(next) => setVendor(next)}
+          defaultVendor={defaultVendor}
           placeholder="Vendor"
-          className="min-w-0 rounded border border-transparent bg-transparent px-1.5 py-1 text-sm text-lp-text outline-none hover:border-lp-border focus:border-lp-orange/40 focus:bg-lp-surface"
+          ariaLabel="Vendor name"
+          onCommit={(committed) => {
+            /* committed comes from the combobox so option
+               picks ship the actual selected value (setState
+               on `vendor` is async — closure-reading would
+               miss the just-picked label). */
+            const next = committed.trim();
+            if (next && next !== row.vendor_name) {
+              onPatch(row.id, { vendor_name: next });
+            } else if (!next) {
+              setVendor(row.vendor_name);
+            }
+          }}
         />
 
-        <input
-          type="number"
-          step="0.01"
-          min="0"
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-          onBlur={() => {
-            const v = Number(amount);
-            if (!Number.isFinite(v) || v < 0) {
-              setAmount(String(row.amount ?? ''));
-              return;
-            }
-            if (v !== Number(row.amount)) onPatch(row.id, { amount: v });
-          }}
-          placeholder="0.00"
-          className="min-w-0 rounded border border-transparent bg-transparent px-1.5 py-1 text-right font-mono text-sm tabular-nums text-lp-text outline-none hover:border-lp-border focus:border-lp-orange/40 focus:bg-lp-surface"
-          aria-label={`Amount in ${displayCurrency}`}
-        />
+        {/* §B1.4 — currency-symbol prefix. Inlined here
+            (instead of the CurrencyNumericInput wrapper) so
+            the local string-state typing flow stays
+            unchanged — the wrapper coerces onChange to a
+            number, which breaks typing intermediate values
+            like "0.5". */}
+        <span className="relative inline-flex w-full items-center">
+          <span
+            aria-hidden
+            className="pointer-events-none absolute left-1.5 text-lp-text-tertiary"
+            style={{ fontSize: '11px' }}
+          >
+            {budgetCurrencySymbol(displayCurrency)}
+          </span>
+          <input
+            type="number"
+            step="0.01"
+            min="0"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            onBlur={() => {
+              const v = Number(amount);
+              if (!Number.isFinite(v) || v < 0) {
+                setAmount(String(row.amount ?? ''));
+                return;
+              }
+              if (v !== Number(row.amount)) onPatch(row.id, { amount: v });
+            }}
+            placeholder="0.00"
+            className="min-w-0 w-full rounded border border-transparent bg-transparent pl-5 pr-1.5 py-1 text-right font-mono text-sm tabular-nums text-lp-text outline-none hover:border-lp-border focus:border-lp-orange/40 focus:bg-lp-surface"
+            aria-label={`Amount in ${displayCurrency}`}
+          />
+        </span>
 
         <input
           type="date"

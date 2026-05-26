@@ -502,6 +502,11 @@ export interface BudgetLineItem {
    *  When ≥ 2 the Actual cell in the grid shows a "click
    *  slide-over to edit" indicator. */
   transaction_count?: number;
+  /** Budget Phase B §B0 (migration 105) — explicit flag set
+   *  when the user has typed an actual that should not
+   *  auto-sync to the transactions sum. Cleared by the "Sync
+   *  to transactions sum" button. Default false on all rows. */
+  actual_cost_override?: boolean;
   flight_id?: string | null;
   hotel_id?: string | null;
   room_id?: string | null;

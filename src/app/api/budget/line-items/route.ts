@@ -318,6 +318,10 @@ export async function PATCH(request: Request) {
     quantity?: number;
     proposed_cost?: number;
     actual_cost?: number;
+    /** Phase B §B0 — explicit override flag (migration 105).
+     *  Set true when the slide-over / grid Actual edit drifts
+     *  from the transactions sum; cleared by Sync. */
+    actual_cost_override?: boolean;
     currency?: string | null;
     routing_id?: string | null;
     notes?: string | null;
@@ -386,6 +390,15 @@ export async function PATCH(request: Request) {
   if (updates.quantity !== undefined) payload.quantity = updates.quantity;
   if (updates.proposed_cost !== undefined) payload.proposed_cost = updates.proposed_cost;
   if (updates.actual_cost !== undefined) payload.actual_cost = updates.actual_cost;
+  /* §B0 — explicit override flag. Independent of actual_cost
+     (caller can set either or both in the same PATCH; the
+     slide-over commits both atomically when "Sync to txns sum"
+     fires). The flag is not part of updatesDerivedFields above
+     because override semantics are user-intent, not amount
+     editing — derived rows are still allowed to toggle it. */
+  if (updates.actual_cost_override !== undefined) {
+    payload.actual_cost_override = Boolean(updates.actual_cost_override);
+  }
   if (updates.currency !== undefined) payload.currency = updates.currency;
   if (updates.routing_id !== undefined) payload.routing_id = updates.routing_id;
   if (updates.notes !== undefined) payload.notes = updates.notes;

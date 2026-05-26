@@ -25,7 +25,10 @@ import {
   ux14BudgetLineDerivedHint,
 } from '@/lib/budget/budgetUx14Derived';
 import { TransactionsSection } from '@/components/budget/TransactionsSection';
+import { CurrencyNumericInput } from '@/components/budget/cells/CurrencyNumericInput';
+import { CategoryChipDropdown } from '@/components/budget/cells/CategoryChip';
 import { getActualState } from '@/lib/budget/transactions';
+import { isIncomeRow, varianceColor } from '@/lib/budget/income-rows';
 import type { BudgetLineItem } from '@/types';
 
 // Status enum MUST match /api/budget/line-items PATCH validation.
@@ -44,20 +47,9 @@ const CURRENCY_OPTIONS = ['GBP', 'USD', 'EUR', 'CAD', 'AUD'] as const;
 
 // Curated category list. Free-text inputs are still allowed for
 // existing rows whose category isn't in the list — those render as
-// a one-off option at the top of the dropdown so the row's current
-// value isn't silently overwritten on save.
-const CATEGORY_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
-  { value: 'production', label: 'Production' },
-  { value: 'logistics', label: 'Logistics' },
-  { value: 'travel', label: 'Travel' },
-  { value: 'crew', label: 'Crew' },
-  { value: 'accommodation', label: 'Accommodation' },
-  { value: 'catering', label: 'Catering' },
-  { value: 'marketing', label: 'Marketing' },
-  { value: 'insurance', label: 'Insurance' },
-  { value: 'contingency', label: 'Contingency' },
-  { value: 'misc', label: 'Misc' },
-];
+/* §B3.1 — CATEGORY_OPTIONS list retired here; canonical
+   source is now lib/budget/category-colors.ts (used by
+   <CategoryChipDropdown>). */
 
 type DraftFields = {
   label: string;
@@ -68,6 +60,11 @@ type DraftFields = {
   quantity: number;
   proposed_cost: number;
   actual_cost: number;
+  /** Phase B §B0 — explicit override flag mirroring the row's
+   *  actual_cost_override column (migration 105). Diff'd against
+   *  the baseline so the PATCH only carries it when the user
+   *  changed override state. */
+  actual_cost_override: boolean;
   currency: string;
   status: string;
   notes: string;
@@ -103,6 +100,7 @@ function fieldsFromLine(line: BudgetLineItem, fallbackCurrency: string): DraftFi
     quantity: Number(line.quantity ?? 1),
     proposed_cost: Number(line.proposed_cost ?? 0),
     actual_cost: actualState.value,
+    actual_cost_override: actualState.isOverride,
     currency: (line.currency || fallbackCurrency).toUpperCase(),
     status: (line.status ?? 'draft').toString(),
     notes: isVendorPrefix ? rest.join('\n') : rawNotes,
@@ -136,6 +134,14 @@ function diffPatchPayload(
   if (current.quantity !== initial.quantity) out.quantity = current.quantity;
   if (current.proposed_cost !== initial.proposed_cost) out.proposed_cost = current.proposed_cost;
   if (current.actual_cost !== initial.actual_cost) out.actual_cost = current.actual_cost;
+  /* §B0 — explicit override flag. Only ship when it changes
+     so a quantity-only edit doesn't accidentally flip the
+     server flag. Slide-over edit handler computes the desired
+     flag from (txnCount, newValue, transactionSum) before
+     calling setField — see actualEditHandlers below. */
+  if (current.actual_cost_override !== initial.actual_cost_override) {
+    out.actual_cost_override = current.actual_cost_override;
+  }
   if (current.currency !== initial.currency) out.currency = current.currency;
   if (current.status !== initial.status) out.status = current.status;
   // Notes ↔ vendor: surface as `notes` because that's the underlying
@@ -201,20 +207,26 @@ export function BudgetLineSlideOver({
     );
   }, [fields.actual_cost, fields.proposed_cost]);
 
-  /* §A3 — derive the actual state from the LIVE fields draft so
-     the marker reacts to the user typing (live override
-     detection) without waiting for the next line prop refresh.
-     transaction_sum + transaction_count come from the line prop
-     (server-attached at page-fetch time, refreshed via
-     router.refresh() after any transaction CRUD below). */
+  /* §B0 — actualState reads the LIVE override flag from the
+     fields draft (which the actual-edit handler keeps in sync
+     with the value-vs-sum rule). transaction_sum +
+     transaction_count come from the line prop (server-attached
+     at page-fetch time, refreshed via router.refresh() after
+     any transaction CRUD below). */
   const actualState = useMemo(
     () =>
       getActualState({
         actual_cost: fields.actual_cost,
+        actual_cost_override: fields.actual_cost_override,
         transaction_sum: line.transaction_sum,
         transaction_count: line.transaction_count,
       }),
-    [fields.actual_cost, line.transaction_sum, line.transaction_count],
+    [
+      fields.actual_cost,
+      fields.actual_cost_override,
+      line.transaction_sum,
+      line.transaction_count,
+    ],
   );
 
   // Derived rows reject edits to label/cost/currency at the API level
@@ -279,6 +291,33 @@ export function BudgetLineSlideOver({
     };
   }, [fields, isCreate, flushExistingPatch]);
 
+  /* §B1.1 — debounced auto-save for CREATE mode. Same 600ms
+     window as the edit effect above. Fires submitCreate as
+     soon as the user types a label (the only required field
+     at create time). Parent's onSaved swaps openLine to the
+     real server row → isCreate flips to false → this effect
+     deregisters and the existing-row debounce takes over.
+     Slide-over stays open through the transition; the
+     Transactions placeholder below becomes interactive once
+     line.id is no longer pending-. */
+  const createAttemptInFlightRef = useRef(false);
+  useEffect(() => {
+    if (!isCreate) return;
+    if (!fields.label.trim()) return;
+    if (createAttemptInFlightRef.current) return;
+    const t = setTimeout(() => {
+      createAttemptInFlightRef.current = true;
+      void submitCreate().finally(() => {
+        createAttemptInFlightRef.current = false;
+      });
+    }, 600);
+    return () => clearTimeout(t);
+    // submitCreate is intentionally NOT in deps — it changes
+    // every render via useCallback's fields deps, which would
+    // reset this timer on every keystroke and never fire.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isCreate, fields.label]);
+
   const submitCreate = useCallback(async () => {
     setSaveState('saving');
     setErrorMessage(null);
@@ -320,19 +359,61 @@ export function BudgetLineSlideOver({
       }
       setSaveState('saved');
       showToast(`Created ${fields.label}`);
+      /* §B1.1 — leave the slide-over open after create.
+         Parent's onSaved swaps openLine to the real server
+         row, isCreate flips to false, the Transactions
+         section unlocks in place. */
       onSaved?.({ ...created, status: fields.status } as BudgetLineItem);
       router.refresh();
-      onClose();
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Create failed';
       setSaveState('error');
       setErrorMessage(msg);
       showToast(msg, 'error');
     }
-  }, [fields, tourId, router, showToast, onClose, onSaved]);
+    /* §B1.1 — no onClose dep since submitCreate no longer
+       dismisses the slide-over (transitions in place). */
+  }, [fields, tourId, router, showToast, onSaved]);
 
   const setField = <K extends keyof DraftFields>(key: K, value: DraftFields[K]) =>
     setFields((cur) => ({ ...cur, [key]: value }));
+
+  /* §B0 — edit handler for the ACTUAL field. Computes the
+     override flag per the spec rules in one atomic setFields
+     so the diff sender ships actual_cost + actual_cost_override
+     together (avoids a transient state where the value changed
+     but the flag hasn't caught up — would cause a brief
+     marker flicker).
+
+     Rules:
+       - 0 transactions: override concept doesn't apply; flag false.
+       - N>0 transactions AND newValue === sum: clear override.
+       - N>0 transactions AND newValue !== sum: set override. */
+  const applyActualEdit = (rawValue: number): void => {
+    setFields((cur) => {
+      const next: DraftFields = { ...cur, actual_cost: rawValue };
+      const sum = Number(line.transaction_sum ?? 0);
+      const count = Number(line.transaction_count ?? 0);
+      if (count === 0) {
+        next.actual_cost_override = false;
+      } else {
+        /* fixed-2 compare to match numericEqual on the server. */
+        next.actual_cost_override = rawValue.toFixed(2) !== sum.toFixed(2);
+      }
+      return next;
+    });
+  };
+
+  /* §B0 — Sync button: set actual_cost = transaction_sum AND
+     clear the override flag. Shipped as one PATCH via the
+     debounced auto-save. */
+  const applySyncToSum = (): void => {
+    setFields((cur) => ({
+      ...cur,
+      actual_cost: Number(line.transaction_sum ?? 0),
+      actual_cost_override: false,
+    }));
+  };
 
   const labelStyle: React.CSSProperties = {
     color: 'var(--lp-text-tertiary)',
@@ -368,17 +449,9 @@ export function BudgetLineSlideOver({
     </>
   );
 
-  // If the row's current category isn't in the curated list (legacy
-  // values like prod_audio, transport_taxis), include it as a one-off
-  // option so saving doesn't silently change it to a curated value.
-  const categoryOptions = useMemo(() => {
-    const cur = (fields.category || '').trim();
-    if (!cur || CATEGORY_OPTIONS.some((o) => o.value === cur)) return CATEGORY_OPTIONS;
-    return [
-      { value: cur, label: `${cur} (custom)` },
-      ...CATEGORY_OPTIONS,
-    ];
-  }, [fields.category]);
+  /* §B3.1 — categoryOptions memo retired with the select.
+     <CategoryChipDropdown> handles the (custom) legacy-value
+     surfacing internally via lib/budget/category-colors. */
 
   return (
     <SlideOver
@@ -434,18 +507,17 @@ export function BudgetLineSlideOver({
         <div className="grid grid-cols-3 gap-3">
           <label className="block">
             <span style={labelStyle}>Category</span>
-            <select
-              value={fields.category || 'misc'}
-              onChange={(e) => setField('category', e.target.value)}
-              className="mt-1.5"
-              style={inputStyle}
-            >
-              {categoryOptions.map((c) => (
-                <option key={c.value} value={c.value}>
-                  {c.label}
-                </option>
-              ))}
-            </select>
+            {/* §B3.1 — chip + dropdown replaces the plain
+                select. Legacy / custom categories surface at
+                the top of the menu as "(custom)" options so
+                the row's stored value isn't clobbered. */}
+            <div className="mt-1.5">
+              <CategoryChipDropdown
+                value={fields.category || 'misc'}
+                onChange={(v) => setField('category', v)}
+                size="md"
+              />
+            </div>
           </label>
           <label className="block">
             {/* Phase 3 §D — phase tag dropdown. '' (Unscoped) maps
@@ -492,15 +564,15 @@ export function BudgetLineSlideOver({
           </label>
           <label className="block">
             <span style={labelStyle}>Estimated</span>
-            <input
-              type="number"
-              step="0.01"
+            {/* §B1.4 — currency-symbol prefix. Quantity above
+                stays a plain numeric (not a money field). */}
+            <CurrencyNumericInput
               value={fields.proposed_cost}
-              onChange={(e) =>
-                setField('proposed_cost', Number(e.target.value) || 0)
-              }
-              className="mt-1.5"
+              onChange={(v) => setField('proposed_cost', v)}
+              currency={fields.currency}
+              className="mt-1.5 block"
               style={inputStyle}
+              ariaLabel="Estimated cost"
             />
           </label>
           <label className="block">
@@ -538,7 +610,7 @@ export function BudgetLineSlideOver({
                   </span>
                   <button
                     type="button"
-                    onClick={() => setField('actual_cost', actualState.transactionSum)}
+                    onClick={applySyncToSum}
                     className="underline"
                     style={{
                       color: 'var(--color-lp-orange)',
@@ -552,23 +624,20 @@ export function BudgetLineSlideOver({
                 </span>
               ) : null}
             </span>
-            <input
-              type="number"
-              step="0.01"
+            {/* §B1.4 — currency-symbol prefix. Same override
+                border tint applied via inputStyle merge. */}
+            <CurrencyNumericInput
               value={fields.actual_cost}
-              onChange={(e) =>
-                setField('actual_cost', Number(e.target.value) || 0)
-              }
-              className="mt-1.5"
+              onChange={(v) => applyActualEdit(v)}
+              currency={fields.currency}
+              className="mt-1.5 block"
               style={{
                 ...inputStyle,
-                /* Slight orange-tinted border when override is
-                   active so the field reads as "modified" even
-                   without scrolling to the marker. */
                 borderColor: actualState.isOverride
                   ? 'var(--color-lp-status-needs-review)'
                   : (inputStyle as { borderColor?: string }).borderColor,
               }}
+              ariaLabel="Actual cost"
             />
           </label>
         </div>
@@ -609,16 +678,9 @@ export function BudgetLineSlideOver({
             <div
               className="mt-1.5 inline-flex items-center rounded-md px-3 py-2 text-base tabular-nums"
               style={{
-                color:
-                  variancePct === null
-                    ? 'var(--lp-text-tertiary)'
-                    : variancePct > 10
-                      ? 'var(--color-lp-error, #EF4444)'
-                      : variancePct > 5
-                        ? 'var(--color-lp-status-needs-review)'
-                        : variancePct < -5
-                          ? 'var(--color-lp-status-complete)'
-                          : 'var(--lp-text-secondary)',
+                /* §B1.3 — colour via the shared income-aware
+                   helper so the rule lives in one place. */
+                color: varianceColor(variancePct, isIncomeRow(line)),
               }}
             >
               {variancePct === null ? '—' : `${variancePct.toFixed(1)}%`}
@@ -638,19 +700,38 @@ export function BudgetLineSlideOver({
         </label>
 
         {/* Budget Phase A §A1 — vendor-breakdown transactions.
-            Only mount once the row exists server-side; create
-            mode has a pending- prefixed id with no transactions
-            to load.
             §A3 — onChange triggers router.refresh() so the
             slide-over's `line` prop refetches after every txn
-            write. The new prop value carries the
-            auto-synced actual_cost + updated transaction_sum,
-            which re-derives the override marker. */}
-        {!isCreate && (
+            write. The new prop value carries the auto-synced
+            actual_cost + updated transaction_sum, which
+            re-derives the override marker.
+            §B1.1 — in create mode (pending- id), show a
+            placeholder section so the user sees Transactions
+            is coming. Auto-save on label blur transitions the
+            slide-over to edit mode in place; the section
+            unlocks automatically once isCreate flips. */}
+        {isCreate ? (
+          <section>
+            <h3 className="text-xs font-bold uppercase tracking-wider text-lp-text-secondary mb-2">
+              Transactions
+            </h3>
+            <div
+              className="rounded-xl border border-dashed border-lp-border bg-lp-surface/50 px-4 py-5 text-center text-xs text-lp-text-secondary"
+            >
+              Save the line item to start adding vendor breakdowns. The label
+              field auto-saves after a moment of inactivity.
+            </div>
+          </section>
+        ) : (
           <TransactionsSection
             lineItemId={line.id}
             currency={line.currency ?? null}
             onChange={() => router.refresh()}
+            /* §B3.2 — parent line item's vendor (from notes
+               "Vendor: <name>" encoding) seeds new
+               transactions and surfaces at the top of each
+               row's autocomplete. */
+            defaultVendor={fields.vendor}
           />
         )}
 
