@@ -19,7 +19,9 @@
 
 import { redirect } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
-import { WorkspaceTopBar } from '@/components/shell-v2/WorkspaceTopBar';
+/* IA Cleanup §I2 — WorkspaceTopBar now mounted by
+   src/app/(app)/(workspace)/layout.tsx (the route group's
+   layout). Page renders its own body content only. */
 import { PickUpCard } from '@/components/artists/PickUpCard';
 import { ArtistGridCard } from '@/components/artists/ArtistGridCard';
 import { WorkspaceActivityList } from '@/components/artists/WorkspaceActivityList';
@@ -49,12 +51,10 @@ export default async function ArtistsLandingPage() {
   if (!data) redirect('/login');
 
   return (
-    <div
-      className="flex min-h-screen flex-col"
-      style={{ background: 'var(--lp-bg)' }}
-    >
-      <WorkspaceTopBar workspaceName={data.workspaceName} />
-
+    <>
+      {/* IA Cleanup §I2 — outer flex column + WorkspaceTopBar
+          moved to (workspace)/layout.tsx. The page is now
+          just the body content. */}
       <ArtistHomeStagger>
         <div
           className="mx-auto w-full"
@@ -270,6 +270,6 @@ export default async function ArtistsLandingPage() {
           </section>
         </div>
       </ArtistHomeStagger>
-    </div>
+    </>
   );
 }
