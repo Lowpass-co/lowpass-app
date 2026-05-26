@@ -19,7 +19,6 @@ import { useEffect, useRef, useState } from 'react';
 import {
   Building2,
   Bug,
-  LayoutGrid,
   LogOut,
   Package,
   Settings,
@@ -183,12 +182,10 @@ export function ProductHeaderAvatarMenu({
             Icon={Users}
             onClose={close}
           />
-          <MenuLink
-            href="/templates"
-            label="Templates"
-            Icon={LayoutGrid}
-            onClose={close}
-          />
+          {/* IA Cleanup §I1.2 — Templates entry removed; the
+              /templates route doesn't exist. Per-product
+              templates live inside Operations / Advance
+              surfaces. */}
           <MenuLink
             href="/venues"
             label="Venues"
