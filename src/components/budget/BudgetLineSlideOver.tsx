@@ -727,6 +727,11 @@ export function BudgetLineSlideOver({
             lineItemId={line.id}
             currency={line.currency ?? null}
             onChange={() => router.refresh()}
+            /* §B3.2 — parent line item's vendor (from notes
+               "Vendor: <name>" encoding) seeds new
+               transactions and surfaces at the top of each
+               row's autocomplete. */
+            defaultVendor={fields.vendor}
           />
         )}
 
