@@ -175,17 +175,14 @@ export function ProductHeaderAvatarMenu({
             </div>
           </div>
 
-          {/* Foundation entries (Phase 1 §D decisions) */}
-          <MenuLink
-            href="/personnel"
-            label="Personnel directory"
-            Icon={Users}
-            onClose={close}
-          />
-          {/* IA Cleanup §I1.2 — Templates entry removed; the
-              /templates route doesn't exist. Per-product
-              templates live inside Operations / Advance
-              surfaces. */}
+          {/* IA Cleanup §I3 — Personnel entry retired here.
+              Personnel is now a workspace dashboard tab
+              (/personnel under the (workspace) route group),
+              reachable from /artists. Keeping it in the avatar
+              dropdown too would create duplicate-entry-point
+              confusion.
+              §I1.2 — Templates entry already removed; the
+              /templates route doesn't exist. */}
           <MenuLink
             href="/venues"
             label="Venues"

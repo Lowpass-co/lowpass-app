@@ -20,7 +20,9 @@
    ============================================ */
 
 import { Suspense } from 'react';
-import { listAppPageShell } from '@/components/shell/app-page-shells';
+/* IA Cleanup §I3 — shell-v1 PageShell wrapper retired here;
+   chrome comes from the (workspace) layout
+   (src/app/(app)/(workspace)/layout.tsx). */
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import {
   PersonnelLibraryClient,
@@ -273,8 +275,8 @@ export default async function PersonnelPage() {
     };
   });
 
-  return listAppPageShell(
-    <div className="mx-auto max-w-7xl space-y-6 pb-12">
+  return (
+    <div className="mx-auto max-w-7xl space-y-6 px-6 pb-12 pt-6">
       <div>
         <h1 className="text-2xl font-bold text-lp-text">Personnel</h1>
         <p className="mt-1 text-sm text-lp-text-secondary">
@@ -289,6 +291,6 @@ export default async function PersonnelPage() {
       >
         <PersonnelLibraryClient initial={rows} viewerCanSeePay={viewerCanSeePay} />
       </Suspense>
-    </div>,
+    </div>
   );
 }

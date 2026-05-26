@@ -35,8 +35,11 @@ type NavItem = {
  *  explicitly so users have a top-level entry point. */
 const WORKSPACE_NAV: NavItem[] = [
   { label: 'Home', href: '/artists', activeMatch: (p) => p === '/' || p.startsWith('/artists') },
-  { label: 'Personnel', href: '/personnel', activeMatch: (p) => p.startsWith('/personnel') },
-  { label: 'Equipment', href: '/equipment', activeMatch: (p) => p.startsWith('/equipment') },
+  /* IA Cleanup §I3 — Personnel + Equipment removed from
+     shell-v1 TopBar nav; they're now workspace dashboard
+     tabs (Artists / Personnel / Equipment), reachable
+     directly via /personnel and /equipment under the
+     (workspace) route group. */
   // Calendar: route doesn't exist yet. Excluded from the array
   // until it does — don't ship dead links.
   { label: 'Settings', href: '/settings', activeMatch: (p) => p.startsWith('/settings') },
@@ -338,21 +341,11 @@ function AccountMenuContent({
           Workspace
         </span>
       </Link>
-      {/* Phase 1 §D — Foundation entries (workspace-level, not in
-          the four-product rail). Library dropdown retired; these
-          surface here per Adam's decisions #2, #3, #4. */}
+      {/* IA Cleanup §I3 — Personnel entry retired from the
+          shell-v1 account dropdown; Personnel is now a
+          workspace dashboard tab reachable from /artists
+          via the WorkspaceTabs row. */}
       <div className="my-1" style={{ borderTop: '1px solid var(--lp-border)' }} />
-      <Link
-        href="/personnel"
-        className="block px-3 py-2 text-sm"
-        style={{ color: 'var(--lp-text)' }}
-        onClick={onClose}
-      >
-        <span className="inline-flex items-center gap-2">
-          <Users className="h-4 w-4" style={{ color: 'var(--lp-text-tertiary)' }} />
-          Personnel directory
-        </span>
-      </Link>
       {/* Sprint 12 §7 — workspace-level /templates page retired.
           Rider + channel-list templates now live under
           /artists/[id]/{riders,channel-lists}. The
