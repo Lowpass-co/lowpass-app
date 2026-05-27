@@ -524,6 +524,7 @@ export default function ChannelListEditor({
           rows={rows}
           stageBoxes={stageBoxes}
           subSnakes={subSnakes}
+          onStructureChange={onStructureChange}
         />
       </div>
 
