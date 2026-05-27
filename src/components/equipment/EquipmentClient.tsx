@@ -12,6 +12,10 @@ import { cn } from '@/lib/utils';
 import { InventoryTab } from './InventoryTab';
 import { JobsTab } from './JobsTab';
 import {
+  EquipmentDensityProvider,
+  EquipmentDensityToggle,
+} from './EquipmentDensityContext';
+import {
   EQUIPMENT_PAGE_SHELL_CLASS,
   type EquipmentArtistOption,
   type EquipmentTourOption,
@@ -30,7 +34,20 @@ interface Props {
 
 type Tab = 'inventory' | 'jobs';
 
-export function EquipmentClient({
+export function EquipmentClient(props: Props) {
+  /* §B5 — wrap in EquipmentDensityProvider so the density
+     toggle + the InventoryTab + JobsTab table cells share
+     one preference. The provider's data-lp-density attr
+     on its wrapping div cascades to descendant <td>s via
+     globals.css. */
+  return (
+    <EquipmentDensityProvider>
+      <EquipmentClientBody {...props} />
+    </EquipmentDensityProvider>
+  );
+}
+
+function EquipmentClientBody({
   userId,
   workspaceId,
   initialInventory,
@@ -47,16 +64,21 @@ export function EquipmentClient({
   return (
     <div className={EQUIPMENT_PAGE_SHELL_CLASS}>
       {/* Page header — fixed slot at top of column */}
-      <header className="w-full shrink-0">
-        <h1
-          className="text-2xl font-bold tracking-tight font-display"
-          style={{ color: 'var(--lp-text)' }}
-        >
-          Equipment
-        </h1>
-        <p className="mt-1 text-sm" style={{ color: 'var(--lp-text-secondary)' }}>
-          Rental inventory and job bookings
-        </p>
+      <header className="flex w-full shrink-0 items-start justify-between gap-3">
+        <div>
+          <h1
+            className="text-2xl font-bold tracking-tight font-display"
+            style={{ color: 'var(--lp-text)' }}
+          >
+            Equipment
+          </h1>
+          <p className="mt-1 text-sm" style={{ color: 'var(--lp-text-secondary)' }}>
+            Rental inventory and job bookings
+          </p>
+        </div>
+        {/* §B5 — density toggle pinned top-right, matches
+            Budget's BudgetTabNav placement. */}
+        <EquipmentDensityToggle />
       </header>
 
       {/* Tabs — full width of content column; equal-width segments */}

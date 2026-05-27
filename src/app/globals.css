@@ -334,6 +334,42 @@ td[data-density="cozy"] .lp-mono {
   font-size: var(--lp-cell-numeric-size-cozy);
 }
 
+/* Phase B §B5 — ancestor-scoped density. Wrap any grid surface
+   in a <div data-lp-density="..."> (the createDensity factory
+   does this for you) and every <td> + <th> inside picks up
+   the right vertical padding + font size without prop-
+   drilling. Used by the Equipment + Personnel grids; the
+   Budget grid keeps its more specific td[data-density] rules
+   above for the .lp-mono numeric bump.
+
+   The bare-text rule below applies to the cell as a whole;
+   .lp-mono children still pick up the numeric-size override
+   from the budget rules above when both attrs are present. */
+[data-lp-density="compact"] td,
+[data-lp-density="compact"] th {
+  padding-block: var(--lp-row-cell-padding-y-compact);
+  font-size: var(--lp-cell-font-size-compact);
+}
+[data-lp-density="comfortable"] td,
+[data-lp-density="comfortable"] th {
+  padding-block: var(--lp-row-cell-padding-y-comfortable);
+  font-size: var(--lp-cell-font-size-comfortable);
+}
+[data-lp-density="cozy"] td,
+[data-lp-density="cozy"] th {
+  padding-block: var(--lp-row-cell-padding-y-cozy);
+  font-size: var(--lp-cell-font-size-cozy);
+}
+[data-lp-density="compact"] .lp-mono {
+  font-size: var(--lp-cell-numeric-size-compact);
+}
+[data-lp-density="comfortable"] .lp-mono {
+  font-size: var(--lp-cell-numeric-size-comfortable);
+}
+[data-lp-density="cozy"] .lp-mono {
+  font-size: var(--lp-cell-numeric-size-cozy);
+}
+
 /* Table / breakdown column headers — light #471300, dark muted grey */
 .lp-table-header-text {
   color: var(--lp-table-header-text);
