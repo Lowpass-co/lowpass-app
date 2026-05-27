@@ -138,13 +138,8 @@ export function RiderPacksTourClient({ tourId, tourName, rows }: { tourId: strin
         }}
       />
 
-      <p className="text-xs text-lp-text-tertiary">
-        Need the workspace-wide grid?{' '}
-        <Link href="/rider-packs" className="underline hover:text-lp-orange">
-          Open global rider packs
-        </Link>
-        .
-      </p>
+      {/* IA Cleanup §I1.2 — workspace-wide /rider-packs is
+          deprecated. Riders live per-artist now. */}
       {detailsId
         ? (() => {
             const row = rows.find((r) => r.id === detailsId);

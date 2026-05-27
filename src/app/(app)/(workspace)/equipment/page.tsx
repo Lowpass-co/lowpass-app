@@ -5,7 +5,9 @@
    ============================================ */
 
 import { createServerSupabaseClient } from '@/lib/supabase-server';
-import { listAppPageShell } from '@/components/shell/app-page-shells';
+/* IA Cleanup §I3 — shell-v1 PageShell wrapper retired here;
+   the (workspace) layout provides chrome (WorkspaceTopBar +
+   WorkspaceTabs) for /artists, /personnel, /equipment. */
 import { EquipmentClient } from '@/components/equipment/EquipmentClient';
 import { redirect } from 'next/navigation';
 import type { EquipmentArtistOption, EquipmentTourOption, RentalJob } from '@/components/equipment/types';
@@ -57,7 +59,7 @@ export default async function EquipmentPage() {
   const artists = (artistsRaw ?? []) as EquipmentArtistOption[];
   const tours = (toursRaw ?? []) as EquipmentTourOption[];
 
-  return listAppPageShell(
+  return (
     <EquipmentClient
       userId={user.id}
       workspaceId={ws}

@@ -19,9 +19,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   Building2,
   Bug,
-  LayoutGrid,
   LogOut,
-  Package,
   Settings,
   SunMoon,
   Users,
@@ -176,31 +174,25 @@ export function ProductHeaderAvatarMenu({
             </div>
           </div>
 
-          {/* Foundation entries (Phase 1 §D decisions) */}
-          <MenuLink
-            href="/personnel"
-            label="Personnel directory"
-            Icon={Users}
-            onClose={close}
-          />
-          <MenuLink
-            href="/templates"
-            label="Templates"
-            Icon={LayoutGrid}
-            onClose={close}
-          />
+          {/* IA Cleanup §I3 — Personnel entry retired here.
+              Personnel is now a workspace dashboard tab
+              (/personnel under the (workspace) route group),
+              reachable from /artists. Keeping it in the avatar
+              dropdown too would create duplicate-entry-point
+              confusion.
+              §I1.2 — Templates entry already removed; the
+              /templates route doesn't exist. */}
           <MenuLink
             href="/venues"
             label="Venues"
             Icon={Building2}
             onClose={close}
           />
-          <MenuLink
-            href="/account/rental"
-            label="Rental"
-            Icon={Package}
-            onClose={close}
-          />
+          {/* IA Cleanup §I4 — Rental entry retired.
+              /account/rental is a permanent redirect to
+              /equipment, which is now a workspace dashboard
+              tab. Keeping the entry would duplicate the
+              tab nav. */}
 
           <div
             className="my-1"
