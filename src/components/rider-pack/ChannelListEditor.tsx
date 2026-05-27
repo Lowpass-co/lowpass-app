@@ -191,21 +191,44 @@ export default function ChannelListEditor({
     }
   };
 
+  /* §CL1.1 — `newlyAddedRowId` lets the row that's just been
+     added auto-focus its Name input on next render. Cleared
+     once the row mounts + focuses (or after a short timeout
+     defence). */
+  const [newlyAddedRowId, setNewlyAddedRowId] = useState<string | null>(null);
+
   const addChannel = async () => {
-    const r = await ch.appendRow(createClient(), { packId: pack.id, sectionId: section.id });
-    setRows((prev) => [...prev, r].sort((a, b) => a.row_index - b.row_index));
-    await onStructureChange();
+    try {
+      const r = await ch.appendRow(createClient(), {
+        packId: pack.id,
+        sectionId: section.id,
+      });
+      setRows((prev) => [...prev, r].sort((a, b) => a.row_index - b.row_index));
+      setNewlyAddedRowId(r.id);
+      await onStructureChange();
+    } catch (err) {
+      /* §CL1.1 — pre-fix the click silently swallowed the
+         promise rejection (`void addChannel()` discards). The
+         alert mirrors handleDragEnd's pattern so the user
+         sees the actual server error. */
+      alert(err instanceof Error ? err.message : 'Add channel failed');
+    }
   };
 
   /* Sprint 12 §8b2 — add an OUTPUT row. Drives the output
      sub-grid below the input table. */
   const addOutput = async () => {
-    const r = await ch.appendOutputRow(createClient(), {
-      packId: pack.id,
-      sectionId: section.id,
-    });
-    setRows((prev) => [...prev, r].sort((a, b) => a.row_index - b.row_index));
-    await onStructureChange();
+    try {
+      const r = await ch.appendOutputRow(createClient(), {
+        packId: pack.id,
+        sectionId: section.id,
+      });
+      setRows((prev) => [...prev, r].sort((a, b) => a.row_index - b.row_index));
+      setNewlyAddedRowId(r.id);
+      await onStructureChange();
+    } catch (err) {
+      alert(err instanceof Error ? err.message : 'Add output failed');
+    }
   };
 
   /* Sprint 12 §8b2 — split rows by row_kind. Input rows drive
@@ -384,6 +407,8 @@ export default function ChannelListEditor({
                       onOpenStageDialog={() => setStageDialog(true)}
                       sectionId={section.id}
                       packId={pack.id}
+                      autoFocusName={row.id === newlyAddedRowId}
+                      onAutoFocused={() => setNewlyAddedRowId(null)}
                     />
                   ))}
                 </SortableContext>
@@ -541,6 +566,8 @@ function ChannelBlock({
   onOpenStageDialog,
   sectionId,
   packId,
+  autoFocusName,
+  onAutoFocused,
 }: {
   row: ChannelListRow;
   rows: ChannelListRow[];
@@ -559,6 +586,11 @@ function ChannelBlock({
   onOpenStageDialog: () => void;
   sectionId: string;
   packId: string;
+  /* §CL1.1 — set by the parent when this row was just created
+     via "+ Add channel". On mount the Name input focuses + the
+     parent's onAutoFocused fires to clear the trigger. */
+  autoFocusName?: boolean;
+  onAutoFocused?: () => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: row.id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.85 : 1 };
@@ -652,6 +684,20 @@ function ChannelBlock({
      Escape (handled in <NavCell>) we restore the snapshot. */
   const nameSnapRef = useRef<string>(local.channel_name);
   const notesSnapRef = useRef<string>(local.notes);
+
+  /* §CL1.1 — focus the Name input on mount when the parent
+     flagged this row as freshly added via "+ Add channel".
+     Fires onAutoFocused so the parent clears the trigger
+     (otherwise a subsequent re-render would re-focus). */
+  const nameInputRef = useRef<HTMLInputElement | null>(null);
+  useEffect(() => {
+    if (!autoFocusName) return;
+    nameInputRef.current?.focus();
+    onAutoFocused?.();
+    // Only fire once on mount with the trigger set; deliberate
+    // single-shot effect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   useEffect(() => {
     return () => {
       if (phantomFlashTimerRef.current) {
@@ -716,6 +762,7 @@ function ChannelBlock({
         >
           <div className="min-w-0 px-0.5 pl-1">
             <input
+              ref={nameInputRef}
               type="text"
               value={local.channel_name}
               onFocus={() => {
