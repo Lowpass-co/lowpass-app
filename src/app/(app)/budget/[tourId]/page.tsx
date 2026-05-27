@@ -35,6 +35,7 @@ import { BudgetExportControls } from '@/components/budget/BudgetExportControls';
 // server→client function-call boundary).
 import { BudgetTabNav } from '@/components/budget/BudgetTabNav';
 import { resolveBudgetTab } from '@/components/budget/budget-tab-utils';
+import { BudgetDensityProvider } from '@/components/budget/BudgetDensityContext';
 import { enrichLinesWithTransactionAggregates } from '@/lib/budget/transactions';
 import { BudgetSummaryTab } from '@/components/budget/BudgetSummaryTab';
 import { BudgetTabPlaceholder } from '@/components/budget/BudgetTabPlaceholder';
@@ -140,6 +141,10 @@ export default async function BudgetTourPage({
   }
 
   return (
+    /* §B4 — BudgetDensityProvider wraps the whole budget page
+       so the tab nav's density toggle + the grid + slide-over
+       (when mounted) all share the same per-device preference. */
+    <BudgetDensityProvider>
     <div className="flex min-h-0 flex-1 flex-col pb-24">
         <BudgetStatsStrip lines={lines} tourCurrency={tourCurrency} />
         <BudgetPhaseStripClient phases={phases} />
@@ -207,5 +212,6 @@ export default async function BudgetTourPage({
 
         <MobileBudgetBanner />
     </div>
+    </BudgetDensityProvider>
   );
 }

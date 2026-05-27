@@ -18,6 +18,7 @@ import {
   type BudgetTab,
   resolveBudgetTab,
 } from './budget-tab-utils';
+import { BudgetDensityToggle } from './BudgetDensityToggle';
 
 // Hotfix 3 §1 — type + helper moved to budget-tab-utils.ts (no
 // 'use client') so the per-tour server page can call them without
@@ -59,6 +60,7 @@ export function BudgetTabNav({ active }: BudgetTabNavProps) {
       }}
       aria-label="Budget tabs"
     >
+      <div className="flex flex-1 items-end gap-1">
       {TABS.map((tab) => {
         const isActive = tab.id === active;
         return (
@@ -90,6 +92,13 @@ export function BudgetTabNav({ active }: BudgetTabNavProps) {
           </Link>
         );
       })}
+      </div>
+      {/* §B4.2 — density toggle at the far right of the tab
+          row. Outside the flex-1 container so it stays
+          pinned right while tabs flow left. */}
+      <div className="pb-1.5">
+        <BudgetDensityToggle />
+      </div>
     </nav>
   );
 }

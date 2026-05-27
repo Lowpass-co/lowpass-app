@@ -299,6 +299,39 @@
   --lp-row-cell-padding-y-compact: 6px;
   --lp-row-cell-padding-y-tight: 4px;
   --lp-row-cell-padding-x: 12px;
+
+  /* Phase B §B4 — density token set extended to cover row
+     height, vertical padding, cell font size, numeric size,
+     and indicator size for three modes (compact / comfortable
+     / cozy). Comfortable is the new default. "tight" stays
+     deprecated and aliases to compact. */
+  --lp-row-height-compact: 32px;
+  --lp-row-height-comfortable: 44px;
+  --lp-row-height-cozy: 56px;
+  --lp-row-cell-padding-y-cozy: 14px;
+  --lp-cell-font-size-compact: 13px;
+  --lp-cell-font-size-comfortable: 14px;
+  --lp-cell-font-size-cozy: 15px;
+  --lp-cell-numeric-size-compact: 14px;
+  --lp-cell-numeric-size-comfortable: 16px;
+  --lp-cell-numeric-size-cozy: 18px;
+  --lp-cell-indicator-size-compact: 12px;
+  --lp-cell-indicator-size-comfortable: 14px;
+  --lp-cell-indicator-size-cozy: 16px;
+}
+
+/* Phase B §B4 — density-aware overrides for monospace numeric
+   cells in the budget grid. Td applies data-density; the rule
+   below bumps .lp-mono children to the larger numeric size
+   without touching the surrounding text-cell font. */
+td[data-density="compact"] .lp-mono {
+  font-size: var(--lp-cell-numeric-size-compact);
+}
+td[data-density="comfortable"] .lp-mono {
+  font-size: var(--lp-cell-numeric-size-comfortable);
+}
+td[data-density="cozy"] .lp-mono {
+  font-size: var(--lp-cell-numeric-size-cozy);
 }
 
 /* Table / breakdown column headers — light #471300, dark muted grey */

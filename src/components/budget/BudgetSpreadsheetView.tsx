@@ -42,6 +42,7 @@ import { BudgetLineSlideOver } from '@/components/budget/BudgetLineSlideOver';
 import { BudgetCellInput } from '@/components/budget/cells/BudgetCellInput';
 import { useToast } from '@/components/ui/Toast';
 import { convertToCurrency } from '@/lib/budget/fx';
+import { useBudgetDensity } from '@/components/budget/BudgetDensityContext';
 import { getEffectiveActual, getActualState } from '@/lib/budget/transactions';
 import { isIncomeRow, varianceColor } from '@/lib/budget/income-rows';
 import { isUx14DerivedBudgetLine } from '@/lib/budget/budgetUx14Derived';
@@ -1433,16 +1434,24 @@ function Td({
   className?: string;
   style?: React.CSSProperties;
 }) {
+  /* §B4 — pull vertical padding + font size from the density
+     tokens. The mode-specific values live in globals.css; we
+     just bind them here. Horizontal padding stays at 8px
+     across modes (column widths are fixed). The .lp-mono
+     class on numeric cells will pick up the larger numeric
+     size from globals.css's .lp-mono override (see below). */
+  const { density } = useBudgetDensity();
   return (
     <td
       onClick={onClick}
       className={className}
+      data-density={density}
       style={{
         textAlign: align ?? 'left',
         verticalAlign: 'middle',
-        padding: '6px 8px',
+        padding: `var(--lp-row-cell-padding-y-${density}) 8px`,
         borderBottom: '1px solid var(--lp-border-subtle)',
-        fontSize: '12px',
+        fontSize: `var(--lp-cell-font-size-${density})`,
         ...style,
       }}
     >
