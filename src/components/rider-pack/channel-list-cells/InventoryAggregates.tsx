@@ -31,7 +31,7 @@
    notes-less aggregates.
    ============================================ */
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import type { ChannelListRow, StageBox, SubSnake } from '@/lib/rider-packs/types';
 import {
   aggregateCables,
@@ -40,11 +40,16 @@ import {
   aggregateStageBoxes,
   aggregateSubSnakes,
 } from '@/lib/rider-packs/aggregates';
+import { StageBoxPatchModal } from '@/components/rider-pack/StageBoxPatchModal';
 
 interface InventoryAggregatesProps {
   rows: ChannelListRow[];
   stageBoxes: StageBox[];
   subSnakes: SubSnake[];
+  /* §CL2 — fires after a Patch-modal save so the parent can
+     refetch the section. Optional for backwards-compat with
+     any caller that doesn't yet pass it. */
+  onStructureChange?: () => void | Promise<void>;
 }
 
 const PROVIDER_LABEL: Record<string, string> = {
@@ -58,12 +63,16 @@ export function InventoryAggregates({
   rows,
   stageBoxes,
   subSnakes,
+  onStructureChange,
 }: InventoryAggregatesProps) {
   const mics = useMemo(() => aggregateMicsByProvider(rows), [rows]);
   const stands = useMemo(() => aggregateStands(rows), [rows]);
   const cables = useMemo(() => aggregateCables(rows), [rows]);
   const boxes = useMemo(() => aggregateStageBoxes(stageBoxes), [stageBoxes]);
   const snakes = useMemo(() => aggregateSubSnakes(subSnakes), [subSnakes]);
+  /* §CL2 — track which stage box (if any) is being patched.
+     null = modal closed. */
+  const [patchingBox, setPatchingBox] = useState<StageBox | null>(null);
 
   return (
     <div
@@ -135,14 +144,16 @@ export function InventoryAggregates({
         )}
       </Section>
 
-      {/* 4. Stage boxes */}
+      {/* 4. Stage boxes — §CL2 adds a Patch button per row
+          that opens StageBoxPatchModal for one-shot patching
+          of all the box's ports. */}
       <Section title={`Stage boxes (${boxes.length})`}>
         {boxes.length === 0 ? (
           <Empty>No stage boxes — use &ldquo;Manage stage I/O&rdquo; to add.</Empty>
         ) : (
           <Table
-            colTemplate="minmax(6rem, 1fr) auto 4.5rem"
-            head={['NAME', 'COLOR', 'CAPACITY']}
+            colTemplate="minmax(6rem, 1fr) auto 4.5rem 4.5rem"
+            head={['NAME', 'COLOR', 'CAPACITY', '']}
             rows={boxes.map((b) => (
               <Row
                 key={b.id}
@@ -150,6 +161,15 @@ export function InventoryAggregates({
                   <Cell key="name">{b.label}</Cell>,
                   <ColorSwatch key="color" hex={b.colour} />,
                   <Num key="cap">{b.capacity}</Num>,
+                  <button
+                    key="patch"
+                    type="button"
+                    onClick={() => setPatchingBox(b)}
+                    className="rounded border border-lp-border bg-lp-bg px-2 py-0.5 text-xs font-medium text-lp-text-secondary hover:bg-lp-surface-hover hover:text-lp-text"
+                    title={`Patch all ${b.capacity} ports on ${b.label}`}
+                  >
+                    Patch
+                  </button>,
                 ]}
               />
             ))}
@@ -178,6 +198,19 @@ export function InventoryAggregates({
           />
         )}
       </Section>
+      {/* §CL2 — modal mount. Renders only when a Patch button
+          has been clicked. */}
+      {patchingBox ? (
+        <StageBoxPatchModal
+          stageBox={patchingBox}
+          inputRows={rows.filter((r) => (r.row_kind ?? 'input') === 'input')}
+          subSnakes={subSnakes}
+          onClose={() => setPatchingBox(null)}
+          onSaved={async () => {
+            if (onStructureChange) await onStructureChange();
+          }}
+        />
+      ) : null}
     </div>
   );
 }

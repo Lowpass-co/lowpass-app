@@ -42,6 +42,10 @@ import { useRouter } from 'next/navigation';
 import { Plus, Trash2, Upload, UserCog, UserPlus } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
 import { PersonnelImportModal } from './PersonnelImportModal';
+import {
+  PersonnelDensityProvider,
+  PersonnelDensityToggle,
+} from './PersonnelDensityContext';
 import { AssignToTourSlideOver } from './AssignToTourSlideOver';
 import {
   PersonnelDetailSlideOver,
@@ -154,7 +158,19 @@ function groupKeyFromFilter(filter: FilterKey): string | null {
    columns remain. updated_at is still read by the recent /
    untouched filter chips above. */
 
-export function PersonnelLibraryClient({
+export function PersonnelLibraryClient(props: PersonnelLibraryClientProps) {
+  /* §B5 — wrap in PersonnelDensityProvider so the toggle +
+     the PersonnelGrid + any sub-table cells share one
+     preference. data-lp-density on the wrapper cascades to
+     descendant <td>s via globals.css. */
+  return (
+    <PersonnelDensityProvider>
+      <PersonnelLibraryClientBody {...props} />
+    </PersonnelDensityProvider>
+  );
+}
+
+function PersonnelLibraryClientBody({
   initial,
   viewerCanSeePay = false,
 }: PersonnelLibraryClientProps) {
@@ -334,6 +350,10 @@ export function PersonnelLibraryClient({
             : ''}
         </div>
         <div className="flex items-center" style={{ gap: 'var(--lp-space-2)' }}>
+          {/* §B5 — density toggle inline in the header
+              action row. Matches Budget + Equipment top-right
+              placement. */}
+          <PersonnelDensityToggle />
           <button
             type="button"
             onClick={handleAddNew}
