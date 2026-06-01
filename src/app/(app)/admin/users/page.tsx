@@ -6,6 +6,7 @@ import { redirect } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { AdminSubNav } from '@/components/admin/AdminSubNav';
 import { UsersListClient } from '@/components/admin/UsersListClient';
+import { PageHeader } from '@/components/ui/PageHeader';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,27 +29,11 @@ export default async function AdminUsersPage() {
           maxWidth: 1200,
         }}
       >
-        <header style={{ marginBottom: 'var(--lp-space-3)' }}>
-          <h1
-            style={{
-              margin: 0,
-              fontSize: 'var(--lp-text-2xl)',
-              fontWeight: 'var(--lp-weight-bold)',
-              color: 'var(--lp-text)',
-            }}
-          >
-            Users
-          </h1>
-          <p
-            style={{
-              marginTop: 4,
-              fontSize: 'var(--lp-text-sm)',
-              color: 'var(--lp-text-secondary)',
-            }}
-          >
-            Cross-workspace user management. All actions are audit-logged.
-          </p>
-        </header>
+        <PageHeader
+          title="Users"
+          subtitle="Cross-workspace user management. All actions are audit-logged."
+          className="mb-3"
+        />
         <UsersListClient currentUserId={user.id} />
       </div>
     </div>

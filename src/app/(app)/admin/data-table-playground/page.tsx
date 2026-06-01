@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation';
 import { topBarOnlyAppPageShell } from '@/components/shell/app-page-shells';
 import { getUserAndAdminStatus } from '@/lib/site-admin';
+import { PageHeader } from '@/components/ui/PageHeader';
 import DataTablePlaygroundClient from './DataTablePlaygroundClient';
 
 export default async function DataTablePlaygroundPage() {
@@ -11,14 +12,11 @@ export default async function DataTablePlaygroundPage() {
 
   return topBarOnlyAppPageShell(
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="mb-4">
-        <h1 className="text-2xl font-bold" style={{ color: 'var(--lp-text)' }}>
-          DataTable playground
-        </h1>
-        <p className="mt-1 text-sm" style={{ color: 'var(--lp-text-secondary)' }}>
-          UX05 — list primitive (admin only). Four demos + optional loading skeleton.
-        </p>
-      </div>
+      <PageHeader
+        title="DataTable playground"
+        subtitle="UX05 — list primitive (admin only). Four demos + optional loading skeleton."
+        className="mb-4"
+      />
       <DataTablePlaygroundClient />
     </div>
   );

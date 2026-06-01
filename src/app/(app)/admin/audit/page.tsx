@@ -4,6 +4,7 @@
 
 import { AdminSubNav } from '@/components/admin/AdminSubNav';
 import { AuditLogClient } from '@/components/admin/AuditLogClient';
+import { PageHeader } from '@/components/ui/PageHeader';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,29 +21,11 @@ export default function AdminAuditPage() {
           maxWidth: 1200,
         }}
       >
-        <header style={{ marginBottom: 'var(--lp-space-3)' }}>
-          <h1
-            style={{
-              margin: 0,
-              fontSize: 'var(--lp-text-2xl)',
-              fontWeight: 'var(--lp-weight-bold)',
-              color: 'var(--lp-text)',
-            }}
-          >
-            Audit log
-          </h1>
-          <p
-            style={{
-              marginTop: 4,
-              fontSize: 'var(--lp-text-sm)',
-              color: 'var(--lp-text-secondary)',
-            }}
-          >
-            Cross-workspace audit trail. Offset pagination — switch
-            to keyset on (created_at, id) when audit_log exceeds
-            ~10K rows (Sprint 12+).
-          </p>
-        </header>
+        <PageHeader
+          title="Audit log"
+          subtitle="Cross-workspace audit trail. Offset pagination — switch to keyset on (created_at, id) when audit_log exceeds ~10K rows (Sprint 12+)."
+          className="mb-3"
+        />
         <AuditLogClient />
       </div>
     </div>

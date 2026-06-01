@@ -4,6 +4,7 @@
 
 import { AdminSubNav } from '@/components/admin/AdminSubNav';
 import { WorkspacesListClient } from '@/components/admin/WorkspacesListClient';
+import { PageHeader } from '@/components/ui/PageHeader';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,28 +21,11 @@ export default function AdminWorkspacesPage() {
           maxWidth: 1200,
         }}
       >
-        <header style={{ marginBottom: 'var(--lp-space-3)' }}>
-          <h1
-            style={{
-              margin: 0,
-              fontSize: 'var(--lp-text-2xl)',
-              fontWeight: 'var(--lp-weight-bold)',
-              color: 'var(--lp-text)',
-            }}
-          >
-            Workspaces
-          </h1>
-          <p
-            style={{
-              marginTop: 4,
-              fontSize: 'var(--lp-text-sm)',
-              color: 'var(--lp-text-secondary)',
-            }}
-          >
-            Cross-workspace listing. Archive soft-deletes (hides from
-            non-site-admin views; data preserved).
-          </p>
-        </header>
+        <PageHeader
+          title="Workspaces"
+          subtitle="Cross-workspace listing. Archive soft-deletes (hides from non-site-admin views; data preserved)."
+          className="mb-3"
+        />
         <WorkspacesListClient />
       </div>
     </div>
