@@ -121,8 +121,8 @@ export function AuthButton({
 }: AuthButtonProps) {
   const isDisabled = disabled || loading;
   const base =
-    'inline-flex items-center justify-center gap-3 rounded-md py-3 text-sm font-medium ' +
-    'outline-none transition-colors duration-200 focus-visible:ring-2 ' +
+    'lp-auth-btn inline-flex items-center justify-center gap-3 rounded-md py-3 text-sm font-medium ' +
+    'outline-none focus-visible:ring-2 ' +
     'disabled:cursor-not-allowed disabled:opacity-60';
   return (
     <button

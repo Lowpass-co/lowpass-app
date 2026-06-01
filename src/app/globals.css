@@ -385,6 +385,30 @@ td[data-density="cozy"] .lp-mono {
   .lp-modal-enter { animation: none; }
 }
 
+/* ── Auth button interaction states (UX Audit 2026) ──
+   The auth buttons (AuthKit) carry brand-orange / dark
+   backgrounds via inline style, so hover/active can't be
+   expressed as a swapped background class. A filter-based
+   lift works over ANY inline background and is the skill's
+   recommended approach for hover/press feedback (skill:
+   interaction-states): subtle brightness on hover, a small
+   press scale on :active. Focus is the existing ring.
+   prefers-reduced-motion drops the transform. */
+.lp-auth-btn {
+  transition: filter 200ms ease, transform 120ms ease, box-shadow 200ms ease;
+}
+.lp-auth-btn:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+.lp-auth-btn:active:not(:disabled) {
+  filter: brightness(0.96);
+  transform: scale(0.985);
+}
+@media (prefers-reduced-motion: reduce) {
+  .lp-auth-btn { transition: filter 200ms ease; }
+  .lp-auth-btn:active:not(:disabled) { transform: none; }
+}
+
 /* Table / breakdown column headers — light #471300, dark muted grey */
 .lp-table-header-text {
   color: var(--lp-table-header-text);
