@@ -409,6 +409,146 @@ td[data-density="cozy"] .lp-mono {
   .lp-auth-btn:active:not(:disabled) { transform: none; }
 }
 
+/* ============================================================
+   UX Audit 2026 — Advance field-cell language ("missing / filled")
+
+   Ported from Adam's per-show Advance redesign reference, but routed
+   through --lp tokens instead of the mockup's hardcoded zinc/amber so
+   it respects light + dark (adaptive, not dark-only — per the trial
+   decision). Two cell states make a long form scannable at a glance:
+
+     .advance-cell--missing : amber dashed, lifts + glows on hover.
+                              amber = --color-lp-status-needs-review.
+     .advance-cell--filled  : solid surface, emerald right-edge bar.
+                              emerald = --color-lp-status-complete.
+
+   Names are deliberately generic ("advance-cell", "advance-badge")
+   so the same interaction language can flow to other data-entry
+   surfaces, not just Advance.
+   ============================================================ */
+.advance-cell {
+  border-radius: 12px;
+  padding: 14px 16px;
+  transition:
+    background-color 200ms var(--lp-ease-standard, ease),
+    border-color 200ms var(--lp-ease-standard, ease),
+    box-shadow 200ms var(--lp-ease-standard, ease),
+    transform 200ms var(--lp-ease-standard, ease);
+}
+
+.advance-cell--missing {
+  position: relative;
+  cursor: text;
+  background: color-mix(in srgb, var(--color-lp-status-needs-review) 3%, transparent);
+  border: 1px dashed color-mix(in srgb, var(--color-lp-status-needs-review) 32%, transparent);
+}
+.advance-cell--missing:hover,
+.advance-cell--missing:focus-within {
+  background: color-mix(in srgb, var(--color-lp-status-needs-review) 8%, transparent);
+  border-color: color-mix(in srgb, var(--color-lp-status-needs-review) 58%, transparent);
+  box-shadow: 0 0 15px color-mix(in srgb, var(--color-lp-status-needs-review) 12%, transparent);
+  transform: translateY(-1px);
+}
+.advance-cell--missing .advance-cell__label {
+  color: var(--lp-text-tertiary);
+  transition: color 200ms var(--lp-ease-standard, ease);
+}
+.advance-cell--missing:hover .advance-cell__label,
+.advance-cell--missing:focus-within .advance-cell__label {
+  color: color-mix(in srgb, var(--color-lp-status-needs-review) 85%, var(--lp-text));
+}
+
+.advance-cell--filled {
+  position: relative;
+  overflow: hidden;
+  background: var(--lp-surface);
+  border: 1px solid var(--lp-border);
+}
+.advance-cell--filled:hover {
+  border-color: var(--lp-border-strong);
+}
+.advance-cell--filled::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 4px;
+  height: 100%;
+  background: color-mix(in srgb, var(--color-lp-status-complete) 60%, transparent);
+}
+.advance-cell--filled .advance-cell__label {
+  color: var(--lp-text-secondary);
+}
+
+.advance-cell__label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+}
+
+/* Plus affordance shown in a missing cell's value row. The icon
+   scales + warms to amber on hover (mirrors the reference's
+   empty-icon micro-interaction). */
+.advance-cell__plus {
+  flex-shrink: 0;
+  color: color-mix(in srgb, var(--color-lp-status-needs-review) 70%, transparent);
+  transition: transform 200ms var(--lp-ease-standard, ease),
+    color 200ms var(--lp-ease-standard, ease);
+}
+.advance-cell--missing:hover .advance-cell__plus {
+  transform: scale(1.12);
+  color: var(--color-lp-status-needs-review);
+}
+
+/* "Needs Input" / "Complete" section badge with a pulse dot. */
+.advance-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 4px 8px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+.advance-badge__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 9999px;
+}
+.advance-badge--needs {
+  color: color-mix(in srgb, var(--color-lp-status-needs-review) 88%, var(--lp-text));
+  border-color: color-mix(in srgb, var(--color-lp-status-needs-review) 22%, transparent);
+  background: color-mix(in srgb, var(--color-lp-status-needs-review) 6%, transparent);
+}
+.advance-badge--needs .advance-badge__dot {
+  background: var(--color-lp-status-needs-review);
+  animation: advance-pulse 2.4s var(--lp-ease-standard, ease) infinite;
+}
+.advance-badge--complete {
+  color: color-mix(in srgb, var(--color-lp-status-complete) 85%, var(--lp-text));
+  border-color: color-mix(in srgb, var(--color-lp-status-complete) 22%, transparent);
+  background: color-mix(in srgb, var(--color-lp-status-complete) 6%, transparent);
+}
+.advance-badge--complete .advance-badge__dot {
+  background: var(--color-lp-status-complete);
+}
+@keyframes advance-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .advance-badge__dot { animation: none !important; }
+}
+
 /* Table / breakdown column headers — light #471300, dark muted grey */
 .lp-table-header-text {
   color: var(--lp-table-header-text);
