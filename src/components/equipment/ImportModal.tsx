@@ -9,6 +9,7 @@ import { useState, useRef, useCallback, DragEvent, ChangeEvent } from 'react';
 import { X, Upload, Link2, ChevronRight, Check, Loader2, AlertCircle } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { createClient } from '@/lib/supabase-client';
+import { useToast } from '@/components/ui/Toast';
 import { dayRateFromPurchase } from '@/lib/rental-pricing';
 import { BrandedSelect } from '@/components/ui/BrandedSelect';
 import type { RentalInventoryItem } from './types';
@@ -134,6 +135,7 @@ interface Props {
 }
 
 export function ImportModal({ userId, onImported, onClose }: Props) {
+  const { showToast } = useToast();
   const [step, setStep]         = useState<Step>('source');
   const [tab, setTab]           = useState<SourceTab>('file');
   const [dragging, setDragging] = useState(false);
@@ -160,9 +162,9 @@ export function ImportModal({ userId, onImported, onClose }: Props) {
       setColMap(autoMap(data.headers));
       setStep('map');
     } catch (e: any) {
-      alert('Could not read file: ' + e.message);
+      showToast('Could not read file: ' + e.message, 'error');
     }
-  }, []);
+  }, [showToast]);
 
   const onDrop = useCallback((e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();

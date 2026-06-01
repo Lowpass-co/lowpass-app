@@ -7,6 +7,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 import { createClient } from '@/lib/supabase-client';
+import { useToast } from '@/components/ui/Toast';
 import { StyledSelect, type StyledSelectOption } from '@/components/ui/StyledSelect';
 import {
   dayRateFromPurchase,
@@ -26,6 +27,7 @@ interface Props {
 }
 
 export function InventoryModal({ userId, workspaceId, editing, onSave, onClose }: Props) {
+  const { showToast } = useToast();
   const [name, setName]             = useState(editing?.name             ?? '');
   const [category, setCategory]     = useState(editing?.category         ?? '');
   const [serial, setSerial]         = useState(editing?.serial_number    ?? '');
@@ -149,7 +151,7 @@ export function InventoryModal({ userId, workspaceId, editing, onSave, onClose }
     }
 
     setSaving(false);
-    if (result.error) { alert('Save failed: ' + result.error.message); return; }
+    if (result.error) { showToast('Save failed: ' + result.error.message, 'error'); return; }
     onSave(result.data as RentalInventoryItem);
   }
 
