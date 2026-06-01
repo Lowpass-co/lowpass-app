@@ -13,15 +13,17 @@
    ============================================ */
 
 import { ProductShell } from '@/components/shell-v2';
+import { PageHeader } from '@/components/ui/PageHeader';
 
 export default async function VenuesPage() {
   return (
     <ProductShell active={null} artistId={null} productName="Venues">
       <div className="mx-auto max-w-6xl p-6">
-        <h1 className="text-2xl font-bold text-lp-text">Venues</h1>
-        <p className="mt-1 text-sm text-lp-text-secondary">
-          Venue and contact database. Coming in a later phase.
-        </p>
+        {/* UX Audit 2026 — uniform page chrome via <PageHeader>. */}
+        <PageHeader
+          title="Venues"
+          subtitle="Venue and contact database. Coming in a later phase."
+        />
       </div>
     </ProductShell>
   );

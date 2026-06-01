@@ -52,7 +52,12 @@ export function PageHeader({ title, subtitle, eyebrow, actions, className }: Pag
             {eyebrow}
           </p>
         ) : null}
-        <h1 className="text-xl font-bold leading-tight tracking-tight text-lp-text">
+        {/* Canonical page-title scale: 24px / bold / display
+            font / tight tracking — matches the established
+            majority (Equipment, Venues, Bugs, workspace
+            dashboard) so adopting PageHeader doesn't resize
+            existing pages. */}
+        <h1 className="font-display text-2xl font-bold leading-tight tracking-tight text-lp-text">
           {title}
         </h1>
         {subtitle ? (
