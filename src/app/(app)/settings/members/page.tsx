@@ -23,6 +23,7 @@ import { ProductShell } from '@/components/shell-v2';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { MembersListClient } from '@/components/settings/members/MembersListClient';
 import { SettingsSubNav } from '@/components/settings/SettingsSubNav';
+import { PageHeader } from '@/components/ui/PageHeader';
 
 export const dynamic = 'force-dynamic';
 
@@ -72,26 +73,11 @@ export default async function SettingsMembersPage() {
         className="mx-auto w-full"
         style={{ maxWidth: 880, padding: 'var(--lp-space-4)' }}
       >
-      <header style={{ marginBottom: 'var(--lp-space-4)' }}>
-        <h1
-          style={{
-            fontSize: 'var(--lp-text-2xl)',
-            fontWeight: 'var(--lp-weight-bold)',
-            color: 'var(--lp-text)',
-          }}
-        >
-          {workspaceName || 'Workspace'}
-        </h1>
-        <p
-          style={{
-            marginTop: 4,
-            fontSize: 'var(--lp-text-sm)',
-            color: 'var(--lp-text-secondary)',
-          }}
-        >
-          Manage who can see and edit data in this workspace.
-        </p>
-      </header>
+      <PageHeader
+        title={workspaceName || 'Workspace'}
+        subtitle="Manage who can see and edit data in this workspace."
+        className="mb-4"
+      />
 
       {!isAdmin ? (
         <div
