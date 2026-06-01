@@ -13,6 +13,7 @@ import { notFound } from 'next/navigation';
 import Link from 'next/link';
 import { Wallet } from 'lucide-react';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { PageHeader } from '@/components/ui/PageHeader';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,28 +44,10 @@ export default async function ArtistFinancialsPage({ params }: PageProps) {
         margin: '0 auto',
       }}
     >
-      <header>
-        <p
-          style={{
-            fontSize: 'var(--lp-text-xs)',
-            color: 'var(--lp-text-tertiary)',
-            marginBottom: 'var(--lp-space-1)',
-          }}
-        >
-          {artist.name} · Financial templates
-        </p>
-        <h1
-          className="lp-h2"
-          style={{
-            margin: 0,
-            fontSize: 'var(--lp-text-2xl)',
-            fontWeight: 'var(--lp-weight-semibold)',
-            color: 'var(--lp-text)',
-          }}
-        >
-          {artist.name} — Financial templates
-        </h1>
-      </header>
+      <PageHeader
+        eyebrow={`${artist.name} · Financial templates`}
+        title={`${artist.name} — Financial templates`}
+      />
 
       <div
         style={{
