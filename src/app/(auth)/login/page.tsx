@@ -13,6 +13,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase-client';
 import { LowpassLogo } from '@/components/common/LowpassLogo';
 import { cn } from '@/lib/utils';
+import { AuthField, AuthButton, AuthLink, AuthError } from '@/components/auth/AuthKit';
 
 /* Sprint 9 §14.3 — honor `next` query param after auth so the
    invite-accept landing (and any other deep-link redirect)
@@ -271,57 +272,37 @@ function LoginPageInner() {
                   <p className="mt-2 text-[#71717a]">
                     We sent a reset link to <strong>{email}</strong>. Click the link to set a new password.
                   </p>
-                  <button
-                    type="button"
-                    onClick={() => { setShowForgotPassword(false); setForgotSent(false); }}
-                    className="mt-4 text-sm font-medium transition-colors hover:underline"
-                    style={{ color: '#ff5500' }}
-                  >
-                    Back to sign in
-                  </button>
+                  <div className="mt-4">
+                    <AuthLink onClick={() => { setShowForgotPassword(false); setForgotSent(false); }}>
+                      Back to sign in
+                    </AuthLink>
+                  </div>
                 </div>
               ) : (
                 <>
-                  {error && (
-                    <div className="mb-5 rounded-lg border border-red-800 bg-red-950/50 px-4 py-3 text-sm text-red-400">
-                      {error}
-                    </div>
-                  )}
+                  <AuthError>{error}</AuthError>
                   <form onSubmit={handleForgotPassword} className="space-y-5">
-                    <div className="space-y-2">
-                      <label htmlFor="forgot-email" className="block text-[13px] font-medium" style={{ color: '#e4e4e7' }}>Email</label>
-                      <input
-                        id="forgot-email"
-                        type="email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        placeholder="you@example.com"
-                        required
-                        className={cn(
-                          'w-full rounded-md px-4 py-3 text-sm text-white placeholder:text-[#71717a]',
-                          'border border-[#27272a] bg-[#18181b]',
-                          'focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange',
-                          'transition-colors duration-200'
-                        )}
-                      />
-                    </div>
+                    <AuthField
+                      id="forgot-email"
+                      label="Email"
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="you@example.com"
+                      autoComplete="email"
+                      required
+                    />
                     <div className="flex gap-2">
-                      <button
-                        type="submit"
-                        disabled={forgotLoading}
-                        className="flex-1 rounded-md py-3 text-sm font-medium text-white transition-colors duration-200 disabled:opacity-60"
-                        style={{ background: '#ff5500' }}
-                      >
-                        {forgotLoading ? 'Sending…' : 'Send reset link'}
-                      </button>
-                      <button
-                        type="button"
+                      <AuthButton type="submit" loading={forgotLoading} block>
+                        Send reset link
+                      </AuthButton>
+                      <AuthButton
+                        variant="secondary"
+                        block={false}
                         onClick={() => { setShowForgotPassword(false); setError(null); }}
-                        className="rounded-md border border-[#27272a] bg-[#18181b] px-4 py-3 text-sm font-medium transition-colors hover:bg-[#27272a]"
-                        style={{ color: '#e4e4e7' }}
                       >
                         Back
-                      </button>
+                      </AuthButton>
                     </div>
                   </form>
                 </>
@@ -331,67 +312,45 @@ function LoginPageInner() {
             <>
           <h2 className="mb-8 text-2xl font-medium text-white">Sign in</h2>
 
-          {error && (
-            <div className="mb-5 rounded-lg border border-red-800 bg-red-950/50 px-4 py-3 text-sm text-red-400">
-              {error}
-            </div>
-          )}
+          <AuthError>{error}</AuthError>
 
           <form onSubmit={handleLogin} className="space-y-5">
-            <div className="space-y-2">
-              <label htmlFor="email" className="block text-[13px] font-medium" style={{ color: '#e4e4e7' }}>Email</label>
-              <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                required
-                className={cn(
-                  'w-full rounded-md px-4 py-3 text-sm text-white placeholder:text-[#71717a]',
-                  'border border-[#27272a] bg-[#18181b]',
-                  'focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange',
-                  'transition-colors duration-200'
-                )}
-              />
-            </div>
+            <AuthField
+              id="email"
+              label="Email"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="you@example.com"
+              autoComplete="email"
+              required
+            />
 
             <div className="space-y-2">
               <div className="flex items-center justify-between">
-                <label htmlFor="password" className="text-[13px] font-medium" style={{ color: '#e4e4e7' }}>Password</label>
-                <button
-                  type="button"
-                  onClick={() => setShowForgotPassword(true)}
-                  className="text-[12px] transition-colors hover:underline"
-                  style={{ color: '#ff5500' }}
-                >
+                <span className="text-[13px] font-medium" style={{ color: '#e4e4e7' }}>Password</span>
+                <AuthLink className="text-[12px]" onClick={() => setShowForgotPassword(true)}>
                   Forgot?
-                </button>
+                </AuthLink>
               </div>
-              <input
+              <AuthField
                 id="password"
-                type="password"
+                label=""
+                aria-label="Password"
+                password
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
+                autoComplete="current-password"
                 required
-                className={cn(
-                  'w-full rounded-md px-4 py-3 text-sm text-white placeholder:text-[#71717a]',
-                  'border border-[#27272a] bg-[#18181b]',
-                  'focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange',
-                  'transition-colors duration-200'
-                )}
               />
             </div>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="mt-2 w-full rounded-md py-3 text-sm font-medium text-white transition-colors duration-200 disabled:cursor-not-allowed disabled:opacity-60"
-              style={{ background: '#ff5500' }}
-            >
-              {loading ? 'Signing in…' : 'Sign in'}
-            </button>
+            <div className="pt-2">
+              <AuthButton type="submit" loading={loading} block>
+                Sign in
+              </AuthButton>
+            </div>
           </form>
 
           {/* Divider */}
@@ -402,11 +361,7 @@ function LoginPageInner() {
           </div>
 
           {/* Google */}
-          <button
-            onClick={handleGoogleLogin}
-            className="flex w-full items-center justify-center gap-3 rounded-md border border-[#27272a] bg-[#18181b] py-3 text-sm font-medium transition-colors duration-200 hover:bg-[#27272a]"
-            style={{ color: '#e4e4e7' }}
-          >
+          <AuthButton variant="secondary" onClick={handleGoogleLogin} block>
             <svg viewBox="0 0 24 24" width="18" height="18">
               <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
               <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
@@ -414,11 +369,15 @@ function LoginPageInner() {
               <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
             </svg>
             Continue with Google
-          </button>
+          </AuthButton>
 
           <p className="mt-10 text-center text-[13px]" style={{ color: '#71717a' }}>
             Don&apos;t have an account?{' '}
-            <Link href="/signup" className="font-medium transition-colors hover:underline" style={{ color: '#ff5500' }}>
+            <Link
+              href="/signup"
+              className="font-medium transition-colors hover:underline"
+              style={{ color: 'var(--color-lp-orange)' }}
+            >
               Sign up
             </Link>
           </p>
