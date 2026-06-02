@@ -1,0 +1,127 @@
+/* ============================================
+   LOWPASS — <StagePlotEditor> (§SP2b/§SP3)
+
+   Three-pane editor: icon palette (left) · stage canvas (centre)
+   · properties (right). Owns the in-memory plot + items; emits
+   onChange so a host can persist (localStorage in the dev
+   harness, API in production). Add from palette, click to select,
+   drag to move (snap), edit/delete in the properties panel.
+   ============================================ */
+'use client';
+
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { getIcon } from '@/lib/stage-plot/icons';
+import { IconPalette } from '@/components/stage-plot/IconPalette';
+import { ItemProperties } from '@/components/stage-plot/ItemProperties';
+import { StageCanvas } from '@/components/stage-plot/StageCanvas';
+import { DEFAULT_PLOT, type EditorItem, type EditorPlot } from '@/lib/stage-plot/editor-types';
+
+const uid = (): string =>
+  typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `i${Date.now()}${Math.round(Math.random() * 1e6)}`;
+
+export interface StagePlotEditorProps {
+  initialPlot?: EditorPlot;
+  initialItems?: EditorItem[];
+  onChange?: (plot: EditorPlot, items: EditorItem[]) => void;
+  /** Optional header-right slot (export / share buttons). */
+  actions?: React.ReactNode;
+}
+
+export function StagePlotEditor({ initialPlot, initialItems, onChange, actions }: StagePlotEditorProps) {
+  const [plot, setPlot] = useState<EditorPlot>(initialPlot ?? DEFAULT_PLOT);
+  const [items, setItems] = useState<EditorItem[]>(initialItems ?? []);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  // Emit changes (debounced) for the host to persist. Keep the
+  // latest callback in a ref (updated in an effect, not render).
+  const onChangeRef = useRef(onChange);
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  });
+  useEffect(() => {
+    const t = setTimeout(() => onChangeRef.current?.(plot, items), 400);
+    return () => clearTimeout(t);
+  }, [plot, items]);
+
+  const addItem = useCallback((iconName: string) => {
+    const icon = getIcon(iconName);
+    setItems((prev) => {
+      const id = uid();
+      setSelectedId(id);
+      return [
+        ...prev,
+        { id, iconName, xFt: plot.widthFt / 2, yFt: plot.depthFt / 2, rotationDeg: 0, layer: 'main' as const, label: icon?.label },
+      ];
+    });
+  }, [plot.widthFt, plot.depthFt]);
+
+  const moveItem = useCallback((id: string, xFt: number, yFt: number) => {
+    setItems((prev) => prev.map((it) => (it.id === id ? { ...it, xFt, yFt } : it)));
+  }, []);
+
+  const updateSelected = useCallback((patch: Partial<EditorItem>) => {
+    setItems((prev) => prev.map((it) => (it.id === selectedId ? { ...it, ...patch } : it)));
+  }, [selectedId]);
+
+  const deleteSelected = useCallback(() => {
+    setItems((prev) => prev.filter((it) => it.id !== selectedId));
+    setSelectedId(null);
+  }, [selectedId]);
+
+  // Delete / Backspace removes the selection.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId) {
+        const tag = (e.target as HTMLElement)?.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA') return;
+        e.preventDefault();
+        deleteSelected();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [selectedId, deleteSelected]);
+
+  const selected = items.find((it) => it.id === selectedId) ?? null;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--lp-bg)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 14px', borderBottom: '1px solid var(--lp-border)' }}>
+        <input
+          value={plot.name}
+          onChange={(e) => setPlot((p) => ({ ...p, name: e.target.value }))}
+          style={{ fontSize: 'var(--lp-text-md)', fontWeight: 600, border: 'none', background: 'transparent', color: 'var(--lp-text)', flex: 1, outline: 'none' }}
+        />
+        <span style={{ fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-tertiary)' }}>{items.length} items</span>
+        {actions}
+      </div>
+      <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
+        <div style={{ width: 240, minWidth: 240 }}>
+          <IconPalette onAdd={addItem} />
+        </div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <StageCanvas
+            widthFt={plot.widthFt}
+            depthFt={plot.depthFt}
+            gridSizeFt={plot.gridSizeFt}
+            showGrid={plot.showGrid}
+            showRulers={plot.showRulers}
+            snap={plot.snap}
+            brandColor={plot.brandColor}
+            items={items}
+            selectedId={selectedId}
+            onSelectItem={setSelectedId}
+            onMoveItem={moveItem}
+          />
+        </div>
+        <ItemProperties
+          plot={plot}
+          item={selected}
+          onUpdateItem={updateSelected}
+          onDeleteItem={deleteSelected}
+          onUpdatePlot={(patch) => setPlot((p) => ({ ...p, ...patch }))}
+        />
+      </div>
+    </div>
+  );
+}

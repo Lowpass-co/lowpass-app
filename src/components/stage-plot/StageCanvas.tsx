@@ -1,14 +1,15 @@
 /* ============================================
-   LOWPASS — <StageCanvas> (§SP2a)
+   LOWPASS — <StageCanvas> (§SP2a + §SP2b)
 
-   The SVG stage surface: dotted grid, stage rectangle, edge
-   rulers, cardinal labels (US/DS/SL/SR), AUDIENCE marker, and
-   placed items rendered from the icon registry. Pan (drag empty
-   canvas) + zoom (wheel toward cursor). Render-only here;
-   selection + drag-drop land in §SP2b.
+   The SVG stage surface: dotted grid (faint sub-foot + bold
+   foot), stage rectangle, edge rulers, cardinal labels
+   (US/DS/SL/SR), AUDIENCE marker, and placed items from the icon
+   registry at real footprint scale. Pan (drag empty canvas) +
+   wheel zoom. Interactive when callbacks are supplied: click to
+   select, drag to move (snap-to-grid); read-only otherwise (the
+   public reader reuses this).
 
-   Pure SVG so the same DOM exports to PDF via Puppeteer (§SP7)
-   and hit-testing is native per element.
+   Pure SVG so the same DOM exports to PDF via Puppeteer (§SP7).
    ============================================ */
 'use client';
 
@@ -16,10 +17,10 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from 're
 import { getCategory, getIcon } from '@/lib/stage-plot/icons';
 import { ICON_BRAND_TINT_PCT } from '@/lib/stage-plot/icons/types';
 import {
-  BASE_PX_PER_FOOT,
   DEFAULT_VIEW,
   ft,
   fitView,
+  snapToGrid,
   zoomAt,
   type ViewTransform,
 } from '@/lib/stage-plot/geometry';
@@ -36,6 +37,7 @@ export interface CanvasItem {
   depthFt?: number;
   rotationDeg?: number;
   colorTint?: string | null;
+  locked?: boolean;
 }
 
 export interface StageCanvasProps {
@@ -44,9 +46,22 @@ export interface StageCanvasProps {
   gridSizeFt?: number;
   showGrid?: boolean;
   showRulers?: boolean;
+  snap?: boolean;
   items: CanvasItem[];
   brandColor?: string;
+  selectedId?: string | null;
+  /** Supply to make the canvas interactive. */
+  onSelectItem?: (id: string | null) => void;
+  onMoveItem?: (id: string, xFt: number, yFt: number) => void;
   className?: string;
+}
+
+interface DragState {
+  id: string;
+  startX: number;
+  startY: number;
+  origXFt: number;
+  origYFt: number;
 }
 
 export function StageCanvas({
@@ -55,8 +70,12 @@ export function StageCanvas({
   gridSizeFt = 1,
   showGrid = true,
   showRulers = true,
+  snap = true,
   items,
   brandColor = DEFAULT_BRAND,
+  selectedId = null,
+  onSelectItem,
+  onMoveItem,
   className,
 }: StageCanvasProps) {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -65,8 +84,9 @@ export function StageCanvas({
   const [panning, setPanning] = useState(false);
   const fitted = useRef(false);
   const pan = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
+  const drag = useRef<DragState | null>(null);
+  const interactive = Boolean(onSelectItem || onMoveItem);
 
-  // Measure host + fit the stage once we have dimensions.
   useEffect(() => {
     const host = hostRef.current;
     if (!host) return;
@@ -89,33 +109,61 @@ export function StageCanvas({
     setView((v) => zoomAt(v, factor, e.clientX - rect.left, e.clientY - rect.top));
   }, []);
 
-  const onPointerDown = useCallback((e: React.PointerEvent) => {
-    // Pan only when starting on empty canvas (not on an item).
-    if ((e.target as Element).closest('[data-canvas-item]')) return;
-    (e.currentTarget as Element).setPointerCapture(e.pointerId);
-    setPanning(true);
-    setView((v) => {
-      pan.current = { x: e.clientX, y: e.clientY, panX: v.panX, panY: v.panY };
-      return v;
-    });
-  }, []);
+  const onPointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      const itemEl = (e.target as Element).closest('[data-canvas-item]');
+      (e.currentTarget as Element).setPointerCapture(e.pointerId);
+      if (itemEl && interactive) {
+        const id = itemEl.getAttribute('data-canvas-item')!;
+        const it = items.find((i) => i.id === id);
+        onSelectItem?.(id);
+        if (it && !it.locked && onMoveItem) {
+          drag.current = { id, startX: e.clientX, startY: e.clientY, origXFt: it.xFt, origYFt: it.yFt };
+        }
+        return;
+      }
+      // empty canvas → deselect + pan
+      onSelectItem?.(null);
+      setPanning(true);
+      setView((v) => {
+        pan.current = { x: e.clientX, y: e.clientY, panX: v.panX, panY: v.panY };
+        return v;
+      });
+    },
+    [interactive, items, onSelectItem, onMoveItem],
+  );
 
-  const onPointerMove = useCallback((e: React.PointerEvent) => {
-    const p = pan.current;
-    if (!p) return;
-    setView((v) => ({ ...v, panX: p.panX + (e.clientX - p.x), panY: p.panY + (e.clientY - p.y) }));
-  }, []);
+  const onPointerMove = useCallback(
+    (e: React.PointerEvent) => {
+      const d = drag.current;
+      if (d && onMoveItem) {
+        const dxFt = (e.clientX - d.startX) / view.zoom / ft(1);
+        const dyFt = (e.clientY - d.startY) / view.zoom / ft(1);
+        let xFt = d.origXFt + dxFt;
+        let yFt = d.origYFt + dyFt;
+        if (snap) {
+          xFt = snapToGrid(ft(xFt), gridSizeFt) / ft(1);
+          yFt = snapToGrid(ft(yFt), gridSizeFt) / ft(1);
+        }
+        onMoveItem(d.id, +xFt.toFixed(2), +yFt.toFixed(2));
+        return;
+      }
+      const p = pan.current;
+      if (!p) return;
+      setView((v) => ({ ...v, panX: p.panX + (e.clientX - p.x), panY: p.panY + (e.clientY - p.y) }));
+    },
+    [onMoveItem, view.zoom, snap, gridSizeFt],
+  );
 
-  const endPan = useCallback(() => {
+  const endInteraction = useCallback(() => {
     pan.current = null;
+    drag.current = null;
     setPanning(false);
   }, []);
 
   const stageW = ft(widthFt);
   const stageH = ft(depthFt);
   const g = ft(gridSizeFt);
-
-  // Ruler ticks every grid step; labels every ~4 ft.
   const labelEvery = Math.max(1, Math.round(4 / gridSizeFt));
   const xTicks = Array.from({ length: Math.floor(widthFt / gridSizeFt) + 1 }, (_, i) => i);
   const yTicks = Array.from({ length: Math.floor(depthFt / gridSizeFt) + 1 }, (_, i) => i);
@@ -128,22 +176,19 @@ export function StageCanvas({
       onWheel={onWheel}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
-      onPointerUp={endPan}
-      onPointerCancel={endPan}
+      onPointerUp={endInteraction}
+      onPointerCancel={endInteraction}
     >
       <svg width={size.w} height={size.h} style={{ display: 'block' }}>
         <defs>
-          {/* faint sub-foot dots */}
           <pattern id="lp-grid-fine" width={g / 2} height={g / 2} patternUnits="userSpaceOnUse">
             <circle cx={g / 2} cy={g / 2} r={0.6} className="lp-canvas-grid-dot-fine" />
           </pattern>
-          {/* bold 1-foot dots */}
           <pattern id="lp-grid" width={g} height={g} patternUnits="userSpaceOnUse">
             <circle cx={g} cy={g} r={1.4} className="lp-canvas-grid-dot" />
           </pattern>
         </defs>
         <g transform={`translate(${view.panX} ${view.panY}) scale(${view.zoom})`}>
-          {/* Stage */}
           <rect className="lp-canvas-stage" x={0} y={0} width={stageW} height={stageH} rx={4} strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
           {showGrid && (
             <>
@@ -152,7 +197,6 @@ export function StageCanvas({
             </>
           )}
 
-          {/* Rulers along top + left edges */}
           {showRulers && (
             <g>
               {xTicks.map((i) => (
@@ -174,14 +218,12 @@ export function StageCanvas({
             </g>
           )}
 
-          {/* Cardinal labels (SR = page-left, SL = page-right) */}
           <text className="lp-canvas-cardinal" x={stageW / 2} y={-18} textAnchor="middle">US</text>
-          <text className="lp-canvas-cardinal" x={stageW / 2} y={stageH + 24} textAnchor="middle">DS</text>
+          <text className="lp-canvas-cardinal" x={stageW / 2} y={stageH + 22} textAnchor="middle">DS</text>
           <text className="lp-canvas-cardinal" x={-22} y={stageH / 2} textAnchor="middle">SR</text>
           <text className="lp-canvas-cardinal" x={stageW + 22} y={stageH / 2} textAnchor="middle">SL</text>
-          <text className="lp-canvas-audience" x={stageW / 2} y={stageH + 42} textAnchor="middle">AUDIENCE</text>
+          <text className="lp-canvas-audience" x={stageW / 2} y={stageH + 40} textAnchor="middle">AUDIENCE</text>
 
-          {/* Items */}
           {items.map((it) => {
             const icon = getIcon(it.iconName);
             if (!icon) return null;
@@ -196,8 +238,28 @@ export function StageCanvas({
               ? 'none'
               : it.colorTint ?? `color-mix(in srgb, ${brandColor} ${ICON_BRAND_TINT_PCT}%, transparent)`;
             const style = { fill, stroke: cat, '--lp-cat': cat } as CSSProperties & Record<string, string>;
+            const sel = it.id === selectedId;
             return (
-              <g key={it.id} data-canvas-item={it.id} transform={`rotate(${it.rotationDeg ?? 0} ${cx} ${cy})`}>
+              <g
+                key={it.id}
+                data-canvas-item={it.id}
+                transform={`rotate(${it.rotationDeg ?? 0} ${cx} ${cy})`}
+                style={{ cursor: interactive ? 'move' : undefined }}
+              >
+                {sel && (
+                  <rect
+                    x={cx - wpx / 2 - 4}
+                    y={cy - hpx / 2 - 4}
+                    width={wpx + 8}
+                    height={hpx + 8}
+                    rx={3}
+                    fill="none"
+                    stroke="var(--lp-orange)"
+                    strokeWidth={1.5}
+                    strokeDasharray="4 3"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                )}
                 <svg
                   x={cx - wpx / 2}
                   y={cy - hpx / 2}
@@ -217,5 +279,3 @@ export function StageCanvas({
     </div>
   );
 }
-
-export { BASE_PX_PER_FOOT };
