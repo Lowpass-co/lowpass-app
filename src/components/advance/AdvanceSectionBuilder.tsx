@@ -1109,6 +1109,54 @@ function SetupMode({
     return () => window.removeEventListener('advance:section-drop', onSectionDrop);
   }, [addSectionFromDrop]);
 
+  // advance-builder-fixes §1 — field-level palette. A single field
+  // clicked/dragged from the library (vs a whole group) lands here. It
+  // appends to the matching template's section, creating that section if
+  // it isn't on the canvas yet; de-dupes by field id so re-adding the
+  // same field is a no-op rather than a duplicate.
+  const addFieldFromLibrary = useCallback(
+    (templateId: string, label: string, field: FieldDef) => {
+      const clone: FieldDef = { ...field };
+      setSections((prev) => {
+        const idx = prev.findIndex((s) => s.template_id === templateId);
+        if (idx >= 0) {
+          if ((prev[idx].fields ?? []).some((f) => f.id === clone.id)) {
+            return prev;
+          }
+          const next = prev.map((s, i) =>
+            i === idx ? { ...s, fields: [...(s.fields ?? []), clone] } : s,
+          );
+          return next.map((s, i) => ({ ...s, order: i }));
+        }
+        return [
+          ...prev.map((s, i) => ({ ...s, order: i })),
+          {
+            template_id: templateId,
+            label: label || 'Section',
+            fields: [clone],
+            order: prev.length,
+          },
+        ];
+      });
+      setLastAddedTemplateId(templateId);
+    },
+    [],
+  );
+
+  useEffect(() => {
+    function onFieldAdd(e: Event) {
+      const ce = e as CustomEvent<{
+        templateId: string;
+        label: string;
+        field: FieldDef;
+      } | null>;
+      if (!ce.detail) return;
+      addFieldFromLibrary(ce.detail.templateId, ce.detail.label, ce.detail.field);
+    }
+    window.addEventListener('advance:field-add', onFieldAdd);
+    return () => window.removeEventListener('advance:field-add', onFieldAdd);
+  }, [addFieldFromLibrary]);
+
   const moveSectionOrder = useCallback((from: number, to: number) => {
     // Sprint 8.6 §4 — diagnostic log so Adam can confirm the
     // reorder fires + see from/to values. Static-trace can't
