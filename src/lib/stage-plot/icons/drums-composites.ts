@@ -49,33 +49,36 @@ function kit(shells: Shell[], cyms: Cym[], left: boolean): string {
 
 // Shared elements (RH): kick top, snare centre, throne bottom; hi-hat
 // page-left, ride page-right, crashes top corners.
+// Big kick centre, snare lower-left of it, throne at the bottom.
 const SHARED: Shell[] = [
-  ['drum-kick', 50, 28, 0.3],
-  ['drum-snare', 50, 60, 0.16],
-  ['drum-throne', 50, 85, 0.14],
+  ['drum-kick', 50, 43, 0.34],
+  ['drum-snare', 36, 58, 0.18],
+  ['drum-throne', 50, 86, 0.13],
 ];
+// Cymbals overlap the kit at the corners; hi-hat drummer-left, ride drummer-right.
 const SHARED_CYM: Cym[] = [
-  [16, 23, 9], // crash L
-  [84, 23, 9], // crash R
-  [13, 47, 9], // hi-hat (drummer's left)
-  [87, 43, 10], // ride (drummer's right)
+  [20, 20, 11], // crash L
+  [80, 20, 11], // crash R
+  [15, 50, 10], // hi-hat
+  [85, 45, 11], // ride
 ];
 
+// Rack toms sit up top (mounted over the kick); floor toms flank lower.
 const CONFIGS: Array<{ key: string; label: string; w: number; toms: Shell[]; floors: Shell[] }> = [
   {
-    key: '1t1f', label: '1 tom, 1 floor', w: 7,
-    toms: [['drum-tom-hi', 50, 41, 0.16]],
-    floors: [['drum-tom-floor', 71, 63, 0.2]],
+    key: '1t1f', label: '1 tom, 1 floor', w: 7.5,
+    toms: [['drum-tom-hi', 50, 25, 0.19]],
+    floors: [['drum-tom-floor', 73, 59, 0.23]],
   },
   {
-    key: '2t1f', label: '2 tom, 1 floor', w: 7.2,
-    toms: [['drum-tom-hi', 41, 41, 0.15], ['drum-tom-mid', 59, 41, 0.16]],
-    floors: [['drum-tom-floor', 71, 64, 0.2]],
+    key: '2t1f', label: '2 tom, 1 floor', w: 7.8,
+    toms: [['drum-tom-hi', 41, 24, 0.18], ['drum-tom-mid', 59, 24, 0.19]],
+    floors: [['drum-tom-floor', 74, 60, 0.23]],
   },
   {
-    key: '2t2f', label: '2 tom, 2 floor', w: 7.5,
-    toms: [['drum-tom-hi', 41, 40, 0.15], ['drum-tom-mid', 59, 40, 0.16]],
-    floors: [['drum-tom-floor', 30, 64, 0.19], ['drum-tom-floor', 71, 64, 0.19]],
+    key: '2t2f', label: '2 tom, 2 floor', w: 8,
+    toms: [['drum-tom-hi', 42, 23, 0.17], ['drum-tom-mid', 58, 23, 0.18]],
+    floors: [['drum-tom-floor', 27, 61, 0.21], ['drum-tom-floor', 73, 61, 0.21]],
   },
 ];
 
