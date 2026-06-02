@@ -16,11 +16,12 @@
    ============================================ */
 
 import { CATEGORIES, getCategory } from './categories';
+import { drumIcons } from './drums';
 import type { IconCategoryKey, IconDescriptor } from './types';
 
 /** Every built-in icon. Spread category arrays here as they ship. */
 export const ALL_ICONS: IconDescriptor[] = [
-  // ...drumIcons,      // §SP1a·2
+  ...drumIcons, // §SP1a·2a (core kit; §SP1a·2b appends aux + composites)
   // ...micIcons,       // §SP1a·3
   // ...musicianIcons,  // §SP1a·3
 ];
