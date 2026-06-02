@@ -15,7 +15,7 @@
    separately by the palette.
    ============================================ */
 
-import { CATEGORIES, getCategory } from './categories';
+import { CATEGORIES, CATEGORY_HEX, getCategory } from './categories';
 import { drumIcons } from './drums';
 import { drumAuxIcons } from './drums-aux';
 import { drumComposites } from './drums-composites';
@@ -72,5 +72,5 @@ export function searchIcons(query: string): IconDescriptor[] {
   });
 }
 
-export { CATEGORIES, getCategory };
+export { CATEGORIES, CATEGORY_HEX, getCategory };
 export type { IconDescriptor, IconCategoryKey } from './types';

@@ -35,3 +35,21 @@ const BY_KEY: Record<IconCategoryKey, IconCategory> = CATEGORIES.reduce(
 export function getCategory(key: IconCategoryKey): IconCategory {
   return BY_KEY[key];
 }
+
+/** Literal light-mode category hexes (mirror of the --lp-plot-cat-*
+ *  tokens in globals.css). For server-side PDF rendering (§SP7),
+ *  where the app's CSS custom properties aren't available. */
+export const CATEGORY_HEX: Record<IconCategoryKey, string> = {
+  musicians: '#475569',
+  mics: '#2563EB',
+  drums: '#525252',
+  strings: '#15803D',
+  keys: '#7C3AED',
+  amps: '#B45309',
+  monitors: '#0F766E',
+  signal: '#0369A1',
+  infrastructure: '#78716C',
+  lighting: '#A16207',
+  stands: '#64748B',
+  utility: '#BE123C',
+};
