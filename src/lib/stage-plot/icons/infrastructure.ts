@@ -225,8 +225,8 @@ export const infrastructureIcons: IconDescriptor[] = [
     "category": "infrastructure",
     "label": "Power 1",
     "footprint": {
-      "width_ft": 0.5,
-      "depth_ft": 0.5
+      "width_ft": 0.4,
+      "depth_ft": 0.4
     },
     "keywords": [
       "power",
@@ -243,8 +243,8 @@ export const infrastructureIcons: IconDescriptor[] = [
     "category": "infrastructure",
     "label": "Power 2",
     "footprint": {
-      "width_ft": 0.8,
-      "depth_ft": 0.5
+      "width_ft": 0.6,
+      "depth_ft": 0.4
     },
     "keywords": [
       "power",
@@ -261,8 +261,8 @@ export const infrastructureIcons: IconDescriptor[] = [
     "category": "infrastructure",
     "label": "Power 4",
     "footprint": {
-      "width_ft": 1,
-      "depth_ft": 0.8
+      "width_ft": 0.7,
+      "depth_ft": 0.6
     },
     "keywords": [
       "power",
@@ -279,8 +279,8 @@ export const infrastructureIcons: IconDescriptor[] = [
     "category": "infrastructure",
     "label": "Power 8",
     "footprint": {
-      "width_ft": 1.6,
-      "depth_ft": 0.8
+      "width_ft": 1,
+      "depth_ft": 0.6
     },
     "keywords": [
       "power",
@@ -297,7 +297,7 @@ export const infrastructureIcons: IconDescriptor[] = [
     "category": "infrastructure",
     "label": "Power distro",
     "footprint": {
-      "width_ft": 1.4,
+      "width_ft": 1.5,
       "depth_ft": 1
     },
     "keywords": [

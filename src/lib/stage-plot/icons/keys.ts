@@ -32,7 +32,7 @@ export const keyIcons: IconDescriptor[] = [
     "category": "keys",
     "label": "Upright",
     "footprint": {
-      "width_ft": 4.8,
+      "width_ft": 4.9,
       "depth_ft": 2
     },
     "keywords": [
@@ -49,7 +49,7 @@ export const keyIcons: IconDescriptor[] = [
     "category": "keys",
     "label": "88",
     "footprint": {
-      "width_ft": 4.6,
+      "width_ft": 4.4,
       "depth_ft": 1.2
     },
     "keywords": [
@@ -131,7 +131,7 @@ export const keyIcons: IconDescriptor[] = [
     "category": "keys",
     "label": "Leslie",
     "footprint": {
-      "width_ft": 2.2,
+      "width_ft": 2.3,
       "depth_ft": 2
     },
     "keywords": [
@@ -166,7 +166,7 @@ export const keyIcons: IconDescriptor[] = [
     "label": "Digital",
     "footprint": {
       "width_ft": 4.6,
-      "depth_ft": 1.2
+      "depth_ft": 1.1
     },
     "keywords": [
       "digital",
@@ -200,7 +200,7 @@ export const keyIcons: IconDescriptor[] = [
     "label": "MIDI",
     "footprint": {
       "width_ft": 2.6,
-      "depth_ft": 1.2
+      "depth_ft": 1
     },
     "keywords": [
       "midi",

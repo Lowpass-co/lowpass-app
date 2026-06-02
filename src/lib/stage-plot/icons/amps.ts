@@ -38,8 +38,8 @@ export const ampIcons: IconDescriptor[] = [
       "speaker"
     ],
     "footprint": {
-      "width_ft": 2,
-      "depth_ft": 0.9
+      "width_ft": 1.9,
+      "depth_ft": 1
     },
     "body": "<rect x=\"14\" y=\"36\" width=\"72\" height=\"28\" rx=\"3\"/><circle cx=\"30\" cy=\"41\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"42\" cy=\"41\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"54\" cy=\"41\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"50\" cy=\"56\" r=\"6\" class=\"lp-ico-detail\"/>"
   },
@@ -71,8 +71,8 @@ export const ampIcons: IconDescriptor[] = [
       "guitar"
     ],
     "footprint": {
-      "width_ft": 2.4,
-      "depth_ft": 1.3
+      "width_ft": 2.5,
+      "depth_ft": 1.2
     },
     "body": "<rect x=\"10\" y=\"30\" width=\"80\" height=\"40\" rx=\"4\"/><circle cx=\"30\" cy=\"44\" r=\"7\" class=\"lp-ico-detail\"/><circle cx=\"50\" cy=\"44\" r=\"7\" class=\"lp-ico-detail\"/><circle cx=\"70\" cy=\"44\" r=\"7\" class=\"lp-ico-detail\"/><text class=\"lp-ico-label\" x=\"50\" y=\"61\" text-anchor=\"middle\" dominant-baseline=\"central\" font-size=\"12\">M</text>"
   },
@@ -88,7 +88,7 @@ export const ampIcons: IconDescriptor[] = [
       "guitar"
     ],
     "footprint": {
-      "width_ft": 2.4,
+      "width_ft": 2.5,
       "depth_ft": 1.2
     },
     "body": "<rect x=\"10\" y=\"34\" width=\"80\" height=\"32\" rx=\"4\"/><circle cx=\"32\" cy=\"46\" r=\"6\" class=\"lp-ico-detail\"/><circle cx=\"50\" cy=\"46\" r=\"6\" class=\"lp-ico-detail\"/><circle cx=\"68\" cy=\"46\" r=\"6\" class=\"lp-ico-detail\"/><text class=\"lp-ico-label\" x=\"50\" y=\"46\" text-anchor=\"middle\" dominant-baseline=\"central\" font-size=\"0\"></text>"
@@ -120,7 +120,7 @@ export const ampIcons: IconDescriptor[] = [
       "tube"
     ],
     "footprint": {
-      "width_ft": 2.2,
+      "width_ft": 2.3,
       "depth_ft": 0.8
     },
     "body": "<rect x=\"10\" y=\"40\" width=\"80\" height=\"20\" rx=\"3\"/><circle cx=\"26\" cy=\"50\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"38\" cy=\"50\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"50\" cy=\"50\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"62\" cy=\"50\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"74\" cy=\"50\" r=\"2.2\" class=\"lp-ico-detail\"/>"
@@ -135,7 +135,7 @@ export const ampIcons: IconDescriptor[] = [
       "amplifier"
     ],
     "footprint": {
-      "width_ft": 2.2,
+      "width_ft": 2,
       "depth_ft": 0.9
     },
     "body": "<rect x=\"10\" y=\"38\" width=\"80\" height=\"24\" rx=\"3\"/><circle cx=\"28\" cy=\"44\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"40\" cy=\"44\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"52\" cy=\"44\" r=\"2.2\" class=\"lp-ico-detail\"/><text class=\"lp-ico-label\" x=\"72\" y=\"51\" text-anchor=\"middle\" dominant-baseline=\"central\" font-size=\"13\">B</text>"
@@ -153,8 +153,8 @@ export const ampIcons: IconDescriptor[] = [
       "cabinet"
     ],
     "footprint": {
-      "width_ft": 2.1,
-      "depth_ft": 1.6
+      "width_ft": 2.2,
+      "depth_ft": 1.4
     },
     "body": "<rect x=\"10\" y=\"26\" width=\"80\" height=\"48\" rx=\"4\"/><circle cx=\"26\" cy=\"40\" r=\"6\" class=\"lp-ico-detail\"/><circle cx=\"42\" cy=\"40\" r=\"6\" class=\"lp-ico-detail\"/><circle cx=\"58\" cy=\"40\" r=\"6\" class=\"lp-ico-detail\"/><circle cx=\"74\" cy=\"40\" r=\"6\" class=\"lp-ico-detail\"/><circle cx=\"26\" cy=\"60\" r=\"6\" class=\"lp-ico-detail\"/><circle cx=\"42\" cy=\"60\" r=\"6\" class=\"lp-ico-detail\"/><circle cx=\"58\" cy=\"60\" r=\"6\" class=\"lp-ico-detail\"/><circle cx=\"74\" cy=\"60\" r=\"6\" class=\"lp-ico-detail\"/>"
   },
@@ -169,8 +169,8 @@ export const ampIcons: IconDescriptor[] = [
       "speaker"
     ],
     "footprint": {
-      "width_ft": 2.2,
-      "depth_ft": 1.5
+      "width_ft": 2,
+      "depth_ft": 1.4
     },
     "body": "<rect x=\"14\" y=\"24\" width=\"72\" height=\"52\" rx=\"3\"/><circle cx=\"50\" cy=\"50\" r=\"18\" class=\"lp-ico-detail\"/><circle cx=\"50\" cy=\"50\" r=\"4\" class=\"lp-ico-detail\"/>"
   },
@@ -185,8 +185,8 @@ export const ampIcons: IconDescriptor[] = [
       "speaker"
     ],
     "footprint": {
-      "width_ft": 2.2,
-      "depth_ft": 1.3
+      "width_ft": 1.9,
+      "depth_ft": 1.4
     },
     "body": "<rect x=\"14\" y=\"28\" width=\"72\" height=\"44\" rx=\"3\"/><circle cx=\"36\" cy=\"50\" r=\"12\" class=\"lp-ico-detail\"/><circle cx=\"64\" cy=\"50\" r=\"12\" class=\"lp-ico-detail\"/>"
   },
@@ -200,8 +200,8 @@ export const ampIcons: IconDescriptor[] = [
       "amplifier"
     ],
     "footprint": {
-      "width_ft": 1.8,
-      "depth_ft": 0.9
+      "width_ft": 1.5,
+      "depth_ft": 1
     },
     "body": "<rect x=\"18\" y=\"36\" width=\"64\" height=\"28\" rx=\"3\"/><circle cx=\"32\" cy=\"42\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"44\" cy=\"42\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"56\" cy=\"42\" r=\"2.2\" class=\"lp-ico-detail\"/><text class=\"lp-ico-label\" x=\"50\" y=\"56\" text-anchor=\"middle\" dominant-baseline=\"central\" font-size=\"13\">A</text>"
   },
@@ -216,8 +216,8 @@ export const ampIcons: IconDescriptor[] = [
       "keys"
     ],
     "footprint": {
-      "width_ft": 1.8,
-      "depth_ft": 1
+      "width_ft": 1.6,
+      "depth_ft": 1.2
     },
     "body": "<rect x=\"16\" y=\"34\" width=\"68\" height=\"32\" rx=\"3\"/><circle cx=\"30\" cy=\"40\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"42\" cy=\"40\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"54\" cy=\"40\" r=\"2.2\" class=\"lp-ico-detail\"/><text class=\"lp-ico-label\" x=\"50\" y=\"56\" text-anchor=\"middle\" dominant-baseline=\"central\" font-size=\"13\">KB</text>"
   },

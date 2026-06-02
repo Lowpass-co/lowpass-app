@@ -16,7 +16,7 @@ export const monitorIcons: IconDescriptor[] = [
     "label": "Wedge",
     "footprint": {
       "width_ft": 2,
-      "depth_ft": 1.4
+      "depth_ft": 1.5
     },
     "keywords": [
       "floor wedge",
@@ -32,7 +32,7 @@ export const monitorIcons: IconDescriptor[] = [
     "label": "Dual wedge",
     "footprint": {
       "width_ft": 3.6,
-      "depth_ft": 1.4
+      "depth_ft": 1.5
     },
     "keywords": [
       "dual wedge",
@@ -79,8 +79,8 @@ export const monitorIcons: IconDescriptor[] = [
     "category": "monitors",
     "label": "IEM pack (P10)",
     "footprint": {
-      "width_ft": 0.4,
-      "depth_ft": 0.4
+      "width_ft": 0.3,
+      "depth_ft": 0.3
     },
     "keywords": [
       "iem",

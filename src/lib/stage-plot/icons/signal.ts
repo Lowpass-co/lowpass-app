@@ -15,8 +15,8 @@ export const signalIcons: IconDescriptor[] = [
     "category": "signal",
     "label": "DI box",
     "footprint": {
-      "width_ft": 0.5,
-      "depth_ft": 0.5
+      "width_ft": 0.4,
+      "depth_ft": 0.4
     },
     "body": "<rect x=\"24\" y=\"20\" width=\"52\" height=\"60\" rx=\"4\"/><circle cx=\"50\" cy=\"38\" r=\"9\" class=\"lp-ico-detail\"/><circle cx=\"50\" cy=\"38\" r=\"3\" class=\"lp-ico-detail\"/><text class=\"lp-ico-label\" x=\"50\" y=\"66\" text-anchor=\"middle\" dominant-baseline=\"central\" font-size=\"16\">DI</text>",
     "keywords": [
@@ -32,8 +32,8 @@ export const signalIcons: IconDescriptor[] = [
     "category": "signal",
     "label": "Active DI",
     "footprint": {
-      "width_ft": 0.5,
-      "depth_ft": 0.5
+      "width_ft": 0.4,
+      "depth_ft": 0.4
     },
     "body": "<rect x=\"24\" y=\"18\" width=\"52\" height=\"64\" rx=\"4\"/><circle cx=\"42\" cy=\"34\" r=\"8\" class=\"lp-ico-detail\"/><circle cx=\"42\" cy=\"34\" r=\"2.5\" class=\"lp-ico-detail\"/><circle cx=\"63\" cy=\"30\" r=\"3.5\" class=\"lp-ico-detail\"/><text class=\"lp-ico-label\" x=\"50\" y=\"66\" text-anchor=\"middle\" dominant-baseline=\"central\" font-size=\"13\">A-DI</text>",
     "keywords": [
@@ -50,8 +50,8 @@ export const signalIcons: IconDescriptor[] = [
     "category": "signal",
     "label": "Stereo DI",
     "footprint": {
-      "width_ft": 0.7,
-      "depth_ft": 0.5
+      "width_ft": 0.6,
+      "depth_ft": 0.4
     },
     "body": "<rect x=\"14\" y=\"22\" width=\"72\" height=\"56\" rx=\"4\"/><circle cx=\"36\" cy=\"36\" r=\"8\" class=\"lp-ico-detail\"/><circle cx=\"36\" cy=\"36\" r=\"2.5\" class=\"lp-ico-detail\"/><circle cx=\"64\" cy=\"36\" r=\"8\" class=\"lp-ico-detail\"/><circle cx=\"64\" cy=\"36\" r=\"2.5\" class=\"lp-ico-detail\"/><text class=\"lp-ico-label\" x=\"50\" y=\"64\" text-anchor=\"middle\" dominant-baseline=\"central\" font-size=\"12\">ST-DI</text>",
     "keywords": [
@@ -88,7 +88,7 @@ export const signalIcons: IconDescriptor[] = [
     "label": "Analog snake",
     "footprint": {
       "width_ft": 1,
-      "depth_ft": 0.6
+      "depth_ft": 0.7
     },
     "keywords": [
       "snake",
@@ -104,7 +104,7 @@ export const signalIcons: IconDescriptor[] = [
     "category": "signal",
     "label": "Digital snake",
     "footprint": {
-      "width_ft": 1,
+      "width_ft": 0.9,
       "depth_ft": 0.6
     },
     "keywords": [
@@ -158,8 +158,8 @@ export const signalIcons: IconDescriptor[] = [
     "category": "signal",
     "label": "Stage box 4",
     "footprint": {
-      "width_ft": 1,
-      "depth_ft": 0.7
+      "width_ft": 0.6,
+      "depth_ft": 0.5
     },
     "body": "<rect x=\"18\" y=\"24\" width=\"64\" height=\"52\" rx=\"3\"/><circle cx=\"40\" cy=\"38\" r=\"5\" class=\"lp-ico-detail\"/><circle cx=\"60\" cy=\"38\" r=\"5\" class=\"lp-ico-detail\"/><circle cx=\"40\" cy=\"54\" r=\"5\" class=\"lp-ico-detail\"/><circle cx=\"60\" cy=\"54\" r=\"5\" class=\"lp-ico-detail\"/><rect x=\"22\" y=\"66\" width=\"56\" height=\"6\" rx=\"1\" class=\"lp-ico-detail\"/>",
     "keywords": [
@@ -177,8 +177,8 @@ export const signalIcons: IconDescriptor[] = [
     "category": "signal",
     "label": "Stage box 8",
     "footprint": {
-      "width_ft": 1.2,
-      "depth_ft": 0.8
+      "width_ft": 0.9,
+      "depth_ft": 0.5
     },
     "body": "<rect x=\"12\" y=\"24\" width=\"76\" height=\"52\" rx=\"3\"/><circle cx=\"26\" cy=\"40\" r=\"5\" class=\"lp-ico-detail\"/><circle cx=\"42\" cy=\"40\" r=\"5\" class=\"lp-ico-detail\"/><circle cx=\"58\" cy=\"40\" r=\"5\" class=\"lp-ico-detail\"/><circle cx=\"74\" cy=\"40\" r=\"5\" class=\"lp-ico-detail\"/><circle cx=\"26\" cy=\"58\" r=\"5\" class=\"lp-ico-detail\"/><circle cx=\"42\" cy=\"58\" r=\"5\" class=\"lp-ico-detail\"/><circle cx=\"58\" cy=\"58\" r=\"5\" class=\"lp-ico-detail\"/><circle cx=\"74\" cy=\"58\" r=\"5\" class=\"lp-ico-detail\"/>",
     "keywords": [
@@ -196,8 +196,8 @@ export const signalIcons: IconDescriptor[] = [
     "category": "signal",
     "label": "Stage box 12",
     "footprint": {
-      "width_ft": 1.4,
-      "depth_ft": 0.8
+      "width_ft": 1.1,
+      "depth_ft": 0.6
     },
     "body": "<rect x=\"8\" y=\"24\" width=\"84\" height=\"52\" rx=\"3\"/><circle cx=\"21\" cy=\"40\" r=\"4.5\" class=\"lp-ico-detail\"/><circle cx=\"35\" cy=\"40\" r=\"4.5\" class=\"lp-ico-detail\"/><circle cx=\"49\" cy=\"40\" r=\"4.5\" class=\"lp-ico-detail\"/><circle cx=\"63\" cy=\"40\" r=\"4.5\" class=\"lp-ico-detail\"/><circle cx=\"77\" cy=\"40\" r=\"4.5\" class=\"lp-ico-detail\"/><circle cx=\"79\" cy=\"40\" r=\"0\"/><circle cx=\"21\" cy=\"58\" r=\"4.5\" class=\"lp-ico-detail\"/><circle cx=\"35\" cy=\"58\" r=\"4.5\" class=\"lp-ico-detail\"/><circle cx=\"49\" cy=\"58\" r=\"4.5\" class=\"lp-ico-detail\"/><circle cx=\"63\" cy=\"58\" r=\"4.5\" class=\"lp-ico-detail\"/><circle cx=\"77\" cy=\"58\" r=\"4.5\" class=\"lp-ico-detail\"/>",
     "keywords": [
@@ -215,8 +215,8 @@ export const signalIcons: IconDescriptor[] = [
     "category": "signal",
     "label": "Stage box 16",
     "footprint": {
-      "width_ft": 1.6,
-      "depth_ft": 0.8
+      "width_ft": 1.3,
+      "depth_ft": 0.6
     },
     "body": "<rect x=\"6\" y=\"24\" width=\"88\" height=\"52\" rx=\"3\"/><circle cx=\"17\" cy=\"40\" r=\"4\" class=\"lp-ico-detail\"/><circle cx=\"28\" cy=\"40\" r=\"4\" class=\"lp-ico-detail\"/><circle cx=\"39\" cy=\"40\" r=\"4\" class=\"lp-ico-detail\"/><circle cx=\"50\" cy=\"40\" r=\"4\" class=\"lp-ico-detail\"/><circle cx=\"61\" cy=\"40\" r=\"4\" class=\"lp-ico-detail\"/><circle cx=\"72\" cy=\"40\" r=\"4\" class=\"lp-ico-detail\"/><circle cx=\"83\" cy=\"40\" r=\"4\" class=\"lp-ico-detail\"/><circle cx=\"17\" cy=\"58\" r=\"4\" class=\"lp-ico-detail\"/><circle cx=\"28\" cy=\"58\" r=\"4\" class=\"lp-ico-detail\"/><circle cx=\"39\" cy=\"58\" r=\"4\" class=\"lp-ico-detail\"/><circle cx=\"50\" cy=\"58\" r=\"4\" class=\"lp-ico-detail\"/><circle cx=\"61\" cy=\"58\" r=\"4\" class=\"lp-ico-detail\"/><circle cx=\"72\" cy=\"58\" r=\"4\" class=\"lp-ico-detail\"/><circle cx=\"83\" cy=\"58\" r=\"4\" class=\"lp-ico-detail\"/>",
     "keywords": [
