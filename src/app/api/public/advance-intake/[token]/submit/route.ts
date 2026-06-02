@@ -10,9 +10,11 @@
    fields; blanks never clobber), and the link is marked submitted with
    the raw answers retained for audit. Service-role client.
 
-   TODO(T3-followup): enqueue a "venue submitted intake" notification to
-   the tour manager via lib/notifications. Core loop (form → write-back)
-   is complete without it.
+   Notifies the TM: setting submitted_at + status='submitted' is the
+   queue signal the 5-minute cron (dispatchPendingNotifications →
+   processAdvanceIntakeRows) reads to email the link's creator once.
+   Dedup via advance_intake_links.notification_email_sent_to (migration
+   108) — no inline send here.
    ============================================ */
 
 import { NextResponse } from 'next/server';

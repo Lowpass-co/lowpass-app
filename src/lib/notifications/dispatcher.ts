@@ -56,6 +56,7 @@ import {
   inviteSent,
   inviteAccepted,
   intakeSubmitted,
+  advanceIntakeSubmitted,
   conflictDetected,
   wrapShell,
   type NotificationTemplate,
@@ -557,6 +558,97 @@ async function processIntakeRows(
   }
 }
 
+/* ============================================
+   Advance intake (Send Packet → venue) — emails the TM who
+   generated the link once the venue submits. Source table is
+   advance_intake_links; dedup column notification_email_sent_to
+   (migration 108) mirrors the personnel-intake pattern above.
+   ============================================ */
+interface AdvanceIntakeNotifyRow {
+  id: string;
+  workspace_id: string;
+  tour_id: string;
+  routing_id: string;
+  created_by: string | null;
+  submitted_by_name: string | null;
+  submitted_at: string | null;
+}
+async function processAdvanceIntakeRows(
+  supabase: SupabaseClient,
+  resend: Resend,
+  summary: DispatchSummary,
+): Promise<void> {
+  const { data: rows } = await supabase
+    .from('advance_intake_links')
+    .select(
+      'id, workspace_id, tour_id, routing_id, created_by, submitted_by_name, submitted_at',
+    )
+    .eq('status', 'submitted')
+    .not('submitted_at', 'is', null)
+    .is('notification_email_sent_to', null)
+    .order('submitted_at', { ascending: true })
+    .limit(50);
+
+  const intakeRows = (rows ?? []) as AdvanceIntakeNotifyRow[];
+  for (const row of intakeRows) {
+    summary.attempted++;
+    try {
+      if (!row.created_by) {
+        // No creator on record — can't resolve a recipient and can't
+        // stamp without a uuid. Leave it; created_by won't appear later.
+        continue;
+      }
+      // Recipient: the TM who generated the link (= the account user;
+      // our authed create route always stamps created_by = auth user).
+      const tm = await lookupUserEmailAndName(supabase, row.created_by);
+      if (!tm) {
+        // TM disabled / deleted — stamp so we don't keep retrying.
+        await supabase
+          .from('advance_intake_links')
+          .update({ notification_email_sent_to: row.created_by })
+          .eq('id', row.id);
+        continue;
+      }
+      const { data: routing } = await supabase
+        .from('routing')
+        .select('venue_name, city')
+        .eq('id', row.routing_id)
+        .maybeSingle();
+      const r = routing as { venue_name?: string | null; city?: string | null } | null;
+      const venueName = r?.venue_name || r?.city || 'The venue';
+      const { data: tour } = await supabase
+        .from('tours')
+        .select('name')
+        .eq('id', row.tour_id)
+        .maybeSingle();
+      const tourName = (tour as { name?: string } | null)?.name ?? 'your tour';
+
+      await sendEmail(
+        resend,
+        tm.email,
+        advanceIntakeSubmitted({
+          recipientName: tm.name,
+          venueName,
+          tourName,
+          submitterName: row.submitted_by_name,
+        }),
+      );
+      summary.sent++;
+      await supabase
+        .from('advance_intake_links')
+        .update({ notification_email_sent_to: row.created_by })
+        .eq('id', row.id);
+    } catch (err) {
+      summary.failed++;
+      summary.failedReasons.push(
+        `advance-intake ${row.id}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      // Don't stamp — leave for retry.
+      continue;
+    }
+  }
+}
+
 /* Public alias to silence unused warnings for the templates
    that aren't used directly here (invite_sent is sent by
    Supabase Auth's invite endpoint, not this dispatcher). */
@@ -586,6 +678,7 @@ export async function dispatchPendingNotifications(
   await processAuditRows(supabase, resend, summary);
   await processInviteRows(supabase, resend, summary);
   await processIntakeRows(supabase, resend, summary);
+  await processAdvanceIntakeRows(supabase, resend, summary);
 
   return summary;
 }
