@@ -85,8 +85,7 @@ export function StagePlotEditor({ initialPlot, initialItems, channels: initialCh
           iconName,
           xFt: pos?.xFt ?? plot.widthFt / 2,
           yFt: pos?.yFt ?? plot.depthFt / 2,
-          // Kits face the audience on a stage plot (drummer upstage).
-          rotationDeg: icon?.composite ? 180 : 0,
+          rotationDeg: 0,
           scale: 1,
           layer: 'main' as const,
           label: icon?.label,

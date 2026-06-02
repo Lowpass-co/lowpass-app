@@ -1,55 +1,78 @@
 /* ============================================
-   LOWPASS — Stage Plot drum kit composites (§SP1, review 4)
+   LOWPASS — Stage Plot drum kit composites (§SP1, review 5)
 
-   Clean top-down kits matching the reference: 2 crash cymbals at
-   the top corners, hi-hat drummer-left, ride drummer-right, rack
-   toms top-centre, big kick centre, snare just below, floor toms
-   at the lower corners, throne (square) at the bottom. Drums are
-   filled circles (brand tint); cymbals are outline circles + bell.
+   Kits built from the ACTUAL designed shell icons (kick, snare
+   with its "S", rack toms with X-lugs, floor toms, throne) placed
+   via transforms — NOT plain circles. Cymbals are outline circles
+   + bell. Layout matches the reference: 2 crash cymbals top
+   corners, hi-hat drummer-left, ride drummer-right, rack toms
+   top-centre, big kick centre, snare beside it, floor toms lower
+   corners, throne (square) at the bottom.
+
    Three configs by tom/floor count, each with a left-handed twin
-   (mirrored x).
-
-   Placed at 180° by default (see addItem) so the kit faces the
-   audience on a stage plot — drummer upstage, kick downstage.
+   (positions mirrored on x; shell ART is left upright so the
+   snare "S" / kick pedal stay correct).
    ============================================ */
 
+import { drumIcons } from './drums';
 import type { IconDescriptor } from './types';
 
-const drum = (cx: number, cy: number, r: number): string =>
-  `<circle cx="${cx}" cy="${cy}" r="${r}"/><circle cx="${cx}" cy="${cy}" r="${+(r * 0.16).toFixed(1)}" class="lp-ico-detail"/>`;
+const shellBody = (name: string): string => {
+  const ic = drumIcons.find((i) => i.name === name);
+  if (!ic) throw new Error(`drum composite: missing shell "${name}"`);
+  return ic.body;
+};
+
+/** Place a shell (authored 0 0 100 100, centred ~50,50) at (px,py), scaled. */
+const place = (name: string, px: number, py: number, s: number): string => {
+  const tx = +(px - 50 * s).toFixed(2);
+  const ty = +(py - 50 * s).toFixed(2);
+  return `<g transform="translate(${tx} ${ty}) scale(${s})">${shellBody(name)}</g>`;
+};
+
 const cymbal = (cx: number, cy: number, r: number): string =>
   `<circle cx="${cx}" cy="${cy}" r="${r}" class="lp-ico-detail"/><circle cx="${cx}" cy="${cy}" r="${+(r * 0.2).toFixed(1)}" class="lp-ico-detail"/>`;
-const throne = (cx: number, cy: number, s: number): string =>
-  `<rect x="${cx - s}" y="${cy - s}" width="${s * 2}" height="${s * 2}" rx="2"/>`;
 
-type Circle = [cx: number, cy: number, r: number];
+type Shell = [name: string, px: number, py: number, s: number];
+type Cym = [cx: number, cy: number, r: number];
+const mx = (x: number) => 100 - x;
 
-const SHARED_DRUMS: Circle[] = [
-  [50, 46, 17], // kick
-  [50, 68, 9], // snare
+// Kick centre, snare to its right, throne at the bottom.
+const SHARED: Shell[] = [
+  ['drum-kick', 50, 49, 0.32],
+  ['drum-snare', 61, 60, 0.16],
+  ['drum-throne', 50, 87, 0.13],
 ];
-const SHARED_CYM: Circle[] = [
-  [20, 17, 12], // crash L
-  [80, 17, 12], // crash R
-  [15, 50, 11], // hi-hat
-  [85, 46, 12], // ride
-];
-
-const CONFIGS: Array<{ key: string; label: string; w: number; toms: Circle[]; floors: Circle[] }> = [
-  { key: '1t1f', label: '1 tom, 1 floor', w: 7.5, toms: [[50, 29, 10]], floors: [[74, 66, 12]] },
-  { key: '2t1f', label: '2 tom, 1 floor', w: 7.8, toms: [[41, 29, 9], [59, 29, 10]], floors: [[74, 67, 12]] },
-  { key: '2t2f', label: '2 tom, 2 floor', w: 8, toms: [[41, 28, 9], [59, 28, 10]], floors: [[26, 67, 11], [74, 67, 11]] },
+const SHARED_CYM: Cym[] = [
+  [20, 18, 11], // crash L
+  [80, 18, 11], // crash R
+  [16, 49, 10], // hi-hat (drummer's left)
+  [84, 45, 11], // ride (drummer's right)
 ];
 
-const mx = (c: Circle): Circle => [100 - c[0], c[1], c[2]];
+const CONFIGS: Array<{ key: string; label: string; w: number; toms: Shell[]; floors: Shell[] }> = [
+  {
+    key: '1t1f', label: '1 tom, 1 floor', w: 7.5,
+    toms: [['drum-tom-hi', 50, 30, 0.18]],
+    floors: [['drum-tom-floor', 73, 63, 0.22]],
+  },
+  {
+    key: '2t1f', label: '2 tom, 1 floor', w: 7.8,
+    toms: [['drum-tom-hi', 40, 30, 0.16], ['drum-tom-mid', 60, 30, 0.17]],
+    floors: [['drum-tom-floor', 74, 64, 0.22]],
+  },
+  {
+    key: '2t2f', label: '2 tom, 2 floor', w: 8,
+    toms: [['drum-tom-hi', 40, 29, 0.15], ['drum-tom-mid', 60, 29, 0.16]],
+    floors: [['drum-tom-floor', 28, 65, 0.2], ['drum-tom-floor', 73, 65, 0.2]],
+  },
+];
 
-function kit(toms: Circle[], floors: Circle[], left: boolean): string {
-  const drums = [...SHARED_DRUMS, ...toms, ...floors];
-  const cyms = SHARED_CYM;
-  const t = left ? throne(50, 87, 5) : throne(50, 87, 5);
-  const ds = (left ? drums.map(mx) : drums).map((c) => drum(...c)).join('');
-  const cs = (left ? cyms.map(mx) : cyms).map((c) => cymbal(...c)).join('');
-  return ds + cs + t;
+function kit(toms: Shell[], floors: Shell[], left: boolean): string {
+  const shells = [...SHARED, ...toms, ...floors];
+  const sh = shells.map(([n, x, y, s]) => place(n, left ? mx(x) : x, y, s)).join('');
+  const cy = SHARED_CYM.map(([x, y, r]) => cymbal(left ? mx(x) : x, y, r)).join('');
+  return sh + cy;
 }
 
 export const drumComposites: IconDescriptor[] = CONFIGS.flatMap((c) => [
