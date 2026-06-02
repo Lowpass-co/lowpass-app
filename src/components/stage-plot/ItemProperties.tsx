@@ -9,6 +9,7 @@
    ============================================ */
 'use client';
 
+import { useState } from 'react';
 import { getIcon } from '@/lib/stage-plot/icons';
 import { octantLabel } from '@/lib/stage-plot/geometry';
 import type { Channel, EditorItem, EditorPlot } from '@/lib/stage-plot/editor-types';
@@ -42,9 +43,12 @@ export interface ItemPropertiesProps {
   onUpdateItem: (patch: Partial<EditorItem>) => void;
   onDeleteItem: () => void;
   onUpdatePlot: (patch: Partial<EditorPlot>) => void;
+  /** Create a new channel-list row and return its id (§SP4 / #8). */
+  onAddChannel?: (label: string) => string;
 }
 
-export function ItemProperties({ plot, item, selectedCount = 0, channels = [], onUpdateItem, onDeleteItem, onUpdatePlot }: ItemPropertiesProps) {
+export function ItemProperties({ plot, item, selectedCount = 0, channels = [], onUpdateItem, onDeleteItem, onUpdatePlot, onAddChannel }: ItemPropertiesProps) {
+  const [newCh, setNewCh] = useState('');
   return (
     <div style={{ height: '100%', overflowY: 'auto', borderLeft: '1px solid var(--lp-border)', background: 'var(--lp-bg)', padding: 14, width: 260 }}>
       {selectedCount > 1 ? (
@@ -100,18 +104,37 @@ export function ItemProperties({ plot, item, selectedCount = 0, channels = [], o
                 </span>
               </Row>
               {channels.length > 0 && (
-                <Row label="Channel">
-                  <select
-                    value={item.channelRowId ?? ''}
-                    onChange={(e) => onUpdateItem({ channelRowId: e.target.value || null })}
-                    style={{ width: 132, fontSize: 'var(--lp-text-xs)', padding: '4px 6px', borderRadius: 5, border: '1px solid var(--lp-border)', background: 'var(--lp-surface)', color: 'var(--lp-text)' }}
-                  >
-                    <option value="">— None —</option>
-                    {channels.map((c) => (
-                      <option key={c.id} value={c.id}>{c.number}. {c.label}</option>
-                    ))}
+                <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--lp-border)' }}>
+                  <div style={{ fontSize: 'var(--lp-text-2xs)', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--lp-text-tertiary)', marginBottom: 6 }}>
+                    Channels {item.channelRowIds?.length ? `(${item.channelRowIds.length})` : ''}
+                  </div>
+                  {(item.channelRowIds ?? []).map((cid) => {
+                    const c = channels.find((x) => x.id === cid);
+                    if (!c) return null;
+                    return (
+                      <div key={cid} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                        <span style={{ width: 10, height: 10, borderRadius: 2, background: c.color || 'var(--lp-border-strong)', flexShrink: 0 }} />
+                        <span style={{ flex: 1, fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text)' }}>{c.number}. {c.label}</span>
+                        <button type="button" aria-label="Unlink" onClick={() => onUpdateItem({ channelRowIds: (item.channelRowIds ?? []).filter((x) => x !== cid) })} style={{ border: 'none', background: 'none', color: 'var(--lp-text-tertiary)', cursor: 'pointer', fontSize: 14, lineHeight: 1 }}>×</button>
+                      </div>
+                    );
+                  })}
+                  {(item.channelRowIds ?? []).length === 0 && <div style={{ fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-tertiary)', marginBottom: 4 }}>None linked.</div>}
+                  <select value="" onChange={(e) => { if (e.target.value) onUpdateItem({ channelRowIds: [...(item.channelRowIds ?? []), e.target.value] }); }}
+                    style={{ width: '100%', fontSize: 'var(--lp-text-xs)', padding: '4px 6px', borderRadius: 5, border: '1px solid var(--lp-border)', background: 'var(--lp-surface)', color: 'var(--lp-text)', marginTop: 4 }}>
+                    <option value="">+ Link existing channel…</option>
+                    {channels.filter((c) => !(item.channelRowIds ?? []).includes(c.id)).map((c) => (<option key={c.id} value={c.id}>{c.number}. {c.label}</option>))}
                   </select>
-                </Row>
+                  {onAddChannel && (
+                    <div style={{ display: 'flex', gap: 4, marginTop: 4 }}>
+                      <input value={newCh} onChange={(e) => setNewCh(e.target.value)} placeholder="New channel…"
+                        onKeyDown={(e) => { if (e.key === 'Enter' && newCh.trim()) { const id = onAddChannel(newCh.trim()); onUpdateItem({ channelRowIds: [...(item.channelRowIds ?? []), id] }); setNewCh(''); } }}
+                        style={{ flex: 1, fontSize: 'var(--lp-text-xs)', padding: '4px 6px', borderRadius: 5, border: '1px solid var(--lp-border)', background: 'var(--lp-surface)', color: 'var(--lp-text)' }} />
+                      <button type="button" onClick={() => { if (newCh.trim()) { const id = onAddChannel(newCh.trim()); onUpdateItem({ channelRowIds: [...(item.channelRowIds ?? []), id] }); setNewCh(''); } }}
+                        style={{ fontSize: 'var(--lp-text-xs)', padding: '4px 8px', borderRadius: 5, border: '1px solid var(--lp-border)', background: 'var(--lp-surface)', color: 'var(--lp-text-secondary)', cursor: 'pointer' }}>Add</button>
+                    </div>
+                  )}
+                </div>
               )}
             </>
           )}

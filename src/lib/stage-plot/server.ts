@@ -79,7 +79,7 @@ export function rowsToEditor(plot: PlotRow, items: ItemRow[], name: string): { p
         locked: r.locked,
         label: r.label ?? undefined,
         layer: (r.layer as EditorItem['layer']) ?? 'main',
-        channelRowId: r.channel_list_row_id,
+        channelRowIds: (ann.channelRowIds as string[] | undefined) ?? (r.channel_list_row_id ? [r.channel_list_row_id] : undefined),
         text: ann.text as string | undefined,
         fontSizeFt: ann.fontSizeFt as number | undefined,
         x2Ft: ann.x2Ft as number | undefined,
@@ -107,10 +107,8 @@ export function plotToColumns(plot: EditorPlot): Record<string, unknown> {
 
 export function itemToRow(it: EditorItem, stagePlotId: string, workspaceId: string): Record<string, unknown> {
   const kind = it.kind ?? 'icon';
-  const labelStyle =
-    kind === 'icon'
-      ? {}
-      : { kind, text: it.text, fontSizeFt: it.fontSizeFt, x2Ft: it.x2Ft, y2Ft: it.y2Ft };
+  const labelStyle: Record<string, unknown> = kind === 'icon' ? {} : { kind, text: it.text, fontSizeFt: it.fontSizeFt, x2Ft: it.x2Ft, y2Ft: it.y2Ft };
+  if (it.channelRowIds?.length) labelStyle.channelRowIds = it.channelRowIds;
   return {
     workspace_id: workspaceId,
     stage_plot_id: stagePlotId,
@@ -126,7 +124,7 @@ export function itemToRow(it: EditorItem, stagePlotId: string, workspaceId: stri
     rotation_deg: it.rotationDeg ?? 0,
     color_tint: it.colorTint ?? null,
     locked: it.locked ?? false,
-    channel_list_row_id: it.channelRowId ?? null,
+    channel_list_row_id: it.channelRowIds?.[0] ?? null,
     label_style: labelStyle,
   };
 }

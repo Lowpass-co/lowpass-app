@@ -40,10 +40,20 @@ export interface StagePlotEditorProps {
   actions?: React.ReactNode;
 }
 
-export function StagePlotEditor({ initialPlot, initialItems, channels = [], onChange, actions }: StagePlotEditorProps) {
+export function StagePlotEditor({ initialPlot, initialItems, channels: initialChannels = [], onChange, actions }: StagePlotEditorProps) {
   const [plot, setPlot] = useState<EditorPlot>(initialPlot ?? DEFAULT_PLOT);
   const [items, setItems] = useState<EditorItem[]>(initialItems ?? []);
+  const [channels, setChannels] = useState<Channel[]>(initialChannels);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+  // Create a new channel-list row on the fly (mics often aren't on the
+  // plot, so you patch an instrument to channels you add here). Returns
+  // the new id so the caller can link it immediately.
+  const addChannel = useCallback((label: string): string => {
+    const id = uid();
+    setChannels((prev) => [...prev, { id, number: prev.length + 1, label, color: null, snakeLabel: null }]);
+    return id;
+  }, []);
 
   const selectItem = useCallback((id: string | null, additive?: boolean) => {
     setSelectedIds((prev) => {
@@ -229,6 +239,7 @@ export function StagePlotEditor({ initialPlot, initialItems, channels = [], onCh
           item={selected}
           selectedCount={selectedIds.length}
           channels={channels}
+          onAddChannel={addChannel}
           onUpdateItem={updateSelected}
           onDeleteItem={deleteSelected}
           onUpdatePlot={(patch) => setPlot((p) => ({ ...p, ...patch }))}

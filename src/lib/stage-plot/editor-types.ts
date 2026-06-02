@@ -61,8 +61,9 @@ export interface EditorItem {
   locked?: boolean;
   label?: string;
   layer?: StagePlotLayer;
-  /** Linked channel-list row (§SP4). */
-  channelRowId?: string | null;
+  /** Linked channel-list rows (§SP4). One instrument can take many
+   *  channels (e.g. a kick has in + out, a kit has many mics). */
+  channelRowIds?: string[];
   /** Text content (kind='text'). */
   text?: string;
   /** Text size in feet (kind='text'). */

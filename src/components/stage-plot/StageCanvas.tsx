@@ -366,7 +366,8 @@ export function StageCanvas({
             const cy = ft(it.yFt);
             const catKey = getCategory(icon.category).key;
             const cat = getCategory(icon.category).colorVar;
-            const ch = it.channelRowId ? channels.find((c) => c.id === it.channelRowId) : undefined;
+            const linked = (it.channelRowIds ?? []).map((cid) => channels.find((c) => c.id === cid)).filter((c): c is NonNullable<typeof c> => Boolean(c));
+            const ch = linked[0];
             // §SP4: a linked channel's sub-snake colour overrides the category tint.
             const stroke = ch?.color || cat;
             const fill = icon.outline ? 'none' : it.colorTint ?? `color-mix(in srgb, ${brandColor} ${ICON_BRAND_TINT_PCT}%, transparent)`;
@@ -383,11 +384,17 @@ export function StageCanvas({
                 {showChannels && ch && (
                   <g>
                     <rect x={bx - 7} y={by - 7} width={16} height={12} rx={3} fill={ch.color || '#6b7280'} stroke="var(--lp-bg)" strokeWidth={0.75} />
-                    <text x={bx + 1} y={by - 1} fontSize={8} fill="#ffffff" textAnchor="middle" dominantBaseline="central" fontWeight={700}>{ch.snakeLabel || String(ch.number)}</text>
+                    <text x={bx + 1} y={by - 1} fontSize={8} fill="#ffffff" textAnchor="middle" dominantBaseline="central" fontWeight={700}>
+                      {linked.length > 1 ? `×${linked.length}` : ch.snakeLabel || String(ch.number)}
+                    </text>
                   </g>
                 )}
                 {showChannels && !ch && inputCat && channels.length > 0 && <circle cx={bx} cy={by} r={3.5} fill="#f59e0b" stroke="var(--lp-bg)" strokeWidth={0.75} />}
-                {showChannels && ch && <text x={cx} y={cy + hpx / 2 + ft(0.55)} fontSize={ft(0.65)} fill="var(--lp-text-secondary)" textAnchor="middle" fontWeight={700}>{ch.number}</text>}
+                {showChannels && ch && (
+                  <text x={cx} y={cy + hpx / 2 + ft(0.55)} fontSize={ft(0.6)} fill="var(--lp-text-secondary)" textAnchor="middle" fontWeight={700}>
+                    {linked.map((c) => c.number).join(', ')}
+                  </text>
+                )}
               </g>
             );
           })}
