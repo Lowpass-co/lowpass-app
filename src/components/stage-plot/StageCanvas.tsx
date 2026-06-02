@@ -133,14 +133,24 @@ export function StageCanvas({
     >
       <svg width={size.w} height={size.h} style={{ display: 'block' }}>
         <defs>
+          {/* faint sub-foot dots */}
+          <pattern id="lp-grid-fine" width={g / 2} height={g / 2} patternUnits="userSpaceOnUse">
+            <circle cx={g / 2} cy={g / 2} r={0.6} className="lp-canvas-grid-dot-fine" />
+          </pattern>
+          {/* bold 1-foot dots */}
           <pattern id="lp-grid" width={g} height={g} patternUnits="userSpaceOnUse">
-            <circle cx={g} cy={g} r={1} className="lp-canvas-grid-dot" />
+            <circle cx={g} cy={g} r={1.4} className="lp-canvas-grid-dot" />
           </pattern>
         </defs>
         <g transform={`translate(${view.panX} ${view.panY}) scale(${view.zoom})`}>
           {/* Stage */}
           <rect className="lp-canvas-stage" x={0} y={0} width={stageW} height={stageH} rx={4} strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
-          {showGrid && <rect x={0} y={0} width={stageW} height={stageH} fill="url(#lp-grid)" />}
+          {showGrid && (
+            <>
+              <rect x={0} y={0} width={stageW} height={stageH} fill="url(#lp-grid-fine)" />
+              <rect x={0} y={0} width={stageW} height={stageH} fill="url(#lp-grid)" />
+            </>
+          )}
 
           {/* Rulers along top + left edges */}
           {showRulers && (

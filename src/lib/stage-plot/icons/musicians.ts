@@ -32,9 +32,10 @@ export const musicianIcons: IconDescriptor[] = [
     footprint: { width_ft: 2, depth_ft: 2 },
     keywords: ['musician', 'performer', 'woman', 'player', 'people'],
     body:
-      '<path d="M28 80 C28 56 72 56 72 80 Z"/>' +
-      // hair: frames the crown and falls past both sides of the head
-      '<path d="M33 44 Q30 16 50 15 Q70 16 67 44" class="lp-ico-detail"/>' +
-      '<circle cx="50" cy="34" r="13"/>',
+      '<path d="M24 80 C24 55 76 55 76 80 Z"/>' +
+      '<circle cx="50" cy="34" r="13"/>' +
+      // understated hair cue (short hairline over the crown) — same
+      // build as the male figure, just a small differentiator
+      '<path d="M38 29 Q50 21 62 29" class="lp-ico-detail"/>',
   },
 ];

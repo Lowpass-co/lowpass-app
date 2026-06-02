@@ -15,10 +15,10 @@ export const signalIcons: IconDescriptor[] = [
     "category": "signal",
     "label": "DI box",
     "footprint": {
-      "width_ft": 0.4,
-      "depth_ft": 0.4
+      "width_ft": 0.8,
+      "depth_ft": 0.6
     },
-    "body": "<rect x=\"24\" y=\"20\" width=\"52\" height=\"60\" rx=\"4\"/><circle cx=\"50\" cy=\"38\" r=\"9\" class=\"lp-ico-detail\"/><circle cx=\"50\" cy=\"38\" r=\"3\" class=\"lp-ico-detail\"/><text class=\"lp-ico-label\" x=\"50\" y=\"66\" text-anchor=\"middle\" dominant-baseline=\"central\" font-size=\"16\">DI</text>",
+    "body": "<rect x=\"22\" y=\"24\" width=\"56\" height=\"52\" rx=\"4\"/><circle cx=\"34\" cy=\"34\" r=\"3\" class=\"lp-ico-detail\"/><text class=\"lp-ico-label\" x=\"50\" y=\"54\" text-anchor=\"middle\" dominant-baseline=\"central\" font-size=\"22\">DI</text>",
     "keywords": [
       "di",
       "direct",
@@ -32,10 +32,10 @@ export const signalIcons: IconDescriptor[] = [
     "category": "signal",
     "label": "Active DI",
     "footprint": {
-      "width_ft": 0.4,
-      "depth_ft": 0.4
+      "width_ft": 0.8,
+      "depth_ft": 0.6
     },
-    "body": "<rect x=\"24\" y=\"18\" width=\"52\" height=\"64\" rx=\"4\"/><circle cx=\"42\" cy=\"34\" r=\"8\" class=\"lp-ico-detail\"/><circle cx=\"42\" cy=\"34\" r=\"2.5\" class=\"lp-ico-detail\"/><circle cx=\"63\" cy=\"30\" r=\"3.5\" class=\"lp-ico-detail\"/><text class=\"lp-ico-label\" x=\"50\" y=\"66\" text-anchor=\"middle\" dominant-baseline=\"central\" font-size=\"13\">A-DI</text>",
+    "body": "<rect x=\"20\" y=\"24\" width=\"60\" height=\"52\" rx=\"4\"/><circle cx=\"32\" cy=\"34\" r=\"3\" class=\"lp-ico-detail\"/><circle cx=\"44\" cy=\"34\" r=\"1.8\" class=\"lp-ico-detail\"/><text class=\"lp-ico-label\" x=\"50\" y=\"54\" text-anchor=\"middle\" dominant-baseline=\"central\" font-size=\"16\">A·DI</text>",
     "keywords": [
       "di",
       "active",
@@ -50,10 +50,10 @@ export const signalIcons: IconDescriptor[] = [
     "category": "signal",
     "label": "Stereo DI",
     "footprint": {
-      "width_ft": 0.6,
-      "depth_ft": 0.4
+      "width_ft": 1,
+      "depth_ft": 0.6
     },
-    "body": "<rect x=\"14\" y=\"22\" width=\"72\" height=\"56\" rx=\"4\"/><circle cx=\"36\" cy=\"36\" r=\"8\" class=\"lp-ico-detail\"/><circle cx=\"36\" cy=\"36\" r=\"2.5\" class=\"lp-ico-detail\"/><circle cx=\"64\" cy=\"36\" r=\"8\" class=\"lp-ico-detail\"/><circle cx=\"64\" cy=\"36\" r=\"2.5\" class=\"lp-ico-detail\"/><text class=\"lp-ico-label\" x=\"50\" y=\"64\" text-anchor=\"middle\" dominant-baseline=\"central\" font-size=\"12\">ST-DI</text>",
+    "body": "<rect x=\"14\" y=\"26\" width=\"72\" height=\"48\" rx=\"4\"/><circle cx=\"28\" cy=\"36\" r=\"3\" class=\"lp-ico-detail\"/><circle cx=\"40\" cy=\"36\" r=\"3\" class=\"lp-ico-detail\"/><text class=\"lp-ico-label\" x=\"50\" y=\"54\" text-anchor=\"middle\" dominant-baseline=\"central\" font-size=\"15\">ST·DI</text>",
     "keywords": [
       "di",
       "stereo",

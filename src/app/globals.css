@@ -1384,6 +1384,9 @@ textarea::selection,
 .lp-canvas-grid-dot {
   fill: var(--lp-border-strong);
 }
+.lp-canvas-grid-dot-fine {
+  fill: var(--lp-border);
+}
 .lp-canvas-ruler {
   stroke: var(--lp-border);
 }

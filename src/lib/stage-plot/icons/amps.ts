@@ -25,7 +25,7 @@ export const ampIcons: IconDescriptor[] = [
       "guitar",
       "tube"
     ],
-    "body": "<rect x=\"8\" y=\"38\" width=\"84\" height=\"24\" rx=\"3\"/><circle cx=\"30\" cy=\"43\" r=\"2\" class=\"lp-ico-detail\"/><circle cx=\"42\" cy=\"43\" r=\"2\" class=\"lp-ico-detail\"/><circle cx=\"54\" cy=\"43\" r=\"2\" class=\"lp-ico-detail\"/><circle cx=\"66\" cy=\"43\" r=\"2\" class=\"lp-ico-detail\"/><line x1=\"14\" y1=\"57\" x2=\"86\" y2=\"57\" class=\"lp-ico-detail\"/>"
+    "body": "<rect x=\"12\" y=\"20\" width=\"76\" height=\"60\" rx=\"4\"/><circle cx=\"24\" cy=\"28\" r=\"2\" class=\"lp-ico-detail\"/><circle cx=\"33\" cy=\"28\" r=\"2\" class=\"lp-ico-detail\"/><circle cx=\"42\" cy=\"28\" r=\"2\" class=\"lp-ico-detail\"/><circle cx=\"51\" cy=\"28\" r=\"2\" class=\"lp-ico-detail\"/><rect x=\"18\" y=\"38\" width=\"64\" height=\"36\" rx=\"3\" class=\"lp-ico-detail\"/><circle cx=\"40\" cy=\"56\" r=\"9\" class=\"lp-ico-detail\"/><circle cx=\"40\" cy=\"56\" r=\"1.6\" class=\"lp-ico-detail\"/><circle cx=\"60\" cy=\"56\" r=\"9\" class=\"lp-ico-detail\"/><circle cx=\"60\" cy=\"56\" r=\"1.6\" class=\"lp-ico-detail\"/>"
   },
   {
     "name": "amp-combo-1x12",
@@ -41,7 +41,7 @@ export const ampIcons: IconDescriptor[] = [
       "width_ft": 1.9,
       "depth_ft": 1
     },
-    "body": "<rect x=\"14\" y=\"36\" width=\"72\" height=\"28\" rx=\"3\"/><circle cx=\"30\" cy=\"41\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"42\" cy=\"41\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"54\" cy=\"41\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"50\" cy=\"56\" r=\"6\" class=\"lp-ico-detail\"/>"
+    "body": "<rect x=\"12\" y=\"20\" width=\"76\" height=\"60\" rx=\"4\"/><circle cx=\"24\" cy=\"28\" r=\"2\" class=\"lp-ico-detail\"/><circle cx=\"33\" cy=\"28\" r=\"2\" class=\"lp-ico-detail\"/><circle cx=\"42\" cy=\"28\" r=\"2\" class=\"lp-ico-detail\"/><circle cx=\"51\" cy=\"28\" r=\"2\" class=\"lp-ico-detail\"/><rect x=\"18\" y=\"38\" width=\"64\" height=\"36\" rx=\"3\" class=\"lp-ico-detail\"/><circle cx=\"50\" cy=\"56\" r=\"11\" class=\"lp-ico-detail\"/><circle cx=\"50\" cy=\"56\" r=\"2\" class=\"lp-ico-detail\"/>"
   },
   {
     "name": "amp-combo-2x12",
@@ -57,7 +57,7 @@ export const ampIcons: IconDescriptor[] = [
       "width_ft": 2.4,
       "depth_ft": 1
     },
-    "body": "<rect x=\"8\" y=\"34\" width=\"84\" height=\"32\" rx=\"3\"/><circle cx=\"28\" cy=\"40\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"40\" cy=\"40\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"52\" cy=\"40\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"36\" cy=\"57\" r=\"5\" class=\"lp-ico-detail\"/><circle cx=\"64\" cy=\"57\" r=\"5\" class=\"lp-ico-detail\"/>"
+    "body": "<rect x=\"12\" y=\"20\" width=\"76\" height=\"60\" rx=\"4\"/><circle cx=\"24\" cy=\"28\" r=\"2\" class=\"lp-ico-detail\"/><circle cx=\"33\" cy=\"28\" r=\"2\" class=\"lp-ico-detail\"/><circle cx=\"42\" cy=\"28\" r=\"2\" class=\"lp-ico-detail\"/><circle cx=\"51\" cy=\"28\" r=\"2\" class=\"lp-ico-detail\"/><rect x=\"18\" y=\"38\" width=\"64\" height=\"36\" rx=\"3\" class=\"lp-ico-detail\"/><circle cx=\"38\" cy=\"56\" r=\"9\" class=\"lp-ico-detail\"/><circle cx=\"38\" cy=\"56\" r=\"1.6\" class=\"lp-ico-detail\"/><circle cx=\"62\" cy=\"56\" r=\"9\" class=\"lp-ico-detail\"/><circle cx=\"62\" cy=\"56\" r=\"1.6\" class=\"lp-ico-detail\"/>"
   },
   {
     "name": "amp-marshall-stack",
@@ -74,7 +74,7 @@ export const ampIcons: IconDescriptor[] = [
       "width_ft": 2.5,
       "depth_ft": 1.2
     },
-    "body": "<rect x=\"10\" y=\"30\" width=\"80\" height=\"40\" rx=\"4\"/><circle cx=\"30\" cy=\"44\" r=\"7\" class=\"lp-ico-detail\"/><circle cx=\"50\" cy=\"44\" r=\"7\" class=\"lp-ico-detail\"/><circle cx=\"70\" cy=\"44\" r=\"7\" class=\"lp-ico-detail\"/><text class=\"lp-ico-label\" x=\"50\" y=\"61\" text-anchor=\"middle\" dominant-baseline=\"central\" font-size=\"12\">M</text>"
+    "body": "<rect x=\"24\" y=\"6\" width=\"52\" height=\"13\" rx=\"2\"/><circle cx=\"34\" cy=\"12.5\" r=\"2\" class=\"lp-ico-detail\"/><circle cx=\"42\" cy=\"12.5\" r=\"2\" class=\"lp-ico-detail\"/><circle cx=\"50\" cy=\"12.5\" r=\"2\" class=\"lp-ico-detail\"/><circle cx=\"58\" cy=\"12.5\" r=\"2\" class=\"lp-ico-detail\"/><rect x=\"22\" y=\"23\" width=\"56\" height=\"63\" rx=\"4\"/><rect x=\"26\" y=\"33\" width=\"48\" height=\"49\" rx=\"3\" class=\"lp-ico-detail\"/><circle cx=\"38\" cy=\"46\" r=\"8\" class=\"lp-ico-detail\"/><circle cx=\"38\" cy=\"46\" r=\"1.4\" class=\"lp-ico-detail\"/><circle cx=\"62\" cy=\"46\" r=\"8\" class=\"lp-ico-detail\"/><circle cx=\"62\" cy=\"46\" r=\"1.4\" class=\"lp-ico-detail\"/><circle cx=\"38\" cy=\"70\" r=\"8\" class=\"lp-ico-detail\"/><circle cx=\"38\" cy=\"70\" r=\"1.4\" class=\"lp-ico-detail\"/><circle cx=\"62\" cy=\"70\" r=\"8\" class=\"lp-ico-detail\"/><circle cx=\"62\" cy=\"70\" r=\"1.4\" class=\"lp-ico-detail\"/><text class=\"lp-ico-label\" x=\"50\" y=\"28\" text-anchor=\"middle\" dominant-baseline=\"central\" font-size=\"6\">M</text>"
   },
   {
     "name": "amp-marshall-halfstack",
@@ -91,7 +91,7 @@ export const ampIcons: IconDescriptor[] = [
       "width_ft": 2.5,
       "depth_ft": 1.2
     },
-    "body": "<rect x=\"10\" y=\"34\" width=\"80\" height=\"32\" rx=\"4\"/><circle cx=\"32\" cy=\"46\" r=\"6\" class=\"lp-ico-detail\"/><circle cx=\"50\" cy=\"46\" r=\"6\" class=\"lp-ico-detail\"/><circle cx=\"68\" cy=\"46\" r=\"6\" class=\"lp-ico-detail\"/><text class=\"lp-ico-label\" x=\"50\" y=\"46\" text-anchor=\"middle\" dominant-baseline=\"central\" font-size=\"0\"></text>"
+    "body": "<rect x=\"24\" y=\"6\" width=\"52\" height=\"13\" rx=\"2\"/><circle cx=\"34\" cy=\"12.5\" r=\"2\" class=\"lp-ico-detail\"/><circle cx=\"42\" cy=\"12.5\" r=\"2\" class=\"lp-ico-detail\"/><circle cx=\"50\" cy=\"12.5\" r=\"2\" class=\"lp-ico-detail\"/><circle cx=\"58\" cy=\"12.5\" r=\"2\" class=\"lp-ico-detail\"/><rect x=\"22\" y=\"23\" width=\"56\" height=\"63\" rx=\"4\"/><rect x=\"26\" y=\"33\" width=\"48\" height=\"49\" rx=\"3\" class=\"lp-ico-detail\"/><circle cx=\"38\" cy=\"46\" r=\"8\" class=\"lp-ico-detail\"/><circle cx=\"38\" cy=\"46\" r=\"1.4\" class=\"lp-ico-detail\"/><circle cx=\"62\" cy=\"46\" r=\"8\" class=\"lp-ico-detail\"/><circle cx=\"62\" cy=\"46\" r=\"1.4\" class=\"lp-ico-detail\"/><circle cx=\"38\" cy=\"70\" r=\"8\" class=\"lp-ico-detail\"/><circle cx=\"38\" cy=\"70\" r=\"1.4\" class=\"lp-ico-detail\"/><circle cx=\"62\" cy=\"70\" r=\"8\" class=\"lp-ico-detail\"/><circle cx=\"62\" cy=\"70\" r=\"1.4\" class=\"lp-ico-detail\"/><text class=\"lp-ico-label\" x=\"50\" y=\"28\" text-anchor=\"middle\" dominant-baseline=\"central\" font-size=\"6\">M</text>"
   },
   {
     "name": "amp-cab-4x12",
@@ -107,7 +107,7 @@ export const ampIcons: IconDescriptor[] = [
       "width_ft": 2.5,
       "depth_ft": 1.2
     },
-    "body": "<rect x=\"12\" y=\"30\" width=\"76\" height=\"40\" rx=\"3\"/><circle cx=\"36\" cy=\"43\" r=\"7\" class=\"lp-ico-detail\"/><circle cx=\"64\" cy=\"43\" r=\"7\" class=\"lp-ico-detail\"/><circle cx=\"36\" cy=\"58\" r=\"7\" class=\"lp-ico-detail\"/><circle cx=\"64\" cy=\"58\" r=\"7\" class=\"lp-ico-detail\"/>"
+    "body": "<rect x=\"22\" y=\"14\" width=\"56\" height=\"72\" rx=\"4\"/><rect x=\"26\" y=\"24\" width=\"48\" height=\"58\" rx=\"3\" class=\"lp-ico-detail\"/><circle cx=\"38\" cy=\"40\" r=\"8.5\" class=\"lp-ico-detail\"/><circle cx=\"38\" cy=\"40\" r=\"1.5\" class=\"lp-ico-detail\"/><circle cx=\"62\" cy=\"40\" r=\"8.5\" class=\"lp-ico-detail\"/><circle cx=\"62\" cy=\"40\" r=\"1.5\" class=\"lp-ico-detail\"/><circle cx=\"38\" cy=\"66\" r=\"8.5\" class=\"lp-ico-detail\"/><circle cx=\"38\" cy=\"66\" r=\"1.5\" class=\"lp-ico-detail\"/><circle cx=\"62\" cy=\"66\" r=\"8.5\" class=\"lp-ico-detail\"/><circle cx=\"62\" cy=\"66\" r=\"1.5\" class=\"lp-ico-detail\"/>"
   },
   {
     "name": "amp-guitar-head",
@@ -123,7 +123,7 @@ export const ampIcons: IconDescriptor[] = [
       "width_ft": 2.3,
       "depth_ft": 0.8
     },
-    "body": "<rect x=\"10\" y=\"40\" width=\"80\" height=\"20\" rx=\"3\"/><circle cx=\"26\" cy=\"50\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"38\" cy=\"50\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"50\" cy=\"50\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"62\" cy=\"50\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"74\" cy=\"50\" r=\"2.2\" class=\"lp-ico-detail\"/>"
+    "body": "<rect x=\"10\" y=\"36\" width=\"80\" height=\"28\" rx=\"3\"/><circle cx=\"24\" cy=\"45\" r=\"2\" class=\"lp-ico-detail\"/><circle cx=\"34\" cy=\"45\" r=\"2\" class=\"lp-ico-detail\"/><circle cx=\"44\" cy=\"45\" r=\"2\" class=\"lp-ico-detail\"/><circle cx=\"54\" cy=\"45\" r=\"2\" class=\"lp-ico-detail\"/><circle cx=\"64\" cy=\"45\" r=\"2\" class=\"lp-ico-detail\"/>"
   },
   {
     "name": "amp-bass-head",
@@ -138,7 +138,7 @@ export const ampIcons: IconDescriptor[] = [
       "width_ft": 2,
       "depth_ft": 0.9
     },
-    "body": "<rect x=\"10\" y=\"38\" width=\"80\" height=\"24\" rx=\"3\"/><circle cx=\"28\" cy=\"44\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"40\" cy=\"44\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"52\" cy=\"44\" r=\"2.2\" class=\"lp-ico-detail\"/><text class=\"lp-ico-label\" x=\"72\" y=\"51\" text-anchor=\"middle\" dominant-baseline=\"central\" font-size=\"13\">B</text>"
+    "body": "<rect x=\"10\" y=\"36\" width=\"80\" height=\"28\" rx=\"3\"/><circle cx=\"24\" cy=\"45\" r=\"2\" class=\"lp-ico-detail\"/><circle cx=\"34\" cy=\"45\" r=\"2\" class=\"lp-ico-detail\"/><circle cx=\"44\" cy=\"45\" r=\"2\" class=\"lp-ico-detail\"/><circle cx=\"54\" cy=\"45\" r=\"2\" class=\"lp-ico-detail\"/><circle cx=\"64\" cy=\"45\" r=\"2\" class=\"lp-ico-detail\"/><text class=\"lp-ico-label\" x=\"78\" y=\"50\" text-anchor=\"middle\" dominant-baseline=\"central\" font-size=\"8\">B</text>"
   },
   {
     "name": "amp-ampeg-svt",
@@ -156,7 +156,7 @@ export const ampIcons: IconDescriptor[] = [
       "width_ft": 2.2,
       "depth_ft": 1.4
     },
-    "body": "<rect x=\"10\" y=\"26\" width=\"80\" height=\"48\" rx=\"4\"/><circle cx=\"26\" cy=\"40\" r=\"6\" class=\"lp-ico-detail\"/><circle cx=\"42\" cy=\"40\" r=\"6\" class=\"lp-ico-detail\"/><circle cx=\"58\" cy=\"40\" r=\"6\" class=\"lp-ico-detail\"/><circle cx=\"74\" cy=\"40\" r=\"6\" class=\"lp-ico-detail\"/><circle cx=\"26\" cy=\"60\" r=\"6\" class=\"lp-ico-detail\"/><circle cx=\"42\" cy=\"60\" r=\"6\" class=\"lp-ico-detail\"/><circle cx=\"58\" cy=\"60\" r=\"6\" class=\"lp-ico-detail\"/><circle cx=\"74\" cy=\"60\" r=\"6\" class=\"lp-ico-detail\"/>"
+    "body": "<rect x=\"26\" y=\"8\" width=\"48\" height=\"84\" rx=\"4\"/><rect x=\"30\" y=\"16\" width=\"40\" height=\"70\" rx=\"3\" class=\"lp-ico-detail\"/><circle cx=\"40\" cy=\"22\" r=\"6.5\" class=\"lp-ico-detail\"/><circle cx=\"40\" cy=\"22\" r=\"1.2\" class=\"lp-ico-detail\"/><circle cx=\"60\" cy=\"22\" r=\"6.5\" class=\"lp-ico-detail\"/><circle cx=\"60\" cy=\"22\" r=\"1.2\" class=\"lp-ico-detail\"/><circle cx=\"40\" cy=\"40\" r=\"6.5\" class=\"lp-ico-detail\"/><circle cx=\"40\" cy=\"40\" r=\"1.2\" class=\"lp-ico-detail\"/><circle cx=\"60\" cy=\"40\" r=\"6.5\" class=\"lp-ico-detail\"/><circle cx=\"60\" cy=\"40\" r=\"1.2\" class=\"lp-ico-detail\"/><circle cx=\"40\" cy=\"58\" r=\"6.5\" class=\"lp-ico-detail\"/><circle cx=\"40\" cy=\"58\" r=\"1.2\" class=\"lp-ico-detail\"/><circle cx=\"60\" cy=\"58\" r=\"6.5\" class=\"lp-ico-detail\"/><circle cx=\"60\" cy=\"58\" r=\"1.2\" class=\"lp-ico-detail\"/><circle cx=\"40\" cy=\"76\" r=\"6.5\" class=\"lp-ico-detail\"/><circle cx=\"40\" cy=\"76\" r=\"1.2\" class=\"lp-ico-detail\"/><circle cx=\"60\" cy=\"76\" r=\"6.5\" class=\"lp-ico-detail\"/><circle cx=\"60\" cy=\"76\" r=\"1.2\" class=\"lp-ico-detail\"/><text class=\"lp-ico-label\" x=\"50\" y=\"12\" text-anchor=\"middle\" dominant-baseline=\"central\" font-size=\"5\">SVT</text>"
   },
   {
     "name": "amp-bass-cab-1x15",
@@ -172,7 +172,7 @@ export const ampIcons: IconDescriptor[] = [
       "width_ft": 2,
       "depth_ft": 1.4
     },
-    "body": "<rect x=\"14\" y=\"24\" width=\"72\" height=\"52\" rx=\"3\"/><circle cx=\"50\" cy=\"50\" r=\"18\" class=\"lp-ico-detail\"/><circle cx=\"50\" cy=\"50\" r=\"4\" class=\"lp-ico-detail\"/>"
+    "body": "<rect x=\"24\" y=\"16\" width=\"52\" height=\"68\" rx=\"4\"/><rect x=\"28\" y=\"24\" width=\"44\" height=\"52\" rx=\"3\" class=\"lp-ico-detail\"/><circle cx=\"50\" cy=\"50\" r=\"20\" class=\"lp-ico-detail\"/><circle cx=\"50\" cy=\"50\" r=\"3.6\" class=\"lp-ico-detail\"/>"
   },
   {
     "name": "amp-bass-cab-2x10",
@@ -188,7 +188,7 @@ export const ampIcons: IconDescriptor[] = [
       "width_ft": 1.9,
       "depth_ft": 1.4
     },
-    "body": "<rect x=\"14\" y=\"28\" width=\"72\" height=\"44\" rx=\"3\"/><circle cx=\"36\" cy=\"50\" r=\"12\" class=\"lp-ico-detail\"/><circle cx=\"64\" cy=\"50\" r=\"12\" class=\"lp-ico-detail\"/>"
+    "body": "<rect x=\"22\" y=\"20\" width=\"56\" height=\"60\" rx=\"4\"/><rect x=\"26\" y=\"26\" width=\"48\" height=\"48\" rx=\"3\" class=\"lp-ico-detail\"/><circle cx=\"50\" cy=\"39\" r=\"11\" class=\"lp-ico-detail\"/><circle cx=\"50\" cy=\"39\" r=\"2\" class=\"lp-ico-detail\"/><circle cx=\"50\" cy=\"61\" r=\"11\" class=\"lp-ico-detail\"/><circle cx=\"50\" cy=\"61\" r=\"2\" class=\"lp-ico-detail\"/>"
   },
   {
     "name": "amp-acoustic",
@@ -203,7 +203,7 @@ export const ampIcons: IconDescriptor[] = [
       "width_ft": 1.5,
       "depth_ft": 1
     },
-    "body": "<rect x=\"18\" y=\"36\" width=\"64\" height=\"28\" rx=\"3\"/><circle cx=\"32\" cy=\"42\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"44\" cy=\"42\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"56\" cy=\"42\" r=\"2.2\" class=\"lp-ico-detail\"/><text class=\"lp-ico-label\" x=\"50\" y=\"56\" text-anchor=\"middle\" dominant-baseline=\"central\" font-size=\"13\">A</text>"
+    "body": "<rect x=\"12\" y=\"20\" width=\"76\" height=\"60\" rx=\"4\"/><circle cx=\"24\" cy=\"28\" r=\"2\" class=\"lp-ico-detail\"/><circle cx=\"33\" cy=\"28\" r=\"2\" class=\"lp-ico-detail\"/><circle cx=\"42\" cy=\"28\" r=\"2\" class=\"lp-ico-detail\"/><circle cx=\"51\" cy=\"28\" r=\"2\" class=\"lp-ico-detail\"/><text class=\"lp-ico-label\" x=\"72\" y=\"28\" text-anchor=\"middle\" dominant-baseline=\"central\" font-size=\"7\">A</text><rect x=\"18\" y=\"38\" width=\"64\" height=\"36\" rx=\"3\" class=\"lp-ico-detail\"/><circle cx=\"50\" cy=\"56\" r=\"11\" class=\"lp-ico-detail\"/><circle cx=\"50\" cy=\"56\" r=\"2\" class=\"lp-ico-detail\"/>"
   },
   {
     "name": "amp-keyboard",
@@ -219,7 +219,7 @@ export const ampIcons: IconDescriptor[] = [
       "width_ft": 1.6,
       "depth_ft": 1.2
     },
-    "body": "<rect x=\"16\" y=\"34\" width=\"68\" height=\"32\" rx=\"3\"/><circle cx=\"30\" cy=\"40\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"42\" cy=\"40\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"54\" cy=\"40\" r=\"2.2\" class=\"lp-ico-detail\"/><text class=\"lp-ico-label\" x=\"50\" y=\"56\" text-anchor=\"middle\" dominant-baseline=\"central\" font-size=\"13\">KB</text>"
+    "body": "<rect x=\"12\" y=\"20\" width=\"76\" height=\"60\" rx=\"4\"/><circle cx=\"24\" cy=\"28\" r=\"2\" class=\"lp-ico-detail\"/><circle cx=\"33\" cy=\"28\" r=\"2\" class=\"lp-ico-detail\"/><circle cx=\"42\" cy=\"28\" r=\"2\" class=\"lp-ico-detail\"/><circle cx=\"51\" cy=\"28\" r=\"2\" class=\"lp-ico-detail\"/><text class=\"lp-ico-label\" x=\"72\" y=\"28\" text-anchor=\"middle\" dominant-baseline=\"central\" font-size=\"7\">KB</text><rect x=\"18\" y=\"38\" width=\"64\" height=\"36\" rx=\"3\" class=\"lp-ico-detail\"/><circle cx=\"50\" cy=\"56\" r=\"11\" class=\"lp-ico-detail\"/><circle cx=\"50\" cy=\"56\" r=\"2\" class=\"lp-ico-detail\"/>"
   },
   {
     "name": "amp-modeller",
@@ -237,6 +237,6 @@ export const ampIcons: IconDescriptor[] = [
       "amp",
       "rack"
     ],
-    "body": "<rect x=\"12\" y=\"28\" width=\"76\" height=\"44\" rx=\"3\"/><rect x=\"18\" y=\"36\" width=\"30\" height=\"16\" rx=\"1\" class=\"lp-ico-detail\"/><circle cx=\"62\" cy=\"44\" r=\"6\" class=\"lp-ico-detail\"/><circle cx=\"78\" cy=\"44\" r=\"6\" class=\"lp-ico-detail\"/><text class=\"lp-ico-label\" x=\"33\" y=\"63\" text-anchor=\"middle\" dominant-baseline=\"central\" font-size=\"9\">MOD</text>"
+    "body": "<rect x=\"14\" y=\"32\" width=\"72\" height=\"36\" rx=\"3\"/><rect x=\"20\" y=\"40\" width=\"30\" height=\"20\" rx=\"2\" class=\"lp-ico-detail\"/><circle cx=\"60\" cy=\"50\" r=\"2\" class=\"lp-ico-detail\"/><circle cx=\"70\" cy=\"50\" r=\"2\" class=\"lp-ico-detail\"/><text class=\"lp-ico-label\" x=\"50\" y=\"73\" text-anchor=\"middle\" dominant-baseline=\"central\" font-size=\"6\">MOD</text>"
   }
 ];
