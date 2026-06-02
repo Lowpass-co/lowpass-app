@@ -51,10 +51,12 @@ import type { IconDescriptor } from './types';
 
 // Shared bolt glyph for the power family (detail = stroked outline).
 const BOLT = '<polygon points="27,9 15,27 23,27 21,41 35,21 27,21" class="lp-ico-detail"/>';
-// Count badge (corner) for power drops with 2+ sockets.
+// Count badge — tucked into the top-right corner CLEAR of the
+// disc (disc r19 leaves the corner empty) so it never overlaps the
+// bolt glyph.
 const countBadge = (n: number): string =>
-  `<circle cx="42" cy="10" r="8.5" class="lp-ico-detail"/>` +
-  `<text class="lp-ico-label" x="42" y="10" text-anchor="middle" dominant-baseline="central" font-size="12">${n}</text>`;
+  `<circle cx="41" cy="9" r="7.5" class="lp-ico-detail"/>` +
+  `<text class="lp-ico-label" x="41" y="9" text-anchor="middle" dominant-baseline="central" font-size="11">${n}</text>`;
 
 /* ── KICK — 3 treatments for Adam to pick (debug page only) ────
    All: rounded-rect shell (1.8w × 1.4d), rx = 30% of the shorter
@@ -62,6 +64,14 @@ const countBadge = (n: number): string =>
    (downstage) pedal-direction marker. Recommended = A. */
 const KICK_SHELL = '<rect x="6" y="6" width="168" height="128" rx="42"/>';
 const KICK_SEAM = '<line x1="90" y1="24" x2="90" y2="116" class="lp-ico-detail"/>';
+// Tension lugs on the front + back head rims (top + bottom edges).
+// Bottom-centre is left clear for the pedal marker.
+const KICK_LUGS =
+  '<line x1="56" y1="3" x2="56" y2="13" class="lp-ico-detail"/>' +
+  '<line x1="90" y1="3" x2="90" y2="13" class="lp-ico-detail"/>' +
+  '<line x1="124" y1="3" x2="124" y2="13" class="lp-ico-detail"/>' +
+  '<line x1="56" y1="127" x2="56" y2="137" class="lp-ico-detail"/>' +
+  '<line x1="124" y1="127" x2="124" y2="137" class="lp-ico-detail"/>';
 export const kickTreatments: IconDescriptor[] = [
   {
     name: 'kick-a',
@@ -71,7 +81,7 @@ export const kickTreatments: IconDescriptor[] = [
     viewBox: '0 0 180 140',
     keywords: ['kick', 'treatment'],
     // Solid filled triangle at the front edge → clearest rotation cue.
-    body: KICK_SHELL + KICK_SEAM + '<polygon points="78,118 102,118 90,134" class="lp-ico-label"/>',
+    body: KICK_SHELL + KICK_LUGS + KICK_SEAM + '<polygon points="78,118 102,118 90,134" class="lp-ico-label"/>',
   },
   {
     name: 'kick-b',
@@ -80,7 +90,7 @@ export const kickTreatments: IconDescriptor[] = [
     footprint: { width_ft: 1.8, depth_ft: 1.4 },
     viewBox: '0 0 180 140',
     keywords: ['kick', 'treatment'],
-    body: KICK_SHELL + KICK_SEAM + '<circle cx="90" cy="120" r="7" class="lp-ico-label"/>',
+    body: KICK_SHELL + KICK_LUGS + KICK_SEAM + '<circle cx="90" cy="120" r="7" class="lp-ico-label"/>',
   },
   {
     name: 'kick-c',
@@ -89,7 +99,7 @@ export const kickTreatments: IconDescriptor[] = [
     footprint: { width_ft: 1.8, depth_ft: 1.4 },
     viewBox: '0 0 180 140',
     keywords: ['kick', 'treatment'],
-    body: KICK_SHELL + KICK_SEAM + '<rect x="79" y="118" width="22" height="16" rx="3" class="lp-ico-detail"/>',
+    body: KICK_SHELL + KICK_LUGS + KICK_SEAM + '<rect x="79" y="118" width="22" height="16" rx="3" class="lp-ico-detail"/>',
   },
 ];
 
@@ -244,7 +254,7 @@ export const canonicalIcons: IconDescriptor[] = [
     footprint: { width_ft: 0.5, depth_ft: 0.5 },
     viewBox: '0 0 50 50',
     keywords: ['power', 'edison', '120v', 'single', 'canonical'],
-    body: '<circle cx="25" cy="25" r="21"/>' + BOLT,
+    body: '<circle cx="25" cy="25" r="19"/>' + BOLT,
   },
   {
     name: 'power-2',
@@ -253,7 +263,7 @@ export const canonicalIcons: IconDescriptor[] = [
     footprint: { width_ft: 0.5, depth_ft: 0.5 },
     viewBox: '0 0 50 50',
     keywords: ['power', 'duplex', 'quad', '120v', 'canonical'],
-    body: '<circle cx="25" cy="25" r="21"/>' + BOLT + countBadge(2),
+    body: '<circle cx="25" cy="25" r="19"/>' + BOLT + countBadge(2),
   },
   {
     name: 'power-4',
@@ -262,7 +272,7 @@ export const canonicalIcons: IconDescriptor[] = [
     footprint: { width_ft: 0.5, depth_ft: 0.5 },
     viewBox: '0 0 50 50',
     keywords: ['power', 'pigtail', '4-way', 'canonical'],
-    body: '<circle cx="25" cy="25" r="21"/>' + BOLT + countBadge(4),
+    body: '<circle cx="25" cy="25" r="19"/>' + BOLT + countBadge(4),
   },
   {
     name: 'power-6',
@@ -271,7 +281,7 @@ export const canonicalIcons: IconDescriptor[] = [
     footprint: { width_ft: 0.5, depth_ft: 0.5 },
     viewBox: '0 0 50 50',
     keywords: ['power', 'distro', '6-way', 'canonical'],
-    body: '<circle cx="25" cy="25" r="21"/>' + BOLT + countBadge(6),
+    body: '<circle cx="25" cy="25" r="19"/>' + BOLT + countBadge(6),
   },
 
   {
