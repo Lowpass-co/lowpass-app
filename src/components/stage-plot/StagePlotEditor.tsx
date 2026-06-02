@@ -20,6 +20,16 @@ import { DEFAULT_PLOT, type EditorItem, type EditorPlot } from '@/lib/stage-plot
 const uid = (): string =>
   typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `i${Date.now()}${Math.round(Math.random() * 1e6)}`;
 
+const toolBtn: React.CSSProperties = {
+  fontSize: 'var(--lp-text-xs)',
+  padding: '5px 10px',
+  borderRadius: 6,
+  border: '1px solid var(--lp-border)',
+  background: 'var(--lp-surface)',
+  color: 'var(--lp-text-secondary)',
+  cursor: 'pointer',
+};
+
 export interface StagePlotEditorProps {
   initialPlot?: EditorPlot;
   initialItems?: EditorItem[];
@@ -44,25 +54,56 @@ export function StagePlotEditor({ initialPlot, initialItems, onChange, actions }
     return () => clearTimeout(t);
   }, [plot, items]);
 
-  const addItem = useCallback((iconName: string) => {
-    const icon = getIcon(iconName);
-    setItems((prev) => {
+  const addItem = useCallback(
+    (iconName: string, pos?: { xFt: number; yFt: number }) => {
+      const icon = getIcon(iconName);
       const id = uid();
-      setSelectedId(id);
-      return [
+      setItems((prev) => [
         ...prev,
-        { id, iconName, xFt: plot.widthFt / 2, yFt: plot.depthFt / 2, rotationDeg: 0, layer: 'main' as const, label: icon?.label },
-      ];
-    });
+        {
+          id,
+          iconName,
+          xFt: pos?.xFt ?? plot.widthFt / 2,
+          yFt: pos?.yFt ?? plot.depthFt / 2,
+          rotationDeg: 0,
+          scale: 1,
+          layer: 'main' as const,
+          label: icon?.label,
+        },
+      ]);
+      setSelectedId(id);
+    },
+    [plot.widthFt, plot.depthFt],
+  );
+
+  const addText = useCallback(() => {
+    const id = uid();
+    setItems((prev) => [
+      ...prev,
+      { id, kind: 'text' as const, iconName: '', xFt: plot.widthFt / 2, yFt: plot.depthFt / 2, text: 'Text', fontSizeFt: 1.1, layer: 'annotations' as const },
+    ]);
+    setSelectedId(id);
   }, [plot.widthFt, plot.depthFt]);
 
-  const moveItem = useCallback((id: string, xFt: number, yFt: number) => {
-    setItems((prev) => prev.map((it) => (it.id === id ? { ...it, xFt, yFt } : it)));
+  const addArrow = useCallback(() => {
+    const id = uid();
+    setItems((prev) => [
+      ...prev,
+      { id, kind: 'arrow' as const, iconName: '', xFt: plot.widthFt / 2 - 2, yFt: plot.depthFt / 2, x2Ft: plot.widthFt / 2 + 2, y2Ft: plot.depthFt / 2, layer: 'annotations' as const },
+    ]);
+    setSelectedId(id);
+  }, [plot.widthFt, plot.depthFt]);
+
+  const updateItem = useCallback((id: string, patch: Partial<EditorItem>) => {
+    setItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...patch } : it)));
   }, []);
 
-  const updateSelected = useCallback((patch: Partial<EditorItem>) => {
-    setItems((prev) => prev.map((it) => (it.id === selectedId ? { ...it, ...patch } : it)));
-  }, [selectedId]);
+  const updateSelected = useCallback(
+    (patch: Partial<EditorItem>) => {
+      if (selectedId) updateItem(selectedId, patch);
+    },
+    [selectedId, updateItem],
+  );
 
   const deleteSelected = useCallback(() => {
     setItems((prev) => prev.filter((it) => it.id !== selectedId));
@@ -134,6 +175,8 @@ export function StagePlotEditor({ initialPlot, initialItems, onChange, actions }
           style={{ fontSize: 'var(--lp-text-md)', fontWeight: 600, border: 'none', background: 'transparent', color: 'var(--lp-text)', flex: 1, outline: 'none' }}
         />
         <span style={{ fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-tertiary)' }}>{items.length} items</span>
+        <button type="button" onClick={addText} style={toolBtn}>+ Text</button>
+        <button type="button" onClick={addArrow} style={toolBtn}>+ Arrow</button>
         <button
           type="button"
           onClick={exportPdf}
@@ -163,7 +206,8 @@ export function StagePlotEditor({ initialPlot, initialItems, onChange, actions }
             items={items}
             selectedId={selectedId}
             onSelectItem={setSelectedId}
-            onMoveItem={moveItem}
+            onUpdateItem={updateItem}
+            onDropIcon={(iconName, xFt, yFt) => addItem(iconName, { xFt, yFt })}
           />
         </div>
         <ItemProperties

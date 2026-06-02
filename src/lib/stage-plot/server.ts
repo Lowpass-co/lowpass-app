@@ -35,11 +35,15 @@ interface ItemRow {
   position_y_ft: number;
   width_ft: number | null;
   depth_ft: number | null;
+  scale: number | null;
   rotation_deg: number;
   color_tint: string | null;
   locked: boolean;
   layer: string;
   channel_list_row_id: string | null;
+  /** Annotation fields (kind/text/fontSizeFt/x2Ft/y2Ft) stashed here —
+   *  stage_plot_items has no dedicated columns for them yet. */
+  label_style: Record<string, unknown> | null;
 }
 
 export function rowsToEditor(plot: PlotRow, items: ItemRow[], name: string): { plot: EditorPlot; items: EditorItem[] } {
@@ -58,20 +62,29 @@ export function rowsToEditor(plot: PlotRow, items: ItemRow[], name: string): { p
       brandColor: plot.color_override ?? DEFAULT_PLOT.brandColor,
       units: plot.units,
     },
-    items: items.map((r) => ({
-      id: r.id,
-      iconName: r.icon_name,
-      xFt: Number(r.position_x_ft),
-      yFt: Number(r.position_y_ft),
-      widthFt: r.width_ft == null ? undefined : Number(r.width_ft),
-      depthFt: r.depth_ft == null ? undefined : Number(r.depth_ft),
-      rotationDeg: Number(r.rotation_deg),
-      colorTint: r.color_tint,
-      locked: r.locked,
-      label: r.label ?? undefined,
-      layer: (r.layer as EditorItem['layer']) ?? 'main',
-      channelRowId: r.channel_list_row_id,
-    })),
+    items: items.map((r) => {
+      const ann = (r.label_style ?? {}) as Record<string, unknown>;
+      return {
+        id: r.id,
+        kind: (ann.kind as EditorItem['kind']) ?? 'icon',
+        iconName: r.icon_name,
+        xFt: Number(r.position_x_ft),
+        yFt: Number(r.position_y_ft),
+        widthFt: r.width_ft == null ? undefined : Number(r.width_ft),
+        depthFt: r.depth_ft == null ? undefined : Number(r.depth_ft),
+        scale: r.scale == null ? undefined : Number(r.scale),
+        rotationDeg: Number(r.rotation_deg),
+        colorTint: r.color_tint,
+        locked: r.locked,
+        label: r.label ?? undefined,
+        layer: (r.layer as EditorItem['layer']) ?? 'main',
+        channelRowId: r.channel_list_row_id,
+        text: ann.text as string | undefined,
+        fontSizeFt: ann.fontSizeFt as number | undefined,
+        x2Ft: ann.x2Ft as number | undefined,
+        y2Ft: ann.y2Ft as number | undefined,
+      };
+    }),
   };
 }
 
@@ -92,20 +105,28 @@ export function plotToColumns(plot: EditorPlot): Record<string, unknown> {
 }
 
 export function itemToRow(it: EditorItem, stagePlotId: string, workspaceId: string): Record<string, unknown> {
+  const kind = it.kind ?? 'icon';
+  const labelStyle =
+    kind === 'icon'
+      ? {}
+      : { kind, text: it.text, fontSizeFt: it.fontSizeFt, x2Ft: it.x2Ft, y2Ft: it.y2Ft };
   return {
     workspace_id: workspaceId,
     stage_plot_id: stagePlotId,
     layer: it.layer ?? 'main',
-    icon_name: it.iconName,
+    // icon_name is NOT NULL; annotations carry their kind as a sentinel.
+    icon_name: it.iconName || `__${kind}__`,
     label: it.label ?? null,
     position_x_ft: it.xFt,
     position_y_ft: it.yFt,
     width_ft: it.widthFt ?? null,
     depth_ft: it.depthFt ?? null,
+    scale: it.scale ?? 1,
     rotation_deg: it.rotationDeg ?? 0,
     color_tint: it.colorTint ?? null,
     locked: it.locked ?? false,
     channel_list_row_id: it.channelRowId ?? null,
+    label_style: labelStyle,
   };
 }
 

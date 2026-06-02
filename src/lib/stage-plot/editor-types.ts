@@ -8,6 +8,9 @@
 
 export type StagePlotLayer = 'house' | 'main' | 'annotations';
 
+/** Icon placement, free text box, or an arrow annotation. */
+export type ItemKind = 'icon' | 'text' | 'arrow';
+
 export interface EditorPlot {
   name: string;
   widthFt: number;
@@ -25,12 +28,17 @@ export interface EditorPlot {
 
 export interface EditorItem {
   id: string;
+  /** 'icon' (default), 'text', or 'arrow'. */
+  kind?: ItemKind;
+  /** Icon registry key (kind='icon'). */
   iconName: string;
   /** Centre, in feet from the stage's upstage-left origin. */
   xFt: number;
   yFt: number;
   widthFt?: number;
   depthFt?: number;
+  /** Uniform size multiplier on the footprint (drag-to-resize / scale field). */
+  scale?: number;
   rotationDeg?: number;
   colorTint?: string | null;
   locked?: boolean;
@@ -38,6 +46,13 @@ export interface EditorItem {
   layer?: StagePlotLayer;
   /** Linked channel-list row (§SP4). */
   channelRowId?: string | null;
+  /** Text content (kind='text'). */
+  text?: string;
+  /** Text size in feet (kind='text'). */
+  fontSizeFt?: number;
+  /** Arrow second endpoint, feet (kind='arrow'); xFt/yFt is the first. */
+  x2Ft?: number;
+  y2Ft?: number;
 }
 
 export const DEFAULT_PLOT: EditorPlot = {

@@ -61,9 +61,14 @@ export function IconPalette({ onAdd }: IconPaletteProps) {
                 <button
                   key={icon.name}
                   type="button"
-                  title={icon.label}
+                  title={`${icon.label} — drag onto the stage or click to add`}
+                  draggable
+                  onDragStart={(e) => {
+                    e.dataTransfer.setData('text/plain', icon.name);
+                    e.dataTransfer.effectAllowed = 'copy';
+                  }}
                   onClick={() => onAdd(icon.name)}
-                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, padding: 6, borderRadius: 8, border: '1px solid transparent', background: 'transparent', cursor: 'pointer', color: 'var(--lp-text-secondary)' }}
+                  style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, padding: 6, borderRadius: 8, border: '1px solid transparent', background: 'transparent', cursor: 'grab', color: 'var(--lp-text-secondary)' }}
                   onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--lp-surface-hover)')}
                   onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                 >

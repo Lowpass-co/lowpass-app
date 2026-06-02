@@ -47,26 +47,50 @@ export function ItemProperties({ plot, item, onUpdateItem, onDeleteItem, onUpdat
       {item ? (
         <>
           <h3 style={{ fontSize: 'var(--lp-text-sm)', fontWeight: 600, color: 'var(--lp-text)', margin: '0 0 4px' }}>
-            {getIcon(item.iconName)?.label ?? item.iconName}
+            {item.kind === 'text' ? 'Text box' : item.kind === 'arrow' ? 'Arrow' : getIcon(item.iconName)?.label ?? item.iconName}
           </h3>
-          <p style={{ fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-tertiary)', margin: '0 0 14px' }}>Item</p>
+          <p style={{ fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-tertiary)', margin: '0 0 14px' }}>
+            {item.kind === 'text' || item.kind === 'arrow' ? 'Annotation' : 'Item'}
+          </p>
 
-          <Row label="Label">
-            <input value={item.label ?? ''} placeholder="—" style={{ ...inputStyle, width: 130, textAlign: 'left' }}
-              onChange={(e) => onUpdateItem({ label: e.target.value })} />
-          </Row>
+          {item.kind === 'text' && (
+            <>
+              <Row label="Text">
+                <input value={item.text ?? ''} placeholder="Text" style={{ ...inputStyle, width: 130, textAlign: 'left' }}
+                  onChange={(e) => onUpdateItem({ text: e.target.value })} />
+              </Row>
+              <Row label="Size (ft)"><Num value={item.fontSizeFt ?? 1.1} step={0.2} min={0.3} onChange={(n) => onUpdateItem({ fontSizeFt: n })} /></Row>
+            </>
+          )}
+
+          {item.kind !== 'text' && item.kind !== 'arrow' && (
+            <Row label="Label">
+              <input value={item.label ?? ''} placeholder="—" style={{ ...inputStyle, width: 130, textAlign: 'left' }}
+                onChange={(e) => onUpdateItem({ label: e.target.value })} />
+            </Row>
+          )}
+
           <Row label="X (ft)"><Num value={item.xFt} onChange={(n) => onUpdateItem({ xFt: n })} /></Row>
           <Row label="Y (ft)"><Num value={item.yFt} onChange={(n) => onUpdateItem({ yFt: n })} /></Row>
-          <Row label="Width (ft)"><Num value={item.widthFt ?? getIcon(item.iconName)?.footprint.width_ft ?? 1} min={0.1} onChange={(n) => onUpdateItem({ widthFt: n })} /></Row>
-          <Row label="Depth (ft)"><Num value={item.depthFt ?? getIcon(item.iconName)?.footprint.depth_ft ?? 1} min={0.1} onChange={(n) => onUpdateItem({ depthFt: n })} /></Row>
-          <Row label="Rotation°"><Num value={item.rotationDeg ?? 0} step={15} onChange={(n) => onUpdateItem({ rotationDeg: n })} /></Row>
-          <Row label="Tint">
+
+          {item.kind !== 'text' && item.kind !== 'arrow' && (
+            <>
+              <Row label="Scale"><Num value={item.scale ?? 1} step={0.1} min={0.2} onChange={(n) => onUpdateItem({ scale: n })} /></Row>
+              <Row label="Width (ft)"><Num value={item.widthFt ?? getIcon(item.iconName)?.footprint.width_ft ?? 1} min={0.1} onChange={(n) => onUpdateItem({ widthFt: n })} /></Row>
+              <Row label="Depth (ft)"><Num value={item.depthFt ?? getIcon(item.iconName)?.footprint.depth_ft ?? 1} min={0.1} onChange={(n) => onUpdateItem({ depthFt: n })} /></Row>
+              <Row label="Rotation°"><Num value={item.rotationDeg ?? 0} step={15} onChange={(n) => onUpdateItem({ rotationDeg: n })} /></Row>
+            </>
+          )}
+
+          <Row label={item.kind === 'arrow' ? 'Colour' : 'Tint'}>
             <input type="color" value={item.colorTint ?? '#000000'} style={{ width: 40, height: 26, border: 'none', background: 'none' }}
               onChange={(e) => onUpdateItem({ colorTint: e.target.value })} />
           </Row>
-          <Row label="Locked">
-            <input type="checkbox" checked={Boolean(item.locked)} onChange={(e) => onUpdateItem({ locked: e.target.checked })} />
-          </Row>
+          {item.kind !== 'text' && item.kind !== 'arrow' && (
+            <Row label="Locked">
+              <input type="checkbox" checked={Boolean(item.locked)} onChange={(e) => onUpdateItem({ locked: e.target.checked })} />
+            </Row>
+          )}
 
           <button type="button" onClick={onDeleteItem}
             style={{ marginTop: 12, width: '100%', padding: '8px', borderRadius: 6, border: '1px solid var(--lp-border)', background: 'var(--lp-surface)', color: 'var(--lp-text-secondary)', cursor: 'pointer', fontSize: 'var(--lp-text-xs)' }}>
