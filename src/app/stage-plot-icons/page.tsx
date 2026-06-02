@@ -71,10 +71,56 @@ function Card({ icon }: { icon: IconDescriptor }) {
   );
 }
 
+const KNOWN_CATS = new Set(['musicians', 'mics', 'drums', 'strings', 'keys', 'amps', 'monitors', 'signal', 'infrastructure', 'lighting', 'stands', 'utility']);
+
 export default function StagePlotIconDebugPage() {
   const [filter, setFilter] = useState('');
   const q = filter.trim().toLowerCase();
   const match = (i: IconDescriptor) => !q || `${i.name} ${i.label}`.toLowerCase().includes(q);
+
+  // §SP-FIX-1b·5 — AI generator test harness (dev only).
+  const [gen, setGen] = useState({ label: '', category: '', w: '2', d: '1', photo: '' });
+  const [genResult, setGenResult] = useState<IconDescriptor | null>(null);
+  const [genErr, setGenErr] = useState('');
+  const [genBusy, setGenBusy] = useState(false);
+
+  async function runGenerate() {
+    setGenBusy(true);
+    setGenErr('');
+    setGenResult(null);
+    try {
+      const res = await fetch('/api/stage-plot/icons/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          label: gen.label,
+          category: gen.category || undefined,
+          real_world_dimensions_ft: { w: Number(gen.w), d: Number(gen.d) },
+          reference_photo_url: gen.photo || undefined,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setGenErr(json.error ?? `HTTP ${res.status}`);
+        return;
+      }
+      const it = json.item;
+      setGenResult({
+        name: it.name,
+        label: it.label,
+        category: (KNOWN_CATS.has(it.category) ? it.category : 'utility') as IconDescriptor['category'],
+        footprint: it.footprint,
+        viewBox: it.viewBox,
+        body: it.body,
+      });
+    } catch (e) {
+      setGenErr(String(e));
+    } finally {
+      setGenBusy(false);
+    }
+  }
+
+  const genField: React.CSSProperties = { padding: '6px 10px', borderRadius: 6, border: '1px solid var(--lp-border)', background: 'var(--lp-surface)', color: 'var(--lp-text)' };
 
   return (
     <div style={{ padding: 28, background: 'var(--lp-bg)', minHeight: '100vh', color: 'var(--lp-text)' }}>
@@ -83,6 +129,36 @@ export default function StagePlotIconDebugPage() {
         Canonical anchors first (§SP-FIX-1a), then the current registry for comparison. Each row shows 16 / 32 / 80 / 240px.
         The set should read as one visual language: same stroke weight, same detail vocabulary, top-down footprints.
       </p>
+
+      <section style={{ margin: '16px 0', padding: 16, border: '1px dashed var(--lp-orange)', borderRadius: 10 }}>
+        <h2 style={{ fontSize: 'var(--lp-text-md)', fontWeight: 700, color: 'var(--lp-orange)', marginBottom: 4 }}>
+          §SP-FIX-1b·5 — AI generator (dev test)
+        </h2>
+        <p style={{ fontSize: 11, color: 'var(--lp-text-tertiary)', marginBottom: 10, maxWidth: 720 }}>
+          POSTs to <code>/api/stage-plot/icons/generate</code>. Requires being logged in and <code>ANTHROPIC_API_KEY</code> set on the server. One generation per 10s.
+        </p>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center' }}>
+          <input value={gen.label} onChange={(e) => setGen({ ...gen, label: e.target.value })} placeholder="label e.g. Shure SM58" style={{ ...genField, width: 220 }} />
+          <input value={gen.category} onChange={(e) => setGen({ ...gen, category: e.target.value })} placeholder="category (mics, amps…)" style={{ ...genField, width: 170 }} />
+          <input value={gen.w} onChange={(e) => setGen({ ...gen, w: e.target.value })} placeholder="W ft" style={{ ...genField, width: 64 }} />
+          <input value={gen.d} onChange={(e) => setGen({ ...gen, d: e.target.value })} placeholder="D ft" style={{ ...genField, width: 64 }} />
+          <input value={gen.photo} onChange={(e) => setGen({ ...gen, photo: e.target.value })} placeholder="reference photo URL (optional, https)" style={{ ...genField, width: 300 }} />
+          <button
+            type="button"
+            onClick={runGenerate}
+            disabled={genBusy || !gen.label.trim()}
+            style={{ padding: '7px 14px', borderRadius: 6, border: '1px solid var(--lp-orange)', background: 'var(--lp-orange)', color: 'var(--lp-text-inverse)', fontWeight: 600, cursor: genBusy ? 'default' : 'pointer', opacity: genBusy || !gen.label.trim() ? 0.6 : 1 }}
+          >
+            {genBusy ? 'Generating…' : 'Generate'}
+          </button>
+        </div>
+        {genErr ? <div style={{ marginTop: 10, color: 'var(--lp-danger, #e5484d)', fontSize: 12 }}>⚠ {genErr}</div> : null}
+        {genResult ? (
+          <div style={{ marginTop: 12, maxWidth: 380 }}>
+            <Card icon={genResult} />
+          </div>
+        ) : null}
+      </section>
 
       <input
         value={filter}
