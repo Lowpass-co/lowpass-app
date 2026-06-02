@@ -77,7 +77,9 @@ export function StagePlotIcon({
   } as CSSProperties & Record<string, string | number>;
 
   if (isCanvas) {
-    style['--ico-fill'] = `color-mix(in srgb, ${brandColor} ${ICON_BRAND_TINT_PCT}%, transparent)`;
+    style['--ico-fill'] = icon.outline
+      ? 'none'
+      : `color-mix(in srgb, ${brandColor} ${ICON_BRAND_TINT_PCT}%, transparent)`;
     style['--ico-stroke'] = category.colorVar;
   } else {
     style.color = selected ? 'var(--lp-text)' : 'var(--lp-text-secondary)';

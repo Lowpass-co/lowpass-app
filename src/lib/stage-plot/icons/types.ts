@@ -64,6 +64,10 @@ export interface IconDescriptor {
    *  (CSS supplies them). Stroke-only detail (knobs, lines) goes in
    *  a `<g class="lp-ico-detail">` so it is never flood-filled. */
   body: string;
+  /** Render as a pure outline (no brand-tint fill) even on canvas —
+   *  for line-art icons like guitars whose silhouette reads better
+   *  unfilled. Stroke still takes the category colour. */
+  outline?: boolean;
   /** Drum composites ship a left-handed twin (locked decision). */
   leftHanded?: boolean;
   /** Splittable cluster (§SP9) — composite kit / rig. */

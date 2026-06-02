@@ -1,10 +1,11 @@
 /* ============================================
-   LOWPASS — Stage Plot stringed instruments icons (§SP1)
+   LOWPASS — Stage Plot stringed instrument icons (§SP1, redesign)
 
-   Generated against the locked icon contract (top-down, no
-   colour attrs, footprint outline unclassed, details in
-   .lp-ico-detail, letters in .lp-ico-label). Footprints are
-   real-world feet. Hand-tunable — edit freely.
+   Adam's redesigned outline set: realistic instrument
+   silhouettes authored in a 0 0 48 48 viewBox, rendered as pure
+   outline (outline:true) in the category colour rather than
+   filled. Electric re-authored to a strat-style double-cutaway
+   per the reference image.
    ============================================ */
 
 import type { IconDescriptor } from './types';
@@ -18,14 +19,15 @@ export const stringIcons: IconDescriptor[] = [
       "width_ft": 1.4,
       "depth_ft": 3.4
     },
+    "viewBox": "0 0 48 48",
+    "outline": true,
+    "body": "<path d=\"M22.75 8 L22.75 26\"/><path d=\"M25.25 8 L25.25 26\"/><path d=\"M22.35 26 L25.65 26\"/><path d=\"M22.75 13.6 L25.25 13.6\"/><path d=\"M22.75 16.2 L25.25 16.2\"/><path d=\"M22.75 18.8 L25.25 18.8\"/><path d=\"M22.75 21.4 L25.25 21.4\"/><path d=\"M19.5 26.2 C16.8 25.3 14.6 25.8 13.7 27.8 C12 26.7 9.7 27.6 9.6 30 C9.5 32.3 11.8 33.5 14.2 33.4 C12 35.2 11.3 39 13.4 41.8 C15.7 44.8 20.2 45.2 24 44.7 C27.8 45.2 32.3 44.8 34.6 41.8 C36.7 39 36 35.2 33.8 33.4 C36.2 33.5 38.5 32.3 38.4 30 C38.3 27.6 36 26.7 34.3 27.8 C33.4 25.8 31.2 25.3 28.5 26.2 C26.5 26.8 21.5 26.8 19.5 26.2 Z\"/><rect x=\"20.4\" y=\"30.4\" width=\"7.2\" height=\"1.7\" rx=\"0.6\"/><rect x=\"20.4\" y=\"34.6\" width=\"7.2\" height=\"1.7\" rx=\"0.6\"/><circle cx=\"30.4\" cy=\"38.6\" r=\"1\"/><circle cx=\"32\" cy=\"40.2\" r=\"1\"/><circle cx=\"28.8\" cy=\"40.2\" r=\"1\"/><path d=\"M24 8 L24.6 3.6 L19.6 2.6 L19.4 4.2 L23.4 5\"/><circle cx=\"20.4\" cy=\"3.2\" r=\"0.6\"/><circle cx=\"21.4\" cy=\"3.4\" r=\"0.6\"/><circle cx=\"22.4\" cy=\"3.6\" r=\"0.6\"/><circle cx=\"20.2\" cy=\"4.4\" r=\"0.6\"/><circle cx=\"21.2\" cy=\"4.6\" r=\"0.6\"/><circle cx=\"22.2\" cy=\"4.8\" r=\"0.6\"/>",
     "keywords": [
       "electric",
       "guitar",
       "strat",
-      "solid body",
-      "axe"
-    ],
-    "body": "<path d=\"M38 56 C30 54 28 64 32 72 C36 80 46 80 50 74 C54 80 64 80 68 72 C72 64 70 54 62 56 C58 50 58 44 54 42 L46 42 C42 44 42 50 38 56 Z\"/><line x1=\"50\" y1=\"42\" x2=\"50\" y2=\"14\" class=\"lp-ico-detail\"/><rect x=\"44\" y=\"8\" width=\"12\" height=\"8\" rx=\"1\"/><circle cx=\"47\" cy=\"10\" r=\"0.9\" class=\"lp-ico-detail\"/><circle cx=\"47\" cy=\"12\" r=\"0.9\" class=\"lp-ico-detail\"/><circle cx=\"47\" cy=\"14\" r=\"0.9\" class=\"lp-ico-detail\"/><circle cx=\"53\" cy=\"10\" r=\"0.9\" class=\"lp-ico-detail\"/><circle cx=\"53\" cy=\"12\" r=\"0.9\" class=\"lp-ico-detail\"/><circle cx=\"53\" cy=\"14\" r=\"0.9\" class=\"lp-ico-detail\"/><rect x=\"43\" y=\"56\" width=\"14\" height=\"4\" rx=\"1\" class=\"lp-ico-detail\"/><rect x=\"43\" y=\"64\" width=\"14\" height=\"4\" rx=\"1\" class=\"lp-ico-detail\"/>"
+      "solid body"
+    ]
   },
   {
     "name": "string-acoustic-guitar",
@@ -35,13 +37,14 @@ export const stringIcons: IconDescriptor[] = [
       "width_ft": 1.5,
       "depth_ft": 3.4
     },
+    "viewBox": "0 0 48 48",
+    "outline": true,
+    "body": "<path d=\"M24 23.5 Q33.3 23.5 33.3 29.09 Q33.3 31.67 30.6 34.25 Q34 36.83 34 39.41 Q34 45 24 45 Q14 45 14 39.41 Q14 36.83 17.4 34.25 Q14.7 31.67 14.7 29.09 Q14.7 23.5 24 23.5 Z\"/><circle cx=\"24\" cy=\"33.5\" r=\"3.2\"/><path d=\"M20.6 38.2 L27.4 38.2\"/><circle cx=\"21.5\" cy=\"39.3\" r=\"0.7\"/><circle cx=\"26.5\" cy=\"39.3\" r=\"0.7\"/><path d=\"M22.65 10 L22.65 23.5\"/><path d=\"M25.35 10 L25.35 23.5\"/><path d=\"M22.25 23.5 L25.75 23.5\"/><path d=\"M22.65 14 L25.35 14\"/><path d=\"M22.65 16 L25.35 16\"/><path d=\"M22.65 18 L25.35 18\"/><path d=\"M22.65 20 L25.35 20\"/><path d=\"M22.6 10 L21.6 5.2 Q21.6 4.4 22.4 4.4 L25.6 4.4 Q26.4 4.4 26.4 5.2 L25.4 10\"/><circle cx=\"20.6\" cy=\"6\" r=\"0.7\"/><circle cx=\"20.6\" cy=\"7.6\" r=\"0.7\"/><circle cx=\"20.6\" cy=\"9.2\" r=\"0.7\"/><circle cx=\"27.4\" cy=\"6\" r=\"0.7\"/><circle cx=\"27.4\" cy=\"7.6\" r=\"0.7\"/><circle cx=\"27.4\" cy=\"9.2\" r=\"0.7\"/>",
     "keywords": [
       "acoustic",
       "guitar",
-      "dreadnought",
-      "flat top"
-    ],
-    "body": "<path d=\"M50 44 C40 44 36 50 36 58 C36 62 38 64 38 66 C38 68 35 70 35 76 C35 86 43 92 50 92 C57 92 65 86 65 76 C65 70 62 68 62 66 C62 64 64 62 64 58 C64 50 60 44 50 44 Z\"/><circle cx=\"50\" cy=\"64\" r=\"6\" class=\"lp-ico-detail\"/><line x1=\"50\" y1=\"44\" x2=\"50\" y2=\"16\" class=\"lp-ico-detail\"/><rect x=\"44\" y=\"8\" width=\"12\" height=\"10\" rx=\"1\"/><circle cx=\"47\" cy=\"10\" r=\"0.9\" class=\"lp-ico-detail\"/><circle cx=\"47\" cy=\"13\" r=\"0.9\" class=\"lp-ico-detail\"/><circle cx=\"47\" cy=\"16\" r=\"0.9\" class=\"lp-ico-detail\"/><circle cx=\"53\" cy=\"10\" r=\"0.9\" class=\"lp-ico-detail\"/><circle cx=\"53\" cy=\"13\" r=\"0.9\" class=\"lp-ico-detail\"/><circle cx=\"53\" cy=\"16\" r=\"0.9\" class=\"lp-ico-detail\"/>"
+      "dreadnought"
+    ]
   },
   {
     "name": "string-bass-guitar",
@@ -51,13 +54,14 @@ export const stringIcons: IconDescriptor[] = [
       "width_ft": 1.4,
       "depth_ft": 3.9
     },
+    "viewBox": "0 0 48 48",
+    "outline": true,
+    "body": "<path d=\"M24 27 Q31.6 27 31.6 31.55 Q31.6 33.65 29.6 35.75 Q33 37.85 33 39.95 Q33 44.5 24 44.5 Q15 44.5 15 39.95 Q15 37.85 18.4 35.75 Q16.4 33.65 16.4 31.55 Q16.4 27 24 27 Z\"/><rect x=\"19.6\" y=\"33\" width=\"5\" height=\"2\" rx=\"0.6\"/><rect x=\"23.4\" y=\"35.4\" width=\"5\" height=\"2\" rx=\"0.6\"/><circle cx=\"29\" cy=\"40.5\" r=\"1\"/><path d=\"M22.75 7 L22.75 27\"/><path d=\"M25.25 7 L25.25 27\"/><path d=\"M22.35 27 L25.65 27\"/><path d=\"M22.75 13 L25.25 13\"/><path d=\"M22.75 16 L25.25 16\"/><path d=\"M22.75 19 L25.25 19\"/><path d=\"M22.75 22 L25.25 22\"/><path d=\"M22.8 7 L21.4 3.6 Q21.4 3 22 3 L26 3 Q26.6 3 26.6 3.6 L25.2 7\"/><circle cx=\"20.4\" cy=\"4.3\" r=\"1.3\"/><circle cx=\"20.4\" cy=\"6.2\" r=\"1.3\"/><circle cx=\"27.6\" cy=\"4.3\" r=\"1.3\"/><circle cx=\"27.6\" cy=\"6.2\" r=\"1.3\"/>",
     "keywords": [
       "bass",
-      "p-bass",
-      "j-bass",
+      "guitar",
       "four string"
-    ],
-    "body": "<path d=\"M40 64 C32 62 30 72 34 80 C38 88 48 88 51 82 C54 88 62 86 65 78 C68 70 64 62 57 64 C56 58 55 54 51 53 L47 53 C43 54 42 58 40 64 Z\"/><line x1=\"49\" y1=\"53\" x2=\"49\" y2=\"14\" class=\"lp-ico-detail\"/><rect x=\"43\" y=\"8\" width=\"12\" height=\"8\" rx=\"1\"/><circle cx=\"46\" cy=\"10\" r=\"1\" class=\"lp-ico-detail\"/><circle cx=\"46\" cy=\"14\" r=\"1\" class=\"lp-ico-detail\"/><circle cx=\"52\" cy=\"10\" r=\"1\" class=\"lp-ico-detail\"/><circle cx=\"52\" cy=\"14\" r=\"1\" class=\"lp-ico-detail\"/><text class=\"lp-ico-label\" x=\"49\" y=\"72\" text-anchor=\"middle\" dominant-baseline=\"central\" font-size=\"13\">B</text>"
+    ]
   },
   {
     "name": "string-classical-guitar",
@@ -67,14 +71,14 @@ export const stringIcons: IconDescriptor[] = [
       "width_ft": 1.4,
       "depth_ft": 3.2
     },
+    "viewBox": "0 0 48 48",
+    "outline": true,
+    "body": "<path d=\"M24 24 Q33 24 33 29.46 Q33 31.98 30.4 34.5 Q33.6 37.019999999999996 33.6 39.54 Q33.6 45 24 45 Q14.4 45 14.4 39.54 Q14.4 37.019999999999996 17.6 34.5 Q15 31.98 15 29.46 Q15 24 24 24 Z\"/><circle cx=\"24\" cy=\"34\" r=\"3.1\"/><path d=\"M20.8 38.6 L27.2 38.6\"/><path d=\"M22.5 11 L22.5 24\"/><path d=\"M25.5 11 L25.5 24\"/><path d=\"M22.1 24 L25.9 24\"/><path d=\"M22.5 14.9 L25.5 14.9\"/><path d=\"M22.5 16.8 L25.5 16.8\"/><path d=\"M22.5 18.7 L25.5 18.7\"/><path d=\"M22.5 20.6 L25.5 20.6\"/><path d=\"M22 11 L21.4 4.4 Q21.4 3.8 22 3.8 L26 3.8 Q26.6 3.8 26.6 4.4 L26 11\"/><rect x=\"22.4\" y=\"5.2\" width=\"1.3\" height=\"4.4\" rx=\"0.6\"/><rect x=\"24.3\" y=\"5.2\" width=\"1.3\" height=\"4.4\" rx=\"0.6\"/><circle cx=\"21\" cy=\"6\" r=\"0.7\"/><circle cx=\"21\" cy=\"8.4\" r=\"0.7\"/><circle cx=\"27\" cy=\"6\" r=\"0.7\"/><circle cx=\"27\" cy=\"8.4\" r=\"0.7\"/>",
     "keywords": [
       "classical",
-      "guitar",
       "nylon",
-      "spanish",
-      "slotted"
-    ],
-    "body": "<path d=\"M50 46 C41 46 37 51 37 59 C37 63 39 64 39 66 C39 68 36 70 36 76 C36 86 44 91 50 91 C56 91 64 86 64 76 C64 70 61 68 61 66 C61 64 63 63 63 59 C63 51 59 46 50 46 Z\"/><circle cx=\"50\" cy=\"65\" r=\"6\" class=\"lp-ico-detail\"/><line x1=\"50\" y1=\"46\" x2=\"50\" y2=\"18\" class=\"lp-ico-detail\"/><rect x=\"45\" y=\"8\" width=\"10\" height=\"12\" rx=\"1\"/><line x1=\"48\" y1=\"10\" x2=\"48\" y2=\"18\" class=\"lp-ico-detail\"/><line x1=\"52\" y1=\"10\" x2=\"52\" y2=\"18\" class=\"lp-ico-detail\"/>"
+      "spanish"
+    ]
   },
   {
     "name": "string-12-string",
@@ -84,13 +88,14 @@ export const stringIcons: IconDescriptor[] = [
       "width_ft": 1.5,
       "depth_ft": 3.4
     },
+    "viewBox": "0 0 48 48",
+    "outline": true,
+    "body": "<path d=\"M24 24.5 Q33.3 24.5 33.3 29.83 Q33.3 32.29 30.6 34.75 Q34 37.21 34 39.67 Q34 45 24 45 Q14 45 14 39.67 Q14 37.21 17.4 34.75 Q14.7 32.29 14.7 29.83 Q14.7 24.5 24 24.5 Z\"/><circle cx=\"24\" cy=\"34\" r=\"3.1\"/><path d=\"M20.6 38.6 L27.4 38.6\"/><path d=\"M22.6 11 L22.6 24.5\"/><path d=\"M25.4 11 L25.4 24.5\"/><path d=\"M22.200000000000003 24.5 L25.799999999999997 24.5\"/><path d=\"M22.5 11 L21.6 3 Q21.6 2.2 22.4 2.2 L25.6 2.2 Q26.4 2.2 26.4 3 L25.5 11\"/><circle cx=\"20.6\" cy=\"3.6\" r=\"0.65\"/><circle cx=\"20.6\" cy=\"5\" r=\"0.65\"/><circle cx=\"20.6\" cy=\"6.4\" r=\"0.65\"/><circle cx=\"20.6\" cy=\"7.8\" r=\"0.65\"/><circle cx=\"20.6\" cy=\"9.2\" r=\"0.65\"/><circle cx=\"20.6\" cy=\"10.4\" r=\"0.65\"/><circle cx=\"27.4\" cy=\"3.6\" r=\"0.65\"/><circle cx=\"27.4\" cy=\"5\" r=\"0.65\"/><circle cx=\"27.4\" cy=\"6.4\" r=\"0.65\"/><circle cx=\"27.4\" cy=\"7.8\" r=\"0.65\"/><circle cx=\"27.4\" cy=\"9.2\" r=\"0.65\"/><circle cx=\"27.4\" cy=\"10.4\" r=\"0.65\"/>",
     "keywords": [
       "12 string",
       "twelve string",
-      "acoustic",
-      "dreadnought"
-    ],
-    "body": "<path d=\"M50 48 C40 48 36 54 36 62 C36 66 38 67 38 69 C38 71 35 73 35 78 C35 88 43 93 50 93 C57 93 65 88 65 78 C65 73 62 71 62 69 C62 67 64 66 64 62 C64 54 60 48 50 48 Z\"/><circle cx=\"50\" cy=\"68\" r=\"6\" class=\"lp-ico-detail\"/><line x1=\"50\" y1=\"48\" x2=\"50\" y2=\"16\" class=\"lp-ico-detail\"/><rect x=\"44\" y=\"6\" width=\"12\" height=\"14\" rx=\"1\"/><circle cx=\"47\" cy=\"8\" r=\"0.8\" class=\"lp-ico-detail\"/><circle cx=\"47\" cy=\"11\" r=\"0.8\" class=\"lp-ico-detail\"/><circle cx=\"47\" cy=\"14\" r=\"0.8\" class=\"lp-ico-detail\"/><circle cx=\"47\" cy=\"17\" r=\"0.8\" class=\"lp-ico-detail\"/><circle cx=\"47\" cy=\"20\" r=\"0.8\" class=\"lp-ico-detail\"/><circle cx=\"47\" cy=\"23\" r=\"0.8\" class=\"lp-ico-detail\"/><circle cx=\"53\" cy=\"8\" r=\"0.8\" class=\"lp-ico-detail\"/><circle cx=\"53\" cy=\"11\" r=\"0.8\" class=\"lp-ico-detail\"/><circle cx=\"53\" cy=\"14\" r=\"0.8\" class=\"lp-ico-detail\"/><circle cx=\"53\" cy=\"17\" r=\"0.8\" class=\"lp-ico-detail\"/><circle cx=\"53\" cy=\"20\" r=\"0.8\" class=\"lp-ico-detail\"/><circle cx=\"53\" cy=\"23\" r=\"0.8\" class=\"lp-ico-detail\"/>"
+      "acoustic"
+    ]
   },
   {
     "name": "string-resonator",
@@ -100,13 +105,13 @@ export const stringIcons: IconDescriptor[] = [
       "width_ft": 1.4,
       "depth_ft": 3.2
     },
+    "viewBox": "0 0 48 48",
+    "outline": true,
+    "body": "<path d=\"M24 24 Q33 24 33 29.46 Q33 31.98 30.6 34.5 Q33.8 37.019999999999996 33.8 39.54 Q33.8 45 24 45 Q14.2 45 14.2 39.54 Q14.2 37.019999999999996 17.4 34.5 Q15 31.98 15 29.46 Q15 24 24 24 Z\"/><circle cx=\"24\" cy=\"36\" r=\"5.6\"/><circle cx=\"24\" cy=\"36\" r=\"1.6\"/><path d=\"M18.4 36 L29.6 36\"/><path d=\"M24 30.4 L24 41.6\"/><path d=\"M20.1 32.1 L27.9 39.9\"/><path d=\"M27.9 32.1 L20.1 39.9\"/><circle cx=\"20.5\" cy=\"28.5\" r=\"1.4\"/><circle cx=\"27.5\" cy=\"28.5\" r=\"1.4\"/><path d=\"M22.65 11 L22.65 24\"/><path d=\"M25.35 11 L25.35 24\"/><path d=\"M22.25 24 L25.75 24\"/><path d=\"M22.65 14.9 L25.35 14.9\"/><path d=\"M22.65 16.8 L25.35 16.8\"/><path d=\"M22.65 18.7 L25.35 18.7\"/><path d=\"M22.65 20.6 L25.35 20.6\"/><path d=\"M22.6 11 L21.6 5.6 Q21.6 4.8 22.4 4.8 L25.6 4.8 Q26.4 4.8 26.4 5.6 L25.4 11\"/><circle cx=\"20.7\" cy=\"6.4\" r=\"0.7\"/><circle cx=\"20.7\" cy=\"8\" r=\"0.7\"/><circle cx=\"20.7\" cy=\"9.6\" r=\"0.7\"/><circle cx=\"27.3\" cy=\"6.4\" r=\"0.7\"/><circle cx=\"27.3\" cy=\"8\" r=\"0.7\"/><circle cx=\"27.3\" cy=\"9.6\" r=\"0.7\"/>",
     "keywords": [
       "resonator",
-      "dobro",
-      "cone",
-      "guitar"
-    ],
-    "body": "<path d=\"M50 46 C41 46 37 51 37 59 C37 63 39 64 39 66 C39 68 36 70 36 76 C36 86 44 91 50 91 C56 91 64 86 64 76 C64 70 61 68 61 66 C61 64 63 63 63 59 C63 51 59 46 50 46 Z\"/><circle cx=\"50\" cy=\"68\" r=\"10\" class=\"lp-ico-detail\"/><circle cx=\"50\" cy=\"68\" r=\"6.5\" class=\"lp-ico-detail\"/><circle cx=\"50\" cy=\"68\" r=\"3\" class=\"lp-ico-detail\"/><line x1=\"50\" y1=\"46\" x2=\"50\" y2=\"16\" class=\"lp-ico-detail\"/><rect x=\"45\" y=\"8\" width=\"10\" height=\"10\" rx=\"1\"/>"
+      "dobro"
+    ]
   },
   {
     "name": "string-ukulele",
@@ -116,12 +121,13 @@ export const stringIcons: IconDescriptor[] = [
       "width_ft": 0.8,
       "depth_ft": 1.6
     },
+    "viewBox": "0 0 48 48",
+    "outline": true,
+    "body": "<path d=\"M24 30 Q30.2 30 30.2 33.77 Q30.2 35.510000000000005 28.4 37.25 Q30.6 38.99 30.6 40.730000000000004 Q30.6 44.5 24 44.5 Q17.4 44.5 17.4 40.730000000000004 Q17.4 38.99 19.6 37.25 Q17.8 35.510000000000005 17.8 33.77 Q17.8 30 24 30 Z\"/><circle cx=\"24\" cy=\"37.5\" r=\"2.3\"/><path d=\"M21 41 L27 41\"/><path d=\"M22.9 20 L22.9 30\"/><path d=\"M25.1 20 L25.1 30\"/><path d=\"M22.5 30 L25.5 30\"/><path d=\"M22.9 23.75 L25.1 23.75\"/><path d=\"M22.9 25.5 L25.1 25.5\"/><path d=\"M22.9 27.25 L25.1 27.25\"/><path d=\"M23 20 L22.4 16.6 Q22.4 16 23 16 L25 16 Q25.6 16 25.6 16.6 L25 20\"/><circle cx=\"21.4\" cy=\"17\" r=\"0.75\"/><circle cx=\"21.4\" cy=\"18.8\" r=\"0.75\"/><circle cx=\"26.6\" cy=\"17\" r=\"0.75\"/><circle cx=\"26.6\" cy=\"18.8\" r=\"0.75\"/>",
     "keywords": [
       "ukulele",
-      "uke",
-      "small guitar"
-    ],
-    "body": "<path d=\"M50 52 C43 52 40 56 40 62 C40 65 41 66 41 68 C41 70 39 71 39 75 C39 83 45 87 50 87 C55 87 61 83 61 75 C61 71 59 70 59 68 C59 66 60 65 60 62 C60 56 57 52 50 52 Z\"/><circle cx=\"50\" cy=\"70\" r=\"5\" class=\"lp-ico-detail\"/><line x1=\"50\" y1=\"52\" x2=\"50\" y2=\"24\" class=\"lp-ico-detail\"/><rect x=\"45\" y=\"16\" width=\"10\" height=\"8\" rx=\"1\"/><circle cx=\"47\" cy=\"18\" r=\"0.9\" class=\"lp-ico-detail\"/><circle cx=\"47\" cy=\"22\" r=\"0.9\" class=\"lp-ico-detail\"/><circle cx=\"53\" cy=\"18\" r=\"0.9\" class=\"lp-ico-detail\"/><circle cx=\"53\" cy=\"22\" r=\"0.9\" class=\"lp-ico-detail\"/>"
+      "uke"
+    ]
   },
   {
     "name": "string-mandolin",
@@ -131,13 +137,12 @@ export const stringIcons: IconDescriptor[] = [
       "width_ft": 0.8,
       "depth_ft": 1.9
     },
+    "viewBox": "0 0 48 48",
+    "outline": true,
+    "body": "<path d=\"M24 27.5 C29.5 28.5 33 32.5 33 37.4 C33 42 29.2 44.5 24 44.5 C18.8 44.5 15 42 15 37.4 C15 32.5 18.5 28.5 24 27.5 Z\"/><ellipse cx=\"24\" cy=\"36.5\" rx=\"1.9\" ry=\"2.9\"/><path d=\"M20.4 40.4 L27.6 40.4\"/><path d=\"M22.8 17 L22.8 27.5\"/><path d=\"M25.2 17 L25.2 27.5\"/><path d=\"M22.400000000000002 27.5 L25.599999999999998 27.5\"/><path d=\"M22.8 20.875 L25.2 20.875\"/><path d=\"M22.8 22.75 L25.2 22.75\"/><path d=\"M22.8 24.625 L25.2 24.625\"/><path d=\"M23 17 L22.4 13.4 Q22.4 12.8 23 12.8 L25 12.8 Q25.6 12.8 25.6 13.4 L25 17\"/><circle cx=\"21.4\" cy=\"13.6\" r=\"0.7\"/><circle cx=\"21.4\" cy=\"15.2\" r=\"0.7\"/><circle cx=\"26.6\" cy=\"13.6\" r=\"0.7\"/><circle cx=\"26.6\" cy=\"15.2\" r=\"0.7\"/>",
     "keywords": [
-      "mandolin",
-      "teardrop",
-      "almond",
-      "f-hole"
-    ],
-    "body": "<path d=\"M50 50 C42 50 38 58 38 68 C38 80 44 88 50 88 C56 88 62 80 62 68 C62 58 58 50 50 50 Z\"/><path d=\"M45 64 C44 66 44 70 45 72\" class=\"lp-ico-detail\"/><path d=\"M55 64 C56 66 56 70 55 72\" class=\"lp-ico-detail\"/><line x1=\"50\" y1=\"50\" x2=\"50\" y2=\"24\" class=\"lp-ico-detail\"/><path d=\"M45 24 C45 14 55 14 55 22 C55 18 49 18 50 24 Z\"/>"
+      "mandolin"
+    ]
   },
   {
     "name": "string-banjo",
@@ -147,13 +152,12 @@ export const stringIcons: IconDescriptor[] = [
       "width_ft": 1,
       "depth_ft": 2.5
     },
+    "viewBox": "0 0 48 48",
+    "outline": true,
+    "body": "<circle cx=\"24\" cy=\"35\" r=\"8.4\"/><circle cx=\"24\" cy=\"35\" r=\"6.6\"/><path d=\"M32.6 35 L33.6 35\"/><path d=\"M31.447818472546174 39.3 L32.31384387633061 39.8\"/><path d=\"M28.3 42.447818472546174 L28.8 43.31384387633061\"/><path d=\"M24 43.6 L24 44.6\"/><path d=\"M19.700000000000003 42.447818472546174 L19.200000000000003 43.31384387633061\"/><path d=\"M16.552181527453826 39.3 L15.686156123669388 39.8\"/><path d=\"M15.4 35 L14.4 35\"/><path d=\"M16.55218152745383 30.7 L15.68615612366939 30.2\"/><path d=\"M19.699999999999996 27.55218152745383 L19.199999999999996 26.68615612366939\"/><path d=\"M24 26.4 L24 25.4\"/><path d=\"M28.3 27.55218152745383 L28.8 26.68615612366939\"/><path d=\"M31.44781847254617 30.699999999999996 L32.31384387633061 30.199999999999996\"/><path d=\"M21 36.4 L27 36.4\"/><path d=\"M22.7 16 L22.7 26.5\"/><path d=\"M25.3 16 L25.3 26.5\"/><path d=\"M22.3 26.5 L25.7 26.5\"/><path d=\"M22.7 19.75 L25.3 19.75\"/><path d=\"M22.7 21.5 L25.3 21.5\"/><path d=\"M22.7 23.25 L25.3 23.25\"/><circle cx=\"28.6\" cy=\"21\" r=\"0.9\"/><path d=\"M22.7 16 L22.1 12.6 Q22.1 12 22.7 12 L25.3 12 Q25.9 12 25.9 12.6 L25.3 16\"/><circle cx=\"21.1\" cy=\"12.8\" r=\"0.7\"/><circle cx=\"21.1\" cy=\"14.4\" r=\"0.7\"/><circle cx=\"26.9\" cy=\"12.8\" r=\"0.7\"/><circle cx=\"26.9\" cy=\"14.4\" r=\"0.7\"/>",
     "keywords": [
-      "banjo",
-      "drum pot",
-      "head",
-      "bluegrass"
-    ],
-    "body": "<circle cx=\"50\" cy=\"72\" r=\"18\"/><circle cx=\"50\" cy=\"72\" r=\"13\" class=\"lp-ico-detail\"/><line x1=\"50\" y1=\"54\" x2=\"50\" y2=\"18\" class=\"lp-ico-detail\"/><rect x=\"45\" y=\"10\" width=\"10\" height=\"8\" rx=\"1\"/><circle cx=\"47\" cy=\"12\" r=\"0.9\" class=\"lp-ico-detail\"/><circle cx=\"47\" cy=\"16\" r=\"0.9\" class=\"lp-ico-detail\"/><circle cx=\"53\" cy=\"12\" r=\"0.9\" class=\"lp-ico-detail\"/><circle cx=\"53\" cy=\"16\" r=\"0.9\" class=\"lp-ico-detail\"/>"
+      "banjo"
+    ]
   },
   {
     "name": "string-violin",
@@ -163,13 +167,13 @@ export const stringIcons: IconDescriptor[] = [
       "width_ft": 0.8,
       "depth_ft": 2
     },
+    "viewBox": "0 0 48 48",
+    "outline": true,
+    "body": "<path d=\"M24 26 Q30.4 26 30.4 30.16 Q30.4 32.08 27.9 34 Q30.9 35.92 30.9 37.84 Q30.9 42 24 42 Q17.1 42 17.1 37.84 Q17.1 35.92 20.1 34 Q17.6 32.08 17.6 30.16 Q17.6 26 24 26 Z\"/><path d=\"M21.6 32 q-1.2 1 0 2 q1.2 1 0 2\"/><path d=\"M26.4 32 q1.2 1 0 2 q-1.2 1 0 2\"/><path d=\"M21.3 36 L26.7 36\"/><path d=\"M24 36.4 L22.5 41.2 L25.5 41.2 Z\"/><circle cx=\"24\" cy=\"41.2\" r=\"0.6\"/><path d=\"M22.85 14 L22.85 26\"/><path d=\"M25.15 14 L25.15 26\"/><path d=\"M22.450000000000003 26 L25.549999999999997 26\"/><circle cx=\"24\" cy=\"7\" r=\"1.8\"/><path d=\"M24 7 q1.4 0 1.4 1.4\"/><path d=\"M22.6 8.6 L22.6 13.5\"/><path d=\"M25.4 8.6 L25.4 13.5\"/><circle cx=\"21.6\" cy=\"10\" r=\"0.85\"/><circle cx=\"21.6\" cy=\"12\" r=\"0.85\"/><circle cx=\"26.4\" cy=\"10\" r=\"0.85\"/><circle cx=\"26.4\" cy=\"12\" r=\"0.85\"/>",
     "keywords": [
       "violin",
-      "fiddle",
-      "strings",
-      "bowed"
-    ],
-    "body": "<path d=\"M50 22 L50 48 M50 48 q-11 1 -11 11 q0 7 5 10 q-5 3 -5 9 q0 9 11 9 q11 0 11 -9 q0 -6 -5 -9 q5 -3 5 -10 q0 -10 -11 -11 Z\"/><line x1=\"50\" y1=\"24\" x2=\"50\" y2=\"46\" class=\"lp-ico-detail\"/><circle cx=\"50\" cy=\"20\" r=\"3\" class=\"lp-ico-detail\"/>"
+      "fiddle"
+    ]
   },
   {
     "name": "string-viola",
@@ -179,13 +183,12 @@ export const stringIcons: IconDescriptor[] = [
       "width_ft": 0.9,
       "depth_ft": 2.2
     },
+    "viewBox": "0 0 48 48",
+    "outline": true,
+    "body": "<g transform=\"translate(24 26) scale(1.12) translate(-24 -26)\"><path d=\"M24 26 Q30.4 26 30.4 30.16 Q30.4 32.08 27.9 34 Q30.9 35.92 30.9 37.84 Q30.9 42 24 42 Q17.1 42 17.1 37.84 Q17.1 35.92 20.1 34 Q17.6 32.08 17.6 30.16 Q17.6 26 24 26 Z\"/><path d=\"M21.6 32 q-1.2 1 0 2 q1.2 1 0 2\"/><path d=\"M26.4 32 q1.2 1 0 2 q-1.2 1 0 2\"/><path d=\"M21.3 36 L26.7 36\"/><path d=\"M24 36.4 L22.5 41.2 L25.5 41.2 Z\"/><circle cx=\"24\" cy=\"41.2\" r=\"0.6\"/><path d=\"M22.85 14 L22.85 26\"/><path d=\"M25.15 14 L25.15 26\"/><path d=\"M22.450000000000003 26 L25.549999999999997 26\"/><circle cx=\"24\" cy=\"7\" r=\"1.8\"/><path d=\"M24 7 q1.4 0 1.4 1.4\"/><path d=\"M22.6 8.6 L22.6 13.5\"/><path d=\"M25.4 8.6 L25.4 13.5\"/><circle cx=\"21.6\" cy=\"10\" r=\"0.85\"/><circle cx=\"21.6\" cy=\"12\" r=\"0.85\"/><circle cx=\"26.4\" cy=\"10\" r=\"0.85\"/><circle cx=\"26.4\" cy=\"12\" r=\"0.85\"/></g>",
     "keywords": [
-      "viola",
-      "strings",
-      "bowed",
-      "orchestra"
-    ],
-    "body": "<path d=\"M50 18 L50 46 M50 46 q-12 1 -12 12 q0 7 5 11 q-5 3 -5 10 q0 10 12 10 q12 0 12 -10 q0 -7 -5 -10 q5 -4 5 -11 q0 -11 -12 -12 Z\"/><line x1=\"50\" y1=\"20\" x2=\"50\" y2=\"44\" class=\"lp-ico-detail\"/><circle cx=\"50\" cy=\"16\" r=\"3\" class=\"lp-ico-detail\"/>"
+      "viola"
+    ]
   },
   {
     "name": "string-cello",
@@ -195,30 +198,29 @@ export const stringIcons: IconDescriptor[] = [
       "width_ft": 1.6,
       "depth_ft": 4
     },
+    "viewBox": "0 0 48 48",
+    "outline": true,
+    "body": "<path d=\"M24 21 Q31.4 21 31.4 26.2 Q31.4 28.6 28.8 31 Q32.4 33.4 32.4 35.8 Q32.4 41 24 41 Q15.6 41 15.6 35.8 Q15.6 33.4 19.2 31 Q16.6 28.6 16.6 26.2 Q16.6 21 24 21 Z\"/><path d=\"M21.6 29 q-1.2 1 0 2 q1.2 1 0 2\"/><path d=\"M26.4 29 q1.2 1 0 2 q-1.2 1 0 2\"/><path d=\"M21.3 33 L26.7 33\"/><path d=\"M24 33.4 L22.5 40.2 L25.5 40.2 Z\"/><path d=\"M24 41 L24 46.5\"/><path d=\"M22.4 46.5 L25.6 46.5\"/><path d=\"M22.75 11 L22.75 21\"/><path d=\"M25.25 11 L25.25 21\"/><path d=\"M22.35 21 L25.65 21\"/><circle cx=\"24\" cy=\"4.5\" r=\"1.8\"/><path d=\"M24 4.5 q1.4 0 1.4 1.4\"/><path d=\"M22.6 6.1 L22.6 11\"/><path d=\"M25.4 6.1 L25.4 11\"/><circle cx=\"21.6\" cy=\"7.5\" r=\"0.85\"/><circle cx=\"21.6\" cy=\"9.5\" r=\"0.85\"/><circle cx=\"26.4\" cy=\"7.5\" r=\"0.85\"/><circle cx=\"26.4\" cy=\"9.5\" r=\"0.85\"/>",
     "keywords": [
-      "cello",
-      "strings",
-      "bowed",
-      "orchestra"
-    ],
-    "body": "<path d=\"M50 12 L50 44 M50 44 q-15 1 -15 15 q0 9 7 13 q-7 4 -7 12 q0 13 15 13 q15 0 15 -13 q0 -8 -7 -12 q7 -4 7 -13 q0 -14 -15 -15 Z\"/><line x1=\"50\" y1=\"14\" x2=\"50\" y2=\"42\" class=\"lp-ico-detail\"/><circle cx=\"50\" cy=\"10\" r=\"3.5\" class=\"lp-ico-detail\"/>"
+      "cello"
+    ]
   },
   {
     "name": "string-double-bass",
     "category": "strings",
-    "label": "Dbl bass",
+    "label": "Double bass",
     "footprint": {
       "width_ft": 2,
       "depth_ft": 6
     },
+    "viewBox": "0 0 48 48",
+    "outline": true,
+    "body": "<path d=\"M24 18.5 Q30.8 18.5 30.8 24.35 Q30.8 27.05 29.2 29.75 Q33.2 32.45 33.2 35.15 Q33.2 41 24 41 Q14.8 41 14.8 35.15 Q14.8 32.45 18.8 29.75 Q17.2 27.05 17.2 24.35 Q17.2 18.5 24 18.5 Z\"/><path d=\"M21.6 27.75 q-1.2 1 0 2 q1.2 1 0 2\"/><path d=\"M26.4 27.75 q1.2 1 0 2 q-1.2 1 0 2\"/><path d=\"M21.3 31.75 L26.7 31.75\"/><path d=\"M24 32.15 L22.5 40.2 L25.5 40.2 Z\"/><path d=\"M24 41 L24 47\"/><path d=\"M22.2 47 L25.8 47\"/><path d=\"M22.7 8.5 L22.7 18.5\"/><path d=\"M25.3 8.5 L25.3 18.5\"/><path d=\"M22.3 18.5 L25.7 18.5\"/><path d=\"M22.6 8.5 L21 5\"/><path d=\"M25.4 8.5 L27 5\"/><circle cx=\"20\" cy=\"6\" r=\"1.2\"/><circle cx=\"20\" cy=\"8.2\" r=\"1.2\"/><circle cx=\"28\" cy=\"6\" r=\"1.2\"/><circle cx=\"28\" cy=\"8.2\" r=\"1.2\"/><path d=\"M21.2 6 L18.6 6\"/><path d=\"M21.2 8.2 L18.6 8.2\"/><path d=\"M26.8 6 L29.4 6\"/><path d=\"M26.8 8.2 L29.4 8.2\"/>",
     "keywords": [
-      "double",
-      "bass",
-      "upright",
-      "contrabass",
-      "bowed"
-    ],
-    "body": "<path d=\"M50 8 L50 42 M50 42 q-19 1 -19 18 q0 11 9 16 q-9 5 -9 15 q0 16 19 16 q19 0 19 -16 q0 -10 -9 -15 q9 -5 9 -16 q0 -17 -19 -18 Z\"/><line x1=\"50\" y1=\"10\" x2=\"50\" y2=\"40\" class=\"lp-ico-detail\"/><circle cx=\"50\" cy=\"7\" r=\"4\" class=\"lp-ico-detail\"/>"
+      "double bass",
+      "upright bass",
+      "contrabass"
+    ]
   },
   {
     "name": "string-lap-steel",
@@ -228,13 +230,13 @@ export const stringIcons: IconDescriptor[] = [
       "width_ft": 0.9,
       "depth_ft": 2.8
     },
+    "viewBox": "0 0 48 48",
+    "outline": true,
+    "body": "<rect x=\"18.5\" y=\"27\" width=\"11\" height=\"17\" rx=\"3.4\"/><rect x=\"20.5\" y=\"31.5\" width=\"7\" height=\"1.8\" rx=\"0.6\"/><path d=\"M20.5 37 L27.5 37\"/><circle cx=\"22.5\" cy=\"40\" r=\"0.7\"/><circle cx=\"25.5\" cy=\"40\" r=\"0.7\"/><path d=\"M22.5 9 L22.5 27\"/><path d=\"M25.5 9 L25.5 27\"/><path d=\"M22.1 27 L25.9 27\"/><path d=\"M22.5 9 L21.6 4.4 Q21.6 3.8 22.2 3.8 L25.8 3.8 Q26.4 3.8 26.4 4.4 L25.5 9\"/><circle cx=\"20.2\" cy=\"5\" r=\"0.75\"/><circle cx=\"20.2\" cy=\"6.6\" r=\"0.75\"/><circle cx=\"20.2\" cy=\"8.2\" r=\"0.75\"/><circle cx=\"27.8\" cy=\"5\" r=\"0.75\"/><circle cx=\"27.8\" cy=\"6.6\" r=\"0.75\"/><circle cx=\"27.8\" cy=\"8.2\" r=\"0.75\"/>",
     "keywords": [
       "lap steel",
-      "slide",
-      "hawaiian",
       "steel guitar"
-    ],
-    "body": "<path d=\"M42 88 L42 64 C42 56 45 50 50 50 C55 50 58 56 58 64 L58 88 C58 90 56 91 54 91 L46 91 C44 91 42 90 42 88 Z\"/><rect x=\"44\" y=\"68\" width=\"12\" height=\"6\" rx=\"1\" class=\"lp-ico-detail\"/><line x1=\"43\" y1=\"80\" x2=\"57\" y2=\"80\" class=\"lp-ico-detail\"/><line x1=\"43\" y1=\"83\" x2=\"57\" y2=\"83\" class=\"lp-ico-detail\"/><line x1=\"50\" y1=\"50\" x2=\"50\" y2=\"22\" class=\"lp-ico-detail\"/><rect x=\"44\" y=\"12\" width=\"12\" height=\"10\" rx=\"1\"/><circle cx=\"47\" cy=\"15\" r=\"0.9\" class=\"lp-ico-detail\"/><circle cx=\"47\" cy=\"19\" r=\"0.9\" class=\"lp-ico-detail\"/><circle cx=\"53\" cy=\"15\" r=\"0.9\" class=\"lp-ico-detail\"/><circle cx=\"53\" cy=\"19\" r=\"0.9\" class=\"lp-ico-detail\"/>"
+    ]
   },
   {
     "name": "string-harp",
@@ -244,29 +246,29 @@ export const stringIcons: IconDescriptor[] = [
       "width_ft": 2.2,
       "depth_ft": 3.8
     },
+    "viewBox": "0 0 48 48",
+    "outline": true,
+    "body": "<path d=\"M16 43 L18 8\"/><path d=\"M18 8 Q26 3 33.5 11\"/><path d=\"M33.5 11 L30 43\"/><path d=\"M14.5 43 L31.5 43\"/><path d=\"M19.4 9.184038001041813 L19.8 42\"/><path d=\"M21.48 7.917947028896843 L21.36 42\"/><path d=\"M23.560000000000002 7.158825257292228 L22.92 42\"/><path d=\"M25.64 7.031541194742089 L24.48 42\"/><path d=\"M27.72 7.557031891984225 L26.04 42\"/><path d=\"M29.8 8.648858990830107 L27.6 42\"/>",
     "keywords": [
-      "harp",
-      "concert harp",
-      "pedal harp",
-      "orchestra"
-    ],
-    "body": "<path d=\"M30 86 C30 60 40 30 64 14 C58 26 52 50 52 86 Z\"/><path d=\"M64 14 C72 16 74 24 70 30\" class=\"lp-ico-detail\"/><line x1=\"30\" y1=\"86\" x2=\"52\" y2=\"86\" class=\"lp-ico-detail\"/><line x1=\"36\" y1=\"60\" x2=\"45\" y2=\"60\" class=\"lp-ico-detail\"/><line x1=\"39\" y1=\"50\" x2=\"48\" y2=\"50\" class=\"lp-ico-detail\"/><line x1=\"43\" y1=\"40\" x2=\"51\" y2=\"40\" class=\"lp-ico-detail\"/><line x1=\"48\" y1=\"30\" x2=\"55\" y2=\"30\" class=\"lp-ico-detail\"/><line x1=\"54\" y1=\"22\" x2=\"60\" y2=\"22\" class=\"lp-ico-detail\"/>"
+      "harp"
+    ]
   },
   {
     "name": "string-stand-single",
     "category": "strings",
-    "label": "Stand",
+    "label": "Guitar stand",
     "footprint": {
       "width_ft": 1.2,
       "depth_ft": 1.2
     },
+    "viewBox": "0 0 48 48",
+    "outline": true,
+    "body": "<path d=\"M24 16 L15 42\"/><path d=\"M24 16 L33 42\"/><path d=\"M13.5 42 L19 42\"/><path d=\"M29 42 L34.5 42\"/><path d=\"M17 30 L31 30\"/><path d=\"M24 16 L20.5 10\"/><path d=\"M24 16 L27.5 10\"/><path d=\"M20.5 10 L19.6 11.4\"/><path d=\"M27.5 10 L28.4 11.4\"/>",
     "keywords": [
       "stand",
-      "guitar",
-      "tripod",
-      "single"
-    ],
-    "body": "<circle cx=\"50\" cy=\"50\" r=\"5\"/><line x1=\"50\" y1=\"50\" x2=\"50\" y2=\"18\" class=\"lp-ico-detail\"/><line x1=\"50\" y1=\"50\" x2=\"24\" y2=\"76\" class=\"lp-ico-detail\"/><line x1=\"50\" y1=\"50\" x2=\"76\" y2=\"76\" class=\"lp-ico-detail\"/><path d=\"M42 14 q8 -8 16 0\" class=\"lp-ico-detail\"/>"
+      "guitar stand",
+      "a-frame"
+    ]
   },
   {
     "name": "string-stand-multi",
@@ -276,12 +278,13 @@ export const stringIcons: IconDescriptor[] = [
       "width_ft": 3,
       "depth_ft": 1.2
     },
+    "viewBox": "0 0 48 48",
+    "outline": true,
+    "body": "<path d=\"M7 30 L41 30\"/><path d=\"M9 30 L9 19\"/><path d=\"M39 30 L39 19\"/><path d=\"M9 19 L13 19 Q15 19 15 21 L15 23 Q15 25 17 25 L19 25 Q21 25 21 23 L21 21 Q21 19 23 19\"/><path d=\"M23 19 L25 19 Q27 19 27 21 L27 23 Q27 25 29 25 L31 25 Q33 25 33 23 L33 21 Q33 19 35 19 L39 19\"/><path d=\"M18 25 L18 16\"/><path d=\"M30 25 L30 16\"/><path d=\"M12 19 L12 16\"/><path d=\"M11 36 L17 36\"/><path d=\"M23 36 L29 36\"/><path d=\"M35 36 L41 36\"/>",
     "keywords": [
-      "guitar rack",
-      "multi stand",
       "rack",
-      "stand"
-    ],
-    "body": "<rect x=\"8\" y=\"40\" width=\"84\" height=\"10\" rx=\"2\"/><path d=\"M18 42 a4 4 0 0 0 8 0\" class=\"lp-ico-detail\"/><path d=\"M42 42 a4 4 0 0 0 8 0\" class=\"lp-ico-detail\"/><path d=\"M66 42 a4 4 0 0 0 8 0\" class=\"lp-ico-detail\"/><circle cx=\"22\" cy=\"30\" r=\"7\" class=\"lp-ico-detail\"/><line x1=\"22\" y1=\"37\" x2=\"22\" y2=\"50\" class=\"lp-ico-detail\"/><circle cx=\"46\" cy=\"30\" r=\"7\" class=\"lp-ico-detail\"/><line x1=\"46\" y1=\"37\" x2=\"46\" y2=\"50\" class=\"lp-ico-detail\"/><circle cx=\"70\" cy=\"30\" r=\"7\" class=\"lp-ico-detail\"/><line x1=\"70\" y1=\"37\" x2=\"70\" y2=\"50\" class=\"lp-ico-detail\"/>"
+      "multi guitar",
+      "guitar rack"
+    ]
   }
 ];
