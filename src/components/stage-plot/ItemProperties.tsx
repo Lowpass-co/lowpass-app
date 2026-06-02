@@ -36,15 +36,28 @@ function Num({ value, onChange, step = 0.5, min }: { value: number; onChange: (n
 export interface ItemPropertiesProps {
   plot: EditorPlot;
   item: EditorItem | null;
+  selectedCount?: number;
   onUpdateItem: (patch: Partial<EditorItem>) => void;
   onDeleteItem: () => void;
   onUpdatePlot: (patch: Partial<EditorPlot>) => void;
 }
 
-export function ItemProperties({ plot, item, onUpdateItem, onDeleteItem, onUpdatePlot }: ItemPropertiesProps) {
+export function ItemProperties({ plot, item, selectedCount = 0, onUpdateItem, onDeleteItem, onUpdatePlot }: ItemPropertiesProps) {
   return (
     <div style={{ height: '100%', overflowY: 'auto', borderLeft: '1px solid var(--lp-border)', background: 'var(--lp-bg)', padding: 14, width: 260 }}>
-      {item ? (
+      {selectedCount > 1 ? (
+        <>
+          <h3 style={{ fontSize: 'var(--lp-text-sm)', fontWeight: 600, color: 'var(--lp-text)', margin: '0 0 4px' }}>{selectedCount} items selected</h3>
+          <p style={{ fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-tertiary)', margin: '0 0 14px' }}>Drag to move them together.</p>
+          <Row label="Rotation°"><Num value={0} step={15} onChange={(n) => onUpdateItem({ rotationDeg: n })} /></Row>
+          <Row label="Tint">
+            <input type="color" defaultValue="#000000" style={{ width: 40, height: 26, border: 'none', background: 'none' }} onChange={(e) => onUpdateItem({ colorTint: e.target.value })} />
+          </Row>
+          <button type="button" onClick={onDeleteItem} style={{ marginTop: 12, width: '100%', padding: '8px', borderRadius: 6, border: '1px solid var(--lp-border)', background: 'var(--lp-surface)', color: 'var(--lp-text-secondary)', cursor: 'pointer', fontSize: 'var(--lp-text-xs)' }}>
+            Delete {selectedCount} items
+          </button>
+        </>
+      ) : item ? (
         <>
           <h3 style={{ fontSize: 'var(--lp-text-sm)', fontWeight: 600, color: 'var(--lp-text)', margin: '0 0 4px' }}>
             {item.kind === 'text' ? 'Text box' : item.kind === 'arrow' ? 'Arrow' : getIcon(item.iconName)?.label ?? item.iconName}
@@ -82,6 +95,9 @@ export function ItemProperties({ plot, item, onUpdateItem, onDeleteItem, onUpdat
             </>
           )}
 
+          {item.kind === 'arrow' && (
+            <Row label="Thickness"><Num value={item.weight ?? 2} step={0.5} min={0.5} onChange={(n) => onUpdateItem({ weight: n })} /></Row>
+          )}
           <Row label={item.kind === 'arrow' ? 'Colour' : 'Tint'}>
             <input type="color" value={item.colorTint ?? '#000000'} style={{ width: 40, height: 26, border: 'none', background: 'none' }}
               onChange={(e) => onUpdateItem({ colorTint: e.target.value })} />

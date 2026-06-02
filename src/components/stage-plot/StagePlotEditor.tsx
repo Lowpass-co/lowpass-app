@@ -41,7 +41,15 @@ export interface StagePlotEditorProps {
 export function StagePlotEditor({ initialPlot, initialItems, onChange, actions }: StagePlotEditorProps) {
   const [plot, setPlot] = useState<EditorPlot>(initialPlot ?? DEFAULT_PLOT);
   const [items, setItems] = useState<EditorItem[]>(initialItems ?? []);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+  const selectItem = useCallback((id: string | null, additive?: boolean) => {
+    setSelectedIds((prev) => {
+      if (id == null) return [];
+      if (additive) return prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id];
+      return [id];
+    });
+  }, []);
 
   // Emit changes (debounced) for the host to persist. Keep the
   // latest callback in a ref (updated in an effect, not render).
@@ -71,7 +79,7 @@ export function StagePlotEditor({ initialPlot, initialItems, onChange, actions }
           label: icon?.label,
         },
       ]);
-      setSelectedId(id);
+      setSelectedIds([id]);
     },
     [plot.widthFt, plot.depthFt],
   );
@@ -82,7 +90,7 @@ export function StagePlotEditor({ initialPlot, initialItems, onChange, actions }
       ...prev,
       { id, kind: 'text' as const, iconName: '', xFt: plot.widthFt / 2, yFt: plot.depthFt / 2, text: 'Text', fontSizeFt: 1.1, layer: 'annotations' as const },
     ]);
-    setSelectedId(id);
+    setSelectedIds([id]);
   }, [plot.widthFt, plot.depthFt]);
 
   const addArrow = useCallback(() => {
@@ -91,51 +99,52 @@ export function StagePlotEditor({ initialPlot, initialItems, onChange, actions }
       ...prev,
       { id, kind: 'arrow' as const, iconName: '', xFt: plot.widthFt / 2 - 2, yFt: plot.depthFt / 2, x2Ft: plot.widthFt / 2 + 2, y2Ft: plot.depthFt / 2, layer: 'annotations' as const },
     ]);
-    setSelectedId(id);
+    setSelectedIds([id]);
   }, [plot.widthFt, plot.depthFt]);
 
   const updateItem = useCallback((id: string, patch: Partial<EditorItem>) => {
     setItems((prev) => prev.map((it) => (it.id === id ? { ...it, ...patch } : it)));
   }, []);
 
+  // Properties edits apply to every selected item.
   const updateSelected = useCallback(
     (patch: Partial<EditorItem>) => {
-      if (selectedId) updateItem(selectedId, patch);
+      setItems((prev) => prev.map((it) => (selectedIds.includes(it.id) ? { ...it, ...patch } : it)));
     },
-    [selectedId, updateItem],
+    [selectedIds],
   );
 
   const deleteSelected = useCallback(() => {
-    setItems((prev) => prev.filter((it) => it.id !== selectedId));
-    setSelectedId(null);
-  }, [selectedId]);
+    setItems((prev) => prev.filter((it) => !selectedIds.includes(it.id)));
+    setSelectedIds([]);
+  }, [selectedIds]);
 
   const duplicateSelected = useCallback(() => {
     setItems((prev) => {
-      const src = prev.find((it) => it.id === selectedId);
-      if (!src) return prev;
-      const id = uid();
-      setSelectedId(id);
-      return [...prev, { ...src, id, xFt: +(src.xFt + 1).toFixed(2), yFt: +(src.yFt + 1).toFixed(2) }];
+      const clones = prev
+        .filter((it) => selectedIds.includes(it.id))
+        .map((src) => ({ ...src, id: uid(), xFt: +(src.xFt + 1).toFixed(2), yFt: +(src.yFt + 1).toFixed(2) }));
+      if (clones.length) setSelectedIds(clones.map((c) => c.id));
+      return [...prev, ...clones];
     });
-  }, [selectedId]);
+  }, [selectedIds]);
 
   // Delete / Backspace removes the selection.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA') return;
-      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId) {
+      if ((e.key === 'Delete' || e.key === 'Backspace') && selectedIds.length) {
         e.preventDefault();
         deleteSelected();
-      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'd' && selectedId) {
+      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'd' && selectedIds.length) {
         e.preventDefault();
         duplicateSelected();
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [selectedId, deleteSelected, duplicateSelected]);
+  }, [selectedIds, deleteSelected, duplicateSelected]);
 
   const [exporting, setExporting] = useState(false);
   // Client-side print → "Save as PDF" (env-free, works everywhere).
@@ -164,7 +173,7 @@ export function StagePlotEditor({ initialPlot, initialItems, onChange, actions }
     }
   }, [plot, items]);
 
-  const selected = items.find((it) => it.id === selectedId) ?? null;
+  const selected = selectedIds.length === 1 ? items.find((it) => it.id === selectedIds[0]) ?? null : null;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', background: 'var(--lp-bg)' }}>
@@ -204,8 +213,8 @@ export function StagePlotEditor({ initialPlot, initialItems, onChange, actions }
             snap={plot.snap}
             brandColor={plot.brandColor}
             items={items}
-            selectedId={selectedId}
-            onSelectItem={setSelectedId}
+            selectedIds={selectedIds}
+            onSelectItem={selectItem}
             onUpdateItem={updateItem}
             onDropIcon={(iconName, xFt, yFt) => addItem(iconName, { xFt, yFt })}
           />
@@ -213,6 +222,7 @@ export function StagePlotEditor({ initialPlot, initialItems, onChange, actions }
         <ItemProperties
           plot={plot}
           item={selected}
+          selectedCount={selectedIds.length}
           onUpdateItem={updateSelected}
           onDeleteItem={deleteSelected}
           onUpdatePlot={(patch) => setPlot((p) => ({ ...p, ...patch }))}

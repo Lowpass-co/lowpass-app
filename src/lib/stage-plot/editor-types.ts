@@ -53,6 +53,8 @@ export interface EditorItem {
   /** Arrow second endpoint, feet (kind='arrow'); xFt/yFt is the first. */
   x2Ft?: number;
   y2Ft?: number;
+  /** Arrow line thickness in px (kind='arrow'). */
+  weight?: number;
 }
 
 export const DEFAULT_PLOT: EditorPlot = {

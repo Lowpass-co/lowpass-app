@@ -1,13 +1,14 @@
 /* ============================================
-   LOWPASS — <StageCanvas> (§SP2 + annotations)
+   LOWPASS — <StageCanvas> (§SP2 + annotations + multi-select)
 
    SVG stage surface: dotted grid (faint sub-foot + bold foot),
-   stage rect, edge rulers, cardinals (US/DS/SR/SL), AUDIENCE,
-   reference markers, and items (icons, text boxes, arrows) at
-   real footprint scale. Pan (drag empty) + wheel zoom.
-   Interactive when callbacks are supplied: drop icons from the
-   palette, click to select, drag to move, drag the corner handle
-   to resize, drag arrow endpoints, double-click text to edit.
+   stage rect, edge rulers, cardinals, AUDIENCE, reference
+   markers, and items (icons, text boxes, arrows) at footprint
+   scale. Pan + wheel zoom. Interactive: drop icons from the
+   palette, click / shift-click to select (multi), drag to move
+   the whole selection, drag the corner handle to resize, drag
+   arrow endpoints, single-click a selected text box (or
+   double-click any) to edit inline.
    Pure SVG so the same DOM exports to PDF (§SP7).
    ============================================ */
 'use client';
@@ -33,15 +34,16 @@ export interface StageCanvasProps {
   snap?: boolean;
   items: EditorItem[];
   brandColor?: string;
-  selectedId?: string | null;
-  onSelectItem?: (id: string | null) => void;
+  selectedIds?: string[];
+  onSelectItem?: (id: string | null, additive?: boolean) => void;
   onUpdateItem?: (id: string, patch: Partial<EditorItem>) => void;
   onDropIcon?: (iconName: string, xFt: number, yFt: number) => void;
   className?: string;
 }
 
+type MoveSet = { id: string; ox: number; oy: number; ox2?: number; oy2?: number };
 type Drag =
-  | { mode: 'move'; id: string; sx: number; sy: number; ox: number; oy: number; ox2?: number; oy2?: number }
+  | { mode: 'move'; set: MoveSet[]; sx: number; sy: number; downId: string; downWasSel: boolean; moved: boolean }
   | { mode: 'resize'; id: string; cx: number; cy: number; startDist: number; startScale: number }
   | { mode: 'arrow'; id: string; end: 'a' | 'b' };
 
@@ -57,7 +59,7 @@ export function StageCanvas({
   snap = true,
   items,
   brandColor = DEFAULT_BRAND,
-  selectedId = null,
+  selectedIds = [],
   onSelectItem,
   onUpdateItem,
   onDropIcon,
@@ -72,6 +74,7 @@ export function StageCanvas({
   const pan = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
   const drag = useRef<Drag | null>(null);
   const interactive = Boolean(onUpdateItem || onSelectItem);
+  const selSet = new Set(selectedIds);
 
   useEffect(() => {
     const host = hostRef.current;
@@ -88,12 +91,11 @@ export function StageCanvas({
     return () => ro.disconnect();
   }, [widthFt, depthFt]);
 
-  /** screen px (clientX/Y) → feet in stage space. */
   const toFt = useCallback(
     (clientX: number, clientY: number) => {
       const rect = hostRef.current?.getBoundingClientRect();
-      const px = ((clientX - (rect?.left ?? 0)) - view.panX) / view.zoom;
-      const py = ((clientY - (rect?.top ?? 0)) - view.panY) / view.zoom;
+      const px = (clientX - (rect?.left ?? 0) - view.panX) / view.zoom;
+      const py = (clientY - (rect?.top ?? 0) - view.panY) / view.zoom;
       return { xFt: px / ft(1), yFt: py / ft(1) };
     },
     [view],
@@ -126,17 +128,24 @@ export function StageCanvas({
       if (arrowEnd && interactive) {
         const [id, end] = arrowEnd.getAttribute('data-arrow-end')!.split(':') as [string, 'a' | 'b'];
         drag.current = { mode: 'arrow', id, end };
-        onSelectItem?.(id);
         return;
       }
       const itemEl = el.closest('[data-canvas-item]');
       if (itemEl && interactive) {
         const id = itemEl.getAttribute('data-canvas-item')!;
-        const it = items.find((i) => i.id === id);
-        onSelectItem?.(id);
-        if (it && !it.locked && onUpdateItem) {
-          drag.current = { mode: 'move', id, sx: e.clientX, sy: e.clientY, ox: it.xFt, oy: it.yFt, ox2: it.x2Ft, oy2: it.y2Ft };
+        const additive = e.shiftKey || e.metaKey || e.ctrlKey;
+        const wasSel = selectedIds.includes(id);
+        if (additive) {
+          onSelectItem?.(id, true);
+          return;
         }
+        if (!wasSel) onSelectItem?.(id, false);
+        const dragIds = wasSel ? selectedIds : [id];
+        const set: MoveSet[] = dragIds
+          .map((d) => items.find((i) => i.id === d))
+          .filter((i): i is EditorItem => Boolean(i) && !i!.locked)
+          .map((i) => ({ id: i.id, ox: i.xFt, oy: i.yFt, ox2: i.x2Ft, oy2: i.y2Ft }));
+        drag.current = { mode: 'move', set, sx: e.clientX, sy: e.clientY, downId: id, downWasSel: wasSel, moved: false };
         return;
       }
       onSelectItem?.(null);
@@ -146,7 +155,7 @@ export function StageCanvas({
         return v;
       });
     },
-    [interactive, items, onSelectItem, onUpdateItem, toFt],
+    [interactive, items, onSelectItem, selectedIds, toFt],
   );
 
   const onPointerMove = useCallback(
@@ -154,22 +163,25 @@ export function StageCanvas({
       const d = drag.current;
       if (d && onUpdateItem) {
         if (d.mode === 'move') {
+          const lead = d.set.find((s) => s.id === d.downId) ?? d.set[0];
+          if (!lead) return;
           let dx = (e.clientX - d.sx) / view.zoom / ft(1);
           let dy = (e.clientY - d.sy) / view.zoom / ft(1);
-          let xFt = d.ox + dx;
-          let yFt = d.oy + dy;
           if (snap) {
-            xFt = snapToGrid(ft(xFt), gridSizeFt) / ft(1);
-            yFt = snapToGrid(ft(yFt), gridSizeFt) / ft(1);
-            dx = xFt - d.ox;
-            dy = yFt - d.oy;
+            const lx = snapToGrid(ft(lead.ox + dx), gridSizeFt) / ft(1);
+            const ly = snapToGrid(ft(lead.oy + dy), gridSizeFt) / ft(1);
+            dx = lx - lead.ox;
+            dy = ly - lead.oy;
           }
-          const patch: Partial<EditorItem> = { xFt: +xFt.toFixed(2), yFt: +yFt.toFixed(2) };
-          if (d.ox2 != null && d.oy2 != null) {
-            patch.x2Ft = +(d.ox2 + dx).toFixed(2);
-            patch.y2Ft = +(d.oy2 + dy).toFixed(2);
+          if (Math.abs(dx) > 0.001 || Math.abs(dy) > 0.001) d.moved = true;
+          for (const s of d.set) {
+            const patch: Partial<EditorItem> = { xFt: +(s.ox + dx).toFixed(2), yFt: +(s.oy + dy).toFixed(2) };
+            if (s.ox2 != null && s.oy2 != null) {
+              patch.x2Ft = +(s.ox2 + dx).toFixed(2);
+              patch.y2Ft = +(s.oy2 + dy).toFixed(2);
+            }
+            onUpdateItem(s.id, patch);
           }
-          onUpdateItem(d.id, patch);
         } else if (d.mode === 'resize') {
           const c = toFt(e.clientX, e.clientY);
           const dist = Math.hypot(c.xFt - d.cx, c.yFt - d.cy) || 0.01;
@@ -191,10 +203,16 @@ export function StageCanvas({
   );
 
   const endInteraction = useCallback(() => {
+    const d = drag.current;
+    // Single-click a selected text box → edit inline.
+    if (d?.mode === 'move' && !d.moved && d.downWasSel) {
+      const it = items.find((i) => i.id === d.downId);
+      if (it?.kind === 'text') setEditing(it.id);
+    }
     pan.current = null;
     drag.current = null;
     setPanning(false);
-  }, []);
+  }, [items]);
 
   const onDrop = useCallback(
     (e: React.DragEvent) => {
@@ -215,7 +233,7 @@ export function StageCanvas({
   const labelEvery = Math.max(1, Math.round(4 / gridSizeFt));
   const xTicks = Array.from({ length: Math.floor(widthFt / gridSizeFt) + 1 }, (_, i) => i);
   const yTicks = Array.from({ length: Math.floor(depthFt / gridSizeFt) + 1 }, (_, i) => i);
-
+  const soleSel = selectedIds.length === 1 ? selectedIds[0] : null;
   const editingItem = editing ? items.find((i) => i.id === editing) : null;
 
   return (
@@ -277,11 +295,11 @@ export function StageCanvas({
             </g>
           )}
           {showLateralMarkers &&
-            Array.from({ length: Math.floor(widthFt / 2 / 2) }, (_, i) => (i + 1) * 2).flatMap((d) =>
-              [stageW / 2 - ft(d), stageW / 2 + ft(d)].map((x, k) => (
-                <g key={`lm${d}${k}`}>
+            Array.from({ length: Math.floor(widthFt / 2 / 2) }, (_, i) => (i + 1) * 2).flatMap((dd) =>
+              [stageW / 2 - ft(dd), stageW / 2 + ft(dd)].map((x, k) => (
+                <g key={`lm${dd}${k}`}>
                   <line className="lp-canvas-ruler" x1={x} y1={stageH} x2={x} y2={stageH + 5} strokeWidth={1} vectorEffect="non-scaling-stroke" />
-                  <text className="lp-canvas-ruler-text" x={x} y={stageH + 12} textAnchor="middle">{d}</text>
+                  <text className="lp-canvas-ruler-text" x={x} y={stageH + 12} textAnchor="middle">{dd}</text>
                 </g>
               )),
             )}
@@ -293,8 +311,7 @@ export function StageCanvas({
           <text className="lp-canvas-audience" x={stageW / 2} y={stageH + 40} textAnchor="middle">AUDIENCE</text>
 
           {items.map((it) => {
-            const sel = it.id === selectedId;
-            // --- ARROW ---
+            const sel = selSet.has(it.id);
             if (it.kind === 'arrow') {
               const x1 = ft(it.xFt);
               const y1 = ft(it.yFt);
@@ -303,8 +320,8 @@ export function StageCanvas({
               const stroke = it.colorTint ?? 'var(--lp-text-secondary)';
               return (
                 <g key={it.id} data-canvas-item={it.id} style={{ cursor: interactive ? 'move' : undefined }}>
-                  <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="transparent" strokeWidth={14} />
-                  <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={stroke} strokeWidth={2} markerEnd="url(#lp-arrow)" vectorEffect="non-scaling-stroke" />
+                  <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="transparent" strokeWidth={16} />
+                  <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={stroke} strokeWidth={it.weight ?? 2} markerEnd="url(#lp-arrow)" vectorEffect="non-scaling-stroke" />
                   {sel && interactive && (
                     <>
                       <circle data-arrow-end={`${it.id}:a`} cx={x1} cy={y1} r={5} fill="var(--lp-orange)" style={{ cursor: 'crosshair' }} />
@@ -314,7 +331,6 @@ export function StageCanvas({
                 </g>
               );
             }
-            // --- TEXT ---
             if (it.kind === 'text') {
               const cx = ft(it.xFt);
               const cy = ft(it.yFt);
@@ -322,25 +338,18 @@ export function StageCanvas({
               const fill = it.colorTint ?? 'var(--lp-text)';
               return (
                 <g key={it.id} data-canvas-item={it.id} style={{ cursor: interactive ? 'move' : undefined }} onDoubleClick={() => interactive && setEditing(it.id)}>
-                  <text x={cx} y={cy} fontSize={fs} fill={fill} textAnchor="middle" dominantBaseline="central" fontWeight={600}>
-                    {it.text || 'Text'}
-                  </text>
-                  {sel && (
-                    <rect x={cx - fs * 2.5} y={cy - fs * 0.8} width={fs * 5} height={fs * 1.6} rx={2} fill="none" stroke="var(--lp-orange)" strokeWidth={1.5} strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />
-                  )}
+                  {sel && <rect x={cx - fs * 2.6} y={cy - fs * 0.9} width={fs * 5.2} height={fs * 1.8} rx={2} fill="none" stroke="var(--lp-orange)" strokeWidth={1.5} strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />}
+                  <text x={cx} y={cy} fontSize={fs} fill={fill} textAnchor="middle" dominantBaseline="central" fontWeight={600}>{it.text || 'Text'}</text>
                 </g>
               );
             }
-            // --- ICON ---
             const icon = getIcon(it.iconName);
             if (!icon) return null;
             const sc = it.scale ?? 1;
-            const wFt = (it.widthFt ?? icon.footprint.width_ft) * sc;
-            const dFt = (it.depthFt ?? icon.footprint.depth_ft) * sc;
+            const wpx = ft((it.widthFt ?? icon.footprint.width_ft) * sc);
+            const hpx = ft((it.depthFt ?? icon.footprint.depth_ft) * sc);
             const cx = ft(it.xFt);
             const cy = ft(it.yFt);
-            const wpx = ft(wFt);
-            const hpx = ft(dFt);
             const cat = getCategory(icon.category).colorVar;
             const fill = icon.outline ? 'none' : it.colorTint ?? `color-mix(in srgb, ${brandColor} ${ICON_BRAND_TINT_PCT}%, transparent)`;
             const style = { fill, stroke: cat, '--lp-cat': cat } as CSSProperties & Record<string, string>;
@@ -348,16 +357,13 @@ export function StageCanvas({
               <g key={it.id} data-canvas-item={it.id} transform={`rotate(${it.rotationDeg ?? 0} ${cx} ${cy})`} style={{ cursor: interactive ? 'move' : undefined }}>
                 {sel && <rect x={cx - wpx / 2 - 4} y={cy - hpx / 2 - 4} width={wpx + 8} height={hpx + 8} rx={3} fill="none" stroke="var(--lp-orange)" strokeWidth={1.5} strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />}
                 <svg x={cx - wpx / 2} y={cy - hpx / 2} width={wpx} height={hpx} viewBox={icon.viewBox ?? '0 0 100 100'} preserveAspectRatio="xMidYMid meet" className="lp-canvas-item" style={style} dangerouslySetInnerHTML={{ __html: icon.body }} />
-                {sel && interactive && (
-                  <rect data-resize={it.id} x={cx + wpx / 2 + 1} y={cy + hpx / 2 + 1} width={9} height={9} rx={1.5} fill="var(--lp-orange)" style={{ cursor: 'nwse-resize' }} />
-                )}
+                {it.id === soleSel && interactive && <rect data-resize={it.id} x={cx + wpx / 2 + 1} y={cy + hpx / 2 + 1} width={9} height={9} rx={1.5} fill="var(--lp-orange)" style={{ cursor: 'nwse-resize' }} />}
               </g>
             );
           })}
         </g>
       </svg>
 
-      {/* Inline text editor */}
       {editingItem && (
         <input
           autoFocus
