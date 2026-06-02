@@ -549,6 +549,62 @@ td[data-density="cozy"] .lp-mono {
   .advance-badge__dot { animation: none !important; }
 }
 
+/* ============================================================
+   UX Audit 2026 — Advance Template Builder chrome
+
+   Re-skin of the 3-pane builder to match Adam's screenshot:
+   a faint grid-textured canvas, elevated section cards (orange
+   ring when the card holds the selected field), and solid
+   Required / muted Optional field badges. Adaptive via --lp
+   tokens (the screenshot is dark; light mode renders the same
+   structure on light surfaces).
+   ============================================================ */
+.advance-builder-canvas {
+  background-color: var(--lp-bg-deep);
+  background-image:
+    linear-gradient(
+      to right,
+      color-mix(in srgb, var(--lp-border-subtle) 55%, transparent) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--lp-border-subtle) 55%, transparent) 1px,
+      transparent 1px
+    );
+  background-size: 28px 28px;
+}
+
+.advance-builder-section {
+  background: var(--lp-surface);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  transition:
+    border-color 200ms var(--lp-ease-standard, ease),
+    box-shadow 200ms var(--lp-ease-standard, ease);
+}
+.advance-builder-section[data-active='true'] {
+  border-color: var(--color-lp-orange) !important;
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, var(--color-lp-orange) 30%, transparent),
+    0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+/* Field row Required / Optional badges (also reusable elsewhere). */
+.advance-req-badge,
+.advance-opt-badge {
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.advance-req-badge {
+  background: var(--color-lp-orange);
+  color: #ffffff;
+}
+.advance-opt-badge {
+  background: var(--lp-bg-deep);
+  color: var(--lp-text-tertiary);
+  border: 1px solid var(--lp-border-subtle);
+}
+
 /* Table / breakdown column headers — light #471300, dark muted grey */
 .lp-table-header-text {
   color: var(--lp-table-header-text);
