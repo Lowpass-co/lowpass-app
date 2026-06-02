@@ -81,6 +81,9 @@ export function ItemProperties({ plot, item, onUpdateItem, onDeleteItem, onUpdat
           <Row label="Grid (ft)"><Num value={plot.gridSizeFt} step={0.5} min={0.5} onChange={(n) => onUpdatePlot({ gridSizeFt: n })} /></Row>
           <Row label="Show grid"><input type="checkbox" checked={plot.showGrid} onChange={(e) => onUpdatePlot({ showGrid: e.target.checked })} /></Row>
           <Row label="Show rulers"><input type="checkbox" checked={plot.showRulers} onChange={(e) => onUpdatePlot({ showRulers: e.target.checked })} /></Row>
+          <Row label="Centre line"><input type="checkbox" checked={plot.showCenterLine} onChange={(e) => onUpdatePlot({ showCenterLine: e.target.checked })} /></Row>
+          <Row label="DS centre cross"><input type="checkbox" checked={plot.showDsCross} onChange={(e) => onUpdatePlot({ showDsCross: e.target.checked })} /></Row>
+          <Row label="Lateral markers"><input type="checkbox" checked={plot.showLateralMarkers} onChange={(e) => onUpdatePlot({ showLateralMarkers: e.target.checked })} /></Row>
           <Row label="Snap to grid"><input type="checkbox" checked={plot.snap} onChange={(e) => onUpdatePlot({ snap: e.target.checked })} /></Row>
           <Row label="Brand colour">
             <input type="color" value={plot.brandColor} style={{ width: 40, height: 26, border: 'none', background: 'none' }}

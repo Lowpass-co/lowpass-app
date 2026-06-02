@@ -15,6 +15,9 @@ export interface EditorPlot {
   gridSizeFt: number;
   showGrid: boolean;
   showRulers: boolean;
+  showCenterLine: boolean;
+  showDsCross: boolean;
+  showLateralMarkers: boolean;
   snap: boolean;
   brandColor: string;
   units: 'ft' | 'm';
@@ -44,6 +47,9 @@ export const DEFAULT_PLOT: EditorPlot = {
   gridSizeFt: 1,
   showGrid: true,
   showRulers: true,
+  showCenterLine: false,
+  showDsCross: false,
+  showLateralMarkers: false,
   snap: true,
   brandColor: '#FF4500',
   units: 'ft',

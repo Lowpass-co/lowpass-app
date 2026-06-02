@@ -68,19 +68,32 @@ export function StagePlotEditor({ initialPlot, initialItems, onChange, actions }
     setSelectedId(null);
   }, [selectedId]);
 
+  const duplicateSelected = useCallback(() => {
+    setItems((prev) => {
+      const src = prev.find((it) => it.id === selectedId);
+      if (!src) return prev;
+      const id = uid();
+      setSelectedId(id);
+      return [...prev, { ...src, id, xFt: +(src.xFt + 1).toFixed(2), yFt: +(src.yFt + 1).toFixed(2) }];
+    });
+  }, [selectedId]);
+
   // Delete / Backspace removes the selection.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return;
       if ((e.key === 'Delete' || e.key === 'Backspace') && selectedId) {
-        const tag = (e.target as HTMLElement)?.tagName;
-        if (tag === 'INPUT' || tag === 'TEXTAREA') return;
         e.preventDefault();
         deleteSelected();
+      } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'd' && selectedId) {
+        e.preventDefault();
+        duplicateSelected();
       }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [selectedId, deleteSelected]);
+  }, [selectedId, deleteSelected, duplicateSelected]);
 
   const selected = items.find((it) => it.id === selectedId) ?? null;
 
@@ -106,6 +119,9 @@ export function StagePlotEditor({ initialPlot, initialItems, onChange, actions }
             gridSizeFt={plot.gridSizeFt}
             showGrid={plot.showGrid}
             showRulers={plot.showRulers}
+            showCenterLine={plot.showCenterLine}
+            showDsCross={plot.showDsCross}
+            showLateralMarkers={plot.showLateralMarkers}
             snap={plot.snap}
             brandColor={plot.brandColor}
             items={items}

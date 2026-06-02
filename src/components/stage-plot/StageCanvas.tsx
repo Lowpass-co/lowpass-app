@@ -46,6 +46,9 @@ export interface StageCanvasProps {
   gridSizeFt?: number;
   showGrid?: boolean;
   showRulers?: boolean;
+  showCenterLine?: boolean;
+  showDsCross?: boolean;
+  showLateralMarkers?: boolean;
   snap?: boolean;
   items: CanvasItem[];
   brandColor?: string;
@@ -70,6 +73,9 @@ export function StageCanvas({
   gridSizeFt = 1,
   showGrid = true,
   showRulers = true,
+  showCenterLine = false,
+  showDsCross = false,
+  showLateralMarkers = false,
   snap = true,
   items,
   brandColor = DEFAULT_BRAND,
@@ -217,6 +223,26 @@ export function StageCanvas({
               ))}
             </g>
           )}
+
+          {/* Reference markers (§SP2c) */}
+          {showCenterLine && (
+            <line x1={stageW / 2} y1={0} x2={stageW / 2} y2={stageH} stroke="var(--lp-border-strong)" strokeWidth={1} strokeDasharray="5 4" vectorEffect="non-scaling-stroke" />
+          )}
+          {showDsCross && (
+            <g stroke="var(--lp-text-tertiary)" strokeWidth={1.25} vectorEffect="non-scaling-stroke">
+              <line x1={stageW / 2 - ft(0.6)} y1={stageH} x2={stageW / 2 + ft(0.6)} y2={stageH} />
+              <line x1={stageW / 2} y1={stageH - ft(0.6)} x2={stageW / 2} y2={stageH + ft(0.6)} />
+            </g>
+          )}
+          {showLateralMarkers &&
+            Array.from({ length: Math.floor(widthFt / 2 / 2) }, (_, i) => (i + 1) * 2).flatMap((d) =>
+              [stageW / 2 - ft(d), stageW / 2 + ft(d)].map((x, k) => (
+                <g key={`lm${d}${k}`}>
+                  <line className="lp-canvas-ruler" x1={x} y1={stageH} x2={x} y2={stageH + 5} strokeWidth={1} vectorEffect="non-scaling-stroke" />
+                  <text className="lp-canvas-ruler-text" x={x} y={stageH + 12} textAnchor="middle">{d}</text>
+                </g>
+              )),
+            )}
 
           <text className="lp-canvas-cardinal" x={stageW / 2} y={-18} textAnchor="middle">US</text>
           <text className="lp-canvas-cardinal" x={stageW / 2} y={stageH + 22} textAnchor="middle">DS</text>
