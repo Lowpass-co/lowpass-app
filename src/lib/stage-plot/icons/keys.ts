@@ -16,7 +16,7 @@ export const keyIcons: IconDescriptor[] = [
     "label": "Grand",
     "footprint": {
       "width_ft": 5,
-      "depth_ft": 5
+      "depth_ft": 6
     },
     "keywords": [
       "piano",

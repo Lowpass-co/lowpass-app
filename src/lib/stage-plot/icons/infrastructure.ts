@@ -114,7 +114,7 @@ export const infrastructureIcons: IconDescriptor[] = [
       "gen",
       "mains"
     ],
-    "body": "<rect x=\"8\" y=\"22\" width=\"84\" height=\"56\" rx=\"5\"/><polyline points=\"24,30 16,46 24,46 19,60 34,42 25,42 30,30\" class=\"lp-ico-detail\"/><line x1=\"60\" y1=\"30\" x2=\"60\" y2=\"70\" class=\"lp-ico-detail\"/><line x1=\"68\" y1=\"30\" x2=\"68\" y2=\"70\" class=\"lp-ico-detail\"/><line x1=\"76\" y1=\"30\" x2=\"76\" y2=\"70\" class=\"lp-ico-detail\"/><line x1=\"84\" y1=\"30\" x2=\"84\" y2=\"70\" class=\"lp-ico-detail\"/><text class=\"lp-ico-label\" x=\"38\" y=\"66\" text-anchor=\"middle\" dominant-baseline=\"central\" font-size=\"15\">GEN</text>"
+    "body": "<rect x=\"8\" y=\"26\" width=\"84\" height=\"48\" rx=\"5\"/><path d=\"M29 32 L21 43 L26 43 L23 54 L33 40 L27 40 Z\" class=\"lp-ico-detail\"/><line x1=\"50\" y1=\"34\" x2=\"84\" y2=\"34\" class=\"lp-ico-detail\"/><line x1=\"50\" y1=\"42\" x2=\"84\" y2=\"42\" class=\"lp-ico-detail\"/><line x1=\"50\" y1=\"50\" x2=\"84\" y2=\"50\" class=\"lp-ico-detail\"/><text class=\"lp-ico-label\" x=\"34\" y=\"62\" text-anchor=\"middle\" dominant-baseline=\"central\" font-size=\"13\">GEN</text>"
   },
   {
     "name": "infra-cable-ramp",
@@ -236,14 +236,14 @@ export const infrastructureIcons: IconDescriptor[] = [
       "drop",
       "mains"
     ],
-    "body": "<rect x=\"24\" y=\"24\" width=\"52\" height=\"52\" rx=\"4\"/><polyline points=\"52,32 42,52 50,52 46,68 60,46 52,46 56,32\" class=\"lp-ico-detail\"/><rect x=\"36\" y=\"56\" width=\"28\" height=\"16\" rx=\"2\" class=\"lp-ico-detail\"/><line x1=\"45\" y1=\"60\" x2=\"45\" y2=\"68\" class=\"lp-ico-detail\"/><line x1=\"55\" y1=\"60\" x2=\"55\" y2=\"68\" class=\"lp-ico-detail\"/>"
+    "body": "<rect x=\"26\" y=\"20\" width=\"48\" height=\"60\" rx=\"6\"/><path d=\"M53 26 L45 37 L50 37 L47 48 L57 34 L51 34 Z\" class=\"lp-ico-detail\"/><rect x=\"45\" y=\"58\" width=\"10\" height=\"12\" rx=\"2\" class=\"lp-ico-detail\"/><line x1=\"48\" y1=\"60.5\" x2=\"48\" y2=\"64.5\" class=\"lp-ico-detail\"/><line x1=\"52\" y1=\"60.5\" x2=\"52\" y2=\"64.5\" class=\"lp-ico-detail\"/><circle cx=\"50\" cy=\"67.5\" r=\"0.9\" class=\"lp-ico-detail\"/>"
   },
   {
     "name": "infra-power-2",
     "category": "infrastructure",
     "label": "Power 2",
     "footprint": {
-      "width_ft": 0.6,
+      "width_ft": 0.8,
       "depth_ft": 0.5
     },
     "keywords": [
@@ -254,15 +254,15 @@ export const infrastructureIcons: IconDescriptor[] = [
       "duplex",
       "mains"
     ],
-    "body": "<rect x=\"16\" y=\"24\" width=\"68\" height=\"52\" rx=\"4\"/><polyline points=\"52,28 44,42 50,42 46,52 58,38 52,38 56,28\" class=\"lp-ico-detail\"/><rect x=\"24\" y=\"54\" width=\"24\" height=\"16\" rx=\"2\" class=\"lp-ico-detail\"/><line x1=\"32\" y1=\"58\" x2=\"32\" y2=\"66\" class=\"lp-ico-detail\"/><line x1=\"40\" y1=\"58\" x2=\"40\" y2=\"66\" class=\"lp-ico-detail\"/><rect x=\"52\" y=\"54\" width=\"24\" height=\"16\" rx=\"2\" class=\"lp-ico-detail\"/><line x1=\"60\" y1=\"58\" x2=\"60\" y2=\"66\" class=\"lp-ico-detail\"/><line x1=\"68\" y1=\"58\" x2=\"68\" y2=\"66\" class=\"lp-ico-detail\"/>"
+    "body": "<rect x=\"18\" y=\"20\" width=\"64\" height=\"60\" rx=\"6\"/><path d=\"M53 26 L45 37 L50 37 L47 48 L57 34 L51 34 Z\" class=\"lp-ico-detail\"/><rect x=\"31\" y=\"58\" width=\"10\" height=\"12\" rx=\"2\" class=\"lp-ico-detail\"/><line x1=\"34\" y1=\"60.5\" x2=\"34\" y2=\"64.5\" class=\"lp-ico-detail\"/><line x1=\"38\" y1=\"60.5\" x2=\"38\" y2=\"64.5\" class=\"lp-ico-detail\"/><circle cx=\"36\" cy=\"67.5\" r=\"0.9\" class=\"lp-ico-detail\"/><rect x=\"59\" y=\"58\" width=\"10\" height=\"12\" rx=\"2\" class=\"lp-ico-detail\"/><line x1=\"62\" y1=\"60.5\" x2=\"62\" y2=\"64.5\" class=\"lp-ico-detail\"/><line x1=\"66\" y1=\"60.5\" x2=\"66\" y2=\"64.5\" class=\"lp-ico-detail\"/><circle cx=\"64\" cy=\"67.5\" r=\"0.9\" class=\"lp-ico-detail\"/>"
   },
   {
     "name": "infra-power-4",
     "category": "infrastructure",
     "label": "Power 4",
     "footprint": {
-      "width_ft": 0.8,
-      "depth_ft": 0.6
+      "width_ft": 1,
+      "depth_ft": 0.8
     },
     "keywords": [
       "power",
@@ -272,15 +272,15 @@ export const infrastructureIcons: IconDescriptor[] = [
       "quad",
       "mains"
     ],
-    "body": "<rect x=\"14\" y=\"18\" width=\"72\" height=\"64\" rx=\"4\"/><polyline points=\"52,22 45,34 51,34 47,44 58,30 52,30 56,22\" class=\"lp-ico-detail\"/><rect x=\"22\" y=\"46\" width=\"26\" height=\"14\" rx=\"2\" class=\"lp-ico-detail\"/><rect x=\"52\" y=\"46\" width=\"26\" height=\"14\" rx=\"2\" class=\"lp-ico-detail\"/><rect x=\"22\" y=\"64\" width=\"26\" height=\"14\" rx=\"2\" class=\"lp-ico-detail\"/><rect x=\"52\" y=\"64\" width=\"26\" height=\"14\" rx=\"2\" class=\"lp-ico-detail\"/>"
+    "body": "<rect x=\"16\" y=\"16\" width=\"68\" height=\"68\" rx=\"6\"/><path d=\"M53 22 L45 33 L50 33 L47 44 L57 30 L51 30 Z\" class=\"lp-ico-detail\"/><rect x=\"31\" y=\"44\" width=\"10\" height=\"12\" rx=\"2\" class=\"lp-ico-detail\"/><line x1=\"34\" y1=\"46.5\" x2=\"34\" y2=\"50.5\" class=\"lp-ico-detail\"/><line x1=\"38\" y1=\"46.5\" x2=\"38\" y2=\"50.5\" class=\"lp-ico-detail\"/><circle cx=\"36\" cy=\"53.5\" r=\"0.9\" class=\"lp-ico-detail\"/><rect x=\"31\" y=\"64\" width=\"10\" height=\"12\" rx=\"2\" class=\"lp-ico-detail\"/><line x1=\"34\" y1=\"66.5\" x2=\"34\" y2=\"70.5\" class=\"lp-ico-detail\"/><line x1=\"38\" y1=\"66.5\" x2=\"38\" y2=\"70.5\" class=\"lp-ico-detail\"/><circle cx=\"36\" cy=\"73.5\" r=\"0.9\" class=\"lp-ico-detail\"/><rect x=\"59\" y=\"44\" width=\"10\" height=\"12\" rx=\"2\" class=\"lp-ico-detail\"/><line x1=\"62\" y1=\"46.5\" x2=\"62\" y2=\"50.5\" class=\"lp-ico-detail\"/><line x1=\"66\" y1=\"46.5\" x2=\"66\" y2=\"50.5\" class=\"lp-ico-detail\"/><circle cx=\"64\" cy=\"53.5\" r=\"0.9\" class=\"lp-ico-detail\"/><rect x=\"59\" y=\"64\" width=\"10\" height=\"12\" rx=\"2\" class=\"lp-ico-detail\"/><line x1=\"62\" y1=\"66.5\" x2=\"62\" y2=\"70.5\" class=\"lp-ico-detail\"/><line x1=\"66\" y1=\"66.5\" x2=\"66\" y2=\"70.5\" class=\"lp-ico-detail\"/><circle cx=\"64\" cy=\"73.5\" r=\"0.9\" class=\"lp-ico-detail\"/>"
   },
   {
     "name": "infra-power-8",
     "category": "infrastructure",
     "label": "Power 8",
     "footprint": {
-      "width_ft": 1.2,
-      "depth_ft": 0.6
+      "width_ft": 1.6,
+      "depth_ft": 0.8
     },
     "keywords": [
       "power",
@@ -290,7 +290,7 @@ export const infrastructureIcons: IconDescriptor[] = [
       "strip",
       "mains"
     ],
-    "body": "<rect x=\"6\" y=\"26\" width=\"88\" height=\"48\" rx=\"4\"/><polyline points=\"50,30 44,40 49,40 46,48 56,36 51,36 54,30\" class=\"lp-ico-detail\"/><rect x=\"10\" y=\"42\" width=\"16\" height=\"12\" rx=\"2\" class=\"lp-ico-detail\"/><rect x=\"30\" y=\"42\" width=\"16\" height=\"12\" rx=\"2\" class=\"lp-ico-detail\"/><rect x=\"54\" y=\"42\" width=\"16\" height=\"12\" rx=\"2\" class=\"lp-ico-detail\"/><rect x=\"74\" y=\"42\" width=\"16\" height=\"12\" rx=\"2\" class=\"lp-ico-detail\"/><rect x=\"10\" y=\"58\" width=\"16\" height=\"12\" rx=\"2\" class=\"lp-ico-detail\"/><rect x=\"30\" y=\"58\" width=\"16\" height=\"12\" rx=\"2\" class=\"lp-ico-detail\"/><rect x=\"54\" y=\"58\" width=\"16\" height=\"12\" rx=\"2\" class=\"lp-ico-detail\"/><rect x=\"74\" y=\"58\" width=\"16\" height=\"12\" rx=\"2\" class=\"lp-ico-detail\"/>"
+    "body": "<rect x=\"8\" y=\"18\" width=\"84\" height=\"64\" rx=\"6\"/><path d=\"M53 22 L45 33 L50 33 L47 44 L57 30 L51 30 Z\" class=\"lp-ico-detail\"/><rect x=\"19\" y=\"44\" width=\"10\" height=\"12\" rx=\"2\" class=\"lp-ico-detail\"/><line x1=\"22\" y1=\"46.5\" x2=\"22\" y2=\"50.5\" class=\"lp-ico-detail\"/><line x1=\"26\" y1=\"46.5\" x2=\"26\" y2=\"50.5\" class=\"lp-ico-detail\"/><circle cx=\"24\" cy=\"53.5\" r=\"0.9\" class=\"lp-ico-detail\"/><rect x=\"19\" y=\"64\" width=\"10\" height=\"12\" rx=\"2\" class=\"lp-ico-detail\"/><line x1=\"22\" y1=\"66.5\" x2=\"22\" y2=\"70.5\" class=\"lp-ico-detail\"/><line x1=\"26\" y1=\"66.5\" x2=\"26\" y2=\"70.5\" class=\"lp-ico-detail\"/><circle cx=\"24\" cy=\"73.5\" r=\"0.9\" class=\"lp-ico-detail\"/><rect x=\"36\" y=\"44\" width=\"10\" height=\"12\" rx=\"2\" class=\"lp-ico-detail\"/><line x1=\"39\" y1=\"46.5\" x2=\"39\" y2=\"50.5\" class=\"lp-ico-detail\"/><line x1=\"43\" y1=\"46.5\" x2=\"43\" y2=\"50.5\" class=\"lp-ico-detail\"/><circle cx=\"41\" cy=\"53.5\" r=\"0.9\" class=\"lp-ico-detail\"/><rect x=\"36\" y=\"64\" width=\"10\" height=\"12\" rx=\"2\" class=\"lp-ico-detail\"/><line x1=\"39\" y1=\"66.5\" x2=\"39\" y2=\"70.5\" class=\"lp-ico-detail\"/><line x1=\"43\" y1=\"66.5\" x2=\"43\" y2=\"70.5\" class=\"lp-ico-detail\"/><circle cx=\"41\" cy=\"73.5\" r=\"0.9\" class=\"lp-ico-detail\"/><rect x=\"54\" y=\"44\" width=\"10\" height=\"12\" rx=\"2\" class=\"lp-ico-detail\"/><line x1=\"57\" y1=\"46.5\" x2=\"57\" y2=\"50.5\" class=\"lp-ico-detail\"/><line x1=\"61\" y1=\"46.5\" x2=\"61\" y2=\"50.5\" class=\"lp-ico-detail\"/><circle cx=\"59\" cy=\"53.5\" r=\"0.9\" class=\"lp-ico-detail\"/><rect x=\"54\" y=\"64\" width=\"10\" height=\"12\" rx=\"2\" class=\"lp-ico-detail\"/><line x1=\"57\" y1=\"66.5\" x2=\"57\" y2=\"70.5\" class=\"lp-ico-detail\"/><line x1=\"61\" y1=\"66.5\" x2=\"61\" y2=\"70.5\" class=\"lp-ico-detail\"/><circle cx=\"59\" cy=\"73.5\" r=\"0.9\" class=\"lp-ico-detail\"/><rect x=\"71\" y=\"44\" width=\"10\" height=\"12\" rx=\"2\" class=\"lp-ico-detail\"/><line x1=\"74\" y1=\"46.5\" x2=\"74\" y2=\"50.5\" class=\"lp-ico-detail\"/><line x1=\"78\" y1=\"46.5\" x2=\"78\" y2=\"50.5\" class=\"lp-ico-detail\"/><circle cx=\"76\" cy=\"53.5\" r=\"0.9\" class=\"lp-ico-detail\"/><rect x=\"71\" y=\"64\" width=\"10\" height=\"12\" rx=\"2\" class=\"lp-ico-detail\"/><line x1=\"74\" y1=\"66.5\" x2=\"74\" y2=\"70.5\" class=\"lp-ico-detail\"/><line x1=\"78\" y1=\"66.5\" x2=\"78\" y2=\"70.5\" class=\"lp-ico-detail\"/><circle cx=\"76\" cy=\"73.5\" r=\"0.9\" class=\"lp-ico-detail\"/>"
   },
   {
     "name": "infra-distro",
@@ -308,7 +308,7 @@ export const infrastructureIcons: IconDescriptor[] = [
       "pwr",
       "edison"
     ],
-    "body": "<rect x=\"10\" y=\"18\" width=\"80\" height=\"64\" rx=\"5\"/><polyline points=\"40,24 30,44 39,44 34,60 52,36 42,36 47,24\" class=\"lp-ico-detail\"/><rect x=\"54\" y=\"28\" width=\"30\" height=\"12\" rx=\"2\" class=\"lp-ico-detail\"/><rect x=\"54\" y=\"44\" width=\"30\" height=\"12\" rx=\"2\" class=\"lp-ico-detail\"/><text class=\"lp-ico-label\" x=\"40\" y=\"70\" text-anchor=\"middle\" dominant-baseline=\"central\" font-size=\"15\">PWR</text>"
+    "body": "<rect x=\"12\" y=\"20\" width=\"76\" height=\"60\" rx=\"6\"/><path d=\"M31 30 L23 41 L28 41 L25 52 L35 38 L29 38 Z\" class=\"lp-ico-detail\"/><rect x=\"47\" y=\"32\" width=\"10\" height=\"12\" rx=\"2\" class=\"lp-ico-detail\"/><line x1=\"50\" y1=\"34.5\" x2=\"50\" y2=\"38.5\" class=\"lp-ico-detail\"/><line x1=\"54\" y1=\"34.5\" x2=\"54\" y2=\"38.5\" class=\"lp-ico-detail\"/><circle cx=\"52\" cy=\"41.5\" r=\"0.9\" class=\"lp-ico-detail\"/><rect x=\"47\" y=\"56\" width=\"10\" height=\"12\" rx=\"2\" class=\"lp-ico-detail\"/><line x1=\"50\" y1=\"58.5\" x2=\"50\" y2=\"62.5\" class=\"lp-ico-detail\"/><line x1=\"54\" y1=\"58.5\" x2=\"54\" y2=\"62.5\" class=\"lp-ico-detail\"/><circle cx=\"52\" cy=\"65.5\" r=\"0.9\" class=\"lp-ico-detail\"/><rect x=\"67\" y=\"32\" width=\"10\" height=\"12\" rx=\"2\" class=\"lp-ico-detail\"/><line x1=\"70\" y1=\"34.5\" x2=\"70\" y2=\"38.5\" class=\"lp-ico-detail\"/><line x1=\"74\" y1=\"34.5\" x2=\"74\" y2=\"38.5\" class=\"lp-ico-detail\"/><circle cx=\"72\" cy=\"41.5\" r=\"0.9\" class=\"lp-ico-detail\"/><rect x=\"67\" y=\"56\" width=\"10\" height=\"12\" rx=\"2\" class=\"lp-ico-detail\"/><line x1=\"70\" y1=\"58.5\" x2=\"70\" y2=\"62.5\" class=\"lp-ico-detail\"/><line x1=\"74\" y1=\"58.5\" x2=\"74\" y2=\"62.5\" class=\"lp-ico-detail\"/><circle cx=\"72\" cy=\"65.5\" r=\"0.9\" class=\"lp-ico-detail\"/><text class=\"lp-ico-label\" x=\"28\" y=\"64\" text-anchor=\"middle\" dominant-baseline=\"central\" font-size=\"11\">PWR</text>"
   },
   {
     "name": "infra-truss-1x1",

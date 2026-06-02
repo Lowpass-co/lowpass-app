@@ -122,7 +122,7 @@ export const signalIcons: IconDescriptor[] = [
     "label": "Patch panel",
     "footprint": {
       "width_ft": 1.6,
-      "depth_ft": 0.5
+      "depth_ft": 0.4
     },
     "body": "<rect x=\"6\" y=\"36\" width=\"88\" height=\"28\" rx=\"2\"/><circle cx=\"18\" cy=\"50\" r=\"4\" class=\"lp-ico-detail\"/><circle cx=\"30\" cy=\"50\" r=\"4\" class=\"lp-ico-detail\"/><circle cx=\"42\" cy=\"50\" r=\"4\" class=\"lp-ico-detail\"/><circle cx=\"54\" cy=\"50\" r=\"4\" class=\"lp-ico-detail\"/><circle cx=\"66\" cy=\"50\" r=\"4\" class=\"lp-ico-detail\"/><circle cx=\"78\" cy=\"50\" r=\"4\" class=\"lp-ico-detail\"/><line x1=\"2\" y1=\"42\" x2=\"6\" y2=\"42\" class=\"lp-ico-detail\"/><line x1=\"2\" y1=\"58\" x2=\"6\" y2=\"58\" class=\"lp-ico-detail\"/><line x1=\"94\" y1=\"42\" x2=\"98\" y2=\"42\" class=\"lp-ico-detail\"/><line x1=\"94\" y1=\"58\" x2=\"98\" y2=\"58\" class=\"lp-ico-detail\"/>",
     "keywords": [
@@ -235,7 +235,7 @@ export const signalIcons: IconDescriptor[] = [
     "label": "Network switch",
     "footprint": {
       "width_ft": 1,
-      "depth_ft": 0.4
+      "depth_ft": 0.5
     },
     "body": "<rect x=\"8\" y=\"38\" width=\"84\" height=\"24\" rx=\"3\"/><rect x=\"15\" y=\"45\" width=\"7\" height=\"10\" rx=\"1\" class=\"lp-ico-detail\"/><rect x=\"25\" y=\"45\" width=\"7\" height=\"10\" rx=\"1\" class=\"lp-ico-detail\"/><rect x=\"35\" y=\"45\" width=\"7\" height=\"10\" rx=\"1\" class=\"lp-ico-detail\"/><rect x=\"45\" y=\"45\" width=\"7\" height=\"10\" rx=\"1\" class=\"lp-ico-detail\"/><rect x=\"55\" y=\"45\" width=\"7\" height=\"10\" rx=\"1\" class=\"lp-ico-detail\"/><rect x=\"65\" y=\"45\" width=\"7\" height=\"10\" rx=\"1\" class=\"lp-ico-detail\"/><rect x=\"75\" y=\"45\" width=\"7\" height=\"10\" rx=\"1\" class=\"lp-ico-detail\"/><rect x=\"85\" y=\"45\" width=\"3\" height=\"10\" rx=\"1\" class=\"lp-ico-detail\"/>",
     "keywords": [

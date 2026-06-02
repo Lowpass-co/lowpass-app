@@ -147,7 +147,7 @@ export const lightingIcons: IconDescriptor[] = [
     "label": "Follow spot",
     "footprint": {
       "width_ft": 1.5,
-      "depth_ft": 3
+      "depth_ft": 2
     },
     "keywords": [
       "follow",
