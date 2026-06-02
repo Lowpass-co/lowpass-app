@@ -106,9 +106,17 @@ export function ProductRail({ active, homeHref }: ProductRailProps) {
       {PRODUCTS.map((p) => {
         if (!entitlements[p.flag]) return null;
         const isActive = active === p.key;
+        // IA tour-flow fix §1 — a tour-scoped product with no tour
+        // selected can't render anything useful. Dim it so the rail
+        // reads "not yet available" (intentional, not broken), and send
+        // the click to artist home where a tour gets picked — never to
+        // the dead workspace-level fall-through / 404.
+        const tourRequired = p.tourScoped && !selectedTourId;
         let href = p.href;
         if (p.key === 'home' && homeHref) {
           href = homeHref;
+        } else if (tourRequired) {
+          href = homeHref ?? '/artists';
         } else if (p.tourScoped && selectedTourId) {
           href = `${p.href}/${selectedTourId}`;
         }
@@ -124,9 +132,13 @@ export function ProductRail({ active, homeHref }: ProductRailProps) {
               color: isActive
                 ? 'var(--color-lp-orange)'
                 : 'var(--lp-text-tertiary)',
+              opacity: tourRequired ? 0.4 : 1,
             }}
-            title={p.label}
-            aria-label={p.label}
+            title={tourRequired ? `${p.label} — pick a tour first` : p.label}
+            aria-label={
+              tourRequired ? `${p.label} (pick a tour first)` : p.label
+            }
+            aria-disabled={tourRequired || undefined}
             aria-current={isActive ? 'page' : undefined}
           >
             <p.Icon className="h-4 w-4" strokeWidth={isActive ? 2.5 : 2} />

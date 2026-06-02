@@ -1,14 +1,27 @@
 /* ============================================
-   LOWPASS — /advance → /artists (IA Cleanup §I1.1)
+   LOWPASS — Advance · workspace-level router (IA tour-flow fix §2)
 
-   Workspace-level /advance was a shell-v1 placeholder
-   surfacing cross-tour advance. Unreachable from current
-   nav. Live advance surface is /advance/[tourId]/[routingId]
-   per tour. Workspace URL becomes a redirect.
+   Advance is tour-scoped. /advance used to blind-redirect to /artists,
+   losing the user's intent. Now it mirrors the Budget / Operations
+   pattern:
+
+   - context has a selected tour → WorkspaceTourRedirect hard-replaces
+     to /advance/{tourId} (its layout resolves the active show)
+   - no tour anywhere → "Select a tour to open Advance" prompt with a
+     link to the artist picker
+
+   Live per-show surface stays at /advance/[tourId]/[routingId].
    ============================================ */
 
-import { redirect } from 'next/navigation';
+import { ProductShell } from '@/components/shell-v2';
+import { WorkspaceTourRedirect } from '@/components/shell-v2/WorkspaceTourRedirect';
+import { SelectTourPrompt } from '@/components/shell-v2/SelectTourPrompt';
 
-export default function AdvanceWorkspacePage(): never {
-  redirect('/artists');
+export default function AdvanceWorkspacePage() {
+  return (
+    <ProductShell active="advance" artistId={null} productName="Advance">
+      <WorkspaceTourRedirect base="/advance" />
+      <SelectTourPrompt product="Advance" />
+    </ProductShell>
+  );
 }

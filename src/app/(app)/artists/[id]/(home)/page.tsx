@@ -27,6 +27,7 @@ import Link from 'next/link';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { getHomeData } from '@/server/home/getHomeData';
 import { ArtistHero } from '@/components/artists/ArtistHero';
+import { TourPicker } from '@/components/artists/TourPicker';
 import { ArtistProductCards } from '@/components/artists/ArtistProductCards';
 import { ArtistHomeStagger } from '@/components/artists/ArtistHomeStagger';
 import { NewReleasesGrid } from '@/components/artists/NewReleasesGrid';
@@ -180,6 +181,13 @@ export default async function ArtistHomePage({
               'var(--lp-space-6) var(--lp-space-6) var(--lp-space-6)',
           }}
         >
+          {/* IA tour-flow fix §3 — primary tour-selection surface. When
+              no tour is selected it's the hero CTA; once one is, it
+              collapses to a compact "Active tour" banner. */}
+          <TourPicker tours={tours} />
+
+          <div style={{ height: 'var(--lp-space-6)' }} />
+
           <section
             className="grid"
             style={{
