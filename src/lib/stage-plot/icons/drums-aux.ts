@@ -91,7 +91,7 @@ export const drumAuxIcons: IconDescriptor[] = [
       "percussion",
       "aux"
     ],
-    "body": "<rect x=\"14\" y=\"22\" width=\"72\" height=\"56\" rx=\"8\"/><rect x=\"24\" y=\"32\" width=\"16\" height=\"14\" rx=\"2\" class=\"lp-ico-detail\"/><rect x=\"46\" y=\"32\" width=\"16\" height=\"14\" rx=\"2\" class=\"lp-ico-detail\"/><rect x=\"68\" y=\"32\" width=\"10\" height=\"14\" rx=\"2\" class=\"lp-ico-detail\"/><rect x=\"24\" y=\"52\" width=\"16\" height=\"14\" rx=\"2\" class=\"lp-ico-detail\"/><rect x=\"46\" y=\"52\" width=\"16\" height=\"14\" rx=\"2\" class=\"lp-ico-detail\"/><rect x=\"68\" y=\"52\" width=\"10\" height=\"14\" rx=\"2\" class=\"lp-ico-detail\"/>"
+    "body": "<rect x=\"12\" y=\"20\" width=\"76\" height=\"60\" rx=\"6\"/><rect x=\"18\" y=\"26\" width=\"22\" height=\"12\" rx=\"2\" class=\"lp-ico-detail\"/><circle cx=\"52\" cy=\"31\" r=\"2.5\" class=\"lp-ico-detail\"/><circle cx=\"61\" cy=\"31\" r=\"2.5\" class=\"lp-ico-detail\"/><circle cx=\"70\" cy=\"31\" r=\"2.5\" class=\"lp-ico-detail\"/><rect x=\"18\" y=\"44\" width=\"18\" height=\"14\" rx=\"2\" class=\"lp-ico-detail\"/><rect x=\"41\" y=\"44\" width=\"18\" height=\"14\" rx=\"2\" class=\"lp-ico-detail\"/><rect x=\"64\" y=\"44\" width=\"18\" height=\"14\" rx=\"2\" class=\"lp-ico-detail\"/><rect x=\"18\" y=\"62\" width=\"18\" height=\"14\" rx=\"2\" class=\"lp-ico-detail\"/><rect x=\"41\" y=\"62\" width=\"18\" height=\"14\" rx=\"2\" class=\"lp-ico-detail\"/><rect x=\"64\" y=\"62\" width=\"18\" height=\"14\" rx=\"2\" class=\"lp-ico-detail\"/>"
   },
   {
     "name": "drum-tambourine",
@@ -108,7 +108,7 @@ export const drumAuxIcons: IconDescriptor[] = [
       "aux",
       "hand"
     ],
-    "body": "<circle cx=\"50\" cy=\"50\" r=\"34\"/><circle cx=\"50\" cy=\"50\" r=\"24\" class=\"lp-ico-detail\"/><line x1=\"50\" y1=\"16\" x2=\"50\" y2=\"26\" class=\"lp-ico-detail\"/><line x1=\"84\" y1=\"50\" x2=\"74\" y2=\"50\" class=\"lp-ico-detail\"/><line x1=\"50\" y1=\"84\" x2=\"50\" y2=\"74\" class=\"lp-ico-detail\"/><line x1=\"16\" y1=\"50\" x2=\"26\" y2=\"50\" class=\"lp-ico-detail\"/>"
+    "body": "<circle cx=\"50\" cy=\"50\" r=\"34\"/><circle cx=\"50\" cy=\"50\" r=\"21\" class=\"lp-ico-detail\"/><circle cx=\"79\" cy=\"50\" r=\"3\" class=\"lp-ico-detail\"/><circle cx=\"71\" cy=\"71\" r=\"3\" class=\"lp-ico-detail\"/><circle cx=\"50\" cy=\"79\" r=\"3\" class=\"lp-ico-detail\"/><circle cx=\"29\" cy=\"71\" r=\"3\" class=\"lp-ico-detail\"/><circle cx=\"21\" cy=\"50\" r=\"3\" class=\"lp-ico-detail\"/><circle cx=\"29\" cy=\"29\" r=\"3\" class=\"lp-ico-detail\"/><circle cx=\"50\" cy=\"21\" r=\"3\" class=\"lp-ico-detail\"/><circle cx=\"71\" cy=\"29\" r=\"3\" class=\"lp-ico-detail\"/>"
   },
   {
     "name": "drum-roto",

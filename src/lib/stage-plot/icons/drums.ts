@@ -85,11 +85,14 @@ export const drumIcons: IconDescriptor[] = [
     footprint: { width_ft: 1.5, depth_ft: 1.5 },
     keywords: ['ft', '16', 'tt3'],
     body:
-      '<circle cx="50" cy="46" r="31"/>' +
-      '<circle cx="50" cy="46" r="5" class="lp-ico-detail"/>' +
-      '<line x1="24" y1="64" x2="18" y2="94" class="lp-ico-detail"/>' +
-      '<line x1="50" y1="77" x2="50" y2="96" class="lp-ico-detail"/>' +
-      '<line x1="76" y1="64" x2="82" y2="94" class="lp-ico-detail"/>',
+      '<circle cx="50" cy="50" r="31"/>' +
+      '<circle cx="50" cy="50" r="5" class="lp-ico-detail"/>' +
+      '<line x1="28" y1="22" x2="36" y2="30" class="lp-ico-detail"/>' +
+      '<line x1="36" y1="22" x2="28" y2="30" class="lp-ico-detail"/>' +
+      '<line x1="46" y1="20" x2="54" y2="28" class="lp-ico-detail"/>' +
+      '<line x1="54" y1="20" x2="46" y2="28" class="lp-ico-detail"/>' +
+      '<line x1="64" y1="22" x2="72" y2="30" class="lp-ico-detail"/>' +
+      '<line x1="72" y1="22" x2="64" y2="30" class="lp-ico-detail"/>',
   },
   {
     name: 'drum-hihat',
