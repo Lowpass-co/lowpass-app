@@ -30,6 +30,7 @@ import { useAutoSave } from '@/lib/forms/useAutoSave';
 import { SaveStatus } from '@/components/forms/SaveStatus';
 import { BrandedSelect } from '@/components/ui/BrandedSelect';
 import { ROLE_TAG_OPTIONS, type RoleTag } from '@/lib/personnel/role-tags';
+import { PersonnelRatesSection } from './PersonnelRatesSection';
 import type {
   PersonnelListItem,
   PersonnelStatus,
@@ -546,6 +547,27 @@ function PersonnelManageEditor({
               {validationError}
             </div>
           ) : null}
+
+          {/* §P2 — payroll rates (show / travel / per-diem +
+              admin-only internal "Lowpass" rate). Targets
+              personnel_rates, separate from the single
+              rate_amount field above which lives on
+              tour_personnel. Self-contained: own fetch +
+              per-field auto-save. Currency hint from the
+              assignment's rate currency (falls back to GBP). */}
+          <div
+            style={{
+              paddingTop: 'var(--lp-space-3)',
+              borderTop: '1px solid var(--lp-border)',
+            }}
+          >
+            <PersonnelRatesSection
+              tourId={tourId}
+              memberId={member.id}
+              personId={member.person_id}
+              currency={state.rateCurrency || 'GBP'}
+            />
+          </div>
 
           {/* Footer — Save button is gone; SaveStatus pill is the
               only feedback. Cancel restores the open-time
