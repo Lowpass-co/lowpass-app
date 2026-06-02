@@ -10,7 +10,8 @@
 'use client';
 
 import { getIcon } from '@/lib/stage-plot/icons';
-import type { EditorItem, EditorPlot } from '@/lib/stage-plot/editor-types';
+import { octantLabel } from '@/lib/stage-plot/geometry';
+import type { Channel, EditorItem, EditorPlot } from '@/lib/stage-plot/editor-types';
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
@@ -37,12 +38,13 @@ export interface ItemPropertiesProps {
   plot: EditorPlot;
   item: EditorItem | null;
   selectedCount?: number;
+  channels?: Channel[];
   onUpdateItem: (patch: Partial<EditorItem>) => void;
   onDeleteItem: () => void;
   onUpdatePlot: (patch: Partial<EditorPlot>) => void;
 }
 
-export function ItemProperties({ plot, item, selectedCount = 0, onUpdateItem, onDeleteItem, onUpdatePlot }: ItemPropertiesProps) {
+export function ItemProperties({ plot, item, selectedCount = 0, channels = [], onUpdateItem, onDeleteItem, onUpdatePlot }: ItemPropertiesProps) {
   return (
     <div style={{ height: '100%', overflowY: 'auto', borderLeft: '1px solid var(--lp-border)', background: 'var(--lp-bg)', padding: 14, width: 260 }}>
       {selectedCount > 1 ? (
@@ -92,6 +94,25 @@ export function ItemProperties({ plot, item, selectedCount = 0, onUpdateItem, on
               <Row label="Width (ft)"><Num value={item.widthFt ?? getIcon(item.iconName)?.footprint.width_ft ?? 1} min={0.1} onChange={(n) => onUpdateItem({ widthFt: n })} /></Row>
               <Row label="Depth (ft)"><Num value={item.depthFt ?? getIcon(item.iconName)?.footprint.depth_ft ?? 1} min={0.1} onChange={(n) => onUpdateItem({ depthFt: n })} /></Row>
               <Row label="Rotation°"><Num value={item.rotationDeg ?? 0} step={15} onChange={(n) => onUpdateItem({ rotationDeg: n })} /></Row>
+              <Row label="Position">
+                <span style={{ fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text)', fontFamily: 'var(--font-mono, monospace)' }}>
+                  {octantLabel(item.xFt, item.yFt, plot.widthFt, plot.depthFt)}
+                </span>
+              </Row>
+              {channels.length > 0 && (
+                <Row label="Channel">
+                  <select
+                    value={item.channelRowId ?? ''}
+                    onChange={(e) => onUpdateItem({ channelRowId: e.target.value || null })}
+                    style={{ width: 132, fontSize: 'var(--lp-text-xs)', padding: '4px 6px', borderRadius: 5, border: '1px solid var(--lp-border)', background: 'var(--lp-surface)', color: 'var(--lp-text)' }}
+                  >
+                    <option value="">— None —</option>
+                    {channels.map((c) => (
+                      <option key={c.id} value={c.id}>{c.number}. {c.label}</option>
+                    ))}
+                  </select>
+                </Row>
+              )}
             </>
           )}
 
@@ -124,6 +145,7 @@ export function ItemProperties({ plot, item, selectedCount = 0, onUpdateItem, on
           <Row label="Centre line"><input type="checkbox" checked={plot.showCenterLine} onChange={(e) => onUpdatePlot({ showCenterLine: e.target.checked })} /></Row>
           <Row label="DS centre cross"><input type="checkbox" checked={plot.showDsCross} onChange={(e) => onUpdatePlot({ showDsCross: e.target.checked })} /></Row>
           <Row label="Lateral markers"><input type="checkbox" checked={plot.showLateralMarkers} onChange={(e) => onUpdatePlot({ showLateralMarkers: e.target.checked })} /></Row>
+          <Row label="Channel overlay"><input type="checkbox" checked={plot.showChannels} onChange={(e) => onUpdatePlot({ showChannels: e.target.checked })} /></Row>
           <Row label="Snap to grid"><input type="checkbox" checked={plot.snap} onChange={(e) => onUpdatePlot({ snap: e.target.checked })} /></Row>
           <Row label="Brand colour">
             <input type="color" value={plot.brandColor} style={{ width: 40, height: 26, border: 'none', background: 'none' }}

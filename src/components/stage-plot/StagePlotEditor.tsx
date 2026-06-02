@@ -15,7 +15,7 @@ import { IconPalette } from '@/components/stage-plot/IconPalette';
 import { ItemProperties } from '@/components/stage-plot/ItemProperties';
 import { StageCanvas } from '@/components/stage-plot/StageCanvas';
 import { buildStagePlotPdfHtml } from '@/lib/stage-plot/pdf-render';
-import { DEFAULT_PLOT, type EditorItem, type EditorPlot } from '@/lib/stage-plot/editor-types';
+import { DEFAULT_PLOT, type Channel, type EditorItem, type EditorPlot } from '@/lib/stage-plot/editor-types';
 
 const uid = (): string =>
   typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `i${Date.now()}${Math.round(Math.random() * 1e6)}`;
@@ -33,12 +33,14 @@ const toolBtn: React.CSSProperties = {
 export interface StagePlotEditorProps {
   initialPlot?: EditorPlot;
   initialItems?: EditorItem[];
+  /** Channel-list rows from the paired channel_list pack (§SP4). */
+  channels?: Channel[];
   onChange?: (plot: EditorPlot, items: EditorItem[]) => void;
   /** Optional header-right slot (export / share buttons). */
   actions?: React.ReactNode;
 }
 
-export function StagePlotEditor({ initialPlot, initialItems, onChange, actions }: StagePlotEditorProps) {
+export function StagePlotEditor({ initialPlot, initialItems, channels = [], onChange, actions }: StagePlotEditorProps) {
   const [plot, setPlot] = useState<EditorPlot>(initialPlot ?? DEFAULT_PLOT);
   const [items, setItems] = useState<EditorItem[]>(initialItems ?? []);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -210,9 +212,11 @@ export function StagePlotEditor({ initialPlot, initialItems, onChange, actions }
             showCenterLine={plot.showCenterLine}
             showDsCross={plot.showDsCross}
             showLateralMarkers={plot.showLateralMarkers}
+            showChannels={plot.showChannels}
             snap={plot.snap}
             brandColor={plot.brandColor}
             items={items}
+            channels={channels}
             selectedIds={selectedIds}
             onSelectItem={selectItem}
             onUpdateItem={updateItem}
@@ -223,6 +227,7 @@ export function StagePlotEditor({ initialPlot, initialItems, onChange, actions }
           plot={plot}
           item={selected}
           selectedCount={selectedIds.length}
+          channels={channels}
           onUpdateItem={updateSelected}
           onDeleteItem={deleteSelected}
           onUpdatePlot={(patch) => setPlot((p) => ({ ...p, ...patch }))}

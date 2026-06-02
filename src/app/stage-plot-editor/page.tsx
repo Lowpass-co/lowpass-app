@@ -10,9 +10,23 @@
 
 import { useEffect, useState } from 'react';
 import { StagePlotEditor } from '@/components/stage-plot/StagePlotEditor';
-import { DEFAULT_PLOT, type EditorItem, type EditorPlot } from '@/lib/stage-plot/editor-types';
+import { DEFAULT_PLOT, type Channel, type EditorItem, type EditorPlot } from '@/lib/stage-plot/editor-types';
 
 const KEY = 'lp:stage-plot-editor:dev';
+
+// Sample channel list (§SP4) so linking is testable without the DB.
+// Colours mimic sub-snakes A/B/C/D.
+const MOCK_CHANNELS: Channel[] = [
+  { id: 'c1', number: 1, label: 'Kick', color: '#ef4444', snakeLabel: 'A' },
+  { id: 'c2', number: 2, label: 'Snare', color: '#ef4444', snakeLabel: 'A' },
+  { id: 'c3', number: 3, label: 'Hi-hat', color: '#ef4444', snakeLabel: 'A' },
+  { id: 'c4', number: 4, label: 'OH L', color: '#3b82f6', snakeLabel: 'B' },
+  { id: 'c5', number: 5, label: 'OH R', color: '#3b82f6', snakeLabel: 'B' },
+  { id: 'c6', number: 6, label: 'Bass DI', color: '#22c55e', snakeLabel: 'C' },
+  { id: 'c7', number: 7, label: 'Gtr 1', color: '#22c55e', snakeLabel: 'C' },
+  { id: 'c8', number: 8, label: 'Lead Vox', color: '#a855f7', snakeLabel: 'D' },
+  { id: 'c9', number: 9, label: 'BV 1', color: '#a855f7', snakeLabel: 'D' },
+];
 
 export default function StagePlotEditorPage() {
   const [data, setData] = useState<{ plot: EditorPlot; items: EditorItem[] } | null>(null);
@@ -41,6 +55,7 @@ export default function StagePlotEditorPage() {
       <StagePlotEditor
         initialPlot={data.plot}
         initialItems={data.items}
+        channels={MOCK_CHANNELS}
         onChange={(plot, items) => {
           try {
             localStorage.setItem(KEY, JSON.stringify({ plot, items }));

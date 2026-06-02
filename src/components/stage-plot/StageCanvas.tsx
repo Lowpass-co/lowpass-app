@@ -17,10 +17,14 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from 're
 import { getCategory, getIcon } from '@/lib/stage-plot/icons';
 import { ICON_BRAND_TINT_PCT } from '@/lib/stage-plot/icons/types';
 import { DEFAULT_VIEW, ft, fitView, snapToGrid, zoomAt, type ViewTransform } from '@/lib/stage-plot/geometry';
-import type { EditorItem } from '@/lib/stage-plot/editor-types';
+import type { Channel, EditorItem } from '@/lib/stage-plot/editor-types';
 
 const DEFAULT_BRAND = '#FF4500';
 export type CanvasItem = EditorItem;
+
+/** Categories that typically take a channel — used for the
+ *  "unlinked" warning (a riser/monitor/light doesn't need one). */
+const INPUT_CATS = new Set(['mics', 'signal', 'strings', 'drums', 'amps', 'keys']);
 
 export interface StageCanvasProps {
   widthFt: number;
@@ -31,8 +35,10 @@ export interface StageCanvasProps {
   showCenterLine?: boolean;
   showDsCross?: boolean;
   showLateralMarkers?: boolean;
+  showChannels?: boolean;
   snap?: boolean;
   items: EditorItem[];
+  channels?: Channel[];
   brandColor?: string;
   selectedIds?: string[];
   onSelectItem?: (id: string | null, additive?: boolean) => void;
@@ -56,8 +62,10 @@ export function StageCanvas({
   showCenterLine = false,
   showDsCross = false,
   showLateralMarkers = false,
+  showChannels = false,
   snap = true,
   items,
+  channels = [],
   brandColor = DEFAULT_BRAND,
   selectedIds = [],
   onSelectItem,
@@ -350,13 +358,31 @@ export function StageCanvas({
             const hpx = ft((it.depthFt ?? icon.footprint.depth_ft) * sc);
             const cx = ft(it.xFt);
             const cy = ft(it.yFt);
+            const catKey = getCategory(icon.category).key;
             const cat = getCategory(icon.category).colorVar;
+            const ch = it.channelRowId ? channels.find((c) => c.id === it.channelRowId) : undefined;
+            // §SP4: a linked channel's sub-snake colour overrides the category tint.
+            const stroke = ch?.color || cat;
             const fill = icon.outline ? 'none' : it.colorTint ?? `color-mix(in srgb, ${brandColor} ${ICON_BRAND_TINT_PCT}%, transparent)`;
-            const style = { fill, stroke: cat, '--lp-cat': cat } as CSSProperties & Record<string, string>;
+            const style = { fill, stroke, '--lp-cat': stroke } as CSSProperties & Record<string, string>;
+            const bx = cx + wpx / 2;
+            const by = cy - hpx / 2;
+            const inputCat = INPUT_CATS.has(catKey);
             return (
               <g key={it.id} data-canvas-item={it.id} transform={`rotate(${it.rotationDeg ?? 0} ${cx} ${cy})`} style={{ cursor: interactive ? 'move' : undefined }}>
                 {sel && <rect x={cx - wpx / 2 - 4} y={cy - hpx / 2 - 4} width={wpx + 8} height={hpx + 8} rx={3} fill="none" stroke="var(--lp-orange)" strokeWidth={1.5} strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />}
                 <svg x={cx - wpx / 2} y={cy - hpx / 2} width={wpx} height={hpx} viewBox={icon.viewBox ?? '0 0 100 100'} preserveAspectRatio="xMidYMid meet" className="lp-canvas-item" style={style} dangerouslySetInnerHTML={{ __html: icon.body }} />
+                {/* §SP4: linked → sub-snake colour + letter badge (colour-blind safe) */}
+                {ch && (
+                  <g>
+                    <rect x={bx - 7} y={by - 7} width={16} height={12} rx={3} fill={ch.color || '#6b7280'} stroke="var(--lp-bg)" strokeWidth={0.75} />
+                    <text x={bx + 1} y={by - 1} fontSize={8} fill="#ffffff" textAnchor="middle" dominantBaseline="central" fontWeight={700}>{ch.snakeLabel || String(ch.number)}</text>
+                  </g>
+                )}
+                {/* unlinked input-source warning */}
+                {!ch && inputCat && channels.length > 0 && <circle cx={bx} cy={by} r={3.5} fill="#f59e0b" stroke="var(--lp-bg)" strokeWidth={0.75} />}
+                {/* channel-number overlay */}
+                {showChannels && ch && <text x={cx} y={cy + hpx / 2 + ft(0.55)} fontSize={ft(0.65)} fill="var(--lp-text-secondary)" textAnchor="middle" fontWeight={700}>{ch.number}</text>}
                 {it.id === soleSel && interactive && <rect data-resize={it.id} x={cx + wpx / 2 + 1} y={cy + hpx / 2 + 1} width={9} height={9} rx={1.5} fill="var(--lp-orange)" style={{ cursor: 'nwse-resize' }} />}
               </g>
             );

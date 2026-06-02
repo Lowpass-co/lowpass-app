@@ -58,6 +58,7 @@ export function rowsToEditor(plot: PlotRow, items: ItemRow[], name: string): { p
       showCenterLine: plot.show_center_line,
       showDsCross: plot.show_ds_cross,
       showLateralMarkers: plot.show_lateral_markers,
+      showChannels: false,
       snap: true,
       brandColor: plot.color_override ?? DEFAULT_PLOT.brandColor,
       units: plot.units,

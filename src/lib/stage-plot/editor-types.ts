@@ -11,6 +11,21 @@ export type StagePlotLayer = 'house' | 'main' | 'annotations';
 /** Icon placement, free text box, or an arrow annotation. */
 export type ItemKind = 'icon' | 'text' | 'arrow';
 
+/** A channel-list row available to link an item to (§SP4). Sourced
+ *  from the paired channel_list pack: channel_list_rows + sub_snakes. */
+export interface Channel {
+  /** channel_list_rows.id */
+  id: string;
+  /** Channel number (row order, 1-based) for the overlay. */
+  number: number;
+  /** channel_name (e.g. "Kick", "Lead Vox"). */
+  label: string;
+  /** sub_snakes.colour (hex) or null if unrouted. */
+  color: string | null;
+  /** Short sub-snake label (the colour-blind badge), e.g. "A". */
+  snakeLabel: string | null;
+}
+
 export interface EditorPlot {
   name: string;
   widthFt: number;
@@ -21,6 +36,8 @@ export interface EditorPlot {
   showCenterLine: boolean;
   showDsCross: boolean;
   showLateralMarkers: boolean;
+  /** Overlay channel numbers/labels on linked items (§SP4, default off). */
+  showChannels: boolean;
   snap: boolean;
   brandColor: string;
   units: 'ft' | 'm';
@@ -67,6 +84,7 @@ export const DEFAULT_PLOT: EditorPlot = {
   showCenterLine: false,
   showDsCross: false,
   showLateralMarkers: false,
+  showChannels: false,
   snap: true,
   brandColor: '#FF4500',
   units: 'ft',
