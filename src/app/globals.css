@@ -1355,3 +1355,45 @@ textarea::selection,
 .lp-stage-icon[data-mode='canvas'] svg .lp-ico-label {
   fill: var(--ico-stroke, currentColor);
 }
+
+/* ============================================================
+   Stage Plot canvas (§SP2a). Items render as nested <svg> in the
+   stage SVG; fill/stroke come from per-item inline style, detail
+   + label sub-elements styled here. Chrome (stage, grid, rulers,
+   cardinals) is token-driven.
+   ============================================================ */
+.lp-canvas-item {
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.lp-canvas-item :is(path, rect, circle, ellipse, line, polyline, polygon) {
+  vector-effect: non-scaling-stroke;
+}
+.lp-canvas-item .lp-ico-detail {
+  fill: none;
+}
+.lp-canvas-item .lp-ico-label {
+  stroke: none;
+  fill: var(--lp-cat, currentColor);
+}
+.lp-canvas-stage {
+  fill: var(--lp-surface);
+  stroke: var(--lp-border-strong);
+}
+.lp-canvas-grid-dot {
+  fill: var(--lp-border-strong);
+}
+.lp-canvas-ruler {
+  stroke: var(--lp-border);
+}
+.lp-canvas-ruler-text,
+.lp-canvas-cardinal {
+  fill: var(--lp-text-tertiary);
+  font-size: var(--lp-text-2xs);
+}
+.lp-canvas-audience {
+  fill: var(--lp-text-secondary);
+  font-size: var(--lp-text-xs);
+  letter-spacing: 0.25em;
+}

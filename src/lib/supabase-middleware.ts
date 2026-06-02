@@ -62,7 +62,7 @@ export async function updateSession(request: NextRequest) {
        Allowlisted here so it can be browsed without a session
        while building the icon library. Never public in prod. */
     (process.env.NODE_ENV !== 'production' &&
-      request.nextUrl.pathname.startsWith('/stage-plot-icon-preview'));
+      request.nextUrl.pathname.startsWith('/stage-plot-'));
 
   if (!user && !isAuthRoute && !isPublicRoute) {
     const url = request.nextUrl.clone();
