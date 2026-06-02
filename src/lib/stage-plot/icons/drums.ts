@@ -98,11 +98,12 @@ export const drumIcons: IconDescriptor[] = [
     footprint: { width_ft: 1.15, depth_ft: 1.15 },
     viewBox: '0 0 100 100',
     keywords: ['hh', 'hats', 'cymbal'],
-    // two stacked thin ellipses (bottom cymbal filled, top offset).
+    // OG concentric-circle hi-hat (top-down: cymbal disc + groove ring
+    // + centre bell), box-filling for footprint accuracy.
     body:
-      '<ellipse cx="50" cy="55" rx="45" ry="40"/>' +
-      '<ellipse cx="50" cy="45" rx="40" ry="35" class="lp-ico-detail"/>' +
-      '<circle cx="50" cy="50" r="5" class="lp-ico-detail"/>',
+      '<circle cx="50" cy="50" r="45"/>' +
+      '<circle cx="50" cy="50" r="30" class="lp-ico-detail"/>' +
+      '<circle cx="50" cy="50" r="6" class="lp-ico-detail"/>',
   },
   { ...canon('drum-crash') },
   {

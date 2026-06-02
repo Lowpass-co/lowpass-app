@@ -50,13 +50,15 @@
 import type { IconDescriptor } from './types';
 
 // Shared bolt glyph for the power family (detail = stroked outline).
-const BOLT = '<polygon points="27,9 15,27 23,27 21,41 35,21 27,21" class="lp-ico-detail"/>';
-// Count badge — tucked into the top-right corner CLEAR of the
-// disc (disc r19 leaves the corner empty) so it never overlaps the
-// bolt glyph.
+// Centred on the disc at (28,28) in the 56×56 power viewBox.
+const BOLT = '<polygon points="30,13 18,30 26,30 24,43 38,25 30,25" class="lp-ico-detail"/>';
+// Count badge — top-right CORNER of the 56×56 box, fully clear of the
+// r16 centred disc (gap ≈ 1.3u) so the number is never inside the disc.
 const countBadge = (n: number): string =>
-  `<circle cx="41" cy="9" r="7.5" class="lp-ico-detail"/>` +
-  `<text class="lp-ico-label" x="41" y="9" text-anchor="middle" dominant-baseline="central" font-size="11">${n}</text>`;
+  `<circle cx="46" cy="11" r="7.5" class="lp-ico-detail"/>` +
+  `<text class="lp-ico-label" x="46" y="11" text-anchor="middle" dominant-baseline="central" font-size="11">${n}</text>`;
+// The power disc, centred in the 56×56 box.
+const POWER_DISC = '<circle cx="28" cy="28" r="16"/>';
 
 /* ── KICK — 3 treatments for Adam to pick (debug page only) ────
    All: rounded-rect shell (1.8w × 1.4d), rx = 30% of the shorter
@@ -252,36 +254,36 @@ export const canonicalIcons: IconDescriptor[] = [
     category: 'infrastructure',
     label: 'Power (single)',
     footprint: { width_ft: 0.5, depth_ft: 0.5 },
-    viewBox: '0 0 50 50',
+    viewBox: '0 0 56 56',
     keywords: ['power', 'edison', '120v', 'single', 'canonical'],
-    body: '<circle cx="25" cy="25" r="19"/>' + BOLT,
+    body: POWER_DISC + BOLT,
   },
   {
     name: 'power-2',
     category: 'infrastructure',
     label: 'Power (duplex ×2)',
     footprint: { width_ft: 0.5, depth_ft: 0.5 },
-    viewBox: '0 0 50 50',
+    viewBox: '0 0 56 56',
     keywords: ['power', 'duplex', 'quad', '120v', 'canonical'],
-    body: '<circle cx="25" cy="25" r="19"/>' + BOLT + countBadge(2),
+    body: POWER_DISC + BOLT + countBadge(2),
   },
   {
     name: 'power-4',
     category: 'infrastructure',
     label: 'Power (4-way)',
     footprint: { width_ft: 0.5, depth_ft: 0.5 },
-    viewBox: '0 0 50 50',
+    viewBox: '0 0 56 56',
     keywords: ['power', 'pigtail', '4-way', 'canonical'],
-    body: '<circle cx="25" cy="25" r="19"/>' + BOLT + countBadge(4),
+    body: POWER_DISC + BOLT + countBadge(4),
   },
   {
     name: 'power-6',
     category: 'infrastructure',
     label: 'Power (6-way distro)',
     footprint: { width_ft: 0.5, depth_ft: 0.5 },
-    viewBox: '0 0 50 50',
+    viewBox: '0 0 56 56',
     keywords: ['power', 'distro', '6-way', 'canonical'],
-    body: '<circle cx="25" cy="25" r="19"/>' + BOLT + countBadge(6),
+    body: POWER_DISC + BOLT + countBadge(6),
   },
 
   {
