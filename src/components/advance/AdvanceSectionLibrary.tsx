@@ -319,8 +319,10 @@ function LibraryCard({
     <div
       className="btn-transition"
       style={{
-        background: 'var(--lp-bg-deep)',
-        border: '1px solid var(--lp-border-strong)',
+        background: expanded
+          ? 'color-mix(in srgb, var(--color-lp-orange) 6%, var(--lp-bg-deep))'
+          : 'var(--lp-bg-deep)',
+        border: `1px solid ${expanded ? 'var(--color-lp-orange)' : 'var(--lp-border-strong)'}`,
         borderRadius: 4,
         overflow: 'hidden',
       }}
