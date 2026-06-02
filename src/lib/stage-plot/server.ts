@@ -166,16 +166,22 @@ export async function saveStagePlot(
   }
 }
 
-/** Create an artist-scope stage plot: rider_pack + stage_plots row. */
+/** Create a stage plot (rider_pack + stage_plots row). Artist-scope
+ *  by default; pass tourId for a tour-scope plot (Operations surface).
+ *  The rider_packs CHECK requires scope='tour' ⇒ tour_id NOT NULL. */
 export async function createStagePlot(
   supabase: SupabaseClient,
   workspaceId: string,
   artistId: string,
   name: string,
+  tourId?: string,
 ): Promise<{ id: string; riderPackId: string } | null> {
+  const packRow = tourId
+    ? { workspace_id: workspaceId, scope: 'tour', artist_id: artistId, tour_id: tourId, kind: 'stage_plot', title: name }
+    : { workspace_id: workspaceId, scope: 'artist', artist_id: artistId, kind: 'stage_plot', title: name };
   const { data: pack, error: packErr } = await supabase
     .from('rider_packs')
-    .insert({ workspace_id: workspaceId, scope: 'artist', artist_id: artistId, kind: 'stage_plot', title: name })
+    .insert(packRow)
     .select('id')
     .single();
   if (packErr || !pack) return null;

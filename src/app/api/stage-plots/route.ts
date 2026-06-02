@@ -21,12 +21,15 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => ({}));
   const artistId = (body as { artist_id?: string }).artist_id;
   if (!artistId) return NextResponse.json({ error: 'artist_id is required' }, { status: 400 });
+  // Optional: tour-scope the plot (Operations surface). Omitted → artist scope.
+  const tourId = (body as { tour_id?: string }).tour_id || undefined;
 
   const created = await createStagePlot(
     supabase,
     auth.workspaceId,
     artistId,
     (body as { name?: string }).name || 'Untitled stage plot',
+    tourId,
   );
   if (!created) return NextResponse.json({ error: 'Create failed' }, { status: 500 });
   return NextResponse.json(created, { status: 201 });
