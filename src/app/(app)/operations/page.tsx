@@ -1,22 +1,29 @@
 /* ============================================
-   LOWPASS — Operations cross-tour dashboard (Phase 1 §C placeholder)
+   LOWPASS — Operations · workspace-level router (IA tour-flow fix §2)
 
-   Top-level Operations landing — not tour-scoped. Lists all tours
-   with operations-relevant signals (upcoming shows, missing assets,
-   personnel gaps). Phase 4 ports the real dashboard.
+   Operations is tour-scoped. Landing on /operations with no tour
+   selected used to drop the user on a Phase-4 placeholder that went
+   nowhere. Now it mirrors the Budget pattern:
+
+   - context has a selected tour → WorkspaceTourRedirect hard-replaces
+     to /operations/{tourId}
+   - no tour anywhere → "Select a tour to open Operations" prompt with a
+     link to the artist picker
+
+   The cross-tour Operations dashboard (Phase 4) can mount on this route
+   when built; until then this is a clean tour-selection funnel rather
+   than a dead placeholder.
    ============================================ */
 
 import { ProductShell } from '@/components/shell-v2';
-import { PhaseScaffoldPlaceholder } from '@/components/shell-v2/PhaseScaffoldPlaceholder';
+import { WorkspaceTourRedirect } from '@/components/shell-v2/WorkspaceTourRedirect';
+import { SelectTourPrompt } from '@/components/shell-v2/SelectTourPrompt';
 
 export default function OperationsDashboardPage() {
   return (
     <ProductShell active="operations" artistId={null} productName="Operations">
-      <PhaseScaffoldPlaceholder
-        title="Operations dashboard (cross-tour)"
-        phase="Phase 4"
-        body="The cross-tour Operations overview lists every active tour with status, upcoming shows, missing personnel assignments, and rooming/routing flags — at a glance. Phase 4 ports the real dashboard onto this route."
-      />
+      <WorkspaceTourRedirect base="/operations" />
+      <SelectTourPrompt product="Operations" />
     </ProductShell>
   );
 }
