@@ -39,9 +39,9 @@ const mx = (x: number) => 100 - x;
 
 // Kick centre, snare to its right, throne at the bottom.
 const SHARED: Shell[] = [
-  ['drum-kick', 50, 49, 0.32],
-  ['drum-snare', 61, 60, 0.16],
-  ['drum-throne', 50, 87, 0.13],
+  ['drum-kick', 50, 49, 0.23],
+  ['drum-snare', 61, 60, 0.115],
+  ['drum-throne', 50, 87, 0.094],
 ];
 const SHARED_CYM: Cym[] = [
   [20, 18, 11], // crash L
@@ -53,18 +53,18 @@ const SHARED_CYM: Cym[] = [
 const CONFIGS: Array<{ key: string; label: string; w: number; toms: Shell[]; floors: Shell[] }> = [
   {
     key: '1t1f', label: '1 tom, 1 floor', w: 7.5,
-    toms: [['drum-tom-hi', 50, 30, 0.18]],
-    floors: [['drum-tom-floor', 73, 63, 0.22]],
+    toms: [['drum-tom-hi', 50, 30, 0.13]],
+    floors: [['drum-tom-floor', 73, 63, 0.158]],
   },
   {
     key: '2t1f', label: '2 tom, 1 floor', w: 7.8,
-    toms: [['drum-tom-hi', 40, 30, 0.16], ['drum-tom-mid', 60, 30, 0.17]],
-    floors: [['drum-tom-floor', 74, 64, 0.22]],
+    toms: [['drum-tom-hi', 40, 30, 0.115], ['drum-tom-mid', 60, 30, 0.122]],
+    floors: [['drum-tom-floor', 74, 64, 0.158]],
   },
   {
     key: '2t2f', label: '2 tom, 2 floor', w: 8,
-    toms: [['drum-tom-hi', 40, 29, 0.15], ['drum-tom-mid', 60, 29, 0.16]],
-    floors: [['drum-tom-floor', 28, 65, 0.2], ['drum-tom-floor', 73, 65, 0.2]],
+    toms: [['drum-tom-hi', 40, 29, 0.108], ['drum-tom-mid', 60, 29, 0.115]],
+    floors: [['drum-tom-floor', 28, 65, 0.144], ['drum-tom-floor', 73, 65, 0.144]],
   },
 ];
 

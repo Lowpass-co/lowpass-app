@@ -94,7 +94,26 @@ export function ItemProperties({ plot, item, selectedCount = 0, channels = [], o
 
           {item.kind !== 'text' && item.kind !== 'arrow' && (
             <>
-              <Row label="Scale"><Num value={item.scale ?? 1} step={0.1} min={0.2} onChange={(n) => onUpdateItem({ scale: n })} /></Row>
+              <Row label="Scale">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <input
+                    type="range"
+                    min={0.2}
+                    max={3}
+                    step={0.05}
+                    value={(item.widthFt ?? getIcon(item.iconName)?.footprint.width_ft ?? 1) / (getIcon(item.iconName)?.footprint.width_ft ?? 1)}
+                    onChange={(e) => {
+                      const s = parseFloat(e.target.value);
+                      const b = getIcon(item.iconName)?.footprint;
+                      if (b) onUpdateItem({ widthFt: +(b.width_ft * s).toFixed(2), depthFt: +(b.depth_ft * s).toFixed(2) });
+                    }}
+                    style={{ width: 96 }}
+                  />
+                  <span style={{ fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-tertiary)', width: 26, textAlign: 'right' }}>
+                    {((item.widthFt ?? getIcon(item.iconName)?.footprint.width_ft ?? 1) / (getIcon(item.iconName)?.footprint.width_ft ?? 1)).toFixed(1)}×
+                  </span>
+                </div>
+              </Row>
               <Row label="Width (ft)"><Num value={item.widthFt ?? getIcon(item.iconName)?.footprint.width_ft ?? 1} min={0.1} onChange={(n) => onUpdateItem({ widthFt: n })} /></Row>
               <Row label="Depth (ft)"><Num value={item.depthFt ?? getIcon(item.iconName)?.footprint.depth_ft ?? 1} min={0.1} onChange={(n) => onUpdateItem({ depthFt: n })} /></Row>
               <Row label="Rotation°"><Num value={item.rotationDeg ?? 0} step={15} onChange={(n) => onUpdateItem({ rotationDeg: n })} /></Row>

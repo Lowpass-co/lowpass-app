@@ -242,7 +242,7 @@ export function StageCanvas({
   const xTicks = Array.from({ length: Math.floor(widthFt / gridSizeFt) + 1 }, (_, i) => i);
   const yTicks = Array.from({ length: Math.floor(depthFt / gridSizeFt) + 1 }, (_, i) => i);
   const editingItem = editing ? items.find((i) => i.id === editing) : null;
-  const editFs = editingItem ? Math.max(12, ft((editingItem.fontSizeFt ?? 0.7) * (editingItem.scale ?? 1)) * view.zoom) : 14;
+  const editFs = editingItem ? Math.max(12, ft(editingItem.fontSizeFt ?? 0.7) * view.zoom) : 14;
 
   return (
     <div
@@ -344,7 +344,7 @@ export function StageCanvas({
             if (it.kind === 'text') {
               const cx = ft(it.xFt);
               const cy = ft(it.yFt);
-              const fs = ft(it.fontSizeFt ?? 0.7) * (it.scale ?? 1);
+              const fs = ft(it.fontSizeFt ?? 0.7);
               const fill = it.colorTint ?? 'var(--lp-text)';
               const txt = it.text || 'Text';
               const halfW = Math.max(fs * 1.3, fs * 0.3 * txt.length + fs * 0.5);
@@ -359,9 +359,8 @@ export function StageCanvas({
             }
             const icon = getIcon(it.iconName);
             if (!icon) return null;
-            const sc = it.scale ?? 1;
-            const wpx = ft((it.widthFt ?? icon.footprint.width_ft) * sc);
-            const hpx = ft((it.depthFt ?? icon.footprint.depth_ft) * sc);
+            const wpx = ft(it.widthFt ?? icon.footprint.width_ft);
+            const hpx = ft(it.depthFt ?? icon.footprint.depth_ft);
             const cx = ft(it.xFt);
             const cy = ft(it.yFt);
             const catKey = getCategory(icon.category).key;
