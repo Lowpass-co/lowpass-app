@@ -33,7 +33,8 @@ export const musicianIcons: IconDescriptor[] = [
     keywords: ['musician', 'performer', 'woman', 'player', 'people'],
     body:
       '<path d="M28 80 C28 56 72 56 72 80 Z"/>' +
-      '<circle cx="50" cy="34" r="14"/>' +
-      '<path d="M35 30 Q50 14 65 30" class="lp-ico-detail"/>',
+      // hair: frames the crown and falls past both sides of the head
+      '<path d="M33 44 Q30 16 50 15 Q70 16 67 44" class="lp-ico-detail"/>' +
+      '<circle cx="50" cy="34" r="13"/>',
   },
 ];
