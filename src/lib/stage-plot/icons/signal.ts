@@ -18,14 +18,14 @@ export const signalIcons: IconDescriptor[] = [
       "width_ft": 0.5,
       "depth_ft": 0.5
     },
+    "body": "<rect x=\"24\" y=\"20\" width=\"52\" height=\"60\" rx=\"4\"/><circle cx=\"50\" cy=\"38\" r=\"9\" class=\"lp-ico-detail\"/><circle cx=\"50\" cy=\"38\" r=\"3\" class=\"lp-ico-detail\"/><text class=\"lp-ico-label\" x=\"50\" y=\"66\" text-anchor=\"middle\" dominant-baseline=\"central\" font-size=\"16\">DI</text>",
     "keywords": [
       "di",
       "direct",
       "box",
-      "jack",
+      "injection",
       "passive"
-    ],
-    "body": "<rect x=\"36\" y=\"30\" width=\"28\" height=\"40\" rx=\"3\"/><circle cx=\"50\" cy=\"42\" r=\"4\" class=\"lp-ico-detail\"/><text class=\"lp-ico-label\" x=\"50\" y=\"60\" text-anchor=\"middle\" dominant-baseline=\"central\" font-size=\"13\">DI</text>"
+    ]
   },
   {
     "name": "signal-di-active",
@@ -35,14 +35,15 @@ export const signalIcons: IconDescriptor[] = [
       "width_ft": 0.5,
       "depth_ft": 0.5
     },
+    "body": "<rect x=\"24\" y=\"18\" width=\"52\" height=\"64\" rx=\"4\"/><circle cx=\"42\" cy=\"34\" r=\"8\" class=\"lp-ico-detail\"/><circle cx=\"42\" cy=\"34\" r=\"2.5\" class=\"lp-ico-detail\"/><circle cx=\"63\" cy=\"30\" r=\"3.5\" class=\"lp-ico-detail\"/><text class=\"lp-ico-label\" x=\"50\" y=\"66\" text-anchor=\"middle\" dominant-baseline=\"central\" font-size=\"13\">A-DI</text>",
     "keywords": [
       "di",
       "active",
       "direct",
       "box",
-      "powered"
-    ],
-    "body": "<rect x=\"36\" y=\"30\" width=\"28\" height=\"40\" rx=\"3\"/><circle cx=\"45\" cy=\"42\" r=\"4\" class=\"lp-ico-detail\"/><circle cx=\"58\" cy=\"40\" r=\"2\" class=\"lp-ico-detail\"/><text class=\"lp-ico-label\" x=\"50\" y=\"60\" text-anchor=\"middle\" dominant-baseline=\"central\" font-size=\"13\">DI</text>"
+      "powered",
+      "led"
+    ]
   },
   {
     "name": "signal-di-stereo",
@@ -52,49 +53,34 @@ export const signalIcons: IconDescriptor[] = [
       "width_ft": 0.7,
       "depth_ft": 0.5
     },
+    "body": "<rect x=\"14\" y=\"22\" width=\"72\" height=\"56\" rx=\"4\"/><circle cx=\"36\" cy=\"36\" r=\"8\" class=\"lp-ico-detail\"/><circle cx=\"36\" cy=\"36\" r=\"2.5\" class=\"lp-ico-detail\"/><circle cx=\"64\" cy=\"36\" r=\"8\" class=\"lp-ico-detail\"/><circle cx=\"64\" cy=\"36\" r=\"2.5\" class=\"lp-ico-detail\"/><text class=\"lp-ico-label\" x=\"50\" y=\"64\" text-anchor=\"middle\" dominant-baseline=\"central\" font-size=\"12\">ST-DI</text>",
     "keywords": [
       "di",
       "stereo",
       "dual",
       "direct",
-      "box"
-    ],
-    "body": "<rect x=\"28\" y=\"32\" width=\"44\" height=\"36\" rx=\"3\"/><circle cx=\"40\" cy=\"44\" r=\"4\" class=\"lp-ico-detail\"/><circle cx=\"60\" cy=\"44\" r=\"4\" class=\"lp-ico-detail\"/><text class=\"lp-ico-label\" x=\"50\" y=\"59\" text-anchor=\"middle\" dominant-baseline=\"central\" font-size=\"12\">DI</text>"
+      "box",
+      "two"
+    ]
   },
   {
     "name": "signal-pedalboard",
     "category": "signal",
     "label": "Pedalboard",
     "footprint": {
-      "width_ft": 2,
-      "depth_ft": 1
+      "width_ft": 2.2,
+      "depth_ft": 1.1
     },
+    "body": "<rect x=\"6\" y=\"30\" width=\"88\" height=\"40\" rx=\"4\"/><rect x=\"12\" y=\"33\" width=\"50\" height=\"12\" rx=\"2\" class=\"lp-ico-detail\"/><circle cx=\"18\" cy=\"60\" r=\"5\" class=\"lp-ico-detail\"/><circle cx=\"32\" cy=\"60\" r=\"5\" class=\"lp-ico-detail\"/><circle cx=\"46\" cy=\"60\" r=\"5\" class=\"lp-ico-detail\"/><circle cx=\"60\" cy=\"60\" r=\"5\" class=\"lp-ico-detail\"/><rect x=\"70\" y=\"36\" width=\"20\" height=\"28\" rx=\"2\" class=\"lp-ico-detail\"/><line x1=\"70\" y1=\"42\" x2=\"90\" y2=\"38\" class=\"lp-ico-detail\"/>",
     "keywords": [
-      "pedal",
       "pedalboard",
-      "effects",
-      "stomp",
+      "helix",
+      "line6",
+      "floorboard",
+      "footswitch",
+      "expression",
       "guitar"
-    ],
-    "body": "<rect x=\"16\" y=\"40\" width=\"68\" height=\"24\" rx=\"3\"/><rect x=\"22\" y=\"46\" width=\"12\" height=\"12\" rx=\"1\" class=\"lp-ico-detail\"/><rect x=\"38\" y=\"46\" width=\"12\" height=\"12\" rx=\"1\" class=\"lp-ico-detail\"/><rect x=\"54\" y=\"46\" width=\"12\" height=\"12\" rx=\"1\" class=\"lp-ico-detail\"/><rect x=\"70\" y=\"46\" width=\"8\" height=\"12\" rx=\"1\" class=\"lp-ico-detail\"/>"
-  },
-  {
-    "name": "signal-wireless-rack",
-    "category": "signal",
-    "label": "Wireless rack",
-    "footprint": {
-      "width_ft": 1.6,
-      "depth_ft": 1.2
-    },
-    "keywords": [
-      "wireless",
-      "rack",
-      "rf",
-      "antenna",
-      "iem",
-      "mic"
-    ],
-    "body": "<rect x=\"24\" y=\"44\" width=\"52\" height=\"30\" rx=\"3\"/><line x1=\"34\" y1=\"44\" x2=\"30\" y2=\"26\" class=\"lp-ico-detail\"/><line x1=\"44\" y1=\"44\" x2=\"44\" y2=\"24\" class=\"lp-ico-detail\"/><line x1=\"56\" y1=\"44\" x2=\"56\" y2=\"24\" class=\"lp-ico-detail\"/><line x1=\"66\" y1=\"44\" x2=\"70\" y2=\"26\" class=\"lp-ico-detail\"/>"
+    ]
   },
   {
     "name": "signal-snake-analog",
@@ -131,61 +117,6 @@ export const signalIcons: IconDescriptor[] = [
     "body": "<rect x=\"22\" y=\"38\" width=\"34\" height=\"28\" rx=\"3\"/><line x1=\"56\" y1=\"52\" x2=\"82\" y2=\"52\" class=\"lp-ico-detail\"/><text class=\"lp-ico-label\" x=\"39\" y=\"52\" text-anchor=\"middle\" dominant-baseline=\"central\" font-size=\"11\">NET</text>"
   },
   {
-    "name": "signal-stagebox-analog",
-    "category": "signal",
-    "label": "Stage box",
-    "footprint": {
-      "width_ft": 1.2,
-      "depth_ft": 0.8
-    },
-    "keywords": [
-      "stagebox",
-      "analog",
-      "stage",
-      "box",
-      "jacks",
-      "multicore"
-    ],
-    "body": "<rect x=\"24\" y=\"34\" width=\"52\" height=\"32\" rx=\"3\"/><circle cx=\"36\" cy=\"44\" r=\"3\" class=\"lp-ico-detail\"/><circle cx=\"50\" cy=\"44\" r=\"3\" class=\"lp-ico-detail\"/><circle cx=\"64\" cy=\"44\" r=\"3\" class=\"lp-ico-detail\"/><circle cx=\"36\" cy=\"56\" r=\"3\" class=\"lp-ico-detail\"/><circle cx=\"50\" cy=\"56\" r=\"3\" class=\"lp-ico-detail\"/><circle cx=\"64\" cy=\"56\" r=\"3\" class=\"lp-ico-detail\"/>"
-  },
-  {
-    "name": "signal-stagebox-digital",
-    "category": "signal",
-    "label": "Stage box",
-    "footprint": {
-      "width_ft": 1.2,
-      "depth_ft": 0.8
-    },
-    "keywords": [
-      "stagebox",
-      "digital",
-      "stage",
-      "box",
-      "ethercon",
-      "dante",
-      "network"
-    ],
-    "body": "<rect x=\"24\" y=\"34\" width=\"52\" height=\"32\" rx=\"3\"/><circle cx=\"34\" cy=\"45\" r=\"3\" class=\"lp-ico-detail\"/><circle cx=\"34\" cy=\"55\" r=\"3\" class=\"lp-ico-detail\"/><rect x=\"44\" y=\"42\" width=\"10\" height=\"8\" rx=\"1\" class=\"lp-ico-detail\"/><text class=\"lp-ico-label\" x=\"63\" y=\"50\" text-anchor=\"middle\" dominant-baseline=\"central\" font-size=\"14\">D</text>"
-  },
-  {
-    "name": "signal-network-switch",
-    "category": "signal",
-    "label": "Switch",
-    "footprint": {
-      "width_ft": 1.2,
-      "depth_ft": 0.6
-    },
-    "keywords": [
-      "network",
-      "switch",
-      "ethernet",
-      "ports",
-      "net",
-      "lan"
-    ],
-    "body": "<rect x=\"20\" y=\"40\" width=\"60\" height=\"22\" rx=\"3\"/><rect x=\"26\" y=\"45\" width=\"6\" height=\"6\" class=\"lp-ico-detail\"/><rect x=\"36\" y=\"45\" width=\"6\" height=\"6\" class=\"lp-ico-detail\"/><rect x=\"46\" y=\"45\" width=\"6\" height=\"6\" class=\"lp-ico-detail\"/><text class=\"lp-ico-label\" x=\"66\" y=\"51\" text-anchor=\"middle\" dominant-baseline=\"central\" font-size=\"10\">NET</text>"
-  },
-  {
     "name": "signal-patch-panel",
     "category": "signal",
     "label": "Patch panel",
@@ -193,14 +124,128 @@ export const signalIcons: IconDescriptor[] = [
       "width_ft": 1.6,
       "depth_ft": 0.5
     },
+    "body": "<rect x=\"6\" y=\"36\" width=\"88\" height=\"28\" rx=\"2\"/><circle cx=\"18\" cy=\"50\" r=\"4\" class=\"lp-ico-detail\"/><circle cx=\"30\" cy=\"50\" r=\"4\" class=\"lp-ico-detail\"/><circle cx=\"42\" cy=\"50\" r=\"4\" class=\"lp-ico-detail\"/><circle cx=\"54\" cy=\"50\" r=\"4\" class=\"lp-ico-detail\"/><circle cx=\"66\" cy=\"50\" r=\"4\" class=\"lp-ico-detail\"/><circle cx=\"78\" cy=\"50\" r=\"4\" class=\"lp-ico-detail\"/><line x1=\"2\" y1=\"42\" x2=\"6\" y2=\"42\" class=\"lp-ico-detail\"/><line x1=\"2\" y1=\"58\" x2=\"6\" y2=\"58\" class=\"lp-ico-detail\"/><line x1=\"94\" y1=\"42\" x2=\"98\" y2=\"42\" class=\"lp-ico-detail\"/><line x1=\"94\" y1=\"58\" x2=\"98\" y2=\"58\" class=\"lp-ico-detail\"/>",
     "keywords": [
       "patch",
       "panel",
+      "1u",
       "rack",
-      "strip",
-      "jacks",
-      "tie-line"
-    ],
-    "body": "<rect x=\"16\" y=\"44\" width=\"68\" height=\"16\" rx=\"2\"/><circle cx=\"26\" cy=\"52\" r=\"3\" class=\"lp-ico-detail\"/><circle cx=\"38\" cy=\"52\" r=\"3\" class=\"lp-ico-detail\"/><circle cx=\"50\" cy=\"52\" r=\"3\" class=\"lp-ico-detail\"/><circle cx=\"62\" cy=\"52\" r=\"3\" class=\"lp-ico-detail\"/><circle cx=\"74\" cy=\"52\" r=\"3\" class=\"lp-ico-detail\"/>"
+      "jack",
+      "tt",
+      "bay"
+    ]
+  },
+  {
+    "name": "signal-rack-6u",
+    "category": "signal",
+    "label": "6U rack",
+    "footprint": {
+      "width_ft": 1.7,
+      "depth_ft": 1.5
+    },
+    "body": "<rect x=\"16\" y=\"14\" width=\"68\" height=\"72\" rx=\"3\"/><line x1=\"16\" y1=\"26\" x2=\"84\" y2=\"26\" class=\"lp-ico-detail\"/><line x1=\"16\" y1=\"38\" x2=\"84\" y2=\"38\" class=\"lp-ico-detail\"/><line x1=\"16\" y1=\"50\" x2=\"84\" y2=\"50\" class=\"lp-ico-detail\"/><line x1=\"16\" y1=\"62\" x2=\"84\" y2=\"62\" class=\"lp-ico-detail\"/><line x1=\"16\" y1=\"74\" x2=\"84\" y2=\"74\" class=\"lp-ico-detail\"/><line x1=\"10\" y1=\"20\" x2=\"16\" y2=\"20\" class=\"lp-ico-detail\"/><line x1=\"84\" y1=\"20\" x2=\"90\" y2=\"20\" class=\"lp-ico-detail\"/><line x1=\"10\" y1=\"80\" x2=\"16\" y2=\"80\" class=\"lp-ico-detail\"/><line x1=\"84\" y1=\"80\" x2=\"90\" y2=\"80\" class=\"lp-ico-detail\"/>",
+    "keywords": [
+      "rack",
+      "6u",
+      "equipment",
+      "case",
+      "amp",
+      "rackmount"
+    ]
+  },
+  {
+    "name": "signal-stagebox-4",
+    "category": "signal",
+    "label": "Stage box 4",
+    "footprint": {
+      "width_ft": 1,
+      "depth_ft": 0.7
+    },
+    "body": "<rect x=\"18\" y=\"24\" width=\"64\" height=\"52\" rx=\"3\"/><circle cx=\"40\" cy=\"38\" r=\"5\" class=\"lp-ico-detail\"/><circle cx=\"60\" cy=\"38\" r=\"5\" class=\"lp-ico-detail\"/><circle cx=\"40\" cy=\"54\" r=\"5\" class=\"lp-ico-detail\"/><circle cx=\"60\" cy=\"54\" r=\"5\" class=\"lp-ico-detail\"/><rect x=\"22\" y=\"66\" width=\"56\" height=\"6\" rx=\"1\" class=\"lp-ico-detail\"/>",
+    "keywords": [
+      "stagebox",
+      "stage",
+      "box",
+      "4",
+      "input",
+      "snake",
+      "xlr"
+    ]
+  },
+  {
+    "name": "signal-stagebox-8",
+    "category": "signal",
+    "label": "Stage box 8",
+    "footprint": {
+      "width_ft": 1.2,
+      "depth_ft": 0.8
+    },
+    "body": "<rect x=\"12\" y=\"24\" width=\"76\" height=\"52\" rx=\"3\"/><circle cx=\"26\" cy=\"40\" r=\"5\" class=\"lp-ico-detail\"/><circle cx=\"42\" cy=\"40\" r=\"5\" class=\"lp-ico-detail\"/><circle cx=\"58\" cy=\"40\" r=\"5\" class=\"lp-ico-detail\"/><circle cx=\"74\" cy=\"40\" r=\"5\" class=\"lp-ico-detail\"/><circle cx=\"26\" cy=\"58\" r=\"5\" class=\"lp-ico-detail\"/><circle cx=\"42\" cy=\"58\" r=\"5\" class=\"lp-ico-detail\"/><circle cx=\"58\" cy=\"58\" r=\"5\" class=\"lp-ico-detail\"/><circle cx=\"74\" cy=\"58\" r=\"5\" class=\"lp-ico-detail\"/>",
+    "keywords": [
+      "stagebox",
+      "stage",
+      "box",
+      "8",
+      "input",
+      "snake",
+      "xlr"
+    ]
+  },
+  {
+    "name": "signal-stagebox-12",
+    "category": "signal",
+    "label": "Stage box 12",
+    "footprint": {
+      "width_ft": 1.4,
+      "depth_ft": 0.8
+    },
+    "body": "<rect x=\"8\" y=\"24\" width=\"84\" height=\"52\" rx=\"3\"/><circle cx=\"21\" cy=\"40\" r=\"4.5\" class=\"lp-ico-detail\"/><circle cx=\"35\" cy=\"40\" r=\"4.5\" class=\"lp-ico-detail\"/><circle cx=\"49\" cy=\"40\" r=\"4.5\" class=\"lp-ico-detail\"/><circle cx=\"63\" cy=\"40\" r=\"4.5\" class=\"lp-ico-detail\"/><circle cx=\"77\" cy=\"40\" r=\"4.5\" class=\"lp-ico-detail\"/><circle cx=\"79\" cy=\"40\" r=\"0\"/><circle cx=\"21\" cy=\"58\" r=\"4.5\" class=\"lp-ico-detail\"/><circle cx=\"35\" cy=\"58\" r=\"4.5\" class=\"lp-ico-detail\"/><circle cx=\"49\" cy=\"58\" r=\"4.5\" class=\"lp-ico-detail\"/><circle cx=\"63\" cy=\"58\" r=\"4.5\" class=\"lp-ico-detail\"/><circle cx=\"77\" cy=\"58\" r=\"4.5\" class=\"lp-ico-detail\"/>",
+    "keywords": [
+      "stagebox",
+      "stage",
+      "box",
+      "12",
+      "input",
+      "snake",
+      "xlr"
+    ]
+  },
+  {
+    "name": "signal-stagebox-16",
+    "category": "signal",
+    "label": "Stage box 16",
+    "footprint": {
+      "width_ft": 1.6,
+      "depth_ft": 0.8
+    },
+    "body": "<rect x=\"6\" y=\"24\" width=\"88\" height=\"52\" rx=\"3\"/><circle cx=\"17\" cy=\"40\" r=\"4\" class=\"lp-ico-detail\"/><circle cx=\"28\" cy=\"40\" r=\"4\" class=\"lp-ico-detail\"/><circle cx=\"39\" cy=\"40\" r=\"4\" class=\"lp-ico-detail\"/><circle cx=\"50\" cy=\"40\" r=\"4\" class=\"lp-ico-detail\"/><circle cx=\"61\" cy=\"40\" r=\"4\" class=\"lp-ico-detail\"/><circle cx=\"72\" cy=\"40\" r=\"4\" class=\"lp-ico-detail\"/><circle cx=\"83\" cy=\"40\" r=\"4\" class=\"lp-ico-detail\"/><circle cx=\"17\" cy=\"58\" r=\"4\" class=\"lp-ico-detail\"/><circle cx=\"28\" cy=\"58\" r=\"4\" class=\"lp-ico-detail\"/><circle cx=\"39\" cy=\"58\" r=\"4\" class=\"lp-ico-detail\"/><circle cx=\"50\" cy=\"58\" r=\"4\" class=\"lp-ico-detail\"/><circle cx=\"61\" cy=\"58\" r=\"4\" class=\"lp-ico-detail\"/><circle cx=\"72\" cy=\"58\" r=\"4\" class=\"lp-ico-detail\"/><circle cx=\"83\" cy=\"58\" r=\"4\" class=\"lp-ico-detail\"/>",
+    "keywords": [
+      "stagebox",
+      "stage",
+      "box",
+      "16",
+      "input",
+      "snake",
+      "xlr"
+    ]
+  },
+  {
+    "name": "signal-switch",
+    "category": "signal",
+    "label": "Network switch",
+    "footprint": {
+      "width_ft": 1,
+      "depth_ft": 0.4
+    },
+    "body": "<rect x=\"8\" y=\"38\" width=\"84\" height=\"24\" rx=\"3\"/><rect x=\"15\" y=\"45\" width=\"7\" height=\"10\" rx=\"1\" class=\"lp-ico-detail\"/><rect x=\"25\" y=\"45\" width=\"7\" height=\"10\" rx=\"1\" class=\"lp-ico-detail\"/><rect x=\"35\" y=\"45\" width=\"7\" height=\"10\" rx=\"1\" class=\"lp-ico-detail\"/><rect x=\"45\" y=\"45\" width=\"7\" height=\"10\" rx=\"1\" class=\"lp-ico-detail\"/><rect x=\"55\" y=\"45\" width=\"7\" height=\"10\" rx=\"1\" class=\"lp-ico-detail\"/><rect x=\"65\" y=\"45\" width=\"7\" height=\"10\" rx=\"1\" class=\"lp-ico-detail\"/><rect x=\"75\" y=\"45\" width=\"7\" height=\"10\" rx=\"1\" class=\"lp-ico-detail\"/><rect x=\"85\" y=\"45\" width=\"3\" height=\"10\" rx=\"1\" class=\"lp-ico-detail\"/>",
+    "keywords": [
+      "switch",
+      "network",
+      "ethernet",
+      "netgear",
+      "port",
+      "lan",
+      "rj45"
+    ]
   }
 ];

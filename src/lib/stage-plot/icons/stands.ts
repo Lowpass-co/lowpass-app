@@ -154,20 +154,18 @@ export const standIcons: IconDescriptor[] = [
   {
     "name": "stand-laptop",
     "category": "stands",
-    "label": "Laptop",
+    "label": "Laptop stand",
     "footprint": {
       "width_ft": 1,
       "depth_ft": 0.9
     },
     "keywords": [
       "laptop",
-      "platform",
-      "tilt",
       "stand",
-      "dj",
-      "computer"
+      "platform",
+      "desk"
     ],
-    "body": "<rect x=\"30\" y=\"30\" width=\"40\" height=\"28\" rx=\"2\"/><line x1=\"30\" y1=\"40\" x2=\"70\" y2=\"40\" class=\"lp-ico-detail\"/><line x1=\"42\" y1=\"58\" x2=\"42\" y2=\"68\" class=\"lp-ico-detail\"/><line x1=\"58\" y1=\"58\" x2=\"58\" y2=\"68\" class=\"lp-ico-detail\"/><line x1=\"42\" y1=\"68\" x2=\"58\" y2=\"68\" class=\"lp-ico-detail\"/>"
+    "body": "<rect x=\"22\" y=\"30\" width=\"56\" height=\"34\" rx=\"3\"/><line x1=\"38\" y1=\"64\" x2=\"62\" y2=\"64\" class=\"lp-ico-detail\"/><line x1=\"32\" y1=\"72\" x2=\"68\" y2=\"72\" class=\"lp-ico-detail\"/>"
   },
   {
     "name": "stand-tablet",

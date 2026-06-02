@@ -77,50 +77,59 @@ export const monitorIcons: IconDescriptor[] = [
   {
     "name": "monitor-iem-pack",
     "category": "monitors",
-    "label": "IEM pack",
+    "label": "IEM pack (P10)",
     "footprint": {
       "width_ft": 0.4,
       "depth_ft": 0.4
     },
     "keywords": [
       "iem",
-      "beltpack",
       "in-ear",
       "bodypack",
+      "shure",
+      "p10r",
+      "monitor",
       "wireless"
     ],
-    "body": "<rect x=\"38\" y=\"40\" width=\"24\" height=\"32\" rx=\"4\"/><line x1=\"50\" y1=\"40\" x2=\"50\" y2=\"22\" class=\"lp-ico-detail\"/><circle cx=\"50\" cy=\"58\" r=\"5\" class=\"lp-ico-detail\"/>"
+    "body": "<rect x=\"30\" y=\"28\" width=\"40\" height=\"48\" rx=\"7\"/><rect x=\"38\" y=\"36\" width=\"24\" height=\"16\" rx=\"2\" class=\"lp-ico-detail\"/><line x1=\"62\" y1=\"28\" x2=\"72\" y2=\"14\" class=\"lp-ico-detail\"/><circle cx=\"50\" cy=\"64\" r=\"4\" class=\"lp-ico-detail\"/>"
   },
   {
     "name": "monitor-iem-rack",
     "category": "monitors",
-    "label": "IEM rack",
+    "label": "IEM rack (PSM1000)",
     "footprint": {
-      "width_ft": 1.6,
-      "depth_ft": 1.2
+      "width_ft": 1.7,
+      "depth_ft": 1.6
     },
     "keywords": [
-      "iem rack",
-      "transmitter",
-      "wireless rack",
-      "in-ear rack"
+      "iem",
+      "rack",
+      "psm1000",
+      "shure",
+      "6u",
+      "monitor",
+      "wireless",
+      "transmitter"
     ],
-    "body": "<rect x=\"22\" y=\"38\" width=\"56\" height=\"36\" rx=\"3\"/><line x1=\"34\" y1=\"38\" x2=\"34\" y2=\"22\" class=\"lp-ico-detail\"/><line x1=\"66\" y1=\"38\" x2=\"66\" y2=\"22\" class=\"lp-ico-detail\"/><rect x=\"32\" y=\"48\" width=\"36\" height=\"16\" rx=\"2\" class=\"lp-ico-detail\"/>"
+    "body": "<rect x=\"22\" y=\"14\" width=\"56\" height=\"72\" rx=\"3\"/><line x1=\"22\" y1=\"26\" x2=\"78\" y2=\"26\" class=\"lp-ico-detail\"/><line x1=\"22\" y1=\"38\" x2=\"78\" y2=\"38\" class=\"lp-ico-detail\"/><line x1=\"22\" y1=\"50\" x2=\"78\" y2=\"50\" class=\"lp-ico-detail\"/><line x1=\"22\" y1=\"62\" x2=\"78\" y2=\"62\" class=\"lp-ico-detail\"/><line x1=\"22\" y1=\"74\" x2=\"78\" y2=\"74\" class=\"lp-ico-detail\"/><line x1=\"34\" y1=\"14\" x2=\"34\" y2=\"6\" class=\"lp-ico-detail\"/><line x1=\"66\" y1=\"14\" x2=\"66\" y2=\"6\" class=\"lp-ico-detail\"/>"
   },
   {
-    "name": "monitor-mix-station",
+    "name": "monitor-console",
     "category": "monitors",
-    "label": "Mix station",
+    "label": "Monitor console",
     "footprint": {
-      "width_ft": 1,
-      "depth_ft": 0.8
+      "width_ft": 6,
+      "depth_ft": 3
     },
     "keywords": [
-      "personal mixer",
-      "mix station",
-      "monitor mixer",
-      "aviom"
+      "monitor",
+      "console",
+      "mixing",
+      "desk",
+      "faders",
+      "wedge",
+      "stage"
     ],
-    "body": "<rect x=\"24\" y=\"34\" width=\"52\" height=\"32\" rx=\"3\"/><line x1=\"33\" y1=\"42\" x2=\"33\" y2=\"58\" class=\"lp-ico-detail\"/><line x1=\"41\" y1=\"42\" x2=\"41\" y2=\"58\" class=\"lp-ico-detail\"/><line x1=\"49\" y1=\"42\" x2=\"49\" y2=\"58\" class=\"lp-ico-detail\"/><line x1=\"57\" y1=\"42\" x2=\"57\" y2=\"58\" class=\"lp-ico-detail\"/><line x1=\"65\" y1=\"42\" x2=\"65\" y2=\"58\" class=\"lp-ico-detail\"/>"
+    "body": "<rect x=\"8\" y=\"30\" width=\"84\" height=\"40\" rx=\"3\"/><rect x=\"14\" y=\"34\" width=\"72\" height=\"10\" rx=\"2\" class=\"lp-ico-detail\"/><line x1=\"20\" y1=\"50\" x2=\"20\" y2=\"64\" class=\"lp-ico-detail\"/><line x1=\"30\" y1=\"50\" x2=\"30\" y2=\"64\" class=\"lp-ico-detail\"/><line x1=\"40\" y1=\"50\" x2=\"40\" y2=\"64\" class=\"lp-ico-detail\"/><line x1=\"50\" y1=\"50\" x2=\"50\" y2=\"64\" class=\"lp-ico-detail\"/><line x1=\"60\" y1=\"50\" x2=\"60\" y2=\"64\" class=\"lp-ico-detail\"/><line x1=\"70\" y1=\"50\" x2=\"70\" y2=\"64\" class=\"lp-ico-detail\"/><line x1=\"80\" y1=\"50\" x2=\"80\" y2=\"64\" class=\"lp-ico-detail\"/>"
   }
 ];

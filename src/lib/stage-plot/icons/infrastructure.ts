@@ -25,7 +25,7 @@ export const infrastructureIcons: IconDescriptor[] = [
       "deck",
       "4x4"
     ],
-    "body": "<rect x=\"28\" y=\"28\" width=\"44\" height=\"44\" rx=\"2\"/><line x1=\"32\" y1=\"32\" x2=\"37\" y2=\"32\" class=\"lp-ico-detail\"/><line x1=\"32\" y1=\"32\" x2=\"32\" y2=\"37\" class=\"lp-ico-detail\"/><line x1=\"68\" y1=\"68\" x2=\"63\" y2=\"68\" class=\"lp-ico-detail\"/><line x1=\"68\" y1=\"68\" x2=\"68\" y2=\"63\" class=\"lp-ico-detail\"/>"
+    "body": "<rect x=\"8\" y=\"8\" width=\"84\" height=\"84\" rx=\"5\"/>"
   },
   {
     "name": "infra-riser-4x8",
@@ -43,7 +43,7 @@ export const infrastructureIcons: IconDescriptor[] = [
       "4x8",
       "wide"
     ],
-    "body": "<rect x=\"16\" y=\"34\" width=\"68\" height=\"32\" rx=\"2\"/><line x1=\"20\" y1=\"38\" x2=\"25\" y2=\"38\" class=\"lp-ico-detail\"/><line x1=\"20\" y1=\"38\" x2=\"20\" y2=\"43\" class=\"lp-ico-detail\"/><line x1=\"80\" y1=\"62\" x2=\"75\" y2=\"62\" class=\"lp-ico-detail\"/><line x1=\"80\" y1=\"62\" x2=\"80\" y2=\"57\" class=\"lp-ico-detail\"/>"
+    "body": "<rect x=\"8\" y=\"8\" width=\"84\" height=\"84\" rx=\"5\"/>"
   },
   {
     "name": "infra-riser-8x8",
@@ -61,7 +61,7 @@ export const infrastructureIcons: IconDescriptor[] = [
       "8x8",
       "large"
     ],
-    "body": "<rect x=\"18\" y=\"18\" width=\"64\" height=\"64\" rx=\"2\"/><line x1=\"23\" y1=\"23\" x2=\"29\" y2=\"23\" class=\"lp-ico-detail\"/><line x1=\"23\" y1=\"23\" x2=\"23\" y2=\"29\" class=\"lp-ico-detail\"/><line x1=\"77\" y1=\"77\" x2=\"71\" y2=\"77\" class=\"lp-ico-detail\"/><line x1=\"77\" y1=\"77\" x2=\"77\" y2=\"71\" class=\"lp-ico-detail\"/>"
+    "body": "<rect x=\"8\" y=\"8\" width=\"84\" height=\"84\" rx=\"5\"/>"
   },
   {
     "name": "infra-riser-8x4",
@@ -79,25 +79,7 @@ export const infrastructureIcons: IconDescriptor[] = [
       "8x4",
       "deep"
     ],
-    "body": "<rect x=\"34\" y=\"16\" width=\"32\" height=\"68\" rx=\"2\"/><line x1=\"38\" y1=\"20\" x2=\"43\" y2=\"20\" class=\"lp-ico-detail\"/><line x1=\"38\" y1=\"20\" x2=\"38\" y2=\"25\" class=\"lp-ico-detail\"/><line x1=\"62\" y1=\"80\" x2=\"57\" y2=\"80\" class=\"lp-ico-detail\"/><line x1=\"62\" y1=\"80\" x2=\"62\" y2=\"75\" class=\"lp-ico-detail\"/>"
-  },
-  {
-    "name": "infra-riser-drum",
-    "category": "infrastructure",
-    "label": "Drum riser",
-    "footprint": {
-      "width_ft": 8,
-      "depth_ft": 8
-    },
-    "keywords": [
-      "riser",
-      "drum",
-      "kit",
-      "platform",
-      "stage",
-      "drums"
-    ],
-    "body": "<rect x=\"18\" y=\"18\" width=\"64\" height=\"64\" rx=\"2\"/><circle cx=\"50\" cy=\"50\" r=\"16\" class=\"lp-ico-detail\"/><line x1=\"23\" y1=\"23\" x2=\"29\" y2=\"23\" class=\"lp-ico-detail\"/><line x1=\"23\" y1=\"23\" x2=\"23\" y2=\"29\" class=\"lp-ico-detail\"/><line x1=\"77\" y1=\"77\" x2=\"71\" y2=\"77\" class=\"lp-ico-detail\"/><line x1=\"77\" y1=\"77\" x2=\"77\" y2=\"71\" class=\"lp-ico-detail\"/>"
+    "body": "<rect x=\"8\" y=\"8\" width=\"84\" height=\"84\" rx=\"5\"/>"
   },
   {
     "name": "infra-riser-custom",
@@ -114,41 +96,7 @@ export const infrastructureIcons: IconDescriptor[] = [
       "stage",
       "deck"
     ],
-    "body": "<rect x=\"22\" y=\"34\" width=\"56\" height=\"32\" rx=\"2\"/><line x1=\"60\" y1=\"38\" x2=\"66\" y2=\"38\" class=\"lp-ico-detail\"/><line x1=\"70\" y1=\"38\" x2=\"74\" y2=\"38\" class=\"lp-ico-detail\"/><line x1=\"74\" y1=\"42\" x2=\"74\" y2=\"48\" class=\"lp-ico-detail\"/><line x1=\"74\" y1=\"52\" x2=\"74\" y2=\"56\" class=\"lp-ico-detail\"/>"
-  },
-  {
-    "name": "infra-power-drop",
-    "category": "infrastructure",
-    "label": "Power drop",
-    "footprint": {
-      "width_ft": 0.6,
-      "depth_ft": 0.6
-    },
-    "keywords": [
-      "power",
-      "drop",
-      "electrical",
-      "outlet",
-      "pwr"
-    ],
-    "body": "<rect x=\"30\" y=\"30\" width=\"40\" height=\"40\" rx=\"3\"/><path d=\"M52 36 L44 52 L50 52 L48 64 L58 46 L51 46 Z\" class=\"lp-ico-detail\"/>"
-  },
-  {
-    "name": "infra-power-distro",
-    "category": "infrastructure",
-    "label": "Distro",
-    "footprint": {
-      "width_ft": 1.4,
-      "depth_ft": 1
-    },
-    "keywords": [
-      "power",
-      "distro",
-      "distribution",
-      "electrical",
-      "outlet"
-    ],
-    "body": "<rect x=\"16\" y=\"34\" width=\"68\" height=\"32\" rx=\"3\"/><circle cx=\"30\" cy=\"50\" r=\"4\" class=\"lp-ico-detail\"/><circle cx=\"42\" cy=\"50\" r=\"4\" class=\"lp-ico-detail\"/><circle cx=\"54\" cy=\"50\" r=\"4\" class=\"lp-ico-detail\"/><circle cx=\"66\" cy=\"50\" r=\"4\" class=\"lp-ico-detail\"/>"
+    "body": "<rect x=\"8\" y=\"8\" width=\"84\" height=\"84\" rx=\"5\"/>"
   },
   {
     "name": "infra-generator",
@@ -160,12 +108,13 @@ export const infrastructureIcons: IconDescriptor[] = [
     },
     "keywords": [
       "generator",
-      "genny",
+      "genset",
       "power",
       "fuel",
-      "gen"
+      "gen",
+      "mains"
     ],
-    "body": "<rect x=\"14\" y=\"32\" width=\"72\" height=\"36\" rx=\"3\"/><line x1=\"60\" y1=\"38\" x2=\"60\" y2=\"62\" class=\"lp-ico-detail\"/><line x1=\"66\" y1=\"38\" x2=\"66\" y2=\"62\" class=\"lp-ico-detail\"/><line x1=\"72\" y1=\"38\" x2=\"72\" y2=\"62\" class=\"lp-ico-detail\"/><line x1=\"78\" y1=\"38\" x2=\"78\" y2=\"62\" class=\"lp-ico-detail\"/><text class=\"lp-ico-label\" x=\"36\" y=\"50\" text-anchor=\"middle\" dominant-baseline=\"central\" font-size=\"15\">GEN</text>"
+    "body": "<rect x=\"8\" y=\"22\" width=\"84\" height=\"56\" rx=\"5\"/><polyline points=\"24,30 16,46 24,46 19,60 34,42 25,42 30,30\" class=\"lp-ico-detail\"/><line x1=\"60\" y1=\"30\" x2=\"60\" y2=\"70\" class=\"lp-ico-detail\"/><line x1=\"68\" y1=\"30\" x2=\"68\" y2=\"70\" class=\"lp-ico-detail\"/><line x1=\"76\" y1=\"30\" x2=\"76\" y2=\"70\" class=\"lp-ico-detail\"/><line x1=\"84\" y1=\"30\" x2=\"84\" y2=\"70\" class=\"lp-ico-detail\"/><text class=\"lp-ico-label\" x=\"38\" y=\"66\" text-anchor=\"middle\" dominant-baseline=\"central\" font-size=\"15\">GEN</text>"
   },
   {
     "name": "infra-cable-ramp",
@@ -179,10 +128,10 @@ export const infrastructureIcons: IconDescriptor[] = [
       "cable",
       "ramp",
       "protector",
-      "trough",
-      "guard"
+      "channel",
+      "crossover"
     ],
-    "body": "<rect x=\"12\" y=\"40\" width=\"76\" height=\"20\" rx=\"2\"/><line x1=\"24\" y1=\"40\" x2=\"16\" y2=\"60\" class=\"lp-ico-detail\"/><line x1=\"40\" y1=\"40\" x2=\"32\" y2=\"60\" class=\"lp-ico-detail\"/><line x1=\"56\" y1=\"40\" x2=\"48\" y2=\"60\" class=\"lp-ico-detail\"/><line x1=\"72\" y1=\"40\" x2=\"64\" y2=\"60\" class=\"lp-ico-detail\"/><line x1=\"88\" y1=\"40\" x2=\"80\" y2=\"60\" class=\"lp-ico-detail\"/>"
+    "body": "<rect x=\"6\" y=\"34\" width=\"88\" height=\"32\" rx=\"4\"/><line x1=\"6\" y1=\"42\" x2=\"94\" y2=\"42\" class=\"lp-ico-detail\"/><line x1=\"6\" y1=\"50\" x2=\"94\" y2=\"50\" class=\"lp-ico-detail\"/><line x1=\"6\" y1=\"58\" x2=\"94\" y2=\"58\" class=\"lp-ico-detail\"/>"
   },
   {
     "name": "infra-barricade",
@@ -272,20 +221,110 @@ export const infrastructureIcons: IconDescriptor[] = [
     "body": "<rect x=\"22\" y=\"34\" width=\"56\" height=\"32\" rx=\"2\"/><rect x=\"26\" y=\"38\" width=\"6\" height=\"6\" class=\"lp-ico-detail\"/><rect x=\"68\" y=\"38\" width=\"6\" height=\"6\" class=\"lp-ico-detail\"/><rect x=\"26\" y=\"56\" width=\"6\" height=\"6\" class=\"lp-ico-detail\"/><rect x=\"68\" y=\"56\" width=\"6\" height=\"6\" class=\"lp-ico-detail\"/><line x1=\"44\" y1=\"32\" x2=\"56\" y2=\"32\" class=\"lp-ico-detail\"/>"
   },
   {
-    "name": "infra-stage-box",
+    "name": "infra-power-1",
     "category": "infrastructure",
-    "label": "Stage box",
+    "label": "Power 1",
     "footprint": {
-      "width_ft": 1.2,
-      "depth_ft": 0.9
+      "width_ft": 0.5,
+      "depth_ft": 0.5
     },
     "keywords": [
-      "stage",
-      "box",
-      "snake",
-      "input",
-      "patch"
+      "power",
+      "edison",
+      "socket",
+      "outlet",
+      "drop",
+      "mains"
     ],
-    "body": "<rect x=\"22\" y=\"34\" width=\"56\" height=\"32\" rx=\"3\"/><line x1=\"26\" y1=\"42\" x2=\"74\" y2=\"42\" class=\"lp-ico-detail\"/><text class=\"lp-ico-label\" x=\"50\" y=\"55\" text-anchor=\"middle\" dominant-baseline=\"central\" font-size=\"13\">SB</text>"
+    "body": "<rect x=\"24\" y=\"24\" width=\"52\" height=\"52\" rx=\"4\"/><polyline points=\"52,32 42,52 50,52 46,68 60,46 52,46 56,32\" class=\"lp-ico-detail\"/><rect x=\"36\" y=\"56\" width=\"28\" height=\"16\" rx=\"2\" class=\"lp-ico-detail\"/><line x1=\"45\" y1=\"60\" x2=\"45\" y2=\"68\" class=\"lp-ico-detail\"/><line x1=\"55\" y1=\"60\" x2=\"55\" y2=\"68\" class=\"lp-ico-detail\"/>"
+  },
+  {
+    "name": "infra-power-2",
+    "category": "infrastructure",
+    "label": "Power 2",
+    "footprint": {
+      "width_ft": 0.6,
+      "depth_ft": 0.5
+    },
+    "keywords": [
+      "power",
+      "edison",
+      "socket",
+      "outlet",
+      "duplex",
+      "mains"
+    ],
+    "body": "<rect x=\"16\" y=\"24\" width=\"68\" height=\"52\" rx=\"4\"/><polyline points=\"52,28 44,42 50,42 46,52 58,38 52,38 56,28\" class=\"lp-ico-detail\"/><rect x=\"24\" y=\"54\" width=\"24\" height=\"16\" rx=\"2\" class=\"lp-ico-detail\"/><line x1=\"32\" y1=\"58\" x2=\"32\" y2=\"66\" class=\"lp-ico-detail\"/><line x1=\"40\" y1=\"58\" x2=\"40\" y2=\"66\" class=\"lp-ico-detail\"/><rect x=\"52\" y=\"54\" width=\"24\" height=\"16\" rx=\"2\" class=\"lp-ico-detail\"/><line x1=\"60\" y1=\"58\" x2=\"60\" y2=\"66\" class=\"lp-ico-detail\"/><line x1=\"68\" y1=\"58\" x2=\"68\" y2=\"66\" class=\"lp-ico-detail\"/>"
+  },
+  {
+    "name": "infra-power-4",
+    "category": "infrastructure",
+    "label": "Power 4",
+    "footprint": {
+      "width_ft": 0.8,
+      "depth_ft": 0.6
+    },
+    "keywords": [
+      "power",
+      "edison",
+      "socket",
+      "outlet",
+      "quad",
+      "mains"
+    ],
+    "body": "<rect x=\"14\" y=\"18\" width=\"72\" height=\"64\" rx=\"4\"/><polyline points=\"52,22 45,34 51,34 47,44 58,30 52,30 56,22\" class=\"lp-ico-detail\"/><rect x=\"22\" y=\"46\" width=\"26\" height=\"14\" rx=\"2\" class=\"lp-ico-detail\"/><rect x=\"52\" y=\"46\" width=\"26\" height=\"14\" rx=\"2\" class=\"lp-ico-detail\"/><rect x=\"22\" y=\"64\" width=\"26\" height=\"14\" rx=\"2\" class=\"lp-ico-detail\"/><rect x=\"52\" y=\"64\" width=\"26\" height=\"14\" rx=\"2\" class=\"lp-ico-detail\"/>"
+  },
+  {
+    "name": "infra-power-8",
+    "category": "infrastructure",
+    "label": "Power 8",
+    "footprint": {
+      "width_ft": 1.2,
+      "depth_ft": 0.6
+    },
+    "keywords": [
+      "power",
+      "edison",
+      "socket",
+      "outlet",
+      "strip",
+      "mains"
+    ],
+    "body": "<rect x=\"6\" y=\"26\" width=\"88\" height=\"48\" rx=\"4\"/><polyline points=\"50,30 44,40 49,40 46,48 56,36 51,36 54,30\" class=\"lp-ico-detail\"/><rect x=\"10\" y=\"42\" width=\"16\" height=\"12\" rx=\"2\" class=\"lp-ico-detail\"/><rect x=\"30\" y=\"42\" width=\"16\" height=\"12\" rx=\"2\" class=\"lp-ico-detail\"/><rect x=\"54\" y=\"42\" width=\"16\" height=\"12\" rx=\"2\" class=\"lp-ico-detail\"/><rect x=\"74\" y=\"42\" width=\"16\" height=\"12\" rx=\"2\" class=\"lp-ico-detail\"/><rect x=\"10\" y=\"58\" width=\"16\" height=\"12\" rx=\"2\" class=\"lp-ico-detail\"/><rect x=\"30\" y=\"58\" width=\"16\" height=\"12\" rx=\"2\" class=\"lp-ico-detail\"/><rect x=\"54\" y=\"58\" width=\"16\" height=\"12\" rx=\"2\" class=\"lp-ico-detail\"/><rect x=\"74\" y=\"58\" width=\"16\" height=\"12\" rx=\"2\" class=\"lp-ico-detail\"/>"
+  },
+  {
+    "name": "infra-distro",
+    "category": "infrastructure",
+    "label": "Power distro",
+    "footprint": {
+      "width_ft": 1.4,
+      "depth_ft": 1
+    },
+    "keywords": [
+      "power",
+      "distro",
+      "distribution",
+      "mains",
+      "pwr",
+      "edison"
+    ],
+    "body": "<rect x=\"10\" y=\"18\" width=\"80\" height=\"64\" rx=\"5\"/><polyline points=\"40,24 30,44 39,44 34,60 52,36 42,36 47,24\" class=\"lp-ico-detail\"/><rect x=\"54\" y=\"28\" width=\"30\" height=\"12\" rx=\"2\" class=\"lp-ico-detail\"/><rect x=\"54\" y=\"44\" width=\"30\" height=\"12\" rx=\"2\" class=\"lp-ico-detail\"/><text class=\"lp-ico-label\" x=\"40\" y=\"70\" text-anchor=\"middle\" dominant-baseline=\"central\" font-size=\"15\">PWR</text>"
+  },
+  {
+    "name": "infra-truss-1x1",
+    "category": "infrastructure",
+    "label": "Truss 1x1",
+    "footprint": {
+      "width_ft": 1,
+      "depth_ft": 1
+    },
+    "keywords": [
+      "truss",
+      "tower",
+      "stack",
+      "rigging",
+      "square"
+    ],
+    "body": "<rect x=\"18\" y=\"18\" width=\"64\" height=\"64\" rx=\"3\"/><line x1=\"22\" y1=\"22\" x2=\"78\" y2=\"78\" class=\"lp-ico-detail\"/><line x1=\"78\" y1=\"22\" x2=\"22\" y2=\"78\" class=\"lp-ico-detail\"/><circle cx=\"26\" cy=\"26\" r=\"6\" class=\"lp-ico-detail\"/><circle cx=\"74\" cy=\"26\" r=\"6\" class=\"lp-ico-detail\"/><circle cx=\"26\" cy=\"74\" r=\"6\" class=\"lp-ico-detail\"/><circle cx=\"74\" cy=\"74\" r=\"6\" class=\"lp-ico-detail\"/>"
   }
 ];

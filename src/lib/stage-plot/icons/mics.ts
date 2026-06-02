@@ -13,55 +13,40 @@ export const micIcons: IconDescriptor[] = [
   {
     "name": "mic-vocal",
     "category": "mics",
-    "label": "Vocal mic",
+    "label": "Vocal (SM58)",
     "footprint": {
       "width_ft": 1,
       "depth_ft": 1
     },
     "keywords": [
+      "sm58",
       "vocal",
-      "mic",
-      "ball",
-      "boom",
-      "stand",
-      "sm58"
+      "dynamic",
+      "microphone",
+      "ball grille",
+      "handheld",
+      "shure"
     ],
-    "body": "<circle cx=\"50\" cy=\"32\" r=\"15\"/><line x1=\"50\" y1=\"47\" x2=\"50\" y2=\"72\" class=\"lp-ico-detail\"/><circle cx=\"50\" cy=\"78\" r=\"11\" class=\"lp-ico-detail\"/>"
+    "body": "<circle cx=\"50\" cy=\"30\" r=\"17\"/><circle cx=\"50\" cy=\"30\" r=\"12\" class=\"lp-ico-detail\"/><circle cx=\"50\" cy=\"30\" r=\"7\" class=\"lp-ico-detail\"/><line x1=\"50\" y1=\"47\" x2=\"50\" y2=\"74\" class=\"lp-ico-detail\"/><circle cx=\"50\" cy=\"80\" r=\"12\"/>"
   },
   {
     "name": "mic-vocal-wireless",
     "category": "mics",
-    "label": "Wireless vocal",
+    "label": "Wireless (SM58)",
     "footprint": {
-      "width_ft": 0.8,
-      "depth_ft": 0.8
+      "width_ft": 0.9,
+      "depth_ft": 0.9
     },
     "keywords": [
       "wireless",
+      "sm58",
       "handheld",
       "vocal",
-      "mic",
-      "rf"
+      "transmitter",
+      "beltpack",
+      "shure"
     ],
-    "body": "<circle cx=\"50\" cy=\"42\" r=\"18\"/><line x1=\"45\" y1=\"60\" x2=\"45\" y2=\"82\" class=\"lp-ico-detail\"/><line x1=\"55\" y1=\"60\" x2=\"55\" y2=\"82\" class=\"lp-ico-detail\"/><path d=\"M70 30 a14 14 0 0 1 0 22\" class=\"lp-ico-detail\"/><path d=\"M64 35 a8 8 0 0 1 0 12\" class=\"lp-ico-detail\"/>"
-  },
-  {
-    "name": "mic-instrument",
-    "category": "mics",
-    "label": "Instrument mic",
-    "footprint": {
-      "width_ft": 0.9,
-      "depth_ft": 1
-    },
-    "keywords": [
-      "instrument",
-      "sm57",
-      "dynamic",
-      "amp",
-      "guitar",
-      "boom"
-    ],
-    "body": "<rect x=\"38\" y=\"18\" width=\"24\" height=\"30\" rx=\"11\"/><line x1=\"50\" y1=\"48\" x2=\"50\" y2=\"70\" class=\"lp-ico-detail\"/><circle cx=\"50\" cy=\"78\" r=\"11\" class=\"lp-ico-detail\"/>"
+    "body": "<circle cx=\"50\" cy=\"28\" r=\"16\"/><circle cx=\"50\" cy=\"28\" r=\"11\" class=\"lp-ico-detail\"/><circle cx=\"50\" cy=\"28\" r=\"6\" class=\"lp-ico-detail\"/><line x1=\"50\" y1=\"44\" x2=\"50\" y2=\"66\" class=\"lp-ico-detail\"/><rect x=\"40\" y=\"66\" width=\"20\" height=\"24\" rx=\"3\"/>"
   },
   {
     "name": "mic-condenser-pencil",
@@ -96,40 +81,6 @@ export const micIcons: IconDescriptor[] = [
       "vocal"
     ],
     "body": "<rect x=\"36\" y=\"28\" width=\"28\" height=\"40\" rx=\"12\"/><circle cx=\"50\" cy=\"48\" r=\"36\" class=\"lp-ico-detail\"/><line x1=\"50\" y1=\"68\" x2=\"50\" y2=\"82\" class=\"lp-ico-detail\"/>"
-  },
-  {
-    "name": "mic-clip",
-    "category": "mics",
-    "label": "Clip-on mic",
-    "footprint": {
-      "width_ft": 0.8,
-      "depth_ft": 0.8
-    },
-    "keywords": [
-      "clip",
-      "clip-on",
-      "brass",
-      "horn",
-      "instrument"
-    ],
-    "body": "<circle cx=\"42\" cy=\"42\" r=\"16\"/><rect x=\"58\" y=\"30\" width=\"18\" height=\"24\" rx=\"3\" class=\"lp-ico-detail\"/><line x1=\"42\" y1=\"58\" x2=\"42\" y2=\"78\" class=\"lp-ico-detail\"/>"
-  },
-  {
-    "name": "mic-boundary",
-    "category": "mics",
-    "label": "Boundary / PZM",
-    "footprint": {
-      "width_ft": 0.8,
-      "depth_ft": 0.8
-    },
-    "keywords": [
-      "boundary",
-      "pzm",
-      "plate",
-      "floor",
-      "stage"
-    ],
-    "body": "<rect x=\"18\" y=\"30\" width=\"64\" height=\"40\" rx=\"8\"/><circle cx=\"50\" cy=\"50\" r=\"6\" class=\"lp-ico-detail\"/>"
   },
   {
     "name": "mic-lavalier",
@@ -203,41 +154,44 @@ export const micIcons: IconDescriptor[] = [
   {
     "name": "mic-ribbon",
     "category": "mics",
-    "label": "Ribbon mic",
+    "label": "Ribbon",
     "footprint": {
       "width_ft": 1,
       "depth_ft": 1
     },
     "keywords": [
       "ribbon",
-      "figure-8",
-      "vintage",
+      "microphone",
       "shock mount",
-      "brass"
+      "figure 8",
+      "royer",
+      "studio"
     ],
-    "body": "<ellipse cx=\"50\" cy=\"48\" rx=\"16\" ry=\"26\"/><circle cx=\"50\" cy=\"48\" r=\"34\" class=\"lp-ico-detail\"/>"
+    "body": "<circle cx=\"50\" cy=\"50\" r=\"38\"/><ellipse cx=\"50\" cy=\"50\" rx=\"15\" ry=\"26\"/><text class=\"lp-ico-label\" x=\"50\" y=\"50\" text-anchor=\"middle\" dominant-baseline=\"central\" font-size=\"22\">R</text>"
   },
   {
     "name": "mic-overhead",
     "category": "mics",
-    "label": "Overhead",
+    "label": "Overhead (AKG C414)",
     "footprint": {
-      "width_ft": 0.8,
+      "width_ft": 0.9,
       "depth_ft": 1.2
     },
     "keywords": [
       "overhead",
-      "drum",
-      "cymbal",
       "condenser",
-      "tall boom"
+      "akg",
+      "c414",
+      "drum overhead",
+      "large diaphragm",
+      "boom"
     ],
-    "body": "<rect x=\"43\" y=\"10\" width=\"14\" height=\"32\" rx=\"7\"/><line x1=\"50\" y1=\"42\" x2=\"50\" y2=\"82\" class=\"lp-ico-detail\"/><circle cx=\"50\" cy=\"88\" r=\"9\" class=\"lp-ico-detail\"/>"
+    "body": "<rect x=\"24\" y=\"14\" width=\"52\" height=\"40\" rx=\"6\"/><line x1=\"34\" y1=\"20\" x2=\"34\" y2=\"48\" class=\"lp-ico-detail\"/><line x1=\"42\" y1=\"20\" x2=\"42\" y2=\"48\" class=\"lp-ico-detail\"/><line x1=\"50\" y1=\"20\" x2=\"50\" y2=\"48\" class=\"lp-ico-detail\"/><line x1=\"58\" y1=\"20\" x2=\"58\" y2=\"48\" class=\"lp-ico-detail\"/><line x1=\"66\" y1=\"20\" x2=\"66\" y2=\"48\" class=\"lp-ico-detail\"/><line x1=\"50\" y1=\"54\" x2=\"50\" y2=\"80\" class=\"lp-ico-detail\"/><circle cx=\"50\" cy=\"85\" r=\"10\"/>"
   },
   {
     "name": "mic-tom-clip",
     "category": "mics",
-    "label": "Tom clip mic",
+    "label": "Tom clip",
     "footprint": {
       "width_ft": 0.8,
       "depth_ft": 0.8
@@ -245,11 +199,12 @@ export const micIcons: IconDescriptor[] = [
     "keywords": [
       "tom",
       "clip",
-      "rim",
-      "drum",
-      "dynamic"
+      "drum mic",
+      "rim mount",
+      "clip-on",
+      "capsule"
     ],
-    "body": "<circle cx=\"44\" cy=\"42\" r=\"15\"/><path d=\"M66 28 a18 18 0 1 0 0 28\" class=\"lp-ico-detail\"/><line x1=\"44\" y1=\"57\" x2=\"44\" y2=\"76\" class=\"lp-ico-detail\"/>"
+    "body": "<circle cx=\"54\" cy=\"50\" r=\"22\"/><path d=\"M28 32 A30 30 0 1 0 28 68\" class=\"lp-ico-detail\"/>"
   },
   {
     "name": "mic-talkback",
@@ -261,12 +216,13 @@ export const micIcons: IconDescriptor[] = [
     },
     "keywords": [
       "talkback",
-      "gooseneck",
-      "comms",
-      "desk",
+      "communication",
+      "com",
+      "desk mic",
+      "ball grille",
       "intercom"
     ],
-    "body": "<circle cx=\"62\" cy=\"24\" r=\"11\"/><path d=\"M62 35 q-10 18 -12 35\" class=\"lp-ico-detail\"/><circle cx=\"48\" cy=\"78\" r=\"10\" class=\"lp-ico-detail\"/>"
+    "body": "<circle cx=\"50\" cy=\"30\" r=\"15\"/><circle cx=\"50\" cy=\"30\" r=\"10\" class=\"lp-ico-detail\"/><line x1=\"50\" y1=\"45\" x2=\"50\" y2=\"68\" class=\"lp-ico-detail\"/><circle cx=\"50\" cy=\"74\" r=\"14\"/><text class=\"lp-ico-label\" x=\"50\" y=\"74\" text-anchor=\"middle\" dominant-baseline=\"central\" font-size=\"13\">TB</text>"
   },
   {
     "name": "mic-choir",

@@ -191,74 +191,6 @@ export const ampIcons: IconDescriptor[] = [
     "body": "<rect x=\"14\" y=\"28\" width=\"72\" height=\"44\" rx=\"3\"/><circle cx=\"36\" cy=\"50\" r=\"12\" class=\"lp-ico-detail\"/><circle cx=\"64\" cy=\"50\" r=\"12\" class=\"lp-ico-detail\"/>"
   },
   {
-    "name": "amp-kemper-head",
-    "category": "amps",
-    "label": "Kemper",
-    "keywords": [
-      "kemper",
-      "profiler",
-      "head",
-      "modeller",
-      "digital"
-    ],
-    "footprint": {
-      "width_ft": 1.4,
-      "depth_ft": 0.8
-    },
-    "body": "<rect x=\"24\" y=\"40\" width=\"52\" height=\"20\" rx=\"3\"/><circle cx=\"36\" cy=\"50\" r=\"5\" class=\"lp-ico-detail\"/><text class=\"lp-ico-label\" x=\"60\" y=\"51\" text-anchor=\"middle\" dominant-baseline=\"central\" font-size=\"13\">K</text>"
-  },
-  {
-    "name": "amp-kemper-rack",
-    "category": "amps",
-    "label": "Kemper Rack",
-    "keywords": [
-      "kemper",
-      "rack",
-      "profiler",
-      "modeller",
-      "digital"
-    ],
-    "footprint": {
-      "width_ft": 1.6,
-      "depth_ft": 1.2
-    },
-    "body": "<rect x=\"22\" y=\"34\" width=\"56\" height=\"32\" rx=\"3\"/><text class=\"lp-ico-label\" x=\"50\" y=\"50\" text-anchor=\"middle\" dominant-baseline=\"central\" font-size=\"18\">K</text>"
-  },
-  {
-    "name": "amp-axefx-rack",
-    "category": "amps",
-    "label": "Axe-FX",
-    "keywords": [
-      "fractal",
-      "axe-fx",
-      "rack",
-      "modeller",
-      "digital"
-    ],
-    "footprint": {
-      "width_ft": 1.6,
-      "depth_ft": 1.2
-    },
-    "body": "<rect x=\"22\" y=\"34\" width=\"56\" height=\"32\" rx=\"3\"/><rect x=\"30\" y=\"42\" width=\"22\" height=\"16\" rx=\"1.5\" class=\"lp-ico-detail\"/><circle cx=\"66\" cy=\"50\" r=\"4\" class=\"lp-ico-detail\"/>"
-  },
-  {
-    "name": "amp-modeler-floor",
-    "category": "amps",
-    "label": "Floor",
-    "keywords": [
-      "floor",
-      "modeller",
-      "floorboard",
-      "footswitch",
-      "digital"
-    ],
-    "footprint": {
-      "width_ft": 2,
-      "depth_ft": 1
-    },
-    "body": "<rect x=\"12\" y=\"34\" width=\"76\" height=\"32\" rx=\"3\"/><circle cx=\"24\" cy=\"55\" r=\"4\" class=\"lp-ico-detail\"/><circle cx=\"38\" cy=\"55\" r=\"4\" class=\"lp-ico-detail\"/><circle cx=\"52\" cy=\"55\" r=\"4\" class=\"lp-ico-detail\"/><circle cx=\"66\" cy=\"55\" r=\"4\" class=\"lp-ico-detail\"/><rect x=\"56\" y=\"40\" width=\"24\" height=\"8\" rx=\"1.5\" class=\"lp-ico-detail\"/>"
-  },
-  {
     "name": "amp-acoustic",
     "category": "amps",
     "label": "Acoustic",
@@ -288,5 +220,23 @@ export const ampIcons: IconDescriptor[] = [
       "depth_ft": 1
     },
     "body": "<rect x=\"16\" y=\"34\" width=\"68\" height=\"32\" rx=\"3\"/><circle cx=\"30\" cy=\"40\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"42\" cy=\"40\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"54\" cy=\"40\" r=\"2.2\" class=\"lp-ico-detail\"/><text class=\"lp-ico-label\" x=\"50\" y=\"56\" text-anchor=\"middle\" dominant-baseline=\"central\" font-size=\"13\">KB</text>"
+  },
+  {
+    "name": "amp-modeller",
+    "category": "amps",
+    "label": "Modeller",
+    "footprint": {
+      "width_ft": 1.6,
+      "depth_ft": 1.2
+    },
+    "keywords": [
+      "modeller",
+      "kemper",
+      "helix",
+      "axe-fx",
+      "amp",
+      "rack"
+    ],
+    "body": "<rect x=\"12\" y=\"28\" width=\"76\" height=\"44\" rx=\"3\"/><rect x=\"18\" y=\"36\" width=\"30\" height=\"16\" rx=\"1\" class=\"lp-ico-detail\"/><circle cx=\"62\" cy=\"44\" r=\"6\" class=\"lp-ico-detail\"/><circle cx=\"78\" cy=\"44\" r=\"6\" class=\"lp-ico-detail\"/><text class=\"lp-ico-label\" x=\"33\" y=\"63\" text-anchor=\"middle\" dominant-baseline=\"central\" font-size=\"9\">MOD</text>"
   }
 ];

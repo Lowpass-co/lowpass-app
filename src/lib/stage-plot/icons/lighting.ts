@@ -70,9 +70,10 @@ export const lightingIcons: IconDescriptor[] = [
     "keywords": [
       "strobe",
       "flash",
-      "blitz"
+      "lighting",
+      "fixture"
     ],
-    "body": "<rect x=\"28\" y=\"34\" width=\"44\" height=\"32\" rx=\"3\"/><polyline points=\"52,40 44,50 54,50 46,60\" class=\"lp-ico-detail\"/>"
+    "body": "<rect x=\"20\" y=\"38\" width=\"24\" height=\"24\" rx=\"2\"/><path d=\"M52 36 A18 18 0 0 1 52 64\" class=\"lp-ico-detail\"/><path d=\"M60 30 A26 26 0 0 1 60 70\" class=\"lp-ico-detail\"/><path d=\"M68 24 A34 34 0 0 1 68 76\" class=\"lp-ico-detail\"/>"
   },
   {
     "name": "light-blinder",
@@ -84,10 +85,11 @@ export const lightingIcons: IconDescriptor[] = [
     },
     "keywords": [
       "blinder",
-      "audience light",
-      "molefay"
+      "array",
+      "beam",
+      "lighting"
     ],
-    "body": "<rect x=\"22\" y=\"34\" width=\"56\" height=\"32\" rx=\"3\"/><line x1=\"50\" y1=\"34\" x2=\"50\" y2=\"66\" class=\"lp-ico-detail\"/><line x1=\"22\" y1=\"50\" x2=\"78\" y2=\"50\" class=\"lp-ico-detail\"/>"
+    "body": "<rect x=\"18\" y=\"30\" width=\"44\" height=\"40\" rx=\"3\"/><circle cx=\"32\" cy=\"43\" r=\"7\" class=\"lp-ico-detail\"/><circle cx=\"48\" cy=\"43\" r=\"7\" class=\"lp-ico-detail\"/><circle cx=\"32\" cy=\"57\" r=\"7\" class=\"lp-ico-detail\"/><circle cx=\"48\" cy=\"57\" r=\"7\" class=\"lp-ico-detail\"/><line x1=\"64\" y1=\"38\" x2=\"82\" y2=\"34\" class=\"lp-ico-detail\"/><line x1=\"64\" y1=\"50\" x2=\"84\" y2=\"50\" class=\"lp-ico-detail\"/><line x1=\"64\" y1=\"62\" x2=\"82\" y2=\"66\" class=\"lp-ico-detail\"/>"
   },
   {
     "name": "light-strip",
@@ -115,44 +117,45 @@ export const lightingIcons: IconDescriptor[] = [
     },
     "keywords": [
       "hazer",
-      "fogger",
-      "fog",
       "haze",
-      "smoke"
+      "fog",
+      "machine",
+      "lighting"
     ],
-    "body": "<rect x=\"26\" y=\"36\" width=\"44\" height=\"28\" rx=\"3\"/><polygon points=\"70,44 82,40 82,60 70,56\"/><line x1=\"32\" y1=\"44\" x2=\"42\" y2=\"44\" class=\"lp-ico-detail\"/><line x1=\"32\" y1=\"50\" x2=\"42\" y2=\"50\" class=\"lp-ico-detail\"/><line x1=\"32\" y1=\"56\" x2=\"42\" y2=\"56\" class=\"lp-ico-detail\"/>"
+    "body": "<rect x=\"20\" y=\"34\" width=\"44\" height=\"36\" rx=\"3\"/><polygon points=\"64,46 78,40 78,64 64,58\" class=\"lp-ico-detail\"/><text class=\"lp-ico-label\" x=\"42\" y=\"52\" text-anchor=\"middle\" dominant-baseline=\"central\" font-size=\"11\">HAZE</text>"
   },
   {
-    "name": "light-followspot",
+    "name": "light-floor-fan",
     "category": "lighting",
-    "label": "Spot",
+    "label": "Floor fan",
+    "footprint": {
+      "width_ft": 1.5,
+      "depth_ft": 1.5
+    },
+    "keywords": [
+      "fan",
+      "floor",
+      "wind",
+      "stage",
+      "lighting"
+    ],
+    "body": "<circle cx=\"50\" cy=\"48\" r=\"30\"/><path d=\"M50 48 Q66 36 70 52\" class=\"lp-ico-detail\"/><path d=\"M50 48 Q60 66 44 72\" class=\"lp-ico-detail\"/><path d=\"M50 48 Q34 56 30 40\" class=\"lp-ico-detail\"/><path d=\"M50 48 Q44 30 62 26\" class=\"lp-ico-detail\"/><circle cx=\"50\" cy=\"48\" r=\"5\" class=\"lp-ico-detail\"/><rect x=\"40\" y=\"82\" width=\"20\" height=\"8\" rx=\"2\"/>"
+  },
+  {
+    "name": "light-spot",
+    "category": "lighting",
+    "label": "Follow spot",
     "footprint": {
       "width_ft": 1.5,
       "depth_ft": 3
     },
     "keywords": [
-      "followspot",
-      "follow spot",
+      "follow",
+      "spot",
       "spotlight",
-      "operator"
+      "barrel",
+      "lighting"
     ],
-    "body": "<rect x=\"40\" y=\"14\" width=\"20\" height=\"50\" rx=\"10\"/><circle cx=\"50\" cy=\"76\" r=\"14\"/>"
-  },
-  {
-    "name": "light-backdrop",
-    "category": "lighting",
-    "label": "Cyc",
-    "footprint": {
-      "width_ft": 12,
-      "depth_ft": 0.5
-    },
-    "keywords": [
-      "backdrop",
-      "cyc",
-      "cyclorama",
-      "drop",
-      "scrim"
-    ],
-    "body": "<rect x=\"6\" y=\"46\" width=\"88\" height=\"8\" rx=\"1\"/>"
+    "body": "<polygon points=\"30,14 70,14 62,58 38,58\"/><ellipse cx=\"50\" cy=\"14\" rx=\"20\" ry=\"5\" class=\"lp-ico-detail\"/><rect x=\"40\" y=\"58\" width=\"20\" height=\"14\" rx=\"2\"/><line x1=\"40\" y1=\"66\" x2=\"26\" y2=\"78\" class=\"lp-ico-detail\"/><line x1=\"60\" y1=\"66\" x2=\"74\" y2=\"78\" class=\"lp-ico-detail\"/><rect x=\"42\" y=\"72\" width=\"16\" height=\"12\" rx=\"2\"/>"
   }
 ];

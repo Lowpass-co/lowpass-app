@@ -38,10 +38,11 @@ export const keyIcons: IconDescriptor[] = [
     "keywords": [
       "piano",
       "upright",
-      "acoustic",
-      "console"
+      "keys",
+      "keyboard",
+      "acoustic"
     ],
-    "body": "<rect x=\"8\" y=\"38\" width=\"84\" height=\"24\" rx=\"2\"/><rect x=\"8\" y=\"56\" width=\"84\" height=\"6\" class=\"lp-ico-detail\"/><line x1=\"16\" y1=\"56\" x2=\"16\" y2=\"62\" class=\"lp-ico-detail\"/><line x1=\"24\" y1=\"56\" x2=\"24\" y2=\"62\" class=\"lp-ico-detail\"/><line x1=\"32\" y1=\"56\" x2=\"32\" y2=\"62\" class=\"lp-ico-detail\"/><line x1=\"40\" y1=\"56\" x2=\"40\" y2=\"62\" class=\"lp-ico-detail\"/><line x1=\"48\" y1=\"56\" x2=\"48\" y2=\"62\" class=\"lp-ico-detail\"/><line x1=\"56\" y1=\"56\" x2=\"56\" y2=\"62\" class=\"lp-ico-detail\"/><line x1=\"64\" y1=\"56\" x2=\"64\" y2=\"62\" class=\"lp-ico-detail\"/><line x1=\"72\" y1=\"56\" x2=\"72\" y2=\"62\" class=\"lp-ico-detail\"/><line x1=\"80\" y1=\"56\" x2=\"80\" y2=\"62\" class=\"lp-ico-detail\"/>"
+    "body": "<rect x=\"6\" y=\"30\" width=\"88\" height=\"40\" rx=\"2\"/><line x1=\"6\" y1=\"60\" x2=\"94\" y2=\"60\" class=\"lp-ico-detail\"/><line x1=\"15\" y1=\"60\" x2=\"15\" y2=\"70\" class=\"lp-ico-detail\"/><line x1=\"24\" y1=\"60\" x2=\"24\" y2=\"70\" class=\"lp-ico-detail\"/><line x1=\"33\" y1=\"60\" x2=\"33\" y2=\"70\" class=\"lp-ico-detail\"/><line x1=\"42\" y1=\"60\" x2=\"42\" y2=\"70\" class=\"lp-ico-detail\"/><line x1=\"51\" y1=\"60\" x2=\"51\" y2=\"70\" class=\"lp-ico-detail\"/><line x1=\"60\" y1=\"60\" x2=\"60\" y2=\"70\" class=\"lp-ico-detail\"/><line x1=\"69\" y1=\"60\" x2=\"69\" y2=\"70\" class=\"lp-ico-detail\"/><line x1=\"78\" y1=\"60\" x2=\"78\" y2=\"70\" class=\"lp-ico-detail\"/><line x1=\"87\" y1=\"60\" x2=\"87\" y2=\"70\" class=\"lp-ico-detail\"/><rect x=\"19\" y=\"60\" width=\"5\" height=\"6\" class=\"lp-ico-detail\"/><rect x=\"37\" y=\"60\" width=\"5\" height=\"6\" class=\"lp-ico-detail\"/><rect x=\"55\" y=\"60\" width=\"5\" height=\"6\" class=\"lp-ico-detail\"/><rect x=\"73\" y=\"60\" width=\"5\" height=\"6\" class=\"lp-ico-detail\"/>"
   },
   {
     "name": "keys-stage-88",
@@ -136,11 +137,11 @@ export const keyIcons: IconDescriptor[] = [
     "keywords": [
       "leslie",
       "rotary",
-      "cabinet",
       "speaker",
+      "cabinet",
       "organ"
     ],
-    "body": "<rect x=\"28\" y=\"28\" width=\"44\" height=\"44\" rx=\"3\"/><line x1=\"32\" y1=\"36\" x2=\"68\" y2=\"36\" class=\"lp-ico-detail\"/><line x1=\"32\" y1=\"42\" x2=\"68\" y2=\"42\" class=\"lp-ico-detail\"/><line x1=\"32\" y1=\"48\" x2=\"68\" y2=\"48\" class=\"lp-ico-detail\"/><line x1=\"32\" y1=\"58\" x2=\"68\" y2=\"58\" class=\"lp-ico-detail\"/><line x1=\"32\" y1=\"64\" x2=\"68\" y2=\"64\" class=\"lp-ico-detail\"/>"
+    "body": "<rect x=\"18\" y=\"14\" width=\"64\" height=\"72\" rx=\"3\"/><circle cx=\"50\" cy=\"34\" r=\"14\" class=\"lp-ico-detail\"/><line x1=\"26\" y1=\"58\" x2=\"74\" y2=\"58\" class=\"lp-ico-detail\"/><line x1=\"26\" y1=\"66\" x2=\"74\" y2=\"66\" class=\"lp-ico-detail\"/><line x1=\"26\" y1=\"74\" x2=\"74\" y2=\"74\" class=\"lp-ico-detail\"/>"
   },
   {
     "name": "keys-workstation",
