@@ -1345,3 +1345,13 @@ textarea::selection,
   color: var(--lp-text-inverse);
   pointer-events: none;
 }
+/* In-icon letter marks (e.g. snare "S", amp model). Filled, not
+   outlined, so they read at small sizes in both modes. */
+.lp-stage-icon svg .lp-ico-label {
+  fill: currentColor;
+  stroke: none;
+  font-weight: 700;
+}
+.lp-stage-icon[data-mode='canvas'] svg .lp-ico-label {
+  fill: var(--ico-stroke, currentColor);
+}
