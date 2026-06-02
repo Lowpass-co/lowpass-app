@@ -21,6 +21,9 @@ import { drumAuxIcons } from './drums-aux';
 import { drumComposites } from './drums-composites';
 import { micIcons } from './mics';
 import { musicianIcons } from './musicians';
+import { ampIcons } from './amps';
+import { keyIcons } from './keys';
+import { stringIcons } from './strings';
 import type { IconCategoryKey, IconDescriptor } from './types';
 
 /** Every built-in icon. Spread category arrays here as they ship. */
@@ -30,6 +33,9 @@ export const ALL_ICONS: IconDescriptor[] = [
   ...drumComposites, // §SP1a·2b RH/LH kit composites
   ...micIcons, // §SP1a·3 microphones
   ...musicianIcons, // §SP1a·3 musicians
+  ...ampIcons, // §SP1b amplifiers & cabinets
+  ...keyIcons, // §SP1b keyboards
+  ...stringIcons, // §SP1b stringed instruments
 ];
 
 const BY_NAME = new Map<string, IconDescriptor>(ALL_ICONS.map((i) => [i.name, i]));
