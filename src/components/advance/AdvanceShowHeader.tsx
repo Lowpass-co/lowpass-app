@@ -34,9 +34,9 @@ import {
   Calendar,
   MapPin,
   AlertTriangle,
-  Send,
 } from 'lucide-react';
 import { CircularProgressRing } from './CircularProgressRing';
+import { SendPacketButton } from './SendPacketButton';
 
 interface AdvanceShowHeaderProps {
   showName: string;
@@ -63,10 +63,11 @@ interface AdvanceShowHeaderProps {
   activeTab: 'show' | 'builder';
   /** Href for the "Edit Template" action (toggles tab to builder). */
   builderHref: string;
-  /** Sprint 12 §11b — href for the Advance Packet view, the shareable
-   *  docs manifest at /advance/[tour]/[show]/packet. The "Send Packet"
-   *  primary points here; T3 turns this into the venue intake flow. */
-  packetHref: string;
+  /** T3 — the "Send Packet" primary now opens the venue intake flow
+   *  (generate link → venue fills → answers merge back). The button is
+   *  a client island that needs the tour + show ids. */
+  tourId: string;
+  routingId: string;
 }
 
 export function AdvanceShowHeader({
@@ -83,7 +84,8 @@ export function AdvanceShowHeader({
   overdueSectionsCount,
   activeTab,
   builderHref,
-  packetHref,
+  tourId,
+  routingId,
 }: AdvanceShowHeaderProps) {
   const pct =
     sectionsTotal > 0
@@ -231,20 +233,7 @@ export function AdvanceShowHeader({
               Edit Template
             </Link>
           ) : null}
-          <Link
-            href={packetHref}
-            className="btn-transition group inline-flex items-center gap-1.5 rounded-lg px-4 py-2 outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-lp-orange)] focus-visible:ring-offset-1 focus-visible:ring-offset-[var(--lp-bg)]"
-            style={{
-              background: 'var(--color-lp-orange)',
-              color: '#FFFFFF',
-              fontSize: '13px',
-              fontWeight: 600,
-            }}
-            title="Open the Advance Packet — send to the venue to fill in"
-          >
-            <Send className="h-3.5 w-3.5 transition-transform group-hover:-translate-y-0.5 group-hover:translate-x-0.5" />
-            Send Packet
-          </Link>
+          <SendPacketButton tourId={tourId} routingId={routingId} />
         </div>
       </div>
 
