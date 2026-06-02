@@ -12,12 +12,34 @@
 
 import { useState } from 'react';
 import { StagePlotIcon } from '@/components/stage-plot/StagePlotIcon';
-import { canonicalIcons } from '@/lib/stage-plot/icons/canonical';
+import { canonicalIcons, kickTreatments } from '@/lib/stage-plot/icons/canonical';
 import { ALL_ICONS, CATEGORIES } from '@/lib/stage-plot/icons';
 import type { IconDescriptor } from '@/lib/stage-plot/icons/types';
 
 const SIZES = [16, 32, 80, 240] as const;
 const BRAND = '#FF4500';
+
+const byName = (n: string) => canonicalIcons.find((i) => i.name === n)!;
+
+/** A labelled horizontal strip of icons at one size, both modes. */
+function Strip({ title, icons, size = 32 }: { title: string; icons: IconDescriptor[]; size?: number }) {
+  return (
+    <div style={{ marginBottom: 18 }}>
+      <div style={{ fontSize: 12, color: 'var(--lp-text-secondary)', marginBottom: 6 }}>{title}</div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 22 }}>
+        {icons.map((ic) => (
+          <div key={ic.name} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+              <StagePlotIcon icon={ic} mode="library" size={size} brandColor={BRAND} showBadge={false} />
+              <StagePlotIcon icon={ic} mode="canvas" size={size} brandColor={BRAND} showBadge={false} />
+            </div>
+            <span style={{ fontSize: 10, color: 'var(--lp-text-tertiary)', textAlign: 'center' }}>{ic.label}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function Swatch({ icon, mode }: { icon: IconDescriptor; mode: 'library' | 'canvas' }) {
   return (
@@ -69,7 +91,32 @@ export default function StagePlotIconDebugPage() {
         style={{ margin: '14px 0', padding: '6px 10px', borderRadius: 6, border: '1px solid var(--lp-border)', background: 'var(--lp-surface)', color: 'var(--lp-text)', width: 280 }}
       />
 
-      <section style={{ marginTop: 8 }}>
+      <section style={{ marginTop: 8, padding: 16, border: '1px solid var(--lp-orange)', borderRadius: 10 }}>
+        <h2 style={{ fontSize: 'var(--lp-text-md)', fontWeight: 700, color: 'var(--lp-orange)', marginBottom: 12 }}>
+          §SP-FIX-1a-v2 — revision review strips
+        </h2>
+        <div style={{ marginBottom: 18 }}>
+          <div style={{ fontSize: 12, color: 'var(--lp-text-secondary)', marginBottom: 6 }}>
+            1 · Kick treatments — pick A / B / C (16 / 32 / 80 / 240px, library + canvas)
+          </div>
+          {kickTreatments.map((k) => (
+            <div key={k.name} style={{ display: 'flex', alignItems: 'flex-end', gap: 16, padding: '6px 0' }}>
+              <span style={{ width: 130, fontSize: 11, color: 'var(--lp-text-secondary)' }}>{k.label}</span>
+              {SIZES.map((s) => (
+                <div key={s} style={{ display: 'flex', gap: 8 }}>
+                  <StagePlotIcon icon={k} mode="library" size={s} brandColor={BRAND} showBadge={false} />
+                  <StagePlotIcon icon={k} mode="canvas" size={s} brandColor={BRAND} showBadge={false} />
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
+        <Strip title="2 · Mic stand family (32px)" icons={[byName('mic-stand-tripod'), byName('mic-stand-tripod-boom'), byName('mic-stand-round-base'), byName('mic-stand-round-base-boom')]} size={48} />
+        <Strip title="3 · DI variants — dots = channel count (48px)" icons={[byName('di-mono'), byName('di-stereo')]} size={48} />
+        <Strip title="4 · Power socket-count progression 1 → 2 → 4 → 6 (48px)" icons={[byName('power-1'), byName('power-2'), byName('power-4'), byName('power-6')]} size={48} />
+      </section>
+
+      <section style={{ marginTop: 22 }}>
         <h2 style={{ fontSize: 'var(--lp-text-md)', fontWeight: 700, color: 'var(--lp-orange)' }}>
           ★ Canonical anchors ({canonicalIcons.length})
         </h2>
