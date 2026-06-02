@@ -281,7 +281,7 @@ export function InventoryTab({ userId, workspaceId, inventory, setInventory }: P
         saved.push({ ...orig, ...patch });
       }
     }
-    if (errors) alert(`${errors} item${errors !== 1 ? 's' : ''} failed to save.`);
+    if (errors) showToast(`${errors} item${errors !== 1 ? 's' : ''} failed to save.`, 'error');
     setInventory(inventory.map(item => saved.find(s => s.id === item.id) ?? item));
     setDrafts({});
     setSaving(false);
@@ -308,7 +308,7 @@ export function InventoryTab({ userId, workspaceId, inventory, setInventory }: P
   */
   async function autoFillImages() {
     const targets = inventory.filter(i => !i.image_url);
-    if (!targets.length) { alert('All items already have images.'); return; }
+    if (!targets.length) { showToast('All items already have images.', 'success'); return; }
     imgFillStop.current = false;
     setImgFill({ current: 0, total: targets.length, found: 0 });
 
@@ -379,6 +379,10 @@ export function InventoryTab({ userId, workspaceId, inventory, setInventory }: P
     // landed and nothing went wrong; otherwise tell the user what
     // happened so they can act on it.
     const stopped = imgFillStop.current;
+    // NOTE: the three multi-paragraph diagnostics below stay as native
+    // alert() on purpose — they're long config/troubleshooting copy that
+    // a 3s auto-dismiss toast would truncate or flash past. Toasts are for
+    // the short success/failure notices elsewhere in this file.
     if (fatalCode === 'CSE_NOT_CONFIGURED') {
       alert(
         `Auto Images can't run — image search isn't configured.\n\n${firstApiError}\n\n` +
@@ -402,7 +406,7 @@ export function InventoryTab({ userId, workspaceId, inventory, setInventory }: P
       return;
     }
     if (stopped && found === 0) {
-      alert('Auto Images stopped — no matches were saved.');
+      showToast('Auto Images stopped — no matches were saved.', 'error');
     }
   }
 
@@ -414,8 +418,8 @@ export function InventoryTab({ userId, workspaceId, inventory, setInventory }: P
     if (!confirm(`Delete "${item.name}"?\n\nItems in use on a job cannot be deleted.`)) return;
     const { error } = await supabase.from('rental_inventory').delete().eq('id', item.id);
     if (error) {
-      if (error.code === '23503') alert('This item is currently assigned to a job. Remove it from all jobs first.');
-      else alert('Delete failed: ' + error.message);
+      if (error.code === '23503') showToast('This item is currently assigned to a job. Remove it from all jobs first.', 'error');
+      else showToast('Delete failed: ' + error.message, 'error');
       return;
     }
     setInventory(inventory.filter(i => i.id !== item.id));
@@ -457,7 +461,7 @@ export function InventoryTab({ userId, workspaceId, inventory, setInventory }: P
     if (deletedIds.length) parts.push(`${deletedIds.length} deleted`);
     if (inUse) parts.push(`${inUse} skipped (assigned to a job)`);
     if (otherErr) parts.push(`${otherErr} failed`);
-    if (parts.length) alert(parts.join('. ') + '.');
+    if (parts.length) showToast(parts.join('. ') + '.', otherErr || inUse ? 'error' : 'success');
   }
 
   function onSave(saved: RentalInventoryItem) {

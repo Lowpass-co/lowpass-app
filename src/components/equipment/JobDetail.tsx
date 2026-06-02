@@ -7,6 +7,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { ArrowLeft, Trash2, Plus, FileDown, Sun, Moon } from 'lucide-react';
 import { createClient } from '@/lib/supabase-client';
+import { useToast } from '@/components/ui/Toast';
 import { effectiveInventoryDayRate } from '@/lib/rental-pricing';
 import { StyledSelect, type StyledSelectOption } from '@/components/ui/StyledSelect';
 import {
@@ -32,6 +33,7 @@ interface Props {
 }
 
 export function JobDetail({ job, workspaceId, inventory, artists, tours, onBack, onEdit, onDelete, onJobUpdated }: Props) {
+  const { showToast } = useToast();
   const [jobItems, setJobItems] = useState<RentalJobItem[]>([]);
   const [loading, setLoading]   = useState(true);
 
@@ -116,7 +118,7 @@ export function JobDetail({ job, workspaceId, inventory, artists, tours, onBack,
       .insert(insertPayload)
       .select().single();
     setAdding(false);
-    if (error) { alert('Failed to add: ' + error.message); return; }
+    if (error) { showToast('Failed to add: ' + error.message, 'error'); return; }
     setJobItems(prev => [...prev, data as RentalJobItem]);
     setSelInv(''); setQty('1'); setRateOvr('');
   }
@@ -124,7 +126,7 @@ export function JobDetail({ job, workspaceId, inventory, artists, tours, onBack,
   /* ── Remove item ── */
   async function handleRemove(id: string) {
     const { error } = await supabase.from('rental_job_items').delete().eq('id', id);
-    if (error) { alert('Failed to remove: ' + error.message); return; }
+    if (error) { showToast('Failed to remove: ' + error.message, 'error'); return; }
     setJobItems(prev => prev.filter(i => i.id !== id));
   }
 
@@ -155,7 +157,7 @@ export function JobDetail({ job, workspaceId, inventory, artists, tours, onBack,
       });
     } catch (err) {
       console.error('PDF export failed', err);
-      alert('PDF export failed. See console for details.');
+      showToast('PDF export failed. See console for details.', 'error');
     } finally {
       setExporting(false);
     }

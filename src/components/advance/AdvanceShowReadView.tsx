@@ -6,8 +6,11 @@
  * Clean display-mode view of a show's advance data.
  * Default experience when opening a show — write once, read many.
  *
- * Renders filled sections as readable content cards.
- * Empty fields are hidden. Edit button per section drops into form mode.
+ * UX Audit 2026 — read mode IS the edit surface (Adam's per-show
+ * redesign). Every field renders as a missing/filled tile in a 2-col
+ * grid; empty cells are amber-dashed click-to-fill, filled cells carry
+ * an emerald edge. The old "empty fields hidden" behaviour now only
+ * applies to the public /share surface (display-only, no onFieldChange).
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -555,6 +558,101 @@ function FieldValue({ field, value }: { field: FieldDef; value: unknown }) {
   return <span className="text-[13px] text-lp-text">{String(value)}</span>;
 }
 
+// ─── Field cell (missing / filled tile) ───────────────────────────────────────
+// UX Audit 2026 — Adam's per-show Advance redesign. Every field is a tile:
+// amber-dashed when empty ("missing"), solid + emerald-edge when filled. The
+// state is read at a glance across a long form. Editable types host an inline
+// EditableFieldValue; contact/file fall through to FieldValue display. The
+// visual language lives in globals.css (.advance-cell*) so it stays adaptive
+// (light/dark) and reusable beyond Advance.
+
+/** Wide fields (long text, contacts, files) span both grid columns. */
+function isWideField(field: FieldDef, value: unknown): boolean {
+  if (field.type === 'textarea' || field.type === 'contact' || field.type === 'file') {
+    return true;
+  }
+  return typeof value === 'string' && value.length > 60;
+}
+
+function FieldCell({
+  field,
+  value,
+  onFieldChange,
+}: {
+  field: FieldDef;
+  value: unknown;
+  /** When defined, editable types render inline inputs that PATCH on
+   *  commit. Undefined = display-only (public share). */
+  onFieldChange?: (next: unknown) => void;
+}) {
+  const missing = isBlank(value);
+  const editable = !!onFieldChange && isEditableFieldType(field.type);
+  const useMono = isMonoFieldType(field.type);
+  const isToggle = field.type === 'boolean' || field.type === 'checkbox';
+  const showPlus = missing && editable && !isToggle;
+
+  return (
+    <div
+      className={cn(
+        'advance-cell group',
+        missing ? 'advance-cell--missing' : 'advance-cell--filled',
+        isWideField(field, value) && 'md:col-span-2',
+      )}
+    >
+      <label className="advance-cell__label">
+        <span className="min-w-0 truncate">{field.label}</span>
+        {field.required ? (
+          <span style={{ color: 'var(--color-lp-error)' }}>*</span>
+        ) : null}
+      </label>
+      <div
+        className={cn('flex min-w-0 items-center gap-2', useMono && 'lp-mono')}
+        style={{ fontSize: '14px', color: 'var(--lp-text)' }}
+      >
+        {showPlus ? (
+          <svg
+            className="advance-cell__plus"
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden
+          >
+            <path d="M5 12h14" />
+            <path d="M12 5v14" />
+          </svg>
+        ) : null}
+        <div className="min-w-0 flex-1">
+          {editable ? (
+            <EditableFieldValue
+              field={field}
+              value={value}
+              mono={useMono}
+              onChange={(next) => onFieldChange?.(next)}
+            />
+          ) : missing ? (
+            <span
+              style={{
+                fontSize: '13px',
+                fontStyle: 'italic',
+                color: 'var(--lp-text-tertiary)',
+              }}
+            >
+              Not added yet
+            </span>
+          ) : (
+            <FieldValue field={field} value={value} />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Section card ─────────────────────────────────────────────────────────────
 
 function SectionCard({
@@ -604,16 +702,13 @@ function SectionCard({
     : section.fields.filter((f) => !isBlank(sectionData[f.id]));
   // Filled set still drives empty-state CTAs + status math below.
   const filledFields = section.fields.filter(f => !isBlank(sectionData[f.id]));
-  const fileFields = renderableFields.filter(f => f.type === 'file');
-  const contactFields = renderableFields.filter(f => f.type === 'contact');
-  const otherFields = renderableFields.filter(f => f.type !== 'file' && f.type !== 'contact');
 
-  // Done-count badge / mini-progress-bar denominators are based on the
-  // full template field count, not just non-blank ones — that's the
-  // honest "X / Y" for the user (filled vs total fields in this section).
+  // Done-count denominators use the full template field count, not just
+  // the non-blank ones — the honest "X / Y" for the user.
   const totalFieldCount = section.fields.length;
   const filledCount = filledFields.length;
-  const pct = totalFieldCount > 0 ? Math.round((filledCount / totalFieldCount) * 100) : 0;
+  // UX Audit 2026 — drives the "Needs Input" / "Complete" header badge.
+  const sectionComplete = totalFieldCount > 0 && filledCount === totalFieldCount;
 
   const activeFlags = flags.filter(f => !f.resolved);
   const isEmpty = filledFields.length === 0;
@@ -676,37 +771,19 @@ function SectionCard({
         >
           {section.label}
         </h2>
-        {/* Mini-progress bar */}
-        <div
-          aria-hidden
-          className="shrink-0 overflow-hidden rounded-full"
-          style={{
-            width: 60,
-            height: 4,
-            background: 'var(--lp-border-subtle)',
-          }}
-        >
-          <div
-            style={{
-              width: `${pct}%`,
-              height: '100%',
-              background: 'var(--color-lp-orange)',
-              transition: 'width 200ms var(--lp-ease-standard, ease)',
-            }}
-          />
-        </div>
-        {/* X / Y done-count badge */}
+        {/* UX Audit 2026 — "X / Y completed" pill (replaces the dense
+            variant's mini progress bar + bare count). */}
         <span
-          className="lp-mono shrink-0"
+          className="lp-mono shrink-0 rounded-full"
           style={{
-            fontSize: '11px',
+            fontSize: '10px',
+            fontWeight: 600,
             background: 'var(--lp-bg-deep)',
             color: 'var(--lp-text-secondary)',
-            padding: '2px 6px',
-            borderRadius: 'var(--border-radius-md, 4px)',
+            padding: '3px 8px',
           }}
         >
-          {filledCount} / {totalFieldCount}
+          {filledCount} / {totalFieldCount} completed
         </span>
         {activeFlags.length > 0 && (
           <span
@@ -723,6 +800,18 @@ function SectionCard({
           </span>
         )}
         <div className="ml-auto flex shrink-0 items-center gap-2">
+          {/* UX Audit 2026 — at-a-glance section state badge. */}
+          {totalFieldCount > 0 ? (
+            <span
+              className={cn(
+                'advance-badge advance-read-no-print',
+                sectionComplete ? 'advance-badge--complete' : 'advance-badge--needs',
+              )}
+            >
+              <span className="advance-badge__dot" />
+              {sectionComplete ? 'Complete' : 'Needs Input'}
+            </span>
+          ) : null}
           <SectionStatusPillSelect
             status={statusKey}
             sectionTemplateId={section.template_id}
@@ -771,10 +860,11 @@ function SectionCard({
         </div>
       ))}
 
-      {/* Smooth collapse animation via grid-template-rows trick: animates
-          between 1fr (open) and 0fr (closed) cleanly without measuring
-          content height. Inner div needs overflow:hidden + min-height:0. */}
-      {(otherFields.length > 0 || contactFields.length > 0 || fileFields.length > 0) && (
+      {/* UX Audit 2026 — Adam's per-show redesign: every field renders as
+          a missing/filled tile in a responsive 2-col grid. Collapse still
+          uses the grid-template-rows 1fr↔0fr trick (no height measuring;
+          inner wrapper needs overflow:hidden + min-height:0). */}
+      {renderableFields.length > 0 && (
         <div
           style={{
             display: 'grid',
@@ -783,199 +873,21 @@ function SectionCard({
           }}
         >
           <div style={{ overflow: 'hidden', minHeight: 0 }}>
-          {/* Dense field rows — Variant parity §C.2.
-              4-col grid: type-icon | label | value | meta.
-              Per-field assignee + due-date + status pills are not in the
-              data model (only per-section status_statuses exists), so the
-              meta column is left for future per-field metadata; the row
-              hover surface stays uniform. */}
-          {otherFields.map((field, i) => {
-            const val = sectionData[field.id];
-            const isLong =
-              field.type === 'textarea' || String(val ?? '').length > 60;
-            const useMono = isMonoFieldType(field.type);
-            const isLast =
-              i === otherFields.length - 1 &&
-              contactFields.length === 0 &&
-              fileFields.length === 0;
-            return (
-              <div
-                key={field.id}
-                className="advance-field-row group"
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: isLong
-                    ? '1fr'
-                    : 'minmax(0, 2fr) minmax(0, 5fr)',
-                  gap: 0,
-                  borderBottom: isLast
-                    ? 'none'
-                    : '1px solid var(--lp-border-subtle)',
-                  alignItems: isLong ? 'start' : 'stretch',
-                  transition: 'background-color 120ms ease',
-                }}
-              >
-                {isLong ? (
-                  <div
-                    className="min-w-0"
-                    style={{ padding: '8px 12px' }}
-                  >
-                    <div
-                      className="lp-row-label"
-                      style={{
-                        fontSize: '14px',
-                        fontWeight: 500,
-                        color: 'var(--lp-text)',
-                        marginBottom: 4,
-                      }}
-                    >
-                      {field.label}
-                      {field.required ? (
-                        <span style={{ color: 'var(--color-lp-error)', marginLeft: 4 }}>
-                          *
-                        </span>
-                      ) : null}
-                    </div>
-                    <div
-                      className={cn(useMono && 'lp-mono')}
-                      style={{
-                        fontSize: '14px',
-                        color: 'var(--lp-text-secondary)',
-                      }}
-                    >
-                      {/* Hotfix v2 §A — inline editable input when
-                          onFieldChange is wired (auth flow); falls back
-                          to FieldValue display for /share public surface
-                          and for non-editable types (contact, file). */}
-                      {onFieldChange && isEditableFieldType(field.type) ? (
-                        <EditableFieldValue
-                          field={field}
-                          value={val}
-                          mono={useMono}
-                          onChange={(next) =>
-                            onFieldChange(section.template_id, field.id, next)
-                          }
-                        />
-                      ) : (
-                        <FieldValue field={field} value={val} />
-                      )}
-                    </div>
-                  </div>
-                ) : (
-                  <>
-                    <div
-                      className="lp-row-label min-w-0 truncate"
-                      style={{
-                        fontSize: '14px',
-                        fontWeight: 500,
-                        color: 'var(--lp-text)',
-                        padding: '8px 12px',
-                        background: 'var(--lp-bg-deep)',
-                        borderRight: '1px solid var(--lp-border-subtle)',
-                        display: 'flex',
-                        alignItems: 'center',
-                      }}
-                    >
-                      <span className="truncate">
-                        {field.label}
-                        {field.required ? (
-                          <span style={{ color: 'var(--color-lp-error)', marginLeft: 4 }}>
-                            *
-                          </span>
-                        ) : null}
-                      </span>
-                    </div>
-                    <div
-                      className={cn('min-w-0', useMono && 'lp-mono')}
-                      style={{
-                        fontSize: '14px',
-                        color: 'var(--lp-text)',
-                        padding: '8px 12px',
-                        display: 'flex',
-                        alignItems: 'center',
-                      }}
-                    >
-                      {onFieldChange && isEditableFieldType(field.type) ? (
-                        <EditableFieldValue
-                          field={field}
-                          value={val}
-                          mono={useMono}
-                          onChange={(next) =>
-                            onFieldChange(section.template_id, field.id, next)
-                          }
-                        />
-                      ) : (
-                        <FieldValue field={field} value={val} />
-                      )}
-                    </div>
-                  </>
-                )}
-              </div>
-            );
-          })}
-
-          {/* Contacts — full-width rows since contact data spans wide. */}
-          {contactFields.length > 0 && (
-            <div
-              style={{
-                borderTop:
-                  otherFields.length > 0
-                    ? '1px solid var(--lp-border-subtle)'
-                    : 'none',
-                padding: '8px 12px',
-              }}
-            >
-              {contactFields.map((field) => (
-                <div key={field.id} className="mb-3 last:mb-0">
-                  <span
-                    style={{
-                      display: 'block',
-                      fontSize: '11px',
-                      fontWeight: 600,
-                      letterSpacing: '0.06em',
-                      textTransform: 'uppercase',
-                      color: 'var(--lp-text-tertiary)',
-                      marginBottom: 6,
-                    }}
-                  >
-                    {field.label}
-                  </span>
-                  <FieldValue field={field} value={sectionData[field.id]} />
-                </div>
-              ))}
-            </div>
-          )}
-
-          {/* Files (Documents) — bottom strip. */}
-          {fileFields.length > 0 && (
-            <div
-              style={{
-                borderTop: '1px solid var(--lp-border-subtle)',
-                padding: '8px 12px',
-              }}
-            >
-              <span
-                style={{
-                  display: 'block',
-                  fontSize: '11px',
-                  fontWeight: 600,
-                  letterSpacing: '0.06em',
-                  textTransform: 'uppercase',
-                  color: 'var(--lp-text-tertiary)',
-                  marginBottom: 6,
-                }}
-              >
-                Documents
-              </span>
-              {fileFields.map((field) => (
-                <FieldValue
+            <div className="grid grid-cols-1 gap-4 p-4 md:grid-cols-2">
+              {renderableFields.map((field) => (
+                <FieldCell
                   key={field.id}
                   field={field}
                   value={sectionData[field.id]}
+                  onFieldChange={
+                    onFieldChange
+                      ? (next) =>
+                          onFieldChange(section.template_id, field.id, next)
+                      : undefined
+                  }
                 />
               ))}
             </div>
-          )}
           </div>
         </div>
       )}

@@ -8,6 +8,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Plus, Pencil, Search, Trash2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase-client';
+import { useToast } from '@/components/ui/Toast';
 import { StyledSelect, type StyledSelectOption } from '@/components/ui/StyledSelect';
 import { JobModal } from './JobModal';
 import { JobDetail } from './JobDetail';
@@ -54,6 +55,7 @@ export function JobsTab({
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('');
   const supabase = createClient();
+  const { showToast } = useToast();
 
   const activeJob = jobs.find((j) => j.id === activeJobId) ?? null;
 
@@ -107,7 +109,7 @@ export function JobsTab({
   async function onJobDeleted(id: string) {
     const { error } = await supabase.from('rental_jobs').delete().eq('id', id);
     if (error) {
-      alert('Delete failed: ' + error.message);
+      showToast('Delete failed: ' + error.message, 'error');
       return;
     }
     setJobs(jobs.filter((j) => j.id !== id));

@@ -13,6 +13,7 @@ import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } 
 import { CSS } from '@dnd-kit/utilities';
 import { Check, GripVertical } from 'lucide-react';
 import { useDebouncedSave } from '@/hooks/useDebouncedSave';
+import { useToast } from '@/components/ui/Toast';
 import { createClient } from '@/lib/supabase-client';
 import type { ChannelListRow, MicLibraryEntry, RiderPack, ResolvedSection, StageBox, SubSnake } from '@/lib/rider-packs/types';
 import * as ch from '@/lib/rider-packs/channel-list';
@@ -121,6 +122,7 @@ export default function ChannelListEditor({
   onMoveDown,
   onStructureChange,
 }: Props) {
+  const { showToast } = useToast();
   const [titleDraft, setTitleDraft] = useState(section.title);
   const [rows, setRows] = useState<ChannelListRow[]>(section.rows ?? []);
   const subSnakes = section.subSnakes ?? [];
@@ -186,7 +188,7 @@ export default function ChannelListEditor({
       await ch.reorderRows(createClient(), section.id, ids);
       await onStructureChange();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Reorder failed');
+      showToast(err instanceof Error ? err.message : 'Reorder failed', 'error');
       setRows(prev);
     }
   };
@@ -211,7 +213,7 @@ export default function ChannelListEditor({
          promise rejection (`void addChannel()` discards). The
          alert mirrors handleDragEnd's pattern so the user
          sees the actual server error. */
-      alert(err instanceof Error ? err.message : 'Add channel failed');
+      showToast(err instanceof Error ? err.message : 'Add channel failed', 'error');
     }
   };
 
@@ -227,7 +229,7 @@ export default function ChannelListEditor({
       setNewlyAddedRowId(r.id);
       await onStructureChange();
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Add output failed');
+      showToast(err instanceof Error ? err.message : 'Add output failed', 'error');
     }
   };
 

@@ -113,6 +113,29 @@ export function intakeSubmitted(f: IntakeSubmittedFields): NotificationTemplate 
   };
 }
 
+interface AdvanceIntakeSubmittedFields {
+  recipientName: string;
+  venueName: string;
+  tourName: string;
+  /** The contact name the venue typed on the form, if any. */
+  submitterName: string | null;
+}
+export function advanceIntakeSubmitted(
+  f: AdvanceIntakeSubmittedFields,
+): NotificationTemplate {
+  const who = f.submitterName
+    ? `${esc(f.submitterName)} at ${esc(f.venueName)}`
+    : esc(f.venueName);
+  return {
+    subject: `${f.venueName} submitted their advance details`,
+    html: `
+      <p>Hi ${esc(f.recipientName)},</p>
+      <p><strong>${who}</strong> has filled in the advance packet you sent for <strong>${esc(f.tourName)}</strong>.</p>
+      <p>Their answers have been added to the show's advance — open it to review the venue's details.</p>
+    `,
+  };
+}
+
 interface ConflictDetectedFields {
   personnelName: string;
   tourAName: string;

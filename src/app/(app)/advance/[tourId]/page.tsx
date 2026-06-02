@@ -13,6 +13,7 @@
 
 import { notFound } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { AdvanceOverview } from '@/components/advance/AdvanceOverview';
 
 export default async function AdvanceTourOverviewPage({
@@ -37,33 +38,11 @@ export default async function AdvanceTourOverviewPage({
 
   return (
     <div className="mx-auto w-full max-w-[1280px] space-y-5 px-6 py-6">
-      <header className="flex items-baseline justify-between gap-4">
-        <div>
-          <p
-            style={{
-              fontSize: '11px',
-              fontWeight: 600,
-              letterSpacing: '0.1em',
-              textTransform: 'uppercase',
-              color: 'var(--lp-text-tertiary)',
-            }}
-          >
-            Advance · {t.name ?? 'Tour'}
-          </p>
-          <h1 className="lp-h1 mt-1">Shows</h1>
-          <p
-            className="mt-1"
-            style={{
-              fontSize: '14px',
-              color: 'var(--lp-text-secondary)',
-              lineHeight: 1.5,
-            }}
-          >
-            Per-show advance forms across this tour. Click a row to
-            open the advance for that day.
-          </p>
-        </div>
-      </header>
+      <PageHeader
+        eyebrow={`Advance · ${t.name ?? 'Tour'}`}
+        title="Shows"
+        subtitle="Per-show advance forms across this tour. Click a row to open the advance for that day."
+      />
 
       <AdvanceOverview tourId={t.id} />
     </div>

@@ -13,6 +13,7 @@ import { getUserAndAdminStatus } from '@/lib/site-admin';
 import { ProductShell } from '@/components/shell-v2';
 import { SiteAdminsCard } from '@/components/settings/SiteAdminsCard';
 import { SettingsSubNav } from '@/components/settings/SettingsSubNav';
+import { PageHeader } from '@/components/ui/PageHeader';
 
 export default async function SettingsPage() {
   const { user, isAdmin } = await getUserAndAdminStatus();
@@ -24,12 +25,12 @@ export default async function SettingsPage() {
         className="mx-auto w-full max-w-3xl"
         style={{ padding: 'var(--lp-space-4)' }}
       >
-        <header className="mb-6">
-          <h1 className="text-2xl font-bold text-lp-text">Settings</h1>
-          <p className="mt-1 text-sm text-lp-text-secondary">
-            Workspace settings, roles, and permissions.
-          </p>
-        </header>
+        {/* UX Audit 2026 — uniform page chrome via <PageHeader>. */}
+        <PageHeader
+          title="Settings"
+          subtitle="Workspace settings, roles, and permissions."
+          className="mb-6"
+        />
 
         {isAdmin && user && (
           <div className="space-y-6">

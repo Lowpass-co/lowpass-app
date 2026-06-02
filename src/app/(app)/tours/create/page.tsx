@@ -7,6 +7,7 @@
 import Link from 'next/link';
 import { listAppPageShell } from '@/components/shell/app-page-shells';
 import { TourWizard } from '@/components/tours/TourWizard';
+import { PageHeader } from '@/components/ui/PageHeader';
 import { ArrowLeft } from 'lucide-react';
 
 export default async function CreateTourPage({
@@ -39,14 +40,11 @@ export default async function CreateTourPage({
         <span className="text-sm font-medium text-lp-text">{isEdit ? 'Edit tour' : 'New tour'}</span>
       </nav>
 
-      <header className="mb-10">
-        <h1 className="font-display text-3xl font-bold tracking-tight text-lp-text">
-          {isEdit ? 'Edit tour' : 'New tour'}
-        </h1>
-        <p className="mt-2 text-lp-text-secondary">
-          Choose an artist, set dates and region. You’ll add routing next.
-        </p>
-      </header>
+      <PageHeader
+        title={isEdit ? 'Edit tour' : 'New tour'}
+        subtitle="Choose an artist, set dates and region. You’ll add routing next."
+        className="mb-10"
+      />
 
       <TourWizard initialTourId={editTourId ?? undefined} />
     </div>

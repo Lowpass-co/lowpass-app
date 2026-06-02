@@ -12,8 +12,8 @@ import { Suspense, useState } from 'react';
 import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { createClient } from '@/lib/supabase-client';
-import { LowpassLogo } from '@/components/common/LowpassLogo';
-import { cn } from '@/lib/utils';
+import { AuthShell } from '@/components/auth/AuthShell';
+import { AuthField, AuthButton, AuthError } from '@/components/auth/AuthKit';
 
 /* Sprint 10 §5.1 — open-redirect guard mirrors the login
    page's safeNextPath (Sprint 9 §14.3). */
@@ -78,132 +78,90 @@ function SignupPageInner() {
 
   if (success) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-lp-bg px-4">
-        <div className="w-full max-w-sm space-y-6 text-center">
-          <div className="flex justify-center">
-            <LowpassLogo size="lg" />
-          </div>
-          <div className="rounded-xl border border-lp-border bg-lp-surface p-8">
-            <h2 className="text-lg font-semibold text-lp-text">Check your email</h2>
-            <p className="mt-2 text-sm text-lp-text-secondary">
-              We&apos;ve sent a confirmation link to <strong>{email}</strong>.
-              Click it to activate your account.
-            </p>
-          </div>
-          <Link href="/login" className="text-sm text-lp-orange hover:text-lp-orange-hover font-medium">
-            Back to login
-          </Link>
+      <AuthShell>
+        <h2 className="mb-8 text-2xl font-medium text-white">Check your email</h2>
+        <div
+          className="rounded-lg border px-4 py-6 text-sm"
+          style={{ borderColor: '#27272a', background: '#18181b', color: '#e4e4e7' }}
+        >
+          <p className="font-medium">Confirmation sent</p>
+          <p className="mt-2" style={{ color: '#71717a' }}>
+            We&apos;ve sent a confirmation link to <strong>{email}</strong>. Click it to
+            activate your account.
+          </p>
+          <p className="mt-4">
+            <Link
+              href="/login"
+              className="font-medium transition-colors hover:underline"
+              style={{ color: 'var(--color-lp-orange)' }}
+            >
+              Back to sign in
+            </Link>
+          </p>
         </div>
-      </div>
+      </AuthShell>
     );
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-lp-bg px-4">
-      <div className="w-full max-w-sm space-y-8">
-        {/* Logo */}
-        <div className="text-center">
-          <div className="flex justify-center">
-            <LowpassLogo size="lg" />
-          </div>
-          <p className="mt-3 text-sm text-lp-text-secondary">
-            Create your Lowpass account.
-          </p>
+    <AuthShell>
+      <h2 className="mb-8 text-2xl font-medium text-white">Create account</h2>
+
+      <AuthError>{error}</AuthError>
+
+      <form onSubmit={handleSignup} className="space-y-5">
+        <AuthField
+          id="name"
+          label="Full name"
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Jane Smith"
+          autoComplete="name"
+          required
+        />
+        <AuthField
+          id="email"
+          label="Email"
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="you@example.com"
+          autoComplete="email"
+          required
+        />
+        <div className="space-y-1.5">
+          <AuthField
+            id="password"
+            label="Password"
+            password
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="••••••••"
+            autoComplete="new-password"
+            minLength={8}
+            required
+          />
+          <p className="text-xs" style={{ color: '#71717a' }}>Minimum 8 characters</p>
         </div>
 
-        {/* Error */}
-        {error && (
-          <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-950/50 dark:text-red-400">
-            {error}
-          </div>
-        )}
+        <div className="pt-2">
+          <AuthButton type="submit" loading={loading} block>
+            Create account
+          </AuthButton>
+        </div>
+      </form>
 
-        {/* Signup form */}
-        <form onSubmit={handleSignup} className="space-y-4">
-          <div>
-            <label htmlFor="name" className="block text-sm font-medium text-lp-text">
-              Full name
-            </label>
-            <input
-              id="name"
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Jane Smith"
-              required
-              className={cn(
-                'mt-1.5 w-full rounded-lg border border-lp-border bg-lp-surface px-3.5 py-2.5',
-                'text-sm text-lp-text placeholder:text-lp-text-tertiary',
-                'focus:border-lp-orange focus:ring-1 focus:ring-lp-orange focus:outline-none',
-                'transition-colors'
-              )}
-            />
-          </div>
-
-          <div>
-            <label htmlFor="email" className="block text-sm font-medium text-lp-text">
-              Email
-            </label>
-            <input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="you@example.com"
-              required
-              className={cn(
-                'mt-1.5 w-full rounded-lg border border-lp-border bg-lp-surface px-3.5 py-2.5',
-                'text-sm text-lp-text placeholder:text-lp-text-tertiary',
-                'focus:border-lp-orange focus:ring-1 focus:ring-lp-orange focus:outline-none',
-                'transition-colors'
-              )}
-            />
-          </div>
-
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-lp-text">
-              Password
-            </label>
-            <input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              required
-              minLength={8}
-              className={cn(
-                'mt-1.5 w-full rounded-lg border border-lp-border bg-lp-surface px-3.5 py-2.5',
-                'text-sm text-lp-text placeholder:text-lp-text-tertiary',
-                'focus:border-lp-orange focus:ring-1 focus:ring-lp-orange focus:outline-none',
-                'transition-colors'
-              )}
-            />
-            <p className="mt-1 text-xs text-lp-text-tertiary">Minimum 8 characters</p>
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className={cn(
-              'w-full rounded-lg bg-lp-orange px-4 py-2.5',
-              'text-sm font-medium text-white',
-              'hover:bg-lp-orange-hover transition-colors',
-              'disabled:opacity-50 disabled:cursor-not-allowed'
-            )}
-          >
-            {loading ? 'Creating account...' : 'Create account'}
-          </button>
-        </form>
-
-        {/* Footer */}
-        <p className="text-center text-xs text-lp-text-tertiary">
-          Already have an account?{' '}
-          <Link href="/login" className="text-lp-orange hover:text-lp-orange-hover font-medium">
-            Sign in
-          </Link>
-        </p>
-      </div>
-    </div>
+      <p className="mt-10 text-center text-[13px]" style={{ color: '#71717a' }}>
+        Already have an account?{' '}
+        <Link
+          href="/login"
+          className="font-medium transition-colors hover:underline"
+          style={{ color: 'var(--color-lp-orange)' }}
+        >
+          Sign in
+        </Link>
+      </p>
+    </AuthShell>
   );
 }

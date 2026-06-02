@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { ContextMenu, type ContextMenuItem } from '@/components/ui/ContextMenu';
+import { useToast } from '@/components/ui/Toast';
 import { deletePack, exportGoogleDoc } from '@/lib/rider-packs/client';
 import { Trash2, Link2, FileOutput, UserRoundCog, ExternalLink } from 'lucide-react';
 import { BrandedSelect } from '@/components/ui/BrandedSelect';
@@ -30,6 +31,7 @@ export function RiderPackGridCard({
   /** When filtering by an artist, exclude them from "move" targets. */
   contextArtistId?: string | null;
 }) {
+  const { showToast } = useToast();
   const [moveOpen, setMoveOpen] = useState(false);
   const [targetArtist, setTargetArtist] = useState('');
   const [busy, setBusy] = useState(false);
@@ -51,7 +53,7 @@ export function RiderPackGridCard({
       setTargetArtist('');
       window.location.reload();
     } catch (e) {
-      alert(e instanceof Error ? e.message : 'Move failed');
+      showToast(e instanceof Error ? e.message : 'Move failed', 'error');
     } finally {
       setBusy(false);
     }
@@ -90,7 +92,7 @@ export function RiderPackGridCard({
             /* ignore */
           }
         } catch (e) {
-          alert(e instanceof Error ? e.message : 'Export failed');
+          showToast(e instanceof Error ? e.message : 'Export failed', 'error');
         } finally {
           setBusy(false);
         }
@@ -101,7 +103,7 @@ export function RiderPackGridCard({
       icon: UserRoundCog,
       onClick: () => {
         if (targetOptions.length === 0) {
-          alert('Add another act under Artists, or use “All workspace packs” to see all bands.');
+          showToast('Add another act under Artists, or use “All workspace packs” to see all bands.', 'error');
           return;
         }
         setMoveOpen(true);
@@ -118,7 +120,7 @@ export function RiderPackGridCard({
           await deletePack(pack.id);
           window.location.reload();
         } catch (e) {
-          alert(e instanceof Error ? e.message : 'Delete failed');
+          showToast(e instanceof Error ? e.message : 'Delete failed', 'error');
         } finally {
           setBusy(false);
         }

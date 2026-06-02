@@ -15,6 +15,7 @@ import {
   EquipmentDensityProvider,
   EquipmentDensityToggle,
 } from './EquipmentDensityContext';
+import { PageHeader } from '@/components/ui/PageHeader';
 import {
   EQUIPMENT_PAGE_SHELL_CLASS,
   type EquipmentArtistOption,
@@ -63,23 +64,16 @@ function EquipmentClientBody({
 
   return (
     <div className={EQUIPMENT_PAGE_SHELL_CLASS}>
-      {/* Page header — fixed slot at top of column */}
-      <header className="flex w-full shrink-0 items-start justify-between gap-3">
-        <div>
-          <h1
-            className="text-2xl font-bold tracking-tight font-display"
-            style={{ color: 'var(--lp-text)' }}
-          >
-            Equipment
-          </h1>
-          <p className="mt-1 text-sm" style={{ color: 'var(--lp-text-secondary)' }}>
-            Rental inventory and job bookings
-          </p>
-        </div>
-        {/* §B5 — density toggle pinned top-right, matches
-            Budget's BudgetTabNav placement. */}
-        <EquipmentDensityToggle />
-      </header>
+      {/* UX Audit 2026 — uniform page chrome via <PageHeader>.
+          Replaces the bespoke header markup; density toggle
+          lives in the actions slot (right-aligned), matching
+          every other workspace page. */}
+      <PageHeader
+        title="Equipment"
+        subtitle="Rental inventory and job bookings"
+        actions={<EquipmentDensityToggle />}
+        className="w-full shrink-0"
+      />
 
       {/* Tabs — full width of content column; equal-width segments */}
       <div

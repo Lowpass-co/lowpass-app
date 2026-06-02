@@ -8,6 +8,7 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import { X, ExternalLink, ChevronDown, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase-client';
+import { useToast } from '@/components/ui/Toast';
 import { StyledSelect, type StyledSelectOption } from '@/components/ui/StyledSelect';
 import {
   type EquipmentArtistOption,
@@ -36,6 +37,7 @@ export function JobModal({
   onSave,
   onClose,
 }: Props) {
+  const { showToast } = useToast();
   const [name, setName] = useState(editing?.name ?? '');
   const [client, setClient] = useState(editing?.client_name ?? '');
   const [artistId, setArtistId] = useState(editing?.artist_id ?? '');
@@ -99,7 +101,7 @@ export function JobModal({
   async function handleSave() {
     if (!name.trim() || !start || !end) return;
     if (end < start) {
-      alert('End date must be on or after start date');
+      showToast('End date must be on or after start date', 'error');
       return;
     }
     setSaving(true);
@@ -142,11 +144,11 @@ export function JobModal({
 
     setSaving(false);
     if (result.error) {
-      alert('Save failed: ' + result.error.message);
+      showToast('Save failed: ' + result.error.message, 'error');
       return;
     }
     if (!result.data) {
-      alert('Save failed: no row returned');
+      showToast('Save failed: no row returned', 'error');
       return;
     }
     onSave(normalizeJobRow(result.data as Record<string, unknown>));
