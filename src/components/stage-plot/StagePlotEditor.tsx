@@ -75,7 +75,8 @@ export function StagePlotEditor({ initialPlot, initialItems, channels = [], onCh
           iconName,
           xFt: pos?.xFt ?? plot.widthFt / 2,
           yFt: pos?.yFt ?? plot.depthFt / 2,
-          rotationDeg: 0,
+          // Kits face the audience on a stage plot (drummer upstage).
+          rotationDeg: icon?.composite ? 180 : 0,
           scale: 1,
           layer: 'main' as const,
           label: icon?.label,
@@ -90,7 +91,7 @@ export function StagePlotEditor({ initialPlot, initialItems, channels = [], onCh
     const id = uid();
     setItems((prev) => [
       ...prev,
-      { id, kind: 'text' as const, iconName: '', xFt: plot.widthFt / 2, yFt: plot.depthFt / 2, text: 'Text', fontSizeFt: 1.1, layer: 'annotations' as const },
+      { id, kind: 'text' as const, iconName: '', xFt: plot.widthFt / 2, yFt: plot.depthFt / 2, text: 'Text', fontSizeFt: 0.7, layer: 'annotations' as const },
     ]);
     setSelectedIds([id]);
   }, [plot.widthFt, plot.depthFt]);

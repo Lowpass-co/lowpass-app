@@ -74,7 +74,7 @@ export function ItemProperties({ plot, item, selectedCount = 0, channels = [], o
                 <input value={item.text ?? ''} placeholder="Text" style={{ ...inputStyle, width: 130, textAlign: 'left' }}
                   onChange={(e) => onUpdateItem({ text: e.target.value })} />
               </Row>
-              <Row label="Size (ft)"><Num value={item.fontSizeFt ?? 1.1} step={0.2} min={0.3} onChange={(n) => onUpdateItem({ fontSizeFt: n })} /></Row>
+              <Row label="Size (ft)"><Num value={item.fontSizeFt ?? 0.7} step={0.1} min={0.3} onChange={(n) => onUpdateItem({ fontSizeFt: n })} /></Row>
             </>
           )}
 

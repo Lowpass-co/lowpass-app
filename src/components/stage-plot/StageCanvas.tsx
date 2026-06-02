@@ -241,14 +241,14 @@ export function StageCanvas({
   const labelEvery = Math.max(1, Math.round(4 / gridSizeFt));
   const xTicks = Array.from({ length: Math.floor(widthFt / gridSizeFt) + 1 }, (_, i) => i);
   const yTicks = Array.from({ length: Math.floor(depthFt / gridSizeFt) + 1 }, (_, i) => i);
-  const soleSel = selectedIds.length === 1 ? selectedIds[0] : null;
   const editingItem = editing ? items.find((i) => i.id === editing) : null;
+  const editFs = editingItem ? Math.max(12, ft((editingItem.fontSizeFt ?? 0.7) * (editingItem.scale ?? 1)) * view.zoom) : 14;
 
   return (
     <div
       ref={hostRef}
       className={className}
-      style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden', background: 'var(--lp-bg-secondary)', cursor: panning ? 'grabbing' : 'grab', touchAction: 'none' }}
+      style={{ position: 'relative', width: '100%', height: '100%', overflow: 'hidden', background: 'var(--lp-bg-secondary)', cursor: panning ? 'grabbing' : 'grab', touchAction: 'none', userSelect: 'none', WebkitUserSelect: 'none' }}
       onWheel={onWheel}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
@@ -332,8 +332,10 @@ export function StageCanvas({
                   <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={stroke} strokeWidth={it.weight ?? 2} markerEnd="url(#lp-arrow)" vectorEffect="non-scaling-stroke" />
                   {sel && interactive && (
                     <>
-                      <circle data-arrow-end={`${it.id}:a`} cx={x1} cy={y1} r={5} fill="var(--lp-orange)" style={{ cursor: 'crosshair' }} />
-                      <circle data-arrow-end={`${it.id}:b`} cx={x2} cy={y2} r={5} fill="var(--lp-orange)" style={{ cursor: 'crosshair' }} />
+                      <circle data-arrow-end={`${it.id}:a`} cx={x1} cy={y1} r={9} fill="transparent" style={{ cursor: 'crosshair' }} />
+                      <circle data-arrow-end={`${it.id}:b`} cx={x2} cy={y2} r={9} fill="transparent" style={{ cursor: 'crosshair' }} />
+                      <circle cx={x1} cy={y1} r={4} fill="none" stroke="var(--lp-orange)" strokeWidth={2} vectorEffect="non-scaling-stroke" pointerEvents="none" />
+                      <circle cx={x2} cy={y2} r={4} fill="none" stroke="var(--lp-orange)" strokeWidth={2} vectorEffect="non-scaling-stroke" pointerEvents="none" />
                     </>
                   )}
                 </g>
@@ -342,12 +344,16 @@ export function StageCanvas({
             if (it.kind === 'text') {
               const cx = ft(it.xFt);
               const cy = ft(it.yFt);
-              const fs = ft(it.fontSizeFt ?? 1.1) * (it.scale ?? 1);
+              const fs = ft(it.fontSizeFt ?? 0.7) * (it.scale ?? 1);
               const fill = it.colorTint ?? 'var(--lp-text)';
+              const txt = it.text || 'Text';
+              const halfW = Math.max(fs * 1.3, fs * 0.3 * txt.length + fs * 0.5);
+              const halfH = fs * 0.85;
+              const isEd = editing === it.id;
               return (
                 <g key={it.id} data-canvas-item={it.id} style={{ cursor: interactive ? 'move' : undefined }} onDoubleClick={() => interactive && setEditing(it.id)}>
-                  {sel && <rect x={cx - fs * 2.6} y={cy - fs * 0.9} width={fs * 5.2} height={fs * 1.8} rx={2} fill="none" stroke="var(--lp-orange)" strokeWidth={1.5} strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />}
-                  <text x={cx} y={cy} fontSize={fs} fill={fill} textAnchor="middle" dominantBaseline="central" fontWeight={600}>{it.text || 'Text'}</text>
+                  <rect x={cx - halfW} y={cy - halfH} width={halfW * 2} height={halfH * 2} rx={2} fill="none" stroke={sel ? 'var(--lp-orange)' : 'var(--lp-border-strong)'} strokeWidth={sel ? 1.5 : 1} strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />
+                  {!isEd && <text x={cx} y={cy} fontSize={fs} fill={fill} textAnchor="middle" dominantBaseline="central" fontWeight={600}>{txt}</text>}
                 </g>
               );
             }
@@ -372,18 +378,16 @@ export function StageCanvas({
               <g key={it.id} data-canvas-item={it.id} transform={`rotate(${it.rotationDeg ?? 0} ${cx} ${cy})`} style={{ cursor: interactive ? 'move' : undefined }}>
                 {sel && <rect x={cx - wpx / 2 - 4} y={cy - hpx / 2 - 4} width={wpx + 8} height={hpx + 8} rx={3} fill="none" stroke="var(--lp-orange)" strokeWidth={1.5} strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />}
                 <svg x={cx - wpx / 2} y={cy - hpx / 2} width={wpx} height={hpx} viewBox={icon.viewBox ?? '0 0 100 100'} preserveAspectRatio="xMidYMid meet" className="lp-canvas-item" style={style} dangerouslySetInnerHTML={{ __html: icon.body }} />
-                {/* §SP4: linked → sub-snake colour + letter badge (colour-blind safe) */}
-                {ch && (
+                {/* §SP4: sub-snake colour tints the icon always; the letter/number
+                    badge + unlinked warning only flag when the channel overlay is on. */}
+                {showChannels && ch && (
                   <g>
                     <rect x={bx - 7} y={by - 7} width={16} height={12} rx={3} fill={ch.color || '#6b7280'} stroke="var(--lp-bg)" strokeWidth={0.75} />
                     <text x={bx + 1} y={by - 1} fontSize={8} fill="#ffffff" textAnchor="middle" dominantBaseline="central" fontWeight={700}>{ch.snakeLabel || String(ch.number)}</text>
                   </g>
                 )}
-                {/* unlinked input-source warning */}
-                {!ch && inputCat && channels.length > 0 && <circle cx={bx} cy={by} r={3.5} fill="#f59e0b" stroke="var(--lp-bg)" strokeWidth={0.75} />}
-                {/* channel-number overlay */}
+                {showChannels && !ch && inputCat && channels.length > 0 && <circle cx={bx} cy={by} r={3.5} fill="#f59e0b" stroke="var(--lp-bg)" strokeWidth={0.75} />}
                 {showChannels && ch && <text x={cx} y={cy + hpx / 2 + ft(0.55)} fontSize={ft(0.65)} fill="var(--lp-text-secondary)" textAnchor="middle" fontWeight={700}>{ch.number}</text>}
-                {it.id === soleSel && interactive && <rect data-resize={it.id} x={cx + wpx / 2 + 1} y={cy + hpx / 2 + 1} width={9} height={9} rx={1.5} fill="var(--lp-orange)" style={{ cursor: 'nwse-resize' }} />}
               </g>
             );
           })}
@@ -404,11 +408,11 @@ export function StageCanvas({
           }}
           style={{
             position: 'absolute',
-            left: view.panX + ft(editingItem.xFt) * view.zoom - 80,
-            top: view.panY + ft(editingItem.yFt) * view.zoom - 14,
-            width: 160,
+            left: view.panX + ft(editingItem.xFt) * view.zoom - 90,
+            top: view.panY + ft(editingItem.yFt) * view.zoom - editFs * 0.9,
+            width: 180,
             textAlign: 'center',
-            fontSize: 14,
+            fontSize: editFs,
             fontWeight: 600,
             padding: '3px 6px',
             borderRadius: 5,
