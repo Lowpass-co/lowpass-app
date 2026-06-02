@@ -88,6 +88,35 @@ const ICON_BY_NAME: Record<string, LucideIcon> = {
  *  value is now a template UUID (not a hardcoded slug). */
 export const SECTION_LIBRARY_DRAG_TYPE = 'application/x-lp-section-library-id';
 
+/** advance-builder-fixes §1 — field-level drag payload. Carries a single
+ *  field (+ its parent template id/label) so the canvas can append just
+ *  that field instead of the whole group. JSON-encoded. */
+export const FIELD_LIBRARY_DRAG_TYPE = 'application/x-lp-field';
+
+/** Dispatch a "add this single field" intent to the canvas (which listens
+ *  on window for 'advance:field-add'). Shared by the click + drag paths. */
+function dispatchFieldAdd(
+  templateId: string,
+  templateLabel: string,
+  field: { id: string; label: string; type: string; required?: boolean },
+) {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(
+    new CustomEvent('advance:field-add', {
+      detail: {
+        templateId,
+        label: templateLabel,
+        field: {
+          id: field.id,
+          label: field.label,
+          type: field.type,
+          required: field.required ?? false,
+        },
+      },
+    }),
+  );
+}
+
 export function AdvanceSectionLibrary({
   onAddBlank,
 }: {
@@ -132,8 +161,18 @@ export function AdvanceSectionLibrary({
   // Sprint 8.5 §6a — split into platform vs custom for the
   // micro-label dividers Adam approved. workspace_id IS NULL ⇒
   // platform; non-null ⇒ workspace custom.
+  // advance-builder-fixes §3 — Key Contacts is the canonical top-of-doc
+  // section (the API auto-pins it to order 0 when missing). Surface it
+  // first in the palette so it's the obvious thing to drop at the top.
   const platform = useMemo(
-    () => filtered.filter((t) => t.workspace_id == null),
+    () =>
+      filtered
+        .filter((t) => t.workspace_id == null)
+        .sort(
+          (a, b) =>
+            (a.name === 'Key Contacts' ? 0 : 1) -
+            (b.name === 'Key Contacts' ? 0 : 1),
+        ),
     [filtered],
   );
   const custom = useMemo(
@@ -443,8 +482,38 @@ function LibraryCard({
             template.fields.map((f) => (
               <div
                 key={f.id}
-                className="flex items-center"
-                style={{ gap: 8 }}
+                role="button"
+                tabIndex={0}
+                draggable
+                onDragStart={(e) => {
+                  // Don't let the row drag bubble into the card's
+                  // whole-section drag.
+                  e.stopPropagation();
+                  e.dataTransfer.setData(
+                    FIELD_LIBRARY_DRAG_TYPE,
+                    JSON.stringify({
+                      templateId: template.id,
+                      label: template.name,
+                      field: {
+                        id: f.id,
+                        label: f.label,
+                        type: f.type,
+                        required: f.required ?? false,
+                      },
+                    }),
+                  );
+                  e.dataTransfer.effectAllowed = 'copy';
+                }}
+                onClick={() => dispatchFieldAdd(template.id, template.name, f)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    dispatchFieldAdd(template.id, template.name, f);
+                  }
+                }}
+                className="group flex cursor-grab items-center rounded"
+                style={{ gap: 8, padding: '3px 4px' }}
+                title="Click or drag to add this field"
               >
                 <FieldTypeIcon type={f.type} size={12} />
                 <span
@@ -468,6 +537,12 @@ function LibraryCard({
                     *
                   </span>
                 ) : null}
+                <Plus
+                  size={12}
+                  aria-hidden
+                  className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
+                  style={{ color: 'var(--color-lp-orange)' }}
+                />
               </div>
             ))
           )}

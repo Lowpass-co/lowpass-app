@@ -15,7 +15,10 @@
 'use client';
 
 import { useState } from 'react';
-import { SECTION_LIBRARY_DRAG_TYPE } from './AdvanceSectionLibrary';
+import {
+  SECTION_LIBRARY_DRAG_TYPE,
+  FIELD_LIBRARY_DRAG_TYPE,
+} from './AdvanceSectionLibrary';
 
 interface SectionDropZoneProps {
   onDrop: (seedId: string, label: string) => void;
@@ -27,7 +30,11 @@ export function SectionDropZone({ onDrop }: SectionDropZoneProps) {
   return (
     <div
       onDragOver={(e) => {
-        if (e.dataTransfer.types.includes(SECTION_LIBRARY_DRAG_TYPE)) {
+        // Accept whole-section drags (group) OR single-field drags (§1).
+        if (
+          e.dataTransfer.types.includes(SECTION_LIBRARY_DRAG_TYPE) ||
+          e.dataTransfer.types.includes(FIELD_LIBRARY_DRAG_TYPE)
+        ) {
           e.preventDefault();
           e.dataTransfer.dropEffect = 'copy';
           if (!over) setOver(true);
@@ -37,6 +44,21 @@ export function SectionDropZone({ onDrop }: SectionDropZoneProps) {
       onDrop={(e) => {
         e.preventDefault();
         setOver(false);
+        // advance-builder-fixes §1 — single field dropped from the
+        // library. Forward to the canvas via the window event the
+        // builder listens on (same path as the click-to-add).
+        const fieldRaw = e.dataTransfer.getData(FIELD_LIBRARY_DRAG_TYPE);
+        if (fieldRaw) {
+          try {
+            const detail = JSON.parse(fieldRaw);
+            window.dispatchEvent(
+              new CustomEvent('advance:field-add', { detail }),
+            );
+          } catch {
+            /* malformed payload — ignore */
+          }
+          return;
+        }
         const seedId = e.dataTransfer.getData(SECTION_LIBRARY_DRAG_TYPE);
         const label = e.dataTransfer.getData('text/plain') ?? seedId;
         if (seedId) onDrop(seedId, label);
@@ -57,7 +79,7 @@ export function SectionDropZone({ onDrop }: SectionDropZoneProps) {
           'border-color 120ms ease, background-color 120ms ease, color 120ms ease',
       }}
     >
-      Drop section here
+      Drop a section or field here
     </div>
   );
 }
