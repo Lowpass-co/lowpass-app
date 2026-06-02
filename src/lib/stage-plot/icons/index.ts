@@ -24,6 +24,12 @@ import { musicianIcons } from './musicians';
 import { ampIcons } from './amps';
 import { keyIcons } from './keys';
 import { stringIcons } from './strings';
+import { monitorIcons } from './monitors';
+import { signalIcons } from './signal';
+import { infrastructureIcons } from './infrastructure';
+import { lightingIcons } from './lighting';
+import { standIcons } from './stands';
+import { utilityIcons } from './utility';
 import type { IconCategoryKey, IconDescriptor } from './types';
 
 /** Every built-in icon. Spread category arrays here as they ship. */
@@ -36,6 +42,12 @@ export const ALL_ICONS: IconDescriptor[] = [
   ...ampIcons, // §SP1b amplifiers & cabinets
   ...keyIcons, // §SP1b keyboards
   ...stringIcons, // §SP1b stringed instruments
+  ...monitorIcons, // §SP1c monitors & IEM
+  ...signalIcons, // §SP1c signal & I/O
+  ...infrastructureIcons, // §SP1c stage infrastructure
+  ...lightingIcons, // §SP1c lighting
+  ...standIcons, // §SP1c stands & supports
+  ...utilityIcons, // §SP1c utility & annotations
 ];
 
 const BY_NAME = new Map<string, IconDescriptor>(ALL_ICONS.map((i) => [i.name, i]));
