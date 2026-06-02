@@ -14,13 +14,42 @@
    snare "S" / kick pedal stay correct).
    ============================================ */
 
-import { drumIcons } from './drums';
 import type { IconDescriptor } from './types';
 
+/* FROZEN shell bodies — the kit composites are owned by §SP-FIX-3
+   (composite/individual toggle redesign). Decoupled from drums.ts so
+   the §SP-FIX-1b standalone-piece redraw can't restyle or break them.
+   These are the pre-FIX-1b 0 0 100 100 bodies (centred ~50,50, which
+   place() assumes). Delete this map when §SP-FIX-3 rebuilds composites. */
+const FROZEN_SHELLS: Record<string, string> = {
+  'drum-kick':
+    '<circle cx="50" cy="44" r="32"/><circle cx="50" cy="44" r="4" class="lp-ico-detail"/>' +
+    '<line x1="30" y1="70" x2="18" y2="93" class="lp-ico-detail"/><line x1="70" y1="70" x2="82" y2="93" class="lp-ico-detail"/>' +
+    '<rect x="43" y="82" width="14" height="13" rx="2" class="lp-ico-detail"/>',
+  'drum-snare':
+    '<circle cx="50" cy="50" r="32"/>' +
+    '<text class="lp-ico-label" x="50" y="50" text-anchor="middle" dominant-baseline="central" font-size="34">S</text>' +
+    '<rect x="79" y="44" width="13" height="12" rx="2" class="lp-ico-detail"/>',
+  'drum-tom-hi':
+    '<circle cx="50" cy="50" r="28"/><circle cx="50" cy="50" r="4" class="lp-ico-detail"/>' +
+    '<line x1="44" y1="20" x2="52" y2="28" class="lp-ico-detail"/><line x1="52" y1="20" x2="44" y2="28" class="lp-ico-detail"/>',
+  'drum-tom-mid':
+    '<circle cx="50" cy="50" r="31"/><circle cx="50" cy="50" r="4" class="lp-ico-detail"/>' +
+    '<line x1="32" y1="22" x2="40" y2="30" class="lp-ico-detail"/><line x1="40" y1="22" x2="32" y2="30" class="lp-ico-detail"/>' +
+    '<line x1="60" y1="22" x2="68" y2="30" class="lp-ico-detail"/><line x1="68" y1="22" x2="60" y2="30" class="lp-ico-detail"/>',
+  'drum-tom-floor':
+    '<circle cx="50" cy="50" r="31"/><circle cx="50" cy="50" r="5" class="lp-ico-detail"/>' +
+    '<line x1="28" y1="22" x2="36" y2="30" class="lp-ico-detail"/><line x1="36" y1="22" x2="28" y2="30" class="lp-ico-detail"/>' +
+    '<line x1="46" y1="20" x2="54" y2="28" class="lp-ico-detail"/><line x1="54" y1="20" x2="46" y2="28" class="lp-ico-detail"/>' +
+    '<line x1="64" y1="22" x2="72" y2="30" class="lp-ico-detail"/><line x1="72" y1="22" x2="64" y2="30" class="lp-ico-detail"/>',
+  'drum-throne':
+    '<rect x="22" y="22" width="56" height="56" rx="12"/><line x1="50" y1="34" x2="50" y2="66" class="lp-ico-detail"/>',
+};
+
 const shellBody = (name: string): string => {
-  const ic = drumIcons.find((i) => i.name === name);
-  if (!ic) throw new Error(`drum composite: missing shell "${name}"`);
-  return ic.body;
+  const b = FROZEN_SHELLS[name];
+  if (!b) throw new Error(`drum composite: missing frozen shell "${name}"`);
+  return b;
 };
 
 /** Place a shell (authored 0 0 100 100, centred ~50,50) at (px,py), scaled. */
