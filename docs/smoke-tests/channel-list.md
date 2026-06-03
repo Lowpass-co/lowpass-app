@@ -155,11 +155,27 @@ section as the channel-list rebuild sprint closes gaps.
 every cell to the bottom-right.
 
 **Expect**: Every cell receives focus in left-to-right, top-to-bottom
-order. No focus drops.
+order. No focus drops. The focused cell shows a clear inset orange ring.
 
-**Currently**: Tab only stops on Name, Notes, and Delete. Mic / DI /
-stand / position / phantom / stage box cells are not wrapped in
-`<NavCell>`.
+**Root cause (corrected)**: Every cell was *already* wrapped in
+`<NavCell>` (since Sprint 12 §8b2 / `71b2327`) and Tab *did* land on
+each cell. The real defect was an **invisible focus ring**:
+`BrandedSelect` (Position / Cable / Mic / Stand / Provider) used
+`ring-[var(--lp-orange)]/20` — but the bare token `--lp-orange` is
+**undefined** in `globals.css` (only `--color-lp-orange` exists), so
+the `color-mix()` resolved to an invalid colour and no ring rendered.
+`PositionPicker` (Stage Box / Loom) had only a faint border nudge; the
+phantom button had no focus style. Focus *looked* like it skipped those
+cells.
+
+**Fix applied (2026-06-03, §CL-FIX-1)**: inset full-opacity
+`focus-visible:ring-2 ring-inset ring-[var(--color-lp-orange)]` on
+the `BrandedSelect` trigger, `PositionPicker` trigger, and the phantom
+button. (App-wide side effect: every `BrandedSelect` mount now has a
+visible keyboard-focus ring — previously all were invisible.)
+
+**Status**: ⏳ Pending Vercel-preview verification. Move out of
+"Known broken" once the tab walk is confirmed.
 
 **Tracked in**: `CC_CHANNEL_LIST_REBUILD.md` §CL-FIX-1.
 
