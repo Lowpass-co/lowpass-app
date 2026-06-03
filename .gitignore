@@ -39,6 +39,11 @@ tsconfig.tsbuildinfo
 # Cursor / agent worktrees
 .claude/worktrees/
 
+# Local Claude/agent config — may contain API keys, never commit
+.mcp.json
+.claude/settings.local.json
+.claude/launch.json
+
 # local lint output
 .lint-output.txt
 
