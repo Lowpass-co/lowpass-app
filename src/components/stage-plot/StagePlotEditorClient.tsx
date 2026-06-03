@@ -11,10 +11,10 @@ import { useEffect, useRef, useState } from 'react';
 import { StagePlotEditor } from '@/components/stage-plot/StagePlotEditor';
 import { registerCustomIcons } from '@/lib/stage-plot/icons';
 import type { IconDescriptor } from '@/lib/stage-plot/icons/types';
-import type { EditorItem, EditorPlot } from '@/lib/stage-plot/editor-types';
+import type { Channel, EditorItem, EditorPlot } from '@/lib/stage-plot/editor-types';
 
 export function StagePlotEditorClient({ plotId }: { plotId: string }) {
-  const [data, setData] = useState<{ plot: EditorPlot; items: EditorItem[]; customs: IconDescriptor[] } | null>(null);
+  const [data, setData] = useState<{ plot: EditorPlot; items: EditorItem[]; customs: IconDescriptor[]; channels: Channel[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -34,7 +34,7 @@ export function StagePlotEditorClient({ plotId }: { plotId: string }) {
         if (!live) return;
         const customs = (custom.items ?? []) as IconDescriptor[];
         registerCustomIcons(customs);
-        setData({ plot: d.plot, items: d.items, customs });
+        setData({ plot: d.plot, items: d.items, customs, channels: (d.channels ?? []) as Channel[] });
       })
       .catch((e) => live && setError(e instanceof Error ? e.message : 'Load error'));
     return () => {
@@ -63,7 +63,7 @@ export function StagePlotEditorClient({ plotId }: { plotId: string }) {
   }
   return (
     <div style={{ height: 'calc(100vh - 64px)' }}>
-      <StagePlotEditor initialPlot={data.plot} initialItems={data.items} initialCustomIcons={data.customs} onChange={persist} />
+      <StagePlotEditor initialPlot={data.plot} initialItems={data.items} initialCustomIcons={data.customs} channels={data.channels} onChange={persist} />
     </div>
   );
 }

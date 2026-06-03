@@ -16,8 +16,7 @@ import { IconPalette } from '@/components/stage-plot/IconPalette';
 import { ItemProperties } from '@/components/stage-plot/ItemProperties';
 import { StageCanvas } from '@/components/stage-plot/StageCanvas';
 import { buildStagePlotPdfHtml } from '@/lib/stage-plot/pdf-render';
-import { extractTitleBarFromItems } from '@/lib/stage-plot/server';
-import { DEFAULT_PLOT, type Channel, type EditorItem, type EditorPlot } from '@/lib/stage-plot/editor-types';
+import { DEFAULT_PLOT, extractTitleBarFromItems, type Channel, type EditorItem, type EditorPlot } from '@/lib/stage-plot/editor-types';
 
 const uid = (): string =>
   typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `i${Date.now()}${Math.round(Math.random() * 1e6)}`;

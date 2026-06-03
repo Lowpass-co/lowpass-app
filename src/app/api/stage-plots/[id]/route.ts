@@ -10,7 +10,7 @@
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { requireUserAndWorkspace } from '@/lib/auth/workspace-check';
-import { loadStagePlot, saveStagePlot } from '@/lib/stage-plot/server';
+import { loadStagePlot, loadPlotChannels, saveStagePlot } from '@/lib/stage-plot/server';
 import type { EditorItem, EditorPlot } from '@/lib/stage-plot/editor-types';
 
 export const dynamic = 'force-dynamic';
@@ -22,7 +22,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   if ('error' in auth) return auth.error;
   const data = await loadStagePlot(supabase, id);
   if (!data) return NextResponse.json({ error: 'Not found' }, { status: 404 });
-  return NextResponse.json(data);
+  const channels = await loadPlotChannels(supabase, data.riderPackId);
+  return NextResponse.json({ ...data, channels });
 }
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {

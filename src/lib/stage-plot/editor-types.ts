@@ -98,6 +98,24 @@ export interface EditorItem {
   weight?: number;
 }
 
+/** §SP-FIX-7 — one-time helper: pull TM contact details out of free
+ *  text annotations (the old hand-built title bar) into structured
+ *  fields. Pure (kept here so client code doesn't import server.ts). */
+export function extractTitleBarFromItems(items: EditorItem[]): Partial<EditorPlot> {
+  const texts = items.filter((i) => i.kind === 'text' && i.text).map((i) => i.text!.trim());
+  const patch: Partial<EditorPlot> = {};
+  for (const t of texts) {
+    const email = t.match(/[\w.+-]+@[\w-]+\.[\w.-]+/);
+    if (email && !patch.tmEmail) patch.tmEmail = email[0];
+    const phone = t.match(/\+?[\d][\d\s().-]{7,}\d/);
+    if (phone && !patch.tmPhone) patch.tmPhone = phone[0].trim();
+    if (/\b(TM|tour manager|FOH|PM|production manager)\b/i.test(t) && !patch.tmRole) {
+      patch.tmRole = t.length <= 24 ? t : t.match(/\b(TM\/FoH|TM|FOH|PM|Tour Manager|Production Manager)\b/i)?.[0];
+    }
+  }
+  return patch;
+}
+
 export const DEFAULT_PLOT: EditorPlot = {
   name: 'Untitled stage plot',
   widthFt: 24,

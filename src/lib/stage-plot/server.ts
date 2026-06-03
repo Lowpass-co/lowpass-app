@@ -10,7 +10,9 @@
    ============================================ */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { DEFAULT_PLOT, type EditorItem, type EditorPlot } from './editor-types';
+import { resolvePack } from '@/lib/rider-packs/resolve';
+import type { RiderPack } from '@/lib/rider-packs/types';
+import { DEFAULT_PLOT, type Channel, type EditorItem, type EditorPlot } from './editor-types';
 
 interface PlotRow {
   id: string;
@@ -135,24 +137,6 @@ export function plotToColumns(plot: EditorPlot): Record<string, unknown> {
   };
 }
 
-/** §SP-FIX-7 — one-time helper: pull TM contact details out of free
- *  text annotations (the old hand-built title bar) into structured
- *  fields. Returns a partial EditorPlot patch. */
-export function extractTitleBarFromItems(items: EditorItem[]): Partial<EditorPlot> {
-  const texts = items.filter((i) => i.kind === 'text' && i.text).map((i) => i.text!.trim());
-  const patch: Partial<EditorPlot> = {};
-  for (const t of texts) {
-    const email = t.match(/[\w.+-]+@[\w-]+\.[\w.-]+/);
-    if (email && !patch.tmEmail) patch.tmEmail = email[0];
-    const phone = t.match(/\+?[\d][\d\s().-]{7,}\d/);
-    if (phone && !patch.tmPhone) patch.tmPhone = phone[0].trim();
-    if (/\b(TM|tour manager|FOH|PM|production manager)\b/i.test(t) && !patch.tmRole) {
-      patch.tmRole = t.length <= 24 ? t : t.match(/\b(TM\/FoH|TM|FOH|PM|Tour Manager|Production Manager)\b/i)?.[0];
-    }
-  }
-  return patch;
-}
-
 export function itemToRow(it: EditorItem, stagePlotId: string, workspaceId: string, zIndex = 0): Record<string, unknown> {
   const kind = it.kind ?? 'icon';
   const labelStyle: Record<string, unknown> = kind === 'icon' ? {} : { kind, text: it.text, fontSizeFt: it.fontSizeFt, x2Ft: it.x2Ft, y2Ft: it.y2Ft };
@@ -185,6 +169,53 @@ export function itemToRow(it: EditorItem, stagePlotId: string, workspaceId: stri
 }
 
 /** Load a stage plot (config + items + name) by stage_plots.id. */
+/** §SP-FIX-6 wiring — resolve the channel-list paired with this stage
+ *  plot (linked pack → else a channel_list pack on the same tour →
+ *  else the artist's), mapped to the editor's Channel shape so the
+ *  editor can show the Channels section + tint linked items. */
+export async function loadPlotChannels(supabase: SupabaseClient, riderPackId: string): Promise<Channel[]> {
+  const { data: src } = await supabase
+    .from('rider_packs')
+    .select('tour_id, artist_id, linked_rider_pack_id')
+    .eq('id', riderPackId)
+    .maybeSingle();
+  if (!src) return [];
+
+  const pickPack = async (): Promise<RiderPack | null> => {
+    if (src.linked_rider_pack_id) {
+      const { data } = await supabase.from('rider_packs').select('*').eq('id', src.linked_rider_pack_id).eq('kind', 'channel_list').maybeSingle();
+      if (data) return data as RiderPack;
+    }
+    if (src.tour_id) {
+      const { data } = await supabase.from('rider_packs').select('*').eq('tour_id', src.tour_id).eq('kind', 'channel_list').order('updated_at', { ascending: false }).limit(1).maybeSingle();
+      if (data) return data as RiderPack;
+    }
+    if (src.artist_id) {
+      const { data } = await supabase.from('rider_packs').select('*').eq('artist_id', src.artist_id).eq('scope', 'artist').eq('kind', 'channel_list').order('updated_at', { ascending: false }).limit(1).maybeSingle();
+      if (data) return data as RiderPack;
+    }
+    return null;
+  };
+
+  const clPack = await pickPack();
+  if (!clPack) return [];
+  try {
+    const resolved = await resolvePack(supabase, clPack);
+    const sec = resolved.sections.find((s) => s.section_type === 'channel_list');
+    if (!sec?.rows) return [];
+    const snakeById = new Map((sec.subSnakes ?? []).map((s) => [s.id, s]));
+    return sec.rows
+      .filter((r) => r.row_kind !== 'output')
+      .sort((a, b) => a.row_index - b.row_index)
+      .map((r, i) => {
+        const sn = r.sub_snake_id ? snakeById.get(r.sub_snake_id) : undefined;
+        return { id: r.id, number: i + 1, label: r.channel_name || `Ch ${i + 1}`, color: sn?.colour ?? null, snakeLabel: sn?.label ?? null };
+      });
+  } catch {
+    return [];
+  }
+}
+
 export async function loadStagePlot(
   supabase: SupabaseClient,
   id: string,

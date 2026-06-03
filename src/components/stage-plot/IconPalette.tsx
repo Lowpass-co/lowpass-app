@@ -26,9 +26,9 @@ export function IconPalette({ onAdd, customIcons = [], onCustomGenerated }: Icon
   const [showLabels, setShowLabels] = useState(false);
 
   // Custom-item generator (§SP-FIX-1b·5): generate an icon from an
-  // uploaded photo. Saved to the workspace library by the endpoint;
-  // previewed here. (Dragging customs onto the canvas needs the §SP10
-  // custom-library/canvas resolution — not wired yet.)
+  // uploaded photo. Saved to the workspace library by the endpoint and
+  // shown in the Custom section; custom_<id> icons are registered with
+  // getIcon (§SP10) so they're draggable onto the canvas like built-ins.
   const [genOpen, setGenOpen] = useState(false);
   const [genLabel, setGenLabel] = useState('');
   const [genW, setGenW] = useState('1');
