@@ -21,6 +21,12 @@ const ALLOWED_SECTION_FIELDS = new Set<string>([
      channel_list sections (the latter wired in a follow-up
      after §9 core). */
   'metadata',
+  /* §RA11 — section completion tracking (migration 111). status drives
+     the RiderPackHeader stats + sidebar/rail progress; last_updated_by_id
+     records the editor; template_id links the seed template. */
+  'status',
+  'last_updated_by_id',
+  'template_id',
 ]);
 
 export async function PATCH(

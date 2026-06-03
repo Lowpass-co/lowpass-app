@@ -19,6 +19,7 @@ import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { appendHistory } from '@/lib/rider-packs/history';
 import { isRiderFoldersMissingError, RIDER_FOLDERS_SETUP_MESSAGE } from '@/lib/rider-packs/schema-errors';
 import type { PackScope } from '@/lib/rider-packs/types';
+import { computeRiderProgress, type SectionLike } from '@/lib/rider-packs/progress';
 
 const SCOPES: PackScope[] = ['artist', 'tour', 'show'];
 
@@ -53,7 +54,33 @@ export async function GET(request: Request) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  return NextResponse.json({ packs: data ?? [] });
+
+  const packs = data ?? [];
+
+  // §RA11 — attach a per-pack completion summary so the sidebar can show
+  // a progress bar without an N+1 fetch. One extra query for all packs'
+  // sections; RLS scopes them. Failure here degrades gracefully (no
+  // progress field) rather than failing the list.
+  if (packs.length > 0) {
+    const ids = packs.map((p) => p.id);
+    const { data: secRows } = await supabase
+      .from('rider_sections')
+      .select('pack_id, fields, section_type, status')
+      .in('pack_id', ids);
+    if (secRows) {
+      const byPack = new Map<string, SectionLike[]>();
+      for (const row of secRows as Array<SectionLike & { pack_id: string }>) {
+        const list = byPack.get(row.pack_id) ?? [];
+        list.push(row);
+        byPack.set(row.pack_id, list);
+      }
+      for (const p of packs) {
+        p.progress = computeRiderProgress(byPack.get(p.id) ?? []);
+      }
+    }
+  }
+
+  return NextResponse.json({ packs });
 }
 
 export async function POST(request: Request) {

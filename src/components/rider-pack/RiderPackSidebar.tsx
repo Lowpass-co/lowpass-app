@@ -24,6 +24,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { FileText, Loader2, Search } from 'lucide-react';
+import type { RiderProgress } from '@/lib/rider-packs/progress';
 
 interface RiderPackRow {
   id: string;
@@ -31,6 +32,8 @@ interface RiderPackRow {
   kind: string | null;
   scope: string | null;
   updated_at: string | null;
+  /** §RA11 — per-pack completion summary from GET /api/rider-packs. */
+  progress?: RiderProgress | null;
 }
 
 interface RiderPackSidebarProps {
@@ -169,6 +172,25 @@ export function RiderPackSidebar({ scope, contextId, contextName, activePackId }
                     {updated ? (
                       <div className="mt-0.5 truncate" style={{ fontSize: '11px', color: 'var(--lp-text-tertiary)', paddingLeft: 20 }}>
                         Updated {updated}
+                      </div>
+                    ) : null}
+                    {p.progress && p.progress.sectionsTotal > 0 ? (
+                      <div className="mt-1 flex items-center gap-1.5" style={{ paddingLeft: 20 }}>
+                        <div
+                          className="flex-1 overflow-hidden"
+                          style={{ height: 3, borderRadius: 9999, background: 'var(--lp-border-subtle)' }}
+                        >
+                          <div
+                            style={{
+                              width: `${Math.round((p.progress.sectionsComplete / p.progress.sectionsTotal) * 100)}%`,
+                              height: '100%',
+                              background: 'var(--color-lp-status-complete)',
+                            }}
+                          />
+                        </div>
+                        <span className="lp-mono shrink-0" style={{ fontSize: '10px', color: 'var(--lp-text-tertiary)' }}>
+                          {p.progress.sectionsComplete}/{p.progress.sectionsTotal}
+                        </span>
                       </div>
                     ) : null}
                   </Link>

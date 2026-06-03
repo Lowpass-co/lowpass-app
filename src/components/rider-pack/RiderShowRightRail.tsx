@@ -18,28 +18,17 @@
 
 'use client';
 
-import type { PackScope, RiderSection, SectionType } from '@/lib/rider-packs/types';
-import { isFieldConsideredEmpty } from './FieldEditors';
+import type { PackScope, RiderSection } from '@/lib/rider-packs/types';
+import { sectionStatus, sectionFillCounts, type RiderSectionStatus } from '@/lib/rider-packs/progress';
 
 const SCOPE_LABEL: Record<PackScope, string> = { artist: 'Artist', tour: 'Tour', show: 'Show' };
 
-type SectionStatus = 'complete' | 'partial' | 'empty' | 'other';
-
-function sectionStatus(section: RiderSection): { status: SectionStatus; filled: number; total: number } {
-  const type: SectionType = section.section_type ?? 'fields';
-  if (type !== 'fields') return { status: 'other', filled: 0, total: 0 };
-  const fields = section.fields ?? [];
-  const total = fields.length;
-  const filled = fields.filter((f) => !isFieldConsideredEmpty(f)).length;
-  const status: SectionStatus = total === 0 || filled === 0 ? 'empty' : filled === total ? 'complete' : 'partial';
-  return { status, filled, total };
-}
-
-const DOT_COLOR: Record<SectionStatus, string> = {
+// Canonical status → dot colour (§RA11 shared helper drives the status).
+const DOT_COLOR: Record<RiderSectionStatus, string> = {
   complete: 'var(--color-lp-status-complete)',
-  partial: 'var(--color-lp-status-needs-review)',
-  empty: 'var(--lp-text-tertiary)',
-  other: 'var(--lp-text-tertiary)',
+  in_progress: 'var(--color-lp-status-in-progress)',
+  needs_review: 'var(--color-lp-status-needs-review)',
+  not_started: 'var(--lp-text-tertiary)',
 };
 
 interface RiderShowRightRailProps {
@@ -61,7 +50,9 @@ export function RiderShowRightRail({ sections, scope, scopeContext, templateName
         ) : (
           <ul className="flex flex-col" style={{ gap: 2 }}>
             {sections.map((s) => {
-              const { status, filled, total } = sectionStatus(s);
+              const status = sectionStatus(s);
+              const { filled, total } = sectionFillCounts(s);
+              const isOther = (s.section_type ?? 'fields') !== 'fields';
               return (
                 <li key={s.id}>
                   <a
@@ -75,7 +66,7 @@ export function RiderShowRightRail({ sections, scope, scopeContext, templateName
                       style={{ width: 8, height: 8, borderRadius: 9999, background: DOT_COLOR[status] }}
                     />
                     <span className="min-w-0 flex-1 truncate">{s.title}</span>
-                    {status === 'other' ? (
+                    {isOther ? (
                       <span className="lp-mono shrink-0" style={{ fontSize: '10px', color: 'var(--lp-text-tertiary)' }}>—</span>
                     ) : (
                       <span className="lp-mono shrink-0" style={{ fontSize: '11px', color: 'var(--lp-text-tertiary)' }}>
