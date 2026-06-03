@@ -52,9 +52,26 @@ export const ALL_ICONS: IconDescriptor[] = [
 
 const BY_NAME = new Map<string, IconDescriptor>(ALL_ICONS.map((i) => [i.name, i]));
 
-/** Resolve a built-in icon by its registry key (icon_name). */
+/* Workspace custom / AI-generated icons (§SP10). Resolved by name
+   (custom_<uuid>) once the editor registers them on load, so getIcon
+   resolves them everywhere built-ins do — palette, canvas, properties,
+   PDF — without threading a registry through every call site. */
+const CUSTOM_BY_NAME = new Map<string, IconDescriptor>();
+
+/** Register workspace custom icons so getIcon can resolve them. */
+export function registerCustomIcons(icons: IconDescriptor[]): void {
+  for (const i of icons) CUSTOM_BY_NAME.set(i.name, i);
+}
+
+/** All currently-registered custom icons. */
+export function listCustomIcons(): IconDescriptor[] {
+  return [...CUSTOM_BY_NAME.values()];
+}
+
+/** Resolve an icon by its registry key (icon_name) — built-in first,
+ *  then registered customs. */
 export function getIcon(name: string): IconDescriptor | undefined {
-  return BY_NAME.get(name);
+  return BY_NAME.get(name) ?? CUSTOM_BY_NAME.get(name);
 }
 
 /** Built-in icons in a category, in registration order. */

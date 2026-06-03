@@ -15,9 +15,13 @@ import type { IconDescriptor } from '@/lib/stage-plot/icons/types';
 
 export interface IconPaletteProps {
   onAdd: (iconName: string) => void;
+  /** Workspace custom / AI icons (§SP10) — rendered in the Custom section. */
+  customIcons?: IconDescriptor[];
+  /** Called when a new icon is generated from an image. */
+  onCustomGenerated?: (icon: IconDescriptor) => void;
 }
 
-export function IconPalette({ onAdd }: IconPaletteProps) {
+export function IconPalette({ onAdd, customIcons = [], onCustomGenerated }: IconPaletteProps) {
   const [query, setQuery] = useState('');
   const [showLabels, setShowLabels] = useState(false);
 
@@ -32,7 +36,6 @@ export function IconPalette({ onAdd }: IconPaletteProps) {
   const [genFile, setGenFile] = useState<File | null>(null);
   const [genBusy, setGenBusy] = useState(false);
   const [genErr, setGenErr] = useState('');
-  const [generated, setGenerated] = useState<IconDescriptor[]>([]);
 
   const generateFromImage = async () => {
     if (!genLabel.trim() || !genFile) {
@@ -54,10 +57,14 @@ export function IconPalette({ onAdd }: IconPaletteProps) {
         return;
       }
       const it = json.item;
-      setGenerated((prev) => [
-        { name: it.name, label: it.label, category: 'utility' as IconDescriptor['category'], footprint: it.footprint, viewBox: it.viewBox, body: it.body },
-        ...prev,
-      ]);
+      onCustomGenerated?.({
+        name: it.name,
+        label: it.label,
+        category: (it.category ?? 'utility') as IconDescriptor['category'],
+        footprint: it.footprint,
+        viewBox: it.viewBox,
+        body: it.body,
+      });
       setGenLabel('');
       setGenFile(null);
       setGenOpen(false);
@@ -136,13 +143,26 @@ export function IconPalette({ onAdd }: IconPaletteProps) {
             <h3 style={{ fontSize: 'var(--lp-text-2xs)', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--lp-text-tertiary)', margin: '0 0 8px' }}>
               Custom (AI)
             </h3>
-            {generated.length ? (
+            {customIcons.length ? (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(48px, 1fr))', gap: 6, marginBottom: 8 }}>
-                {generated.map((icon) => (
-                  <div key={icon.name} title={`${icon.label} — saved to the workspace library`} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, padding: 6 }}>
+                {customIcons.map((icon) => (
+                  <button
+                    key={icon.name}
+                    type="button"
+                    title={`${icon.label} — drag onto the stage or click to add`}
+                    draggable
+                    onDragStart={(e) => {
+                      e.dataTransfer.setData('text/plain', icon.name);
+                      e.dataTransfer.effectAllowed = 'copy';
+                    }}
+                    onClick={() => onAdd(icon.name)}
+                    style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, padding: 6, borderRadius: 8, border: '1px solid transparent', background: 'transparent', cursor: 'grab', color: 'var(--lp-text-secondary)' }}
+                    onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--lp-surface-hover)')}
+                    onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+                  >
                     <StagePlotIcon icon={icon} mode="library" size={30} showBadge={false} />
                     {showLabels && <span style={{ fontSize: 9, lineHeight: 1.1, textAlign: 'center', color: 'var(--lp-text-tertiary)' }}>{icon.label}</span>}
-                  </div>
+                  </button>
                 ))}
               </div>
             ) : null}

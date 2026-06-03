@@ -9,22 +9,32 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { StagePlotEditor } from '@/components/stage-plot/StagePlotEditor';
+import { registerCustomIcons } from '@/lib/stage-plot/icons';
+import type { IconDescriptor } from '@/lib/stage-plot/icons/types';
 import type { EditorItem, EditorPlot } from '@/lib/stage-plot/editor-types';
 
 export function StagePlotEditorClient({ plotId }: { plotId: string }) {
-  const [data, setData] = useState<{ plot: EditorPlot; items: EditorItem[] } | null>(null);
+  const [data, setData] = useState<{ plot: EditorPlot; items: EditorItem[]; customs: IconDescriptor[] } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     let live = true;
-    fetch(`/api/stage-plots/${plotId}`)
-      .then(async (r) => {
+    // Load the plot + the workspace custom-icon library together, and
+    // register the customs BEFORE mounting the editor so getIcon
+    // resolves any custom_<id> items on the very first render.
+    Promise.all([
+      fetch(`/api/stage-plots/${plotId}`).then(async (r) => {
         if (!r.ok) throw new Error(r.status === 404 ? 'Stage plot not found' : `Load failed (${r.status})`);
         return r.json();
-      })
-      .then((d) => {
-        if (live) setData({ plot: d.plot, items: d.items });
+      }),
+      fetch('/api/stage-plot/icons').then((r) => (r.ok ? r.json() : { items: [] })).catch(() => ({ items: [] })),
+    ])
+      .then(([d, custom]) => {
+        if (!live) return;
+        const customs = (custom.items ?? []) as IconDescriptor[];
+        registerCustomIcons(customs);
+        setData({ plot: d.plot, items: d.items, customs });
       })
       .catch((e) => live && setError(e instanceof Error ? e.message : 'Load error'));
     return () => {
@@ -53,7 +63,7 @@ export function StagePlotEditorClient({ plotId }: { plotId: string }) {
   }
   return (
     <div style={{ height: 'calc(100vh - 64px)' }}>
-      <StagePlotEditor initialPlot={data.plot} initialItems={data.items} onChange={persist} />
+      <StagePlotEditor initialPlot={data.plot} initialItems={data.items} initialCustomIcons={data.customs} onChange={persist} />
     </div>
   );
 }

@@ -10,7 +10,8 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { getIcon } from '@/lib/stage-plot/icons';
+import { getIcon, registerCustomIcons } from '@/lib/stage-plot/icons';
+import type { IconDescriptor } from '@/lib/stage-plot/icons/types';
 import { IconPalette } from '@/components/stage-plot/IconPalette';
 import { ItemProperties } from '@/components/stage-plot/ItemProperties';
 import { StageCanvas } from '@/components/stage-plot/StageCanvas';
@@ -35,16 +36,30 @@ export interface StagePlotEditorProps {
   initialItems?: EditorItem[];
   /** Channel-list rows from the paired channel_list pack (§SP4). */
   channels?: Channel[];
+  /** Workspace custom / AI icons (§SP10) — registered for getIcon + shown in the palette. */
+  initialCustomIcons?: IconDescriptor[];
   onChange?: (plot: EditorPlot, items: EditorItem[]) => void;
   /** Optional header-right slot (export / share buttons). */
   actions?: React.ReactNode;
 }
 
-export function StagePlotEditor({ initialPlot, initialItems, channels: initialChannels = [], onChange, actions }: StagePlotEditorProps) {
+export function StagePlotEditor({ initialPlot, initialItems, channels: initialChannels = [], initialCustomIcons = [], onChange, actions }: StagePlotEditorProps) {
   const [plot, setPlot] = useState<EditorPlot>(initialPlot ?? DEFAULT_PLOT);
   const [items, setItems] = useState<EditorItem[]>(initialItems ?? []);
   const [channels, setChannels] = useState<Channel[]>(initialChannels);
+  const [customIcons, setCustomIcons] = useState<IconDescriptor[]>(initialCustomIcons);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+  // Keep getIcon able to resolve customs (canvas / properties / PDF).
+  useEffect(() => {
+    registerCustomIcons(customIcons);
+  }, [customIcons]);
+
+  // A new icon generated from the palette: register + show immediately.
+  const onCustomGenerated = useCallback((icon: IconDescriptor) => {
+    registerCustomIcons([icon]);
+    setCustomIcons((prev) => [icon, ...prev.filter((c) => c.name !== icon.name)]);
+  }, []);
 
   // Create a new channel-list row on the fly (mics often aren't on the
   // plot, so you patch an instrument to channels you add here). Returns
@@ -211,7 +226,7 @@ export function StagePlotEditor({ initialPlot, initialItems, channels: initialCh
       </div>
       <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
         <div style={{ width: 240, minWidth: 240 }}>
-          <IconPalette onAdd={addItem} />
+          <IconPalette onAdd={addItem} customIcons={customIcons} onCustomGenerated={onCustomGenerated} />
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <StageCanvas
