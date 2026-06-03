@@ -9,7 +9,7 @@
 
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
-import Anthropic from '@anthropic-ai/sdk';
+import { withAiUsage, aiCapExceededResponse } from '@/lib/ai/usage';
 import {
   requireUserAndWorkspace,
   requireTourInWorkspace,
@@ -160,22 +160,35 @@ export async function POST(request: Request) {
 Return a JSON object with only these keys (use null for missing): guarantee (currency string if present), guest_list (number + details), transport_from_promoter, backline_provisions, notes, key_contacts (names/roles), show_date (YYYY-MM-DD if possible), venue.
 No markdown, no explanation, only valid JSON.`;
 
-  const anthropic = new Anthropic({ apiKey });
   try {
-    const message = await anthropic.messages.create({
-      /* Sprint 12 §SAFE — Haiku 4.5 supports vision and PDF
-         extraction. Deal memo / rider parsing is structured
-         field extraction, not reasoning; Haiku is fine. */
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 1024,
-      system: systemPrompt,
-      messages: [
-        {
-          role: 'user',
-          content: contentBlocks,
-        },
-      ],
-    });
+    const { result: message, blocked, blockReason } = await withAiUsage(
+      {
+        workspaceId: workspaceId,
+        userId: user.id,
+        endpoint: 'advance.extract-deal-memo',
+        model: 'claude-haiku-4-5-20251001',
+        metadata: { tour_id: tourId },
+      },
+      async (anthropic) => {
+        const r = await anthropic.messages.create({
+          /* Sprint 12 §SAFE — Haiku 4.5 supports vision and PDF
+             extraction. Deal memo / rider parsing is structured
+             field extraction, not reasoning; Haiku is fine. */
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 1024,
+          system: systemPrompt,
+          messages: [
+            {
+              role: 'user',
+              content: contentBlocks,
+            },
+          ],
+        });
+        return { result: r, usage: r.usage };
+      },
+    );
+    if (blocked) return aiCapExceededResponse(blockReason ?? 'workspace_budget');
+    if (!message) return NextResponse.json({ error: 'Extraction failed' }, { status: 500 });
 
     const textBlock = message.content?.find((c) => c.type === 'text');
     const text = textBlock && 'text' in textBlock ? textBlock.text : '';

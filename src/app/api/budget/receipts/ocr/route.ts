@@ -5,8 +5,9 @@
    ============================================ */
 
 import { NextResponse } from 'next/server';
-import Anthropic, { APIError } from '@anthropic-ai/sdk';
+import { APIError } from '@anthropic-ai/sdk';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { withAiUsage, aiCapExceededResponse } from '@/lib/ai/usage';
 import {
   requireUserAndWorkspace,
   requireTourInWorkspace,
@@ -104,30 +105,37 @@ export async function POST(request: Request) {
   const buffer = Buffer.from(await file.arrayBuffer());
   const base64 = buffer.toString('base64');
 
-  const client = new Anthropic({ apiKey });
-
   try {
-    const response = await client.messages.create({
-      /* Sprint 12 §SAFE — Haiku 4.5 supports vision and is ~10x
-         cheaper than Sonnet. Receipt OCR is bounded extraction,
-         not reasoning — Haiku handles it. */
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 1024,
-      messages: [
-        {
-          role: 'user',
-          content: [
+    const { result: response, blocked, blockReason } = await withAiUsage(
+      {
+        workspaceId: workspaceId,
+        userId: user.id,
+        endpoint: 'budget.receipts.ocr',
+        model: 'claude-haiku-4-5-20251001',
+        metadata: { tour_id: tourId },
+      },
+      async (anthropic) => {
+        const r = await anthropic.messages.create({
+          /* Sprint 12 §SAFE — Haiku 4.5 supports vision and is ~10x
+             cheaper than Sonnet. Receipt OCR is bounded extraction,
+             not reasoning — Haiku handles it. */
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 1024,
+          messages: [
             {
-              type: 'image',
-              source: {
-                type: 'base64',
-                media_type: mediaType as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif',
-                data: base64,
-              },
-            },
-            {
-              type: 'text',
-              text: `Extract receipt data from this image. Return ONLY valid JSON with these fields:
+              role: 'user',
+              content: [
+                {
+                  type: 'image',
+                  source: {
+                    type: 'base64',
+                    media_type: mediaType as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif',
+                    data: base64,
+                  },
+                },
+                {
+                  type: 'text',
+                  text: `Extract receipt data from this image. Return ONLY valid JSON with these fields:
 {
   "vendor": "string - business name",
   "date": "string - YYYY-MM-DD format",
@@ -139,11 +147,16 @@ export async function POST(request: Request) {
   "line_items": [{"description": "string", "amount": number}]
 }
 If any field is unclear, use null. Tour currency is ${tourCurrency}.`,
+                },
+              ],
             },
           ],
-        },
-      ],
-    });
+        });
+        return { result: r, usage: r.usage };
+      },
+    );
+    if (blocked) return aiCapExceededResponse(blockReason ?? 'workspace_budget');
+    if (!response) return NextResponse.json({ error: 'Receipt OCR failed' }, { status: 500 });
 
     const block = response.content[0];
     const text = block.type === 'text' ? block.text : '';

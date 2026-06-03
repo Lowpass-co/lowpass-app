@@ -29,7 +29,7 @@
    ============================================ */
 
 import { NextResponse } from 'next/server';
-import Anthropic from '@anthropic-ai/sdk';
+import { withAiUsage, aiCapExceededResponse, type BlockReason } from '@/lib/ai/usage';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import type { RiderPack, RiderSection, FieldText, Field } from '@/lib/rider-packs/types';
 
@@ -158,14 +158,24 @@ export async function POST(
   const subjectList = summaryRows.map((r) => r.subject).join('\n');
   const prompt = `${PROMPT_HEADER}\n\nRIDER BODY:\n${riderBody}\n\nSUBJECTS:\n${subjectList}\n\n${PROMPT_FORMAT_TAIL}`;
 
-  const anthropic = new Anthropic({ apiKey });
+  const usageCtx = {
+    workspaceId: pack.workspace_id,
+    userId: user.id,
+    endpoint: 'rider-packs.advance-summary',
+    model: MODEL,
+    metadata: { pack_id: packId },
+  };
 
   /* First attempt with the model's default temperature. */
-  let attemptRows = await callAndParse(anthropic, prompt, summaryRows, undefined);
+  let attempt = await callAndParse(usageCtx, prompt, summaryRows, undefined);
+  if (attempt.blocked) return aiCapExceededResponse(attempt.blockReason ?? 'workspace_budget');
+  let attemptRows = attempt.rows;
   /* Retry once at temperature=0 for determinism if the parse
      didn't match the subject count. */
   if (attemptRows === null) {
-    attemptRows = await callAndParse(anthropic, prompt, summaryRows, 0);
+    attempt = await callAndParse(usageCtx, prompt, summaryRows, 0);
+    if (attempt.blocked) return aiCapExceededResponse(attempt.blockReason ?? 'workspace_budget');
+    attemptRows = attempt.rows;
   }
   if (attemptRows === null) {
     return NextResponse.json(
@@ -184,19 +194,39 @@ export async function POST(
   return NextResponse.json({ rows: attemptRows });
 }
 
+interface CallAndParseResult {
+  rows: SummaryRow[] | null;
+  blocked: boolean;
+  blockReason?: BlockReason;
+}
+
 async function callAndParse(
-  client: Anthropic,
+  usageCtx: {
+    workspaceId: string;
+    userId: string | null;
+    endpoint: string;
+    model: string;
+    metadata?: Record<string, unknown>;
+  },
   prompt: string,
   subjectRows: SummaryRow[],
   temperature: number | undefined,
-): Promise<SummaryRow[] | null> {
+): Promise<CallAndParseResult> {
   try {
-    const response = await client.messages.create({
-      model: MODEL,
-      max_tokens: MAX_OUTPUT_TOKENS,
-      ...(temperature !== undefined ? { temperature } : {}),
-      messages: [{ role: 'user', content: prompt }],
-    });
+    const { result: response, blocked, blockReason } = await withAiUsage(
+      usageCtx,
+      async (anthropic) => {
+        const r = await anthropic.messages.create({
+          model: MODEL,
+          max_tokens: MAX_OUTPUT_TOKENS,
+          ...(temperature !== undefined ? { temperature } : {}),
+          messages: [{ role: 'user', content: prompt }],
+        });
+        return { result: r, usage: r.usage };
+      },
+    );
+    if (blocked) return { rows: null, blocked: true, blockReason };
+    if (!response) return { rows: null, blocked: false };
     const text = response.content
       .map((block) => (block.type === 'text' ? block.text : ''))
       .join('\n')
@@ -205,7 +235,7 @@ async function callAndParse(
       .split('\n')
       .map((l) => l.trim())
       .filter((l) => l.length > 0);
-    if (lines.length !== subjectRows.length) return null;
+    if (lines.length !== subjectRows.length) return { rows: null, blocked: false };
     /* Each line should split on em-dash (—) into [subject, body].
        Operators rephrase subjects sometimes; trust positional
        order and only consume the body half. */
@@ -222,9 +252,9 @@ async function callAndParse(
         out.push({ subject: subjectRows[i].subject, body });
       }
     }
-    return out;
+    return { rows: out, blocked: false };
   } catch {
-    return null;
+    return { rows: null, blocked: false };
   }
 }
 
