@@ -46,9 +46,13 @@ export interface ItemPropertiesProps {
   onUpdatePlot: (patch: Partial<EditorPlot>) => void;
   /** Create a new channel-list row and return its id (§SP4 / #8). */
   onAddChannel?: (label: string) => string;
+  /** §SP-FIX-3 — split a composite drum kit into individual pieces. */
+  onSplitKit?: () => void;
+  /** §SP-FIX-3 — recombine a split kit piece's group into the composite. */
+  onCombineKit?: () => void;
 }
 
-export function ItemProperties({ plot, item, selectedCount = 0, channels = [], onUpdateItem, onDeleteItem, onUpdatePlot, onAddChannel }: ItemPropertiesProps) {
+export function ItemProperties({ plot, item, selectedCount = 0, channels = [], onUpdateItem, onDeleteItem, onUpdatePlot, onAddChannel, onSplitKit, onCombineKit }: ItemPropertiesProps) {
   const [newCh, setNewCh] = useState('');
   // Expert "custom dimensions" gate (§SP-FIX-2). Off by default → items
   // lock to footprint; on → editable W×D×H. Interim home is localStorage
@@ -102,6 +106,28 @@ export function ItemProperties({ plot, item, selectedCount = 0, channels = [], o
 
           {item.kind !== 'text' && item.kind !== 'arrow' && (
             <>
+              {(onSplitKit || onCombineKit) && (
+                <Row label="Display as">
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    <button
+                      type="button"
+                      onClick={() => onCombineKit?.()}
+                      disabled={!onCombineKit}
+                      style={{ fontSize: 'var(--lp-text-2xs)', padding: '3px 8px', borderRadius: 5, border: '1px solid var(--lp-border)', background: onCombineKit ? 'var(--lp-surface)' : 'var(--lp-surface-hover)', color: 'var(--lp-text-secondary)', cursor: onCombineKit ? 'pointer' : 'default', fontWeight: onCombineKit ? 400 : 600 }}
+                    >
+                      Composite
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => onSplitKit?.()}
+                      disabled={!onSplitKit}
+                      style={{ fontSize: 'var(--lp-text-2xs)', padding: '3px 8px', borderRadius: 5, border: '1px solid var(--lp-border)', background: onSplitKit ? 'var(--lp-surface)' : 'var(--lp-surface-hover)', color: 'var(--lp-text-secondary)', cursor: onSplitKit ? 'pointer' : 'default', fontWeight: onSplitKit ? 400 : 600 }}
+                    >
+                      Individual
+                    </button>
+                  </div>
+                </Row>
+              )}
               {(() => {
                 // §SP-FIX-2 — items lock to their real-world footprint
                 // (no per-item scale). Expert mode reveals a W×D×H override.

@@ -68,6 +68,10 @@ export interface EditorItem {
   /** Linked channel-list rows (§SP4). One instrument can take many
    *  channels (e.g. a kick has in + out, a kit has many mics). */
   channelRowIds?: string[];
+  /** Grouping id (§SP-FIX-3 kit split → shared id across the pieces). */
+  groupId?: string;
+  /** For a split-out drum-kit piece: the composite icon to recombine to. */
+  kitName?: string;
   /** Text content (kind='text'). */
   text?: string;
   /** Text size in feet (kind='text'). */

@@ -90,4 +90,5 @@ export function searchIcons(query: string): IconDescriptor[] {
 }
 
 export { CATEGORIES, CATEGORY_HEX, getCategory };
+export { kitLayout, type KitPiece } from './drums-composites';
 export type { IconDescriptor, IconCategoryKey } from './types';

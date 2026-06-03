@@ -104,6 +104,46 @@ function kit(toms: Shell[], floors: Shell[], left: boolean): string {
   return sh + cy;
 }
 
+/* ── §SP-FIX-3 — individual-mode layout ──────────────────────────
+   Splitting a composite kit into individual pieces places real piece
+   icons (kick/snare/toms/cymbals/hi-hat/ride/throne) at canonical
+   offsets in feet from the kit centre, derived from the composite art
+   positions. Left-handed mirrors the x offsets. */
+export interface KitPiece {
+  iconName: string;
+  dxFt: number;
+  dyFt: number;
+}
+
+const CYM_ICONS: ReadonlyArray<[string, number, number]> = [
+  ['drum-crash', 20, 18],
+  ['drum-crash', 80, 18],
+  ['drum-hihat', 16, 49],
+  ['drum-ride', 84, 45],
+];
+
+/** Resolve a composite icon name → its individual-piece layout. */
+export function kitLayout(name: string): { footprintFt: number; pieces: KitPiece[] } | null {
+  const lh = name.endsWith('-lh');
+  const key = name.replace(/^drum-kit-/, '').replace(/-lh$/, '');
+  const cfg = CONFIGS.find((c) => c.key === key);
+  if (!cfg) return null;
+  const raw: Array<[string, number, number]> = [
+    ['drum-kick', 50, 49],
+    ['drum-snare', 61, 60],
+    ['drum-throne', 50, 87],
+    ...cfg.toms.map(([n, x, y]) => [n, x, y] as [string, number, number]),
+    ...cfg.floors.map(([n, x, y]) => [n, x, y] as [string, number, number]),
+    ...CYM_ICONS.map(([n, x, y]) => [n, x, y] as [string, number, number]),
+  ];
+  const w = cfg.w;
+  const pieces = raw.map(([icon, px, py]) => {
+    const x = lh ? 100 - px : px;
+    return { iconName: icon, dxFt: +(((x - 50) / 100) * w).toFixed(2), dyFt: +(((py - 50) / 100) * w).toFixed(2) };
+  });
+  return { footprintFt: w, pieces };
+}
+
 export const drumComposites: IconDescriptor[] = CONFIGS.flatMap((c) => [
   {
     name: `drum-kit-${c.key}`,

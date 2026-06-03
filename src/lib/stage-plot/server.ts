@@ -41,6 +41,7 @@ interface ItemRow {
   color_tint: string | null;
   locked: boolean;
   layer: string;
+  group_id: string | null;
   channel_list_row_id: string | null;
   /** Annotation fields (kind/text/fontSizeFt/x2Ft/y2Ft) stashed here —
    *  stage_plot_items has no dedicated columns for them yet. */
@@ -82,6 +83,8 @@ export function rowsToEditor(plot: PlotRow, items: ItemRow[], name: string): { p
         label: r.label ?? undefined,
         layer: (r.layer as EditorItem['layer']) ?? 'main',
         channelRowIds: (ann.channelRowIds as string[] | undefined) ?? (r.channel_list_row_id ? [r.channel_list_row_id] : undefined),
+        groupId: r.group_id ?? undefined,
+        kitName: ann.kitName as string | undefined,
         text: ann.text as string | undefined,
         fontSizeFt: ann.fontSizeFt as number | undefined,
         x2Ft: ann.x2Ft as number | undefined,
@@ -111,10 +114,12 @@ export function itemToRow(it: EditorItem, stagePlotId: string, workspaceId: stri
   const kind = it.kind ?? 'icon';
   const labelStyle: Record<string, unknown> = kind === 'icon' ? {} : { kind, text: it.text, fontSizeFt: it.fontSizeFt, x2Ft: it.x2Ft, y2Ft: it.y2Ft };
   if (it.channelRowIds?.length) labelStyle.channelRowIds = it.channelRowIds;
+  if (it.kitName) labelStyle.kitName = it.kitName;
   return {
     workspace_id: workspaceId,
     stage_plot_id: stagePlotId,
     layer: it.layer ?? 'main',
+    group_id: it.groupId ?? null,
     // icon_name is NOT NULL; annotations carry their kind as a sentinel.
     icon_name: it.iconName || `__${kind}__`,
     label: it.label ?? null,

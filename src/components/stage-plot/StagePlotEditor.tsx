@@ -10,7 +10,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { getIcon, registerCustomIcons } from '@/lib/stage-plot/icons';
+import { getIcon, registerCustomIcons, kitLayout } from '@/lib/stage-plot/icons';
 import type { IconDescriptor } from '@/lib/stage-plot/icons/types';
 import { IconPalette } from '@/components/stage-plot/IconPalette';
 import { ItemProperties } from '@/components/stage-plot/ItemProperties';
@@ -157,6 +157,54 @@ export function StagePlotEditor({ initialPlot, initialItems, channels: initialCh
     });
   }, [selectedIds]);
 
+  // §SP-FIX-3 — split a composite kit into individual pieces at their
+  // canonical offsets (rotated with the kit), tagged with a shared group.
+  const splitKit = useCallback((item: EditorItem) => {
+    const layout = kitLayout(item.iconName);
+    if (!layout) return;
+    const gid = uid();
+    const rad = ((item.rotationDeg ?? 0) * Math.PI) / 180;
+    const cos = Math.cos(rad);
+    const sin = Math.sin(rad);
+    const pieces: EditorItem[] = layout.pieces.map((p) => {
+      const rx = p.dxFt * cos - p.dyFt * sin;
+      const ry = p.dxFt * sin + p.dyFt * cos;
+      const ic = getIcon(p.iconName);
+      return {
+        id: uid(),
+        iconName: p.iconName,
+        xFt: +(item.xFt + rx).toFixed(2),
+        yFt: +(item.yFt + ry).toFixed(2),
+        rotationDeg: item.rotationDeg ?? 0,
+        widthFt: ic?.footprint.width_ft,
+        depthFt: ic?.footprint.depth_ft,
+        layer: item.layer ?? 'main',
+        label: ic?.label,
+        groupId: gid,
+        kitName: item.iconName,
+      };
+    });
+    setItems((prev) => [...prev.filter((it) => it.id !== item.id), ...pieces]);
+    setSelectedIds(pieces.map((p) => p.id));
+  }, []);
+
+  // Collapse a split kit back to its composite at the pieces' average centre.
+  const combineKit = useCallback((groupId: string, kitName: string) => {
+    setItems((prev) => {
+      const group = prev.filter((it) => it.groupId === groupId);
+      if (!group.length) return prev;
+      const cx = group.reduce((s, it) => s + it.xFt, 0) / group.length;
+      const cy = group.reduce((s, it) => s + it.yFt, 0) / group.length;
+      const ic = getIcon(kitName);
+      const id = uid();
+      setSelectedIds([id]);
+      return [
+        ...prev.filter((it) => it.groupId !== groupId),
+        { id, iconName: kitName, xFt: +cx.toFixed(2), yFt: +cy.toFixed(2), rotationDeg: group[0].rotationDeg ?? 0, widthFt: ic?.footprint.width_ft, depthFt: ic?.footprint.depth_ft, layer: group[0].layer ?? 'main', label: ic?.label },
+      ];
+    });
+  }, []);
+
   // Delete / Backspace removes the selection.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -258,6 +306,8 @@ export function StagePlotEditor({ initialPlot, initialItems, channels: initialCh
           onUpdateItem={updateSelected}
           onDeleteItem={deleteSelected}
           onUpdatePlot={(patch) => setPlot((p) => ({ ...p, ...patch }))}
+          onSplitKit={selected && selected.iconName.startsWith('drum-kit-') ? () => splitKit(selected) : undefined}
+          onCombineKit={selected && selected.kitName && selected.groupId ? () => combineKit(selected.groupId!, selected.kitName!) : undefined}
         />
       </div>
     </div>
