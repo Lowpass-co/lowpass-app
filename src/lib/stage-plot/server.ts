@@ -115,7 +115,7 @@ export function rowsToEditor(plot: PlotRow, items: ItemRow[], name: string): { p
 }
 
 export function plotToColumns(plot: EditorPlot): Record<string, unknown> {
-  return {
+  const cols: Record<string, unknown> = {
     stage_width_ft: plot.widthFt,
     stage_depth_ft: plot.depthFt,
     grid_size_ft: plot.gridSizeFt,
@@ -126,8 +126,7 @@ export function plotToColumns(plot: EditorPlot): Record<string, unknown> {
     show_lateral_markers: plot.showLateralMarkers,
     units: plot.units,
     color_override: plot.brandColor,
-    subtitle: plot.subtitle ?? null,
-    version_label: plot.versionLabel ?? null,
+    // TM + logo columns exist since migration 109.
     show_tm_name: plot.tmName ?? null,
     show_tm_role: plot.tmRole ?? null,
     show_tm_phone: plot.tmPhone ?? null,
@@ -135,6 +134,12 @@ export function plotToColumns(plot: EditorPlot): Record<string, unknown> {
     show_logo_position: plot.logoPosition ?? 'top-right',
     updated_at: new Date().toISOString(),
   };
+  // subtitle + version_label only exist after migration 110 — only
+  // write them when set, so create / save still work on a 109-only DB
+  // (otherwise the INSERT/UPDATE references a non-existent column).
+  if (plot.subtitle != null && plot.subtitle !== '') cols.subtitle = plot.subtitle;
+  if (plot.versionLabel != null && plot.versionLabel !== '') cols.version_label = plot.versionLabel;
+  return cols;
 }
 
 export function itemToRow(it: EditorItem, stagePlotId: string, workspaceId: string, zIndex = 0): Record<string, unknown> {
@@ -261,7 +266,7 @@ export async function createStagePlot(
   artistId: string,
   name: string,
   tourId?: string,
-): Promise<{ id: string; riderPackId: string } | null> {
+): Promise<{ id: string; riderPackId: string } | { error: string }> {
   const packRow = tourId
     ? { workspace_id: workspaceId, scope: 'tour', artist_id: artistId, tour_id: tourId, kind: 'stage_plot', title: name }
     : { workspace_id: workspaceId, scope: 'artist', artist_id: artistId, kind: 'stage_plot', title: name };
@@ -270,12 +275,16 @@ export async function createStagePlot(
     .insert(packRow)
     .select('id')
     .single();
-  if (packErr || !pack) return null;
+  if (packErr || !pack) return { error: `rider_pack: ${packErr?.message ?? 'insert failed'}` };
   const { data: plot, error: plotErr } = await supabase
     .from('stage_plots')
     .insert({ workspace_id: workspaceId, rider_pack_id: pack.id, ...plotToColumns(DEFAULT_PLOT) })
     .select('id')
     .single();
-  if (plotErr || !plot) return null;
+  if (plotErr || !plot) {
+    // Roll back the orphaned pack so a retry isn't blocked by the unique index.
+    await supabase.from('rider_packs').delete().eq('id', pack.id);
+    return { error: `stage_plots: ${plotErr?.message ?? 'insert failed'}` };
+  }
   return { id: plot.id, riderPackId: pack.id };
 }

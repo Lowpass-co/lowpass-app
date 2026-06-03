@@ -31,6 +31,6 @@ export async function POST(request: Request) {
     (body as { name?: string }).name || 'Untitled stage plot',
     tourId,
   );
-  if (!created) return NextResponse.json({ error: 'Create failed' }, { status: 500 });
+  if ('error' in created) return NextResponse.json({ error: created.error }, { status: 500 });
   return NextResponse.json(created, { status: 201 });
 }
