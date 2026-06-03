@@ -30,6 +30,7 @@ export async function POST(request: Request) {
     artistId,
     (body as { name?: string }).name || 'Untitled stage plot',
     tourId,
+    auth.user.id,
   );
   if ('error' in created) return NextResponse.json({ error: created.error }, { status: 500 });
   return NextResponse.json(created, { status: 201 });

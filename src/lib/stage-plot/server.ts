@@ -266,24 +266,39 @@ export async function createStagePlot(
   artistId: string,
   name: string,
   tourId?: string,
+  createdBy?: string,
 ): Promise<{ id: string; riderPackId: string } | { error: string }> {
-  const packRow = tourId
-    ? { workspace_id: workspaceId, scope: 'tour', artist_id: artistId, tour_id: tourId, kind: 'stage_plot', title: name }
-    : { workspace_id: workspaceId, scope: 'artist', artist_id: artistId, kind: 'stage_plot', title: name };
-  const { data: pack, error: packErr } = await supabase
-    .from('rider_packs')
-    .insert(packRow)
+  // rider_packs need a parent rider_folders row (migration 039: many
+  // folders per scope, one pack per folder). Mirror the /api/rider-packs
+  // create: folder → pack (folder_id + created_by) → stage_plots.
+  const scope = tourId ? 'tour' : 'artist';
+
+  const { data: folder, error: folderErr } = await supabase
+    .from('rider_folders')
+    .insert({ workspace_id: workspaceId, artist_id: artistId, scope, tour_id: tourId ?? null, routing_id: null, title: name, inherit_from_folder_id: null })
     .select('id')
     .single();
-  if (packErr || !pack) return { error: `rider_pack: ${packErr?.message ?? 'insert failed'}` };
+  if (folderErr || !folder) return { error: `rider_folder: ${folderErr?.message ?? 'insert failed'}` };
+
+  const { data: pack, error: packErr } = await supabase
+    .from('rider_packs')
+    .insert({ workspace_id: workspaceId, folder_id: folder.id, scope, artist_id: artistId, tour_id: tourId ?? null, routing_id: null, kind: 'stage_plot', title: name, created_by: createdBy ?? null })
+    .select('id')
+    .single();
+  if (packErr || !pack) {
+    await supabase.from('rider_folders').delete().eq('id', folder.id);
+    return { error: `rider_pack: ${packErr?.message ?? 'insert failed'}` };
+  }
+
   const { data: plot, error: plotErr } = await supabase
     .from('stage_plots')
     .insert({ workspace_id: workspaceId, rider_pack_id: pack.id, ...plotToColumns(DEFAULT_PLOT) })
     .select('id')
     .single();
   if (plotErr || !plot) {
-    // Roll back the orphaned pack so a retry isn't blocked by the unique index.
+    // Roll back so a retry isn't blocked by the rider_packs unique index.
     await supabase.from('rider_packs').delete().eq('id', pack.id);
+    await supabase.from('rider_folders').delete().eq('id', folder.id);
     return { error: `stage_plots: ${plotErr?.message ?? 'insert failed'}` };
   }
   return { id: plot.id, riderPackId: pack.id };
