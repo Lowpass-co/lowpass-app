@@ -9,9 +9,10 @@
    ============================================ */
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { getIcon } from '@/lib/stage-plot/icons';
 import { octantLabel } from '@/lib/stage-plot/geometry';
+import { defaultHeightFt, readExpertDimensions, writeExpertDimensions } from '@/lib/stage-plot/item-dimensions';
 import type { Channel, EditorItem, EditorPlot } from '@/lib/stage-plot/editor-types';
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
@@ -49,6 +50,13 @@ export interface ItemPropertiesProps {
 
 export function ItemProperties({ plot, item, selectedCount = 0, channels = [], onUpdateItem, onDeleteItem, onUpdatePlot, onAddChannel }: ItemPropertiesProps) {
   const [newCh, setNewCh] = useState('');
+  // Expert "custom dimensions" gate (§SP-FIX-2). Off by default → items
+  // lock to footprint; on → editable W×D×H. Interim home is localStorage
+  // (canonical: workspace settings).
+  const [expert, setExpert] = useState(false);
+  // localStorage is client-only; read after mount to avoid SSR/hydration mismatch.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => setExpert(readExpertDimensions()), []);
   return (
     <div style={{ height: '100%', overflowY: 'auto', borderLeft: '1px solid var(--lp-border)', background: 'var(--lp-bg)', padding: 14, width: 260 }}>
       {selectedCount > 1 ? (
@@ -94,33 +102,43 @@ export function ItemProperties({ plot, item, selectedCount = 0, channels = [], o
 
           {item.kind !== 'text' && item.kind !== 'arrow' && (
             <>
-              <Row label="Scale">
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <input
-                    type="range"
-                    min={0.2}
-                    max={3}
-                    step={0.05}
-                    value={(item.widthFt ?? getIcon(item.iconName)?.footprint.width_ft ?? 1) / (getIcon(item.iconName)?.footprint.width_ft ?? 1)}
-                    onChange={(e) => {
-                      const s = parseFloat(e.target.value);
-                      const b = getIcon(item.iconName)?.footprint;
-                      if (b) onUpdateItem({ widthFt: +(b.width_ft * s).toFixed(2), depthFt: +(b.depth_ft * s).toFixed(2) });
-                    }}
-                    style={{ width: 96 }}
-                  />
-                  <span style={{ fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-tertiary)', width: 26, textAlign: 'right' }}>
-                    {((item.widthFt ?? getIcon(item.iconName)?.footprint.width_ft ?? 1) / (getIcon(item.iconName)?.footprint.width_ft ?? 1)).toFixed(1)}×
-                  </span>
-                </div>
-              </Row>
-              <Row label="Width (ft)"><Num value={item.widthFt ?? getIcon(item.iconName)?.footprint.width_ft ?? 1} min={0.1} onChange={(n) => onUpdateItem({ widthFt: n })} /></Row>
-              <Row label="Depth (ft)"><Num value={item.depthFt ?? getIcon(item.iconName)?.footprint.depth_ft ?? 1} min={0.1} onChange={(n) => onUpdateItem({ depthFt: n })} /></Row>
+              {(() => {
+                // §SP-FIX-2 — items lock to their real-world footprint
+                // (no per-item scale). Expert mode reveals a W×D×H override.
+                const icon = getIcon(item.iconName);
+                const w = item.widthFt ?? icon?.footprint.width_ft ?? 1;
+                const d = item.depthFt ?? icon?.footprint.depth_ft ?? 1;
+                const h = item.heightFt ?? (icon ? defaultHeightFt(icon.category) : 1);
+                if (!expert) {
+                  return (
+                    <Row label="Size (ft)">
+                      <span style={{ fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text)' }}>
+                        {w} × {d} <span style={{ color: 'var(--lp-text-tertiary)' }}>· to scale</span>
+                      </span>
+                    </Row>
+                  );
+                }
+                return (
+                  <>
+                    <Row label="Width (ft)"><Num value={w} min={0.1} onChange={(n) => onUpdateItem({ widthFt: n })} /></Row>
+                    <Row label="Depth (ft)"><Num value={d} min={0.1} onChange={(n) => onUpdateItem({ depthFt: n })} /></Row>
+                    <Row label="Height (ft)"><Num value={h} min={0} onChange={(n) => onUpdateItem({ heightFt: n })} /></Row>
+                  </>
+                );
+              })()}
               <Row label="Rotation°"><Num value={item.rotationDeg ?? 0} step={15} onChange={(n) => onUpdateItem({ rotationDeg: n })} /></Row>
               <Row label="Position">
                 <span style={{ fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text)', fontFamily: 'var(--font-mono, monospace)' }}>
                   {octantLabel(item.xFt, item.yFt, plot.widthFt, plot.depthFt)}
                 </span>
+              </Row>
+              <Row label="Custom size (expert)">
+                <input
+                  type="checkbox"
+                  checked={expert}
+                  onChange={(e) => { setExpert(e.target.checked); writeExpertDimensions(e.target.checked); }}
+                  style={{ accentColor: 'var(--lp-orange)' }}
+                />
               </Row>
               {channels.length > 0 && (
                 <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--lp-border)' }}>

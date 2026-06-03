@@ -35,6 +35,7 @@ interface ItemRow {
   position_y_ft: number;
   width_ft: number | null;
   depth_ft: number | null;
+  height_ft: number | null;
   scale: number | null;
   rotation_deg: number;
   color_tint: string | null;
@@ -73,6 +74,7 @@ export function rowsToEditor(plot: PlotRow, items: ItemRow[], name: string): { p
         yFt: Number(r.position_y_ft),
         widthFt: r.width_ft == null ? undefined : Number(r.width_ft),
         depthFt: r.depth_ft == null ? undefined : Number(r.depth_ft),
+        heightFt: r.height_ft == null ? undefined : Number(r.height_ft),
         scale: r.scale == null ? undefined : Number(r.scale),
         rotationDeg: Number(r.rotation_deg),
         colorTint: r.color_tint,
@@ -120,6 +122,7 @@ export function itemToRow(it: EditorItem, stagePlotId: string, workspaceId: stri
     position_y_ft: it.yFt,
     width_ft: it.widthFt ?? null,
     depth_ft: it.depthFt ?? null,
+    height_ft: it.heightFt ?? null,
     scale: it.scale ?? 1,
     rotation_deg: it.rotationDeg ?? 0,
     color_tint: it.colorTint ?? null,

@@ -54,7 +54,11 @@ export interface EditorItem {
   yFt: number;
   widthFt?: number;
   depthFt?: number;
-  /** Uniform size multiplier on the footprint (drag-to-resize / scale field). */
+  /** Height in feet — third dimension for risers/stacked gear + the
+   *  expert W×D×H override (§SP-FIX-2). */
+  heightFt?: number;
+  /** @deprecated §SP-FIX-2 removed per-item scaling; items lock to
+   *  footprint. Kept for back-compat with stored rows; not rendered. */
   scale?: number;
   rotationDeg?: number;
   colorTint?: string | null;
