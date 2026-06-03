@@ -76,6 +76,9 @@ export interface EditorItem {
   labelPosition?: 'top' | 'bottom' | 'left' | 'right' | 'inside' | 'hidden';
   /** Label font size in px (§SP-FIX-4), 8–18, default 11. */
   labelFontPx?: number;
+  /** §SP-FIX-5 — keep this item axis-aligned even when the riser it
+   *  sits on is rotated (opt out of riser-attached rotation). */
+  decoupleRotation?: boolean;
   /** Text content (kind='text'). */
   text?: string;
   /** Text size in feet (kind='text'). */

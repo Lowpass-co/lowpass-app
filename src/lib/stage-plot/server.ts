@@ -88,6 +88,7 @@ export function rowsToEditor(plot: PlotRow, items: ItemRow[], name: string): { p
         kitName: ann.kitName as string | undefined,
         labelPosition: (r.label_position as EditorItem['labelPosition']) ?? undefined,
         labelFontPx: ann.labelFontPx as number | undefined,
+        decoupleRotation: ann.decoupleRotation === true ? true : undefined,
         text: ann.text as string | undefined,
         fontSizeFt: ann.fontSizeFt as number | undefined,
         x2Ft: ann.x2Ft as number | undefined,
@@ -113,12 +114,13 @@ export function plotToColumns(plot: EditorPlot): Record<string, unknown> {
   };
 }
 
-export function itemToRow(it: EditorItem, stagePlotId: string, workspaceId: string): Record<string, unknown> {
+export function itemToRow(it: EditorItem, stagePlotId: string, workspaceId: string, zIndex = 0): Record<string, unknown> {
   const kind = it.kind ?? 'icon';
   const labelStyle: Record<string, unknown> = kind === 'icon' ? {} : { kind, text: it.text, fontSizeFt: it.fontSizeFt, x2Ft: it.x2Ft, y2Ft: it.y2Ft };
   if (it.channelRowIds?.length) labelStyle.channelRowIds = it.channelRowIds;
   if (it.kitName) labelStyle.kitName = it.kitName;
   if (it.labelFontPx) labelStyle.labelFontPx = it.labelFontPx;
+  if (it.decoupleRotation) labelStyle.decoupleRotation = true;
   return {
     workspace_id: workspaceId,
     stage_plot_id: stagePlotId,
@@ -138,6 +140,7 @@ export function itemToRow(it: EditorItem, stagePlotId: string, workspaceId: stri
     color_tint: it.colorTint ?? null,
     locked: it.locked ?? false,
     channel_list_row_id: it.channelRowIds?.[0] ?? null,
+    z_index: zIndex,
     label_style: labelStyle,
   };
 }
@@ -175,7 +178,7 @@ export async function saveStagePlot(
   // Whole-document item replace (simple + correct for last-write-wins).
   await supabase.from('stage_plot_items').delete().eq('stage_plot_id', id);
   if (items.length) {
-    await supabase.from('stage_plot_items').insert(items.map((it) => itemToRow(it, id, workspaceId)));
+    await supabase.from('stage_plot_items').insert(items.map((it, i) => itemToRow(it, id, workspaceId, i)));
   }
 }
 

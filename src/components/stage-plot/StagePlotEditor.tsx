@@ -205,6 +205,60 @@ export function StagePlotEditor({ initialPlot, initialItems, channels: initialCh
     });
   }, []);
 
+  // §SP-FIX-5 — z-order: render order = array order; reorder a single item.
+  const reorderItem = useCallback((id: string, op: 'front' | 'back' | 'forward' | 'backward') => {
+    setItems((prev) => {
+      const i = prev.findIndex((it) => it.id === id);
+      if (i < 0) return prev;
+      const arr = [...prev];
+      const [it] = arr.splice(i, 1);
+      if (op === 'front') arr.push(it);
+      else if (op === 'back') arr.unshift(it);
+      else if (op === 'forward') arr.splice(Math.min(arr.length, i + 1), 0, it);
+      else arr.splice(Math.max(0, i - 1), 0, it);
+      return arr;
+    });
+  }, []);
+
+  // §SP-FIX-5 — rotating a riser rotates the items sitting on it (unless
+  // decoupled), around the riser centre — so a tilted riser carries its
+  // gear. Non-risers just set their own rotation.
+  const setItemRotation = useCallback((id: string, deg: number) => {
+    setItems((prev) => {
+      const riser = prev.find((it) => it.id === id);
+      if (!riser) return prev;
+      if (!riser.iconName.startsWith('infra-riser-')) {
+        return prev.map((it) => (it.id === id ? { ...it, rotationDeg: deg } : it));
+      }
+      const delta = deg - (riser.rotationDeg ?? 0);
+      if (!delta) return prev.map((it) => (it.id === id ? { ...it, rotationDeg: deg } : it));
+      const ic = getIcon(riser.iconName);
+      const rw = riser.widthFt ?? ic?.footprint.width_ft ?? 8;
+      const rd = riser.depthFt ?? ic?.footprint.depth_ft ?? 8;
+      const rrad = -((riser.rotationDeg ?? 0) * Math.PI) / 180;
+      const rcos = Math.cos(rrad);
+      const rsin = Math.sin(rrad);
+      const drad = (delta * Math.PI) / 180;
+      const dcos = Math.cos(drad);
+      const dsin = Math.sin(drad);
+      return prev.map((it) => {
+        if (it.id === id) return { ...it, rotationDeg: deg };
+        if (it.decoupleRotation || it.iconName?.startsWith('infra-riser-')) return it;
+        const dx = it.xFt - riser.xFt;
+        const dy = it.yFt - riser.yFt;
+        const lx = dx * rcos - dy * rsin;
+        const ly = dx * rsin + dy * rcos;
+        if (Math.abs(lx) > rw / 2 || Math.abs(ly) > rd / 2) return it; // not on the riser
+        return {
+          ...it,
+          xFt: +(riser.xFt + (dx * dcos - dy * dsin)).toFixed(2),
+          yFt: +(riser.yFt + (dx * dsin + dy * dcos)).toFixed(2),
+          rotationDeg: (it.rotationDeg ?? 0) + delta,
+        };
+      });
+    });
+  }, []);
+
   // Delete / Backspace removes the selection.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -308,6 +362,8 @@ export function StagePlotEditor({ initialPlot, initialItems, channels: initialCh
           onUpdatePlot={(patch) => setPlot((p) => ({ ...p, ...patch }))}
           onSplitKit={selected && selected.iconName.startsWith('drum-kit-') ? () => splitKit(selected) : undefined}
           onCombineKit={selected && selected.kitName && selected.groupId ? () => combineKit(selected.groupId!, selected.kitName!) : undefined}
+          onReorder={selected ? (op) => reorderItem(selected.id, op) : undefined}
+          onRotate={selected ? (deg) => setItemRotation(selected.id, deg) : undefined}
         />
       </div>
     </div>

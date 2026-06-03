@@ -50,9 +50,13 @@ export interface ItemPropertiesProps {
   onSplitKit?: () => void;
   /** §SP-FIX-3 — recombine a split kit piece's group into the composite. */
   onCombineKit?: () => void;
+  /** §SP-FIX-5 — z-order ops for the selected item. */
+  onReorder?: (op: 'front' | 'back' | 'forward' | 'backward') => void;
+  /** §SP-FIX-5 — rotate the selected item (riser-aware: carries gear). */
+  onRotate?: (deg: number) => void;
 }
 
-export function ItemProperties({ plot, item, selectedCount = 0, channels = [], onUpdateItem, onDeleteItem, onUpdatePlot, onAddChannel, onSplitKit, onCombineKit }: ItemPropertiesProps) {
+export function ItemProperties({ plot, item, selectedCount = 0, channels = [], onUpdateItem, onDeleteItem, onUpdatePlot, onAddChannel, onSplitKit, onCombineKit, onReorder, onRotate }: ItemPropertiesProps) {
   const [newCh, setNewCh] = useState('');
   // Expert "custom dimensions" gate (§SP-FIX-2). Off by default → items
   // lock to footprint; on → editable W×D×H. Interim home is localStorage
@@ -135,7 +139,9 @@ export function ItemProperties({ plot, item, selectedCount = 0, channels = [], o
                 const w = item.widthFt ?? icon?.footprint.width_ft ?? 1;
                 const d = item.depthFt ?? icon?.footprint.depth_ft ?? 1;
                 const h = item.heightFt ?? (icon ? defaultHeightFt(icon.category) : 1);
-                if (!expert) {
+                // Risers always expose W×D×H (their dimensions are the point).
+                const isRiser = item.iconName.startsWith('infra-riser-');
+                if (!expert && !isRiser) {
                   return (
                     <Row label="Size (ft)">
                       <span style={{ fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text)' }}>
@@ -152,7 +158,17 @@ export function ItemProperties({ plot, item, selectedCount = 0, channels = [], o
                   </>
                 );
               })()}
-              <Row label="Rotation°"><Num value={item.rotationDeg ?? 0} step={15} onChange={(n) => onUpdateItem({ rotationDeg: n })} /></Row>
+              <Row label="Rotation°"><Num value={item.rotationDeg ?? 0} step={15} onChange={(n) => (onRotate ? onRotate(n) : onUpdateItem({ rotationDeg: n }))} /></Row>
+              {item.iconName.startsWith('infra-riser-') === false && (
+                <Row label="Rotate w/ riser">
+                  <input
+                    type="checkbox"
+                    checked={!item.decoupleRotation}
+                    onChange={(e) => onUpdateItem({ decoupleRotation: e.target.checked ? undefined : true })}
+                    style={{ accentColor: 'var(--lp-orange)' }}
+                  />
+                </Row>
+              )}
               <Row label="Label">
                 <select
                   value={item.labelPosition ?? 'bottom'}
@@ -178,6 +194,23 @@ export function ItemProperties({ plot, item, selectedCount = 0, channels = [], o
                   {octantLabel(item.xFt, item.yFt, plot.widthFt, plot.depthFt)}
                 </span>
               </Row>
+              {onReorder && (
+                <Row label="Layer">
+                  <div style={{ display: 'flex', gap: 3 }}>
+                    {([['front', '⤒', 'Bring to front'], ['forward', '↑', 'Forward'], ['backward', '↓', 'Backward'], ['back', '⤓', 'Send to back']] as const).map(([op, sym, title]) => (
+                      <button
+                        key={op}
+                        type="button"
+                        title={title}
+                        onClick={() => onReorder(op)}
+                        style={{ width: 26, fontSize: 'var(--lp-text-xs)', padding: '3px 0', borderRadius: 5, border: '1px solid var(--lp-border)', background: 'var(--lp-surface)', color: 'var(--lp-text-secondary)', cursor: 'pointer' }}
+                      >
+                        {sym}
+                      </button>
+                    ))}
+                  </div>
+                </Row>
+              )}
               <Row label="Custom size (expert)">
                 <input
                   type="checkbox"

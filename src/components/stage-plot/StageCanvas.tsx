@@ -386,6 +386,7 @@ export function StageCanvas({
             const cy = ft(it.yFt);
             const cat = getCategory(icon.category);
             const isPerson = cat.key === 'musicians';
+            const isRiser = it.iconName.startsWith('infra-riser-');
             const linked = (it.channelRowIds ?? []).map((cid) => channels.find((c) => c.id === cid)).filter((c): c is NonNullable<typeof c> => Boolean(c));
             const ch = linked[0];
             // §SP-FIX-6: linked → sub-snake colour; unlinked → muted brand
@@ -411,6 +412,26 @@ export function StageCanvas({
                   {isPerson ? (
                     /* §SP-FIX-4: person marker = neutral position dot (not a silhouette). */
                     <circle cx={cx} cy={cy} r={5} fill="var(--lp-text-secondary)" stroke="var(--lp-bg)" strokeWidth={1.25} />
+                  ) : isRiser ? (
+                    /* §SP-FIX-5: riser = very faint brand fill (doesn't obstruct
+                       gear placed on it) + 1px brand outline + W×D×H dims label
+                       along the top edge (rotates with the riser). */
+                    <>
+                      <rect
+                        x={cx - wpx / 2}
+                        y={cy - hpx / 2}
+                        width={wpx}
+                        height={hpx}
+                        rx={6}
+                        fill={`color-mix(in srgb, ${brandColor} 7%, transparent)`}
+                        stroke={`color-mix(in srgb, ${brandColor} 30%, transparent)`}
+                        strokeWidth={1}
+                        vectorEffect="non-scaling-stroke"
+                      />
+                      <text x={cx} y={cy - hpx / 2 + 12} fontSize={11} fill="var(--lp-text-secondary)" textAnchor="middle" dominantBaseline="central" fontWeight={600}>
+                        {`${it.widthFt ?? icon.footprint.width_ft} × ${it.depthFt ?? icon.footprint.depth_ft} × ${it.heightFt ?? 1} ft`}
+                      </text>
+                    </>
                   ) : (
                     <svg x={cx - wpx / 2} y={cy - hpx / 2} width={wpx} height={hpx} viewBox={icon.viewBox ?? '0 0 100 100'} preserveAspectRatio="xMidYMid meet" className="lp-canvas-item" style={style} dangerouslySetInnerHTML={{ __html: icon.body }} />
                   )}
