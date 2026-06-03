@@ -409,6 +409,14 @@ export default function ChannelListEditor({
                       onOpenStageDialog={() => setStageDialog(true)}
                       sectionId={section.id}
                       packId={pack.id}
+                      workspaceId={pack.workspace_id}
+                      onMicCreated={(m) =>
+                        setMics((prev) =>
+                          prev.some((x) => x.id === m.id)
+                            ? prev
+                            : [...prev, m].sort((a, b) => a.name.localeCompare(b.name)),
+                        )
+                      }
                       autoFocusName={row.id === newlyAddedRowId}
                       onAutoFocused={() => setNewlyAddedRowId(null)}
                     />
@@ -569,6 +577,8 @@ function ChannelBlock({
   onOpenStageDialog,
   sectionId,
   packId,
+  workspaceId,
+  onMicCreated,
   autoFocusName,
   onAutoFocused,
 }: {
@@ -589,6 +599,11 @@ function ChannelBlock({
   onOpenStageDialog: () => void;
   sectionId: string;
   packId: string;
+  /* §CL-FIX-2 — workspace for inserting a new mic_library row
+     from the Mic/DI combobox, + the parent callback that adds
+     the new mic to the shared library list. */
+  workspaceId: string;
+  onMicCreated: (entry: MicLibraryEntry) => void;
   /* §CL1.1 — set by the parent when this row was just created
      via "+ Add channel". On mount the Name input focuses + the
      parent's onAutoFocused fires to clear the trigger. */
@@ -860,6 +875,8 @@ function ChannelBlock({
               mics={mics}
               onPick={pickMicFromLibrary}
               ariaLabel={`Mic or DI for channel ${row.row_index}`}
+              workspaceId={workspaceId}
+              onMicCreated={onMicCreated}
             />
             {local.gear_id ? (
               <div className="mt-1 inline-flex items-center rounded border border-lp-border bg-lp-bg px-1.5 py-0.5 text-[10px] text-lp-text-secondary">

@@ -208,14 +208,25 @@ dropdown.
 
 **Currently**:
 - (1) ✅ aggregates do recompute correctly.
-- (2) ❌ dropdown options are clipped — long names cut off.
-- (3) ❌ no type-to-search; native select scroll only.
-- (4) ❌ no inline "add this mic" path; user has to leave to the mic
-  library elsewhere.
+- (2) ⏳ FIXED §CL-FIX-2 (pending Vercel verify) — Mic/DI is now a
+  downshift combobox whose menu portals to `<body>`, escaping the
+  channel grid's `overflow-auto` clip (the real cause of "clipping");
+  menu sizes to the mic name (min 260px), not the cell width.
+- (3) ⏳ FIXED §CL-FIX-2 (pending Vercel verify) — typing filters the
+  list (case-insensitive substring on name). Arrow/Enter/Esc nav.
+- (4) ⏳ FIXED §CL-FIX-2 (pending Vercel verify) — the last item is
+  always "+ Add «typed» to library"; opens a modal that inserts into
+  `mic_library` (workspace-scoped) and selects the new row.
+  NOTE — modal field set is **Name / Type (5-way enum) / Default +48V**,
+  matching the REAL mic_library schema (migration 040). The spec's
+  "default provider" field is omitted: there is no provider column on
+  mic_library (provider is captured per-channel), and `type` is a 5-way
+  enum, not a mic/DI binary. Flagged for Adam.
 - (5) ❌ phantom has three visible states (on / off / null) — DB column
-  is `phantom_power BOOLEAN` nullable.
+  is `phantom_power BOOLEAN` nullable. (§CL-FIX-3)
 
-**Tracked in**: `CC_CHANNEL_LIST_REBUILD.md` §CL-FIX-2 + §CL-FIX-3.
+**Tracked in**: `CC_CHANNEL_LIST_REBUILD.md` §CL-FIX-2 (items 2–4) +
+§CL-FIX-3 (item 5).
 
 #### CHL-09 — Cables inventory auto-aggregates (enhancement needed)
 
