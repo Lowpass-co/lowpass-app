@@ -184,7 +184,8 @@ function SectionCard({ section, packContext, onChangeField, onBlur }: SectionCar
 
   return (
     <section
-      className="overflow-hidden rounded-xl border"
+      id={`rider-section-${section.id}`}
+      className="scroll-mt-24 overflow-hidden rounded-xl border"
       style={{ borderColor: 'var(--lp-border-strong)', background: 'var(--lp-surface)' }}
     >
       {/* Card header — title + completion. */}
