@@ -49,23 +49,65 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Rate limited — one generation per 10 seconds' }, { status: 429 });
   }
 
-  let body: GenBody;
-  try {
-    body = (await request.json()) as GenBody;
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
+  // Two input modes: JSON (label + optional reference_photo_url), or
+  // multipart/form-data (label + optional uploaded image — the custom
+  // item library "generate from image" flow).
+  let label = '';
+  let category: string | null = null;
+  let w: number | undefined;
+  let d: number | undefined;
+  let imageBlock: Anthropic.ImageBlockParam | null = null;
+
+  const contentType = request.headers.get('content-type') ?? '';
+  if (contentType.includes('multipart/form-data')) {
+    let form: FormData;
+    try {
+      form = await request.formData();
+    } catch {
+      return NextResponse.json({ error: 'Invalid form data' }, { status: 400 });
+    }
+    label = String(form.get('label') ?? '').trim();
+    category = String(form.get('category') ?? '').trim() || null;
+    const wv = form.get('w');
+    const dv = form.get('d');
+    w = wv != null ? Number(wv) : undefined;
+    d = dv != null ? Number(dv) : undefined;
+    const file = form.get('image');
+    if (file instanceof File && file.size > 0) {
+      const ALLOWED = ['image/png', 'image/jpeg', 'image/webp'];
+      if (!ALLOWED.includes(file.type)) {
+        return NextResponse.json({ error: 'Image must be PNG, JPG, or WebP' }, { status: 400 });
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        return NextResponse.json({ error: 'Image exceeds 5MB' }, { status: 400 });
+      }
+      const data = Buffer.from(await file.arrayBuffer()).toString('base64');
+      imageBlock = { type: 'image', source: { type: 'base64', media_type: file.type as 'image/png' | 'image/jpeg' | 'image/webp', data } };
+    }
+  } else {
+    let body: GenBody;
+    try {
+      body = (await request.json()) as GenBody;
+    } catch {
+      return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
+    }
+    label = (body.label ?? '').trim();
+    category = body.category?.trim() || null;
+    w = body.real_world_dimensions_ft?.w;
+    d = body.real_world_dimensions_ft?.d;
+    const photoUrl = body.reference_photo_url;
+    if (photoUrl) {
+      if (!/^https:\/\//i.test(photoUrl)) {
+        return NextResponse.json({ error: 'reference_photo_url must be https' }, { status: 400 });
+      }
+      imageBlock = { type: 'image', source: { type: 'url', url: photoUrl } };
+    }
   }
 
-  const label = (body.label ?? '').trim();
   if (!label) {
     return NextResponse.json({ error: 'label required' }, { status: 400 });
   }
-  const category = body.category?.trim() || null;
-  const dims = body.real_world_dimensions_ft;
-  const photoUrl = body.reference_photo_url;
-  if (photoUrl && !/^https:\/\//i.test(photoUrl)) {
-    return NextResponse.json({ error: 'reference_photo_url must be https' }, { status: 400 });
-  }
+  const dims = w && d ? { w, d } : undefined;
 
   // Reserve the slot before the (slow) API call so concurrent calls bounce.
   lastGen.set(user.id, now);
@@ -73,14 +115,12 @@ export async function POST(request: Request) {
   const userText =
     `Draw a top-down stage-plot icon for: "${label}"` +
     (category ? ` (category: ${category})` : '') +
-    (dims?.w && dims?.d ? ` Real-world footprint ≈ ${dims.w} × ${dims.d} ft.` : '') +
+    (dims ? ` Real-world footprint ≈ ${dims.w} × ${dims.d} ft.` : '') +
+    (imageBlock ? ' Use the attached reference image for shape/proportions.' : '') +
     ' Match the canonical grammar and example density exactly. Return ONLY the JSON object.';
 
-  const content: Anthropic.MessageParam['content'] = photoUrl
-    ? [
-        { type: 'image', source: { type: 'url', url: photoUrl } },
-        { type: 'text', text: userText },
-      ]
+  const content: Anthropic.MessageParam['content'] = imageBlock
+    ? [imageBlock, { type: 'text', text: userText }]
     : userText;
 
   const client = new Anthropic({ apiKey });
