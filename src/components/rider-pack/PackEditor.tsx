@@ -3,6 +3,14 @@
 /* ============================================
    LOWPASS — Rider/Pack editor shell
 
+   @deprecated (§RA12, 2026-06-03) — superseded by the Rider Architecture
+   Mirror shells. The live /rider-packs/[id] route now mounts
+   RiderBuilderShellClient (builder) + RiderShowReadView/RiderShowRightRail
+   (show) via src/app/(app)/rider-packs/[id]/page.tsx. PackEditor is no
+   longer reached by the default route; kept temporarily for back-compat /
+   reference. Slated for removal ~30 days after §RA12 ships once the new
+   surface is confirmed in production. Do NOT build new features on it.
+
    Three-pane layout:
    - Left:   section list (add/remove/reorder/select)
    - Center: section editor (title + fields)

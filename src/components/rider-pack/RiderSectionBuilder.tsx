@@ -89,7 +89,7 @@ const SECTION_TYPE_LABEL: Record<SectionType, string> = {
 /** Rider field-type metadata for the row icon + picker. Covers all 9
  *  real Field types (FieldTypeIcon from Advance only knows its own set,
  *  so the rider types table/asset/checkbox_list would fall back). */
-const RIDER_FIELD_META: Record<FieldType, { label: string; Icon: LucideIcon }> = {
+export const RIDER_FIELD_META: Record<FieldType, { label: string; Icon: LucideIcon }> = {
   text: { label: 'Text', Icon: TypeIcon },
   table: { label: 'Table', Icon: TableIcon },
   contact: { label: 'Contact', Icon: User },
@@ -101,7 +101,7 @@ const RIDER_FIELD_META: Record<FieldType, { label: string; Icon: LucideIcon }> =
   url: { label: 'URL', Icon: Link2 },
 };
 
-const FIELD_TYPE_ORDER: FieldType[] = [
+export const FIELD_TYPE_ORDER: FieldType[] = [
   'text',
   'table',
   'contact',
@@ -426,16 +426,39 @@ export function RiderSectionBuilder({ packId }: { packId: string }) {
     [persistFields],
   );
 
-  // Label edit streaming back from the §RA8 properties panel.
-  const patchFieldLabel = useCallback(
-    (key: string, label: string) => {
+  // Label / type edit streaming back from the §RA8 properties panel.
+  // A type change re-shapes the field via makeField (preserving key +
+  // label) — there's no user value to lose while editing structure.
+  const patchField = useCallback(
+    (key: string, patch: { label?: string; type?: FieldType }) => {
       const list = sectionsRef.current ?? [];
       const section = list.find((s) => (s.fields ?? []).some((f) => f.key === key));
       if (!section) return;
-      const fields = (section.fields ?? []).map((f) => (f.key === key ? { ...f, label } : f));
+      const fields = (section.fields ?? []).map((f) => {
+        if (f.key !== key) return f;
+        if (patch.type && patch.type !== f.type) {
+          const reshaped = makeField(patch.type);
+          reshaped.key = key;
+          reshaped.label = patch.label ?? f.label ?? reshaped.label;
+          return reshaped;
+        }
+        return patch.label !== undefined ? { ...f, label: patch.label } : f;
+      });
       void persistFields(section.id, fields);
     },
     [persistFields],
+  );
+
+  // Delete from the properties panel (knows only the field key).
+  const deleteFieldByKey = useCallback(
+    (key: string) => {
+      const list = sectionsRef.current ?? [];
+      const section = list.find((s) => (s.fields ?? []).some((f) => f.key === key));
+      if (!section) return;
+      if (selectedKey === key) setSelectedKey(null);
+      void persistFields(section.id, (section.fields ?? []).filter((f) => f.key !== key));
+    },
+    [persistFields, selectedKey],
   );
 
   useEffect(() => {
@@ -458,17 +481,23 @@ export function RiderSectionBuilder({ packId }: { packId: string }) {
     }
     function onFieldUpdated(e: Event) {
       const d = (e as CustomEvent).detail ?? {};
-      if (d.id && d.patch && typeof d.patch.label === 'string') patchFieldLabel(d.id, d.patch.label);
+      if (d.id && d.patch) patchField(d.id, d.patch);
+    }
+    function onFieldDelete(e: Event) {
+      const d = (e as CustomEvent).detail ?? {};
+      if (d.id) deleteFieldByKey(d.id);
     }
     window.addEventListener('rider:section-drop', onSectionDrop);
     window.addEventListener('rider:field-add', onFieldAdd);
     window.addEventListener('rider:field-updated', onFieldUpdated);
+    window.addEventListener('rider:field-delete', onFieldDelete);
     return () => {
       window.removeEventListener('rider:section-drop', onSectionDrop);
       window.removeEventListener('rider:field-add', onFieldAdd);
       window.removeEventListener('rider:field-updated', onFieldUpdated);
+      window.removeEventListener('rider:field-delete', onFieldDelete);
     };
-  }, [appendSection, loadTemplates, addLibraryField, patchFieldLabel]);
+  }, [appendSection, loadTemplates, addLibraryField, patchField, deleteFieldByKey]);
 
   // --- render ---------------------------------------------------------------
   if (loadError) {

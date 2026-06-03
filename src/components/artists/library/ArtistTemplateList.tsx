@@ -109,7 +109,9 @@ export function ArtistTemplateList({
         setCreateError(body?.error ?? `Create failed (${res.status})`);
         return;
       }
-      router.push(`/rider-packs/${body.id}`);
+      // §RA14 — a freshly created rider template opens straight into the
+      // builder; channel_list keeps the legacy editor (bare path).
+      router.push(`/rider-packs/${body.id}${kind === 'rider' ? '?mode=edit' : ''}`);
     } catch (err) {
       setCreateError(err instanceof Error ? err.message : 'Network error');
     } finally {
@@ -240,7 +242,10 @@ export function ArtistTemplateList({
               }}
             >
               <Link
-                href={`/rider-packs/${row.id}`}
+                /* §RA14 — rider templates open the new shell in builder
+                   mode (artist-scope templates are the structure source).
+                   channel_list rows keep the bare path (legacy PackEditor). */
+                href={`/rider-packs/${row.id}${kind === 'rider' ? '?mode=edit' : ''}`}
                 style={{
                   minWidth: 0,
                   fontSize: 'var(--lp-text-sm)',

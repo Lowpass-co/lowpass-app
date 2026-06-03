@@ -52,7 +52,7 @@ type FieldEditorProps<F extends Field = Field> = {
   packContext?: PackContext;
 };
 
-function isFieldConsideredEmpty(field: Field): boolean {
+export function isFieldConsideredEmpty(field: Field): boolean {
   switch (field.type) {
     case 'text':
       return !(field.value && field.value.trim());
@@ -191,7 +191,7 @@ function fireBlur(
   onFieldBlur?.();
 }
 
-function Dispatcher({
+export function Dispatcher({
   field,
   onChange,
   onFieldBlur,

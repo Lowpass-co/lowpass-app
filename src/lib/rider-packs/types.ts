@@ -182,6 +182,11 @@ export type RiderSection = {
    *  Defaults to `{}` on the DB side; consumers should treat
    *  missing keys as the empty/default state. */
   metadata?: Record<string, unknown> | null;
+  /** Migration 111 (§RA1) — section completion tracking. Optional on
+   *  older clients / pre-migration rows. */
+  status?: 'not_started' | 'in_progress' | 'complete' | 'needs_review' | null;
+  last_updated_by_id?: string | null;
+  template_id?: string | null;
   created_at: string;
   updated_at: string;
 };
