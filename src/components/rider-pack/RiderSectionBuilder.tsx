@@ -1,5 +1,5 @@
 /* ============================================
-   LOWPASS — Rider · Section Builder (§RA7a + §RA7b)
+   LOWPASS — Rider · Section Builder (§RA7a + §RA7b + §RA7c)
 
    The accordion canvas at the centre of the builder shell. Slimmer
    mirror of src/components/advance/AdvanceSectionBuilder.tsx (6046 LOC)
@@ -17,14 +17,19 @@
    reorder, MIME-gated) and :2327-2359 (type picker dropdown) — native
    HTML5 drag, NOT dnd-kit.
 
-   Deferred to §RA7c (no-op until then):
-   - add SECTION (blank + template fork via rider:section-drop)
-   - workspace template fork on custom-field add
-   - rider:field-add listener (single field from the library palette)
-   - rider:field-updated listener (label/type edits streaming back from
-     the properties panel) + the debounced snapshot/auto-save system.
-   §RA7b persists field add / delete / reorder with direct
-   updateSection({fields}) calls (same pattern as §RA7a section order).
+   §RA7c (this commit): add SECTION via rider:section-drop (blank +
+   template-seeded), the rider:field-add listener (single field from the
+   library palette), and the rider:field-updated listener (label edits
+   from the §RA8 properties panel). Section-template seed field types are
+   a SUPERSET (textarea/boolean) of the 9 real rider types, so
+   templateFieldToRiderField maps them (textarea→text, boolean→
+   checkbox_list). All mutations persist with direct create/updateSection
+   calls (the per-mutation persist IS the auto-save — the builder has no
+   Cancel, so no snapshot is needed).
+
+   Still deferred (reported follow-up, needs new mutation API):
+   - workspace template FORK on custom-field add (POST/PATCH
+     /api/rider-section-templates) — §RA7c-fork.
 
    Rider adaptations (data-shape):
    - 9 real Field types (text/table/contact/asset/time/currency/number/
@@ -58,7 +63,7 @@ import {
   Link2,
   type LucideIcon,
 } from 'lucide-react';
-import { getPackRaw, updateSection, deleteSection } from '@/lib/rider-packs/client';
+import { getPackRaw, createSection, updateSection, deleteSection } from '@/lib/rider-packs/client';
 import type { Field, FieldType, RiderSection, SectionType } from '@/lib/rider-packs/types';
 
 /** Native-drag MIMEs. Distinct from the library's add MIME
@@ -142,6 +147,59 @@ function makeField(type: FieldType): Field {
   }
 }
 
+/** Subset of GET /api/rider-section-templates rows needed to seed a
+ *  section. Field descriptors are the template shape ({id,label,type}),
+ *  NOT rider Field objects. */
+type TemplateLite = {
+  id: string;
+  name: string;
+  fields: Array<{ id?: string; label?: string; type?: string; required?: boolean }>;
+};
+
+/** Section-template seed field types are a SUPERSET (textarea/boolean) of
+ *  the 9 real rider Field types — map to the nearest rider type. (§RA7c
+ *  adaptation; flagged: migration 111 seeds use textarea/boolean.) */
+function toRiderFieldType(t: string | undefined): FieldType {
+  switch (t) {
+    case 'textarea':
+      return 'text';
+    case 'boolean':
+      return 'checkbox_list';
+    case 'text':
+    case 'table':
+    case 'contact':
+    case 'asset':
+    case 'time':
+    case 'currency':
+    case 'number':
+    case 'checkbox_list':
+    case 'url':
+      return t;
+    default:
+      return 'text';
+  }
+}
+
+/** Build a rider Field from a template field descriptor. */
+function templateFieldToRiderField(tf: { id?: string; label?: string; type?: string }): Field {
+  const f = makeField(toRiderFieldType(tf.type));
+  if (tf.label) f.label = tf.label;
+  if (tf.type === 'boolean' && f.type === 'checkbox_list') {
+    f.items = [{ key: 'yes', label: f.label ?? 'Yes', checked: false }];
+  }
+  return f;
+}
+
+/** Unique section_key derived from a title. */
+function slugKey(title: string): string {
+  const base = title.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'section';
+  const rand =
+    typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID().slice(0, 6)
+      : Math.random().toString(36).slice(2, 8);
+  return `${base}_${rand}`;
+}
+
 export function RiderSectionBuilder({ packId }: { packId: string }) {
   const [sections, setSections] = useState<RiderSection[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -153,6 +211,19 @@ export function RiderSectionBuilder({ packId }: { packId: string }) {
   const [pickerFor, setPickerFor] = useState<string | null>(null);
   const [fieldDrag, setFieldDrag] = useState<{ sectionId: string; index: number } | null>(null);
   const [fieldDrop, setFieldDrop] = useState<{ sectionId: string; index: number } | null>(null);
+  const [activeSectionId, setActiveSectionId] = useState<string | null>(null);
+
+  // Refs mirror the latest state so the window CustomEvent listeners can
+  // be stable ([] deps) yet always read current values (no stale closures).
+  const sectionsRef = useRef<RiderSection[] | null>(null);
+  const activeSectionIdRef = useRef<string | null>(null);
+  const templatesRef = useRef<TemplateLite[] | null>(null);
+  useEffect(() => {
+    sectionsRef.current = sections;
+  }, [sections]);
+  useEffect(() => {
+    activeSectionIdRef.current = activeSectionId;
+  }, [activeSectionId]);
 
   // --- load -----------------------------------------------------------------
   useEffect(() => {
@@ -177,6 +248,7 @@ export function RiderSectionBuilder({ packId }: { packId: string }) {
       else next.add(id);
       return next;
     });
+    setActiveSectionId(id); // mark the section the user is working in (field-add target)
   }, []);
 
   // --- persist section sort_order for rows whose index moved ----------------
@@ -292,8 +364,9 @@ export function RiderSectionBuilder({ packId }: { packId: string }) {
     [sections, persistFields],
   );
 
-  const selectField = useCallback((field: Field) => {
+  const selectField = useCallback((field: Field, sectionId: string) => {
     setSelectedKey(field.key);
+    setActiveSectionId(sectionId);
     if (typeof window !== 'undefined') {
       window.dispatchEvent(
         new CustomEvent(FIELD_SELECTED_EVENT, {
@@ -302,6 +375,100 @@ export function RiderSectionBuilder({ packId }: { packId: string }) {
       );
     }
   }, []);
+
+  // --- §RA7c: create section + library wiring -------------------------------
+  const loadTemplates = useCallback(async () => {
+    if (templatesRef.current) return templatesRef.current;
+    try {
+      const res = await fetch('/api/rider-section-templates');
+      const j = res.ok ? await res.json() : { templates: [] };
+      templatesRef.current = (j.templates ?? []) as TemplateLite[];
+    } catch {
+      templatesRef.current = [];
+    }
+    return templatesRef.current;
+  }, []);
+
+  const appendSection = useCallback(
+    async (title: string, fields: Field[]) => {
+      setSave('saving');
+      try {
+        const created = await createSection(packId, {
+          section_key: slugKey(title),
+          title,
+          fields,
+          sort_order: (sectionsRef.current ?? []).length,
+          section_type: 'fields',
+        });
+        setSections((prev) => [...(prev ?? []), created]);
+        setExpanded((prev) => new Set(prev).add(created.id));
+        setActiveSectionId(created.id);
+        setSave('saved');
+      } catch {
+        setSave('error');
+      }
+    },
+    [packId],
+  );
+
+  // Single field dropped/clicked in the library → add to the active
+  // section (the one last expanded/selected), else the last section.
+  const addLibraryField = useCallback(
+    (tf: { id?: string; label?: string; type?: string }) => {
+      const list = sectionsRef.current ?? [];
+      if (list.length === 0) return;
+      const active = activeSectionIdRef.current;
+      const targetId = active && list.some((s) => s.id === active) ? active : list[list.length - 1].id;
+      const target = list.find((s) => s.id === targetId);
+      if (!target) return;
+      void persistFields(targetId, [...(target.fields ?? []), templateFieldToRiderField(tf)]);
+    },
+    [persistFields],
+  );
+
+  // Label edit streaming back from the §RA8 properties panel.
+  const patchFieldLabel = useCallback(
+    (key: string, label: string) => {
+      const list = sectionsRef.current ?? [];
+      const section = list.find((s) => (s.fields ?? []).some((f) => f.key === key));
+      if (!section) return;
+      const fields = (section.fields ?? []).map((f) => (f.key === key ? { ...f, label } : f));
+      void persistFields(section.id, fields);
+    },
+    [persistFields],
+  );
+
+  useEffect(() => {
+    function onSectionDrop(e: Event) {
+      const d = (e as CustomEvent).detail ?? {};
+      void (async () => {
+        if (!d.templateId || d.templateId === '__blank__') {
+          await appendSection(d.label || 'Custom section', []);
+          return;
+        }
+        const tmpls = await loadTemplates();
+        const t = tmpls.find((x) => x.id === d.templateId);
+        const fields = (t?.fields ?? []).map(templateFieldToRiderField);
+        await appendSection(t?.name || d.label || 'Section', fields);
+      })();
+    }
+    function onFieldAdd(e: Event) {
+      const d = (e as CustomEvent).detail ?? {};
+      if (d.field) addLibraryField(d.field);
+    }
+    function onFieldUpdated(e: Event) {
+      const d = (e as CustomEvent).detail ?? {};
+      if (d.id && d.patch && typeof d.patch.label === 'string') patchFieldLabel(d.id, d.patch.label);
+    }
+    window.addEventListener('rider:section-drop', onSectionDrop);
+    window.addEventListener('rider:field-add', onFieldAdd);
+    window.addEventListener('rider:field-updated', onFieldUpdated);
+    return () => {
+      window.removeEventListener('rider:section-drop', onSectionDrop);
+      window.removeEventListener('rider:field-add', onFieldAdd);
+      window.removeEventListener('rider:field-updated', onFieldUpdated);
+    };
+  }, [appendSection, loadTemplates, addLibraryField, patchFieldLabel]);
 
   // --- render ---------------------------------------------------------------
   if (loadError) {
@@ -323,7 +490,7 @@ export function RiderSectionBuilder({ packId }: { packId: string }) {
         style={{ minHeight: 200, borderColor: 'var(--lp-border-subtle)', background: 'var(--lp-surface)', color: 'var(--lp-text-tertiary)', padding: 32 }}
       >
         <p style={{ fontSize: '14px', fontWeight: 500, color: 'var(--lp-text-secondary)' }}>No sections yet</p>
-        <p style={{ fontSize: '12px' }}>Drag a section from the library, or use “Blank custom section”. (Add lands in §RA7c.)</p>
+        <p style={{ fontSize: '12px' }}>Drag a section from the library on the left, or use “Blank custom section”.</p>
       </div>
     );
   }
@@ -349,7 +516,7 @@ export function RiderSectionBuilder({ packId }: { packId: string }) {
           onDelete={() => removeSection(section.id)}
           onTogglePicker={() => setPickerFor((cur) => (cur === section.id ? null : section.id))}
           onAddField={(type) => addField(section.id, type)}
-          onSelectField={selectField}
+          onSelectField={(f) => selectField(f, section.id)}
           onDeleteField={(key) => deleteField(section.id, key)}
           onFieldDragStart={(index) => setFieldDrag({ sectionId: section.id, index })}
           onFieldDragOver={(index) => setFieldDrop({ sectionId: section.id, index })}
