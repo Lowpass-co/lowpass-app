@@ -1,5 +1,5 @@
 /* ============================================
-   LOWPASS — Rider · Section Builder (§RA7a)
+   LOWPASS — Rider · Section Builder (§RA7a + §RA7b)
 
    The accordion canvas at the centre of the builder shell. Slimmer
    mirror of src/components/advance/AdvanceSectionBuilder.tsx (6046 LOC)
@@ -7,27 +7,33 @@
    strip, conflict detection, and the specialised section cards that
    bloat the original.
 
-   §RA7a scope (this commit): fetch the pack's sections, render each as
-   an expand/collapse accordion card, drag-reorder sections, inline
-   title edit, delete. Mirrors Advance's section card + native HTML5
-   drag (AdvanceSectionBuilder.tsx:5026-5124 header/body; 1760-1835
-   section reorder — native drag, MIME-gated, NOT dnd-kit; persists via
-   per-row sort_order).
+   §RA7a: fetch sections, accordion expand/collapse, drag-reorder
+   sections, inline title edit, delete.
+   §RA7b (this commit): field rows inside the section body, drag-reorder
+   fields within a section, click-to-select a field (dispatches
+   rider:field-selected for the §RA8 properties panel), delete field, and
+   a field type picker that appends a new field. Mirrors
+   AdvanceSectionBuilder.tsx:1857-1991 (field rows + native field
+   reorder, MIME-gated) and :2327-2359 (type picker dropdown) — native
+   HTML5 drag, NOT dnd-kit.
 
-   Deferred to later sub-phases (placeholders / no-ops until then):
-   - §RA7b: field rows inside the body + field drag-reorder + type picker
-   - §RA7c: add section (blank + template fork via rider:section-drop),
-     add custom field, and the snapshot/auto-save system. Until §RA7c
-     the shell's drop zone dispatches rider:section-drop into the void.
+   Deferred to §RA7c (no-op until then):
+   - add SECTION (blank + template fork via rider:section-drop)
+   - workspace template fork on custom-field add
+   - rider:field-add listener (single field from the library palette)
+   - rider:field-updated listener (label/type edits streaming back from
+     the properties panel) + the debounced snapshot/auto-save system.
+   §RA7b persists field add / delete / reorder with direct
+   updateSection({fields}) calls (same pattern as §RA7a section order).
 
    Rider adaptations (data-shape):
-   - Sections come from rider_sections (getPackRaw → {pack, sections}),
-     keyed by section_key, fields is a JSONB Field[] (9 real field
-     types, not Advance's 12). rich_text / channel_list / advance_summary
-     are SECTION types whose body lives in metadata, so the body shows a
-     type label rather than a field list for those.
-   - Status pill is deferred to §RA11 (the rider_sections.status column
-     exists but the PATCH allow-list doesn't expose it yet).
+   - 9 real Field types (text/table/contact/asset/time/currency/number/
+     checkbox_list/url) — NOT Advance's 12. No `required` slot on rider
+     fields, so rows omit the Required/Optional badge Advance shows.
+   - rich_text/channel_list/advance_summary are SECTION types whose body
+     lives in metadata → those cards show a type label, not a field list.
+   - Status pill deferred to §RA11 (column exists; PATCH allow-list
+     doesn't expose it yet).
    ============================================ */
 
 'use client';
@@ -40,14 +46,31 @@ import {
   Trash2,
   Loader2,
   AlertCircle,
+  Plus,
+  Type as TypeIcon,
+  Table as TableIcon,
+  User,
+  Paperclip,
+  Clock,
+  DollarSign,
+  Hash,
+  ListChecks,
+  Link2,
+  type LucideIcon,
 } from 'lucide-react';
 import { getPackRaw, updateSection, deleteSection } from '@/lib/rider-packs/client';
-import type { RiderSection, SectionType } from '@/lib/rider-packs/types';
+import type { Field, FieldType, RiderSection, SectionType } from '@/lib/rider-packs/types';
 
-/** Native-drag MIME for SECTION reorder. Distinct from the library's
- *  add MIME (application/x-lp-rider-section-id) so a library card drop
- *  never reads as a reorder and vice-versa. */
+/** Native-drag MIMEs. Distinct from the library's add MIME
+ *  (application/x-lp-rider-section-id) so a library card drop never
+ *  reads as a reorder. */
 const SECTION_REORDER_MIME = 'application/x-lp-rider-section-reorder';
+const FIELD_REORDER_MIME = 'application/x-lp-rider-field-reorder';
+
+/** Matches RIDER_FIELD_SELECTED_EVENT in RiderBuilderShellClient. Kept
+ *  as a literal here to avoid a circular import (the shell imports this
+ *  builder). */
+const FIELD_SELECTED_EVENT = 'rider:field-selected';
 
 type SaveState = 'idle' | 'saving' | 'saved' | 'error';
 
@@ -58,6 +81,67 @@ const SECTION_TYPE_LABEL: Record<SectionType, string> = {
   advance_summary: 'advance summary',
 };
 
+/** Rider field-type metadata for the row icon + picker. Covers all 9
+ *  real Field types (FieldTypeIcon from Advance only knows its own set,
+ *  so the rider types table/asset/checkbox_list would fall back). */
+const RIDER_FIELD_META: Record<FieldType, { label: string; Icon: LucideIcon }> = {
+  text: { label: 'Text', Icon: TypeIcon },
+  table: { label: 'Table', Icon: TableIcon },
+  contact: { label: 'Contact', Icon: User },
+  asset: { label: 'Asset', Icon: Paperclip },
+  time: { label: 'Time', Icon: Clock },
+  currency: { label: 'Currency', Icon: DollarSign },
+  number: { label: 'Number', Icon: Hash },
+  checkbox_list: { label: 'Checklist', Icon: ListChecks },
+  url: { label: 'URL', Icon: Link2 },
+};
+
+const FIELD_TYPE_ORDER: FieldType[] = [
+  'text',
+  'table',
+  'contact',
+  'asset',
+  'time',
+  'currency',
+  'number',
+  'checkbox_list',
+  'url',
+];
+
+function newKey(type: FieldType): string {
+  const rand =
+    typeof crypto !== 'undefined' && 'randomUUID' in crypto
+      ? crypto.randomUUID().slice(0, 8)
+      : Math.random().toString(36).slice(2, 10);
+  return `${type}_${rand}`;
+}
+
+/** Default-shaped Field for a freshly added field of a given type. */
+function makeField(type: FieldType): Field {
+  const key = newKey(type);
+  const label = `New ${RIDER_FIELD_META[type].label.toLowerCase()}`;
+  switch (type) {
+    case 'text':
+      return { type, key, label, value: '' };
+    case 'table':
+      return { type, key, label, columns: [{ key: 'c1', label: 'Column 1' }], rows: [] };
+    case 'contact':
+      return { type, key, label, entries: [] };
+    case 'asset':
+      return { type, key, label, asset_id: '' };
+    case 'time':
+      return { type, key, label, value: '' };
+    case 'currency':
+      return { type, key, label, amount: 0, currency: 'USD' };
+    case 'number':
+      return { type, key, label, value: 0 };
+    case 'checkbox_list':
+      return { type, key, label, items: [] };
+    case 'url':
+      return { type, key, label, href: '' };
+  }
+}
+
 export function RiderSectionBuilder({ packId }: { packId: string }) {
   const [sections, setSections] = useState<RiderSection[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -65,6 +149,10 @@ export function RiderSectionBuilder({ packId }: { packId: string }) {
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [dropIndex, setDropIndex] = useState<number | null>(null);
   const [save, setSave] = useState<SaveState>('idle');
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [pickerFor, setPickerFor] = useState<string | null>(null);
+  const [fieldDrag, setFieldDrag] = useState<{ sectionId: string; index: number } | null>(null);
+  const [fieldDrop, setFieldDrop] = useState<{ sectionId: string; index: number } | null>(null);
 
   // --- load -----------------------------------------------------------------
   useEffect(() => {
@@ -72,8 +160,7 @@ export function RiderSectionBuilder({ packId }: { packId: string }) {
     getPackRaw(packId)
       .then(({ sections }) => {
         if (!alive) return;
-        const sorted = [...sections].sort((a, b) => a.sort_order - b.sort_order);
-        setSections(sorted);
+        setSections([...sections].sort((a, b) => a.sort_order - b.sort_order));
       })
       .catch((e: Error) => {
         if (alive) setLoadError(e.message);
@@ -92,11 +179,9 @@ export function RiderSectionBuilder({ packId }: { packId: string }) {
     });
   }, []);
 
-  // --- persist sort_order for rows whose index changed ----------------------
+  // --- persist section sort_order for rows whose index moved ----------------
   const persistOrder = useCallback(
     async (next: RiderSection[], prevById: Map<string, number>) => {
-      // `next` is already renumbered (sort_order === index), so only the
-      // rows whose index moved need a PATCH and sort_order is authoritative.
       const changed = next.filter((s, i) => prevById.get(s.id) !== i);
       if (changed.length === 0) return;
       setSave('saving');
@@ -126,7 +211,6 @@ export function RiderSectionBuilder({ packId }: { packId: string }) {
     [persistOrder],
   );
 
-  // --- title edit (onBlur PATCH) --------------------------------------------
   const renameSection = useCallback(
     async (id: string, title: string) => {
       const current = sections?.find((s) => s.id === id);
@@ -143,7 +227,6 @@ export function RiderSectionBuilder({ packId }: { packId: string }) {
     [packId, sections],
   );
 
-  // --- delete ---------------------------------------------------------------
   const removeSection = useCallback(
     async (id: string) => {
       const target = sections?.find((s) => s.id === id);
@@ -161,30 +244,78 @@ export function RiderSectionBuilder({ packId }: { packId: string }) {
     [packId, sections],
   );
 
+  // --- field mutations (persist via updateSection({fields})) ----------------
+  const persistFields = useCallback(
+    async (sectionId: string, fields: Field[]) => {
+      setSections((prev) => prev?.map((s) => (s.id === sectionId ? { ...s, fields } : s)) ?? prev);
+      setSave('saving');
+      try {
+        await updateSection(packId, sectionId, { fields });
+        setSave('saved');
+      } catch {
+        setSave('error');
+      }
+    },
+    [packId],
+  );
+
+  const addField = useCallback(
+    (sectionId: string, type: FieldType) => {
+      setPickerFor(null);
+      const section = sections?.find((s) => s.id === sectionId);
+      if (!section) return;
+      void persistFields(sectionId, [...(section.fields ?? []), makeField(type)]);
+    },
+    [sections, persistFields],
+  );
+
+  const deleteField = useCallback(
+    (sectionId: string, key: string) => {
+      const section = sections?.find((s) => s.id === sectionId);
+      if (!section) return;
+      if (selectedKey === key) setSelectedKey(null);
+      void persistFields(sectionId, (section.fields ?? []).filter((f) => f.key !== key));
+    },
+    [sections, persistFields, selectedKey],
+  );
+
+  const moveField = useCallback(
+    (sectionId: string, from: number, to: number) => {
+      if (from === to) return;
+      const section = sections?.find((s) => s.id === sectionId);
+      if (!section) return;
+      const next = [...(section.fields ?? [])];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      void persistFields(sectionId, next);
+    },
+    [sections, persistFields],
+  );
+
+  const selectField = useCallback((field: Field) => {
+    setSelectedKey(field.key);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent(FIELD_SELECTED_EVENT, {
+          detail: { id: field.key, type: field.type, label: field.label ?? '', required: false },
+        }),
+      );
+    }
+  }, []);
+
   // --- render ---------------------------------------------------------------
   if (loadError) {
     return (
-      <div
-        className="flex items-center gap-2 rounded-xl border p-4"
-        style={{ borderColor: 'var(--lp-border-subtle)', background: 'var(--lp-surface)', color: 'var(--lp-text-tertiary)', fontSize: '13px' }}
-      >
-        <AlertCircle className="h-4 w-4" />
-        Couldn’t load sections: {loadError}
-      </div>
+      <Notice icon={<AlertCircle className="h-4 w-4" />}>Couldn’t load sections: {loadError}</Notice>
     );
   }
-
   if (sections === null) {
     return (
-      <div
-        className="flex items-center justify-center gap-2 rounded-xl border p-8"
-        style={{ borderColor: 'var(--lp-border-subtle)', background: 'var(--lp-surface)', color: 'var(--lp-text-tertiary)', fontSize: '13px' }}
-      >
-        <Loader2 className="h-4 w-4 animate-spin" /> Loading sections…
-      </div>
+      <Notice icon={<Loader2 className="h-4 w-4 animate-spin" />} center>
+        Loading sections…
+      </Notice>
     );
   }
-
   if (sections.length === 0) {
     return (
       <div
@@ -209,9 +340,28 @@ export function RiderSectionBuilder({ packId }: { packId: string }) {
           expanded={expanded.has(section.id)}
           isDragging={dragIndex === i}
           isDropTarget={dropIndex === i && dragIndex !== null && dragIndex !== i}
+          selectedKey={selectedKey}
+          pickerOpen={pickerFor === section.id}
+          fieldDrag={fieldDrag}
+          fieldDrop={fieldDrop}
           onToggle={() => toggle(section.id)}
           onRename={(t) => renameSection(section.id, t)}
           onDelete={() => removeSection(section.id)}
+          onTogglePicker={() => setPickerFor((cur) => (cur === section.id ? null : section.id))}
+          onAddField={(type) => addField(section.id, type)}
+          onSelectField={selectField}
+          onDeleteField={(key) => deleteField(section.id, key)}
+          onFieldDragStart={(index) => setFieldDrag({ sectionId: section.id, index })}
+          onFieldDragOver={(index) => setFieldDrop({ sectionId: section.id, index })}
+          onFieldDrop={(index) => {
+            if (fieldDrag && fieldDrag.sectionId === section.id) moveField(section.id, fieldDrag.index, index);
+            setFieldDrag(null);
+            setFieldDrop(null);
+          }}
+          onFieldDragEnd={() => {
+            setFieldDrag(null);
+            setFieldDrop(null);
+          }}
           onDragStart={(e) => {
             e.dataTransfer.setData(SECTION_REORDER_MIME, String(i));
             e.dataTransfer.effectAllowed = 'move';
@@ -242,18 +392,26 @@ export function RiderSectionBuilder({ packId }: { packId: string }) {
   );
 }
 
+function Notice({ icon, center, children }: { icon: React.ReactNode; center?: boolean; children: React.ReactNode }) {
+  return (
+    <div
+      className={`flex items-center gap-2 rounded-xl border p-4 ${center ? 'justify-center p-8' : ''}`}
+      style={{ borderColor: 'var(--lp-border-subtle)', background: 'var(--lp-surface)', color: 'var(--lp-text-tertiary)', fontSize: '13px' }}
+    >
+      {icon}
+      {children}
+    </div>
+  );
+}
+
 function SavePill({ state }: { state: SaveState }) {
   if (state === 'idle') return null;
-  const map = {
-    saving: { text: 'Saving…', color: 'var(--lp-text-tertiary)' },
-    saved: { text: 'Saved', color: 'var(--color-lp-status-needs-review)' },
-    error: { text: 'Save failed', color: 'var(--color-lp-status-needs-review)' },
-  } as const;
-  const v = state === 'saved' ? map.saved : state === 'error' ? map.error : map.saving;
+  const text = state === 'saving' ? 'Saving…' : state === 'saved' ? 'Saved' : 'Save failed';
+  const color = state === 'saving' ? 'var(--lp-text-tertiary)' : 'var(--color-lp-status-needs-review)';
   return (
-    <span className="inline-flex items-center gap-1.5" style={{ fontSize: '11px', color: v.color }}>
+    <span className="inline-flex items-center gap-1.5" style={{ fontSize: '11px', color }}>
       {state === 'saving' ? <Loader2 className="h-3 w-3 animate-spin" /> : null}
-      {state === 'saved' ? 'Saved' : v.text}
+      {text}
     </span>
   );
 }
@@ -263,28 +421,29 @@ interface SectionCardProps {
   expanded: boolean;
   isDragging: boolean;
   isDropTarget: boolean;
+  selectedKey: string | null;
+  pickerOpen: boolean;
+  fieldDrag: { sectionId: string; index: number } | null;
+  fieldDrop: { sectionId: string; index: number } | null;
   onToggle: () => void;
   onRename: (title: string) => void;
   onDelete: () => void;
+  onTogglePicker: () => void;
+  onAddField: (type: FieldType) => void;
+  onSelectField: (field: Field) => void;
+  onDeleteField: (key: string) => void;
+  onFieldDragStart: (index: number) => void;
+  onFieldDragOver: (index: number) => void;
+  onFieldDrop: (index: number) => void;
+  onFieldDragEnd: () => void;
   onDragStart: (e: React.DragEvent) => void;
   onDragOver: (e: React.DragEvent) => void;
   onDrop: (e: React.DragEvent) => void;
   onDragEnd: () => void;
 }
 
-function SectionCard({
-  section,
-  expanded,
-  isDragging,
-  isDropTarget,
-  onToggle,
-  onRename,
-  onDelete,
-  onDragStart,
-  onDragOver,
-  onDrop,
-  onDragEnd,
-}: SectionCardProps) {
+function SectionCard(props: SectionCardProps) {
+  const { section, expanded, isDragging, isDropTarget, onToggle, onRename, onDelete } = props;
   const titleRef = useRef<HTMLInputElement>(null);
   const sectionType: SectionType = section.section_type ?? 'fields';
   const isFieldType = sectionType === 'fields';
@@ -292,8 +451,8 @@ function SectionCard({
 
   return (
     <div
-      onDragOver={onDragOver}
-      onDrop={onDrop}
+      onDragOver={props.onDragOver}
+      onDrop={props.onDrop}
       className="advance-builder-section rounded-xl border"
       style={{
         borderColor: isDropTarget ? 'var(--color-lp-orange)' : 'var(--lp-border-strong)',
@@ -308,8 +467,8 @@ function SectionCard({
         <button
           type="button"
           draggable
-          onDragStart={onDragStart}
-          onDragEnd={onDragEnd}
+          onDragStart={props.onDragStart}
+          onDragEnd={props.onDragEnd}
           aria-label="Drag to reorder section"
           className="flex shrink-0 items-center justify-center"
           style={{ width: 24, height: 24, cursor: 'grab', background: 'transparent', border: 'none', color: 'var(--lp-text-tertiary)' }}
@@ -358,17 +517,12 @@ function SectionCard({
       {/* Body — CSS-grid collapse (mirrors AdvanceSectionBuilder:5122). */}
       <div
         className="grid"
-        style={{
-          gridTemplateRows: expanded ? '1fr' : '0fr',
-          transition: 'grid-template-rows 200ms var(--lp-ease-standard, ease)',
-        }}
+        style={{ gridTemplateRows: expanded ? '1fr' : '0fr', transition: 'grid-template-rows 200ms var(--lp-ease-standard, ease)' }}
       >
         <div style={{ minHeight: 0, overflow: 'hidden' }}>
           <div style={{ borderTop: '1px solid var(--lp-border-subtle)', padding: '12px' }}>
             {isFieldType ? (
-              <p style={{ fontSize: '12px', color: 'var(--lp-text-tertiary)', fontStyle: 'italic' }}>
-                Field rows + type picker land in §RA7b.
-              </p>
+              <FieldList {...props} />
             ) : (
               <p style={{ fontSize: '12px', color: 'var(--lp-text-tertiary)' }}>
                 {SECTION_TYPE_LABEL[sectionType]} section — edited in its dedicated surface.
@@ -378,5 +532,186 @@ function SectionCard({
         </div>
       </div>
     </div>
+  );
+}
+
+function FieldList(props: SectionCardProps) {
+  const { section, selectedKey, pickerOpen, fieldDrag, fieldDrop } = props;
+  const fields = section.fields ?? [];
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      {fields.length === 0 ? (
+        <p style={{ fontSize: '12px', color: 'var(--lp-text-tertiary)', fontStyle: 'italic', marginBottom: 4 }}>
+          No fields yet.
+        </p>
+      ) : (
+        <ul className="flex flex-col gap-1">
+          {fields.map((f, idx) => (
+            <FieldRow
+              key={f.key}
+              field={f}
+              selected={selectedKey === f.key}
+              isDropTarget={
+                fieldDrop?.sectionId === section.id &&
+                fieldDrop.index === idx &&
+                fieldDrag?.sectionId === section.id &&
+                fieldDrag.index !== idx
+              }
+              onSelect={() => props.onSelectField(f)}
+              onDelete={() => props.onDeleteField(f.key)}
+              onDragStart={(e) => {
+                e.dataTransfer.setData(FIELD_REORDER_MIME, JSON.stringify({ sectionId: section.id, index: idx }));
+                e.dataTransfer.effectAllowed = 'move';
+                props.onFieldDragStart(idx);
+              }}
+              onDragOver={(e) => {
+                if (e.dataTransfer.types.includes(FIELD_REORDER_MIME)) {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = 'move';
+                  props.onFieldDragOver(idx);
+                }
+              }}
+              onDrop={(e) => {
+                if (!e.dataTransfer.types.includes(FIELD_REORDER_MIME)) return;
+                e.preventDefault();
+                props.onFieldDrop(idx);
+              }}
+              onDragEnd={props.onFieldDragEnd}
+            />
+          ))}
+        </ul>
+      )}
+
+      {/* Add field — type picker */}
+      <div className="relative" style={{ marginTop: 4 }}>
+        <button
+          type="button"
+          onClick={props.onTogglePicker}
+          aria-expanded={pickerOpen}
+          className="btn-transition inline-flex items-center gap-1.5"
+          style={{
+            padding: '5px 10px',
+            fontSize: '12px',
+            fontWeight: 500,
+            color: 'var(--lp-text-secondary)',
+            background: 'var(--lp-bg-deep)',
+            border: '1px dashed var(--lp-border-strong)',
+            borderRadius: 4,
+            cursor: 'pointer',
+          }}
+        >
+          <Plus className="h-3.5 w-3.5" />
+          Add field
+        </button>
+        {pickerOpen ? <FieldTypePicker onPick={props.onAddField} /> : null}
+      </div>
+    </div>
+  );
+}
+
+function FieldTypePicker({ onPick }: { onPick: (type: FieldType) => void }) {
+  return (
+    <div
+      role="menu"
+      aria-label="Field type"
+      className="absolute left-0 z-20 grid"
+      style={{
+        top: 'calc(100% + 4px)',
+        gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+        gap: 4,
+        padding: 6,
+        width: 264,
+        background: 'var(--lp-panel)',
+        border: '1px solid var(--lp-border-strong)',
+        borderRadius: 6,
+        boxShadow: '0 6px 20px rgba(0,0,0,0.18)',
+      }}
+    >
+      {FIELD_TYPE_ORDER.map((type) => {
+        const { label, Icon } = RIDER_FIELD_META[type];
+        return (
+          <button
+            key={type}
+            type="button"
+            role="menuitem"
+            onClick={() => onPick(type)}
+            className="btn-transition flex flex-col items-center justify-center gap-1"
+            style={{
+              padding: '8px 4px',
+              background: 'var(--lp-bg-deep)',
+              border: '1px solid var(--lp-border-subtle)',
+              borderRadius: 4,
+              cursor: 'pointer',
+              color: 'var(--lp-text-secondary)',
+            }}
+          >
+            <Icon className="h-4 w-4" style={{ color: 'var(--color-lp-orange)' }} />
+            <span style={{ fontSize: '11px', color: 'var(--lp-text)' }}>{label}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+interface FieldRowProps {
+  field: Field;
+  selected: boolean;
+  isDropTarget: boolean;
+  onSelect: () => void;
+  onDelete: () => void;
+  onDragStart: (e: React.DragEvent) => void;
+  onDragOver: (e: React.DragEvent) => void;
+  onDrop: (e: React.DragEvent) => void;
+  onDragEnd: () => void;
+}
+
+function FieldRow({ field, selected, isDropTarget, onSelect, onDelete, onDragStart, onDragOver, onDrop, onDragEnd }: FieldRowProps) {
+  const { Icon, label: typeLabel } = RIDER_FIELD_META[field.type];
+  return (
+    <li
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      className="group flex items-center gap-2 rounded"
+      style={{
+        padding: '5px 6px',
+        background: selected ? 'color-mix(in srgb, var(--color-lp-orange) 8%, var(--lp-bg-deep))' : 'var(--lp-bg-deep)',
+        border: `1px solid ${selected || isDropTarget ? 'var(--color-lp-orange)' : 'var(--lp-border-subtle)'}`,
+      }}
+    >
+      <span
+        draggable
+        onDragStart={onDragStart}
+        onDragEnd={onDragEnd}
+        aria-label="Drag to reorder field"
+        className="flex shrink-0 items-center justify-center"
+        style={{ width: 20, height: 20, cursor: 'grab', color: 'var(--lp-text-tertiary)' }}
+      >
+        <GripVertical className="h-3.5 w-3.5" />
+      </span>
+      <Icon className="h-3.5 w-3.5 shrink-0" style={{ color: 'var(--lp-text-tertiary)' }} aria-hidden />
+      <button
+        type="button"
+        onClick={onSelect}
+        className="min-w-0 flex-1 truncate text-left"
+        style={{ fontSize: '13px', color: 'var(--lp-text)', background: 'transparent', border: 'none', cursor: 'pointer' }}
+        title={`${typeLabel} field`}
+      >
+        {field.label || field.key}
+      </button>
+      <span className="lp-mono shrink-0" style={{ fontSize: '10px', color: 'var(--lp-text-tertiary)' }}>
+        {typeLabel}
+      </span>
+      <button
+        type="button"
+        onClick={onDelete}
+        aria-label="Delete field"
+        className="btn-transition flex shrink-0 items-center justify-center opacity-0 group-hover:opacity-100"
+        style={{ width: 20, height: 20, background: 'transparent', border: 'none', cursor: 'pointer', color: 'var(--lp-text-tertiary)', borderRadius: 2 }}
+      >
+        <Trash2 className="h-3 w-3" />
+      </button>
+    </li>
   );
 }
