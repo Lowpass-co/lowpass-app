@@ -65,6 +65,9 @@ export interface StageCanvasProps {
   onSelectItem?: (id: string | null, additive?: boolean) => void;
   onUpdateItem?: (id: string, patch: Partial<EditorItem>) => void;
   onDropIcon?: (iconName: string, xFt: number, yFt: number) => void;
+  /** §SP-FIX-5 — right-click z-order actions. */
+  onReorderItem?: (id: string, op: 'front' | 'back' | 'forward' | 'backward') => void;
+  onDeleteItem?: (id: string) => void;
   className?: string;
 }
 
@@ -92,6 +95,8 @@ export function StageCanvas({
   onSelectItem,
   onUpdateItem,
   onDropIcon,
+  onReorderItem,
+  onDeleteItem,
   className,
 }: StageCanvasProps) {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -99,11 +104,27 @@ export function StageCanvas({
   const [view, setView] = useState<ViewTransform>(DEFAULT_VIEW);
   const [panning, setPanning] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; id: string } | null>(null);
   const fitted = useRef(false);
   const pan = useRef<{ x: number; y: number; panX: number; panY: number } | null>(null);
   const drag = useRef<Drag | null>(null);
   const interactive = Boolean(onUpdateItem || onSelectItem);
   const selSet = new Set(selectedIds);
+
+  // §SP-FIX-5 — right-click an item → z-order / delete menu.
+  const onContextMenu = useCallback(
+    (e: React.MouseEvent) => {
+      if (!interactive) return;
+      const itemEl = (e.target as Element).closest('[data-canvas-item]');
+      if (!itemEl) return;
+      e.preventDefault();
+      const id = itemEl.getAttribute('data-canvas-item')!;
+      const rect = (e.currentTarget as Element).getBoundingClientRect();
+      onSelectItem?.(id, false);
+      setCtxMenu({ x: e.clientX - rect.left, y: e.clientY - rect.top, id });
+    },
+    [interactive, onSelectItem],
+  );
 
   useEffect(() => {
     const host = hostRef.current;
@@ -139,6 +160,7 @@ export function StageCanvas({
 
   const onPointerDown = useCallback(
     (e: React.PointerEvent) => {
+      setCtxMenu(null);
       const el = e.target as Element;
       (e.currentTarget as Element).setPointerCapture(e.pointerId);
 
@@ -275,6 +297,7 @@ export function StageCanvas({
       onPointerMove={onPointerMove}
       onPointerUp={endInteraction}
       onPointerCancel={endInteraction}
+      onContextMenu={onContextMenu}
       onDragOver={onDropIcon ? (e) => e.preventDefault() : undefined}
       onDrop={onDropIcon ? onDrop : undefined}
     >
@@ -481,6 +504,36 @@ export function StageCanvas({
             color: 'var(--lp-text)',
           }}
         />
+      )}
+
+      {ctxMenu && (
+        <div
+          style={{ position: 'absolute', left: ctxMenu.x, top: ctxMenu.y, zIndex: 20, minWidth: 150, padding: 4, borderRadius: 8, border: '1px solid var(--lp-border)', background: 'var(--lp-surface)', boxShadow: '0 6px 20px rgba(0,0,0,0.25)' }}
+          onPointerDown={(e) => e.stopPropagation()}
+        >
+          {([['front', 'Bring to front'], ['forward', 'Forward'], ['backward', 'Backward'], ['back', 'Send to back']] as const).map(([op, label]) => (
+            <button
+              key={op}
+              type="button"
+              onClick={() => { onReorderItem?.(ctxMenu.id, op); setCtxMenu(null); }}
+              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', border: 'none', background: 'none', color: 'var(--lp-text-secondary)', cursor: 'pointer', fontSize: 'var(--lp-text-xs)', borderRadius: 5 }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--lp-surface-hover)')}
+              onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+            >
+              {label}
+            </button>
+          ))}
+          <div style={{ height: 1, background: 'var(--lp-border)', margin: '4px 0' }} />
+          <button
+            type="button"
+            onClick={() => { onDeleteItem?.(ctxMenu.id); setCtxMenu(null); }}
+            style={{ display: 'block', width: '100%', textAlign: 'left', padding: '6px 10px', border: 'none', background: 'none', color: 'var(--lp-danger, #e5484d)', cursor: 'pointer', fontSize: 'var(--lp-text-xs)', borderRadius: 5 }}
+            onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--lp-surface-hover)')}
+            onMouseLeave={(e) => (e.currentTarget.style.background = 'none')}
+          >
+            Delete
+          </button>
+        </div>
       )}
     </div>
   );

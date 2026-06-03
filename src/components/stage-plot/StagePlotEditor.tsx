@@ -359,6 +359,8 @@ export function StagePlotEditor({ initialPlot, initialItems, channels: initialCh
             onSelectItem={selectItem}
             onUpdateItem={updateItem}
             onDropIcon={(iconName, xFt, yFt) => addItem(iconName, { xFt, yFt })}
+            onReorderItem={reorderItem}
+            onDeleteItem={(id) => { setItems((prev) => prev.filter((it) => it.id !== id)); setSelectedIds((prev) => prev.filter((x) => x !== id)); }}
           />
         </div>
         <ItemProperties
