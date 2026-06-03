@@ -373,10 +373,212 @@ a photo-proof button.
 
 **Last verified**:
 
+## Per-show read redesign (UX Audit 2026 — T1 / T2)
+
+#### ADV-93 — Field cells read missing vs filled at a glance
+
+**Do**: Open `/advance/[tour]/[show]`. Scan the section grids.
+
+**Expect**: Every field is a tile — empty fields are amber-dashed
+("missing"), filled fields are solid with an emerald right edge. No
+empty fields are hidden (auth view).
+
+**Last verified**:
+
+#### ADV-94 — Inline fill autosaves
+
+**Do**: Click a missing (amber) cell and type a value; click away.
+
+**Expect**: The cell flips to the filled (emerald-edge) style; a
+"Saving… → Saved ✓" pill appears top-right. Reload → value persists.
+
+**Last verified**:
+
+#### ADV-95 — Section header: completed pill + state badge
+
+**Do**: Look at any section card header.
+
+**Expect**: Shows an "X / Y completed" pill and a "Needs Input"
+(amber, pulsing dot) or "Complete" (emerald) badge; the caret
+collapses/expands the grid.
+
+**Last verified**:
+
+#### ADV-96 — Glass hero with completion ring + stats
+
+**Do**: Look at the top of the per-show page.
+
+**Expect**: Glass hero with a date chip, "Missing info" warning when
+incomplete, big venue title, address line, and a stats row
+(completion ring + Complete / Pending / Overdue). Actions: "Edit
+Template" (outline) + "Send Packet" (orange).
+
+**Last verified**:
+
+#### ADV-97 — Read surface is adaptive (light/dark)
+
+**Do**: Toggle the app theme on the per-show page.
+
+**Expect**: Cells, hero, and badges adapt via tokens (amber =
+needs-review, emerald = complete, brand = orange). No hardcoded dark
+colours leaking in light mode.
+
+**Last verified**:
+
+## Template Builder re-skin (UX Audit 2026 — T2.5)
+
+#### ADV-98 — Canvas grid + elevated section cards
+
+**Do**: Open the builder (`?mode=edit` / Template Builder tab).
+
+**Expect**: The canvas shows a faint grid texture; section cards are
+elevated; the card holding the currently selected field gets an
+orange ring.
+
+**Last verified**:
+
+#### ADV-99 — Required / Optional field badges
+
+**Do**: Look at the field rows inside a section card.
+
+**Expect**: Required = solid-orange badge; Optional = muted badge.
+
+**Last verified**:
+
+#### ADV-100 — Field Properties panel layout
+
+**Do**: Click a field; look at the right rail.
+
+**Expect**: Titled "Field Properties"; TYPE row, Field Label,
+Placeholder Text, Help Text, a VALIDATION group with Required +
+Read-only pill toggles, and a Delete Field button. (Required / Label /
+Type are wired; Placeholder / Read-only / Delete are design-surfaced —
+see Known broken.)
+
+**Last verified**:
+
+#### ADV-101 — Library active card highlight
+
+**Do**: Expand a card in the left section library.
+
+**Expect**: The expanded (active) card takes the orange treatment
+(tinted bg + orange border).
+
+**Last verified**:
+
+## Builder field-level palette + contacts (advance-builder-fixes)
+
+#### ADV-102 — Click a palette field to add just that field
+
+**Do**: In the builder, expand a group in the left palette and click
+a single field row.
+
+**Expect**: That one field lands in its group's section on the canvas
+(the section is created if absent). Clicking the same field again is a
+no-op (de-duped by id).
+
+**Last verified**:
+
+#### ADV-103 — Drag a single field onto the canvas
+
+**Do**: Drag a single field row from the palette onto the "Drop a
+section or field here" zone.
+
+**Expect**: Same result as ADV-102 (single field appended).
+
+**Last verified**:
+
+#### ADV-104 — Key Contacts pinned first in the palette
+
+**Do**: Open the builder; look at the palette's Platform group.
+
+**Expect**: "Key Contacts" is the first card.
+
+**Last verified**:
+
+#### ADV-105 — Section / header reorder
+
+**Do**: Drag a section card above/below another to reorder headers;
+Save layout; reload.
+
+**Expect**: The new section order persists. (Flagged for live
+confirmation — native drag can't be exercised in CI.)
+
+**Last verified**:
+
+## Send Packet venue intake (T3) — requires migrations 107 + 108
+
+#### ADV-106 — Generate + copy + revoke an intake link
+
+**Do**: Per-show advance → "Send Packet" → set recipient + expiry →
+"Generate link". Then Copy, then Revoke.
+
+**Expect**: A `/advance-intake/<token>` URL appears and is
+auto-copied; the list shows it with Copy + Revoke; revoking removes it
+from the active list.
+
+**Last verified**:
+
+#### ADV-107 — Public venue form submits
+
+**Do**: Open `/advance-intake/<token>` (logged out / incognito), fill
+fields, submit.
+
+**Expect**: A branded form with the show's fillable fields, required
+validation, and a "Thanks — your details are in" success state. Never
+shows the TM's existing advance data.
+
+**Last verified**:
+
+#### ADV-108 — Submission merges back into the advance
+
+**Do**: After ADV-107, reopen the show's advance in the app.
+
+**Expect**: The venue's answers now show as filled (emerald) cells;
+blanks left by the venue didn't wipe existing values.
+
+**Last verified**:
+
+#### ADV-109 — Revoked / expired link is blocked
+
+**Do**: Open a revoked or expired token URL.
+
+**Expect**: "This link isn't available" / "This link has expired" —
+no form, no submit.
+
+**Last verified**:
+
+#### ADV-110 — TM emailed on submit
+
+**Do**: Submit a venue form; wait one cron tick (~5 min) with
+`RESEND_API_KEY` + `CRON_SECRET` set.
+
+**Expect**: The link creator (account email) receives "<Venue>
+submitted their advance details". Sent exactly once.
+
+**Last verified**:
+
 ## Known broken
 
-(Empty as of the parity followup 2 sprint. Move tests here when a
-gap surfaces in a smoke run; reference the issue / PR.)
+#### ADV-100 (partial) — Field Properties: 3 controls are design-only
+
+**Currently**: The Field Properties panel renders fully, but
+Placeholder Text, "Read-only for users", and Delete Field are
+surfaced visually and not yet wired to the builder's save path
+(Required / Label / Type ARE wired). Delete Field fires
+`advance:field-delete` which the canvas does not yet consume.
+
+**Tracked in**: design/ux-audit-2026 T2.5 follow-up.
+
+#### ADV-105 — Section/header reorder needs live confirmation
+
+**Currently**: Static recon shows section reorder + persistence
+already work (moveSectionOrder + section-card drag + saveLayout writes
+`order`); native drag-drop can't be exercised in CI. Confirm on a
+preview before relying on it; if it fails, capture the exact
+behaviour (drag does nothing? doesn't persist?).
+
+**Tracked in**: feat/advance-builder-fixes §2.
 
 ## Retired
 
