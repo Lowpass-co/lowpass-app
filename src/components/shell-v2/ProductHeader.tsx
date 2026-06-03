@@ -43,6 +43,7 @@ export type ProductName =
   | 'Operations'
   | 'Budget'
   | 'Advance'
+  | 'Rider'
   | 'Settings'
   | 'Venues'
   | 'Bug reports';
