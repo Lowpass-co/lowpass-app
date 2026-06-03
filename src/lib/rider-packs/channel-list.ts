@@ -226,6 +226,33 @@ export async function appendRow(
   return data as ChannelListRow;
 }
 
+/* §CL-FIX-4 — bulk-append N blank INPUT rows in ONE round-trip.
+   Supabase .insert() takes an array, so a 32-channel festival
+   list is a single network call instead of 32. row_index
+   continues sequentially after the section's current max
+   (UNIQUE (section_id, row_index) holds for a single editor).
+   Count is clamped to 1..64. */
+export async function appendRows(
+  supabase: SupabaseClient,
+  args: { packId: string; sectionId: string; count: number },
+): Promise<ChannelListRow[]> {
+  const count = Math.max(1, Math.min(64, Math.floor(args.count)));
+  const { data: existing } = await supabase
+    .from('channel_list_rows')
+    .select('row_index')
+    .eq('section_id', args.sectionId);
+  const start =
+    existing && existing.length > 0 ? Math.max(...existing.map((r) => r.row_index)) + 1 : 1;
+  const payload = Array.from({ length: count }, (_, i) => ({
+    pack_id: args.packId,
+    section_id: args.sectionId,
+    row_index: start + i,
+  }));
+  const { data, error } = await supabase.from('channel_list_rows').insert(payload).select('*');
+  if (error) throw new Error(error.message);
+  return (data ?? []) as ChannelListRow[];
+}
+
 /* Sprint 12 §8 — append an OUTPUT row. row_kind='output' so
    the editor renders it in the outputs sub-grid alongside
    IEM mixes / drive lines / send loops. Input-only columns

@@ -11,7 +11,7 @@ import {
 } from '@dnd-kit/core';
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Check, GripVertical } from 'lucide-react';
+import { Check, GripVertical, ListPlus } from 'lucide-react';
 import { useDebouncedSave } from '@/hooks/useDebouncedSave';
 import { useToast } from '@/components/ui/Toast';
 import { createClient } from '@/lib/supabase-client';
@@ -30,6 +30,7 @@ import { CableLengthSelectCell } from './channel-list-cells/CableLengthSelectCel
 import { MicDiSelectCell } from './channel-list-cells/MicDiSelectCell';
 import { OutputBlock, OUTPUT_GRID, OUTPUT_COL_COUNT } from './channel-list-cells/OutputBlock';
 import { InventoryAggregates } from './channel-list-cells/InventoryAggregates';
+import { AddManyChannelsModal } from './channel-list-cells/AddManyChannelsModal';
 import { CellNavProvider, NavCell } from '@/lib/hooks/useCellNav';
 
 /* Sprint 12 §8b2 — colCount across input-grid cells (Name,
@@ -123,6 +124,7 @@ export default function ChannelListEditor({
   const stageBoxes = section.stageBoxes ?? [];
   const [subDialog, setSubDialog] = useState(false);
   const [stageDialog, setStageDialog] = useState(false);
+  const [multiAddOpen, setMultiAddOpen] = useState(false);
   const [mics, setMics] = useState<MicLibraryEntry[]>([]);
   const [gearByName, setGearByName] = useState<
     Map<string, { id: string; ownership: 'owned' | 'sub_hired' | 'hired_to_client' }>
@@ -208,6 +210,23 @@ export default function ChannelListEditor({
          alert mirrors handleDragEnd's pattern so the user
          sees the actual server error. */
       showToast(err instanceof Error ? err.message : 'Add channel failed', 'error');
+    }
+  };
+
+  /* §CL-FIX-4 — bulk-add N input rows in one round-trip. */
+  const addManyChannels = async (count: number) => {
+    try {
+      const created = await ch.appendRows(createClient(), {
+        packId: pack.id,
+        sectionId: section.id,
+        count,
+      });
+      setRows((prev) => [...prev, ...created].sort((a, b) => a.row_index - b.row_index));
+      setMultiAddOpen(false);
+      if (created.length > 0) setNewlyAddedRowId(created[0].id);
+      await onStructureChange();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Add channels failed', 'error');
     }
   };
 
@@ -421,7 +440,7 @@ export default function ChannelListEditor({
           </div>
         </DndContext>
 
-        <div className="border-t border-lp-border bg-lp-surface px-3 py-3">
+        <div className="flex flex-wrap items-center gap-2 border-t border-lp-border bg-lp-surface px-3 py-3">
           <button
             type="button"
             onClick={() => void addChannel()}
@@ -429,6 +448,15 @@ export default function ChannelListEditor({
             style={ADD_BTN_STYLE}
           >
             + Add channel
+          </button>
+          <button
+            type="button"
+            onClick={() => setMultiAddOpen(true)}
+            className={ADD_BTN}
+            style={ADD_BTN_STYLE}
+          >
+            <ListPlus className="h-4 w-4" aria-hidden />
+            Add many…
           </button>
         </div>
 
@@ -551,6 +579,12 @@ export default function ChannelListEditor({
         packId={pack.id}
         sectionId={section.id}
         onChanged={onStructureChange}
+      />
+      <AddManyChannelsModal
+        key={multiAddOpen ? 'multi-open' : 'multi-closed'}
+        open={multiAddOpen}
+        onClose={() => setMultiAddOpen(false)}
+        onConfirm={addManyChannels}
       />
     </div>
   );

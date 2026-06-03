@@ -354,8 +354,11 @@ separate trip back to the aggregate section.
 many rows at the end of the input grid in one batch, sequentially
 numbered. Each row blank, ready to fill.
 
-**Currently**: Only single-row "+ Add channel" exists. Bulk insert is
-manual.
+**Currently**: ⏳ FIXED §CL-FIX-4 (pending Vercel verify) — an
+"+ Add many…" button (list-plus icon) sits beside "+ Add channel". It
+opens a count modal (default 8, clamp 1–64); submitting inserts that many
+blank input rows in ONE round-trip (`ch.appendRows` array insert),
+numbered sequentially after the current max input `row_index`.
 
 **Tracked in**: `CC_CHANNEL_LIST_REBUILD.md` §CL-FIX-4.
 
