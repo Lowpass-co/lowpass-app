@@ -186,11 +186,17 @@ visible keyboard-focus ring — previously all were invisible.)
 **Expect**: Visible, polished section dividers between input rows,
 output rows, and the inventory aggregates blocks.
 
-**Currently**: Section dividers exist functionally but the visual
-treatment is weak. Needs UI/UX pass to match the Advance glass-hero /
-sticky section pattern.
+**Currently**: ⏳ FIXED §CL-FIX-5a (pending Vercel verify) — Inputs /
+Outputs / Inventory each now render a full-width section band: brand-
+orange left edge accent + subtle orange tint + uppercase label + count
+pill (`<ChannelListSectionBand>`). The glass-hero HEADER half (§CL-FIX-5b)
+is DEFERRED: its spec target (`/operations/[tourId]/channel-list`) is a
+Phase-4 placeholder, and the live editor renders inside `PackEditor`
+(rider-pack route). True viewport-sticky bands also deferred to Phase 4
+(host scroll container not yet defined).
 
-**Tracked in**: `CC_CHANNEL_LIST_REBUILD.md` §CL-FIX-5.
+**Tracked in**: `CC_CHANNEL_LIST_REBUILD.md` §CL-FIX-5 (5a done; 5b/header
+deferred to Phase 4).
 
 #### CHL-07 — Mic / DI inventory auto-aggregates (multiple issues)
 

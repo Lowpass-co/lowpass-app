@@ -31,6 +31,7 @@ import { MicDiSelectCell } from './channel-list-cells/MicDiSelectCell';
 import { OutputBlock, OUTPUT_GRID, OUTPUT_COL_COUNT } from './channel-list-cells/OutputBlock';
 import { InventoryAggregates } from './channel-list-cells/InventoryAggregates';
 import { AddManyChannelsModal } from './channel-list-cells/AddManyChannelsModal';
+import { ChannelListSectionBand } from './channel-list-cells/ChannelListSectionBand';
 import { CellNavProvider, NavCell } from '@/lib/hooks/useCellNav';
 
 /* Sprint 12 §8b2 — colCount across input-grid cells (Name,
@@ -367,6 +368,8 @@ export default function ChannelListEditor({
           ))}
         </div>
 
+        <ChannelListSectionBand label="Inputs" count={inputRows.length} />
+
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => void handleDragEnd(e)}>
           <div className="w-full min-w-0 max-h-[min(75vh,720px)] overflow-y-auto overflow-x-auto overscroll-contain">
             <div className="w-full min-w-0" style={{ minWidth: 'min(100%, 1180px)' }}>
@@ -465,32 +468,28 @@ export default function ChannelListEditor({
             state shows when no row_kind='output' rows exist
             yet. */}
         <div
-          className="border-t px-3 py-3"
+          className="border-t"
           style={{
             borderColor: 'var(--lp-border)',
             background: 'var(--lp-bg)',
           }}
         >
-          <div
-            className="mb-2 flex items-center justify-between"
-            style={{ gap: 'var(--lp-space-2)' }}
-          >
-            <h4
-              className="text-[10px] font-bold uppercase tracking-wider"
-              style={{ color: 'var(--lp-text-tertiary)' }}
-            >
-              Outputs ({outputRows.length})
-            </h4>
-            <button
-              type="button"
-              onClick={() => void addOutput()}
-              className="text-xs font-semibold uppercase tracking-wide"
-              style={{ color: 'var(--lp-text-secondary)' }}
-            >
-              + Add output
-            </button>
-          </div>
+          <ChannelListSectionBand
+            label="Outputs"
+            count={outputRows.length}
+            actions={
+              <button
+                type="button"
+                onClick={() => void addOutput()}
+                className="text-xs font-semibold uppercase tracking-wide hover:text-lp-orange"
+                style={{ color: 'var(--lp-text-secondary)' }}
+              >
+                + Add output
+              </button>
+            }
+          />
 
+          <div className="px-3 py-3">
           {outputRows.length === 0 ? (
             <div
               style={{
@@ -543,6 +542,7 @@ export default function ChannelListEditor({
               </CellNavProvider>
             </div>
           )}
+          </div>
         </div>
 
         {/* Sprint 12 §8b3 — 5 inventory aggregate render
@@ -552,12 +552,15 @@ export default function ChannelListEditor({
             aggregate is deferred (rider_sections.fields can't
             hold non-Field metadata cleanly; flagged for §9 or
             a dedicated schema commit). */}
-        <InventoryAggregates
-          rows={rows}
-          stageBoxes={stageBoxes}
-          subSnakes={subSnakes}
-          onStructureChange={onStructureChange}
-        />
+        <div className="border-t" style={{ borderColor: 'var(--lp-border)' }}>
+          <ChannelListSectionBand label="Inventory" />
+          <InventoryAggregates
+            rows={rows}
+            stageBoxes={stageBoxes}
+            subSnakes={subSnakes}
+            onStructureChange={onStructureChange}
+          />
+        </div>
       </div>
 
       <SubSnakeDialog
