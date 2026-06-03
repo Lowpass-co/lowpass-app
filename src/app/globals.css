@@ -575,6 +575,32 @@ td[data-density="cozy"] .lp-mono {
   background-size: 28px 28px;
 }
 
+/* ============================================================
+   Rider · Builder-mode canvas (§RA6)
+
+   Mirror-but-distinguish of .advance-builder-canvas. Where Advance
+   uses a 90° grid, the Rider builder uses a 45° diagonal HATCH with a
+   faint orange tint — "hashed" reads as draft / active-edit mode and
+   ties the surface to the brand without competing with field-row
+   alignment. UI/UX consult (§RA6): hatch chosen over 90° grid (dupes
+   Advance, not "hashed") and dot grid (generic, fades on light mode).
+
+   Decorative only: section cards sit on --lp-surface so text contrast
+   is untouched; static (reduced-motion safe); builder mode is also
+   signalled by the meta-bar tab pill (color-not-only). Applied to the
+   canvas container ONLY, never the rails or panels.
+   ============================================================ */
+.lp-rider-builder-canvas {
+  background-color: var(--lp-bg-deep);
+  background-image: repeating-linear-gradient(
+    45deg,
+    color-mix(in srgb, var(--color-lp-orange) 4%, transparent) 0,
+    color-mix(in srgb, var(--color-lp-orange) 4%, transparent) 1px,
+    transparent 1px,
+    transparent 9px
+  );
+}
+
 .advance-builder-section {
   background: var(--lp-surface);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
