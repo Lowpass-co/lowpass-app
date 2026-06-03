@@ -34,8 +34,9 @@ export function StagePlotLibraryList({ artistId, rows }: StagePlotLibraryListPro
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ artist_id: artistId, name: 'Untitled stage plot' }),
       });
-      if (!res.ok) throw new Error(`Create ${res.status}`);
-      const { id } = await res.json();
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || `Create ${res.status}`);
+      const { id } = json;
       router.push(`/artists/${artistId}/stage-plots/${id}`);
     } catch (err) {
       alert(`Couldn't create: ${err instanceof Error ? err.message : 'unknown'}`);

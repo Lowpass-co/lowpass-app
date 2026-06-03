@@ -37,8 +37,9 @@ export function OperationsStagePlotClient({ tourId, artistId, rows }: Operations
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ tour_id: tourId, artist_id: artistId, name: 'Untitled stage plot' }),
       });
-      if (!res.ok) throw new Error(`Create ${res.status}`);
-      const { id } = await res.json();
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(json.error || `Create ${res.status}`);
+      const { id } = json;
       setList((prev) => [{ stagePlotId: id, title: 'Untitled stage plot', updatedAt: new Date().toISOString() }, ...prev]);
       setSelected(id);
     } catch (err) {
