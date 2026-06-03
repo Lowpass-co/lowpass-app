@@ -222,8 +222,12 @@ dropdown.
   "default provider" field is omitted: there is no provider column on
   mic_library (provider is captured per-channel), and `type` is a 5-way
   enum, not a mic/DI binary. Flagged for Adam.
-- (5) ❌ phantom has three visible states (on / off / null) — DB column
-  is `phantom_power BOOLEAN` nullable. (§CL-FIX-3)
+- (5) ⏳ FIXED §CL-FIX-3 (pending Vercel verify + migration 113 apply) —
+  the +48V cell is now a binary `role="switch"` toggle (orange-filled +
+  white check = on, bordered + faint dot = off). Migration 113 backfills
+  NULL→false and pins `phantom_power NOT NULL DEFAULT false`. The UI is
+  null-safe pre-migration (legacy NULL renders off, first tap → on). Run
+  the STEP 0 pre-check in `113_supabase.sql` before applying.
 
 **Tracked in**: `CC_CHANNEL_LIST_REBUILD.md` §CL-FIX-2 (items 2–4) +
 §CL-FIX-3 (item 5).

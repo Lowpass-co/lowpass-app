@@ -104,12 +104,6 @@ type Props = {
   onStructureChange: () => void | Promise<void>;
 };
 
-function cyclePhantom(p: boolean | null): boolean | null {
-  if (p === null) return true;
-  if (p === true) return false;
-  return null;
-}
-
 export default function ChannelListEditor({
   section,
   pack,
@@ -910,32 +904,43 @@ function ChannelBlock({
             />
           </div>
         </NavCell>
-        {/* Phantom (col 7) — 3-state cycle button. Flashes
-            on default_phantom auto-fill. */}
+        {/* Phantom (col 7) — binary +48V toggle (§CL-FIX-3).
+            role="switch"; on = orange-filled + white check, off =
+            bordered + faint dot. Legacy NULL (pre-migration 113)
+            renders as off and toggles to true on first tap.
+            Flashes on default_phantom auto-fill. */}
         <NavCell row={inputRowIdx} col={7}>
           <div className="flex items-center justify-center self-center">
             <button
               type="button"
-              title="Phantom +48V (tap: on · off · n/a)"
+              role="switch"
+              aria-checked={local.phantom_power === true}
+              aria-label={`Phantom +48V for channel ${row.row_index}`}
+              title="Phantom +48V (on / off)"
               onClick={() => {
-                const next = cyclePhantom(local.phantom_power);
-                queue({ phantom_power: next });
+                queue({ phantom_power: local.phantom_power !== true });
                 void saveRow.flush();
               }}
-              className="flex h-7 w-7 items-center justify-center rounded border bg-lp-bg text-lp-text hover:bg-lp-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-lp-orange)]"
+              className="flex h-7 w-7 items-center justify-center rounded border hover:bg-lp-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-lp-orange)]"
               style={{
+                background: local.phantom_power === true ? 'var(--color-lp-orange)' : 'var(--lp-bg)',
                 borderColor: phantomFlash
                   ? 'var(--color-lp-orange)'
-                  : 'var(--lp-border)',
+                  : local.phantom_power === true
+                    ? 'var(--color-lp-orange)'
+                    : 'var(--lp-border)',
                 boxShadow: phantomFlash
                   ? '0 0 0 3px color-mix(in srgb, var(--color-lp-orange) 25%, transparent)'
                   : 'none',
-                transition: 'border-color 200ms ease-out, box-shadow 200ms ease-out',
+                transition:
+                  'background-color 150ms ease-out, border-color 200ms ease-out, box-shadow 200ms ease-out',
               }}
             >
-              {local.phantom_power === true && <Check className="h-3.5 w-3.5 text-emerald-500" strokeWidth={2.5} />}
-              {local.phantom_power === false && <span className="text-lp-text-tertiary">·</span>}
-              {local.phantom_power === null && <span className="text-[10px] text-lp-text-tertiary/70">—</span>}
+              {local.phantom_power === true ? (
+                <Check className="h-3.5 w-3.5" strokeWidth={2.5} style={{ color: 'var(--lp-text-inverse)' }} />
+              ) : (
+                <span className="text-lp-text-tertiary">·</span>
+              )}
             </button>
           </div>
         </NavCell>
