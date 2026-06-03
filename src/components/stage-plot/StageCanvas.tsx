@@ -22,9 +22,30 @@ import type { Channel, EditorItem } from '@/lib/stage-plot/editor-types';
 const DEFAULT_BRAND = '#FF4500';
 export type CanvasItem = EditorItem;
 
-/** Categories that typically take a channel — used for the
- *  "unlinked" warning (a riser/monitor/light doesn't need one). */
-const INPUT_CATS = new Set(['mics', 'signal', 'strings', 'drums', 'amps', 'keys']);
+export type LabelPosition = 'top' | 'bottom' | 'left' | 'right' | 'inside' | 'hidden';
+
+/** §SP-FIX-4 — item name label: pill background (8% tint) + scalable
+ *  text, placed around the item. Rendered UNROTATED for readability. */
+function ItemLabel({ cx, cy, halfW, halfH, text, px, position, heavy }: {
+  cx: number; cy: number; halfW: number; halfH: number; text: string; px: number;
+  position: Exclude<LabelPosition, 'hidden'>; heavy?: boolean;
+}) {
+  const gap = 4;
+  const pw = text.length * px * 0.58 + px * 0.9;
+  const ph = px * 1.5;
+  let lx = cx;
+  let ly = cy;
+  if (position === 'bottom') ly = cy + halfH + gap + ph / 2;
+  else if (position === 'top') ly = cy - halfH - gap - ph / 2;
+  else if (position === 'left') lx = cx - halfW - gap - pw / 2;
+  else if (position === 'right') lx = cx + halfW + gap + pw / 2;
+  return (
+    <g pointerEvents="none">
+      <rect x={lx - pw / 2} y={ly - ph / 2} width={pw} height={ph} rx={ph / 2} fill="color-mix(in srgb, var(--lp-text) 8%, transparent)" />
+      <text x={lx} y={ly} fontSize={px} fill="var(--lp-text)" textAnchor="middle" dominantBaseline="central" fontWeight={heavy ? 600 : 500}>{text}</text>
+    </g>
+  );
+}
 
 export interface StageCanvasProps {
   widthFt: number;
@@ -363,36 +384,48 @@ export function StageCanvas({
             const hpx = ft(it.depthFt ?? icon.footprint.depth_ft);
             const cx = ft(it.xFt);
             const cy = ft(it.yFt);
-            const catKey = getCategory(icon.category).key;
-            const cat = getCategory(icon.category).colorVar;
+            const cat = getCategory(icon.category);
+            const isPerson = cat.key === 'musicians';
             const linked = (it.channelRowIds ?? []).map((cid) => channels.find((c) => c.id === cid)).filter((c): c is NonNullable<typeof c> => Boolean(c));
             const ch = linked[0];
-            // §SP4: a linked channel's sub-snake colour overrides the category tint.
-            const stroke = ch?.color || cat;
-            const fill = icon.outline ? 'none' : it.colorTint ?? `color-mix(in srgb, ${brandColor} ${ICON_BRAND_TINT_PCT}%, transparent)`;
+            // §SP-FIX-6: linked → sub-snake colour; unlinked → muted brand
+            // tint (the default brand is orange, matching the locked
+            // "muted orange for unlinked" signal).
+            const unlinkedStroke = `color-mix(in srgb, ${brandColor} 55%, var(--lp-text-tertiary))`;
+            const stroke = ch?.color || unlinkedStroke;
+            const fill = icon.outline
+              ? 'none'
+              : it.colorTint ?? `color-mix(in srgb, ${ch?.color ?? brandColor} ${ICON_BRAND_TINT_PCT}%, transparent)`;
             const style = { fill, stroke, '--lp-cat': stroke } as CSSProperties & Record<string, string>;
             const bx = cx + wpx / 2;
             const by = cy - hpx / 2;
-            const inputCat = INPUT_CATS.has(catKey);
+            const labelPos = (it.labelPosition ?? 'bottom') as LabelPosition;
+            const labelText = it.label ?? icon.label;
+            const labelPx = it.labelFontPx ?? 11;
+            const halfW = isPerson ? 5 : wpx / 2;
+            const halfH = isPerson ? 5 : hpx / 2;
             return (
-              <g key={it.id} data-canvas-item={it.id} transform={`rotate(${it.rotationDeg ?? 0} ${cx} ${cy})`} style={{ cursor: interactive ? 'move' : undefined }}>
-                {sel && <rect x={cx - wpx / 2 - 4} y={cy - hpx / 2 - 4} width={wpx + 8} height={hpx + 8} rx={3} fill="none" stroke="var(--lp-orange)" strokeWidth={1.5} strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />}
-                <svg x={cx - wpx / 2} y={cy - hpx / 2} width={wpx} height={hpx} viewBox={icon.viewBox ?? '0 0 100 100'} preserveAspectRatio="xMidYMid meet" className="lp-canvas-item" style={style} dangerouslySetInnerHTML={{ __html: icon.body }} />
-                {/* §SP4: sub-snake colour tints the icon always; the letter/number
-                    badge + unlinked warning only flag when the channel overlay is on. */}
-                {showChannels && ch && (
-                  <g>
-                    <rect x={bx - 7} y={by - 7} width={16} height={12} rx={3} fill={ch.color || '#6b7280'} stroke="var(--lp-bg)" strokeWidth={0.75} />
-                    <text x={bx + 1} y={by - 1} fontSize={8} fill="#ffffff" textAnchor="middle" dominantBaseline="central" fontWeight={700}>
-                      {linked.length > 1 ? `×${linked.length}` : ch.snakeLabel || String(ch.number)}
-                    </text>
-                  </g>
-                )}
-                {showChannels && !ch && inputCat && channels.length > 0 && <circle cx={bx} cy={by} r={3.5} fill="#f59e0b" stroke="var(--lp-bg)" strokeWidth={0.75} />}
-                {showChannels && ch && (
-                  <text x={cx} y={cy + hpx / 2 + ft(0.55)} fontSize={ft(0.6)} fill="var(--lp-text-secondary)" textAnchor="middle" fontWeight={700}>
-                    {linked.map((c) => c.number).join(', ')}
-                  </text>
+              <g key={it.id} data-canvas-item={it.id} style={{ cursor: interactive ? 'move' : undefined }}>
+                <g transform={`rotate(${it.rotationDeg ?? 0} ${cx} ${cy})`}>
+                  {sel && <rect x={cx - halfW - 4} y={cy - halfH - 4} width={halfW * 2 + 8} height={halfH * 2 + 8} rx={3} fill="none" stroke="var(--lp-orange)" strokeWidth={1.5} strokeDasharray="4 3" vectorEffect="non-scaling-stroke" />}
+                  {isPerson ? (
+                    /* §SP-FIX-4: person marker = neutral position dot (not a silhouette). */
+                    <circle cx={cx} cy={cy} r={5} fill="var(--lp-text-secondary)" stroke="var(--lp-bg)" strokeWidth={1.25} />
+                  ) : (
+                    <svg x={cx - wpx / 2} y={cy - hpx / 2} width={wpx} height={hpx} viewBox={icon.viewBox ?? '0 0 100 100'} preserveAspectRatio="xMidYMid meet" className="lp-canvas-item" style={style} dangerouslySetInnerHTML={{ __html: icon.body }} />
+                  )}
+                  {/* §SP-FIX-6: sub-snake letter badge only when the channel overlay is on. */}
+                  {showChannels && ch && !isPerson && (
+                    <g>
+                      <rect x={bx - 7} y={by - 7} width={16} height={12} rx={3} fill={ch.color || '#6b7280'} stroke="var(--lp-bg)" strokeWidth={0.75} />
+                      <text x={bx + 1} y={by - 1} fontSize={8} fill="#ffffff" textAnchor="middle" dominantBaseline="central" fontWeight={700}>
+                        {linked.length > 1 ? `×${linked.length}` : ch.snakeLabel || String(ch.number)}
+                      </text>
+                    </g>
+                  )}
+                </g>
+                {labelPos !== 'hidden' && labelText && (
+                  <ItemLabel cx={cx} cy={cy} halfW={halfW} halfH={halfH} text={labelText} px={labelPx} position={labelPos} heavy={isPerson} />
                 )}
               </g>
             );

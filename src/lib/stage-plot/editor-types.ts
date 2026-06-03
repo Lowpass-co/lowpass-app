@@ -72,6 +72,10 @@ export interface EditorItem {
   groupId?: string;
   /** For a split-out drum-kit piece: the composite icon to recombine to. */
   kitName?: string;
+  /** Label placement around the item (§SP-FIX-4). Default 'bottom'. */
+  labelPosition?: 'top' | 'bottom' | 'left' | 'right' | 'inside' | 'hidden';
+  /** Label font size in px (§SP-FIX-4), 8–18, default 11. */
+  labelFontPx?: number;
   /** Text content (kind='text'). */
   text?: string;
   /** Text size in feet (kind='text'). */

@@ -153,6 +153,26 @@ export function ItemProperties({ plot, item, selectedCount = 0, channels = [], o
                 );
               })()}
               <Row label="Rotation°"><Num value={item.rotationDeg ?? 0} step={15} onChange={(n) => onUpdateItem({ rotationDeg: n })} /></Row>
+              <Row label="Label">
+                <select
+                  value={item.labelPosition ?? 'bottom'}
+                  onChange={(e) => onUpdateItem({ labelPosition: e.target.value as EditorItem['labelPosition'] })}
+                  style={{ fontSize: 'var(--lp-text-xs)', padding: '4px 6px', borderRadius: 5, border: '1px solid var(--lp-border)', background: 'var(--lp-surface)', color: 'var(--lp-text)' }}
+                >
+                  <option value="bottom">Bottom</option>
+                  <option value="top">Top</option>
+                  <option value="left">Left</option>
+                  <option value="right">Right</option>
+                  <option value="inside">Inside</option>
+                  <option value="hidden">Hidden</option>
+                </select>
+              </Row>
+              <Row label="Label size">
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <input type="range" min={8} max={18} step={1} value={item.labelFontPx ?? 11} onChange={(e) => onUpdateItem({ labelFontPx: parseInt(e.target.value, 10) })} style={{ width: 90 }} />
+                  <span style={{ fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-tertiary)', width: 28, textAlign: 'right' }}>{item.labelFontPx ?? 11}px</span>
+                </div>
+              </Row>
               <Row label="Position">
                 <span style={{ fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text)', fontFamily: 'var(--font-mono, monospace)' }}>
                   {octantLabel(item.xFt, item.yFt, plot.widthFt, plot.depthFt)}
