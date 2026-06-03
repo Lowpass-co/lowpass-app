@@ -241,8 +241,8 @@ export function BrandedSelect({
             ? 'h-8 rounded-lg px-2 py-1 text-xs'
             : 'h-9 rounded-xl px-3 py-2 text-sm',
           'border border-[var(--lp-border)] bg-[var(--lp-bg-secondary)] text-[var(--lp-text)]',
-          'hover:bg-[var(--lp-surface-hover)] focus:outline-none focus:ring-2 focus:ring-[var(--lp-orange)]/20',
-          open && 'ring-2 ring-[var(--lp-orange)]/20',
+          'hover:bg-[var(--lp-surface-hover)] focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-lp-orange)]',
+          open && 'ring-2 ring-inset ring-[var(--color-lp-orange)]/40',
           disabled && 'cursor-not-allowed opacity-50',
           triggerClassName
         )}

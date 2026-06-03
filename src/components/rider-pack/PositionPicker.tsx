@@ -70,7 +70,7 @@ export default function PositionPicker({
     <div ref={rootRef} className="relative min-w-0">
       <button
         type="button"
-        className="flex w-full min-w-0 items-center gap-1 rounded border border-lp-border bg-lp-bg px-1.5 py-1 text-left text-xs outline-none focus:border-lp-orange/50"
+        className="flex w-full min-w-0 items-center gap-1 rounded border border-lp-border bg-lp-bg px-1.5 py-1 text-left text-xs outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-lp-orange)]"
         onClick={() => setOpen((o) => !o)}
         aria-label={ariaLabel}
       >

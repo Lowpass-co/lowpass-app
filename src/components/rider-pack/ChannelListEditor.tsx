@@ -905,7 +905,7 @@ function ChannelBlock({
                 queue({ phantom_power: next });
                 void saveRow.flush();
               }}
-              className="flex h-7 w-7 items-center justify-center rounded border bg-lp-bg text-lp-text hover:bg-lp-surface-hover"
+              className="flex h-7 w-7 items-center justify-center rounded border bg-lp-bg text-lp-text hover:bg-lp-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-lp-orange)]"
               style={{
                 borderColor: phantomFlash
                   ? 'var(--color-lp-orange)'
