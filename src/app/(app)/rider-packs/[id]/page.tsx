@@ -21,8 +21,11 @@
    is now @deprecated). §RA14 appends ?mode=edit to artist-scope links.
    ============================================ */
 
+import Link from 'next/link';
 import { redirect, notFound } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { builderAppPageShell } from '@/components/shell/app-page-shells';
+import { PackEditor } from '@/components/rider-pack/PackEditor';
 import { ProductShell } from '@/components/shell-v2';
 import { RiderPackHeader } from '@/components/rider-pack/RiderPackHeader';
 import { RiderPackSidebar } from '@/components/rider-pack/RiderPackSidebar';
@@ -68,10 +71,33 @@ export default async function RiderPackPage({
 
   const { data: pack } = await supabase
     .from('rider_packs')
-    .select('id, title, scope, artist_id, tour_id, routing_id, updated_at')
+    .select('id, title, kind, scope, artist_id, tour_id, routing_id, updated_at')
     .eq('id', id)
     .maybeSingle();
   if (!pack) notFound();
+
+  // Channel-list packs keep the legacy PackEditor (it mounts
+  // ChannelListEditor for channel_list sections, which the rider shells
+  // intentionally don't edit). Only kind='rider' gets the new shells.
+  if (pack.kind === 'channel_list') {
+    return builderAppPageShell(
+      <div>
+        <div className="flex items-center gap-2 border-b border-lp-border bg-lp-surface px-6 py-3 text-sm">
+          <Link href="/artists" className="text-lp-text-secondary hover:text-lp-text">
+            ← Artists
+          </Link>
+          <span className="text-lp-text-tertiary">/</span>
+          <span className="font-semibold text-lp-text">{pack.title || '(untitled)'}</span>
+        </div>
+        <PackEditor packId={id} />
+      </div>,
+      {
+        kind: 'docSections',
+        activeId: 'doc',
+        sections: [{ id: 'doc', label: 'Document', href: `/rider-packs/${id}` }],
+      },
+    );
+  }
 
   const scope = pack.scope as PackScope;
 
