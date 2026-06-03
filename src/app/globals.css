@@ -575,6 +575,34 @@ td[data-density="cozy"] .lp-mono {
   background-size: 28px 28px;
 }
 
+/* ============================================================
+   Rider · Builder-mode canvas (§RA6)
+
+   Subtle 45° diagonal stripes signal "you are editing the template
+   structure, not the data." Brand orange at 3%, 14px stripe width.
+   Mirror-but-distinguish of .advance-builder-canvas (which uses a 90°
+   grid). UI/UX consult (§RA6): 45° hatch chosen over 90° grid (dupes
+   Advance, not "hashed") and dot grid (generic, fades on light mode);
+   stripe geometry per the spec's documented baseline (CRITICAL VISUAL).
+
+   Decorative only: section cards sit on --lp-surface so text contrast
+   is untouched; static (reduced-motion safe); builder mode is also
+   signalled by the meta-bar tab pill (color-not-only). Applied to the
+   canvas container ONLY, never the rails or panels. background-color
+   matches .advance-builder-canvas so the canvas reads as a distinct
+   deeper surface; token-driven so light/dark both work.
+   ============================================================ */
+.lp-rider-builder-canvas {
+  background-color: var(--lp-bg-deep);
+  background-image: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 14px,
+    color-mix(in srgb, var(--color-lp-orange) 3%, transparent) 14px,
+    color-mix(in srgb, var(--color-lp-orange) 3%, transparent) 28px
+  );
+}
+
 .advance-builder-section {
   background: var(--lp-surface);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
