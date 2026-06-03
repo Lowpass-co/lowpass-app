@@ -33,10 +33,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { MousePointerClick, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { RiderSectionLibrary, RIDER_SECTION_DRAG_TYPE } from './RiderSectionLibrary';
 import { RiderTemplateMetaBar } from './RiderTemplateMetaBar';
 import { RiderSectionBuilder } from './RiderSectionBuilder';
+import { RiderFieldPropertiesPanel } from './RiderFieldPropertiesPanel';
 import { useToast } from '@/components/ui/Toast';
 
 /** Field selection event (canvas → shell). Interim CustomEvent seam,
@@ -154,44 +155,28 @@ export function RiderBuilderShellClient({
         </div>
       </main>
 
-      {/* Properties rail — §RA8 swaps RiderFieldPropertiesPanel in here. */}
-      <RA8PropertiesPlaceholder selected={selected} />
+      {/* Properties rail (§RA8). onChange → rider:field-updated;
+          onDelete → rider:field-delete (both consumed by the canvas). */}
+      <RiderFieldPropertiesPanel
+        selected={selected}
+        onChange={(next) => {
+          // Optimistic — the panel reflects the edit immediately.
+          setSelected((prev) => (prev ? { ...prev, type: next.type, label: next.label } : prev));
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(
+              new CustomEvent(RIDER_FIELD_UPDATED_EVENT, {
+                detail: { id: next.id, patch: { label: next.label, type: next.type } },
+              }),
+            );
+          }
+        }}
+        onDelete={(id) => {
+          setSelected(null);
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('rider:field-delete', { detail: { id } }));
+          }
+        }}
+      />
     </div>
-  );
-}
-
-/** Temporary stand-in for RiderFieldPropertiesPanel (§RA8). Shows the
- *  selected-field summary so the CustomEvent loop is observable now. */
-function RA8PropertiesPlaceholder({ selected }: { selected: RiderFieldSelection | null }) {
-  return (
-    <aside
-      className="advance-read-no-print hidden shrink-0 flex-col lg:flex"
-      style={{ width: 300, borderLeft: '1px solid var(--lp-border-strong)', background: 'var(--lp-panel)' }}
-    >
-      <div className="border-b p-4" style={{ borderColor: 'var(--lp-border-subtle)' }}>
-        <span className="lp-label-caps" style={{ color: 'var(--lp-text-tertiary)' }}>
-          Field properties
-        </span>
-      </div>
-      {selected ? (
-        <div className="flex flex-col gap-2 p-4">
-          <div style={{ fontSize: '14px', fontWeight: 600, color: 'var(--lp-text)' }}>{selected.label}</div>
-          <div className="lp-mono" style={{ fontSize: '12px', color: 'var(--lp-text-tertiary)' }}>
-            {selected.type}
-            {selected.required ? ' · required' : ''}
-          </div>
-          <p style={{ fontSize: '12px', color: 'var(--lp-text-tertiary)', marginTop: 8 }}>
-            Full editor lands in §RA8.
-          </p>
-        </div>
-      ) : (
-        <div className="flex flex-1 flex-col items-center justify-center gap-2 px-6 text-center">
-          <MousePointerClick className="h-5 w-5" style={{ color: 'var(--lp-text-tertiary)' }} />
-          <p style={{ fontSize: '12px', color: 'var(--lp-text-tertiary)' }}>
-            Select a field to edit its properties.
-          </p>
-        </div>
-      )}
-    </aside>
   );
 }
