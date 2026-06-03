@@ -54,9 +54,11 @@ export interface ItemPropertiesProps {
   onReorder?: (op: 'front' | 'back' | 'forward' | 'backward') => void;
   /** §SP-FIX-5 — rotate the selected item (riser-aware: carries gear). */
   onRotate?: (deg: number) => void;
+  /** §SP-FIX-7 — pull TM details out of text annotations into the title bar. */
+  onExtractTitleBar?: () => void;
 }
 
-export function ItemProperties({ plot, item, selectedCount = 0, channels = [], onUpdateItem, onDeleteItem, onUpdatePlot, onAddChannel, onSplitKit, onCombineKit, onReorder, onRotate }: ItemPropertiesProps) {
+export function ItemProperties({ plot, item, selectedCount = 0, channels = [], onUpdateItem, onDeleteItem, onUpdatePlot, onAddChannel, onSplitKit, onCombineKit, onReorder, onRotate, onExtractTitleBar }: ItemPropertiesProps) {
   const [newCh, setNewCh] = useState('');
   // Expert "custom dimensions" gate (§SP-FIX-2). Off by default → items
   // lock to footprint; on → editable W×D×H. Interim home is localStorage
@@ -290,6 +292,47 @@ export function ItemProperties({ plot, item, selectedCount = 0, channels = [], o
             <input type="color" value={plot.brandColor} style={{ width: 40, height: 26, border: 'none', background: 'none' }}
               onChange={(e) => onUpdatePlot({ brandColor: e.target.value })} />
           </Row>
+
+          <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid var(--lp-border)' }}>
+            <div style={{ fontSize: 'var(--lp-text-2xs)', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--lp-text-tertiary)', marginBottom: 8 }}>Title bar</div>
+            {([
+              ['Subtitle', 'subtitle'],
+              ['TM name', 'tmName'],
+              ['TM role', 'tmRole'],
+              ['TM phone', 'tmPhone'],
+              ['TM email', 'tmEmail'],
+              ['Version', 'versionLabel'],
+            ] as const).map(([label, key]) => (
+              <Row key={key} label={label}>
+                <input
+                  value={(plot[key] as string | undefined) ?? ''}
+                  onChange={(e) => onUpdatePlot({ [key]: e.target.value } as Partial<EditorPlot>)}
+                  style={{ width: 140, fontSize: 'var(--lp-text-xs)', padding: '4px 6px', borderRadius: 5, border: '1px solid var(--lp-border)', background: 'var(--lp-surface)', color: 'var(--lp-text)' }}
+                />
+              </Row>
+            ))}
+            <Row label="Logo">
+              <select
+                value={plot.logoPosition ?? 'top-right'}
+                onChange={(e) => onUpdatePlot({ logoPosition: e.target.value as EditorPlot['logoPosition'] })}
+                style={{ fontSize: 'var(--lp-text-xs)', padding: '4px 6px', borderRadius: 5, border: '1px solid var(--lp-border)', background: 'var(--lp-surface)', color: 'var(--lp-text)' }}
+              >
+                <option value="top-left">Top-left</option>
+                <option value="top-center">Top-centre</option>
+                <option value="top-right">Top-right</option>
+              </select>
+            </Row>
+            {onExtractTitleBar && (
+              <button
+                type="button"
+                onClick={onExtractTitleBar}
+                style={{ marginTop: 6, width: '100%', padding: '6px', borderRadius: 6, border: '1px solid var(--lp-border)', background: 'var(--lp-surface)', color: 'var(--lp-text-secondary)', cursor: 'pointer', fontSize: 'var(--lp-text-2xs)' }}
+              >
+                Extract from text annotations
+              </button>
+            )}
+          </div>
+
           <p style={{ fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-tertiary)', marginTop: 12 }}>
             Select an item to edit its properties.
           </p>

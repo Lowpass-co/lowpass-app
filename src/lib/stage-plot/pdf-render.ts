@@ -107,7 +107,9 @@ export function buildStagePlotPdfHtml(
   opts: StagePlotRenderOpts = {},
 ): string {
   const svg = buildStagePlotSvg(plot, items);
-  const tm = [meta.tmName, meta.tmRole, meta.tmPhone, meta.tmEmail].filter(Boolean) as string[];
+  // §SP-FIX-7 — fall back to the plot's structured title-bar metadata.
+  const tm = [meta.tmName ?? plot.tmName, meta.tmRole ?? plot.tmRole, meta.tmPhone ?? plot.tmPhone, meta.tmEmail ?? plot.tmEmail].filter(Boolean) as string[];
+  const version = meta.version ?? plot.versionLabel ?? '';
   return `<!doctype html><html><head><meta charset="utf-8"><style>
     @page { size: ${opts.paper ?? 'A4'} ${opts.orientation ?? 'landscape'}; margin: 14mm; }
     * { box-sizing: border-box; }
@@ -124,11 +126,12 @@ export function buildStagePlotPdfHtml(
     <div class="hd">
       <div>
         <h1>${esc(meta.title || plot.name || 'STAGE PLOT')}</h1>
+        ${plot.subtitle ? `<div class="upd">${esc(plot.subtitle)}</div>` : ''}
         ${meta.updatedLabel ? `<div class="upd">Updated ${esc(meta.updatedLabel)}</div>` : ''}
       </div>
       ${tm.length ? `<div class="tm">${tm.map((t, i) => `<div class="${i === 0 ? 'nm' : ''}">${esc(t)}</div>`).join('')}</div>` : ''}
     </div>
     <div class="plot">${svg}</div>
-    <div class="ft"><span>${esc(meta.version || '')}</span><span>${esc(meta.timestamp || '')}</span></div>
+    <div class="ft"><span>${esc(version)}</span><span>${esc(meta.timestamp || '')}</span></div>
   </body></html>`;
 }

@@ -16,6 +16,7 @@ import { IconPalette } from '@/components/stage-plot/IconPalette';
 import { ItemProperties } from '@/components/stage-plot/ItemProperties';
 import { StageCanvas } from '@/components/stage-plot/StageCanvas';
 import { buildStagePlotPdfHtml } from '@/lib/stage-plot/pdf-render';
+import { extractTitleBarFromItems } from '@/lib/stage-plot/server';
 import { DEFAULT_PLOT, type Channel, type EditorItem, type EditorPlot } from '@/lib/stage-plot/editor-types';
 
 const uid = (): string =>
@@ -326,6 +327,15 @@ export function StagePlotEditor({ initialPlot, initialItems, channels: initialCh
         </button>
         {actions}
       </div>
+      {(plot.subtitle || plot.tmName || plot.tmPhone || plot.tmEmail || plot.versionLabel) && (
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 12, padding: '4px 14px', borderBottom: '1px solid var(--lp-border)', background: 'var(--lp-surface)', fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-secondary)' }}>
+          <span>{plot.subtitle}</span>
+          <span>
+            {[plot.tmName, plot.tmRole, plot.tmPhone, plot.tmEmail].filter(Boolean).join(' · ')}
+            {plot.versionLabel ? `  ·  ${plot.versionLabel}` : ''}
+          </span>
+        </div>
+      )}
       <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
         <div style={{ width: 240, minWidth: 240 }}>
           <IconPalette onAdd={addItem} customIcons={customIcons} onCustomGenerated={onCustomGenerated} />
@@ -364,6 +374,7 @@ export function StagePlotEditor({ initialPlot, initialItems, channels: initialCh
           onCombineKit={selected && selected.kitName && selected.groupId ? () => combineKit(selected.groupId!, selected.kitName!) : undefined}
           onReorder={selected ? (op) => reorderItem(selected.id, op) : undefined}
           onRotate={selected ? (deg) => setItemRotation(selected.id, deg) : undefined}
+          onExtractTitleBar={() => setPlot((p) => ({ ...p, ...extractTitleBarFromItems(items) }))}
         />
       </div>
     </div>

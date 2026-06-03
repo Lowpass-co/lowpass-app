@@ -41,6 +41,14 @@ export interface EditorPlot {
   snap: boolean;
   brandColor: string;
   units: 'ft' | 'm';
+  /** §SP-FIX-7 — structured title-bar metadata (renders on output). */
+  subtitle?: string;
+  tmName?: string;
+  tmRole?: string;
+  tmPhone?: string;
+  tmEmail?: string;
+  versionLabel?: string;
+  logoPosition?: 'top-left' | 'top-right' | 'top-center';
 }
 
 export interface EditorItem {

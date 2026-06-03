@@ -25,6 +25,13 @@ interface PlotRow {
   show_lateral_markers: boolean;
   units: 'ft' | 'm';
   color_override: string | null;
+  show_tm_name: string | null;
+  show_tm_role: string | null;
+  show_tm_phone: string | null;
+  show_tm_email: string | null;
+  show_logo_position: string | null;
+  subtitle: string | null;
+  version_label: string | null;
 }
 
 interface ItemRow {
@@ -65,6 +72,13 @@ export function rowsToEditor(plot: PlotRow, items: ItemRow[], name: string): { p
       snap: true,
       brandColor: plot.color_override ?? DEFAULT_PLOT.brandColor,
       units: plot.units,
+      subtitle: plot.subtitle ?? undefined,
+      tmName: plot.show_tm_name ?? undefined,
+      tmRole: plot.show_tm_role ?? undefined,
+      tmPhone: plot.show_tm_phone ?? undefined,
+      tmEmail: plot.show_tm_email ?? undefined,
+      versionLabel: plot.version_label ?? undefined,
+      logoPosition: (plot.show_logo_position as EditorPlot['logoPosition']) ?? undefined,
     },
     items: items.map((r) => {
       const ann = (r.label_style ?? {}) as Record<string, unknown>;
@@ -110,8 +124,33 @@ export function plotToColumns(plot: EditorPlot): Record<string, unknown> {
     show_lateral_markers: plot.showLateralMarkers,
     units: plot.units,
     color_override: plot.brandColor,
+    subtitle: plot.subtitle ?? null,
+    version_label: plot.versionLabel ?? null,
+    show_tm_name: plot.tmName ?? null,
+    show_tm_role: plot.tmRole ?? null,
+    show_tm_phone: plot.tmPhone ?? null,
+    show_tm_email: plot.tmEmail ?? null,
+    show_logo_position: plot.logoPosition ?? 'top-right',
     updated_at: new Date().toISOString(),
   };
+}
+
+/** §SP-FIX-7 — one-time helper: pull TM contact details out of free
+ *  text annotations (the old hand-built title bar) into structured
+ *  fields. Returns a partial EditorPlot patch. */
+export function extractTitleBarFromItems(items: EditorItem[]): Partial<EditorPlot> {
+  const texts = items.filter((i) => i.kind === 'text' && i.text).map((i) => i.text!.trim());
+  const patch: Partial<EditorPlot> = {};
+  for (const t of texts) {
+    const email = t.match(/[\w.+-]+@[\w-]+\.[\w.-]+/);
+    if (email && !patch.tmEmail) patch.tmEmail = email[0];
+    const phone = t.match(/\+?[\d][\d\s().-]{7,}\d/);
+    if (phone && !patch.tmPhone) patch.tmPhone = phone[0].trim();
+    if (/\b(TM|tour manager|FOH|PM|production manager)\b/i.test(t) && !patch.tmRole) {
+      patch.tmRole = t.length <= 24 ? t : t.match(/\b(TM\/FoH|TM|FOH|PM|Tour Manager|Production Manager)\b/i)?.[0];
+    }
+  }
+  return patch;
 }
 
 export function itemToRow(it: EditorItem, stagePlotId: string, workspaceId: string, zIndex = 0): Record<string, unknown> {
