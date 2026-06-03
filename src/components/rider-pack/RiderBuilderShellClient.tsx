@@ -36,6 +36,7 @@ import { useEffect, useState } from 'react';
 import { MousePointerClick, Plus } from 'lucide-react';
 import { RiderSectionLibrary, RIDER_SECTION_DRAG_TYPE } from './RiderSectionLibrary';
 import { RiderTemplateMetaBar } from './RiderTemplateMetaBar';
+import { RiderSectionBuilder } from './RiderSectionBuilder';
 import { useToast } from '@/components/ui/Toast';
 
 /** Field selection event (canvas → shell). Interim CustomEvent seam,
@@ -113,7 +114,7 @@ export function RiderBuilderShellClient({
         {/* Hashed builder-mode canvas — .lp-rider-builder-canvas on the
             canvas container ONLY (§RA6). */}
         <div className="lp-rider-builder-canvas flex-1 px-4 pb-12 pt-4">
-          <RA7Placeholder packId={packId} />
+          <RiderSectionBuilder packId={packId} />
 
           {/* Section drop zone — accepts a library card and dispatches
               rider:section-drop. */}
@@ -155,30 +156,6 @@ export function RiderBuilderShellClient({
 
       {/* Properties rail — §RA8 swaps RiderFieldPropertiesPanel in here. */}
       <RA8PropertiesPlaceholder selected={selected} />
-    </div>
-  );
-}
-
-/** Temporary stand-in for RiderSectionBuilder (§RA7). */
-function RA7Placeholder({ packId }: { packId: string }) {
-  return (
-    <div
-      className="flex flex-col items-center justify-center gap-2 text-center"
-      style={{
-        minHeight: 240,
-        borderRadius: 12,
-        border: '1px solid var(--lp-border-subtle)',
-        background: 'var(--lp-surface)',
-        color: 'var(--lp-text-tertiary)',
-        padding: 32,
-      }}
-    >
-      <p style={{ fontSize: '14px', fontWeight: 500, color: 'var(--lp-text-secondary)' }}>
-        Section builder
-      </p>
-      <p style={{ fontSize: '12px' }}>
-        The accordion canvas for <span className="lp-mono">{packId}</span> lands in §RA7.
-      </p>
     </div>
   );
 }
