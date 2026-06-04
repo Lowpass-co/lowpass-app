@@ -13,6 +13,7 @@ import { getUserAndAdminStatus } from '@/lib/site-admin';
 import { ProductShell } from '@/components/shell-v2';
 import { SiteAdminsCard } from '@/components/settings/SiteAdminsCard';
 import { SettingsSubNav } from '@/components/settings/SettingsSubNav';
+import { MyAiUsage } from '@/components/settings/MyAiUsage';
 import { PageHeader } from '@/components/ui/PageHeader';
 
 export default async function SettingsPage() {
@@ -32,11 +33,12 @@ export default async function SettingsPage() {
           className="mb-6"
         />
 
-        {isAdmin && user && (
-          <div className="space-y-6">
-            <SiteAdminsCard currentUserId={user.id} />
-          </div>
-        )}
+        <div className="space-y-6">
+          {/* §AI-7 — every member sees their own AI usage this month. */}
+          <MyAiUsage />
+
+          {isAdmin && user && <SiteAdminsCard currentUserId={user.id} />}
+        </div>
       </div>
     </ProductShell>
   );
