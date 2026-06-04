@@ -23,7 +23,7 @@
 
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   AlertTriangle,
@@ -33,6 +33,7 @@ import {
   Download,
   Filter,
   Paperclip,
+  PanelRightOpen,
   Plus,
   Search,
   Trash2,
@@ -122,6 +123,27 @@ const QUICK_ADD_TEMPLATES = [
   { label: 'Catering', emoji: '🍽', category: 'catering', defaultLabel: 'Catering' },
   { label: 'Local Crew', emoji: '👷', category: 'crew', defaultLabel: 'Local crew' },
 ] as const;
+
+/* §B1.2 — inline-edit option lists. Status can't be cleared back
+   to null via the PATCH route (it validates against the 5 values),
+   so the empty entry is a disabled placeholder only. Phase is
+   nullable (unscoped), so its empty entry commits null. */
+const STATUS_EDIT_OPTIONS: { value: string; label: string; disabled?: boolean }[] = [
+  { value: '', label: '—', disabled: true },
+  { value: 'draft', label: 'Draft' },
+  { value: 'quoted', label: 'Quoted' },
+  { value: 'approved', label: 'Approved' },
+  { value: 'paid', label: 'Paid' },
+  { value: 'disputed', label: 'Disputed' },
+];
+
+const PHASE_EDIT_OPTIONS: { value: string; label: string }[] = [
+  { value: '', label: '—' },
+  { value: 'pre_prod', label: 'Pre-prod' },
+  { value: 'rehearsals', label: 'Rehearsals' },
+  { value: 'show_days', label: 'Show days' },
+  { value: 'wrap', label: 'Wrap' },
+];
 
 export type BudgetSpreadsheetGroupBy = 'category' | 'phase';
 
@@ -1082,11 +1104,6 @@ function GroupRows({
           cur,
           displayCurrency,
         );
-        const actual = convertToCurrency(
-          getEffectiveActual(row),
-          cur,
-          displayCurrency,
-        );
         /* Budget Phase A §A2 — indicator next to the Actual cell
            when 2+ transactions exist. Signals "click the row to
            open the slide-over to edit the breakdown" since the
@@ -1121,8 +1138,6 @@ function GroupRows({
         return (
           <tr
             key={row.id}
-            onClick={() => onOpenLine(row)}
-            className="cursor-pointer"
             style={{
               background: rowBg,
               borderLeft: selected
@@ -1167,12 +1182,38 @@ function GroupRows({
                     aria-label={`Possible duplicate of ${dupes.length} other line${dupes.length === 1 ? '' : 's'}`}
                   />
                 ) : null}
-                <span
-                  className="truncate"
-                  style={{ color: 'var(--lp-text)', fontWeight: 500 }}
+                {/* §B1.2 — the title is the explicit "open detail"
+                    affordance (Notion model). Clicking it opens the
+                    slide-over; clicking the numeric cells edits in
+                    place. The row itself is no longer a click target,
+                    so inline editing is never hijacked by the slide. */}
+                <button
+                  type="button"
+                  onClick={() => onOpenLine(row)}
+                  title="Open detail"
+                  aria-label={`Open ${row.label || 'line item'} detail`}
+                  className="flex min-w-0 items-center gap-1.5 text-left hover:underline"
+                  style={{
+                    background: 'transparent',
+                    border: 0,
+                    padding: 0,
+                    cursor: 'pointer',
+                    color: 'inherit',
+                    font: 'inherit',
+                  }}
                 >
-                  {row.label || '(untitled)'}
-                </span>
+                  <span
+                    className="truncate"
+                    style={{ color: 'var(--lp-text)', fontWeight: 500 }}
+                  >
+                    {row.label || '(untitled)'}
+                  </span>
+                  <PanelRightOpen
+                    className="h-3.5 w-3.5 shrink-0"
+                    style={{ color: 'var(--lp-text-tertiary)', opacity: 0.5 }}
+                    aria-hidden
+                  />
+                </button>
               </div>
             </Td>
             <Td>
@@ -1184,27 +1225,42 @@ function GroupRows({
               </span>
             </Td>
             <Td>
-              {phaseTag ? (
-                <span
-                  className="inline-flex items-center rounded px-1.5 py-0.5"
-                  style={{
-                    fontSize: '10px',
-                    fontWeight: 600,
-                    letterSpacing: '0.04em',
-                    color: phaseTone ?? 'var(--lp-text-secondary)',
-                    background: phaseTone
-                      ? `color-mix(in srgb, ${phaseTone} 12%, transparent)`
-                      : 'transparent',
-                  }}
-                >
-                  {PHASE_LABEL[phaseTag]}
-                </span>
-              ) : (
-                <span style={{ color: 'var(--lp-text-tertiary)' }}>—</span>
-              )}
+              <InlineSelectCell
+                value={phaseTag ?? ''}
+                options={PHASE_EDIT_OPTIONS}
+                ariaLabel="Phase"
+                onCommit={(next) =>
+                  void onCommitLine(row.id, {
+                    phase_tag: next === '' ? null : next,
+                  })
+                }
+              >
+                {phaseTag ? (
+                  <span
+                    className="inline-flex items-center rounded px-1.5 py-0.5"
+                    style={{
+                      fontSize: '10px',
+                      fontWeight: 600,
+                      letterSpacing: '0.04em',
+                      color: phaseTone ?? 'var(--lp-text-secondary)',
+                      background: phaseTone
+                        ? `color-mix(in srgb, ${phaseTone} 12%, transparent)`
+                        : 'transparent',
+                    }}
+                  >
+                    {PHASE_LABEL[phaseTag]}
+                  </span>
+                ) : (
+                  <span style={{ color: 'var(--lp-text-tertiary)' }}>—</span>
+                )}
+              </InlineSelectCell>
             </Td>
             <Td align="right" className="lp-mono">
-              {Number(row.quantity ?? 0)}
+              <InlineNumber
+                value={Number(row.quantity ?? 0)}
+                onCommit={(next) => void onCommitLine(row.id, { quantity: next })}
+                readOnly={isUx14DerivedBudgetLine(row)}
+              />
             </Td>
             <Td align="right" className="lp-mono">
               {row.quantity && row.quantity > 0
@@ -1342,26 +1398,37 @@ function GroupRows({
               )}
             </Td>
             <Td>
-              {statusOpt && statusOpt.tone ? (
-                <span
-                  className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5"
-                  style={{
-                    fontSize: '10px',
-                    background: `color-mix(in srgb, ${statusOpt.tone} 15%, transparent)`,
-                    color: statusOpt.tone,
-                    fontWeight: 500,
-                  }}
-                >
+              <InlineSelectCell
+                value={status}
+                options={STATUS_EDIT_OPTIONS}
+                ariaLabel="Status"
+                onCommit={(next) => {
+                  if (next && next !== status) {
+                    void onCommitLine(row.id, { status: next });
+                  }
+                }}
+              >
+                {statusOpt && statusOpt.tone ? (
                   <span
-                    aria-hidden
-                    className="h-1.5 w-1.5 rounded-full"
-                    style={{ background: statusOpt.tone }}
-                  />
-                  {statusOpt.label}
-                </span>
-              ) : (
-                <span style={{ color: 'var(--lp-text-tertiary)' }}>—</span>
-              )}
+                    className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5"
+                    style={{
+                      fontSize: '10px',
+                      background: `color-mix(in srgb, ${statusOpt.tone} 15%, transparent)`,
+                      color: statusOpt.tone,
+                      fontWeight: 500,
+                    }}
+                  >
+                    <span
+                      aria-hidden
+                      className="h-1.5 w-1.5 rounded-full"
+                      style={{ background: statusOpt.tone }}
+                    />
+                    {statusOpt.label}
+                  </span>
+                ) : (
+                  <span style={{ color: 'var(--lp-text-tertiary)' }}>—</span>
+                )}
+              </InlineSelectCell>
             </Td>
           </tr>
         );
@@ -1457,5 +1524,188 @@ function Td({
     >
       {children}
     </td>
+  );
+}
+
+/* §B1.2 — inline integer editor for the Qty cell. Mirrors
+   BudgetCellInput's click-to-edit / commit-on-blur-or-Enter UX,
+   minus the currency prefix (qty is a plain count). Token-clean. */
+function InlineNumber({
+  value,
+  onCommit,
+  readOnly = false,
+}: {
+  value: number;
+  onCommit: (next: number) => void;
+  readOnly?: boolean;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState<string>(String(value));
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [editing]);
+
+  useEffect(() => {
+    /* eslint-disable-next-line react-hooks/set-state-in-effect -- resync display from server when no edit is in flight (matches BudgetCellInput) */
+    if (!editing) setDraft(String(value));
+  }, [value, editing]);
+
+  const commit = (): void => {
+    const n = Number(draft);
+    if (Number.isFinite(n) && n >= 0) {
+      const next = Math.floor(n);
+      if (next !== value) onCommit(next);
+    } else {
+      setDraft(String(value));
+    }
+    setEditing(false);
+  };
+
+  if (readOnly) return <>{value}</>;
+
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        onClick={() => setEditing(true)}
+        title="Click to edit quantity"
+        style={{
+          background: 'transparent',
+          border: '1px solid transparent',
+          padding: '0 4px',
+          width: '100%',
+          textAlign: 'right',
+          cursor: 'text',
+          color: 'inherit',
+          font: 'inherit',
+        }}
+      >
+        {value}
+      </button>
+    );
+  }
+
+  return (
+    <input
+      ref={inputRef}
+      type="number"
+      min="0"
+      step="1"
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === 'Tab') {
+          commit();
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          setDraft(String(value));
+          setEditing(false);
+        }
+      }}
+      aria-label="Quantity"
+      style={{
+        width: '100%',
+        textAlign: 'right',
+        border: '1px solid var(--color-lp-orange)',
+        borderRadius: 3,
+        background: 'var(--lp-surface)',
+        color: 'var(--lp-text)',
+        fontFamily: 'inherit',
+        fontSize: 'inherit',
+        outline: 'none',
+        padding: '0 4px',
+      }}
+    />
+  );
+}
+
+/* §B1.2 — inline select editor for the Status + Phase cells.
+   Renders the existing chip as a click target; on click swaps to
+   a focused native <select> that commits onChange / reverts on
+   Escape. Closed display is whatever the caller passes as
+   children (the coloured chip), so the at-a-glance read is
+   preserved. Token-clean. */
+function InlineSelectCell({
+  value,
+  options,
+  onCommit,
+  ariaLabel,
+  readOnly = false,
+  children,
+}: {
+  value: string;
+  options: { value: string; label: string; disabled?: boolean }[];
+  onCommit: (next: string) => void;
+  ariaLabel: string;
+  readOnly?: boolean;
+  children: React.ReactNode;
+}) {
+  const [editing, setEditing] = useState(false);
+  const selectRef = useRef<HTMLSelectElement>(null);
+
+  useEffect(() => {
+    if (editing && selectRef.current) selectRef.current.focus();
+  }, [editing]);
+
+  if (readOnly) return <>{children}</>;
+
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        onClick={() => setEditing(true)}
+        title="Click to edit"
+        style={{
+          background: 'transparent',
+          border: 0,
+          padding: 0,
+          cursor: 'pointer',
+          font: 'inherit',
+          color: 'inherit',
+          display: 'inline-flex',
+          alignItems: 'center',
+        }}
+      >
+        {children}
+      </button>
+    );
+  }
+
+  return (
+    <select
+      ref={selectRef}
+      value={value}
+      aria-label={ariaLabel}
+      onChange={(e) => {
+        onCommit(e.target.value);
+        setEditing(false);
+      }}
+      onBlur={() => setEditing(false)}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') setEditing(false);
+      }}
+      style={{
+        fontFamily: 'inherit',
+        fontSize: '11px',
+        border: '1px solid var(--color-lp-orange)',
+        borderRadius: 4,
+        background: 'var(--lp-surface)',
+        color: 'var(--lp-text)',
+        padding: '1px 4px',
+        outline: 'none',
+      }}
+    >
+      {options.map((o) => (
+        <option key={o.value} value={o.value} disabled={o.disabled}>
+          {o.label}
+        </option>
+      ))}
+    </select>
   );
 }
