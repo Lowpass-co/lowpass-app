@@ -33,13 +33,16 @@ import { InventoryAggregates } from './channel-list-cells/InventoryAggregates';
 import { AddManyChannelsModal } from './channel-list-cells/AddManyChannelsModal';
 import { ChannelListSectionBand } from './channel-list-cells/ChannelListSectionBand';
 import { CellNavProvider, NavCell } from '@/lib/hooks/useCellNav';
+import {
+  COLUMN_BY_KEY,
+  getEnabledColumnKeys,
+  type ChannelListColumnKey,
+} from '@/lib/channel-list/columns';
 
-/* Sprint 12 §8b2 — colCount across input-grid cells (Name,
-   Position, Stage Box, Loom, Cable, Mic-DI, Stand, Phantom,
-   Provider, Notes). Channel # is read-only display, not a
-   focusable cell. Drag handle + color stripe + actions sit
-   outside the nav matrix. */
-const INPUT_COL_COUNT = 10;
+/* §CL-FIX-6 — the input-grid column set is now dynamic. Which
+   columns render (and the nav-matrix colCount) is derived per
+   section from getEnabledColumnKeys(metadata, rows). See
+   src/lib/channel-list/columns.ts for the source of truth. */
 
 /* Sprint 12 §8b1 — POSITION_SUGGESTIONS removed: the Pos cell
    is now <PositionSelectCell> with the canonical enum from
@@ -54,32 +57,11 @@ const ADD_BTN_STYLE = {
   color: 'var(--lp-text)',
 } as const;
 
-/* Sprint 12 §8b1 — column order matches the spec: 11 logical
-   cells per row + the 3 chrome cells (color stripe / drag handle /
-   actions). The mic_substitute column is dropped from the
-   editor surface; legacy data stays on the row (the editor
-   simply doesn't render it).
-
-   Tracks:
-     1   color stripe                 6px
-     2   drag handle                  24px
-     3   channel # (sticky col 1)     32px
-     4   name                         minmax(10rem, 1.4fr)
-     5   position (select)            minmax(4rem, 0.55fr)
-     6   stage box (PositionPicker)   minmax(4.5rem, 0.7fr)
-     7   loom / sub-snake             minmax(4.5rem, 0.7fr)
-     8   cable length (select)        minmax(4rem, 0.55fr)
-     9   mic / di (select)            minmax(6rem, 1fr)
-     10  stand (select)               minmax(4rem, 0.6fr)
-     11  phantom (3-state button)     2.25rem
-     12  provider (select)            minmax(4.5rem, 0.55fr)
-     13  notes                        minmax(7rem, 1.1fr)
-     14  row actions                  4.5rem
-   ============================================ */
-const CHANNEL_ROW_GRID: CSSProperties = {
-  gridTemplateColumns:
-    '6px 24px 32px minmax(10rem,1.4fr) minmax(4rem,0.55fr) minmax(4.5rem,0.7fr) minmax(4.5rem,0.7fr) minmax(4rem,0.55fr) minmax(6rem,1fr) minmax(4rem,0.6fr) 2.25rem minmax(4.5rem,0.55fr) minmax(7rem,1.1fr) 4.5rem',
-};
+/* §CL-FIX-6 — CHANNEL_ROW_GRID is now built per render from the
+   enabled column set: '6px 24px' (stripe + drag) + each enabled
+   column's track (number, name, …enabled optionals) + '4.5rem'
+   (row actions). Track sizes live on the column defs in
+   src/lib/channel-list/columns.ts. */
 
 function countWirelessHint(rows: ChannelListRow[]) {
   return rows.filter((r) =>
@@ -266,6 +248,42 @@ export default function ChannelListEditor({
     [],
   );
 
+  /* §CL-FIX-6 — enabled column set for this section. Derived
+     from section.metadata.enabled_columns, or lazily from the
+     server-loaded rows when absent (existing tours look
+     unchanged). Computed from section.rows (the stable
+     server snapshot) — NOT the local `rows` state — so columns
+     don't flicker as the operator types. */
+  const enabledKeys = useMemo(
+    () => getEnabledColumnKeys(section.metadata ?? null, section.rows ?? []),
+    [section.metadata, section.rows],
+  );
+  const show = useMemo(() => new Set<ChannelListColumnKey>(enabledKeys), [enabledKeys]);
+  const channelGridStyle = useMemo<CSSProperties>(
+    () => ({
+      gridTemplateColumns:
+        '6px 24px ' + enabledKeys.map((k) => COLUMN_BY_KEY[k].track).join(' ') + ' 4.5rem',
+    }),
+    [enabledKeys],
+  );
+  /* Sequential NavCell col index per enabled FOCUSABLE column
+     (Number is display-only, so it's skipped). */
+  const navCol = useMemo(() => {
+    const m: Partial<Record<ChannelListColumnKey, number>> = {};
+    let i = 0;
+    for (const k of enabledKeys) {
+      if (COLUMN_BY_KEY[k].focusable) {
+        m[k] = i;
+        i += 1;
+      }
+    }
+    return m;
+  }, [enabledKeys]);
+  const inputColCount = useMemo(
+    () => enabledKeys.filter((k) => COLUMN_BY_KEY[k].focusable).length,
+    [enabledKeys],
+  );
+
   return (
     <div
       className="w-full max-w-full min-w-0 rounded-xl border"
@@ -379,34 +397,39 @@ export default function ChannelListEditor({
                   treatment so it stays put on horizontal scroll. */}
               <div
                 className="sticky top-0 z-20 grid w-full min-h-9 items-stretch gap-0 border-b border-lp-border bg-lp-surface text-[10px] font-bold uppercase tracking-wider text-lp-text-tertiary shadow-[0_1px_0_var(--lp-border)]"
-                style={CHANNEL_ROW_GRID}
+                style={channelGridStyle}
               >
                 <div className="py-2" style={{ borderLeft: '2px solid transparent' }} />
                 <div className="py-2" />
-                <div
-                  className="py-2 pl-0.5"
-                  style={{
-                    position: 'sticky',
-                    left: 0,
-                    background: 'var(--lp-surface)',
-                    zIndex: 21,
-                  }}
-                >
-                  #
-                </div>
-                <div className="px-0.5 py-2 pl-1">Name</div>
-                <div className="px-0.5 py-2">Pos</div>
-                <div className="px-0.5 py-2">Stage Box</div>
-                <div className="px-0.5 py-2">Loom</div>
-                <div className="px-0.5 py-2">Cable</div>
-                <div className="px-0.5 py-2">Mic / DI</div>
-                <div className="px-0.5 py-2">Stand</div>
-                <div className="px-0.5 py-2 text-center">+48</div>
-                <div className="px-0.5 py-2">Prov</div>
-                <div className="px-0.5 py-2 min-w-0">Notes</div>
+                {enabledKeys.map((k) => {
+                  if (k === 'number') {
+                    return (
+                      <div
+                        key="number"
+                        className="py-2 pl-0.5"
+                        style={{ position: 'sticky', left: 0, background: 'var(--lp-surface)', zIndex: 21 }}
+                      >
+                        #
+                      </div>
+                    );
+                  }
+                  const extra =
+                    k === 'name'
+                      ? ' pl-1'
+                      : k === 'phantom_power'
+                        ? ' text-center'
+                        : k === 'notes'
+                          ? ' min-w-0'
+                          : '';
+                  return (
+                    <div key={k} className={`px-0.5 py-2${extra}`}>
+                      {COLUMN_BY_KEY[k].label}
+                    </div>
+                  );
+                })}
                 <div className="px-0.5 py-2 text-right" />
               </div>
-              <CellNavProvider colCount={INPUT_COL_COUNT}>
+              <CellNavProvider colCount={inputColCount}>
                 <SortableContext items={inputRows.map((r) => r.id)} strategy={verticalListSortingStrategy}>
                   {inputRows.map((row, idx) => (
                     <ChannelBlock
@@ -418,7 +441,9 @@ export default function ChannelListEditor({
                       stageBoxes={stageBoxes}
                       mics={mics}
                       gearByName={gearByName}
-                      gridStyle={CHANNEL_ROW_GRID}
+                      gridStyle={channelGridStyle}
+                      show={show}
+                      navCol={navCol}
                       onUpdateLocal={(r) => setRows((prev) => prev.map((x) => (x.id === r.id ? r : x)))}
                       onRefresh={onStructureChange}
                       onOpenSubDialog={() => setSubDialog(true)}
@@ -602,6 +627,8 @@ function ChannelBlock({
   mics,
   gearByName,
   gridStyle,
+  show,
+  navCol,
   onUpdateLocal,
   onRefresh,
   onOpenSubDialog,
@@ -624,6 +651,9 @@ function ChannelBlock({
   mics: MicLibraryEntry[];
   gearByName: Map<string, { id: string; ownership: 'owned' | 'sub_hired' | 'hired_to_client' }>;
   gridStyle: CSSProperties;
+  /* §CL-FIX-6 — enabled column set + per-column nav index. */
+  show: Set<ChannelListColumnKey>;
+  navCol: Partial<Record<ChannelListColumnKey, number>>;
   onUpdateLocal: (r: ChannelListRow) => void;
   onRefresh: () => void | Promise<void>;
   onOpenSubDialog: () => void;
@@ -804,7 +834,7 @@ function ChannelBlock({
             pre-focus value via the snap ref. */}
         <NavCell
           row={inputRowIdx}
-          col={0}
+          col={navCol.name!}
           onCancelEdit={() => {
             queue({ channel_name: nameSnapRef.current });
           }}
@@ -827,79 +857,87 @@ function ChannelBlock({
             />
           </div>
         </NavCell>
-        {/* Position (col 1) — enum select. Esc closes the
-            dropdown natively; no cancel-revert needed. */}
-        <NavCell row={inputRowIdx} col={1}>
-          <div className="min-w-0 self-center px-0.5">
-            <PositionSelectCell
-              value={local.position}
-              onChange={(v) => {
-                queue({ position: v });
-                void saveRow.flush();
-              }}
-              ariaLabel={`Stage position for channel ${row.row_index}`}
-            />
-          </div>
-        </NavCell>
-        {/* Stage Box (col 2) — PositionPicker (slot-aware). */}
-        <NavCell row={inputRowIdx} col={2}>
-          <div className="min-w-0 self-center px-0.5">
-            <PositionPicker
-              entityId={local.stage_box_id}
-              position={local.stage_box_position}
-              entities={stageBoxes.map((s) => ({
-                id: s.id,
-                label: s.label,
-                colour: s.colour,
-                capacity: s.capacity ?? 16,
-              }))}
-              usedPositions={usedStageBoxPositions}
-              onChange={(id, pos) => queue({ stage_box_id: id, stage_box_position: pos })}
-              onManageClick={onOpenStageDialog}
-              ariaLabel={`Stage box I/O for channel ${row.row_index}`}
-              manageLabel="Manage stage I/O"
-              getOccupant={getStageOccupant}
-              formatLabel={(l, p) => `${l}-${p}`}
-            />
-          </div>
-        </NavCell>
-        {/* Loom / sub-snake (col 3) — PositionPicker. */}
-        <NavCell row={inputRowIdx} col={3}>
-          <div className="min-w-0 self-center px-0.5">
-            <PositionPicker
-              entityId={local.sub_snake_id}
-              position={local.sub_snake_position}
-              entities={subSnakes.map((s) => ({
-                id: s.id,
-                label: s.label,
-                colour: s.colour,
-                capacity: s.capacity ?? 8,
-              }))}
-              usedPositions={usedSubSnakePositions}
-              onChange={(id, pos) => queue({ sub_snake_id: id, sub_snake_position: pos })}
-              onManageClick={onOpenSubDialog}
-              ariaLabel={`Sub-snake (loom) for channel ${row.row_index}`}
-              manageLabel="Manage sub-snakes"
-              getOccupant={getSubOccupant}
-              formatLabel={(l, p) => `${l}-${p}`}
-            />
-          </div>
-        </NavCell>
-        {/* Cable length (col 4) — enum select. */}
-        <NavCell row={inputRowIdx} col={4}>
-          <div className="min-w-0 self-center px-0.5">
-            <CableLengthSelectCell
-              value={local.cable_length}
-              onChange={(v) => {
-                queue({ cable_length: v });
-                void saveRow.flush();
-              }}
-              ariaLabel={`Cable length for channel ${row.row_index}`}
-            />
-          </div>
-        </NavCell>
-        {/* Mic / DI (col 5) — combined mic_library picker. */}
-        <NavCell row={inputRowIdx} col={5}>
+        {/* Position — enum select (optional column). */}
+        {show.has('position') && (
+          <NavCell row={inputRowIdx} col={navCol.position!}>
+            <div className="min-w-0 self-center px-0.5">
+              <PositionSelectCell
+                value={local.position}
+                onChange={(v) => {
+                  queue({ position: v });
+                  void saveRow.flush();
+                }}
+                ariaLabel={`Stage position for channel ${row.row_index}`}
+              />
+            </div>
+          </NavCell>
+        )}
+        {/* Stage Box — PositionPicker (optional column). */}
+        {show.has('stage_box') && (
+          <NavCell row={inputRowIdx} col={navCol.stage_box!}>
+            <div className="min-w-0 self-center px-0.5">
+              <PositionPicker
+                entityId={local.stage_box_id}
+                position={local.stage_box_position}
+                entities={stageBoxes.map((s) => ({
+                  id: s.id,
+                  label: s.label,
+                  colour: s.colour,
+                  capacity: s.capacity ?? 16,
+                }))}
+                usedPositions={usedStageBoxPositions}
+                onChange={(id, pos) => queue({ stage_box_id: id, stage_box_position: pos })}
+                onManageClick={onOpenStageDialog}
+                ariaLabel={`Stage box I/O for channel ${row.row_index}`}
+                manageLabel="Manage stage I/O"
+                getOccupant={getStageOccupant}
+                formatLabel={(l, p) => `${l}-${p}`}
+              />
+            </div>
+          </NavCell>
+        )}
+        {/* Loom / sub-snake — PositionPicker (optional column). */}
+        {show.has('sub_snake') && (
+          <NavCell row={inputRowIdx} col={navCol.sub_snake!}>
+            <div className="min-w-0 self-center px-0.5">
+              <PositionPicker
+                entityId={local.sub_snake_id}
+                position={local.sub_snake_position}
+                entities={subSnakes.map((s) => ({
+                  id: s.id,
+                  label: s.label,
+                  colour: s.colour,
+                  capacity: s.capacity ?? 8,
+                }))}
+                usedPositions={usedSubSnakePositions}
+                onChange={(id, pos) => queue({ sub_snake_id: id, sub_snake_position: pos })}
+                onManageClick={onOpenSubDialog}
+                ariaLabel={`Sub-snake (loom) for channel ${row.row_index}`}
+                manageLabel="Manage sub-snakes"
+                getOccupant={getSubOccupant}
+                formatLabel={(l, p) => `${l}-${p}`}
+              />
+            </div>
+          </NavCell>
+        )}
+        {/* Cable length — enum select (optional column). */}
+        {show.has('cable_length') && (
+          <NavCell row={inputRowIdx} col={navCol.cable_length!}>
+            <div className="min-w-0 self-center px-0.5">
+              <CableLengthSelectCell
+                value={local.cable_length}
+                onChange={(v) => {
+                  queue({ cable_length: v });
+                  void saveRow.flush();
+                }}
+                ariaLabel={`Cable length for channel ${row.row_index}`}
+              />
+            </div>
+          </NavCell>
+        )}
+        {/* Mic / DI — combined mic_library picker (optional column). */}
+        {show.has('mic') && (
+          <NavCell row={inputRowIdx} col={navCol.mic!}>
           <div className="min-w-0 self-center px-0.5">
             <MicDiSelectCell
               value={local.mic}
@@ -928,25 +966,25 @@ function ChannelBlock({
             ) : null}
           </div>
         </NavCell>
-        {/* Stand (col 6) — enum select. */}
-        <NavCell row={inputRowIdx} col={6}>
-          <div className="min-w-0 self-center px-0.5">
-            <StandSelectCell
-              value={local.stand}
-              onChange={(v) => {
-                queue({ stand: v });
-                void saveRow.flush();
-              }}
-              ariaLabel={`Stand type for channel ${row.row_index}`}
-            />
-          </div>
-        </NavCell>
-        {/* Phantom (col 7) — binary +48V toggle (§CL-FIX-3).
-            role="switch"; on = orange-filled + white check, off =
-            bordered + faint dot. Legacy NULL (pre-migration 113)
-            renders as off and toggles to true on first tap.
-            Flashes on default_phantom auto-fill. */}
-        <NavCell row={inputRowIdx} col={7}>
+        )}
+        {/* Stand — enum select (optional column). */}
+        {show.has('stand') && (
+          <NavCell row={inputRowIdx} col={navCol.stand!}>
+            <div className="min-w-0 self-center px-0.5">
+              <StandSelectCell
+                value={local.stand}
+                onChange={(v) => {
+                  queue({ stand: v });
+                  void saveRow.flush();
+                }}
+                ariaLabel={`Stand type for channel ${row.row_index}`}
+              />
+            </div>
+          </NavCell>
+        )}
+        {/* Phantom — binary +48V toggle (§CL-FIX-3, optional column). */}
+        {show.has('phantom_power') && (
+        <NavCell row={inputRowIdx} col={navCol.phantom_power!}>
           <div className="flex items-center justify-center self-center">
             <button
               type="button"
@@ -981,8 +1019,10 @@ function ChannelBlock({
             </button>
           </div>
         </NavCell>
-        {/* Provider (col 8) — enum select. */}
-        <NavCell row={inputRowIdx} col={8}>
+        )}
+        {/* Provider — enum select (optional column). */}
+        {show.has('provider') && (
+        <NavCell row={inputRowIdx} col={navCol.provider!}>
           <div className="min-w-0 self-center px-0.5">
             <BrandedSelect
               value={local.provider ?? ''}
@@ -1007,10 +1047,12 @@ function ChannelBlock({
             />
           </div>
         </NavCell>
-        {/* Notes (col 9) — text with Enter-down / Esc-revert. */}
+        )}
+        {/* Notes — text with Enter-down / Esc-revert (optional column). */}
+        {show.has('notes') && (
         <NavCell
           row={inputRowIdx}
-          col={9}
+          col={navCol.notes!}
           onCancelEdit={() => {
             queue({ notes: notesSnapRef.current });
           }}
@@ -1030,6 +1072,7 @@ function ChannelBlock({
             />
           </div>
         </NavCell>
+        )}
         <div className="flex flex-col items-stretch justify-center gap-0.5 self-center pl-0.5 pr-1 text-[10px] sm:flex-row sm:items-center sm:gap-1">
           <button
             type="button"
