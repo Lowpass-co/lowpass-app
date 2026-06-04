@@ -29,6 +29,7 @@ import {
   AlertTriangle,
   ArrowDown,
   ArrowUp,
+  Check,
   Columns3,
   Download,
   Filter,
@@ -47,7 +48,6 @@ import { useBudgetDensity } from '@/components/budget/BudgetDensityContext';
 import { getEffectiveActual, getActualState } from '@/lib/budget/transactions';
 import { isIncomeRow, varianceColor } from '@/lib/budget/income-rows';
 import { isUx14DerivedBudgetLine } from '@/lib/budget/budgetUx14Derived';
-import { cn } from '@/lib/utils';
 import type { BudgetLineItem } from '@/types';
 import type { TourPhase, TourPhaseKey } from '@/server/budget/computeTourPhases';
 
@@ -144,6 +144,22 @@ const PHASE_EDIT_OPTIONS: { value: string; label: string }[] = [
   { value: 'show_days', label: 'Show days' },
   { value: 'wrap', label: 'Wrap' },
 ];
+
+/* §B1.2 — tone lookup for the custom dropdown menu so each option
+   carries the same colour dot as its rendered chip. Keyed by option
+   value; status tones mirror STATUS_OPTIONS, phase tones mirror
+   PHASE_TINT. Unknown / placeholder values render no dot. */
+const OPTION_TONE: Record<string, string> = {
+  draft: 'var(--color-lp-status-not-started)',
+  quoted: 'var(--color-lp-status-in-progress)',
+  approved: 'var(--color-lp-status-complete)',
+  paid: 'var(--color-lp-status-complete)',
+  disputed: 'var(--color-lp-status-needs-review)',
+  pre_prod: PHASE_TINT.pre_prod,
+  rehearsals: PHASE_TINT.rehearsals,
+  show_days: PHASE_TINT.show_days,
+  wrap: PHASE_TINT.wrap,
+};
 
 export type BudgetSpreadsheetGroupBy = 'category' | 'phase';
 
@@ -249,6 +265,14 @@ export function BudgetSpreadsheetView({
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [bulkBusy, setBulkBusy] = useState<null | 'status' | 'delete'>(null);
   const [pendingCreations, setPendingCreations] = useState<BudgetLineItem[]>([]);
+  /* §B1.2 — optimistic field patches keyed by line id, applied over
+     `lines` so an inline commit shows instantly. Without this the cell
+     flashes back to the stale server value (e.g. 0) until the
+     router.refresh() round-trip lands. Cleared when fresh `lines`
+     arrive from the refetch. */
+  const [optimistic, setOptimistic] = useState<
+    Record<string, Record<string, unknown>>
+  >({});
   const [groupBy, setGroupBy] = useState<BudgetSpreadsheetGroupBy>(initialGroupBy);
 
   // §D — restore per-tour group-by preference on mount.
@@ -271,13 +295,23 @@ export function BudgetSpreadsheetView({
     return m;
   }, [routingDateById]);
 
-  // Optimistic creations merge.
+  // Optimistic creations merge + optimistic field-edit overlay.
   const allLines = useMemo(() => {
-    if (pendingCreations.length === 0) return lines;
-    const known = new Set(lines.map((l) => l.id));
-    const extras = pendingCreations.filter((p) => !known.has(p.id));
-    return extras.length > 0 ? [...extras, ...lines] : lines;
-  }, [lines, pendingCreations]);
+    const base =
+      pendingCreations.length === 0
+        ? lines
+        : (() => {
+            const known = new Set(lines.map((l) => l.id));
+            const extras = pendingCreations.filter((p) => !known.has(p.id));
+            return extras.length > 0 ? [...extras, ...lines] : lines;
+          })();
+    if (Object.keys(optimistic).length === 0) return base;
+    return base.map((l) =>
+      optimistic[l.id]
+        ? ({ ...l, ...optimistic[l.id] } as BudgetLineItem)
+        : l,
+    );
+  }, [lines, pendingCreations, optimistic]);
 
   useEffect(() => {
     if (pendingCreations.length === 0) return;
@@ -287,6 +321,11 @@ export function BudgetSpreadsheetView({
       setPendingCreations(stillPending);
     }
   }, [lines, pendingCreations]);
+
+  // Fresh server rows supersede any optimistic patches.
+  useEffect(() => {
+    setOptimistic((prev) => (Object.keys(prev).length ? {} : prev));
+  }, [lines]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -461,6 +500,23 @@ export function BudgetSpreadsheetView({
     id: string,
     patch: Record<string, unknown>,
   ): Promise<void> => {
+    const rollback = () =>
+      setOptimistic((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+    // Show the edit immediately (no flash back to the stale value)
+    // and keep an open slide-over for this row in sync.
+    setOptimistic((prev) => ({
+      ...prev,
+      [id]: { ...prev[id], ...patch },
+    }));
+    setOpenLine((cur) =>
+      cur && cur.id === id
+        ? ({ ...cur, ...patch } as BudgetLineItem)
+        : cur,
+    );
     try {
       const res = await fetch('/api/budget/line-items', {
         method: 'PATCH',
@@ -470,14 +526,15 @@ export function BudgetSpreadsheetView({
       if (!res.ok) {
         const body = (await res.json().catch(() => ({}))) as { error?: string };
         showToast(body.error ?? 'Save failed', 'error');
+        rollback();
+        router.refresh();
         return;
       }
       router.refresh();
     } catch (err) {
-      showToast(
-        err instanceof Error ? err.message : 'Save failed',
-        'error',
-      );
+      showToast(err instanceof Error ? err.message : 'Save failed', 'error');
+      rollback();
+      router.refresh();
     }
   };
 
@@ -726,12 +783,9 @@ export function BudgetSpreadsheetView({
               <Th>Item</Th>
               <Th>Vendor</Th>
               <Th width={80}>Phase</Th>
-              <Th align="right" width={48}>Qty</Th>
-              <Th align="right" width={92}>Est unit</Th>
-              <Th align="right" width={104}>Est total</Th>
-              <Th align="right" width={112}>Actual</Th>
+              <Th align="right" width={120}>Estimate</Th>
+              <Th align="right" width={120}>Actual</Th>
               <Th align="right" width={96}>Variance</Th>
-              <Th align="right" width={56}>Rcpts</Th>
               <Th width={92}>Status</Th>
             </tr>
           </thead>
@@ -739,7 +793,7 @@ export function BudgetSpreadsheetView({
             {groups.length === 0 ? (
               <tr>
                 <td
-                  colSpan={12}
+                  colSpan={9}
                   className="px-4 py-8 text-center"
                   style={{ color: 'var(--lp-text-tertiary)' }}
                 >
@@ -841,6 +895,10 @@ export function BudgetSpreadsheetView({
                transitions create → edit in place (isCreate
                flips to false, Transactions section unlocks). */
             setOpenLine(savedLine);
+            /* Reflect slide-over edits of existing lines back into
+               the grid — pendingCreations only adds NEW rows, so
+               edits to a row already in `lines` need a refetch. */
+            router.refresh();
           }}
           onApplyAmount={() => setOpenLine(null)}
         />
@@ -1047,7 +1105,7 @@ function GroupRows({
         }}
       >
         <td
-          colSpan={12}
+          colSpan={9}
           style={{
             padding: '6px 12px',
           }}
@@ -1098,12 +1156,6 @@ function GroupRows({
         bumpRunning(runningStart + group.rows.length);
         const selected = selectedIds.includes(row.id);
         const dupes = duplicateMap?.[row.id] ?? [];
-        const cur = (row.currency || tourCurrency).toUpperCase();
-        const proposed = convertToCurrency(
-          Number(row.proposed_cost ?? 0),
-          cur,
-          displayCurrency,
-        );
         /* Budget Phase A §A2 — indicator next to the Actual cell
            when 2+ transactions exist. Signals "click the row to
            open the slide-over to edit the breakdown" since the
@@ -1130,9 +1182,6 @@ function GroupRows({
         const statusOpt = STATUS_OPTIONS.find((o) => o.value === status);
         const phaseTag = phaseTagOf(row);
         const phaseTone = phaseTag ? PHASE_TINT[phaseTag] : null;
-        const attachmentCount =
-          (row as BudgetLineItem & { _attachment_count?: number })
-            ._attachment_count ?? 0;
         const rowBg =
           i % 2 === 0 ? 'var(--lp-bg)' : 'var(--lp-bg-deep)';
         return (
@@ -1182,37 +1231,46 @@ function GroupRows({
                     aria-label={`Possible duplicate of ${dupes.length} other line${dupes.length === 1 ? '' : 's'}`}
                   />
                 ) : null}
-                {/* §B1.2 — the title is the explicit "open detail"
-                    affordance (Notion model). Clicking it opens the
-                    slide-over; clicking the numeric cells edits in
-                    place. The row itself is no longer a click target,
-                    so inline editing is never hijacked by the slide. */}
+                {/* §B1.2 — split affordances: the title TEXT is
+                    inline-editable in place (click → rename, Enter/
+                    blur commits, Escape cancels). The slide-over now
+                    lives behind a dedicated, larger open-detail
+                    button so renaming never opens the panel and
+                    vice-versa. The row itself is not a click target. */}
+                <InlineLabelCell
+                  value={row.label ?? ''}
+                  onCommit={(label) => void onCommitLine(row.id, { label })}
+                />
                 <button
                   type="button"
                   onClick={() => onOpenLine(row)}
                   title="Open detail"
                   aria-label={`Open ${row.label || 'line item'} detail`}
-                  className="flex min-w-0 items-center gap-1.5 text-left hover:underline"
+                  className="btn-transition btn-primary-press inline-flex shrink-0 items-center justify-center"
                   style={{
-                    background: 'transparent',
-                    border: 0,
-                    padding: 0,
+                    height: 26,
+                    width: 26,
+                    borderRadius: 7,
+                    border: '1px solid var(--lp-border)',
+                    background: 'var(--lp-surface)',
+                    color: 'var(--lp-text-secondary)',
                     cursor: 'pointer',
-                    color: 'inherit',
-                    font: 'inherit',
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background =
+                      'color-mix(in srgb, var(--color-lp-orange) 14%, transparent)';
+                    e.currentTarget.style.color = 'var(--color-lp-orange)';
+                    e.currentTarget.style.borderColor = 'var(--color-lp-orange)';
+                    e.currentTarget.style.transform = 'scale(1.08)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'var(--lp-surface)';
+                    e.currentTarget.style.color = 'var(--lp-text-secondary)';
+                    e.currentTarget.style.borderColor = 'var(--lp-border)';
+                    e.currentTarget.style.transform = 'scale(1)';
                   }}
                 >
-                  <span
-                    className="truncate"
-                    style={{ color: 'var(--lp-text)', fontWeight: 500 }}
-                  >
-                    {row.label || '(untitled)'}
-                  </span>
-                  <PanelRightOpen
-                    className="h-3.5 w-3.5 shrink-0"
-                    style={{ color: 'var(--lp-text-tertiary)', opacity: 0.5 }}
-                    aria-hidden
-                  />
+                  <PanelRightOpen className="h-4 w-4" aria-hidden />
                 </button>
               </div>
             </Td>
@@ -1254,18 +1312,6 @@ function GroupRows({
                   <span style={{ color: 'var(--lp-text-tertiary)' }}>—</span>
                 )}
               </InlineSelectCell>
-            </Td>
-            <Td align="right" className="lp-mono">
-              <InlineNumber
-                value={Number(row.quantity ?? 0)}
-                onCommit={(next) => void onCommitLine(row.id, { quantity: next })}
-                readOnly={isUx14DerivedBudgetLine(row)}
-              />
-            </Td>
-            <Td align="right" className="lp-mono">
-              {row.quantity && row.quantity > 0
-                ? formatCurrency(proposed / Number(row.quantity), displayCurrency)
-                : '—'}
             </Td>
             <Td align="right" className="lp-mono" style={{ color: 'var(--lp-text)' }}>
               {/* §B1.2 — inline-edit Proposed. Derived rows
@@ -1381,22 +1427,6 @@ function GroupRows({
                 </span>
               )}
             </Td>
-            <Td align="right">
-              {attachmentCount > 0 ? (
-                <span
-                  className={cn('inline-flex items-center gap-1 lp-mono')}
-                  style={{
-                    color: 'var(--lp-text-secondary)',
-                    fontSize: '11px',
-                  }}
-                >
-                  <Paperclip className="h-3 w-3" aria-hidden />
-                  {attachmentCount}
-                </span>
-              ) : (
-                <span style={{ color: 'var(--lp-text-tertiary)' }}>—</span>
-              )}
-            </Td>
             <Td>
               <InlineSelectCell
                 value={status}
@@ -1449,7 +1479,7 @@ function GroupRows({
         return (
           <tr>
             <td
-              colSpan={12}
+              colSpan={9}
               style={{
                 padding: '4px 12px',
                 background: 'var(--lp-bg)',
@@ -1527,20 +1557,23 @@ function Td({
   );
 }
 
-/* §B1.2 — inline integer editor for the Qty cell. Mirrors
-   BudgetCellInput's click-to-edit / commit-on-blur-or-Enter UX,
-   minus the currency prefix (qty is a plain count). Token-clean. */
-function InlineNumber({
+/* §B1.2 — inline-editable line-item title. Closed state is a
+   text-styled button (same weight/colour as the old label) with a
+   subtle hover wash signalling "click to rename". Clicking swaps to
+   a focused input; Enter or blur commits via onCommit, Escape
+   cancels. The commit is skipped when the value is unchanged or
+   empty (after trim), matching the numeric cells' optimistic path
+   (the caller wires onCommit → onCommitLine(id, { label })).
+   Token-clean. */
+function InlineLabelCell({
   value,
   onCommit,
-  readOnly = false,
 }: {
-  value: number;
-  onCommit: (next: number) => void;
-  readOnly?: boolean;
+  value: string;
+  onCommit: (next: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState<string>(String(value));
+  const [draft, setDraft] = useState(value);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -1550,87 +1583,96 @@ function InlineNumber({
     }
   }, [editing]);
 
-  useEffect(() => {
-    /* eslint-disable-next-line react-hooks/set-state-in-effect -- resync display from server when no edit is in flight (matches BudgetCellInput) */
-    if (!editing) setDraft(String(value));
-  }, [value, editing]);
-
-  const commit = (): void => {
-    const n = Number(draft);
-    if (Number.isFinite(n) && n >= 0) {
-      const next = Math.floor(n);
-      if (next !== value) onCommit(next);
-    } else {
-      setDraft(String(value));
-    }
+  const commit = () => {
+    const trimmed = draft.trim();
+    if (trimmed && trimmed !== value) onCommit(trimmed);
     setEditing(false);
   };
 
-  if (readOnly) return <>{value}</>;
+  const cancel = () => {
+    setDraft(value);
+    setEditing(false);
+  };
 
-  if (!editing) {
+  if (editing) {
     return (
-      <button
-        type="button"
-        onClick={() => setEditing(true)}
-        title="Click to edit quantity"
-        style={{
-          background: 'transparent',
-          border: '1px solid transparent',
-          padding: '0 4px',
-          width: '100%',
-          textAlign: 'right',
-          cursor: 'text',
-          color: 'inherit',
-          font: 'inherit',
+      <input
+        ref={inputRef}
+        type="text"
+        value={draft}
+        aria-label="Edit line item name"
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            commit();
+          } else if (e.key === 'Escape') {
+            e.preventDefault();
+            cancel();
+          }
         }}
-      >
-        {value}
-      </button>
+        className="min-w-0 flex-1"
+        style={{
+          font: 'inherit',
+          fontWeight: 500,
+          width: '100%',
+          color: 'var(--lp-text)',
+          background: 'var(--lp-surface)',
+          border: '1px solid var(--color-lp-orange)',
+          borderRadius: 4,
+          padding: '1px 5px',
+          outline: 'none',
+        }}
+      />
     );
   }
 
   return (
-    <input
-      ref={inputRef}
-      type="number"
-      min="0"
-      step="1"
-      value={draft}
-      onChange={(e) => setDraft(e.target.value)}
-      onBlur={commit}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === 'Tab') {
-          commit();
-        } else if (e.key === 'Escape') {
-          e.preventDefault();
-          setDraft(String(value));
-          setEditing(false);
-        }
+    <button
+      type="button"
+      onClick={() => {
+        setDraft(value);
+        setEditing(true);
       }}
-      aria-label="Quantity"
+      title="Click to rename"
+      aria-label={`Rename ${value || 'line item'}`}
+      className="btn-transition min-w-0 flex-1 truncate text-left"
       style={{
-        width: '100%',
-        textAlign: 'right',
-        border: '1px solid var(--color-lp-orange)',
-        borderRadius: 3,
-        background: 'var(--lp-surface)',
+        font: 'inherit',
+        fontWeight: 500,
         color: 'var(--lp-text)',
-        fontFamily: 'inherit',
-        fontSize: 'inherit',
-        outline: 'none',
-        padding: '0 4px',
+        background: 'transparent',
+        border: '1px solid transparent',
+        borderRadius: 4,
+        padding: '1px 5px',
+        margin: '-1px -5px',
+        cursor: 'text',
       }}
-    />
+      onMouseEnter={(e) => {
+        e.currentTarget.style.background = 'var(--lp-bg-deep)';
+        e.currentTarget.style.borderColor = 'var(--lp-border)';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = 'transparent';
+        e.currentTarget.style.borderColor = 'transparent';
+      }}
+    >
+      {value || '(untitled)'}
+    </button>
   );
 }
 
 /* §B1.2 — inline select editor for the Status + Phase cells.
-   Renders the existing chip as a click target; on click swaps to
-   a focused native <select> that commits onChange / reverts on
-   Escape. Closed display is whatever the caller passes as
-   children (the coloured chip), so the at-a-glance read is
-   preserved. Token-clean. */
+   Closed display is whatever the caller passes as children (the
+   coloured chip), so the at-a-glance read is preserved. Clicking
+   opens a custom popover menu (not a native <select>) styled to
+   match the chips — rounded, tokenised, with a tone dot per option
+   and a check on the current value. The menu is fixed-positioned
+   (anchored to the trigger via getBoundingClientRect) so it escapes
+   the table's overflow clip. Closes on outside-click, Escape, or
+   scroll/resize; arrow keys move the active option, Enter selects.
+   Props + the onCommit(value) contract are unchanged. */
 function InlineSelectCell({
   value,
   options,
@@ -1646,21 +1688,89 @@ function InlineSelectCell({
   readOnly?: boolean;
   children: React.ReactNode;
 }) {
-  const [editing, setEditing] = useState(false);
-  const selectRef = useRef<HTMLSelectElement>(null);
+  const [open, setOpen] = useState(false);
+  const [coords, setCoords] = useState<{
+    top: number;
+    left: number;
+    width: number;
+  } | null>(null);
+  const [activeIndex, setActiveIndex] = useState(-1);
+  const buttonRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
+  // Selectable options exclude the disabled placeholder (e.g. the
+  // status "—" that the PATCH route won't accept).
+  const selectable = options.filter((o) => !o.disabled);
+
+  const closeMenu = () => {
+    setOpen(false);
+    setActiveIndex(-1);
+  };
+
+  const openMenu = () => {
+    const rect = buttonRef.current?.getBoundingClientRect();
+    if (rect) {
+      setCoords({
+        top: rect.bottom + 4,
+        left: rect.left,
+        width: Math.max(rect.width, 150),
+      });
+    }
+    const idx = selectable.findIndex((o) => o.value === value);
+    setActiveIndex(idx >= 0 ? idx : 0);
+    setOpen(true);
+  };
+
+  const choose = (next: string) => {
+    onCommit(next);
+    closeMenu();
+    buttonRef.current?.focus();
+  };
+
+  // Outside-click + scroll/resize dismissal. Escape is handled on
+  // the focused menu so it can also restore trigger focus.
   useEffect(() => {
-    if (editing && selectRef.current) selectRef.current.focus();
-  }, [editing]);
+    if (!open) return;
+    const onPointerDown = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (buttonRef.current?.contains(t) || menuRef.current?.contains(t)) return;
+      closeMenu();
+    };
+    const dismiss = () => closeMenu();
+    document.addEventListener('mousedown', onPointerDown);
+    window.addEventListener('scroll', dismiss, true);
+    window.addEventListener('resize', dismiss);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      window.removeEventListener('scroll', dismiss, true);
+      window.removeEventListener('resize', dismiss);
+    };
+  }, [open]);
+
+  // Move keyboard focus onto the menu when it opens.
+  useEffect(() => {
+    if (open && menuRef.current) menuRef.current.focus();
+  }, [open]);
 
   if (readOnly) return <>{children}</>;
 
-  if (!editing) {
-    return (
+  return (
+    <>
       <button
+        ref={buttonRef}
         type="button"
-        onClick={() => setEditing(true)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={ariaLabel}
         title="Click to edit"
+        onClick={() => (open ? closeMenu() : openMenu())}
+        onKeyDown={(e) => {
+          if (!open && (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ')) {
+            e.preventDefault();
+            openMenu();
+          }
+        }}
+        className="btn-transition"
         style={{
           background: 'transparent',
           border: 0,
@@ -1670,42 +1780,97 @@ function InlineSelectCell({
           color: 'inherit',
           display: 'inline-flex',
           alignItems: 'center',
+          borderRadius: 999,
         }}
       >
         {children}
       </button>
-    );
-  }
-
-  return (
-    <select
-      ref={selectRef}
-      value={value}
-      aria-label={ariaLabel}
-      onChange={(e) => {
-        onCommit(e.target.value);
-        setEditing(false);
-      }}
-      onBlur={() => setEditing(false)}
-      onKeyDown={(e) => {
-        if (e.key === 'Escape') setEditing(false);
-      }}
-      style={{
-        fontFamily: 'inherit',
-        fontSize: '11px',
-        border: '1px solid var(--color-lp-orange)',
-        borderRadius: 4,
-        background: 'var(--lp-surface)',
-        color: 'var(--lp-text)',
-        padding: '1px 4px',
-        outline: 'none',
-      }}
-    >
-      {options.map((o) => (
-        <option key={o.value} value={o.value} disabled={o.disabled}>
-          {o.label}
-        </option>
-      ))}
-    </select>
+      {open && coords ? (
+        <div
+          ref={menuRef}
+          role="listbox"
+          aria-label={ariaLabel}
+          tabIndex={-1}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              e.preventDefault();
+              closeMenu();
+              buttonRef.current?.focus();
+            } else if (e.key === 'ArrowDown') {
+              e.preventDefault();
+              setActiveIndex((i) => (i + 1) % selectable.length);
+            } else if (e.key === 'ArrowUp') {
+              e.preventDefault();
+              setActiveIndex((i) => (i - 1 + selectable.length) % selectable.length);
+            } else if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              const opt = selectable[activeIndex];
+              if (opt) choose(opt.value);
+            }
+          }}
+          style={{
+            position: 'fixed',
+            top: coords.top,
+            left: coords.left,
+            minWidth: coords.width,
+            zIndex: 50,
+            background: 'var(--lp-surface)',
+            border: '1px solid var(--lp-border-strong)',
+            borderRadius: 8,
+            boxShadow: 'var(--lp-shadow-popover)',
+            padding: 4,
+            outline: 'none',
+          }}
+        >
+          {selectable.map((o, idx) => {
+            const isSelected = o.value === value;
+            const isActive = idx === activeIndex;
+            const tone = OPTION_TONE[o.value];
+            return (
+              <button
+                key={o.value || 'empty'}
+                type="button"
+                role="option"
+                aria-selected={isSelected}
+                onClick={() => choose(o.value)}
+                onMouseEnter={() => setActiveIndex(idx)}
+                className="btn-transition"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                  width: '100%',
+                  textAlign: 'left',
+                  fontSize: '12px',
+                  fontWeight: isSelected ? 600 : 500,
+                  padding: '5px 8px',
+                  borderRadius: 5,
+                  border: 0,
+                  cursor: 'pointer',
+                  background: isActive
+                    ? 'color-mix(in srgb, var(--color-lp-orange) 12%, transparent)'
+                    : 'transparent',
+                  color: isActive ? 'var(--color-lp-orange)' : 'var(--lp-text)',
+                }}
+              >
+                <span
+                  aria-hidden
+                  className="h-1.5 w-1.5 shrink-0 rounded-full"
+                  style={{ background: tone ?? 'var(--lp-border-strong)' }}
+                />
+                <span className="min-w-0 flex-1 truncate">{o.label}</span>
+                {isSelected ? (
+                  <Check
+                    className="h-3.5 w-3.5 shrink-0"
+                    style={{ color: 'var(--color-lp-orange)' }}
+                    aria-hidden
+                  />
+                ) : null}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+    </>
   );
 }
