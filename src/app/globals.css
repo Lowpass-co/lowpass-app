@@ -1361,3 +1361,154 @@ textarea::selection,
   border-radius: 12px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
 }
+
+/* ============================================================
+   Stage Plot — per-category icon encoding (Stage Plot Builder §SP1a)
+
+   Category hue is the on-canvas STROKE colour + the library
+   badge chip. The icon FILL stays the brand tint, so brand
+   identity and category never muddy each other (one tints the
+   fill, the other the stroke). Colour is reinforcement only —
+   a 2–3 char letter badge (see icons/categories.ts) is the
+   primary signal, satisfying the colour-blind requirement
+   (color-not-only). Light values target >=3:1 as a large glyph
+   on the light canvas; .dark values are lightened for the dark
+   canvas. Drums are intentionally neutral (locked decision).
+   ============================================================ */
+:root {
+  --lp-plot-cat-musicians: #475569;
+  --lp-plot-cat-mics: #2563EB;
+  --lp-plot-cat-drums: #525252;
+  --lp-plot-cat-strings: #15803D;
+  --lp-plot-cat-keys: #7C3AED;
+  --lp-plot-cat-amps: #B45309;
+  --lp-plot-cat-monitors: #0F766E;
+  --lp-plot-cat-signal: #0369A1;
+  --lp-plot-cat-infrastructure: #78716C;
+  --lp-plot-cat-lighting: #A16207;
+  --lp-plot-cat-stands: #64748B;
+  --lp-plot-cat-utility: #BE123C;
+}
+
+.dark {
+  --lp-plot-cat-musicians: #94A3B8;
+  --lp-plot-cat-mics: #60A5FA;
+  --lp-plot-cat-drums: #A3A3A3;
+  --lp-plot-cat-strings: #4ADE80;
+  --lp-plot-cat-keys: #A78BFA;
+  --lp-plot-cat-amps: #FBBF24;
+  --lp-plot-cat-monitors: #2DD4BF;
+  --lp-plot-cat-signal: #38BDF8;
+  --lp-plot-cat-infrastructure: #D6D3D1;
+  --lp-plot-cat-lighting: #FACC15;
+  --lp-plot-cat-stands: #CBD5E1;
+  --lp-plot-cat-utility: #FB7185;
+}
+
+/* ============================================================
+   Stage Plot icon render primitive — structural CSS (§SP1a·1).
+   One authored SVG source renders both palette + canvas; the
+   <StagePlotIcon> component sets data-mode + the --ico-* vars.
+   Authored bodies carry NO colour attrs — fill/stroke come from
+   here. Detail strokes (knobs, lines) sit in .lp-ico-detail so
+   they are never flood-filled on canvas.
+   ============================================================ */
+.lp-stage-icon {
+  display: inline-flex;
+  position: relative;
+  line-height: 0;
+}
+.lp-stage-icon svg {
+  width: 100%;
+  height: 100%;
+  stroke-width: var(--ico-stroke-w, 1.5);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  overflow: visible;
+}
+.lp-stage-icon svg :is(path, rect, circle, ellipse, line, polyline, polygon) {
+  vector-effect: non-scaling-stroke;
+}
+/* Library: monochrome outline driven by currentColor. */
+.lp-stage-icon[data-mode='library'] svg {
+  fill: none;
+  stroke: currentColor;
+}
+/* Canvas: closed footprint shapes flood-filled with the brand
+   tint + stroked in the category hue; detail group stays open. */
+.lp-stage-icon[data-mode='canvas'] svg {
+  fill: var(--ico-fill, transparent);
+  stroke: var(--ico-stroke, currentColor);
+}
+.lp-stage-icon[data-mode='canvas'] svg .lp-ico-detail {
+  fill: none;
+  stroke: var(--ico-stroke, currentColor);
+}
+.lp-stage-icon__badge {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  padding: 1px 3px;
+  border-radius: 4px;
+  font-size: var(--lp-text-2xs);
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0.02em;
+  color: var(--lp-text-inverse);
+  pointer-events: none;
+}
+/* In-icon letter marks (e.g. snare "S", amp model). Filled, not
+   outlined, so they read at small sizes in both modes. */
+.lp-stage-icon svg .lp-ico-label {
+  fill: currentColor;
+  stroke: none;
+  font-weight: 700;
+}
+.lp-stage-icon[data-mode='canvas'] svg .lp-ico-label {
+  fill: var(--ico-stroke, currentColor);
+}
+
+/* ============================================================
+   Stage Plot canvas (§SP2a). Items render as nested <svg> in the
+   stage SVG; fill/stroke come from per-item inline style, detail
+   + label sub-elements styled here. Chrome (stage, grid, rulers,
+   cardinals) is token-driven.
+   ============================================================ */
+.lp-canvas-item {
+  stroke-width: 1.75;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.lp-canvas-item :is(path, rect, circle, ellipse, line, polyline, polygon) {
+  vector-effect: non-scaling-stroke;
+}
+.lp-canvas-item .lp-ico-detail {
+  fill: none;
+}
+.lp-canvas-item .lp-ico-label {
+  stroke: none;
+  fill: var(--lp-cat, currentColor);
+}
+.lp-canvas-stage {
+  fill: var(--lp-surface);
+  stroke: var(--lp-border-strong);
+}
+.lp-canvas-grid-dot {
+  fill: var(--lp-border-strong);
+}
+.lp-canvas-grid-dot-fine {
+  fill: var(--lp-border);
+}
+.lp-canvas-ruler {
+  stroke: var(--lp-border);
+}
+.lp-canvas-ruler-text,
+.lp-canvas-cardinal {
+  fill: var(--lp-text-tertiary);
+  font-size: var(--lp-text-2xs);
+}
+.lp-canvas-audience {
+  fill: var(--lp-text-secondary);
+  font-size: var(--lp-text-xs);
+  letter-spacing: 0.25em;
+}
