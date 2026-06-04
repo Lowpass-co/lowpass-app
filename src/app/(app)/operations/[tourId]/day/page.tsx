@@ -1,20 +1,43 @@
 /* ============================================
-   LOWPASS — Operations · Day View (Phase 1 §C placeholder)
+   LOWPASS — Operations · Day View (Phase 4 unblock)
 
-   /operations/[tourId]/day — replaces /tours/[id]/day. Phase 4
-   ports the existing surface onto the new shell.
-
-   Sprint 8.1 §2 — ProductShell hoisted to /operations/[tourId]/layout.tsx.
+   /operations/[tourId]/day — live day-of-show timeline. Ports
+   /tours/[id]/day, inner content only (ProductShell + TourHeader come
+   from /operations/[tourId]/layout.tsx).
    ============================================ */
 
-import { PhaseScaffoldPlaceholder } from '@/components/shell-v2/PhaseScaffoldPlaceholder';
+import { notFound } from 'next/navigation';
+import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { DayViewTimeline } from '@/components/day-view/DayViewTimeline';
+import type { Tour, RoutingDate } from '@/types';
 
-export default function OperationsTourDayViewPage() {
+export const dynamic = 'force-dynamic';
+
+export default async function OperationsTourDayViewPage({ params }: { params: Promise<{ tourId: string }> }) {
+  const { tourId } = await params;
+  const supabase = await createServerSupabaseClient();
+
+  const { data: tour, error: tourError } = await supabase
+    .from('tours')
+    .select('*, artist:artists(*)')
+    .eq('id', tourId)
+    .single();
+
+  if (tourError || !tour) notFound();
+
+  const { data: routingDates, error: routingError } = await supabase
+    .from('routing')
+    .select('*, venue:venues(*)')
+    .eq('tour_id', tourId)
+    .order('date', { ascending: true });
+
+  if (routingError) notFound();
+
+  const routing = (routingDates ?? []) as RoutingDate[];
+
   return (
-    <PhaseScaffoldPlaceholder
-      title="Operations · Day View"
-      phase="Phase 4"
-      body={`The Day View surfaces the day-of-show schedule with arrivals, soundcheck, doors, set times, and load-out. Phase 4 ports it onto the new shell.`}
-    />
+    <div className="mx-auto max-w-5xl space-y-4 px-4 pt-6 pb-12">
+      <DayViewTimeline tour={tour as Tour} routingDates={routing} />
+    </div>
   );
 }

@@ -1,20 +1,21 @@
 /* ============================================
-   LOWPASS — Operations · Hire (Phase 1 §C placeholder)
+   LOWPASS — Operations · Hire (Phase 4 unblock)
 
-   /operations/[tourId]/hire — replaces /tours/[id]/hire. Phase 4
-   ports the existing surface onto the new shell.
-
-   Sprint 8.1 §2 — ProductShell hoisted to /operations/[tourId]/layout.tsx.
+   /operations/[tourId]/hire — live tour gear/hire library. Ports
+   /tours/[id]/hire, inner content only (ProductShell + TourHeader come
+   from /operations/[tourId]/layout.tsx).
    ============================================ */
 
-import { PhaseScaffoldPlaceholder } from '@/components/shell-v2/PhaseScaffoldPlaceholder';
+import { GearLibraryClient } from '@/components/gear/GearLibraryClient';
 
-export default function OperationsTourHirePage() {
+export const dynamic = 'force-dynamic';
+
+export default async function OperationsTourHirePage({ params }: { params: Promise<{ tourId: string }> }) {
+  const { tourId } = await params;
   return (
-    <PhaseScaffoldPlaceholder
-      title="Operations · Hire"
-      phase="Phase 4"
-      body={`Hire tracks freelance / one-off engagements for this tour. Phase 4 ports it onto the new shell.`}
-    />
+    <div className="mx-auto max-w-6xl space-y-4 px-4 pt-6">
+      <h1 className="text-2xl font-bold text-lp-text">Tour Hire</h1>
+      <GearLibraryClient tourId={tourId} />
+    </div>
   );
 }
