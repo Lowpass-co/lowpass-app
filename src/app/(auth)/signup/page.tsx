@@ -79,10 +79,10 @@ function SignupPageInner() {
   if (success) {
     return (
       <AuthShell>
-        <h2 className="mb-8 text-2xl font-medium text-white">Check your email</h2>
+        <h2 className="mb-8 text-2xl font-semibold text-white">Check your email</h2>
         <div
           className="rounded-lg border px-4 py-6 text-sm"
-          style={{ borderColor: '#27272a', background: '#18181b', color: '#e4e4e7' }}
+          style={{ borderColor: 'rgba(255,255,255,0.1)', background: 'rgba(24,24,27,0.6)', color: '#e4e4e7' }}
         >
           <p className="font-medium">Confirmation sent</p>
           <p className="mt-2" style={{ color: '#71717a' }}>
@@ -105,7 +105,7 @@ function SignupPageInner() {
 
   return (
     <AuthShell>
-      <h2 className="mb-8 text-2xl font-medium text-white">Create account</h2>
+      <h2 className="mb-8 text-2xl font-semibold text-white">Create account</h2>
 
       <AuthError>{error}</AuthError>
 

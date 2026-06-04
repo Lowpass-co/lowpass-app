@@ -410,6 +410,90 @@ td[data-density="cozy"] .lp-mono {
 }
 
 /* ============================================================
+   Auth redesign (2026-06) — liquid-glass auth surfaces.
+   Entrance animations, a translucent glass form card, input
+   focus-glow, and primary-button lift. Dark-pinned (the auth
+   pages don't flip with the light/dark token theme). All motion
+   is gated by prefers-reduced-motion.
+   ============================================================ */
+
+/* Entrance: fade + rise. Applied to the brand panel + form card,
+   staggered via the delay utilities. */
+@keyframes lp-auth-rise {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.lp-auth-rise {
+  animation: lp-auth-rise 600ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.lp-auth-rise-d1 { animation-delay: 90ms; }
+.lp-auth-rise-d2 { animation-delay: 180ms; }
+.lp-auth-rise-d3 { animation-delay: 270ms; }
+
+/* Glass form card — translucent dark + blur, with a hairline
+   brand glow along the top edge. */
+.lp-auth-card {
+  position: relative;
+  background: rgba(18, 18, 22, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 18px;
+  backdrop-filter: blur(20px) saturate(120%);
+  -webkit-backdrop-filter: blur(20px) saturate(120%);
+  box-shadow:
+    0 24px 60px -20px rgba(0, 0, 0, 0.7),
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.06);
+}
+.lp-auth-card::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 1px;
+  border-radius: 18px 18px 0 0;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    color-mix(in srgb, var(--color-lp-orange) 70%, transparent),
+    transparent
+  );
+  pointer-events: none;
+}
+
+/* Soft pulsing aurora behind the card (depth cue). */
+@keyframes lp-auth-aurora {
+  0%, 100% { opacity: 0.45; transform: scale(1); }
+  50%      { opacity: 0.8; transform: scale(1.09); }
+}
+.lp-auth-aurora {
+  animation: lp-auth-aurora 9s ease-in-out infinite;
+}
+
+/* Input focus-glow (replaces the JS border toggle + ring). */
+.lp-auth-field {
+  transition: border-color 180ms ease, box-shadow 180ms ease, background-color 180ms ease;
+}
+.lp-auth-field:focus {
+  border-color: var(--color-lp-orange);
+  background-color: #1c1c20;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-lp-orange) 22%, transparent);
+}
+
+/* Primary-button lift + brand glow on hover (extends .lp-auth-btn). */
+.lp-auth-btn-primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 24px -8px color-mix(in srgb, var(--color-lp-orange) 60%, transparent);
+}
+.lp-auth-btn-primary:active:not(:disabled) {
+  transform: translateY(0) scale(0.985);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lp-auth-rise { animation: none; opacity: 1; transform: none; }
+  .lp-auth-aurora { animation: none; }
+  .lp-auth-btn-primary:hover:not(:disabled) { transform: none; }
+  .lp-auth-btn-primary:active:not(:disabled) { transform: none; }
+}
+
+/* ============================================================
    UX Audit 2026 — Advance field-cell language ("missing / filled")
 
    Ported from Adam's per-show Advance redesign reference, but routed

@@ -138,8 +138,8 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
         }}
       />
       <div className="absolute inset-0 flex" style={{ zIndex: 10 }}>
-        {/* Brand panel */}
-        <div className="hidden w-[45%] shrink-0 flex-col items-center justify-center px-16 md:flex">
+        {/* Brand panel — fades + rises in on load. */}
+        <div className="lp-auth-rise hidden w-[45%] shrink-0 flex-col items-center justify-center px-16 md:flex">
           <div style={{ transform: 'scale(1.18)', transformOrigin: 'center' }}>
             <LowpassLogo size="lg" />
           </div>
@@ -157,10 +157,30 @@ export function AuthShell({ children }: { children: React.ReactNode }) {
           >
             Tour Management.<br />Simplified.
           </p>
+          {/* thin brand accent under the strapline */}
+          <span
+            aria-hidden
+            className="mt-8 block h-px w-16"
+            style={{
+              background:
+                'linear-gradient(90deg, transparent, var(--color-lp-orange), transparent)',
+            }}
+          />
         </div>
-        {/* Form slot */}
-        <main className="flex flex-1 flex-col items-center justify-center px-6">
-          <div className="w-full max-w-[400px]">{children}</div>
+        {/* Form slot — glass card on a soft brand aurora, staggered in. */}
+        <main className="flex flex-1 flex-col items-center justify-center px-6 py-10">
+          <div className="relative w-full max-w-[420px]">
+            <div
+              aria-hidden
+              className="lp-auth-aurora pointer-events-none absolute -inset-12 -z-10"
+              style={{
+                background:
+                  'radial-gradient(58% 50% at 50% 38%, color-mix(in srgb, var(--color-lp-orange) 22%, transparent), transparent 72%)',
+                filter: 'blur(44px)',
+              }}
+            />
+            <div className="lp-auth-card lp-auth-rise lp-auth-rise-d1 p-8 sm:p-10">{children}</div>
+          </div>
         </main>
       </div>
     </div>

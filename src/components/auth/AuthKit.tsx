@@ -26,7 +26,7 @@
 
 import { useState } from 'react';
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode } from 'react';
-import { Eye, EyeOff, Loader2 } from 'lucide-react';
+import { Eye, EyeOff, Loader2, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 /* Dark auth palette — pinned (not adaptive). Brand routes
@@ -67,22 +67,15 @@ export function AuthField({ id, label, password, type, ...rest }: AuthFieldProps
           id={id}
           type={resolvedType}
           className={cn(
-            'w-full rounded-md px-4 py-3 text-sm text-white outline-none transition-colors duration-200',
+            // .lp-auth-field handles the focus border + orange glow + bg
+            // lift in CSS (replaces the old JS border toggle + ring).
+            'lp-auth-field w-full rounded-lg px-4 py-3 text-sm text-white outline-none',
             password && 'pr-11',
             'placeholder:text-[#71717a]',
-            'focus-visible:ring-2',
           )}
           style={{
             background: AUTH.fieldBg,
             border: `1px solid ${AUTH.fieldBorder}`,
-            // focus ring color via inline custom prop the class reads
-            ['--tw-ring-color' as string]: AUTH.brand,
-          }}
-          onFocus={(e) => {
-            e.currentTarget.style.borderColor = AUTH.brand;
-          }}
-          onBlur={(e) => {
-            e.currentTarget.style.borderColor = AUTH.fieldBorder;
           }}
           {...rest}
         />
@@ -121,22 +114,29 @@ export function AuthButton({
 }: AuthButtonProps) {
   const isDisabled = disabled || loading;
   const base =
-    'lp-auth-btn inline-flex items-center justify-center gap-3 rounded-md py-3 text-sm font-medium ' +
+    'lp-auth-btn inline-flex items-center justify-center gap-3 rounded-lg py-3 text-sm font-medium ' +
     'outline-none focus-visible:ring-2 ' +
     'disabled:cursor-not-allowed disabled:opacity-60';
+  const isPrimary = variant === 'primary';
   return (
     <button
       type={type ?? 'button'}
       disabled={isDisabled}
       aria-busy={loading || undefined}
-      className={cn(base, block && 'w-full')}
+      className={cn(base, isPrimary && 'lp-auth-btn-primary', block && 'w-full')}
       style={
-        variant === 'primary'
-          ? { background: AUTH.brand, color: '#fff', ['--tw-ring-color' as string]: AUTH.brand }
+        isPrimary
+          ? {
+              // subtle top-light → brand gradient for depth
+              background: 'linear-gradient(180deg, var(--color-lp-orange-light), var(--color-lp-orange))',
+              color: '#fff',
+              ['--tw-ring-color' as string]: AUTH.brand,
+            }
           : {
-              background: AUTH.fieldBg,
+              // glass secondary (e.g. Continue with Google) — matches the card
+              background: 'rgba(255,255,255,0.04)',
               color: AUTH.textPrimary,
-              border: `1px solid ${AUTH.fieldBorder}`,
+              border: '1px solid rgba(255,255,255,0.12)',
               ['--tw-ring-color' as string]: AUTH.brand,
               paddingLeft: 16,
               paddingRight: 16,
@@ -177,14 +177,15 @@ export function AuthError({ children }: { children: ReactNode }) {
     <div
       role="alert"
       aria-live="polite"
-      className="mb-5 rounded-lg border px-4 py-3 text-sm"
+      className="lp-auth-rise mb-5 flex items-start gap-2.5 rounded-lg border px-4 py-3 text-sm"
       style={{
         borderColor: 'rgba(248,113,113,0.4)',
         background: 'rgba(127,29,29,0.5)',
         color: '#f87171',
       }}
     >
-      {children}
+      <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+      <span>{children}</span>
     </div>
   );
 }
