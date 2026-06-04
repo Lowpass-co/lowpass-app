@@ -611,10 +611,10 @@ export default function ChannelListEditor({
                 }}
               >
                 <div className="py-2 pl-2">#</div>
-                <div className="px-1 py-2">Item</div>
-                <div className="px-1 py-2">Destination</div>
-                <div className="px-1 py-2">Pos</div>
-                <div className="px-1 py-2 text-center">QTY</div>
+                <div className="px-1 py-2">Name</div>
+                <div className="px-1 py-2">Description</div>
+                <div className="px-1 py-2 text-center">Stereo?</div>
+                <div className="px-1 py-2 text-center">Pos</div>
                 <div className="px-1 py-2">Notes</div>
                 <div className="px-1 py-2 text-right" />
               </div>

@@ -245,6 +245,12 @@ export type ChannelListRow = {
   output_destination: string | null;
   output_qty: number | null;
   output_notes: string | null;
+  /* §CL-FIX-7 — outputs v2. output_description supersedes
+     output_destination (kept one tour for safety); output_is_stereo
+     + output_position model the "Mark as stereo" 1+2 display. */
+  output_description: string | null;
+  output_is_stereo: boolean;
+  output_position: string | null;
   /* Sprint 12 §8a — cable length feeding the Cables
      aggregate. Stored as text so the editor's hardcoded
      options round-trip exactly. */
