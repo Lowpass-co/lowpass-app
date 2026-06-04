@@ -45,7 +45,8 @@ export type ProductName =
   | 'Advance'
   | 'Settings'
   | 'Venues'
-  | 'Bug reports';
+  | 'Bug reports'
+  | 'AI Usage';
 
 interface ProductHeaderProps {
   productName: ProductName;
