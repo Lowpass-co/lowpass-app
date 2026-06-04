@@ -6,7 +6,7 @@
 
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
-import Anthropic from '@anthropic-ai/sdk';
+import { withAiUsage, aiCapExceededResponse } from '@/lib/ai/usage';
 import { getCached, setCached } from '@/lib/rate-limit';
 
 const n = (x: number | null | undefined): number => (x == null ? 0 : Number(x) || 0);
@@ -122,19 +122,26 @@ Tour budget analysis. Data:
 - Withholding/tax info: ${withholdingInfo}
 `;
 
-  const client = new Anthropic({ apiKey });
-
   try {
-    const response = await client.messages.create({
-      /* Sprint 12 §SAFE — Haiku 4.5. Pattern-match the variance
-         data into 3-8 alert objects; structured output task, no
-         reasoning needed. */
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 1024,
-      messages: [
-        {
-          role: 'user',
-          content: `${budgetContext}
+    const { result: response, blocked, blockReason } = await withAiUsage(
+      {
+        workspaceId: wid,
+        userId: user.id,
+        endpoint: 'budget.ai.alerts',
+        model: 'claude-haiku-4-5-20251001',
+        metadata: { tour_id: tourId },
+      },
+      async (anthropic) => {
+        const r = await anthropic.messages.create({
+          /* Sprint 12 §SAFE — Haiku 4.5. Pattern-match the variance
+             data into 3-8 alert objects; structured output task, no
+             reasoning needed. */
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 1024,
+          messages: [
+            {
+              role: 'user',
+              content: `${budgetContext}
 
 Analyse this tour budget and return a JSON array of alerts. Each alert:
 {
@@ -145,9 +152,14 @@ Analyse this tour budget and return a JSON array of alerts. Each alert:
 }
 
 Focus on: cost anomalies, missing data, category imbalances, withholding tax issues. Return 3-8 alerts, ordered by severity (critical first). Return ONLY the JSON array, no markdown.`,
-        },
-      ],
-    });
+            },
+          ],
+        });
+        return { result: r, usage: r.usage };
+      },
+    );
+    if (blocked) return aiCapExceededResponse(blockReason ?? 'workspace_budget');
+    if (!response) return NextResponse.json({ alerts: [] });
 
     const block = response.content[0];
     const text = block.type === 'text' ? block.text : '';

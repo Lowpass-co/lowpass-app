@@ -5,6 +5,8 @@ import { ChevronRight } from 'lucide-react';
 import { InlineEditCell } from '@/components/spreadsheet-view/InlineEditCell';
 import { useDetailPanel } from '@/contexts/DetailPanelContext';
 import { cn } from '@/lib/utils';
+import { useToast } from '@/components/ui/Toast';
+import { detectAiCap, aiCapMessage } from '@/lib/ai/client';
 
 interface TemplateLineItem {
   category: string;
@@ -81,6 +83,7 @@ export function TourWideCosts({
   initialCommissions: Commission[];
 }) {
   const { openLineItem } = useDetailPanel();
+  const { showToast } = useToast();
   const [lineItems, setLineItems] = useState<LineItem[]>(initialLineItems);
   const [settings, setSettings] = useState<Settings | null>(initialSettings);
   const [commissions, setCommissions] = useState<Commission[]>(initialCommissions);
@@ -228,6 +231,11 @@ export function TourWideCosts({
           crew_count: crewCount || 1,
         }),
       });
+      const cap = await detectAiCap(res);
+      if (cap) {
+        showToast(aiCapMessage(cap), 'error');
+        return;
+      }
       const data = await res.json();
       if (res.ok) {
         setTemplateModal(data);
@@ -241,7 +249,7 @@ export function TourWideCosts({
         setTemplateLoading(false);
       }
     }
-  }, [tourId, artistId, workspaceId, showCount, crewCount]);
+  }, [tourId, artistId, workspaceId, showCount, crewCount, showToast]);
 
   const acceptTemplateItems = useCallback(
     async (indices: number[]) => {

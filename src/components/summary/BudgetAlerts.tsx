@@ -22,6 +22,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { AlertTriangle, Info, AlertCircle, Loader2, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useToast } from '@/components/ui/Toast';
+import { detectAiCap, aiCapMessage } from '@/lib/ai/client';
 
 interface Alert {
   severity: 'info' | 'warning' | 'critical';
@@ -33,6 +35,7 @@ interface Alert {
 const REFRESH_COOLDOWN_MS = 30_000;
 
 export function BudgetAlerts({ tourId }: { tourId: string }) {
+  const { showToast } = useToast();
   const [state, setState] = useState<'idle' | 'loading' | 'loaded'>('idle');
   const [alerts, setAlerts] = useState<Alert[]>([]);
   const [expandedId, setExpandedId] = useState<number | null>(null);
@@ -43,6 +46,13 @@ export function BudgetAlerts({ tourId }: { tourId: string }) {
     setState('loading');
     try {
       const res = await fetch(`/api/budget/ai/alerts?tour_id=${encodeURIComponent(tourId)}`);
+      const cap = await detectAiCap(res);
+      if (cap) {
+        showToast(aiCapMessage(cap), 'error');
+        setAlerts([]);
+        setState('loaded');
+        return;
+      }
       const json = await res.json().catch(() => ({}));
       const list = Array.isArray(json.alerts) ? (json.alerts as Alert[]) : [];
       setAlerts(list);
@@ -53,7 +63,7 @@ export function BudgetAlerts({ tourId }: { tourId: string }) {
       setAlerts([]);
       setState('loaded');
     }
-  }, [tourId]);
+  }, [tourId, showToast]);
 
   /* Tick the cooldown counter so the Refresh button can show
      a live "(Xs)" suffix. The interval clears itself when the
