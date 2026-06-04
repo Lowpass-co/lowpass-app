@@ -11,7 +11,7 @@ import {
 } from '@dnd-kit/core';
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Check, GripVertical, ListPlus } from 'lucide-react';
+import { Check, GripVertical, ListPlus, Columns3, X } from 'lucide-react';
 import { useDebouncedSave } from '@/hooks/useDebouncedSave';
 import { useToast } from '@/components/ui/Toast';
 import { createClient } from '@/lib/supabase-client';
@@ -35,9 +35,13 @@ import { ChannelListSectionBand } from './channel-list-cells/ChannelListSectionB
 import { CellNavProvider, NavCell } from '@/lib/hooks/useCellNav';
 import {
   COLUMN_BY_KEY,
+  OPTIONAL_COLUMNS,
+  enabledOptionalKeys,
   getEnabledColumnKeys,
   type ChannelListColumnKey,
 } from '@/lib/channel-list/columns';
+import { updateSection } from '@/lib/rider-packs/client';
+import { ColumnPickerPopover } from './channel-list-cells/ColumnPickerPopover';
 
 /* §CL-FIX-6 — the input-grid column set is now dynamic. Which
    columns render (and the nav-matrix colCount) is derived per
@@ -108,6 +112,7 @@ export default function ChannelListEditor({
   const [subDialog, setSubDialog] = useState(false);
   const [stageDialog, setStageDialog] = useState(false);
   const [multiAddOpen, setMultiAddOpen] = useState(false);
+  const [columnPickerOpen, setColumnPickerOpen] = useState(false);
   const [mics, setMics] = useState<MicLibraryEntry[]>([]);
   const [gearByName, setGearByName] = useState<
     Map<string, { id: string; ownership: 'owned' | 'sub_hired' | 'hired_to_client' }>
@@ -284,6 +289,28 @@ export default function ChannelListEditor({
     [enabledKeys],
   );
 
+  /* §CL-FIX-6b — soft-hide toggle. Persists the optional-column
+     set to rider_sections.metadata.enabled_columns (the first
+     explicit toggle freezes the lazily-derived set), then
+     refetches so the grid + contextual buttons re-derive. Row
+     data is never deleted — re-enabling a column shows it again. */
+  const toggleColumn = useCallback(
+    async (key: ChannelListColumnKey, enable: boolean) => {
+      const current = new Set(enabledOptionalKeys(enabledKeys));
+      if (enable) current.add(key);
+      else current.delete(key);
+      const next = OPTIONAL_COLUMNS.filter((c) => current.has(c.key)).map((c) => c.key);
+      const nextMeta = { ...(section.metadata ?? {}), enabled_columns: next };
+      try {
+        await updateSection(pack.id, section.id, { metadata: nextMeta });
+        await onStructureChange();
+      } catch (err) {
+        showToast(err instanceof Error ? err.message : 'Could not update columns', 'error');
+      }
+    },
+    [enabledKeys, section.metadata, pack.id, section.id, onStructureChange, showToast],
+  );
+
   return (
     <div
       className="w-full max-w-full min-w-0 rounded-xl border"
@@ -309,20 +336,44 @@ export default function ChannelListEditor({
           {savePill.state !== 'idle' && <SaveStatePill state={savePill.state} error={savePill.error} />}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setSubDialog(true)}
-            className="text-xs font-semibold uppercase tracking-wide text-lp-text-secondary hover:text-lp-orange"
-          >
-            Manage sub-snakes
-          </button>
-          <button
-            type="button"
-            onClick={() => setStageDialog(true)}
-            className="text-xs font-semibold uppercase tracking-wide text-lp-text-secondary hover:text-lp-orange"
-          >
-            Manage stage I/O
-          </button>
+          {/* §CL-FIX-6b — contextual: only when the column is on. */}
+          {show.has('sub_snake') && (
+            <button
+              type="button"
+              onClick={() => setSubDialog(true)}
+              className="text-xs font-semibold uppercase tracking-wide text-lp-text-secondary hover:text-lp-orange"
+            >
+              Manage sub-snakes
+            </button>
+          )}
+          {show.has('stage_box') && (
+            <button
+              type="button"
+              onClick={() => setStageDialog(true)}
+              className="text-xs font-semibold uppercase tracking-wide text-lp-text-secondary hover:text-lp-orange"
+            >
+              Manage stage I/O
+            </button>
+          )}
+          {/* §CL-FIX-6b — add / remove columns picker. */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setColumnPickerOpen((o) => !o)}
+              aria-haspopup="menu"
+              aria-expanded={columnPickerOpen}
+              className="inline-flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-lp-text-secondary hover:text-lp-orange"
+            >
+              <Columns3 className="h-3.5 w-3.5" aria-hidden />
+              Columns
+            </button>
+            <ColumnPickerPopover
+              open={columnPickerOpen}
+              enabled={show}
+              onToggle={(k, enable) => void toggleColumn(k, enable)}
+              onClose={() => setColumnPickerOpen(false)}
+            />
+          </div>
           <div className="flex shrink-0 items-center gap-1 text-xs">
             <button
               type="button"
@@ -413,6 +464,7 @@ export default function ChannelListEditor({
                       </div>
                     );
                   }
+                  const def = COLUMN_BY_KEY[k];
                   const extra =
                     k === 'name'
                       ? ' pl-1'
@@ -422,8 +474,20 @@ export default function ChannelListEditor({
                           ? ' min-w-0'
                           : '';
                   return (
-                    <div key={k} className={`px-0.5 py-2${extra}`}>
-                      {COLUMN_BY_KEY[k].label}
+                    <div key={k} className={`group/col relative px-0.5 py-2${extra}`}>
+                      {def.label}
+                      {!def.permanent && (
+                        <button
+                          type="button"
+                          aria-label={`Hide ${def.label} column`}
+                          title={`Hide ${def.label}`}
+                          onClick={() => void toggleColumn(k, false)}
+                          className="absolute right-0 top-1 hidden h-4 w-4 items-center justify-center rounded text-lp-text-tertiary hover:text-lp-error group-hover/col:flex"
+                          style={{ background: 'var(--lp-surface)' }}
+                        >
+                          <X className="h-3 w-3" aria-hidden />
+                        </button>
+                      )}
                     </div>
                   );
                 })}

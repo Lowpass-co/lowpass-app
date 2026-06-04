@@ -278,11 +278,19 @@ other column is opt-in via an "Add column" picker. Removing a column
 hides its cells AND its related action buttons (e.g. removing the
 sub-snake column also hides the "Manage sub snakes" CTA).
 
-**Currently**: All columns are always present. Sub-snake / stage box
-/ mic / cable buttons are always visible regardless of whether you
-use those columns.
+**Currently**: ⏳ FIXED §CL-FIX-6 (pending Vercel verify) — base list is
+Number + Name; all other columns opt-in. A "Columns" picker (top toolbar)
+toggles each optional column (Position, Stage Box, Loom, Cable, Mic/DI,
+Stand, +48, Provider, Notes). Each optional column header has a hover "×"
+that soft-hides it (row data kept — re-enable restores it). Enabled set
+persists to `rider_sections.metadata.enabled_columns`; existing tours
+lazily derive their set from row data so they look unchanged. The
+"Manage sub-snakes" / "Manage stage I/O" buttons only show when their
+columns are enabled. NOTE: `mic_substitute` dropped per Adam; the
+"Add column at right of header row" was placed in the toolbar instead
+(the grid header is a fixed-track CSS grid).
 
-**Tracked in**: `CC_CHANNEL_LIST_REBUILD.md` §CL-FIX-6.
+**Tracked in**: `CC_CHANNEL_LIST_REBUILD.md` §CL-FIX-6 (6a render + 6b picker).
 
 #### CHL-22 — Output numbering independent from input numbering
 
