@@ -1,7 +1,8 @@
 import { notFound } from 'next/navigation';
 import { listAppPageShell } from '@/components/shell/app-page-shells';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
-import { RiderPacksTourClient, riderPackRowsFromServer } from '@/components/tours/RiderPacksTourClient';
+import { RiderPacksTourClient } from '@/components/tours/RiderPacksTourClient';
+import { riderPackRowsFromServer } from '@/components/tours/rider-pack-rows';
 
 export const dynamic = 'force-dynamic';
 
