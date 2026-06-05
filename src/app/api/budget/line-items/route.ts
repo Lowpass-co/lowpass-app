@@ -194,6 +194,8 @@ export async function POST(request: Request) {
     routing_id?: string | null;
     notes?: string | null;
     section?: string | null;
+    /** Budget redesign (migration 200) — FK to budget_sections. */
+    section_id?: string | null;
     sort_order?: number;
     /** Phase 3 §D — pre_prod / rehearsals / show_days / wrap, or null. */
     phase_tag?: string | null;
@@ -278,6 +280,7 @@ export async function POST(request: Request) {
       notes: body.notes ?? null,
       order_index: orderIndex,
       section: sectionVal,
+      section_id: body.section_id ?? null,
       sort_order: sortOrder,
       phase_tag: phaseTag,
     })
@@ -337,6 +340,8 @@ export async function PATCH(request: Request) {
     gear_id?: string | null;
     tour_gear_id?: string | null;
     section?: string | null;
+    /** Budget redesign (migration 200) — FK to budget_sections. */
+    section_id?: string | null;
     sort_order?: number;
   };
   try {
@@ -445,6 +450,11 @@ export async function PATCH(request: Request) {
   }
   if (updates.sort_order !== undefined && Number.isFinite(Number(updates.sort_order))) {
     payload.sort_order = Math.max(0, Math.floor(Number(updates.sort_order)));
+  }
+  // Budget redesign (migration 200) — reassign / clear the section_id.
+  if (updates.section_id !== undefined) {
+    payload.section_id =
+      updates.section_id === null ? null : String(updates.section_id);
   }
 
   const { data, error } = await supabase

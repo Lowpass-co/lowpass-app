@@ -20,7 +20,8 @@ import { useSearchParams } from 'next/navigation';
 import { ArrowDown, ArrowUp, History } from 'lucide-react';
 import { BudgetOverviewPanels } from '@/components/budget/BudgetOverviewPanels';
 import { convertToCurrency } from '@/lib/budget/fx';
-import type { BudgetLineItem } from '@/types';
+import { getEffectiveActual } from '@/lib/budget/transactions';
+import type { BudgetLineItem, BudgetSection } from '@/types';
 import type {
   AllocationSegment,
   BurnBucket,
@@ -78,6 +79,8 @@ function formatRelative(iso: string | null | undefined): string {
 export interface BudgetSummaryTabProps {
   tourId: string;
   lines: BudgetLineItem[];
+  /** Phase E — section backbone for the per-section rollup table. */
+  sections?: BudgetSection[];
   allocation: AllocationSegment[];
   burn: BurnBucket[];
   phaseBoundaries: BurnPhaseBoundary[];
@@ -87,6 +90,7 @@ export interface BudgetSummaryTabProps {
 export function BudgetSummaryTab({
   tourId,
   lines,
+  sections = [],
   allocation,
   burn,
   phaseBoundaries,
@@ -96,6 +100,61 @@ export function BudgetSummaryTab({
   const displayCurrency = (
     searchParams.get('display') ?? tourCurrency
   ).toUpperCase();
+
+  /* Phase E — per-section rollup mirroring the GN sheet's SUMMARY tab.
+     Each section's proposed / actual / variance + a grand total. Lines
+     with no (or a stale) section_id fall into "Uncategorised". */
+  const sectionRollup = useMemo(() => {
+    const sorted = [...sections].sort(
+      (a, b) =>
+        (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.name.localeCompare(b.name),
+    );
+    const known = new Set(sorted.map((s) => s.id));
+    // Immutable accumulation (no in-place mutation) — sum matching lines
+    // into a fresh object each step.
+    const sumFor = (pred: (l: BudgetLineItem) => boolean) =>
+      lines.reduce(
+        (acc, line) => {
+          if (!pred(line)) return acc;
+          const cur = (line.currency || tourCurrency).toUpperCase();
+          return {
+            proposed:
+              acc.proposed +
+              convertToCurrency(
+                Number(line.proposed_cost ?? 0),
+                cur,
+                displayCurrency,
+              ),
+            actual:
+              acc.actual +
+              convertToCurrency(getEffectiveActual(line), cur, displayCurrency),
+          };
+        },
+        { proposed: 0, actual: 0 },
+      );
+
+    const rows = sorted.map((s) => {
+      const t = sumFor((l) => l.section_id === s.id);
+      return { id: s.id, name: s.name, ...t, delta: t.actual - t.proposed };
+    });
+    const orphanT = sumFor((l) => !l.section_id || !known.has(l.section_id));
+    if (orphanT.proposed !== 0 || orphanT.actual !== 0) {
+      rows.push({
+        id: '__uncat__',
+        name: 'Uncategorised',
+        ...orphanT,
+        delta: orphanT.actual - orphanT.proposed,
+      });
+    }
+    const grand = rows.reduce(
+      (acc, r) => ({
+        proposed: acc.proposed + r.proposed,
+        actual: acc.actual + r.actual,
+      }),
+      { proposed: 0, actual: 0 },
+    );
+    return { rows, grand: { ...grand, delta: grand.actual - grand.proposed } };
+  }, [sections, lines, tourCurrency, displayCurrency]);
 
   const stats = useMemo(() => {
     type CatAgg = {
@@ -195,6 +254,156 @@ export function BudgetSummaryTab({
         currency={tourCurrency}
       />
 
+      {/* Phase E — per-section rollup (GN SUMMARY tab) */}
+      {sectionRollup.rows.length > 0 ? (
+        <section
+          className="rounded-lg border p-4"
+          style={{
+            borderColor: 'var(--lp-border-strong)',
+            background: 'var(--lp-surface)',
+          }}
+        >
+          <h2 className="lp-h3">Section summary</h2>
+          <div className="mt-3 overflow-x-auto">
+            <table className="lp-dense w-full" style={{ borderCollapse: 'collapse' }}>
+              <thead>
+                <tr>
+                  {(['Section', 'Estimate', 'Actual', 'Variance'] as const).map(
+                    (h, i) => (
+                      <th
+                        key={h}
+                        style={{
+                          textAlign: i === 0 ? 'left' : 'right',
+                          fontSize: 'var(--lp-text-2xs)',
+                          fontWeight: 'var(--lp-weight-semibold)',
+                          letterSpacing: 'var(--lp-tracking-caps)',
+                          textTransform: 'uppercase',
+                          color: 'var(--lp-text-tertiary)',
+                          padding: '6px 8px',
+                          borderBottom: '1px solid var(--lp-border-subtle)',
+                        }}
+                      >
+                        {h}
+                      </th>
+                    ),
+                  )}
+                </tr>
+              </thead>
+              <tbody>
+                {sectionRollup.rows.map((r) => (
+                  <tr key={r.id}>
+                    <td
+                      style={{
+                        padding: '6px 8px',
+                        color: 'var(--lp-text)',
+                        borderBottom: '1px solid var(--lp-border-subtle)',
+                      }}
+                    >
+                      {r.name}
+                    </td>
+                    <td
+                      className="lp-mono"
+                      style={{
+                        textAlign: 'right',
+                        padding: '6px 8px',
+                        color: 'var(--lp-text-secondary)',
+                        borderBottom: '1px solid var(--lp-border-subtle)',
+                      }}
+                    >
+                      {formatCurrency(r.proposed, displayCurrency)}
+                    </td>
+                    <td
+                      className="lp-mono"
+                      style={{
+                        textAlign: 'right',
+                        padding: '6px 8px',
+                        color: 'var(--lp-text)',
+                        borderBottom: '1px solid var(--lp-border-subtle)',
+                      }}
+                    >
+                      {formatCurrency(r.actual, displayCurrency)}
+                    </td>
+                    <td
+                      className="lp-mono"
+                      style={{
+                        textAlign: 'right',
+                        padding: '6px 8px',
+                        borderBottom: '1px solid var(--lp-border-subtle)',
+                        color:
+                          r.delta > 0
+                            ? 'var(--color-lp-error)'
+                            : r.delta < 0
+                              ? 'var(--color-lp-status-complete)'
+                              : 'var(--lp-text-tertiary)',
+                      }}
+                    >
+                      {r.delta >= 0 ? '+' : ''}
+                      {formatCurrency(r.delta, displayCurrency)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td
+                    style={{
+                      padding: '8px',
+                      fontWeight: 'var(--lp-weight-bold)',
+                      color: 'var(--lp-text)',
+                      borderTop: '2px solid var(--lp-border-strong)',
+                    }}
+                  >
+                    Total
+                  </td>
+                  <td
+                    className="lp-mono"
+                    style={{
+                      textAlign: 'right',
+                      padding: '8px',
+                      fontWeight: 'var(--lp-weight-semibold)',
+                      color: 'var(--lp-text)',
+                      borderTop: '2px solid var(--lp-border-strong)',
+                    }}
+                  >
+                    {formatCurrency(sectionRollup.grand.proposed, displayCurrency)}
+                  </td>
+                  <td
+                    className="lp-mono"
+                    style={{
+                      textAlign: 'right',
+                      padding: '8px',
+                      fontWeight: 'var(--lp-weight-semibold)',
+                      color: 'var(--lp-text)',
+                      borderTop: '2px solid var(--lp-border-strong)',
+                    }}
+                  >
+                    {formatCurrency(sectionRollup.grand.actual, displayCurrency)}
+                  </td>
+                  <td
+                    className="lp-mono"
+                    style={{
+                      textAlign: 'right',
+                      padding: '8px',
+                      fontWeight: 'var(--lp-weight-bold)',
+                      borderTop: '2px solid var(--lp-border-strong)',
+                      color:
+                        sectionRollup.grand.delta > 0
+                          ? 'var(--color-lp-error)'
+                          : sectionRollup.grand.delta < 0
+                            ? 'var(--color-lp-status-complete)'
+                            : 'var(--lp-text)',
+                    }}
+                  >
+                    {sectionRollup.grand.delta >= 0 ? '+' : ''}
+                    {formatCurrency(sectionRollup.grand.delta, displayCurrency)}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        </section>
+      ) : null}
+
       {/* Variance summary card */}
       <section
         className="rounded-lg border p-4"
@@ -212,7 +421,7 @@ export function BudgetSummaryTab({
               fontWeight: 600,
               color:
                 stats.totalDelta > 0
-                  ? 'var(--color-lp-error, #EF4444)'
+                  ? 'var(--color-lp-error)'
                   : stats.totalDelta < 0
                     ? 'var(--color-lp-status-complete)'
                     : 'var(--lp-text)',
@@ -455,10 +664,10 @@ function SpendBar({
           bottom: 0,
           width: `${actPct}%`,
           background: overrun
-            ? 'var(--color-lp-error, #EF4444)'
+            ? 'var(--color-lp-error)'
             : 'var(--color-lp-orange)',
           borderRight: overrun
-            ? '1px solid var(--color-lp-error, #EF4444)'
+            ? '1px solid var(--color-lp-error)'
             : 'none',
         }}
       />
@@ -488,7 +697,7 @@ function VariancePanel({
   const headerColor =
     tone === 'good'
       ? 'var(--color-lp-status-complete)'
-      : 'var(--color-lp-error, #EF4444)';
+      : 'var(--color-lp-error)';
   const Icon = tone === 'good' ? ArrowDown : ArrowUp;
   return (
     <div

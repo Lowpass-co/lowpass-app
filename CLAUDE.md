@@ -70,6 +70,8 @@ The "Adam pastes SQL by hand into Supabase SQL Editor" workflow is retired excep
 
 **Read `database/migrations/README.md` before writing any migration.** TL;DR: pick the next sequential number after the highest on `main` AND across active feature branches. Mirror the number in the file's header comment. Idempotent where possible. RLS via existing helpers. Down-migration block at the end. Two real collisions have already happened — don't make a third.
 
+**CLEAN-BREAK NUMBERING (as of 2026-06-04): new migrations start at `200`.** The historical range (≤113 on `main`, plus stray 114/115s across feature branches) is a collision mess. To get a clean run, the next migration written is `200_*.sql` and we continue sequentially from there (`201`, `202`, …). Anything below `200` is legacy — do not add new files in that range. The budget redesign (templates/sections) is the first to use the 200 block.
+
 ### Design tokens
 
 **All visual values must reference `var(--lp-…)` tokens.** No hardcoded hex colours, font sizes, paddings, z-indexes, or shadows in component code. Token catalogue: `docs/design-tokens.md`. Tokens defined in `src/app/globals.css`.

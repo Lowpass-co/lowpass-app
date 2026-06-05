@@ -42,13 +42,17 @@ import {
 } from 'lucide-react';
 import { BudgetLineSlideOver } from '@/components/budget/BudgetLineSlideOver';
 import { BudgetCellInput } from '@/components/budget/cells/BudgetCellInput';
+import {
+  useBudgetGridSizing,
+  type GridColumnDef,
+} from '@/components/budget/useBudgetGridSizing';
 import { useToast } from '@/components/ui/Toast';
 import { convertToCurrency } from '@/lib/budget/fx';
 import { useBudgetDensity } from '@/components/budget/BudgetDensityContext';
 import { getEffectiveActual, getActualState } from '@/lib/budget/transactions';
 import { isIncomeRow, varianceColor } from '@/lib/budget/income-rows';
 import { isUx14DerivedBudgetLine } from '@/lib/budget/budgetUx14Derived';
-import type { BudgetLineItem } from '@/types';
+import type { BudgetLineItem, BudgetSection } from '@/types';
 import type { TourPhase, TourPhaseKey } from '@/server/budget/computeTourPhases';
 
 const VALID_PHASES: ReadonlySet<TourPhaseKey> = new Set([
@@ -171,10 +175,52 @@ function vendorFromNotes(notes?: string | null): string {
     : '';
 }
 
-export type BudgetSpreadsheetGroupBy = 'category' | 'phase';
+/* Phase C — the default grouping is now Section (the budget backbone),
+   replacing the old hardcoded category grouping. Phase grouping is kept
+   as an option (gated behind the per-tour track_phases toggle). */
+export type BudgetSpreadsheetGroupBy = 'section' | 'phase';
+
+/* Phase C — the canonical column model. Drives the colgroup + header so
+   columns are resizable (drag a header-edge handle) and widths persist
+   per-tour. The Phase column is omitted from the visible set when the
+   tour's track_phases toggle is off. */
+const GRID_COLUMNS: GridColumnDef[] = [
+  { key: 'select', width: 32, min: 32, resizable: false },
+  { key: 'num', width: 40, min: 32, resizable: false },
+  { key: 'item', width: 320, min: 160, resizable: true },
+  { key: 'vendor', width: 160, min: 90, resizable: true },
+  { key: 'phase', width: 96, min: 70, resizable: true },
+  { key: 'estimate', width: 124, min: 90, resizable: true },
+  { key: 'actual', width: 124, min: 90, resizable: true },
+  { key: 'variance', width: 104, min: 72, resizable: true },
+  { key: 'status', width: 104, min: 80, resizable: true },
+];
+
+const COLUMN_META: Record<
+  string,
+  { label: string; align?: 'left' | 'right' }
+> = {
+  select: { label: '' },
+  num: { label: '#', align: 'right' },
+  item: { label: 'Item' },
+  vendor: { label: 'Vendor' },
+  phase: { label: 'Phase' },
+  estimate: { label: 'Estimate', align: 'right' },
+  actual: { label: 'Actual', align: 'right' },
+  variance: { label: 'Variance', align: 'right' },
+  status: { label: 'Status' },
+};
+
+/** Default canvas cap — the grid reads as a focused sheet by default
+ *  and can be dragged wider (persisted) via the right-edge handle. */
+const DEFAULT_CANVAS_WIDTH = 1120;
 
 export interface BudgetSpreadsheetViewProps {
   lines: BudgetLineItem[];
+  /** Phase C — per-tour section headers (the grouping backbone). */
+  sections?: BudgetSection[];
+  /** Phase C — when false, the Phase column + grouping are hidden. */
+  trackPhases?: boolean;
   phases: TourPhase[];
   routingDateById: Record<string, string>;
   duplicateMap?: Record<string, string[]>;
@@ -249,12 +295,14 @@ const GROUP_BY_LS_PREFIX = 'lp-budget-group-by:';
 
 export function BudgetSpreadsheetView({
   lines,
+  sections = [],
+  trackPhases = false,
   phases,
   routingDateById,
   duplicateMap,
   tourCurrency,
   tourId,
-  initialGroupBy = 'category',
+  initialGroupBy = 'section',
 }: BudgetSpreadsheetViewProps) {
   const router = useRouter();
   const { showToast } = useToast();
@@ -293,13 +341,24 @@ export function BudgetSpreadsheetView({
     Record<string, Record<string, unknown>>
   >({});
   const [groupBy, setGroupBy] = useState<BudgetSpreadsheetGroupBy>(initialGroupBy);
+  /* Phase C — track in-flight section ops (add/rename/delete) so the
+     toolbar + section headers can disable while a write is pending. */
+  const [sectionBusy, setSectionBusy] = useState(false);
 
-  // §D — restore per-tour group-by preference on mount.
+  // §D — restore per-tour group-by preference on mount. The legacy
+  // 'category' value maps forward to the new 'section' grouping.
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const stored = window.localStorage.getItem(GROUP_BY_LS_PREFIX + tourId);
-    if (stored === 'category' || stored === 'phase') setGroupBy(stored);
+    if (stored === 'phase') setGroupBy('phase');
+    else if (stored === 'section' || stored === 'category') setGroupBy('section');
   }, [tourId]);
+
+  // When phases get toggled off, never leave the grid stuck on the
+  // now-hidden Phase grouping.
+  useEffect(() => {
+    if (!trackPhases) setGroupBy((cur) => (cur === 'phase' ? 'section' : cur));
+  }, [trackPhases]);
 
   const setGroupByPersisted = (next: BudgetSpreadsheetGroupBy) => {
     setGroupBy(next);
@@ -307,6 +366,18 @@ export function BudgetSpreadsheetView({
       window.localStorage.setItem(GROUP_BY_LS_PREFIX + tourId, next);
     }
   };
+
+  // Phase C — column / canvas sizing (persisted per tour).
+  const sizing = useBudgetGridSizing(tourId, GRID_COLUMNS);
+  const visibleColumns = useMemo(
+    () => GRID_COLUMNS.filter((c) => trackPhases || c.key !== 'phase'),
+    [trackPhases],
+  );
+  const colCount = visibleColumns.length;
+  const tableWidth = useMemo(
+    () => visibleColumns.reduce((sum, c) => sum + sizing.widthFor(c.key), 0),
+    [visibleColumns, sizing],
+  );
 
   const dateMap = useMemo(() => {
     const m = new Map<string, string>();
@@ -372,10 +443,27 @@ export function BudgetSpreadsheetView({
     });
   }, [allLines, phaseFilter, statusFilter, categoryFilter, search, dateMap, phases]);
 
-  // §B group structure — produce { group label, rows[] }[] in the
-  // documented order. Categories not in the canonical list fall to
-  // "Other" at the bottom; same for unscoped phase tags.
-  const groups = useMemo(() => {
+  const sectionsSorted = useMemo(
+    () =>
+      [...sections].sort(
+        (a, b) =>
+          (a.sort_order ?? 0) - (b.sort_order ?? 0) ||
+          a.name.localeCompare(b.name),
+      ),
+    [sections],
+  );
+
+  // Phase C group structure — produce { id, label, rows[], sectionId? }[].
+  // Default grouping is now Section (the budget backbone). Empty sections
+  // still render (so a freshly-scaffolded section shows its "+ Add line"
+  // affordance). Phase grouping is retained as an option.
+  type GridGroup = {
+    id: string;
+    label: string;
+    rows: BudgetLineItem[];
+    sectionId?: string | null;
+  };
+  const groups = useMemo<GridGroup[]>(() => {
     if (groupBy === 'phase') {
       const byPhase = new Map<string, BudgetLineItem[]>();
       for (const line of filtered) {
@@ -383,7 +471,7 @@ export function BudgetSpreadsheetView({
         const key = tag ?? 'unscoped';
         (byPhase.get(key) ?? byPhase.set(key, []).get(key)!).push(line);
       }
-      const out: { id: string; label: string; rows: BudgetLineItem[] }[] = [];
+      const out: GridGroup[] = [];
       for (const key of PHASE_ORDER) {
         const rows = byPhase.get(key);
         if (rows && rows.length > 0) {
@@ -396,20 +484,55 @@ export function BudgetSpreadsheetView({
       }
       return out;
     }
-    // Default: group by category in canonical Lowpass order.
+
+    // Section grouping (default). Lines bucket by section_id; sections
+    // render in sort order even when empty.
+    if (sectionsSorted.length > 0) {
+      const bySection = new Map<string, BudgetLineItem[]>();
+      for (const line of filtered) {
+        const key = line.section_id ?? '__none__';
+        (bySection.get(key) ?? bySection.set(key, []).get(key)!).push(line);
+      }
+      const out: GridGroup[] = [];
+      const known = new Set(sectionsSorted.map((s) => s.id));
+      for (const s of sectionsSorted) {
+        out.push({
+          id: s.id,
+          label: s.name,
+          rows: bySection.get(s.id) ?? [],
+          sectionId: s.id,
+        });
+      }
+      // Lines whose section_id is null or points at a deleted section.
+      const orphan: BudgetLineItem[] = [];
+      for (const [key, rows] of bySection.entries()) {
+        if (key === '__none__' || !known.has(key)) orphan.push(...rows);
+      }
+      if (orphan.length > 0) {
+        out.push({
+          id: '__uncategorised__',
+          label: 'Uncategorised',
+          rows: orphan,
+          sectionId: null,
+        });
+      }
+      return out;
+    }
+
+    // Fallback for legacy tours with no sections yet — group by category
+    // in canonical order (mirrors pre-redesign behaviour).
     const byCat = new Map<string, BudgetLineItem[]>();
     for (const line of filtered) {
       const cat = (line.category ?? 'other').toLowerCase();
       (byCat.get(cat) ?? byCat.set(cat, []).get(cat)!).push(line);
     }
-    const out: { id: string; label: string; rows: BudgetLineItem[] }[] = [];
+    const out: GridGroup[] = [];
     for (const key of CATEGORY_ORDER) {
       const rows = byCat.get(key);
       if (rows && rows.length > 0) {
         out.push({ id: key, label: CATEGORY_LABEL[key], rows });
       }
     }
-    // Tail catch — anything outside the canonical order.
     for (const [key, rows] of byCat.entries()) {
       if (!CATEGORY_ORDER.includes(key as (typeof CATEGORY_ORDER)[number])) {
         out.push({
@@ -420,7 +543,7 @@ export function BudgetSpreadsheetView({
       }
     }
     return out;
-  }, [filtered, groupBy]);
+  }, [filtered, groupBy, sectionsSorted]);
 
   const totals = useMemo(() => {
     let proposed = 0;
@@ -511,10 +634,104 @@ export function BudgetSpreadsheetView({
     } as BudgetLineItem);
   };
 
-  /* §B1.2 — inline-edit commit handler. Used by Proposed +
-     Actual cell edits in the grid. Fire-and-refresh; toast on
-     failure. router.refresh re-fetches the page so the auto-
-     synced actual_cost + override flag come back fresh. */
+  /* Phase C — section CRUD. All fire-and-refresh; the page refetches
+     budget_sections + lines server-side, so no optimistic section state
+     is needed (sections change far less often than cell edits). */
+  const addSection = async () => {
+    setSectionBusy(true);
+    try {
+      const res = await fetch('/api/budget/sections', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tour_id: tourId, name: 'New section' }),
+      });
+      if (!res.ok) {
+        const b = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(b.error ?? 'Could not add section');
+      }
+      router.refresh();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Could not add section', 'error');
+    } finally {
+      setSectionBusy(false);
+    }
+  };
+
+  const renameSection = async (sectionId: string, name: string) => {
+    try {
+      const res = await fetch('/api/budget/sections', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: sectionId, name }),
+      });
+      if (!res.ok) {
+        const b = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(b.error ?? 'Rename failed');
+      }
+      router.refresh();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Rename failed', 'error');
+    }
+  };
+
+  const deleteSection = async (sectionId: string, label: string) => {
+    if (
+      !window.confirm(
+        `Delete the "${label}" section? Its line items move to Uncategorised (they are not deleted).`,
+      )
+    ) {
+      return;
+    }
+    setSectionBusy(true);
+    try {
+      const res = await fetch(
+        `/api/budget/sections?id=${encodeURIComponent(sectionId)}`,
+        { method: 'DELETE' },
+      );
+      if (!res.ok) {
+        const b = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(b.error ?? 'Delete failed');
+      }
+      router.refresh();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Delete failed', 'error');
+    } finally {
+      setSectionBusy(false);
+    }
+  };
+
+  /* Phase C — add a line straight into a section. With inline rename in
+     the grid the user can immediately retitle the placeholder, so we
+     skip the slide-over here (a faster spreadsheet flow). */
+  const addLineToSection = async (sectionId: string | null) => {
+    try {
+      const res = await fetch('/api/budget/line-items', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tour_id: tourId,
+          category: 'misc',
+          label: 'New line item',
+          section_id: sectionId,
+          currency: tourCurrency,
+        }),
+      });
+      if (!res.ok) {
+        const b = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(b.error ?? 'Could not add line');
+      }
+      router.refresh();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Could not add line', 'error');
+    }
+  };
+
+  /* §B1.2 — inline-edit commit handler. Optimistic-only on success:
+     the overlay already shows the saved value and section/summary
+     totals derive from it, so we do NOT router.refresh() per edit
+     (that re-ran the whole server page and caused a full-page reload
+     flash). Server truth reconciles on the next natural refresh. Only
+     failures refresh, to surface true state after a rejected write. */
   const commitLineEdit = async (
     id: string,
     patch: Record<string, unknown>,
@@ -549,7 +766,7 @@ export function BudgetSpreadsheetView({
         router.refresh();
         return;
       }
-      router.refresh();
+      // Success — no refresh; optimistic overlay is the source of truth.
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Save failed', 'error');
       rollback();
@@ -643,32 +860,69 @@ export function BudgetSpreadsheetView({
           >
             Group
           </span>
-          {(['category', 'phase'] as const).map((opt) => {
-            const active = groupBy === opt;
-            return (
-              <button
-                key={opt}
-                type="button"
-                role="tab"
-                aria-selected={active}
-                onClick={() => setGroupByPersisted(opt)}
-                className="btn-transition rounded px-2 py-1"
-                style={{
-                  fontSize: '11px',
-                  fontWeight: 500,
-                  background: active
-                    ? 'color-mix(in srgb, var(--color-lp-orange) 12%, transparent)'
-                    : 'transparent',
-                  color: active
-                    ? 'var(--color-lp-orange)'
-                    : 'var(--lp-text-secondary)',
-                }}
-              >
-                {opt === 'category' ? 'Category' : 'Phase'}
-              </button>
-            );
-          })}
+          {(['section', 'phase'] as const)
+            .filter((opt) => opt !== 'phase' || trackPhases)
+            .map((opt) => {
+              const active = groupBy === opt;
+              return (
+                <button
+                  key={opt}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => setGroupByPersisted(opt)}
+                  className="btn-transition rounded px-2 py-1"
+                  style={{
+                    fontSize: '11px',
+                    fontWeight: 500,
+                    background: active
+                      ? 'color-mix(in srgb, var(--color-lp-orange) 12%, transparent)'
+                      : 'transparent',
+                    color: active
+                      ? 'var(--color-lp-orange)'
+                      : 'var(--lp-text-secondary)',
+                  }}
+                >
+                  {opt === 'section' ? 'Section' : 'Phase'}
+                </button>
+              );
+            })}
         </div>
+
+        {/* Phase C — add a section + reset column/canvas sizing. */}
+        <button
+          type="button"
+          onClick={() => void addSection()}
+          disabled={sectionBusy}
+          className="btn-transition inline-flex items-center gap-1 rounded-md border px-2 py-1"
+          style={{
+            borderColor: 'var(--lp-border)',
+            background: 'var(--lp-bg)',
+            color: 'var(--lp-text-secondary)',
+            fontSize: '12px',
+            opacity: sectionBusy ? 0.6 : 1,
+          }}
+          title="Add a new section"
+        >
+          <Plus className="h-3.5 w-3.5" />
+          Section
+        </button>
+        {sizing.isCustomised ? (
+          <button
+            type="button"
+            onClick={sizing.reset}
+            className="btn-transition inline-flex items-center gap-1 rounded-md border px-2 py-1"
+            style={{
+              borderColor: 'var(--lp-border)',
+              background: 'var(--lp-bg)',
+              color: 'var(--lp-text-tertiary)',
+              fontSize: '12px',
+            }}
+            title="Reset column + canvas widths"
+          >
+            Reset widths
+          </button>
+        ) : null}
 
         <button
           type="button"
@@ -778,89 +1032,163 @@ export function BudgetSpreadsheetView({
         })}
       </div>
 
-      {/* §B.2 dense table */}
+      {/* Phase C — resizable canvas (drag the right edge to widen) +
+          dense spreadsheet with resizable columns. */}
       <div
-        className="overflow-x-auto rounded-md border"
         style={{
-          borderColor: 'var(--lp-border-strong)',
-          background: 'var(--lp-bg)',
+          position: 'relative',
+          width: sizing.canvasWidth ?? DEFAULT_CANVAS_WIDTH,
+          maxWidth: '100%',
         }}
       >
-        <table className="lp-dense w-full" style={{ borderCollapse: 'separate', borderSpacing: 0 }}>
-          <thead
-            className="sticky top-0 z-10"
+        <div
+          className="overflow-x-auto rounded-md border"
+          style={{
+            borderColor: 'var(--lp-border-strong)',
+            background: 'var(--lp-bg)',
+          }}
+        >
+          <table
+            className="lp-dense"
             style={{
-              background: 'var(--lp-panel)',
-              borderBottom: '1px solid var(--lp-border-strong)',
+              borderCollapse: 'separate',
+              borderSpacing: 0,
+              tableLayout: 'fixed',
+              width: tableWidth,
             }}
           >
-            <tr>
-              <Th width={28}>
-                <span aria-hidden> </span>
-              </Th>
-              <Th align="right" width={36}>#</Th>
-              <Th width={360}>Item</Th>
-              <Th>Vendor</Th>
-              <Th width={80}>Phase</Th>
-              <Th align="right" width={120}>Estimate</Th>
-              <Th align="right" width={120}>Actual</Th>
-              <Th align="right" width={96}>Variance</Th>
-              <Th width={92}>Status</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {groups.length === 0 ? (
+            <colgroup>
+              {visibleColumns.map((c) => (
+                <col key={c.key} style={{ width: sizing.widthFor(c.key) }} />
+              ))}
+            </colgroup>
+            <thead
+              className="sticky top-0 z-10"
+              style={{
+                background: 'var(--lp-panel)',
+                borderBottom: '1px solid var(--lp-border-strong)',
+              }}
+            >
               <tr>
-                <td
-                  colSpan={9}
-                  className="px-4 py-8 text-center"
-                  style={{ color: 'var(--lp-text-tertiary)' }}
-                >
-                  No line items match the current filter.
-                </td>
+                {visibleColumns.map((c) => {
+                  const meta = COLUMN_META[c.key];
+                  return (
+                    <th
+                      key={c.key}
+                      style={{
+                        position: 'relative',
+                        textAlign: meta?.align ?? 'left',
+                        fontSize: '10px',
+                        fontWeight: 600,
+                        letterSpacing: '0.08em',
+                        textTransform: 'uppercase',
+                        color: 'var(--lp-text-tertiary)',
+                        padding: '6px 8px',
+                        borderBottom: '1px solid var(--lp-border-subtle)',
+                      }}
+                    >
+                      {meta?.label ? meta.label : <span aria-hidden> </span>}
+                      {c.resizable ? (
+                        <span
+                          role="separator"
+                          aria-orientation="vertical"
+                          aria-label={`Resize ${meta?.label ?? c.key} column`}
+                          title="Drag to resize column"
+                          onPointerDown={(e) => sizing.startColumnResize(c.key, e)}
+                          style={{
+                            position: 'absolute',
+                            top: 0,
+                            right: -3,
+                            height: '100%',
+                            width: 6,
+                            cursor: 'col-resize',
+                            touchAction: 'none',
+                            zIndex: 1,
+                          }}
+                        />
+                      ) : null}
+                    </th>
+                  );
+                })}
               </tr>
-            ) : (
-              groups.map((group) => {
-                // Group totals computed in display currency.
-                let gProposed = 0;
-                let gActual = 0;
-                for (const r of group.rows) {
-                  const cur = (r.currency || tourCurrency).toUpperCase();
-                  gProposed += convertToCurrency(
-                    Number(r.proposed_cost ?? 0),
-                    cur,
-                    displayCurrency,
+            </thead>
+            <tbody>
+              {groups.length === 0 ? (
+                <tr>
+                  <td
+                    colSpan={colCount}
+                    className="px-4 py-8 text-center"
+                    style={{ color: 'var(--lp-text-tertiary)' }}
+                  >
+                    No line items match the current filter.
+                  </td>
+                </tr>
+              ) : (
+                groups.map((group) => {
+                  // Group totals computed in display currency.
+                  let gProposed = 0;
+                  let gActual = 0;
+                  for (const r of group.rows) {
+                    const cur = (r.currency || tourCurrency).toUpperCase();
+                    gProposed += convertToCurrency(
+                      Number(r.proposed_cost ?? 0),
+                      cur,
+                      displayCurrency,
+                    );
+                    gActual += convertToCurrency(
+                      getEffectiveActual(r),
+                      cur,
+                      displayCurrency,
+                    );
+                  }
+                  return (
+                    <GroupRows
+                      key={group.id}
+                      group={group}
+                      colCount={colCount}
+                      trackPhases={trackPhases}
+                      sectionBusy={sectionBusy}
+                      runningStart={runningIndex}
+                      bumpRunning={(n) => {
+                        runningIndex = n;
+                      }}
+                      selectedIds={selectedIds}
+                      setSelectedIds={setSelectedIds}
+                      onOpenLine={setOpenLine}
+                      duplicateMap={duplicateMap}
+                      tourCurrency={tourCurrency}
+                      displayCurrency={displayCurrency}
+                      gProposed={gProposed}
+                      gActual={gActual}
+                      onCommitLine={commitLineEdit}
+                      onAddRowToSection={handleAddToSection}
+                      onAddLineToSection={addLineToSection}
+                      onRenameSection={renameSection}
+                      onDeleteSection={deleteSection}
+                    />
                   );
-                  gActual += convertToCurrency(
-                    getEffectiveActual(r),
-                    cur,
-                    displayCurrency,
-                  );
-                }
-                return (
-                  <GroupRows
-                    key={group.id}
-                    group={group}
-                    runningStart={runningIndex}
-                    bumpRunning={(n) => {
-                      runningIndex = n;
-                    }}
-                    selectedIds={selectedIds}
-                    setSelectedIds={setSelectedIds}
-                    onOpenLine={setOpenLine}
-                    duplicateMap={duplicateMap}
-                    tourCurrency={tourCurrency}
-                    displayCurrency={displayCurrency}
-                    gProposed={gProposed}
-                    gActual={gActual}
-                    onCommitLine={commitLineEdit}
-                    onAddRowToSection={handleAddToSection}
-                  />
-                );
-              })
-            )}
-          </tbody>
-        </table>
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+        {/* Canvas widen handle — drag the right edge. */}
+        <span
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Widen the grid"
+          title="Drag to widen the grid"
+          onPointerDown={sizing.startCanvasResize}
+          style={{
+            position: 'absolute',
+            top: 0,
+            right: -4,
+            height: '100%',
+            width: 8,
+            cursor: 'col-resize',
+            touchAction: 'none',
+          }}
+        />
       </div>
 
       {/* Quick Add */}
@@ -1054,36 +1382,21 @@ export function BudgetSpreadsheetView({
    single-file unit (the file is already a known surgical area).
    ============================================ */
 
-function Th({
-  children,
-  align,
-  width,
-}: {
-  children: React.ReactNode;
-  align?: 'left' | 'right';
-  width?: number;
-}) {
-  return (
-    <th
-      style={{
-        textAlign: align ?? 'left',
-        fontSize: '10px',
-        fontWeight: 600,
-        letterSpacing: '0.08em',
-        textTransform: 'uppercase',
-        color: 'var(--lp-text-tertiary)',
-        padding: '6px 8px',
-        borderBottom: '1px solid var(--lp-border-subtle)',
-        width,
-      }}
-    >
-      {children}
-    </th>
-  );
-}
-
 interface GroupRowsProps {
-  group: { id: string; label: string; rows: BudgetLineItem[] };
+  group: {
+    id: string;
+    label: string;
+    rows: BudgetLineItem[];
+    /** Phase C — present when grouping by Section. null = the
+     *  "Uncategorised" bucket; undefined = phase/legacy grouping. */
+    sectionId?: string | null;
+  };
+  /** Number of visible columns (drives every full-row colSpan). */
+  colCount: number;
+  /** When false, the Phase column is omitted. */
+  trackPhases: boolean;
+  /** Disables section header controls while a section write is pending. */
+  sectionBusy: boolean;
   runningStart: number;
   bumpRunning: (n: number) => void;
   selectedIds: string[];
@@ -1091,8 +1404,14 @@ interface GroupRowsProps {
    *  write + toast + router.refresh. */
   onCommitLine: (id: string, patch: Record<string, unknown>) => Promise<void>;
   /** §B1.5 — open create slide with section + category
-   *  pre-filled from this group's row context. */
+   *  pre-filled (legacy / phase groups). */
   onAddRowToSection: (section: string | null, defaultCategory: string) => void;
+  /** Phase C — add a line straight into a budget_section (direct POST). */
+  onAddLineToSection: (sectionId: string | null) => void | Promise<void>;
+  /** Phase C — rename a budget_section from its header. */
+  onRenameSection: (sectionId: string, name: string) => void | Promise<void>;
+  /** Phase C — delete a budget_section from its header. */
+  onDeleteSection: (sectionId: string, label: string) => void | Promise<void>;
   setSelectedIds: (ids: string[]) => void;
   onOpenLine: (line: BudgetLineItem) => void;
   duplicateMap?: Record<string, string[]>;
@@ -1104,6 +1423,9 @@ interface GroupRowsProps {
 
 function GroupRows({
   group,
+  colCount,
+  trackPhases,
+  sectionBusy,
   runningStart,
   bumpRunning,
   selectedIds,
@@ -1116,7 +1438,13 @@ function GroupRows({
   gActual,
   onCommitLine,
   onAddRowToSection,
+  onAddLineToSection,
+  onRenameSection,
+  onDeleteSection,
 }: GroupRowsProps) {
+  const isSectionGroup = group.sectionId !== undefined;
+  const isRealSection =
+    typeof group.sectionId === 'string' && group.sectionId.length > 0;
   const gDelta = gActual - gProposed;
   /* §B1.3 — group total inherits income semantics when every
      row in the group is income. Mixed groups fall back to
@@ -1134,34 +1462,78 @@ function GroupRows({
         }}
       >
         <td
-          colSpan={9}
+          colSpan={colCount}
           style={{
             padding: '6px 12px',
           }}
         >
-          <div className="flex items-baseline justify-between gap-3">
-            <span
-              style={{
-                fontSize: '11px',
-                fontWeight: 700,
-                letterSpacing: '0.12em',
-                textTransform: 'uppercase',
-                color: 'var(--lp-text)',
-              }}
-            >
-              {group.label}{' '}
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex min-w-0 items-center gap-1.5">
+              {/* Phase C — real sections get an inline-editable name +
+                  delete; phase / legacy buckets stay read-only. */}
+              {isRealSection ? (
+                <InlineSectionName
+                  value={group.label}
+                  onCommit={(name) =>
+                    void onRenameSection(group.sectionId as string, name)
+                  }
+                />
+              ) : (
+                <span
+                  style={{
+                    fontSize: '11px',
+                    fontWeight: 700,
+                    letterSpacing: '0.12em',
+                    textTransform: 'uppercase',
+                    color: 'var(--lp-text)',
+                  }}
+                >
+                  {group.label}
+                </span>
+              )}
               <span
                 className="lp-mono"
-                style={{ color: 'var(--lp-text-tertiary)', fontWeight: 500 }}
+                style={{
+                  color: 'var(--lp-text-tertiary)',
+                  fontWeight: 500,
+                  fontSize: '11px',
+                }}
               >
                 · {group.rows.length}
               </span>
-            </span>
+              {isRealSection ? (
+                <button
+                  type="button"
+                  disabled={sectionBusy}
+                  onClick={() =>
+                    void onDeleteSection(group.sectionId as string, group.label)
+                  }
+                  className="btn-transition rounded p-0.5"
+                  title="Delete section"
+                  aria-label={`Delete ${group.label} section`}
+                  style={{
+                    color: 'var(--lp-text-tertiary)',
+                    background: 'transparent',
+                    opacity: sectionBusy ? 0.5 : 1,
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.color =
+                      'var(--color-lp-status-needs-review)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.color = 'var(--lp-text-tertiary)';
+                  }}
+                >
+                  <Trash2 className="h-3 w-3" aria-hidden />
+                </button>
+              ) : null}
+            </div>
             <span
               className="lp-mono"
               style={{
                 fontSize: '11px',
                 color: 'var(--lp-text-tertiary)',
+                whiteSpace: 'nowrap',
               }}
             >
               est {' '}
@@ -1313,37 +1685,40 @@ function GroupRows({
                 {vendorFromNotes(row.notes) || '—'}
               </span>
             </Td>
-            <Td>
-              <InlineSelectCell
-                value={phaseTag ?? ''}
-                options={PHASE_EDIT_OPTIONS}
-                ariaLabel="Phase"
-                onCommit={(next) =>
-                  void onCommitLine(row.id, {
-                    phase_tag: next === '' ? null : next,
-                  })
-                }
-              >
-                {phaseTag ? (
-                  <span
-                    className="inline-flex items-center rounded px-1.5 py-0.5"
-                    style={{
-                      fontSize: '10px',
-                      fontWeight: 600,
-                      letterSpacing: '0.04em',
-                      color: phaseTone ?? 'var(--lp-text-secondary)',
-                      background: phaseTone
-                        ? `color-mix(in srgb, ${phaseTone} 12%, transparent)`
-                        : 'transparent',
-                    }}
-                  >
-                    {PHASE_LABEL[phaseTag]}
-                  </span>
-                ) : (
-                  <span style={{ color: 'var(--lp-text-tertiary)' }}>—</span>
-                )}
-              </InlineSelectCell>
-            </Td>
+            {trackPhases ? (
+              <Td>
+                <InlineSelectCell
+                  value={phaseTag ?? ''}
+                  options={PHASE_EDIT_OPTIONS}
+                  ariaLabel="Phase"
+                  onCommit={(next) =>
+                    void onCommitLine(row.id, {
+                      phase_tag: next === '' ? null : next,
+                    })
+                  }
+                >
+                  {phaseTag ? (
+                    <span
+                      className="inline-flex items-center rounded px-1.5 py-0.5"
+                      style={{
+                        fontSize: '10px',
+                        fontWeight: 600,
+                        letterSpacing: '0.04em',
+                        whiteSpace: 'nowrap',
+                        color: phaseTone ?? 'var(--lp-text-secondary)',
+                        background: phaseTone
+                          ? `color-mix(in srgb, ${phaseTone} 12%, transparent)`
+                          : 'transparent',
+                      }}
+                    >
+                      {PHASE_LABEL[phaseTag]}
+                    </span>
+                  ) : (
+                    <span style={{ color: 'var(--lp-text-tertiary)' }}>—</span>
+                  )}
+                </InlineSelectCell>
+              </Td>
+            ) : null}
             <Td align="right" className="lp-mono" style={{ color: 'var(--lp-text)' }}>
               {/* §B1.2 — inline-edit Proposed. Derived rows
                   (flight / hotel / gear-link) are read-only;
@@ -1503,14 +1878,24 @@ function GroupRows({
           users who want to add a line without committing to a
           section yet. */}
       {(() => {
+        // Section groups (incl. empty ones) get a direct "+ Add line"
+        // that POSTs into the section. Phase / legacy groups fall back
+        // to the slide-over create flow seeded from the first row.
         const firstRow = group.rows[0];
-        if (!firstRow) return null;
-        const section = (firstRow.section ?? null) as string | null;
-        const defaultCategory = (firstRow.category ?? 'production').toString();
+        if (!isSectionGroup && !firstRow) return null;
+        const handleAdd = () => {
+          if (isSectionGroup) {
+            void onAddLineToSection(group.sectionId ?? null);
+          } else if (firstRow) {
+            const section = (firstRow.section ?? null) as string | null;
+            const defaultCategory = (firstRow.category ?? 'production').toString();
+            onAddRowToSection(section, defaultCategory);
+          }
+        };
         return (
           <tr>
             <td
-              colSpan={9}
+              colSpan={colCount}
               style={{
                 padding: '4px 12px',
                 background: 'var(--lp-bg)',
@@ -1519,7 +1904,7 @@ function GroupRows({
             >
               <button
                 type="button"
-                onClick={() => onAddRowToSection(section, defaultCategory)}
+                onClick={handleAdd}
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
@@ -1539,13 +1924,110 @@ function GroupRows({
                 }}
               >
                 <Plus className="h-3 w-3" aria-hidden />
-                Add row to {group.label.toLowerCase()}
+                Add line to {group.label.toLowerCase()}
               </button>
             </td>
           </tr>
         );
       })()}
     </>
+  );
+}
+
+/* Phase C — inline-editable section name in the group header. Mirrors
+   InlineLabelCell but styled as the bold uppercase section title.
+   Enter / blur commits via onCommit; Escape cancels; unchanged or empty
+   values are skipped. */
+function InlineSectionName({
+  value,
+  onCommit,
+}: {
+  value: string;
+  onCommit: (next: string) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [editing]);
+
+  const commit = () => {
+    const trimmed = draft.trim();
+    if (trimmed && trimmed !== value) onCommit(trimmed);
+    setEditing(false);
+  };
+
+  const titleStyle: React.CSSProperties = {
+    fontSize: '11px',
+    fontWeight: 700,
+    letterSpacing: '0.12em',
+    textTransform: 'uppercase',
+    color: 'var(--lp-text)',
+  };
+
+  if (editing) {
+    return (
+      <input
+        ref={inputRef}
+        type="text"
+        value={draft}
+        aria-label="Section name"
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            commit();
+          } else if (e.key === 'Escape') {
+            e.preventDefault();
+            setDraft(value);
+            setEditing(false);
+          }
+        }}
+        style={{
+          ...titleStyle,
+          background: 'var(--lp-surface)',
+          border: '1px solid var(--color-lp-orange)',
+          borderRadius: 4,
+          padding: '1px 5px',
+          outline: 'none',
+        }}
+      />
+    );
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        setDraft(value);
+        setEditing(true);
+      }}
+      title="Click to rename section"
+      className="btn-transition truncate text-left"
+      style={{
+        ...titleStyle,
+        background: 'transparent',
+        border: '1px solid transparent',
+        borderRadius: 4,
+        padding: '1px 5px',
+        margin: '-1px -5px',
+        cursor: 'text',
+      }}
+      onMouseEnter={(e) => {
+        e.currentTarget.style.background = 'var(--lp-surface)';
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.background = 'transparent';
+      }}
+    >
+      {value}
+    </button>
   );
 }
 

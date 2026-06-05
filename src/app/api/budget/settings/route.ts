@@ -105,6 +105,7 @@ export async function POST(request: Request) {
     contingency_pct,
     accountancy_pct,
     notes,
+    track_phases,
   } = body;
 
   if (!tour_id) {
@@ -135,6 +136,7 @@ export async function POST(request: Request) {
   if (contingency_pct !== undefined) payload.contingency_pct = contingency_pct;
   if (accountancy_pct !== undefined) payload.accountancy_pct = accountancy_pct;
   if (notes !== undefined) payload.notes = notes;
+  if (track_phases !== undefined) payload.track_phases = Boolean(track_phases);
 
   const { data, error } = await supabase
     .from('budget_settings')

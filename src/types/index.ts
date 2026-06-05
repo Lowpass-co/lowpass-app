@@ -436,8 +436,64 @@ export interface BudgetSettings {
   contingency_pct: number;
   accountancy_pct: number;
   notes: string | null;
+  /** Budget redesign (migration 200) — per-tour phase toggle. When
+   *  false (default) the grid hides the Phase column + phase strip. */
+  track_phases?: boolean;
   created_at: string;
   updated_at: string;
+}
+
+/* ============================================
+   Budget redesign (migration 200) — sections + templates
+   ============================================ */
+
+/** Per-tour, user-defined section header. The new backbone of a
+ *  budget — line items group under sections via section_id. */
+export interface BudgetSection {
+  id: string;
+  tour_id: string;
+  workspace_id: string;
+  name: string;
+  sort_order: number;
+  created_at?: string;
+}
+
+/** A reusable budget preset. System presets have workspace_id null +
+ *  is_system true; workspace templates are scoped, with an optional
+ *  artist_id override. */
+export interface BudgetTemplate {
+  id: string;
+  workspace_id: string | null;
+  artist_id: string | null;
+  name: string;
+  description: string | null;
+  tier: string | null;
+  is_system: boolean;
+  is_default: boolean;
+  created_at?: string;
+  updated_at?: string;
+  /** Optionally hydrated by the templates API for the editor. */
+  sections?: BudgetTemplateSection[];
+}
+
+export interface BudgetTemplateSection {
+  id: string;
+  template_id: string;
+  workspace_id: string | null;
+  name: string;
+  sort_order: number;
+  /** Optionally hydrated alongside the section. */
+  lines?: BudgetTemplateLine[];
+}
+
+export interface BudgetTemplateLine {
+  id: string;
+  template_id: string;
+  template_section_id: string;
+  workspace_id: string | null;
+  label: string;
+  default_phase_tag: string | null;
+  sort_order: number;
 }
 
 export interface BudgetCommission {
@@ -513,8 +569,12 @@ export interface BudgetLineItem {
   gear_id?: string | null;
   tour_gear_id?: string | null;
   order_index: number;
-  /** UX14 section bucket (migration 054). */
+  /** UX14 section bucket (migration 054) — legacy enum, kept for
+   *  back-compat. Superseded in the UI by section_id below. */
   section?: string | null;
+  /** Budget redesign (migration 200) — FK to budget_sections. The new
+   *  grouping backbone; null = uncategorised. */
+  section_id?: string | null;
   sort_order?: number;
   status?: string | null;
   /** Phase 3 §D / migration 064 — optional tour-phase tag for grouping

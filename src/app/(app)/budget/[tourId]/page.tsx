@@ -26,6 +26,8 @@ import { MobileBudgetBanner } from '@/components/mobile/MobileBudgetBanner';
 import { BudgetPhaseStripClient } from '@/components/budget/BudgetPhaseStripClient';
 import { BudgetStatsStrip } from '@/components/budget/BudgetStatsStrip';
 import { BudgetSpreadsheetView } from '@/components/budget/BudgetSpreadsheetView';
+import { BudgetEmptyState } from '@/components/budget/BudgetEmptyState';
+import { BudgetSettingsTab } from '@/components/budget/BudgetSettingsTab';
 import { ReceiptInbox } from '@/components/budget/ReceiptInbox';
 import { BudgetExportControls } from '@/components/budget/BudgetExportControls';
 // Hotfix 3 §1 — resolveBudgetTab is a server-safe pure helper now,
@@ -46,7 +48,7 @@ import {
   detectDuplicates,
   duplicatesToRecord,
 } from '@/server/budget/detectDuplicates';
-import type { BudgetLineItem } from '@/types';
+import type { BudgetLineItem, BudgetSection } from '@/types';
 
 export async function generateMetadata({
   params,
@@ -102,20 +104,40 @@ export default async function BudgetTourPage({
     notFound();
   }
 
-  const [phases, panelData, lineItemsRes, routingRes] = await Promise.all([
-    computeTourPhases(supabase, tourId),
-    getBudgetPanelData(supabase, tourId),
-    supabase
-      .from('budget_line_items')
-      .select('*')
-      .eq('tour_id', tourId)
-      .eq('workspace_id', workspaceId)
-      .order('section')
-      .order('sort_order', { ascending: true })
-      .order('category')
-      .order('order_index', { ascending: true }),
-    supabase.from('routing').select('id, date').eq('tour_id', tourId),
-  ]);
+  const [phases, panelData, lineItemsRes, routingRes, sectionsRes, settingsRes] =
+    await Promise.all([
+      computeTourPhases(supabase, tourId),
+      getBudgetPanelData(supabase, tourId),
+      supabase
+        .from('budget_line_items')
+        .select('*')
+        .eq('tour_id', tourId)
+        .eq('workspace_id', workspaceId)
+        .order('section')
+        .order('sort_order', { ascending: true })
+        .order('category')
+        .order('order_index', { ascending: true }),
+      supabase.from('routing').select('id, date').eq('tour_id', tourId),
+      // Budget redesign — section backbone + per-tour phase toggle.
+      supabase
+        .from('budget_sections')
+        .select('*')
+        .eq('tour_id', tourId)
+        .eq('workspace_id', workspaceId)
+        .order('sort_order', { ascending: true })
+        .order('created_at', { ascending: true }),
+      supabase
+        .from('budget_settings')
+        .select('track_phases')
+        .eq('tour_id', tourId)
+        .eq('workspace_id', workspaceId)
+        .maybeSingle(),
+    ]);
+
+  const sections = (sectionsRes.data ?? []) as BudgetSection[];
+  const trackPhases = Boolean(
+    (settingsRes.data as { track_phases?: boolean } | null)?.track_phases,
+  );
 
   const phaseBoundaries = phases.map((p) => ({
     key: p.key,
@@ -155,6 +177,7 @@ export default async function BudgetTourPage({
             <BudgetSummaryTab
               tourId={tourId}
               lines={lines}
+              sections={sections}
               allocation={panelData.allocation}
               burn={panelData.burn}
               phaseBoundaries={phaseBoundaries}
@@ -163,25 +186,33 @@ export default async function BudgetTourPage({
           ) : null}
 
           {tab === 'budget' ? (
-            <>
-              {/* Export controls live above the spreadsheet so PDF/
-                  XLSX is reachable from the line-item surface itself
-                  (Reports tab also links to it). */}
-              <BudgetExportControls
-                lines={lines}
-                tourCurrency={tourCurrency}
-                tourName={(tour.name as string | null) ?? 'Budget'}
-              />
-              <BudgetSpreadsheetView
-                lines={lines}
-                phases={phases}
-                routingDateById={routingDateById}
-                duplicateMap={duplicatesToRecord(detectDuplicates(lines))}
-                tourCurrency={tourCurrency}
-                tourId={tourId}
-              />
-              <ReceiptInbox tourId={tourId} lineItems={lines} />
-            </>
+            lines.length === 0 && sections.length === 0 ? (
+              /* Phase B — no sections + no lines: scaffold from a
+                 template instead of showing a blank grid. */
+              <BudgetEmptyState tourId={tourId} />
+            ) : (
+              <>
+                {/* Export controls live above the spreadsheet so PDF/
+                    XLSX is reachable from the line-item surface itself
+                    (Reports tab also links to it). */}
+                <BudgetExportControls
+                  lines={lines}
+                  tourCurrency={tourCurrency}
+                  tourName={(tour.name as string | null) ?? 'Budget'}
+                />
+                <BudgetSpreadsheetView
+                  lines={lines}
+                  sections={sections}
+                  trackPhases={trackPhases}
+                  phases={phases}
+                  routingDateById={routingDateById}
+                  duplicateMap={duplicatesToRecord(detectDuplicates(lines))}
+                  tourCurrency={tourCurrency}
+                  tourId={tourId}
+                />
+                <ReceiptInbox tourId={tourId} lineItems={lines} />
+              </>
+            )
           ) : null}
 
           {/* Budget Phase A §A2 — Actuals tab removed; the
@@ -200,12 +231,10 @@ export default async function BudgetTourPage({
           ) : null}
 
           {tab === 'settings' ? (
-            <BudgetTabPlaceholder
-              subtitle="Budget · settings"
-              title="Settings"
-              body="Per-tour budget settings (categories, currency, contingency %) will live here. The tour's currency is editable from the tour edit page today."
-              linkLabel="Open tour settings"
-              linkHref={`/operations/${tourId}/edit`}
+            <BudgetSettingsTab
+              tourId={tourId}
+              sections={sections}
+              trackPhases={trackPhases}
             />
           ) : null}
         </div>

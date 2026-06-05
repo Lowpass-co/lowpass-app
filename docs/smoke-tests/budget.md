@@ -1,112 +1,119 @@
 # Budget smoke tests
 
-> **Last bulk verification**: pending — first run on `feat/budget-grid-usable`
-> (inline-edit grid + decouple row-click from slide-over).
+> **Last run**: 2026-06-04 on `feat/budget-grid-usable` preview, all
+> phases (grid redesign + sections/templates). ID prefix `BUD`. IDs are
+> never recycled.
 
-Per `docs/smoke-tests/README.md`. Walk these on Vercel preview (or
-local `npm run dev`) after every non-trivial budget change. ID prefix
-is `BUD`. Open the Warning Support tour → Budget tab unless stated.
+Per `docs/smoke-tests/README.md`. Reference tour: "Warning Support".
 
-## Inline editing + persistence (Phase 0 — feat/budget-grid-usable)
+## Verified passing (detail retired)
 
-#### BUD-01 — Actual edits inline and persists across reload
+BUD-01, BUD-02, BUD-06, BUD-07, BUD-09 (inline edit, persistence,
+title-only slide open, no-slide-on-cell-edit, totals reconcile) —
+**pass**. BUD-10 (migration 200 applies, idempotent), BUD-11 (existing
+budgets still load) — **pass**.
 
-**Do**: Click the **Actual** cell on a non-derived line, type a value,
-press Enter. Then reload the page.
+## Open issues from the 2026-06-04 run
 
-**Expect**: The cell enters edit mode in place (orange-bordered input),
-commits, and the value is still there after reload. The displayed value
-updates **immediately** and does not flash back to the previous/zero
-value (optimistic update). The slide-over does **not** open.
+- **Full-page reload on every inline edit (BUD-01/02/09)** — FIXED,
+  retest. The eager `router.refresh()` per cell commit re-ran the whole
+  server page; removed on the success path (optimistic overlay is the
+  source of truth; totals derive from it). Expect: edits commit with no
+  page flash; reload still shows the saved value.
+- **Phase chip "Show days" wrapped to two lines (BUD-05)** — FIXED,
+  retest. Added `nowrap` to the phase chip; column is resizable anyway.
+- **Slide-over design language (BUD-04)** — OPEN → CC. The slide-over
+  doesn't match the grid: it should use the same custom dropdown style
+  and the redesigned visual language. Queued as a CC pass.
+- **Flight grid not working (BUD-08)** — OUT OF SCOPE here. Derived
+  flight rows belong to the flights module; can't test derived-row
+  read-only until that works. Tracked separately.
+- **Template picker not visible (BUD-13)** — NOT A BUG. The empty-state
+  picker only renders when a tour has **0 sections AND 0 lines**.
+  Warning Support has lines (and migration 200 backfilled sections from
+  them), so it correctly shows the grid. To see the picker, create a
+  **new empty tour**. The system templates themselves are visible on any
+  tour under **Budget → Settings → Templates**.
 
-**Last verified**:
+## Remaining checklist (blocked on testing against an empty/rebuilt tour)
 
-#### BUD-02 — Estimate edits inline and persists across reload
+#### BUD-12 — Sections backfilled + system templates seeded (DB check)
 
-**Do**: Click the **Estimate** cell, change it, press Enter, reload.
+**Do**: Supabase SQL Editor —
+`SELECT name, sort_order FROM budget_sections WHERE tour_id = '<id>' ORDER BY sort_order;`
+`SELECT name, tier FROM budget_templates WHERE is_system ORDER BY tier;`
+`SELECT count(*) FROM budget_line_items WHERE tour_id = '<id>' AND section_id IS NULL AND category <> '';`
 
-**Expect**: Value commits and survives reload. Variance % and the
-group/tour totals recompute. No flash to the old value.
+**Expect**: one section per distinct category; three system templates
+(Club / Support run, Headline tour, Festival run); NULL-`section_id`
+count = 0 for previously-categorised lines.
 
-**Last verified**:
+#### BUD-13 — Empty-state template picker
 
-#### BUD-04 — Status edits inline via dropdown
+**Do**: Open a **new tour** with zero sections + zero lines → Budget tab.
 
-**Do**: Click the **Status** chip, pick a different status from the
-inline dropdown.
+**Expect**: template picker (3 system presets with tier badges +
+section chips, plus your own templates) and a "Start blank" button.
 
-**Expect**: Chip updates immediately to the new status + colour,
-persists across reload, and an open slide-over for the same row
-reflects the change. Escape cancels without changing.
+#### BUD-14 — Create budget from a template
 
-**Last verified**:
+**Do**: "Create budget from this template" on a preset.
 
-#### BUD-05 — Phase edits inline via dropdown
+**Expect**: grid grouped by Section with the template's default lines
+(est/act = 0); re-applying adds nothing.
 
-**Do**: Click the **Phase** chip (or the "—"), pick a phase. If grouped
-by Phase, watch the row.
+#### BUD-15 — Start blank + add section/line inline
 
-**Expect**: Phase commits immediately and persists. With Group = Phase,
-the row moves to the correct phase group on refresh. Choosing "—"
-clears it.
+**Do**: "Start blank" → "+ Section", rename a header inline, "+ Add
+line", rename the line.
 
-**Last verified**:
+**Expect**: a "General" section scaffolds; new sections/lines persist
+across reload; rename commits on Enter/blur, cancels on Escape.
 
-#### BUD-06 — Slide-over opens only from the item title
+#### BUD-16 — Section grouping + subtotals + delete
 
-**Do**: Click the **item title** (has the small open-panel icon).
-Separately, click empty areas of the row and the number cells.
+**Do**: With Group = Section, review headers; delete a section.
 
-**Expect**: Only the title opens the slide-over. Clicking number cells
-edits them in place; clicking elsewhere in the row does nothing. The
-row is no longer a single big click target.
+**Expect**: header shows name · count + est/act/var; deleting moves its
+lines to "Uncategorised" (not deleted) after a confirm.
 
-**Last verified**:
+#### BUD-17 — Resizable columns + canvas (persisted)
 
-#### BUD-07 — Editing a cell never opens the slide-over
+**Do**: Drag a column edge; drag the grid's right edge; reload; "Reset
+widths".
 
-**Do**: Click Est total / Actual / Qty / Status / Phase to edit.
+**Expect**: widths change, persist per-tour (localStorage), reset works.
 
-**Expect**: None of these open the slide-over (regression guard for the
-row-click collision that previously hijacked every edit).
+#### BUD-18 — Phase toggle hides/shows the Phase column
 
-**Last verified**:
+**Do**: Settings → toggle Phase tracking off/on; return to the grid.
 
-#### BUD-08 — Derived rows stay read-only on amounts
+**Expect**: off = no Phase column + no Group=Phase option (falls back to
+Section); on = both return.
 
-**Do**: On a flight/hotel/gear-derived line, try to edit Estimate or
-Actual.
+#### BUD-19 — Settings: template clone + edit
 
-**Expect**: Those cells are display-only (no edit mode). Editing must
-happen on the source flight/room/gear, per the existing 409 rule.
+**Do**: Settings → Templates → clone a system preset; edit its
+sections/lines; "Apply to tour".
 
-**Last verified**:
+**Expect**: clone appears under "Yours"; edits persist; system presets
+read-only; apply adds missing lines.
 
-#### BUD-09 — Totals reconcile after an inline edit
+#### BUD-20 — Summary per-section rollup
 
-**Do**: Edit any Est/Actual, note the group header "est/act" and the
-filter-bar tour total "est … · act …".
+**Do**: Summary tab on a tour with sections + lines.
 
-**Expect**: Both the group subtotal and the tour-wide total update to
-include the edit (in the selected display currency).
+**Expect**: "Section summary" table (Estimate/Actual/Variance + grand
+total) alongside the existing charts; over = red, under = green.
 
-**Last verified**:
+## Known broken / later
 
-## Known broken / open
-
-- **Actual vs transactions override math** — whether a manually-typed
-  Actual that differs from the sum of transactions behaves correctly
-  across reload is the open question gating a possible refactor of
-  `src/lib/budget/transactions.ts`. Test: add 2 transactions to a line
-  (sum e.g. $300), then type a different Actual ($350) inline → expect
-  an override marker (⚠) + the typed value sticking; clicking the
-  slide-over "Sync to transactions sum" resets to $300. Report drift.
-- **Template / empty-state** — a blank budget should scaffold from a
-  reusable template (workspace default + per-artist override, GN
-  structure). Not built yet (Phase 2). No test IDs yet.
-- **Item-cell polish (CC)** — title should be inline-editable; the
-  open-detail affordance should be a clearer, larger, centred button
-  with a hover/click animation. Handed to Claude Code (UI/UX + 21st).
-- **Status/Phase dropdown styling** — currently a native `<select>`
-  (looks like default Safari). To be replaced with a custom dropdown
-  matching the chips. Functionally works + propagates; cosmetic only.
+- **Actual vs transactions override math** — manual Actual ≠ transaction
+  sum behaviour across reload; gates a possible `transactions.ts`
+  refactor. Repro: add 2 txns (sum $300), type a different Actual ($350)
+  → expect ⚠ override + $350 sticking; slide "Sync to transactions sum"
+  → $300.
+- **Deliberate gaps from Phases B–E**: per-artist template override has
+  no picker UI; section reorder is two PATCHes (no drag); top-level
+  "Line item" / Quick-Add still create section-less lines (land in
+  "Uncategorised"); income/net P&L not in the Summary rollup yet.
