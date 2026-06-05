@@ -157,6 +157,15 @@ type BudgetLineSlideOverProps = {
   tourId: string;
   tourCurrency: string;
   onClose: () => void;
+  /** Drives the SlideOver enter/exit animation. Optional + defaults
+   *  to `true` so older callers (BudgetMainTable, TourBudgetRebuild)
+   *  that mount/unmount conditionally keep working unchanged. New
+   *  callers thread a boolean and pair it with `onExitComplete` to
+   *  let the panel slide out before unmounting. */
+  open?: boolean;
+  /** Forwarded to SlideOver — fires once the exit transform finishes
+   *  so the parent can drop the cached line and unmount. */
+  onExitComplete?: () => void;
   /** F1.2 round 2: emitted after a successful create or save so the
    *  parent (BudgetMainTable) can prepend the new row optimistically.
    *  router.refresh() still fires for canonical sync. */
@@ -170,6 +179,8 @@ export function BudgetLineSlideOver({
   tourId,
   tourCurrency,
   onClose,
+  open = true,
+  onExitComplete,
   onSaved,
 }: BudgetLineSlideOverProps) {
   const router = useRouter();
@@ -197,7 +208,14 @@ export function BudgetLineSlideOver({
     baselineRef.current = next;
     setSaveState('idle');
     setErrorMessage(null);
-  }, [line.id, fallbackCurrency, line]);
+    // Re-seed ONLY when the row identity (id) or fallback currency
+    // changes — NOT on every fresh `line` object. The parent hands us
+    // a new `line` reference each render via its optimistic overlay;
+    // including `line` here re-ran this effect mid-edit and clobbered
+    // the value the user had just picked (the persist bug). Keying on
+    // `line.id` keeps the snapshot stable across those identity churns.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [line.id, fallbackCurrency]);
 
   const variancePct = useMemo(() => {
     if (fields.proposed_cost <= 0) return null;
@@ -290,6 +308,28 @@ export function BudgetLineSlideOver({
       if (saveTimer.current) clearTimeout(saveTimer.current);
     };
   }, [fields, isCreate, flushExistingPatch]);
+
+  /* Flush-on-close. The debounced auto-save (600ms) means a fast
+     change-then-close could unmount before the timer fires, dropping
+     the edit. Intercept every close path (X, overlay, Escape, footer
+     Close) here: cancel the pending debounce and await one final
+     flush BEFORE asking the parent to dismiss, so the panel only
+     starts sliding out once the PATCH has landed. Create mode has no
+     debounced PATCH to flush, so it closes immediately. */
+  const handleClose = useCallback(() => {
+    if (isCreate) {
+      onClose();
+      return;
+    }
+    if (saveTimer.current) {
+      clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+    }
+    void (async () => {
+      await flushExistingPatch(fields);
+      onClose();
+    })();
+  }, [isCreate, fields, flushExistingPatch, onClose]);
 
   /* §B1.1 — debounced auto-save for CREATE mode. Same 600ms
      window as the edit effect above. Fires submitCreate as
@@ -416,6 +456,7 @@ export function BudgetLineSlideOver({
   };
 
   const labelStyle: React.CSSProperties = {
+    display: 'block',
     color: 'var(--lp-text-tertiary)',
     fontSize: 'var(--lp-text-2xs)',
     fontWeight: 'var(--lp-weight-semibold)',
@@ -426,11 +467,26 @@ export function BudgetLineSlideOver({
     border: '1px solid var(--lp-border)',
     background: 'var(--lp-surface)',
     color: 'var(--lp-text)',
-    borderRadius: 'var(--lp-radius-md, 6px)',
+    borderRadius: 'var(--lp-radius-md)',
     padding: 'var(--lp-space-2) var(--lp-space-3)',
     fontSize: 'var(--lp-text-base)',
     width: '100%',
     outline: 'none',
+  };
+  /* Selects keep their native dropdown arrow (no appearance reset) but
+     inherit the tokenised border/background/padding so they line up
+     with the text inputs. */
+  const selectStyle: React.CSSProperties = {
+    ...inputStyle,
+    cursor: 'pointer',
+  };
+  // Section heading — the spine of the new grouped layout.
+  const sectionHeadingStyle: React.CSSProperties = {
+    color: 'var(--lp-text-secondary)',
+    fontSize: 'var(--lp-text-2xs)',
+    fontWeight: 'var(--lp-weight-bold)',
+    letterSpacing: 'var(--lp-tracking-caps)',
+    textTransform: 'uppercase',
   };
 
   // F2.3: drop the redundant header title. The big label input below
@@ -453,49 +509,138 @@ export function BudgetLineSlideOver({
      <CategoryChipDropdown> handles the (custom) legacy-value
      surfacing internally via lib/budget/category-colors. */
 
+  /* Section divider — applied to every group below the first so the
+     form reads as labelled bands rather than one undifferentiated
+     stack of inputs. Token-only. */
+  const sectionDivider: React.CSSProperties = {
+    borderTop: '1px solid var(--lp-border)',
+    paddingTop: 'var(--lp-space-5)',
+  };
+
+  const saveStatusNode = (
+    <span
+      className="inline-flex items-center gap-1.5"
+      style={{
+        fontSize: 'var(--lp-text-xs)',
+        color:
+          saveState === 'error'
+            ? 'var(--color-lp-status-needs-review)'
+            : saveState === 'saved'
+              ? 'var(--color-lp-status-complete)'
+              : 'var(--lp-text-tertiary)',
+      }}
+    >
+      {saveState === 'saving' ? (
+        <>
+          <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
+          Saving…
+        </>
+      ) : saveState === 'saved' ? (
+        <>✓ Saved</>
+      ) : saveState === 'error' ? (
+        <>{errorMessage ?? 'Save failed'}</>
+      ) : isCreate ? (
+        <>Will create on save</>
+      ) : (
+        <>Auto-saves on change</>
+      )}
+    </span>
+  );
+
+  const footerNode = (
+    <div className="flex items-center justify-between gap-3">
+      {saveStatusNode}
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={handleClose}
+          className="rounded-md"
+          style={{
+            color: 'var(--lp-text-secondary)',
+            background: 'transparent',
+            fontSize: 'var(--lp-text-sm)',
+            fontWeight: 'var(--lp-weight-medium)',
+            padding: 'var(--lp-space-2) var(--lp-space-3)',
+          }}
+        >
+          {isCreate ? 'Cancel' : 'Close'}
+        </button>
+        {isCreate ? (
+          <button
+            type="button"
+            onClick={() => void submitCreate()}
+            disabled={saveState === 'saving'}
+            className="inline-flex items-center gap-1.5 rounded-md"
+            style={{
+              background: 'var(--color-lp-orange)',
+              color: 'var(--lp-text-inverse)',
+              fontSize: 'var(--lp-text-sm)',
+              fontWeight: 'var(--lp-weight-medium)',
+              padding: 'var(--lp-space-2) var(--lp-space-4)',
+              opacity: saveState === 'saving' ? 0.7 : 1,
+            }}
+          >
+            {saveState === 'saving' ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
+            ) : null}
+            Create line
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+
   return (
     <SlideOver
-      open
+      open={open}
       backdrop
-      onClose={onClose}
+      onClose={handleClose}
+      onExitComplete={onExitComplete}
       title=""
       width="wide"
       subtitle={subtitleSummary}
+      footer={footerNode}
     >
-      {derived ? (
-        <section
-          className="rounded-md border p-3"
-          style={{
-            borderColor: 'var(--lp-border)',
-            background: 'var(--lp-bg-secondary)',
-          }}
-        >
-          <h3 style={labelStyle}>Source</h3>
-          <p
-            className="mt-2 text-sm"
-            style={{ color: 'var(--lp-text-secondary)' }}
+      <div className="space-y-5">
+        {derived ? (
+          <section
+            className="rounded-md border"
+            style={{
+              borderColor: 'var(--lp-border)',
+              background: 'var(--lp-bg-secondary)',
+              padding: 'var(--lp-space-3)',
+            }}
           >
-            {ux14BudgetLineDerivedHint(line)}
-          </p>
-          <p
-            className="mt-2 text-xs"
-            style={{ color: 'var(--lp-text-tertiary)' }}
-          >
-            Canonical rows refresh from flights, hotels, rooming and hire — overwrite amounts via those entities whenever possible.
-          </p>
-        </section>
-      ) : null}
+            <h3 style={sectionHeadingStyle}>Source</h3>
+            <p
+              className="mt-2"
+              style={{
+                color: 'var(--lp-text-secondary)',
+                fontSize: 'var(--lp-text-sm)',
+              }}
+            >
+              {ux14BudgetLineDerivedHint(line)}
+            </p>
+            <p
+              className="mt-2"
+              style={{
+                color: 'var(--lp-text-tertiary)',
+                fontSize: 'var(--lp-text-xs)',
+              }}
+            >
+              Canonical rows refresh from flights, hotels, rooming and hire — overwrite amounts via those entities whenever possible.
+            </p>
+          </section>
+        ) : null}
 
-      <div className="space-y-4">
         {/* The Item input IS the canonical title — large + prominent. */}
-        <label className="block">
+        <label className="block space-y-1.5">
           <span style={labelStyle}>Item</span>
           <input
             type="text"
             value={fields.label}
             onChange={(e) => setField('label', e.target.value)}
             placeholder="e.g. Hotel block — Manchester"
-            className="mt-1.5"
             style={{
               ...inputStyle,
               fontSize: 'var(--lp-text-xl)',
@@ -504,298 +649,244 @@ export function BudgetLineSlideOver({
           />
         </label>
 
-        <div className="grid grid-cols-3 gap-3">
-          <label className="block">
-            <span style={labelStyle}>Category</span>
-            {/* §B3.1 — chip + dropdown replaces the plain
-                select. Legacy / custom categories surface at
-                the top of the menu as "(custom)" options so
-                the row's stored value isn't clobbered. */}
-            <div className="mt-1.5">
+        {/* Classification — what kind of line this is. */}
+        <section className="space-y-3" style={sectionDivider}>
+          <h3 style={sectionHeadingStyle}>Classification</h3>
+          <div className="grid grid-cols-3 gap-3">
+            <label className="block space-y-1.5">
+              <span style={labelStyle}>Category</span>
+              {/* §B3.1 — chip + dropdown replaces the plain
+                  select. Legacy / custom categories surface at
+                  the top of the menu as "(custom)" options so
+                  the row's stored value isn't clobbered. */}
               <CategoryChipDropdown
                 value={fields.category || 'misc'}
                 onChange={(v) => setField('category', v)}
                 size="md"
               />
-            </div>
-          </label>
-          <label className="block">
-            {/* Phase 3 §D — phase tag dropdown. '' (Unscoped) maps
-                to NULL on the server; valid values mirror migration
-                064's CHECK constraint. */}
-            <span style={labelStyle}>Phase</span>
-            <select
-              value={fields.phase_tag}
-              onChange={(e) => setField('phase_tag', e.target.value)}
-              className="mt-1.5"
-              style={inputStyle}
-            >
-              {PHASE_TAG_OPTIONS.map((opt) => (
-                <option key={opt.value || 'unscoped'} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="block">
-            <span style={labelStyle}>Vendor</span>
-            <input
-              type="text"
-              value={fields.vendor}
-              onChange={(e) => setField('vendor', e.target.value)}
-              placeholder="Optional"
-              className="mt-1.5"
-              style={inputStyle}
-            />
-          </label>
-        </div>
+            </label>
+            <label className="block space-y-1.5">
+              {/* Phase 3 §D — phase tag dropdown. '' (Unscoped) maps
+                  to NULL on the server; valid values mirror migration
+                  064's CHECK constraint. */}
+              <span style={labelStyle}>Phase</span>
+              <select
+                value={fields.phase_tag}
+                onChange={(e) => setField('phase_tag', e.target.value)}
+                style={selectStyle}
+              >
+                {PHASE_TAG_OPTIONS.map((opt) => (
+                  <option key={opt.value || 'unscoped'} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block space-y-1.5">
+              <span style={labelStyle}>Vendor</span>
+              <input
+                type="text"
+                value={fields.vendor}
+                onChange={(e) => setField('vendor', e.target.value)}
+                placeholder="Optional"
+                style={inputStyle}
+              />
+            </label>
+          </div>
+        </section>
 
-        <div className="grid grid-cols-3 gap-3">
-          <label className="block">
-            <span style={labelStyle}>Quantity</span>
-            <input
-              type="number"
-              min={1}
-              value={fields.quantity}
-              onChange={(e) => setField('quantity', Number(e.target.value) || 1)}
-              className="mt-1.5"
-              style={inputStyle}
-            />
-          </label>
-          <label className="block">
-            <span style={labelStyle}>Estimated</span>
-            {/* §B1.4 — currency-symbol prefix. Quantity above
-                stays a plain numeric (not a money field). */}
-            <CurrencyNumericInput
-              value={fields.proposed_cost}
-              onChange={(v) => setField('proposed_cost', v)}
-              currency={fields.currency}
-              className="mt-1.5 block"
-              style={inputStyle}
-              ariaLabel="Estimated cost"
-            />
-          </label>
-          <label className="block">
-            <span
-              style={labelStyle}
-              className="flex items-center justify-between gap-2"
-            >
-              <span>Actual</span>
-              {/* §A3 — override marker + one-click Sync. Shown
-                  only when transactions exist AND the displayed
-                  value diverges from their sum. Clicking Sync
-                  pushes the txn sum into the field, which the
-                  debounced auto-save sends as actual_cost
-                  PATCH — clearing the override. */}
-              {actualState.isOverride ? (
-                <span
-                  className="inline-flex items-center gap-1.5"
-                  style={{ fontSize: '10px' }}
-                >
+        {/* Costs — quantities, money, and the live variance read-out. */}
+        <section className="space-y-3" style={sectionDivider}>
+          <h3 style={sectionHeadingStyle}>Costs</h3>
+          <div className="grid grid-cols-3 gap-3">
+            <label className="block space-y-1.5">
+              <span style={labelStyle}>Quantity</span>
+              <input
+                type="number"
+                min={1}
+                value={fields.quantity}
+                onChange={(e) => setField('quantity', Number(e.target.value) || 1)}
+                style={inputStyle}
+              />
+            </label>
+            <label className="block space-y-1.5">
+              <span style={labelStyle}>Estimated</span>
+              {/* §B1.4 — currency-symbol prefix. Quantity above
+                  stays a plain numeric (not a money field). */}
+              <CurrencyNumericInput
+                value={fields.proposed_cost}
+                onChange={(v) => setField('proposed_cost', v)}
+                currency={fields.currency}
+                className="block"
+                style={inputStyle}
+                ariaLabel="Estimated cost"
+              />
+            </label>
+            <label className="block space-y-1.5">
+              <span
+                style={labelStyle}
+                className="flex items-center justify-between gap-2"
+              >
+                <span>Actual</span>
+                {/* §A3 — override marker + one-click Sync. Shown
+                    only when transactions exist AND the displayed
+                    value diverges from their sum. Clicking Sync
+                    pushes the txn sum into the field, which the
+                    debounced auto-save sends as actual_cost
+                    PATCH — clearing the override. */}
+                {actualState.isOverride ? (
                   <span
-                    title={`Manual override — does not match transactions sum (${actualState.transactionSum.toFixed(2)})`}
-                    aria-label="Manual override"
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 4,
-                      color: 'var(--color-lp-status-needs-review)',
-                      fontWeight: 600,
-                      textTransform: 'none',
-                      letterSpacing: 0,
-                    }}
+                    className="inline-flex items-center gap-1.5"
+                    style={{ fontSize: 'var(--lp-text-2xs)' }}
                   >
-                    <AlertTriangle className="h-3 w-3" aria-hidden />
-                    Override
+                    <span
+                      title={`Manual override — does not match transactions sum (${actualState.transactionSum.toFixed(2)})`}
+                      aria-label="Manual override"
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 4,
+                        color: 'var(--color-lp-status-needs-review)',
+                        fontWeight: 'var(--lp-weight-semibold)',
+                        textTransform: 'none',
+                        letterSpacing: 0,
+                      }}
+                    >
+                      <AlertTriangle className="h-3 w-3" aria-hidden />
+                      Override
+                    </span>
+                    <button
+                      type="button"
+                      onClick={applySyncToSum}
+                      className="underline"
+                      style={{
+                        color: 'var(--color-lp-orange)',
+                        fontWeight: 'var(--lp-weight-medium)',
+                        textTransform: 'none',
+                        letterSpacing: 0,
+                      }}
+                    >
+                      Sync to {actualState.transactionSum.toFixed(2)}
+                    </button>
                   </span>
-                  <button
-                    type="button"
-                    onClick={applySyncToSum}
-                    className="underline"
-                    style={{
-                      color: 'var(--color-lp-orange)',
-                      fontWeight: 500,
-                      textTransform: 'none',
-                      letterSpacing: 0,
-                    }}
-                  >
-                    Sync to {actualState.transactionSum.toFixed(2)}
-                  </button>
-                </span>
-              ) : null}
-            </span>
-            {/* §B1.4 — currency-symbol prefix. Same override
-                border tint applied via inputStyle merge. */}
-            <CurrencyNumericInput
-              value={fields.actual_cost}
-              onChange={(v) => applyActualEdit(v)}
-              currency={fields.currency}
-              className="mt-1.5 block"
-              style={{
-                ...inputStyle,
-                borderColor: actualState.isOverride
-                  ? 'var(--color-lp-status-needs-review)'
-                  : (inputStyle as { borderColor?: string }).borderColor,
-              }}
-              ariaLabel="Actual cost"
-            />
-          </label>
-        </div>
-
-        <div className="grid grid-cols-3 gap-3">
-          <label className="block">
-            <span style={labelStyle}>Currency</span>
-            <select
-              value={fields.currency}
-              onChange={(e) => setField('currency', e.target.value)}
-              className="mt-1.5"
-              style={inputStyle}
-            >
-              {CURRENCY_OPTIONS.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="block">
-            <span style={labelStyle}>Status</span>
-            <select
-              value={fields.status}
-              onChange={(e) => setField('status', e.target.value)}
-              className="mt-1.5"
-              style={inputStyle}
-            >
-              {STATUS_OPTIONS.map((s) => (
-                <option key={s.value} value={s.value}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div>
-            <span style={labelStyle}>Variance</span>
-            <div
-              className="mt-1.5 inline-flex items-center rounded-md px-3 py-2 text-base tabular-nums"
-              style={{
-                /* §B1.3 — colour via the shared income-aware
-                   helper so the rule lives in one place. */
-                color: varianceColor(variancePct, isIncomeRow(line)),
-              }}
-            >
-              {variancePct === null ? '—' : `${variancePct.toFixed(1)}%`}
+                ) : null}
+              </span>
+              {/* §B1.4 — currency-symbol prefix. Same override
+                  border tint applied via inputStyle merge. */}
+              <CurrencyNumericInput
+                value={fields.actual_cost}
+                onChange={(v) => applyActualEdit(v)}
+                currency={fields.currency}
+                className="block"
+                style={{
+                  ...inputStyle,
+                  borderColor: actualState.isOverride
+                    ? 'var(--color-lp-status-needs-review)'
+                    : (inputStyle as { borderColor?: string }).borderColor,
+                }}
+                ariaLabel="Actual cost"
+              />
+            </label>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <label className="block space-y-1.5">
+              <span style={labelStyle}>Currency</span>
+              <select
+                value={fields.currency}
+                onChange={(e) => setField('currency', e.target.value)}
+                style={selectStyle}
+              >
+                {CURRENCY_OPTIONS.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="block space-y-1.5">
+              <span style={labelStyle}>Status</span>
+              <select
+                value={fields.status}
+                onChange={(e) => setField('status', e.target.value)}
+                style={selectStyle}
+              >
+                {STATUS_OPTIONS.map((s) => (
+                  <option key={s.value} value={s.value}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="space-y-1.5">
+              <span style={labelStyle}>Variance</span>
+              <div
+                className="inline-flex items-center rounded-md tabular-nums"
+                style={{
+                  padding: 'var(--lp-space-2) var(--lp-space-3)',
+                  fontSize: 'var(--lp-text-base)',
+                  fontWeight: 'var(--lp-weight-semibold)',
+                  /* §B1.3 — colour via the shared income-aware
+                     helper so the rule lives in one place. */
+                  color: varianceColor(variancePct, isIncomeRow(line)),
+                }}
+              >
+                {variancePct === null ? '—' : `${variancePct.toFixed(1)}%`}
+              </div>
             </div>
           </div>
-        </div>
+        </section>
 
-        <label className="block">
-          <span style={labelStyle}>Notes</span>
-          <textarea
-            value={fields.notes}
-            onChange={(e) => setField('notes', e.target.value)}
-            rows={4}
-            className="mt-1.5"
-            style={{ ...inputStyle, resize: 'vertical' }}
-          />
-        </label>
+        {/* Notes */}
+        <section className="space-y-3" style={sectionDivider}>
+          <label className="block space-y-1.5">
+            <span style={labelStyle}>Notes</span>
+            <textarea
+              value={fields.notes}
+              onChange={(e) => setField('notes', e.target.value)}
+              rows={4}
+              style={{ ...inputStyle, resize: 'vertical' }}
+            />
+          </label>
+        </section>
 
-        {/* Budget Phase A §A1 — vendor-breakdown transactions.
-            §A3 — onChange triggers router.refresh() so the
-            slide-over's `line` prop refetches after every txn
-            write. The new prop value carries the auto-synced
-            actual_cost + updated transaction_sum, which
-            re-derives the override marker.
-            §B1.1 — in create mode (pending- id), show a
-            placeholder section so the user sees Transactions
-            is coming. Auto-save on label blur transitions the
-            slide-over to edit mode in place; the section
-            unlocks automatically once isCreate flips. */}
-        {isCreate ? (
-          <section>
-            <h3 className="text-xs font-bold uppercase tracking-wider text-lp-text-secondary mb-2">
-              Transactions
-            </h3>
+        {/* Transactions. §A1 — vendor-breakdown rows. §A3 — onChange
+            triggers router.refresh() so the slide-over's `line` prop
+            refetches after every txn write; the new value carries the
+            auto-synced actual_cost + updated transaction_sum, which
+            re-derives the override marker. §B1.1 — in create mode
+            (pending- id) we show a placeholder so the user sees the
+            section is coming; the label field auto-saves and flips the
+            slide-over to edit mode in place, unlocking it. */}
+        <section className="space-y-3" style={sectionDivider}>
+          <h3 style={sectionHeadingStyle}>Transactions</h3>
+          {isCreate ? (
             <div
-              className="rounded-xl border border-dashed border-lp-border bg-lp-surface/50 px-4 py-5 text-center text-xs text-lp-text-secondary"
+              className="rounded-lg border text-center"
+              style={{
+                borderStyle: 'dashed',
+                borderColor: 'var(--lp-border)',
+                background: 'var(--lp-bg-secondary)',
+                color: 'var(--lp-text-secondary)',
+                fontSize: 'var(--lp-text-xs)',
+                padding: 'var(--lp-space-5) var(--lp-space-4)',
+              }}
             >
               Save the line item to start adding vendor breakdowns. The label
               field auto-saves after a moment of inactivity.
             </div>
-          </section>
-        ) : (
-          <TransactionsSection
-            lineItemId={line.id}
-            currency={line.currency ?? null}
-            onChange={() => router.refresh()}
-            /* §B3.2 — parent line item's vendor (from notes
-               "Vendor: <name>" encoding) seeds new
-               transactions and surfaces at the top of each
-               row's autocomplete. */
-            defaultVendor={fields.vendor}
-          />
-        )}
-
-        <div
-          className="flex items-center justify-between gap-3 border-t pt-4"
-          style={{ borderColor: 'var(--lp-border)' }}
-        >
-          <span
-            className="inline-flex items-center gap-1.5 text-xs"
-            style={{
-              color:
-                saveState === 'error'
-                  ? 'var(--color-lp-status-needs-review)'
-                  : 'var(--lp-text-tertiary)',
-            }}
-          >
-            {saveState === 'saving' ? (
-              <>
-                <Loader2 className="h-3 w-3 animate-spin" aria-hidden />
-                Saving…
-              </>
-            ) : saveState === 'saved' ? (
-              <>✓ Saved</>
-            ) : saveState === 'error' ? (
-              <>{errorMessage ?? 'Save failed'}</>
-            ) : isCreate ? (
-              <>Will create on save</>
-            ) : (
-              <>Auto-saves on change</>
-            )}
-          </span>
-
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-md px-3 py-2 text-sm"
-              style={{
-                color: 'var(--lp-text-secondary)',
-                background: 'transparent',
-              }}
-            >
-              {isCreate ? 'Cancel' : 'Close'}
-            </button>
-            {isCreate ? (
-              <button
-                type="button"
-                onClick={() => void submitCreate()}
-                disabled={saveState === 'saving'}
-                className="inline-flex items-center gap-1.5 rounded-md px-3 py-2 text-sm font-medium"
-                style={{
-                  background: 'var(--color-lp-orange)',
-                  color: 'var(--lp-text-inverse, #FFFFFF)',
-                  opacity: saveState === 'saving' ? 0.7 : 1,
-                }}
-              >
-                {saveState === 'saving' ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
-                ) : null}
-                Create line
-              </button>
-            ) : null}
-          </div>
-        </div>
+          ) : (
+            <TransactionsSection
+              lineItemId={line.id}
+              currency={line.currency ?? null}
+              onChange={() => router.refresh()}
+              /* §B3.2 — parent line item's vendor (from notes
+                 "Vendor: <name>" encoding) seeds new
+                 transactions and surfaces at the top of each
+                 row's autocomplete. */
+              defaultVendor={fields.vendor}
+            />
+          )}
+        </section>
       </div>
     </SlideOver>
   );

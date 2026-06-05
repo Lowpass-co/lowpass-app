@@ -161,6 +161,16 @@ const OPTION_TONE: Record<string, string> = {
   wrap: PHASE_TINT.wrap,
 };
 
+/* §B1.2 — vendor is encoded as the first line of `notes`
+   ("Vendor: X") by the slide-over until a real column exists. Mirror
+   that decode so the grid's Vendor column shows the saved value. */
+function vendorFromNotes(notes?: string | null): string {
+  const first = (notes ?? '').split('\n')[0] ?? '';
+  return first.startsWith('Vendor: ') && first.length < 80
+    ? first.slice('Vendor: '.length).trim()
+    : '';
+}
+
 export type BudgetSpreadsheetGroupBy = 'category' | 'phase';
 
 export interface BudgetSpreadsheetViewProps {
@@ -262,6 +272,15 @@ export function BudgetSpreadsheetView({
   const [statusFilter, setStatusFilter] = useState<StatusValue>(null);
   const [search, setSearch] = useState('');
   const [openLine, setOpenLine] = useState<BudgetLineItem | null>(null);
+  /* Keep the slide-over mounted through its exit animation. `openLine`
+     drives the open/closed state; when it goes null the panel must
+     still render its last content so SlideOver can animate
+     translateX(100%) out. We cache that last line in a ref (updated
+     during render) and only drop it — unmounting the slide-over — once
+     onExitComplete fires. The tick state forces that final unmount. */
+  const lastLineRef = useRef<BudgetLineItem | null>(null);
+  const [, setExitTick] = useState(0);
+  if (openLine) lastLineRef.current = openLine;
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [bulkBusy, setBulkBusy] = useState<null | 'status' | 'delete'>(null);
   const [pendingCreations, setPendingCreations] = useState<BudgetLineItem[]>([]);
@@ -780,7 +799,7 @@ export function BudgetSpreadsheetView({
                 <span aria-hidden> </span>
               </Th>
               <Th align="right" width={36}>#</Th>
-              <Th>Item</Th>
+              <Th width={360}>Item</Th>
               <Th>Vendor</Th>
               <Th width={80}>Phase</Th>
               <Th align="right" width={120}>Estimate</Th>
@@ -879,12 +898,22 @@ export function BudgetSpreadsheetView({
         ))}
       </div>
 
-      {openLine ? (
+      {openLine || lastLineRef.current ? (
         <BudgetLineSlideOver
-          line={openLine}
+          /* open follows the live state; the rendered `line` falls
+             back to the cached one so content stays put while the
+             panel slides out. */
+          open={!!openLine}
+          line={openLine ?? lastLineRef.current!}
           tourId={tourId}
           tourCurrency={tourCurrency}
           onClose={() => setOpenLine(null)}
+          onExitComplete={() => {
+            // Exit transform finished — drop the cached line and force
+            // the final unmount.
+            lastLineRef.current = null;
+            setExitTick((t) => t + 1);
+          }}
           onSaved={(savedLine) => {
             if (!savedLine?.id || savedLine.id.startsWith('pending-')) return;
             setPendingCreations((prev) => {
@@ -1246,14 +1275,17 @@ function GroupRows({
                   onClick={() => onOpenLine(row)}
                   title="Open detail"
                   aria-label={`Open ${row.label || 'line item'} detail`}
-                  className="btn-transition btn-primary-press inline-flex shrink-0 items-center justify-center"
+                  className="btn-transition btn-primary-press inline-flex shrink-0 items-center gap-1"
                   style={{
-                    height: 26,
-                    width: 26,
-                    borderRadius: 7,
+                    height: 24,
+                    padding: '0 9px',
+                    borderRadius: 6,
                     border: '1px solid var(--lp-border)',
                     background: 'var(--lp-surface)',
                     color: 'var(--lp-text-secondary)',
+                    fontSize: '11px',
+                    fontWeight: 600,
+                    letterSpacing: '0.02em',
                     cursor: 'pointer',
                   }}
                   onMouseEnter={(e) => {
@@ -1261,16 +1293,15 @@ function GroupRows({
                       'color-mix(in srgb, var(--color-lp-orange) 14%, transparent)';
                     e.currentTarget.style.color = 'var(--color-lp-orange)';
                     e.currentTarget.style.borderColor = 'var(--color-lp-orange)';
-                    e.currentTarget.style.transform = 'scale(1.08)';
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.background = 'var(--lp-surface)';
                     e.currentTarget.style.color = 'var(--lp-text-secondary)';
                     e.currentTarget.style.borderColor = 'var(--lp-border)';
-                    e.currentTarget.style.transform = 'scale(1)';
                   }}
                 >
-                  <PanelRightOpen className="h-4 w-4" aria-hidden />
+                  <PanelRightOpen className="h-3.5 w-3.5" aria-hidden />
+                  Open
                 </button>
               </div>
             </Td>
@@ -1279,7 +1310,7 @@ function GroupRows({
                 className="truncate"
                 style={{ color: 'var(--lp-text-secondary)' }}
               >
-                {(row as BudgetLineItem & { vendor?: string }).vendor ?? '—'}
+                {vendorFromNotes(row.notes) || '—'}
               </span>
             </Td>
             <Td>
