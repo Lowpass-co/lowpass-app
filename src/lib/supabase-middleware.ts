@@ -56,7 +56,13 @@ export async function updateSession(request: NextRequest) {
   const isPublicRoute =
     request.nextUrl.pathname.startsWith('/r/') ||
     request.nextUrl.pathname.startsWith('/invite/accept') ||
-    request.nextUrl.pathname.startsWith('/intake/');
+    request.nextUrl.pathname.startsWith('/intake/') ||
+    /* Dev-only: the Stage Plot icon catalog (§SP1a) renders with
+       no data and is gated to non-production by the page itself.
+       Allowlisted here so it can be browsed without a session
+       while building the icon library. Never public in prod. */
+    (process.env.NODE_ENV !== 'production' &&
+      request.nextUrl.pathname.startsWith('/stage-plot-'));
 
   if (!user && !isAuthRoute && !isPublicRoute) {
     const url = request.nextUrl.clone();

@@ -47,6 +47,7 @@ const SUB_NAV: ReadonlyArray<{
   { id: 'personnel', label: 'Tour Personnel', slug: 'personnel', resource_id: 'operations.personnel' },
   { id: 'routing', label: 'Routing', slug: 'routing', resource_id: 'operations.routing' },
   { id: 'channel-list', label: 'Channel list', slug: 'channel-list', resource_id: 'operations.channel_list' },
+  { id: 'stage-plot', label: 'Stage Plot', slug: 'stage-plot', resource_id: 'operations.stage_plot' },
   { id: 'payroll', label: 'Payroll', slug: 'payroll', resource_id: 'operations.payroll' },
   { id: 'rooming', label: 'Rooming', slug: 'rooming', resource_id: 'operations.rooming' },
   { id: 'files', label: 'Files', slug: 'files', resource_id: 'operations.files' },

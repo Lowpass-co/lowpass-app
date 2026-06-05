@@ -1,59 +1,48 @@
 'use client';
 
 /* ============================================
-   LOWPASS — <OutputBlock> + OUTPUT_GRID (Sprint 12 §8b2)
+   LOWPASS — <OutputBlock> + OUTPUT_GRID (§CL-FIX-7)
 
-   Per-output-row component for the channel list editor.
-   Renders `row_kind='output'` rows from channel_list_rows in
-   a sub-grid below the inputs.
+   Per-output-row component. Output rows now number independently
+   of inputs (migration 115: UNIQUE (section_id, row_kind,
+   row_index)) and carry the v2 column set:
 
-   Output rows model IEM mixes, drive lines, send loops, etc.
-   The §8 spec column set is Index | Item | Destination |
-   Position | QTY | Notes — 6 cells per row, 5 of them
-   focusable (Index is read-only sequence display).
+     # | NAME | DESCRIPTION | STEREO? | POSITION | NOTES
 
-   Persistence uses the same useDebouncedSave + ch.updateRow
-   pattern as ChannelBlock. The save chain stays per-row so
-   typing in one output doesn't fight typing in another.
+   - NAME        → output_item   (the IEM device / send)
+   - DESCRIPTION → output_description (renamed from
+                   output_destination; backfilled by migration 115)
+   - STEREO?     → output_is_stereo (binary toggle). When on, the
+                   row claims two positions — the POSITION cell's
+                   placeholder shows the derived "N+(N+1)".
+   - POSITION    → output_position (free text; overrides the
+                   derived stereo/mono placeholder)
+   - NOTES       → output_notes
 
-   Keyboard nav follows the §8b2 matrix:
-     - Tab / Shift+Tab between cells within the row, wraps to
-       the next/prev row at the edges (handled by the
-       <CellNavProvider> mounted by the parent editor).
-     - Enter on Item / Destination / Notes — moves down one
-       cell in the same column (NavCell intercepts).
-     - Enter on Position (BrandedSelect trigger) — opens the
-       dropdown (BrandedSelect's own handler).
-     - Esc on text inputs — reverts the cell to its pre-focus
-       value via the snapshot refs.
+   output_destination / output_qty are retained in the DB (one
+   tour to confirm the rename) but no longer rendered.
+
+   Keyboard / persistence follow ChannelBlock: per-row
+   useDebouncedSave; NavCell Enter-down / Esc-revert.
    ============================================ */
 
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react';
+import { Check } from 'lucide-react';
 import { useDebouncedSave } from '@/hooks/useDebouncedSave';
 import { createClient } from '@/lib/supabase-client';
 import * as ch from '@/lib/rider-packs/channel-list';
 import type { ChannelListRow } from '@/lib/rider-packs/types';
 import { NavCell } from '@/lib/hooks/useCellNav';
-import { PositionSelectCell } from './PositionSelectCell';
 
-/* Sprint 12 §8b2 — output sub-grid column tracks. Six cells
-   plus a small actions column at the right.
-     1   #            (32px, read-only sequence)
-     2   Item         (1.4fr — the IEM device + capsule)
-     3   Destination  (1fr — where the line is sent)
-     4   Position     (minmax(4rem, 0.55fr) — same enum as inputs)
-     5   QTY          (3.5rem — small int field)
-     6   Notes        (1.2fr)
-     7   actions      (4.5rem) */
+/* §CL-FIX-7 — output sub-grid tracks: # | NAME | DESCRIPTION |
+   STEREO? | POSITION | NOTES | actions. */
 export const OUTPUT_GRID: CSSProperties = {
   gridTemplateColumns:
-    '32px minmax(8rem,1.4fr) minmax(6rem,1fr) minmax(4rem,0.55fr) 3.5rem minmax(6rem,1.2fr) 4.5rem',
+    '32px minmax(8rem,1.4fr) minmax(7rem,1.2fr) 4.5rem minmax(4rem,0.6fr) minmax(6rem,1.1fr) 4.5rem',
 };
 
-/* Five focusable cells: Item, Destination, Position, QTY,
-   Notes. Index is display-only and the actions cell holds a
-   delete button (focusable via Tab but not part of the cell
-   nav matrix). */
+/* Five focusable cells: NAME, DESCRIPTION, STEREO?, POSITION,
+   NOTES. # is display-only; actions hold delete. */
 export const OUTPUT_COL_COUNT = 5;
 
 interface OutputBlockProps {
@@ -63,12 +52,7 @@ interface OutputBlockProps {
   onRefresh: () => void | Promise<void>;
 }
 
-export function OutputBlock({
-  row,
-  outputRowIdx,
-  onUpdateLocal,
-  onRefresh,
-}: OutputBlockProps) {
+export function OutputBlock({ row, outputRowIdx, onUpdateLocal, onRefresh }: OutputBlockProps) {
   const patchRef = useRef<Partial<ChannelListRow>>({});
   const saveRow = useDebouncedSave<number>(
     useCallback(
@@ -87,7 +71,7 @@ export function OutputBlock({
   const [local, setLocal] = useState(row);
   useEffect(() => {
     if (saveRow.isPending()) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- sync from server when no edit is in flight (matches ChannelBlock pattern)
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- sync from server when no edit is in flight (matches ChannelBlock)
     setLocal(row);
   }, [row, saveRow]);
 
@@ -101,120 +85,119 @@ export function OutputBlock({
     saveRow.schedule(0);
   };
 
-  /* Pre-focus snapshots for the Esc-revert behaviour. The
-     NavCell wrapper's onCancelEdit fires on Escape; we restore
-     the value from the matching ref. */
-  const itemSnapRef = useRef<string>(local.output_item ?? '');
-  const destSnapRef = useRef<string>(local.output_destination ?? '');
+  /* Pre-focus snapshots for Esc-revert. */
+  const nameSnapRef = useRef<string>(local.output_item ?? '');
+  const descSnapRef = useRef<string>(local.output_description ?? '');
+  const posSnapRef = useRef<string>(local.output_position ?? '');
   const notesSnapRef = useRef<string>(local.output_notes ?? '');
-  const qtySnapRef = useRef<number | null>(local.output_qty);
+
+  /* Derived position placeholder. Stereo rows suggest the pair
+     N+(N+1); mono rows suggest N. row.row_index is the
+     independent output number. */
+  const positionPlaceholder = local.output_is_stereo
+    ? `${row.row_index}+${row.row_index + 1}`
+    : `${row.row_index}`;
+
+  const fieldClass =
+    'w-full min-w-0 rounded border border-lp-border bg-lp-bg px-1.5 py-1.5 text-xs text-lp-text outline-none focus:border-lp-orange/40';
 
   return (
     <div
       className="grid w-full min-h-10 items-center gap-0 border-b last:border-b-0"
       style={{ ...OUTPUT_GRID, borderColor: 'var(--lp-border-light)' }}
     >
-      {/* Index (read-only, not focusable). */}
-      <div
-        className="font-mono text-[11px] tabular-nums pl-2"
-        style={{ color: 'var(--lp-text-tertiary)' }}
-      >
-        {row.row_index}
+      {/* # — independent output number (read-only). Stereo rows
+          show the claimed pair. */}
+      <div className="font-mono text-[11px] tabular-nums pl-2" style={{ color: 'var(--lp-text-tertiary)' }}>
+        {local.output_is_stereo ? `${row.row_index}+${row.row_index + 1}` : row.row_index}
       </div>
 
-      {/* Item (col 0) — text input. */}
-      <NavCell
-        row={outputRowIdx}
-        col={0}
-        onCancelEdit={() => queue({ output_item: itemSnapRef.current })}
-      >
+      {/* NAME (col 0) */}
+      <NavCell row={outputRowIdx} col={0} onCancelEdit={() => queue({ output_item: nameSnapRef.current })}>
         <div className="min-w-0 px-1 self-center">
           <input
             type="text"
             value={local.output_item ?? ''}
             onFocus={() => {
-              itemSnapRef.current = local.output_item ?? '';
+              nameSnapRef.current = local.output_item ?? '';
             }}
             onChange={(e) => queue({ output_item: e.target.value })}
             onBlur={() => void saveRow.flush()}
             placeholder="PSM1000 w/ P10R"
-            className="w-full min-w-0 rounded border border-lp-border bg-lp-bg px-1.5 py-1.5 text-xs text-lp-text outline-none focus:border-lp-orange/40"
+            className={fieldClass}
             title={local.output_item ?? ''}
           />
         </div>
       </NavCell>
 
-      {/* Destination (col 1) — text input. */}
-      <NavCell
-        row={outputRowIdx}
-        col={1}
-        onCancelEdit={() => queue({ output_destination: destSnapRef.current })}
-      >
+      {/* DESCRIPTION (col 1) */}
+      <NavCell row={outputRowIdx} col={1} onCancelEdit={() => queue({ output_description: descSnapRef.current })}>
         <div className="min-w-0 px-1 self-center">
           <input
             type="text"
-            value={local.output_destination ?? ''}
+            value={local.output_description ?? ''}
             onFocus={() => {
-              destSnapRef.current = local.output_destination ?? '';
+              descSnapRef.current = local.output_description ?? '';
             }}
-            onChange={(e) => queue({ output_destination: e.target.value })}
+            onChange={(e) => queue({ output_description: e.target.value })}
             onBlur={() => void saveRow.flush()}
             placeholder="SL MON / DRIVE LOOM"
-            className="w-full min-w-0 rounded border border-lp-border bg-lp-bg px-1.5 py-1.5 text-xs text-lp-text outline-none focus:border-lp-orange/40"
-            title={local.output_destination ?? ''}
+            className={fieldClass}
+            title={local.output_description ?? ''}
           />
         </div>
       </NavCell>
 
-      {/* Position (col 2) — enum select. Reuses the input
-          grid's stage-position enum. */}
+      {/* STEREO? (col 2) — binary toggle. */}
       <NavCell row={outputRowIdx} col={2}>
-        <div className="min-w-0 px-1 self-center">
-          <PositionSelectCell
-            value={local.position}
-            onChange={(v) => {
-              queue({ position: v });
+        <div className="flex items-center justify-center self-center">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={local.output_is_stereo}
+            aria-label={`Mark output ${row.row_index} as stereo`}
+            title="Stereo pair (claims two positions)"
+            onClick={() => {
+              queue({ output_is_stereo: !local.output_is_stereo });
               void saveRow.flush();
             }}
-            ariaLabel={`Stage position for output ${row.row_index}`}
-          />
+            className="flex h-7 w-7 items-center justify-center rounded border hover:bg-lp-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-lp-orange)]"
+            style={{
+              background: local.output_is_stereo ? 'var(--color-lp-orange)' : 'var(--lp-bg)',
+              borderColor: local.output_is_stereo ? 'var(--color-lp-orange)' : 'var(--lp-border)',
+              transition: 'background-color 150ms ease-out, border-color 200ms ease-out',
+            }}
+          >
+            {local.output_is_stereo ? (
+              <Check className="h-3.5 w-3.5" strokeWidth={2.5} style={{ color: 'var(--lp-text-inverse)' }} />
+            ) : (
+              <span className="text-[9px] font-bold text-lp-text-tertiary">ST</span>
+            )}
+          </button>
         </div>
       </NavCell>
 
-      {/* QTY (col 3) — small int input. */}
-      <NavCell
-        row={outputRowIdx}
-        col={3}
-        onCancelEdit={() => queue({ output_qty: qtySnapRef.current })}
-      >
+      {/* POSITION (col 3) — free text; placeholder shows the
+          derived mono/stereo position. */}
+      <NavCell row={outputRowIdx} col={3} onCancelEdit={() => queue({ output_position: posSnapRef.current })}>
         <div className="min-w-0 px-1 self-center">
           <input
-            type="number"
-            min={0}
-            step={1}
-            value={local.output_qty ?? ''}
+            type="text"
+            value={local.output_position ?? ''}
             onFocus={() => {
-              qtySnapRef.current = local.output_qty;
+              posSnapRef.current = local.output_position ?? '';
             }}
-            onChange={(e) => {
-              const v = e.target.value;
-              queue({
-                output_qty: v === '' ? null : Math.max(0, Math.floor(Number(v))),
-              });
-            }}
+            onChange={(e) => queue({ output_position: e.target.value })}
             onBlur={() => void saveRow.flush()}
-            placeholder="0"
-            className="w-full min-w-0 rounded border border-lp-border bg-lp-bg px-1.5 py-1.5 text-xs text-lp-text outline-none focus:border-lp-orange/40 text-center tabular-nums"
+            placeholder={positionPlaceholder}
+            className={`${fieldClass} text-center tabular-nums`}
+            title={local.output_position ?? positionPlaceholder}
           />
         </div>
       </NavCell>
 
-      {/* Notes (col 4) — text input. */}
-      <NavCell
-        row={outputRowIdx}
-        col={4}
-        onCancelEdit={() => queue({ output_notes: notesSnapRef.current })}
-      >
+      {/* NOTES (col 4) */}
+      <NavCell row={outputRowIdx} col={4} onCancelEdit={() => queue({ output_notes: notesSnapRef.current })}>
         <div className="min-w-0 px-1 self-center">
           <input
             type="text"
@@ -225,14 +208,13 @@ export function OutputBlock({
             onChange={(e) => queue({ output_notes: e.target.value })}
             onBlur={() => void saveRow.flush()}
             placeholder="…"
-            className="w-full min-w-0 rounded border border-lp-border bg-lp-bg px-1.5 py-1.5 text-xs text-lp-text outline-none focus:border-lp-orange/40"
+            className={fieldClass}
             title={local.output_notes ?? ''}
           />
         </div>
       </NavCell>
 
-      {/* Delete action. Tab-reachable but outside the cell
-          nav matrix (no NavCell wrapper). */}
+      {/* Delete action. */}
       <div className="flex justify-end pr-1 self-center">
         <button
           type="button"

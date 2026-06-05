@@ -145,6 +145,14 @@ export const RESOURCE_CATALOG: readonly ResourceDef[] = [
     sensitive: false,
   },
   {
+    id: 'operations.stage_plot',
+    type: 'page',
+    group: 'operations',
+    label: 'Stage Plot',
+    description: 'Stage plot / input-list diagrams.',
+    sensitive: false,
+  },
+  {
     id: 'operations.payroll',
     type: 'page',
     group: 'operations',

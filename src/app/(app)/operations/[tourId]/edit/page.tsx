@@ -1,20 +1,51 @@
 /* ============================================
-   LOWPASS — Operations · Edit Tour (Phase 1 §C placeholder)
+   LOWPASS — Operations · Edit Tour (Phase 4 unblock)
 
-   /operations/[tourId]/edit — replaces /tours/[id]/edit. Phase 4
-   ports the existing surface onto the new shell.
-
-   Sprint 8.1 §2 — ProductShell hoisted to /operations/[tourId]/layout.tsx.
+   /operations/[tourId]/edit — live tour-details edit form. Ports
+   /tours/[id]/edit, inner content only (ProductShell + TourHeader come
+   from /operations/[tourId]/layout.tsx).
    ============================================ */
 
-import { PhaseScaffoldPlaceholder } from '@/components/shell-v2/PhaseScaffoldPlaceholder';
+import Link from 'next/link';
+import { notFound } from 'next/navigation';
+import { ArrowLeft } from 'lucide-react';
+import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { TourEditForm } from '@/components/tours/TourEditForm';
 
-export default function OperationsTourEditTourPage() {
+export const dynamic = 'force-dynamic';
+
+export default async function OperationsTourEditPage({ params }: { params: Promise<{ tourId: string }> }) {
+  const { tourId } = await params;
+  const supabase = await createServerSupabaseClient();
+  const { data: tour, error } = await supabase
+    .from('tours')
+    .select(`
+      *,
+      artist:artists(*)
+    `)
+    .eq('id', tourId)
+    .single();
+
+  if (error || !tour) notFound();
+
   return (
-    <PhaseScaffoldPlaceholder
-      title="Operations · Edit Tour"
-      phase="Phase 4"
-      body={`Tour metadata edit (name, dates, currency, status). Phase 4 ports it onto the new shell.`}
-    />
+    <div className="mx-auto max-w-xl space-y-6 px-4 pt-6">
+      <div className="flex items-center gap-4">
+        <Link
+          href={`/operations/${tourId}`}
+          className="flex items-center gap-1 text-sm text-lp-text-secondary hover:text-lp-text"
+        >
+          <ArrowLeft size={16} />
+          Back to tour
+        </Link>
+      </div>
+      <div>
+        <h1 className="text-2xl font-bold text-lp-text">Edit tour</h1>
+        <p className="mt-1 text-sm text-lp-text-secondary">
+          Update tour details. Routing is edited on the tour page.
+        </p>
+      </div>
+      <TourEditForm tour={tour} />
+    </div>
   );
 }

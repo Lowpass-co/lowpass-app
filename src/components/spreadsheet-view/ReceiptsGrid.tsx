@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { GridTable } from './GridTable';
 import { InlineEditCell } from './InlineEditCell';
 import { cn } from '@/lib/utils';
+import { useToast } from '@/components/ui/Toast';
+import { detectAiCap, aiCapMessage } from '@/lib/ai/client';
 import type { ExpenseReceipt } from '@/types';
 
 function ocrCategoryToReceiptCategory(ocr: string | null): string {
@@ -78,6 +80,7 @@ const COLS = [
 ];
 
 export function ReceiptsGrid({ tourId, currency }: { tourId: string; currency: string }) {
+  const { showToast } = useToast();
   const [receipts, setReceipts] = useState<ExpenseReceipt[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -164,6 +167,11 @@ export function ReceiptsGrid({ tourId, currency }: { tourId: string; currency: s
           method: 'POST',
           body: formData,
         });
+        const cap = await detectAiCap(ocrRes);
+        if (cap) {
+          showToast(aiCapMessage(cap), 'error');
+          return;
+        }
         if (!ocrRes.ok) {
           const errBody = (await ocrRes.json().catch(() => ({}))) as Record<string, unknown>;
           throw new Error(ocrErrorMessageFromBody(errBody));
@@ -194,7 +202,7 @@ export function ReceiptsGrid({ tourId, currency }: { tourId: string; currency: s
         setScanning(false);
       }
     },
-    [tourId, currency]
+    [tourId, currency, showToast]
   );
 
   if (loading) return <div className="text-sm text-lp-text-secondary py-4">Loading…</div>;

@@ -25,6 +25,14 @@ Tier 3 — Tour context (one tour, multiple shows)
   /advance/[tourId]/[routingId]
 ```
 
+**Operations sub-nav** (single source of truth: `SUB_NAV` in
+`operations/[tourId]/layout.tsx`), in order:
+Summary · Tour Personnel · Routing · Channel list · **Stage Plot** ·
+Payroll · Rooming · Files · Riders.
+Stage Plot (`/operations/[tourId]/stage-plot`) mounts the stage-plot
+editor on tour-scoped `rider_packs` (kind='stage_plot', scope='tour');
+0 plots → create CTA, 1 → editor inline, 2+ → list.
+
 ## Chrome rules
 
 | Tier | Chrome | ProductRail |

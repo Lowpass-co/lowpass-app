@@ -29,6 +29,10 @@ type RowPatch = Partial<
     | 'output_destination'
     | 'output_qty'
     | 'output_notes'
+    /* §CL-FIX-7 — outputs v2: DESCRIPTION + stereo + POSITION. */
+    | 'output_description'
+    | 'output_is_stereo'
+    | 'output_position'
   >
 >;
 
@@ -207,10 +211,14 @@ export async function appendRow(
   supabase: SupabaseClient,
   args: { packId: string; sectionId: string },
 ): Promise<ChannelListRow> {
+  /* §CL-FIX-7 — inputs number independently of outputs now
+     (UNIQUE (section_id, row_kind, row_index)). Scope the max to
+     input rows (legacy NULL row_kind counts as input). */
   const { data: existing } = await supabase
     .from('channel_list_rows')
     .select('row_index')
-    .eq('section_id', args.sectionId);
+    .eq('section_id', args.sectionId)
+    .or('row_kind.is.null,row_kind.eq.input');
   const next =
     existing && existing.length > 0 ? Math.max(...existing.map((r) => r.row_index)) + 1 : 1;
   const { data, error } = await supabase
@@ -219,6 +227,7 @@ export async function appendRow(
       pack_id: args.packId,
       section_id: args.sectionId,
       row_index: next,
+      row_kind: 'input',
     })
     .select('*')
     .single();
@@ -240,13 +249,15 @@ export async function appendRows(
   const { data: existing } = await supabase
     .from('channel_list_rows')
     .select('row_index')
-    .eq('section_id', args.sectionId);
+    .eq('section_id', args.sectionId)
+    .or('row_kind.is.null,row_kind.eq.input');
   const start =
     existing && existing.length > 0 ? Math.max(...existing.map((r) => r.row_index)) + 1 : 1;
   const payload = Array.from({ length: count }, (_, i) => ({
     pack_id: args.packId,
     section_id: args.sectionId,
     row_index: start + i,
+    row_kind: 'input',
   }));
   const { data, error } = await supabase.from('channel_list_rows').insert(payload).select('*');
   if (error) throw new Error(error.message);
@@ -268,10 +279,12 @@ export async function appendOutputRow(
   supabase: SupabaseClient,
   args: { packId: string; sectionId: string },
 ): Promise<ChannelListRow> {
+  /* §CL-FIX-7 — outputs number from 1 independently of inputs. */
   const { data: existing } = await supabase
     .from('channel_list_rows')
     .select('row_index')
-    .eq('section_id', args.sectionId);
+    .eq('section_id', args.sectionId)
+    .eq('row_kind', 'output');
   const next =
     existing && existing.length > 0 ? Math.max(...existing.map((r) => r.row_index)) + 1 : 1;
   const { data, error } = await supabase

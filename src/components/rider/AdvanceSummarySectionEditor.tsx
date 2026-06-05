@@ -30,6 +30,8 @@
 import { useEffect, useState } from 'react';
 import { Plus, Trash2, Sparkles, Loader2 } from 'lucide-react';
 import { SaveStatePill, type SavePillState } from '@/components/rider-pack/SaveStatePill';
+import { useToast } from '@/components/ui/Toast';
+import { detectAiCap, aiCapMessage } from '@/lib/ai/client';
 import type { ResolvedSection } from '@/lib/rider-packs/types';
 
 export interface AdvanceSummaryRow {
@@ -92,6 +94,7 @@ export function AdvanceSummarySectionEditor({
   onMoveUp,
   onMoveDown,
 }: AdvanceSummarySectionEditorProps) {
+  const { showToast } = useToast();
   const [titleDraft, setTitleDraft] = useState(section.title);
   useEffect(() => {
     setTitleDraft(section.title);
@@ -140,6 +143,11 @@ export function AdvanceSummarySectionEditor({
         `/api/rider-packs/${packId}/advance-summary/generate`,
         { method: 'POST' },
       );
+      const cap = await detectAiCap(res);
+      if (cap) {
+        showToast(aiCapMessage(cap), 'error');
+        return;
+      }
       const body = (await res.json().catch(() => null)) as
         | { rows?: AdvanceSummaryRow[]; error?: string; retry_after_seconds?: number }
         | null;

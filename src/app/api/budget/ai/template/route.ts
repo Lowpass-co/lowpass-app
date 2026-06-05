@@ -7,7 +7,7 @@
 
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
-import Anthropic from '@anthropic-ai/sdk';
+import { withAiUsage, aiCapExceededResponse } from '@/lib/ai/usage';
 import { checkRateLimit, markRateLimit } from '@/lib/rate-limit';
 
 const n = (x: number | null | undefined): number => (x == null ? 0 : Number(x) || 0);
@@ -172,21 +172,28 @@ export async function POST(request: Request) {
   const avgProductionPerDay = totalShowDays > 0 ? prodTotal / totalShowDays : 0;
   const avgPerDiem = personCount > 0 && totalShowDays > 0 ? perDiemTotal / (personCount * totalShowDays) : 0;
 
-  const client = new Anthropic({ apiKey });
-
   const citiesText = cities.length > 0 ? cities.join(', ') : 'various';
 
   try {
-    const response = await client.messages.create({
-      /* Sprint 12 §SAFE — Haiku 4.5. This route does template
-         arithmetic + structured JSON output, no chain-of-
-         thought reasoning that needs Sonnet. */
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 2048,
-      messages: [
-        {
-          role: 'user',
-          content: `Based on historical tour data for this artist/workspace, generate a budget template.
+    const { result: response, blocked, blockReason } = await withAiUsage(
+      {
+        workspaceId: wid,
+        userId: user.id,
+        endpoint: 'budget.ai.template',
+        model: 'claude-haiku-4-5-20251001',
+        metadata: { tour_id },
+      },
+      async (anthropic) => {
+        const r = await anthropic.messages.create({
+          /* Sprint 12 §SAFE — Haiku 4.5. This route does template
+             arithmetic + structured JSON output, no chain-of-
+             thought reasoning that needs Sonnet. */
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 2048,
+          messages: [
+            {
+              role: 'user',
+              content: `Based on historical tour data for this artist/workspace, generate a budget template.
 
 Historical averages (from ${pastTours.length} completed tour(s), ${totalShowDays} total show days):
 - Hotels: £${avgHotelPerDay.toFixed(0)}/show day
@@ -210,9 +217,14 @@ Return ONLY valid JSON with this structure (no markdown):
   "warnings": ["any concerns or caveats"]
 }
 Use category values: hotels, prod_misc, prod_audio, transport_misc, transport_bus, etc. Keep line_items to 5-15 items.`,
-        },
-      ],
-    });
+            },
+          ],
+        });
+        return { result: r, usage: r.usage };
+      },
+    );
+    if (blocked) return aiCapExceededResponse(blockReason ?? 'workspace_budget');
+    if (!response) return NextResponse.json({ error: 'Template generation failed' }, { status: 500 });
 
     const block = response.content[0];
     const text = block.type === 'text' ? block.text : '';

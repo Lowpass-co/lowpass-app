@@ -41,6 +41,12 @@ const SETTINGS_LINKS: SettingsSubNavLink[] = [
     href: '/settings/members',
     activePathPrefix: '/settings/members',
   },
+  {
+    id: 'ai-limits',
+    label: 'AI limits',
+    href: '/settings/ai-limits',
+    activePathPrefix: '/settings/ai-limits',
+  },
 ];
 
 export function SettingsSubNav({ pathname }: { pathname: string }) {

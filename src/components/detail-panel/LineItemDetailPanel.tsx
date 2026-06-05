@@ -11,6 +11,8 @@ import {
 import { InlineEditCell } from '@/components/spreadsheet-view/InlineEditCell';
 import { RoutingDateField } from '@/components/spreadsheet-view/RoutingDateField';
 import { cn } from '@/lib/utils';
+import { useToast } from '@/components/ui/Toast';
+import { detectAiCap, aiCapMessage } from '@/lib/ai/client';
 
 const STATUS_OPTIONS = [
   { value: 'draft', label: 'Draft' },
@@ -94,6 +96,7 @@ interface NoteRow {
 }
 
 export function LineItemDetailPanel({ lineItemId, tourId, onClose }: LineItemDetailPanelProps) {
+  const { showToast } = useToast();
   const [lineItem, setLineItem] = useState<LineItemRow | null>(null);
   const [attachments, setAttachments] = useState<AttachmentRow[]>([]);
   const [notes, setNotes] = useState<NoteRow[]>([]);
@@ -216,6 +219,12 @@ export function LineItemDetailPanel({ lineItemId, tourId, onClose }: LineItemDet
           context: lineItem ? { category: lineItem.category, label: lineItem.label, proposed_cost: lineItem.proposed_cost } : undefined,
         }),
       });
+      const cap = await detectAiCap(res);
+      if (cap) {
+        showToast(aiCapMessage(cap), 'error');
+        setSuggestions([]);
+        return;
+      }
       const json = await res.json().catch(() => ({}));
       setSuggestions(Array.isArray(json.suggestions) ? json.suggestions : []);
       setSuggestionsDismissed(new Set());
@@ -224,7 +233,7 @@ export function LineItemDetailPanel({ lineItemId, tourId, onClose }: LineItemDet
     } finally {
       setSuggestionsLoading(false);
     }
-  }, [lineItemId, tourId, lineItem]);
+  }, [lineItemId, tourId, lineItem, showToast]);
 
   useEffect(() => {
     if (lineItem && lineItemId) {

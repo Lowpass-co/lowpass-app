@@ -7,7 +7,7 @@
 
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
-import Anthropic from '@anthropic-ai/sdk';
+import { withAiUsage, aiCapExceededResponse } from '@/lib/ai/usage';
 import { getCached, setCached } from '@/lib/rate-limit';
 
 /* Sprint 12 §SAFE — server-side dedupe. The detail panel
@@ -98,18 +98,25 @@ export async function POST(request: Request) {
     (i: { label?: string }) => (i.label ?? '').toLowerCase().match(/haulage|freight|truck/)
   );
 
-  const client = new Anthropic({ apiKey });
-
   try {
-    const response = await client.messages.create({
-      /* Sprint 12 §SAFE — Haiku 4.5. 1-3 short suggestions
-         on a structured prompt; Haiku is the right tier. */
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 512,
-      messages: [
-        {
-          role: 'user',
-          content: `You are a tour budget assistant. Given this line item and tour context, suggest 1-3 brief, actionable tips. Be subtle and specific.
+    const { result: response, blocked, blockReason } = await withAiUsage(
+      {
+        workspaceId: profile.workspace_id,
+        userId: user.id,
+        endpoint: 'budget.ai.suggest',
+        model: 'claude-haiku-4-5-20251001',
+        metadata: { tour_id, line_id: line_item?.id ?? null },
+      },
+      async (anthropic) => {
+        const r = await anthropic.messages.create({
+          /* Sprint 12 §SAFE — Haiku 4.5. 1-3 short suggestions
+             on a structured prompt; Haiku is the right tier. */
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 512,
+          messages: [
+            {
+              role: 'user',
+              content: `You are a tour budget assistant. Given this line item and tour context, suggest 1-3 brief, actionable tips. Be subtle and specific.
 
 Line item: category="${category}", label="${label}", proposed_cost=${proposedCost}
 Tour: ${(tour as { name?: string }).name ?? ''}, ${showCount} show days.
@@ -117,9 +124,14 @@ Other budgeted items include: ${(lineItems.data ?? []).slice(0, 15).map((i: { la
 Carnet budgeted: ${hasCarnet}. Haulage/freight budgeted: ${hasHaulage}.
 
 Return ONLY a JSON array of 1-3 strings, each a short suggestion (e.g. "You usually budget £250/night for hotels in London — is £200 still right?" or "This tour has 3 EU shows but no carnet budgeted."). If nothing useful, return []. No markdown.`,
-        },
-      ],
-    });
+            },
+          ],
+        });
+        return { result: r, usage: r.usage };
+      },
+    );
+    if (blocked) return aiCapExceededResponse(blockReason ?? 'workspace_budget');
+    if (!response) return NextResponse.json({ suggestions: [] });
 
     const block = response.content[0];
     const text = block.type === 'text' ? block.text : '';

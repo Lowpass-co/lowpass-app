@@ -300,9 +300,11 @@ row numbers.
 **Expect**: Output rows are numbered 1, 2, 3, 4 (independent of input
 count).
 
-**Currently**: Output rows continue the input numbering — they show
-17, 18, 19, 20. Shared `(section_id, row_index)` unique constraint on
-`channel_list_rows`.
+**Currently**: ⏳ FIXED §CL-FIX-7 (pending Vercel verify + migration 115
+apply) — outputs number from 1 independently. Migration 115 drops the
+shared `(section_id, row_index)` constraint, adds UNIQUE
+`(section_id, row_kind, row_index)`, and renumbers existing outputs per
+section. appendRow / appendOutputRow now scope their max by row_kind.
 
 **Tracked in**: `CC_CHANNEL_LIST_REBUILD.md` §CL-FIX-7.
 
@@ -314,8 +316,10 @@ count).
 indicator that the row is a stereo pair. Patch matrix treats it as a
 1×2 cell.
 
-**Currently**: No stereo concept exists on outputs. Each output row
-is single-position.
+**Currently**: ⏳ FIXED §CL-FIX-7 (pending Vercel verify + migration 115)
+— each output row has a STEREO? binary toggle (output_is_stereo). When
+on, the # column and POSITION placeholder show the pair "N+(N+1)";
+POSITION is overridable free text. (Single-row + boolean model per Adam.)
 
 **Tracked in**: `CC_CHANNEL_LIST_REBUILD.md` §CL-FIX-7.
 
@@ -325,10 +329,11 @@ is single-position.
 
 **Expect**: NAME, DESCRIPTION, STEREO?, POSITION, NOTES.
 
-**Currently**: Output columns are: output_item, output_destination,
-output_qty, output_notes (per migration 098). No STEREO. No
-POSITION. DESCRIPTION lives under output_destination but the label
-is mis-named for Adam's workflow.
+**Currently**: ⏳ FIXED §CL-FIX-7 (pending Vercel verify + migration 115)
+— output grid is now # | NAME | DESCRIPTION | STEREO? | POSITION | NOTES.
+DESCRIPTION = new `output_description` (backfilled from
+`output_destination`, kept one tour before any drop). QTY removed from
+the UI (`output_qty` retained in DB).
 
 **Tracked in**: `CC_CHANNEL_LIST_REBUILD.md` §CL-FIX-7.
 

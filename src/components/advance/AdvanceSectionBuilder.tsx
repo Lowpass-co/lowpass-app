@@ -74,6 +74,8 @@ import {
 } from 'lucide-react';
 import { parseRoutingDate, getDayTypeColor, getAdvanceStatusInfo, firstDayType, dayTypesInclude, cn } from '@/lib/utils';
 import { SlidingToggle } from '@/components/ui/SlidingToggle';
+import { useToast } from '@/components/ui/Toast';
+import { detectAiCap, aiCapMessage } from '@/lib/ai/client';
 import { ContextMenu } from '@/components/ui/ContextMenu';
 import { DeleteConfirmationModal } from '@/components/ui/DeleteConfirmationModal';
 import { BrandedSelect } from '@/components/ui/BrandedSelect';
@@ -3542,6 +3544,7 @@ function DealInfoUploadBlock({
      the user's workspace before billing the AI key. */
   tourId?: string;
 }) {
+  const { showToast } = useToast();
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<1 | 2>(1);
   const [documentType, setDocumentType] = useState<string>(DEAL_MEMO_DOC_TYPES[0]);
@@ -3568,6 +3571,11 @@ function DealInfoUploadBlock({
       form.set('tour_id', tourId);
       files.forEach((f) => form.append('files', f));
       const res = await fetch('/api/advance/extract-deal-memo', { method: 'POST', body: form });
+      const cap = await detectAiCap(res);
+      if (cap) {
+        showToast(aiCapMessage(cap), 'error');
+        return;
+      }
       const j = await res.json().catch(() => ({}));
       if (!res.ok) {
         setError(j.error ?? 'Extraction failed');
