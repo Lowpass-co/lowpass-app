@@ -24,12 +24,16 @@ export function resolveBudgetTab(
   raw: string | string[] | undefined,
 ): BudgetTab {
   const candidate = Array.isArray(raw) ? raw[0] : raw;
+  /* Budget is the landing tab — the TM almost always wants the line-item
+     grid first. Summary/Reports/Settings are explicit; everything else
+     (no ?tab, stale ?tab=actuals, unknown) falls through to Budget. */
   switch (candidate) {
-    case 'budget':
+    case 'summary':
     case 'reports':
     case 'settings':
       return candidate;
+    case 'budget':
     default:
-      return 'summary';
+      return 'budget';
   }
 }

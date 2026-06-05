@@ -169,7 +169,8 @@ export default async function BudgetTourPage({
     <BudgetDensityProvider>
     <div className="flex min-h-0 flex-1 flex-col pb-24">
         <BudgetStatsStrip lines={lines} tourCurrency={tourCurrency} />
-        <BudgetPhaseStripClient phases={phases} />
+        {/* Phase strip only when this tour tracks phases (BUD-18). */}
+        {trackPhases ? <BudgetPhaseStripClient phases={phases} /> : null}
         <BudgetTabNav active={tab} />
 
         <div className="space-y-6 px-4 pt-4">

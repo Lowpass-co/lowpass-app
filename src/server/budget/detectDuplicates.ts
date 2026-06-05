@@ -83,6 +83,11 @@ export function detectDuplicates(
 
       const amtA = pickAmount(a);
       const amtB = pickAmount(b);
+      // Two zero-cost rows (fresh template / placeholder lines) are not
+      // duplicates — only flag when at least one carries a real amount.
+      // This kills the "N rows flagged as duplicates" warning that fired
+      // on every freshly-applied template or batch of new blank lines.
+      if (amtA === 0 && amtB === 0) continue;
       if (!withinPctOf(amtA, amtB, AMOUNT_TOLERANCE_PCT)) continue;
 
       if (!withinDays(a.created_at, b.created_at, TIME_WINDOW_DAYS)) continue;
