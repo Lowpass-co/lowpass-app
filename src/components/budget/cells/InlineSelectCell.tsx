@@ -19,6 +19,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Check, ChevronDown } from 'lucide-react';
 
 export interface SelectOption {
@@ -194,7 +195,7 @@ export function InlineSelectCell({
           children
         )}
       </button>
-      {open && coords ? (
+      {open && coords && typeof document !== 'undefined' ? createPortal(
         <div
           ref={menuRef}
           role="listbox"
@@ -224,7 +225,7 @@ export function InlineSelectCell({
             minWidth: coords.width,
             maxHeight: 280,
             overflowY: 'auto',
-            zIndex: 50,
+            zIndex: 2000,
             background: 'var(--lp-surface)',
             border: '1px solid var(--lp-border-strong)',
             borderRadius: 8,
@@ -282,7 +283,8 @@ export function InlineSelectCell({
               </button>
             );
           })}
-        </div>
+        </div>,
+        document.body,
       ) : null}
     </>
   );

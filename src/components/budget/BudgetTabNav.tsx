@@ -5,8 +5,8 @@
    strip and the page content.
 
    Tab routing uses ?tab=… (no replace, scroll preserved). Default
-   tab is Summary — empty / unknown ?tab= lands here too. The
-   active link picks up the brand-orange underline.
+   tab is Budget — empty / unknown ?tab= lands there. Every tab sets
+   ?tab= explicitly. The active link picks up the brand-orange underline.
    ============================================ */
 
 'use client';
@@ -45,8 +45,10 @@ export function BudgetTabNav({ active }: BudgetTabNavProps) {
 
   function hrefFor(tab: BudgetTab): string {
     const params = new URLSearchParams(searchParams);
-    if (tab === 'summary') params.delete('tab');
-    else params.set('tab', tab);
+    // Budget is the default tab now, so every tab — including Summary —
+    // must set ?tab= explicitly; otherwise the Summary link (no param)
+    // falls through to Budget.
+    params.set('tab', tab);
     const qs = params.toString();
     return qs ? `${pathname}?${qs}` : pathname;
   }
