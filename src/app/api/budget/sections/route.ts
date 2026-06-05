@@ -25,7 +25,7 @@ async function resolveWorkspace() {
     .from('profiles')
     .select('workspace_id')
     .eq('id', user.id)
-    .single();
+    .maybeSingle();
   if (!profile?.workspace_id) {
     return { error: NextResponse.json({ error: 'No workspace' }, { status: 403 }) };
   }
@@ -83,7 +83,7 @@ export async function POST(request: Request) {
     .select('id')
     .eq('id', tourId)
     .eq('workspace_id', workspaceId)
-    .single();
+    .maybeSingle();
   if (!tour) {
     return NextResponse.json({ error: 'Tour not found' }, { status: 404 });
   }
@@ -148,16 +148,21 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: 'nothing to update' }, { status: 400 });
   }
 
+  // maybeSingle so a 0-row update (deleted / RLS-filtered) returns null
+  // instead of throwing "Cannot coerce the result to a single JSON object".
   const { data, error } = await supabase
     .from('budget_sections')
     .update(payload)
     .eq('id', body.id)
     .eq('workspace_id', workspaceId)
     .select()
-    .single();
+    .maybeSingle();
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  if (!data) {
+    return NextResponse.json({ error: 'Section not found' }, { status: 404 });
   }
   return NextResponse.json(data);
 }

@@ -44,6 +44,7 @@ import { BudgetTabPlaceholder } from '@/components/budget/BudgetTabPlaceholder';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { computeTourPhases } from '@/server/budget/computeTourPhases';
 import { getBudgetPanelData } from '@/server/budget/getBudgetPanelData';
+import { reconcileDerivedBudgetLines } from '@/server/budget/reconcileDerivedLines';
 import {
   detectDuplicates,
   duplicatesToRecord,
@@ -103,6 +104,12 @@ export default async function BudgetTourPage({
   if (!workspaceId) {
     notFound();
   }
+
+  /* Budget ← Operations linking — reconcile derived lines (rooming +
+     payroll) BEFORE reading lines + sections, so the grid shows fresh
+     derived rows and their auto-created sections on load. Self-guarded:
+     never throws. */
+  await reconcileDerivedBudgetLines(supabase, tourId, workspaceId);
 
   const [phases, panelData, lineItemsRes, routingRes, sectionsRes, settingsRes] =
     await Promise.all([

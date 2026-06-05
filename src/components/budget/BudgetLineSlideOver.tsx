@@ -27,9 +27,10 @@ import {
 import { TransactionsSection } from '@/components/budget/TransactionsSection';
 import { CurrencyNumericInput } from '@/components/budget/cells/CurrencyNumericInput';
 import { CategoryChipDropdown } from '@/components/budget/cells/CategoryChip';
+import { InlineSelectCell } from '@/components/budget/cells/InlineSelectCell';
 import { getActualState } from '@/lib/budget/transactions';
 import { isIncomeRow, varianceColor } from '@/lib/budget/income-rows';
-import type { BudgetLineItem } from '@/types';
+import type { BudgetLineItem, BudgetSection } from '@/types';
 
 // Status enum MUST match /api/budget/line-items PATCH validation.
 // Mismatches cause a 400 response that fails the entire batched
@@ -54,6 +55,9 @@ const CURRENCY_OPTIONS = ['GBP', 'USD', 'EUR', 'CAD', 'AUD'] as const;
 type DraftFields = {
   label: string;
   category: string;
+  /** Fix-pack A — budget_sections FK ('' = Uncategorised). The single
+   *  grouping source; moving a line between sections writes this. */
+  section_id: string;
   /** Phase 3 §D — pre_prod / rehearsals / show_days / wrap, or '' (unscoped). */
   phase_tag: string;
   vendor: string;
@@ -95,6 +99,7 @@ function fieldsFromLine(line: BudgetLineItem, fallbackCurrency: string): DraftFi
   return {
     label: line.label ?? '',
     category: (line.category ?? '').toString(),
+    section_id: (line.section_id ?? '').toString(),
     phase_tag: (line.phase_tag ?? '').toString(),
     vendor: isVendorPrefix ? maybeVendor.slice('Vendor: '.length) : '',
     quantity: Number(line.quantity ?? 1),
@@ -126,6 +131,10 @@ function diffPatchPayload(
   const out: Record<string, unknown> = {};
   if (current.label !== initial.label) out.label = current.label;
   if (current.category !== initial.category) out.category = current.category || 'misc';
+  // Fix-pack A — moving a line between sections. '' → null (Uncategorised).
+  if (current.section_id !== initial.section_id) {
+    out.section_id = current.section_id || null;
+  }
   // Phase 3 §D — '' (empty string in the dropdown) maps to NULL on the
   // server (= unscoped). Matches migration 064's CHECK constraint.
   if (current.phase_tag !== initial.phase_tag) {
@@ -156,6 +165,9 @@ type BudgetLineSlideOverProps = {
   line: BudgetLineItem;
   tourId: string;
   tourCurrency: string;
+  /** Fix-pack A — existing budget_sections for the Section dropdown
+   *  (move a line between sections). Optional for back-compat callers. */
+  sections?: BudgetSection[];
   onClose: () => void;
   /** Drives the SlideOver enter/exit animation. Optional + defaults
    *  to `true` so older callers (BudgetMainTable, TourBudgetRebuild)
@@ -178,6 +190,7 @@ export function BudgetLineSlideOver({
   line,
   tourId,
   tourCurrency,
+  sections = [],
   onClose,
   open = true,
   onExitComplete,
@@ -379,6 +392,8 @@ export function BudgetLineSlideOver({
           actual_cost: fields.actual_cost,
           currency: fields.currency,
           notes: notesFromFields(fields),
+          // Fix-pack A — section_id is the grouping source; '' → null.
+          section_id: fields.section_id || null,
           // Phase 3 §D — '' (Unscoped) maps to NULL on the server.
           phase_tag: fields.phase_tag || null,
         }),
@@ -472,13 +487,6 @@ export function BudgetLineSlideOver({
     fontSize: 'var(--lp-text-base)',
     width: '100%',
     outline: 'none',
-  };
-  /* Selects keep their native dropdown arrow (no appearance reset) but
-     inherit the tokenised border/background/padding so they line up
-     with the text inputs. */
-  const selectStyle: React.CSSProperties = {
-    ...inputStyle,
-    cursor: 'pointer',
   };
   // Section heading — the spine of the new grouped layout.
   const sectionHeadingStyle: React.CSSProperties = {
@@ -652,6 +660,31 @@ export function BudgetLineSlideOver({
         {/* Classification — what kind of line this is. */}
         <section className="space-y-3" style={sectionDivider}>
           <h3 style={sectionHeadingStyle}>Classification</h3>
+          {/* Fix-pack A — Section is the grouping source. Picking from
+              existing sections writes section_id (auto-saved); there is
+              no free-text section creation here. */}
+          {/* BUD-04 — same custom dropdown as the grid (field variant). */}
+          <div className="block space-y-1.5">
+            <span style={labelStyle}>Section</span>
+            <InlineSelectCell
+              variant="field"
+              ariaLabel="Section"
+              showTone={false}
+              placeholder="Uncategorised"
+              value={fields.section_id}
+              options={[
+                { value: '', label: 'Uncategorised' },
+                ...[...sections]
+                  .sort(
+                    (a, b) =>
+                      (a.sort_order ?? 0) - (b.sort_order ?? 0) ||
+                      a.name.localeCompare(b.name),
+                  )
+                  .map((s) => ({ value: s.id, label: s.name })),
+              ]}
+              onCommit={(v) => setField('section_id', v)}
+            />
+          </div>
           <div className="grid grid-cols-3 gap-3">
             <label className="block space-y-1.5">
               <span style={labelStyle}>Category</span>
@@ -665,23 +698,19 @@ export function BudgetLineSlideOver({
                 size="md"
               />
             </label>
-            <label className="block space-y-1.5">
+            <div className="block space-y-1.5">
               {/* Phase 3 §D — phase tag dropdown. '' (Unscoped) maps
                   to NULL on the server; valid values mirror migration
                   064's CHECK constraint. */}
               <span style={labelStyle}>Phase</span>
-              <select
+              <InlineSelectCell
+                variant="field"
+                ariaLabel="Phase"
                 value={fields.phase_tag}
-                onChange={(e) => setField('phase_tag', e.target.value)}
-                style={selectStyle}
-              >
-                {PHASE_TAG_OPTIONS.map((opt) => (
-                  <option key={opt.value || 'unscoped'} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            </label>
+                options={[...PHASE_TAG_OPTIONS]}
+                onCommit={(v) => setField('phase_tag', v)}
+              />
+            </div>
             <label className="block space-y-1.5">
               <span style={labelStyle}>Vendor</span>
               <input
@@ -789,34 +818,27 @@ export function BudgetLineSlideOver({
             </label>
           </div>
           <div className="grid grid-cols-3 gap-3">
-            <label className="block space-y-1.5">
+            <div className="block space-y-1.5">
               <span style={labelStyle}>Currency</span>
-              <select
+              <InlineSelectCell
+                variant="field"
+                ariaLabel="Currency"
+                showTone={false}
                 value={fields.currency}
-                onChange={(e) => setField('currency', e.target.value)}
-                style={selectStyle}
-              >
-                {CURRENCY_OPTIONS.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="block space-y-1.5">
+                options={CURRENCY_OPTIONS.map((c) => ({ value: c, label: c }))}
+                onCommit={(v) => setField('currency', v)}
+              />
+            </div>
+            <div className="block space-y-1.5">
               <span style={labelStyle}>Status</span>
-              <select
+              <InlineSelectCell
+                variant="field"
+                ariaLabel="Status"
                 value={fields.status}
-                onChange={(e) => setField('status', e.target.value)}
-                style={selectStyle}
-              >
-                {STATUS_OPTIONS.map((s) => (
-                  <option key={s.value} value={s.value}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
-            </label>
+                options={[...STATUS_OPTIONS]}
+                onCommit={(v) => setField('status', v)}
+              />
+            </div>
             <div className="space-y-1.5">
               <span style={labelStyle}>Variance</span>
               <div

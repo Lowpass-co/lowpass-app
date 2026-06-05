@@ -27,7 +27,7 @@ async function guardTemplate(templateId: string) {
     .from('profiles')
     .select('workspace_id')
     .eq('id', user.id)
-    .single();
+    .maybeSingle();
   if (!profile?.workspace_id) {
     return { error: NextResponse.json({ error: 'No workspace' }, { status: 403 }) };
   }
@@ -122,8 +122,9 @@ export async function PATCH(request: Request, ctx: RouteCtx) {
     .eq('id', body.id)
     .eq('template_id', templateId)
     .select()
-    .single();
+    .maybeSingle();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!data) return NextResponse.json({ error: 'Section not found' }, { status: 404 });
   return NextResponse.json(data);
 }
 

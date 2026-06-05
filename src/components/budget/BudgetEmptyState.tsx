@@ -15,7 +15,8 @@
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Check, FileStack, Layers, Loader2, Plus } from 'lucide-react';
+import { Check, FileStack, Loader2, Plus } from 'lucide-react';
+import { Modal } from '@/components/ui/Modal';
 import { useToast } from '@/components/ui/Toast';
 import type { BudgetTemplate } from '@/types';
 
@@ -95,21 +96,44 @@ export function BudgetEmptyState({ tourId }: { tourId: string }) {
     'flex flex-col gap-3 rounded-lg border p-4 text-left transition';
 
   return (
-    <div className="mx-auto w-full max-w-[860px] py-6">
-      <div className="mb-5 flex items-center gap-2">
-        <Layers className="h-5 w-5" style={{ color: 'var(--color-lp-orange)' }} aria-hidden />
-        <div>
-          <h1 className="lp-h2">Start your budget from a template</h1>
-          <p
-            className="mt-1"
-            style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text-secondary)' }}
+    <Modal
+      open
+      onClose={() => void startBlank()}
+      closeOnBackdrop={false}
+      size="lg"
+      title="Start your budget"
+      subtitle="Pick a preset to scaffold sections and default line items — edit everything afterwards."
+      footer={
+        <div className="flex w-full items-center justify-between gap-3">
+          <span
+            style={{ fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text-tertiary)' }}
           >
-            Pick a preset to scaffold sections and default line items. You can
-            edit everything afterwards, or start blank.
-          </p>
+            Prefer to build it yourself?
+          </span>
+          <button
+            type="button"
+            disabled={busy !== null}
+            onClick={() => void startBlank()}
+            className="btn-transition inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5"
+            style={{
+              borderColor: 'var(--lp-border)',
+              background: 'var(--lp-surface)',
+              color: 'var(--lp-text-secondary)',
+              fontSize: 'var(--lp-text-sm)',
+              fontWeight: 'var(--lp-weight-medium)',
+              opacity: busy !== null && busy !== '__blank__' ? 0.5 : 1,
+            }}
+          >
+            {busy === '__blank__' ? (
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+            ) : (
+              <Plus className="h-4 w-4" aria-hidden />
+            )}
+            Start blank
+          </button>
         </div>
-      </div>
-
+      }
+    >
       {loadError ? (
         <div
           className="rounded-md border p-3"
@@ -253,33 +277,6 @@ export function BudgetEmptyState({ tourId }: { tourId: string }) {
           })}
         </div>
       )}
-
-      <div className="mt-5 flex items-center gap-3">
-        <button
-          type="button"
-          disabled={busy !== null}
-          onClick={startBlank}
-          className="btn-transition inline-flex items-center gap-1.5 rounded-md border px-3 py-2"
-          style={{
-            borderColor: 'var(--lp-border)',
-            background: 'var(--lp-surface)',
-            color: 'var(--lp-text-secondary)',
-            fontSize: 'var(--lp-text-sm)',
-            fontWeight: 'var(--lp-weight-medium)',
-            opacity: busy !== null && busy !== '__blank__' ? 0.5 : 1,
-          }}
-        >
-          {busy === '__blank__' ? (
-            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-          ) : (
-            <Plus className="h-4 w-4" aria-hidden />
-          )}
-          Start blank
-        </button>
-        <span style={{ fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text-tertiary)' }}>
-          Adds an empty section you can fill in yourself.
-        </span>
-      </div>
-    </div>
+    </Modal>
   );
 }

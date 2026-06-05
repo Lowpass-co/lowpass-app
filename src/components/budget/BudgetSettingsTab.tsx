@@ -321,6 +321,25 @@ function TemplatesCard({ tourId }: { tourId: string }) {
     void load();
   }, [load]);
 
+  /* BUD-19 — inline rename of a workspace template name. Optimistic
+     local update; reload to resync on failure. */
+  const renameTemplate = async (id: string, name: string) => {
+    setTemplates((prev) =>
+      prev ? prev.map((t) => (t.id === id ? { ...t, name } : t)) : prev,
+    );
+    try {
+      const res = await fetch('/api/budget/templates', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, name }),
+      });
+      if (!res.ok) throw new Error(`Rename failed (${res.status})`);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Rename failed', 'error');
+      await load();
+    }
+  };
+
   const apply = async (templateId: string) => {
     setBusy(templateId);
     try {
@@ -414,15 +433,33 @@ function TemplatesCard({ tourId }: { tourId: string }) {
                 <div className="flex items-center gap-2 px-3 py-2">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      <span
-                        style={{
-                          fontSize: 'var(--lp-text-base)',
-                          fontWeight: 'var(--lp-weight-medium)',
-                          color: 'var(--lp-text)',
-                        }}
-                      >
-                        {t.name}
-                      </span>
+                      {/* BUD-19 — your templates rename inline; system
+                          presets are read-only. */}
+                      {t.is_system ? (
+                        <span
+                          style={{
+                            fontSize: 'var(--lp-text-base)',
+                            fontWeight: 'var(--lp-weight-medium)',
+                            color: 'var(--lp-text)',
+                          }}
+                        >
+                          {t.name}
+                        </span>
+                      ) : (
+                        <InlineText
+                          value={t.name}
+                          onCommit={(name) => void renameTemplate(t.id, name)}
+                          style={{
+                            fontSize: 'var(--lp-text-base)',
+                            fontWeight: 'var(--lp-weight-medium)',
+                            border: '1px solid transparent',
+                            background: 'transparent',
+                            borderRadius: 'var(--lp-radius-md)',
+                            padding: 'var(--lp-space-1) var(--lp-space-2)',
+                            minWidth: 0,
+                          }}
+                        />
+                      )}
                       <span
                         className="rounded-full px-1.5 py-0.5"
                         style={{
@@ -580,14 +617,25 @@ function TemplateEditor({ templateId }: { templateId: string }) {
           Loading…
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="space-y-2.5">
+          {/* BUD-19 — each template section as a bordered card (header +
+              indented default-line list), mirroring the budget's own
+              section idiom for a consistent picker. */}
           {sections.map((s) => (
-            <div key={s.id}>
-              <div className="flex items-center gap-2">
+            <div
+              key={s.id}
+              className="rounded-md border"
+              style={{ borderColor: 'var(--lp-border)', background: 'var(--lp-surface)' }}
+            >
+              <div
+                className="flex items-center gap-2 border-b px-2.5 py-1.5"
+                style={{ borderColor: 'var(--lp-border)' }}
+              >
                 <InlineText
                   value={s.name}
                   onCommit={(name) => void sectionCall('PATCH', { id: s.id, name })}
                   style={{
+                    flex: 1,
                     ...inputStyle,
                     border: '1px solid transparent',
                     background: 'transparent',
@@ -597,20 +645,27 @@ function TemplateEditor({ templateId }: { templateId: string }) {
                 <button
                   type="button"
                   aria-label="Delete section"
+                  title="Delete section"
                   onClick={() => void sectionCall('DELETE', null, `?id=${encodeURIComponent(s.id)}`)}
+                  className="btn-transition rounded p-1"
                   style={{ color: 'var(--lp-text-tertiary)' }}
                 >
                   <Trash2 className="h-3.5 w-3.5" aria-hidden />
                 </button>
               </div>
-              <ul className="ml-3 mt-1 space-y-1">
+              <ul className="space-y-0.5 px-2.5 py-2">
                 {(s.lines ?? []).map((l) => (
                   <li key={l.id} className="flex items-center gap-2">
-                    <span style={{ color: 'var(--lp-text-tertiary)' }}>·</span>
+                    <span
+                      aria-hidden
+                      className="h-1 w-1 shrink-0 rounded-full"
+                      style={{ background: 'var(--lp-border-strong)' }}
+                    />
                     <InlineText
                       value={l.label}
                       onCommit={(label) => void lineCall('PATCH', { id: l.id, label })}
                       style={{
+                        flex: 1,
                         ...inputStyle,
                         border: '1px solid transparent',
                         background: 'transparent',
@@ -620,7 +675,9 @@ function TemplateEditor({ templateId }: { templateId: string }) {
                     <button
                       type="button"
                       aria-label="Delete line"
+                      title="Delete line"
                       onClick={() => void lineCall('DELETE', null, `?id=${encodeURIComponent(l.id)}`)}
+                      className="btn-transition rounded p-1"
                       style={{ color: 'var(--lp-text-tertiary)' }}
                     >
                       <Trash2 className="h-3 w-3" aria-hidden />
@@ -636,12 +693,15 @@ function TemplateEditor({ templateId }: { templateId: string }) {
                         label: 'New line',
                       })
                     }
-                    className="inline-flex items-center gap-1"
+                    className="btn-transition inline-flex items-center gap-1 rounded-md border"
                     style={{
                       fontSize: 'var(--lp-text-xs)',
-                      color: 'var(--lp-text-tertiary)',
-                      background: 'transparent',
-                      border: 0,
+                      fontWeight: 600,
+                      color: 'var(--lp-text-secondary)',
+                      background: 'var(--lp-surface)',
+                      borderColor: 'var(--lp-border)',
+                      padding: '2px 8px',
+                      marginLeft: 12,
                       cursor: 'pointer',
                     }}
                   >
@@ -654,12 +714,13 @@ function TemplateEditor({ templateId }: { templateId: string }) {
           <button
             type="button"
             onClick={() => void sectionCall('POST', { name: 'New section' })}
-            className="inline-flex items-center gap-1.5 rounded-md border px-2 py-1"
+            className="btn-transition inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1"
             style={{
-              borderColor: 'var(--lp-border)',
+              borderColor: 'var(--lp-border-strong)',
               background: 'var(--lp-surface)',
-              color: 'var(--lp-text-secondary)',
+              color: 'var(--lp-text)',
               fontSize: 'var(--lp-text-xs)',
+              fontWeight: 600,
               cursor: 'pointer',
             }}
           >

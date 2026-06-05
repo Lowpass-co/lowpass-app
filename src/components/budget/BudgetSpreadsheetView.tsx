@@ -29,10 +29,11 @@ import {
   AlertTriangle,
   ArrowDown,
   ArrowUp,
-  Check,
   Columns3,
   Download,
+  ExternalLink,
   Filter,
+  GripVertical,
   Paperclip,
   PanelRightOpen,
   Plus,
@@ -42,6 +43,7 @@ import {
 } from 'lucide-react';
 import { BudgetLineSlideOver } from '@/components/budget/BudgetLineSlideOver';
 import { BudgetCellInput } from '@/components/budget/cells/BudgetCellInput';
+import { InlineSelectCell } from '@/components/budget/cells/InlineSelectCell';
 import {
   useBudgetGridSizing,
   type GridColumnDef,
@@ -77,30 +79,9 @@ const STATUS_OPTIONS: ReadonlyArray<{
   { value: 'disputed', label: 'Disputed', tone: 'var(--color-lp-status-needs-review)' },
 ];
 
-/** Adam's product lock — these are the canonical Lowpass categories. */
-const CATEGORY_ORDER = [
-  'production',
-  'logistics',
-  'travel',
-  'crew',
-  'accommodation',
-  'catering',
-  'marketing',
-  'insurance',
-  'contingency',
-] as const;
-
-const CATEGORY_LABEL: Record<string, string> = {
-  production: 'Production',
-  logistics: 'Logistics',
-  travel: 'Travel',
-  crew: 'Crew',
-  accommodation: 'Accommodation',
-  catering: 'Catering',
-  marketing: 'Marketing',
-  insurance: 'Insurance',
-  contingency: 'Contingency',
-};
+/* Fix-pack A Task 2 — the free-text `category` no longer drives grouping
+   or labels (section_id → budget_sections is the single source), so the
+   old CATEGORY_ORDER / CATEGORY_LABEL maps were removed. */
 
 /** §D — phase grouping in the order Adam asked for. Items with no
     phase_tag fall into "Unscoped" at the bottom. */
@@ -149,21 +130,8 @@ const PHASE_EDIT_OPTIONS: { value: string; label: string }[] = [
   { value: 'wrap', label: 'Wrap' },
 ];
 
-/* §B1.2 — tone lookup for the custom dropdown menu so each option
-   carries the same colour dot as its rendered chip. Keyed by option
-   value; status tones mirror STATUS_OPTIONS, phase tones mirror
-   PHASE_TINT. Unknown / placeholder values render no dot. */
-const OPTION_TONE: Record<string, string> = {
-  draft: 'var(--color-lp-status-not-started)',
-  quoted: 'var(--color-lp-status-in-progress)',
-  approved: 'var(--color-lp-status-complete)',
-  paid: 'var(--color-lp-status-complete)',
-  disputed: 'var(--color-lp-status-needs-review)',
-  pre_prod: PHASE_TINT.pre_prod,
-  rehearsals: PHASE_TINT.rehearsals,
-  show_days: PHASE_TINT.show_days,
-  wrap: PHASE_TINT.wrap,
-};
+/* BUD-04 — InlineSelectCell (+ its OPTION_TONE) now lives in a shared
+   module so the slide-over reuses the exact same custom dropdown. */
 
 /* §B1.2 — vendor is encoded as the first line of `notes`
    ("Vendor: X") by the slide-over until a real column exists. Mirror
@@ -173,6 +141,26 @@ function vendorFromNotes(notes?: string | null): string {
   return first.startsWith('Vendor: ') && first.length < 80
     ? first.slice('Vendor: '.length).trim()
     : '';
+}
+
+/* Budget ← Operations linking — a derived line's source badge + the
+   Operations page to drill into. Returns null for manual lines (and for
+   flights, which have no dedicated Operations page yet). */
+function derivedSource(
+  row: BudgetLineItem,
+  tourId: string,
+): { badge: string; href: string } | null {
+  const t = row.source_entity_type;
+  if (row.hotel_id || row.room_id || t === 'hotel_booking') {
+    return { badge: 'from rooming', href: `/operations/${tourId}/rooming` };
+  }
+  if (t === 'payroll' || t === 'payroll_per_diem') {
+    return { badge: 'from payroll', href: `/operations/${tourId}/payroll` };
+  }
+  if (row.gear_id || row.tour_gear_id || t === 'gear') {
+    return { badge: 'from gear', href: `/operations/${tourId}/hire` };
+  }
+  return null;
 }
 
 /* Phase C — the default grouping is now Section (the budget backbone),
@@ -344,6 +332,17 @@ export function BudgetSpreadsheetView({
   /* Phase C — track in-flight section ops (add/rename/delete) so the
      toolbar + section headers can disable while a write is pending. */
   const [sectionBusy, setSectionBusy] = useState(false);
+  /* Fix-pack A — optimistic line deletes (bulk delete + future single
+     delete) hide rows instantly without a router.refresh(). Reconciled
+     when fresh `lines` arrive. */
+  const [deletedLineIds, setDeletedLineIds] = useState<string[]>([]);
+  /* Fix-pack A — optimistic section CRUD, mirroring the line machinery.
+     Sections render from `allSections` (server sections + these overlays)
+     so add / rename / delete reflect instantly with NO full-page refresh.
+     Cleared when the server `sections` prop changes (tab nav / refetch). */
+  const [pendingSections, setPendingSections] = useState<BudgetSection[]>([]);
+  const [sectionRenames, setSectionRenames] = useState<Record<string, string>>({});
+  const [deletedSectionIds, setDeletedSectionIds] = useState<string[]>([]);
 
   // §D — restore per-tour group-by preference on mount. The legacy
   // 'category' value maps forward to the new 'section' grouping.
@@ -385,7 +384,8 @@ export function BudgetSpreadsheetView({
     return m;
   }, [routingDateById]);
 
-  // Optimistic creations merge + optimistic field-edit overlay.
+  // Optimistic creations merge + optimistic field-edit overlay, minus
+  // optimistically-deleted rows.
   const allLines = useMemo(() => {
     const base =
       pendingCreations.length === 0
@@ -395,13 +395,33 @@ export function BudgetSpreadsheetView({
             const extras = pendingCreations.filter((p) => !known.has(p.id));
             return extras.length > 0 ? [...extras, ...lines] : lines;
           })();
-    if (Object.keys(optimistic).length === 0) return base;
-    return base.map((l) =>
+    const visible =
+      deletedLineIds.length === 0
+        ? base
+        : base.filter((l) => !deletedLineIds.includes(l.id));
+    if (Object.keys(optimistic).length === 0) return visible;
+    return visible.map((l) =>
       optimistic[l.id]
         ? ({ ...l, ...optimistic[l.id] } as BudgetLineItem)
         : l,
     );
-  }, [lines, pendingCreations, optimistic]);
+  }, [lines, pendingCreations, optimistic, deletedLineIds]);
+
+  // Fix-pack A — sections to render: server sections (minus optimistic
+  // deletes) + optimistic additions, with optimistic renames applied.
+  const allSections = useMemo(() => {
+    const merged: BudgetSection[] = [
+      ...sections.filter((s) => !deletedSectionIds.includes(s.id)),
+      ...pendingSections.filter(
+        (p) =>
+          !sections.some((s) => s.id === p.id) &&
+          !deletedSectionIds.includes(p.id),
+      ),
+    ];
+    return merged.map((s) =>
+      sectionRenames[s.id] ? { ...s, name: sectionRenames[s.id] } : s,
+    );
+  }, [sections, pendingSections, sectionRenames, deletedSectionIds]);
 
   useEffect(() => {
     if (pendingCreations.length === 0) return;
@@ -412,10 +432,18 @@ export function BudgetSpreadsheetView({
     }
   }, [lines, pendingCreations]);
 
-  // Fresh server rows supersede any optimistic patches.
+  // Fresh server rows supersede any optimistic patches + line deletes.
   useEffect(() => {
     setOptimistic((prev) => (Object.keys(prev).length ? {} : prev));
+    setDeletedLineIds((prev) => (prev.length ? [] : prev));
   }, [lines]);
+
+  // Fresh server sections supersede the optimistic section overlays.
+  useEffect(() => {
+    setPendingSections((prev) => (prev.length ? [] : prev));
+    setSectionRenames((prev) => (Object.keys(prev).length ? {} : prev));
+    setDeletedSectionIds((prev) => (prev.length ? [] : prev));
+  }, [sections]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -445,12 +473,12 @@ export function BudgetSpreadsheetView({
 
   const sectionsSorted = useMemo(
     () =>
-      [...sections].sort(
+      [...allSections].sort(
         (a, b) =>
           (a.sort_order ?? 0) - (b.sort_order ?? 0) ||
           a.name.localeCompare(b.name),
       ),
-    [sections],
+    [allSections],
   );
 
   // Phase C group structure — produce { id, label, rows[], sectionId? }[].
@@ -485,65 +513,76 @@ export function BudgetSpreadsheetView({
       return out;
     }
 
-    // Section grouping (default). Lines bucket by section_id; sections
-    // render in sort order even when empty.
-    if (sectionsSorted.length > 0) {
-      const bySection = new Map<string, BudgetLineItem[]>();
-      for (const line of filtered) {
-        const key = line.section_id ?? '__none__';
-        (bySection.get(key) ?? bySection.set(key, []).get(key)!).push(line);
-      }
-      const out: GridGroup[] = [];
-      const known = new Set(sectionsSorted.map((s) => s.id));
-      for (const s of sectionsSorted) {
-        out.push({
-          id: s.id,
-          label: s.name,
-          rows: bySection.get(s.id) ?? [],
-          sectionId: s.id,
-        });
-      }
-      // Lines whose section_id is null or points at a deleted section.
-      const orphan: BudgetLineItem[] = [];
-      for (const [key, rows] of bySection.entries()) {
-        if (key === '__none__' || !known.has(key)) orphan.push(...rows);
-      }
-      if (orphan.length > 0) {
-        out.push({
-          id: '__uncategorised__',
-          label: 'Uncategorised',
-          rows: orphan,
-          sectionId: null,
-        });
-      }
-      return out;
-    }
-
-    // Fallback for legacy tours with no sections yet — group by category
-    // in canonical order (mirrors pre-redesign behaviour).
-    const byCat = new Map<string, BudgetLineItem[]>();
+    /* Section grouping (default + only). Lines bucket by section_id →
+       budget_sections; the free-text `category` is NOT used for grouping
+       or labels anymore (Fix-pack A Task 2). Sections render in sort
+       order even when empty; any line with a null / stale section_id
+       falls into a single "Uncategorised" bucket (which matches the
+       Summary rollup 1:1). */
+    const bySection = new Map<string, BudgetLineItem[]>();
     for (const line of filtered) {
-      const cat = (line.category ?? 'other').toLowerCase();
-      (byCat.get(cat) ?? byCat.set(cat, []).get(cat)!).push(line);
+      const key = line.section_id ?? '__none__';
+      (bySection.get(key) ?? bySection.set(key, []).get(key)!).push(line);
     }
     const out: GridGroup[] = [];
-    for (const key of CATEGORY_ORDER) {
-      const rows = byCat.get(key);
-      if (rows && rows.length > 0) {
-        out.push({ id: key, label: CATEGORY_LABEL[key], rows });
-      }
+    const known = new Set(sectionsSorted.map((s) => s.id));
+    for (const s of sectionsSorted) {
+      out.push({
+        id: s.id,
+        label: s.name,
+        rows: bySection.get(s.id) ?? [],
+        sectionId: s.id,
+      });
     }
-    for (const [key, rows] of byCat.entries()) {
-      if (!CATEGORY_ORDER.includes(key as (typeof CATEGORY_ORDER)[number])) {
-        out.push({
-          id: key,
-          label: key.charAt(0).toUpperCase() + key.slice(1) + ' (other)',
-          rows,
-        });
-      }
+    const orphan: BudgetLineItem[] = [];
+    for (const [key, rows] of bySection.entries()) {
+      if (key === '__none__' || !known.has(key)) orphan.push(...rows);
+    }
+    if (orphan.length > 0) {
+      out.push({
+        id: '__uncategorised__',
+        label: 'Uncategorised',
+        rows: orphan,
+        sectionId: null,
+      });
     }
     return out;
   }, [filtered, groupBy, sectionsSorted]);
+
+  /* Fix-pack A Task 3 — multi-select. `orderedRowIds` is the flat
+     display order (group order, then row order) so shift-click can
+     select a contiguous range; `lastSelectedIndexRef` anchors it. */
+  const orderedRowIds = useMemo(
+    () => groups.flatMap((g) => g.rows.map((r) => r.id)),
+    [groups],
+  );
+  const lastSelectedIndexRef = useRef<number | null>(null);
+
+  const toggleSelect = (rowId: string, index: number, shiftKey: boolean) => {
+    if (shiftKey && lastSelectedIndexRef.current !== null) {
+      const lo = Math.min(lastSelectedIndexRef.current, index);
+      const hi = Math.max(lastSelectedIndexRef.current, index);
+      const range = orderedRowIds.slice(lo, hi + 1);
+      setSelectedIds((prev) => Array.from(new Set([...prev, ...range])));
+    } else {
+      setSelectedIds((prev) =>
+        prev.includes(rowId)
+          ? prev.filter((x) => x !== rowId)
+          : [...prev, rowId],
+      );
+    }
+    lastSelectedIndexRef.current = index;
+  };
+
+  const allSelected =
+    orderedRowIds.length > 0 &&
+    orderedRowIds.every((id) => selectedIds.includes(id));
+  const someSelected =
+    !allSelected && orderedRowIds.some((id) => selectedIds.includes(id));
+  const toggleSelectAll = () => {
+    setSelectedIds(allSelected ? [] : [...orderedRowIds]);
+    lastSelectedIndexRef.current = null;
+  };
 
   const totals = useMemo(() => {
     let proposed = 0;
@@ -566,6 +605,13 @@ export function BudgetSpreadsheetView({
 
   const duplicateCount = duplicateMap ? Object.keys(duplicateMap).length : 0;
 
+  /* Fix-pack A Task 2 — every newly-created line takes a section_id
+     (section_id is the single grouping source; the free-text category is
+     no longer used for grouping). Default to the first REAL section (skip
+     not-yet-persisted optimistic temps, whose ids would FK-fail). */
+  const defaultSectionId =
+    sectionsSorted.find((s) => !String(s.id).startsWith('pending-'))?.id ?? null;
+
   const handleQuickAdd = (template: (typeof QUICK_ADD_TEMPLATES)[number]) => {
     const now = new Date().toISOString();
     setOpenLine({
@@ -582,6 +628,7 @@ export function BudgetSpreadsheetView({
       routing_id: null,
       notes: null,
       order_index: 0,
+      section_id: defaultSectionId,
       created_at: now,
       updated_at: now,
     } as BudgetLineItem);
@@ -603,15 +650,14 @@ export function BudgetSpreadsheetView({
       routing_id: null,
       notes: null,
       order_index: 0,
+      section_id: defaultSectionId,
       created_at: now,
       updated_at: now,
     } as BudgetLineItem);
   };
 
-  /* §B1.5 — open the slide-over in create mode with section
-     + category pre-filled from the group the user clicked.
-     The global "Add line item" button still opens a
-     section-less new row. */
+  /* Open the slide-over in create mode pre-seeded with a section. Used
+     by the per-group "+ Add line" for non-section (phase) groups. */
   const handleAddToSection = (section: string | null, defaultCategory: string) => {
     const now = new Date().toISOString();
     setOpenLine({
@@ -629,28 +675,51 @@ export function BudgetSpreadsheetView({
       notes: null,
       order_index: 0,
       section: section ?? undefined,
+      section_id: defaultSectionId,
       created_at: now,
       updated_at: now,
     } as BudgetLineItem);
   };
 
-  /* Phase C — section CRUD. All fire-and-refresh; the page refetches
-     budget_sections + lines server-side, so no optimistic section state
-     is needed (sections change far less often than cell edits). */
+  /* Fix-pack A Task 1.2 — optimistic section CRUD. Apply locally first,
+     fire the request, roll back + toast on failure, and DO NOT
+     router.refresh() on success (that re-ran the whole server page and
+     read as a full-page reload). `allSections` reflects the overlays
+     instantly; the server reconciles on the next natural refetch. */
   const addSection = async () => {
+    const tempId = `pending-sec-${Date.now()}`;
+    const maxSort = sectionsSorted.reduce(
+      (m, s) => Math.max(m, s.sort_order ?? 0),
+      -1,
+    );
+    const temp: BudgetSection = {
+      id: tempId,
+      tour_id: tourId,
+      workspace_id: '',
+      name: 'New section',
+      sort_order: maxSort + 1,
+    };
+    setPendingSections((prev) => [...prev, temp]);
     setSectionBusy(true);
     try {
       const res = await fetch('/api/budget/sections', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tour_id: tourId, name: 'New section' }),
+        body: JSON.stringify({
+          tour_id: tourId,
+          name: 'New section',
+          sort_order: maxSort + 1,
+        }),
       });
       if (!res.ok) {
         const b = (await res.json().catch(() => ({}))) as { error?: string };
         throw new Error(b.error ?? 'Could not add section');
       }
-      router.refresh();
+      const created = (await res.json()) as BudgetSection;
+      // Swap the temp row for the real one (real id needed for adding lines).
+      setPendingSections((prev) => prev.map((s) => (s.id === tempId ? created : s)));
     } catch (err) {
+      setPendingSections((prev) => prev.filter((s) => s.id !== tempId));
       showToast(err instanceof Error ? err.message : 'Could not add section', 'error');
     } finally {
       setSectionBusy(false);
@@ -658,6 +727,14 @@ export function BudgetSpreadsheetView({
   };
 
   const renameSection = async (sectionId: string, name: string) => {
+    const prevName = allSections.find((s) => s.id === sectionId)?.name ?? '';
+    setSectionRenames((prev) => ({ ...prev, [sectionId]: name }));
+    setPendingSections((prev) =>
+      prev.map((s) => (s.id === sectionId ? { ...s, name } : s)),
+    );
+    // A not-yet-persisted section carries the new name locally; the
+    // pending create will POST it. Nothing to PATCH yet.
+    if (String(sectionId).startsWith('pending-')) return;
     try {
       const res = await fetch('/api/budget/sections', {
         method: 'PATCH',
@@ -668,8 +745,8 @@ export function BudgetSpreadsheetView({
         const b = (await res.json().catch(() => ({}))) as { error?: string };
         throw new Error(b.error ?? 'Rename failed');
       }
-      router.refresh();
     } catch (err) {
+      setSectionRenames((prev) => ({ ...prev, [sectionId]: prevName }));
       showToast(err instanceof Error ? err.message : 'Rename failed', 'error');
     }
   };
@@ -682,7 +759,12 @@ export function BudgetSpreadsheetView({
     ) {
       return;
     }
-    setSectionBusy(true);
+    // Optimistic-remove a not-yet-persisted section without a request.
+    if (String(sectionId).startsWith('pending-')) {
+      setPendingSections((prev) => prev.filter((s) => s.id !== sectionId));
+      return;
+    }
+    setDeletedSectionIds((prev) => [...prev, sectionId]);
     try {
       const res = await fetch(
         `/api/budget/sections?id=${encodeURIComponent(sectionId)}`,
@@ -692,18 +774,21 @@ export function BudgetSpreadsheetView({
         const b = (await res.json().catch(() => ({}))) as { error?: string };
         throw new Error(b.error ?? 'Delete failed');
       }
-      router.refresh();
     } catch (err) {
+      setDeletedSectionIds((prev) => prev.filter((id) => id !== sectionId));
       showToast(err instanceof Error ? err.message : 'Delete failed', 'error');
-    } finally {
-      setSectionBusy(false);
     }
   };
 
-  /* Phase C — add a line straight into a section. With inline rename in
-     the grid the user can immediately retitle the placeholder, so we
-     skip the slide-over here (a faster spreadsheet flow). */
+  /* Fix-pack A — add a line straight into a section, optimistically.
+     POST (fast), then push the created row into the pendingCreations
+     overlay so it appears with NO router.refresh(). Inline rename lets
+     the user retitle the placeholder immediately. */
   const addLineToSection = async (sectionId: string | null) => {
+    if (sectionId && String(sectionId).startsWith('pending-')) {
+      showToast('Section is still saving — try again in a moment', 'error');
+      return;
+    }
     try {
       const res = await fetch('/api/budget/line-items', {
         method: 'POST',
@@ -720,7 +805,8 @@ export function BudgetSpreadsheetView({
         const b = (await res.json().catch(() => ({}))) as { error?: string };
         throw new Error(b.error ?? 'Could not add line');
       }
-      router.refresh();
+      const created = (await res.json()) as BudgetLineItem;
+      setPendingCreations((prev) => [created, ...prev]);
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Could not add line', 'error');
     }
@@ -889,23 +975,24 @@ export function BudgetSpreadsheetView({
             })}
         </div>
 
-        {/* Phase C — add a section + reset column/canvas sizing. */}
+        {/* BUD-15 — clear, labelled add-section button. */}
         <button
           type="button"
           onClick={() => void addSection()}
           disabled={sectionBusy}
-          className="btn-transition inline-flex items-center gap-1 rounded-md border px-2 py-1"
+          className="btn-transition inline-flex items-center gap-1 rounded-md border px-2.5 py-1"
           style={{
-            borderColor: 'var(--lp-border)',
-            background: 'var(--lp-bg)',
-            color: 'var(--lp-text-secondary)',
+            borderColor: 'var(--lp-border-strong)',
+            background: 'var(--lp-surface)',
+            color: 'var(--lp-text)',
             fontSize: '12px',
+            fontWeight: 600,
             opacity: sectionBusy ? 0.6 : 1,
           }}
           title="Add a new section"
         >
           <Plus className="h-3.5 w-3.5" />
-          Section
+          Add section
         </button>
         {sizing.isCustomised ? (
           <button
@@ -1087,24 +1174,26 @@ export function BudgetSpreadsheetView({
                         borderBottom: '1px solid var(--lp-border-subtle)',
                       }}
                     >
-                      {meta?.label ? meta.label : <span aria-hidden> </span>}
-                      {c.resizable ? (
-                        <span
-                          role="separator"
-                          aria-orientation="vertical"
-                          aria-label={`Resize ${meta?.label ?? c.key} column`}
-                          title="Drag to resize column"
-                          onPointerDown={(e) => sizing.startColumnResize(c.key, e)}
-                          style={{
-                            position: 'absolute',
-                            top: 0,
-                            right: -3,
-                            height: '100%',
-                            width: 6,
-                            cursor: 'col-resize',
-                            touchAction: 'none',
-                            zIndex: 1,
+                      {c.key === 'select' ? (
+                        <input
+                          type="checkbox"
+                          className="lp-checkbox"
+                          checked={allSelected}
+                          ref={(el) => {
+                            if (el) el.indeterminate = someSelected;
                           }}
+                          onChange={toggleSelectAll}
+                          aria-label="Select all line items"
+                        />
+                      ) : meta?.label ? (
+                        meta.label
+                      ) : (
+                        <span aria-hidden> </span>
+                      )}
+                      {c.resizable ? (
+                        <ColumnResizeHandle
+                          label={`Resize ${meta?.label ?? c.key} column`}
+                          onPointerDown={(e) => sizing.startColumnResize(c.key, e)}
                         />
                       ) : null}
                     </th>
@@ -1148,12 +1237,14 @@ export function BudgetSpreadsheetView({
                       colCount={colCount}
                       trackPhases={trackPhases}
                       sectionBusy={sectionBusy}
+                      tourId={tourId}
+                      onNavigate={(href) => router.push(href)}
                       runningStart={runningIndex}
                       bumpRunning={(n) => {
                         runningIndex = n;
                       }}
                       selectedIds={selectedIds}
-                      setSelectedIds={setSelectedIds}
+                      onToggleSelect={toggleSelect}
                       onOpenLine={setOpenLine}
                       duplicateMap={duplicateMap}
                       tourCurrency={tourCurrency}
@@ -1173,22 +1264,7 @@ export function BudgetSpreadsheetView({
           </table>
         </div>
         {/* Canvas widen handle — drag the right edge. */}
-        <span
-          role="separator"
-          aria-orientation="vertical"
-          aria-label="Widen the grid"
-          title="Drag to widen the grid"
-          onPointerDown={sizing.startCanvasResize}
-          style={{
-            position: 'absolute',
-            top: 0,
-            right: -4,
-            height: '100%',
-            width: 8,
-            cursor: 'col-resize',
-            touchAction: 'none',
-          }}
-        />
+        <CanvasResizeHandle onPointerDown={sizing.startCanvasResize} />
       </div>
 
       {/* Quick Add */}
@@ -1235,6 +1311,7 @@ export function BudgetSpreadsheetView({
           line={openLine ?? lastLineRef.current!}
           tourId={tourId}
           tourCurrency={tourCurrency}
+          sections={allSections}
           onClose={() => setOpenLine(null)}
           onExitComplete={() => {
             // Exit transform finished — drop the cached line and force
@@ -1286,10 +1363,18 @@ export function BudgetSpreadsheetView({
               type="button"
               disabled={bulkBusy !== null}
               onClick={async () => {
+                const ids = [...selectedIds];
                 setBulkBusy('status');
+                // Optimistic: apply the status to the overlay immediately.
+                setOptimistic((prev) => {
+                  const next = { ...prev };
+                  for (const id of ids) next[id] = { ...next[id], status: s };
+                  return next;
+                });
+                setSelectedIds([]);
                 try {
-                  await Promise.all(
-                    selectedIds.map((id) =>
+                  const results = await Promise.all(
+                    ids.map((id) =>
                       fetch('/api/budget/line-items', {
                         method: 'PATCH',
                         headers: { 'Content-Type': 'application/json' },
@@ -1297,14 +1382,18 @@ export function BudgetSpreadsheetView({
                       }),
                     ),
                   );
-                  showToast(`Marked ${selectedIds.length} as ${s}`);
-                  setSelectedIds([]);
-                  router.refresh();
+                  if (results.some((r) => !r.ok)) {
+                    throw new Error('Some updates failed');
+                  }
+                  showToast(`Marked ${ids.length} as ${s}`);
+                  // No router.refresh() on success — the overlay matches.
                 } catch (err) {
                   showToast(
                     err instanceof Error ? err.message : 'Bulk update failed',
                     'error',
                   );
+                  // Resync truth; the [lines] effect clears the overlay.
+                  router.refresh();
                 } finally {
                   setBulkBusy(null);
                 }
@@ -1328,23 +1417,34 @@ export function BudgetSpreadsheetView({
             onClick={async () => {
               if (!window.confirm(`Delete ${selectedIds.length} budget lines?`))
                 return;
+              const ids = [...selectedIds];
               setBulkBusy('delete');
+              // Optimistic: hide the rows immediately (the route accepts
+              // ?id=, which is why this delete actually fires now).
+              setDeletedLineIds((prev) => [...prev, ...ids]);
+              setPendingCreations((prev) => prev.filter((p) => !ids.includes(p.id)));
+              setSelectedIds([]);
               try {
-                await Promise.all(
-                  selectedIds.map((id) =>
+                const results = await Promise.all(
+                  ids.map((id) =>
                     fetch(`/api/budget/line-items?id=${encodeURIComponent(id)}`, {
                       method: 'DELETE',
                     }),
                   ),
                 );
-                showToast(`Deleted ${selectedIds.length} lines`);
-                setSelectedIds([]);
-                router.refresh();
+                if (results.some((r) => !r.ok)) {
+                  throw new Error('Some deletes failed');
+                }
+                showToast(`Deleted ${ids.length} lines`);
+                // No router.refresh() on success — rows already hidden.
               } catch (err) {
+                // Roll back the optimistic hide + resync truth.
+                setDeletedLineIds((prev) => prev.filter((id) => !ids.includes(id)));
                 showToast(
                   err instanceof Error ? err.message : 'Bulk delete failed',
                   'error',
                 );
+                router.refresh();
               } finally {
                 setBulkBusy(null);
               }
@@ -1382,6 +1482,112 @@ export function BudgetSpreadsheetView({
    single-file unit (the file is already a known surgical area).
    ============================================ */
 
+/* BUD-17 — discoverable column-resize handle. At rest a faint vertical
+   divider line (reads as a column gridline); on hover it thickens to a
+   brand-orange bar with a grab cursor. */
+function ColumnResizeHandle({
+  label,
+  onPointerDown,
+}: {
+  label: string;
+  onPointerDown: (e: React.PointerEvent) => void;
+}) {
+  const [hover, setHover] = useState(false);
+  return (
+    <span
+      role="separator"
+      aria-orientation="vertical"
+      aria-label={label}
+      title="Drag to resize column"
+      onPointerDown={onPointerDown}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        position: 'absolute',
+        top: 0,
+        right: -4,
+        height: '100%',
+        width: 9,
+        cursor: 'col-resize',
+        touchAction: 'none',
+        zIndex: 2,
+        display: 'flex',
+        justifyContent: 'center',
+      }}
+    >
+      <span
+        aria-hidden
+        style={{
+          width: hover ? 2 : 1,
+          margin: '5px 0',
+          borderRadius: 2,
+          background: hover
+            ? 'var(--color-lp-orange)'
+            : 'var(--lp-border-strong)',
+          opacity: hover ? 1 : 0.4,
+          transition: 'width 120ms ease, opacity 120ms ease, background 120ms ease',
+        }}
+      />
+    </span>
+  );
+}
+
+/* BUD-17 — canvas widen handle on the grid's right edge. A small grip
+   pill, subtle at rest, brand-orange on hover. */
+function CanvasResizeHandle({
+  onPointerDown,
+}: {
+  onPointerDown: (e: React.PointerEvent) => void;
+}) {
+  const [hover, setHover] = useState(false);
+  return (
+    <span
+      role="separator"
+      aria-orientation="vertical"
+      aria-label="Widen the grid (drag)"
+      title="Drag to widen the grid"
+      onPointerDown={onPointerDown}
+      onMouseEnter={() => setHover(true)}
+      onMouseLeave={() => setHover(false)}
+      style={{
+        position: 'absolute',
+        top: 0,
+        right: -7,
+        height: '100%',
+        width: 14,
+        cursor: 'col-resize',
+        touchAction: 'none',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 2,
+      }}
+    >
+      <span
+        aria-hidden
+        className="btn-transition"
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          height: 34,
+          width: 14,
+          borderRadius: 7,
+          border: '1px solid',
+          borderColor: hover ? 'var(--color-lp-orange)' : 'var(--lp-border-strong)',
+          background: hover
+            ? 'color-mix(in srgb, var(--color-lp-orange) 14%, var(--lp-surface))'
+            : 'var(--lp-surface)',
+          color: hover ? 'var(--color-lp-orange)' : 'var(--lp-text-tertiary)',
+          boxShadow: 'var(--lp-shadow-sm)',
+        }}
+      >
+        <GripVertical className="h-3.5 w-3.5" />
+      </span>
+    </span>
+  );
+}
+
 interface GroupRowsProps {
   group: {
     id: string;
@@ -1397,6 +1603,9 @@ interface GroupRowsProps {
   trackPhases: boolean;
   /** Disables section header controls while a section write is pending. */
   sectionBusy: boolean;
+  /** For derived-line drill links to the source Operations page. */
+  tourId: string;
+  onNavigate: (href: string) => void;
   runningStart: number;
   bumpRunning: (n: number) => void;
   selectedIds: string[];
@@ -1412,7 +1621,9 @@ interface GroupRowsProps {
   onRenameSection: (sectionId: string, name: string) => void | Promise<void>;
   /** Phase C — delete a budget_section from its header. */
   onDeleteSection: (sectionId: string, label: string) => void | Promise<void>;
-  setSelectedIds: (ids: string[]) => void;
+  /** Fix-pack A — toggle a row's selection, with shift-click range
+   *  support; `index` is the row's flat display index. */
+  onToggleSelect: (rowId: string, index: number, shiftKey: boolean) => void;
   onOpenLine: (line: BudgetLineItem) => void;
   duplicateMap?: Record<string, string[]>;
   tourCurrency: string;
@@ -1426,10 +1637,12 @@ function GroupRows({
   colCount,
   trackPhases,
   sectionBusy,
+  tourId,
+  onNavigate,
   runningStart,
   bumpRunning,
   selectedIds,
-  setSelectedIds,
+  onToggleSelect,
   onOpenLine,
   duplicateMap,
   tourCurrency,
@@ -1502,26 +1715,37 @@ function GroupRows({
                 · {group.rows.length}
               </span>
               {isRealSection ? (
+                /* BUD-15 — delete-section: compact icon, but a clear
+                   red-tinted hover pill, and guarded by a confirm in
+                   onDeleteSection. */
                 <button
                   type="button"
                   disabled={sectionBusy}
                   onClick={() =>
                     void onDeleteSection(group.sectionId as string, group.label)
                   }
-                  className="btn-transition rounded p-0.5"
+                  className="btn-transition inline-flex items-center gap-1 rounded"
                   title="Delete section"
                   aria-label={`Delete ${group.label} section`}
                   style={{
                     color: 'var(--lp-text-tertiary)',
                     background: 'transparent',
+                    border: '1px solid transparent',
+                    padding: '1px 4px',
                     opacity: sectionBusy ? 0.5 : 1,
                   }}
                   onMouseEnter={(e) => {
                     e.currentTarget.style.color =
                       'var(--color-lp-status-needs-review)';
+                    e.currentTarget.style.borderColor =
+                      'color-mix(in srgb, var(--color-lp-status-needs-review) 45%, transparent)';
+                    e.currentTarget.style.background =
+                      'color-mix(in srgb, var(--color-lp-status-needs-review) 10%, transparent)';
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.color = 'var(--lp-text-tertiary)';
+                    e.currentTarget.style.borderColor = 'transparent';
+                    e.currentTarget.style.background = 'transparent';
                   }}
                 >
                   <Trash2 className="h-3 w-3" aria-hidden />
@@ -1583,6 +1807,9 @@ function GroupRows({
         const statusOpt = STATUS_OPTIONS.find((o) => o.value === status);
         const phaseTag = phaseTagOf(row);
         const phaseTone = phaseTag ? PHASE_TINT[phaseTag] : null;
+        // Budget ← Operations — derived (rooming / payroll / gear) lines
+        // are read-only + drill to source.
+        const derivedSrc = derivedSource(row, tourId);
         const rowBg =
           i % 2 === 0 ? 'var(--lp-bg)' : 'var(--lp-bg-deep)';
         return (
@@ -1606,13 +1833,13 @@ function GroupRows({
                 type="checkbox"
                 className="lp-checkbox"
                 checked={selected}
-                onChange={(e) => {
-                  if (e.target.checked) {
-                    setSelectedIds([...selectedIds, row.id]);
-                  } else {
-                    setSelectedIds(selectedIds.filter((x) => x !== row.id));
-                  }
-                }}
+                readOnly
+                /* onClick (not onChange) so we can read shiftKey for range
+                   selection; `checked` is driven by state. Keyboard space
+                   fires a synthetic click → single toggle. */
+                onClick={(e) =>
+                  onToggleSelect(row.id, runningStart + i, e.shiftKey)
+                }
                 aria-label={`Select ${row.label || 'line item'}`}
               />
             </Td>
@@ -1632,49 +1859,102 @@ function GroupRows({
                     aria-label={`Possible duplicate of ${dupes.length} other line${dupes.length === 1 ? '' : 's'}`}
                   />
                 ) : null}
-                {/* §B1.2 — split affordances: the title TEXT is
-                    inline-editable in place (click → rename, Enter/
-                    blur commits, Escape cancels). The slide-over now
-                    lives behind a dedicated, larger open-detail
-                    button so renaming never opens the panel and
-                    vice-versa. The row itself is not a click target. */}
-                <InlineLabelCell
-                  value={row.label ?? ''}
-                  onCommit={(label) => void onCommitLine(row.id, { label })}
-                />
-                <button
-                  type="button"
-                  onClick={() => onOpenLine(row)}
-                  title="Open detail"
-                  aria-label={`Open ${row.label || 'line item'} detail`}
-                  className="btn-transition btn-primary-press inline-flex shrink-0 items-center gap-1"
-                  style={{
-                    height: 24,
-                    padding: '0 9px',
-                    borderRadius: 6,
-                    border: '1px solid var(--lp-border)',
-                    background: 'var(--lp-surface)',
-                    color: 'var(--lp-text-secondary)',
-                    fontSize: '11px',
-                    fontWeight: 600,
-                    letterSpacing: '0.02em',
-                    cursor: 'pointer',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background =
-                      'color-mix(in srgb, var(--color-lp-orange) 14%, transparent)';
-                    e.currentTarget.style.color = 'var(--color-lp-orange)';
-                    e.currentTarget.style.borderColor = 'var(--color-lp-orange)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = 'var(--lp-surface)';
-                    e.currentTarget.style.color = 'var(--lp-text-secondary)';
-                    e.currentTarget.style.borderColor = 'var(--lp-border)';
-                  }}
-                >
-                  <PanelRightOpen className="h-3.5 w-3.5" aria-hidden />
-                  Open
-                </button>
+                {derivedSrc ? (
+                  /* Budget ← Operations — derived line: read-only label,
+                     a "from rooming / payroll / gear" badge, and a drill
+                     link to the source Operations page (no inline rename,
+                     no slide-over). */
+                  <>
+                    <span
+                      className="truncate"
+                      style={{ color: 'var(--lp-text)', fontWeight: 500 }}
+                      title={row.label || '(untitled)'}
+                    >
+                      {row.label || '(untitled)'}
+                    </span>
+                    <span
+                      className="shrink-0 rounded-full px-1.5 py-0.5"
+                      style={{
+                        fontSize: '9px',
+                        fontWeight: 700,
+                        letterSpacing: '0.04em',
+                        textTransform: 'uppercase',
+                        color: 'var(--lp-text-tertiary)',
+                        background: 'var(--lp-bg-deep)',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {derivedSrc.badge}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => onNavigate(derivedSrc.href)}
+                      title={`Edit at source — ${derivedSrc.badge.replace('from ', '')}`}
+                      aria-label={`Open ${derivedSrc.badge.replace('from ', '')} in Operations`}
+                      className="btn-transition inline-flex shrink-0 items-center justify-center rounded"
+                      style={{
+                        height: 22,
+                        width: 22,
+                        border: '1px solid var(--lp-border)',
+                        background: 'var(--lp-surface)',
+                        color: 'var(--lp-text-secondary)',
+                        cursor: 'pointer',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.color = 'var(--color-lp-orange)';
+                        e.currentTarget.style.borderColor = 'var(--color-lp-orange)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.color = 'var(--lp-text-secondary)';
+                        e.currentTarget.style.borderColor = 'var(--lp-border)';
+                      }}
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    {/* §B1.2 — manual line: inline-editable title +
+                        dedicated open-detail button. */}
+                    <InlineLabelCell
+                      value={row.label ?? ''}
+                      onCommit={(label) => void onCommitLine(row.id, { label })}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => onOpenLine(row)}
+                      title="Open detail"
+                      aria-label={`Open ${row.label || 'line item'} detail`}
+                      className="btn-transition btn-primary-press inline-flex shrink-0 items-center gap-1"
+                      style={{
+                        height: 24,
+                        padding: '0 9px',
+                        borderRadius: 6,
+                        border: '1px solid var(--lp-border)',
+                        background: 'var(--lp-surface)',
+                        color: 'var(--lp-text-secondary)',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        letterSpacing: '0.02em',
+                        cursor: 'pointer',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.background =
+                          'color-mix(in srgb, var(--color-lp-orange) 14%, transparent)';
+                        e.currentTarget.style.color = 'var(--color-lp-orange)';
+                        e.currentTarget.style.borderColor = 'var(--color-lp-orange)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.background = 'var(--lp-surface)';
+                        e.currentTarget.style.color = 'var(--lp-text-secondary)';
+                        e.currentTarget.style.borderColor = 'var(--lp-border)';
+                      }}
+                    >
+                      <PanelRightOpen className="h-3.5 w-3.5" aria-hidden />
+                      Open
+                    </button>
+                  </>
+                )}
               </div>
             </Td>
             <Td>
@@ -1902,29 +2182,38 @@ function GroupRows({
                 borderBottom: '1px solid var(--lp-border-subtle)',
               }}
             >
+              {/* BUD-15 — clear, labelled, discoverable add-line pill. */}
               <button
                 type="button"
                 onClick={handleAdd}
+                className="btn-transition"
                 style={{
                   display: 'inline-flex',
                   alignItems: 'center',
-                  gap: 6,
+                  gap: 5,
                   fontSize: '11px',
-                  color: 'var(--lp-text-tertiary)',
-                  background: 'transparent',
-                  border: 0,
-                  padding: '2px 0',
+                  fontWeight: 600,
+                  color: 'var(--lp-text-secondary)',
+                  background: 'var(--lp-surface)',
+                  border: '1px solid var(--lp-border)',
+                  borderRadius: 6,
+                  padding: '3px 9px',
                   cursor: 'pointer',
                 }}
                 onMouseEnter={(e) => {
                   e.currentTarget.style.color = 'var(--color-lp-orange)';
+                  e.currentTarget.style.borderColor = 'var(--color-lp-orange)';
+                  e.currentTarget.style.background =
+                    'color-mix(in srgb, var(--color-lp-orange) 10%, transparent)';
                 }}
                 onMouseLeave={(e) => {
-                  e.currentTarget.style.color = 'var(--lp-text-tertiary)';
+                  e.currentTarget.style.color = 'var(--lp-text-secondary)';
+                  e.currentTarget.style.borderColor = 'var(--lp-border)';
+                  e.currentTarget.style.background = 'var(--lp-surface)';
                 }}
               >
                 <Plus className="h-3 w-3" aria-hidden />
-                Add line to {group.label.toLowerCase()}
+                Add line
               </button>
             </td>
           </tr>
@@ -2176,214 +2465,3 @@ function InlineLabelCell({
   );
 }
 
-/* §B1.2 — inline select editor for the Status + Phase cells.
-   Closed display is whatever the caller passes as children (the
-   coloured chip), so the at-a-glance read is preserved. Clicking
-   opens a custom popover menu (not a native <select>) styled to
-   match the chips — rounded, tokenised, with a tone dot per option
-   and a check on the current value. The menu is fixed-positioned
-   (anchored to the trigger via getBoundingClientRect) so it escapes
-   the table's overflow clip. Closes on outside-click, Escape, or
-   scroll/resize; arrow keys move the active option, Enter selects.
-   Props + the onCommit(value) contract are unchanged. */
-function InlineSelectCell({
-  value,
-  options,
-  onCommit,
-  ariaLabel,
-  readOnly = false,
-  children,
-}: {
-  value: string;
-  options: { value: string; label: string; disabled?: boolean }[];
-  onCommit: (next: string) => void;
-  ariaLabel: string;
-  readOnly?: boolean;
-  children: React.ReactNode;
-}) {
-  const [open, setOpen] = useState(false);
-  const [coords, setCoords] = useState<{
-    top: number;
-    left: number;
-    width: number;
-  } | null>(null);
-  const [activeIndex, setActiveIndex] = useState(-1);
-  const buttonRef = useRef<HTMLButtonElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  // Selectable options exclude the disabled placeholder (e.g. the
-  // status "—" that the PATCH route won't accept).
-  const selectable = options.filter((o) => !o.disabled);
-
-  const closeMenu = () => {
-    setOpen(false);
-    setActiveIndex(-1);
-  };
-
-  const openMenu = () => {
-    const rect = buttonRef.current?.getBoundingClientRect();
-    if (rect) {
-      setCoords({
-        top: rect.bottom + 4,
-        left: rect.left,
-        width: Math.max(rect.width, 150),
-      });
-    }
-    const idx = selectable.findIndex((o) => o.value === value);
-    setActiveIndex(idx >= 0 ? idx : 0);
-    setOpen(true);
-  };
-
-  const choose = (next: string) => {
-    onCommit(next);
-    closeMenu();
-    buttonRef.current?.focus();
-  };
-
-  // Outside-click + scroll/resize dismissal. Escape is handled on
-  // the focused menu so it can also restore trigger focus.
-  useEffect(() => {
-    if (!open) return;
-    const onPointerDown = (e: MouseEvent) => {
-      const t = e.target as Node;
-      if (buttonRef.current?.contains(t) || menuRef.current?.contains(t)) return;
-      closeMenu();
-    };
-    const dismiss = () => closeMenu();
-    document.addEventListener('mousedown', onPointerDown);
-    window.addEventListener('scroll', dismiss, true);
-    window.addEventListener('resize', dismiss);
-    return () => {
-      document.removeEventListener('mousedown', onPointerDown);
-      window.removeEventListener('scroll', dismiss, true);
-      window.removeEventListener('resize', dismiss);
-    };
-  }, [open]);
-
-  // Move keyboard focus onto the menu when it opens.
-  useEffect(() => {
-    if (open && menuRef.current) menuRef.current.focus();
-  }, [open]);
-
-  if (readOnly) return <>{children}</>;
-
-  return (
-    <>
-      <button
-        ref={buttonRef}
-        type="button"
-        aria-haspopup="listbox"
-        aria-expanded={open}
-        aria-label={ariaLabel}
-        title="Click to edit"
-        onClick={() => (open ? closeMenu() : openMenu())}
-        onKeyDown={(e) => {
-          if (!open && (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ')) {
-            e.preventDefault();
-            openMenu();
-          }
-        }}
-        className="btn-transition"
-        style={{
-          background: 'transparent',
-          border: 0,
-          padding: 0,
-          cursor: 'pointer',
-          font: 'inherit',
-          color: 'inherit',
-          display: 'inline-flex',
-          alignItems: 'center',
-          borderRadius: 999,
-        }}
-      >
-        {children}
-      </button>
-      {open && coords ? (
-        <div
-          ref={menuRef}
-          role="listbox"
-          aria-label={ariaLabel}
-          tabIndex={-1}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') {
-              e.preventDefault();
-              closeMenu();
-              buttonRef.current?.focus();
-            } else if (e.key === 'ArrowDown') {
-              e.preventDefault();
-              setActiveIndex((i) => (i + 1) % selectable.length);
-            } else if (e.key === 'ArrowUp') {
-              e.preventDefault();
-              setActiveIndex((i) => (i - 1 + selectable.length) % selectable.length);
-            } else if (e.key === 'Enter' || e.key === ' ') {
-              e.preventDefault();
-              const opt = selectable[activeIndex];
-              if (opt) choose(opt.value);
-            }
-          }}
-          style={{
-            position: 'fixed',
-            top: coords.top,
-            left: coords.left,
-            minWidth: coords.width,
-            zIndex: 50,
-            background: 'var(--lp-surface)',
-            border: '1px solid var(--lp-border-strong)',
-            borderRadius: 8,
-            boxShadow: 'var(--lp-shadow-popover)',
-            padding: 4,
-            outline: 'none',
-          }}
-        >
-          {selectable.map((o, idx) => {
-            const isSelected = o.value === value;
-            const isActive = idx === activeIndex;
-            const tone = OPTION_TONE[o.value];
-            return (
-              <button
-                key={o.value || 'empty'}
-                type="button"
-                role="option"
-                aria-selected={isSelected}
-                onClick={() => choose(o.value)}
-                onMouseEnter={() => setActiveIndex(idx)}
-                className="btn-transition"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  width: '100%',
-                  textAlign: 'left',
-                  fontSize: '12px',
-                  fontWeight: isSelected ? 600 : 500,
-                  padding: '5px 8px',
-                  borderRadius: 5,
-                  border: 0,
-                  cursor: 'pointer',
-                  background: isActive
-                    ? 'color-mix(in srgb, var(--color-lp-orange) 12%, transparent)'
-                    : 'transparent',
-                  color: isActive ? 'var(--color-lp-orange)' : 'var(--lp-text)',
-                }}
-              >
-                <span
-                  aria-hidden
-                  className="h-1.5 w-1.5 shrink-0 rounded-full"
-                  style={{ background: tone ?? 'var(--lp-border-strong)' }}
-                />
-                <span className="min-w-0 flex-1 truncate">{o.label}</span>
-                {isSelected ? (
-                  <Check
-                    className="h-3.5 w-3.5 shrink-0"
-                    style={{ color: 'var(--color-lp-orange)' }}
-                    aria-hidden
-                  />
-                ) : null}
-              </button>
-            );
-          })}
-        </div>
-      ) : null}
-    </>
-  );
-}

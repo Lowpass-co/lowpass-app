@@ -28,7 +28,7 @@ async function resolveWorkspace() {
     .from('profiles')
     .select('workspace_id')
     .eq('id', user.id)
-    .single();
+    .maybeSingle();
   if (!profile?.workspace_id) {
     return { error: NextResponse.json({ error: 'No workspace' }, { status: 403 }) };
   }

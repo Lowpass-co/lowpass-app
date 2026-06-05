@@ -32,7 +32,7 @@ export async function POST(request: Request) {
     .from('profiles')
     .select('workspace_id')
     .eq('id', user.id)
-    .single();
+    .maybeSingle();
   if (!profile?.workspace_id) {
     return NextResponse.json({ error: 'No workspace' }, { status: 403 });
   }
@@ -58,7 +58,7 @@ export async function POST(request: Request) {
     .select('id')
     .eq('id', tourId)
     .eq('workspace_id', workspaceId)
-    .single();
+    .maybeSingle();
   if (!tour) {
     return NextResponse.json({ error: 'Tour not found' }, { status: 404 });
   }

@@ -9,6 +9,7 @@
 
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { reconcileDerivedBudgetLines } from '@/server/budget/reconcileDerivedLines';
 
 export async function GET(request: Request) {
   const supabase = await createServerSupabaseClient();
@@ -21,7 +22,7 @@ export async function GET(request: Request) {
     .from('profiles')
     .select('workspace_id')
     .eq('id', user.id)
-    .single();
+    .maybeSingle();
 
   if (!profile?.workspace_id) {
     return NextResponse.json({ error: 'No workspace' }, { status: 403 });
@@ -39,7 +40,7 @@ export async function GET(request: Request) {
     .select('id')
     .eq('id', tourId)
     .eq('workspace_id', profile.workspace_id)
-    .single();
+    .maybeSingle();
 
   if (!tour) {
     return NextResponse.json({ error: 'Tour not found' }, { status: 404 });
@@ -158,6 +159,12 @@ export async function GET(request: Request) {
     }
   }
 
+  // Budget ← Operations linking — reconcile rooming + payroll derived
+  // lines on a full (unfiltered) load, mirroring the gear pattern above.
+  if (!category) {
+    await reconcileDerivedBudgetLines(supabase, tourId, profile.workspace_id);
+  }
+
   const { data, error } = await query;
 
   if (error) {
@@ -177,7 +184,7 @@ export async function POST(request: Request) {
     .from('profiles')
     .select('workspace_id')
     .eq('id', user.id)
-    .single();
+    .maybeSingle();
 
   if (!profile?.workspace_id) {
     return NextResponse.json({ error: 'No workspace' }, { status: 403 });
@@ -219,7 +226,7 @@ export async function POST(request: Request) {
     .select('id')
     .eq('id', tour_id)
     .eq('workspace_id', profile.workspace_id)
-    .single();
+    .maybeSingle();
 
   if (!tour) {
     return NextResponse.json({ error: 'Tour not found' }, { status: 404 });
@@ -304,7 +311,7 @@ export async function PATCH(request: Request) {
     .from('profiles')
     .select('workspace_id')
     .eq('id', user.id)
-    .single();
+    .maybeSingle();
 
   if (!profile?.workspace_id) {
     return NextResponse.json({ error: 'No workspace' }, { status: 403 });
@@ -357,7 +364,7 @@ export async function PATCH(request: Request) {
 
   const { data: existingRow } = await supabase
     .from('budget_line_items')
-    .select('id, flight_id, hotel_id, room_id, gear_id, tour_gear_id')
+    .select('id, flight_id, hotel_id, room_id, gear_id, tour_gear_id, source_entity_type')
     .eq('id', id)
     .eq('workspace_id', profile.workspace_id)
     .maybeSingle();
@@ -379,6 +386,16 @@ export async function PATCH(request: Request) {
   if ((existingRow.hotel_id || existingRow.room_id) && updatesDerivedFields) {
     return NextResponse.json(
       { error: 'This row is derived from rooming; edit the linked room/hotel instead' },
+      { status: 409 }
+    );
+  }
+  if (
+    (existingRow.source_entity_type === 'payroll' ||
+      existingRow.source_entity_type === 'payroll_per_diem') &&
+    updatesDerivedFields
+  ) {
+    return NextResponse.json(
+      { error: 'This row is derived from payroll; edit the fee / per diem at source' },
       { status: 409 }
     );
   }
@@ -463,10 +480,13 @@ export async function PATCH(request: Request) {
     .eq('id', id)
     .eq('workspace_id', profile.workspace_id)
     .select()
-    .single();
+    .maybeSingle();
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  if (!data) {
+    return NextResponse.json({ error: 'Line item not found' }, { status: 404 });
   }
 
   const row = data as {
@@ -502,27 +522,34 @@ export async function DELETE(request: Request) {
     .from('profiles')
     .select('workspace_id')
     .eq('id', user.id)
-    .single();
+    .maybeSingle();
 
   if (!profile?.workspace_id) {
     return NextResponse.json({ error: 'No workspace' }, { status: 403 });
   }
 
-  let body: { id: string };
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
+  // Accept the id via query string (?id=) OR JSON body. The grid's bulk
+  // delete uses the query form; older callers send a body. Reading the
+  // query first means a body-less DELETE no longer 400s on JSON parse.
+  const { searchParams } = new URL(request.url);
+  let id = searchParams.get('id');
+  if (!id) {
+    try {
+      const body = (await request.json()) as { id?: string };
+      id = body.id ?? null;
+    } catch {
+      // no body — fall through to the missing-id error
+    }
   }
 
-  if (!body.id) {
+  if (!id) {
     return NextResponse.json({ error: 'id is required' }, { status: 400 });
   }
 
   const { error } = await supabase
     .from('budget_line_items')
     .delete()
-    .eq('id', body.id)
+    .eq('id', id)
     .eq('workspace_id', profile.workspace_id);
 
   if (error) {
