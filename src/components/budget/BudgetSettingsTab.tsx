@@ -25,6 +25,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
+import { useBudgetConfirm } from '@/components/budget/BudgetConfirmDialog';
 import type {
   BudgetSection,
   BudgetTemplate,
@@ -166,6 +167,7 @@ function TourSectionsCard({
 }) {
   const router = useRouter();
   const { showToast } = useToast();
+  const { requestConfirm, dialog } = useBudgetConfirm();
   const [busy, setBusy] = useState(false);
 
   const sorted = [...sections].sort(
@@ -276,14 +278,25 @@ function TourSectionsCard({
               <button
                 type="button"
                 aria-label={`Delete ${s.name}`}
+                title="Delete section"
                 disabled={busy}
-                onClick={() => {
-                  if (window.confirm(`Delete "${s.name}"? Lines move to Uncategorised.`)) {
-                    void call('DELETE', null, `?id=${encodeURIComponent(s.id)}`);
-                  }
-                }}
+                onClick={() =>
+                  requestConfirm({
+                    title: 'Delete section?',
+                    message: `Delete "${s.name}"? Its line items move to Uncategorised (they are not deleted).`,
+                    confirmLabel: 'Delete section',
+                    onConfirm: () =>
+                      void call('DELETE', null, `?id=${encodeURIComponent(s.id)}`),
+                  })
+                }
                 className="btn-transition rounded p-1"
                 style={{ color: 'var(--lp-text-tertiary)' }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.color = 'var(--color-lp-error)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.color = 'var(--lp-text-tertiary)';
+                }}
               >
                 <Trash2 className="h-3.5 w-3.5" aria-hidden />
               </button>
@@ -291,6 +304,7 @@ function TourSectionsCard({
           ))
         )}
       </ul>
+      {dialog}
     </section>
   );
 }
@@ -301,6 +315,7 @@ function TourSectionsCard({
 function TemplatesCard({ tourId }: { tourId: string }) {
   const router = useRouter();
   const { showToast } = useToast();
+  const { requestConfirm, dialog } = useBudgetConfirm();
   const [templates, setTemplates] = useState<BudgetTemplate[] | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -362,6 +377,25 @@ function TemplatesCard({ tourId }: { tourId: string }) {
     }
   };
 
+  /* Fix-pack B Task 4b — start a template from scratch (no clone). */
+  const createBlank = async () => {
+    setBusy('__new__');
+    try {
+      const res = await fetch('/api/budget/templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: 'New template' }),
+      });
+      if (!res.ok) throw new Error(`Could not create template (${res.status})`);
+      showToast('Blank template created');
+      await load();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Could not create template', 'error');
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const clone = async (template: BudgetTemplate) => {
     setBusy(`clone-${template.id}`);
     try {
@@ -385,8 +419,7 @@ function TemplatesCard({ tourId }: { tourId: string }) {
     }
   };
 
-  const remove = async (template: BudgetTemplate) => {
-    if (!window.confirm(`Delete the "${template.name}" template?`)) return;
+  const performRemove = async (template: BudgetTemplate) => {
     setBusy(`del-${template.id}`);
     try {
       const res = await fetch(
@@ -402,16 +435,50 @@ function TemplatesCard({ tourId }: { tourId: string }) {
     }
   };
 
+  const remove = (template: BudgetTemplate) => {
+    requestConfirm({
+      title: 'Delete template?',
+      message: `Delete the "${template.name}" template? This can't be undone.`,
+      confirmLabel: 'Delete template',
+      onConfirm: () => void performRemove(template),
+    });
+  };
+
   return (
     <section className="rounded-lg border p-4" style={cardStyle}>
-      <h2 className="lp-h3">Templates</h2>
-      <p
-        className="mt-1"
-        style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text-secondary)' }}
-      >
-        Apply a preset to add any missing sections + lines to this tour, clone a
-        system preset to customise, or edit your own templates.
-      </p>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="lp-h3">Templates</h2>
+          <p
+            className="mt-1"
+            style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text-secondary)' }}
+          >
+            Apply a preset to add any missing sections + lines to this tour, clone
+            a system preset to customise, or edit your own templates.
+          </p>
+        </div>
+        {/* Fix-pack B Task 4b — start a template from scratch. */}
+        <button
+          type="button"
+          disabled={busy !== null}
+          onClick={() => void createBlank()}
+          className="btn-transition inline-flex shrink-0 items-center gap-1.5 rounded-md px-3 py-1.5"
+          style={{
+            background: 'var(--color-lp-orange)',
+            color: 'var(--lp-text-inverse)',
+            fontSize: 'var(--lp-text-sm)',
+            fontWeight: 'var(--lp-weight-semibold)',
+            opacity: busy !== null ? 0.6 : 1,
+          }}
+        >
+          {busy === '__new__' ? (
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+          ) : (
+            <Plus className="h-4 w-4" aria-hidden />
+          )}
+          New template
+        </button>
+      </div>
 
       {templates === null ? (
         <div
@@ -448,16 +515,19 @@ function TemplatesCard({ tourId }: { tourId: string }) {
                       ) : (
                         <InlineText
                           value={t.name}
-                          onCommit={(name) => void renameTemplate(t.id, name)}
+                          title="Click to rename"
+                          /* Fix-pack B Task 4a — subtle bordered box so it
+                             reads as an editable field. */
                           style={{
                             fontSize: 'var(--lp-text-base)',
                             fontWeight: 'var(--lp-weight-medium)',
-                            border: '1px solid transparent',
-                            background: 'transparent',
+                            border: '1px solid var(--lp-border)',
+                            background: 'var(--lp-bg)',
                             borderRadius: 'var(--lp-radius-md)',
                             padding: 'var(--lp-space-1) var(--lp-space-2)',
                             minWidth: 0,
                           }}
+                          onCommit={(name) => void renameTemplate(t.id, name)}
                         />
                       )}
                       <span
@@ -554,6 +624,7 @@ function TemplatesCard({ tourId }: { tourId: string }) {
           })}
         </ul>
       )}
+      {dialog}
     </section>
   );
 }
@@ -738,10 +809,12 @@ function InlineText({
   value,
   onCommit,
   style,
+  title,
 }: {
   value: string;
   onCommit: (next: string) => void;
   style?: React.CSSProperties;
+  title?: string;
 }) {
   const [draft, setDraft] = useState(value);
   // Resync the field when the server value changes (e.g. after refresh).
@@ -759,6 +832,7 @@ function InlineText({
       type="text"
       value={draft}
       aria-label="Edit name"
+      title={title}
       onChange={(e) => setDraft(e.target.value)}
       onBlur={commit}
       onKeyDown={(e) => {

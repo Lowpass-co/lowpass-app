@@ -24,6 +24,7 @@ import type { Metadata } from 'next';
 
 import { MobileBudgetBanner } from '@/components/mobile/MobileBudgetBanner';
 import { BudgetPhaseStripClient } from '@/components/budget/BudgetPhaseStripClient';
+import { BudgetPhaseStripReveal } from '@/components/budget/BudgetPhaseStripReveal';
 import { BudgetStatsStrip } from '@/components/budget/BudgetStatsStrip';
 import { BudgetSpreadsheetView } from '@/components/budget/BudgetSpreadsheetView';
 import { BudgetEmptyState } from '@/components/budget/BudgetEmptyState';
@@ -176,8 +177,12 @@ export default async function BudgetTourPage({
     <BudgetDensityProvider>
     <div className="flex min-h-0 flex-1 flex-col pb-24">
         <BudgetStatsStrip lines={lines} tourCurrency={tourCurrency} />
-        {/* Phase strip only when this tour tracks phases (BUD-18). */}
-        {trackPhases ? <BudgetPhaseStripClient phases={phases} /> : null}
+        {/* Phase strip when this tour tracks phases (BUD-18). Kept mounted
+            inside the reveal wrapper so the toggle animates (Fix-pack B
+            Task 6 / #18) instead of flashing in/out. */}
+        <BudgetPhaseStripReveal visible={trackPhases}>
+          <BudgetPhaseStripClient phases={phases} />
+        </BudgetPhaseStripReveal>
         <BudgetTabNav active={tab} />
 
         <div className="space-y-6 px-4 pt-4">

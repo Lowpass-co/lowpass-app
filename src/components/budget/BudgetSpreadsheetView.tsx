@@ -44,6 +44,7 @@ import {
 import { BudgetLineSlideOver } from '@/components/budget/BudgetLineSlideOver';
 import { BudgetCellInput } from '@/components/budget/cells/BudgetCellInput';
 import { InlineSelectCell } from '@/components/budget/cells/InlineSelectCell';
+import { useBudgetConfirm } from '@/components/budget/BudgetConfirmDialog';
 import {
   useBudgetGridSizing,
   type GridColumnDef,
@@ -343,6 +344,13 @@ export function BudgetSpreadsheetView({
   const [pendingSections, setPendingSections] = useState<BudgetSection[]>([]);
   const [sectionRenames, setSectionRenames] = useState<Record<string, string>>({});
   const [deletedSectionIds, setDeletedSectionIds] = useState<string[]>([]);
+  /* Fix-pack B Task 2 — the section / line just created via "+", which
+     should open straight into name-edit mode (focused + selected). Cleared
+     once the inline editor consumes it. */
+  const [autoEditSectionId, setAutoEditSectionId] = useState<string | null>(null);
+  const [autoEditLineId, setAutoEditLineId] = useState<string | null>(null);
+  // Fix-pack B Task 5b — branded confirm dialog (replaces window.confirm).
+  const { requestConfirm, dialog: confirmDialog } = useBudgetConfirm();
 
   // §D — restore per-tour group-by preference on mount. The legacy
   // 'category' value maps forward to the new 'section' grouping.
@@ -393,7 +401,10 @@ export function BudgetSpreadsheetView({
         : (() => {
             const known = new Set(lines.map((l) => l.id));
             const extras = pendingCreations.filter((p) => !known.has(p.id));
-            return extras.length > 0 ? [...extras, ...lines] : lines;
+            // Fix-pack B Task 1 — append new lines at the END so a freshly
+            // created line lands at the BOTTOM of its section (where the
+            // user clicked "+"), not jumping to the top.
+            return extras.length > 0 ? [...lines, ...extras] : lines;
           })();
     const visible =
       deletedLineIds.length === 0
@@ -558,8 +569,12 @@ export function BudgetSpreadsheetView({
   );
   const lastSelectedIndexRef = useRef<number | null>(null);
 
-  const toggleSelect = (rowId: string, index: number, shiftKey: boolean) => {
-    if (shiftKey && lastSelectedIndexRef.current !== null) {
+  const toggleSelect = (rowId: string, _index: number, shiftKey: boolean) => {
+    // Fix-pack B Task 3 — derive the flat index from orderedRowIds itself
+    // (not the row's render-time index, which can drift). slice(lo, hi+1)
+    // is inclusive of BOTH the anchor and the clicked row.
+    const index = orderedRowIds.indexOf(rowId);
+    if (shiftKey && lastSelectedIndexRef.current !== null && index >= 0) {
       const lo = Math.min(lastSelectedIndexRef.current, index);
       const hi = Math.max(lastSelectedIndexRef.current, index);
       const range = orderedRowIds.slice(lo, hi + 1);
@@ -718,6 +733,8 @@ export function BudgetSpreadsheetView({
       const created = (await res.json()) as BudgetSection;
       // Swap the temp row for the real one (real id needed for adding lines).
       setPendingSections((prev) => prev.map((s) => (s.id === tempId ? created : s)));
+      // Fix-pack B Task 2 — open the new section header in name-edit mode.
+      setAutoEditSectionId(created.id);
     } catch (err) {
       setPendingSections((prev) => prev.filter((s) => s.id !== tempId));
       showToast(err instanceof Error ? err.message : 'Could not add section', 'error');
@@ -751,14 +768,7 @@ export function BudgetSpreadsheetView({
     }
   };
 
-  const deleteSection = async (sectionId: string, label: string) => {
-    if (
-      !window.confirm(
-        `Delete the "${label}" section? Its line items move to Uncategorised (they are not deleted).`,
-      )
-    ) {
-      return;
-    }
+  const performDeleteSection = async (sectionId: string) => {
     // Optimistic-remove a not-yet-persisted section without a request.
     if (String(sectionId).startsWith('pending-')) {
       setPendingSections((prev) => prev.filter((s) => s.id !== sectionId));
@@ -778,6 +788,15 @@ export function BudgetSpreadsheetView({
       setDeletedSectionIds((prev) => prev.filter((id) => id !== sectionId));
       showToast(err instanceof Error ? err.message : 'Delete failed', 'error');
     }
+  };
+
+  const deleteSection = (sectionId: string, label: string) => {
+    requestConfirm({
+      title: 'Delete section?',
+      message: `Delete the "${label}" section? Its line items move to Uncategorised (they are not deleted).`,
+      confirmLabel: 'Delete section',
+      onConfirm: () => void performDeleteSection(sectionId),
+    });
   };
 
   /* Fix-pack A — add a line straight into a section, optimistically.
@@ -806,7 +825,9 @@ export function BudgetSpreadsheetView({
         throw new Error(b.error ?? 'Could not add line');
       }
       const created = (await res.json()) as BudgetLineItem;
-      setPendingCreations((prev) => [created, ...prev]);
+      setPendingCreations((prev) => [...prev, created]);
+      // Fix-pack B Task 2 — drop the new line straight into name-edit mode.
+      setAutoEditLineId(created.id);
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Could not add line', 'error');
     }
@@ -1256,6 +1277,12 @@ export function BudgetSpreadsheetView({
                       onAddLineToSection={addLineToSection}
                       onRenameSection={renameSection}
                       onDeleteSection={deleteSection}
+                      autoEditSectionId={autoEditSectionId}
+                      autoEditLineId={autoEditLineId}
+                      onAutoEditConsumed={() => {
+                        setAutoEditSectionId(null);
+                        setAutoEditLineId(null);
+                      }}
                     />
                   );
                 })
@@ -1414,40 +1441,48 @@ export function BudgetSpreadsheetView({
           <button
             type="button"
             disabled={bulkBusy !== null}
-            onClick={async () => {
-              if (!window.confirm(`Delete ${selectedIds.length} budget lines?`))
-                return;
+            onClick={() => {
               const ids = [...selectedIds];
-              setBulkBusy('delete');
-              // Optimistic: hide the rows immediately (the route accepts
-              // ?id=, which is why this delete actually fires now).
-              setDeletedLineIds((prev) => [...prev, ...ids]);
-              setPendingCreations((prev) => prev.filter((p) => !ids.includes(p.id)));
-              setSelectedIds([]);
-              try {
-                const results = await Promise.all(
-                  ids.map((id) =>
-                    fetch(`/api/budget/line-items?id=${encodeURIComponent(id)}`, {
-                      method: 'DELETE',
-                    }),
-                  ),
-                );
-                if (results.some((r) => !r.ok)) {
-                  throw new Error('Some deletes failed');
-                }
-                showToast(`Deleted ${ids.length} lines`);
-                // No router.refresh() on success — rows already hidden.
-              } catch (err) {
-                // Roll back the optimistic hide + resync truth.
-                setDeletedLineIds((prev) => prev.filter((id) => !ids.includes(id)));
-                showToast(
-                  err instanceof Error ? err.message : 'Bulk delete failed',
-                  'error',
-                );
-                router.refresh();
-              } finally {
-                setBulkBusy(null);
-              }
+              const count = ids.length;
+              requestConfirm({
+                title: 'Delete line items?',
+                message: `Delete ${count} budget ${count === 1 ? 'line' : 'lines'}? This can't be undone.`,
+                confirmLabel: `Delete ${count}`,
+                onConfirm: () => {
+                  setBulkBusy('delete');
+                  // Optimistic: hide the rows immediately (the route accepts
+                  // ?id=, which is why this delete actually fires now).
+                  setDeletedLineIds((prev) => [...prev, ...ids]);
+                  setPendingCreations((prev) => prev.filter((p) => !ids.includes(p.id)));
+                  setSelectedIds([]);
+                  void (async () => {
+                    try {
+                      const results = await Promise.all(
+                        ids.map((id) =>
+                          fetch(`/api/budget/line-items?id=${encodeURIComponent(id)}`, {
+                            method: 'DELETE',
+                          }),
+                        ),
+                      );
+                      if (results.some((r) => !r.ok)) {
+                        throw new Error('Some deletes failed');
+                      }
+                      showToast(`Deleted ${count} lines`);
+                      // No router.refresh() on success — rows already hidden.
+                    } catch (err) {
+                      // Roll back the optimistic hide + resync truth.
+                      setDeletedLineIds((prev) => prev.filter((id) => !ids.includes(id)));
+                      showToast(
+                        err instanceof Error ? err.message : 'Bulk delete failed',
+                        'error',
+                      );
+                      router.refresh();
+                    } finally {
+                      setBulkBusy(null);
+                    }
+                  })();
+                },
+              });
             }}
             className="btn-transition inline-flex items-center gap-1 rounded-md border px-2 py-1"
             style={{
@@ -1473,6 +1508,9 @@ export function BudgetSpreadsheetView({
           </button>
         </div>
       ) : null}
+
+      {/* Fix-pack B Task 5b — branded delete confirms. */}
+      {confirmDialog}
     </section>
   );
 }
@@ -1630,6 +1668,11 @@ interface GroupRowsProps {
   displayCurrency: string;
   gProposed: number;
   gActual: number;
+  /** Fix-pack B Task 2 — the section / line that should auto-open in
+   *  name-edit mode, and a callback to clear that state once consumed. */
+  autoEditSectionId: string | null;
+  autoEditLineId: string | null;
+  onAutoEditConsumed: () => void;
 }
 
 function GroupRows({
@@ -1654,6 +1697,9 @@ function GroupRows({
   onAddLineToSection,
   onRenameSection,
   onDeleteSection,
+  autoEditSectionId,
+  autoEditLineId,
+  onAutoEditConsumed,
 }: GroupRowsProps) {
   const isSectionGroup = group.sectionId !== undefined;
   const isRealSection =
@@ -1690,6 +1736,10 @@ function GroupRows({
                   onCommit={(name) =>
                     void onRenameSection(group.sectionId as string, name)
                   }
+                  autoEdit={
+                    group.sectionId != null && group.sectionId === autoEditSectionId
+                  }
+                  onAutoEditConsumed={onAutoEditConsumed}
                 />
               ) : (
                 <span
@@ -1735,12 +1785,12 @@ function GroupRows({
                     opacity: sectionBusy ? 0.5 : 1,
                   }}
                   onMouseEnter={(e) => {
-                    e.currentTarget.style.color =
-                      'var(--color-lp-status-needs-review)';
+                    // Fix-pack B Task 5a — danger RED on hover, not amber.
+                    e.currentTarget.style.color = 'var(--color-lp-error)';
                     e.currentTarget.style.borderColor =
-                      'color-mix(in srgb, var(--color-lp-status-needs-review) 45%, transparent)';
+                      'color-mix(in srgb, var(--color-lp-error) 45%, transparent)';
                     e.currentTarget.style.background =
-                      'color-mix(in srgb, var(--color-lp-status-needs-review) 10%, transparent)';
+                      'color-mix(in srgb, var(--color-lp-error) 10%, transparent)';
                   }}
                   onMouseLeave={(e) => {
                     e.currentTarget.style.color = 'var(--lp-text-tertiary)';
@@ -1919,6 +1969,8 @@ function GroupRows({
                     <InlineLabelCell
                       value={row.label ?? ''}
                       onCommit={(label) => void onCommitLine(row.id, { label })}
+                      autoEdit={row.id === autoEditLineId}
+                      onAutoEditConsumed={onAutoEditConsumed}
                     />
                     <button
                       type="button"
@@ -2230,13 +2282,28 @@ function GroupRows({
 function InlineSectionName({
   value,
   onCommit,
+  autoEdit = false,
+  onAutoEditConsumed,
 }: {
   value: string;
   onCommit: (next: string) => void;
+  autoEdit?: boolean;
+  onAutoEditConsumed?: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
   const inputRef = useRef<HTMLInputElement>(null);
+  const autoEditDone = useRef(false);
+
+  // Fix-pack B Task 2 — a just-created section opens straight into edit.
+  useEffect(() => {
+    if (autoEdit && !autoEditDone.current) {
+      autoEditDone.current = true;
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setEditing(true);
+      onAutoEditConsumed?.();
+    }
+  }, [autoEdit, onAutoEditConsumed]);
 
   useEffect(() => {
     if (editing && inputRef.current) {
@@ -2370,13 +2437,28 @@ function Td({
 function InlineLabelCell({
   value,
   onCommit,
+  autoEdit = false,
+  onAutoEditConsumed,
 }: {
   value: string;
   onCommit: (next: string) => void;
+  autoEdit?: boolean;
+  onAutoEditConsumed?: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(value);
   const inputRef = useRef<HTMLInputElement>(null);
+  const autoEditDone = useRef(false);
+
+  // Fix-pack B Task 2 — a just-created line opens straight into edit.
+  useEffect(() => {
+    if (autoEdit && !autoEditDone.current) {
+      autoEditDone.current = true;
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setEditing(true);
+      onAutoEditConsumed?.();
+    }
+  }, [autoEdit, onAutoEditConsumed]);
 
   useEffect(() => {
     if (editing && inputRef.current) {
