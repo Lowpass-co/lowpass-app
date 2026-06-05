@@ -104,6 +104,10 @@ export async function POST(request: Request) {
     insurance_pct,
     contingency_pct,
     accountancy_pct,
+    merch_cogs_pct,
+    insurance_basis,
+    contingency_basis,
+    accountancy_basis,
     notes,
     track_phases,
   } = body;
@@ -117,11 +121,16 @@ export async function POST(request: Request) {
     .select('id')
     .eq('id', tour_id)
     .eq('workspace_id', profile.workspace_id)
-    .single();
+    .maybeSingle();
 
   if (!tour) {
     return NextResponse.json({ error: 'Tour not found' }, { status: 404 });
   }
+
+  // Stage 3 — overhead bases must be one of the known vocabulary values.
+  const BASIS_VALUES = ['income_gross', 'expenses_total', 'expenses_pre_contingency'];
+  const validBasis = (v: unknown) =>
+    typeof v === 'string' && BASIS_VALUES.includes(v);
 
   const payload: Record<string, unknown> = {
     tour_id,
@@ -135,6 +144,10 @@ export async function POST(request: Request) {
   if (insurance_pct !== undefined) payload.insurance_pct = insurance_pct;
   if (contingency_pct !== undefined) payload.contingency_pct = contingency_pct;
   if (accountancy_pct !== undefined) payload.accountancy_pct = accountancy_pct;
+  if (merch_cogs_pct !== undefined) payload.merch_cogs_pct = merch_cogs_pct;
+  if (validBasis(insurance_basis)) payload.insurance_basis = insurance_basis;
+  if (validBasis(contingency_basis)) payload.contingency_basis = contingency_basis;
+  if (validBasis(accountancy_basis)) payload.accountancy_basis = accountancy_basis;
   if (notes !== undefined) payload.notes = notes;
   if (track_phases !== undefined) payload.track_phases = Boolean(track_phases);
 

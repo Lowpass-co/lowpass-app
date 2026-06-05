@@ -46,6 +46,10 @@ import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { computeTourPhases } from '@/server/budget/computeTourPhases';
 import { getBudgetPanelData } from '@/server/budget/getBudgetPanelData';
 import { reconcileDerivedBudgetLines } from '@/server/budget/reconcileDerivedLines';
+import type {
+  IncomeInput,
+  CommissionInput,
+} from '@/lib/budget/computeBudgetPnl';
 import {
   detectDuplicates,
   duplicatesToRecord,
@@ -134,18 +138,47 @@ export default async function BudgetTourPage({
         .eq('workspace_id', workspaceId)
         .order('sort_order', { ascending: true })
         .order('created_at', { ascending: true }),
+      // select('*') is migration-tolerant — merch_cogs_pct (migration 201)
+      // is read by the P&L but absent before the migration applies.
       supabase
         .from('budget_settings')
-        .select('track_phases')
+        .select('*')
         .eq('tour_id', tourId)
         .eq('workspace_id', workspaceId)
         .maybeSingle(),
     ]);
 
   const sections = (sectionsRes.data ?? []) as BudgetSection[];
-  const trackPhases = Boolean(
-    (settingsRes.data as { track_phases?: boolean } | null)?.track_phases,
-  );
+  const budgetSettings = settingsRes.data as Record<string, unknown> | null;
+  const trackPhases = Boolean(budgetSettings?.track_phases);
+
+  /* Stage 3 — P&L inputs (income + commissions) only fetched for the
+     Summary tab. budget_income keys per show, so fetch by the tour's
+     routing ids. */
+  const routingIds = (routingRes.data ?? [])
+    .map((r) => (r as { id?: string }).id)
+    .filter((id): id is string => Boolean(id));
+  let incomeRows: IncomeInput[] = [];
+  let commissionRows: CommissionInput[] = [];
+  if (tab === 'summary') {
+    const [incRes, commRes] = await Promise.all([
+      routingIds.length
+        ? supabase
+            .from('budget_income')
+            .select('*')
+            .eq('workspace_id', workspaceId)
+            .in('routing_id', routingIds)
+        : Promise.resolve({ data: [] }),
+      supabase
+        .from('budget_commissions')
+        .select('id, label, percentage, basis, order_index')
+        .eq('tour_id', tourId)
+        .eq('workspace_id', workspaceId)
+        .order('order_index', { ascending: true }),
+    ]);
+    incomeRows = (incRes.data ?? []) as unknown as IncomeInput[];
+    commissionRows = (commRes.data ?? []) as unknown as CommissionInput[];
+  }
 
   const phaseBoundaries = phases.map((p) => ({
     key: p.key,
@@ -191,6 +224,9 @@ export default async function BudgetTourPage({
               tourId={tourId}
               lines={lines}
               sections={sections}
+              income={incomeRows}
+              commissions={commissionRows}
+              settings={budgetSettings}
               allocation={panelData.allocation}
               burn={panelData.burn}
               phaseBoundaries={phaseBoundaries}

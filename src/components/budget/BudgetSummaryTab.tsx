@@ -21,6 +21,13 @@ import { ArrowDown, ArrowUp, History } from 'lucide-react';
 import { BudgetOverviewPanels } from '@/components/budget/BudgetOverviewPanels';
 import { convertToCurrency } from '@/lib/budget/fx';
 import { getEffectiveActual } from '@/lib/budget/transactions';
+import {
+  computeBudgetPnl,
+  type BudgetPnl,
+  type IncomeInput,
+  type CommissionInput,
+  type PnlSettingsInput,
+} from '@/lib/budget/computeBudgetPnl';
 import type { BudgetLineItem, BudgetSection } from '@/types';
 import type {
   AllocationSegment,
@@ -81,6 +88,10 @@ export interface BudgetSummaryTabProps {
   lines: BudgetLineItem[];
   /** Phase E — section backbone for the per-section rollup table. */
   sections?: BudgetSection[];
+  /** Stage 3 — P&L inputs. */
+  income?: IncomeInput[];
+  commissions?: CommissionInput[];
+  settings?: PnlSettingsInput | null;
   allocation: AllocationSegment[];
   burn: BurnBucket[];
   phaseBoundaries: BurnPhaseBoundary[];
@@ -91,6 +102,9 @@ export function BudgetSummaryTab({
   tourId,
   lines,
   sections = [],
+  income = [],
+  commissions = [],
+  settings = null,
   allocation,
   burn,
   phaseBoundaries,
@@ -100,6 +114,20 @@ export function BudgetSummaryTab({
   const displayCurrency = (
     searchParams.get('display') ?? tourCurrency
   ).toUpperCase();
+
+  /* Stage 3 — the P&L waterfall, recomputed live from the (optimistic)
+     line overlay via the shared pure helper. Single source of truth. */
+  const pnl = useMemo(
+    () =>
+      computeBudgetPnl({
+        lines,
+        income,
+        commissions,
+        settings,
+        tourCurrency,
+      }),
+    [lines, income, commissions, settings, tourCurrency],
+  );
 
   /* Phase E — per-section rollup mirroring the GN sheet's SUMMARY tab.
      Each section's proposed / actual / variance + a grand total. Lines
@@ -253,6 +281,9 @@ export function BudgetSummaryTab({
         phaseBoundaries={phaseBoundaries}
         currency={tourCurrency}
       />
+
+      {/* Stage 3 — the P&L waterfall (manager-PDF order). */}
+      <PnlWaterfall pnl={pnl} />
 
       {/* Phase E — per-section rollup (GN SUMMARY tab) */}
       {sectionRollup.rows.length > 0 ? (
@@ -773,5 +804,205 @@ function VariancePanel({
         </ul>
       )}
     </div>
+  );
+}
+
+/* ============================================
+   Stage 3 — P&L waterfall (manager-PDF order). Computed rows are
+   read-only by nature (no inputs here — the % inputs live in Settings;
+   line totals are edited on the Budget tab). Projected vs Actual.
+   ============================================ */
+
+const BASIS_LABEL: Record<string, string> = {
+  gross: 'gross',
+  net: 'net',
+  gross_merch: 'merch',
+  net_merch: 'net merch',
+  gross_minus_tax: 'pre-tax',
+};
+
+/* Phase 1 — overhead base labels (insurance / contingency / accountancy). */
+const OVERHEAD_BASIS_LABEL: Record<string, string> = {
+  income_gross: 'gross income',
+  expenses_total: 'total expenses',
+  expenses_pre_contingency: 'expenses',
+};
+
+function pctLabel(frac: number): string {
+  const p = frac * 100;
+  return `${p % 1 === 0 ? p.toFixed(0) : p.toFixed(1)}%`;
+}
+
+function PnlWaterfall({ pnl }: { pnl: BudgetPnl }) {
+  const cur = pnl.currency;
+  const cellNum: React.CSSProperties = {
+    textAlign: 'right',
+    padding: '5px 8px',
+    fontVariantNumeric: 'tabular-nums',
+  };
+  const rowBorder = '1px solid var(--lp-border-subtle)';
+
+  type Row = {
+    key: string;
+    label: string;
+    sub?: string;
+    pair: { projected: number; actual: number };
+    kind?: 'income' | 'expense' | 'subtotal' | 'net';
+  };
+  const rows: Row[] = [
+    { key: 'gross', label: 'Gross income', pair: pnl.grossIncome, kind: 'income' },
+    { key: 'base', label: 'Line-item expenses', pair: pnl.baseExpenses, kind: 'expense' },
+    ...pnl.commissionRows.map((c) => ({
+      key: `comm-${c.id}`,
+      label: c.label || 'Commission',
+      sub: `${pctLabel(c.pct)} · ${BASIS_LABEL[c.basis] ?? c.basis}`,
+      pair: { projected: c.projected, actual: c.actual },
+      kind: 'expense' as const,
+    })),
+    {
+      key: 'insurance',
+      label: 'Insurance',
+      sub: `${pctLabel(pnl.pct.insurance)} of ${OVERHEAD_BASIS_LABEL[pnl.basis.insurance]}`,
+      pair: pnl.insurance,
+      kind: 'expense',
+    },
+    {
+      key: 'contingency',
+      label: 'Contingency',
+      sub: `${pctLabel(pnl.pct.contingency)} of ${OVERHEAD_BASIS_LABEL[pnl.basis.contingency]}`,
+      pair: pnl.contingency,
+      kind: 'expense',
+    },
+    ...(pnl.pct.accountancy > 0
+      ? [
+          {
+            key: 'accountancy',
+            label: 'Accountancy',
+            sub: `${pctLabel(pnl.pct.accountancy)} of ${OVERHEAD_BASIS_LABEL[pnl.basis.accountancy]}`,
+            pair: pnl.accountancy,
+            kind: 'expense' as const,
+          },
+        ]
+      : []),
+    ...(pnl.pct.merchCogs > 0
+      ? [
+          {
+            key: 'cogs',
+            label: 'Merch COGS',
+            sub: `${pctLabel(pnl.pct.merchCogs)} of merch`,
+            pair: pnl.cogs,
+            kind: 'expense' as const,
+          },
+        ]
+      : []),
+    { key: 'total', label: 'Total expenses', pair: pnl.totalExpenses, kind: 'subtotal' },
+    { key: 'net', label: 'Net (profit / loss)', pair: pnl.net, kind: 'net' },
+  ];
+
+  const netColor = (v: number) =>
+    v > 0
+      ? 'var(--color-lp-status-complete)'
+      : v < 0
+        ? 'var(--color-lp-error)'
+        : 'var(--lp-text)';
+
+  return (
+    <section
+      className="rounded-lg border p-4"
+      style={{ borderColor: 'var(--lp-border-strong)', background: 'var(--lp-surface)' }}
+    >
+      <h2 className="lp-h3">Profit &amp; loss</h2>
+      <p
+        className="mt-1"
+        style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text-secondary)' }}
+      >
+        Income − expenses − commissions − overheads. Computed live from the
+        line items, income and commission % — read-only here.
+      </p>
+      <div className="mt-3 overflow-x-auto">
+        <table className="lp-dense w-full" style={{ borderCollapse: 'collapse' }}>
+          <thead>
+            <tr>
+              {(['', 'Projected', 'Actual'] as const).map((h, i) => (
+                <th
+                  key={h || 'label'}
+                  style={{
+                    textAlign: i === 0 ? 'left' : 'right',
+                    fontSize: 'var(--lp-text-2xs)',
+                    fontWeight: 'var(--lp-weight-semibold)',
+                    letterSpacing: 'var(--lp-tracking-caps)',
+                    textTransform: 'uppercase',
+                    color: 'var(--lp-text-tertiary)',
+                    padding: '6px 8px',
+                    borderBottom: rowBorder,
+                  }}
+                >
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => {
+              const isTotal = r.kind === 'subtotal' || r.kind === 'net';
+              const topBorder = isTotal ? '2px solid var(--lp-border-strong)' : rowBorder;
+              const labelColor =
+                r.kind === 'income'
+                  ? 'var(--color-lp-status-complete)'
+                  : r.kind === 'net'
+                    ? netColor(r.pair.actual || r.pair.projected)
+                    : 'var(--lp-text)';
+              const weight =
+                isTotal || r.kind === 'income'
+                  ? 'var(--lp-weight-bold)'
+                  : 'var(--lp-weight-medium)';
+              return (
+                <tr key={r.key}>
+                  <td style={{ padding: '5px 8px', borderTop: topBorder }}>
+                    <span style={{ color: labelColor, fontWeight: weight }}>
+                      {r.label}
+                    </span>
+                    {r.sub ? (
+                      <span
+                        className="ml-2"
+                        style={{
+                          fontSize: 'var(--lp-text-2xs)',
+                          color: 'var(--lp-text-tertiary)',
+                        }}
+                      >
+                        {r.sub}
+                      </span>
+                    ) : null}
+                  </td>
+                  <td
+                    className="lp-mono"
+                    style={{
+                      ...cellNum,
+                      borderTop: topBorder,
+                      color:
+                        r.kind === 'net' ? netColor(r.pair.projected) : 'var(--lp-text-secondary)',
+                      fontWeight: weight,
+                    }}
+                  >
+                    {formatCurrency(r.pair.projected, cur)}
+                  </td>
+                  <td
+                    className="lp-mono"
+                    style={{
+                      ...cellNum,
+                      borderTop: topBorder,
+                      color: r.kind === 'net' ? netColor(r.pair.actual) : 'var(--lp-text)',
+                      fontWeight: weight,
+                    }}
+                  >
+                    {formatCurrency(r.pair.actual, cur)}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }

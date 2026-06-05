@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
 import { useBudgetConfirm } from '@/components/budget/BudgetConfirmDialog';
+import { InlineSelectCell } from '@/components/budget/cells/InlineSelectCell';
 import type {
   BudgetSection,
   BudgetTemplate,
@@ -65,9 +66,169 @@ export function BudgetSettingsTab({
   return (
     <div className="mx-auto w-full max-w-[820px] space-y-5 py-2">
       <PhaseToggleCard tourId={tourId} trackPhases={trackPhases} />
+      <OverheadsCard tourId={tourId} />
       <TourSectionsCard tourId={tourId} sections={sections} />
       <TemplatesCard tourId={tourId} />
     </div>
+  );
+}
+
+/* -------------------------------------------------- */
+/* Overheads — insurance / contingency / accountancy / */
+/* merch COGS %, each with a configurable base (Phase 1). */
+/* -------------------------------------------------- */
+type OverheadSettings = {
+  insurance_pct: number;
+  contingency_pct: number;
+  accountancy_pct: number;
+  merch_cogs_pct: number;
+  insurance_basis: string;
+  contingency_basis: string;
+  accountancy_basis: string;
+};
+
+const BASIS_OPTIONS = [
+  { value: 'income_gross', label: 'of gross income' },
+  { value: 'expenses_pre_contingency', label: 'of expenses' },
+  { value: 'expenses_total', label: 'of total expenses' },
+];
+
+function OverheadsCard({ tourId }: { tourId: string }) {
+  const { showToast } = useToast();
+  const [s, setS] = useState<OverheadSettings | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const res = await fetch(`/api/budget/settings?tour_id=${encodeURIComponent(tourId)}`);
+        if (!res.ok) throw new Error(`Failed (${res.status})`);
+        const d = (await res.json()) as Partial<OverheadSettings>;
+        if (!active) return;
+        setS({
+          insurance_pct: Number(d.insurance_pct ?? 0),
+          contingency_pct: Number(d.contingency_pct ?? 0),
+          accountancy_pct: Number(d.accountancy_pct ?? 0),
+          merch_cogs_pct: Number(d.merch_cogs_pct ?? 0),
+          insurance_basis: d.insurance_basis ?? 'income_gross',
+          contingency_basis: d.contingency_basis ?? 'expenses_pre_contingency',
+          accountancy_basis: d.accountancy_basis ?? 'income_gross',
+        });
+      } catch {
+        if (active)
+          setS({
+            insurance_pct: 0,
+            contingency_pct: 0,
+            accountancy_pct: 0,
+            merch_cogs_pct: 0,
+            insurance_basis: 'income_gross',
+            contingency_basis: 'expenses_pre_contingency',
+            accountancy_basis: 'income_gross',
+          });
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [tourId]);
+
+  /* Optimistic — apply locally, POST in the background, no refresh
+     (pitfall #1). Roll back + toast on failure. */
+  const save = (patch: Partial<OverheadSettings>) => {
+    if (!s) return;
+    const prev = s;
+    const next = { ...s, ...patch };
+    setS(next);
+    void (async () => {
+      try {
+        const res = await fetch('/api/budget/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tour_id: tourId, ...patch }),
+        });
+        if (!res.ok) throw new Error(`Save failed (${res.status})`);
+      } catch (err) {
+        setS(prev);
+        showToast(err instanceof Error ? err.message : 'Save failed', 'error');
+      }
+    })();
+  };
+
+  const pctRow = (
+    key: 'insurance' | 'contingency' | 'accountancy',
+    label: string,
+  ) => {
+    const pctKey = `${key}_pct` as const;
+    const basisKey = `${key}_basis` as const;
+    return (
+      <div className="flex items-center gap-3" key={key}>
+        <span className="w-28 shrink-0" style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text)' }}>
+          {label}
+        </span>
+        <div className="flex items-center gap-1">
+          <input
+            type="number"
+            min={0}
+            step={0.5}
+            value={s ? +(s[pctKey] * 100).toFixed(2) : 0}
+            onChange={(e) => save({ [pctKey]: (Number(e.target.value) || 0) / 100 } as Partial<OverheadSettings>)}
+            disabled={!s}
+            className="w-16"
+            style={{ ...inputStyle, textAlign: 'right' }}
+          />
+          <span style={{ color: 'var(--lp-text-tertiary)' }}>%</span>
+        </div>
+        <div className="w-44">
+          <InlineSelectCell
+            variant="field"
+            showTone={false}
+            ariaLabel={`${label} base`}
+            value={s ? s[basisKey] : 'income_gross'}
+            options={BASIS_OPTIONS}
+            onCommit={(v) => save({ [basisKey]: v } as Partial<OverheadSettings>)}
+          />
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <section className="rounded-lg border p-4" style={cardStyle}>
+      <h2 className="lp-h3">Overheads</h2>
+      <p
+        className="mt-1"
+        style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text-secondary)' }}
+      >
+        Percentages feed the Summary P&amp;L. Each picks the base it
+        applies to (gross income, expenses, or total expenses).
+      </p>
+      <div className="mt-3 space-y-2">
+        {pctRow('insurance', 'Insurance')}
+        {pctRow('contingency', 'Contingency')}
+        {pctRow('accountancy', 'Accountancy')}
+        <div className="flex items-center gap-3">
+          <span className="w-28 shrink-0" style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text)' }}>
+            Merch COGS
+          </span>
+          <div className="flex items-center gap-1">
+            <input
+              type="number"
+              min={0}
+              step={0.5}
+              value={s ? +(s.merch_cogs_pct * 100).toFixed(2) : 0}
+              onChange={(e) => save({ merch_cogs_pct: (Number(e.target.value) || 0) / 100 })}
+              disabled={!s}
+              className="w-16"
+              style={{ ...inputStyle, textAlign: 'right' }}
+            />
+            <span style={{ color: 'var(--lp-text-tertiary)' }}>%</span>
+          </div>
+          <span style={{ fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text-tertiary)' }}>
+            of merch income
+          </span>
+        </div>
+      </div>
+    </section>
   );
 }
 

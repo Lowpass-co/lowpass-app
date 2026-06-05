@@ -1486,9 +1486,10 @@ export function BudgetSpreadsheetView({
             }}
             className="btn-transition inline-flex items-center gap-1 rounded-md border px-2 py-1"
             style={{
+              // Stage 3 addendum — danger RED to match the trash icon.
               fontSize: '11px',
-              borderColor: 'var(--color-lp-status-needs-review)',
-              color: 'var(--color-lp-status-needs-review)',
+              borderColor: 'var(--color-lp-error)',
+              color: 'var(--color-lp-error)',
               background: 'transparent',
               fontWeight: 500,
               opacity: bulkBusy === null ? 1 : 0.6,
