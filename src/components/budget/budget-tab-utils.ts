@@ -17,6 +17,7 @@
 export type BudgetTab =
   | 'summary'
   | 'budget'
+  | 'income'
   | 'reports'
   | 'settings';
 
@@ -25,10 +26,11 @@ export function resolveBudgetTab(
 ): BudgetTab {
   const candidate = Array.isArray(raw) ? raw[0] : raw;
   /* Budget is the landing tab — the TM almost always wants the line-item
-     grid first. Summary/Reports/Settings are explicit; everything else
-     (no ?tab, stale ?tab=actuals, unknown) falls through to Budget. */
+     grid first. Summary/Income/Reports/Settings are explicit; everything
+     else (no ?tab, stale ?tab=actuals, unknown) falls through to Budget. */
   switch (candidate) {
     case 'summary':
+    case 'income':
     case 'reports':
     case 'settings':
       return candidate;

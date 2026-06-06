@@ -119,6 +119,10 @@ export async function POST(request: Request) {
     pre_tax_overage?: number;
     merch_income?: number;
     vip_income?: number;
+    actual_guarantee?: number | null;
+    actual_overage?: number | null;
+    actual_merch?: number | null;
+    actual_vip?: number | null;
     drop_count?: number | null;
     notes?: string | null;
   };
@@ -137,7 +141,7 @@ export async function POST(request: Request) {
     .from('routing')
     .select('id, tour_id')
     .eq('id', routing_id)
-    .single();
+    .maybeSingle();
 
   if (!routingRow) {
     return NextResponse.json({ error: 'Routing not found' }, { status: 404 });
@@ -148,7 +152,7 @@ export async function POST(request: Request) {
     .select('workspace_id')
     .eq('id', routingRow.tour_id)
     .eq('workspace_id', profile.workspace_id)
-    .single();
+    .maybeSingle();
 
   if (!tourRow) {
     return NextResponse.json({ error: 'Routing not found' }, { status: 404 });
@@ -156,33 +160,53 @@ export async function POST(request: Request) {
 
   const workspaceId = tourRow.workspace_id;
 
-  const preTaxGuarantee = Number(body.pre_tax_guarantee) || 0;
-  const withholdingPct = Number(body.withholding_pct) || 0;
-  const preTaxOverage = Number(body.pre_tax_overage) || 0;
+  /* Merge-safe upsert: per-cell edits send ONE field, so unprovided
+     fields must keep their existing values (not get zeroed). Read the
+     existing row, merge, recompute post-tax from the merged inputs. */
+  const { data: existing } = await supabase
+    .from('budget_income')
+    .select('*')
+    .eq('routing_id', routing_id)
+    .eq('workspace_id', workspaceId)
+    .maybeSingle();
 
-  const postTaxGuarantee = postTaxFromPreTax(preTaxGuarantee, withholdingPct);
-  const postTaxOverage = postTaxFromPreTax(preTaxOverage, withholdingPct);
+  const numMerge = (b: number | undefined, ex: unknown): number =>
+    b !== undefined ? Number(b) || 0 : Number(ex ?? 0);
+  const nullableMerge = (
+    b: number | null | undefined,
+    ex: unknown,
+  ): number | null =>
+    b !== undefined ? (b === null ? null : Number(b) || 0) : (ex as number | null) ?? null;
+
+  const preTaxGuarantee = numMerge(body.pre_tax_guarantee, existing?.pre_tax_guarantee);
+  const withholdingPct = numMerge(body.withholding_pct, existing?.withholding_pct);
+  const preTaxOverage = numMerge(body.pre_tax_overage, existing?.pre_tax_overage);
 
   const payload: Record<string, unknown> = {
     routing_id,
     workspace_id: workspaceId,
     pre_tax_guarantee: preTaxGuarantee,
     withholding_pct: withholdingPct,
-    post_tax_guarantee: postTaxGuarantee,
+    post_tax_guarantee: postTaxFromPreTax(preTaxGuarantee, withholdingPct),
     pre_tax_overage: preTaxOverage,
-    post_tax_overage: postTaxOverage,
+    post_tax_overage: postTaxFromPreTax(preTaxOverage, withholdingPct),
+    merch_income: numMerge(body.merch_income, existing?.merch_income),
+    vip_income: numMerge(body.vip_income, existing?.vip_income),
+    actual_guarantee: nullableMerge(body.actual_guarantee, existing?.actual_guarantee),
+    actual_overage: nullableMerge(body.actual_overage, existing?.actual_overage),
+    actual_merch: nullableMerge(body.actual_merch, existing?.actual_merch),
+    actual_vip: nullableMerge(body.actual_vip, existing?.actual_vip),
+    drop_count:
+      body.drop_count !== undefined ? body.drop_count : (existing?.drop_count ?? null),
+    notes: body.notes !== undefined ? body.notes : (existing?.notes ?? null),
     updated_at: new Date().toISOString(),
   };
-  if (body.merch_income !== undefined) payload.merch_income = Number(body.merch_income) || 0;
-  if (body.vip_income !== undefined) payload.vip_income = Number(body.vip_income) || 0;
-  if (body.drop_count !== undefined) payload.drop_count = body.drop_count;
-  if (body.notes !== undefined) payload.notes = body.notes;
 
   const { data, error } = await supabase
     .from('budget_income')
     .upsert(payload, { onConflict: 'routing_id' })
     .select()
-    .single();
+    .maybeSingle();
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

@@ -31,6 +31,7 @@ export { type BudgetTab, resolveBudgetTab };
 const TABS: ReadonlyArray<{ id: BudgetTab; label: string }> = [
   { id: 'summary', label: 'Summary' },
   { id: 'budget', label: 'Budget' },
+  { id: 'income', label: 'Income' },
   { id: 'reports', label: 'Reports' },
   { id: 'settings', label: 'Settings' },
 ];

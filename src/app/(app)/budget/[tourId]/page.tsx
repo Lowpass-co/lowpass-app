@@ -27,6 +27,7 @@ import { BudgetPhaseStripClient } from '@/components/budget/BudgetPhaseStripClie
 import { BudgetPhaseStripReveal } from '@/components/budget/BudgetPhaseStripReveal';
 import { BudgetStatsStrip } from '@/components/budget/BudgetStatsStrip';
 import { BudgetSpreadsheetView } from '@/components/budget/BudgetSpreadsheetView';
+import { BudgetIncomeTab } from '@/components/budget/BudgetIncomeTab';
 import { BudgetEmptyState } from '@/components/budget/BudgetEmptyState';
 import { BudgetSettingsTab } from '@/components/budget/BudgetSettingsTab';
 import { ReceiptInbox } from '@/components/budget/ReceiptInbox';
@@ -262,6 +263,11 @@ export default async function BudgetTourPage({
                 <ReceiptInbox tourId={tourId} lineItems={lines} />
               </>
             )
+          ) : null}
+
+          {/* Stage 3 Phase 2 — per-show income (feeds the Summary P&L). */}
+          {tab === 'income' ? (
+            <BudgetIncomeTab tourId={tourId} tourCurrency={tourCurrency} />
           ) : null}
 
           {/* Budget Phase A §A2 — Actuals tab removed; the
