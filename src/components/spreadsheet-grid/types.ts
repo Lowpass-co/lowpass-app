@@ -70,6 +70,9 @@ export type SpreadsheetGridProps<T> = {
   ariaLabel?: string;
   /** Passed to entityRef cell search (tour-scoped flights, shows, rooms). */
   entitySearchTourId?: string | null;
+  /** localStorage key to persist per-column widths (e.g. per-tour). When
+   *  omitted, column resizing is ephemeral (resets on remount). */
+  columnWidthsKey?: string | null;
 };
 
 export type CellCoord = { rowId: string; columnId: string };

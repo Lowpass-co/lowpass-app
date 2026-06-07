@@ -206,6 +206,7 @@ export function ChannelListTourSheet({
           columns={columns}
           rows={rows}
           ariaLabel="Tour channel list"
+          columnWidthsKey={`lp-cols-channel:${tourId}`}
         />
       )}
     </div>

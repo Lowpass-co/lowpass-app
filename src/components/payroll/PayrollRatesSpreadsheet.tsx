@@ -202,6 +202,7 @@ export function PayrollRatesSpreadsheet({
         onCommitCell={onCommitCell}
         onRowOpen={onRowOpen}
         ariaLabel="Personnel rate cards"
+        columnWidthsKey="lp-cols-payroll"
       />
       {personOpen ? <PersonSlideOver id={personOpen} onClose={() => setPersonOpen(null)} /> : null}
     </div>

@@ -3,6 +3,7 @@
 import { ChevronsUpDown } from 'lucide-react';
 import type { GridColumn } from './types';
 import { cn } from '@/lib/utils';
+import { ColumnResizeHandle } from '@/components/grid/ColumnResizeHandle';
 
 const padY = (d: 'comfortable' | 'compact' | 'tight' | 'cozy') => `var(--lp-row-cell-padding-y-${d})`;
 
@@ -10,56 +11,19 @@ type GridHeaderProps<T> = {
   columns: GridColumn<T>[];
   density: 'comfortable' | 'compact' | 'tight' | 'cozy';
   columnWidths: Record<string, number>;
-  setColumnWidth: (id: string, w: number) => void;
+  /** Begin a column drag (min-clamp + persistence handled by the hook). */
+  onStartResize: (id: string, e: React.PointerEvent) => void;
   frozenLeft: Record<string, number>;
   onMouseDownSelect?: (e: React.MouseEvent, colId: string) => void;
 };
 
 const DEF_W = 160;
 
-function ColumnResizeHandle<T>({
-  columnId,
-  startWidth,
-  column,
-  onResize,
-}: {
-  columnId: string;
-  startWidth: number;
-  column: GridColumn<T>;
-  onResize: (id: string, w: number) => void;
-}) {
-  return (
-    <button
-      type="button"
-      className="absolute right-0 top-0 h-full w-1 cursor-col-resize opacity-0 hover:opacity-100"
-      style={{ width: 4 }}
-      aria-label="Resize column"
-      onMouseDown={e => {
-        e.stopPropagation();
-        e.preventDefault();
-        const startX = e.clientX;
-        const min = column.minWidth ?? 80;
-        const max = column.maxWidth ?? 800;
-        const onMm = (ev: MouseEvent) => {
-          const dw = ev.clientX - startX;
-          onResize(columnId, Math.min(max, Math.max(min, startWidth + dw)));
-        };
-        const onMu = () => {
-          document.removeEventListener('mousemove', onMm);
-          document.removeEventListener('mouseup', onMu);
-        };
-        document.addEventListener('mousemove', onMm);
-        document.addEventListener('mouseup', onMu);
-      }}
-    />
-  );
-}
-
 export function GridHeader<T>({
   columns,
   density,
   columnWidths,
-  setColumnWidth,
+  onStartResize,
   frozenLeft,
   onMouseDownSelect,
 }: GridHeaderProps<T>) {
@@ -107,10 +71,8 @@ export function GridHeader<T>({
               </span>
               {resizable && (
                 <ColumnResizeHandle
-                  columnId={col.id}
-                  startWidth={w}
-                  column={col}
-                  onResize={setColumnWidth}
+                  label={`Resize ${typeof col.header === 'string' ? col.header : col.id} column`}
+                  onPointerDown={e => onStartResize(col.id, e)}
                 />
               )}
             </th>

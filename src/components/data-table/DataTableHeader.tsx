@@ -5,6 +5,7 @@ import { ChevronDown, ChevronUp, ChevronsUpDown } from 'lucide-react';
 import type { ColumnDef } from './types';
 import { resolveWidthStyle } from './utils';
 import { cn } from '@/lib/utils';
+import { ColumnResizeHandle } from '@/components/grid/ColumnResizeHandle';
 
 type DataTableHeaderProps<T> = {
   columns: ColumnDef<T>[];
@@ -21,6 +22,9 @@ type DataTableHeaderProps<T> = {
   frozenLeft: Record<string, number>;
   stickyHeader: boolean;
   selectColWidth: number;
+  /** Per-column drag-to-resize (opt-in via the table's columnWidthsKey). */
+  resizable?: boolean;
+  onStartResize?: (id: string, e: React.PointerEvent) => void;
 };
 
 const headerPadY = (d: 'comfortable' | 'compact' | 'cozy') => `var(--lp-row-cell-padding-y-${d})`;
@@ -38,6 +42,8 @@ export function DataTableHeader<T>({
   frozenLeft,
   stickyHeader,
   selectColWidth,
+  resizable = false,
+  onStartResize,
 }: DataTableHeaderProps<T>) {
   const headerRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
@@ -110,7 +116,9 @@ export function DataTableHeader<T>({
                 padding: `${headerPadY(density)} var(--lp-row-cell-padding-x)`,
                 ...w,
                 minWidth: col.minWidth,
-                position: isFrozen ? 'sticky' : undefined,
+                // relative so the resize handle can anchor to this cell's
+                // right edge (sticky also establishes a containing block).
+                position: isFrozen ? 'sticky' : resizable ? 'relative' : undefined,
                 left: isFrozen ? left : undefined,
                 zIndex: isFrozen ? 25 : undefined,
                 background: isFrozen ? 'var(--lp-surface)' : undefined,
@@ -146,6 +154,12 @@ export function DataTableHeader<T>({
               ) : (
                 <span className="block truncate">{col.header}</span>
               )}
+              {resizable && onStartResize ? (
+                <ColumnResizeHandle
+                  label={`Resize ${typeof col.header === 'string' ? col.header : col.id} column`}
+                  onPointerDown={e => onStartResize(col.id, e)}
+                />
+              ) : null}
             </th>
           );
         })}

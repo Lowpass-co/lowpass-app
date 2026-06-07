@@ -90,6 +90,7 @@ export function AdvanceFlightsPanel({ tourId }: { tourId: string }) {
           rowKey={(f) => f.id}
           searchable={false}
           pagination="none"
+          columnWidthsKey={`lp-cols-flights:${tourId}`}
           onRowClick={(row) => setActiveFlightId(row.id)}
           emptyState={
             <div className="px-3 py-6 text-center text-sm" style={{ color: 'var(--lp-text-tertiary)' }}>

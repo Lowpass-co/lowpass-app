@@ -606,6 +606,7 @@ export function AdvanceOverview({
           searchable={false}
           onRowClick={onRowClick}
           rowClassName={(r) => (r.isShow ? '' : 'opacity-70')}
+          columnWidthsKey={`lp-cols-advance:${tourId}`}
           emptyState={
             <div className="px-3 py-8 text-center text-sm" style={{ color: 'var(--lp-text-tertiary)' }}>
               No shows match the current filters.

@@ -11,6 +11,7 @@ import {
   type MouseEvent,
 } from 'react';
 import { useAppDensity } from '@/lib/density/appDensity';
+import { useColumnWidths } from '@/lib/grid/useColumnWidths';
 import type { DataTableProps } from './types';
 import { DataTableEmpty } from './DataTableEmpty';
 import { DataTableHeader, collectFrozenOffsets } from './DataTableHeader';
@@ -66,6 +67,7 @@ export function DataTable<T>(props: DataTableProps<T>) {
     emptyState,
     stickyHeader = true,
     containerHeight = 'auto',
+    columnWidthsKey,
     ariaLabel = 'Data table',
   } = props;
 
@@ -99,7 +101,38 @@ export function DataTable<T>(props: DataTableProps<T>) {
     [onSelectionChange]
   );
 
-  const columns = columnsIn;
+  // Per-column drag-to-resize, opt-in + persisted via columnWidthsKey.
+  // When off, columns keep their declared widths (no handles) so existing
+  // tables are unchanged.
+  const resizable = columnWidthsKey != null;
+  const colSpecs = useMemo(
+    () =>
+      columnsIn.map(c => ({
+        key: c.id,
+        width:
+          typeof c.width === 'number'
+            ? c.width
+            : typeof c.width === 'string' && c.width.endsWith('px')
+              ? parseFloat(c.width) || 160
+              : 160,
+        min: c.minWidth ?? 80,
+        resizable: true,
+      })),
+    [columnsIn]
+  );
+  const {
+    widthFor,
+    startResize,
+    reset: resetWidths,
+    isCustomised: widthsCustomised,
+  } = useColumnWidths(colSpecs, resizable ? columnWidthsKey : null);
+  const columns = useMemo(
+    () =>
+      resizable
+        ? columnsIn.map(c => ({ ...c, width: widthFor(c.id) }))
+        : columnsIn,
+    [resizable, columnsIn, widthFor]
+  );
   const searchable = searchableP && !isLoading;
   const pagination = paginationP;
 
@@ -310,6 +343,25 @@ export function DataTable<T>(props: DataTableProps<T>) {
         selectedCount={selectedIdsP?.length ?? 0}
         displayTotal={isLoading ? 0 : totalRows}
         selectionActions={selectionActions}
+        rightExtra={
+          resizable && widthsCustomised ? (
+            <button
+              type="button"
+              onClick={resetWidths}
+              className="btn-transition rounded-md border px-2 py-0.5"
+              style={{
+                borderColor: 'var(--lp-border-strong)',
+                background: 'var(--lp-surface)',
+                color: 'var(--lp-text-tertiary)',
+                fontSize: '11px',
+                fontWeight: 500,
+              }}
+              title="Reset column widths to defaults"
+            >
+              Reset widths
+            </button>
+          ) : null
+        }
       />
 
       <div
@@ -348,6 +400,8 @@ export function DataTable<T>(props: DataTableProps<T>) {
               frozenLeft={frozenLeft}
               stickyHeader={stickyHeader}
               selectColWidth={SELECT_W}
+              resizable={resizable}
+              onStartResize={startResize}
             />
             <tbody>
               {displayRows.map((row, i) => {

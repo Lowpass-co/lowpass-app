@@ -20,6 +20,8 @@ type DataTableToolbarProps<T> = {
   selectedCount: number;
   displayTotal: number;
   selectionActions?: React.ReactNode;
+  /** Right-aligned extra control (e.g. "Reset widths"). */
+  rightExtra?: React.ReactNode;
 };
 
 function FilterForm({
@@ -210,6 +212,7 @@ export function DataTableToolbar<T>({
   selectedCount,
   displayTotal,
   selectionActions,
+  rightExtra,
 }: DataTableToolbarProps<T>) {
   const [openChip, setOpenChip] = useState<string | null>(null);
   const filterCols = columns.filter(c => c.filter);
@@ -275,8 +278,11 @@ export function DataTableToolbar<T>({
         );
       })}
 
-      <div className="ml-auto text-xs" style={{ color: 'var(--lp-text-tertiary)' }}>
-        {displayTotal} row{displayTotal === 1 ? '' : 's'}
+      <div className="ml-auto flex items-center gap-2">
+        {rightExtra}
+        <span className="text-xs" style={{ color: 'var(--lp-text-tertiary)' }}>
+          {displayTotal} row{displayTotal === 1 ? '' : 's'}
+        </span>
       </div>
     </div>
   );

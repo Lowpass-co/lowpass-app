@@ -57,5 +57,10 @@ export type DataTableProps<T> = {
   stickyHeader?: boolean;
   containerHeight?: string;
 
+  /** Enable per-column drag-to-resize, persisted under this localStorage
+   *  key (e.g. per-tour). Omit to keep columns fixed (no handles) — so
+   *  existing tables are unchanged unless they opt in. */
+  columnWidthsKey?: string | null;
+
   ariaLabel?: string;
 };

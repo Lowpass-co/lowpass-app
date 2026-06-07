@@ -10,6 +10,7 @@ import {
 } from 'react';
 import { createPortal } from 'react-dom';
 import { useAppDensity } from '@/lib/density/appDensity';
+import { useColumnWidths } from '@/lib/grid/useColumnWidths';
 import { GridDataRow } from './GridDataRow';
 import { buildFrozenLeft, GridHeader } from './GridHeader';
 import { GridBody } from './GridBody';
@@ -44,16 +45,6 @@ function keyCell(row: string, col: string) {
   return `${row}::${col}`;
 }
 
-function useColumnWidths<T>(columns: GridColumn<T>[]) {
-  return useState<Record<string, number>>(() => {
-    const w: Record<string, number> = {};
-    for (const c of columns) {
-      w[c.id] = c.width ?? DEF_W;
-    }
-    return w;
-  });
-}
-
 export function SpreadsheetGrid<T>(props: SpreadsheetGridProps<T>) {
   const {
     columns,
@@ -70,6 +61,7 @@ export function SpreadsheetGrid<T>(props: SpreadsheetGridProps<T>) {
     containerHeight = '100%',
     ariaLabel = 'Spreadsheet',
     entitySearchTourId,
+    columnWidthsKey,
   } = props;
 
   // Grid system Phase 1 — density comes from the one app-wide preference
@@ -89,10 +81,25 @@ export function SpreadsheetGrid<T>(props: SpreadsheetGridProps<T>) {
     [merged, collapsed]
   );
 
-  const [columnWidths, setColumnWidths] = useColumnWidths(columns);
-  const setW = useCallback((id: string, w: number) => {
-    setColumnWidths(s => ({ ...s, [id]: w }));
-  }, [setColumnWidths]);
+  // Per-column drag-to-resize + persistence (shared hook). Widths persist
+  // when a columnWidthsKey is passed (e.g. per-tour); otherwise ephemeral.
+  const colSpecs = useMemo(
+    () =>
+      columns.map(c => ({
+        key: c.id,
+        width: c.width ?? DEF_W,
+        min: c.minWidth ?? 80,
+        resizable: c.resizable !== false,
+      })),
+    [columns]
+  );
+  const { widthFor, startResize, reset: resetWidths, isCustomised } =
+    useColumnWidths(colSpecs, columnWidthsKey);
+  const columnWidths = useMemo(() => {
+    const w: Record<string, number> = {};
+    for (const c of columns) w[c.id] = widthFor(c.id);
+    return w;
+  }, [columns, widthFor]);
 
   const frozenLeft = useMemo(
     () => buildFrozenLeft(columns, columnWidths),
@@ -358,7 +365,7 @@ export function SpreadsheetGrid<T>(props: SpreadsheetGridProps<T>) {
 
   return (
     <div
-      className="flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-xl"
+      className="relative flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-xl"
       data-spreadsheet-root
       style={{
         /* Grid system Phase 2 — one elevated panel that fills the
@@ -371,6 +378,24 @@ export function SpreadsheetGrid<T>(props: SpreadsheetGridProps<T>) {
         height: containerHeight,
       }}
     >
+      {/* Column resize — restore default widths (only when customised). */}
+      {isCustomised && (
+        <button
+          type="button"
+          onClick={resetWidths}
+          className="btn-transition absolute right-1 top-1 z-30 rounded-md border px-2 py-0.5"
+          style={{
+            borderColor: 'var(--lp-border-strong)',
+            background: 'var(--lp-surface)',
+            color: 'var(--lp-text-tertiary)',
+            fontSize: '11px',
+            fontWeight: 500,
+          }}
+          title="Reset column widths to defaults"
+        >
+          Reset widths
+        </button>
+      )}
       {toast && (
         <div
           className="fixed bottom-4 right-4 z-[100] max-w-sm rounded-lg border px-3 py-2 text-sm shadow-lg"
@@ -402,7 +427,7 @@ export function SpreadsheetGrid<T>(props: SpreadsheetGridProps<T>) {
               columns={columns}
               density={density}
               columnWidths={columnWidths}
-              setColumnWidth={setW}
+              onStartResize={startResize}
               frozenLeft={frozenLeft}
             />
             <GridBody>
