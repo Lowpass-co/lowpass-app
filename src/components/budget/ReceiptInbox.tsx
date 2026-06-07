@@ -27,7 +27,7 @@
 
 'use client';
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { FileText, Loader2, Paperclip, Upload, X } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
 import type { BudgetLineItem } from '@/types';
@@ -67,6 +67,21 @@ export function ReceiptInbox({ tourId, lineItems }: ReceiptInboxProps) {
   const [receipts, setReceipts] = useState<InboxReceipt[]>([]);
   const [pickerForId, setPickerForId] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
+  // Compact toolbar variant — the inbox is a popover off a "Receipts"
+  // button now (was a large drop panel at the bottom of the grid).
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDoc = (e: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [open]);
 
   const handleFiles = useCallback(
     async (files: FileList | File[]) => {
@@ -167,7 +182,7 @@ export function ReceiptInbox({ tourId, lineItems }: ReceiptInboxProps) {
   );
 
   const onDrop = useCallback(
-    (e: React.DragEvent<HTMLDivElement>) => {
+    (e: React.DragEvent<HTMLElement>) => {
       e.preventDefault();
       setDragActive(false);
       if (e.dataTransfer.files?.length) {
@@ -217,13 +232,58 @@ export function ReceiptInbox({ tourId, lineItems }: ReceiptInboxProps) {
   );
 
   return (
-    <section
-      className="flex flex-col gap-3 rounded-xl border p-4"
-      style={{
-        borderColor: 'var(--lp-border)',
-        background: 'var(--lp-surface)',
-      }}
-    >
+    <div ref={containerRef} className="relative inline-block">
+      {/* Compact toolbar trigger — opens the inbox popover; also a drop
+          target so files can be dropped straight onto the button. */}
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        onDragOver={(e) => {
+          e.preventDefault();
+          setDragActive(true);
+        }}
+        onDragLeave={() => setDragActive(false)}
+        onDrop={(e) => {
+          onDrop(e);
+          setOpen(true);
+        }}
+        aria-expanded={open}
+        className="btn-transition inline-flex items-center gap-1 rounded-md border px-2 py-1"
+        style={{
+          borderColor: dragActive ? 'var(--color-lp-orange)' : 'var(--lp-border)',
+          background: dragActive
+            ? 'color-mix(in srgb, var(--color-lp-orange) 6%, transparent)'
+            : 'var(--lp-bg)',
+          color: 'var(--lp-text-secondary)',
+          fontSize: '12px',
+        }}
+        title="Upload & link receipts — drag files here or click"
+      >
+        <Paperclip className="h-3.5 w-3.5" aria-hidden />
+        Receipts
+        {receipts.length > 0 ? (
+          <span
+            className="tabular-nums"
+            style={{
+              marginLeft: 2,
+              borderRadius: 9999,
+              background: 'color-mix(in srgb, var(--color-lp-orange) 16%, transparent)',
+              color: 'var(--color-lp-orange)',
+              padding: '0 6px',
+              fontSize: '11px',
+              fontWeight: 'var(--lp-weight-semibold)',
+            }}
+          >
+            {receipts.length}
+          </span>
+        ) : null}
+      </button>
+
+      {open ? (
+        <div
+          className="absolute right-0 z-50 mt-1 flex w-[360px] flex-col gap-3 rounded-xl border p-4 shadow-lg"
+          style={{ borderColor: 'var(--lp-border)', background: 'var(--lp-surface)' }}
+        >
       <div className="flex items-baseline justify-between gap-2">
         <h3
           style={{
@@ -379,6 +439,8 @@ export function ReceiptInbox({ tourId, lineItems }: ReceiptInboxProps) {
           ))}
         </ul>
       ) : null}
+        </div>
+      ) : null}
 
       {/* Inline line-item picker overlay (lightweight, not a SlideOver
           since the inbox stays on-page).  */}
@@ -476,6 +538,6 @@ export function ReceiptInbox({ tourId, lineItems }: ReceiptInboxProps) {
           </div>
         </div>
       ) : null}
-    </section>
+    </div>
   );
 }

@@ -33,7 +33,6 @@ import { BudgetSpreadsheetView } from '@/components/budget/BudgetSpreadsheetView
 import { BudgetIncomeTab } from '@/components/budget/BudgetIncomeTab';
 import { BudgetEmptyState } from '@/components/budget/BudgetEmptyState';
 import { BudgetSettingsTab } from '@/components/budget/BudgetSettingsTab';
-import { ReceiptInbox } from '@/components/budget/ReceiptInbox';
 // Fix 3 — Budget's sub-tabs (Summary/Expenses/Income + corner
 // Reports/Settings) render in <BudgetContextBand> (Band 2). The page
 // only needs the server-safe resolveBudgetTab helper to pick which tab
@@ -296,7 +295,6 @@ export default async function BudgetTourPage({
                   commissions={commissionRows}
                   settings={budgetSettings}
                 />
-                <ReceiptInbox tourId={tourId} lineItems={lines} />
               </>
             )
           ) : null}

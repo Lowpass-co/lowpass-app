@@ -19,6 +19,7 @@ import { BarChart3, Settings } from 'lucide-react';
 import { ProductSubBar } from '@/components/shell-v2/ProductSubBar';
 import { TourIdentityChip } from '@/components/shell-v2/TourIdentityChip';
 import { BudgetExportControls } from '@/components/budget/BudgetExportControls';
+import { AppDensityToggle } from '@/lib/density/appDensity';
 import { resolveBudgetTab, type BudgetTab } from './budget-tab-utils';
 import type { BudgetLineItem } from '@/types';
 
@@ -70,7 +71,12 @@ export function BudgetContextBand({
           { key: 'settings', label: 'Settings', href: hrefFor('settings'), active: active === 'settings', Icon: Settings, scroll: false },
         ]}
         rightSlot={
-          <BudgetExportControls lines={lines} tourCurrency={tourCurrency} tourName={tourName} />
+          <div className="flex items-center gap-2">
+            {/* Density scaler re-mounted here (regressed when the budget
+                bars collapsed into this band). */}
+            <AppDensityToggle />
+            <BudgetExportControls lines={lines} tourCurrency={tourCurrency} tourName={tourName} />
+          </div>
         }
       />
     </div>
