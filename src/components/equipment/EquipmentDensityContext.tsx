@@ -1,20 +1,20 @@
 'use client';
 
 /* ============================================
-   LOWPASS — Equipment density (Phase B §B5)
+   LOWPASS — Equipment density (delegates to app-wide density)
 
-   Per-device density preference for the Equipment grid
-   (InventoryTab + JobsTab). Distinct localStorage key from
-   Budget so each surface keeps its own choice.
+   Grid system Phase 1 — retired the per-feature Equipment density
+   context in favour of ONE app-wide preference
+   (`@/lib/density/appDensity`). Exports kept as aliases so existing
+   imports keep working; the provider is a pass-through (the real one
+   is mounted once in (app)/layout).
    ============================================ */
 
-import { createDensity } from '@/lib/density/createDensity';
+import { useAppDensity, AppDensityToggle } from '@/lib/density/appDensity';
 
-const binding = createDensity({
-  storageKey: 'lowpass:equipment:density',
-  defaultDensity: 'comfortable',
-});
+export function EquipmentDensityProvider({ children }: { children: React.ReactNode }) {
+  return <>{children}</>;
+}
 
-export const EquipmentDensityProvider = binding.Provider;
-export const useEquipmentDensity = binding.useDensity;
-export const EquipmentDensityToggle = binding.Toggle;
+export const useEquipmentDensity = useAppDensity;
+export const EquipmentDensityToggle = AppDensityToggle;

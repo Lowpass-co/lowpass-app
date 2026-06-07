@@ -88,7 +88,6 @@ export function AdvanceFlightsPanel({ tourId }: { tourId: string }) {
           rows={rows}
           columns={columns}
           rowKey={(f) => f.id}
-          density="compact"
           searchable={false}
           pagination="none"
           onRowClick={(row) => setActiveFlightId(row.id)}

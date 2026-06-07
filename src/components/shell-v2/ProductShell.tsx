@@ -25,7 +25,7 @@
    ============================================ */
 
 import { ProductHeader, type ProductName } from './ProductHeader';
-import { ProductRail, type ProductRailActive } from './ProductRail';
+import type { ProductRailActive } from './productNav';
 
 interface ProductShellProps {
   active: ProductRailActive;
@@ -34,8 +34,11 @@ interface ProductShellProps {
   productName: ProductName;
   /** When the active product is "home" and an artist is selected, the
       Home root lives at `/artists/[artistId]` rather than `/`. Pass
-      that through for the rail's Home icon. */
+      that through for the top bar's Home item + its dropdown. */
   homeHref?: string;
+  /** Two-bar shell — Bar 2: the product's sub-tab strip, rendered
+      directly under the top product bar (Bar 1) and above <main>. */
+  subNav?: React.ReactNode;
   children: React.ReactNode;
 }
 
@@ -45,6 +48,7 @@ export function ProductShell({
   tourId,
   productName,
   homeHref,
+  subNav,
   children,
 }: ProductShellProps) {
   // Sprint 8.5 §1 — artistId and tourId are no longer consumed
@@ -55,27 +59,30 @@ export function ProductShell({
   // sites are updated.
   void artistId;
   void tourId;
+  // Two-bar shell — the left ProductRail is replaced by the horizontal
+  // top product bar inside <ProductHeader> (Bar 1), reclaiming the 56px
+  // sidebar for content. The shell is now a vertical column: Bar 1 →
+  // Bar 2 (subNav) → scrolling <main>. <main> stays the only scroll
+  // surface, so sticky chrome inside the page still anchors to it.
   return (
     <div
-      className="lp-product-shell flex h-screen overflow-hidden"
+      className="lp-product-shell flex h-screen flex-col overflow-hidden"
       style={{
         background: 'var(--lp-bg)',
         color: 'var(--lp-text)',
       }}
     >
-      <ProductRail active={active} homeHref={homeHref} />
-      <div className="flex min-w-0 flex-1 flex-col">
-        <ProductHeader productName={productName} />
-        <main
-          className="flex-1 overflow-y-auto"
-          style={{
-            minHeight: 0,
-            background: 'var(--lp-bg)',
-          }}
-        >
-          {children}
-        </main>
-      </div>
+      <ProductHeader productName={productName} active={active} homeHref={homeHref} />
+      {subNav ?? null}
+      <main
+        className="flex-1 overflow-y-auto"
+        style={{
+          minHeight: 0,
+          background: 'var(--lp-bg)',
+        }}
+      >
+        {children}
+      </main>
     </div>
   );
 }

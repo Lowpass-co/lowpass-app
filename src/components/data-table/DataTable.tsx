@@ -10,6 +10,7 @@ import {
   type KeyboardEvent,
   type MouseEvent,
 } from 'react';
+import { useAppDensity } from '@/lib/density/appDensity';
 import type { DataTableProps } from './types';
 import { DataTableEmpty } from './DataTableEmpty';
 import { DataTableHeader, collectFrozenOffsets } from './DataTableHeader';
@@ -48,7 +49,7 @@ export function DataTable<T>(props: DataTableProps<T>) {
     rows,
     columns: columnsIn,
     rowKey,
-    density = 'comfortable',
+    density: densityProp,
     selectable = false,
     selectedIds: selectedIdsP,
     onSelectionChange,
@@ -67,6 +68,11 @@ export function DataTable<T>(props: DataTableProps<T>) {
     containerHeight = 'auto',
     ariaLabel = 'Data table',
   } = props;
+
+  // Grid system Phase 1 — density follows the one app-wide preference
+  // unless a caller pins it explicitly.
+  const { density: appDensity } = useAppDensity();
+  const density = densityProp ?? appDensity;
 
   const isLoading = rows === undefined;
   const [search, setSearch] = useState('');
@@ -274,8 +280,17 @@ export function DataTable<T>(props: DataTableProps<T>) {
 
   return (
     <div
-      className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl"
-      style={{ border: '1px solid var(--lp-border)', backgroundColor: 'var(--lp-surface)' }}
+      className="flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-xl"
+      style={{
+        /* Grid system Phase 3 — same elevated-panel language as
+           SpreadsheetGrid: fill width, surface bg, crisp border + faint
+           ring + soft shadow, tabular numerics. Lists + spreadsheets now
+           read as one family. */
+        border: '1px solid var(--lp-border-strong)',
+        backgroundColor: 'var(--lp-bg)',
+        boxShadow: 'var(--lp-shadow-sm)',
+        fontVariantNumeric: 'tabular-nums',
+      }}
       role="region"
       aria-label={ariaLabel}
     >

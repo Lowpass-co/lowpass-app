@@ -134,7 +134,6 @@ export function BudgetSection({
       <SpreadsheetGrid<BudgetLineItem>
         columns={columns}
         rows={gridRows}
-        density="compact"
         onCommitCell={onCommitCell}
         onRowOpen={onRowOpen}
         entitySearchTourId={entitySearchTourId}

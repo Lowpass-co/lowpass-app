@@ -205,7 +205,6 @@ export function ChannelListTourSheet({
         <SpreadsheetGrid<RowVm>
           columns={columns}
           rows={rows}
-          density="compact"
           ariaLabel="Tour channel list"
         />
       )}

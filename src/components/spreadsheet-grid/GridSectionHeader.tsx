@@ -9,10 +9,10 @@ type GridSectionHeaderProps = {
   collapsible?: boolean;
   collapsed?: boolean;
   onToggle?: () => void;
-  density: 'comfortable' | 'compact' | 'tight';
+  density: 'comfortable' | 'compact' | 'tight' | 'cozy';
 };
 
-const padY = (d: 'comfortable' | 'compact' | 'tight') => `var(--lp-row-cell-padding-y-${d})`;
+const padY = (d: 'comfortable' | 'compact' | 'tight' | 'cozy') => `var(--lp-row-cell-padding-y-${d})`;
 
 export function GridSectionHeader({
   label,

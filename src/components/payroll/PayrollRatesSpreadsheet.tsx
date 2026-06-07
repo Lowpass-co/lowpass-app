@@ -199,7 +199,6 @@ export function PayrollRatesSpreadsheet({
         columns={columns}
         rows={gridRows}
         sectionHeaders={sectionHeaders}
-        density="compact"
         onCommitCell={onCommitCell}
         onRowOpen={onRowOpen}
         ariaLabel="Personnel rate cards"

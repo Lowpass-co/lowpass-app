@@ -154,6 +154,7 @@ export default async function OperationsTourLayout({
       artistId={tourRow.artist_id}
       tourId={tourId}
       productName="Operations"
+      subNav={<OperationsSubNavClient tourId={tourId} links={subNavLinks} />}
     >
       {artistRow ? (
         <TourHeader
@@ -175,7 +176,6 @@ export default async function OperationsTourLayout({
           }}
         />
       ) : null}
-      <OperationsSubNavClient tourId={tourId} links={subNavLinks} />
       <TourVisitTracker tourId={tourId} />
       {children}
     </ProductShell>

@@ -7,9 +7,9 @@
 
    Layout (top → bottom):
      <ProductShell>
-       <BudgetStatsStrip>          (sticky — always visible)
+       <BudgetBurnBar>            (sticky — runway + spend meter)
        <BudgetPhaseStripClient>    (sticky — phase context)
-       <BudgetTabNav>              (active tab from ?tab=)
+       (Budget sub-tabs render in the shell Bar-2 slot via BudgetSubBar)
        <tab-content>               (Summary | Budget | Actuals | Reports | Settings)
      </ProductShell>
 
@@ -26,19 +26,17 @@ import { MobileBudgetBanner } from '@/components/mobile/MobileBudgetBanner';
 import { BudgetPhaseStripClient } from '@/components/budget/BudgetPhaseStripClient';
 import { BudgetPhaseStripGate } from '@/components/budget/BudgetPhaseStripReveal';
 import { BudgetTrackPhasesProvider } from '@/components/budget/BudgetTrackPhasesContext';
-import { BudgetStatsStrip } from '@/components/budget/BudgetStatsStrip';
+import { BudgetBurnBar } from '@/components/budget/BudgetBurnBar';
 import { BudgetSpreadsheetView } from '@/components/budget/BudgetSpreadsheetView';
 import { BudgetIncomeTab } from '@/components/budget/BudgetIncomeTab';
 import { BudgetEmptyState } from '@/components/budget/BudgetEmptyState';
 import { BudgetSettingsTab } from '@/components/budget/BudgetSettingsTab';
 import { ReceiptInbox } from '@/components/budget/ReceiptInbox';
 import { BudgetExportControls } from '@/components/budget/BudgetExportControls';
-// Hotfix 3 §1 — resolveBudgetTab is a server-safe pure helper now,
-// imported directly from the utils module. The BudgetTabNav React
-// component itself is a client component and stays imported from
-// its own file (it's referenced as JSX, which doesn't cross the
-// server→client function-call boundary).
-import { BudgetTabNav } from '@/components/budget/BudgetTabNav';
+// Two-bar shell — Budget's sub-tabs (Summary/Expenses/Income + corner
+// Reports/Settings) now render in ProductShell's Bar-2 slot via
+// <BudgetSubBar> (mounted in the layout). The page only needs the
+// server-safe resolveBudgetTab helper to pick which tab body to render.
 import { resolveBudgetTab } from '@/components/budget/budget-tab-utils';
 import { BudgetDensityProvider } from '@/components/budget/BudgetDensityContext';
 import { enrichLinesWithTransactionAggregates } from '@/lib/budget/transactions';
@@ -215,14 +213,13 @@ export default async function BudgetTourPage({
     <BudgetDensityProvider>
     <BudgetTrackPhasesProvider tourId={tourId} initial={trackPhases}>
     <div className="flex min-h-0 flex-1 flex-col pb-24">
-        <BudgetStatsStrip lines={lines} tourCurrency={tourCurrency} />
+        <BudgetBurnBar lines={lines} tourCurrency={tourCurrency} />
         {/* Phase strip when this tour tracks phases (BUD-18). Phase 4.2 —
             the gate reads the shared track-phases context so the Settings
             toggle animates this strip without a router.refresh. */}
         <BudgetPhaseStripGate>
           <BudgetPhaseStripClient phases={phases} />
         </BudgetPhaseStripGate>
-        <BudgetTabNav active={tab} />
 
         <div className="space-y-6 px-4 pt-4">
           {tab === 'summary' ? (

@@ -21,6 +21,7 @@ import { notFound } from 'next/navigation';
 import { ProductShell } from '@/components/shell-v2';
 import { TourHeader } from '@/components/shell-v2/TourHeader';
 import { TourVisitTracker } from '@/components/shell-v2/TourVisitTracker';
+import { BudgetSubBar } from '@/components/budget/BudgetSubBar';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { resolveArtistLogoUrl } from '@/lib/artists/imageUrl';
 import type { BudgetLineItem } from '@/types';
@@ -111,6 +112,7 @@ export default async function BudgetTourLayout({
       artistId={tourRow.artist_id}
       tourId={tourId}
       productName="Budget"
+      subNav={<BudgetSubBar />}
     >
       {artistRow ? (
         <TourHeader

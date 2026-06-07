@@ -1,11 +1,20 @@
-# Claude Code prompt — Two-bar navigation (app-wide shell)
+# Claude Code prompt — Two-bar navigation (app-wide shell) — RUN AFTER the grid system
 
 > App-wide shell change: replace the left `ProductRail` with a horizontal
 > top **product bar**, and render each product's existing sub-nav as a
 > consistent **second bar** directly beneath it. High blast radius (every
 > product + the workspace tier share this shell), so deliver in PHASES
-> and verify each product renders before moving on. Branch: a NEW branch
-> off the latest budget branch (e.g. `feat/nav-two-bar`).
+> and verify each product renders before moving on. Branch off main
+> (e.g. `feat/nav-two-bar`).
+>
+> **Run AFTER `CC_GRID_SYSTEM.md`.** That pass makes every grid fill its
+> container + share one density. This pass reclaims the ~56px sidebar
+> width by moving products to the top — so the container-filling grids
+> automatically use the new width with NO rework (that's the whole point
+> of doing grids first). Don't change any grid styling here; only the
+> shell chrome. Everything (stage-plot, operations sub-nav, channel-list,
+> rider, budget Income tab) is now live on main — wire the REAL,
+> shipped sub-navs, not placeholders.
 
 ## The model (two bars, never three)
 - **Bar 1 — product nav (horizontal, top).** Home · Operations · Budget ·
@@ -58,10 +67,11 @@ sub-tab. Rules:
 - **Budget**: Summary · Expenses · Income — plus Reports + Settings as
   right-aligned corner icons. NOTE: today Budget's tabs are
   Summary/Budget/Reports/Settings (`BudgetTabNav` + `budget-tab-utils`).
-  Rename the "Budget" tab to "Expenses" and add "Income" (Income is built
-  in the Stage 3 prompt — until then it can be a disabled/"coming"
-  placeholder). Do NOT add rooming/payroll/flights to Budget — those live
-  in Operations; Budget is financial only.
+  Income is now a LIVE tab (current order: Summary · Budget · Income ·
+  Reports · Settings). For the sub-bar: rename "Budget" → "Expenses",
+  keep "Income", and move Reports + Settings to right-aligned corner
+  icons. Do NOT add rooming/payroll/flights to Budget — those live in
+  Operations; Budget is financial only.
 - **Advance**: Overview (tour show list) · and on a show, Show · Builder
   (the existing `?mode=` read/builder toggle). Sections stay data-driven
   inside the builder, not tabs.

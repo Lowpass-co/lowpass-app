@@ -28,7 +28,7 @@ const OPTIONS: ReadonlyArray<{
 }> = [
   { value: 'compact', label: 'Compact', Icon: Rows4 },
   { value: 'comfortable', label: 'Comfortable', Icon: Rows3 },
-  { value: 'cozy', label: 'Cozy', Icon: Menu },
+  { value: 'cozy', label: 'Spacious', Icon: Menu },
 ];
 
 export function BudgetDensityToggle() {

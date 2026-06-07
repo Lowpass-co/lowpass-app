@@ -33,7 +33,7 @@ export type DataTableProps<T> = {
   columns: ColumnDef<T>[];
   rowKey: (row: T) => string;
 
-  density?: 'comfortable' | 'compact';
+  density?: 'comfortable' | 'compact' | 'cozy';
 
   selectable?: boolean;
   selectedIds?: string[];

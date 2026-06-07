@@ -753,25 +753,6 @@ export function BudgetSpreadsheetView({
     lastSelectedIndexRef.current = null;
   };
 
-  const totals = useMemo(() => {
-    let proposed = 0;
-    let actual = 0;
-    for (const line of filtered) {
-      const cur = (line.currency || tourCurrency).toUpperCase();
-      proposed += convertToCurrency(
-        Number(line.proposed_cost ?? 0),
-        cur,
-        displayCurrency,
-      );
-      actual += convertToCurrency(
-        getEffectiveActual(line),
-        cur,
-        displayCurrency,
-      );
-    }
-    return { proposed, actual };
-  }, [filtered, tourCurrency, displayCurrency]);
-
   const duplicateCount = duplicateMap ? Object.keys(duplicateMap).length : 0;
 
   /* Fix-pack A Task 2 — every newly-created line takes a section_id
@@ -1241,6 +1222,8 @@ export function BudgetSpreadsheetView({
 
         <span className="flex-1" />
 
+        {/* Grid system Phase 4 — the est/act summary lives only in the
+            burn bar now; the filter bar keeps just the row count. */}
         <span
           className="lp-mono"
           style={{
@@ -1248,9 +1231,7 @@ export function BudgetSpreadsheetView({
             color: 'var(--lp-text-tertiary)',
           }}
         >
-          {totalRowCount}/{allLines.length} · est{' '}
-          {formatCurrency(totals.proposed, displayCurrency)} · act{' '}
-          {formatCurrency(totals.actual, displayCurrency)}
+          {totalRowCount}/{allLines.length} rows
         </span>
 
         <button
@@ -1413,39 +1394,10 @@ export function BudgetSpreadsheetView({
                 </tr>
               ) : (
                 groups.map((group) => {
-                  // Group totals computed in display currency. Phase 3 —
-                  // formula sections total their computed rows (tour
-                  // currency → display) instead of DB line items.
-                  let gProposed = 0;
-                  let gActual = 0;
-                  if (group.formulaRows) {
-                    for (const f of group.formulaRows) {
-                      gProposed += convertToCurrency(
-                        f.projected,
-                        tourCurrency,
-                        displayCurrency,
-                      );
-                      gActual += convertToCurrency(
-                        f.actual,
-                        tourCurrency,
-                        displayCurrency,
-                      );
-                    }
-                  } else {
-                    for (const r of group.rows) {
-                      const cur = (r.currency || tourCurrency).toUpperCase();
-                      gProposed += convertToCurrency(
-                        Number(r.proposed_cost ?? 0),
-                        cur,
-                        displayCurrency,
-                      );
-                      gActual += convertToCurrency(
-                        getEffectiveActual(r),
-                        cur,
-                        displayCurrency,
-                      );
-                    }
-                  }
+                  // Grid system Phase 4 — the est/act/var summary now lives
+                  // only in the burn bar up top; section headers are
+                  // NAME · count only, so no per-group totals are computed
+                  // here anymore.
                   return (
                     <GroupRows
                       key={group.id}
@@ -1465,8 +1417,6 @@ export function BudgetSpreadsheetView({
                       duplicateMap={duplicateMap}
                       tourCurrency={tourCurrency}
                       displayCurrency={displayCurrency}
-                      gProposed={gProposed}
-                      gActual={gActual}
                       onCommitLine={commitLineEdit}
                       onAddRowToSection={handleAddToSection}
                       onAddLineToSection={addLineToSection}
@@ -1893,8 +1843,6 @@ interface GroupRowsProps {
   duplicateMap?: Record<string, string[]>;
   tourCurrency: string;
   displayCurrency: string;
-  gProposed: number;
-  gActual: number;
   /** Fix-pack B Task 2 — the section / line that should auto-open in
    *  name-edit mode, and a callback to clear that state once consumed. */
   autoEditSectionId: string | null;
@@ -1917,8 +1865,6 @@ function GroupRows({
   duplicateMap,
   tourCurrency,
   displayCurrency,
-  gProposed,
-  gActual,
   onCommitLine,
   onAddRowToSection,
   onAddLineToSection,
@@ -1935,13 +1881,6 @@ function GroupRows({
   const formulaRows = group.formulaRows;
   const isFormula = Array.isArray(formulaRows);
   const rowCount = isFormula ? formulaRows!.length : group.rows.length;
-  const gDelta = gActual - gProposed;
-  /* §B1.3 — group total inherits income semantics when every
-     row in the group is income. Mixed groups fall back to
-     expense semantics (over = bad red). */
-  const groupIsIncome = group.rows.length > 0 && group.rows.every(isIncomeRow);
-  const gVarPct = gProposed > 0 ? (gDelta / gProposed) * 100 : null;
-  const gVarColor = varianceColor(gVarPct, groupIsIncome);
   return (
     <>
       <tr
@@ -2054,27 +1993,6 @@ function GroupRows({
                 </button>
               ) : null}
             </div>
-            <span
-              className="lp-mono shrink-0"
-              style={{
-                fontSize: '11px',
-                color: 'var(--lp-text-tertiary)',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              est {' '}
-              {formatCurrency(gProposed, displayCurrency)} · act{' '}
-              {formatCurrency(gActual, displayCurrency)}
-              {gProposed > 0 ? (
-                <>
-                  {' '}· var{' '}
-                  <span style={{ color: gVarColor }}>
-                    {gDelta >= 0 ? '+' : ''}
-                    {formatCurrency(gDelta, displayCurrency)}
-                  </span>
-                </>
-              ) : null}
-            </span>
           </div>
         </td>
       </tr>

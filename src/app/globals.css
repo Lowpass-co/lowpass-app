@@ -295,6 +295,7 @@
   --lp-row-comfortable: 44px;
   --lp-row-compact: 32px;
   --lp-row-tight: 28px;
+  --lp-row-cozy: 56px; /* grid system Phase 1 — Spacious row height */
   --lp-row-cell-padding-y-comfortable: 10px;
   --lp-row-cell-padding-y-compact: 6px;
   --lp-row-cell-padding-y-tight: 4px;

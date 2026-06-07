@@ -71,6 +71,23 @@ Reference tour: "Warning Support". Templates picker needs a NEW empty tour.
   ones; then persist them site-wide as system/workspace templates
   (template-authoring + save flow needed).
 
+## Grid system pass (burn bar + scannable grid)
+
+- **BUD-21 — Burn bar replaces the stat strip.** Open `/budget/[tour]`.
+  Expect a single burn bar at the top: large **Remaining** runway with
+  "of $X budget"; a spent/budget **meter** ("$X spent · NN% used") with a
+  thin **Committed marker** on the same scale; the fill turns **red** once
+  spent crosses 100%; a **Variance** read (up/down arrow + colour, red
+  over / green under) on the right. The five KPI cards are gone.
+- **BUD-22 — Section headers + filter bar are quiet.** On the Budget grid,
+  every section group header reads **NAME · count** only (no
+  `est… · act… · var…` triplet); the filter bar shows just the row count.
+  The est/act/var summary lives only in the burn bar.
+- **BUD-23 — Grid fills the width + density follows the app toggle.** The
+  Budget grid fills the container as one elevated panel; changing density
+  (Compact/Comfortable/Spacious) resizes its rows AND the Income tab AND
+  the section headers. (Shared with UI-05/UI-06.)
+
 ## Known later
 
 - Actual-vs-transactions override math (gates a `transactions.ts` refactor).

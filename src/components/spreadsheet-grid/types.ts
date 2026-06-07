@@ -52,7 +52,7 @@ export type SelectionRange = {
 export type SpreadsheetGridProps<T> = {
   columns: GridColumn<T>[];
   rows: GridRow<T>[];
-  density?: 'comfortable' | 'compact' | 'tight';
+  density?: 'comfortable' | 'compact' | 'tight' | 'cozy';
 
   sectionHeaders?: SectionHeader[];
 

@@ -13,7 +13,7 @@ type DataTableRowProps<T> = {
   selected: boolean;
   focused: boolean;
   focusedRef?: RefObject<HTMLTableRowElement | null>;
-  density: 'comfortable' | 'compact';
+  density: 'comfortable' | 'compact' | 'cozy';
   onRowClick?: (row: T) => void;
   onRowFocus: () => void;
   onCheckbox: (e: MouseEvent) => void;
@@ -24,8 +24,10 @@ type DataTableRowProps<T> = {
   tabIndex: number;
 };
 
-const cellPad = (d: 'comfortable' | 'compact') => ({
+const cellPad = (d: 'comfortable' | 'compact' | 'cozy') => ({
   padding: `var(--lp-row-cell-padding-y-${d}) var(--lp-row-cell-padding-x)`,
+  /* Grid system Phase 3 — type scale follows density (13 / 14 / 15px). */
+  fontSize: `var(--lp-cell-font-size-${d})`,
 });
 
 const selectedBg = 'color-mix(in srgb, var(--lp-orange) 5.1%, transparent)';
@@ -141,7 +143,7 @@ export function DataTableRow<T>({
               verticalAlign: 'middle',
             }}
           >
-            <div className="min-w-0 text-sm">{content}</div>
+            <div className="min-w-0">{content}</div>
           </td>
         );
       })}

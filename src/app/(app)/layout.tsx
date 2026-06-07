@@ -28,6 +28,7 @@ import { ToastProvider } from '@/components/ui/Toast';
 import { ArtistTourProvider } from '@/contexts/ArtistTourContext';
 import { ProductProvider } from '@/contexts/ProductContext';
 import { SwitcherStateProvider } from '@/contexts/SwitcherStateContext';
+import { AppDensityProvider } from '@/lib/density/appDensity';
 
 export default async function AppLayout({
   children,
@@ -50,7 +51,12 @@ export default async function AppLayout({
                   remounts the wrapper/switcher on /artists/[id]
                   changes; the provider above the segment doesn't). */}
               <SwitcherStateProvider>
-                <AppShell>{children}</AppShell>
+                {/* Grid system Phase 1 — ONE app-wide density. Mounted
+                    here so its data-lp-density attr + context wrap every
+                    authenticated page; every grid reads the same value. */}
+                <AppDensityProvider>
+                  <AppShell>{children}</AppShell>
+                </AppDensityProvider>
               </SwitcherStateProvider>
             </ProductProvider>
           </ArtistTourProvider>

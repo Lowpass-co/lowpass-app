@@ -6,7 +6,7 @@ import { cn } from '@/lib/utils';
 type GridPinnedRowProps = {
   children: ReactNode;
   variant: 'top' | 'bottom';
-  density: 'comfortable' | 'compact' | 'tight';
+  density: 'comfortable' | 'compact' | 'tight' | 'cozy';
 };
 
 export function GridPinnedRow({ children, variant, density }: GridPinnedRowProps) {

@@ -109,7 +109,7 @@ export function createDensity({
     const options: ReadonlyArray<{ value: Density; label: string; Icon: typeof Rows3 }> = [
       { value: 'compact', label: 'Compact', Icon: Rows4 },
       { value: 'comfortable', label: 'Comfortable', Icon: Rows3 },
-      { value: 'cozy', label: 'Cozy', Icon: Menu },
+      { value: 'cozy', label: 'Spacious', Icon: Menu },
     ];
     return (
       <div

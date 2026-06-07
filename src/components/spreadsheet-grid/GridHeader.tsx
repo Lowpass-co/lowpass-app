@@ -4,11 +4,11 @@ import { ChevronsUpDown } from 'lucide-react';
 import type { GridColumn } from './types';
 import { cn } from '@/lib/utils';
 
-const padY = (d: 'comfortable' | 'compact' | 'tight') => `var(--lp-row-cell-padding-y-${d})`;
+const padY = (d: 'comfortable' | 'compact' | 'tight' | 'cozy') => `var(--lp-row-cell-padding-y-${d})`;
 
 type GridHeaderProps<T> = {
   columns: GridColumn<T>[];
-  density: 'comfortable' | 'compact' | 'tight';
+  density: 'comfortable' | 'compact' | 'tight' | 'cozy';
   columnWidths: Record<string, number>;
   setColumnWidth: (id: string, w: number) => void;
   frozenLeft: Record<string, number>;

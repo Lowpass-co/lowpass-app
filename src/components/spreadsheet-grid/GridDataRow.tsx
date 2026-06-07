@@ -12,7 +12,7 @@ type GridDataRowProps<T> = {
   columns: GridColumn<T>[];
   columnWidths: Record<string, number>;
   frozenLeft: Record<string, number>;
-  density: 'comfortable' | 'compact' | 'tight';
+  density: 'comfortable' | 'compact' | 'tight' | 'cozy';
   isInRange: (rowId: string, colId: string) => boolean;
   isActive: (rowId: string, colId: string) => boolean;
   isEditing: (rowId: string, colId: string) => boolean;

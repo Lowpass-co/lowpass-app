@@ -2,12 +2,16 @@
 
 import { cn } from '@/lib/utils';
 
-const densityClass = (density: 'comfortable' | 'compact') =>
-  density === 'compact' ? 'h-[var(--lp-row-compact)]' : 'h-[var(--lp-row-comfortable)]';
+const densityClass = (density: 'comfortable' | 'compact' | 'cozy') =>
+  density === 'compact'
+    ? 'h-[var(--lp-row-compact)]'
+    : density === 'cozy'
+      ? 'h-[var(--lp-row-cozy)]'
+      : 'h-[var(--lp-row-comfortable)]';
 
 type DataTableSkeletonProps = {
   columns: number;
-  density?: 'comfortable' | 'compact';
+  density?: 'comfortable' | 'compact' | 'cozy';
   rows?: number;
 };
 

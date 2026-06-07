@@ -9,6 +9,7 @@ import {
   type KeyboardEvent,
 } from 'react';
 import { createPortal } from 'react-dom';
+import { useAppDensity } from '@/lib/density/appDensity';
 import { GridDataRow } from './GridDataRow';
 import { buildFrozenLeft, GridHeader } from './GridHeader';
 import { GridBody } from './GridBody';
@@ -32,10 +33,11 @@ import { validateValue } from './utils/validate';
 
 const DEF_W = 160;
 
-const rowHeightPx: Record<'comfortable' | 'compact' | 'tight', number> = {
+const rowHeightPx: Record<'comfortable' | 'compact' | 'tight' | 'cozy', number> = {
   comfortable: 44,
   compact: 32,
   tight: 28,
+  cozy: 56,
 };
 
 function keyCell(row: string, col: string) {
@@ -56,7 +58,7 @@ export function SpreadsheetGrid<T>(props: SpreadsheetGridProps<T>) {
   const {
     columns,
     rows,
-    density = 'compact',
+    density: densityProp,
     sectionHeaders,
     onSelectionChange,
     onCommitCell,
@@ -69,6 +71,11 @@ export function SpreadsheetGrid<T>(props: SpreadsheetGridProps<T>) {
     ariaLabel = 'Spreadsheet',
     entitySearchTourId,
   } = props;
+
+  // Grid system Phase 1 — density comes from the one app-wide preference
+  // unless a caller pins it explicitly (e.g. the admin playground).
+  const { density: appDensity } = useAppDensity();
+  const density = densityProp ?? appDensity;
 
   const { top, middle, bottom } = useMemo(() => partitionRows(rows), [rows]);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
@@ -351,9 +358,18 @@ export function SpreadsheetGrid<T>(props: SpreadsheetGridProps<T>) {
 
   return (
     <div
-      className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl"
+      className="flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-xl"
       data-spreadsheet-root
-      style={{ border: '1px solid var(--lp-border)', height: containerHeight }}
+      style={{
+        /* Grid system Phase 2 — one elevated panel that fills the
+           container width and "pops" off the page: own surface bg, a
+           crisp border + faint ring, and a soft shadow. */
+        border: '1px solid var(--lp-border-strong)',
+        background: 'var(--lp-bg)',
+        boxShadow: 'var(--lp-shadow-sm)',
+        fontVariantNumeric: 'tabular-nums',
+        height: containerHeight,
+      }}
     >
       {toast && (
         <div

@@ -49,6 +49,34 @@ disabled; required shows an asterisk; errors set `role="alert"` +
 
 **Last verified**:
 
+## Grid design system (grid-system sprint)
+
+#### UI-05 — Density is one app-wide preference (3 levels)
+
+**Do**: On the Budget grid, click the density toggle and pick
+**Spacious**. Then navigate to Personnel, Equipment, Tours, the Channel
+list and Payroll spreadsheets.
+
+**Expect**: Row height AND type size change on **every** grid (not just
+Budget). Default on first load is **Comfortable**; the three levels are
+Compact · Comfortable · Spacious. The choice is one shared preference
+(localStorage `lowpass:density`) — it persists across reloads and is the
+same on all surfaces.
+
+**Last verified**:
+
+#### UI-06 — Grids are full-width elevated panels
+
+**Do**: Open the Budget grid, a list surface (Tours or Personnel), and a
+spreadsheet (Channel list or Payroll).
+
+**Expect**: Each grid **fills its container width** and reads as one
+**elevated panel** — its own surface background, a crisp border + faint
+ring + soft shadow. Numeric columns are right-aligned with tabular
+figures.
+
+**Last verified**:
+
 ## Known broken
 
 (None yet.)

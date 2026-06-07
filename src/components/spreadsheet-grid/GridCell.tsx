@@ -12,7 +12,7 @@ import { EntityRefEditor } from './cell-editors/EntityRefEditor';
 import { EntityChip } from '@/components/entity/EntityChip';
 import { cn } from '@/lib/utils';
 
-const pad = (d: 'comfortable' | 'compact' | 'tight') => ({
+const pad = (d: 'comfortable' | 'compact' | 'tight' | 'cozy') => ({
   padding: `var(--lp-row-cell-padding-y-${d}) var(--lp-row-cell-padding-x)`,
 });
 
@@ -20,7 +20,7 @@ type GridCellProps<T> = {
   row: GridRow<T>;
   col: GridColumn<T>;
   colIndex: number;
-  density: 'comfortable' | 'compact' | 'tight';
+  density: 'comfortable' | 'compact' | 'tight' | 'cozy';
   width: number;
   frozen: boolean;
   left?: number;

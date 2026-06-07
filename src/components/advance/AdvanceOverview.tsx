@@ -603,7 +603,6 @@ export function AdvanceOverview({
           rows={filteredRows}
           columns={columns}
           rowKey={(r) => r.routing_id}
-          density="comfortable"
           searchable={false}
           onRowClick={onRowClick}
           rowClassName={(r) => (r.isShow ? '' : 'opacity-70')}

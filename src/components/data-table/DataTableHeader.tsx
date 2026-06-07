@@ -9,7 +9,7 @@ import { cn } from '@/lib/utils';
 type DataTableHeaderProps<T> = {
   columns: ColumnDef<T>[];
   selectable: boolean;
-  density: 'comfortable' | 'compact';
+  density: 'comfortable' | 'compact' | 'cozy';
   sortColumnId: string | null;
   sortDirection: 'asc' | 'desc' | null;
   onSortClick: (columnId: string) => void;
@@ -23,7 +23,7 @@ type DataTableHeaderProps<T> = {
   selectColWidth: number;
 };
 
-const headerPadY = (d: 'comfortable' | 'compact') => `var(--lp-row-cell-padding-y-${d})`;
+const headerPadY = (d: 'comfortable' | 'compact' | 'cozy') => `var(--lp-row-cell-padding-y-${d})`;
 const thBase =
   "border-b text-left font-semibold uppercase [font-size:var(--lp-text-xs)] [letter-spacing:var(--lp-tracking-caps)]";
 

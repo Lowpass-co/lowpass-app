@@ -32,6 +32,8 @@ import { ProductHeaderAvatarMenu } from './ProductHeaderAvatarMenu';
 import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 import { ArtistTourSwitcherClientWrapper } from './ArtistTourSwitcherClientWrapper';
 import { ConnectionIndicator } from '@/components/realtime/ConnectionIndicator';
+import { TopProductNav } from './TopProductNav';
+import type { ProductRailActive } from './productNav';
 
 /* IA Cleanup §I4 — neutral-chrome surfaces (Settings, Venues,
  * Bugs) reuse ProductShell with active=null. They surface
@@ -51,6 +53,10 @@ export type ProductName =
 
 interface ProductHeaderProps {
   productName: ProductName;
+  /** Two-bar shell — the active product (for the top product nav) and the
+   *  Home-href override. Default to neutral chrome when omitted. */
+  active?: ProductRailActive;
+  homeHref?: string;
 }
 
 type SwitcherArtistMin = {
@@ -60,7 +66,11 @@ type SwitcherArtistMin = {
   spotify_image_url: string | null;
 };
 
-export async function ProductHeader({ productName }: ProductHeaderProps) {
+export async function ProductHeader({
+  productName,
+  active = null,
+  homeHref,
+}: ProductHeaderProps) {
   const supabase = await createServerSupabaseClient();
 
   // Sprint 9 §13.A.2 — fetch user/profile AND the workspace's
@@ -132,17 +142,25 @@ export async function ProductHeader({ productName }: ProductHeaderProps) {
             marginInline: 'var(--lp-space-1)',
           }}
         />
-        <span
-          style={{
-            fontSize: '11px',
-            fontWeight: 600,
-            letterSpacing: '0.1em',
-            textTransform: 'uppercase',
-            color: 'var(--lp-text-tertiary)',
-          }}
-        >
-          {productName}
-        </span>
+        {/* Two-bar shell — Bar 1 product nav (replaces the left rail). On
+            neutral surfaces (Settings / Venues / Bugs, active=null) the
+            product name still shows so the header reads as the
+            destination. */}
+        <TopProductNav active={active} homeHref={homeHref} />
+        {active === null ? (
+          <span
+            style={{
+              fontSize: '11px',
+              fontWeight: 600,
+              letterSpacing: '0.1em',
+              textTransform: 'uppercase',
+              color: 'var(--lp-text-tertiary)',
+              marginLeft: 'var(--lp-space-1)',
+            }}
+          >
+            {productName}
+          </span>
+        ) : null}
       </div>
 
       {/* Right: connection state + search trigger + avatar menu.
