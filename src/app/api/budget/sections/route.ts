@@ -12,6 +12,10 @@
 
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import {
+  isFormulaSectionKind,
+  normalizeSectionKind,
+} from '@/lib/budget/sectionKinds';
 
 async function resolveWorkspace() {
   const supabase = await createServerSupabaseClient();
@@ -62,7 +66,12 @@ export async function POST(request: Request) {
   if (ctx.error) return ctx.error;
   const { supabase, workspaceId } = ctx;
 
-  let body: { tour_id?: string; name?: string; sort_order?: number };
+  let body: {
+    tour_id?: string;
+    name?: string;
+    sort_order?: number;
+    kind?: string;
+  };
   try {
     body = await request.json();
   } catch {
@@ -76,6 +85,9 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
+  // Phase 3 — locked formula section kind (default 'custom'). Unknown
+  // values normalise to 'custom' so a bad client can't write a stray kind.
+  const kind = normalizeSectionKind(body.kind);
 
   // Confirm the tour is in this workspace before writing.
   const { data: tour } = await supabase
@@ -101,18 +113,50 @@ export async function POST(request: Request) {
     sortOrder = Number(maxRow?.sort_order ?? -1) + 1;
   }
 
-  const { data, error } = await supabase
+  const baseRow = {
+    tour_id: tourId,
+    workspace_id: workspaceId,
+    name,
+    sort_order: Math.max(0, Math.floor(Number(sortOrder))),
+  };
+
+  let { data, error } = await supabase
     .from('budget_sections')
-    .insert({
-      tour_id: tourId,
-      workspace_id: workspaceId,
-      name,
-      sort_order: Math.max(0, Math.floor(Number(sortOrder))),
-    })
+    .insert({ ...baseRow, kind })
     .select()
     .single();
 
+  // Phase 3 — resilience: if migration 203 (the `kind` column) hasn't been
+  // applied yet, Postgres/PostgREST reject the unknown column (42703 /
+  // PGRST204). Fall back to a plain insert so custom sections still work;
+  // formula kinds genuinely need the migration, so surface that.
+  if (
+    error &&
+    (error.code === '42703' || error.code === 'PGRST204') &&
+    /kind/i.test(error.message)
+  ) {
+    if (isFormulaSectionKind(kind)) {
+      return NextResponse.json(
+        { error: 'Formula sections require migration 203 — run npm run db:migrate.' },
+        { status: 409 },
+      );
+    }
+    ({ data, error } = await supabase
+      .from('budget_sections')
+      .insert(baseRow)
+      .select()
+      .single());
+  }
+
   if (error) {
+    // The partial unique index (one formula section per kind per tour)
+    // surfaces as 23505. Translate to a friendly 409.
+    if (error.code === '23505' && isFormulaSectionKind(kind)) {
+      return NextResponse.json(
+        { error: `This tour already has a ${kind} section.` },
+        { status: 409 },
+      );
+    }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
   return NextResponse.json(data);

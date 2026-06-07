@@ -29,11 +29,13 @@ import {
   AlertTriangle,
   ArrowDown,
   ArrowUp,
+  ChevronDown,
   Columns3,
   Download,
   ExternalLink,
   Filter,
   GripVertical,
+  Lock,
   Paperclip,
   PanelRightOpen,
   Plus,
@@ -55,8 +57,34 @@ import { useBudgetDensity } from '@/components/budget/BudgetDensityContext';
 import { getEffectiveActual, getActualState } from '@/lib/budget/transactions';
 import { isIncomeRow, varianceColor } from '@/lib/budget/income-rows';
 import { isUx14DerivedBudgetLine } from '@/lib/budget/budgetUx14Derived';
+import {
+  computeBudgetPnl,
+  type IncomeInput,
+  type CommissionInput,
+  type PnlSettingsInput,
+} from '@/lib/budget/computeBudgetPnl';
+import {
+  BUDGET_SECTION_KINDS,
+  basisLabel,
+  isFormulaSectionKind,
+  normalizeSectionKind,
+  SECTION_KIND_NAME,
+  SECTION_KIND_PICKER_LABEL,
+  type BudgetSectionKind,
+} from '@/lib/budget/sectionKinds';
 import type { BudgetLineItem, BudgetSection } from '@/types';
 import type { TourPhase, TourPhaseKey } from '@/server/budget/computeTourPhases';
+
+/** Phase 3 — a computed read-only row surfaced inside a locked formula
+ *  section. Values come straight from computeBudgetPnl. */
+interface FormulaRow {
+  id: string;
+  label: string;
+  /** e.g. "10% of gross income" — shown muted under the label. */
+  hint: string;
+  projected: number;
+  actual: number;
+}
 
 const VALID_PHASES: ReadonlySet<TourPhaseKey> = new Set([
   'pre-prod',
@@ -218,6 +246,13 @@ export interface BudgetSpreadsheetViewProps {
   /** §D: default grouping. The toggle inside this view persists
       changes per-tour via localStorage. */
   initialGroupBy?: BudgetSpreadsheetGroupBy;
+  /** Phase 3 — P&L inputs for locked formula sections (commissions /
+   *  insurance / contingency / COGS). Computed live over the optimistic
+   *  line overlay so editing an expense updates the formula rows with NO
+   *  refresh. */
+  income?: IncomeInput[];
+  commissions?: CommissionInput[];
+  settings?: PnlSettingsInput | null;
 }
 
 function formatCurrency(value: number, currency: string): string {
@@ -292,6 +327,9 @@ export function BudgetSpreadsheetView({
   tourCurrency,
   tourId,
   initialGroupBy = 'section',
+  income = [],
+  commissions = [],
+  settings = null,
 }: BudgetSpreadsheetViewProps) {
   const router = useRouter();
   const { showToast } = useToast();
@@ -488,6 +526,109 @@ export function BudgetSpreadsheetView({
     [allSections],
   );
 
+  /* Phase 3 — locked formula sections. The SAME pure P&L the Summary tab
+     uses, computed here over the optimistic line overlay so the
+     commission / insurance / contingency / COGS rows recompute live as the
+     user edits expense lines — no refresh (pitfall #1). */
+  const pnl = useMemo(
+    () =>
+      computeBudgetPnl({
+        lines: allLines,
+        income,
+        commissions,
+        settings,
+        tourCurrency,
+      }),
+    [allLines, income, commissions, settings, tourCurrency],
+  );
+
+  /* Phase 3 — only plain (non-formula) sections can hold line items, so the
+     slide-over's "move to section" picker excludes locked formula ones. */
+  const lineSections = useMemo(
+    () =>
+      allSections.filter(
+        (s) => !isFormulaSectionKind(normalizeSectionKind(s.kind)),
+      ),
+    [allSections],
+  );
+
+  /* Phase 3 — "+ Add section" picker options. Formula kinds already
+     present on this tour are disabled (one of each per tour). */
+  const addSectionOptions = useMemo(() => {
+    const existing = new Set(
+      sectionsSorted.map((s) => normalizeSectionKind(s.kind)),
+    );
+    return BUDGET_SECTION_KINDS.map((k) => ({
+      value: k,
+      label: isFormulaSectionKind(k) && existing.has(k)
+        ? `${SECTION_KIND_PICKER_LABEL[k]} — added`
+        : SECTION_KIND_PICKER_LABEL[k],
+      disabled: isFormulaSectionKind(k) && existing.has(k),
+    }));
+  }, [sectionsSorted]);
+
+  const formulaRowsFor = useMemo(() => {
+    const fmtPct = (f: number) => {
+      const p = f * 100;
+      return `${Number.isInteger(p) ? p : p.toFixed(2)}%`;
+    };
+    return (kind: BudgetSectionKind): FormulaRow[] => {
+      switch (kind) {
+        case 'commission':
+          if (pnl.commissionRows.length === 0) {
+            return [
+              {
+                id: 'commission:none',
+                label: 'No commissions configured',
+                hint: 'Add commissions in Settings',
+                projected: 0,
+                actual: 0,
+              },
+            ];
+          }
+          return pnl.commissionRows.map((r) => ({
+            id: `commission:${r.id}`,
+            label: r.label || 'Commission',
+            hint: `${fmtPct(r.pct)} of ${basisLabel(r.basis)}`,
+            projected: r.projected,
+            actual: r.actual,
+          }));
+        case 'insurance':
+          return [
+            {
+              id: 'insurance',
+              label: 'Insurance',
+              hint: `${fmtPct(pnl.pct.insurance)} of ${basisLabel(pnl.basis.insurance)}`,
+              projected: pnl.insurance.projected,
+              actual: pnl.insurance.actual,
+            },
+          ];
+        case 'contingency':
+          return [
+            {
+              id: 'contingency',
+              label: 'Contingency',
+              hint: `${fmtPct(pnl.pct.contingency)} of ${basisLabel(pnl.basis.contingency)}`,
+              projected: pnl.contingency.projected,
+              actual: pnl.contingency.actual,
+            },
+          ];
+        case 'cogs':
+          return [
+            {
+              id: 'cogs',
+              label: 'Merch COGS',
+              hint: `${fmtPct(pnl.pct.merchCogs)} of merch income`,
+              projected: pnl.cogs.projected,
+              actual: pnl.cogs.actual,
+            },
+          ];
+        default:
+          return [];
+      }
+    };
+  }, [pnl]);
+
   // Phase C group structure — produce { id, label, rows[], sectionId? }[].
   // Default grouping is now Section (the budget backbone). Empty sections
   // still render (so a freshly-scaffolded section shows its "+ Add line"
@@ -497,6 +638,9 @@ export function BudgetSpreadsheetView({
     label: string;
     rows: BudgetLineItem[];
     sectionId?: string | null;
+    /** Phase 3 — formula sections carry a kind + computed read-only rows. */
+    kind?: BudgetSectionKind;
+    formulaRows?: FormulaRow[];
   };
   const groups = useMemo<GridGroup[]>(() => {
     if (groupBy === 'phase') {
@@ -534,12 +678,26 @@ export function BudgetSpreadsheetView({
     const out: GridGroup[] = [];
     const known = new Set(sectionsSorted.map((s) => s.id));
     for (const s of sectionsSorted) {
-      out.push({
-        id: s.id,
-        label: s.name,
-        rows: bySection.get(s.id) ?? [],
-        sectionId: s.id,
-      });
+      const kind = normalizeSectionKind(s.kind);
+      if (isFormulaSectionKind(kind)) {
+        // Locked formula section — rows are computed, not DB lines.
+        out.push({
+          id: s.id,
+          label: s.name,
+          rows: [],
+          sectionId: s.id,
+          kind,
+          formulaRows: formulaRowsFor(kind),
+        });
+      } else {
+        out.push({
+          id: s.id,
+          label: s.name,
+          rows: bySection.get(s.id) ?? [],
+          sectionId: s.id,
+          kind,
+        });
+      }
     }
     const orphan: BudgetLineItem[] = [];
     for (const [key, rows] of bySection.entries()) {
@@ -554,7 +712,7 @@ export function BudgetSpreadsheetView({
       });
     }
     return out;
-  }, [filtered, groupBy, sectionsSorted]);
+  }, [filtered, groupBy, sectionsSorted, formulaRowsFor]);
 
   /* Fix-pack A Task 3 — multi-select. `orderedRowIds` is the flat
      display order (group order, then row order) so shift-click can
@@ -697,18 +855,31 @@ export function BudgetSpreadsheetView({
      router.refresh() on success (that re-ran the whole server page and
      read as a full-page reload). `allSections` reflects the overlays
      instantly; the server reconciles on the next natural refetch. */
-  const addSection = async () => {
+  const addSection = async (kind: BudgetSectionKind = 'custom') => {
+    const isFormula = isFormulaSectionKind(kind);
+    // Phase 3 — a formula section is unique per kind per tour. Block a
+    // local dup before the round-trip (the DB also enforces it via a
+    // partial unique index → 409).
+    if (
+      isFormula &&
+      sectionsSorted.some((s) => normalizeSectionKind(s.kind) === kind)
+    ) {
+      showToast(`This tour already has a ${kind} section.`, 'error');
+      return;
+    }
     const tempId = `pending-sec-${Date.now()}`;
     const maxSort = sectionsSorted.reduce(
       (m, s) => Math.max(m, s.sort_order ?? 0),
       -1,
     );
+    const name = SECTION_KIND_NAME[kind];
     const temp: BudgetSection = {
       id: tempId,
       tour_id: tourId,
       workspace_id: '',
-      name: 'New section',
+      name,
       sort_order: maxSort + 1,
+      kind,
     };
     setPendingSections((prev) => [...prev, temp]);
     setSectionBusy(true);
@@ -718,8 +889,9 @@ export function BudgetSpreadsheetView({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           tour_id: tourId,
-          name: 'New section',
+          name,
           sort_order: maxSort + 1,
+          kind,
         }),
       });
       if (!res.ok) {
@@ -729,8 +901,9 @@ export function BudgetSpreadsheetView({
       const created = (await res.json()) as BudgetSection;
       // Swap the temp row for the real one (real id needed for adding lines).
       setPendingSections((prev) => prev.map((s) => (s.id === tempId ? created : s)));
-      // Fix-pack B Task 2 — open the new section header in name-edit mode.
-      setAutoEditSectionId(created.id);
+      // Fix-pack B Task 2 — open a new CUSTOM section header in name-edit
+      // mode. Formula sections have a fixed canonical name (locked).
+      if (!isFormula) setAutoEditSectionId(created.id);
     } catch (err) {
       setPendingSections((prev) => prev.filter((s) => s.id !== tempId));
       showToast(err instanceof Error ? err.message : 'Could not add section', 'error');
@@ -992,25 +1165,34 @@ export function BudgetSpreadsheetView({
             })}
         </div>
 
-        {/* BUD-15 — clear, labelled add-section button. */}
-        <button
-          type="button"
-          onClick={() => void addSection()}
-          disabled={sectionBusy}
-          className="btn-transition inline-flex items-center gap-1 rounded-md border px-2.5 py-1"
-          style={{
-            borderColor: 'var(--lp-border-strong)',
-            background: 'var(--lp-surface)',
-            color: 'var(--lp-text)',
-            fontSize: '12px',
-            fontWeight: 600,
-            opacity: sectionBusy ? 0.6 : 1,
-          }}
-          title="Add a new section"
+        {/* BUD-15 + Phase 3 — picker: a plain custom section or a locked
+            formula section (commission / insurance / contingency / COGS,
+            one of each per tour). Reuses the portaled InlineSelectCell so
+            it works inside transformed ancestors (pitfall #3). */}
+        <InlineSelectCell
+          ariaLabel="Add a section"
+          value=""
+          options={addSectionOptions}
+          showTone={false}
+          onCommit={(v) => void addSection(normalizeSectionKind(v))}
         >
-          <Plus className="h-3.5 w-3.5" />
-          Add section
-        </button>
+          <span
+            className="inline-flex items-center gap-1 rounded-md border px-2.5 py-1"
+            style={{
+              borderColor: 'var(--lp-border-strong)',
+              background: 'var(--lp-surface)',
+              color: 'var(--lp-text)',
+              fontSize: '12px',
+              fontWeight: 600,
+              opacity: sectionBusy ? 0.6 : 1,
+            }}
+            title="Add a section"
+          >
+            <Plus className="h-3.5 w-3.5" />
+            Add section
+            <ChevronDown className="h-3.5 w-3.5" style={{ color: 'var(--lp-text-tertiary)' }} />
+          </span>
+        </InlineSelectCell>
         {sizing.isCustomised ? (
           <button
             type="button"
@@ -1231,21 +1413,38 @@ export function BudgetSpreadsheetView({
                 </tr>
               ) : (
                 groups.map((group) => {
-                  // Group totals computed in display currency.
+                  // Group totals computed in display currency. Phase 3 —
+                  // formula sections total their computed rows (tour
+                  // currency → display) instead of DB line items.
                   let gProposed = 0;
                   let gActual = 0;
-                  for (const r of group.rows) {
-                    const cur = (r.currency || tourCurrency).toUpperCase();
-                    gProposed += convertToCurrency(
-                      Number(r.proposed_cost ?? 0),
-                      cur,
-                      displayCurrency,
-                    );
-                    gActual += convertToCurrency(
-                      getEffectiveActual(r),
-                      cur,
-                      displayCurrency,
-                    );
+                  if (group.formulaRows) {
+                    for (const f of group.formulaRows) {
+                      gProposed += convertToCurrency(
+                        f.projected,
+                        tourCurrency,
+                        displayCurrency,
+                      );
+                      gActual += convertToCurrency(
+                        f.actual,
+                        tourCurrency,
+                        displayCurrency,
+                      );
+                    }
+                  } else {
+                    for (const r of group.rows) {
+                      const cur = (r.currency || tourCurrency).toUpperCase();
+                      gProposed += convertToCurrency(
+                        Number(r.proposed_cost ?? 0),
+                        cur,
+                        displayCurrency,
+                      );
+                      gActual += convertToCurrency(
+                        getEffectiveActual(r),
+                        cur,
+                        displayCurrency,
+                      );
+                    }
                   }
                   return (
                     <GroupRows
@@ -1334,7 +1533,9 @@ export function BudgetSpreadsheetView({
           line={openLine ?? lastLineRef.current!}
           tourId={tourId}
           tourCurrency={tourCurrency}
-          sections={allSections}
+          /* Phase 3 — only plain sections are assignable to a line; locked
+             formula sections are computed, not buckets for line items. */
+          sections={lineSections}
           onClose={() => setOpenLine(null)}
           onExitComplete={() => {
             // Exit transform finished — drop the cached line and force
@@ -1657,6 +1858,9 @@ interface GroupRowsProps {
     /** Phase C — present when grouping by Section. null = the
      *  "Uncategorised" bucket; undefined = phase/legacy grouping. */
     sectionId?: string | null;
+    /** Phase 3 — locked formula section kind + its computed read-only rows. */
+    kind?: BudgetSectionKind;
+    formulaRows?: FormulaRow[];
   };
   /** Number of visible columns (drives every full-row colSpan). */
   colCount: number;
@@ -1727,6 +1931,10 @@ function GroupRows({
   const isSectionGroup = group.sectionId !== undefined;
   const isRealSection =
     typeof group.sectionId === 'string' && group.sectionId.length > 0;
+  // Phase 3 — locked formula section (computed read-only rows from the P&L).
+  const formulaRows = group.formulaRows;
+  const isFormula = Array.isArray(formulaRows);
+  const rowCount = isFormula ? formulaRows!.length : group.rows.length;
   const gDelta = gActual - gProposed;
   /* §B1.3 — group total inherits income semantics when every
      row in the group is income. Mixed groups fall back to
@@ -1754,8 +1962,27 @@ function GroupRows({
           <div className="flex items-center gap-3">
             <div className="flex min-w-0 items-center gap-1.5">
               {/* Phase C — real sections get an inline-editable name +
-                  delete; phase / legacy buckets stay read-only. */}
-              {isRealSection ? (
+                  delete; phase / legacy buckets stay read-only. Phase 3 —
+                  formula sections show a lock + a fixed canonical name (the
+                  % is edited in Settings, not here). */}
+              {isFormula ? (
+                <span
+                  className="inline-flex items-center gap-1.5"
+                  title="Computed section — edit the % in Settings"
+                  style={{
+                    fontSize: '12px',
+                    fontWeight: 600,
+                    color: 'var(--lp-text)',
+                  }}
+                >
+                  <Lock
+                    className="h-3 w-3 shrink-0"
+                    style={{ color: 'var(--lp-text-tertiary)' }}
+                    aria-hidden
+                  />
+                  {group.label}
+                </span>
+              ) : isRealSection ? (
                 <InlineSectionName
                   value={group.label}
                   onCommit={(name) =>
@@ -1787,7 +2014,7 @@ function GroupRows({
                   fontSize: '11px',
                 }}
               >
-                · {group.rows.length}
+                · {rowCount}
               </span>
               {isRealSection ? (
                 /* BUD-15 — delete-section: compact icon, but a clear
@@ -1851,6 +2078,92 @@ function GroupRows({
           </div>
         </td>
       </tr>
+      {/* Phase 3 — locked formula rows: computed, read-only, lock icon +
+          formula hint. Values come straight from computeBudgetPnl (tour
+          currency → display). The % is edited in Settings, not here. */}
+      {isFormula
+        ? formulaRows!.map((f, i) => {
+            const proj = convertToCurrency(
+              f.projected,
+              tourCurrency,
+              displayCurrency,
+            );
+            const act = convertToCurrency(
+              f.actual,
+              tourCurrency,
+              displayCurrency,
+            );
+            const delta = act - proj;
+            const fPct = proj > 0 ? (delta / proj) * 100 : null;
+            const rowBg = i % 2 === 0 ? 'var(--lp-bg)' : 'var(--lp-bg-deep)';
+            return (
+              <tr key={f.id} style={{ background: rowBg }}>
+                <Td>{null}</Td>
+                <Td align="right">
+                  <Lock
+                    className="inline-block h-3 w-3"
+                    style={{ color: 'var(--lp-text-tertiary)' }}
+                    aria-label="Computed (read-only)"
+                  />
+                </Td>
+                <Td>
+                  <div className="min-w-0">
+                    <div
+                      className="truncate"
+                      style={{ color: 'var(--lp-text)', fontWeight: 500 }}
+                    >
+                      {f.label}
+                    </div>
+                    {f.hint ? (
+                      <div
+                        className="truncate"
+                        style={{
+                          fontSize: '10px',
+                          color: 'var(--lp-text-tertiary)',
+                        }}
+                      >
+                        {f.hint}
+                      </div>
+                    ) : null}
+                  </div>
+                </Td>
+                <Td>{null}</Td>
+                {trackPhases ? <Td>{null}</Td> : null}
+                <Td
+                  align="right"
+                  className="lp-mono"
+                  style={{ color: 'var(--lp-text-secondary)' }}
+                >
+                  {formatCurrency(proj, displayCurrency)}
+                </Td>
+                <Td align="right" className="lp-mono" style={{ color: 'var(--lp-text)' }}>
+                  {formatCurrency(act, displayCurrency)}
+                </Td>
+                <Td
+                  align="right"
+                  className="lp-mono"
+                  style={{ color: varianceColor(fPct, false) }}
+                >
+                  {delta >= 0 ? '+' : ''}
+                  {formatCurrency(delta, displayCurrency)}
+                </Td>
+                <Td>
+                  <span
+                    style={{
+                      fontSize: '9px',
+                      fontWeight: 700,
+                      letterSpacing: '0.04em',
+                      textTransform: 'uppercase',
+                      color: 'var(--lp-text-tertiary)',
+                    }}
+                  >
+                    computed
+                  </span>
+                </Td>
+              </tr>
+            );
+          })
+        : null}
       {group.rows.map((row, i) => {
         const lineNumber = runningStart + i + 1;
         bumpRunning(runningStart + group.rows.length);
@@ -2235,6 +2548,8 @@ function GroupRows({
           users who want to add a line without committing to a
           section yet. */}
       {(() => {
+        // Phase 3 — locked formula sections have no editable lines.
+        if (isFormula) return null;
         // Section groups (incl. empty ones) get a direct "+ Add line"
         // that POSTs into the section. Phase / legacy groups fall back
         // to the slide-over create flow seeded from the first row.

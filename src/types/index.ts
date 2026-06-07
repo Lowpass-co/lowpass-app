@@ -456,6 +456,10 @@ export interface BudgetSection {
   name: string;
   sort_order: number;
   created_at?: string;
+  /** Phase 3 (migration 203) — 'custom' (plain, editable lines) or a locked
+   *  formula kind: 'commission' | 'insurance' | 'contingency' | 'cogs'.
+   *  Absent on rows read before the migration → treat as 'custom'. */
+  kind?: string | null;
 }
 
 /** A reusable budget preset. System presets have workspace_id null +

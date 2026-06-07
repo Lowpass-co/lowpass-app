@@ -162,7 +162,10 @@ export default async function BudgetTourPage({
     .filter((id): id is string => Boolean(id));
   let incomeRows: IncomeInput[] = [];
   let commissionRows: CommissionInput[] = [];
-  if (tab === 'summary') {
+  // Phase 3 — the Budget grid's locked formula sections (commissions /
+  // insurance / contingency / COGS) compute live from the same P&L inputs
+  // as the Summary, so fetch them for the Budget tab too.
+  if (tab === 'summary' || tab === 'budget') {
     const [incRes, commRes] = await Promise.all([
       routingIds.length
         ? supabase
@@ -261,6 +264,9 @@ export default async function BudgetTourPage({
                   duplicateMap={duplicatesToRecord(detectDuplicates(lines))}
                   tourCurrency={tourCurrency}
                   tourId={tourId}
+                  income={incomeRows}
+                  commissions={commissionRows}
+                  settings={budgetSettings}
                 />
                 <ReceiptInbox tourId={tourId} lineItems={lines} />
               </>
