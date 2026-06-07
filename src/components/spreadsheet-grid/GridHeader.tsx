@@ -31,7 +31,8 @@ export function GridHeader<T>({
     <thead
       className="sticky top-0 z-20"
       style={{
-        background: 'var(--lp-surface)',
+        /* Header sits a step up from the panel surface. */
+        background: 'var(--lp-panel)',
         boxShadow: '0 1px 0 0 var(--lp-border-light)',
       }}
     >
@@ -58,7 +59,7 @@ export function GridHeader<T>({
                 position: isFrozen ? 'sticky' : 'relative',
                 left: isFrozen ? left : undefined,
                 zIndex: isFrozen ? 25 : 1,
-                background: isFrozen ? 'var(--lp-surface)' : 'var(--lp-surface)',
+                background: 'var(--lp-panel)',
                 borderColor: isFrozen ? 'var(--lp-border)' : 'var(--lp-border-light)',
                 borderWidth: 1,
                 borderStyle: 'solid',

@@ -416,8 +416,15 @@ export function BudgetSpreadsheetView({
     [trackPhases],
   );
   const colCount = visibleColumns.length;
+  // Table minWidth = sum of column widths. The flexible Item column counts
+  // its MIN (not its larger default) when undragged, so the grid only
+  // scrolls once the other columns genuinely overflow the container.
   const tableWidth = useMemo(
-    () => visibleColumns.reduce((sum, c) => sum + sizing.widthFor(c.key), 0),
+    () =>
+      visibleColumns.reduce((sum, c) => {
+        if (c.key === 'item' && !sizing.hasOverride('item')) return sum + 200;
+        return sum + sizing.widthFor(c.key);
+      }, 0),
     [visibleColumns, sizing],
   );
 
@@ -1304,14 +1311,21 @@ export function BudgetSpreadsheetView({
         style={{
           position: 'relative',
           width: '100%',
+          // Cap + centre so ultra-wide monitors don't push the name column
+          // absurdly far from the numbers.
+          maxWidth: 1600,
+          marginInline: 'auto',
         }}
       >
         <div
           className="w-full overflow-x-auto rounded-xl border"
           style={{
             borderColor: 'var(--lp-border-strong)',
-            background: 'var(--lp-bg)',
-            boxShadow: 'var(--lp-shadow-sm)',
+            // Raised panel — an elevated surface distinct from the page
+            // (--lp-bg), with a visible shadow. On dark, the surface/bg
+            // contrast is the elevation cue (shadow alone is invisible).
+            background: 'var(--lp-surface)',
+            boxShadow: 'var(--lp-shadow-md)',
             fontVariantNumeric: 'tabular-nums',
           }}
         >
@@ -1321,13 +1335,29 @@ export function BudgetSpreadsheetView({
               borderCollapse: 'separate',
               borderSpacing: 0,
               tableLayout: 'fixed',
-              width: tableWidth,
+              // Fill the container; the Item column flexes to absorb the
+              // leftover (below). Scroll once columns exceed minWidth.
+              width: '100%',
+              minWidth: tableWidth,
             }}
           >
             <colgroup>
-              {visibleColumns.map((c) => (
-                <col key={c.key} style={{ width: sizing.widthFor(c.key) }} />
-              ))}
+              {visibleColumns.map((c) => {
+                // Item = the flexible primary column: width:auto (min 200)
+                // unless the user has dragged it, in which case honour the
+                // stored width. Every other column stays fixed + resizable.
+                const flexAuto = c.key === 'item' && !sizing.hasOverride('item');
+                return (
+                  <col
+                    key={c.key}
+                    style={
+                      flexAuto
+                        ? { width: 'auto', minWidth: 200 }
+                        : { width: sizing.widthFor(c.key) }
+                    }
+                  />
+                );
+              })}
             </colgroup>
             <thead
               className="sticky top-0 z-10"
@@ -1829,7 +1859,9 @@ function GroupRows({
     <>
       <tr
         style={{
-          background: 'var(--lp-bg-deep)',
+          /* Section header — a step up (panel), distinct from the
+             rows so the page < panel < header stack reads clearly. */
+          background: 'var(--lp-panel)',
           borderTop: '1px solid var(--lp-border-subtle)',
           borderBottom: '1px solid var(--lp-border-subtle)',
         }}
@@ -1957,7 +1989,12 @@ function GroupRows({
             );
             const delta = act - proj;
             const fPct = proj > 0 ? (delta / proj) * 100 : null;
-            const rowBg = i % 2 === 0 ? 'var(--lp-bg)' : 'var(--lp-bg-deep)';
+            // Rows sit on the raised panel surface: even = transparent
+            // (shows the surface), odd = a subtle token-clean zebra.
+            const rowBg =
+              i % 2 === 0
+                ? 'transparent'
+                : 'color-mix(in srgb, var(--lp-surface) 94%, var(--lp-text) 6%)';
             return (
               <tr key={f.id} style={{ background: rowBg }}>
                 <Td>{null}</Td>
@@ -2061,7 +2098,9 @@ function GroupRows({
         // are read-only + drill to source.
         const derivedSrc = derivedSource(row, tourId);
         const rowBg =
-          i % 2 === 0 ? 'var(--lp-bg)' : 'var(--lp-bg-deep)';
+          i % 2 === 0
+            ? 'transparent'
+            : 'color-mix(in srgb, var(--lp-surface) 94%, var(--lp-text) 6%)';
         return (
           <tr
             key={row.id}
@@ -2072,7 +2111,7 @@ function GroupRows({
                 : '2px solid transparent',
             }}
             onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'var(--lp-surface)';
+              e.currentTarget.style.background = 'var(--lp-surface-hover)';
             }}
             onMouseLeave={(e) => {
               e.currentTarget.style.background = rowBg;

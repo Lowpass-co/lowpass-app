@@ -46,6 +46,7 @@ function buildColumns(
       accessor: 'channel_name',
       type: { kind: 'computed', render: (r) => ((r as RowVm).channel_name ?? '').trim() || '—' },
       width: 160,
+      flex: true,
     },
     {
       id: 'mic_di',

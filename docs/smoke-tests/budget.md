@@ -13,12 +13,12 @@ Reference tour: "Warning Support". Templates picker needs a NEW empty tour.
 | BUD-10/11 | PASS | migration 200 applies; existing budgets load |
 | BUD-13 | PASS | picker works; **make modal + prettier**; default to Budget tab (DONE) |
 | BUD-14 | PASS | fixed: no longer flags template lines as duplicates (DONE) |
-| BUD-15 | **FAIL** | section/line create-rename-delete unreliable (no optimistic; `.single()` error); no multi-select; delete broken |
-| BUD-16 | **FAIL** | grouping still keyed on free-text `category`, not `section_id` |
-| BUD-17 | PASS | needs visible drag handles |
-| BUD-18 | PASS | fixed: phase strip now hides with toggle (DONE); was refresh-only |
-| BUD-19 | PASS | need click-to-rename template; dropdown style inconsistent |
-| BUD-20 | **FAIL** | summary refresh-only + lists phantom/old sections |
+| BUD-15 | FIXED | optimistic section/line CRUD + `.maybeSingle()`; multi-select + delete work (Fix-pack A) |
+| BUD-16 | FIXED | grouping now keyed on `section_id`; Category retired from UI (Fix-pack A/C) |
+| BUD-17 | PASS→see BUD-26 | column resize now has visible handles |
+| BUD-18 | PASS | phase strip hides with toggle (no reload) |
+| BUD-19 | FIXED | click-to-rename templates + consistent picker (Fix-pack C) |
+| BUD-20 | FIXED | summary reads live from `section_id`; no phantom sections (Fix-pack A) |
 
 ## Fixed this pass (retest on next deploy)
 
@@ -71,22 +71,62 @@ Reference tour: "Warning Support". Templates picker needs a NEW empty tour.
   ones; then persist them site-wide as system/workspace templates
   (template-authoring + save flow needed).
 
-## Grid system pass (burn bar + scannable grid)
+## Grid + nav overhaul (current)
 
-- **BUD-21 — Burn bar replaces the stat strip.** Open `/budget/[tour]`.
-  Expect a single burn bar at the top: large **Remaining** runway with
-  "of $X budget"; a spent/budget **meter** ("$X spent · NN% used") with a
-  thin **Committed marker** on the same scale; the fill turns **red** once
-  spent crosses 100%; a **Variance** read (up/down arrow + colour, red
-  over / green under) on the right. The five KPI cards are gone.
-- **BUD-22 — Section headers + filter bar are quiet.** On the Budget grid,
-  every section group header reads **NAME · count** only (no
-  `est… · act… · var…` triplet); the filter bar shows just the row count.
-  The est/act/var summary lives only in the burn bar.
-- **BUD-23 — Grid fills the width + density follows the app toggle.** The
-  Budget grid fills the container as one elevated panel; changing density
-  (Compact/Comfortable/Spacious) resizes its rows AND the Income tab AND
-  the section headers. (Shared with UI-05/UI-06.)
+Reference: "Warning Support" (populated) + a fresh empty tour for the picker.
+
+#### BUD-21 — Burn bar
+Open `/budget/[tour]`. One burn bar at the top: big **Remaining** + "of $X
+budget"; a spent/budget **meter** ("$X spent · NN% used") with a thin
+**Committed marker** on the same scale; the fill turns **red** past 100%;
+a **Variance** read (arrow + colour, red over / green under) on the right.
+No KPI cards.
+
+#### BUD-22 — Quiet section headers
+Every section group header reads **NAME · count** only — no
+`est… · act… · var…` triplet; the filter bar shows just the row count. The
+est/act/var summary lives only in the burn bar.
+
+#### BUD-23 — Raised panel
+The grid reads as a **raised panel** lifted off the page (lighter surface
+bg than the page + border + visible shadow), not flat. Header + section
+rows sit a step higher (`--lp-panel`). Channel-list + payroll grids are
+raised the same way.
+
+#### BUD-24 — Fills the width (name column flexes)
+The grid fills the container; the **Item/description column stretches** to
+absorb the leftover width — no dead band on the right. Numbers stay fixed
++ right-aligned. On ultra-wide the panel caps ~1600px and centres.
+Horizontal scroll appears only when columns exceed the container.
+
+#### BUD-25 — Density (app-wide, 3 levels)
+Toggle = Compact / Comfortable / Spacious, **default Comfortable**.
+Changing it resizes rows + text on the budget grid, the **Income tab**,
+AND other grids (channel-list, payroll, a list like Personnel). Persists
+on reload. (Shared with UI-05.)
+
+#### BUD-26 — Column resize
+Hover a column's right edge → handle appears (grab cursor); drag resizes
+that column live; can't drag to zero; dragging the flex (name) column
+starts from its **rendered** width (no jump). Widths **persist** on
+reload; "Reset widths" restores defaults. Works on channel-list + payroll
+too. (Shared with UI-07.)
+
+#### BUD-27 — Two-band budget top
+Budget top is **two bands** then content: product bar (Home · Operations ·
+Budget · Advance, active = solid orange) → **one context band** (tour
+identity + Summary · Expenses · Income tabs + Display/Export/Settings) →
+burn bar → grid. Not four stacked layers. The tabs read as tabs and
+switch correctly.
+
+#### NAV-01 — Two-bar app nav
+No left sidebar anywhere. The top product bar shows on every product;
+hover a product → dropdown of its sub-pages → click lands directly (one
+load). Each product, the workspace tabs (Artists/Personnel/Equipment), and
+Settings/Venues/Bugs all load.
+
+> These supersede the earlier BUD-15/16/20 failures (section CRUD,
+> category-vs-section, summary refresh) — all resolved in Fix-pack A.
 
 ## Known later
 

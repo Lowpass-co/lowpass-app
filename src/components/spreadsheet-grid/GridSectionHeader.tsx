@@ -28,7 +28,8 @@ export function GridSectionHeader({
         colSpan={colSpan}
         className={cn('text-left font-semibold uppercase [font-size:var(--lp-text-xs)] [letter-spacing:var(--lp-tracking-caps)]')}
         style={{
-          backgroundColor: 'var(--lp-bg-tertiary)',
+          /* Section header — a step up (panel) from the panel surface. */
+          backgroundColor: 'var(--lp-panel)',
           color: 'var(--lp-text-secondary)',
           padding: `${padY(density)} var(--lp-row-cell-padding-x)`,
         }}

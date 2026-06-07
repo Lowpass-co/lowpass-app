@@ -21,6 +21,9 @@ export type GridColumn<T> = {
   maxWidth?: number;
   resizable?: boolean;
   frozen?: boolean;
+  /** The flexible primary column — width:auto, absorbs the leftover table
+   *  width (min ~200px) unless the user drags it. Mark one per grid. */
+  flex?: boolean;
   align?: 'left' | 'right' | 'center';
   sticky?: 'left' | 'right';
   validator?: (value: unknown, row: T) => string | null;

@@ -57,10 +57,10 @@ export function DataTableHeader<T>({
         position: 'sticky' as const,
         top: 0,
         zIndex: 20,
-        background: 'var(--lp-surface)',
+        background: 'var(--lp-panel)',
         boxShadow: '0 1px 0 0 var(--lp-border-light)',
       }
-    : { background: 'var(--lp-surface)' };
+    : { background: 'var(--lp-panel)' };
 
   return (
     <thead style={stickyT}>
@@ -76,7 +76,7 @@ export function DataTableHeader<T>({
               position: 'sticky' as const,
               left: 0,
               zIndex: 30,
-              background: 'var(--lp-surface)',
+              background: 'var(--lp-panel)',
               boxShadow: '1px 0 0 0 var(--lp-border-light)',
             }}
             aria-label="Select rows"
@@ -121,7 +121,7 @@ export function DataTableHeader<T>({
                 position: isFrozen ? 'sticky' : resizable ? 'relative' : undefined,
                 left: isFrozen ? left : undefined,
                 zIndex: isFrozen ? 25 : undefined,
-                background: isFrozen ? 'var(--lp-surface)' : undefined,
+                background: isFrozen ? 'var(--lp-panel)' : undefined,
                 boxShadow: isFrozen ? '1px 0 0 0 var(--lp-border-light)' : undefined,
               }}
               aria-sort={

@@ -43,7 +43,7 @@ function buildPayrollColumns(
 ): GridColumn<PersonnelRate>[] {
   const ccy = currency.trim().toUpperCase() || 'GBP';
   const cols: GridColumn<PersonnelRate>[] = [
-    { id: 'person_name', header: 'Person', accessor: 'person_name', type: { kind: 'text' }, width: 160 },
+    { id: 'person_name', header: 'Person', accessor: 'person_name', type: { kind: 'text' }, width: 160, flex: true },
     { id: 'role', header: 'Role', accessor: 'role', type: { kind: 'text' }, width: 128 },
     {
       id: 'person_type',

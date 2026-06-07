@@ -428,6 +428,7 @@ export function AdvanceOverview({
         header: 'Venue',
         accessor: (r) => r.venue_name ?? '',
         sortable: true,
+        flex: true,
         cell: (_v, r) => (
           <span className={cn('truncate', !r.isShow && 'text-lp-text-secondary')}>
             {r.isShow

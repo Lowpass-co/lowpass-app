@@ -10,6 +10,9 @@ export type ColumnDef<T> = {
   minWidth?: number;
   align?: 'left' | 'right' | 'center';
   frozen?: boolean;
+  /** The flexible primary column — when column resize is enabled it gets
+   *  width:auto (absorbs the leftover, min ~200px) unless dragged. */
+  flex?: boolean;
   className?: string;
   filter?: ColumnFilter;
 };

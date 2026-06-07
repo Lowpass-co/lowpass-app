@@ -99,7 +99,7 @@ export function DataTableRow<T>({
             position: 'sticky',
             left: 0,
             zIndex: 15,
-            background: 'var(--lp-bg)',
+            background: 'var(--lp-surface)',
             boxShadow: '1px 0 0 0 var(--lp-border-light)',
             verticalAlign: 'middle',
           }}
@@ -138,7 +138,7 @@ export function DataTableRow<T>({
               position: frozen ? 'sticky' : undefined,
               left: frozen ? left : undefined,
               zIndex: frozen ? 12 : undefined,
-              background: frozen ? 'var(--lp-bg)' : undefined,
+              background: frozen ? 'var(--lp-surface)' : undefined,
               boxShadow: frozen ? '1px 0 0 0 var(--lp-border-light)' : undefined,
               verticalAlign: 'middle',
             }}

@@ -52,6 +52,7 @@ export function AdvanceFlightsPanel({ tourId }: { tourId: string }) {
         header: 'Route',
         accessor: (f) => `${f.originAirport} → ${f.destinationAirport}`,
         cell: (_v, f) => `${f.originAirport} → ${f.destinationAirport}`,
+        flex: true,
       },
       {
         id: 'depart',

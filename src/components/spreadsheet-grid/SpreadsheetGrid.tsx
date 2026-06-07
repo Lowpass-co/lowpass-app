@@ -93,13 +93,33 @@ export function SpreadsheetGrid<T>(props: SpreadsheetGridProps<T>) {
       })),
     [columns]
   );
-  const { widthFor, startResize, reset: resetWidths, isCustomised } =
+  const { widthFor, hasOverride, startResize, reset: resetWidths, isCustomised } =
     useColumnWidths(colSpecs, columnWidthsKey);
   const columnWidths = useMemo(() => {
     const w: Record<string, number> = {};
     for (const c of columns) w[c.id] = widthFor(c.id);
     return w;
   }, [columns, widthFor]);
+
+  // The flexible primary column (e.g. the name/description) absorbs the
+  // leftover width: width:auto unless the user has dragged it. Pick the
+  // first column flagged `flex` (consumers mark their name column).
+  const FLEX_MIN = 200;
+  const flexColId = useMemo(
+    () => columns.find(c => c.flex)?.id ?? null,
+    [columns]
+  );
+  // Table minWidth — the flex column counts its min (not its default)
+  // when undragged, so the grid scrolls only when the OTHER columns
+  // genuinely overflow.
+  const tableWidth = useMemo(
+    () =>
+      columns.reduce((sum, c) => {
+        if (c.id === flexColId && !hasOverride(c.id)) return sum + FLEX_MIN;
+        return sum + (columnWidths[c.id] ?? 0);
+      }, 0),
+    [columns, flexColId, hasOverride, columnWidths]
+  );
 
   const frozenLeft = useMemo(
     () => buildFrozenLeft(columns, columnWidths),
@@ -365,16 +385,18 @@ export function SpreadsheetGrid<T>(props: SpreadsheetGridProps<T>) {
 
   return (
     <div
-      className="relative flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-xl"
+      className="relative mx-auto flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-xl"
       data-spreadsheet-root
       style={{
-        /* Grid system Phase 2 — one elevated panel that fills the
-           container width and "pops" off the page: own surface bg, a
-           crisp border + faint ring, and a soft shadow. */
+        /* Raised panel — an elevated surface (distinct from the page
+           --lp-bg) with a visible shadow, so it pops on dark where the
+           bg/surface contrast is the elevation cue. Capped + centred so
+           ultra-wide screens don't strand the name column. */
         border: '1px solid var(--lp-border-strong)',
-        background: 'var(--lp-bg)',
-        boxShadow: 'var(--lp-shadow-sm)',
+        background: 'var(--lp-surface)',
+        boxShadow: 'var(--lp-shadow-md)',
         fontVariantNumeric: 'tabular-nums',
+        maxWidth: 1600,
         height: containerHeight,
       }}
     >
@@ -422,7 +444,28 @@ export function SpreadsheetGrid<T>(props: SpreadsheetGridProps<T>) {
           ref={scrollRef as React.RefObject<HTMLDivElement>}
           onScroll={onScroll}
         >
-          <table className="w-full min-w-0 border-collapse" style={{ minWidth: 'max(100%, 800px)' }}>
+          <table
+            className="border-collapse"
+            style={{ tableLayout: 'fixed', width: '100%', minWidth: tableWidth }}
+          >
+            <colgroup>
+              {columns.map(c => {
+                // Flex column → width:auto (absorbs the leftover) unless
+                // the user dragged it; every other column stays fixed +
+                // resizable.
+                const flexAuto = c.id === flexColId && !hasOverride(c.id);
+                return (
+                  <col
+                    key={c.id}
+                    style={
+                      flexAuto
+                        ? { width: 'auto', minWidth: FLEX_MIN }
+                        : { width: widthFor(c.id) }
+                    }
+                  />
+                );
+              })}
+            </colgroup>
             <GridHeader
               columns={columns}
               density={density}

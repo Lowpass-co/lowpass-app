@@ -122,16 +122,37 @@ export function DataTable<T>(props: DataTableProps<T>) {
   );
   const {
     widthFor,
+    hasOverride,
     startResize,
     reset: resetWidths,
     isCustomised: widthsCustomised,
   } = useColumnWidths(colSpecs, resizable ? columnWidthsKey : null);
+  // The flexible primary column absorbs the leftover width (width:auto,
+  // min ~200px) unless the user has dragged it. Consumers mark it `flex`.
+  const FLEX_MIN = 200;
+  const flexColId = useMemo(
+    () => columnsIn.find(c => c.flex)?.id ?? null,
+    [columnsIn]
+  );
   const columns = useMemo(
     () =>
       resizable
-        ? columnsIn.map(c => ({ ...c, width: widthFor(c.id) }))
+        ? columnsIn.map(c => ({
+            ...c,
+            width:
+              c.id === flexColId && !hasOverride(c.id) ? 'auto' : widthFor(c.id),
+          }))
         : columnsIn,
-    [resizable, columnsIn, widthFor]
+    [resizable, columnsIn, widthFor, flexColId, hasOverride]
+  );
+  // Table minWidth when resizing — the flex column counts its min.
+  const resizeTableWidth = useMemo(
+    () =>
+      columnsIn.reduce((sum, c) => {
+        if (c.id === flexColId && !hasOverride(c.id)) return sum + FLEX_MIN;
+        return sum + widthFor(c.id);
+      }, 0),
+    [columnsIn, flexColId, hasOverride, widthFor]
   );
   const searchable = searchableP && !isLoading;
   const pagination = paginationP;
@@ -313,16 +334,18 @@ export function DataTable<T>(props: DataTableProps<T>) {
 
   return (
     <div
-      className="flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-xl"
+      className="mx-auto flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-xl"
       style={{
-        /* Grid system Phase 3 — same elevated-panel language as
-           SpreadsheetGrid: fill width, surface bg, crisp border + faint
-           ring + soft shadow, tabular numerics. Lists + spreadsheets now
-           read as one family. */
+        /* Raised panel — an elevated surface distinct from the page
+           (--lp-bg) + a visible shadow, so lists pop on dark where the
+           bg/surface contrast is the elevation cue. Capped + centred like
+           the spreadsheet panels so ultra-wide screens don't strand the
+           name column. */
         border: '1px solid var(--lp-border-strong)',
-        backgroundColor: 'var(--lp-bg)',
-        boxShadow: 'var(--lp-shadow-sm)',
+        backgroundColor: 'var(--lp-surface)',
+        boxShadow: 'var(--lp-shadow-md)',
         fontVariantNumeric: 'tabular-nums',
+        maxWidth: 1600,
       }}
       role="region"
       aria-label={ariaLabel}
@@ -377,7 +400,17 @@ export function DataTable<T>(props: DataTableProps<T>) {
         ) : (
           <table
             className="w-full border-collapse"
-            style={{ minWidth: 'max(100%, 600px)' }}
+            style={
+              resizable
+                ? {
+                    // Fixed layout so the flex column absorbs the leftover
+                    // and the others keep their exact resizable widths.
+                    tableLayout: 'fixed',
+                    width: '100%',
+                    minWidth: resizeTableWidth,
+                  }
+                : { minWidth: 'max(100%, 600px)' }
+            }
             role="table"
             aria-label={ariaLabel}
           >

@@ -29,6 +29,9 @@ export interface GridColumnDef {
 export interface GridSizing {
   /** Effective width for a column key (override or default). */
   widthFor: (key: string) => number;
+  /** True when the user has dragged THIS column (has a stored width). Used
+   *  by the flexible primary column: honour a dragged width, else auto. */
+  hasOverride: (key: string) => boolean;
   /** Begin a column drag from a header-edge handle. */
   startColumnResize: (key: string, e: React.PointerEvent) => void;
   /** Clear all overrides back to defaults. */
@@ -86,7 +89,15 @@ export function useBudgetGridSizing(
       const col = columns.find((c) => c.key === key);
       const min = col?.min ?? 48;
       const startX = e.clientX;
-      const startWidth = colOverrides[key] ?? defaults[key] ?? 120;
+      // Begin from the column's LIVE rendered width (measure the header
+      // cell) so the flexible Item column doesn't snap to its default on
+      // the first drag. Fall back to the stored/default width.
+      const th = (e.currentTarget as HTMLElement).closest('th');
+      const measured = th?.getBoundingClientRect().width ?? 0;
+      const startWidth =
+        measured > 0
+          ? Math.round(measured)
+          : colOverrides[key] ?? defaults[key] ?? 120;
 
       const onMove = (ev: PointerEvent) => {
         const delta = ev.clientX - startX;
@@ -117,9 +128,14 @@ export function useBudgetGridSizing(
   }, [persistCols]);
 
   const isCustomised = Object.keys(colOverrides).length > 0;
+  const hasOverride = useCallback(
+    (key: string) => key in colOverrides,
+    [colOverrides],
+  );
 
   return {
     widthFor,
+    hasOverride,
     startColumnResize,
     reset,
     isCustomised,
