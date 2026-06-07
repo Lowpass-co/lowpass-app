@@ -28,7 +28,7 @@ export default async function OperationsTourRoomingPage({
 
   if (tourError || !tour) notFound();
 
-  const [routingRes, hotelsRes, ratesRes] = await Promise.all([
+  const [routingRes, hotelsRes, ratesRes, rosterRes] = await Promise.all([
     supabase.from('routing').select('*').eq('tour_id', tourId).order('date', { ascending: true }),
     supabase
       .from('hotels')
@@ -36,10 +36,27 @@ export default async function OperationsTourRoomingPage({
       .eq('tour_id', tourId)
       .eq('workspace_id', tour.workspace_id)
       .order('check_in_at', { ascending: true, nullsFirst: true }),
-    supabase.from('personnel_rates').select('*').eq('tour_id', tourId).order('order_index'),
+    // Personnel unification Phase 2 — Rooming renders ONLY roster members.
+    // Grid people = rate cards linked to a live roster row; room
+    // assignments are filtered to roster persons below.
+    supabase
+      .from('personnel_rates')
+      .select('*')
+      .eq('tour_id', tourId)
+      .not('tour_personnel_id', 'is', null)
+      .order('order_index'),
+    supabase.from('tour_personnel').select('person_id').eq('tour_id', tourId),
   ]);
 
   const routingDates = routingRes.data ?? [];
+  // Person ids on the tour roster — assignments for anyone else are hidden
+  // (e.g. an off-tour person who still holds a room). person_id is robust
+  // whether or not the assignment carries a tour_personnel_id yet.
+  const rosterPersonIds = new Set(
+    ((rosterRes.data ?? []) as Array<{ person_id?: string | null }>)
+      .map((r) => r.person_id)
+      .filter((id): id is string => Boolean(id)),
+  );
   const hotelsRaw = (hotelsRes.data ?? []) as Array<{
     id: string;
     tour_id: string;
@@ -56,6 +73,7 @@ export default async function OperationsTourRoomingPage({
       notes?: string | null;
       room_assignments?: Array<{
         id: string;
+        person_id?: string | null;
         starts_on: string;
         ends_on: string;
         persons?: { full_name?: string | null } | Array<{ full_name?: string | null }> | null;
@@ -73,7 +91,13 @@ export default async function OperationsTourRoomingPage({
     phone: h.phone ?? null,
     cancellation_policy: h.notes ?? null,
     room_assignments: (h.rooms ?? []).flatMap((room) =>
-      (room.room_assignments ?? []).map((ra) => {
+      (room.room_assignments ?? [])
+        // Only roster members' assignments render (kills the off-tour
+        // occupant bug). If a person isn't yet linked to canonical
+        // `persons` (null person_id) keep them visible rather than
+        // silently dropping data.
+        .filter((ra) => !ra.person_id || rosterPersonIds.has(ra.person_id))
+        .map((ra) => {
         const person = Array.isArray(ra.persons) ? ra.persons[0] : ra.persons;
         const checkIn = ra.starts_on;
         const checkOut = ra.ends_on;

@@ -26,7 +26,16 @@ export default async function OperationsTourPayrollPage({ params }: { params: Pr
 
   const [{ data: routingDates }, { data: ratesRows }, { data: payrollRows }] = await Promise.all([
     supabase.from('routing').select('*').eq('tour_id', tourId).order('date', { ascending: true }),
-    supabase.from('personnel_rates').select('*').eq('tour_id', tourId).order('order_index'),
+    // Personnel unification Phase 2 — Payroll renders ONLY roster members.
+    // A rate card linked to a live tour_personnel row (the FK cascades on
+    // removal, so a non-null link always points to a real roster member);
+    // un-rostered / orphan rate cards are excluded.
+    supabase
+      .from('personnel_rates')
+      .select('*')
+      .eq('tour_id', tourId)
+      .not('tour_personnel_id', 'is', null)
+      .order('order_index'),
     supabase
       .from('payroll_entries')
       .select(`

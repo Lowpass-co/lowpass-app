@@ -257,7 +257,7 @@ export async function POST(
 
   const { data: person } = await supabase
     .from('persons')
-    .select('id, workspace_id')
+    .select('id, workspace_id, full_name, preferred_name')
     .eq('id', personId)
     .maybeSingle();
   if (!person) {
@@ -311,5 +311,53 @@ export async function POST(
     },
   });
 
-  return NextResponse.json({ id: inserted.id });
+  /* Personnel unification Phase 2 — adding to the roster seeds the
+     payroll rate card so the member appears in Payroll immediately
+     (single source: roster → payroll). If a rate card already exists for
+     this person on this tour (e.g. removed then re-added, or backfilled),
+     relink it to the new roster row instead of creating a duplicate.
+     Rooming needs no seed row — its grid derives people from the roster.
+     Self-guarded: a failure here never fails the assignment. */
+  let rateCard: Record<string, unknown> | null = null;
+  try {
+    const personName =
+      (person as { full_name?: string | null }).full_name?.trim() || role;
+    const { data: existingRate } = await supabase
+      .from('personnel_rates')
+      .select('id')
+      .eq('tour_id', tourId)
+      .eq('person_id', personId)
+      .maybeSingle();
+    if (existingRate) {
+      const { data } = await supabase
+        .from('personnel_rates')
+        .update({ tour_personnel_id: inserted.id })
+        .eq('id', (existingRate as { id: string }).id)
+        .select('*')
+        .maybeSingle();
+      rateCard = data as Record<string, unknown> | null;
+    } else {
+      const { data } = await supabase
+        .from('personnel_rates')
+        .insert({
+          tour_id: tourId,
+          workspace_id: tourWorkspaceId,
+          person_name: personName,
+          role,
+          person_type: 'crew',
+          person_id: personId,
+          tour_personnel_id: inserted.id,
+          show_rate: typeof body.rate_amount === 'number' ? body.rate_amount : 0,
+        })
+        .select('*')
+        .maybeSingle();
+      rateCard = data as Record<string, unknown> | null;
+    }
+  } catch {
+    /* rate-card seed is best-effort — the roster row is what matters */
+  }
+
+  // Return the seeded rate card so Payroll/Rooming can append the new
+  // member optimistically (no router.refresh).
+  return NextResponse.json({ id: inserted.id, rateCard });
 }

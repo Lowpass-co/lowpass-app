@@ -1,9 +1,10 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { RoomingMasterGrid } from './RoomingMasterGrid';
 import { RoomingHotelSheet } from './RoomingHotelSheet';
+import { AddPersonToTourButton } from '@/components/operations/personnel/AddPersonToTourButton';
 
 interface RoomingViewProps {
   tourId: string;
@@ -22,6 +23,17 @@ export function RoomingView({
   hotels,
   personnelRates,
 }: RoomingViewProps) {
+  // Phase 2/A — roster people in state so adding a person appends them
+  // optimistically (single source: roster → rooming grid), no router.refresh.
+  const [people, setPeople] = useState<Record<string, unknown>[]>(personnelRates);
+  const excludePersonIds = useMemo(
+    () =>
+      people
+        .map((r) => r.person_id)
+        .filter((id): id is string => typeof id === 'string'),
+    [people],
+  );
+
   const tabs = [
     { id: 'master', label: 'Master Grid' },
     ...hotels.map((h) => ({ id: h.id, label: `${h.hotel_name}${h.city ? ` · ${h.city}` : ''}` })),
@@ -31,7 +43,18 @@ export function RoomingView({
 
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-bold text-lp-text">{tourName} — Rooming</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-xl font-bold text-lp-text">{tourName} — Rooming</h1>
+        <AddPersonToTourButton
+          tourId={tourId}
+          excludePersonIds={excludePersonIds}
+          onAdded={(result) => {
+            if (result?.rateCard) {
+              setPeople((prev) => [...prev, result.rateCard as Record<string, unknown>]);
+            }
+          }}
+        />
+      </div>
 
       <nav className="flex flex-wrap gap-0 border-b border-lp-border">
         {tabs.map((t) => (
@@ -57,7 +80,7 @@ export function RoomingView({
             tourId={tourId}
             currency={currency}
             routingDates={routingDates}
-            personnelRates={personnelRates}
+            personnelRates={people}
           />
         )}
         {activeTab !== 'master' && hotels.some((h) => h.id === activeTab) && (

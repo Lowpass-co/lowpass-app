@@ -137,11 +137,15 @@ async function computePayrollDesired(
   tourId: string,
   workspaceId: string,
 ): Promise<{ salary: Desired[]; perDiem: Desired[] }> {
+  // Personnel unification Phase 2 — derived Salary/Per-diem lines come only
+  // from roster members (rate cards linked to a live tour_personnel row).
+  // Orphan / un-rostered rate cards don't generate budget lines.
   const { data: persons } = await supabase
     .from('personnel_rates')
     .select('id, person_name, role, order_index')
     .eq('tour_id', tourId)
-    .eq('workspace_id', workspaceId);
+    .eq('workspace_id', workspaceId)
+    .not('tour_personnel_id', 'is', null);
   if (!persons?.length) return { salary: [], perDiem: [] };
 
   const { data: entries } = await supabase

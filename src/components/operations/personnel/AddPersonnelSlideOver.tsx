@@ -60,7 +60,13 @@ interface AddPersonnelSlideOverProps {
   tourStartDate?: string | null;
   tourEndDate?: string | null;
   onClose: () => void;
-  onAdded: () => void;
+  /** Called after a successful assignment. Receives the POST result
+   *  (incl. the seeded rate card) so callers can update optimistically
+   *  without a router.refresh. The Personnel page ignores the arg. */
+  onAdded: (result?: {
+    id?: string;
+    rateCard?: Record<string, unknown> | null;
+  }) => void;
 }
 
 export function AddPersonnelSlideOver({
@@ -208,10 +214,10 @@ export function AddPersonnelSlideOver({
           rate_period: null,
         }),
       });
+      const assignBody = (await assignRes.json().catch(() => null)) as
+        | { id?: string; rateCard?: Record<string, unknown> | null; error?: string }
+        | null;
       if (!assignRes.ok) {
-        const assignBody = (await assignRes.json().catch(() => null)) as
-          | { error?: string }
-          | null;
         // Workspace person row was created — surface that so
         // the operator knows where to find them.
         setCreateError(
@@ -222,7 +228,7 @@ export function AddPersonnelSlideOver({
         return;
       }
       showToast(`${name} created and added to tour.`);
-      onAdded();
+      onAdded(assignBody ?? undefined);
       onClose();
     } catch (err) {
       setCreateError(err instanceof Error ? err.message : 'Network error');
@@ -259,7 +265,7 @@ export function AddPersonnelSlideOver({
         }),
       });
       const body = (await res.json().catch(() => null)) as
-        | { id?: string; error?: string }
+        | { id?: string; rateCard?: Record<string, unknown> | null; error?: string }
         | null;
       if (!res.ok) {
         if (res.status === 409) {
@@ -270,7 +276,7 @@ export function AddPersonnelSlideOver({
         return;
       }
       showToast(`${picked.display_name} added to tour.`);
-      onAdded();
+      onAdded(body ?? undefined);
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Network error');

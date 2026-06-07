@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils';
 import { PayrollSummary } from './PayrollSummary';
 import { PayrollWeekSheet } from './PayrollWeekSheet';
 import { getWeekStart, formatWeekTabLabel } from './payroll-utils';
+import { AddPersonToTourButton } from '@/components/operations/personnel/AddPersonToTourButton';
 
 interface PayrollViewProps {
   tourId: string;
@@ -23,6 +24,18 @@ export function PayrollView({
   personnelRates,
   payrollEntries,
 }: PayrollViewProps) {
+  // Phase 2/A — lift the roster's rate cards into state so adding a person
+  // appends them optimistically (single source: roster → payroll), no
+  // router.refresh. Seeded from the server-filtered (roster-only) list.
+  const [rates, setRates] = useState<Record<string, unknown>[]>(personnelRates);
+  const excludePersonIds = useMemo(
+    () =>
+      rates
+        .map((r) => r.person_id)
+        .filter((id): id is string => typeof id === 'string'),
+    [rates],
+  );
+
   const weekStarts = useMemo(() => {
     const set = new Set<string>();
     for (const r of routingDates) {
@@ -44,7 +57,18 @@ export function PayrollView({
 
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-bold text-lp-text">{tourName} — Payroll</h1>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-xl font-bold text-lp-text">{tourName} — Payroll</h1>
+        <AddPersonToTourButton
+          tourId={tourId}
+          excludePersonIds={excludePersonIds}
+          onAdded={(result) => {
+            if (result?.rateCard) {
+              setRates((prev) => [...prev, result.rateCard as Record<string, unknown>]);
+            }
+          }}
+        />
+      </div>
 
       <nav className="flex flex-wrap gap-0 border-b border-lp-border">
         {tabs.map((t) => (
@@ -69,7 +93,7 @@ export function PayrollView({
           <PayrollSummary
             tourId={tourId}
             currency={currency}
-            personnelRates={personnelRates}
+            personnelRates={rates}
             routingDates={routingDates}
             payrollEntries={payrollEntries}
           />
@@ -78,7 +102,7 @@ export function PayrollView({
           <PayrollWeekSheet
             tourId={tourId}
             weekStart={activeTab}
-            personnelRates={personnelRates}
+            personnelRates={rates}
             routingDates={routingDates}
             payrollEntries={payrollEntries}
           />

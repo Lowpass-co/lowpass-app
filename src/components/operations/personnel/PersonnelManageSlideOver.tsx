@@ -22,10 +22,11 @@
    Remove: opens <DeleteConfirmationModal>; on confirm, DELETE.
    ============================================ */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useToast } from '@/components/ui/Toast';
 import { SlideOver } from '@/components/shell/SlideOver';
 import { DeleteConfirmationModal } from '@/components/ui/DeleteConfirmationModal';
+import { SwapPersonnelModal } from './SwapPersonnelModal';
 import { useAutoSave } from '@/lib/forms/useAutoSave';
 import { SaveStatus } from '@/components/forms/SaveStatus';
 import { BrandedSelect } from '@/components/ui/BrandedSelect';
@@ -196,6 +197,69 @@ function PersonnelManageEditor({
       onSaved();
     },
   });
+
+  /* Phase 3 — fetch exactly what cascades on removal so the confirm
+     dialog lists it. Fetched when the remove modal opens (not on every
+     edit). The DB FKs (mig 204) do the cascade; this is read-only. */
+  const [swapOpen, setSwapOpen] = useState(false);
+  const [removalPreview, setRemovalPreview] = useState<{
+    rateCards: number;
+    roomAssignments: number;
+    budgetLines: number;
+    sharedRooms: number;
+  } | null>(null);
+  useEffect(() => {
+    if (!removeOpen) return;
+    let active = true;
+    // Clear any stale preview from a previous member before refetching.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setRemovalPreview(null);
+    void (async () => {
+      try {
+        const res = await fetch(
+          `/api/tours/${tourId}/personnel/${member.id}/removal-preview`,
+        );
+        if (!res.ok) return;
+        const data = (await res.json()) as typeof removalPreview;
+        if (active) setRemovalPreview(data);
+      } catch {
+        /* preview is best-effort — removal still works without it */
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [removeOpen, tourId, member.id]);
+
+  const removalDescription = (() => {
+    const parts: string[] = [];
+    if (!removalPreview) {
+      parts.push('Also removes their rate card, room assignments, and any derived budget lines.');
+    } else {
+      const bits: string[] = [];
+      if (removalPreview.rateCards > 0) bits.push('their payroll rate card');
+      if (removalPreview.roomAssignments > 0)
+        bits.push(
+          `${removalPreview.roomAssignments} room assignment${removalPreview.roomAssignments === 1 ? '' : 's'}`,
+        );
+      if (removalPreview.budgetLines > 0)
+        bits.push(
+          `${removalPreview.budgetLines} derived budget line${removalPreview.budgetLines === 1 ? '' : 's'}`,
+        );
+      parts.push(
+        bits.length > 0
+          ? `Also removes ${bits.join(', ')}.`
+          : 'No rate card, rooms, or budget lines are attached.',
+      );
+      if (removalPreview.sharedRooms > 0) {
+        parts.push(
+          `Shared room: the roommate keeps their assignment — only this person's occupancy clears.`,
+        );
+      }
+    }
+    parts.push('The personnel record itself stays in your workspace library.');
+    return parts.join(' ');
+  })();
 
   // Close handler: flush any pending save BEFORE closing so the
   // last keystroke isn't lost. If the user wants to bail, they
@@ -576,23 +640,43 @@ function PersonnelManageEditor({
             className="flex items-center justify-between"
             style={{ gap: 'var(--lp-space-2)' }}
           >
-            <button
-              type="button"
-              onClick={() => setRemoveOpen(true)}
-              className="btn-transition"
-              style={{
-                padding: 'var(--lp-space-2) var(--lp-space-3)',
-                fontSize: 'var(--lp-text-sm)',
-                fontWeight: 'var(--lp-weight-medium)',
-                color: 'var(--color-lp-error)',
-                background: 'transparent',
-                border: '1px solid var(--lp-border-strong)',
-                borderRadius: 'var(--lp-radius-md)',
-                cursor: 'pointer',
-              }}
-            >
-              Remove from tour
-            </button>
+            <div className="flex items-center" style={{ gap: 'var(--lp-space-2)' }}>
+              <button
+                type="button"
+                onClick={() => setRemoveOpen(true)}
+                className="btn-transition"
+                style={{
+                  padding: 'var(--lp-space-2) var(--lp-space-3)',
+                  fontSize: 'var(--lp-text-sm)',
+                  fontWeight: 'var(--lp-weight-medium)',
+                  color: 'var(--color-lp-error)',
+                  background: 'transparent',
+                  border: '1px solid var(--lp-border-strong)',
+                  borderRadius: 'var(--lp-radius-md)',
+                  cursor: 'pointer',
+                }}
+              >
+                Remove from tour
+              </button>
+              <button
+                type="button"
+                onClick={() => setSwapOpen(true)}
+                className="btn-transition"
+                style={{
+                  padding: 'var(--lp-space-2) var(--lp-space-3)',
+                  fontSize: 'var(--lp-text-sm)',
+                  fontWeight: 'var(--lp-weight-medium)',
+                  color: 'var(--lp-text-secondary)',
+                  background: 'transparent',
+                  border: '1px solid var(--lp-border-strong)',
+                  borderRadius: 'var(--lp-radius-md)',
+                  cursor: 'pointer',
+                }}
+                title="Replace this person with another — transfers their rate card, rooms, and budget lines"
+              >
+                Swap…
+              </button>
+            </div>
             <div className="flex items-center" style={{ gap: 'var(--lp-space-2)' }}>
               <SaveStatus
                 status={status}
@@ -643,10 +727,25 @@ function PersonnelManageEditor({
       <DeleteConfirmationModal
         open={removeOpen}
         itemName={`${member.display_name} from this tour`}
-        description="Removes the assignment from this tour. The personnel record itself stays in your workspace library."
+        description={removalDescription}
         onClose={() => setRemoveOpen(false)}
         onConfirm={handleRemove}
         onDeleted={onClose}
+      />
+
+      <SwapPersonnelModal
+        open={swapOpen}
+        tourId={tourId}
+        member={{
+          id: member.id,
+          display_name: member.display_name,
+          person_id: member.person_id,
+        }}
+        onClose={() => setSwapOpen(false)}
+        onSwapped={() => {
+          onSaved();
+          onClose();
+        }}
       />
     </>
   );

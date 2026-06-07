@@ -283,3 +283,83 @@ export async function DELETE(
 
   return NextResponse.json({ ok: true });
 }
+
+/* Personnel unification Phase 3 — removal preview. Returns exactly what
+   cascades when this roster member is removed (rate card, room
+   assignments, derived budget lines) so the confirm dialog can list it.
+   The DB FKs (mig 204) do the actual cascade; this is read-only counting.
+   Shared rooms are reported so the UI can reassure that the roommate is
+   preserved (only the removed person's per-person assignment row clears). */
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ id: string; memberId: string }> },
+) {
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const { id: tourId, memberId } = await params;
+
+  const membership = await getActiveMembership(supabase, user.id);
+  if (!membership) {
+    return NextResponse.json({ error: 'No active workspace' }, { status: 403 });
+  }
+  const grants = await fetchActiveGrants(supabase, membership, user.id);
+  if (!canAccess(membership, grants, 'page', 'operations.personnel', 'read')) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+
+  const { data: member } = await supabase
+    .from('tour_personnel')
+    .select('id, tour_id')
+    .eq('id', memberId)
+    .maybeSingle();
+  if (!member || (member as { tour_id: string }).tour_id !== tourId) {
+    return NextResponse.json({ error: 'Assignment not found' }, { status: 404 });
+  }
+
+  const [{ data: rates }, { data: assigns }] = await Promise.all([
+    supabase.from('personnel_rates').select('id').eq('tour_personnel_id', memberId),
+    supabase
+      .from('room_assignments')
+      .select('id, room_id')
+      .eq('tour_personnel_id', memberId),
+  ]);
+  const rateIds = (rates ?? []).map((r) => (r as { id: string }).id);
+  const roomIds = (assigns ?? []).map((a) => (a as { room_id: string }).room_id);
+
+  // Derived budget lines keyed by the rate card id(s).
+  let budgetLines = 0;
+  if (rateIds.length > 0) {
+    const { count } = await supabase
+      .from('budget_line_items')
+      .select('id', { count: 'exact', head: true })
+      .eq('tour_id', tourId)
+      .in('source_entity_type', ['payroll', 'payroll_per_diem'])
+      .in('source_entity_id', rateIds);
+    budgetLines = count ?? 0;
+  }
+
+  // Rooms this person shares with someone still on the roster (their
+  // roommate keeps the room — only this person's occupancy clears).
+  let sharedRooms = 0;
+  if (roomIds.length > 0) {
+    const { data: mates } = await supabase
+      .from('room_assignments')
+      .select('room_id')
+      .in('room_id', roomIds)
+      .neq('tour_personnel_id', memberId);
+    sharedRooms = new Set(
+      (mates ?? []).map((m) => (m as { room_id: string }).room_id),
+    ).size;
+  }
+
+  return NextResponse.json({
+    rateCards: rateIds.length,
+    roomAssignments: (assigns ?? []).length,
+    budgetLines,
+    sharedRooms,
+  });
+}
