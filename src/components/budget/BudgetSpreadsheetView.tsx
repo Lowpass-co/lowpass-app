@@ -256,6 +256,9 @@ export interface BudgetSpreadsheetViewProps {
   income?: IncomeInput[];
   commissions?: CommissionInput[];
   settings?: PnlSettingsInput | null;
+  /** Compact toolbar control(s) — e.g. the Receipts button. Rendered in
+   *  the filter bar near + Line item / Export. */
+  receiptSlot?: React.ReactNode;
 }
 
 function formatCurrency(value: number, currency: string): string {
@@ -333,6 +336,7 @@ export function BudgetSpreadsheetView({
   income = [],
   commissions = [],
   settings = null,
+  receiptSlot,
 }: BudgetSpreadsheetViewProps) {
   const router = useRouter();
   const { showToast } = useToast();
@@ -1272,6 +1276,9 @@ export function BudgetSpreadsheetView({
           <Download className="h-3.5 w-3.5" />
           Export
         </button>
+        {/* Receipts — compact upload control (relocated from the big
+            bottom drop-zone). */}
+        {receiptSlot}
         <button
           type="button"
           onClick={handleNewLineItem}

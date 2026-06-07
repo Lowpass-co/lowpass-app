@@ -295,8 +295,10 @@ export default async function BudgetTourPage({
                   income={incomeRows}
                   commissions={commissionRows}
                   settings={budgetSettings}
+                  receiptSlot={
+                    <ReceiptInbox tourId={tourId} lineItems={lines} />
+                  }
                 />
-                <ReceiptInbox tourId={tourId} lineItems={lines} />
               </>
             )
           ) : null}

@@ -19,6 +19,7 @@ import { BarChart3, Settings } from 'lucide-react';
 import { ProductSubBar } from '@/components/shell-v2/ProductSubBar';
 import { TourIdentityChip } from '@/components/shell-v2/TourIdentityChip';
 import { BudgetExportControls } from '@/components/budget/BudgetExportControls';
+import { AppDensityToggle } from '@/lib/density/appDensity';
 import { resolveBudgetTab, type BudgetTab } from './budget-tab-utils';
 import type { BudgetLineItem } from '@/types';
 
@@ -70,7 +71,14 @@ export function BudgetContextBand({
           { key: 'settings', label: 'Settings', href: hrefFor('settings'), active: active === 'settings', Icon: Settings, scroll: false },
         ]}
         rightSlot={
-          <BudgetExportControls lines={lines} tourCurrency={tourCurrency} tourName={tourName} />
+          <div className="flex items-center gap-2">
+            {/* Re-mount the app-wide density toggle (orphaned when
+                BudgetTabNav/BudgetSubBar were retired). AppDensityToggle
+                drives the same `lowpass:density` preference every grid
+                reads via useAppDensity. */}
+            <AppDensityToggle />
+            <BudgetExportControls lines={lines} tourCurrency={tourCurrency} tourName={tourName} />
+          </div>
         }
       />
     </div>

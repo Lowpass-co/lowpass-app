@@ -67,6 +67,10 @@ export function ReceiptInbox({ tourId, lineItems }: ReceiptInboxProps) {
   const [receipts, setReceipts] = useState<InboxReceipt[]>([]);
   const [pickerForId, setPickerForId] = useState<string | null>(null);
   const [dragActive, setDragActive] = useState(false);
+  // The inbox is a compact toolbar button + a modal panel now (was a big
+  // bottom drop-zone). `open` controls the panel.
+  const [open, setOpen] = useState(false);
+  const linkedCount = receipts.filter((r) => r.status === 'linked').length;
 
   const handleFiles = useCallback(
     async (files: FileList | File[]) => {
@@ -167,7 +171,7 @@ export function ReceiptInbox({ tourId, lineItems }: ReceiptInboxProps) {
   );
 
   const onDrop = useCallback(
-    (e: React.DragEvent<HTMLDivElement>) => {
+    (e: React.DragEvent<HTMLElement>) => {
       e.preventDefault();
       setDragActive(false);
       if (e.dataTransfer.files?.length) {
@@ -217,84 +221,149 @@ export function ReceiptInbox({ tourId, lineItems }: ReceiptInboxProps) {
   );
 
   return (
-    <section
-      className="flex flex-col gap-3 rounded-xl border p-4"
-      style={{
-        borderColor: 'var(--lp-border)',
-        background: 'var(--lp-surface)',
-      }}
-    >
-      <div className="flex items-baseline justify-between gap-2">
-        <h3
-          style={{
-            color: 'var(--lp-text-tertiary)',
-            fontSize: 'var(--lp-text-xs)',
-            fontWeight: 'var(--lp-weight-semibold)',
-            letterSpacing: 'var(--lp-tracking-caps)',
-            textTransform: 'uppercase',
-          }}
-        >
-          Receipt inbox
-        </h3>
-        {receipts.length > 0 ? (
-          <span
-            className="text-xs"
-            style={{ color: 'var(--lp-text-tertiary)' }}
-          >
-            {receipts.length} uploaded · {receipts.filter((r) => r.status === 'linked').length} linked
-          </span>
-        ) : null}
-      </div>
-
-      {/* Drop zone */}
-      <div
+    <>
+      {/* Compact toolbar trigger — opens the inbox panel, and also accepts
+          a direct drag-drop of receipt files (uploads + opens the panel). */}
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
         onDragOver={(e) => {
           e.preventDefault();
           setDragActive(true);
         }}
         onDragLeave={() => setDragActive(false)}
-        onDrop={onDrop}
-        onClick={() => fileInputRef.current?.click()}
-        className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-6 text-center transition-colors"
-        style={{
-          borderColor: dragActive
-            ? 'var(--color-lp-orange)'
-            : 'var(--lp-border)',
-          background: dragActive
-            ? 'color-mix(in srgb, var(--color-lp-orange) 4%, transparent)'
-            : 'transparent',
+        onDrop={(e) => {
+          onDrop(e);
+          setOpen(true);
         }}
+        className="btn-transition inline-flex items-center gap-1 rounded-md border px-3 py-1"
+        style={{
+          borderColor: dragActive ? 'var(--color-lp-orange)' : 'var(--lp-border)',
+          background: dragActive
+            ? 'color-mix(in srgb, var(--color-lp-orange) 8%, transparent)'
+            : 'var(--lp-bg)',
+          color: dragActive ? 'var(--color-lp-orange)' : 'var(--lp-text-secondary)',
+          fontSize: '12px',
+        }}
+        title="Upload + link receipts (or drop files here)"
+        aria-label="Receipts"
       >
-        <Upload
-          className="h-6 w-6"
-          style={{ color: 'var(--lp-text-tertiary)' }}
-          aria-hidden
-        />
-        <p
-          className="text-sm"
-          style={{ color: 'var(--lp-text-secondary)' }}
+        <Paperclip className="h-3.5 w-3.5" aria-hidden />
+        Receipts
+        {receipts.length > 0 ? (
+          <span
+            className="lp-mono rounded-full px-1.5"
+            style={{
+              fontSize: '10px',
+              fontWeight: 600,
+              background: 'color-mix(in srgb, var(--color-lp-orange) 16%, transparent)',
+              color: 'var(--color-lp-orange)',
+            }}
+          >
+            {receipts.length}
+          </span>
+        ) : null}
+      </button>
+
+      {/* Hidden file input (shared by the trigger + the modal drop zone). */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".pdf,.jpg,.jpeg,.png,.gif,.webp"
+        multiple
+        onChange={(e) => {
+          if (e.target.files) void handleFiles(e.target.files);
+          e.target.value = '';
+        }}
+        className="hidden"
+      />
+
+      {/* Inbox panel (modal) — the drop zone + uploaded list, opened from
+          the compact button. */}
+      {open ? (
+        <div
+          className="fixed inset-0 flex items-start justify-center p-4 pt-24"
+          style={{ background: 'color-mix(in srgb, #000 40%, transparent)', zIndex: 1090 }}
+          onClick={() => setOpen(false)}
         >
-          Drop receipts here or{' '}
-          <span style={{ color: 'var(--color-lp-orange)' }}>click to upload</span>
-        </p>
-        <p
-          className="text-xs"
-          style={{ color: 'var(--lp-text-tertiary)' }}
-        >
-          PDF, JPG, PNG · up to 10 MB
-        </p>
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept=".pdf,.jpg,.jpeg,.png,.gif,.webp"
-          multiple
-          onChange={(e) => {
-            if (e.target.files) void handleFiles(e.target.files);
-            e.target.value = '';
-          }}
-          className="hidden"
-        />
-      </div>
+          <section
+            className="flex w-full max-w-lg flex-col gap-3 rounded-xl border p-4 shadow-lg"
+            style={{
+              borderColor: 'var(--lp-border)',
+              background: 'var(--lp-surface)',
+              maxHeight: '80vh',
+              overflowY: 'auto',
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-baseline justify-between gap-2">
+              <h3
+                style={{
+                  color: 'var(--lp-text-tertiary)',
+                  fontSize: 'var(--lp-text-xs)',
+                  fontWeight: 'var(--lp-weight-semibold)',
+                  letterSpacing: 'var(--lp-tracking-caps)',
+                  textTransform: 'uppercase',
+                }}
+              >
+                Receipt inbox
+              </h3>
+              <div className="flex items-center gap-2">
+                {receipts.length > 0 ? (
+                  <span className="text-xs" style={{ color: 'var(--lp-text-tertiary)' }}>
+                    {receipts.length} uploaded · {linkedCount} linked
+                  </span>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => setOpen(false)}
+                  className="btn-transition rounded-md p-1"
+                  style={{ color: 'var(--lp-text-tertiary)' }}
+                  aria-label="Close receipt inbox"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+
+            {/* Drop zone */}
+            <div
+              onDragOver={(e) => {
+                e.preventDefault();
+                setDragActive(true);
+              }}
+              onDragLeave={() => setDragActive(false)}
+              onDrop={onDrop}
+              onClick={() => fileInputRef.current?.click()}
+              className="flex cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border-2 border-dashed p-6 text-center transition-colors"
+              style={{
+                borderColor: dragActive
+                  ? 'var(--color-lp-orange)'
+                  : 'var(--lp-border)',
+                background: dragActive
+                  ? 'color-mix(in srgb, var(--color-lp-orange) 4%, transparent)'
+                  : 'transparent',
+              }}
+            >
+              <Upload
+                className="h-6 w-6"
+                style={{ color: 'var(--lp-text-tertiary)' }}
+                aria-hidden
+              />
+              <p
+                className="text-sm"
+                style={{ color: 'var(--lp-text-secondary)' }}
+              >
+                Drop receipts here or{' '}
+                <span style={{ color: 'var(--color-lp-orange)' }}>click to upload</span>
+              </p>
+              <p
+                className="text-xs"
+                style={{ color: 'var(--lp-text-tertiary)' }}
+              >
+                PDF, JPG, PNG · up to 10 MB
+              </p>
+            </div>
 
       {/* Uploaded list */}
       {receipts.length > 0 ? (
@@ -378,6 +447,9 @@ export function ReceiptInbox({ tourId, lineItems }: ReceiptInboxProps) {
             </li>
           ))}
         </ul>
+      ) : null}
+          </section>
+        </div>
       ) : null}
 
       {/* Inline line-item picker overlay (lightweight, not a SlideOver
@@ -476,6 +548,6 @@ export function ReceiptInbox({ tourId, lineItems }: ReceiptInboxProps) {
           </div>
         </div>
       ) : null}
-    </section>
+    </>
   );
 }
