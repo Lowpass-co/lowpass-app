@@ -22,7 +22,7 @@
 import type { ReactNode } from 'react';
 import { notFound } from 'next/navigation';
 import { ProductShell } from '@/components/shell-v2';
-import { TourHeader } from '@/components/shell-v2/TourHeader';
+import { TourIdentityChip } from '@/components/shell-v2/TourIdentityChip';
 import { TourVisitTracker } from '@/components/shell-v2/TourVisitTracker';
 import { OperationsSubNavClient } from '@/components/operations/OperationsSubNavClient';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
@@ -70,9 +70,7 @@ export default async function OperationsTourLayout({
 
   const { data: tour } = await supabase
     .from('tours')
-    .select(
-      'id, name, artist_id, start_date, end_date, band_count, crew_count, principal_count',
-    )
+    .select('id, name, artist_id')
     .eq('id', tourId)
     .maybeSingle();
 
@@ -82,28 +80,20 @@ export default async function OperationsTourLayout({
     id: string;
     name: string;
     artist_id: string | null;
-    start_date: string | null;
-    end_date: string | null;
-    band_count: number | null;
-    crew_count: number | null;
-    principal_count: number | null;
   };
 
-  const [artistRes, routingCountRes] = await Promise.all([
-    tourRow.artist_id
-      ? supabase
-          .from('artists')
-          .select('id, name, branding, spotify_id, spotify_image_url')
-          .eq('id', tourRow.artist_id)
-          .maybeSingle()
-      : Promise.resolve({ data: null }),
-    supabase
-      .from('routing')
-      .select('id', { count: 'exact', head: true })
-      .eq('tour_id', tourId),
-  ]);
+  // Fix 3 — only the artist identity is needed now (for the context
+  // band's TourIdentityChip); the routing-count / crew stats fed the
+  // retired TourHeader.
+  const { data: artistData } = tourRow.artist_id
+    ? await supabase
+        .from('artists')
+        .select('id, name, branding, spotify_id, spotify_image_url')
+        .eq('id', tourRow.artist_id)
+        .maybeSingle()
+    : { data: null };
 
-  const artistRow = artistRes.data as {
+  const artistRow = artistData as {
     id: string;
     name: string;
     branding: unknown;
@@ -114,12 +104,6 @@ export default async function OperationsTourLayout({
   const artistLogoUrl = artistRow
     ? await resolveArtistLogoUrl(artistRow)
     : null;
-
-  // Crew total = principals + band + crew (schema splits them).
-  const crewCount =
-    (tourRow.band_count ?? 0) +
-    (tourRow.crew_count ?? 0) +
-    (tourRow.principal_count ?? 0);
 
   /* Sprint 9 §14.11 — build sub-nav links once at the layout
      level. Summary entry leads, then each sub-page link gated
@@ -154,28 +138,22 @@ export default async function OperationsTourLayout({
       artistId={tourRow.artist_id}
       tourId={tourId}
       productName="Operations"
-      subNav={<OperationsSubNavClient tourId={tourId} links={subNavLinks} />}
-    >
-      {artistRow ? (
-        <TourHeader
-          artistId={artistRow.id}
-          artistName={artistRow.name}
-          artistLogoUrl={artistLogoUrl}
+      subNav={
+        <OperationsSubNavClient
           tourId={tourId}
-          tourName={tourRow.name}
-          startDate={tourRow.start_date}
-          endDate={tourRow.end_date}
-          product="operations"
-          stats={{
-            showCount: routingCountRes.count ?? null,
-            crewCount: crewCount > 0 ? crewCount : null,
-            // legCount sourced from flight-legs table when that
-            // surface lands — deferred. TourHeader gracefully
-            // omits empty fields from the stats line.
-            legCount: null,
-          }}
+          links={subNavLinks}
+          leftSlot={
+            <TourIdentityChip
+              artistName={artistRow?.name ?? null}
+              artistLogoUrl={artistLogoUrl}
+              tourName={tourRow.name}
+            />
+          }
         />
-      ) : null}
+      }
+    >
+      {/* Fix 3 — tour identity moved into the sub-nav band (one context
+          band), collapsing the separate TourHeader layer. */}
       <TourVisitTracker tourId={tourId} />
       {children}
     </ProductShell>

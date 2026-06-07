@@ -79,19 +79,25 @@ export function TopProductNav({ active, homeHref }: TopProductNavProps) {
             }}
             style={{
               borderRadius: 'var(--lp-radius-md)',
+              // Fix 2 — the active product gets a solid brand pill (filled
+              // orange tint + ring), so the bar reads unmistakably as the
+              // app's primary nav, not a faint label.
               background: isActive
-                ? 'color-mix(in srgb, var(--color-lp-orange) 10%, transparent)'
+                ? 'color-mix(in srgb, var(--color-lp-orange) 16%, transparent)'
                 : 'transparent',
+              boxShadow: isActive
+                ? 'inset 0 0 0 1px color-mix(in srgb, var(--color-lp-orange) 40%, transparent)'
+                : 'none',
             }}
           >
             <Link
               href={href}
-              className="btn-transition inline-flex items-center gap-1.5 rounded-md py-1.5 pl-2.5"
+              className="btn-transition inline-flex items-center gap-1.5 rounded-md py-2 pl-3"
               style={{
-                paddingRight: hasMenu ? 4 : 10,
-                color: isActive ? 'var(--color-lp-orange)' : 'var(--lp-text-secondary)',
-                fontSize: '13px',
-                fontWeight: isActive ? 600 : 500,
+                paddingRight: hasMenu ? 4 : 12,
+                color: isActive ? 'var(--color-lp-orange)' : 'var(--lp-text)',
+                fontSize: '14px',
+                fontWeight: isActive ? 700 : 500,
                 opacity: tourRequired ? 0.45 : 1,
               }}
               title={tourRequired ? `${p.label} — pick a tour first` : p.label}

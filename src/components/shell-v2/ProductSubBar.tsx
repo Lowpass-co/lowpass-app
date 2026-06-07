@@ -35,6 +35,10 @@ interface ProductSubBarProps {
   items: SubBarItem[];
   cornerItems?: SubBarCornerItem[];
   rightSlot?: React.ReactNode;
+  /** Context-band mode — content shown left of the tabs (e.g. compact
+   *  tour identity), so the sub-tabs sit WITH the product and a separate
+   *  tour-header layer collapses away. */
+  leftSlot?: React.ReactNode;
   ariaLabel: string;
   /** Pass false for tab strips that route via ?param= and want to keep
    *  scroll position (Budget). Defaults to true. */
@@ -45,18 +49,22 @@ export function ProductSubBar({
   items,
   cornerItems,
   rightSlot,
+  leftSlot,
   ariaLabel,
   scroll = true,
 }: ProductSubBarProps) {
   return (
     <nav
-      className="flex shrink-0 items-end gap-1 border-b px-4"
+      className="flex shrink-0 items-stretch gap-2 border-b px-4"
       style={{
         borderColor: 'var(--lp-border-strong)',
         background: 'var(--lp-bg)',
       }}
       aria-label={ariaLabel}
     >
+      {leftSlot ? (
+        <div className="flex shrink-0 items-center gap-2 pr-1">{leftSlot}</div>
+      ) : null}
       <div className="flex min-w-0 flex-1 items-end gap-1 overflow-x-auto">
         {items.map((item) => (
           <Link

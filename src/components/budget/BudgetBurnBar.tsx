@@ -122,9 +122,8 @@ export function BudgetBurnBar({ lines, tourCurrency }: BudgetBurnBarProps) {
 
   return (
     <div
-      className="lp-budget-burn-bar sticky z-10 flex items-center gap-6 border-b px-6 py-3"
+      className="lp-budget-burn-bar flex items-center gap-6 border-b px-6 py-3"
       style={{
-        top: 0,
         background: 'var(--lp-panel)',
         borderColor: 'var(--lp-border-strong)',
       }}

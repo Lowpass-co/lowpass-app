@@ -22,7 +22,7 @@
    ============================================ */
 
 import Link from 'next/link';
-import { useId } from 'react';
+import { useId, type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 
 export interface OperationsSubNavLink {
@@ -44,12 +44,16 @@ interface OperationsSubNavProps {
   /** Slug of the active sub-page. Underlined orange. */
   activeSlug: string;
   links: OperationsSubNavLink[];
+  /** Fix 3 — context-band mode: compact tour identity pinned left of the
+   *  sub-tabs, so a separate TourHeader layer collapses away. */
+  leftSlot?: ReactNode;
 }
 
 export function OperationsSubNav({
   tourId,
   activeSlug,
   links,
+  leftSlot,
 }: OperationsSubNavProps) {
   const navId = useId();
   const visible = links.filter((l) => l.visible);
@@ -62,16 +66,26 @@ export function OperationsSubNav({
       style={{
         display: 'flex',
         alignItems: 'center',
-        gap: 'var(--lp-space-1)',
+        gap: 'var(--lp-space-2)',
         padding: '0 var(--lp-space-4)',
         borderBottom: '1px solid var(--lp-border-strong)',
         background: 'var(--lp-panel)',
-        overflowX: 'auto',
       }}
     >
       <span id={navId} className="sr-only">
         Operations sub-navigation
       </span>
+      {leftSlot ? <div className="flex shrink-0 items-center">{leftSlot}</div> : null}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 'var(--lp-space-1)',
+          minWidth: 0,
+          flex: 1,
+          overflowX: 'auto',
+        }}
+      >
       {visible.map((link) => {
         const active = link.slug === activeSlug;
         return (
@@ -104,6 +118,7 @@ export function OperationsSubNav({
           </Link>
         );
       })}
+      </div>
     </nav>
   );
 }

@@ -9,7 +9,7 @@
      <ProductShell>
        <BudgetBurnBar>            (sticky — runway + spend meter)
        <BudgetPhaseStripClient>    (sticky — phase context)
-       (Budget sub-tabs render in the shell Bar-2 slot via BudgetSubBar)
+       <BudgetContextBand>        (Band 2 — identity + tabs + actions)
        <tab-content>               (Summary | Budget | Actuals | Reports | Settings)
      </ProductShell>
 
@@ -27,16 +27,17 @@ import { BudgetPhaseStripClient } from '@/components/budget/BudgetPhaseStripClie
 import { BudgetPhaseStripGate } from '@/components/budget/BudgetPhaseStripReveal';
 import { BudgetTrackPhasesProvider } from '@/components/budget/BudgetTrackPhasesContext';
 import { BudgetBurnBar } from '@/components/budget/BudgetBurnBar';
+import { BudgetContextBand } from '@/components/budget/BudgetContextBand';
+import { resolveArtistLogoUrl } from '@/lib/artists/imageUrl';
 import { BudgetSpreadsheetView } from '@/components/budget/BudgetSpreadsheetView';
 import { BudgetIncomeTab } from '@/components/budget/BudgetIncomeTab';
 import { BudgetEmptyState } from '@/components/budget/BudgetEmptyState';
 import { BudgetSettingsTab } from '@/components/budget/BudgetSettingsTab';
 import { ReceiptInbox } from '@/components/budget/ReceiptInbox';
-import { BudgetExportControls } from '@/components/budget/BudgetExportControls';
-// Two-bar shell — Budget's sub-tabs (Summary/Expenses/Income + corner
-// Reports/Settings) now render in ProductShell's Bar-2 slot via
-// <BudgetSubBar> (mounted in the layout). The page only needs the
-// server-safe resolveBudgetTab helper to pick which tab body to render.
+// Fix 3 — Budget's sub-tabs (Summary/Expenses/Income + corner
+// Reports/Settings) render in <BudgetContextBand> (Band 2). The page
+// only needs the server-safe resolveBudgetTab helper to pick which tab
+// body to render.
 import { resolveBudgetTab } from '@/components/budget/budget-tab-utils';
 import { BudgetDensityProvider } from '@/components/budget/BudgetDensityContext';
 import { enrichLinesWithTransactionAggregates } from '@/lib/budget/transactions';
@@ -116,7 +117,15 @@ export default async function BudgetTourPage({
      never throws. */
   await reconcileDerivedBudgetLines(supabase, tourId, workspaceId);
 
-  const [phases, panelData, lineItemsRes, routingRes, sectionsRes, settingsRes] =
+  const [
+    phases,
+    panelData,
+    lineItemsRes,
+    routingRes,
+    sectionsRes,
+    settingsRes,
+    artistRes,
+  ] =
     await Promise.all([
       computeTourPhases(supabase, tourId),
       getBudgetPanelData(supabase, tourId),
@@ -146,7 +155,24 @@ export default async function BudgetTourPage({
         .eq('tour_id', tourId)
         .eq('workspace_id', workspaceId)
         .maybeSingle(),
+      // Fix 3 — artist identity for the context band (avatar + name).
+      tour.artist_id
+        ? supabase
+            .from('artists')
+            .select('id, name, branding, spotify_id, spotify_image_url')
+            .eq('id', tour.artist_id)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
     ]);
+
+  const artistRow = artistRes.data as {
+    id: string;
+    name: string;
+    branding: unknown;
+    spotify_id: string | null;
+    spotify_image_url: string | null;
+  } | null;
+  const artistLogoUrl = artistRow ? await resolveArtistLogoUrl(artistRow) : null;
 
   const sections = (sectionsRes.data ?? []) as BudgetSection[];
   const budgetSettings = settingsRes.data as Record<string, unknown> | null;
@@ -213,6 +239,16 @@ export default async function BudgetTourPage({
     <BudgetDensityProvider>
     <BudgetTrackPhasesProvider tourId={tourId} initial={trackPhases}>
     <div className="flex min-h-0 flex-1 flex-col pb-24">
+        {/* Fix 3 — Band 2: tour identity + Summary/Expenses/Income tabs +
+            display-currency/Export/Reports/Settings in one row (sticky),
+            collapsing the old separate sub-bar + tour-header layers. */}
+        <BudgetContextBand
+          artistName={artistRow?.name ?? null}
+          artistLogoUrl={artistLogoUrl}
+          tourName={(tour.name as string | null) ?? 'Tour'}
+          tourCurrency={tourCurrency}
+          lines={lines}
+        />
         <BudgetBurnBar lines={lines} tourCurrency={tourCurrency} />
         {/* Phase strip when this tour tracks phases (BUD-18). Phase 4.2 —
             the gate reads the shared track-phases context so the Settings
@@ -244,14 +280,9 @@ export default async function BudgetTourPage({
               <BudgetEmptyState tourId={tourId} />
             ) : (
               <>
-                {/* Export controls live above the spreadsheet so PDF/
-                    XLSX is reachable from the line-item surface itself
-                    (Reports tab also links to it). */}
-                <BudgetExportControls
-                  lines={lines}
-                  tourCurrency={tourCurrency}
-                  tourName={(tour.name as string | null) ?? 'Budget'}
-                />
+                {/* Fix 3 — display-currency + Export moved up into the
+                    context band (BudgetContextBand), so they're reachable
+                    from every tab, not just above this grid. */}
                 <BudgetSpreadsheetView
                   lines={lines}
                   sections={sections}

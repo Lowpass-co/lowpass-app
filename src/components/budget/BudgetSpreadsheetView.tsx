@@ -34,7 +34,6 @@ import {
   Download,
   ExternalLink,
   Filter,
-  GripVertical,
   Lock,
   Paperclip,
   PanelRightOpen,
@@ -53,7 +52,7 @@ import {
 } from '@/components/budget/useBudgetGridSizing';
 import { useToast } from '@/components/ui/Toast';
 import { convertToCurrency } from '@/lib/budget/fx';
-import { useBudgetDensity } from '@/components/budget/BudgetDensityContext';
+import { useAppDensity } from '@/lib/density/appDensity';
 import { getEffectiveActual, getActualState } from '@/lib/budget/transactions';
 import { isIncomeRow, varianceColor } from '@/lib/budget/income-rows';
 import { isUx14DerivedBudgetLine } from '@/lib/budget/budgetUx14Derived';
@@ -230,7 +229,6 @@ const COLUMN_META: Record<
 
 /** Default canvas cap — the grid reads as a focused sheet by default
  *  and can be dragged wider (persisted) via the right-edge handle. */
-const DEFAULT_CANVAS_WIDTH = 1120;
 
 export interface BudgetSpreadsheetViewProps {
   lines: BudgetLineItem[];
@@ -1299,20 +1297,22 @@ export function BudgetSpreadsheetView({
         })}
       </div>
 
-      {/* Phase C — resizable canvas (drag the right edge to widen) +
-          dense spreadsheet with resizable columns. */}
+      {/* Grid-system parity — fill the container width and render as one
+          elevated panel, matching <SpreadsheetGrid>. No 1120px canvas cap,
+          no left-align confinement; columns stay individually resizable. */}
       <div
         style={{
           position: 'relative',
-          width: sizing.canvasWidth ?? DEFAULT_CANVAS_WIDTH,
-          maxWidth: '100%',
+          width: '100%',
         }}
       >
         <div
-          className="overflow-x-auto rounded-md border"
+          className="w-full overflow-x-auto rounded-xl border"
           style={{
             borderColor: 'var(--lp-border-strong)',
             background: 'var(--lp-bg)',
+            boxShadow: 'var(--lp-shadow-sm)',
+            fontVariantNumeric: 'tabular-nums',
           }}
         >
           <table
@@ -1435,8 +1435,6 @@ export function BudgetSpreadsheetView({
             </tbody>
           </table>
         </div>
-        {/* Canvas widen handle — drag the right edge. */}
-        <CanvasResizeHandle onPointerDown={sizing.startCanvasResize} />
       </div>
 
       {/* Quick Add */}
@@ -1746,60 +1744,6 @@ function ColumnResizeHandle({
 
 /* BUD-17 — canvas widen handle on the grid's right edge. A small grip
    pill, subtle at rest, brand-orange on hover. */
-function CanvasResizeHandle({
-  onPointerDown,
-}: {
-  onPointerDown: (e: React.PointerEvent) => void;
-}) {
-  const [hover, setHover] = useState(false);
-  return (
-    <span
-      role="separator"
-      aria-orientation="vertical"
-      aria-label="Widen the grid (drag)"
-      title="Drag to widen the grid"
-      onPointerDown={onPointerDown}
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      style={{
-        position: 'absolute',
-        top: 0,
-        right: -7,
-        height: '100%',
-        width: 14,
-        cursor: 'col-resize',
-        touchAction: 'none',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        zIndex: 2,
-      }}
-    >
-      <span
-        aria-hidden
-        className="btn-transition"
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          height: 34,
-          width: 14,
-          borderRadius: 7,
-          border: '1px solid',
-          borderColor: hover ? 'var(--color-lp-orange)' : 'var(--lp-border-strong)',
-          background: hover
-            ? 'color-mix(in srgb, var(--color-lp-orange) 14%, var(--lp-surface))'
-            : 'var(--lp-surface)',
-          color: hover ? 'var(--color-lp-orange)' : 'var(--lp-text-tertiary)',
-          boxShadow: 'var(--lp-shadow-sm)',
-        }}
-      >
-        <GripVertical className="h-3.5 w-3.5" />
-      </span>
-    </span>
-  );
-}
-
 interface GroupRowsProps {
   group: {
     id: string;
@@ -2664,7 +2608,7 @@ function Td({
      across modes (column widths are fixed). The .lp-mono
      class on numeric cells will pick up the larger numeric
      size from globals.css's .lp-mono override (see below). */
-  const { density } = useBudgetDensity();
+  const { density } = useAppDensity();
   return (
     <td
       onClick={onClick}

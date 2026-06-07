@@ -25,11 +25,13 @@ import {
 interface OperationsSubNavClientProps {
   tourId: string;
   links: OperationsSubNavLink[];
+  leftSlot?: React.ReactNode;
 }
 
 export function OperationsSubNavClient({
   tourId,
   links,
+  leftSlot,
 }: OperationsSubNavClientProps) {
   const pathname = usePathname() ?? '';
   // Strip the /operations/[tourId] prefix; whatever remains is
@@ -44,5 +46,12 @@ export function OperationsSubNavClient({
       activeSlug = seg;
     }
   }
-  return <OperationsSubNav tourId={tourId} activeSlug={activeSlug} links={links} />;
+  return (
+    <OperationsSubNav
+      tourId={tourId}
+      activeSlug={activeSlug}
+      links={links}
+      leftSlot={leftSlot}
+    />
+  );
 }

@@ -17,6 +17,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { BudgetCellInput } from '@/components/budget/cells/BudgetCellInput';
 import { useToast } from '@/components/ui/Toast';
+import { useAppDensity } from '@/lib/density/appDensity';
 
 interface IncomeRow {
   routing_id: string;
@@ -75,6 +76,7 @@ export function BudgetIncomeTab({
   tourCurrency: string;
 }) {
   const { showToast } = useToast();
+  const { density } = useAppDensity();
   const cur = (tourCurrency || 'GBP').toUpperCase();
   const [rows, setRows] = useState<IncomeRow[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -269,8 +271,13 @@ export function BudgetIncomeTab({
         </div>
       ) : (
         <div
-          className="overflow-x-auto rounded-md border"
-          style={{ borderColor: 'var(--lp-border-strong)', background: 'var(--lp-bg)' }}
+          className="w-full overflow-x-auto rounded-xl border"
+          style={{
+            borderColor: 'var(--lp-border-strong)',
+            background: 'var(--lp-bg)',
+            boxShadow: 'var(--lp-shadow-sm)',
+            fontVariantNumeric: 'tabular-nums',
+          }}
         >
           <table
             className="lp-dense w-full"
@@ -312,7 +319,10 @@ export function BudgetIncomeTab({
                       r.actual_merch +
                       r.actual_vip;
                 const td: React.CSSProperties = {
-                  padding: '4px 8px',
+                  // Grid-system parity — row size + type follow the shared
+                  // app density (Compact / Comfortable / Spacious).
+                  padding: `var(--lp-row-cell-padding-y-${density}) 8px`,
+                  fontSize: `var(--lp-cell-font-size-${density})`,
                   borderBottom: '1px solid var(--lp-border-subtle)',
                   textAlign: 'right',
                 };

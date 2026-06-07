@@ -110,7 +110,7 @@ export async function ProductHeader({
 
   return (
     <header
-      className="lp-product-header flex h-12 shrink-0 items-center gap-3 border-b px-4"
+      className="lp-product-header flex h-14 shrink-0 items-center gap-3 border-b px-4"
       style={{
         background: 'var(--lp-panel)',
         borderColor: 'var(--lp-border-strong)',
