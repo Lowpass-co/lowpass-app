@@ -15,6 +15,7 @@ import { NextResponse } from 'next/server';
 import Anthropic from '@anthropic-ai/sdk';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { GENERATOR_MODEL, SYSTEM_PROMPT, sanitizeSvgBody, isValidViewBox, isValidDim } from '@/lib/stage-plot/icon-generator';
+import { withAiUsage, aiCapExceededResponse } from '@/lib/ai/usage';
 
 const RATE_MS = 10_000;
 const lastGen = new Map<string, number>();
@@ -123,16 +124,33 @@ export async function POST(request: Request) {
     ? [imageBlock, { type: 'text', text: userText }]
     : userText;
 
-  const client = new Anthropic({ apiKey });
-
   try {
-    const response = await client.messages.create({
-      model: GENERATOR_MODEL,
-      max_tokens: 1500,
-      // Big static style guide cached so repeated generations are cheap.
-      system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
-      messages: [{ role: 'user', content }],
-    });
+    // Security audit §H2/§AI — route this Sonnet call through the shared
+    // usage wrapper so it is cap-checked (per-user hard cap + workspace
+    // monthly budget) and logged to ai_usage_events like every other
+    // Anthropic call. It previously called Anthropic directly, uncapped —
+    // the only AI endpoint that bypassed the meter.
+    const gen = await withAiUsage(
+      {
+        workspaceId: profile.workspace_id,
+        userId: user.id,
+        endpoint: 'stage-plot.icons.generate',
+        model: GENERATOR_MODEL,
+        metadata: { label, category },
+      },
+      async (anthropic) => {
+        const r = await anthropic.messages.create({
+          model: GENERATOR_MODEL,
+          max_tokens: 1500,
+          // Big static style guide cached so repeated generations are cheap.
+          system: [{ type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
+          messages: [{ role: 'user', content }],
+        });
+        return { result: r, usage: r.usage };
+      },
+    );
+    if (gen.blocked) return aiCapExceededResponse(gen.blockReason!);
+    const response = gen.result!;
 
     const first = response.content[0];
     const text = first && first.type === 'text' ? first.text : '';

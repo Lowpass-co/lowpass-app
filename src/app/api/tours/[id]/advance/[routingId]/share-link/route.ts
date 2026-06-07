@@ -40,7 +40,7 @@ export async function POST(
 
   if (!hasAdvanceShareSecret()) {
     return NextResponse.json(
-      { error: 'Set ADVANCE_SHARE_HMAC_SECRET or SUPABASE_SERVICE_ROLE_KEY so share links can be signed.' },
+      { error: 'Set ADVANCE_SHARE_HMAC_SECRET (a dedicated random secret) so share links can be signed.' },
       { status: 503 },
     );
   }

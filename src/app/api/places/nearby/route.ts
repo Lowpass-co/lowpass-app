@@ -6,6 +6,7 @@
    ============================================ */
 
 import { NextResponse } from 'next/server';
+import { guardGoogleCall, logGoogleCall } from '@/lib/external/googleUsage';
 
 const VALID_TYPES = ['hospital', 'pharmacy', 'laundromat', 'gym'] as const;
 const GOOGLE_TYPE_MAP: Record<(typeof VALID_TYPES)[number], string> = {
@@ -35,6 +36,10 @@ function haversineDistanceMeters(
 }
 
 export async function GET(request: Request) {
+  // Security audit §H2 — authenticate + rate-limit + meter (was open).
+  const g = await guardGoogleCall('google.places.nearby');
+  if (!g.ok) return g.response;
+
   const key = process.env.GOOGLE_PLACES_API_KEY;
   if (!key) {
     return NextResponse.json({ error: 'Places API not configured' }, { status: 503 });
@@ -76,6 +81,7 @@ export async function GET(request: Request) {
       rankPreference: 'DISTANCE',
     }),
   });
+  await logGoogleCall(g.ctx, res.ok ? 'ok' : 'error');
 
   if (!res.ok) {
     const err = await res.text();

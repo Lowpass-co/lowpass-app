@@ -6,8 +6,13 @@
    ============================================ */
 
 import { NextResponse } from 'next/server';
+import { guardGoogleCall, logGoogleCall } from '@/lib/external/googleUsage';
 
 export async function GET(request: Request) {
+  // Security audit §H2 — authenticate + rate-limit + meter (was open).
+  const g = await guardGoogleCall('google.geocode');
+  if (!g.ok) return g.response;
+
   const key = process.env.GOOGLE_PLACES_API_KEY;
   if (!key) {
     return NextResponse.json({ error: 'Geocoding not configured' }, { status: 503 });
@@ -21,6 +26,7 @@ export async function GET(request: Request) {
 
   const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${key}`;
   const res = await fetch(url);
+  await logGoogleCall(g.ctx, res.ok ? 'ok' : 'error');
   if (!res.ok) {
     return NextResponse.json({ error: 'Geocode failed' }, { status: 502 });
   }

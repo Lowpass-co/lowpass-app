@@ -5,9 +5,17 @@ import { createHmac, timingSafeEqual } from 'crypto';
 const PREFIX = 'lpa1';
 
 function secret(): string {
-  const s = process.env.ADVANCE_SHARE_HMAC_SECRET ?? process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!s) return '';
-  return s;
+  /* Security audit §M2 — share links are signed with a DEDICATED secret,
+     never the Supabase service-role key. Reusing the database master key
+     as an HMAC signing secret widened its blast radius and coupled link
+     signing to the most sensitive credential we hold. Set
+     ADVANCE_SHARE_HMAC_SECRET (a long random string) in every environment
+     that issues share links. If unset, signing is disabled (the route
+     returns 503) rather than silently falling back to the master key.
+
+     NOTE: dropping the fallback invalidates any links previously signed
+     with the service-role key. Issue fresh links after setting the env. */
+  return process.env.ADVANCE_SHARE_HMAC_SECRET ?? '';
 }
 
 export function hasAdvanceShareSecret(): boolean {

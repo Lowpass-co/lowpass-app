@@ -9,6 +9,59 @@ const nextConfig: NextConfig = {
       { protocol: 'https', hostname: 'lh3.googleusercontent.com' },
     ],
   },
+  // ============================================
+  // Security audit §H1 — HTTP security headers
+  //
+  // ENFORCED (safe, will not break rendering):
+  //   HSTS, X-Frame-Options + CSP frame-ancestors (clickjacking),
+  //   nosniff, Referrer-Policy, Permissions-Policy.
+  //
+  // CSP for script/style/img/connect is shipped as REPORT-ONLY so it
+  // cannot white-screen the app. Watch the browser console / a report
+  // collector for violations, tighten the directives, then graduate it
+  // to an enforced `Content-Security-Policy` by renaming the header
+  // (drop "-Report-Only") and removing 'unsafe-inline'/'unsafe-eval'
+  // once a nonce strategy is in place. See AUDIT handoff notes.
+  // ============================================
+  async headers() {
+    const reportOnlyCsp = [
+      "default-src 'self'",
+      // Next.js App Router injects inline bootstrap scripts; until a nonce
+      // strategy is wired, 'unsafe-inline' is required. Report-only first.
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+      "style-src 'self' 'unsafe-inline'",
+      "img-src 'self' data: blob: https:",
+      "font-src 'self' data:",
+      "connect-src 'self' https://*.supabase.co wss://*.supabase.co https://*.googleapis.com https://places.googleapis.com https://maps.googleapis.com",
+      "frame-ancestors 'self'",
+      "base-uri 'self'",
+      "form-action 'self'",
+      "object-src 'none'",
+    ].join('; ');
+
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          {
+            key: 'Strict-Transport-Security',
+            value: 'max-age=63072000; includeSubDomains; preload',
+          },
+          { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          {
+            key: 'Permissions-Policy',
+            value: 'camera=(), microphone=(), geolocation=(), browsing-topics=()',
+          },
+          // Enforced clickjacking control (safe to enforce on its own).
+          { key: 'Content-Security-Policy', value: "frame-ancestors 'self'" },
+          // Everything else observed, not enforced — see comment above.
+          { key: 'Content-Security-Policy-Report-Only', value: reportOnlyCsp },
+        ],
+      },
+    ];
+  },
   async redirects() {
     return [
       // ============================================

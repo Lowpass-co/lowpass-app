@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { guardGoogleCall, logGoogleCall } from '@/lib/external/googleUsage';
 
 /**
  * GET /api/equipment/find-image?q=ITEM_NAME
@@ -14,6 +15,10 @@ import { NextRequest, NextResponse } from 'next/server';
  * “not configured” or Google errors as transport failures.
  */
 export async function GET(req: NextRequest) {
+  // Security audit §H2 — authenticate + rate-limit + meter (was open).
+  const g = await guardGoogleCall('google.cse.find-image');
+  if (!g.ok) return g.response;
+
   const q = req.nextUrl.searchParams.get('q')?.trim();
   if (!q) {
     return NextResponse.json({ imageUrl: null, code: 'BAD_REQUEST' as const, message: 'Missing query' }, { status: 400 });
@@ -51,12 +56,14 @@ export async function GET(req: NextRequest) {
   try {
     res = await fetch(url.toString());
   } catch {
+    await logGoogleCall(g.ctx, 'error');
     return NextResponse.json({
       imageUrl: null,
       code: 'GOOGLE_CSE_ERROR' as const,
       message: 'Network error reaching Google.',
     });
   }
+  await logGoogleCall(g.ctx, res.ok ? 'ok' : 'error');
 
   let data: { items?: { link?: string }[]; error?: { message?: string } };
   try {

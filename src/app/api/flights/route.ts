@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { jsonError } from '@/lib/http/errors';
 
 export async function GET(request: Request) {
   const supabase = await createServerSupabaseClient();
@@ -26,7 +27,7 @@ export async function GET(request: Request) {
 
   const { data, error } = await dbQuery;
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return jsonError('flights.list', error);
   return NextResponse.json({ flights: data ?? [] });
 }
 
@@ -49,17 +50,30 @@ export async function POST(request: Request) {
     .single();
   if (!profile?.workspace_id) return NextResponse.json({ error: 'No workspace' }, { status: 403 });
 
+  // Security audit §M1 — whitelist writable columns instead of spreading
+  // the raw body (which allowed mass-assignment of id/created_at/etc.), and
+  // ALWAYS force workspace_id to the caller's own workspace. Cross-tenant
+  // writes were already blocked by the flights_insert RLS WITH CHECK, but
+  // trusting body.workspace_id + ...body was a defense-in-depth failure.
+  const WRITABLE = [
+    'tour_id', 'show_id', 'airline', 'flight_number', 'pnr',
+    'origin_airport', 'destination_airport', 'depart_at', 'arrive_at',
+    'cost_amount', 'cost_currency', 'passenger_ids', 'notes',
+  ] as const;
+  const insertRow: Record<string, unknown> = {};
+  for (const k of WRITABLE) {
+    if (k in body) insertRow[k] = body[k];
+  }
+  insertRow.workspace_id = profile.workspace_id; // never from body
+  insertRow.created_by = user.id;
+  insertRow.updated_by = user.id;
+
   const { data, error } = await supabase
     .from('flights')
-    .insert({
-      ...body,
-      workspace_id: (body.workspace_id as string | undefined) ?? profile.workspace_id,
-      created_by: user.id,
-      updated_by: user.id,
-    })
+    .insert(insertRow)
     .select('*')
     .single();
 
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error) return jsonError('flights.create', error);
   return NextResponse.json(data);
 }
