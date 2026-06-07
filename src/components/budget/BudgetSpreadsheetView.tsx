@@ -304,7 +304,6 @@ export function BudgetSpreadsheetView({
   const displayCurrency = (
     searchParams.get('display') ?? tourCurrency
   ).toUpperCase();
-  const categoryFilter = searchParams.get('category');
 
   const [statusFilter, setStatusFilter] = useState<StatusValue>(null);
   const [search, setSearch] = useState('');
@@ -463,9 +462,6 @@ export function BudgetSpreadsheetView({
       if (statusFilter && (line.status ?? '').toLowerCase() !== statusFilter) {
         return false;
       }
-      if (categoryFilter && (line.category ?? '').toLowerCase() !== categoryFilter.toLowerCase()) {
-        return false;
-      }
       if (q) {
         const hay = [
           line.label,
@@ -480,7 +476,7 @@ export function BudgetSpreadsheetView({
       }
       return true;
     });
-  }, [allLines, phaseFilter, statusFilter, categoryFilter, search, dateMap, phases]);
+  }, [allLines, phaseFilter, statusFilter, search, dateMap, phases]);
 
   const sectionsSorted = useMemo(
     () =>
@@ -1362,6 +1358,32 @@ export function BudgetSpreadsheetView({
             router.refresh();
           }}
           onApplyAmount={() => setOpenLine(null)}
+          onTransactionsChanged={(lineId, sum, count) => {
+            // Phase 4.3 — mirror the auto-synced actual into the grid's
+            // optimistic overlay (Actual cell + section subtotals update
+            // instantly) and the open line — NO router.refresh.
+            setOptimistic((prev) => ({
+              ...prev,
+              [lineId]: {
+                ...prev[lineId],
+                actual_cost: sum,
+                transaction_sum: sum,
+                transaction_count: count,
+                actual_cost_override: false,
+              },
+            }));
+            setOpenLine((cur) =>
+              cur && cur.id === lineId
+                ? ({
+                    ...cur,
+                    actual_cost: sum,
+                    transaction_sum: sum,
+                    transaction_count: count,
+                    actual_cost_override: false,
+                  } as BudgetLineItem)
+                : cur,
+            );
+          }}
         />
       ) : null}
 
@@ -1727,7 +1749,9 @@ function GroupRows({
             padding: '6px 12px',
           }}
         >
-          <div className="flex items-center justify-between gap-3">
+          {/* Phase 4.5 — subtotal sits beside the name + trash (left),
+              not drifting to the far right. */}
+          <div className="flex items-center gap-3">
             <div className="flex min-w-0 items-center gap-1.5">
               {/* Phase C — real sections get an inline-editable name +
                   delete; phase / legacy buckets stay read-only. */}
@@ -1804,7 +1828,7 @@ function GroupRows({
               ) : null}
             </div>
             <span
-              className="lp-mono"
+              className="lp-mono shrink-0"
               style={{
                 fontSize: '11px',
                 color: 'var(--lp-text-tertiary)',

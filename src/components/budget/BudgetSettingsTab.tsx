@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
 import { useBudgetConfirm } from '@/components/budget/BudgetConfirmDialog';
+import { useTrackPhases } from '@/components/budget/BudgetTrackPhasesContext';
 import { InlineSelectCell } from '@/components/budget/cells/InlineSelectCell';
 import type {
   BudgetSection,
@@ -57,15 +58,13 @@ const inputStyle: React.CSSProperties = {
 export function BudgetSettingsTab({
   tourId,
   sections,
-  trackPhases,
 }: {
   tourId: string;
   sections: BudgetSection[];
-  trackPhases: boolean;
 }) {
   return (
     <div className="mx-auto w-full max-w-[820px] space-y-5 py-2">
-      <PhaseToggleCard tourId={tourId} trackPhases={trackPhases} />
+      <PhaseToggleCard />
       <OverheadsCard tourId={tourId} />
       <TourSectionsCard tourId={tourId} sections={sections} />
       <TemplatesCard tourId={tourId} />
@@ -235,39 +234,14 @@ function OverheadsCard({ tourId }: { tourId: string }) {
 /* -------------------------------------------------- */
 /* 1. Phase tracking toggle                            */
 /* -------------------------------------------------- */
-function PhaseToggleCard({
-  tourId,
-  trackPhases,
-}: {
-  tourId: string;
-  trackPhases: boolean;
-}) {
-  const router = useRouter();
-  const { showToast } = useToast();
-  const [busy, setBusy] = useState(false);
-  const [on, setOn] = useState(trackPhases);
+function PhaseToggleCard() {
+  // Phase 4.2 — the toggle now drives the SHARED track-phases context.
+  // Flipping it optimistically animates the phase strip above the tabs
+  // (BudgetPhaseStripGate) and persists in the background — no
+  // router.refresh(), so the grid + tab state don't flash.
+  const { trackPhases: on, setTrackPhases, busy } = useTrackPhases();
 
-  useEffect(() => setOn(trackPhases), [trackPhases]);
-
-  const toggle = async () => {
-    const next = !on;
-    setOn(next);
-    setBusy(true);
-    try {
-      const res = await fetch('/api/budget/settings', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tour_id: tourId, track_phases: next }),
-      });
-      if (!res.ok) throw new Error(`Save failed (${res.status})`);
-      router.refresh();
-    } catch (err) {
-      setOn(!next);
-      showToast(err instanceof Error ? err.message : 'Save failed', 'error');
-    } finally {
-      setBusy(false);
-    }
-  };
+  const toggle = () => setTrackPhases(!on);
 
   return (
     <section className="rounded-lg border p-4" style={cardStyle}>
@@ -658,17 +632,46 @@ function TemplatesCard({ tourId }: { tourId: string }) {
                 className="rounded-md border"
                 style={{ borderColor: 'var(--lp-border)', background: 'var(--lp-bg)' }}
               >
+                {/* Phase 4.4 — uniform row: leading disclosure column
+                    (chevron for editable templates, spacer for system so
+                    names align) · name + badge · fixed action group
+                    [Apply][Copy][Trash-or-spacer] in a constant order so
+                    the chevron no longer shoves "Apply to tour". */}
                 <div className="flex items-center gap-2 px-3 py-2">
+                  {/* leading disclosure — keeps a constant 28px gutter on
+                      every row whether or not it expands. */}
+                  {t.is_system ? (
+                    <span className="shrink-0" style={{ width: 28 }} aria-hidden />
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setExpanded(isOpen ? null : t.id)}
+                      aria-label={isOpen ? 'Collapse' : 'Edit template'}
+                      aria-expanded={isOpen}
+                      className="btn-transition shrink-0 rounded-md p-1.5"
+                      style={{ color: 'var(--lp-text-secondary)' }}
+                    >
+                      {isOpen ? (
+                        <ChevronDown className="h-4 w-4" aria-hidden />
+                      ) : (
+                        <ChevronRight className="h-4 w-4" aria-hidden />
+                      )}
+                    </button>
+                  )}
+
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       {/* BUD-19 — your templates rename inline; system
-                          presets are read-only. */}
+                          presets are read-only. Matching padding so the
+                          plain span and the ghost input share a baseline. */}
                       {t.is_system ? (
                         <span
                           style={{
                             fontSize: 'var(--lp-text-base)',
                             fontWeight: 'var(--lp-weight-medium)',
                             color: 'var(--lp-text)',
+                            border: '1px solid transparent',
+                            padding: 'var(--lp-space-1) var(--lp-space-2)',
                           }}
                         >
                           {t.name}
@@ -677,22 +680,16 @@ function TemplatesCard({ tourId }: { tourId: string }) {
                         <InlineText
                           value={t.name}
                           title="Click to rename"
-                          /* Fix-pack B Task 4a — subtle bordered box so it
-                             reads as an editable field. */
                           style={{
                             fontSize: 'var(--lp-text-base)',
                             fontWeight: 'var(--lp-weight-medium)',
-                            border: '1px solid var(--lp-border)',
-                            background: 'var(--lp-bg)',
-                            borderRadius: 'var(--lp-radius-md)',
-                            padding: 'var(--lp-space-1) var(--lp-space-2)',
                             minWidth: 0,
                           }}
                           onCommit={(name) => void renameTemplate(t.id, name)}
                         />
                       )}
                       <span
-                        className="rounded-full px-1.5 py-0.5"
+                        className="shrink-0 rounded-full px-1.5 py-0.5"
                         style={{
                           ...labelStyle,
                           background: t.is_system
@@ -716,11 +713,12 @@ function TemplatesCard({ tourId }: { tourId: string }) {
                     ) : null}
                   </div>
 
+                  {/* Constant-order action group on every row. */}
                   <button
                     type="button"
                     disabled={busy !== null}
                     onClick={() => void apply(t.id)}
-                    className="btn-transition rounded-md px-2.5 py-1"
+                    className="btn-transition shrink-0 rounded-md px-2.5 py-1"
                     style={{
                       border: '1px solid var(--color-lp-orange)',
                       color: 'var(--color-lp-orange)',
@@ -736,44 +734,43 @@ function TemplatesCard({ tourId }: { tourId: string }) {
                     )}
                   </button>
 
+                  {/* Phase 4.4 — Copy on EVERY template (system clones to a
+                      workspace copy; custom duplicates itself). */}
+                  <button
+                    type="button"
+                    disabled={busy !== null}
+                    onClick={() => void clone(t)}
+                    title={
+                      t.is_system
+                        ? 'Clone into your workspace'
+                        : 'Duplicate this template'
+                    }
+                    aria-label={t.is_system ? 'Clone template' : 'Duplicate template'}
+                    className="btn-transition shrink-0 rounded-md p-1.5"
+                    style={{ color: 'var(--lp-text-secondary)' }}
+                  >
+                    {busy === `clone-${t.id}` ? (
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                    ) : (
+                      <Copy className="h-4 w-4" aria-hidden />
+                    )}
+                  </button>
+
+                  {/* Trash only for editable templates; system keeps a
+                      same-width spacer so the action group stays aligned. */}
                   {t.is_system ? (
+                    <span className="shrink-0" style={{ width: 28 }} aria-hidden />
+                  ) : (
                     <button
                       type="button"
                       disabled={busy !== null}
-                      onClick={() => void clone(t)}
-                      title="Clone into your workspace"
-                      aria-label="Clone template"
-                      className="btn-transition rounded-md p-1.5"
-                      style={{ color: 'var(--lp-text-secondary)' }}
+                      onClick={() => void remove(t)}
+                      aria-label="Delete template"
+                      className="btn-transition shrink-0 rounded-md p-1.5"
+                      style={{ color: 'var(--lp-text-tertiary)' }}
                     >
-                      <Copy className="h-4 w-4" aria-hidden />
+                      <Trash2 className="h-4 w-4" aria-hidden />
                     </button>
-                  ) : (
-                    <>
-                      <button
-                        type="button"
-                        onClick={() => setExpanded(isOpen ? null : t.id)}
-                        aria-label={isOpen ? 'Collapse' : 'Edit template'}
-                        className="btn-transition rounded-md p-1.5"
-                        style={{ color: 'var(--lp-text-secondary)' }}
-                      >
-                        {isOpen ? (
-                          <ChevronDown className="h-4 w-4" aria-hidden />
-                        ) : (
-                          <ChevronRight className="h-4 w-4" aria-hidden />
-                        )}
-                      </button>
-                      <button
-                        type="button"
-                        disabled={busy !== null}
-                        onClick={() => void remove(t)}
-                        aria-label="Delete template"
-                        className="btn-transition rounded-md p-1.5"
-                        style={{ color: 'var(--lp-text-tertiary)' }}
-                      >
-                        <Trash2 className="h-4 w-4" aria-hidden />
-                      </button>
-                    </>
                   )}
                 </div>
 
@@ -965,7 +962,12 @@ function TemplateEditor({ templateId }: { templateId: string }) {
 }
 
 /* Small inline-editable text field (click → edit, Enter/blur commit,
-   Escape cancel; skips unchanged/empty). */
+   Escape cancel; skips unchanged/empty).
+
+   Phase 4.4 — "ghost" affordance: reads as plain text at rest, reveals a
+   bordered input on hover/focus so it doesn't look like a permanently-
+   cheap text box. Border + background are transparent until interacted
+   with; both transition smoothly. */
 function InlineText({
   value,
   onCommit,
@@ -978,6 +980,7 @@ function InlineText({
   title?: string;
 }) {
   const [draft, setDraft] = useState(value);
+  const [active, setActive] = useState(false); // hover OR focus
   // Resync the field when the server value changes (e.g. after refresh).
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => setDraft(value), [value]);
@@ -995,7 +998,14 @@ function InlineText({
       aria-label="Edit name"
       title={title}
       onChange={(e) => setDraft(e.target.value)}
-      onBlur={commit}
+      onMouseEnter={() => setActive(true)}
+      onMouseLeave={() => setActive(false)}
+      onFocus={() => setActive(true)}
+      onBlur={(e) => {
+        setActive(false);
+        commit();
+        void e;
+      }}
       onKeyDown={(e) => {
         if (e.key === 'Enter') {
           e.preventDefault();
@@ -1006,7 +1016,18 @@ function InlineText({
           (e.target as HTMLInputElement).blur();
         }
       }}
-      style={{ color: 'var(--lp-text)', outline: 'none', ...style }}
+      style={{
+        color: 'var(--lp-text)',
+        outline: 'none',
+        border: '1px solid',
+        borderColor: active ? 'var(--lp-border-strong)' : 'transparent',
+        background: active ? 'var(--lp-surface)' : 'transparent',
+        borderRadius: 'var(--lp-radius-md)',
+        padding: 'var(--lp-space-1) var(--lp-space-2)',
+        transition:
+          'border-color var(--lp-duration-fast) var(--lp-ease-standard), background var(--lp-duration-fast) var(--lp-ease-standard)',
+        ...style,
+      }}
     />
   );
 }

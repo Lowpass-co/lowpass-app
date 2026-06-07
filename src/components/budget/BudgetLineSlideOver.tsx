@@ -26,7 +26,6 @@ import {
 } from '@/lib/budget/budgetUx14Derived';
 import { TransactionsSection } from '@/components/budget/TransactionsSection';
 import { CurrencyNumericInput } from '@/components/budget/cells/CurrencyNumericInput';
-import { CategoryChipDropdown } from '@/components/budget/cells/CategoryChip';
 import { InlineSelectCell } from '@/components/budget/cells/InlineSelectCell';
 import { getActualState } from '@/lib/budget/transactions';
 import { isIncomeRow, varianceColor } from '@/lib/budget/income-rows';
@@ -182,6 +181,9 @@ type BudgetLineSlideOverProps = {
    *  parent (BudgetMainTable) can prepend the new row optimistically.
    *  router.refresh() still fires for canonical sync. */
   onSaved?: (line: BudgetLineItem) => void;
+  /** Phase 4.3 — transactions changed: (lineId, new sum, new count).
+   *  The grid mirrors actual_cost optimistically (no router.refresh). */
+  onTransactionsChanged?: (lineId: string, sum: number, count: number) => void;
   /** kept for backwards-compat with older callers; no-ops on save now. */
   onApplyAmount?: (amount: number) => void;
 };
@@ -195,6 +197,7 @@ export function BudgetLineSlideOver({
   open = true,
   onExitComplete,
   onSaved,
+  onTransactionsChanged,
 }: BudgetLineSlideOverProps) {
   const router = useRouter();
   const { showToast } = useToast();
@@ -497,13 +500,13 @@ export function BudgetLineSlideOver({
     textTransform: 'uppercase',
   };
 
-  // F2.3: drop the redundant header title. The big label input below
-  // IS the canonical title — passing an empty string + the live
-  // category/cost as the only header line keeps context without
-  // showing the same name twice.
+  // F2.3 / Phase 4.1: header subtitle is the line's SECTION + cost
+  // (category retired). The big label input below is the canonical title.
   const subtitleSummary = (
     <>
-      {isCreate ? 'New line item' : (fields.category || '—').replace(/_/g, ' ')}
+      {isCreate
+        ? 'New line item'
+        : (sections.find((s) => s.id === fields.section_id)?.name ?? 'Uncategorised')}
       {' · '}
       {Number(fields.proposed_cost ?? 0).toLocaleString('en-GB', {
         style: 'currency',
@@ -512,10 +515,6 @@ export function BudgetLineSlideOver({
       })}
     </>
   );
-
-  /* §B3.1 — categoryOptions memo retired with the select.
-     <CategoryChipDropdown> handles the (custom) legacy-value
-     surfacing internally via lib/budget/category-colors. */
 
   /* Section divider — applied to every group below the first so the
      form reads as labelled bands rather than one undifferentiated
@@ -685,19 +684,10 @@ export function BudgetLineSlideOver({
               onCommit={(v) => setField('section_id', v)}
             />
           </div>
-          <div className="grid grid-cols-3 gap-3">
-            <label className="block space-y-1.5">
-              <span style={labelStyle}>Category</span>
-              {/* §B3.1 — chip + dropdown replaces the plain
-                  select. Legacy / custom categories surface at
-                  the top of the menu as "(custom)" options so
-                  the row's stored value isn't clobbered. */}
-              <CategoryChipDropdown
-                value={fields.category || 'misc'}
-                onChange={(v) => setField('category', v)}
-                size="md"
-              />
-            </label>
+          {/* Phase 4.1 — Category retired from the UI. Section (above)
+              is the only grouping control; `category` still persists in
+              the DB (defaulted on create) but is no longer user-facing. */}
+          <div className="grid grid-cols-2 gap-3">
             <div className="block space-y-1.5">
               {/* Phase 3 §D — phase tag dropdown. '' (Unscoped) maps
                   to NULL on the server; valid values mirror migration
@@ -900,7 +890,23 @@ export function BudgetLineSlideOver({
             <TransactionsSection
               lineItemId={line.id}
               currency={line.currency ?? null}
-              onChange={() => router.refresh()}
+              /* Phase 4.3 — optimistic: mirror the server's auto-synced
+                 actual locally (advance the baseline so the auto-save
+                 sees no diff → no PATCH) and tell the grid. The panel
+                 stays open; NO router.refresh. */
+              onChange={(sum, count) => {
+                setFields((cur) => ({
+                  ...cur,
+                  actual_cost: sum,
+                  actual_cost_override: false,
+                }));
+                baselineRef.current = {
+                  ...baselineRef.current,
+                  actual_cost: sum,
+                  actual_cost_override: false,
+                };
+                onTransactionsChanged?.(line.id, sum, count);
+              }}
               /* §B3.2 — parent line item's vendor (from notes
                  "Vendor: <name>" encoding) seeds new
                  transactions and surfaces at the top of each

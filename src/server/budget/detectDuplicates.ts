@@ -69,17 +69,20 @@ export function detectDuplicates(
       const b = lines[j];
       if (a.id === b.id) continue;
 
-      const aCat = (a.category ?? '').toString().toLowerCase();
-      const bCat = (b.category ?? '').toString().toLowerCase();
-      const sameCategory = !!aCat && !!bCat && aCat === bCat;
+      // Phase 4.1 — section_id is the grouping source now (not the
+      // retired free-text category). Two lines in the same section are
+      // the "same bucket" signal.
+      const aSec = (a.section_id ?? '').toString();
+      const bSec = (b.section_id ?? '').toString();
+      const sameSection = !!aSec && !!bSec && aSec === bSec;
 
       const aVendor = pickVendor(a);
       const bVendor = pickVendor(b);
       const sameVendor = aVendor != null && aVendor === bVendor;
 
-      // Need EITHER a same category OR a same vendor. Without one of
+      // Need EITHER the same section OR the same vendor. Without one of
       // those signals the amount + date overlap is too thin to flag.
-      if (!sameCategory && !sameVendor) continue;
+      if (!sameSection && !sameVendor) continue;
 
       const amtA = pickAmount(a);
       const amtB = pickAmount(b);

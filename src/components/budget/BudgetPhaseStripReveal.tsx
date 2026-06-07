@@ -11,6 +11,16 @@
 
 import type { ReactNode } from 'react';
 
+import { useTrackPhases } from './BudgetTrackPhasesContext';
+
+/** Context-driven gate (Phase 4.2). Reads the shared track-phases state
+ *  so flipping the Settings toggle animates the strip without a reload.
+ *  Seeded once from the server value via the provider. */
+export function BudgetPhaseStripGate({ children }: { children: ReactNode }) {
+  const { trackPhases } = useTrackPhases();
+  return <BudgetPhaseStripReveal visible={trackPhases}>{children}</BudgetPhaseStripReveal>;
+}
+
 export function BudgetPhaseStripReveal({
   visible,
   children,

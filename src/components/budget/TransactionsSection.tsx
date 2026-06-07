@@ -52,6 +52,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { GripVertical, Loader2, Paperclip, Plus, Trash2 } from 'lucide-react';
 import { budgetCurrencySymbol } from '@/lib/budget-currency';
 import { VendorCombobox } from '@/components/budget/cells/VendorCombobox';
+import { useBudgetConfirm } from '@/components/budget/BudgetConfirmDialog';
 import type { BudgetLineItemTransaction } from '@/lib/budget/transactions';
 
 interface Props {
@@ -59,12 +60,10 @@ interface Props {
   /** Line item's currency; falls back to GBP. Transaction
    *  rows with a NULL currency inherit this. */
   currency?: string | null;
-  /** §A3 — fired after every successful POST / PATCH / DELETE
-   *  so the host slide-over can router.refresh() and pull the
-   *  newly auto-synced budget_line_items.actual_cost +
-   *  transaction_sum. Without this the ACTUAL field stays
-   *  stale and the override marker fails to update. */
-  onChange?: () => void;
+  /** Phase 4.3 — fired after every successful POST / PATCH(amount) /
+   *  DELETE with the new transaction (sum, count). The host updates the
+   *  line's actual optimistically — NO router.refresh, panel stays open. */
+  onChange?: (sum: number, count: number) => void;
   /** §B3.2 — parent line item's vendor (from notes encoding
    *  "Vendor: <name>"). New transactions seed with this value;
    *  the per-row VendorCombobox surfaces it at the top of the
@@ -83,6 +82,7 @@ export function TransactionsSection({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  const { requestConfirm, dialog: confirmDialog } = useBudgetConfirm();
 
   const tourCurrency = currency || 'GBP';
 
@@ -141,20 +141,24 @@ export function TransactionsSection({
         setError(json.error ?? 'Could not add transaction.');
         return;
       }
-      setRows((prev) => [...prev, json.transaction!]);
-      onChange?.();
+      const next = [...rows, json.transaction];
+      setRows(next);
+      onChange?.(sumOf(next), next.length);
     } finally {
       setAdding(false);
     }
-  }, [lineItemId, onChange, defaultVendor]);
+  }, [lineItemId, onChange, defaultVendor, rows]);
 
   /* Single PATCH for inline edits — optimistic local update
      then network. On failure, refetch to converge. */
   const patchRow = useCallback(
     async (id: string, patch: Partial<BudgetLineItemTransaction>) => {
-      setRows((prev) =>
-        prev.map((r) => (r.id === id ? ({ ...r, ...patch } as BudgetLineItemTransaction) : r)),
+      const next = rows.map((r) =>
+        r.id === id ? ({ ...r, ...patch } as BudgetLineItemTransaction) : r,
       );
+      setRows(next);
+      // Optimistic actual sync (no router.refresh) when the amount moves.
+      if (patch.amount !== undefined) onChange?.(sumOf(next), next.length);
       try {
         const res = await fetch(`/api/budget/transactions/${encodeURIComponent(id)}`, {
           method: 'PATCH',
@@ -167,38 +171,50 @@ export function TransactionsSection({
           void load();
           return;
         }
-        /* Notify parent so the slide-over's ACTUAL field can
-           refresh — server-side auto-sync may have updated
-           actual_cost when patch.amount changed. */
-        if (patch.amount !== undefined) onChange?.();
       } catch {
         setError('Network error saving transaction.');
         void load();
       }
     },
-    [load, onChange],
+    [load, onChange, rows],
   );
 
-  const deleteRow = useCallback(async (id: string) => {
-    if (!confirm('Delete this transaction?')) return;
-    const prev = rows;
-    setRows((rs) => rs.filter((r) => r.id !== id));
-    try {
-      const res = await fetch(`/api/budget/transactions/${encodeURIComponent(id)}`, {
-        method: 'DELETE',
+  const deleteRow = useCallback(
+    (id: string) => {
+      // Phase 4.3 / pitfall #10 — branded confirm, never window.confirm.
+      requestConfirm({
+        title: 'Delete transaction?',
+        message: 'Remove this vendor breakdown line? This can’t be undone.',
+        confirmLabel: 'Delete',
+        onConfirm: () => {
+          const prev = rows;
+          const next = rows.filter((r) => r.id !== id);
+          setRows(next);
+          onChange?.(sumOf(next), next.length);
+          void (async () => {
+            try {
+              const res = await fetch(
+                `/api/budget/transactions/${encodeURIComponent(id)}`,
+                { method: 'DELETE' },
+              );
+              if (!res.ok) {
+                const json = (await res.json().catch(() => ({}))) as { error?: string };
+                setError(json.error ?? 'Delete failed.');
+                setRows(prev);
+                onChange?.(sumOf(prev), prev.length);
+                return;
+              }
+            } catch {
+              setError('Network error deleting.');
+              setRows(prev);
+              onChange?.(sumOf(prev), prev.length);
+            }
+          })();
+        },
       });
-      if (!res.ok) {
-        const json = (await res.json().catch(() => ({}))) as { error?: string };
-        setError(json.error ?? 'Delete failed.');
-        setRows(prev);
-        return;
-      }
-      onChange?.();
-    } catch {
-      setError('Network error deleting.');
-      setRows(prev);
-    }
-  }, [rows, onChange]);
+    },
+    [rows, onChange, requestConfirm],
+  );
 
   /* Reorder: optimistic local move + PATCH /reorder for each
      affected row. Simple O(n) — fine for the small lists
@@ -293,6 +309,7 @@ export function TransactionsSection({
       {error && (
         <p className="mt-2 text-xs text-lp-error">{error}</p>
       )}
+      {confirmDialog}
     </div>
   );
 }
@@ -466,6 +483,9 @@ function TransactionRow({
     </div>
   );
 }
+
+const sumOf = (rs: BudgetLineItemTransaction[]): number =>
+  rs.reduce((s, r) => s + Number(r.amount || 0), 0);
 
 function formatCurrency(amount: number, code: string): string {
   try {

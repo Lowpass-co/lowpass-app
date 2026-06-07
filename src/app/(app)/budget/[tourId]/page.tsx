@@ -24,7 +24,8 @@ import type { Metadata } from 'next';
 
 import { MobileBudgetBanner } from '@/components/mobile/MobileBudgetBanner';
 import { BudgetPhaseStripClient } from '@/components/budget/BudgetPhaseStripClient';
-import { BudgetPhaseStripReveal } from '@/components/budget/BudgetPhaseStripReveal';
+import { BudgetPhaseStripGate } from '@/components/budget/BudgetPhaseStripReveal';
+import { BudgetTrackPhasesProvider } from '@/components/budget/BudgetTrackPhasesContext';
 import { BudgetStatsStrip } from '@/components/budget/BudgetStatsStrip';
 import { BudgetSpreadsheetView } from '@/components/budget/BudgetSpreadsheetView';
 import { BudgetIncomeTab } from '@/components/budget/BudgetIncomeTab';
@@ -209,14 +210,15 @@ export default async function BudgetTourPage({
        so the tab nav's density toggle + the grid + slide-over
        (when mounted) all share the same per-device preference. */
     <BudgetDensityProvider>
+    <BudgetTrackPhasesProvider tourId={tourId} initial={trackPhases}>
     <div className="flex min-h-0 flex-1 flex-col pb-24">
         <BudgetStatsStrip lines={lines} tourCurrency={tourCurrency} />
-        {/* Phase strip when this tour tracks phases (BUD-18). Kept mounted
-            inside the reveal wrapper so the toggle animates (Fix-pack B
-            Task 6 / #18) instead of flashing in/out. */}
-        <BudgetPhaseStripReveal visible={trackPhases}>
+        {/* Phase strip when this tour tracks phases (BUD-18). Phase 4.2 —
+            the gate reads the shared track-phases context so the Settings
+            toggle animates this strip without a router.refresh. */}
+        <BudgetPhaseStripGate>
           <BudgetPhaseStripClient phases={phases} />
-        </BudgetPhaseStripReveal>
+        </BudgetPhaseStripGate>
         <BudgetTabNav active={tab} />
 
         <div className="space-y-6 px-4 pt-4">
@@ -286,16 +288,13 @@ export default async function BudgetTourPage({
           ) : null}
 
           {tab === 'settings' ? (
-            <BudgetSettingsTab
-              tourId={tourId}
-              sections={sections}
-              trackPhases={trackPhases}
-            />
+            <BudgetSettingsTab tourId={tourId} sections={sections} />
           ) : null}
         </div>
 
         <MobileBudgetBanner />
     </div>
+    </BudgetTrackPhasesProvider>
     </BudgetDensityProvider>
   );
 }
