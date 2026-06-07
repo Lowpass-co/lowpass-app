@@ -27,8 +27,6 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   AlertTriangle,
-  ArrowDown,
-  ArrowUp,
   ChevronDown,
   Columns3,
   Download,
@@ -36,7 +34,6 @@ import {
   Filter,
   Lock,
   Paperclip,
-  PanelRightOpen,
   Plus,
   Search,
   Trash2,
@@ -130,13 +127,6 @@ const PHASE_TINT: Record<NonNullable<PhaseTag>, string> = {
   wrap: 'var(--lp-text-tertiary)', // muted gray
 };
 
-const QUICK_ADD_TEMPLATES = [
-  { label: 'Hotel Block', emoji: '🏨', category: 'accommodation', defaultLabel: 'Hotel block' },
-  { label: 'Freight', emoji: '🚛', category: 'logistics', defaultLabel: 'Freight' },
-  { label: 'Catering', emoji: '🍽', category: 'catering', defaultLabel: 'Catering' },
-  { label: 'Local Crew', emoji: '👷', category: 'crew', defaultLabel: 'Local crew' },
-] as const;
-
 /* §B1.2 — inline-edit option lists. Status can't be cleared back
    to null via the PATCH route (it validates against the 5 values),
    so the empty entry is a disabled placeholder only. Phase is
@@ -211,6 +201,21 @@ const GRID_COLUMNS: GridColumnDef[] = [
   { key: 'variance', width: 104, min: 72, resizable: true },
   { key: 'status', width: 104, min: 80, resizable: true },
 ];
+
+/* Proportional default widths — the data columns spread evenly across the
+   full container (no single flex-into-void column). Under tableLayout:fixed
+   + width:100% these act as ratios that fill the width after the fixed
+   select/# columns; a dragged column switches to its explicit px width.
+   (phase only shows when phase-tracking is on.) */
+const COLUMN_PCT: Record<string, number> = {
+  item: 26,
+  vendor: 18,
+  phase: 11,
+  estimate: 12,
+  actual: 13,
+  variance: 11,
+  status: 10,
+};
 
 const COLUMN_META: Record<
   string,
@@ -416,15 +421,15 @@ export function BudgetSpreadsheetView({
     [trackPhases],
   );
   const colCount = visibleColumns.length;
-  // Table minWidth = sum of column widths. The flexible Item column counts
-  // its MIN (not its larger default) when undragged, so the grid only
-  // scrolls once the other columns genuinely overflow the container.
+  // Table minWidth = sum of each column's MIN (dragged columns use their
+  // explicit width). The proportional defaults fill the container above
+  // this; below it the grid scrolls horizontally.
   const tableWidth = useMemo(
     () =>
-      visibleColumns.reduce((sum, c) => {
-        if (c.key === 'item' && !sizing.hasOverride('item')) return sum + 200;
-        return sum + sizing.widthFor(c.key);
-      }, 0),
+      visibleColumns.reduce(
+        (sum, c) => sum + (sizing.hasOverride(c.key) ? sizing.widthFor(c.key) : c.min),
+        0,
+      ),
     [visibleColumns, sizing],
   );
 
@@ -767,28 +772,6 @@ export function BudgetSpreadsheetView({
   const defaultSectionId =
     sectionsSorted.find((s) => !String(s.id).startsWith('pending-'))?.id ?? null;
 
-  const handleQuickAdd = (template: (typeof QUICK_ADD_TEMPLATES)[number]) => {
-    const now = new Date().toISOString();
-    setOpenLine({
-      id: `pending-${template.category}-${Date.now()}`,
-      tour_id: tourId,
-      workspace_id: '',
-      category: template.category,
-      label: template.defaultLabel,
-      quantity: 1,
-      proposed_cost: 0,
-      actual_cost: 0,
-      currency: tourCurrency,
-      receipt_id: null,
-      routing_id: null,
-      notes: null,
-      order_index: 0,
-      section_id: defaultSectionId,
-      created_at: now,
-      updated_at: now,
-    } as BudgetLineItem);
-  };
-
   const handleNewLineItem = () => {
     const now = new Date().toISOString();
     setOpenLine({
@@ -1100,6 +1083,42 @@ export function BudgetSpreadsheetView({
           />
         </div>
 
+        {/* Status filter — folded into the single control strip (was a
+            separate second row). */}
+        <div className="flex flex-wrap items-center gap-1.5">
+          {STATUS_OPTIONS.map((opt) => {
+            const active = statusFilter === opt.value;
+            const tone = opt.tone ?? 'var(--lp-text-secondary)';
+            return (
+              <button
+                key={String(opt.value ?? 'all')}
+                type="button"
+                onClick={() => setStatusFilter(opt.value)}
+                className="btn-transition inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5"
+                style={{
+                  fontSize: '11px',
+                  borderColor: active ? tone : 'var(--lp-border)',
+                  background: active
+                    ? `color-mix(in srgb, ${tone} 15%, transparent)`
+                    : 'var(--lp-surface)',
+                  color: active ? tone : 'var(--lp-text-secondary)',
+                  fontWeight: 500,
+                }}
+                aria-pressed={active}
+              >
+                {opt.value ? (
+                  <span
+                    aria-hidden
+                    className="h-1.5 w-1.5 rounded-full"
+                    style={{ background: tone }}
+                  />
+                ) : null}
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
+
         {/* §D group-by toggle */}
         <div
           className="inline-flex items-center gap-1 rounded-md border px-1 py-0.5"
@@ -1269,41 +1288,6 @@ export function BudgetSpreadsheetView({
         </button>
       </div>
 
-      {/* Status chips */}
-      <div className="flex flex-wrap items-center gap-1.5">
-        {STATUS_OPTIONS.map((opt) => {
-          const active = statusFilter === opt.value;
-          const tone = opt.tone ?? 'var(--lp-text-secondary)';
-          return (
-            <button
-              key={String(opt.value ?? 'all')}
-              type="button"
-              onClick={() => setStatusFilter(opt.value)}
-              className="btn-transition inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5"
-              style={{
-                fontSize: '11px',
-                borderColor: active ? tone : 'var(--lp-border)',
-                background: active
-                  ? `color-mix(in srgb, ${tone} 15%, transparent)`
-                  : 'var(--lp-surface)',
-                color: active ? tone : 'var(--lp-text-secondary)',
-                fontWeight: 500,
-              }}
-              aria-pressed={active}
-            >
-              {opt.value ? (
-                <span
-                  aria-hidden
-                  className="h-1.5 w-1.5 rounded-full"
-                  style={{ background: tone }}
-                />
-              ) : null}
-              {opt.label}
-            </button>
-          );
-        })}
-      </div>
-
       {/* Grid-system parity — fill the container width and render as one
           elevated panel, matching <SpreadsheetGrid>. No 1120px canvas cap,
           no left-align confinement; columns stay individually resizable. */}
@@ -1335,28 +1319,24 @@ export function BudgetSpreadsheetView({
               borderCollapse: 'separate',
               borderSpacing: 0,
               tableLayout: 'fixed',
-              // Fill the container; the Item column flexes to absorb the
-              // leftover (below). Scroll once columns exceed minWidth.
+              // Columns spread proportionally to fill the container (via the
+              // % colgroup below); scroll once they hit their mins.
               width: '100%',
               minWidth: tableWidth,
             }}
           >
             <colgroup>
               {visibleColumns.map((c) => {
-                // Item = the flexible primary column: width:auto (min 200)
-                // unless the user has dragged it, in which case honour the
-                // stored width. Every other column stays fixed + resizable.
-                const flexAuto = c.key === 'item' && !sizing.hasOverride('item');
-                return (
-                  <col
-                    key={c.key}
-                    style={
-                      flexAuto
-                        ? { width: 'auto', minWidth: 200 }
-                        : { width: sizing.widthFor(c.key) }
-                    }
-                  />
-                );
+                // A dragged column → its explicit px width. Otherwise: data
+                // columns spread by their proportional %, the fixed
+                // select / # columns keep their px. No flex-into-void.
+                const pct = COLUMN_PCT[c.key];
+                const style: React.CSSProperties = sizing.hasOverride(c.key)
+                  ? { width: sizing.widthFor(c.key) }
+                  : pct != null
+                    ? { width: `${pct}%` }
+                    : { width: sizing.widthFor(c.key) };
+                return <col key={c.key} style={style} />;
               })}
             </colgroup>
             <thead
@@ -1467,40 +1447,6 @@ export function BudgetSpreadsheetView({
         </div>
       </div>
 
-      {/* Quick Add */}
-      <div className="flex flex-wrap items-center gap-2">
-        <span
-          style={{
-            fontSize: '10px',
-            fontWeight: 600,
-            letterSpacing: '0.08em',
-            textTransform: 'uppercase',
-            color: 'var(--lp-text-tertiary)',
-          }}
-        >
-          Quick add
-        </span>
-        {QUICK_ADD_TEMPLATES.map((t) => (
-          <button
-            key={t.category}
-            type="button"
-            onClick={() => handleQuickAdd(t)}
-            className="btn-transition inline-flex items-center gap-1.5 rounded-md border px-2 py-1"
-            style={{
-              borderColor: 'var(--lp-border)',
-              background: 'var(--lp-surface)',
-              color: 'var(--lp-text)',
-              fontSize: '12px',
-              fontWeight: 500,
-            }}
-          >
-            <span aria-hidden className="text-base leading-none">
-              {t.emoji}
-            </span>
-            {t.label}
-          </button>
-        ))}
-      </div>
 
       {openLine || lastLineRef.current ? (
         <BudgetLineSlideOver
@@ -2086,10 +2032,6 @@ function GroupRows({
            rows: over forecast = green. Helper handles the
            threshold ladder + null case. */
         const varColor = varianceColor(v.pct, isIncomeRow(row));
-        /* §B1.3 — Arrow icon direction reflects the
-           sign-flip too: income row over-forecast = up = good
-           (matches the green tone); expense over = up = bad. */
-        const Icon = v.delta > 0 ? ArrowUp : v.delta < 0 ? ArrowDown : null;
         const status = (row.status ?? '').toLowerCase();
         const statusOpt = STATUS_OPTIONS.find((o) => o.value === status);
         const phaseTag = phaseTagOf(row);
@@ -2101,6 +2043,14 @@ function GroupRows({
           i % 2 === 0
             ? 'transparent'
             : 'color-mix(in srgb, var(--lp-surface) 94%, var(--lp-text) 6%)';
+        // Mute $0 / Draft placeholder rows so filled rows stand out.
+        const isPlaceholder =
+          (Number(row.proposed_cost ?? 0) === 0 &&
+            getEffectiveActual(row) === 0) ||
+          status === 'draft';
+        // Whole row opens the detail slide-over (manual lines only);
+        // derived lines drill to their source via the badge link.
+        const openable = !derivedSrc;
         return (
           <tr
             key={row.id}
@@ -2109,6 +2059,20 @@ function GroupRows({
               borderLeft: selected
                 ? '2px solid var(--color-lp-orange)'
                 : '2px solid transparent',
+              opacity: isPlaceholder && !selected ? 0.55 : 1,
+              cursor: openable ? 'pointer' : 'default',
+            }}
+            onClick={(e) => {
+              // Don't hijack clicks on the interactive cells (edit fields,
+              // selects, checkbox, links, buttons).
+              if (
+                (e.target as HTMLElement).closest(
+                  'input, button, select, textarea, a, [contenteditable], [role="button"], [role="listbox"]',
+                )
+              ) {
+                return;
+              }
+              if (openable) onOpenLine(row);
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.background = 'var(--lp-surface-hover)';
@@ -2202,49 +2166,15 @@ function GroupRows({
                     </button>
                   </>
                 ) : (
-                  <>
-                    {/* §B1.2 — manual line: inline-editable title +
-                        dedicated open-detail button. */}
-                    <InlineLabelCell
-                      value={row.label ?? ''}
-                      onCommit={(label) => void onCommitLine(row.id, { label })}
-                      autoEdit={row.id === autoEditLineId}
-                      onAutoEditConsumed={onAutoEditConsumed}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => onOpenLine(row)}
-                      title="Open detail"
-                      aria-label={`Open ${row.label || 'line item'} detail`}
-                      className="btn-transition btn-primary-press inline-flex shrink-0 items-center gap-1"
-                      style={{
-                        height: 24,
-                        padding: '0 9px',
-                        borderRadius: 6,
-                        border: '1px solid var(--lp-border)',
-                        background: 'var(--lp-surface)',
-                        color: 'var(--lp-text-secondary)',
-                        fontSize: '11px',
-                        fontWeight: 600,
-                        letterSpacing: '0.02em',
-                        cursor: 'pointer',
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.background =
-                          'color-mix(in srgb, var(--color-lp-orange) 14%, transparent)';
-                        e.currentTarget.style.color = 'var(--color-lp-orange)';
-                        e.currentTarget.style.borderColor = 'var(--color-lp-orange)';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.background = 'var(--lp-surface)';
-                        e.currentTarget.style.color = 'var(--lp-text-secondary)';
-                        e.currentTarget.style.borderColor = 'var(--lp-border)';
-                      }}
-                    >
-                      <PanelRightOpen className="h-3.5 w-3.5" aria-hidden />
-                      Open
-                    </button>
-                  </>
+                  /* §B1.2 — manual line: inline-editable title. The whole
+                     row opens the detail slide-over (clean rows — no
+                     per-row Open button). */
+                  <InlineLabelCell
+                    value={row.label ?? ''}
+                    onCommit={(label) => void onCommitLine(row.id, { label })}
+                    autoEdit={row.id === autoEditLineId}
+                    onAutoEditConsumed={onAutoEditConsumed}
+                  />
                 )}
               </div>
             </Td>
@@ -2394,11 +2324,9 @@ function GroupRows({
               {v.pct === null ? (
                 <span style={{ color: 'var(--lp-text-tertiary)' }}>—</span>
               ) : (
-                <span
-                  className="inline-flex items-center gap-1"
-                  style={{ color: varColor }}
-                >
-                  {Icon ? <Icon className="h-3 w-3" aria-hidden /> : null}
+                /* Variance encoded once via sign + colour — the redundant
+                   up/down arrow is dropped. */
+                <span style={{ color: varColor }}>
                   {v.pct >= 0 ? '+' : ''}
                   {v.pct.toFixed(1)}%
                 </span>

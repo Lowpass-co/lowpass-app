@@ -223,7 +223,9 @@ export function BudgetBurnBar({ lines, tourCurrency }: BudgetBurnBarProps) {
         </div>
       </div>
 
-      {/* Variance — actuals vs what you committed to. */}
+      {/* vs Committed — actuals vs what you committed to. Distinct from
+          the grid's "Variance" (actuals vs estimate) so one word doesn't
+          name two metrics. */}
       <div className="flex shrink-0 flex-col items-end">
         <span
           style={{
@@ -234,7 +236,7 @@ export function BudgetBurnBar({ lines, tourCurrency }: BudgetBurnBarProps) {
             color: 'var(--lp-text-tertiary)',
           }}
         >
-          Variance
+          vs Committed
         </span>
         <span
           className="lp-mono inline-flex items-center gap-1"
