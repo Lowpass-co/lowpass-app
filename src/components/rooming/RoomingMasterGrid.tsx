@@ -19,20 +19,28 @@ function formatDateCol(dateStr: string): string {
   return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
 }
 
+interface RosterPerson {
+  person_id: string | null;
+  person_name: string;
+  role: string;
+}
+
 interface RoomingMasterGridProps {
   tourId: string;
   currency: string;
   routingDates: { id: string; date: string; venue_name?: string; city?: string; day_type?: string }[];
-  personnelRates: Record<string, unknown>[];
+  /** FOUNDATION FIX — the authoritative people list (one row per roster
+   *  member), sourced from `tour_personnel`, not the rate cards. */
+  roster: RosterPerson[];
 }
 
 export function RoomingMasterGrid({
   tourId,
   currency,
   routingDates,
-  personnelRates,
+  roster,
 }: RoomingMasterGridProps) {
-  const [gridByPerson, setGridByPerson] = useState<{ person_name: string; role: string | null; entries: { routing_id: string; room_type: string; routing?: { date: string; city?: string } }[] }[]>([]);
+  const [gridByPerson, setGridByPerson] = useState<{ person_name: string; person_id: string | null; role: string | null; entries: { routing_id: string; room_type: string; routing?: { date: string; city?: string } }[] }[]>([]);
   const [assumedRate, setAssumedRate] = useState(0);
   const [loading, setLoading] = useState(true);
 
@@ -80,28 +88,44 @@ export function RoomingMasterGrid({
     [tourId, fetchGrid]
   );
 
-  const people = useMemo(() => {
-    const fromGrid = new Set(gridByPerson.map((p) => p.person_name));
-    for (const pr of personnelRates) {
-      const name = (pr.person_name as string) ?? '';
-      if (name && !fromGrid.has(name)) fromGrid.add(name);
+  // Roster membership sets (person_id is robust; name is the fallback for
+  // legacy assignments not yet linked to canonical `persons`).
+  const rosterPersonIdSet = useMemo(
+    () => new Set(roster.map((r) => r.person_id).filter((id): id is string => Boolean(id))),
+    [roster],
+  );
+  const rosterNameSet = useMemo(() => new Set(roster.map((r) => r.person_name)), [roster]);
+
+  // Roster rows — the authoritative people list, in roster order.
+  const rosterPeople = useMemo(
+    () => roster.map((r) => ({ person_name: r.person_name, role: r.role })),
+    [roster],
+  );
+
+  // Off-roster occupants: anyone the rooming grid knows about (holds a room)
+  // who is NOT on the roster. Surfaced in their own group — NEVER as a
+  // phantom roster row (the Duncan bug). Matched by person_id, name fallback.
+  const offRoster = useMemo(() => {
+    const seen = new Set<string>();
+    const out: { person_name: string; role: string }[] = [];
+    for (const g of gridByPerson) {
+      const onRoster = (g.person_id && rosterPersonIdSet.has(g.person_id)) || rosterNameSet.has(g.person_name);
+      if (onRoster || seen.has(g.person_name)) continue;
+      seen.add(g.person_name);
+      out.push({ person_name: g.person_name, role: (g.role ?? '') as string });
     }
-    const list = Array.from(fromGrid);
-    list.sort();
-    return list.map((person_name) => {
-      const gridPerson = gridByPerson.find((p) => p.person_name === person_name);
-      const pr = personnelRates.find((p) => (p.person_name as string) === person_name);
-      const role = (gridPerson?.role ?? pr?.role ?? '') as string;
-      return { person_name, role };
-    });
-  }, [gridByPerson, personnelRates]);
+    return out;
+  }, [gridByPerson, rosterPersonIdSet, rosterNameSet]);
+
+  // Every rendered row (roster + off-roster) for room-night maths.
+  const allRows = useMemo(() => [...rosterPeople, ...offRoster], [rosterPeople, offRoster]);
 
   /** Room nights: SGL = one room each; each distinct DBL (A).. group on a date = one room (shared). */
   const roomNights = useMemo(() => {
     let n = 0;
       for (const r of routingDates) {
         const dblLabels = new Set<string>();
-      for (const p of people) {
+      for (const p of allRows) {
         const v = cellMap.get(`${p.person_name}:${r.id}`) ?? '-';
         if (!v || v === '-') continue;
         if (v === 'SGL') {
@@ -113,9 +137,42 @@ export function RoomingMasterGrid({
       n += dblLabels.size;
     }
     return n;
-  }, [people, routingDates, cellMap]);
+  }, [allRows, routingDates, cellMap]);
 
   const estTotal = assumedRate * roomNights;
+
+  const renderRow = (p: { person_name: string; role: string }) => {
+    const parts = (p.person_name ?? '').trim().split(/\s+/);
+    const forename = parts[0] ?? '';
+    const surname = parts.slice(1).join(' ') ?? '';
+    return (
+      <tr key={p.person_name} className="even:bg-lp-surface/30">
+        <td className="border-b border-lp-border/30 px-2 py-1">{p.role}</td>
+        <td className="border-b border-lp-border/30 px-2 py-1">{forename}</td>
+        <td className="border-b border-lp-border/30 px-2 py-1">{surname}</td>
+        {routingDates.map((r) => {
+          const value = cellMap.get(`${p.person_name}:${r.id}`) ?? '-';
+          return (
+            <td
+              key={r.id}
+              className={cn(
+                'border-b border-lp-border/30 px-1 py-0',
+                value === 'SGL' && 'bg-blue-500/10',
+                value.startsWith('DBL') && 'bg-purple-500/10'
+              )}
+            >
+              <InlineEditCell
+                value={value}
+                type="select"
+                options={ROOM_OPTIONS}
+                onSave={async (v) => saveCell(p.person_name, r.id, String(v))}
+              />
+            </td>
+          );
+        })}
+      </tr>
+    );
+  };
 
   if (loading) return <div className="text-sm text-lp-text-secondary py-4">Loading…</div>;
 
@@ -167,38 +224,20 @@ export function RoomingMasterGrid({
           </tr>
         </thead>
         <tbody>
-          {people.map((p) => {
-            const parts = (p.person_name ?? '').trim().split(/\s+/);
-            const forename = parts[0] ?? '';
-            const surname = parts.slice(1).join(' ') ?? '';
-            return (
-              <tr key={p.person_name} className="even:bg-lp-surface/30">
-                <td className="border-b border-lp-border/30 px-2 py-1">{p.role}</td>
-                <td className="border-b border-lp-border/30 px-2 py-1">{forename}</td>
-                <td className="border-b border-lp-border/30 px-2 py-1">{surname}</td>
-                {routingDates.map((r) => {
-                  const value = cellMap.get(`${p.person_name}:${r.id}`) ?? '-';
-                  return (
-                    <td
-                      key={r.id}
-                      className={cn(
-                        'border-b border-lp-border/30 px-1 py-0',
-                        value === 'SGL' && 'bg-blue-500/10',
-                        value.startsWith('DBL') && 'bg-purple-500/10'
-                      )}
-                    >
-                      <InlineEditCell
-                        value={value}
-                        type="select"
-                        options={ROOM_OPTIONS}
-                        onSave={async (v) => saveCell(p.person_name, r.id, String(v))}
-                      />
-                    </td>
-                  );
-                })}
+          {rosterPeople.map(renderRow)}
+          {offRoster.length > 0 && (
+            <>
+              <tr>
+                <td
+                  colSpan={3 + routingDates.length}
+                  className="border-b border-lp-border/30 bg-lp-surface px-2 pt-4 pb-1 text-xs font-bold uppercase tracking-wider text-lp-text-secondary"
+                >
+                  Off-roster / unassigned — holds a room but is not on this tour&apos;s roster
+                </td>
               </tr>
-            );
-          })}
+              {offRoster.map(renderRow)}
+            </>
+          )}
         </tbody>
       </table>
     </div>

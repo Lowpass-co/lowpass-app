@@ -28,7 +28,7 @@ export default async function OperationsTourRoomingPage({
 
   if (tourError || !tour) notFound();
 
-  const [routingRes, hotelsRes, ratesRes, rosterRes] = await Promise.all([
+  const [routingRes, hotelsRes, rosterRes] = await Promise.all([
     supabase.from('routing').select('*').eq('tour_id', tourId).order('date', { ascending: true }),
     supabase
       .from('hotels')
@@ -36,27 +36,51 @@ export default async function OperationsTourRoomingPage({
       .eq('tour_id', tourId)
       .eq('workspace_id', tour.workspace_id)
       .order('check_in_at', { ascending: true, nullsFirst: true }),
-    // Personnel unification Phase 2 — Rooming renders ONLY roster members.
-    // Grid people = rate cards linked to a live roster row; room
-    // assignments are filtered to roster persons below.
+    // Personnel unification — FOUNDATION FIX. ROW SOURCE is the roster
+    // (`tour_personnel`), not the rate cards. Every roster member is a
+    // rooming row even with no rate card and no room. (The grid's own
+    // off-roster occupants — people holding a room but NOT on the roster,
+    // e.g. Duncan — are surfaced separately by the grid, never as a phantom
+    // roster row.)
     supabase
-      .from('personnel_rates')
-      .select('*')
+      .from('tour_personnel')
+      .select('id, person_id, role, created_at')
       .eq('tour_id', tourId)
-      .not('tour_personnel_id', 'is', null)
-      .order('order_index'),
-    supabase.from('tour_personnel').select('person_id').eq('tour_id', tourId),
+      .order('created_at', { ascending: true }),
   ]);
 
   const routingDates = routingRes.data ?? [];
+  const rosterRows = (rosterRes.data ?? []) as Array<{
+    id: string;
+    person_id?: string | null;
+    role?: string | null;
+  }>;
   // Person ids on the tour roster — assignments for anyone else are hidden
   // (e.g. an off-tour person who still holds a room). person_id is robust
   // whether or not the assignment carries a tour_personnel_id yet.
   const rosterPersonIds = new Set(
-    ((rosterRes.data ?? []) as Array<{ person_id?: string | null }>)
-      .map((r) => r.person_id)
-      .filter((id): id is string => Boolean(id)),
+    rosterRows.map((r) => r.person_id).filter((id): id is string => Boolean(id)),
   );
+
+  // Names for the roster (full_name = the canonical key the grid + POST use).
+  const nameByPersonId = new Map<string, string>();
+  if (rosterPersonIds.size > 0) {
+    const { data: personsRows } = await supabase
+      .from('persons')
+      .select('id, full_name, preferred_name')
+      .in('id', Array.from(rosterPersonIds));
+    for (const p of (personsRows ?? []) as Array<{ id: string; full_name?: string | null; preferred_name?: string | null }>) {
+      nameByPersonId.set(p.id, p.full_name?.trim() || p.preferred_name?.trim() || '');
+    }
+  }
+
+  // The authoritative people list for the master grid: one row per roster
+  // member. person_name matches persons.full_name so cells/saves resolve.
+  const roster = rosterRows.map((r) => ({
+    person_id: r.person_id ?? null,
+    person_name: (r.person_id ? nameByPersonId.get(r.person_id) : '') || r.role || 'Unknown',
+    role: r.role ?? '',
+  }));
   const hotelsRaw = (hotelsRes.data ?? []) as Array<{
     id: string;
     tour_id: string;
@@ -80,7 +104,6 @@ export default async function OperationsTourRoomingPage({
       }>;
     }>;
   }>;
-  const personnelRates = ratesRes.data ?? [];
 
   const hotels = hotelsRaw.map((h) => ({
     id: h.id,
@@ -132,7 +155,7 @@ export default async function OperationsTourRoomingPage({
         currency={tour.currency}
         routingDates={routingDates ?? []}
         hotels={hotels}
-        personnelRates={personnelRates ?? []}
+        roster={roster}
       />
     </div>
   );

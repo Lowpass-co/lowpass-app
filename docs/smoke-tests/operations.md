@@ -1,220 +1,157 @@
 # Operations smoke tests
 
-> **Last bulk verification**: (pending — personnel unification + A/C built
-> blind on `feat/personnel-unify`, not yet click-tested)
+> **Last bulk verification**: 2026-06-07 (Adam, `feat/personnel-unify`
+> preview). **Result: roster unification (Phase 1/2) is NOT working.**
+> Rooming does not derive from `tour_personnel`; remove is destructive;
+> personnel retention thrashes. The A/C UI exists but is blocked by the
+> broken foundation. See "Keystone bug" below. Do NOT start D/E/F until
+> the keystone is fixed.
 
 Covers the `tour_personnel` roster unification (migration 204) and the
-Payroll / Rooming / Personnel surfaces that all derive from it. Format in
-`docs/smoke-tests/README.md`. Prefix: `OPS`.
+Payroll / Rooming / Personnel surfaces. Format in `README.md`. Prefix: `OPS`.
 
-Reference tour: **"Warning Support"** (populated). OPS-01 is best checked on
-the tour that previously showed the phantom person (Duncan Brookfield).
+---
 
-Run order: do the **auth gate** (AUTH-05..09 in `auth.md`) first — we
-changed the route proxy on `main`; if login or saving is broken, stop and
-fix that before testing anything below.
+## ⛔ Keystone bug — the three lists are still NOT unified (2026-06-07)
+
+Blocks OPS-01/02/03/04/12/13/14 and the swap tests downstream.
+
+Observed on "Simple Plan Support | Fall'26":
+- **Tour Personnel** shows: Dillon Jordan, Megan Clark, Adam Rowley.
+- **Rooming** master grid shows: Alexander Weyand, Ben Quinton, Duncan
+  Brookfield — a *different* set.
+- **Payroll** shows yet another set (Ben Quinton, Alexander Weyand).
+- Deleting Duncan's personnel profile does NOT remove him from Rooming
+  (persists on refresh).
+- Removing one member wiped ALL of Payroll but left Rooming untouched.
+- State is non-deterministic: "didn't touch anything, now it's just Duncan
+  again."
+
+ROOT CAUSE (confirmed 2026-06-07 against prod data): **Payroll and Rooming
+source their people from `personnel_rates` (rate cards), not from
+`tour_personnel` (the roster).** Proof — the roster has 5 members, but only
+the 2 with a rate card render in Payroll; the 3 real members (Dillon, Megan,
+Adam) have `has_rate_card = false` so they're invisible. The Personnel page
+reads `tour_personnel` directly, so the lists disagree.
+
+FIX: make `tour_personnel` the row source for every surface — Payroll and
+Rooming list ALL roster members, LEFT JOIN rate cards / room assignments for
+their data. Fix the data model before any further personnel features.
 
 ---
 
 ## Roster unification (single source: `tour_personnel`)
 
 #### OPS-01 — Phantom person gone, correct roster
-
-**Do**: Open a tour's Personnel page (the one that used to list Duncan
-Brookfield).
-
-**Expect**: The roster lists only people actually on the tour. Duncan
-Brookfield (never on this tour) is absent; Dillon Jordan (who is on it) is
-present.
-
-**Last verified**:
+**Result**: ❌ FAIL (2026-06-07) — deleted Duncan still shows in Rooming,
+persists on refresh.
 
 #### OPS-02 — Payroll derives from the roster
-
-**Do**: Open the tour's Payroll.
-
-**Expect**: Payroll lists exactly the roster people — not empty, no
-phantoms. Each has a rate-card row.
-
-**Last verified**:
+**Result**: ❌ FAIL — Payroll people (Ben, Alexander) don't match the
+roster (Dillon, Megan, Adam).
 
 #### OPS-03 — Rooming derives from the roster
-
-**Do**: Open the tour's Rooming master grid.
-
-**Expect**: Rooming lists the same roster people as Personnel and Payroll —
-one list, no drift between the three.
-
-**Last verified**:
+**Result**: ❌ FAIL — Rooming still lists Duncan + other non-roster people.
 
 #### OPS-04 — Budget derived lines match the roster
-
-**Do**: Open the tour's Budget tab; find the payroll + per-diem derived
-lines.
-
-**Expect**: Derived lines correspond to roster people only — no phantom
-names, none missing.
-
-**Last verified**:
+**Result**: ❌ FAIL — assigned 2 rooms to Duncan; budget shows only generic
+"Unassigned Hotel · FROM ROOMING" ×2 @ £0, not his rooms.
 
 ---
 
 ## A — Add a person from anywhere
 
-#### OPS-05 — Add from Payroll (optimistic, no reload)
+#### OPS-05 — Add from Payroll (optimistic)
+**Result**: ✅ PASS (2026-06-07). Note: grid not resizable — surname wraps
+to two lines. → design follow-up (all grids resizable).
 
-**Do**: On Payroll, click **"+ Add person"**, pick an existing workspace
-person, confirm.
+#### OPS-06 — Add from Rooming (optimistic)
+**Result**: ✅ PASS. Note: Ben appeared in Rooming after a Payroll-add
+(cross-surface state) — verify the Duncan drift is tour-specific and would
+NOT recur on a fresh tour.
 
-**Expect**: The new row appears immediately, with no full-page reload. They
-land in the **Crew** group (the seeded rate card defaults to
-`person_type: 'crew'`).
+#### OPS-07 — Added person seeded with a rate card
+**Result**: ⚠️ PARTIAL. The single show-rate seeds, but the add slide only
+captures very basic fields — no travel rate / per diem / role tag / status.
+→ design follow-up (Phase E): richer add + payroll week navigation via a
+reused Advance-style routing sidebar (weeks/dates/cities on the left).
 
-**Last verified**:
-
-#### OPS-06 — Add from Rooming (optimistic, no reload)
-
-**Do**: On Rooming, click **"+ Add person"**, pick a person.
-
-**Expect**: They appear in the rooming master grid immediately, no reload.
-
-**Last verified**:
-
-#### OPS-07 — Added person is seeded with a rate card
-
-**Do**: After OPS-05, look at the new person's Payroll row.
-
-**Expect**: A rate card exists (auto-seeded). If they're band/principal
-rather than crew, the `person_type` on the card can be changed.
-
-**Last verified**:
-
-#### OPS-08 — Add propagates to all surfaces (single source)
-
-**Do**: Add a person on Payroll, then open Rooming and Personnel.
-
-**Expect**: The same person is now present on all three — one roster, no
-re-entry needed.
-
-**Last verified**:
+#### OPS-08 — Add propagates to all surfaces
+**Result**: ✅ PASS.
 
 #### OPS-09 — "Workspace personnel" link
-
-**Do**: In the add slide-out, click **"Workspace personnel ↗"**.
-
-**Expect**: Navigates to the workspace-wide Personnel page.
-
-**Last verified**:
+**Result**: ✅ PASS.
 
 #### OPS-10 — Inline "create new person"
-
-**Do**: In the add slide-out, create a brand-new person (instead of picking
-an existing one), then assign.
-
-**Expect**: A new workspace person is created and added to the tour roster
-in one flow (`POST /api/personnel` then assign).
-
-**Last verified**:
+**Result**: ✅ PASS. Note: "Create new person" is buried below a long
+unscoped list — needs search + a sticky button.
 
 #### OPS-11 — No re-offer of people already on the roster
-
-**Do**: Open the add search when several people are already on the tour.
-
-**Expect**: People already on the roster don't appear in the search
-(`excludePersonIds` derived from current people).
-
-**Last verified**:
+**Result**: ✅ PASS. Note: prefer greying-out already-assigned people with
+an "already assigned to this tour" label rather than hiding them.
 
 ---
 
 ## B — Remove (cascade + roommate safety)
 
 #### OPS-12 — Remove confirm lists the cascade
-
-**Do**: On the personnel manage slide-out, remove a roster member.
-
-**Expect**: A confirm dialog names exactly what cascades — their rate card,
-N room assignments, M derived budget lines (counts from
-`removal-preview`).
-
-**Last verified**:
+**Result**: ❌ FAIL — removing one member wiped ALL of Payroll, left Rooming
+untouched; only Personnel updated. Cascade is wrong + destructive.
 
 #### OPS-13 — Remove executes the cascade
-
-**Do**: Confirm the removal.
-
-**Expect**: Person gone from Payroll, Rooming, and Personnel; their rate
-card, room assignment, and derived budget lines are removed. The personnel
-record itself stays in the workspace library.
-
-**Last verified**:
+**Result**: ❌ FAIL (same as OPS-12).
 
 #### OPS-14 — Shared-room roommate keeps their room
-
-**Do**: Remove one occupant of a shared (Twin/Double) room.
-
-**Expect**: The roommate keeps their assignment — only the removed person's
-occupancy clears; the room isn't deleted.
-
-**Last verified**:
+**Result**: 🚧 BLOCKED — state thrashed (everyone gone from Rooming, then
+Duncan reappeared). Re-test after the keystone fix.
 
 ---
 
 ## C — Swap personnel (transfer, no rebuild)
 
 #### OPS-15 — Swap dialog lists transfer counts
-
-**Do**: On a roster member's manage slide-out, click **"Swap…"**, pick a
-replacement.
-
-**Expect**: A confirm dialog lists what transfers (rate card / N rooms / M
-budget lines) — reusing the removal-preview counts.
-
-**Last verified**:
+**Result**: ❌ FAIL — the swap popover opens but the name list isn't
+clickable; dead end. → redesign: rename the button "Swap personnel"; flow
+like "copy advance to other days" — pick the replacement from a dropdown,
+choose what to transfer, and prompt to manually fill anything NOT
+transferred.
 
 #### OPS-16 — Swap transfers rate card + rooms
-
-**Do**: Confirm the swap.
-
-**Expect**: The replacement inherits the rate card and room assignments; the
-original is off the roster.
-
-**Last verified**:
+**Result**: 🚧 BLOCKED (personnel retention unreliable).
 
 #### OPS-17 — Swap re-labels budget lines on reconcile
+**Result**: 🚧 BLOCKED.
 
-**Do**: After a swap, open/refresh the Budget tab.
-
-**Expect**: The derived budget lines now show the replacement's name. This
-happens on the next budget reconcile (open/refresh) because the lines key on
-the rate-card id (`source_entity_id`), which now belongs to the
-replacement — not instantly.
-
-**Last verified**:
-
-#### OPS-18 — Swap guard: replacement already on the roster
-
-**Do**: Try to swap to someone already on the tour.
-
-**Expect**: 409 with a clear message; no partial transfer.
-
-**Last verified**:
+#### OPS-18 — Swap guard: replacement already on roster
+**Result**: ❌ FAIL — names in the swap menu aren't clickable, so the guard
+can't be reached.
 
 #### OPS-19 — Swap guard: same person / cross-workspace
-
-**Do**: Try to swap a person for themselves, or for someone outside your
-workspace.
-
-**Expect**: Rejected (no-op / blocked); no data change.
-
-**Last verified**:
+**Result**: 🚧 BLOCKED.
 
 ---
 
-## Known broken
+## Design follow-ups (2026-06-07 smoke → Phase E/F)
 
-(None recorded yet — A + C are built but unverified. Move any failure you
-find here with a one-line failure mode + the file/PR it's tracked in.)
+- **All grids resizable** (payroll, rooming, personnel) — surnames wrap
+  today. Part of the app-wide grid system.
+- **Payroll week navigation**: reuse the Advance left routing sidebar —
+  group by WEEK with dates + cities on the left; navigate weeks there
+  instead of the WC tabs.
+- **Add-person slide**: capture the full tour-personnel fields (travel rate,
+  per diem, role tag, dates, status), not just one rate.
+- **Add-person list**: searchable + sticky "Create new person" button.
+- **OPS-11**: grey out already-assigned people with a label, don't hide.
+- **Swap UX (OPS-15)**: dropdown + per-field transfer choices + manual-fill
+  prompts for fields not carried over.
+
+---
+
+## Known broken (2026-06-07)
+
+- **Keystone**: OPS-01/02/03/04 (lists not unified), OPS-12/13 (remove
+  destructive), OPS-14/16/17/19 (blocked by retention), OPS-15/18 (swap menu
+  not clickable). All trace to the roster-unification data model — see top.
 
 ## Retired
 

@@ -26,7 +26,7 @@ export default async function TourRoomingPage({
 
   if (tourError || !tour) notFound();
 
-  const [routingRes, hotelsRes, ratesRes] = await Promise.all([
+  const [routingRes, hotelsRes, rosterRes] = await Promise.all([
     supabase.from('routing').select('*').eq('tour_id', tourId).order('date', { ascending: true }),
     supabase
       .from('hotels')
@@ -34,10 +34,40 @@ export default async function TourRoomingPage({
       .eq('tour_id', tourId)
       .eq('workspace_id', tour.workspace_id)
       .order('check_in_at', { ascending: true, nullsFirst: true }),
-    supabase.from('personnel_rates').select('*').eq('tour_id', tourId).order('order_index'),
+    // FOUNDATION FIX — rooming rows come from the roster (`tour_personnel`),
+    // not the rate cards. (Legacy twin, kept in sync with the live
+    // /operations/[tourId]/rooming page.)
+    supabase
+      .from('tour_personnel')
+      .select('id, person_id, role, created_at')
+      .eq('tour_id', tourId)
+      .order('created_at', { ascending: true }),
   ]);
 
   const routingDates = routingRes.data ?? [];
+  const rosterRows = (rosterRes.data ?? []) as Array<{
+    id: string;
+    person_id?: string | null;
+    role?: string | null;
+  }>;
+  const rosterPersonIds = rosterRows
+    .map((r) => r.person_id)
+    .filter((id): id is string => Boolean(id));
+  const nameByPersonId = new Map<string, string>();
+  if (rosterPersonIds.length > 0) {
+    const { data: personsRows } = await supabase
+      .from('persons')
+      .select('id, full_name, preferred_name')
+      .in('id', rosterPersonIds);
+    for (const p of (personsRows ?? []) as Array<{ id: string; full_name?: string | null; preferred_name?: string | null }>) {
+      nameByPersonId.set(p.id, p.full_name?.trim() || p.preferred_name?.trim() || '');
+    }
+  }
+  const roster = rosterRows.map((r) => ({
+    person_id: r.person_id ?? null,
+    person_name: (r.person_id ? nameByPersonId.get(r.person_id) : '') || r.role || 'Unknown',
+    role: r.role ?? '',
+  }));
   const hotelsRaw = (hotelsRes.data ?? []) as Array<{
     id: string;
     tour_id: string;
@@ -60,7 +90,6 @@ export default async function TourRoomingPage({
       }>;
     }>;
   }>;
-  const personnelRates = ratesRes.data ?? [];
 
   const hotels = hotelsRaw.map((h) => ({
     id: h.id,
@@ -106,7 +135,7 @@ export default async function TourRoomingPage({
         currency={tour.currency}
         routingDates={routingDates ?? []}
         hotels={hotels}
-        personnelRates={personnelRates ?? []}
+        roster={roster}
       />
     </div>,
     getRoomingSheetSections(tourId)

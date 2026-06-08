@@ -6,13 +6,22 @@ import { RoomingMasterGrid } from './RoomingMasterGrid';
 import { RoomingHotelSheet } from './RoomingHotelSheet';
 import { AddPersonToTourButton } from '@/components/operations/personnel/AddPersonToTourButton';
 
+/** One row per roster member — the authoritative people list (FOUNDATION
+ *  FIX). person_name matches persons.full_name so the grid's cells/saves
+ *  resolve; person_id drives roster membership (and the off-roster split). */
+export interface RosterPerson {
+  person_id: string | null;
+  person_name: string;
+  role: string;
+}
+
 interface RoomingViewProps {
   tourId: string;
   tourName: string;
   currency: string;
   routingDates: { id: string; date: string; venue_name?: string; city?: string; day_type?: string }[];
   hotels: { id: string; hotel_name: string; city?: string | null; address?: string | null; phone?: string | null; cancellation_policy?: string | null; distance_to_venue?: string | null; distance_to_airport?: string | null; room_assignments?: unknown[] }[];
-  personnelRates: Record<string, unknown>[];
+  roster: RosterPerson[];
 }
 
 export function RoomingView({
@@ -21,11 +30,12 @@ export function RoomingView({
   currency,
   routingDates,
   hotels,
-  personnelRates,
+  roster,
 }: RoomingViewProps) {
-  // Phase 2/A — roster people in state so adding a person appends them
-  // optimistically (single source: roster → rooming grid), no router.refresh.
-  const [people, setPeople] = useState<Record<string, unknown>[]>(personnelRates);
+  // FOUNDATION FIX — rows come from the roster. Held in state so adding a
+  // person appends them optimistically (single source: roster → rooming
+  // grid), no router.refresh.
+  const [people, setPeople] = useState<RosterPerson[]>(roster);
   const excludePersonIds = useMemo(
     () =>
       people
@@ -49,8 +59,19 @@ export function RoomingView({
           tourId={tourId}
           excludePersonIds={excludePersonIds}
           onAdded={(result) => {
-            if (result?.rateCard) {
-              setPeople((prev) => [...prev, result.rateCard as Record<string, unknown>]);
+            const card = result?.rateCard as
+              | { person_id?: string | null; person_name?: string | null; role?: string | null }
+              | null
+              | undefined;
+            if (card) {
+              setPeople((prev) => [
+                ...prev,
+                {
+                  person_id: card.person_id ?? null,
+                  person_name: (card.person_name ?? '').trim() || 'Unknown',
+                  role: card.role ?? '',
+                },
+              ]);
             }
           }}
         />
@@ -80,7 +101,7 @@ export function RoomingView({
             tourId={tourId}
             currency={currency}
             routingDates={routingDates}
-            personnelRates={people}
+            roster={people}
           />
         )}
         {activeTab !== 'master' && hotels.some((h) => h.id === activeTab) && (

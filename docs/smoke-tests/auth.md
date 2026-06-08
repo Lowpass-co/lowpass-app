@@ -43,6 +43,12 @@ the Google button uses the shared button styling (not bespoke chrome).
 > The audit's `middleware.ts` was folded into `src/proxy.ts` (Next 16
 > renamed middleware→proxy). These verify the merge didn't break auth and
 > that the new CSRF layer is live. **Run these first after any deploy.**
+>
+> **2026-06-07 (Adam, preview)**: AUTH-05/06/07/08 PASS; AUTH-09 not
+> hand-testable. AUTH-05 note — the signed-out redirect preserves the
+> `?artist_id&tour_id` query params rather than landing on a bare `/login`.
+> Acceptable (keeps return context); revisit only if a clean `/login` is
+> wanted.
 
 #### AUTH-05 — Signed-out redirect still works
 

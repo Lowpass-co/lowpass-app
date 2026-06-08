@@ -1,20 +1,28 @@
 'use client';
 
 /* ============================================
-   LOWPASS — <SwapPersonnelModal> (Personnel unification — Phase 4)
+   LOWPASS — <SwapPersonnelModal> (Personnel unification — Phase 4 + foundation fix)
 
    Replace a roster member with another workspace person, transferring
    their rate card + room assignments + derived budget lines (the swap API
    re-points the FKs in place — nothing rebuilds). Search the workspace
    `persons` (reusing the personnel search endpoint), pick a replacement,
-   then confirm via <BudgetConfirmDialog> which lists exactly what moves.
+   then CONFIRM IN-PANEL (a second view inside this same overlay) which
+   lists exactly what moves.
+
+   Why in-panel confirm and not <BudgetConfirmDialog>: this modal launches
+   from inside a <SlideOver> (z 1210), so its own overlay sits at the
+   dropdown layer (z 1300) to clear it. <BudgetConfirmDialog> is built on
+   the shared <Modal> primitive (z-50) — it would render *behind* this
+   overlay and be unreachable (the OPS-15/18 "swap list isn't clickable"
+   dead-end: clicking a row opened a confirm nobody could see). Keeping the
+   confirm in this overlay's panel removes the z-index trap entirely.
    Token-clean.
    ============================================ */
 
 import { useEffect, useState } from 'react';
-import { Search, X } from 'lucide-react';
+import { Search, X, ArrowLeft } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
-import { useBudgetConfirm } from '@/components/budget/BudgetConfirmDialog';
 
 interface Hit {
   id: string;
@@ -36,14 +44,17 @@ export function SwapPersonnelModal({
   onSwapped: () => void;
 }) {
   const { showToast } = useToast();
-  const { requestConfirm, dialog } = useBudgetConfirm();
   const [q, setQ] = useState('');
   const [hits, setHits] = useState<Hit[]>([]);
   const [busy, setBusy] = useState(false);
+  // When set, the panel shows the confirm step for this replacement instead
+  // of the search list (in-panel, so no second overlay to fight for z-order).
+  const [pending, setPending] = useState<Hit | null>(null);
+  const [summary, setSummary] = useState('their rate card, room assignments, and derived budget lines');
 
   // Debounced workspace person search (excludes the person being replaced).
   useEffect(() => {
-    if (!open || !member) return;
+    if (!open || !member || pending) return;
     const query = q.trim();
     let active = true;
     const t = setTimeout(() => {
@@ -65,41 +76,35 @@ export function SwapPersonnelModal({
       active = false;
       clearTimeout(t);
     };
-  }, [q, open, tourId, member]);
+  }, [q, open, tourId, member, pending]);
 
   if (!open || !member) return null;
 
+  // Step 1 → 2: fetch exactly what will transfer, then show the confirm view.
   const pick = (hit: Hit) => {
+    setPending(hit);
+    setSummary('their rate card, room assignments, and derived budget lines');
     void (async () => {
-      // Fetch exactly what transfers, then confirm.
-      let summary = 'their rate card, room assignments, and derived budget lines';
       try {
-        const res = await fetch(
-          `/api/tours/${tourId}/personnel/${member.id}/removal-preview`,
-        );
+        // Removal-preview GET lives on the member route itself.
+        const res = await fetch(`/api/tours/${tourId}/personnel/${member.id}`);
         if (res.ok) {
           const p = (await res.json()) as {
-            rateCards: number;
-            roomAssignments: number;
-            budgetLines: number;
+            rateCards?: number;
+            roomAssignments?: number;
+            budgetLines?: number;
           };
           const bits: string[] = [];
-          if (p.rateCards > 0) bits.push('their rate card');
-          if (p.roomAssignments > 0)
+          if ((p.rateCards ?? 0) > 0) bits.push('their rate card');
+          if ((p.roomAssignments ?? 0) > 0)
             bits.push(`${p.roomAssignments} room assignment${p.roomAssignments === 1 ? '' : 's'}`);
-          if (p.budgetLines > 0)
+          if ((p.budgetLines ?? 0) > 0)
             bits.push(`${p.budgetLines} derived budget line${p.budgetLines === 1 ? '' : 's'}`);
-          if (bits.length > 0) summary = bits.join(', ');
+          if (bits.length > 0) setSummary(bits.join(', '));
         }
       } catch {
-        /* fall back to the generic summary */
+        /* keep the generic summary */
       }
-      requestConfirm({
-        title: 'Swap personnel',
-        message: `Replace ${member.display_name} with ${hit.display_name} on this tour. ${summary} transfer to ${hit.display_name}; ${member.display_name} leaves the roster. Nothing is rebuilt.`,
-        confirmLabel: 'Swap',
-        onConfirm: () => void doSwap(hit),
-      });
     })();
   };
 
@@ -127,88 +132,130 @@ export function SwapPersonnelModal({
   };
 
   return (
-    <>
+    <div
+      className="fixed inset-0 flex items-start justify-center p-4 pt-24"
+      style={{ background: 'color-mix(in srgb, #000 40%, transparent)', zIndex: 'var(--lp-z-dropdown)' }}
+      onClick={onClose}
+    >
       <div
-        className="fixed inset-0 flex items-start justify-center p-4 pt-24"
-        style={{ background: 'color-mix(in srgb, #000 40%, transparent)', zIndex: 1090 }}
-        onClick={onClose}
+        className="flex w-full max-w-md flex-col gap-3 rounded-xl border p-4 shadow-lg"
+        style={{
+          borderColor: 'var(--lp-border)',
+          background: 'var(--lp-surface)',
+          maxHeight: '70vh',
+        }}
+        onClick={(e) => e.stopPropagation()}
       >
-        <div
-          className="flex w-full max-w-md flex-col gap-3 rounded-xl border p-4 shadow-lg"
-          style={{
-            borderColor: 'var(--lp-border)',
-            background: 'var(--lp-surface)',
-            maxHeight: '70vh',
-          }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="flex items-center justify-between">
-            <h3
-              style={{
-                color: 'var(--lp-text)',
-                fontSize: 'var(--lp-text-base)',
-                fontWeight: 'var(--lp-weight-semibold)',
-              }}
-            >
-              Swap {member.display_name}
-            </h3>
-            <button
-              type="button"
-              onClick={onClose}
-              className="btn-transition rounded-md p-1"
-              style={{ color: 'var(--lp-text-tertiary)' }}
-              aria-label="Close"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-
-          <div
-            className="flex items-center gap-2 rounded-md border px-2 py-1"
-            style={{ borderColor: 'var(--lp-border)', background: 'var(--lp-bg)' }}
+        <div className="flex items-center justify-between">
+          <h3
+            style={{
+              color: 'var(--lp-text)',
+              fontSize: 'var(--lp-text-base)',
+              fontWeight: 'var(--lp-weight-semibold)',
+            }}
           >
-            <Search className="h-3.5 w-3.5" style={{ color: 'var(--lp-text-tertiary)' }} />
-            <input
-              type="search"
-              autoFocus
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Search workspace people…"
-              className="w-full bg-transparent outline-none"
-              style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text)' }}
-              aria-label="Search people to swap in"
-            />
-          </div>
-
-          <ul className="min-h-0 flex-1 space-y-1 overflow-y-auto">
-            {hits.length === 0 ? (
-              <li className="px-2 py-4 text-center" style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text-tertiary)' }}>
-                {q.trim() ? 'No matches.' : 'Type to search the workspace people.'}
-              </li>
-            ) : (
-              hits.map((hit) => (
-                <li key={hit.id}>
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => pick(hit)}
-                    className="btn-transition flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left"
-                    style={{ color: 'var(--lp-text)', fontSize: 'var(--lp-text-sm)' }}
-                  >
-                    <span className="truncate">{hit.display_name}</span>
-                    {hit.email ? (
-                      <span className="truncate" style={{ fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text-tertiary)' }}>
-                        {hit.email}
-                      </span>
-                    ) : null}
-                  </button>
-                </li>
-              ))
-            )}
-          </ul>
+            {pending ? `Swap in ${pending.display_name}` : `Swap ${member.display_name}`}
+          </h3>
+          <button
+            type="button"
+            onClick={onClose}
+            className="btn-transition rounded-md p-1"
+            style={{ color: 'var(--lp-text-tertiary)' }}
+            aria-label="Close"
+          >
+            <X className="h-4 w-4" />
+          </button>
         </div>
+
+        {pending ? (
+          /* Step 2 — in-panel confirm. */
+          <div className="flex flex-col gap-4">
+            <p style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text-secondary)', lineHeight: 1.5 }}>
+              Replace <strong style={{ color: 'var(--lp-text)' }}>{member.display_name}</strong> with{' '}
+              <strong style={{ color: 'var(--lp-text)' }}>{pending.display_name}</strong> on this tour. {summary}{' '}
+              transfer to {pending.display_name}; {member.display_name} leaves the roster. Nothing is rebuilt.
+            </p>
+            <div className="flex items-center justify-between gap-2">
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => setPending(null)}
+                className="btn-transition inline-flex items-center gap-1 rounded-md border px-3 py-2"
+                style={{
+                  borderColor: 'var(--lp-border)',
+                  background: 'var(--lp-surface)',
+                  color: 'var(--lp-text-secondary)',
+                  fontSize: 'var(--lp-text-sm)',
+                  fontWeight: 'var(--lp-weight-medium)',
+                }}
+              >
+                <ArrowLeft className="h-3.5 w-3.5" /> Back
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void doSwap(pending)}
+                className="btn-transition rounded-md px-4 py-2"
+                style={{
+                  background: 'var(--color-lp-orange)',
+                  color: 'var(--lp-text-inverse)',
+                  fontSize: 'var(--lp-text-sm)',
+                  fontWeight: 'var(--lp-weight-semibold)',
+                }}
+              >
+                {busy ? 'Swapping…' : 'Swap'}
+              </button>
+            </div>
+          </div>
+        ) : (
+          /* Step 1 — search + pick. */
+          <>
+            <div
+              className="flex items-center gap-2 rounded-md border px-2 py-1"
+              style={{ borderColor: 'var(--lp-border)', background: 'var(--lp-bg)' }}
+            >
+              <Search className="h-3.5 w-3.5" style={{ color: 'var(--lp-text-tertiary)' }} />
+              <input
+                type="search"
+                autoFocus
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Search workspace people…"
+                className="w-full bg-transparent outline-none"
+                style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text)' }}
+                aria-label="Search people to swap in"
+              />
+            </div>
+
+            <ul className="min-h-0 flex-1 space-y-1 overflow-y-auto">
+              {hits.length === 0 ? (
+                <li className="px-2 py-4 text-center" style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text-tertiary)' }}>
+                  {q.trim() ? 'No matches.' : 'Type to search the workspace people.'}
+                </li>
+              ) : (
+                hits.map((hit) => (
+                  <li key={hit.id}>
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => pick(hit)}
+                      className="btn-transition flex w-full items-center justify-between gap-3 rounded-md px-3 py-2 text-left hover:bg-lp-bg"
+                      style={{ color: 'var(--lp-text)', fontSize: 'var(--lp-text-sm)' }}
+                    >
+                      <span className="truncate">{hit.display_name}</span>
+                      {hit.email ? (
+                        <span className="truncate" style={{ fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text-tertiary)' }}>
+                          {hit.email}
+                        </span>
+                      ) : null}
+                    </button>
+                  </li>
+                ))
+              )}
+            </ul>
+          </>
+        )}
       </div>
-      {dialog}
-    </>
+    </div>
   );
 }

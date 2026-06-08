@@ -138,7 +138,11 @@ delete one (confirm dialog).
 **Expect**: Add/remove are optimistic (no full reload); the Summary P&L
 recomputes to match (commission feeds `computeBudgetPnl`).
 
-**Last verified**:
+**Currently**: ❌ FAIL (2026-06-07) — no "add commission" button at all. The
+CommissionsCard code never reached this branch: the popped stash only
+carried receipts + density (see commit `86d26ce`), NOT
+`BudgetSettingsTab.tsx`. The commissions work is stranded on the
+`feat/budget-quick-fixes` worktree and must be recovered.
 
 #### BUD-29 — Density toggle present + app-wide
 
@@ -148,7 +152,9 @@ Compact / Comfortable / Spacious.
 **Expect**: Rows + text resize; the choice persists on reload; the same
 control resizes the other grids (channel-list, payroll).
 
-**Last verified**:
+**Currently**: ❌ FAIL (2026-06-07) — no density control visible on the grid.
+The toggle mount in `BudgetContextBand` either didn't render or was lost in
+the `main` merge. Needs diagnosis.
 
 #### BUD-30 — Receipts as a compact top button
 
@@ -158,7 +164,8 @@ or open the popover.
 **Expect**: A compact button + popover near the top of the grid (the old
 bottom drop-zone is gone); upload/link works.
 
-**Last verified**:
+**Last verified**: 2026-06-07 (Adam, preview) — ✅ PASS, the Receipts button
+is present in the toolbar.
 
 ## Known later
 
