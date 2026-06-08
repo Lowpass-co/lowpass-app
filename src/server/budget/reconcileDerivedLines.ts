@@ -26,6 +26,7 @@
    ============================================ */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { countDayStatuses, computeTotalFee, computeTotalPerDiem } from '@/lib/payroll/fees';
 
 const SECTION_ACCOMMODATION = 'Accommodation';
 const SECTION_SALARY = 'Salary';
@@ -75,14 +76,25 @@ async function computeHotelDesired(
   const hotelIds = hotels.map((h) => h.id as string);
   const { data: rooms } = await supabase
     .from('rooms')
-    .select('id, hotel_id, cost_amount')
+    .select('id, hotel_id, cost_amount, room_type')
     .eq('workspace_id', workspaceId)
     .in('hotel_id', hotelIds);
 
   const roomById = new Map(
-    (rooms ?? []).map((r) => [r.id as string, r as { hotel_id: string; cost_amount: number | null }]),
+    (rooms ?? []).map((r) => [r.id as string, r as { hotel_id: string; cost_amount: number | null; room_type: string | null }]),
   );
   const roomIds = (rooms ?? []).map((r) => r.id as string);
+
+  // Distinct room types per hotel, for an informative line label
+  // (OPS-04 — "Hotel — SGL, DBL" rather than a bare, unnamed-looking row).
+  const typesByHotel = new Map<string, Set<string>>();
+  for (const r of rooms ?? []) {
+    const type = String((r as { room_type?: string | null }).room_type ?? '').trim();
+    if (!type || type === '-') continue;
+    const hid = (r as { hotel_id: string }).hotel_id;
+    if (!typesByHotel.has(hid)) typesByHotel.set(hid, new Set());
+    typesByHotel.get(hid)!.add(type);
+  }
 
   const totalByHotel = new Map<string, number>();
   if (roomIds.length) {
@@ -124,12 +136,17 @@ async function computeHotelDesired(
     }
   }
 
-  return hotels.map((h) => ({
-    sourceId: h.id as string,
-    label: String(h.name ?? 'Hotel'),
-    total: totalByHotel.get(h.id as string) ?? 0,
-    hotelId: h.id as string,
-  }));
+  return hotels.map((h) => {
+    const hid = h.id as string;
+    const name = String(h.name ?? 'Hotel');
+    const types = Array.from(typesByHotel.get(hid) ?? []).sort();
+    return {
+      sourceId: hid,
+      label: types.length ? `${name} — ${types.join(', ')}` : name,
+      total: totalByHotel.get(hid) ?? 0,
+      hotelId: hid,
+    };
+  });
 }
 
 async function computePayrollDesired(
@@ -137,29 +154,39 @@ async function computePayrollDesired(
   tourId: string,
   workspaceId: string,
 ): Promise<{ salary: Desired[]; perDiem: Desired[] }> {
-  // Personnel unification Phase 2 — derived Salary/Per-diem lines come only
-  // from roster members (rate cards linked to a live tour_personnel row).
-  // Orphan / un-rostered rate cards don't generate budget lines.
+  // Personnel unification — derived Salary/Per-diem lines come from every
+  // roster member (rate cards linked to a live tour_personnel row). Orphan /
+  // un-rostered cards don't generate budget lines.
   const { data: persons } = await supabase
     .from('personnel_rates')
-    .select('id, person_name, role, order_index')
+    .select('id, person_name, role, order_index, show_rate, off_rate, rehearsal_rate, per_diem, advance_fee')
     .eq('tour_id', tourId)
     .eq('workspace_id', workspaceId)
     .not('tour_personnel_id', 'is', null);
   if (!persons?.length) return { salary: [], perDiem: [] };
 
+  // OPS-17b — compute fees from day_statuses + the rate card via the SAME
+  // shared helper the payroll sheets use, instead of trusting the persisted
+  // total_fee column (which can lag behind the rates after the OPS-17a math
+  // fix). This guarantees the budget Salary/Per-Diem == the payroll display.
   const { data: entries } = await supabase
     .from('payroll_entries')
-    .select('personnel_id, total_fee, total_per_diem')
+    .select('personnel_id, day_statuses, advance_fee')
     .eq('tour_id', tourId)
     .eq('workspace_id', workspaceId);
 
-  const feeBy = new Map<string, number>();
-  const pdBy = new Map<string, number>();
+  const countsBy = new Map<string, { show: number; offTravel: number; rehearsal: number; active: number }>();
+  const advanceBy = new Map<string, number>();
   for (const e of entries ?? []) {
     const id = e.personnel_id as string;
-    feeBy.set(id, (feeBy.get(id) ?? 0) + Number(e.total_fee ?? 0));
-    pdBy.set(id, (pdBy.get(id) ?? 0) + Number(e.total_per_diem ?? 0));
+    const c = countDayStatuses((e.day_statuses as Record<string, string>) ?? {});
+    const acc = countsBy.get(id) ?? { show: 0, offTravel: 0, rehearsal: 0, active: 0 };
+    acc.show += c.show;
+    acc.offTravel += c.offTravel;
+    acc.rehearsal += c.rehearsal;
+    acc.active += c.active;
+    countsBy.set(id, acc);
+    advanceBy.set(id, (advanceBy.get(id) ?? 0) + (Number(e.advance_fee) || 0));
   }
 
   const salary: Desired[] = [];
@@ -169,10 +196,13 @@ async function computePayrollDesired(
     const label = p.role
       ? `${String(p.person_name)} — ${String(p.role)}`
       : String(p.person_name);
-    // Salary line for anyone on payroll (any entry); per-diem line only
-    // when there's a non-zero per-diem total.
-    if (feeBy.has(id)) salary.push({ sourceId: id, label, total: feeBy.get(id) ?? 0 });
-    if ((pdBy.get(id) ?? 0) > 0) perDiem.push({ sourceId: id, label, total: pdBy.get(id) ?? 0 });
+    const counts = countsBy.get(id) ?? { show: 0, offTravel: 0, rehearsal: 0, active: 0 };
+    const fee = computeTotalFee(p, counts, advanceBy.get(id) ?? 0);
+    const pd = computeTotalPerDiem(p, counts);
+    // One Salary line per roster member (named + costed; 0 until days set).
+    salary.push({ sourceId: id, label, total: fee });
+    // Per-diem line only when there's a non-zero total.
+    if (pd > 0) perDiem.push({ sourceId: id, label, total: pd });
   }
   return { salary, perDiem };
 }

@@ -9,30 +9,16 @@
 
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { countDayStatuses, computeTotalFee, computeTotalPerDiem } from '@/lib/payroll/fees';
 
 type DayStatus = 'show' | 'off_travel' | 'rehearsal' | 'no_tour';
 
-function countDayStatuses(
-  dayStatuses: Record<string, DayStatus> | null | undefined
-): { show: number; offTravel: number; rehearsal: number; active: number } {
-  const statuses = dayStatuses ?? {};
-  let show = 0;
-  let offTravel = 0;
-  let rehearsal = 0;
-  for (const v of Object.values(statuses)) {
-    if (v === 'show') show++;
-    else if (v === 'off_travel') offTravel++;
-    else if (v === 'rehearsal') rehearsal++;
-  }
-  const active = show + offTravel + rehearsal;
-  return { show, offTravel, rehearsal, active };
-}
-
 /**
- * Math spec §6:
- * split_rate: week_fee = (week_show_days × show_rate) + (week_off_days × off_rate) + (week_rehearsal_days × rehearsal_rate) + week_advance_fee
- * day_rate: week_fee = active_days × off_rate + week_advance_fee
- * week_per_diem = (week_show_days + week_off_days + week_rehearsal_days) × per_diem_rate
+ * total_fee splits BY DAY TYPE (OPS-17a — fixed): show_days×show_rate +
+ * off/travel_days×off_rate + rehearsal_days×rehearsal_rate + advance_fee.
+ * NO show_rate fallback for travel days. Shared with the payroll displays
+ * and the budget Salary reconcile via src/lib/payroll/fees.ts so they can
+ * never disagree.
  */
 function computeWeekFeeAndPerDiem(
   dayStatuses: Record<string, DayStatus>,
@@ -45,21 +31,11 @@ function computeWeekFeeAndPerDiem(
   },
   advanceFee: number
 ): { total_fee: number; total_per_diem: number } {
-  const { show, offTravel, rehearsal, active } = countDayStatuses(dayStatuses);
-  const rateType = (personnel?.rate_type ?? 'day_rate') as string;
-  let totalFee: number;
-  if (rateType === 'split_rate') {
-    const showRate = Number(personnel.show_rate) || 0;
-    const offRate = Number(personnel.off_rate) || 0;
-    const rehRate = Number(personnel.rehearsal_rate) || 0;
-    totalFee = show * showRate + offTravel * offRate + rehearsal * rehRate + advanceFee;
-  } else {
-    const offRate = Number(personnel.off_rate) || 0;
-    totalFee = active * offRate + advanceFee;
-  }
-  const perDiemRate = Number(personnel.per_diem) || 0;
-  const totalPerDiem = active * perDiemRate;
-  return { total_fee: totalFee, total_per_diem: totalPerDiem };
+  const counts = countDayStatuses(dayStatuses);
+  return {
+    total_fee: computeTotalFee(personnel, counts, advanceFee),
+    total_per_diem: computeTotalPerDiem(personnel, counts),
+  };
 }
 
 export async function GET(request: Request) {

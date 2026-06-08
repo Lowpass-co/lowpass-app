@@ -149,6 +149,9 @@ export async function POST(request: Request) {
     role?: string | null;
     routing_id?: string;
     room_type?: string;
+    /** Assumed nightly rate from the rooming grid — persisted as the room's
+     *  cost so the budget Accommodation line is costed (OPS-04). */
+    cost_amount?: number | null;
     entries?: Array<{
       tour_id: string;
       person_id?: string | null;
@@ -156,6 +159,7 @@ export async function POST(request: Request) {
       role?: string | null;
       routing_id: string;
       room_type?: string;
+      cost_amount?: number | null;
     }>;
   };
   try {
@@ -174,6 +178,7 @@ export async function POST(request: Request) {
         role: body.role ?? null,
         routing_id: body.routing_id!,
         room_type: body.room_type ?? '-',
+        cost_amount: body.cost_amount ?? null,
       }];
 
   for (const e of workEntries) {
@@ -254,6 +259,9 @@ export async function POST(request: Request) {
     if (!targetHotelId) continue;
 
     const roomType = (entry.room_type ?? '-').trim();
+    // Assumed nightly rate → room cost (OPS-04). 0/absent leaves cost as-is.
+    const costAmount = Number(entry.cost_amount);
+    const hasCost = Number.isFinite(costAmount) && costAmount > 0;
     let roomId =
       (
         await supabase
@@ -272,11 +280,18 @@ export async function POST(request: Request) {
           workspace_id: profile.workspace_id,
           hotel_id: targetHotelId,
           room_type: roomType,
-          cost_amount: 0,
+          cost_amount: hasCost ? costAmount : 0,
         })
         .select('id')
         .single();
       roomId = createdRoom?.id ?? null;
+    } else if (hasCost) {
+      // Keep the room's cost in step with the latest assumed rate.
+      await supabase
+        .from('rooms')
+        .update({ cost_amount: costAmount })
+        .eq('id', roomId)
+        .eq('workspace_id', profile.workspace_id);
     }
     if (!roomId) continue;
 

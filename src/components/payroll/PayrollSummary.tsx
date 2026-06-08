@@ -4,6 +4,7 @@ import { useMemo } from 'react';
 import { GridTable } from '@/components/spreadsheet-view/GridTable';
 import { InlineEditCell } from '@/components/spreadsheet-view/InlineEditCell';
 import { formatCurrency } from '@/lib/utils';
+import { countDayStatuses, computeTotalFee, computeTotalPerDiem, type RateLike } from '@/lib/payroll/fees';
 
 function splitName(name: string): { forename: string; surname: string } {
   const parts = (name ?? '').trim().split(/\s+/);
@@ -33,19 +34,11 @@ export function PayrollSummary({
     const emptyAgg = (): Agg => ({ show: 0, offTravel: 0, rehearsal: 0, advanceFee: 0 });
     for (const e of payrollEntries) {
       const pid = e.personnel_id as string;
-      const statuses = (e.day_statuses as Record<string, string>) ?? {};
-      let show = 0;
-      let offTravel = 0;
-      let rehearsal = 0;
-      for (const v of Object.values(statuses)) {
-        if (v === 'show') show++;
-        else if (v === 'off_travel') offTravel++;
-        else if (v === 'rehearsal') rehearsal++;
-      }
+      const c = countDayStatuses((e.day_statuses as Record<string, string>) ?? {});
       const existing = entriesByPerson.get(pid) ?? emptyAgg();
-      existing.show += show;
-      existing.offTravel += offTravel;
-      existing.rehearsal += rehearsal;
+      existing.show += c.show;
+      existing.offTravel += c.offTravel;
+      existing.rehearsal += c.rehearsal;
       existing.advanceFee += Number((e as { advance_fee?: number }).advance_fee) || 0;
       entriesByPerson.set(pid, existing);
     }
@@ -56,23 +49,24 @@ export function PayrollSummary({
       const { forename, surname } = splitName(personName);
       const showRate = Number(pr.show_rate) || 0;
       const offRate = Number(pr.off_rate) || 0;
-      const rehearsalRate = Number((pr as { rehearsal_rate?: number }).rehearsal_rate) || 0;
       const perDiemRate = Number(pr.per_diem) || 0;
-      const rateType = String(pr.rate_type ?? 'day_rate');
+      const rate: RateLike = {
+        show_rate: showRate,
+        off_rate: offRate,
+        rehearsal_rate: Number((pr as { rehearsal_rate?: number }).rehearsal_rate) || 0,
+        per_diem: perDiemRate,
+      };
       const agg = entriesByPerson.get(id) ?? emptyAgg();
-      const active = agg.show + agg.offTravel + agg.rehearsal;
-      let totalFee: number;
-      if (rateType === 'split_rate') {
-        totalFee =
-          agg.show * showRate + agg.offTravel * offRate + agg.rehearsal * rehearsalRate + agg.advanceFee;
-      } else {
-        // Day rate: bill show days at show rate, travel/off/rehearsal at off rate (not 0 when only show rate is set).
-        const showPart = agg.show * (showRate || offRate);
-        const otherPart = (agg.offTravel + agg.rehearsal) * (offRate || showRate);
-        totalFee = showPart + otherPart + agg.advanceFee;
-      }
-      const totalDays = active;
-      const totalPerDiem = active * perDiemRate;
+      const counts = {
+        show: agg.show,
+        offTravel: agg.offTravel,
+        rehearsal: agg.rehearsal,
+        active: agg.show + agg.offTravel + agg.rehearsal,
+      };
+      // OPS-17a — split by day type via the shared helper (no show_rate
+      // fallback for travel days). Matches the persisted total_fee + budget.
+      const totalFee = computeTotalFee(rate, counts, agg.advanceFee);
+      const totalPerDiem = computeTotalPerDiem(rate, counts);
 
       return {
         id,

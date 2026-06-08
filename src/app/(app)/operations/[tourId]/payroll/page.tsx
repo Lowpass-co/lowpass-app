@@ -118,7 +118,14 @@ export default async function OperationsTourPayrollPage({ params }: { params: Pr
     .not('tour_personnel_id', 'is', null)
     .order('order_index');
 
-  const personnelRates = ratesRows ?? [];
+  // OPS-16 — display the LIVE roster name. The card's stored person_name
+  // can be stale (e.g. after a swap that didn't reach it); the authoritative
+  // name is persons.full_name via the card's person_id. Override it here so
+  // Payroll always shows the current person.
+  const personnelRates = ((ratesRows ?? []) as Array<Record<string, unknown>>).map((r) => {
+    const liveName = r.person_id ? nameByPersonId.get(r.person_id as string) : '';
+    return liveName ? { ...r, person_name: liveName } : r;
+  });
   const payrollEntries = (payrollRows ?? [])
     .map((row: { personnel_rates?: unknown; personnel?: unknown }) => {
       const p = row.personnel_rates ?? row.personnel;

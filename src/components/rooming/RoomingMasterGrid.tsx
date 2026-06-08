@@ -1,7 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { X } from 'lucide-react';
 import { InlineEditCell } from '@/components/spreadsheet-view/InlineEditCell';
+import { useToast } from '@/components/ui/Toast';
 import { cn } from '@/lib/utils';
 
 const ROOM_OPTIONS = [
@@ -40,9 +42,13 @@ export function RoomingMasterGrid({
   routingDates,
   roster,
 }: RoomingMasterGridProps) {
-  const [gridByPerson, setGridByPerson] = useState<{ person_name: string; person_id: string | null; role: string | null; entries: { routing_id: string; room_type: string; routing?: { date: string; city?: string } }[] }[]>([]);
+  const { showToast } = useToast();
+  const [gridByPerson, setGridByPerson] = useState<{ person_name: string; person_id: string | null; role: string | null; entries: { id: string; routing_id: string; room_type: string; routing?: { date: string; city?: string } }[] }[]>([]);
   const [assumedRate, setAssumedRate] = useState(0);
   const [loading, setLoading] = useState(true);
+  // Optimistic cell overrides (`name:routingId` → room_type), applied over
+  // the fetched grid so an assignment shows instantly with no reload (OPS-04).
+  const [overrides, setOverrides] = useState<Map<string, string>>(new Map());
 
   const fetchGrid = useCallback(async () => {
     setLoading(true);
@@ -51,6 +57,7 @@ export function RoomingMasterGrid({
       if (!res.ok) throw new Error('Failed to load rooming');
       const json = await res.json();
       setGridByPerson(json.grid_by_person ?? []);
+      setOverrides(new Map());
     } finally {
       setLoading(false);
     }
@@ -67,25 +74,72 @@ export function RoomingMasterGrid({
         m.set(`${person.person_name}:${e.routing_id}`, e.room_type ?? '-');
       }
     }
+    for (const [k, v] of overrides) m.set(k, v);
+    return m;
+  }, [gridByPerson, overrides]);
+
+  // Room-assignment ids per person (for off-roster cleanup deletes).
+  const assignmentIdsByPerson = useMemo(() => {
+    const m = new Map<string, string[]>();
+    for (const person of gridByPerson) {
+      const ids = Array.from(new Set(person.entries.map((e) => e.id).filter(Boolean)));
+      if (ids.length) m.set(person.person_name, ids);
+    }
     return m;
   }, [gridByPerson]);
 
   const saveCell = useCallback(
     async (personName: string, routingId: string, roomType: string) => {
-      const res = await fetch('/api/budget/rooming', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          tour_id: tourId,
-          person_name: personName,
-          routing_id: routingId,
-          room_type: roomType,
-        }),
-      });
-      if (!res.ok) throw new Error('Save failed');
-      fetchGrid();
+      const key = `${personName}:${routingId}`;
+      const prev = cellMap.get(key) ?? '-';
+      if (prev === roomType) return;
+      // Optimistic — show the new value immediately, persist in the
+      // background, NO router.refresh / no grid reload. Revert on failure.
+      setOverrides((o) => new Map(o).set(key, roomType));
+      try {
+        const res = await fetch('/api/budget/rooming', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            tour_id: tourId,
+            person_name: personName,
+            routing_id: routingId,
+            room_type: roomType,
+            // Persist the assumed nightly rate as the room cost so the budget
+            // Accommodation line is costed (OPS-04). Omitted when unset.
+            ...(assumedRate > 0 ? { cost_amount: assumedRate } : {}),
+          }),
+        });
+        if (!res.ok) throw new Error('Save failed');
+      } catch {
+        setOverrides((o) => new Map(o).set(key, prev));
+        showToast('Could not save room assignment', 'error');
+      }
     },
-    [tourId, fetchGrid]
+    [tourId, cellMap, assumedRate, showToast]
+  );
+
+  const deleteOffRoster = useCallback(
+    async (personName: string) => {
+      const ids = assignmentIdsByPerson.get(personName) ?? [];
+      if (ids.length === 0) return;
+      try {
+        await Promise.all(
+          ids.map((id) =>
+            fetch('/api/budget/rooming', {
+              method: 'DELETE',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ id }),
+            }),
+          ),
+        );
+        showToast(`Removed ${personName}'s room assignments.`);
+        fetchGrid();
+      } catch {
+        showToast('Could not remove assignments', 'error');
+      }
+    },
+    [assignmentIdsByPerson, fetchGrid, showToast],
   );
 
   // Roster membership sets (person_id is robust; name is the fallback for
@@ -102,9 +156,20 @@ export function RoomingMasterGrid({
     [roster],
   );
 
+  // True iff this person still holds at least one room across the tour
+  // (honouring optimistic edits — clearing every cell drops them).
+  const holdsARoom = useCallback(
+    (personName: string) => routingDates.some((r) => {
+      const v = cellMap.get(`${personName}:${r.id}`) ?? '-';
+      return v && v !== '-';
+    }),
+    [routingDates, cellMap],
+  );
+
   // Off-roster occupants: anyone the rooming grid knows about (holds a room)
   // who is NOT on the roster. Surfaced in their own group — NEVER as a
   // phantom roster row (the Duncan bug). Matched by person_id, name fallback.
+  // OPS-03/14 — only render those who still hold ≥1 room (drop at zero).
   const offRoster = useMemo(() => {
     const seen = new Set<string>();
     const out: { person_name: string; role: string }[] = [];
@@ -112,10 +177,11 @@ export function RoomingMasterGrid({
       const onRoster = (g.person_id && rosterPersonIdSet.has(g.person_id)) || rosterNameSet.has(g.person_name);
       if (onRoster || seen.has(g.person_name)) continue;
       seen.add(g.person_name);
+      if (!holdsARoom(g.person_name)) continue;
       out.push({ person_name: g.person_name, role: (g.role ?? '') as string });
     }
     return out;
-  }, [gridByPerson, rosterPersonIdSet, rosterNameSet]);
+  }, [gridByPerson, rosterPersonIdSet, rosterNameSet, holdsARoom]);
 
   // Every rendered row (roster + off-roster) for room-night maths.
   const allRows = useMemo(() => [...rosterPeople, ...offRoster], [rosterPeople, offRoster]);
@@ -141,7 +207,7 @@ export function RoomingMasterGrid({
 
   const estTotal = assumedRate * roomNights;
 
-  const renderRow = (p: { person_name: string; role: string }) => {
+  const renderRow = (p: { person_name: string; role: string }, onDelete?: () => void) => {
     const parts = (p.person_name ?? '').trim().split(/\s+/);
     const forename = parts[0] ?? '';
     const surname = parts.slice(1).join(' ') ?? '';
@@ -149,7 +215,22 @@ export function RoomingMasterGrid({
       <tr key={p.person_name} className="even:bg-lp-surface/30">
         <td className="border-b border-lp-border/30 px-2 py-1">{p.role}</td>
         <td className="border-b border-lp-border/30 px-2 py-1">{forename}</td>
-        <td className="border-b border-lp-border/30 px-2 py-1">{surname}</td>
+        <td className="border-b border-lp-border/30 px-2 py-1">
+          <span className="inline-flex items-center gap-1">
+            {surname}
+            {onDelete && (
+              <button
+                type="button"
+                onClick={onDelete}
+                title={`Remove ${p.person_name}'s room assignments`}
+                aria-label={`Remove ${p.person_name}'s room assignments`}
+                className="btn-transition rounded p-0.5 text-lp-text-tertiary hover:text-lp-error"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </span>
+        </td>
         {routingDates.map((r) => {
           const value = cellMap.get(`${p.person_name}:${r.id}`) ?? '-';
           return (
@@ -224,7 +305,7 @@ export function RoomingMasterGrid({
           </tr>
         </thead>
         <tbody>
-          {rosterPeople.map(renderRow)}
+          {rosterPeople.map((p) => renderRow(p))}
           {offRoster.length > 0 && (
             <>
               <tr>
@@ -235,7 +316,7 @@ export function RoomingMasterGrid({
                   Off-roster / unassigned — holds a room but is not on this tour&apos;s roster
                 </td>
               </tr>
-              {offRoster.map(renderRow)}
+              {offRoster.map((p) => renderRow(p, () => deleteOffRoster(p.person_name)))}
             </>
           )}
         </tbody>

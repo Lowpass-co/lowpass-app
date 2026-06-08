@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { weekDates } from './payroll-utils';
 import { InlineEditCell } from '@/components/spreadsheet-view/InlineEditCell';
 import { cn } from '@/lib/utils';
+import { countDayStatuses, computeTotalFee, computeTotalPerDiem, type RateLike } from '@/lib/payroll/fees';
 
 const DAY_OPTIONS = [
   { value: 'show', label: 'SHOW DAY' },
@@ -209,22 +210,17 @@ export function PayrollWeekSheet({
             const forename = parts[0] ?? '';
             const surname = parts.slice(1).join(' ') ?? '';
 
-            let show = 0;
-            let offTravel = 0;
-            for (const v of Object.values(statuses)) {
-              if (v === 'show') show++;
-              else if (v === 'off_travel' || v === 'rehearsal') offTravel++;
-            }
+            const counts = countDayStatuses(statuses);
             const advanceFee = Number(entry?.advance_fee ?? pr.advance_fee) || 0;
-            const showRate = Number(pr.show_rate) || 0;
-            const offRate = Number(pr.off_rate) || 0;
-            const perDiemRate = Number(pr.per_diem) || 0;
-            const rateType = (pr.rate_type as string) ?? 'day_rate';
-            const totalFee =
-              rateType === 'split_rate'
-                ? show * showRate + offTravel * offRate + advanceFee
-                : show * (showRate || offRate) + offTravel * (offRate || showRate) + advanceFee;
-            const totalPD = (show + offTravel) * perDiemRate;
+            const rate: RateLike = {
+              show_rate: Number(pr.show_rate) || 0,
+              off_rate: Number(pr.off_rate) || 0,
+              rehearsal_rate: Number((pr as { rehearsal_rate?: number }).rehearsal_rate) || 0,
+              per_diem: Number(pr.per_diem) || 0,
+            };
+            // OPS-17a — shared per-day-type math (matches Summary + budget).
+            const totalFee = computeTotalFee(rate, counts, advanceFee);
+            const totalPD = computeTotalPerDiem(rate, counts);
             weekTotalFee += totalFee;
             weekTotalPD += totalPD;
 
