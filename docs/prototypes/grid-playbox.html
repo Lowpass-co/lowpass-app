@@ -117,7 +117,7 @@
   .projpanel .ph{display:flex;align-items:center;gap:9px;padding:10px 14px;background:var(--card-head);border-bottom:1px solid var(--border-soft);}
   .projpanel .ph .sh-title{font-size:11px;letter-spacing:.09em;text-transform:uppercase;font-weight:700;color:var(--text-2);}
   .projm{display:grid;grid-template-columns:1.6fr 86px 78px 84px 78px 112px 96px;align-items:center;border-bottom:1px solid var(--border-soft);}
-  .projv{display:grid;grid-template-columns:1.6fr 86px 90px 78px 112px 96px;align-items:center;border-bottom:1px solid var(--border-soft);}
+  .projv{display:grid;grid-template-columns:1.6fr 86px 78px 84px 78px 112px 96px;align-items:center;border-bottom:1px solid var(--border-soft);}
   .projm>div,.projv>div{padding:8px 12px;font-size:var(--fs);}
   .projm.h>div,.projv.h>div{font-size:10px;letter-spacing:.06em;text-transform:uppercase;color:var(--text-3);font-weight:600;text-align:right;} .projm.h>div:first-child,.projv.h>div:first-child{text-align:left;}
   .cellin{display:flex;align-items:center;justify-content:flex-end;gap:3px;} .cellin .pre,.cellin .suf{color:var(--text-3);font-size:11px;}
@@ -409,8 +409,8 @@ function renderProjections(){const w=document.getElementById('projwrap');if(!w)r
   let html=`<div class="projpanel"><div class="ph"><span class="dot" style="color:var(--green)"></span><span class="sh-title">Projections (per tour) — editable formulas</span><button class="so-add" id="projAdd" style="margin-left:auto">＋ Add projection</button></div>`;
   if(merch.length)html+=`<div class="projm h"><div>Merch source</div><div>Cap</div><div>Sell&nbsp;%</div><div>£/head</div><div>Venue&nbsp;%</div><div>Projected net</div><div>Actual</div></div>`+
     merch.map(({p,i})=>`<div class="projm" data-i="${i}"><div><input class="pf l" data-k="item" value="${esc(p.item)}"/></div>${fld('cap',p.cap)}${fld('sell',p.sell,'%')}${fld('perhead',p.perhead,'£')}${fld('split',p.split,'%')}<div class="pnet">${fmt(projNet(p))}</div>${fld('act',p.act,'£')}</div>`).join('');
-  if(vip.length)html+=`<div class="projv h"><div>VIP / upsell source</div><div>Passes</div><div>£ price</div><div>Fee&nbsp;%</div><div>Projected net</div><div>Actual</div></div>`+
-    vip.map(({p,i})=>`<div class="projv" data-i="${i}"><div><input class="pf l" data-k="item" value="${esc(p.item)}"/></div>${fld('passes',p.passes)}${fld('price',p.price,'£')}${fld('fee',p.fee,'%')}<div class="pnet">${fmt(projNet(p))}</div>${fld('act',p.act,'£')}</div>`).join('');
+  if(vip.length)html+=`<div class="projv h"><div>VIP / upsell source</div><div>Passes</div><div>Sell&nbsp;%</div><div>£ price</div><div>Fee&nbsp;%</div><div>Projected net</div><div>Actual</div></div>`+
+    vip.map(({p,i})=>`<div class="projv" data-i="${i}"><div><input class="pf l" data-k="item" value="${esc(p.item)}"/></div>${fld('passes',p.passes)}${fld('sell',p.sell,'%')}${fld('price',p.price,'£')}${fld('fee',p.fee,'%')}<div class="pnet">${fmt(projNet(p))}</div>${fld('act',p.act,'£')}</div>`).join('');
   html+=`</div>`;w.innerHTML=html;
   w.querySelectorAll('.projm[data-i],.projv[data-i]').forEach(el=>{const i=+el.dataset.i;el.querySelectorAll('.pf').forEach(f=>f.onchange=e=>{pushUndo();const k=f.dataset.k;projData[i][k]=(k==='item')?e.target.value:(parseFloat(e.target.value.replace(/[^0-9.\-]/g,''))||0);renderProjections();renderKpis();});});
   const add=w.querySelector('#projAdd');if(add)add.onclick=()=>openMenu(add,['Merch projection','VIP / M&G projection'],t=>{pushUndo();projData.push(t==='Merch projection'?{item:'New merch line',type:'merch',cap:10000,sell:80,perhead:1,split:25,act:0}:{item:'New VIP line',type:'vip',passes:100,price:75,fee:15,act:0});renderProjections();renderKpis();});}
@@ -801,9 +801,9 @@ let incomeData=[
 let projData=[
   {item:'Merch — soft goods (shirts / hoodies)',type:'merch',cap:10000,sell:80,perhead:1,split:25,act:3200},
   {item:'Merch — hard goods (vinyl / CD)',type:'merch',cap:10000,sell:25,perhead:3,split:25,act:1800},
-  {item:'VIP / M&G',type:'vip',passes:200,price:75,fee:15,act:2400},
+  {item:'VIP / M&G',type:'vip',passes:200,sell:70,price:75,fee:15,act:2400},
 ];
-function projGross(p){if(p.type==='merch')return (+p.cap||0)*(+p.sell||0)/100*(+p.perhead||0);if(p.type==='vip')return (+p.passes||0)*(+p.price||0)*(1-(+p.fee||0)/100);return +p.proj||0;}
+function projGross(p){if(p.type==='merch')return (+p.cap||0)*(+p.sell||0)/100*(+p.perhead||0);if(p.type==='vip')return (+p.passes||0)*(+p.sell||0)/100*(+p.price||0)*(1-(+p.fee||0)/100);return +p.proj||0;}
 function projNet(p){const g=projGross(p);if(p.type==='merch')return g*(1-(+p.split||0)/100);return g;}
 let viewKey='budget';
 function initUids(arr){arr.forEach((s,i)=>{if(!s.accent)s.accent=ACCENTS[i%ACCENTS.length];if(!s._uid)s._uid='s'+(uidc++);s.rows.forEach(r=>{if(!r._uid)r._uid='r'+(uidc++);});});}

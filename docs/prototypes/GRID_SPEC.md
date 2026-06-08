@@ -141,8 +141,9 @@ ticket tiers → GBO → deductions → NET → expenses (budget vs actual) → 
   are also subject to WH tax. This detail lives in the **merch advance** and
   should **auto-link** into the income slide (it's already generated there), not
   be re-keyed.
-- **VIP**: per **tier** `{price, available, expectedSold}` → `Σ price ×
-  expectedSold`, **minus platform/CC/Live-Nation fees** → net.
+- **VIP**: `passes × sell% × price × (1 − fee%)` — predict how many of the
+  available passes actually sell rather than assuming a sell-out; fees cover
+  platform / CC / Live-Nation. (Per-tier {price, available, sell%} when needed.)
 
 These are the only Income lines with an estimate (the projection); Guarantees
 are contract-only.
