@@ -38,6 +38,63 @@ the Google button uses the shared button styling (not bespoke chrome).
 
 **Last verified**:
 
+## Route proxy + CSRF (security audit §M3/§L4 — merged to `main` 2026-06-07)
+
+> The audit's `middleware.ts` was folded into `src/proxy.ts` (Next 16
+> renamed middleware→proxy). These verify the merge didn't break auth and
+> that the new CSRF layer is live. **Run these first after any deploy.**
+
+#### AUTH-05 — Signed-out redirect still works
+
+**Do**: In a fresh/incognito window, open an authenticated page (e.g.
+`/artists`).
+
+**Expect**: Redirected to `/login` — the proxy → `updateSession` redirect is
+intact after the merge.
+
+**Last verified**:
+
+#### AUTH-06 — Signed-in app loads and saves (same-origin not blocked)
+
+**Do**: Log in; edit a budget line or add a personnel row.
+
+**Expect**: Saves succeed — no `403 "Cross-origin request blocked"`.
+Same-origin mutations pass the new CSRF check; API routes still authenticate
+normally (the proxy short-circuits `/api/` after the CSRF check, so they
+return JSON, not redirects).
+
+**Last verified**:
+
+#### AUTH-07 — Public token routes reachable signed-out
+
+**Do**: In incognito, open a rider-pack share link (`/r/[token]`) or
+`/invite/accept`.
+
+**Expect**: Renders for the unauthenticated visitor — NOT bounced to
+`/login`. (Public-route allowlist in `updateSession` intact.)
+
+**Last verified**:
+
+#### AUTH-08 — Auth route bounce when signed-in
+
+**Do**: While logged in, visit `/login`.
+
+**Expect**: Redirected to `/dashboard`.
+
+**Last verified**:
+
+#### AUTH-09 — Cross-origin write blocked (code-level; manual optional)
+
+**Do**: Hard to do by hand — a `POST/PUT/PATCH/DELETE` from a foreign
+`Origin` header should be rejected. Trust the proxy code unless you can craft
+a cross-site request.
+
+**Expect**: `403` JSON `"Cross-origin request blocked"`. Server-to-server
+callers that send no `Origin` (Vercel Cron, webhooks) pass through to their
+own secret checks (e.g. `CRON_SECRET`).
+
+**Last verified**:
+
 ## Known broken
 
 #### AUTH-04 — Login globe not yet deduped onto AuthShell

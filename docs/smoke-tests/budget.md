@@ -128,6 +128,38 @@ Settings/Venues/Bugs all load.
 > These supersede the earlier BUD-15/16/20 failures (section CRUD,
 > category-vs-section, summary refresh) — all resolved in Fix-pack A.
 
+## Quick-fixes (feat/budget-quick-fixes — retest)
+
+#### BUD-28 — Commissions add/remove in Settings
+
+**Do**: Budget → Settings. Add a commission line, edit its % and basis,
+delete one (confirm dialog).
+
+**Expect**: Add/remove are optimistic (no full reload); the Summary P&L
+recomputes to match (commission feeds `computeBudgetPnl`).
+
+**Last verified**:
+
+#### BUD-29 — Density toggle present + app-wide
+
+**Do**: On the budget grid, use the density control in the context band:
+Compact / Comfortable / Spacious.
+
+**Expect**: Rows + text resize; the choice persists on reload; the same
+control resizes the other grids (channel-list, payroll).
+
+**Last verified**:
+
+#### BUD-30 — Receipts as a compact top button
+
+**Do**: On the budget grid toolbar, click **"Receipts"**; drop a file on it
+or open the popover.
+
+**Expect**: A compact button + popover near the top of the grid (the old
+bottom drop-zone is gone); upload/link works.
+
+**Last verified**:
+
 ## Known later
 
 - Actual-vs-transactions override math (gates a `transactions.ts` refactor).
