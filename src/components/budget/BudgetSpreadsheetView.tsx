@@ -40,7 +40,6 @@ import {
   X,
 } from 'lucide-react';
 import { BudgetLineSlideOver } from '@/components/budget/BudgetLineSlideOver';
-import { ReceiptInbox } from '@/components/budget/ReceiptInbox';
 import { BudgetCellInput } from '@/components/budget/cells/BudgetCellInput';
 import { InlineSelectCell } from '@/components/budget/cells/InlineSelectCell';
 import { useBudgetConfirm } from '@/components/budget/BudgetConfirmDialog';
@@ -1262,11 +1261,6 @@ export function BudgetSpreadsheetView({
         >
           {totalRowCount}/{allLines.length} rows
         </span>
-
-        {/* Receipts — compact upload/link control (relocated from the
-            big bottom drop panel). Click opens the inbox popover; the
-            button also accepts dropped files. */}
-        <ReceiptInbox tourId={tourId} lineItems={lines} />
 
         <button
           type="button"

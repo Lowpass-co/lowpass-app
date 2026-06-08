@@ -1,11 +1,27 @@
 # Operations smoke tests
 
-> **Last bulk verification**: 2026-06-07 (Adam, `feat/personnel-unify`
-> preview). **Result: roster unification (Phase 1/2) is NOT working.**
-> Rooming does not derive from `tour_personnel`; remove is destructive;
-> personnel retention thrashes. The A/C UI exists but is blocked by the
-> broken foundation. See "Keystone bug" below. Do NOT start D/E/F until
-> the keystone is fixed.
+> **Last bulk verification**: 2026-06-07 re-smoke (Adam, preview, AFTER the
+> foundation fix). **Keystone RESOLVED** — Payroll, Rooming, and Personnel
+> now show the same 5 roster members; remove is no longer destructive; swap
+> is clickable.
+>
+> **Still failing (functional):**
+> - OPS-16 — after a swap the displayed name stays the OLD person's name.
+> - OPS-17 — payroll does NOT flow to the budget SALARY section (empty); and
+>   the payroll total-fee math is wrong (counts ALL days × show rate, ignores
+>   the show-vs-travel-day split).
+> - OPS-04 — rooming→budget lines appear but with no hotel name and no cost;
+>   and assigning a room triggers a full page refresh (should be optimistic).
+> - OPS-03 / OPS-14 — an off-roster person with their rooms removed still
+>   lingers in the "Off-roster / unassigned" group; need to drop them when
+>   they hold no rooms, and a delete action for them.
+>
+> **Big theme (visual, → redesign phase):** Rooming + Payroll + Budget don't
+> match the Variant reference — rooming grid is functional but ugly, payroll
+> wants the Advance-style week sidebar, the budget has two toolbars split by
+> the summary bar (too cluttered), commissions are buried in Settings, the
+> swap guard popup needs to be more obvious, and swap should prompt
+> what-to-transfer.
 
 Covers the `tour_personnel` roster unification (migration 204) and the
 Payroll / Rooming / Personnel surfaces. Format in `README.md`. Prefix: `OPS`.
