@@ -47,6 +47,7 @@ import {
   withCalc,
 } from './gridModel';
 import { GridMenu, type MenuConfig } from './GridMenu';
+import { GridSlideOver } from './GridSlideOver';
 import {
   GridConfirm,
   GridPrompt,
@@ -80,7 +81,7 @@ export interface GridProps {
 type ReorderKind = 'section' | 'row' | 'col';
 
 export function Grid({ initialData, initialColumns, onOpenRow }: GridProps) {
-  const [, force] = useReducer((x: number) => x + 1, 0);
+  const [tick, force] = useReducer((x: number) => x + 1, 0);
   const render = useCallback(() => force(), []);
 
   /* ---- source of truth (refs) ---- */
@@ -109,6 +110,8 @@ export function Grid({ initialData, initialColumns, onOpenRow }: GridProps) {
   /** toolbar popovers. */
   const popRef = useRef<'filter' | 'cols' | 'addcol' | null>(null);
   const popAnchorRef = useRef<{ left: number; bottom: number }>({ left: 0, bottom: 0 });
+  /** open slide-over target (Phase 2). */
+  const slideRef = useRef<{ si: number; ri: number } | null>(null);
 
   /* drag machinery */
   const rootRef = useRef<HTMLDivElement>(null);
@@ -320,6 +323,41 @@ export function Grid({ initialData, initialColumns, onOpenRow }: GridProps) {
     menuRef.current = null;
     render();
   }, [render]);
+
+  /* ---- slide-over (Phase 2) ---- */
+  const openSlide = useCallback(
+    (sIdx: number, rIdx: number) => {
+      if (sIdx < 0 || rIdx < 0) return;
+      slideRef.current = { si: sIdx, ri: rIdx };
+      render();
+      onOpenRow?.(sIdx, rIdx);
+    },
+    [render, onOpenRow],
+  );
+  const closeSlide = useCallback(() => {
+    slideRef.current = null;
+    render();
+  }, [render]);
+  // Menu opener for the slide — auto-closes on pick, but survives a nested
+  // open (link picker: category → names) by only closing if THIS menu is
+  // still the active one after the pick.
+  const slideOpenMenu = useCallback(
+    (config: MenuConfig) => {
+      const wrapped: MenuConfig = {
+        ...config,
+        onPick: (v: string) => {
+          config.onPick(v);
+          if (menuRef.current === wrapped) {
+            menuRef.current = null;
+            render();
+          }
+        },
+      };
+      menuRef.current = wrapped;
+      render();
+    },
+    [render],
+  );
   const openStatusMenu = (anchorEl: HTMLElement, rowObj: { row: Row }, id: string) => {
     const a = (anchorEl.querySelector('.pill') ?? anchorEl).getBoundingClientRect();
     menuRef.current = {
@@ -891,7 +929,7 @@ export function Grid({ initialData, initialColumns, onOpenRow }: GridProps) {
               anchor: { left: a.left, bottom: a.bottom },
               options: names.length ? [...names, 'Open line ↗'] : ['No receipts on this line', 'Open line ↗'],
               onPick: (v) => {
-                if (v === 'Open line ↗') onOpenRow?.(sec._si!, ri);
+                if (v === 'Open line ↗') openSlide(sec._si!, ri);
                 closeMenu();
               },
             };
@@ -966,6 +1004,14 @@ export function Grid({ initialData, initialColumns, onOpenRow }: GridProps) {
         return (
           <div key={key} className="c">
             {row.item}
+            <span
+              className="openbtn"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={() => openSlide(sec._si ?? -1, ri)}
+            >
+              <span className="oarr">⤢</span>
+              <span className="ow">Open</span>
+            </span>
           </div>
         );
       if (id === 'vendor') {
@@ -1149,7 +1195,7 @@ export function Grid({ initialData, initialColumns, onOpenRow }: GridProps) {
             onPointerDown={(e) => {
               e.stopPropagation();
             }}
-            onClick={() => onOpenRow?.(sec._si ?? -1, ri)}
+            onClick={() => openSlide(sec._si ?? -1, ri)}
           >
             <span className="oarr">⤢</span>
             <span className="ow">Open</span>
@@ -1532,6 +1578,20 @@ export function Grid({ initialData, initialColumns, onOpenRow }: GridProps) {
             warnRef.current = null;
             render();
           }}
+        />
+      ) : null}
+
+      {/* Phase 2 — the slide-over, opened from openSlide() */}
+      {slideRef.current ? (
+        <GridSlideOver
+          data={data()}
+          si={slideRef.current.si}
+          ri={slideRef.current.ri}
+          version={tick}
+          onClose={closeSlide}
+          pushUndo={pushUndo}
+          render={render}
+          openMenu={slideOpenMenu}
         />
       ) : null}
     </div>

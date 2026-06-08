@@ -225,9 +225,86 @@ cancels. The keystroke does **not** also navigate twice (no double-fire).
 
 _None recorded yet — Phase 1 awaits its first smoke._
 
-## Deferred to later phases (not in Phase 1)
+## Slide-over (Phase 2 — `<GridSlideOver>`)
 
-- Slide-over (Line / Person / Hotel / Settlement) — `onOpenRow` is wired but
-  unbound in the demo.
-- Income column set + deal/settlement, projections panel, live FX feed.
-- Mounting `<Grid>` inside the real product surfaces.
+Build-green / tsc-0 / eslint-0, **not yet click-verified** (auth-gated
+locally). Opens from the **Open** affordance on an Item cell (now present on
+formula rows too) or a Receipts cell → "Open line ↗". Slides from the right;
+Esc / backdrop / ✕ closes; menus + modals sit ABOVE the slide; all edits
+write back to the grid row and are **undoable (⌘Z)**.
+
+#### SLIDE-01 — Opens / closes
+**Do**: Click **Open** on a Travel row; then press Esc, click the backdrop, and the ✕.
+**Expect**: Panel slides in from the right; each of Esc / backdrop / ✕ slides it out.
+**Last verified**:
+
+#### SLIDE-02 — LINE variant
+**Do**: Open a normal row.
+**Expect**: Editable title; Estimate/Actual currency inputs; Variance stat; Vendor; Status pill; Linked-to; Transactions; Documents; Notes.
+**Last verified**:
+
+#### SLIDE-03 — Currency + FX (red)
+**Do**: Open the EUR Hotel row (or change a line's currency via the pill); look at Estimate/Actual + the variance line.
+**Expect**: A styled currency menu; non-USD shows the converted value **red** with a "from {sym}{amount}" / "≈ … in $" note + a demo-rate warning.
+**Last verified**:
+
+#### SLIDE-04 — Locked estimate
+**Do**: Open a Salaries (Payroll) or Accommodation (Rooming) row, then a Commissions (formula) row.
+**Expect**: Estimate is read-only with a 🔒; the header shows the "🔗 source → open" pill. (A Routing-derived line would NOT lock.)
+**Last verified**:
+
+#### SLIDE-05 — Linked-to (person / show)
+**Do**: Click "Link to a person or show…", pick a category then a name; remove a chip with ✕.
+**Expect**: Two-step styled menu (no native chrome); chip added/removed; undoable.
+**Last verified**:
+
+#### SLIDE-06 — Transactions + receipt
+**Do**: Add a transaction; edit name/date/amount; click "＋ attach receipt" → pick an existing document OR "Upload new receipt".
+**Expect**: Date picker works; "Upload new" creates a Document AND links it to the transaction (the 📎 shows the name).
+**Last verified**:
+
+#### SLIDE-07 — Documents
+**Do**: "＋ Add" → pick a type (Receipt/Quote/Contract/Invoice/Other); rename; remove.
+**Expect**: Styled type menu; the new doc's name input is auto-focused; rename + remove are undoable.
+**Last verified**:
+
+#### SLIDE-08 — PERSON rate card
+**Do**: Open a Salaries row; "＋ Add rate" → pick a preset; edit a rate label/amount; remove one. "Open in Personnel".
+**Expect**: Rate lines add/edit/remove (undoable); "Open in Personnel" is a stub link (later phase).
+**Last verified**:
+
+#### SLIDE-09 — HOTEL variant
+**Do**: Open an Accommodation row.
+**Expect**: Budget first, then Confirmation # / Nights / Contact; "Open in Rooming" + "Link to Advance" stubs.
+**Last verified**:
+
+#### SLIDE-10 — SETTLEMENT (set a row's Day to "Show" first)
+**Do**: On any row set **Day → Show**, then Open it.
+**Expect**: Ticket tiers (£price · sold → gross); deductions (comps, charity/ticket, facility/ticket, tax %, WH %, deposit) → net; expenses tagged **Show/Artist**; deal switch (Flat/Plus/Versus/Door + split%) → walkout → after-WH → balance due — **all recompute live**.
+**Last verified**:
+
+#### SLIDE-11 — Settlement deal math
+**Do**: Toggle the deal pill through Flat → Plus → Versus → Door; edit the split %, guarantee, tiers, an Artist expense.
+**Expect**: Walkout follows the deal formula; Artist costs reduce the balance, Show costs sit inside the deal; the summary updates each edit.
+**Last verified**:
+
+#### SLIDE-12 — Scan + memo viewer
+**Do**: "⬆ Upload & scan deal memo" (watch the animated steps); then click a memo → "view ↗".
+**Expect**: Scanner runs then fills deal/guarantee/cap + attaches a memo (no reload); the viewer shows the document left + advance info (transport/exclusivity/hospitality/notes) right.
+**Last verified**:
+
+#### SLIDE-13 — Undo covers slide edits
+**Do**: Make several slide edits, close, press ⌘Z in the grid.
+**Expect**: Each edit reverts (the slide writes to the same model + undo stack).
+**Last verified**:
+
+## Known broken
+
+_None recorded yet — Phase 1 + 2 await their first smoke._
+
+## Deferred to later phases
+
+- Income column set + projections panel + live FX feed (Phase 3/4).
+- "Open in Personnel / Rooming", "Link to Advance", source-pill open, and the
+  link/person/show targets are demo stubs until the real surfaces are wired.
+- Mounting `<Grid>` + `<GridSlideOver>` inside the real product surfaces.
