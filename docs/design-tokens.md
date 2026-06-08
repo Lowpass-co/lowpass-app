@@ -268,3 +268,21 @@ Existing `--sidebar-width`, `--sidebar-collapsed-width`, `--header-height` remai
 ---
 
 **Preview:** [Design Tokens (admin)](/admin/design-tokens) — site admins only, `getUserAndAdminStatus` + `notFound` for others.
+
+---
+
+## Canonical Grid palette (added with `src/components/grid/`)
+
+The grid's section accents rotate through a stable 5-colour set. lp already
+had orange / info / success / warning; the grid needs two more, added as
+base tokens (light in `:root`, brighter dark overrides in `.dark`):
+
+| Token | Light | Dark | Use |
+|-------|-------|------|-----|
+| `--lp-violet` | `#8B5CF6` | `#A78BFA` | formula sections, FX / deal chips |
+| `--lp-pink` | `#EC4899` | `#F472B6` | 5th section accent |
+
+The rotation is exposed as `--lp-grid-accent-1..5` (orange · info · violet ·
+success · pink). Every colour inside `src/components/grid/grid.css` resolves
+to one of these `var(--lp-…)` tokens (or a `color-mix` / hex+alpha of one) —
+no literal hex in the grid.

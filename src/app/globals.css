@@ -191,6 +191,19 @@
   --lp-border-strong: #D4D4D2;    /* card borders, modal edges */
   --lp-text-mono: #404040;        /* monospace numeric content */
   --lp-mono-font: 'JetBrains Mono', ui-monospace, 'SF Mono', 'Fira Code', monospace;
+
+  /* Canonical Grid palette — extends the semantic set with the two extra
+     accents the grid's 5-colour section rotation needs (dark overrides in
+     the .dark block). The grid references ONLY these var(--lp-…) tokens. */
+  --lp-violet: #8B5CF6;
+  --lp-pink: #EC4899;
+  /* Stable 5-accent rotation for grid sections (the colour belongs to the
+     section, not its position). */
+  --lp-grid-accent-1: var(--color-lp-orange);
+  --lp-grid-accent-2: var(--color-lp-info);
+  --lp-grid-accent-3: var(--lp-violet);
+  --lp-grid-accent-4: var(--color-lp-success);
+  --lp-grid-accent-5: var(--lp-pink);
 }
 
 /* ============================================
@@ -886,6 +899,9 @@ input[type='checkbox'].lp-checkbox:focus-visible {
   --lp-border-subtle: #222222;
   --lp-border-strong: #333333;
   --lp-text-mono: #d1d5db;
+  /* Canonical Grid palette — brighter accents for dark surfaces. */
+  --lp-violet: #A78BFA;
+  --lp-pink: #F472B6;
 }
 
 /* ============================================
