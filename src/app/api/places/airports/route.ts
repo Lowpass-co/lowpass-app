@@ -7,10 +7,15 @@
    ============================================ */
 
 import { NextResponse } from 'next/server';
+import { guardGoogleCall, logGoogleCall } from '@/lib/external/googleUsage';
 
 const PLACES_AUTOCOMPLETE_URL = 'https://places.googleapis.com/v1/places:autocomplete';
 
 export async function POST(request: Request) {
+  // Security audit §H2 — authenticate + rate-limit + meter (was open).
+  const g = await guardGoogleCall('google.places.airports');
+  if (!g.ok) return g.response;
+
   const key = process.env.GOOGLE_PLACES_API_KEY;
   if (!key) {
     return NextResponse.json({ error: 'Places API not configured' }, { status: 503 });
@@ -40,6 +45,7 @@ export async function POST(request: Request) {
       includedPrimaryTypes: ['airport'],
     }),
   });
+  await logGoogleCall(g.ctx, res.ok ? 'ok' : 'error');
 
   if (!res.ok) {
     const err = await res.text();

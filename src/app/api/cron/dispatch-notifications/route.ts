@@ -24,9 +24,12 @@ export const dynamic = 'force-dynamic';
 function authorized(request: Request): boolean {
   const expected = process.env.CRON_SECRET;
   if (!expected) {
-    /* No secret configured — local dev. Allow. Production
-       Vercel deploys MUST set CRON_SECRET. */
-    return true;
+    /* Security audit §H3 — FAIL CLOSED in production. A missing secret
+       previously made this service-role notification dispatcher fully
+       public (queue-drain + email-send abuse via Resend). In production
+       a missing CRON_SECRET now denies all callers; only local dev
+       (NODE_ENV !== 'production') is allowed without a secret. */
+    return process.env.NODE_ENV !== 'production';
   }
   const header = request.headers.get('authorization');
   return header === `Bearer ${expected}`;

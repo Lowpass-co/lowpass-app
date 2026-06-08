@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { createServerSupabaseClient } from '@/lib/supabase-server';
 
 /**
  * GET /api/equipment/import-sheet?id=SHEET_ID
@@ -8,6 +9,17 @@ import { NextRequest, NextResponse } from 'next/server';
  * The sheet must be set to "Anyone with the link can view".
  */
 export async function GET(req: NextRequest) {
+  // Security audit — was unauthenticated (open proxy / mild SSRF to
+  // docs.google.com). Require a logged-in user. The sheet id is already
+  // constrained to [A-Za-z0-9_-] so only Sheets export URLs are reachable.
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
   const id = req.nextUrl.searchParams.get('id');
   if (!id || !/^[a-zA-Z0-9_-]+$/.test(id)) {
     return NextResponse.json({ error: 'Invalid sheet ID.' }, { status: 400 });

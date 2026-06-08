@@ -72,10 +72,10 @@ export function BudgetContextBand({
         ]}
         rightSlot={
           <div className="flex items-center gap-2">
-            {/* Re-mount the app-wide density toggle (orphaned when
-                BudgetTabNav/BudgetSubBar were retired). AppDensityToggle
-                drives the same `lowpass:density` preference every grid
-                reads via useAppDensity. */}
+            {/* App-wide density toggle, re-mounted here (orphaned when
+                BudgetTabNav/BudgetSubBar were retired and the budget bars
+                collapsed into this band). Drives the same `lowpass:density`
+                preference every grid reads via useAppDensity. */}
             <AppDensityToggle />
             <BudgetExportControls lines={lines} tourCurrency={tourCurrency} tourName={tourName} />
           </div>

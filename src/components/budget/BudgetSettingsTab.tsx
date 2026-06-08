@@ -66,6 +66,7 @@ export function BudgetSettingsTab({
     <div className="mx-auto w-full max-w-[820px] space-y-5 py-2">
       <PhaseToggleCard />
       <OverheadsCard tourId={tourId} />
+      <CommissionsCard tourId={tourId} />
       <TourSectionsCard tourId={tourId} sections={sections} />
       <TemplatesCard tourId={tourId} />
     </div>
@@ -227,6 +228,221 @@ function OverheadsCard({ tourId }: { tourId: string }) {
           </span>
         </div>
       </div>
+    </section>
+  );
+}
+
+/* -------------------------------------------------- */
+/* Commissions — manager/agent %, each on a chosen base */
+/* (gross/net/merch/pre-tax). Feeds the Summary P&L.    */
+/* -------------------------------------------------- */
+const COMMISSION_BASIS_OPTIONS = [
+  { value: 'gross', label: 'gross' },
+  { value: 'net', label: 'net' },
+  { value: 'gross_merch', label: 'merch' },
+  { value: 'net_merch', label: 'net merch' },
+  { value: 'gross_minus_tax', label: 'pre-tax' },
+];
+
+type CommissionRow = { id: string; label: string; percentage: number; basis: string };
+
+function CommissionsCard({ tourId }: { tourId: string }) {
+  const { showToast } = useToast();
+  const { requestConfirm, dialog } = useBudgetConfirm();
+  const [rows, setRows] = useState<CommissionRow[] | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const res = await fetch(`/api/budget/commissions?tour_id=${encodeURIComponent(tourId)}`);
+        if (!res.ok) throw new Error(`Failed (${res.status})`);
+        const d = (await res.json()) as { commissions?: CommissionRow[] };
+        if (active)
+          setRows(
+            (d.commissions ?? []).map((c) => ({
+              id: c.id,
+              label: c.label,
+              percentage: Number(c.percentage) || 0,
+              basis: c.basis || 'gross',
+            })),
+          );
+      } catch {
+        if (active) setRows([]);
+      }
+    })();
+    return () => {
+      active = false;
+    };
+  }, [tourId]);
+
+  /* Optimistic PATCH — apply locally, persist in the background, no
+     router.refresh(). Roll back + toast on failure. */
+  const commit = (id: string, fields: Partial<Omit<CommissionRow, 'id'>>) => {
+    if (!rows) return;
+    const before = rows;
+    setRows(rows.map((r) => (r.id === id ? { ...r, ...fields } : r)));
+    void (async () => {
+      try {
+        const res = await fetch('/api/budget/commissions', {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id, ...fields }),
+        });
+        if (!res.ok) throw new Error(`Save failed (${res.status})`);
+      } catch (err) {
+        setRows(before);
+        showToast(err instanceof Error ? err.message : 'Save failed', 'error');
+      }
+    })();
+  };
+
+  // Local-only update while typing the %; commit() fires on blur.
+  const setLocalPct = (id: string, fraction: number) =>
+    setRows((prev) => prev?.map((r) => (r.id === id ? { ...r, percentage: fraction } : r)) ?? prev);
+
+  const add = async () => {
+    setBusy(true);
+    try {
+      const res = await fetch('/api/budget/commissions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tour_id: tourId, label: 'New commission', percentage: 0, basis: 'gross' }),
+      });
+      if (!res.ok) throw new Error(`Add failed (${res.status})`);
+      const c = (await res.json()) as CommissionRow;
+      setRows((prev) => [
+        ...(prev ?? []),
+        { id: c.id, label: c.label, percentage: Number(c.percentage) || 0, basis: c.basis || 'gross' },
+      ]);
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Add failed', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = (row: CommissionRow) =>
+    requestConfirm({
+      title: 'Delete commission?',
+      message: `Delete "${row.label || 'commission'}"? It will no longer feed the Summary P&L.`,
+      confirmLabel: 'Delete commission',
+      onConfirm: () => {
+        const before = rows;
+        setRows((prev) => prev?.filter((r) => r.id !== row.id) ?? prev);
+        void (async () => {
+          try {
+            const res = await fetch('/api/budget/commissions', {
+              method: 'DELETE',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ id: row.id }),
+            });
+            if (!res.ok) throw new Error(`Delete failed (${res.status})`);
+          } catch (err) {
+            if (before) setRows(before);
+            showToast(err instanceof Error ? err.message : 'Delete failed', 'error');
+          }
+        })();
+      },
+    });
+
+  return (
+    <section className="rounded-lg border p-4" style={cardStyle}>
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="lp-h3">Commissions</h2>
+          <p className="mt-1" style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text-secondary)' }}>
+            Manager / agent percentages. Each feeds the Summary P&amp;L on its chosen base.
+          </p>
+        </div>
+        <button
+          type="button"
+          disabled={busy || rows === null}
+          onClick={() => void add()}
+          className="btn-transition inline-flex items-center gap-1.5 rounded-md px-3 py-1.5"
+          style={{
+            background: 'var(--color-lp-orange)',
+            color: 'var(--lp-text-inverse)',
+            fontSize: 'var(--lp-text-sm)',
+            fontWeight: 'var(--lp-weight-medium)',
+            opacity: busy ? 0.6 : 1,
+          }}
+        >
+          <Plus className="h-4 w-4" aria-hidden /> Add commission
+        </button>
+      </div>
+
+      <ul className="mt-3 space-y-1.5">
+        {rows === null ? (
+          <li style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text-tertiary)' }}>Loading…</li>
+        ) : rows.length === 0 ? (
+          <li style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text-tertiary)' }}>
+            No commissions yet — add one above.
+          </li>
+        ) : (
+          rows.map((r) => (
+            <li
+              key={r.id}
+              className="flex items-center gap-2 rounded-md border px-2 py-1.5"
+              style={{ borderColor: 'var(--lp-border)', background: 'var(--lp-bg)' }}
+            >
+              <InlineText
+                value={r.label}
+                onCommit={(label) => commit(r.id, { label })}
+                style={{
+                  flex: 1,
+                  ...inputStyle,
+                  border: '1px solid transparent',
+                  background: 'transparent',
+                  fontSize: 'var(--lp-text-base)',
+                }}
+              />
+              <div className="flex items-center gap-1">
+                <input
+                  type="number"
+                  min={0}
+                  step={0.5}
+                  value={+(r.percentage * 100).toFixed(2)}
+                  onChange={(e) => setLocalPct(r.id, (Number(e.target.value) || 0) / 100)}
+                  onBlur={(e) => commit(r.id, { percentage: (Number(e.target.value) || 0) / 100 })}
+                  className="w-16"
+                  style={{ ...inputStyle, textAlign: 'right' }}
+                  aria-label={`${r.label} percentage`}
+                />
+                <span style={{ color: 'var(--lp-text-tertiary)' }}>%</span>
+              </div>
+              <div className="w-32">
+                <InlineSelectCell
+                  variant="field"
+                  showTone={false}
+                  ariaLabel={`${r.label} basis`}
+                  value={r.basis}
+                  options={COMMISSION_BASIS_OPTIONS}
+                  onCommit={(v) => commit(r.id, { basis: v })}
+                />
+              </div>
+              <button
+                type="button"
+                aria-label={`Delete ${r.label}`}
+                title="Delete commission"
+                onClick={() => remove(r)}
+                className="btn-transition rounded p-1"
+                style={{ color: 'var(--lp-text-tertiary)' }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.color = 'var(--color-lp-error)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.color = 'var(--lp-text-tertiary)';
+                }}
+              >
+                <Trash2 className="h-3.5 w-3.5" aria-hidden />
+              </button>
+            </li>
+          ))
+        )}
+      </ul>
+      {dialog}
     </section>
   );
 }

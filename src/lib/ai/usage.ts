@@ -208,6 +208,12 @@ async function sumMonthCost(
     .from('ai_usage_events')
     .select('cost_usd_micros')
     .eq('workspace_id', workspaceId)
+    // Anthropic dollar-caps are Anthropic-only. Google calls share this
+    // table (migration 205, provider='google') but have their own
+    // request-count limiter (src/lib/external/googleUsage.ts), so they must
+    // NOT consume the Anthropic monthly budget. provider defaults to
+    // 'anthropic' for every pre-205 row, so this stays historically correct.
+    .neq('provider', 'google')
     .gte('created_at', monthStartIsoStr);
   if (userId) q = q.eq('user_id', userId);
   const { data, error } = await q;
