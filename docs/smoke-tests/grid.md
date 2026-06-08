@@ -2,6 +2,25 @@
 
 > **Last bulk verification**: _pending — Phase 1 not yet smoked by Adam._
 
+## Phase 1 fix pass (re-smoke these)
+
+Regressions reported on the first smoke, fixed — build-green / tsc-0 /
+eslint-0, but **not yet click-verified** (auth-gated locally). Re-smoke:
+
+| Reported | Smoke IDs | Fix |
+|----------|-----------|-----|
+| Selection invisible | GRID-03/04/05 | active ring + range tint now **inline-styled** (can't be hidden by any cascade) |
+| L/R arrows scroll | GRID-03 | was downstream of the invisible ring — keydown already `preventDefault`s; the ring now shows the move |
+| Modal primary button missing | GRID-16/18/31 | modal overlay raised above the toolbar popovers + popover closes on confirm + primary inline-styled |
+| Checkbox won't toggle | GRID-25 | `.chk` now has a click handler (toggle + styled) |
+| Dropdown menu not colour-coded | GRID-23 | menu items now carry their optColor dot + text colour |
+| No insertion line (col + section) | GRID-13/19/20 | drag overlays are now **state-driven + portaled** (inline-styled); column line spans full grid height |
+| Column reorder no animation | GRID-13 | columns now FLIP (header) like rows/sections |
+| Section rename | GRID-21 | double-click the section name to rename |
+| Item emoji sticks on clear | GRID-06/09 | icon only renders while the item text is non-empty |
+| Hide/show jumps width | GRID-15 | `grid-template-columns` transitions |
+| Search result jumps | GRID-34 | rows fade in on appearance |
+
 The one `<Grid>` every tabular surface will use (Expenses · Income ·
 Payroll · Rooming · Channel list). Phase 1 = the spreadsheet core against
 static data at **`/grid-demo`** (no backend, no slide-over). Reference

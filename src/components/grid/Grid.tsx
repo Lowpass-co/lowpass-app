@@ -23,7 +23,7 @@
    ============================================ */
 
 import './grid.css';
-import { useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useReducer, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { Column, Density, GroupBy, Row, Section, Sel, Snapshot } from './types';
 import {
@@ -61,6 +61,14 @@ import {
    dependency arrays are intentionally minimal — they never need to re-create
    to "see" fresh data. exhaustive-deps would force noise that hides nothing. */
 /* eslint-disable react-hooks/exhaustive-deps */
+
+/** Imperative handle for the portaled drag overlays (resize ghost +
+ *  reorder insertion line). State-driven so they can't be hidden by any
+ *  cascade; only the tiny overlay re-renders on pointermove, not the grid. */
+interface OverlayHandle {
+  setGhost: (x: number | null) => void;
+  setIns: (spec: { axis: 'x' | 'y'; left: number; top: number; width: number; height: number } | null) => void;
+}
 
 export interface GridProps {
   initialData: Section[];
@@ -104,8 +112,7 @@ export function Grid({ initialData, initialColumns, onOpenRow }: GridProps) {
 
   /* drag machinery */
   const rootRef = useRef<HTMLDivElement>(null);
-  const ghostRef = useRef<HTMLDivElement>(null);
-  const insRef = useRef<HTMLDivElement>(null);
+  const overlayRef = useRef<OverlayHandle>(null);
   const selDragRef = useRef(false);
   const rzRef = useRef<{ key: string; x: number; w: number } | null>(null);
   const reRef = useRef<{
@@ -121,7 +128,7 @@ export function Grid({ initialData, initialColumns, onOpenRow }: GridProps) {
     sy: number;
     dragEl: HTMLElement | null;
   } | null>(null);
-  const flipRef = useRef<Map<string, DOMRect> | null>(null);
+  const flipRef = useRef<{ sel: string; keyAttr: string; first: Map<string, DOMRect> } | null>(null);
 
   /* ---- one-time init ---- */
   const inited = useRef(false);
@@ -339,6 +346,7 @@ export function Grid({ initialData, initialColumns, onOpenRow }: GridProps) {
       anchor: { left: a.left, bottom: a.bottom },
       options: col.options ?? [],
       current: String(rowObj.row[id]),
+      optColors: col.optColors,
       onPick: (v) => {
         pushUndo();
         rowObj.row[id] = v;
@@ -353,6 +361,7 @@ export function Grid({ initialData, initialColumns, onOpenRow }: GridProps) {
       anchor: { left: a.left, bottom: a.bottom },
       options: (col.options ?? []).map((t) => ({ value: t, deletable: !DT_DEFAULTS.includes(t) })),
       current: String(rowObj.row.daytype),
+      optColors: col.optColors,
       onPick: (v) => {
         pushUndo();
         rowObj.row.daytype = v;
@@ -402,11 +411,11 @@ export function Grid({ initialData, initialColumns, onOpenRow }: GridProps) {
     if (!col) return;
     widthsRef.current[rz.key] = Math.max(col.min, rz.w + (e.clientX - rz.x));
     rootRef.current?.style.setProperty('--cols', template(colsRef.current, widthsRef.current));
-    if (ghostRef.current) ghostRef.current.style.left = e.clientX + 'px';
+    overlayRef.current?.setGhost(e.clientX);
   }, []);
   const endResize = useCallback(() => {
     rzRef.current = null;
-    if (ghostRef.current) ghostRef.current.style.display = 'none';
+    overlayRef.current?.setGhost(null);
     rootRef.current?.querySelectorAll('.grip.drag').forEach((g) => g.classList.remove('drag'));
     document.removeEventListener('pointermove', onResizeMove);
     render();
@@ -417,10 +426,7 @@ export function Grid({ initialData, initialColumns, onOpenRow }: GridProps) {
       e.preventDefault();
       rzRef.current = { key, x: e.clientX, w: widthsRef.current[key] };
       (e.target as HTMLElement).classList.add('drag');
-      if (ghostRef.current) {
-        ghostRef.current.style.display = 'block';
-        ghostRef.current.style.left = e.clientX + 'px';
-      }
+      overlayRef.current?.setGhost(e.clientX);
       document.addEventListener('pointermove', onResizeMove);
       document.addEventListener('pointerup', endResize, { once: true });
     },
@@ -435,14 +441,8 @@ export function Grid({ initialData, initialColumns, onOpenRow }: GridProps) {
       if (Math.abs(e.clientX - RE.sx) < 4 && Math.abs(e.clientY - RE.sy) < 4) return;
       RE.started = true;
       RE.dragEl?.classList.add('dragging');
-      const ins = insRef.current;
-      if (ins) {
-        ins.className = RE.axis === 'y' ? 'gr-ins-y' : 'gr-ins-x';
-        ins.style.display = 'block';
-      }
     }
     const { items, axis } = RE;
-    const ins = insRef.current;
     let to: number | null = null;
     let boundary: number | null = null;
     for (let i = 0; i < items.length; i++) {
@@ -462,15 +462,20 @@ export function Grid({ initialData, initialColumns, onOpenRow }: GridProps) {
     }
     RE.to = to;
     const ref = items[0].getBoundingClientRect();
-    if (ins && boundary !== null) {
+    if (boundary !== null) {
       if (axis === 'y') {
-        ins.style.left = ref.left + 'px';
-        ins.style.width = ref.width + 'px';
-        ins.style.top = boundary - 1 + 'px';
+        // horizontal line spanning the section width at the drop boundary.
+        overlayRef.current?.setIns({ axis: 'y', left: ref.left, top: boundary - 1, width: ref.width, height: 3 });
       } else {
-        ins.style.top = ref.top + 'px';
-        ins.style.height = ref.height + 'px';
-        ins.style.left = boundary - 1 + 'px';
+        // vertical line spanning the whole grid height at the drop boundary.
+        const inner = rootRef.current?.querySelector('.gridinner')?.getBoundingClientRect();
+        overlayRef.current?.setIns({
+          axis: 'x',
+          left: boundary - 1,
+          top: inner ? inner.top : ref.top,
+          width: 3,
+          height: inner ? inner.height : ref.height,
+        });
       }
     }
   }, []);
@@ -481,7 +486,7 @@ export function Grid({ initialData, initialColumns, onOpenRow }: GridProps) {
     let to = RE.to;
     const started = RE.started;
     RE.dragEl?.classList.remove('dragging');
-    if (insRef.current) insRef.current.style.display = 'none';
+    overlayRef.current?.setIns(null);
     document.removeEventListener('pointermove', moveReorder);
     reRef.current = null;
     if (!started) return;
@@ -494,17 +499,17 @@ export function Grid({ initialData, initialColumns, onOpenRow }: GridProps) {
         if (kind !== 'col') selRef.current = { ar: 0, ac: 0, fr: 0, fc: 0 };
         render();
       };
-      if (kind === 'col') {
-        doIt();
-      } else {
-        // FLIP — capture first rects, mutate, animate in useLayoutEffect.
-        const first = new Map<string, DOMRect>();
-        rootRef.current
-          ?.querySelectorAll('#gr-sections [data-uid]')
-          .forEach((el) => first.set((el as HTMLElement).dataset.uid!, el.getBoundingClientRect()));
-        flipRef.current = first;
-        doIt();
-      }
+      // FLIP for every kind (#6 — columns animate like rows/sections). Capture
+      // the moving elements' first rects, mutate, animate in useLayoutEffect.
+      const sel = kind === 'col' ? '.gridhead .hc[data-colid]' : '#gr-sections [data-uid]';
+      const keyAttr = kind === 'col' ? 'colid' : 'uid';
+      const first = new Map<string, DOMRect>();
+      rootRef.current?.querySelectorAll(sel).forEach((el) => {
+        const k = (el as HTMLElement).dataset[keyAttr];
+        if (k) first.set(k, el.getBoundingClientRect());
+      });
+      flipRef.current = { sel, keyAttr, first };
+      doIt();
     }
   }, [moveReorder, pushUndo, render]);
   const startReorder = useCallback(
@@ -543,14 +548,15 @@ export function Grid({ initialData, initialColumns, onOpenRow }: GridProps) {
     [moveReorder, endReorder],
   );
 
-  // FLIP runner — after a section/row reorder commits.
+  // FLIP runner — after a section / row / column reorder commits.
   useLayoutEffect(() => {
-    const first = flipRef.current;
-    if (!first) return;
+    const flip = flipRef.current;
+    if (!flip) return;
     flipRef.current = null;
-    rootRef.current?.querySelectorAll('#gr-sections [data-uid]').forEach((el) => {
+    rootRef.current?.querySelectorAll(flip.sel).forEach((el) => {
       const node = el as HTMLElement;
-      const f = first.get(node.dataset.uid!);
+      const key = node.dataset[flip.keyAttr];
+      const f = key ? flip.first.get(key) : undefined;
       if (!f) return;
       const l = node.getBoundingClientRect();
       const dx = f.left - l.left,
@@ -785,6 +791,23 @@ export function Grid({ initialData, initialColumns, onOpenRow }: GridProps) {
   const vis = visCols(cols());
   const nc = NC();
   const s = sel();
+
+  // Selection visuals as INLINE styles (#1) — the orange active ring + the
+  // range tint. Inline so no stylesheet cascade / specificity issue can
+  // hide them; the .active/.selected classes stay for the radius/glow too.
+  const selStyle = (active: boolean, selected: boolean): React.CSSProperties | undefined => {
+    if (active)
+      return {
+        boxShadow:
+          'inset 0 0 0 2px var(--lp-orange), 0 0 16px color-mix(in srgb, var(--lp-orange) 16%, transparent)',
+        background: 'color-mix(in srgb, var(--lp-orange) 7%, transparent)',
+        borderRadius: 'var(--lp-radius-sm)',
+        position: 'relative',
+        zIndex: 1,
+      };
+    if (selected) return { background: 'color-mix(in srgb, var(--lp-orange) 12%, transparent)' };
+    return undefined;
+  };
 
   const renderEditInput = () => (
     <input
@@ -1076,22 +1099,32 @@ export function Grid({ initialData, initialColumns, onOpenRow }: GridProps) {
     // derived locked estimate
     if (sec.kind === 'derived' && id === 'est' && (sec.source === 'Payroll' || sec.source === 'Rooming')) {
       const ci2 = nc.indexOf('est');
-      const cls = s.fr === fi && s.fc === ci2 ? ' active' : inSel(s, fi, ci2) ? ' selected' : '';
+      const active2 = s.fr === fi && s.fc === ci2;
+      const cls = active2 ? ' active' : inSel(s, fi, ci2) ? ' selected' : '';
       return (
-        <div key={key} className={`c cell num cell-lock${cls}`} data-r={fi} data-c={ci2} onPointerDown={(e) => onCellPointerDown(e, fi, ci2)}>
+        <div
+          key={key}
+          className={`c cell num cell-lock${cls}`}
+          style={selStyle(active2, !active2 && inSel(s, fi, ci2))}
+          data-r={fi}
+          data-c={ci2}
+          onPointerDown={(e) => onCellPointerDown(e, fi, ci2)}
+        >
           {fmt(row.est)}
           <span className="lockmini">🔒</span>
         </div>
       );
     }
     // generic navigable cell
-    const cls = isActive ? ' active' : inSel(s, fi, ci) ? ' selected' : '';
+    const selected = !isActive && inSel(s, fi, ci);
+    const cls = isActive ? ' active' : selected ? ' selected' : '';
     const mut = t === 'money' && !row[id] ? ' muted0' : '';
     const numCls = t === 'money' || t === 'number' ? ' num' : '';
     return (
       <div
         key={key}
         className={`c cell${numCls}${mut}${cls}`}
+        style={selStyle(isActive, selected)}
         data-r={fi}
         data-c={ci}
         onPointerDown={(e) => onCellPointerDown(e, fi, ci)}
@@ -1106,7 +1139,9 @@ export function Grid({ initialData, initialColumns, onOpenRow }: GridProps) {
     const id = col.id,
       t = col.type;
     if (t === 'text') {
-      const ic = id === 'item' && row.icon ? <span className="ic">{row.icon}</span> : null;
+      // #8 — only show the leading icon while there's text; clearing the
+      // item (edit to empty / ⌫) drops the emoji too instead of it sticking.
+      const ic = id === 'item' && row.icon && String(row[id] ?? '').trim() ? <span className="ic">{row.icon}</span> : null;
       const op =
         id === 'item' ? (
           <span
@@ -1142,7 +1177,22 @@ export function Grid({ initialData, initialColumns, onOpenRow }: GridProps) {
       );
     }
     if (t === 'number') return (row[id] ?? '') === '' ? '' : String(row[id]);
-    if (t === 'check') return <span className={`chk ${row[id] ? 'on' : ''}`}>{row[id] ? '✓' : ''}</span>;
+    if (t === 'check')
+      return (
+        <span
+          className={`chk ${row[id] ? 'on' : ''}`}
+          role="checkbox"
+          aria-checked={Boolean(row[id])}
+          onClick={(e) => {
+            e.stopPropagation();
+            pushUndo();
+            row[col.id] = !row[col.id];
+            render();
+          }}
+        >
+          {row[id] ? '✓' : ''}
+        </span>
+      );
     if (t === 'dropdown') {
       const cc = col.optColors && col.optColors[String(row[id])];
       return (
@@ -1220,7 +1270,29 @@ export function Grid({ initialData, initialColumns, onOpenRow }: GridProps) {
             <div className="sh-name">
               <span className="grip-dots">⠿</span>
               <span className="dot" style={{ color: accent }} />
-              <span className="sh-title">{sec.name}</span>
+              <span
+                className="sh-title"
+                style={{ cursor: 'text' }}
+                title="Double-click to rename"
+                onPointerDown={(e) => e.stopPropagation()}
+                onDoubleClick={(e) => {
+                  e.stopPropagation();
+                  promptRef.current = {
+                    title: 'Rename section',
+                    placeholder: sec.name,
+                    defaultValue: sec.name,
+                    onSubmit: (name) => {
+                      if (!name) return;
+                      pushUndo();
+                      sec.name = name;
+                      render();
+                    },
+                  };
+                  render();
+                }}
+              >
+                {sec.name}
+              </span>
               <span className="sh-count">{visRows.length}</span>
               {sec.kind === 'derived' ? (
                 <span className="badge src" onClick={(e) => e.stopPropagation()}>
@@ -1331,6 +1403,7 @@ export function Grid({ initialData, initialColumns, onOpenRow }: GridProps) {
                 key={c.id}
                 className={`hc ${c.type === 'money' || c.type === 'number' || c.type === 'variance' ? 'num' : ''} ${c.id === 'idx' ? 'noreorder' : ''}`}
                 data-ci={cols().indexOf(c)}
+                data-colid={c.id}
                 onPointerDown={(e) => {
                   if ((e.target as HTMLElement).classList.contains('grip')) return;
                   if (c.id === 'idx') return;
@@ -1342,6 +1415,7 @@ export function Grid({ initialData, initialColumns, onOpenRow }: GridProps) {
                   promptRef.current = {
                     title: 'Rename column',
                     placeholder: c.label,
+                    defaultValue: c.label,
                     onSubmit: (name) => {
                       pushUndo();
                       c.label = name || c.label;
@@ -1375,9 +1449,9 @@ export function Grid({ initialData, initialColumns, onOpenRow }: GridProps) {
         </span>
       </div>
 
-      {/* drag overlays (inside the grid root for .lp-grid scoping) */}
-      <div ref={ghostRef} className="gr-ghost" style={{ display: 'none' }} />
-      <div ref={insRef} className="gr-ins-y" style={{ display: 'none' }} />
+      {/* drag overlays — state-driven + portaled (#6), inline-styled so no
+          cascade can hide them (matches the selection-ring fix). */}
+      <DragOverlay ref={overlayRef} />
 
       {/* popovers */}
       {popRef.current === 'filter' ? <FilterPop anchor={popAnchorRef.current} filter={filterRef.current} onChange={() => render()} onClose={closePop} /> : null}
@@ -1393,6 +1467,7 @@ export function Grid({ initialData, initialColumns, onOpenRow }: GridProps) {
             render();
           }}
           onDelete={(id) => {
+            popRef.current = null; // close the Columns popover so the confirm isn't behind it (#3)
             confirmRef.current = {
               title: 'Delete this column?',
               body: 'This removes the column and its data from every row. This can be undone with ⌘Z.',
@@ -1462,6 +1537,44 @@ export function Grid({ initialData, initialColumns, onOpenRow }: GridProps) {
     </div>
   );
 }
+
+/* ============================================================
+   Drag overlays — resize ghost + reorder insertion line (#6)
+   ============================================================ */
+
+const DRAG_GLOW = '0 0 12px color-mix(in srgb, var(--lp-orange) 22%, transparent)';
+
+const DragOverlay = forwardRef<OverlayHandle>(function DragOverlay(_props, ref) {
+  const [ghostX, setGhostX] = useState<number | null>(null);
+  const [ins, setIns] = useState<{ axis: 'x' | 'y'; left: number; top: number; width: number; height: number } | null>(null);
+  useImperativeHandle(ref, () => ({ setGhost: setGhostX, setIns }), []);
+  if (ghostX === null && !ins) return null;
+  return createPortal(
+    <>
+      {ghostX !== null ? (
+        <div
+          className="gr-drag-layer"
+          style={{ top: 0, bottom: 0, left: ghostX, width: 2, background: 'var(--lp-orange)', boxShadow: DRAG_GLOW }}
+        />
+      ) : null}
+      {ins ? (
+        <div
+          className="gr-drag-layer"
+          style={{
+            left: ins.left,
+            top: ins.top,
+            width: ins.width,
+            height: ins.height,
+            background: 'var(--lp-orange)',
+            boxShadow: DRAG_GLOW,
+            borderRadius: 'var(--lp-radius-xs)',
+          }}
+        />
+      ) : null}
+    </>,
+    document.body,
+  );
+});
 
 /* ============================================================
    Toolbar popovers (portaled, token-clean via .lp-grid-pop)
@@ -1637,6 +1750,7 @@ function AddColumnPop({
       <button
         className="go"
         type="button"
+        style={{ background: 'var(--lp-orange)', color: 'var(--lp-text-inverse)', border: 0, width: '100%', marginTop: 6, padding: 8, borderRadius: 'var(--lp-radius-lg)', cursor: 'pointer', fontWeight: 650 }}
         onClick={() => {
           const name = nameRef.current?.value.trim() || 'Column';
           const t = type;

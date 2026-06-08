@@ -84,6 +84,7 @@
   border: 1px solid var(--gr-border);
   border-radius: var(--lp-radius-lg);
   margin-bottom: var(--lp-space-2);
+  transition: grid-template-columns 0.22s var(--ease);
 }
 .lp-grid .hc {
   height: 34px;
@@ -152,6 +153,13 @@
 }
 .gr-ins-y { height: 3px; }
 .gr-ins-x { width: 3px; }
+/* Portaled drag overlays (resize ghost + reorder insertion line) — fixed,
+   above the grid, click-through. Geometry + colour are set inline (#6). */
+.gr-drag-layer {
+  position: fixed;
+  z-index: var(--lp-z-tooltip);
+  pointer-events: none;
+}
 
 /* ---- section cards ---- */
 .lp-grid .section {
@@ -187,6 +195,7 @@
   height: 38px;
   cursor: grab;
   user-select: none;
+  transition: grid-template-columns 0.22s var(--ease);
 }
 .lp-grid .sec-head:active { cursor: grabbing; }
 .lp-grid .sh-name {
@@ -259,7 +268,10 @@
   grid-template-columns: var(--cols);
   align-items: center;
   border-bottom: 1px solid var(--gr-border-soft);
-  transition: background 0.12s var(--ease);
+  /* #9 — ease column width/show-hide changes instead of snapping.
+     #10 — rows that newly appear (search clear / filter) fade in. */
+  transition: background 0.12s var(--ease), grid-template-columns 0.22s var(--ease);
+  animation: gr-rise 0.18s var(--ease);
 }
 .lp-grid .row:last-child { border-bottom: 0; }
 .lp-grid .row:hover { background: var(--gr-row-hover); }
@@ -707,7 +719,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: var(--lp-z-modal);
+  /* Above the grid's toolbar popovers (--lp-z-dropdown 1300) so a confirm
+     opened from the Columns popover isn't hidden behind it (#3). */
+  z-index: var(--lp-z-command-palette);
   animation: gr-rise 0.12s cubic-bezier(0.2, 0.7, 0.3, 1);
 }
 .lp-grid-modal {

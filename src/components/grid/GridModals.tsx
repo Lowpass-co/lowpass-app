@@ -19,6 +19,8 @@ export interface ConfirmState {
 export interface PromptState {
   title: string;
   placeholder?: string;
+  /** pre-filled, selected on open (e.g. the current name when renaming). */
+  defaultValue?: string;
   onSubmit: (value: string) => void;
 }
 export interface WarnState {
@@ -54,6 +56,7 @@ export function GridConfirm({ state, onClose }: { state: ConfirmState; onClose: 
         <button
           type="button"
           className="pri"
+          style={{ background: 'var(--lp-orange)', color: 'var(--lp-text-inverse)', border: 0 }}
           onClick={() => {
             state.onYes();
             onClose();
@@ -70,6 +73,7 @@ export function GridPrompt({ state, onClose }: { state: PromptState; onClose: ()
   const inputRef = useRef<HTMLInputElement>(null);
   useEffect(() => {
     inputRef.current?.focus();
+    inputRef.current?.select();
   }, []);
   const submit = () => {
     const v = inputRef.current?.value.trim() ?? '';
@@ -83,6 +87,7 @@ export function GridPrompt({ state, onClose }: { state: PromptState; onClose: ()
         ref={inputRef}
         type="text"
         placeholder={state.placeholder ?? ''}
+        defaultValue={state.defaultValue ?? ''}
         onKeyDown={(e) => {
           e.stopPropagation();
           if (e.key === 'Enter') {
@@ -95,7 +100,12 @@ export function GridPrompt({ state, onClose }: { state: PromptState; onClose: ()
         <button type="button" onClick={onClose}>
           Cancel
         </button>
-        <button type="button" className="pri" onClick={submit}>
+        <button
+          type="button"
+          className="pri"
+          style={{ background: 'var(--lp-orange)', color: 'var(--lp-text-inverse)', border: 0 }}
+          onClick={submit}
+        >
           Add
         </button>
       </div>

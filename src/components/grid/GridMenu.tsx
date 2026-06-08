@@ -23,6 +23,8 @@ export interface MenuConfig {
   anchor: { left: number; bottom: number };
   options: (string | MenuItem)[];
   current?: string;
+  /** colour-code each option (dropdown columns) by its optColor. */
+  optColors?: Record<string, string>;
   onPick: (value: string) => void;
   onDelete?: (value: string) => void;
   footer?: { label: string; onClick: () => void };
@@ -47,7 +49,7 @@ export function GridMenu({ config, onClose }: { config: MenuConfig; onClose: () 
     };
   }, [onClose]);
 
-  const { anchor, options, current, onPick, onDelete, footer } = config;
+  const { anchor, options, current, optColors, onPick, onDelete, footer } = config;
 
   return createPortal(
     <div
@@ -69,7 +71,21 @@ export function GridMenu({ config, onClose }: { config: MenuConfig; onClose: () 
               onPick(it.value);
             }}
           >
-            <span style={{ flex: 1 }}>
+            <span style={{ flex: 1, color: optColors?.[it.value] }}>
+              {optColors?.[it.value] ? (
+                <span
+                  aria-hidden
+                  style={{
+                    display: 'inline-block',
+                    width: 7,
+                    height: 7,
+                    borderRadius: '50%',
+                    background: optColors[it.value],
+                    marginRight: 7,
+                    verticalAlign: 'middle',
+                  }}
+                />
+              ) : null}
               {on ? '✓ ' : ''}
               {it.label ?? it.value}
             </span>
