@@ -537,9 +537,16 @@ export function Grid({ initialData, initialColumns, onOpenRow }: GridProps) {
         if (kind !== 'col') selRef.current = { ar: 0, ac: 0, fr: 0, fc: 0 };
         render();
       };
-      // FLIP for every kind (#6 — columns animate like rows/sections). Capture
-      // the moving elements' first rects, mutate, animate in useLayoutEffect.
-      const sel = kind === 'col' ? '.gridhead .hc[data-colid]' : '#gr-sections [data-uid]';
+      // FLIP — capture the moving elements' first rects, mutate, animate in
+      // useLayoutEffect. The selector is KIND-SPECIFIC (A3): a section drag
+      // must FLIP only the section cards (`> .section`), NOT also their child
+      // rows (which would double-transform); a row drag FLIPs only rows.
+      const sel =
+        kind === 'col'
+          ? '.gridhead .hc[data-colid]'
+          : kind === 'section'
+            ? '#gr-sections > .section[data-uid]'
+            : '#gr-sections .row[data-uid]';
       const keyAttr = kind === 'col' ? 'colid' : 'uid';
       const first = new Map<string, DOMRect>();
       rootRef.current?.querySelectorAll(sel).forEach((el) => {
@@ -600,11 +607,21 @@ export function Grid({ initialData, initialColumns, onOpenRow }: GridProps) {
       const dx = f.left - l.left,
         dy = f.top - l.top;
       if (dx || dy) {
+        // A2 — kill the mount animation (gr-rise) for the FLIP: a running CSS
+        // animation beats inline style on `transform`, so gr-rise would stomp
+        // the FLIP and the row would snap. Restore it after the tween.
+        node.style.animation = 'none';
         node.style.transition = 'none';
         node.style.transform = `translate(${dx}px,${dy}px)`;
         requestAnimationFrame(() => {
           node.style.transition = 'transform .2s var(--ease)';
           node.style.transform = '';
+          const clear = () => {
+            node.style.animation = '';
+            node.style.transition = '';
+            node.removeEventListener('transitionend', clear);
+          };
+          node.addEventListener('transitionend', clear);
         });
       }
     });
@@ -1217,16 +1234,20 @@ export function Grid({ initialData, initialColumns, onOpenRow }: GridProps) {
     }
     if (t === 'money') {
       const cc = row.cur || 'USD';
-      return cc !== 'USD' ? (
-        <>
-          <span className="fxconv">{fmt(disp(row[id], cc))}</span>
-          <span className="fxtag" title={`from ${SYM[cc]}${(Number(row[id]) || 0).toLocaleString()}`}>
+      // C1 — show the SOURCE figure in the row's own currency (red = foreign),
+      // so the grid cell and the slide input read the SAME number. The
+      // display-currency conversion is the tooltip + a small ≈ tag; section
+      // totals still convert via disp().
+      if (cc !== 'USD') {
+        return (
+          <span className="fxconv" title={`≈ ${fmt(disp(row[id], cc))} in display $`}>
             {SYM[cc]}
+            {(Number(row[id]) || 0).toLocaleString('en-US')}
+            <span className="fxtag">≈{fmt(disp(row[id], cc))}</span>
           </span>
-        </>
-      ) : (
-        fmt(row[id])
-      );
+        );
+      }
+      return fmt(row[id]);
     }
     if (t === 'number') return (row[id] ?? '') === '' ? '' : String(row[id]);
     if (t === 'check')

@@ -1,6 +1,47 @@
 # Canonical Grid smoke tests
 
-> **Last bulk verification**: _pending — Phase 1 not yet smoked by Adam._
+> **Last bulk verification**: 2026-06-08 (Adam, `/grid-demo` on
+> `feat/personnel-unify` preview) — first smoke of Phase 1 core + Phase 2
+> slide. Results logged below; fixes handed to CC in
+> `docs/handover/CC_GRID_FIXPASS_2.md`.
+>
+> **Phase 1 fails:** GRID-03/04/05 (active ring missing — range tint shows, no
+> ring), GRID-13/19/20 (no insertion line on row/section drag; row + section
+> reorder **snap**, no FLIP — columns DO animate), GRID-16/18/31 (modal primary
+> button invisible + off-centre), GRID-23 (dropdown option colours not applied).
+> Demo also mashes Expenses+Income columns (Quantity + Day Type both present).
+>
+> **Phase 2 fails:** SLIDE-03 (currency display confusing — typed source
+> replaced by converted value, grid≠slide), SLIDE-02 (status set wrong),
+> SLIDE-06 (doc rename doesn't propagate to a linked transaction), SLIDE-07 /
+> settlement / projections (missing headers + currency symbols), SLIDE-12 (scan
+> animation doesn't play), SLIDE-01 (Open affordance too faint). SLIDE-10/11/12
+> settlement **untestable** in the demo (no income/Show row) — demo needs an
+> Income view.
+>
+> **Phase 2 passes:** SLIDE-04 (locked est), SLIDE-05, SLIDE-08, SLIDE-13.
+
+## Fix pass 2 (post Phase 1+2 smoke — re-smoke these)
+
+Build-green / tsc-0 / eslint-0, **not click-verified** (auth-gated locally —
+code + build verified only). The first three were already correct in HEAD
+(the smoke ran on a stale preview).
+
+| Smoke ID | Status | Fix / finding |
+|----------|--------|---------------|
+| GRID-03/04/05 (active ring) | already fixed in HEAD (e5d33c8) — retest | solid token-orange `box-shadow` + `outline` (no color-mix); call sites pass `isActive` |
+| GRID-16/18/31 (modal primary) | already fixed in HEAD — retest | inline orange + `.lp-grid-modal button.pri` / `.go`; stale preview |
+| GRID-23 (dropdown colours) | already fixed in HEAD — retest | `GridMenu` applies `optColors` dot+text; `ddpill` recolours (Grid.tsx:1249); stale |
+| GRID-19 (row FLIP) | **fixed** | FLIP selector now `.row[data-uid]` only; runner sets `animation:none` so `gr-rise` can't stomp the transform (Grid.tsx endReorder + FLIP runner) |
+| GRID-20 (section FLIP) | **fixed** | selector `#gr-sections > .section[data-uid]` (was `[data-uid]` → also matched rows, double-transforming) |
+| GRID-13/19/20 (insertion line) | verify | `DragOverlay` portals to `<body>` (above the `overflow:hidden` cards) at `--lp-z-tooltip`; `setIns` is called for the y-axis — no code defect found; retest on fresh build |
+| SLIDE-01 (Open affordance) | **fixed** | `.openbtn` opacity 0.7→1, stronger orange tint (grid.css) |
+| SLIDE-02 (status set) | already correct — retest | `STATUSES` = budgeted·paid·reconciled·refunded (gridModel.ts:15); slide uses it |
+| SLIDE-03 (currency) | **fixed** | grid money cell + slide inputs both show the SOURCE figure in row.cur; conversion is a red ≈ note (Grid.tsx money cell; GridSlideOver MoneyBlock) |
+| SLIDE-06 (doc rename) | **fixed** | `Doc.id`; txn stores the doc id and renders the doc's live name (`receiptLabel`) |
+| SLIDE-07 + settlement (symbols/headers) | **fixed** | currency symbol on txn/rate/settlement amounts; expenses header row added |
+| SLIDE-12 (scan animation) | verify | `gr-spin` keyframe + step interval present; flow correct — retest |
+| (demo) Expenses/Income split | **done** | `/grid-demo` toggle; Income view (Day·Venue·Date·Cap·Deal·Guarantee·Settled·Docs) makes settlement reachable (set Day=Show → Open) |
 
 ## Phase 1 fix pass (re-smoke these)
 
@@ -298,9 +339,26 @@ write back to the grid row and are **undoable (⌘Z)**.
 **Expect**: Each edit reverts (the slide writes to the same model + undo stack).
 **Last verified**:
 
-## Known broken
+## Known broken (2026-06-08 smoke → fix pass in CC_GRID_FIXPASS_2.md)
 
-_None recorded yet — Phase 1 + 2 await their first smoke._
+- **GRID-03/04/05** — active-cell ring missing (range tint shows; focused cell
+  not flagged `active` at the `selStyle` call sites).
+- **GRID-13/19/20** — no insertion line on row/section drag; row + section
+  reorder **snap** (FLIP stomped: `.row` `gr-rise` mount animation overrides the
+  inline transform; section FLIP selector may miss `.section` nodes).
+- **GRID-16/18/31** — modal primary button invisible + off-centre.
+- **GRID-23** — dropdown option colours not applied to menu/pill.
+- **SLIDE-01** — Open affordance too faint.
+- **SLIDE-02** — slide status set wrong (must be budgeted/paid/reconciled/refunded).
+- **SLIDE-03** — currency display confusing (typed source replaced by converted
+  value; grid ≠ slide; missing the red source note on instant convert).
+- **SLIDE-06** — renaming a doc linked to a transaction doesn't update the
+  transaction (transaction stores a name copy, not a doc-id reference).
+- **SLIDE-07 / settlement / projections** — missing column headers + currency
+  symbols; every monetary value must show its currency.
+- **SLIDE-12** — deal-memo scan animation doesn't play.
+- **SLIDE-10/11/12** — settlement untestable in the demo (no income/Show row);
+  demo needs an Expenses/Income view toggle.
 
 ## Deferred to later phases
 

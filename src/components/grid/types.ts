@@ -52,6 +52,8 @@ export interface Txn {
 }
 
 export interface Doc {
+  /** stable id so a transaction can reference a document and reflect renames. */
+  id?: string;
   type: string;
   name: string;
 }

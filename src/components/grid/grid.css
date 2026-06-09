@@ -307,13 +307,14 @@
   gap: 4px;
   min-width: 24px;
   height: 20px;
-  opacity: 0.7;
+  /* C6 — clearly visible at rest (was a faint 0.7 that read as grey). */
+  opacity: 1;
   color: var(--lp-orange);
   font-size: var(--lp-text-xs);
   font-weight: 700;
   line-height: 20px;
-  background: var(--gr-orange-12);
-  border: 1px solid color-mix(in srgb, var(--lp-orange) 40%, transparent);
+  background: var(--gr-orange-16);
+  border: 1px solid color-mix(in srgb, var(--lp-orange) 55%, transparent);
   border-radius: var(--lp-radius-md);
   padding: 0 6px;
   cursor: pointer;

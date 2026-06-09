@@ -81,6 +81,8 @@ const rectOf = (e: React.MouseEvent) => {
   return { left: r.left, bottom: r.bottom };
 };
 const money = (v: unknown) => parseFloat(String(v).replace(/[^0-9.\-]/g, '')) || 0;
+let docSeq = 0;
+const genDocId = () => `doc-${Date.now().toString(36)}-${docSeq++}`;
 
 export function GridSlideOver({ data, si, ri, version, onClose, pushUndo, render, openMenu }: GridSlideOverProps) {
   const [open, setOpen] = useState(false);
@@ -197,23 +199,25 @@ export function GridSlideOver({ data, si, ri, version, onClose, pushUndo, render
   const MoneyBlock = () => {
     const estV = sec.kind === 'formula' ? formulaEst(row, data) : Number(row.est) || 0;
     const v = variance(row, estV);
+    // C1 — inputs hold the SOURCE figure in row.cur (same number the grid cell
+    // shows); the display-currency conversion is a red ≈ note BENEATH, never
+    // replacing the typed value.
+    const fxBelow = (srcVal: number) =>
+      cv ? (
+        <div className="fxnote" style={{ marginTop: 4 }}>
+          ≈ {fmt(disp(srcVal, row.cur))} in display $
+        </div>
+      ) : null;
     return (
       <>
         <div className="so-2col">
           <div className="so-field">
             <label>Estimate</label>
             {estLocked ? (
-              cv ? (
-                <div className="so-ro">
-                  <span className="fxconv">{fmt(disp(estV, row.cur))}</span> 🔒{' '}
-                  <span className="fxnote">
-                    from {s}
-                    {Number(estV).toLocaleString()}
-                  </span>
-                </div>
-              ) : (
-                <div className="so-ro">{fmt(estV)} 🔒</div>
-              )
+              <div className="so-ro">
+                {s}
+                {Number(estV).toLocaleString()} 🔒
+              </div>
             ) : (
               <div className="moneyin">
                 <span className="cursym">{s}</span>
@@ -223,6 +227,7 @@ export function GridSlideOver({ data, si, ri, version, onClose, pushUndo, render
                 />
               </div>
             )}
+            {fxBelow(estV)}
           </div>
           <div className="so-field">
             <label>Actual</label>
@@ -233,6 +238,7 @@ export function GridSlideOver({ data, si, ri, version, onClose, pushUndo, render
                 onBlur={(e) => commit(() => (row.act = money(e.target.value)))}
               />
             </div>
+            {fxBelow(Number(row.act) || 0)}
           </div>
         </div>
         <div className="so-stat">
@@ -240,14 +246,6 @@ export function GridSlideOver({ data, si, ri, version, onClose, pushUndo, render
           <b style={{ color: v ? (v.d > 0 ? 'var(--color-lp-error)' : 'var(--color-lp-success)') : 'var(--lp-text-tertiary)' }}>
             {v ? (v.d > 0 ? '+' : '') + v.pct.toFixed(1) + '%' : '—'}
           </b>
-          {cv ? (
-            <>
-              {' '}·{' '}
-              <span className="fxconv">
-                ≈ {fmt(disp(estV, row.cur))} est / {fmt(disp(row.act, row.cur))} act in $
-              </span>
-            </>
-          ) : null}
         </div>
       </>
     );
@@ -308,15 +306,25 @@ export function GridSlideOver({ data, si, ri, version, onClose, pushUndo, render
       options: [...names, '＋ Upload new receipt'],
       onPick: (choice) =>
         commit(() => {
+          // C4 — store the linked document's id (not a name copy), so renaming
+          // the document later updates the transaction's receipt label too.
           if (choice === '＋ Upload new receipt') {
-            const name = `receipt-${(row.docs?.length ?? 0) + 1}.pdf`;
-            row.docs!.push({ type: 'Receipt', name });
-            t.receipt = name;
+            const doc: Doc = { id: genDocId(), type: 'Receipt', name: `receipt-${(row.docs?.length ?? 0) + 1}.pdf` };
+            row.docs!.push(doc);
+            t.receipt = doc.id!;
           } else {
-            t.receipt = choice;
+            const d = row.docs!.find((x) => x.name === choice);
+            t.receipt = d?.id ?? choice;
           }
         }),
     });
+  };
+
+  /** A transaction's receipt label — the linked document's LIVE name (by id),
+   *  falling back to the stored string for legacy/seed receipts (C4). */
+  const receiptLabel = (t: Txn): string => {
+    const d = row.docs?.find((x) => x.id && x.id === t.receipt);
+    return d ? d.name : String(t.receipt);
   };
 
   const TxnsBlock = () => (
@@ -343,14 +351,17 @@ export function GridSlideOver({ data, si, ri, version, onClose, pushUndo, render
                 onBlur={(e) => commit(() => (t.desc = e.target.value))}
               />
               <input type="date" defaultValue={t.date} onBlur={(e) => commit(() => (t.date = e.target.value))} />
-              <input
-                className="amt"
-                defaultValue={t.amount || 0}
-                onBlur={(e) => commit(() => (t.amount = money(e.target.value)))}
-              />
+              <div className="cellin">
+                <span className="pre">{s}</span>
+                <input
+                  className="amt"
+                  defaultValue={t.amount || 0}
+                  onBlur={(e) => commit(() => (t.amount = money(e.target.value)))}
+                />
+              </div>
               <div className="txn-receipt">
                 {t.receipt ? (
-                  <span className="rcpt has">📎 {t.receipt}</span>
+                  <span className="rcpt has">📎 {receiptLabel(t)}</span>
                 ) : (
                   <span className="rcpt none" onClick={(e) => attachReceipt(e, t)}>
                     ＋ attach receipt
@@ -376,7 +387,7 @@ export function GridSlideOver({ data, si, ri, version, onClose, pushUndo, render
     openMenu({
       anchor: rectOf(e),
       options: DOCTYPES,
-      onPick: (tp) => commit(() => row.docs!.push({ type: tp, name: `${tp.toLowerCase()}.pdf` })),
+      onPick: (tp) => commit(() => row.docs!.push({ id: genDocId(), type: tp, name: `${tp.toLowerCase()}.pdf` })),
     });
 
   const DocsBlock = () => (
@@ -481,11 +492,14 @@ export function GridSlideOver({ data, si, ri, version, onClose, pushUndo, render
             {rates.map((r, i) => (
               <div key={i} className="docrow rate">
                 <input className="ratelabel" defaultValue={r.label} onBlur={(e) => commit(() => (r.label = e.target.value))} />
-                <input
-                  className="rateamt"
-                  defaultValue={r.amount || 0}
-                  onBlur={(e) => commit(() => (r.amount = money(e.target.value)))}
-                />
+                <div className="cellin">
+                  <span className="pre">{s}</span>
+                  <input
+                    className="rateamt"
+                    defaultValue={r.amount || 0}
+                    onBlur={(e) => commit(() => (r.amount = money(e.target.value)))}
+                  />
+                </div>
                 <span className="docx" onClick={() => commit(() => rates.splice(i, 1))}>
                   ✕
                 </span>
@@ -716,6 +730,12 @@ export function GridSlideOver({ data, si, ri, version, onClose, pushUndo, render
         </div>
         <div className="so-empty" style={{ padding: '0 2px 6px' }}>
           Show costs sit inside the deal; artist costs are deducted from the balance.
+        </div>
+        <div className="st-tier exp h">
+          <div>Expense</div>
+          <div>Type</div>
+          <div>£ Amount</div>
+          <div />
         </div>
         {st.expenses.length === 0 ? (
           <div className="so-empty">No expenses added.</div>
