@@ -7,9 +7,14 @@
 >
 > **Still failing (functional):**
 > - OPS-16 — after a swap the displayed name stays the OLD person's name.
-> - OPS-17 — payroll does NOT flow to the budget SALARY section (empty); and
->   the payroll total-fee math is wrong (counts ALL days × show rate, ignores
->   the show-vs-travel-day split).
+> - OPS-17 — **SALARY-population half FIXED & verified** (2026-06-08, live via
+>   Chrome on "Simple Plan Support | Fall'26"): after migration **208** widened
+>   the `budget_line_items.source_entity_type` CHECK to allow `payroll`/
+>   `payroll_per_diem`, the Salary section now materialises all 5 roster members
+>   `FROM PAYROLL`. Root cause was the CHECK rejecting payroll inserts +
+>   reconcile swallowing the error. **Still open (separate):** the payroll
+>   total-fee math (some members show £0; counts ALL days × show rate, ignores
+>   the show-vs-travel-day split) — personnel work, not the migration.
 > - OPS-04 — rooming→budget lines appear but with no hotel name and no cost;
 >   and assigning a room triggers a full page refresh (should be optimistic).
 > - OPS-03 / OPS-14 — an off-roster person with their rooms removed still
