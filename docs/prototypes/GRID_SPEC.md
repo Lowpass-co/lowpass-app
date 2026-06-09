@@ -90,8 +90,13 @@ build:
   cost-per-show rollups, and AI reports that traverse the graph.
 - Link targets are the app's existing canonical entities (person, show) from the
   personnel-unification work — the tables already exist.
-- Derived sections write-back rules: Payroll/Rooming own the source; the budget
-  shows them read-only (estimate locked), Actuals editable here.
+- Derived sections write-back rules: Payroll/Rooming own the source. **Both the
+  estimate AND the actual are locked** (read-only) on a derived budget line —
+  the reconcile pass regenerates both `proposed_cost` and `actual_cost` from the
+  source module on every load, so an "editable" actual would be silently
+  overwritten. (Phase 3 decision — was aspirationally "actuals editable here";
+  corrected to match the live `reconcileDerivedBudgetLines` behaviour. The
+  source module is where you edit; `notes` stays editable on the budget line.)
 - Hotel ↔ Advance link: pulls hotel contact / confirmation / notes from the
   advance into the rooming line.
 

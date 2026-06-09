@@ -292,10 +292,14 @@ export async function POST(request: Request) {
       phase_tag: phaseTag,
     })
     .select()
-    .single();
+    .maybeSingle();
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  if (!created) {
+    // BUD-15 disease — never let an RLS-filtered insert throw "no rows".
+    return NextResponse.json({ error: 'Insert returned no row' }, { status: 500 });
   }
   return NextResponse.json(created);
 }

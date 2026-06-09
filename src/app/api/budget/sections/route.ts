@@ -124,7 +124,7 @@ export async function POST(request: Request) {
     .from('budget_sections')
     .insert({ ...baseRow, kind })
     .select()
-    .single();
+    .maybeSingle();
 
   // Phase 3 — resilience: if migration 203 (the `kind` column) hasn't been
   // applied yet, Postgres/PostgREST reject the unknown column (42703 /
@@ -145,7 +145,7 @@ export async function POST(request: Request) {
       .from('budget_sections')
       .insert(baseRow)
       .select()
-      .single());
+      .maybeSingle());
   }
 
   if (error) {
@@ -158,6 +158,10 @@ export async function POST(request: Request) {
       );
     }
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  if (!data) {
+    // BUD-15 disease — never let an RLS-filtered insert throw "no rows".
+    return NextResponse.json({ error: 'Insert returned no row' }, { status: 500 });
   }
   return NextResponse.json(data);
 }

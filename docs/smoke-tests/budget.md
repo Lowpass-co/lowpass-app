@@ -167,6 +167,31 @@ left TWO Receipts buttons (inline mount + page `receiptSlot`). Fixed by
 removing the inline mount in `BudgetSpreadsheetView` (kept the page-driven
 slot). Re-verify there's now exactly one on the next build.
 
+## Phase 3 — canonical `<Grid>` on Expenses (in progress)
+
+Mounting the canonical `<Grid>` + `<GridSlideOver>` (see `grid.md`) on
+`/budget/[tourId]` Expenses, replacing `BudgetSpreadsheetView`. **Stage A** map:
+`docs/handover/PHASE3_BUDGET_MAP.md`. **Stage B floor (landed, this PR):**
+
+#### BUD-31 — `source_entity_type` CHECK drift fixed (migration 208)
+**Do**: `npm run db:migrate` (applies `208_widen_source_entity_type_check.sql`).
+**Expect**: the live `budget_line_items.source_entity_type` CHECK now matches
+what reconcile writes (`hotel_booking·flight_booking·flight·payroll·
+payroll_per_diem·gear`). Migration 026 only allowed two; the live DB had
+drifted — a fresh clone would have silently dropped the Salary/Per-Diem/gear
+derived sections. **Read-safe**; records the drift.
+**Last verified**:
+
+#### BUD-32 — budget↔grid adapter (pure, unit-tested)
+`src/lib/grid/budgetAdapter.ts` maps `budget_line_items`/`budget_sections` →
+grid `Section[]`/`Row` and grid edits → DB patches (both directions tested:
+`node --experimental-strip-types src/lib/grid/budgetAdapter.test.ts` → 7 checks).
+Formula sections excluded; derived sections classified + sourced; `est`→
+`proposed_cost`, `act`→`actual_cost`(+override), no `vendor` column.
+**Not yet a UI** — the grid mount (steps 3–6) is the next pass.
+
+> Cross-ref `docs/smoke-tests/grid.md` for the grid component's GRID-/SLIDE- IDs.
+
 ## Known later
 
 - Actual-vs-transactions override math (gates a `transactions.ts` refactor).
