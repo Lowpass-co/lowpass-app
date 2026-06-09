@@ -384,8 +384,12 @@ write back to the grid row and are **undoable (⌘Z)**.
 
 ## Known broken (2026-06-08 smoke → fix pass in CC_GRID_FIXPASS_2.md)
 
-- **GRID-03/04/05 + A4 (insertion line)** — ROOT CAUSE FOUND (live DOM,
-  2026-06-08): the grid references **`var(--lp-orange)`**, which is **undefined**
+- **GRID-03/04/05 + GRID-13/19/20 (ring + insertion line)** — ✅ FIXED &
+  VERIFIED LIVE on `5846d89` (2026-06-08, via Chrome DOM inspection): active
+  cell paints `box-shadow rgb(255,69,0) inset 2px` + `outline 2px solid
+  rgb(255,69,0)`; a driven row-drag shows the insertion line painting
+  `background rgb(255,69,0)` at the correct boundary. Root cause was:
+  the grid referenced **`var(--lp-orange)`**, which was **undefined**
   — globals.css defines `--color-lp-orange`, never `--lp-orange`. So the ring's
   box-shadow computes `none`, its outline is style-`none`, and the insertion
   line (geometry/z correct) paints transparent. `isActive` logic + overlay
@@ -409,6 +413,25 @@ write back to the grid row and are **undoable (⌘Z)**.
 - **SLIDE-12** — deal-memo scan animation doesn't play.
 - **SLIDE-10/11/12** — settlement untestable in the demo (no income/Show row);
   demo needs an Expenses/Income view toggle.
+
+## New — 2026-06-08 live review (queued for next grid polish pass)
+
+- **Derived source pill doesn't animate** — the `🔗 ROOMING` / `🔗 PAYROLL`
+  section-header badges still have no hover affordance. Fix-pass 3 added the
+  hover transition to the link/routing `→ open` pills but missed the
+  derived-section badges. Same treatment.
+- **Range selection has no frame** — selecting a block rings only the active
+  cell and faint-tints the rest. Spreadsheet behaviour: draw a single **frame
+  (border) around the whole selected range** (anchor→focus rectangle), like
+  Excel/Sheets, in addition to the per-cell tint. (Selection-render addition to
+  `selStyle` / a range-outline overlay.)
+- **Custom-column type dropdown is a native `<select>`** (old visuals) in the
+  Add-column form. Replace with the styled grid menu used elsewhere (no native
+  chrome — mirrors the GRID-23/status menu treatment).
+- **Grid still horizontally scrolls / clips the right column** — GRID-24 made
+  the item column flex but total fixed columns still overflow ~1290px; confirm
+  with Adam whether no-scroll-at-width is required (would need column
+  compaction/hiding) or horizontal scroll is acceptable.
 
 ## Deferred to later phases
 
