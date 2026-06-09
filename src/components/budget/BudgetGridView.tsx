@@ -96,6 +96,68 @@ export function BudgetGridView({ lines, sections, tourCurrency, tourId }: Budget
     [router, showToast],
   );
 
+  // Structural CRUD: POST/DELETE then refresh (the new row needs a real id;
+  // rename is a PATCH with no refresh — the grid already shows it).
+  const refreshOnFail = (res: Response) => {
+    if (!res.ok) {
+      showToast('Could not save the change', 'error');
+    }
+    router.refresh();
+  };
+
+  const onAddLine = useCallback(
+    (sectionUid: string) => {
+      void fetch('/api/budget/line-items', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tour_id: tourId,
+          category: 'misc',
+          label: 'New line item',
+          section_id: sectionUid === 'ungrouped' ? null : sectionUid,
+          currency: display,
+        }),
+      })
+        .then(refreshOnFail)
+        .catch(() => {
+          showToast('Could not add the line', 'error');
+        });
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [tourId, display],
+  );
+
+  const onAddSection = useCallback(() => {
+    void fetch('/api/budget/sections', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tour_id: tourId, name: 'New section', kind: 'custom', sort_order: sections.length }),
+    })
+      .then(refreshOnFail)
+      .catch(() => {
+        showToast('Could not add the section', 'error');
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tourId, sections.length]);
+
+  const onRenameSection = useCallback((sectionUid: string, name: string) => {
+    if (sectionUid === 'ungrouped') return;
+    void fetch('/api/budget/sections', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: sectionUid, name }),
+    }).catch(() => undefined); // optimistic; the grid already renamed locally
+  }, []);
+
+  const onDeleteRow = useCallback((rowUid: string) => {
+    void fetch(`/api/budget/line-items?id=${encodeURIComponent(rowUid)}`, { method: 'DELETE' })
+      .then(refreshOnFail)
+      .catch(() => {
+        showToast('Could not delete the line', 'error');
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <Grid
       // re-init when the line/section COUNT changes (add/delete via a refresh);
@@ -107,6 +169,10 @@ export function BudgetGridView({ lines, sections, tourCurrency, tourId }: Budget
       slideStatuses={STATUS_CONFIG}
       slideLineVariant
       onEdit={onEdit}
+      onAddLine={onAddLine}
+      onAddSection={onAddSection}
+      onRenameSection={onRenameSection}
+      onDeleteRow={onDeleteRow}
     />
   );
 }

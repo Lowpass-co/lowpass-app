@@ -86,6 +86,12 @@ export interface GridProps {
   /** Force the slide's LINE variant (budget Expenses — no person/hotel/
       settlement variants). */
   slideLineVariant?: boolean;
+  /** Structural CRUD hooks. When provided, the grid delegates instead of
+      mutating local state (real surfaces persist + re-fetch). Phase 3. */
+  onAddLine?: (sectionUid: string) => void;
+  onAddSection?: () => void;
+  onRenameSection?: (sectionUid: string, name: string) => void;
+  onDeleteRow?: (rowUid: string) => void;
 }
 
 type ReorderKind = 'section' | 'row' | 'col';
@@ -98,6 +104,10 @@ export function Grid({
   fx: fxProp,
   slideStatuses,
   slideLineVariant,
+  onAddLine,
+  onAddSection,
+  onRenameSection,
+  onDeleteRow,
 }: GridProps) {
   const fx = fxProp ?? demoFx;
   const onEditRef = useRef(onEdit);
@@ -810,6 +820,12 @@ export function Grid({
   }, [render]);
 
   const addSection = () => {
+    // Real surfaces persist + re-fetch (the new row needs a DB id before it's
+    // editable); the demo mutates locally.
+    if (onAddSection) {
+      onAddSection();
+      return;
+    }
     pushUndo();
     const d = data();
     d.push({
@@ -822,6 +838,11 @@ export function Grid({
     render();
   };
   const addLine = (si: number) => {
+    if (onAddLine) {
+      const uid = data()[si]?._uid;
+      if (uid) onAddLine(uid);
+      return;
+    }
     pushUndo();
     data()[si].rows.push({ item: '', vendor: '', est: 0, act: 0, status: 'budgeted', _uid: 'r' + uidc.current++ });
     render();
@@ -1391,6 +1412,8 @@ export function Grid({
                       pushUndo();
                       sec.name = name;
                       render();
+                      // rename is a simple PATCH — persist without a re-fetch.
+                      if (sec._uid) onRenameSection?.(sec._uid, name);
                     },
                   };
                   render();
@@ -1474,6 +1497,19 @@ export function Grid({
         <span className="chip" onClick={resetWidths} role="button">
           ⇄ Reset widths
         </span>
+        {onDeleteRow ? (
+          <span
+            className="chip"
+            role="button"
+            title="Delete the active line"
+            onClick={() => {
+              const o = flat()[sel().fr];
+              if (o?.row._uid) onDeleteRow(o.row._uid);
+            }}
+          >
+            🗑 Delete line
+          </span>
+        ) : null}
         <span className={`chip${popRef.current === 'filter' ? ' on' : ''}`} onClick={(e) => openPop('filter', e)} role="button">
           ⚲ Filter
         </span>

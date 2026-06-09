@@ -222,10 +222,20 @@ the Status menu lists the DB set (`draft·quoted·approved·paid·disputed`); sl
 edits to item/est/act/status/notes persist.
 **Last verified**:
 
-> **Deferred to the grid-default flip (next pass, called out):** add-line /
-> delete-line / section CRUD / reorder persistence, and the slide's
-> Transactions/Documents CRUD (the budget rows don't carry them yet). Those
-> stay on the **Classic** view until wired — which is why the toggle keeps it.
+#### BUD-38 — Line + section CRUD persists
+**Do**: In Grid (beta): **＋ Add line** in a section; **🗑 Delete line** (deletes
+the active line) from the toolbar; **＋ Add section**; double-click a section
+name to rename.
+**Expect**: Add line / section + delete line POST/DELETE then re-fetch; rename
+PATCHes (no flash). All survive reload. (Derived sections can't be added to /
+their lines are reconcile-owned.)
+**Last verified**:
+
+> **Still deferred to the grid-default flip (called out):** row/section
+> **reorder** persistence (`sort_order`), and the slide's Transactions/
+> Documents CRUD (budget rows don't carry them yet — they live in
+> `budget_line_item_transactions` / `_attachments`, a follow-up). The
+> **Classic** view keeps those until wired — which is why the toggle stays.
 
 > Cross-ref `docs/smoke-tests/grid.md` for the grid component's GRID-/SLIDE- IDs.
 
