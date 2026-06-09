@@ -96,6 +96,18 @@ export interface GridProps {
 
 type ReorderKind = 'section' | 'row' | 'col';
 
+/** The full set of statuses for the status FILTER — the status column's
+ *  configured options UNION every status actually present in the data. The
+ *  union guard means a row whose status isn't in the canonical set is never
+ *  silently filtered out (the income/draft-rows-invisible bug class). */
+function statusUniverse(columns: Column[], sections: Section[]): string[] {
+  const set = new Set<string>();
+  const statusCol = columns.find((c) => c.type === 'status');
+  (statusCol?.options ?? STATUSES.slice()).forEach((sName) => set.add(sName));
+  sections.forEach((sec) => sec.rows.forEach((r) => { if (r.status) set.add(String(r.status)); }));
+  return [...set];
+}
+
 export function Grid({
   initialData,
   initialColumns,
@@ -125,7 +137,10 @@ export function Grid({
   const densityRef = useRef<Density>('comfortable');
   const groupRef = useRef<GroupBy>('section');
   const queryRef = useRef('');
-  const filterRef = useRef<Set<string>>(new Set(STATUSES));
+  // Seed the status filter with the SURFACE's full status set (all checked),
+  // not the canonical 4 — otherwise budget `draft` rows (and any DB status not
+  // in the demo set) get silently filtered to zero rows. BUD-38 blocker fix.
+  const filterRef = useRef<Set<string>>(new Set(statusUniverse(initialColumns, initialData)));
 
   const undoRef = useRef<Snapshot[]>([]);
   const redoRef = useRef<Snapshot[]>([]);
@@ -1339,7 +1354,7 @@ export function Grid({
     if (groupRef.current === 'status') {
       const out: React.ReactNode[] = [];
       let f = 0;
-      STATUSES.forEach((st, si) => {
+      statusUniverse(cols(), data()).forEach((st, si) => {
         const rows: { row: Row; ri: number }[] = [];
         data().forEach((sec) =>
           sec.rows.forEach((row, ri) => {
@@ -1595,7 +1610,15 @@ export function Grid({
       <DragOverlay ref={overlayRef} />
 
       {/* popovers */}
-      {popRef.current === 'filter' ? <FilterPop anchor={popAnchorRef.current} filter={filterRef.current} onChange={() => render()} onClose={closePop} /> : null}
+      {popRef.current === 'filter' ? (
+        <FilterPop
+          anchor={popAnchorRef.current}
+          filter={filterRef.current}
+          statusList={statusUniverse(cols(), data())}
+          onChange={() => render()}
+          onClose={closePop}
+        />
+      ) : null}
       {popRef.current === 'cols' ? (
         <ColumnsPop
           anchor={popAnchorRef.current}
@@ -1770,18 +1793,20 @@ function PopShell({
 function FilterPop({
   anchor,
   filter,
+  statusList,
   onChange,
   onClose,
 }: {
   anchor: { left: number; bottom: number };
   filter: Set<string>;
+  statusList: string[];
   onChange: () => void;
   onClose: () => void;
 }) {
   return (
     <PopShell anchor={anchor} onClose={onClose}>
       <div className="ttl">Show statuses</div>
-      {STATUSES.map((st) => (
+      {statusList.map((st) => (
         <label key={st}>
           <input
             type="checkbox"

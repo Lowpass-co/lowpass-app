@@ -231,6 +231,25 @@ PATCHes (no flash). All survive reload. (Derived sections can't be added to /
 their lines are reconcile-owned.)
 **Last verified**:
 
+#### BUD-39 — Grid (beta) shows all rows (status filter = surface status set)
+**Do**: Budget → Expenses → **Grid (beta)** on a populated tour (e.g. "Simple
+Plan Support | Fall'26").
+**Expect**: Every section renders its lines (Classic and Grid (beta) show the
+same row count — e.g. 10 rows: 4 Accommodation + 5 Salary + 1 Uncategorised),
+each with its DB status pill (`draft` etc.). The "SHOW STATUSES" filter lists
+the surface's status set (`draft·quoted·approved·paid·disputed` for budget),
+all checked by default.
+**Root cause (fixed)**: the grid's status filter + its default-all-checked init
+were hardcoded to the canonical 4 (`budgeted·paid·reconciled·refunded`). Every
+budget line's status is `draft` (DB default), so all rows were filtered out →
+0 rows. Now driven by `statusUniverse(columns, sections)` — the union of the
+status column's `options` and every status actually present in the data — so
+the filter defaults to all of the surface's statuses and never silently hides a
+row whose status isn't in the canonical set. `/grid-demo` (no status config)
+still defaults to the canonical 4. (Grid.tsx: `statusUniverse`, `filterRef`
+init, `FilterPop` `statusList`, status-group view.)
+**Last verified**: code/build green; Adam to re-confirm live via Chrome DOM.
+
 > **Still deferred to the grid-default flip (called out):** row/section
 > **reorder** persistence (`sort_order`), and the slide's Transactions/
 > Documents CRUD (budget rows don't carry them yet — they live in
