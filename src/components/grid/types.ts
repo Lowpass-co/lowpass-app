@@ -112,6 +112,28 @@ export interface Sel {
 export type Density = 'compact' | 'comfortable' | 'spacious';
 export type GroupBy = 'section' | 'status';
 
+/** Injected currency/FX so the grid isn't bound to the demo's static table.
+ *  The demo passes `demoFx` (gridModel); the budget passes one built from
+ *  src/lib/budget/fx.ts + the tour currency. */
+export interface GridFx {
+  /** the grid's display currency (tour currency for budget). */
+  displayCurrency: string;
+  /** currencies offered in the slide's currency menu. */
+  currencies: string[];
+  /** convert an amount in `fromCur` into the display currency. */
+  toDisplay: (amount: number, fromCur: string) => number;
+  /** symbol for a currency code, e.g. '$' / '£'. */
+  symbol: (cur: string) => string;
+  /** format a display-currency amount, e.g. "$1,234". */
+  formatDisplay: (amount: number) => string;
+}
+
+/** Status set + colours for a surface (the slide menu + column reuse this). */
+export interface GridStatusConfig {
+  options: string[];
+  colors?: Record<string, string>;
+}
+
 /** One undo/redo snapshot. `cols` is serialisable (calc fns stripped). */
 export interface Snapshot {
   data: Section[];

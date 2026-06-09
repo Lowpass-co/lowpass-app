@@ -25,12 +25,13 @@
 import './grid.css';
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useReducer, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import type { Column, Density, GroupBy, Row, Section, Sel, Snapshot } from './types';
+import type { Column, Density, GridFx, GridStatusConfig, GroupBy, Row, Section, Sel, Snapshot } from './types';
 import {
   ACCENTS,
   STATUSES,
   cloneData,
   colDef,
+  demoFx,
   disp,
   flatRows,
   fmt,
@@ -40,7 +41,6 @@ import {
   navCols,
   rowMatches,
   stripCols,
-  SYM,
   template,
   variance,
   visCols,
@@ -76,11 +76,32 @@ export interface GridProps {
   initialColumns: Column[];
   /** Phase 2 wires the slide-over here; Phase 1 leaves it undefined. */
   onOpenRow?: (si: number, ri: number) => void;
+  /** Persistence hook — fires after a cell commit / status / dropdown / check
+      edit, with the row's _uid (= DB id on real surfaces). Phase 3. */
+  onEdit?: (rowUid: string, field: string, value: unknown) => void;
+  /** Currency/FX injection (default: demo static table). */
+  fx?: GridFx;
+  /** Status set for the slide's status menu (default: canonical 4). */
+  slideStatuses?: GridStatusConfig;
+  /** Force the slide's LINE variant (budget Expenses — no person/hotel/
+      settlement variants). */
+  slideLineVariant?: boolean;
 }
 
 type ReorderKind = 'section' | 'row' | 'col';
 
-export function Grid({ initialData, initialColumns, onOpenRow }: GridProps) {
+export function Grid({
+  initialData,
+  initialColumns,
+  onOpenRow,
+  onEdit,
+  fx: fxProp,
+  slideStatuses,
+  slideLineVariant,
+}: GridProps) {
+  const fx = fxProp ?? demoFx;
+  const onEditRef = useRef(onEdit);
+  onEditRef.current = onEdit;
   const [tick, force] = useReducer((x: number) => x + 1, 0);
   const render = useCallback(() => force(), []);
 
@@ -227,7 +248,10 @@ export function Grid({ initialData, initialColumns, onOpenRow }: GridProps) {
     let v: string | number = input.value;
     pushUndo();
     if (t === 'money' || t === 'number') v = parseFloat(String(v).replace(/[^0-9.\-]/g, '')) || 0;
-    if (o) o.row[key] = v;
+    if (o) {
+      o.row[key] = v;
+      if (o.row._uid) onEditRef.current?.(o.row._uid, key, v);
+    }
     editRef.current = null;
     render();
   }, [pushUndo, render]);
@@ -367,6 +391,7 @@ export function Grid({ initialData, initialColumns, onOpenRow }: GridProps) {
       onPick: (v) => {
         pushUndo();
         rowObj.row[id] = v;
+        if (rowObj.row._uid) onEditRef.current?.(rowObj.row._uid as string, id, v);
         closeMenu();
       },
     };
@@ -388,12 +413,13 @@ export function Grid({ initialData, initialColumns, onOpenRow }: GridProps) {
       onPick: (v) => {
         pushUndo();
         rowObj.row[id] = v;
+        if (rowObj.row._uid) onEditRef.current?.(rowObj.row._uid as string, id, v);
         closeMenu();
       },
     };
     render();
   };
-  const DT_DEFAULTS = ['Show', 'Off', 'Travel', 'Rehearsal', 'Press / promo', 'Festival', 'Day off', 'Hold'];
+  const DT_DEFAULTS =['Show', 'Off', 'Travel', 'Rehearsal', 'Press / promo', 'Festival', 'Day off', 'Hold'];
   const openDayTypeMenu = (a: DOMRect, rowObj: { row: Row }, col: Column) => {
     menuRef.current = {
       anchor: { left: a.left, bottom: a.bottom },
@@ -685,6 +711,7 @@ export function Grid({ initialData, initialColumns, onOpenRow }: GridProps) {
           else if (t === 'check' && o) {
             pushUndo();
             o.row[k] = !o.row[k];
+            if (o.row._uid) onEditRef.current?.(o.row._uid, k, o.row[k]);
             render();
           } else startEdit();
           break;
@@ -868,6 +895,25 @@ export function Grid({ initialData, initialColumns, onOpenRow }: GridProps) {
       };
     if (selected) return { background: '#FF450017' };
     return undefined;
+  };
+
+  // Money cell content via the injected FX (default = demo). Shows the SOURCE
+  // figure in the row's currency; a foreign currency renders red + a ≈
+  // converted tag/tooltip in the display currency (C1).
+  const moneyContent = (row: Row, id: string) => {
+    const cc = (row.cur as string) || fx.displayCurrency;
+    const raw = Number(row[id]) || 0;
+    if (cc !== fx.displayCurrency) {
+      const conv = fx.formatDisplay(fx.toDisplay(raw, cc));
+      return (
+        <span className="fxconv" title={`≈ ${conv} in ${fx.displayCurrency}`}>
+          {fx.symbol(cc)}
+          {raw.toLocaleString('en-US')}
+          <span className="fxtag">≈{conv}</span>
+        </span>
+      );
+    }
+    return fx.formatDisplay(raw);
   };
 
   const renderEditInput = () => (
@@ -1165,21 +1211,23 @@ export function Grid({ initialData, initialColumns, onOpenRow }: GridProps) {
         );
       return <div key={key} className="c" />;
     }
-    // derived locked estimate
-    if (sec.kind === 'derived' && id === 'est' && (sec.source === 'Payroll' || sec.source === 'Rooming')) {
-      const ci2 = nc.indexOf('est');
-      const active2 = s.fr === fi && s.fc === ci2;
-      const cls = active2 ? ' active' : inSel(s, fi, ci2) ? ' selected' : '';
+    // Derived sections lock BOTH estimate AND actual — the source module
+    // (Payroll/Rooming/…) owns them and the reconcile pass regenerates both
+    // each load (GRID_SPEC §6, Phase 3 decision 2).
+    if (sec.kind === 'derived' && (id === 'est' || id === 'act')) {
+      const ci2 = nc.indexOf(id);
+      const active2 = ci2 >= 0 && s.fr === fi && s.fc === ci2;
+      const cls = active2 ? ' active' : ci2 >= 0 && inSel(s, fi, ci2) ? ' selected' : '';
       return (
         <div
           key={key}
           className={`c cell num cell-lock${cls}`}
-          style={selStyle(active2, !active2 && inSel(s, fi, ci2))}
+          style={selStyle(active2, ci2 >= 0 && !active2 && inSel(s, fi, ci2))}
           data-r={fi}
           data-c={ci2}
           onPointerDown={(e) => onCellPointerDown(e, fi, ci2)}
         >
-          {fmt(row.est)}
+          {moneyContent(row, id)}
           <span className="lockmini">🔒</span>
         </div>
       );
@@ -1232,23 +1280,7 @@ export function Grid({ initialData, initialColumns, onOpenRow }: GridProps) {
         </>
       );
     }
-    if (t === 'money') {
-      const cc = row.cur || 'USD';
-      // C1 — show the SOURCE figure in the row's own currency (red = foreign),
-      // so the grid cell and the slide input read the SAME number. The
-      // display-currency conversion is the tooltip + a small ≈ tag; section
-      // totals still convert via disp().
-      if (cc !== 'USD') {
-        return (
-          <span className="fxconv" title={`≈ ${fmt(disp(row[id], cc))} in display $`}>
-            {SYM[cc]}
-            {(Number(row[id]) || 0).toLocaleString('en-US')}
-            <span className="fxtag">≈{fmt(disp(row[id], cc))}</span>
-          </span>
-        );
-      }
-      return fmt(row[id]);
-    }
+    if (t === 'money') return moneyContent(row, id);
     if (t === 'number') return (row[id] ?? '') === '' ? '' : String(row[id]);
     if (t === 'check')
       return (
@@ -1619,6 +1651,10 @@ export function Grid({ initialData, initialColumns, onOpenRow }: GridProps) {
           pushUndo={pushUndo}
           render={render}
           openMenu={slideOpenMenu}
+          fx={fx}
+          statuses={slideStatuses}
+          forceLineVariant={slideLineVariant}
+          onEdit={onEdit}
         />
       ) : null}
     </div>

@@ -7,7 +7,7 @@
    by every surface. No React, no DOM.
    ============================================ */
 
-import type { Column, Row, Section, Sel } from './types';
+import type { Column, GridFx, Row, Section, Sel } from './types';
 
 /** Display-currency symbol for the grid + all totals (demo: USD). FX is a
     static table here; the spec wires a live feed in a later phase. */
@@ -40,6 +40,16 @@ export function sym(c?: string): string {
 export function fmt(n: unknown): string {
   return CUR + Number(Math.round(Number(n) || 0)).toLocaleString('en-US');
 }
+
+/** Default FX injection — the demo's static USD-pivot table. Real surfaces
+ *  (budget) pass their own GridFx (built from src/lib/budget/fx.ts). */
+export const demoFx: GridFx = {
+  displayCurrency: 'USD',
+  currencies: [...CURS],
+  toDisplay: (amount, fromCur) => disp(amount, fromCur),
+  symbol: (cur) => sym(cur),
+  formatDisplay: (amount) => fmt(amount),
+};
 
 export function isFormula(s: Section): boolean {
   return s.kind === 'formula';

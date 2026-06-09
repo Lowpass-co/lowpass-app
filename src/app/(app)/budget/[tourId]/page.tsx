@@ -30,6 +30,8 @@ import { BudgetBurnBar } from '@/components/budget/BudgetBurnBar';
 import { BudgetContextBand } from '@/components/budget/BudgetContextBand';
 import { resolveArtistLogoUrl } from '@/lib/artists/imageUrl';
 import { BudgetSpreadsheetView } from '@/components/budget/BudgetSpreadsheetView';
+import { BudgetGridToggle } from '@/components/budget/BudgetGridToggle';
+import { BudgetGridView } from '@/components/budget/BudgetGridView';
 import { BudgetIncomeTab } from '@/components/budget/BudgetIncomeTab';
 import { BudgetEmptyState } from '@/components/budget/BudgetEmptyState';
 import { BudgetSettingsTab } from '@/components/budget/BudgetSettingsTab';
@@ -280,23 +282,34 @@ export default async function BudgetTourPage({
               <BudgetEmptyState tourId={tourId} />
             ) : (
               <>
-                {/* Fix 3 — display-currency + Export moved up into the
-                    context band (BudgetContextBand), so they're reachable
-                    from every tab, not just above this grid. */}
-                <BudgetSpreadsheetView
-                  lines={lines}
-                  sections={sections}
-                  trackPhases={trackPhases}
-                  phases={phases}
-                  routingDateById={routingDateById}
-                  duplicateMap={duplicatesToRecord(detectDuplicates(lines))}
-                  tourCurrency={tourCurrency}
-                  tourId={tourId}
-                  income={incomeRows}
-                  commissions={commissionRows}
-                  settings={budgetSettings}
-                  receiptSlot={
-                    <ReceiptInbox tourId={tourId} lineItems={lines} />
+                {/* Phase 3 — the canonical <Grid> is mounted on the REAL
+                    budget data behind a "Grid (beta)" toggle; the classic
+                    BudgetSpreadsheetView stays the default safety net until
+                    the grid is live-verified, then this flips. */}
+                <BudgetGridToggle
+                  classic={
+                    <BudgetSpreadsheetView
+                      lines={lines}
+                      sections={sections}
+                      trackPhases={trackPhases}
+                      phases={phases}
+                      routingDateById={routingDateById}
+                      duplicateMap={duplicatesToRecord(detectDuplicates(lines))}
+                      tourCurrency={tourCurrency}
+                      tourId={tourId}
+                      income={incomeRows}
+                      commissions={commissionRows}
+                      settings={budgetSettings}
+                      receiptSlot={<ReceiptInbox tourId={tourId} lineItems={lines} />}
+                    />
+                  }
+                  grid={
+                    <BudgetGridView
+                      lines={lines}
+                      sections={sections}
+                      tourCurrency={tourCurrency}
+                      tourId={tourId}
+                    />
                   }
                 />
               </>

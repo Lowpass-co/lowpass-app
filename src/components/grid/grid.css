@@ -478,6 +478,23 @@
   background: color-mix(in srgb, var(--gr-amber) 14%, transparent);
   border-color: color-mix(in srgb, var(--gr-amber) 32%, transparent);
 }
+/* Budget (Expenses) DB status set (Phase 3): draft + paid reuse the rules
+   above; these add quoted / approved / disputed. */
+.lp-grid .pill.quoted {
+  color: var(--gr-amber);
+  background: color-mix(in srgb, var(--gr-amber) 14%, transparent);
+  border-color: color-mix(in srgb, var(--gr-amber) 32%, transparent);
+}
+.lp-grid .pill.approved {
+  color: var(--gr-blue);
+  background: color-mix(in srgb, var(--gr-blue) 14%, transparent);
+  border-color: color-mix(in srgb, var(--gr-blue) 32%, transparent);
+}
+.lp-grid .pill.disputed {
+  color: var(--gr-red);
+  background: color-mix(in srgb, var(--gr-red) 14%, transparent);
+  border-color: color-mix(in srgb, var(--gr-red) 32%, transparent);
+}
 .lp-grid .pill:hover { transform: translateY(-1px); }
 
 /* deal pill (income — rendered, edited in a later phase) */

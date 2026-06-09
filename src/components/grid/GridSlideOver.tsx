@@ -27,9 +27,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Lock } from 'lucide-react';
-import type { Doc, Row, Section, Txn } from './types';
+import type { Doc, GridFx, GridStatusConfig, Row, Section, Txn } from './types';
 import type { MenuConfig } from './GridMenu';
-import { CURS, FX, STATUSES, disp, fmt, formulaEst, sym, variance } from './gridModel';
+import { STATUSES, demoFx, formulaEst, variance } from './gridModel';
 
 const LINKCATS: Record<string, string[]> = {
   Person: ['Dillon Jordan', 'Megan Clark', 'Adam Rowley', 'Ben Quinton'],
@@ -75,6 +75,13 @@ export interface GridSlideOverProps {
   pushUndo: () => void;
   render: () => void;
   openMenu: (config: MenuConfig) => void;
+  /** Phase 3 injections (default to the demo). */
+  fx?: GridFx;
+  statuses?: GridStatusConfig;
+  /** budget Expenses: always the LINE variant (no person/hotel/settlement). */
+  forceLineVariant?: boolean;
+  /** persist a slide field edit (item/est/act/status/notes) by the row _uid. */
+  onEdit?: (rowUid: string, field: string, value: unknown) => void;
 }
 
 const rectOf = (e: React.MouseEvent) => {
@@ -85,7 +92,21 @@ const money = (v: unknown) => parseFloat(String(v).replace(/[^0-9.\-]/g, '')) ||
 let docSeq = 0;
 const genDocId = () => `doc-${Date.now().toString(36)}-${docSeq++}`;
 
-export function GridSlideOver({ data, si, ri, version, onClose, pushUndo, render, openMenu }: GridSlideOverProps) {
+export function GridSlideOver({
+  data,
+  si,
+  ri,
+  version,
+  onClose,
+  pushUndo,
+  render,
+  openMenu,
+  fx: fxProp,
+  statuses,
+  forceLineVariant,
+  onEdit,
+}: GridSlideOverProps) {
+  const fxC = fxProp ?? demoFx;
   const [open, setOpen] = useState(false);
   const [scan, setScan] = useState(false);
   const [memo, setMemo] = useState<string | null>(null);
@@ -127,21 +148,34 @@ export function GridSlideOver({ data, si, ri, version, onClose, pushUndo, render
     fn();
     render();
   };
+  /** persist a slide edit to the backing surface (budget) by row _uid. */
+  const fireEdit = (field: string, value: unknown) => {
+    if (row?._uid) onEdit?.(String(row._uid), field, value);
+  };
 
   /* ---- shared menus ---- */
   const pickCurrency = (e: React.MouseEvent) =>
     openMenu({
       anchor: rectOf(e),
-      options: [...CURS],
+      options: [...fxC.currencies],
       current: row.cur,
-      onPick: (cc) => commit(() => (row.cur = cc)),
+      onPick: (cc) =>
+        commit(() => {
+          row.cur = cc;
+          fireEdit('cur', cc);
+        }),
     });
   const pickStatus = (e: React.MouseEvent) =>
     openMenu({
       anchor: rectOf(e),
-      options: [...STATUSES],
+      options: statuses?.options ?? [...STATUSES],
+      optColors: statuses?.colors,
       current: String(row.status),
-      onPick: (v) => commit(() => (row.status = v)),
+      onPick: (v) =>
+        commit(() => {
+          row.status = v;
+          fireEdit('status', v);
+        }),
     });
   const addLink = (e: React.MouseEvent) => {
     const anchor = rectOf(e);
@@ -158,8 +192,9 @@ export function GridSlideOver({ data, si, ri, version, onClose, pushUndo, render
   };
 
   /* ---- shared blocks ---- */
-  const cv = (row.cur || 'USD') !== 'USD';
-  const s = sym(row.cur);
+  const dispCur = fxC.displayCurrency.toUpperCase();
+  const cv = (row.cur || dispCur).toUpperCase() !== dispCur;
+  const s = fxC.symbol(row.cur || dispCur);
 
   const Header = () => (
     <div className="so-head">
@@ -190,13 +225,19 @@ export function GridSlideOver({ data, si, ri, version, onClose, pushUndo, render
       placeholder={placeholder}
       defaultValue={String(row.item ?? '')}
       onBlur={(e) => {
-        if (e.target.value !== row.item) commit(() => (row.item = e.target.value));
+        if (e.target.value !== row.item)
+          commit(() => {
+            row.item = e.target.value;
+            fireEdit('item', e.target.value);
+          });
       }}
     />
   );
 
-  const estLocked =
-    sec.kind === 'formula' || (sec.kind === 'derived' && (sec.source === 'Payroll' || sec.source === 'Rooming'));
+  // Derived sections lock BOTH est + act (decision 2); formula sections lock
+  // the estimate. Any derived kind locks (budget: Rooming/Payroll/Travel/Gear).
+  const estLocked = sec.kind === 'formula' || sec.kind === 'derived';
+  const actLocked = sec.kind === 'derived';
 
   const MoneyBlock = () => {
     const estV = sec.kind === 'formula' ? formulaEst(row, data) : Number(row.est) || 0;
@@ -207,28 +248,36 @@ export function GridSlideOver({ data, si, ri, version, onClose, pushUndo, render
     const fxBelow = (srcVal: number) =>
       cv ? (
         <div className="fxnote" style={{ marginTop: 4 }}>
-          ≈ {fmt(disp(srcVal, row.cur))} in display $
+          ≈ {fxC.formatDisplay(fxC.toDisplay(srcVal, row.cur || dispCur))} in {dispCur}
         </div>
       ) : null;
+    const lockedMoney = (val: number) => (
+      <div className="so-ro" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span>
+          {s}
+          {Number(val).toLocaleString()}
+        </span>
+        <Lock size={12} strokeWidth={2.25} color="var(--lp-text-tertiary)" aria-label="locked" />
+      </div>
+    );
     return (
       <>
         <div className="so-2col">
           <div className="so-field">
             <label>Estimate</label>
             {estLocked ? (
-              <div className="so-ro" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span>
-                  {s}
-                  {Number(estV).toLocaleString()}
-                </span>
-                <Lock size={12} strokeWidth={2.25} color="var(--lp-text-tertiary)" aria-label="locked" />
-              </div>
+              lockedMoney(estV)
             ) : (
               <div className="moneyin">
                 <span className="cursym">{s}</span>
                 <input
                   defaultValue={Number(row.est) || 0}
-                  onBlur={(e) => commit(() => (row.est = money(e.target.value)))}
+                  onBlur={(e) =>
+                    commit(() => {
+                      row.est = money(e.target.value);
+                      fireEdit('est', row.est);
+                    })
+                  }
                 />
               </div>
             )}
@@ -236,13 +285,22 @@ export function GridSlideOver({ data, si, ri, version, onClose, pushUndo, render
           </div>
           <div className="so-field">
             <label>Actual</label>
-            <div className="moneyin">
-              <span className="cursym">{s}</span>
-              <input
-                defaultValue={Number(row.act) || 0}
-                onBlur={(e) => commit(() => (row.act = money(e.target.value)))}
-              />
-            </div>
+            {actLocked ? (
+              lockedMoney(Number(row.act) || 0)
+            ) : (
+              <div className="moneyin">
+                <span className="cursym">{s}</span>
+                <input
+                  defaultValue={Number(row.act) || 0}
+                  onBlur={(e) =>
+                    commit(() => {
+                      row.act = money(e.target.value);
+                      fireEdit('act', row.act);
+                    })
+                  }
+                />
+              </div>
+            )}
             {fxBelow(Number(row.act) || 0)}
           </div>
         </div>
@@ -261,9 +319,9 @@ export function GridSlideOver({ data, si, ri, version, onClose, pushUndo, render
       <label>Currency</label>
       <div style={{ display: 'flex', alignItems: 'center', gap: 9, flexWrap: 'wrap' }}>
         <span className="pill" style={{ cursor: 'pointer' }} onClick={pickCurrency}>
-          {row.cur || 'USD'} ({s})
+          {row.cur || dispCur} ({s})
         </span>
-        {cv ? <span className="fxnote">⚠ shown converted to $ at {FX[row.cur || 'USD']}× (demo rate)</span> : null}
+        {cv ? <span className="fxnote">⚠ shown converted to {dispCur}</span> : null}
       </div>
     </div>
   );
@@ -433,7 +491,12 @@ export function GridSlideOver({ data, si, ri, version, onClose, pushUndo, render
         rows={3}
         placeholder={placeholder}
         defaultValue={String(row.notes ?? '')}
-        onBlur={(e) => commit(() => (row.notes = e.target.value))}
+        onBlur={(e) =>
+          commit(() => {
+            row.notes = e.target.value;
+            fireEdit('notes', e.target.value);
+          })
+        }
       />
     </div>
   );
@@ -841,8 +904,9 @@ export function GridSlideOver({ data, si, ri, version, onClose, pushUndo, render
     );
   };
 
-  const body =
-    row.daytype === 'Show'
+  const body = forceLineVariant
+    ? LineBody()
+    : row.daytype === 'Show'
       ? SettleBody()
       : sec.source === 'Payroll'
         ? PersonBody()

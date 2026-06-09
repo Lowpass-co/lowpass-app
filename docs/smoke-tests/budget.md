@@ -188,7 +188,44 @@ grid `Section[]`/`Row` and grid edits → DB patches (both directions tested:
 `node --experimental-strip-types src/lib/grid/budgetAdapter.test.ts` → 7 checks).
 Formula sections excluded; derived sections classified + sourced; `est`→
 `proposed_cost`, `act`→`actual_cost`(+override), no `vendor` column.
-**Not yet a UI** — the grid mount (steps 3–6) is the next pass.
+
+#### BUD-33 — Grid (beta) renders on real budget data
+**Do**: Budget → Expenses tab → click **Grid (beta)** (default is Classic).
+**Expect**: The canonical `<Grid>` renders the live sections + lines (same
+data as Classic); the production view is untouched on the **Classic** toggle.
+**Last verified**:
+
+#### BUD-34 — Cell edits persist (survive reload)
+**Do**: In Grid (beta), edit an Item / Estimate / Actual / Status on a normal
+line; reload.
+**Expect**: The edit persisted (PATCH `/api/budget/line-items`, optimistic, no
+flash). A rejected write toasts + refreshes.
+**Last verified**:
+
+#### BUD-35 — Derived sections locked (est + act)
+**Do**: Look at the Salary / Accommodation sections.
+**Expect**: They show the 🔗 source pill; **both** Estimate and Actual are
+read-only with a 🔒 (the reconcile owns them — GRID_SPEC §6).
+**Last verified**:
+
+#### BUD-36 — Currency uses the tour FX
+**Do**: A foreign-currency line (e.g. EUR on a GBP tour).
+**Expect**: The cell shows the SOURCE figure in its currency + a red ≈
+conversion in the tour currency (via `src/lib/budget/fx.ts`, not the demo
+table); the tour's own symbol (£/$/€) is used throughout.
+**Last verified**:
+
+#### BUD-37 — Slide opens (LINE variant, DB statuses)
+**Do**: Click the orange **Open** chip on a line.
+**Expect**: The slide opens as the LINE variant (no person/hotel/settlement);
+the Status menu lists the DB set (`draft·quoted·approved·paid·disputed`); slide
+edits to item/est/act/status/notes persist.
+**Last verified**:
+
+> **Deferred to the grid-default flip (next pass, called out):** add-line /
+> delete-line / section CRUD / reorder persistence, and the slide's
+> Transactions/Documents CRUD (the budget rows don't carry them yet). Those
+> stay on the **Classic** view until wired — which is why the toggle keeps it.
 
 > Cross-ref `docs/smoke-tests/grid.md` for the grid component's GRID-/SLIDE- IDs.
 
