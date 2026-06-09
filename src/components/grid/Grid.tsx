@@ -834,16 +834,22 @@ export function Grid({ initialData, initialColumns, onOpenRow }: GridProps) {
   // range tint. Inline so no stylesheet cascade / specificity issue can
   // hide them; the .active/.selected classes stay for the radius/glow too.
   const selStyle = (active: boolean, selected: boolean): React.CSSProperties | undefined => {
+    // SOLID colours only — no color-mix in box-shadow (several Chrome builds
+    // drop the whole box-shadow when it contains color-mix, killing the
+    // ring). Orange hex+alpha tints are the CLAUDE.md-sanctioned variant.
     if (active)
       return {
-        boxShadow:
-          'inset 0 0 0 2px var(--lp-orange), 0 0 16px color-mix(in srgb, var(--lp-orange) 16%, transparent)',
-        background: 'color-mix(in srgb, var(--lp-orange) 7%, transparent)',
+        // Two independent rings — box-shadow + outline — so the orange shows
+        // even if one is dropped by the browser.
+        boxShadow: 'inset 0 0 0 2px var(--lp-orange)',
+        outline: '2px solid var(--lp-orange)',
+        outlineOffset: '-2px',
+        background: '#FF450021',
         borderRadius: 'var(--lp-radius-sm)',
         position: 'relative',
         zIndex: 1,
       };
-    if (selected) return { background: 'color-mix(in srgb, var(--lp-orange) 12%, transparent)' };
+    if (selected) return { background: '#FF450017' };
     return undefined;
   };
 

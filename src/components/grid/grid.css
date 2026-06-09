@@ -335,10 +335,14 @@
 .lp-grid .openbtn:hover .ow { max-width: 50px; opacity: 1; margin-left: 2px; }
 
 .lp-grid .cell { cursor: cell; position: relative; }
-.lp-grid .cell.selected { background: var(--gr-orange-10); }
+/* SOLID box-shadow ring — no color-mix here (some Chrome builds drop a
+   box-shadow that contains color-mix, which hid the active ring). */
+.lp-grid .cell.selected { background: #FF450017; }
 .lp-grid .cell.active {
-  box-shadow: inset 0 0 0 2px var(--lp-orange), 0 0 16px var(--gr-orange-16);
-  background: var(--gr-orange-07);
+  box-shadow: inset 0 0 0 2px var(--lp-orange);
+  outline: 2px solid var(--lp-orange);
+  outline-offset: -2px;
+  background: #FF450021;
   border-radius: var(--lp-radius-sm);
   z-index: var(--lp-z-elevated);
 }
