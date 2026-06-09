@@ -80,10 +80,16 @@ export function variance(row: Row, estVal?: number): { d: number; pct: number } 
   return { d, pct: est ? (d / est) * 100 : 0 };
 }
 
-/** grid-template-columns string from the visible columns' live widths. */
+/** grid-template-columns string from the visible columns' live widths.
+ *  GRID-24 — the name/`item` column is a flex track (`minmax(w, 1fr)`) so the
+ *  grid fills its container and the leftover width lands on the name column;
+ *  every other column stays a fixed px track (numbers stay right-aligned). */
 export function template(cols: Column[], widths: Record<string, number>): string {
   return visCols(cols)
-    .map((c) => `${widths[c.id] ?? c.w}px`)
+    .map((c) => {
+      const w = widths[c.id] ?? c.w;
+      return c.id === 'item' ? `minmax(${w}px, 1fr)` : `${w}px`;
+    })
     .join(' ');
 }
 

@@ -21,6 +21,49 @@
 >
 > **Phase 2 passes:** SLIDE-04 (locked est), SLIDE-05, SLIDE-08, SLIDE-13.
 
+## Fix pass 3 — P0 root cause (the dead `--lp-orange` token)
+
+Found by inspecting the **running** `/grid-demo` DOM (not a code-read — which
+is why GRID-03/04/05 + the A4 insertion line survived two passes):
+`var(--lp-orange)` was **never defined**. `globals.css` only defined the
+Tailwind `@theme` name `--color-lp-orange: #FF4500`, so every grid value using
+`var(--lp-orange)` (the active-cell ring `box-shadow`/`outline`, the drag
+insertion line `background`, all `--gr-orange-*` glows, buttons) resolved to
+**nothing** → transparent. Literal-hex orange (`#FF450021`) survived; that's
+why the range tint showed but the ring didn't.
+
+**Fix (one line, `globals.css :root`):** `--lp-orange: var(--color-lp-orange);`
+(+ `--lp-orange-hover`/`--lp-orange-light` for the family). CLAUDE.md sanctions
+`var(--lp-orange)` as THE token, so the defect was the missing definition.
+
+**Verified in the built CSS** (live `getComputedStyle` probe is Adam's to run):
+`--lp-orange:var(--color-lp-orange)` is emitted to `:root` and
+`--color-lp-orange:#ff4500` — so `var(--lp-orange)` now resolves to `#FF4500`,
+and `.cell.active{box-shadow:inset 0 0 0 2px var(--lp-orange);outline:2px solid
+var(--lp-orange)}` will paint orange.
+
+**Token audit** (every `--lp-<colour>` the grid uses, checked defined in
+`globals.css`): `--lp-orange` ❌→ now aliased; `--lp-violet` ✓ (#8B5CF6),
+`--lp-pink` ✓ (#EC4899), `--lp-grid-accent-1..5` ✓; semantics via
+`--color-lp-success/error/info/warning` ✓; surface/border/text/radius/space/z
+all ✓. **`--lp-orange` was the only dead one.**
+
+→ **GRID-03/04/05 (ring) and GRID-13/19/20 (insertion line) are root-caused to
+this; retest on the fresh build.**
+
+### Refinements landed this pass
+- **SLIDE-02** — slide status pill now colour-coded (`.lp-gso .pill.<status>`).
+- **SLIDE-07** — `🔒` emoji → lucide `Lock` (token colour) + tighter spacing.
+- **Hover affordance** — the `🔗 source → open` pill reveals "→ open" on hover
+  (opacity/tint transition), no longer a permanently-open chip.
+- **GRID-24** — grid fills its container; the `item` column flexes
+  (`minmax(w, 1fr)`), numbers stay fixed + right-aligned.
+- **Demo toggle** — proper token-clean segmented control.
+
+### Deferred to a follow-up (called out)
+- **Settlement visual polish** — computes correctly; bringing the
+  layout/spacing/typography fully up to the playbox render is a separate pass.
+
 ## Fix pass 2 (post Phase 1+2 smoke — re-smoke these)
 
 Build-green / tsc-0 / eslint-0, **not click-verified** (auth-gated locally —
@@ -341,8 +384,15 @@ write back to the grid row and are **undoable (⌘Z)**.
 
 ## Known broken (2026-06-08 smoke → fix pass in CC_GRID_FIXPASS_2.md)
 
-- **GRID-03/04/05** — active-cell ring missing (range tint shows; focused cell
-  not flagged `active` at the `selStyle` call sites).
+- **GRID-03/04/05 + A4 (insertion line)** — ROOT CAUSE FOUND (live DOM,
+  2026-06-08): the grid references **`var(--lp-orange)`**, which is **undefined**
+  — globals.css defines `--color-lp-orange`, never `--lp-orange`. So the ring's
+  box-shadow computes `none`, its outline is style-`none`, and the insertion
+  line (geometry/z correct) paints transparent. `isActive` logic + overlay
+  structure are both fine. Fix = alias `--lp-orange: var(--color-lp-orange)` in
+  globals.css. See `docs/handover/CC_GRID_FIXPASS_3.md`. (Earlier guess —
+  "focused cell not flagged active" — was wrong; the class applies, the token
+  is dead.)
 - **GRID-13/19/20** — no insertion line on row/section drag; row + section
   reorder **snap** (FLIP stomped: `.row` `gr-rise` mount animation overrides the
   inline transform; section FLIP selector may miss `.section` nodes).

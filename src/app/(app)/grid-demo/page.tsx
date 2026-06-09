@@ -182,27 +182,45 @@ export default function GridDemoPage() {
           data; no backend. Open a row (the orange <strong>Open</strong> chip on the first cell) for the slide; set an
           Income row&rsquo;s <strong>Day → Show</strong> and open it for the settlement variant.
         </p>
-        {/* Expenses / Income toggle */}
-        <div style={{ display: 'inline-flex', gap: 4, border: '1px solid var(--lp-border)', borderRadius: 'var(--lp-radius-lg)', padding: 3, background: 'var(--lp-surface)' }}>
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setView(t.id)}
-              style={{
-                border: 0,
-                cursor: 'pointer',
-                borderRadius: 'var(--lp-radius-md)',
-                padding: '6px 14px',
-                fontSize: 'var(--lp-text-sm)',
-                fontWeight: 600,
-                background: view === t.id ? 'var(--lp-orange)' : 'transparent',
-                color: view === t.id ? 'var(--lp-text-inverse)' : 'var(--lp-text-secondary)',
-              }}
-            >
-              {t.label}
-            </button>
-          ))}
+        {/* Expenses / Income — segmented control (token-clean) */}
+        <div
+          role="tablist"
+          aria-label="Demo view"
+          style={{
+            display: 'inline-flex',
+            gap: 2,
+            border: '1px solid var(--lp-border)',
+            borderRadius: 'var(--lp-radius-full)',
+            padding: 3,
+            background: 'var(--lp-panel)',
+          }}
+        >
+          {TABS.map((t) => {
+            const on = view === t.id;
+            return (
+              <button
+                key={t.id}
+                type="button"
+                role="tab"
+                aria-selected={on}
+                onClick={() => setView(t.id)}
+                style={{
+                  border: 0,
+                  cursor: 'pointer',
+                  borderRadius: 'var(--lp-radius-full)',
+                  padding: '6px 18px',
+                  fontSize: 'var(--lp-text-sm)',
+                  fontWeight: 600,
+                  background: on ? 'var(--lp-orange)' : 'transparent',
+                  color: on ? 'var(--lp-text-inverse)' : 'var(--lp-text-secondary)',
+                  boxShadow: on ? 'var(--lp-shadow-sm)' : 'none',
+                  transition: 'background 0.16s ease, color 0.16s ease',
+                }}
+              >
+                {t.label}
+              </button>
+            );
+          })}
         </div>
       </div>
       {/* key by view → the Grid remounts with the right column + data set */}

@@ -26,6 +26,7 @@
 /* eslint-disable react-hooks/immutability */
 import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { Lock } from 'lucide-react';
 import type { Doc, Row, Section, Txn } from './types';
 import type { MenuConfig } from './GridMenu';
 import { CURS, FX, STATUSES, disp, fmt, formulaEst, sym, variance } from './gridModel';
@@ -172,7 +173,8 @@ export function GridSlideOver({ data, si, ri, version, onClose, pushUndo, render
               /* would open {sec.source} — wired in a later phase */
             }}
           >
-            🔗 {sec.source} → open
+            🔗 {sec.source}
+            <span className="openword"> → open</span>
           </span>
         ) : null}
       </div>
@@ -214,9 +216,12 @@ export function GridSlideOver({ data, si, ri, version, onClose, pushUndo, render
           <div className="so-field">
             <label>Estimate</label>
             {estLocked ? (
-              <div className="so-ro">
-                {s}
-                {Number(estV).toLocaleString()} 🔒
+              <div className="so-ro" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span>
+                  {s}
+                  {Number(estV).toLocaleString()}
+                </span>
+                <Lock size={12} strokeWidth={2.25} color="var(--lp-text-tertiary)" aria-label="locked" />
               </div>
             ) : (
               <div className="moneyin">

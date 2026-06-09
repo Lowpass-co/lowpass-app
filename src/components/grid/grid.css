@@ -69,8 +69,10 @@
   overflow-x: auto;
 }
 .lp-grid .gridinner {
-  width: max-content;
-  min-width: 100%;
+  /* GRID-24 — fill the container so the item column's 1fr track can absorb
+     leftover width; the gridwrap scrolls only when fixed columns overflow. */
+  width: 100%;
+  min-width: max-content;
 }
 
 /* ---- header ---- */
@@ -930,7 +932,18 @@
   color: var(--color-lp-info);
   background: color-mix(in srgb, var(--color-lp-info) 12%, transparent);
   border: 1px solid color-mix(in srgb, var(--color-lp-info) 35%, transparent);
+  transition: background 0.16s cubic-bezier(0.2, 0.7, 0.3, 1);
 }
+.lp-gso .badge.src:hover { background: color-mix(in srgb, var(--color-lp-info) 22%, transparent); }
+/* "→ open" is a hover affordance, not a permanently-open chip. */
+.lp-gso .badge.src .openword {
+  max-width: 0;
+  opacity: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  transition: max-width 0.22s cubic-bezier(0.2, 0.7, 0.3, 1), opacity 0.18s;
+}
+.lp-gso .badge.src:hover .openword { max-width: 52px; opacity: 1; }
 .lp-gso .txn {
   display: grid;
   grid-template-columns: 1fr 124px 76px;
@@ -985,6 +998,11 @@
   display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: var(--lp-radius-full);
   font-size: var(--lp-text-2xs); font-weight: 600; border: 1px solid var(--lp-border); cursor: pointer; background: var(--lp-panel); color: var(--lp-text);
 }
+/* SLIDE-02 — status pills carry their status colour, like the grid. */
+.lp-gso .pill.budgeted { color: var(--lp-text-secondary); background: color-mix(in srgb, var(--lp-text-secondary) 12%, transparent); border-color: color-mix(in srgb, var(--lp-text-secondary) 28%, transparent); }
+.lp-gso .pill.paid { color: var(--color-lp-success); background: color-mix(in srgb, var(--color-lp-success) 14%, transparent); border-color: color-mix(in srgb, var(--color-lp-success) 32%, transparent); }
+.lp-gso .pill.reconciled { color: var(--color-lp-info); background: color-mix(in srgb, var(--color-lp-info) 14%, transparent); border-color: color-mix(in srgb, var(--color-lp-info) 32%, transparent); }
+.lp-gso .pill.refunded { color: var(--color-lp-warning); background: color-mix(in srgb, var(--color-lp-warning) 14%, transparent); border-color: color-mix(in srgb, var(--color-lp-warning) 32%, transparent); }
 
 /* scan + memo-viewer modals (portaled, above the slide) */
 .lp-gso-modal-ovl {

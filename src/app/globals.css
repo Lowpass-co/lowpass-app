@@ -192,6 +192,16 @@
   --lp-text-mono: #404040;        /* monospace numeric content */
   --lp-mono-font: 'JetBrains Mono', ui-monospace, 'SF Mono', 'Fira Code', monospace;
 
+  /* Brand-orange short aliases. CLAUDE.md sanctions `var(--lp-orange)` as
+     THE orange token, but Tailwind v4 only ever defined the @theme name
+     `--color-lp-orange` — so `var(--lp-orange)` resolved to NOTHING and every
+     non-hex orange (the grid's active-cell ring, the drag insertion line,
+     all --gr-orange-* glows, buttons) rendered transparent. Alias the short
+     names to the real tokens so they resolve everywhere. */
+  --lp-orange: var(--color-lp-orange);
+  --lp-orange-hover: var(--color-lp-orange-hover);
+  --lp-orange-light: var(--color-lp-orange-light);
+
   /* Canonical Grid palette — extends the semantic set with the two extra
      accents the grid's 5-colour section rotation needs (dark overrides in
      the .dark block). The grid references ONLY these var(--lp-…) tokens. */
