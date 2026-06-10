@@ -47,26 +47,39 @@ Stage B is authorised. Still **Expenses only** — Income/settlement/projections
    `Section[]`/`Row` mapping module with a test covering **both directions**
    before any UI.
 
-## ⚠ Pre-req for the derived step (do NOT skip)
+## ⛔ REQUIRED migration 208 — the `source_entity_type` CHECK rejects payroll (also fixes OPS-17)
 
-Before wiring derived sections, **confirm the live DB's `source_entity_type`
-CHECK actually permits `'payroll'` and `'payroll_per_diem'`.** The committed
-migration `026` only allows `hotel_booking|flight_booking`, and nothing widens
-it — yet reconcile writes payroll values and the live budget shows Salary/Per
-Diem sections, so the live constraint must have drifted from the migrations.
-Either (a) run a quick `\d budget_line_items` / `information_schema` check
-(Adam can run it in Supabase), or (b) inspect the constraint, and if the
-migrations don't match the live DB, write a small **`208_*.sql`** that widens
-the CHECK to match what reconcile actually writes
-(`hotel_booking, flight_booking, flight, payroll, payroll_per_diem`) — idempotent,
-header-numbered, down-block. This is read-safe for Phase 3 (we only READ derived
-lines), but the drift must be recorded + fixed so a fresh clone reconciles.
+**Confirmed against the LIVE DB + code (not assumed):**
+- Live constraint (Adam's Supabase query):
+  `budget_line_items_source_entity_type_check` =
+  `IN ('hotel_booking','flight_booking','flight')` (+ NULL). **No `payroll` /
+  `payroll_per_diem`.**
+- `src/server/budget/reconcileDerivedLines.ts:304` inserts
+  `source_entity_type: sourceType` with `sourceType='payroll'` (Salary) /
+  `'payroll_per_diem'` (Per-Diem). Those inserts **violate the CHECK and throw**,
+  and the wrapping `try/catch` (`:373-376`) **silently swallows** the error.
+- ⇒ **Payroll & Per-Diem derived lines never persist.** Accommodation
+  (`hotel_booking`) persists because it's allowed. **This is the root cause of
+  OPS-17** ("payroll does NOT flow to the budget SALARY section (empty)") — an
+  open Operations smoke fail.
+
+**So migration `208` is REQUIRED (not optional):** widen the CHECK to match what
+reconcile writes —
+`('hotel_booking','flight_booking','flight','payroll','payroll_per_diem')`.
+Idempotent (drop + re-add the named constraint), header-numbered, down-block,
+RLS untouched (it's a CHECK). Confirm `208` is free per
+`database/migrations/README.md` (highest on main + active branches) before using
+it. **Land 208 BEFORE the derived step** — until it lands there are no payroll
+lines to detect, and the adapter's `source_entity_type='payroll'` detection is
+correct only once it does. Note in `operations.md` that 208 fixes OPS-17's
+"empty salary section" half (the fee-math half is separate).
 
 ## Build order (from the Phase 3 prompt — unchanged)
 
 1. Adapter module + bidirectional unit test (no UI).
-2. (No status migration — decision 1A.) Verify the `source_entity_type` CHECK
-   drift (above); write `208` only if needed.
+2. **Migration `208` (REQUIRED)** — widen the `source_entity_type` CHECK (above);
+   this unblocks payroll/per-diem derived lines AND fixes OPS-17. (No status
+   migration — decision 1A.)
 3. Mount `<Grid>` + `<GridSlideOver>` on `/budget/[tourId]`, Expenses column set,
    **inside the existing chrome** — keep `BudgetContextBand` + `BudgetBurnBar` +
    `ProductShell`; replace **only** the `{tab==='budget' && <BudgetSpreadsheetView/>}`
@@ -76,6 +89,24 @@ lines), but the drift must be recorded + fixed so a fresh clone reconciles.
    §5; both cells locked.
 6. Currency (per-line `currency`, `fx.ts`) + transactions/documents wired to the
    real tables; respect `syncActualCostIfNoOverride` when the slide edits `act`.
+
+## Steps 3–6 (the mount) — GO
+
+Floor (adapter + test + 208 + route hardening) reviewed and verified correct.
+Proceed with the UI mount. Two notes folded in:
+
+- **Display parity:** the adapter returns `actual_cost`. Confirm the old
+  `BudgetSpreadsheetView` didn't display `effective_actual_cost` (the
+  txn-sum/override-aware enriched value); if it did, surface that instead so
+  numbers don't change for the user on lines where the two diverge.
+- **Per-row derived lock:** lock derived rows using the carried `_derived` flag
+  (not only `Section.kind==='derived'`), so a derived line in a mixed/ungrouped
+  section still shows the lock. Server already blocks the edit; keep the UI
+  consistent.
+
+After you push, the grid mount will be **live-verified on the preview via Chrome
+DOM** (adapter render, persistence-survives-reload, the now-populated Salary
+section once 208 is applied, derived locks, currency) before Adam smokes.
 
 ## Hard rules
 - Tokens (`var(--lp-orange)` resolves now). Build `next build --webpack`; tsc 0;

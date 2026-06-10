@@ -414,6 +414,26 @@ write back to the grid row and are **undoable (⌘Z)**.
 - **SLIDE-10/11/12** — settlement untestable in the demo (no income/Show row);
   demo needs an Expenses/Income view toggle.
 
+## Live-verified slide/settlement sweep — `5846d89` (2026-06-08, Chrome DOM)
+
+All ✅ confirmed on the running preview by driving the actual UI:
+- SLIDE-02 status pill colour-coded (`.pill.paid` = rgb(16,185,129)).
+- SLIDE-03 currency — EUR Hotel shows `€520` source + red `= $562 in display $`
+  + "converted at 1.08×" warning; source not replaced.
+- SLIDE-07 lock is `lucide-lock` SVG, no emoji.
+- SLIDE-09 hotel variant — budget-first, Confirmation/Nights/Contact, Open in
+  Rooming + Link to Advance stubs.
+- SLIDE-10 settlement (Versus 80%) — gross £39,800 → net £39,800 → deal
+  max(£6,915, 80%×£39,800=£31,840) → after 20% WH £25,472. Every figure carries
+  `£`; Show/Artist expense tags + note present.
+- SLIDE-11 reactivity — Artist expense £5,000 → "Less artist costs −£5,000" →
+  balance £25,472→£20,472 live; Show costs stay inside the deal.
+- B1 Income view — routing-style columns; Day/Deal pills coloured; toggle is a
+  clean segmented control.
+
+Not yet live-verified (CC-claimed): **SLIDE-06** doc-rename → transaction
+propagation (doc-id reference). **Settlement visual polish** still deferred.
+
 ## New — 2026-06-08 live review (queued for next grid polish pass)
 
 - **Derived source pill doesn't animate** — the `🔗 ROOMING` / `🔗 PAYROLL`
