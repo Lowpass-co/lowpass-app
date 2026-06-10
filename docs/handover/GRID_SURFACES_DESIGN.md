@@ -155,39 +155,48 @@ implementations into a single `<RoutingRail>` (props: entries
 Days never move to the top for one screen. This is the first foundational build
 after Budget (see `CC_ROUTING_RAIL.md`).
 
-## Shared EXPORT tool — modelled on Daysheets (studied from 8 screenshots)
-Daysheets is the benchmark: a **WYSIWYG document builder + exporter** with a
-pop-out, live preview, the routing rail on the left, a right settings panel, and
-per-line styling. Replicate the table-relevant subset as one `<GridExport>` the
-canonical grid exposes (fed columns + rows + grouping); each surface supplies a
-preset. Build once (on Budget or Channel list), reuse everywhere.
+## `<GridExport>` — table export for PAYROLL · ROOMING · CHANNEL LIST only
+**Scope correction (Adam, 2026-06-09):** this shared export is for the
+**payroll, rooming, and channel-list** tables. **Budget is NOT here** — budget
+needs its own, more involved **Reports tool** (P&L, summaries, variance — a
+separate, richer build; see below). Don't wire budget into `<GridExport>`.
 
-Feature set to mirror (priority order):
-- **Pop-out window** with centered **live WYSIWYG preview**; toolbar = template
-  selector · filter · zoom % · email · share · **download (PDF)** · close.
-- **Templates**: built-in presets + user **"Save as Template"** (Daysheets has
-  Classic / 2.0 / Venue Schedule + per-tour saved templates). Per-surface
-  defaults (rooming list / channel list / payroll sheet / budget).
-- **Section show/hide + reorder** in a right panel (Header · the grid/table ·
-  Footer · Contacts · Notes). Each section has its own settings sub-panel.
-- **Header**: logo image (alignment, max-height, corner-radius), background image
-  (opacity), title elements (artist / tour name / date / day-type / group —
-  each show/hide + alignment + **drag to reorder**), day-type bar, group tags.
-- **Table format**: **font-size slider**, **row-spacing slider**, **zebra
-  stripes**, bold headers, column **show/hide + reorder**, column width/full-width.
-- **Per-row/line menu** (click a line in the preview): **bold**, **highlight**
-  (colour swatches), **font colour** (swatches), **text size** (−/default/+),
-  **order up/down**, **hide line**. (Mirrors the grid's own per-row affordances.)
-- **Filter by group / day type** (checkbox list) to scope which rows/people
-  appear in the export.
-- Output: print-ready **PDF**, plus **email / share**.
-- NOTE: Daysheets' full *composed daysheet* (schedule + flights + lodging +
-  notes blocks) is a richer document than a table — that's the Advance/Daysheet
-  surface, which can reuse the **same export engine + header/template/per-line
-  layer**. Scope `<GridExport>` to the table + header/template/per-line subset
-  first; the composed-daysheet renderer is a later, larger piece.
+Daysheets was the reference but the skin must be **Lowpass, not a Daysheets
+clone**:
+- **Light/dark — adapts to the app theme** (like the **quotes in Jobs**
+  documents). Not hardcoded dark. Chrome uses the app surface/text tokens;
+  orange is the accent; the print "paper" is white in both modes.
+- **Tone down the colour controls** — the per-line font-colour/highlight swatch
+  rows read too Daysheets and too busy. Keep per-line styling minimal: **bold ·
+  one subtle highlight · text size · move up/down · hide**. Drop the rainbow
+  font-colour picker.
+
+Builder (one `<GridExport>`, fed the grid's columns + rows + grouping; each
+surface supplies a preset; **Save as Template** per surface):
+- Pop-out, live WYSIWYG preview, toolbar = template · filter · zoom · email ·
+  share · **download PDF** · close.
+- **Header**: **logo auto-pulls through from the artist's branding** (override
+  optional) — not a manual upload each time. Title + date. Optional background.
+- **Header notes**: a free-text notes block in the header (e.g. "Patch to FOH
+  SL, 48v as marked").
+- **Contact info block**: add contacts (name · role · phone/email) to the
+  document — like Daysheets' Contacts section.
+- **Table format**: font-size slider, row-spacing slider, zebra stripes, column
+  show/hide + reorder. Carries the grid's **coloured section-dot bands** into the
+  doc (Lowpass identity).
+- **Filter by group / day type** to scope rows. Output: print-ready **PDF** +
+  email/share.
+- Build it first on **channel list or rooming** (NOT budget), reuse on the others.
+
+## Budget Reports tool (separate, later — NOT `<GridExport>`)
+Budget export is a richer **reports** surface: P&L summary, category roll-ups,
+estimate-vs-actual variance, commissions/contingency, per-show/derived breakdowns
+— not a single styled table. Its own design + build pass, after the table
+surfaces. Flagged here so `<GridExport>` stays scoped to the simple table export.
+
 - Build gate: mock the export pop-out (Claude) for Adam's sign-off before CC
-  builds it.
+  builds it. (Lowpass light/dark skin + logo-pull + header-notes + contacts mock
+  done 2026-06-09.)
 
 ## Sequence (recommended)
 Finish Budget Expenses (finalise prompt) → **Payroll** (real; quick, reuses
