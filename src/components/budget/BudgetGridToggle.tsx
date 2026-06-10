@@ -1,22 +1,22 @@
 'use client';
 
 /* ============================================
-   LOWPASS — <BudgetGridToggle> (Phase 3 mount, safety net)
+   LOWPASS — <BudgetGridToggle> (Phase 3 mount)
 
-   Lets Adam smoke the canonical <Grid> on the REAL budget data on the running
-   page WITHOUT replacing the production Expenses view yet. Default = the
-   classic BudgetSpreadsheetView; "Grid (beta)" renders <BudgetGridView>. Once
-   the grid is live-verified, this flips to grid-default (and the remaining
-   CRUD — add/delete/section/reorder — gets wired). Token-clean.
+   The canonical <Grid> (<BudgetGridView>) is now the DEFAULT Budget → Expenses
+   view (BUD-46, Phase 3 live-verified BUD-41…45). Classic (BudgetSpreadsheetView)
+   stays available via the toggle until the remaining Phase-4 parity lands.
+   Token-clean.
    ============================================ */
 
 import { useState } from 'react';
 
 export function BudgetGridToggle({ classic, grid }: { classic: React.ReactNode; grid: React.ReactNode }) {
-  const [mode, setMode] = useState<'classic' | 'grid'>('classic');
+  // BUD-46 — default to Grid (Classic still one click away).
+  const [mode, setMode] = useState<'classic' | 'grid'>('grid');
   const TABS: { id: 'classic' | 'grid'; label: string }[] = [
     { id: 'classic', label: 'Classic' },
-    { id: 'grid', label: 'Grid (beta)' },
+    { id: 'grid', label: 'Grid' },
   ];
   return (
     <div>

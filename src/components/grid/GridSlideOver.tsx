@@ -324,6 +324,9 @@ export function GridSlideOver({
                   onBlur={(e) =>
                     commit(() => {
                       row.act = money(e.target.value);
+                      // Manual actual = override (mirrors the server) so a later
+                      // txn edit won't auto-sync over it this session (BUD-47).
+                      row._actualOverride = true;
                       fireEdit('act', row.act);
                     })
                   }
@@ -436,13 +439,31 @@ export function GridSlideOver({
     return d ? d.name : String(t.receipt);
   };
 
+  // BUD-47 — keep the line's Actual (slide + grid cell) in step with the
+  // transactions sum WITHOUT a reload, mirroring the server's
+  // syncActualCostIfNoOverride: only when auto-synced (real surface, not a
+  // derived/locked line, no manual override) and ≥1 txn remains (the server
+  // preserves actual_cost when the last txn is removed). Pure display update —
+  // no PATCH (the server already synced actual_cost).
+  const syncActualFromTxns = () => {
+    if (!lineApi || actLocked || row._actualOverride) return;
+    const txns = row.transactions ?? [];
+    if (txns.length === 0) return;
+    row.act = txns.reduce((a, t) => a + (Number(t.amount) || 0), 0);
+  };
+
   // Add a transaction: real surface creates the row first (needs its id);
   // demo pushes an empty in-memory txn.
   const addTxn = () => {
     if (lineApi && row._uid) {
       void lineApi
         .addTransaction(String(row._uid))
-        .then((t) => commit(() => row.transactions!.push(t)))
+        .then((t) =>
+          commit(() => {
+            row.transactions!.push(t);
+            syncActualFromTxns();
+          }),
+        )
         .catch(() => {});
     } else {
       commit(() => row.transactions!.push({ date: '', desc: '', amount: 0, receipt: null }));
@@ -455,7 +476,12 @@ export function GridSlideOver({
     if (lineApi && t.id) {
       void lineApi
         .deleteTransaction(t.id)
-        .then(() => commit(() => row.transactions!.splice(i, 1)))
+        .then(() =>
+          commit(() => {
+            row.transactions!.splice(i, 1);
+            syncActualFromTxns();
+          }),
+        )
         .catch(() => {});
     } else {
       commit(() => row.transactions!.splice(i, 1));
@@ -502,7 +528,10 @@ export function GridSlideOver({
                   onBlur={(e) => {
                     const v = money(e.target.value);
                     if (v === t.amount) return;
-                    commit(() => (t.amount = v));
+                    commit(() => {
+                      t.amount = v;
+                      syncActualFromTxns();
+                    });
                     patchTxn(t, { amount: v });
                   }}
                 />

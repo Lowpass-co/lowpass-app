@@ -44,16 +44,25 @@ export async function GET(
   const tourGate = await requireTourInWorkspace(supabase, ctx.tour_id, auth.workspaceId);
   if (tourGate) return tourGate;
 
+  // BUD-48 — embed the linked receipt's number so loaded receipts render their
+  // real number (not a generic "Receipt"). FK receipt_id → expense_receipts.
   const { data, error } = await supabase
     .from('budget_line_item_transactions')
-    .select('*')
+    .select('*, receipt:expense_receipts(receipt_number)')
     .eq('line_item_id', lineItemId)
     .order('sort_order', { ascending: true })
     .order('created_at', { ascending: true });
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  return NextResponse.json({ transactions: (data ?? []) as BudgetLineItemTransaction[] });
+  // Flatten the embedded receipt to a `receipt_number` field on each txn.
+  const transactions = (data ?? []).map((row) => {
+    const { receipt, ...txn } = row as BudgetLineItemTransaction & {
+      receipt?: { receipt_number?: string | null } | null;
+    };
+    return { ...txn, receipt_number: receipt?.receipt_number ?? null };
+  });
+  return NextResponse.json({ transactions });
 }
 
 export async function POST(

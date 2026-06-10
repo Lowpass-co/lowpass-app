@@ -315,13 +315,33 @@ lazy-loads the lists and the toaster lists them (docs as `Type: name`, txns as
 `Txn: vendor 📎`) with **Open line ↗**.
 **Last verified**: code/build green; Adam live.
 
-> Known follow-ups (called out): the slide's **Actual** doesn't live-update on a
-> transaction edit (it auto-syncs server-side and shows on reload — no page
-> refresh on each keystroke); transaction receipt labels load as a generic
-> "Receipt" (the freshly-attached one shows its number) — a receipt-number join
-> on list is a follow-up; the txn **🔗 Link** stays a Phase-4 stub (no
-> `transaction_links` write). Step 6 (flip Grid to default) is gated on Adam's
-> live-verify of BUD-41…45.
+#### BUD-46 — Grid is the default Expenses view
+**Do**: Open Budget → Expenses (fresh load).
+**Expect**: the **Grid** view renders by default (was Classic). The toggle still
+offers **Classic** (one click) and **Grid**. (`BudgetGridToggle` default = `grid`.)
+**Last verified**: code/build green; Adam live.
+
+#### BUD-47 — slide Actual live-updates on a transaction edit
+**Do**: Open a non-derived line's slide. Add a transaction / edit its amount /
+delete it — watch the **Actual** field and the grid's Actual cell **without
+reloading**.
+**Expect**: Actual tracks Σ transactions immediately (no page reload), matching
+the server's auto-sync — **unless** the line has a manual override (typed Actual)
+or is derived/locked. Removing the last transaction leaves Actual as-is (the
+server preserves it). Done on commit, not per-keystroke.
+**Last verified**: code/build green; Adam live.
+
+#### BUD-48 — loaded receipts show their number
+**Do**: Attach a receipt to a transaction, reload, reopen the slide.
+**Expect**: the receipt chip shows the real **receipt number** (e.g. `R-001`),
+not a generic "Receipt". The transactions GET joins `expense_receipts`
+(`receipt_number`).
+**Last verified**: code/build green; Adam live.
+
+> **Phase 3 budget = complete** once BUD-46…48 live-verify (BUD-41…45 already
+> green). Then merge `feat/personnel-unify` → main and start Rooming.
+> Still out of scope (Phase 4): the txn **🔗 Link** (`transaction_links`),
+> Income / settlement / projections.
 
 > **Still deferred to the grid-default flip (called out):** row/section
 > **reorder** persistence (`sort_order`), and the slide's Transactions/

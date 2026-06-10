@@ -230,13 +230,16 @@ export function BudgetGridView({ lines, sections, tourCurrency, tourId }: Budget
             paid_at: string | null;
             amount: number;
             receipt_id: string | null;
+            receipt_number: string | null;
           }) => ({
             id: t.id,
             date: t.paid_at ?? '',
             desc: t.vendor_name ?? '',
             amount: Number(t.amount) || 0,
             receipt: t.receipt_id ?? null,
-            receiptLabel: t.receipt_id ? 'Receipt' : undefined,
+            // BUD-48 — real receipt number when joined; fall back to a generic
+            // label only if the number is somehow missing.
+            receiptLabel: t.receipt_id ? (t.receipt_number ?? 'Receipt') : undefined,
           }),
         );
       },
