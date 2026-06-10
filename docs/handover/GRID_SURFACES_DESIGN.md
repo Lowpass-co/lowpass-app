@@ -221,6 +221,14 @@ surfaces. Flagged here so `<GridExport>` stays scoped to the simple table export
   - **Rendered as a GRID** (stat cells + a supplier table + stand/cable count
     tables) — aligned, not flowing text. Consistent with the everything-is-a-grid
     ethos.
+- **Section manager** (the right panel): every document block — header, table,
+  each summary block (Totals / Supplied / Stands / Cables), Contacts, Notes,
+  Stage plot — is **show/hide-able**, set **full- or half-width**, and **drag-to-
+  reorder**. The preview re-flows: consecutive half-width blocks pair side by
+  side. This is how "customisation on how they're shown / if they're shown" works.
+- **Movable Notes blocks** — "Add notes section" inserts a free-text Notes block
+  that's also reorderable / width-settable like any other section (multiple
+  allowed).
 - Build gate: mock done + iterated to **v5** 2026-06-09 (header-top · section
   gutter · light/dark toggle · resizable cols · zebra colour · stage-plot
   co-export · gridded production summary) — pending final sign-off.
