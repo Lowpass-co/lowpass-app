@@ -23,7 +23,7 @@
    covers them — a deliberately-imperative component. */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Lock } from 'lucide-react';
+import { Lock, Trash2 } from 'lucide-react';
 import type { Doc, GridFx, GridLineApi, GridStatusConfig, Row, Section, Txn } from './types';
 import type { MenuConfig } from './GridMenu';
 import { STATUSES, demoFx, formulaEst, variance } from './gridModel';
@@ -536,6 +536,15 @@ export function GridSlideOver({
                   }}
                 />
               </div>
+              <button
+                type="button"
+                className="txn-del"
+                title="Delete transaction"
+                aria-label="Delete transaction"
+                onClick={() => deleteTxn(t, i)}
+              >
+                <Trash2 size={14} strokeWidth={2} />
+              </button>
               <div className="txn-receipt">
                 {t.receipt ? (
                   <span className="rcpt has">📎 {receiptLabel(t)}</span>
@@ -552,9 +561,6 @@ export function GridSlideOver({
                 >
                   🔗 Link
                 </button>
-                <span className="docx" title="Delete transaction" onClick={() => deleteTxn(t, i)}>
-                  ✕
-                </span>
               </div>
             </div>
           ))

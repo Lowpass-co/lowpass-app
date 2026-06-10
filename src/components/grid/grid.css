@@ -963,7 +963,7 @@
 .lp-gso .badge.src:hover .openword { max-width: 52px; opacity: 1; }
 .lp-gso .txn {
   display: grid;
-  grid-template-columns: 1fr 124px 76px;
+  grid-template-columns: 1fr 124px 76px auto;
   gap: 8px;
   align-items: center;
   padding: 9px 10px;
@@ -972,10 +972,29 @@
   margin-bottom: 8px;
   background: var(--lp-panel);
 }
+/* BUD-49 — discoverable per-row delete (was a faint ✕ buried by the Link btn). */
+.lp-gso .txn-del {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--lp-border);
+  border-radius: var(--lp-radius-md);
+  background: transparent;
+  color: var(--lp-text-tertiary);
+  cursor: pointer;
+  transition: 0.14s cubic-bezier(0.2, 0.7, 0.3, 1);
+}
+.lp-gso .txn-del:hover {
+  color: var(--color-lp-error);
+  border-color: color-mix(in srgb, var(--color-lp-error) 45%, transparent);
+  background: color-mix(in srgb, var(--color-lp-error) 10%, transparent);
+}
 .lp-gso .txn input { background: transparent; border: 0; outline: none; color: var(--lp-text); font: inherit; width: 100%; }
 .lp-gso .txn input::placeholder { color: var(--lp-text-tertiary); }
 .lp-gso .txn input.amt { text-align: right; font-variant-numeric: tabular-nums; }
-.lp-gso .txn-receipt { grid-column: 1 / 4; display: flex; align-items: center; margin-top: 4px; padding-top: 7px; border-top: 1px solid var(--lp-border-subtle); }
+.lp-gso .txn-receipt { grid-column: 1 / 5; display: flex; align-items: center; margin-top: 4px; padding-top: 7px; border-top: 1px solid var(--lp-border-subtle); }
 .lp-gso .rcpt { display: inline-flex; align-items: center; gap: 5px; font-size: var(--lp-text-2xs); font-weight: 600; padding: 3px 9px; border-radius: var(--lp-radius-md); cursor: pointer; transition: 0.14s cubic-bezier(0.2, 0.7, 0.3, 1); }
 .lp-gso .rcpt.has { color: var(--color-lp-success); background: color-mix(in srgb, var(--color-lp-success) 14%, transparent); border: 1px solid color-mix(in srgb, var(--color-lp-success) 32%, transparent); }
 .lp-gso .rcpt.none { color: var(--lp-text-tertiary); background: transparent; border: 1px dashed var(--lp-border); }

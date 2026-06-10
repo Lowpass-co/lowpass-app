@@ -338,7 +338,15 @@ not a generic "Receipt". The transactions GET joins `expense_receipts`
 (`receipt_number`).
 **Last verified**: code/build green; Adam live.
 
-> **Phase 3 budget = complete** once BUD-46…48 live-verify (BUD-41…45 already
+#### BUD-49 — transaction row has a discoverable delete
+**Do**: Open a line's slide → Transactions. Look at a transaction row.
+**Expect**: a clear **trash button** (lucide `Trash2`, bordered, hover turns red)
+sits at the end of the row next to the amount — not a faint `✕` buried beside
+"🔗 Link". Clicking it deletes the transaction (real route); the line's Actual
+re-syncs per BUD-47 (last-txn removal preserves Actual). (`.txn-del` in grid.css.)
+**Last verified**: code/build green; Adam live.
+
+> **Phase 3 budget = complete** once BUD-46…49 live-verify (BUD-41…45 already
 > green). Then merge `feat/personnel-unify` → main and start Rooming.
 > Still out of scope (Phase 4): the txn **🔗 Link** (`transaction_links`),
 > Income / settlement / projections.
