@@ -21,7 +21,16 @@ them off; report fails by ID.
 - [ ] **SMK-BUD-04** — Confirm **Classic** is still reachable via the toggle and
   renders the same data (the flip to Grid-default didn't strand Classic).
 
-## Rooming  — *pending build (CC_ROOMING.md). Smokes added when it ships.*
+## Rooming  — built (a22fa57); 3 views Chrome-verified. Your manual checks:
+- [ ] **SMK-ROOM-01** — In **Cards**, assign a person to a room via the "+ room…"
+  picker on a night; switch to **Matrix** → the code shows; reload → it persists.
+- [ ] **SMK-ROOM-02** — Set a room's **rate/cost** (Nights row → hotel sheet, or
+  the assumed-rate field) → the **budget Accommodation** line picks up the cost
+  (the reconcile feed with a non-£0 value — I only verified the £0 baseline).
+- [ ] **SMK-ROOM-03** — Shared room: two people, same letter (e.g. `DBL (A)`) →
+  the **Nights** view counts + costs it **once** (not twice).
+- [ ] **SMK-ROOM-04** — Off-roster person shows as a greyed ✕ column (Matrix) and
+  can be removed; roommates keep their room.
 
 ## Payroll — *pending build (CC_PAYROLL.md). Smokes added when it ships.*
 
