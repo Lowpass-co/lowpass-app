@@ -8,6 +8,36 @@ import PersonSlideOver from '@/components/entity/person/PersonSlideOver';
 import { useToast } from '@/components/ui/Toast';
 import type { PersonnelRate } from '@/types';
 import { cn } from '@/lib/utils';
+import { countDayStatuses, computeTotalFee, computeTotalPerDiem, type RateLike } from '@/lib/payroll/fees';
+
+/** Per-person day counts + advance, aggregated from payroll_entries. */
+type PersonTotals = { show: number; offTravel: number; rehearsal: number; active: number; advance: number };
+
+/** The explicit computed columns (show/off-travel days · total fee · total PD ·
+ *  advance) — read-only, derived from day_statuses via the shared fee helper so
+ *  they always match the budget Salary feed. (Stage B "Rates & totals".) */
+function buildTotalsColumns(
+  currency: string,
+  countsByPerson: Map<string, PersonTotals>,
+): GridColumn<PersonnelRate>[] {
+  const ccy = currency.trim().toUpperCase() || 'GBP';
+  const money = new Intl.NumberFormat('en-GB', { style: 'currency', currency: ccy, minimumFractionDigits: 0 });
+  const countsOf = (id: string): PersonTotals =>
+    countsByPerson.get(id) ?? { show: 0, offTravel: 0, rehearsal: 0, active: 0, advance: 0 };
+  const rateOf = (r: PersonnelRate): RateLike => ({
+    show_rate: r.show_rate,
+    off_rate: r.off_rate,
+    rehearsal_rate: r.rehearsal_rate,
+    per_diem: r.per_diem,
+  });
+  return [
+    { id: 'show_days', header: 'Show days', accessor: (r) => countsOf(r.id).show, align: 'right', width: 90, type: { kind: 'computed', render: (r) => String(countsOf((r as PersonnelRate).id).show || '—') } },
+    { id: 'off_days', header: 'Off/Travel', accessor: (r) => countsOf(r.id).offTravel, align: 'right', width: 96, type: { kind: 'computed', render: (r) => String(countsOf((r as PersonnelRate).id).offTravel || '—') } },
+    { id: 'total_fee', header: 'Total fee', accessor: (r) => computeTotalFee(rateOf(r), countsOf(r.id), countsOf(r.id).advance), align: 'right', width: 120, type: { kind: 'computed', render: (r) => { const row = r as PersonnelRate; return money.format(computeTotalFee(rateOf(row), countsOf(row.id), countsOf(row.id).advance)); } } },
+    { id: 'total_pd', header: 'Total PD', accessor: (r) => computeTotalPerDiem(rateOf(r), countsOf(r.id)), align: 'right', width: 110, type: { kind: 'computed', render: (r) => { const row = r as PersonnelRate; return money.format(computeTotalPerDiem(rateOf(row), countsOf(row.id))); } } },
+    { id: 'advance', header: 'Advance', accessor: (r) => countsOf(r.id).advance, align: 'right', width: 104, type: { kind: 'computed', render: (r) => money.format(countsOf((r as PersonnelRate).id).advance) } },
+  ];
+}
 
 const PT_OPTIONS = [
   { value: 'principal', label: 'Principal / Mgmt' },
@@ -89,19 +119,45 @@ export function PayrollRatesSpreadsheet({
   currency,
   initialRates,
   canSeeCommission,
+  payrollEntries,
 }: {
   currency: string;
   initialRates: PersonnelRate[];
   canSeeCommission?: boolean;
+  /** When provided, appends the read-only computed total columns (show days ·
+   *  off/travel days · total fee · total PD · advance) derived from day_statuses. */
+  payrollEntries?: Record<string, unknown>[];
 }) {
   const { showToast } = useToast();
   const [rates, setRates] = useState<PersonnelRate[]>(initialRates);
   const [personOpen, setPersonOpen] = useState<string | null>(null);
 
-  const columns = useMemo(
-    () => buildPayrollColumns(currency, !!canSeeCommission),
-    [currency, canSeeCommission],
-  );
+  // Per-person day counts + advance from payroll_entries (for the totals cols).
+  const countsByPerson = useMemo(() => {
+    const m = new Map<string, PersonTotals>();
+    for (const e of payrollEntries ?? []) {
+      const pid = e.personnel_id as string;
+      const c = countDayStatuses((e.day_statuses as Record<string, string>) ?? {});
+      const acc = m.get(pid) ?? { show: 0, offTravel: 0, rehearsal: 0, active: 0, advance: 0 };
+      acc.show += c.show;
+      acc.offTravel += c.offTravel;
+      acc.rehearsal += c.rehearsal;
+      acc.active += c.active;
+      acc.advance += Number((e as { advance_fee?: number }).advance_fee) || 0;
+      m.set(pid, acc);
+    }
+    return m;
+  }, [payrollEntries]);
+
+  const columns = useMemo(() => {
+    const base = buildPayrollColumns(currency, !!canSeeCommission);
+    if (!payrollEntries) return base;
+    // Insert the computed totals BEFORE the trailing Notes column.
+    const notesIdx = base.findIndex((c) => c.id === 'base_rate_note');
+    const totals = buildTotalsColumns(currency, countsByPerson);
+    const at = notesIdx === -1 ? base.length : notesIdx;
+    return [...base.slice(0, at), ...totals, ...base.slice(at)];
+  }, [currency, canSeeCommission, payrollEntries, countsByPerson]);
 
   // Sort rows by group then keep insertion order within group; build section headers.
   const { gridRows, sectionHeaders } = useMemo(() => {
@@ -194,7 +250,11 @@ export function PayrollRatesSpreadsheet({
   }
 
   return (
-    <div className={cn('rounded-xl border border-lp-border bg-lp-surface shadow-sm', 'print:break-inside-avoid print:border-lp-border')}>
+    // Raised panel (canonical-grid parity: lifted surface + border + shadow).
+    <div
+      className={cn('rounded-xl border border-lp-border shadow-sm', 'print:break-inside-avoid print:border-lp-border')}
+      style={{ background: 'var(--lp-panel)' }}
+    >
       <SpreadsheetGrid<PersonnelRate>
         columns={columns}
         rows={gridRows}

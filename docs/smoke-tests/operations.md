@@ -12,9 +12,12 @@
 >   the `budget_line_items.source_entity_type` CHECK to allow `payroll`/
 >   `payroll_per_diem`, the Salary section now materialises all 5 roster members
 >   `FROM PAYROLL`. Root cause was the CHECK rejecting payroll inserts +
->   reconcile swallowing the error. **Still open (separate):** the payroll
->   total-fee math (some members show £0; counts ALL days × show rate, ignores
->   the show-vs-travel-day split) — personnel work, not the migration.
+>   reconcile swallowing the error. **Fee-math half now CLOSED** (Payroll Stage
+>   B): `src/lib/payroll/fees.ts` already split by day type
+>   (`show×show_rate + offTravel×off_rate + rehearsal×rehearsal_rate + advance`,
+>   no show-rate fallback) — the "all days × show rate" bug was already gone.
+>   Proven by **PAY-OPS17** below against the real sheet. (Festival
+>   `acl_per_diem` override is a separate, deferred follow-up — CC_PAYROLL_ACL.)
 > - OPS-04 — rooming→budget lines appear but with no hotel name and no cost;
 >   and assigning a room triggers a full page refresh (should be optimistic).
 > - OPS-03 / OPS-14 — an off-roster person with their rooms removed still
@@ -173,6 +176,68 @@ can't be reached.
 - **Keystone**: OPS-01/02/03/04 (lists not unified), OPS-12/13 (remove
   destructive), OPS-14/16/17/19 (blocked by retention), OPS-15/18 (swap menu
   not clickable). All trace to the roster-unification data model — see top.
+
+## Payroll — Stage B (canonical grid + shared rail) — 2026-06-10
+
+> Restructure onto 3 views (Rates & totals · Days matrix · Summary) + the shared
+> `<RoutingRail>` night cell, + the OPS-17 proving test. Fee math (fees.ts),
+> the budget Salary feed, and internal_rate gating are unchanged.
+> `tsc` 0 · `eslint` 0 · `next build --webpack` green at this commit.
+
+#### PAY-OPS17 — fee math matches the real sheet (closes the OPS-17 fee half)
+**Do**: `node --experimental-strip-types src/lib/payroll/fees.test.ts`.
+**Expect**: 8 checks pass — Richie **$4,611**, Duncan **$1,607** (his real half
+travel rate, not a band rule), Jake **$2,250**, Adam PD **$167**, the "no
+show-rate fallback" case (300 show / 0 off over 21+10 = £6,300 not £9,300), and
+no_tour-ignored / rehearsal-counts. **Status: PASS (code-verified).** Adam
+re-confirms the same numbers render in the Rates & totals view live.
+
+#### PAY-01 — Days matrix on the shared rail
+**Do**: Payroll → **Days matrix**. 
+**Expect**: days run **down the left** as the shared RailNightCell (date · city ·
+day-type pill — identical to Advance/Rooming), people across the top, grouped by
+**week** (WC dd Mon dividers), **all** routing dates incl. no-tour. Cells =
+Show / Off-Travel / No-Tour, **token-coloured** (no hardcoded emerald/amber).
+Editing a cell persists (POST /api/budget/payroll), optimistic, survives reload.
+
+#### PAY-02 — Rates & totals (default view)
+**Do**: Payroll (default view).
+**Expect**: re-skinned `<SpreadsheetGrid>` (raised panel) with every column
+explicit: person · role · employment · rate type · **show · off · reh · PD**
+rates · **show days · off/travel days · total fee · total PD · advance** ·
+notes. The computed columns are read-only and **equal the sheet** (Richie
+$4,611…). Rate edits persist (PATCH /api/budget/personnel-rates).
+**Needs-live**: Adam confirms visual parity with the budget `<Grid>` (raised
+panel / gutter / row styling) — deep cell/header parity lives in SpreadsheetGrid;
+flag if it reads off.
+
+#### PAY-03 — Person rate-card slide  *(DEFERRED — see note)*
+The dedicated slide (show/travel/per-diem/**advance** editable + internal_rate
+admin-gated) is **not in this build**: it must reuse the existing gated editor
+(`PersonnelRatesSection`, server-gated), which needs the `tour_personnel`
+memberId plumbed into the payroll rates payload (today the row only carries
+`roster_personnel_id`). Show/travel/per-diem stay editable **inline** in
+PAY-02; **advance editing currently has no home** (the old week sheet was
+removed) until PAY-03 lands. Flagged to Adam.
+
+#### PAY-04 — internal_rate stays admin-only
+**Do**: As a non-admin, open any payroll surface.
+**Expect**: `internal_rate` is never shown or writable in the all-staff Rates
+grid (it isn't a column) and the server gate (`rates` route) is untouched.
+**Status: code-verified** (no change to the gate).
+
+#### PAY-05 — budget Salary/Per-Diem feed unchanged
+**Do**: Set day statuses in the Days matrix, then open Budget → Expenses.
+**Expect**: the derived `payroll` Salary + `payroll_per_diem` lines reconcile
+exactly as before (same `reconcileDerivedLines` recompute from day_statuses via
+the same helper). **Needs-live** (Adam).
+
+#### PAY-06 — Summary unchanged
+**Do**: Payroll → **Summary**. **Expect**: identical to before (kept as-is).
+
+> **Deferred follow-ups:** PAY-03 rate-card slide + **advance editing** (needs
+> memberId plumbing); `acl_per_diem` festival override (CC_PAYROLL_ACL); branded
+> payroll PDF (bucket + brand_color exist, unused — future).
 
 ## Retired
 

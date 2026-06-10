@@ -1,10 +1,22 @@
 'use client';
 
+/* ============================================
+   LOWPASS — <PayrollView> (Stage B host)
+
+   Three views, view switcher; the shared rail is the constant:
+     Rates & totals — re-skinned <SpreadsheetGrid> rate cards + explicit
+                      computed totals (default)
+     Days matrix    — days DOWN the shared rail, people across, week-grouped
+     Summary        — kept as-is
+   Fee math (fees.ts), the budget Salary feed, and internal_rate gating are
+   unchanged. Per-week tabs are replaced by the all-weeks Days matrix.
+   ============================================ */
+
 import { useMemo, useState } from 'react';
-import { cn } from '@/lib/utils';
+import type { PersonnelRate } from '@/types';
 import { PayrollSummary } from './PayrollSummary';
-import { PayrollWeekSheet } from './PayrollWeekSheet';
-import { getWeekStart, formatWeekTabLabel } from './payroll-utils';
+import { PayrollRatesSpreadsheet } from './PayrollRatesSpreadsheet';
+import { PayrollDaysMatrix } from './PayrollDaysMatrix';
 import { AddPersonToTourButton } from '@/components/operations/personnel/AddPersonToTourButton';
 
 interface PayrollViewProps {
@@ -16,6 +28,13 @@ interface PayrollViewProps {
   payrollEntries: Record<string, unknown>[];
 }
 
+type ViewId = 'rates' | 'days' | 'summary';
+const VIEWS: { id: ViewId; label: string }[] = [
+  { id: 'rates', label: 'Rates & totals' },
+  { id: 'days', label: 'Days matrix' },
+  { id: 'summary', label: 'Summary' },
+];
+
 export function PayrollView({
   tourId,
   tourName,
@@ -24,84 +43,85 @@ export function PayrollView({
   personnelRates,
   payrollEntries,
 }: PayrollViewProps) {
-  // Phase 2/A — lift the roster's rate cards into state so adding a person
-  // appends them optimistically (single source: roster → payroll), no
-  // router.refresh. Seeded from the server-filtered (roster-only) list.
   const [rates, setRates] = useState<Record<string, unknown>[]>(personnelRates);
+  const [view, setView] = useState<ViewId>('rates');
   const excludePersonIds = useMemo(
-    () =>
-      rates
-        .map((r) => r.person_id)
-        .filter((id): id is string => typeof id === 'string'),
+    () => rates.map((r) => r.person_id).filter((id): id is string => typeof id === 'string'),
     [rates],
   );
 
-  const weekStarts = useMemo(() => {
-    const set = new Set<string>();
-    for (const r of routingDates) {
-      const d = (r.date ?? '').slice(0, 10);
-      if (d) set.add(getWeekStart(d));
-    }
-    return Array.from(set).sort();
-  }, [routingDates]);
-
-  const tabs = useMemo(() => {
-    const list: { id: string; label: string }[] = [{ id: 'summary', label: 'Summary' }];
-    for (const ws of weekStarts) {
-      list.push({ id: ws, label: formatWeekTabLabel(ws) });
-    }
-    return list;
-  }, [weekStarts]);
-
-  const [activeTab, setActiveTab] = useState(tabs[0]?.id ?? 'summary');
-
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-xl font-bold text-lp-text">{tourName} — Payroll</h1>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        <h1 style={{ fontSize: 20, fontWeight: 700, color: 'var(--lp-text)' }}>{tourName} — Payroll</h1>
         <AddPersonToTourButton
           tourId={tourId}
           excludePersonIds={excludePersonIds}
           onAdded={(result) => {
-            if (result?.rateCard) {
-              setRates((prev) => [...prev, result.rateCard as Record<string, unknown>]);
-            }
+            if (result?.rateCard) setRates((prev) => [...prev, result.rateCard as Record<string, unknown>]);
           }}
         />
       </div>
 
-      <nav className="flex flex-wrap gap-0 border-b border-lp-border">
-        {tabs.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => setActiveTab(t.id)}
-            className={cn(
-              'text-xs font-semibold uppercase tracking-wider px-3 py-2 transition-colors',
-              activeTab === t.id
-                ? 'border-b-2 border-lp-orange text-lp-orange'
-                : 'text-lp-text-secondary hover:text-lp-text'
-            )}
-          >
-            {t.label}
-          </button>
-        ))}
-      </nav>
+      <div
+        role="tablist"
+        aria-label="Payroll view"
+        style={{
+          display: 'inline-flex',
+          alignSelf: 'flex-start',
+          gap: 2,
+          border: '1px solid var(--lp-border)',
+          borderRadius: 'var(--lp-radius-full)',
+          padding: 3,
+          background: 'var(--lp-panel)',
+        }}
+      >
+        {VIEWS.map((v) => {
+          const on = view === v.id;
+          return (
+            <button
+              key={v.id}
+              type="button"
+              role="tab"
+              aria-selected={on}
+              onClick={() => setView(v.id)}
+              style={{
+                border: 0,
+                cursor: 'pointer',
+                borderRadius: 'var(--lp-radius-full)',
+                padding: '5px 16px',
+                fontSize: 13,
+                fontWeight: 600,
+                background: on ? 'var(--lp-orange)' : 'transparent',
+                color: on ? 'var(--lp-text-inverse)' : 'var(--lp-text-secondary)',
+                transition: 'background 0.16s ease, color 0.16s ease',
+              }}
+            >
+              {v.label}
+            </button>
+          );
+        })}
+      </div>
 
-      <div className="min-h-[300px]">
-        {activeTab === 'summary' && (
+      <div style={{ minHeight: 300 }}>
+        {view === 'rates' ? (
+          <PayrollRatesSpreadsheet
+            currency={currency}
+            initialRates={rates as unknown as PersonnelRate[]}
+            payrollEntries={payrollEntries}
+            canSeeCommission={false}
+          />
+        ) : view === 'days' ? (
+          <PayrollDaysMatrix
+            tourId={tourId}
+            routingDates={routingDates}
+            personnelRates={rates}
+            payrollEntries={payrollEntries}
+          />
+        ) : (
           <PayrollSummary
             tourId={tourId}
             currency={currency}
-            personnelRates={rates}
-            routingDates={routingDates}
-            payrollEntries={payrollEntries}
-          />
-        )}
-        {activeTab !== 'summary' && weekStarts.includes(activeTab) && (
-          <PayrollWeekSheet
-            tourId={tourId}
-            weekStart={activeTab}
             personnelRates={rates}
             routingDates={routingDates}
             payrollEntries={payrollEntries}
