@@ -195,22 +195,35 @@ estimate-vs-actual variance, commissions/contingency, per-show/derived breakdown
 surfaces. Flagged here so `<GridExport>` stays scoped to the simple table export.
 
 ### v3 additions (Adam, 2026-06-09)
-- **Header BESIDE the table, not part of it.** The branding/letterhead (logo,
-  title, date, header notes, contacts) is a **side column** next to the table —
-  not a band stacked on top inside the grid panel. Applies to the **in-app grid
-  too**: the header/context sits beside the grid, not baked into it. *(Confirm
-  interpretation with Adam — could also mean section labels in a left gutter.)*
+- **Header stays on top.** The letterhead (logo, title, date, header notes,
+  contacts) is a top band — unchanged.
+- **Sections move to a LEFT GUTTER** (clarified: this is what "beside, not part
+  of the grid" meant). Section labels (Drums/Bass/Vocals) sit as vertical tabs in
+  a narrow left gutter beside their row group, colour-accented — **not** as
+  full-width band rows interrupting the table. Applies to the **in-app grid too**
+  (section label in the gutter, not a band row). Grid-wide change to the canonical
+  section rendering.
 - **Resizable columns** in the export (drag column edges), carried from the grid.
 - **Zebra colour is pickable** (swatch set), not a fixed grey.
 - **Export light/dark toggle** — matches the app theme by default, but a ☀/☾
   button forces a light or dark PDF independent of the app theme.
 - **Include stage plot** option — export the channel list + its **stage plot**
   together (page 2). Channel-list export specific.
-- **Totals bar at the bottom**: grand totals of everything (inputs · 48v ·
-  outputs) **and a supplier roll-up** (Band-supplied vs Venue-supplied vs Rental
-  counts) — the band/venue split Adam called out. Each surface's totals differ
-  (rooming: rooms/nights/cost; payroll: fees/per-diem).
-- Build gate: mock done + iterated (v3) 2026-06-09 — pending final sign-off.
+- **Production summary at the bottom** (richer than a totals bar — Adam: must
+  show WHAT, not just counts). Auto-derived from the data:
+  - Totals (inputs · outputs · 48v count).
+  - **Supplied-by**: Band / Venue / Rental, each with the **item list** of what
+    they supply (e.g. Band: Beta 91A, Beta 52, SM57, KM184…), not just a count.
+  - **Stand-type counts** (tall boom ×N · short boom ×N · none ×N).
+  - **Cable-length counts** (5m ×N · 10m ×N · 15m ×N).
+  - Each surface gets its own summary (rooming: rooms/nights/cost + room-type
+    counts; payroll: fee + per-diem totals; channel: the above).
+  - **Rendered as a GRID** (stat cells + a supplier table + stand/cable count
+    tables) — aligned, not flowing text. Consistent with the everything-is-a-grid
+    ethos.
+- Build gate: mock done + iterated to **v5** 2026-06-09 (header-top · section
+  gutter · light/dark toggle · resizable cols · zebra colour · stage-plot
+  co-export · gridded production summary) — pending final sign-off.
 
 ## Sequence (recommended)
 Finish Budget Expenses (finalise prompt) → **Payroll** (real; quick, reuses
