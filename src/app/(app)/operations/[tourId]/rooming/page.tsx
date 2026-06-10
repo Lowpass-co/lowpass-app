@@ -133,6 +133,9 @@ export default async function OperationsTourRoomingPage({
         );
         return {
           id: ra.id,
+          // room_id lets the Nights-overview group assignments by ROOM so a
+          // shared room is counted + costed once (matching the reconcile feed).
+          room_id: room.id,
           person_name: person?.full_name ?? null,
           check_in: checkIn,
           check_out: checkOut,

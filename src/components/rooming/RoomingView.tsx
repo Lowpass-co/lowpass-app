@@ -1,60 +1,87 @@
 'use client';
 
+/* ============================================
+   LOWPASS — <RoomingView> (Stage B host)
+
+   One dataset, three views over the shared <RoutingRail> night model:
+     Matrix  — nights (rail) × people, room-code cells (default)
+     Nights  — one row per hotel stay; click a row → its detail sheet
+     Cards   — rail(nights) + the night's room cards + unassigned pool
+   The rail is the constant; the view switcher swaps the body. Nights are
+   filtered to "nights away" (Q2). Roster/add-person + the data layer + the
+   derived budget feed are unchanged.
+   ============================================ */
+
 import { useMemo, useState } from 'react';
-import { cn } from '@/lib/utils';
-import { RoomingMasterGrid } from './RoomingMasterGrid';
+import { RoomingMatrix } from './RoomingMatrix';
+import { RoomingCards } from './RoomingCards';
+import { RoomingNightsOverview } from './RoomingNightsOverview';
 import { RoomingHotelSheet } from './RoomingHotelSheet';
+import { isNightAway } from './useRoomingGrid';
 import { AddPersonToTourButton } from '@/components/operations/personnel/AddPersonToTourButton';
 
-/** One row per roster member — the authoritative people list (FOUNDATION
- *  FIX). person_name matches persons.full_name so the grid's cells/saves
- *  resolve; person_id drives roster membership (and the off-roster split). */
 export interface RosterPerson {
   person_id: string | null;
   person_name: string;
   role: string;
 }
 
+type HotelAssignment = {
+  id: string;
+  person_name: string | null;
+  check_in: string | null;
+  check_out: string | null;
+  nights: number;
+  room_type: string | null;
+  room_number: string | null;
+  confirmation: string | null;
+  rate_per_night: number;
+  notes: string | null;
+};
+
 interface RoomingViewProps {
   tourId: string;
   tourName: string;
   currency: string;
   routingDates: { id: string; date: string; venue_name?: string; city?: string; day_type?: string }[];
-  hotels: { id: string; hotel_name: string; city?: string | null; address?: string | null; phone?: string | null; cancellation_policy?: string | null; distance_to_venue?: string | null; distance_to_airport?: string | null; room_assignments?: unknown[] }[];
+  hotels: {
+    id: string;
+    hotel_name: string;
+    city?: string | null;
+    address?: string | null;
+    phone?: string | null;
+    cancellation_policy?: string | null;
+    distance_to_venue?: string | null;
+    distance_to_airport?: string | null;
+    room_assignments?: HotelAssignment[];
+  }[];
   roster: RosterPerson[];
 }
 
-export function RoomingView({
-  tourId,
-  tourName,
-  currency,
-  routingDates,
-  hotels,
-  roster,
-}: RoomingViewProps) {
-  // FOUNDATION FIX — rows come from the roster. Held in state so adding a
-  // person appends them optimistically (single source: roster → rooming
-  // grid), no router.refresh.
+type ViewId = 'matrix' | 'nights' | 'cards';
+const VIEWS: { id: ViewId; label: string }[] = [
+  { id: 'matrix', label: 'Matrix' },
+  { id: 'nights', label: 'Nights' },
+  { id: 'cards', label: 'Cards' },
+];
+
+export function RoomingView({ tourId, tourName, currency, routingDates, hotels, roster }: RoomingViewProps) {
   const [people, setPeople] = useState<RosterPerson[]>(roster);
+  const [view, setView] = useState<ViewId>('matrix');
+  const [hotelId, setHotelId] = useState<string | null>(null);
+
   const excludePersonIds = useMemo(
-    () =>
-      people
-        .map((r) => r.person_id)
-        .filter((id): id is string => typeof id === 'string'),
+    () => people.map((r) => r.person_id).filter((id): id is string => typeof id === 'string'),
     [people],
   );
-
-  const tabs = [
-    { id: 'master', label: 'Master Grid' },
-    ...hotels.map((h) => ({ id: h.id, label: `${h.hotel_name}${h.city ? ` · ${h.city}` : ''}` })),
-  ];
-
-  const [activeTab, setActiveTab] = useState(tabs[0]?.id ?? 'master');
+  // Nights away — every routing date except explicit home / no-tour days (Q2).
+  const nights = useMemo(() => routingDates.filter((r) => isNightAway(r.day_type)), [routingDates]);
+  const activeHotel = hotels.find((h) => h.id === hotelId) ?? null;
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-xl font-bold text-lp-text">{tourName} — Rooming</h1>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        <h1 style={{ fontSize: 20, fontWeight: 700, color: 'var(--lp-text)' }}>{tourName} — Rooming</h1>
         <AddPersonToTourButton
           tourId={tourId}
           excludePersonIds={excludePersonIds}
@@ -77,39 +104,67 @@ export function RoomingView({
         />
       </div>
 
-      <nav className="flex flex-wrap gap-0 border-b border-lp-border">
-        {tabs.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => setActiveTab(t.id)}
-            className={cn(
-              'text-xs font-semibold uppercase tracking-wider px-3 py-2 transition-colors',
-              activeTab === t.id
-                ? 'border-b-2 border-lp-orange text-lp-orange'
-                : 'text-lp-text-secondary hover:text-lp-text'
-            )}
-          >
-            {t.label}
-          </button>
-        ))}
-      </nav>
+      {/* view switcher (segmented control) */}
+      <div
+        role="tablist"
+        aria-label="Rooming view"
+        style={{
+          display: 'inline-flex',
+          alignSelf: 'flex-start',
+          gap: 2,
+          border: '1px solid var(--lp-border)',
+          borderRadius: 'var(--lp-radius-full)',
+          padding: 3,
+          background: 'var(--lp-panel)',
+        }}
+      >
+        {VIEWS.map((v) => {
+          const on = view === v.id;
+          return (
+            <button
+              key={v.id}
+              type="button"
+              role="tab"
+              aria-selected={on}
+              onClick={() => setView(v.id)}
+              style={{
+                border: 0,
+                cursor: 'pointer',
+                borderRadius: 'var(--lp-radius-full)',
+                padding: '5px 16px',
+                fontSize: 13,
+                fontWeight: 600,
+                background: on ? 'var(--lp-orange)' : 'transparent',
+                color: on ? 'var(--lp-text-inverse)' : 'var(--lp-text-secondary)',
+                transition: 'background 0.16s ease, color 0.16s ease',
+              }}
+            >
+              {v.label}
+            </button>
+          );
+        })}
+      </div>
 
-      <div className="min-h-[300px]">
-        {activeTab === 'master' && (
-          <RoomingMasterGrid
-            tourId={tourId}
-            currency={currency}
-            routingDates={routingDates}
-            roster={people}
-          />
-        )}
-        {activeTab !== 'master' && hotels.some((h) => h.id === activeTab) && (
-          <RoomingHotelSheet
-            hotelBooking={hotels.find((h) => h.id === activeTab)!}
-            roomAssignments={(hotels.find((h) => h.id === activeTab)?.room_assignments ?? []) as { id: string; person_name: string | null; check_in: string | null; check_out: string | null; nights: number; room_type: string | null; room_number: string | null; confirmation: string | null; rate_per_night: number; notes: string | null }[]}
-            currency={currency}
-          />
+      <div style={{ minHeight: 300 }}>
+        {view === 'matrix' ? (
+          <RoomingMatrix tourId={tourId} currency={currency} nights={nights} roster={people} />
+        ) : view === 'cards' ? (
+          <RoomingCards tourId={tourId} nights={nights} roster={people} />
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <RoomingNightsOverview hotels={hotels} currency={currency} selectedId={hotelId} onSelectHotel={setHotelId} />
+            {activeHotel ? (
+              <RoomingHotelSheet
+                hotelBooking={activeHotel}
+                roomAssignments={(activeHotel.room_assignments ?? []) as HotelAssignment[]}
+                currency={currency}
+              />
+            ) : (
+              <div style={{ fontSize: 12, color: 'var(--lp-text-tertiary)' }}>
+                Click a hotel row to edit its rooms, rates + confirmation.
+              </div>
+            )}
+          </div>
         )}
       </div>
     </div>

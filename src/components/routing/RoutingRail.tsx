@@ -94,15 +94,18 @@ function DayTypePill({ dayType }: { dayType: string }) {
   );
 }
 
-function EntryInner({
+/** The single-night cell — date · venue/city · day-type pill (+ optional meta).
+ *  Shared so other surfaces (e.g. the Rooming matrix) render an IDENTICAL night
+ *  cell as a grid row-header without embedding RoutingRail's <ul>. (D1.) */
+export function RailNightCell({
   entry,
-  active,
-  showDayTypePill,
+  active = false,
+  showDayTypePill = true,
   renderMeta,
 }: {
   entry: RailEntry;
-  active: boolean;
-  showDayTypePill: boolean;
+  active?: boolean;
+  showDayTypePill?: boolean;
   renderMeta?: (entry: RailEntry) => React.ReactNode;
 }) {
   const primary = entry.venueName || entry.city || '—';
@@ -157,7 +160,7 @@ export function RoutingRail({
       background: active ? 'var(--lp-surface)' : 'transparent',
     };
     const inner = (
-      <EntryInner
+      <RailNightCell
         entry={entry}
         active={active}
         showDayTypePill={showDayTypePill}
