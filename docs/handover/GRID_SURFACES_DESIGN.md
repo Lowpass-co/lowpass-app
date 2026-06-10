@@ -194,9 +194,23 @@ estimate-vs-actual variance, commissions/contingency, per-show/derived breakdown
 — not a single styled table. Its own design + build pass, after the table
 surfaces. Flagged here so `<GridExport>` stays scoped to the simple table export.
 
-- Build gate: mock the export pop-out (Claude) for Adam's sign-off before CC
-  builds it. (Lowpass light/dark skin + logo-pull + header-notes + contacts mock
-  done 2026-06-09.)
+### v3 additions (Adam, 2026-06-09)
+- **Header BESIDE the table, not part of it.** The branding/letterhead (logo,
+  title, date, header notes, contacts) is a **side column** next to the table —
+  not a band stacked on top inside the grid panel. Applies to the **in-app grid
+  too**: the header/context sits beside the grid, not baked into it. *(Confirm
+  interpretation with Adam — could also mean section labels in a left gutter.)*
+- **Resizable columns** in the export (drag column edges), carried from the grid.
+- **Zebra colour is pickable** (swatch set), not a fixed grey.
+- **Export light/dark toggle** — matches the app theme by default, but a ☀/☾
+  button forces a light or dark PDF independent of the app theme.
+- **Include stage plot** option — export the channel list + its **stage plot**
+  together (page 2). Channel-list export specific.
+- **Totals bar at the bottom**: grand totals of everything (inputs · 48v ·
+  outputs) **and a supplier roll-up** (Band-supplied vs Venue-supplied vs Rental
+  counts) — the band/venue split Adam called out. Each surface's totals differ
+  (rooming: rooms/nights/cost; payroll: fees/per-diem).
+- Build gate: mock done + iterated (v3) 2026-06-09 — pending final sign-off.
 
 ## Sequence (recommended)
 Finish Budget Expenses (finalise prompt) → **Payroll** (real; quick, reuses
