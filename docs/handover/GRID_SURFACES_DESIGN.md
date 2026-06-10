@@ -229,9 +229,12 @@ surfaces. Flagged here so `<GridExport>` stays scoped to the simple table export
 - **Movable Notes blocks** — "Add notes section" inserts a free-text Notes block
   that's also reorderable / width-settable like any other section (multiple
   allowed).
-- Build gate: mock done + iterated to **v5** 2026-06-09 (header-top · section
-  gutter · light/dark toggle · resizable cols · zebra colour · stage-plot
-  co-export · gridded production summary) — pending final sign-off.
+- Build gate: mock done + iterated to **v7** 2026-06-09 — one panel with ALL
+  controls: header (logo-from-artist · header notes) · table format (font · row
+  spacing · zebra + colour picker · resizable cols) · per-line menu (bold ·
+  highlight · text size · move · hide) · section manager (show/hide · full/half ·
+  drag-reorder · add notes) · light/dark toggle · stage-plot co-export · gridded
+  production summary. Pending final sign-off.
 
 ## Sequence (recommended)
 Finish Budget Expenses (finalise prompt) → **Payroll** (real; quick, reuses
