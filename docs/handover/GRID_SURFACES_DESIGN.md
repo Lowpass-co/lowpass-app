@@ -66,13 +66,20 @@ top, each cell a **day type**: `SHOW DAY` · `OFF/TRAVEL DAY` · `NO TOUR`. This
 matrix **drives the day counts** that feed the fee math. (Same rail+matrix shape
 as rooming — consistent.) Festivals = multiple shows/cities in one week.
 
-### Formulas — VERIFIED against the sheet (high confidence)
-- `total_fee = show_rate × show_days + travel_rate × off_travel_days + advance`
+### Formulas — VERIFIED against the sheet AND against `src/lib/payroll/fees.ts`
+- `total_fee = show_rate×show_days + off_rate×off_travel_days + rehearsal_rate×rehearsal_days + advance`
   - Richie: 635.95×2 + 635.95×4 + 794.93 = **$4,611** ✓ · Duncan: 401.65×2 +
     200.83×4 = **$1,607** ✓ · Jake: 450×2 + 450×3 = **$2,250** ✓
-- `total_per_diem = pd_rate × (show_days + off_travel_days)` (on-tour days only)
+- `total_per_diem = pd_rate × (show + off_travel + rehearsal days)` (every engaged
+  day; rehearsal earns PD — it's a worked day)
   - Adam: 33.47 × 5 = **$167** ✓
-- **`NO TOUR` days pay nothing and earn no per diem** (excluded from both counts).
+- **`NO TOUR` days pay nothing and earn no per diem** (excluded).
+- **OPS-17 STATUS (verified 2026-06-10): the fee split is ALREADY correct in
+  `fees.ts`** (no "all days × show rate" bug; `off_rate` is the per-person travel
+  rate). The payroll build **re-verifies** this with a smoke (PAY-OPS17), it does
+  NOT rewrite the helper. The one un-done fee piece is the **`acl_per_diem`
+  festival override** (deferred to a focused follow-up — needs a per-date per-diem
+  path the count-based helper can't express).
 
 ### Nuances that MUST be preserved (the current app gets these wrong → OPS-17)
 - **Travel rate is independent of show rate.** Crew (TM/PM/tech/content) travel at
