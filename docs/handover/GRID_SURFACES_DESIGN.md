@@ -52,15 +52,42 @@ hard consistency rule, not just rooming.
   path to it (and the Nights-overview view surfaces it). Sell this as an upgrade,
   not a regression.
 
-## Payroll — grid + week rail + full sheet parity + export
-- Canonical grid, payroll column set (person · role · show rate · travel rate ·
-  per diem · show days · travel days · **computed total fee**), Advance-style
-  **week rail** on the left (group by WC, dates + cities), rate cards in the
-  slide. Fee = show-rate×show-days + travel-rate×travel-days + per-diem; flows
-  into the budget Salary section (now that migration 208 lets it persist).
-- **Requirement: full feature parity with Adam's Google Sheet payroll** — before
-  building, map the sheet's columns/derivations (a Stage-A-style pass) so nothing
-  is dropped. Plus the OPS-17 fee-math fix (show-vs-travel split) lands here.
+## Payroll — parity mapped from the real sheet (GN | Payroll | Bottlerock & Miami, 2026-06-09)
+Two linked views on the **shared routing rail**, plus a summary, mirroring his
+sheet's SUMMARY + weekly W/C tabs:
+
+### A. Rates / totals table (the SUMMARY tab) — one row per person, fixed order
+Columns: **Role · Forename · Surname · Show rate · Travel rate · Per-diem rate ·
+Show days · Off/Travel days · Total fee · Total per diem · Advance · Notes**.
+
+### B. Day-type matrix (the weekly W/C tab) — **rail (days) × people**
+The week's days down the routing rail (date · city · day-type), people across the
+top, each cell a **day type**: `SHOW DAY` · `OFF/TRAVEL DAY` · `NO TOUR`. This
+matrix **drives the day counts** that feed the fee math. (Same rail+matrix shape
+as rooming — consistent.) Festivals = multiple shows/cities in one week.
+
+### Formulas — VERIFIED against the sheet (high confidence)
+- `total_fee = show_rate × show_days + travel_rate × off_travel_days + advance`
+  - Richie: 635.95×2 + 635.95×4 + 794.93 = **$4,611** ✓ · Duncan: 401.65×2 +
+    200.83×4 = **$1,607** ✓ · Jake: 450×2 + 450×3 = **$2,250** ✓
+- `total_per_diem = pd_rate × (show_days + off_travel_days)` (on-tour days only)
+  - Adam: 33.47 × 5 = **$167** ✓
+- **`NO TOUR` days pay nothing and earn no per diem** (excluded from both counts).
+
+### Nuances that MUST be preserved (the current app gets these wrong → OPS-17)
+- **Travel rate is independent of show rate.** Crew (TM/PM/tech/content) travel at
+  full rate; **band members travel at ~half** (Duncan/James/Teresa show 401.65 /
+  334.71 but travel 200.83). Never assume travel = show.
+- **Advance fee**: a one-off added to total for advancing roles (TM/PM here).
+- **Day types**: Show / Off-Travel / No-Tour — per day, on the matrix.
+- Multi-week: weekly tabs each compute; a **summary aggregates across weeks**.
+- Currency is **per tour** (this run USD; rooming was GBP).
+- Personnel order is fixed; payroll **feeds the budget Salary section** (links to
+  the budget — migration 208 now lets the derived lines persist). The OPS-17
+  fee-math fix = implement exactly the formula above.
+- Slide = editable **rate card** per person (show/travel/per-diem/advance).
+
+### Build: Stage-A map the real personnel/rate tables first, then build, Chrome-verify.
 - **Export** (see shared tool below).
 
 ## Channel list — grid variant + custom columns + export
