@@ -287,9 +287,41 @@ and persist (reconcile's update path doesn't reset `sort_order`); a brand-new
 derived row starts at top until reordered.
 **Last verified**: code/build green; Adam to re-confirm live.
 
-> Steps 3–5 (slide Transactions/Documents CRUD, 📎 receipts count) are mapped
-> with open decisions in `docs/handover/CC_GRID_PHASE3_SLIDE_MAP.md` (D1–D5) —
-> not built yet. Step 6 (flip Grid to default) is gated on 1–5 live-verify.
+#### BUD-43 — Slide Transactions CRUD (real table)
+**Do**: In Grid (beta), open a non-derived line's slide → Transactions. Add a
+transaction; edit its name/date/amount; attach a receipt; delete it. Reload.
+**Expect**: writes hit `budget_line_item_transactions` via the real routes
+(POST/PATCH/DELETE) and survive reload. The line's **Actual** auto-syncs to the
+Σ transactions server-side **unless** `actual_cost_override` (no double-write —
+decision 6); the synced Actual shows on next reload. "Attach receipt" creates +
+links an `expense_receipts` row (sets `receipt_id`) and the chip shows the
+receipt label. (Demo `/grid-demo` keeps its in-memory transactions.)
+**Last verified**: code/build green; Adam live.
+
+#### BUD-44 — Slide Documents CRUD (attachments)
+**Do**: In the slide → Documents. **Add** (OS file picker → upload), **rename**
+(inline), **delete**. Reload.
+**Expect**: writes hit `budget_line_item_attachments` via the route (POST
+upload, new **GET** list-on-open, new **PATCH** rename, DELETE). The type chip
+shows the file extension (no category column on the table). Survives reload.
+**Last verified**: code/build green; Adam live.
+
+#### BUD-45 — 📎 Receipts cell shows a real count
+**Do**: Look at the Receipts column; click the 📎 on a line with transactions /
+documents.
+**Expect**: the badge counts documents + transactions from server-supplied
+`attachment_count` + `transaction_count` (no per-row fetch on render); clicking
+lazy-loads the lists and the toaster lists them (docs as `Type: name`, txns as
+`Txn: vendor 📎`) with **Open line ↗**.
+**Last verified**: code/build green; Adam live.
+
+> Known follow-ups (called out): the slide's **Actual** doesn't live-update on a
+> transaction edit (it auto-syncs server-side and shows on reload — no page
+> refresh on each keystroke); transaction receipt labels load as a generic
+> "Receipt" (the freshly-attached one shows its number) — a receipt-number join
+> on list is a follow-up; the txn **🔗 Link** stays a Phase-4 stub (no
+> `transaction_links` write). Step 6 (flip Grid to default) is gated on Adam's
+> live-verify of BUD-41…45.
 
 > **Still deferred to the grid-default flip (called out):** row/section
 > **reorder** persistence (`sort_order`), and the slide's Transactions/

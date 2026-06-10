@@ -20,14 +20,11 @@
 
 /* Mutate-in-place model (same as <Grid>): edits write straight to the
    shared grid row object inside commit() (pushUndo → mutate → render) so ⌘Z
-   covers them. That trips the React-Compiler immutability lint, which
-   assumes immutable state — it doesn't apply to this deliberately-imperative
-   component. */
-/* eslint-disable react-hooks/immutability */
-import { useCallback, useEffect, useState } from 'react';
+   covers them — a deliberately-imperative component. */
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Lock } from 'lucide-react';
-import type { Doc, GridFx, GridStatusConfig, Row, Section, Txn } from './types';
+import type { Doc, GridFx, GridLineApi, GridStatusConfig, Row, Section, Txn } from './types';
 import type { MenuConfig } from './GridMenu';
 import { STATUSES, demoFx, formulaEst, variance } from './gridModel';
 
@@ -82,6 +79,10 @@ export interface GridSlideOverProps {
   forceLineVariant?: boolean;
   /** persist a slide field edit (item/est/act/status/notes) by the row _uid. */
   onEdit?: (rowUid: string, field: string, value: unknown) => void;
+  /** Phase 3 (Steps 3–5) — async transactions/documents CRUD. When provided
+      (budget), the slide reads/writes real tables; when absent (/grid-demo) the
+      Transactions/Documents sections keep their in-memory demo behaviour. */
+  lineApi?: GridLineApi;
 }
 
 const rectOf = (e: React.MouseEvent) => {
@@ -105,11 +106,39 @@ export function GridSlideOver({
   statuses,
   forceLineVariant,
   onEdit,
+  lineApi,
 }: GridSlideOverProps) {
   const fxC = fxProp ?? demoFx;
   const [open, setOpen] = useState(false);
   const [scan, setScan] = useState(false);
   const [memo, setMemo] = useState<string | null>(null);
+  const loadedRef = useRef(false);
+  const docFileRef = useRef<HTMLInputElement>(null);
+
+  // Step 3/4 — when a real lineApi is injected, load the line's transactions +
+  // documents once on open and seed the row; writes below go through the api.
+  useEffect(() => {
+    if (loadedRef.current || !lineApi) return;
+    const r = data[si]?.rows?.[ri];
+    const lineId = r?._uid ? String(r._uid) : '';
+    if (!r || !lineId) return;
+    loadedRef.current = true;
+    let alive = true;
+    Promise.all([lineApi.listTransactions(lineId), lineApi.listDocuments(lineId)])
+      .then(([txns, docs]) => {
+        if (!alive) return;
+        r.transactions = txns;
+        r.docs = docs;
+        render();
+      })
+      .catch(() => {
+        /* leave the sections empty on a load failure */
+      });
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lineApi, si, ri]);
 
   const close = useCallback(() => {
     setOpen(false);
@@ -363,14 +392,30 @@ export function GridSlideOver({
   );
 
   const attachReceipt = (e: React.MouseEvent, t: Txn) => {
+    // Real surface (budget): create/link an expense_receipts row + set
+    // receipt_id; the returned label rides on the txn (it's not a row.doc).
+    if (lineApi && row._uid && t.id) {
+      void lineApi
+        .attachReceipt(String(row._uid), t.id)
+        .then(({ receiptId, label }) =>
+          commit(() => {
+            t.receipt = receiptId;
+            t.receiptLabel = label;
+          }),
+        )
+        .catch(() => {
+          /* ignore — the chip stays "attach receipt" */
+        });
+      return;
+    }
     const names = (row.docs ?? []).map((d) => d.name);
     openMenu({
       anchor: rectOf(e),
       options: [...names, '＋ Upload new receipt'],
       onPick: (choice) =>
         commit(() => {
-          // C4 — store the linked document's id (not a name copy), so renaming
-          // the document later updates the transaction's receipt label too.
+          // C4 (demo) — store the linked document's id (not a name copy), so
+          // renaming the document later updates the txn's receipt label too.
           if (choice === '＋ Upload new receipt') {
             const doc: Doc = { id: genDocId(), type: 'Receipt', name: `receipt-${(row.docs?.length ?? 0) + 1}.pdf` };
             row.docs!.push(doc);
@@ -383,22 +428,45 @@ export function GridSlideOver({
     });
   };
 
-  /** A transaction's receipt label — the linked document's LIVE name (by id),
-   *  falling back to the stored string for legacy/seed receipts (C4). */
+  /** A transaction's receipt label — real receipts carry their own label
+   *  (expense_receipts number/vendor); demo links to a row.doc by id (C4). */
   const receiptLabel = (t: Txn): string => {
+    if (t.receiptLabel) return t.receiptLabel;
     const d = row.docs?.find((x) => x.id && x.id === t.receipt);
     return d ? d.name : String(t.receipt);
+  };
+
+  // Add a transaction: real surface creates the row first (needs its id);
+  // demo pushes an empty in-memory txn.
+  const addTxn = () => {
+    if (lineApi && row._uid) {
+      void lineApi
+        .addTransaction(String(row._uid))
+        .then((t) => commit(() => row.transactions!.push(t)))
+        .catch(() => {});
+    } else {
+      commit(() => row.transactions!.push({ date: '', desc: '', amount: 0, receipt: null }));
+    }
+  };
+  const patchTxn = (t: Txn, patch: { desc?: string; date?: string; amount?: number }) => {
+    if (lineApi && t.id) void lineApi.patchTransaction(t.id, patch).catch(() => {});
+  };
+  const deleteTxn = (t: Txn, i: number) => {
+    if (lineApi && t.id) {
+      void lineApi
+        .deleteTransaction(t.id)
+        .then(() => commit(() => row.transactions!.splice(i, 1)))
+        .catch(() => {});
+    } else {
+      commit(() => row.transactions!.splice(i, 1));
+    }
   };
 
   const TxnsBlock = () => (
     <div>
       <div className="so-sec-h">
         <h5>Transactions</h5>
-        <button
-          type="button"
-          className="so-add"
-          onClick={() => commit(() => row.transactions!.push({ date: '', desc: '', amount: 0, receipt: null }))}
-        >
+        <button type="button" className="so-add" onClick={addTxn}>
           ＋ Add
         </button>
       </div>
@@ -407,19 +475,36 @@ export function GridSlideOver({
           <div className="so-empty">No transactions yet.</div>
         ) : (
           row.transactions.map((t, i) => (
-            <div key={i} className="txn">
+            <div key={t.id ?? i} className="txn">
               <input
                 defaultValue={t.desc}
                 placeholder="Transaction name"
-                onBlur={(e) => commit(() => (t.desc = e.target.value))}
+                onBlur={(e) => {
+                  if (e.target.value === t.desc) return;
+                  commit(() => (t.desc = e.target.value));
+                  patchTxn(t, { desc: e.target.value });
+                }}
               />
-              <input type="date" defaultValue={t.date} onBlur={(e) => commit(() => (t.date = e.target.value))} />
+              <input
+                type="date"
+                defaultValue={t.date}
+                onBlur={(e) => {
+                  if (e.target.value === t.date) return;
+                  commit(() => (t.date = e.target.value));
+                  patchTxn(t, { date: e.target.value });
+                }}
+              />
               <div className="cellin">
                 <span className="pre">{s}</span>
                 <input
                   className="amt"
                   defaultValue={t.amount || 0}
-                  onBlur={(e) => commit(() => (t.amount = money(e.target.value)))}
+                  onBlur={(e) => {
+                    const v = money(e.target.value);
+                    if (v === t.amount) return;
+                    commit(() => (t.amount = v));
+                    patchTxn(t, { amount: v });
+                  }}
                 />
               </div>
               <div className="txn-receipt">
@@ -438,6 +523,9 @@ export function GridSlideOver({
                 >
                   🔗 Link
                 </button>
+                <span className="docx" title="Delete transaction" onClick={() => deleteTxn(t, i)}>
+                  ✕
+                </span>
               </div>
             </div>
           ))
@@ -446,12 +534,41 @@ export function GridSlideOver({
     </div>
   );
 
-  const addDoc = (e: React.MouseEvent) =>
+  // Demo: a type-picker that pushes a placeholder doc. Real: open the OS file
+  // picker (handled by the hidden input below) → upload → push the attachment.
+  const addDoc = (e: React.MouseEvent) => {
+    if (lineApi) {
+      docFileRef.current?.click();
+      return;
+    }
     openMenu({
       anchor: rectOf(e),
       options: DOCTYPES,
       onPick: (tp) => commit(() => row.docs!.push({ id: genDocId(), type: tp, name: `${tp.toLowerCase()}.pdf` })),
     });
+  };
+  const onDocFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0];
+    e.target.value = '';
+    if (!f || !lineApi || !row._uid) return;
+    void lineApi
+      .addDocument(String(row._uid), f)
+      .then((d) => commit(() => row.docs!.push(d)))
+      .catch(() => {});
+  };
+  const renameDoc = (d: Doc, name: string) => {
+    if (lineApi && d.id && row._uid) void lineApi.renameDocument(String(row._uid), d.id, name).catch(() => {});
+  };
+  const deleteDoc = (d: Doc, i: number) => {
+    if (lineApi && d.id && row._uid) {
+      void lineApi
+        .deleteDocument(String(row._uid), d.id)
+        .then(() => commit(() => row.docs!.splice(i, 1)))
+        .catch(() => {});
+    } else {
+      commit(() => row.docs!.splice(i, 1));
+    }
+  };
 
   const DocsBlock = () => (
     <div>
@@ -461,20 +578,36 @@ export function GridSlideOver({
           ＋ Add
         </button>
       </div>
+      <input
+        ref={docFileRef}
+        type="file"
+        style={{ display: 'none' }}
+        onChange={onDocFile}
+        aria-hidden
+      />
       <div>
         {!row.docs || row.docs.length === 0 ? (
           <div className="so-empty">No quotes, contracts or receipts on this line.</div>
         ) : (
           row.docs.map((d: Doc, i: number) => (
-            <div key={i} className="docrow">
+            <div key={d.id ?? i} className="docrow">
               <span className="doctype">{d.type}</span>
               <input
                 className="docname"
                 defaultValue={d.name}
-                autoFocus={i === (row.docs?.length ?? 0) - 1 && d.name.endsWith('.pdf') && d.name.startsWith(d.type.toLowerCase())}
-                onBlur={(e) => commit(() => (d.name = e.target.value))}
+                autoFocus={
+                  !lineApi &&
+                  i === (row.docs?.length ?? 0) - 1 &&
+                  d.name.endsWith('.pdf') &&
+                  d.name.startsWith(d.type.toLowerCase())
+                }
+                onBlur={(e) => {
+                  if (e.target.value === d.name) return;
+                  commit(() => (d.name = e.target.value));
+                  renameDoc(d, e.target.value);
+                }}
               />
-              <span className="docx" onClick={() => commit(() => row.docs!.splice(i, 1))}>
+              <span className="docx" onClick={() => deleteDoc(d, i)}>
                 ✕
               </span>
             </div>

@@ -25,7 +25,7 @@
 import './grid.css';
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useReducer, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import type { Column, Density, GridFx, GridStatusConfig, GroupBy, Row, Section, Sel, Snapshot } from './types';
+import type { Column, Density, GridFx, GridLineApi, GridStatusConfig, GroupBy, Row, Section, Sel, Snapshot } from './types';
 import {
   ACCENTS,
   STATUSES,
@@ -94,6 +94,9 @@ export interface GridProps {
       of uids (= DB ids on real surfaces). Caller PATCHes sort_order. Phase 3. */
   onReorderRow?: (sectionUid: string, orderedRowUids: string[]) => void;
   onReorderSection?: (orderedSectionUids: string[]) => void;
+  /** Async transactions/documents CRUD for the slide + 📎 cell. Absent on the
+      demo (in-memory). Phase 3 Steps 3–5. */
+  lineApi?: GridLineApi;
 }
 
 type ReorderKind = 'section' | 'row' | 'col';
@@ -124,6 +127,7 @@ export function Grid({
   onDeleteRow,
   onReorderRow,
   onReorderSection,
+  lineApi,
 }: GridProps) {
   const fx = fxProp ?? demoFx;
   // Totals / section-header / KPI maths must use the SAME injected FX + display
@@ -1041,26 +1045,48 @@ export function Grid({
         </div>
       );
     if (t === 'receipts') {
-      const n = (row.docs ? row.docs.length : 0) + (row.transactions ? row.transactions.filter((x) => x.receipt).length : 0);
+      // Step 5 — real surfaces (lineApi) count documents + transactions from the
+      // server-supplied counts (docCount/txnCount), falling back to the loaded
+      // arrays once the slide has fetched them. Demo counts docs + receipt-txns.
+      const n = lineApi
+        ? (row.docs?.length ?? row.docCount ?? 0) + (row.transactions?.length ?? row.txnCount ?? 0)
+        : (row.docs ? row.docs.length : 0) + (row.transactions ? row.transactions.filter((x) => x.receipt).length : 0);
+      const openToaster = (a: { left: number; bottom: number }) => {
+        const docNames = (row.docs ?? []).map((d) => `${d.type}: ${d.name}`);
+        const txnNames = lineApi
+          ? (row.transactions ?? []).map((x) => `Txn: ${x.desc || '—'}${x.receipt ? ' 📎' : ''}`)
+          : (row.transactions ?? []).filter((x) => x.receipt).map((x) => `Receipt: ${x.receipt}`);
+        const names = [...docNames, ...txnNames];
+        menuRef.current = {
+          anchor: a,
+          options: names.length ? [...names, 'Open line ↗'] : ['No receipts or documents', 'Open line ↗'],
+          onPick: (v) => {
+            if (v === 'Open line ↗') openSlide(sec._si!, ri);
+            closeMenu();
+          },
+        };
+        render();
+      };
       return (
         <div
           key={key}
           className={`c rcptcell${n ? ' has' : ''}`}
           onClick={(e) => {
-            const names = [
-              ...(row.docs ?? []).map((d) => `${d.type}: ${d.name}`),
-              ...(row.transactions ?? []).filter((x) => x.receipt).map((x) => `Receipt: ${x.receipt}`),
-            ];
-            const a = e.currentTarget.getBoundingClientRect();
-            menuRef.current = {
-              anchor: { left: a.left, bottom: a.bottom },
-              options: names.length ? [...names, 'Open line ↗'] : ['No receipts on this line', 'Open line ↗'],
-              onPick: (v) => {
-                if (v === 'Open line ↗') openSlide(sec._si!, ri);
-                closeMenu();
-              },
-            };
-            render();
+            const r = e.currentTarget.getBoundingClientRect();
+            const a = { left: r.left, bottom: r.bottom };
+            // Lazy-load the real lists on first open so the toaster shows names.
+            if (lineApi && row._uid && (row.transactions === undefined || row.docs === undefined)) {
+              const lineId = String(row._uid);
+              void Promise.all([lineApi.listTransactions(lineId), lineApi.listDocuments(lineId)])
+                .then(([txns, docs]) => {
+                  row.transactions = txns;
+                  row.docs = docs;
+                  openToaster(a);
+                })
+                .catch(() => openToaster(a));
+            } else {
+              openToaster(a);
+            }
           }}
         >
           📎{n ? ` ${n}` : ''}
@@ -1736,6 +1762,7 @@ export function Grid({
           statuses={slideStatuses}
           forceLineVariant={slideLineVariant}
           onEdit={onEdit}
+          lineApi={lineApi}
         />
       ) : null}
     </div>

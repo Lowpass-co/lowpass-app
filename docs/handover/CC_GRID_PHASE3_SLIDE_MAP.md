@@ -103,19 +103,28 @@ without N per-row requests?
 
 ---
 
-## Build order once D1–D5 are answered
+## Build order — DONE (decisions: real two-table model · add GET+PATCH · one push)
 
-1. (D2) Add GET + PATCH verbs to `attachments/route.ts`. *(needs-live)*
-2. (D5) Add `enrichLinesWithAttachmentAggregates`; feed `transaction_count` +
-   `attachment_count` into the grid rows via `budgetAdapter`.
-3. (D4) Extend `GridSlideOverProps` with optional async txn/doc CRUD; fetch on
-   open; optimistic writes; demo unchanged.
-4. (D3) Transactions: wire to the real routes; "attach receipt" → expense_receipts.
-5. (D1) Documents: wire to attachments (upload / rename / delete).
-6. Step 5: 📎 cell reads real counts + toaster.
-7. **Step 6 (gated):** flip the toggle default to Grid once 1–5 are live-verified.
+1. ✅ (D2) GET + PATCH added to `attachments/route.ts` (list-on-open + rename).
+2. ✅ (D5) `enrichLinesWithAttachmentCounts` (`src/lib/budget/attachments.ts`);
+   `attachment_count` on `BudgetLineItem`; `budgetAdapter` sets `txnCount`/
+   `docCount` on rows.
+3. ✅ (D4) `GridSlideOverProps.lineApi?` — fetch-on-open + optimistic writes;
+   `/grid-demo` (no lineApi) keeps its in-memory behaviour.
+4. ✅ (D3) Transactions wired to `…/transactions` (+ `/transactions/[id]`);
+   "attach receipt" creates/links an `expense_receipts` row + sets `receipt_id`.
+5. ✅ (D1) Documents wired to attachments (upload / rename / delete; type chip =
+   file extension).
+6. ✅ Step 5: 📎 cell shows real counts (server aggregates) + lazy toaster.
+7. ⏳ **Step 6 (gated):** flip the toggle default to Grid — pending Adam's
+   live-verify of BUD-41…45.
 
-Each step independently verifiable; Adam live-verifies via Chrome before the flip.
+Smoke IDs BUD-43/44/45 (+ BUD-41/42) in `budget.md`. Verify floor: tsc 0,
+eslint 0, `next build --webpack` green, adapter test 7/7.
+
+Follow-ups noted in budget.md: slide Actual doesn't live-update on a txn edit
+(syncs server-side, shows on reload); receipt labels load as generic "Receipt"
+(number-join is a follow-up); txn 🔗 Link stays a Phase-4 stub.
 
 ---
 

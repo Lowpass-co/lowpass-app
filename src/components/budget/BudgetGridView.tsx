@@ -13,10 +13,10 @@
    src/lib/budget/fx.ts; formula sections live on the Summary tab (excluded).
    ============================================ */
 
-import { useCallback } from 'react';
+import { useCallback, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Grid } from '@/components/grid/Grid';
-import type { Column, GridFx, GridStatusConfig } from '@/components/grid/types';
+import type { Column, GridFx, GridLineApi, GridStatusConfig } from '@/components/grid/types';
 import { budgetToGridSections, gridEditToPatch } from '@/lib/grid/budgetAdapter';
 import { convertToCurrency } from '@/lib/budget/fx';
 import { useToast } from '@/components/ui/Toast';
@@ -35,6 +35,16 @@ const STATUS_CONFIG: GridStatusConfig = { options: STATUS_OPTIONS, colors: STATU
 
 const CUR_SYMBOL: Record<string, string> = { GBP: '£', USD: '$', EUR: '€', CAD: 'C$', AUD: 'A$', JPY: '¥' };
 const CURRENCIES = ['GBP', 'USD', 'EUR', 'CAD', 'AUD', 'JPY'];
+
+/** Document "type" chip from a filename / MIME (real attachments have no
+ *  category column — show the extension, e.g. PDF / PNG). */
+function docTypeFromName(name: string, fileType?: string | null): string {
+  const ext = (name.split('.').pop() ?? '').toUpperCase();
+  if (ext && ext.length <= 4 && ext !== name.toUpperCase()) return ext;
+  if (fileType?.includes('pdf')) return 'PDF';
+  if (fileType?.startsWith('image/')) return 'Image';
+  return 'File';
+}
 
 /** Expenses column set — no vendor (decision 3), no day-type. */
 const EXPENSE_COLS: Column[] = [
@@ -202,6 +212,115 @@ export function BudgetGridView({ lines, sections, tourCurrency, tourId }: Budget
     [persistOrder],
   );
 
+  // Steps 3–5 — async transactions/documents CRUD against the real tables.
+  // Transactions: budget_line_item_transactions (actual_cost auto-syncs
+  // server-side unless override — no double-write here). Documents:
+  // budget_line_item_attachments. Receipts: a txn's receipt is an
+  // expense_receipts row (decision: real two-table model).
+  const lineApi = useMemo<GridLineApi>(
+    () => ({
+      listTransactions: async (lineId) => {
+        const res = await fetch(`/api/budget/line-items/${lineId}/transactions`);
+        if (!res.ok) return [];
+        const json = await res.json();
+        return (json.transactions ?? []).map(
+          (t: {
+            id: string;
+            vendor_name: string | null;
+            paid_at: string | null;
+            amount: number;
+            receipt_id: string | null;
+          }) => ({
+            id: t.id,
+            date: t.paid_at ?? '',
+            desc: t.vendor_name ?? '',
+            amount: Number(t.amount) || 0,
+            receipt: t.receipt_id ?? null,
+            receiptLabel: t.receipt_id ? 'Receipt' : undefined,
+          }),
+        );
+      },
+      addTransaction: async (lineId) => {
+        const res = await fetch(`/api/budget/line-items/${lineId}/transactions`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ vendor_name: 'New transaction', amount: 0 }),
+        });
+        const t = (await res.json()).transaction;
+        return {
+          id: t.id,
+          date: t.paid_at ?? '',
+          desc: t.vendor_name ?? '',
+          amount: Number(t.amount) || 0,
+          receipt: t.receipt_id ?? null,
+        };
+      },
+      patchTransaction: async (txnId, patch) => {
+        const body: Record<string, unknown> = {};
+        if (patch.desc !== undefined) body.vendor_name = patch.desc;
+        if (patch.date !== undefined) body.paid_at = patch.date || null;
+        if (patch.amount !== undefined) body.amount = patch.amount;
+        await fetch(`/api/budget/transactions/${txnId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+      },
+      deleteTransaction: async (txnId) => {
+        await fetch(`/api/budget/transactions/${txnId}`, { method: 'DELETE' });
+      },
+      attachReceipt: async (lineId, txnId) => {
+        const rRes = await fetch('/api/budget/receipts', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tour_id: tourId, linked_line_item_id: lineId, in_budget: false }),
+        });
+        const receipt = await rRes.json();
+        await fetch(`/api/budget/transactions/${txnId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ receipt_id: receipt.id }),
+        });
+        return { receiptId: receipt.id as string, label: (receipt.receipt_number as string) ?? 'Receipt' };
+      },
+      listDocuments: async (lineId) => {
+        const res = await fetch(`/api/budget/line-items/${lineId}/attachments`);
+        if (!res.ok) return [];
+        const json = await res.json();
+        return (json.attachments ?? []).map(
+          (a: { id: string; file_name: string; file_type: string | null; file_url: string }) => ({
+            id: a.id,
+            type: docTypeFromName(a.file_name, a.file_type),
+            name: a.file_name,
+            url: a.file_url,
+          }),
+        );
+      },
+      addDocument: async (lineId, file) => {
+        const fd = new FormData();
+        fd.append('file', file);
+        const res = await fetch(`/api/budget/line-items/${lineId}/attachments`, { method: 'POST', body: fd });
+        const a = await res.json();
+        return { id: a.id as string, type: docTypeFromName(a.file_name, a.file_type), name: a.file_name, url: a.file_url };
+      },
+      renameDocument: async (lineId, docId, name) => {
+        await fetch(`/api/budget/line-items/${lineId}/attachments`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: docId, file_name: name }),
+        });
+      },
+      deleteDocument: async (lineId, docId) => {
+        await fetch(`/api/budget/line-items/${lineId}/attachments`, {
+          method: 'DELETE',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: docId }),
+        });
+      },
+    }),
+    [tourId],
+  );
+
   return (
     <Grid
       // re-init when the line/section COUNT changes (add/delete via a refresh);
@@ -219,6 +338,7 @@ export function BudgetGridView({ lines, sections, tourCurrency, tourId }: Budget
       onDeleteRow={onDeleteRow}
       onReorderRow={onReorderRow}
       onReorderSection={onReorderSection}
+      lineApi={lineApi}
     />
   );
 }

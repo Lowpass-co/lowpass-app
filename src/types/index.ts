@@ -562,6 +562,10 @@ export interface BudgetLineItem {
    *  When ≥ 2 the Actual cell in the grid shows a "click
    *  slide-over to edit" indicator. */
   transaction_count?: number;
+  /** Phase 3 grid (Step 5) — count of budget_line_item_attachments for the
+   *  row, attached at fetch time so the grid's 📎 cell shows a real count
+   *  without loading the attachment rows. Optional (not on every fetch path). */
+  attachment_count?: number;
   /** Budget Phase B §B0 (migration 105) — explicit flag set
    *  when the user has typed an actual that should not
    *  auto-sync to the transactions sum. Cleared by the "Sync

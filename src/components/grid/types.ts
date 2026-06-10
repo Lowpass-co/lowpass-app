@@ -45,10 +45,16 @@ export interface Column {
 }
 
 export interface Txn {
+  /** real-row id (budget_line_item_transactions.id) when backed by a route. */
+  id?: string;
   date: string;
   desc: string;
   amount: number;
+  /** demo: a row.docs id. real: the linked expense_receipts id (or null). */
   receipt: string | null;
+  /** real receipts live in expense_receipts (not row.docs) — their display
+   *  label (receipt_number / vendor) rides along so the slide can show it. */
+  receiptLabel?: string;
 }
 
 export interface Doc {
@@ -56,6 +62,8 @@ export interface Doc {
   id?: string;
   type: string;
   name: string;
+  /** real attachments carry their file URL for opening. */
+  url?: string;
 }
 
 export interface Link {
@@ -82,6 +90,10 @@ export interface Row {
   docs?: Doc[];
   links?: Link[];
   memos?: string[];
+  /** Phase 3 Step 5 — server-supplied counts for the 📎 receipts cell, so the
+   *  badge shows a real total before the slide lazily loads the full rows. */
+  txnCount?: number;
+  docCount?: number;
   /** custom-column values, the day-type dropdown, deal split, etc. */
   [key: string]: unknown;
 }
@@ -132,6 +144,29 @@ export interface GridFx {
 export interface GridStatusConfig {
   options: string[];
   colors?: Record<string, string>;
+}
+
+/** Phase 3 (Steps 3–5) — async CRUD for a line's transactions + documents,
+ *  injected by real surfaces (budget). When ABSENT the slide keeps its
+ *  in-memory demo behaviour (/grid-demo). `lineId` = the row's _uid (DB id).
+ *  Methods return the grid's Txn/Doc shapes; the surface owns the field
+ *  mapping to its tables. Receipts: a transaction's receipt is an
+ *  expense_receipts row (receipt_id), distinct from the line's documents
+ *  (budget_line_item_attachments) — see CC_GRID_PHASE3_SLIDE_MAP.md. */
+export interface GridLineApi {
+  listTransactions: (lineId: string) => Promise<Txn[]>;
+  addTransaction: (lineId: string) => Promise<Txn>;
+  patchTransaction: (
+    txnId: string,
+    patch: { desc?: string; date?: string; amount?: number },
+  ) => Promise<void>;
+  deleteTransaction: (txnId: string) => Promise<void>;
+  /** create/link an expense_receipts row + set the txn's receipt_id. */
+  attachReceipt: (lineId: string, txnId: string) => Promise<{ receiptId: string; label: string }>;
+  listDocuments: (lineId: string) => Promise<Doc[]>;
+  addDocument: (lineId: string, file: File) => Promise<Doc>;
+  renameDocument: (lineId: string, docId: string, name: string) => Promise<void>;
+  deleteDocument: (lineId: string, docId: string) => Promise<void>;
 }
 
 /** One undo/redo snapshot. `cols` is serialisable (calc fns stripped). */

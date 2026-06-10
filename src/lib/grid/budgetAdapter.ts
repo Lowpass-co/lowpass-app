@@ -70,6 +70,9 @@ export function lineToRow(l: BudgetLineItem, tourCurrency: string): Row {
     status: l.status ?? 'draft',
     cur: (l.currency || tourCurrency || 'USD').toUpperCase(),
     notes: l.notes ?? '',
+    // Step 5 — server-supplied counts for the 📎 receipts cell badge.
+    txnCount: l.transaction_count ?? 0,
+    docCount: l.attachment_count ?? 0,
     // carried for the UI/persistence layer (not rendered as columns):
     _lineId: l.id,
     _derived: derived,

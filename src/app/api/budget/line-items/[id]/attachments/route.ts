@@ -1,7 +1,9 @@
 /* ============================================
    LOWPASS — Line Item Attachments API
 
+   GET: List attachments for a line item (for the grid slide-over).
    POST: Upload file to budget-files, create attachment record.
+   PATCH: Rename an attachment (body: { id, file_name }).
    DELETE: Remove file from storage and delete record (body: { id: attachment_id }).
    ============================================ */
 
@@ -21,6 +23,35 @@ const ALLOWED_TYPES = [
   'application/vnd.ms-excel',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 ];
+
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const supabase = await createServerSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('workspace_id')
+    .eq('id', user.id)
+    .single();
+  if (!profile?.workspace_id) return NextResponse.json({ error: 'No workspace' }, { status: 403 });
+
+  const { id: lineItemId } = await params;
+  if (!lineItemId) return NextResponse.json({ error: 'id required' }, { status: 400 });
+
+  const { data: attachments, error } = await supabase
+    .from('budget_line_item_attachments')
+    .select('id, file_name, file_type, file_url, file_size_bytes, uploaded_at')
+    .eq('line_item_id', lineItemId)
+    .eq('workspace_id', profile.workspace_id)
+    .order('uploaded_at', { ascending: true });
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ attachments: attachments ?? [] });
+}
 
 export async function POST(
   request: Request,
@@ -97,6 +128,49 @@ export async function POST(
 
   if (insertError) return NextResponse.json({ error: insertError.message }, { status: 500 });
   return NextResponse.json(attachment);
+}
+
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const supabase = await createServerSupabaseClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('workspace_id')
+    .eq('id', user.id)
+    .single();
+  if (!profile?.workspace_id) return NextResponse.json({ error: 'No workspace' }, { status: 403 });
+
+  const { id: lineItemId } = await params;
+  if (!lineItemId) return NextResponse.json({ error: 'id required' }, { status: 400 });
+
+  let body: { id?: string; file_name?: string };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
+  }
+  const attachmentId = body.id;
+  const name = (body.file_name ?? '').trim();
+  if (!attachmentId) return NextResponse.json({ error: 'id (attachment id) required' }, { status: 400 });
+  if (!name) return NextResponse.json({ error: 'file_name required' }, { status: 400 });
+
+  const { data: attachment, error } = await supabase
+    .from('budget_line_item_attachments')
+    .update({ file_name: name })
+    .eq('id', attachmentId)
+    .eq('line_item_id', lineItemId)
+    .eq('workspace_id', profile.workspace_id)
+    .select('id, file_name, file_type, file_url, file_size_bytes, uploaded_at')
+    .maybeSingle();
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!attachment) return NextResponse.json({ error: 'Attachment not found' }, { status: 404 });
+  return NextResponse.json({ attachment });
 }
 
 export async function DELETE(

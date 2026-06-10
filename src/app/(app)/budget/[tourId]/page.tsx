@@ -43,6 +43,7 @@ import { ReceiptInbox } from '@/components/budget/ReceiptInbox';
 import { resolveBudgetTab } from '@/components/budget/budget-tab-utils';
 import { BudgetDensityProvider } from '@/components/budget/BudgetDensityContext';
 import { enrichLinesWithTransactionAggregates } from '@/lib/budget/transactions';
+import { enrichLinesWithAttachmentCounts } from '@/lib/budget/attachments';
 import { BudgetSummaryTab } from '@/components/budget/BudgetSummaryTab';
 import { BudgetTabPlaceholder } from '@/components/budget/BudgetTabPlaceholder';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
@@ -222,9 +223,14 @@ export default async function BudgetTourPage({
      when present (§A1 derivation rule). One extra round-trip; cheap
      because we only fetch (line_item_id, amount). */
   const rawLines = (lineItemsRes.data ?? []) as BudgetLineItem[];
-  const lines: BudgetLineItem[] = await enrichLinesWithTransactionAggregates(
+  const txnEnriched = await enrichLinesWithTransactionAggregates(
     supabase,
     rawLines,
+  );
+  // Phase 3 Step 5 — also attach attachment_count for the grid's 📎 cell.
+  const lines: BudgetLineItem[] = await enrichLinesWithAttachmentCounts(
+    supabase,
+    txnEnriched,
   );
   const routingDateById: Record<string, string> = {};
   for (const r of (routingRes.data ?? []) as Array<{
