@@ -126,11 +126,25 @@ connections visible. Not separate spreadsheets that happen to share names.
   rooming, advance, budget are **bridges** off it. Design the day model to carry
   per-person overrides + drive budget lines before piling surface features on top.
 
-## Channel list — grid variant + custom columns + export
-- Canonical grid, input-list columns (# · source · mic/DI · stand · 48V · notes),
-  grouped by stage area (Drums / Bass & gtr / Vocals). Custom columns (pad,
-  phase, stage box) via the grid's existing add-column. Reorder + export free.
-- Use the data already in the live channel list; map its real schema first.
+## Channel list — RE-SKIN the existing editor (Option A, confirmed 2026-06-09)
+Channel list is **not a fresh build** — it's a mature rider-pack feature with
+specialised cells. **Do NOT rebuild it on the basic `<Grid>`.** Decision:
+**re-skin the existing editor to the canonical grid look + adopt missing
+spreadsheet behaviours + wire the shared export. Keep all the smart cells.**
+- **Per rider/show, NOT per day** — no routing rail here (the one surface that
+  doesn't need it).
+- Real columns (`src/lib/channel-list/columns.ts`): base **# · Name** always on;
+  opt-in: **Pos · Stage Box · Loom (sub-snake) · Cable · Mic/DI · Stand · +48 ·
+  Prov · Notes** (enabled set persisted in `rider_sections.metadata.enabled_columns`).
+- Smart cells to **preserve** (already built — verified): **Mic/DI combobox with
+  type-to-search + mic library** (`MicDiSelectCell` / `AddMicModal`), stage-box &
+  loom pickers, cable inventory, phantom toggle, provider, `AddManyChannels`,
+  column picker, section bands. Plus the separate **Outputs** block and the linked
+  **Stage plot** (companion views — the rider's technical package).
+- Scope of the re-skin pass: tokens/raised-panel/section-band styling to match
+  the canonical grid, keyboard-nav/reorder parity where missing, and the shared
+  `<GridExport>`. Light touch — the editor's guts are good.
+- Adam confirmed the prior mic-search/combobox fix (§CL-FIX-6) is in place.
 
 ## Shared ROUTING RAIL (hard consistency rule)
 The **days-on-left rail** (date · city · day-type pill) must be **one shared
