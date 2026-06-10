@@ -51,6 +51,36 @@ post-208).
    reconcile) — verify after.
 6. Day-type from routing drives which nights have rooms.
 
+## Clarifications (answers to CC's Stage-A questions, 2026-06-10)
+
+**Q1 — How does the Matrix "reuse the rail" if the rail is a `<ul>`?**
+It does NOT embed the `<RoutingRail>` `<ul>` literally. Factor the rail's
+**single-entry renderer** (one night = date · city · day-type pill, from
+`RailEntry` + the day-type tokens) into a small shared presentational piece.
+Then:
+- **Cards / Nights** use the literal `<RoutingRail>` (`<ul>`) as the sidebar.
+- **Matrix** uses that same per-entry renderer as the **left column / row
+  headers** of the CSS-grid matrix (nights down, people across), so it looks
+  identical to the rail but lives in the grid.
+"Reuse the rail" = reuse its entry-cell + data shape + styling, not its `<ul>`
+container. Days stay on the left in all three.
+
+**Q2 — Which routing nights get room columns/cells?**
+Every **night away** = all **Show + Off/Travel** routing dates (exclude
+**No-Tour / home** days). Each such date is a matrix row (and a Cards rail item);
+the cell is a room code (`SGL / DBL (A…)`) or `—` (no room that night). NOTE this
+differs from the Advance rail (show-days-only) — rooming needs every night you
+sleep away, not just show nights. So the rooming rail/matrix filter = **nights
+away**, not shows. (Adam's sheet shows every tour date incl. checkout days as
+`—`.)
+
+**Q3 — Nights-overview: what is one row?**
+**One hotel stay** — i.e. one `hotels` record: hotel · city ·
+check-in → check-out · nights · room-type counts (S/D/T) · pax · cost,
+aggregating that hotel's `rooms`. NOT one row per night. (This is the "how many
+rooms am I paying for, where" scan; the per-night/per-room granularity lives in
+the derived budget Accommodation lines.)
+
 ## Hard rules
 - Map both sides before writing; cite real columns; don't guess the room-code↔
   room mapping. Surface decisions.
