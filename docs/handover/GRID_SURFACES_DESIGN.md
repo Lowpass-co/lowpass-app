@@ -22,10 +22,35 @@ view switcher (like sheet tabs), all reading/writing the same rooming lines
    an unassigned pool; drag a person into a room. Best for building a single
    night.
 
-Open question for Adam (to finalise matrix/cards interaction): in the sheet
-today, is the primary axis people×nights (matrix) or per-night room blocks? And
-how are shared rooms / room types entered — typed, or picked? A `<thinking>`
-dump of the real workflow will tune the default view + the cell editor.
+### App orientation decision (2026-06-08) — days ALWAYS on the left
+Adam's sheet is people-left / nights-across, but in the **app the matrix is
+FLIPPED**: **nights down the shared routing rail on the left**, **people across
+the top**. Rationale (Adam): the routing rail (date · city · day-type) is the
+app's spine everywhere (Advance, Payroll) — rooming must not invert it for one
+screen. All three rooming views share the **same left routing rail**; only the
+right panel differs (matrix = people grid · nights = per-stay table · cards =
+room cards for the selected night). Long crews scroll the people columns
+horizontally; the rail stays fixed. See "Shared routing rail" below — it's a
+hard consistency rule, not just rooming.
+
+### Conventions to match (from the GN Rooming List sheet)
+- Each person carries **Role · Forename · Surname**.
+- Each night has **City · Day-type · Date**.
+- **Day-type** row per night: `Off` (pink) / `Show` (green) — drives which nights
+  have rooms.
+- Each cell = a **room-type code with a group letter**: `SGL`, `DBL (A)`,
+  `DBL (B)`, `DBL (C)` … The **letter is the shared-room identity** — two people
+  with `DBL (A)` share room A. Colour-keyed by type/group (SGL green, DBL A
+  light green, DBL B orange, DBL C blue — his legend, reproduced).
+- `-` = no room that night (travel/home/checkout).
+- **Cell editor** = pick room type + group letter (existing codes or add new),
+  not free text — so the grouping stays consistent and roommates auto-link.
+- His sheet sums to a single **EST TOTAL** → one `hotels` budget line. **The app
+  already improves on this**: rooming generates **per-room/per-stay derived
+  Accommodation lines** in the budget (seen live: "Unassigned Hotel — DBL (A)"
+  etc. FROM ROOMING). Adam wants night-by-night — the derived-lines model is the
+  path to it (and the Nights-overview view surfaces it). Sell this as an upgrade,
+  not a regression.
 
 ## Payroll — grid + week rail + full sheet parity + export
 - Canonical grid, payroll column set (person · role · show rate · travel rate ·
@@ -44,19 +69,48 @@ dump of the real workflow will tune the default view + the cell editor.
   phase, stage box) via the grid's existing add-column. Reorder + export free.
 - Use the data already in the live channel list; map its real schema first.
 
-## Shared EXPORT tool (high-value, build once — used by every grid surface + Daysheets)
-Adam: the Daysheets export tool is the benchmark — replicate as much as possible.
-- Opens in a **pop-out** (new window/large modal), live preview of the output.
-- Customisation knobs: **logo image**, **header image/banner**, **column order +
-  show/hide**, **font size**, **highlighted rows/lines**, section ordering, page
-  setup (size/orientation/margins).
-- Output: print-ready **PDF** (and/or print dialog). Per-surface presets
-  (rooming list, channel list, payroll sheet, budget).
-- Architecture: a single `<GridExport>` module the canonical grid exposes, fed
-  the grid's columns + rows + grouping; each surface supplies a preset. Build it
-  once on Budget/Channel-list, reuse everywhere.
-- TODO before building: get the Daysheets export specifics from Adam (a
-  screenshot/walkthrough of its options) to scope the knobs precisely.
+## Shared ROUTING RAIL (hard consistency rule)
+The **days-on-left rail** (date · city · day-type pill) must be **one shared
+component** rendered identically wherever days are indexed — Advance, Payroll,
+Rooming (all 3 views), Daysheets. Extract the existing Advance/Payroll rail
+implementations into a single `<RoutingRail>` (props: entries
+[{date, city, dayType, …}], `selected`, `onSelect`, `grouping: 'night' | 'week'`).
+Days never move to the top for one screen. This is the first foundational build
+after Budget (see `CC_ROUTING_RAIL.md`).
+
+## Shared EXPORT tool — modelled on Daysheets (studied from 8 screenshots)
+Daysheets is the benchmark: a **WYSIWYG document builder + exporter** with a
+pop-out, live preview, the routing rail on the left, a right settings panel, and
+per-line styling. Replicate the table-relevant subset as one `<GridExport>` the
+canonical grid exposes (fed columns + rows + grouping); each surface supplies a
+preset. Build once (on Budget or Channel list), reuse everywhere.
+
+Feature set to mirror (priority order):
+- **Pop-out window** with centered **live WYSIWYG preview**; toolbar = template
+  selector · filter · zoom % · email · share · **download (PDF)** · close.
+- **Templates**: built-in presets + user **"Save as Template"** (Daysheets has
+  Classic / 2.0 / Venue Schedule + per-tour saved templates). Per-surface
+  defaults (rooming list / channel list / payroll sheet / budget).
+- **Section show/hide + reorder** in a right panel (Header · the grid/table ·
+  Footer · Contacts · Notes). Each section has its own settings sub-panel.
+- **Header**: logo image (alignment, max-height, corner-radius), background image
+  (opacity), title elements (artist / tour name / date / day-type / group —
+  each show/hide + alignment + **drag to reorder**), day-type bar, group tags.
+- **Table format**: **font-size slider**, **row-spacing slider**, **zebra
+  stripes**, bold headers, column **show/hide + reorder**, column width/full-width.
+- **Per-row/line menu** (click a line in the preview): **bold**, **highlight**
+  (colour swatches), **font colour** (swatches), **text size** (−/default/+),
+  **order up/down**, **hide line**. (Mirrors the grid's own per-row affordances.)
+- **Filter by group / day type** (checkbox list) to scope which rows/people
+  appear in the export.
+- Output: print-ready **PDF**, plus **email / share**.
+- NOTE: Daysheets' full *composed daysheet* (schedule + flights + lodging +
+  notes blocks) is a richer document than a table — that's the Advance/Daysheet
+  surface, which can reuse the **same export engine + header/template/per-line
+  layer**. Scope `<GridExport>` to the table + header/template/per-line subset
+  first; the composed-daysheet renderer is a later, larger piece.
+- Build gate: mock the export pop-out (Claude) for Adam's sign-off before CC
+  builds it.
 
 ## Sequence (recommended)
 Finish Budget Expenses (finalise prompt) → **Payroll** (real; quick, reuses
