@@ -87,8 +87,44 @@ as rooming — consistent.) Festivals = multiple shows/cities in one week.
   fee-math fix = implement exactly the formula above.
 - Slide = editable **rate card** per person (show/travel/per-diem/advance).
 
+### Design decisions (confirmed 2026-06-09)
+- **Default landing view = Rates & totals**; jump to Days matrix to edit the
+  schedule; click a person → rate-card.
+- **Three views** (one dataset): Rates & totals · Days matrix (rail × people) ·
+  Person rate-card. Mirrors rooming.
+- **Travel rate is per-person, full stop.** Band-at-half-rate was just this run's
+  data — NOT a rule. Do not group or compute by Crew/Band; every person owns an
+  independent show rate + travel rate + per-diem rate + advance.
+- **Roster grouping** is display-only (by role/section), never tied to rate
+  logic. Default flat ordered list (his sheet order); grouping optional.
+- **Every column separate and explicit** — show rate · travel rate · per-diem
+  rate · show days · off/travel days · total fee · total per diem · advance ·
+  notes. Don't merge columns.
+
 ### Build: Stage-A map the real personnel/rate tables first, then build, Chrome-verify.
 - **Export** (see shared tool below).
+
+## ⭐ Core principle — EVERYTHING RELATES (Adam, 2026-06-09)
+The surfaces are **one interconnected model**, and the UI must make the
+connections visible. Not separate spreadsheets that happen to share names.
+- **Days are shared.** Payroll days, rooming nights, advance days, and the budget
+  all index off the **same `routing`** (the rail's source). "**Add a week**" in
+  payroll must **extend the routing** — and that change shows up on rooming,
+  advance, the rail, everywhere.
+- **Per-person days exist** beyond the tour-uniform schedule: a guitar tech's
+  **de-prep day** next week, the TM's **business meeting day** — extra working
+  days for ONE person that still **count for pay and create a budget line**. So
+  the day model must support **per-person day-types layered over the tour
+  routing**, not just one day-type per day for everyone.
+- **Money flows automatically.** A person-day or an added week ripples into the
+  **budget** (Salary / per-diem lines) — never re-keyed.
+- **Surface the ripple.** When the user adds a week / a person-day / changes a
+  rate, the app tells them what else just changed ("this added 5 routing days +
+  a $X budget line"). Blast-radius made visible — the user is never surprised by
+  a downstream effect.
+- Implication for the build: the routing/day model is the **anchor**; payroll,
+  rooming, advance, budget are **bridges** off it. Design the day model to carry
+  per-person overrides + drive budget lines before piling surface features on top.
 
 ## Channel list — grid variant + custom columns + export
 - Canonical grid, input-list columns (# · source · mic/DI · stand · 48V · notes),
