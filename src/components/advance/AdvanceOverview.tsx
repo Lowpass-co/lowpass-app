@@ -41,6 +41,7 @@ import {
   parseRoutingDate,
 } from '@/lib/utils';
 import { formatRelativeTime } from '@/lib/format-relative';
+import { colourForDayType } from '@/lib/routing/dayType';
 import { useToast } from '@/components/ui/Toast';
 import { CopyAdvanceModal } from '@/components/advance/CopyAdvanceModal';
 import { ApplyAdvanceTemplateSlideOver } from '@/components/advance/ApplyAdvanceTemplateSlideOver';
@@ -86,30 +87,12 @@ const STATUS_FILTER_OPTIONS: ReadonlyArray<readonly [StatusFilter, string]> = [
   ['needs_review', 'Needs review'],
 ] as const;
 
-/** Day-type → colour token. Falls back to the `off` neutral. */
-const DAY_TYPE_TOKEN: Record<string, string> = {
-  show: 'var(--color-lp-day-show)',
-  festival: 'var(--color-lp-day-festival)',
-  travel: 'var(--color-lp-day-travel)',
-  off: 'var(--color-lp-day-off)',
-  rehearsal: 'var(--color-lp-day-rehearsal)',
-  press: 'var(--color-lp-day-press)',
-  radio: 'var(--color-lp-day-radio)',
-  tv: 'var(--color-lp-day-tv)',
-};
-
 const STATUS_TOKEN: Record<string, string> = {
   not_started: 'var(--color-lp-status-not-started)',
   in_progress: 'var(--color-lp-status-in-progress)',
   complete: 'var(--color-lp-status-complete)',
   needs_review: 'var(--color-lp-status-needs-review)',
 };
-
-function colourForDayType(dayTypeCsv: string | null | undefined): string {
-  if (!dayTypeCsv) return DAY_TYPE_TOKEN.off;
-  const first = dayTypeCsv.split(',')[0]?.trim().toLowerCase() ?? '';
-  return DAY_TYPE_TOKEN[first] ?? DAY_TYPE_TOKEN.off;
-}
 
 function isShowDay(dayTypeCsv: string | null | undefined): boolean {
   if (!dayTypeCsv) return false;

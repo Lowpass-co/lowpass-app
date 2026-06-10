@@ -19,23 +19,7 @@ import type { TimelineRow, TimelineItem } from '@/components/timeline/types';
 import { useEntityRouting } from '@/components/entity/EntityRoutingContext';
 import { useToast } from '@/components/ui/Toast';
 import { cn } from '@/lib/utils';
-
-const DAY_TYPE_COLOUR: Record<string, string> = {
-  show: 'var(--color-lp-day-show, #FF4500)',
-  festival: 'var(--color-lp-day-festival, #FF4500)',
-  travel: 'var(--color-lp-day-travel, #2563EB)',
-  off: 'var(--color-lp-day-off, #94A3B8)',
-  rehearsal: 'var(--color-lp-day-rehearsal, #16A34A)',
-  press: 'var(--color-lp-day-press, #C026D3)',
-  radio: 'var(--color-lp-day-radio, #C026D3)',
-  tv: 'var(--color-lp-day-tv, #C026D3)',
-};
-
-function colourForDayType(dayTypeCsv: string | null | undefined): string {
-  if (!dayTypeCsv) return DAY_TYPE_COLOUR.off;
-  const first = dayTypeCsv.split(',')[0]?.trim().toLowerCase() ?? '';
-  return DAY_TYPE_COLOUR[first] ?? DAY_TYPE_COLOUR.off;
-}
+import { colourForDayType } from '@/lib/routing/dayType';
 
 export type ShowVm = {
   type: 'show';

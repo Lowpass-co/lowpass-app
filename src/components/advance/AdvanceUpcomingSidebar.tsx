@@ -18,10 +18,10 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ChevronDown, Loader2, Search } from 'lucide-react';
 import { CopyAdvanceModal, type AdvanceDateItem } from '@/components/advance/CopyAdvanceModal';
+import { RoutingRail, type RailEntry } from '@/components/routing/RoutingRail';
 import { parseRoutingDate } from '@/lib/utils';
 
 interface AdvanceUpcomingSidebarProps {
@@ -122,6 +122,26 @@ export function AdvanceUpcomingSidebar({
     // "advance shows" so they'd clutter the rail.
     return filtered.filter((d) => isShowDay(d.day_type));
   }, [items, search]);
+
+  // Map show rows → shared rail entries (id = routing_id). Advance keeps its
+  // own per-entry meta (progress bar + overdue) via renderMeta, and stays
+  // pill-less / show-days-only (showDayTypePill={false}).
+  const railEntries = useMemo<RailEntry[]>(
+    () =>
+      showRows.map((d) => ({
+        id: d.routing_id,
+        date: d.date,
+        city: d.city,
+        venueName: d.venue_name,
+        dayType: d.day_type,
+      })),
+    [showRows],
+  );
+  const itemById = useMemo(() => {
+    const m = new Map<string, AdvanceDateItem>();
+    for (const d of showRows) m.set(d.routing_id, d);
+    return m;
+  }, [showRows]);
 
   // Source list for the "Copy advance from…" dropdown — every show
   // that already has an advance instance to copy from.
@@ -274,104 +294,53 @@ export function AdvanceUpcomingSidebar({
             No show days in routing yet.
           </div>
         ) : (
-          <ul className="space-y-px">
-            {showRows.map((d) => {
-              const active = d.routing_id === activeRoutingId;
+          <RoutingRail
+            entries={railEntries}
+            selected={activeRoutingId}
+            onSelect={() => {}}
+            grouping="night"
+            showDayTypePill={false}
+            ariaLabel="Upcoming shows"
+            hrefForEntry={(e) => `/advance/${tourId}/${e.id}`}
+            renderMeta={(e) => {
+              const d = itemById.get(e.id);
+              if (!d) return null;
               const pct = completionPercent(d);
               const overdue = overdueCount(d);
               return (
-                <li key={d.routing_id}>
-                  <Link
-                    href={`/advance/${tourId}/${d.routing_id}`}
-                    className="btn-transition block px-3 py-2"
-                    style={{
-                      borderLeft: active
-                        ? '2px solid var(--color-lp-orange)'
-                        : '2px solid transparent',
-                      background: active
-                        ? 'var(--lp-surface)'
-                        : 'transparent',
-                    }}
+                <>
+                  <div
+                    className="mt-1.5 overflow-hidden rounded-full"
+                    style={{ height: 4, background: 'var(--lp-bg)' }}
+                    aria-hidden
                   >
                     <div
-                      className="lp-mono"
                       style={{
-                        fontSize: '11px',
-                        fontWeight: 600,
-                        letterSpacing: '0.04em',
-                        color: active
-                          ? 'var(--color-lp-orange)'
-                          : 'var(--lp-text-secondary)',
+                        width: `${pct}%`,
+                        height: '100%',
+                        background:
+                          pct >= 100
+                            ? 'var(--color-lp-status-complete)'
+                            : 'var(--lp-orange)',
+                        transition: 'width 200ms var(--lp-ease-standard, ease)',
                       }}
-                    >
-                      {dateLabel(d)}
-                    </div>
-                    <div
-                      className="mt-0.5 truncate"
-                      style={{
-                        fontSize: '13px',
-                        fontWeight: 500,
-                        color: 'var(--lp-text)',
-                      }}
-                    >
-                      {d.venue_name || d.city || '—'}
-                    </div>
-                    {d.city ? (
-                      <div
-                        className="truncate"
-                        style={{
-                          fontSize: '11px',
-                          color: 'var(--lp-text-tertiary)',
-                        }}
-                      >
-                        {d.city}
-                      </div>
+                    />
+                  </div>
+                  <div
+                    className="mt-1 flex items-baseline justify-between gap-2"
+                    style={{ fontSize: '11px', color: 'var(--lp-text-tertiary)' }}
+                  >
+                    <span className="lp-mono">{pct}% complete</span>
+                    {overdue > 0 ? (
+                      <span style={{ color: 'var(--color-lp-error, #EF4444)', fontWeight: 600 }}>
+                        {overdue} overdue
+                      </span>
                     ) : null}
-                    <div
-                      className="mt-1.5 overflow-hidden rounded-full"
-                      style={{
-                        height: 4,
-                        background: 'var(--lp-bg)',
-                      }}
-                      aria-hidden
-                    >
-                      <div
-                        style={{
-                          width: `${pct}%`,
-                          height: '100%',
-                          background:
-                            pct >= 100
-                              ? 'var(--color-lp-status-complete)'
-                              : 'var(--color-lp-orange)',
-                          transition:
-                            'width 200ms var(--lp-ease-standard, ease)',
-                        }}
-                      />
-                    </div>
-                    <div
-                      className="mt-1 flex items-baseline justify-between gap-2"
-                      style={{
-                        fontSize: '11px',
-                        color: 'var(--lp-text-tertiary)',
-                      }}
-                    >
-                      <span className="lp-mono">{pct}% complete</span>
-                      {overdue > 0 ? (
-                        <span
-                          style={{
-                            color: 'var(--color-lp-error, #EF4444)',
-                            fontWeight: 600,
-                          }}
-                        >
-                          {overdue} overdue
-                        </span>
-                      ) : null}
-                    </div>
-                  </Link>
-                </li>
+                  </div>
+                </>
               );
-            })}
-          </ul>
+            }}
+          />
         )}
       </div>
 

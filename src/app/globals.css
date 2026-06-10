@@ -85,6 +85,17 @@
   --color-lp-day-tv: #EF4444;
   --color-lp-day-festival: #FF4500;
 
+  /* Day-type aliases — reference these as var(--lp-day-*) in component code
+     (mirrors the --lp-orange alias). Canonical hues live in --color-lp-day-*. */
+  --lp-day-show: var(--color-lp-day-show);
+  --lp-day-off: var(--color-lp-day-off);
+  --lp-day-travel: var(--color-lp-day-travel);
+  --lp-day-rehearsal: var(--color-lp-day-rehearsal);
+  --lp-day-press: var(--color-lp-day-press);
+  --lp-day-radio: var(--color-lp-day-radio);
+  --lp-day-tv: var(--color-lp-day-tv);
+  --lp-day-festival: var(--color-lp-day-festival);
+
   /* Tour disambiguation colours
      Used on the Home calendar to distinguish multiple tours under the same
      artist. Six slots; pages cycle modulo 6. Hues are deliberately distinct
