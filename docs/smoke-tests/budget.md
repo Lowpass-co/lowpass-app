@@ -268,6 +268,29 @@ is unchanged.
 **Last verified**: code/build green; Adam to re-confirm live (totals in £
 matching the burn bar; a Display switch converting cells + totals together).
 
+#### BUD-41 — Grid binds to the DISPLAY selector
+**Do**: Budget → Expenses → **Grid (beta)** on a GBP tour. Flip the **Display**
+selector £→$.
+**Expect**: grid **cells AND totals** convert to US$ together with the burn bar
+(previously the grid ignored the selector and stayed £). A line whose currency
+≠ display renders the red ≈ converted note (GRID_SPEC §4). Currency-less lines
+fall back to the **native** tour currency, not the display one.
+**Last verified**: code/build green; Adam to re-confirm live (DISPLAY flip moves
+cells + totals + burn bar in lockstep).
+
+#### BUD-42 — Row + section reorder persists
+**Do**: In Grid (beta), drag a line within its section; drag a section. Reload.
+**Expect**: the new order survives reload (optimistic; PATCHes `sort_order` on
+`budget_line_items` / `budget_sections` — both routes already accept it). A
+failed write toasts + refreshes to the true order. Derived rows are reorderable
+and persist (reconcile's update path doesn't reset `sort_order`); a brand-new
+derived row starts at top until reordered.
+**Last verified**: code/build green; Adam to re-confirm live.
+
+> Steps 3–5 (slide Transactions/Documents CRUD, 📎 receipts count) are mapped
+> with open decisions in `docs/handover/CC_GRID_PHASE3_SLIDE_MAP.md` (D1–D5) —
+> not built yet. Step 6 (flip Grid to default) is gated on 1–5 live-verify.
+
 > **Still deferred to the grid-default flip (called out):** row/section
 > **reorder** persistence (`sort_order`), and the slide's Transactions/
 > Documents CRUD (budget rows don't carry them yet — they live in

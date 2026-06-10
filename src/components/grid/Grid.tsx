@@ -90,6 +90,10 @@ export interface GridProps {
   onAddSection?: () => void;
   onRenameSection?: (sectionUid: string, name: string) => void;
   onDeleteRow?: (rowUid: string) => void;
+  /** Reorder persistence — fired after a drag commits with the NEW full order
+      of uids (= DB ids on real surfaces). Caller PATCHes sort_order. Phase 3. */
+  onReorderRow?: (sectionUid: string, orderedRowUids: string[]) => void;
+  onReorderSection?: (orderedSectionUids: string[]) => void;
 }
 
 type ReorderKind = 'section' | 'row' | 'col';
@@ -118,6 +122,8 @@ export function Grid({
   onAddSection,
   onRenameSection,
   onDeleteRow,
+  onReorderRow,
+  onReorderSection,
 }: GridProps) {
   const fx = fxProp ?? demoFx;
   // Totals / section-header / KPI maths must use the SAME injected FX + display
@@ -127,6 +133,10 @@ export function Grid({
   const fmtC = (n: number | undefined | null) => fx.formatDisplay(Number(n) || 0);
   const onEditRef = useRef(onEdit);
   onEditRef.current = onEdit;
+  const onReorderRowRef = useRef(onReorderRow);
+  onReorderRowRef.current = onReorderRow;
+  const onReorderSectionRef = useRef(onReorderSection);
+  onReorderSectionRef.current = onReorderSection;
   const [tick, force] = useReducer((x: number) => x + 1, 0);
   const render = useCallback(() => force(), []);
 
@@ -574,7 +584,7 @@ export function Grid({
   const endReorder = useCallback(() => {
     const RE = reRef.current;
     if (!RE) return;
-    const { arr, from, kind } = RE;
+    const { arr, from, kind, si0 } = RE;
     let to = RE.to;
     const started = RE.started;
     RE.dragEl?.classList.remove('dragging');
@@ -590,6 +600,15 @@ export function Grid({
         arr.splice(to, 0, m);
         if (kind !== 'col') selRef.current = { ar: 0, ac: 0, fr: 0, fc: 0 };
         render();
+        // Persist the new order (BUD-42). Column reorder is display-only.
+        if (kind === 'section') {
+          const ids = (arr as Section[]).map((s) => s._uid).filter(Boolean) as string[];
+          if (ids.length) onReorderSectionRef.current?.(ids);
+        } else if (kind === 'row' && si0 != null) {
+          const sec = dataRef.current[si0];
+          const ids = (arr as Row[]).map((r) => r._uid).filter(Boolean) as string[];
+          if (sec?._uid && ids.length) onReorderRowRef.current?.(sec._uid, ids);
+        }
       };
       // FLIP — capture the moving elements' first rects, mutate, animate in
       // useLayoutEffect. The selector is KIND-SPECIFIC (A3): a section drag
