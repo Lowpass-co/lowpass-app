@@ -32,9 +32,7 @@ import {
   cloneData,
   colDef,
   demoFx,
-  disp,
   flatRows,
-  fmt,
   formulaEst,
   inSel,
   isFormula,
@@ -122,6 +120,11 @@ export function Grid({
   onDeleteRow,
 }: GridProps) {
   const fx = fxProp ?? demoFx;
+  // Totals / section-header / KPI maths must use the SAME injected FX + display
+  // currency as the cells — not gridModel's USD-pivot `disp`/`fmt`. (BUD-40.)
+  const dispC = (v: unknown, cur?: unknown) =>
+    fx.toDisplay(Number(v) || 0, ((cur as string) || fx.displayCurrency).toUpperCase());
+  const fmtC = (n: number | undefined | null) => fx.formatDisplay(Number(n) || 0);
   const onEditRef = useRef(onEdit);
   onEditRef.current = onEdit;
   const [tick, force] = useReducer((x: number) => x + 1, 0);
@@ -1048,7 +1051,7 @@ export function Grid({
     if (t === 'calc')
       return (
         <div key={key} className="c num">
-          {fmt(col.calc ? col.calc(row) : 0)}
+          {fmtC(col.calc ? col.calc(row) : 0)}
         </div>
       );
     if (t === 'doc') {
@@ -1099,7 +1102,7 @@ export function Grid({
       const r = col.formula!.op === '-' ? av - bv : col.formula!.op === '*' ? av * bv : av + bv;
       return (
         <div key={key} className="c num">
-          {fmt(r)}
+          {fmtC(r)}
         </div>
       );
     }
@@ -1234,7 +1237,7 @@ export function Grid({
                 onBlur={(e) => commitFx(e.currentTarget)}
               />
             ) : (
-              fmt(formulaEst(row, data()))
+              fmtC(formulaEst(row, data()))
             )}
           </div>
         );
@@ -1242,7 +1245,7 @@ export function Grid({
       if (id === 'act')
         return (
           <div key={key} className="c num muted0">
-            {fmt(row.act)}
+            {fmtC(row.act)}
           </div>
         );
       return <div key={key} className="c" />;
@@ -1393,10 +1396,10 @@ export function Grid({
       let est = 0,
         act = 0;
       sec.rows.forEach((r) => {
-        est += disp(isFormula(sec) ? formulaEst(r, data()) : r.est, r.cur);
-        act += disp(r.act, r.cur);
+        est += dispC(isFormula(sec) ? formulaEst(r, data()) : r.est, r.cur);
+        act += dispC(r.act, r.cur);
       });
-      const sub = est || act ? `est ${fmt(est)} · act ${fmt(act)}` : '';
+      const sub = est || act ? `est ${fmtC(est)} · act ${fmtC(act)}` : '';
       const accent = sec.accent || ACCENTS[si % ACCENTS.length];
       out.push(
         <div className={`section ${sec.kind}`} data-si={si} data-uid={sec._uid} key={sec._uid}>
@@ -1448,7 +1451,7 @@ export function Grid({
             <div className="sh-sub">
               {sub ? (
                 <>
-                  est <b>{fmt(est)}</b> · act <b>{fmt(act)}</b>
+                  est <b>{fmtC(est)}</b> · act <b>{fmtC(act)}</b>
                 </>
               ) : null}
             </div>
@@ -1481,8 +1484,8 @@ export function Grid({
     cAct = 0;
   data().forEach((sec) =>
     sec.rows.forEach((r) => {
-      cEst += disp(isFormula(sec) ? formulaEst(r, data()) : r.est, r.cur);
-      cAct += disp(r.act, r.cur);
+      cEst += dispC(isFormula(sec) ? formulaEst(r, data()) : r.est, r.cur);
+      cAct += dispC(r.act, r.cur);
     }),
   );
   const numCols = cols().filter((c) => c.type === 'money' || c.type === 'number');
@@ -1533,7 +1536,7 @@ export function Grid({
         </span>
         <span className="gr-spacer" />
         <span className="gr-counts">
-          <b>{flat().length} rows</b> · est <b>{fmt(cEst)}</b> · act <b>{fmt(cAct)}</b>
+          <b>{flat().length} rows</b> · est <b>{fmtC(cEst)}</b> · act <b>{fmtC(cAct)}</b>
         </span>
         <div className="gr-density">
           {(['compact', 'comfortable', 'spacious'] as Density[]).map((d) => (

@@ -250,6 +250,24 @@ still defaults to the canonical 4. (Grid.tsx: `statusUniverse`, `filterRef`
 init, `FilterPop` `statusList`, status-group view.)
 **Last verified**: code/build green; Adam to re-confirm live via Chrome DOM.
 
+#### BUD-40 — Totals/KPIs use the display currency + tour FX (not USD)
+**Do**: Budget → Expenses → **Grid (beta)** on a GBP-display tour. Read the
+toolbar total, every section header `est/act`, and the burn bar together. Then
+flip the **Display** selector £→$ and re-read.
+**Expect**: With Display = £, the toolbar total, section-header `est/act`, and
+group totals all read **£…** and the SALARY total matches the burn bar
+(`£11,550`), not `$14,669`. Switching Display to $ converts **cells AND totals
+together** consistently.
+**Root cause (fixed)**: decision 5 (grid takes FX + display currency as props)
+was applied to the cell-render path but missed the total/section-header/KPI
+maths, which still used `gridModel.disp`/`fmt` (the demo USD-pivot table, GBP→USD
+1.27). Grid.tsx now derives `dispC`/`fmtC` from the injected `fx` and routes the
+section totals, grand totals, and calc/formula cell formatting through them; the
+unused `disp`/`fmt` imports are dropped. `/grid-demo` (no `fx` prop → `demoFx`)
+is unchanged.
+**Last verified**: code/build green; Adam to re-confirm live (totals in £
+matching the burn bar; a Display switch converting cells + totals together).
+
 > **Still deferred to the grid-default flip (called out):** row/section
 > **reorder** persistence (`sort_order`), and the slide's Transactions/
 > Documents CRUD (budget rows don't carry them yet — they live in
