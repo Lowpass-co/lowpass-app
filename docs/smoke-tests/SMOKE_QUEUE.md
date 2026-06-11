@@ -32,7 +32,16 @@ them off; report fails by ID.
 - [ ] **SMK-ROOM-04** — Off-roster person shows as a greyed ✕ column (Matrix) and
   can be removed; roommates keep their room.
 
-## Payroll — *pending build (CC_PAYROLL.md). Smokes added when it ships.*
+## Payroll — built (c674daf); Rates + Days matrix + PAY-OPS17 + PAY-05 Chrome-verified. Your manual checks:
+- [ ] **SMK-PAY-01** — Edit a day-type cell in **Days matrix** (Show↔Off/Travel↔
+  No-tour) → the person's **Total fee** in Rates & totals + the **budget Salary**
+  line both update; survives reload.
+- [ ] **SMK-PAY-02** — **internal_rate** stays admin-only: as a non-admin it must
+  not appear or be editable anywhere in payroll (PAY-04).
+- [ ] **SMK-PAY-03** — Advance editing: once the **inline advance stopgap** ships,
+  edit an advance fee in the Rates grid → it persists + flows to the total. (Until
+  then, advance has no editor — known gap.)
+- [ ] **SMK-PAY-04** — Summary view totals match the Rates view.
 
 ## Channel list — *pending re-skin. Smokes added when it ships.*
 
