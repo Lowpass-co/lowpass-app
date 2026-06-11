@@ -30,12 +30,17 @@ function buildTotalsColumns(
     rehearsal_rate: r.rehearsal_rate,
     per_diem: r.per_diem,
   });
+  // total_fee uses the rate-card advance (the editable Advance column below) so
+  // editing advance visibly moves the fee. The budget reconcile reads the
+  // per-week payroll_entries.advance_fee (synced at generate) — see PAY-02 note.
+  const adv = (r: PersonnelRate) => Number(r.advance_fee) || 0;
   return [
     { id: 'show_days', header: 'Show days', accessor: (r) => countsOf(r.id).show, align: 'right', width: 90, type: { kind: 'computed', render: (r) => String(countsOf((r as PersonnelRate).id).show || '—') } },
     { id: 'off_days', header: 'Off/Travel', accessor: (r) => countsOf(r.id).offTravel, align: 'right', width: 96, type: { kind: 'computed', render: (r) => String(countsOf((r as PersonnelRate).id).offTravel || '—') } },
-    { id: 'total_fee', header: 'Total fee', accessor: (r) => computeTotalFee(rateOf(r), countsOf(r.id), countsOf(r.id).advance), align: 'right', width: 120, type: { kind: 'computed', render: (r) => { const row = r as PersonnelRate; return money.format(computeTotalFee(rateOf(row), countsOf(row.id), countsOf(row.id).advance)); } } },
+    { id: 'total_fee', header: 'Total fee', accessor: (r) => computeTotalFee(rateOf(r), countsOf(r.id), adv(r)), align: 'right', width: 120, type: { kind: 'computed', render: (r) => { const row = r as PersonnelRate; return money.format(computeTotalFee(rateOf(row), countsOf(row.id), adv(row))); } } },
     { id: 'total_pd', header: 'Total PD', accessor: (r) => computeTotalPerDiem(rateOf(r), countsOf(r.id)), align: 'right', width: 110, type: { kind: 'computed', render: (r) => { const row = r as PersonnelRate; return money.format(computeTotalPerDiem(rateOf(row), countsOf(row.id))); } } },
-    { id: 'advance', header: 'Advance', accessor: (r) => countsOf(r.id).advance, align: 'right', width: 104, type: { kind: 'computed', render: (r) => money.format(countsOf((r as PersonnelRate).id).advance) } },
+    // Editable — PATCHes personnel_rates.advance_fee via the existing route.
+    { id: 'advance', header: 'Advance', accessor: 'advance_fee', align: 'right', width: 104, type: { kind: 'currency', currency: ccy, decimals: 2 } },
   ];
 }
 
@@ -198,6 +203,7 @@ export function PayrollRatesSpreadsheet({
         case 'off_rate': patch.off_rate = asNumber(raw); break;
         case 'rehearsal_rate': patch.rehearsal_rate = asNumber(raw); break;
         case 'per_diem': patch.per_diem = asNumber(raw); break;
+        case 'advance': patch.advance_fee = asNumber(raw); break;
         case 'commission':
           if (canSeeCommission) patch.commission = asNumber(raw);
           break;

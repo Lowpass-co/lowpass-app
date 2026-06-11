@@ -206,19 +206,24 @@ Editing a cell persists (POST /api/budget/payroll), optimistic, survives reload.
 explicit: person · role · employment · rate type · **show · off · reh · PD**
 rates · **show days · off/travel days · total fee · total PD · advance** ·
 notes. The computed columns are read-only and **equal the sheet** (Richie
-$4,611…). Rate edits persist (PATCH /api/budget/personnel-rates).
+$4,611…). Rate edits persist (PATCH /api/budget/personnel-rates). **Advance is
+editable** (→ `personnel_rates.advance_fee` via the same route; not
+internal_rate-sensitive, no gating) and the **Total fee** moves with it live.
+*Nuance:* the budget reconcile reads the per-week `payroll_entries.advance_fee`
+(synced from the rate card at **generate**), so the budget Salary line picks up
+a manual advance edit on the next generate — aligning the two advance sources is
+part of PAY-03.
 **Needs-live**: Adam confirms visual parity with the budget `<Grid>` (raised
 panel / gutter / row styling) — deep cell/header parity lives in SpreadsheetGrid;
 flag if it reads off.
 
-#### PAY-03 — Person rate-card slide  *(DEFERRED — see note)*
-The dedicated slide (show/travel/per-diem/**advance** editable + internal_rate
-admin-gated) is **not in this build**: it must reuse the existing gated editor
-(`PersonnelRatesSection`, server-gated), which needs the `tour_personnel`
-memberId plumbed into the payroll rates payload (today the row only carries
-`roster_personnel_id`). Show/travel/per-diem stay editable **inline** in
-PAY-02; **advance editing currently has no home** (the old week sheet was
-removed) until PAY-03 lands. Flagged to Adam.
+#### PAY-03 — Person rate-card slide  *(DEFERRED — narrowed)*
+Show / travel / per-diem / **advance** are all editable **inline** in PAY-02
+now, so the deferred slide's remaining job is the **internal_rate** admin-gated
+field + a focused card. It must reuse the existing server-gated editor
+(`PersonnelRatesSection`), which needs the `tour_personnel` memberId plumbed
+into the payroll rates payload (today the row only carries `roster_personnel_id`)
+— so it stays a focused follow-up. No advance-editing gap anymore.
 
 #### PAY-04 — internal_rate stays admin-only
 **Do**: As a non-admin, open any payroll surface.
