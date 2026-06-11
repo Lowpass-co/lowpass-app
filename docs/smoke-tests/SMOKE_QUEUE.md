@@ -43,7 +43,22 @@ them off; report fails by ID.
   then, advance has no editor — known gap.)
 - [ ] **SMK-PAY-04** — Summary view totals match the Rates view.
 
-## Channel list — *pending re-skin. Smokes added when it ships.*
+## Channel list — re-skin shipped (Option A: visual + arrow-key nav only). Your manual checks:
+> Only 3 files changed (useCellNav, ChannelListSectionBand, ChannelListEditor
+> outer container); every feature is otherwise untouched — these confirm the
+> re-skin didn't visually break anything. See `docs/smoke-tests/channel-list.md`.
+- [ ] **SMK-CL-01** — Re-skin reads right: editor is a **raised panel** + the
+  Inputs/Outputs/Inventory bands match the canonical look (parity vs budget `<Grid>`).
+- [ ] **SMK-CL-02** — **Arrow-key nav**: ↑/↓ move rows, ←/→ jump cells at the
+  caret edge; typing mid-cell + the Mic/DI and other **selects' own ↑↓** still work.
+- [ ] **SMK-CL-03** — **Counters** (Mics/DIs · Stands · Cables · Stage boxes ·
+  Snakes) still compute; **Stage-box Patch** one-shot still assigns all ports.
+- [ ] **SMK-CL-04** — **Mic search** + "Add to library" + **+48 auto-flash** intact.
+- [ ] **SMK-CL-05** — **Outputs** sub-grid: add-output, stereo pairing, independent numbering.
+- [ ] **SMK-CL-06** — **Drag-reorder** rows still reindexes; the **stage-plot link**
+  still resolves the same channels (ids/linkage unchanged).
+- [ ] **SMK-CL-07** — Templates assign-to-tour + show inheritance + export
+  (Google Docs / ⌘P) all behave as before.
 
 ---
 Already Chrome-verified by Claude (no action needed): BUD-41 (currency↔DISPLAY),

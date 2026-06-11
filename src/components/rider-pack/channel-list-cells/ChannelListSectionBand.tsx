@@ -29,9 +29,9 @@ export function ChannelListSectionBand({ label, count, actions }: ChannelListSec
     <div
       className="flex items-center justify-between gap-2 px-3 py-2"
       style={{
-        borderLeft: '3px solid var(--color-lp-orange)',
+        borderLeft: '3px solid var(--lp-orange)',
         borderBottom: '1px solid var(--lp-border)',
-        background: 'color-mix(in srgb, var(--color-lp-orange) 5%, var(--lp-surface))',
+        background: 'color-mix(in srgb, var(--lp-orange) 5%, var(--lp-panel))',
       }}
     >
       <h4
@@ -43,7 +43,7 @@ export function ChannelListSectionBand({ label, count, actions }: ChannelListSec
           <span
             className="inline-flex min-w-5 items-center justify-center rounded-full px-1.5 text-[10px] tabular-nums"
             style={{
-              background: 'color-mix(in srgb, var(--color-lp-orange) 14%, transparent)',
+              background: 'color-mix(in srgb, var(--lp-orange) 14%, transparent)',
               color: 'var(--lp-text)',
             }}
           >

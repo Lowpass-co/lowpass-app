@@ -381,6 +381,36 @@ numbered sequentially after the current max input `row_index`.
 
 **Tracked in**: `CC_CHANNEL_LIST_REBUILD.md` §CL-FIX-4.
 
+## Stage B — RE-SKIN ONLY (Option A) + arrow-key nav — 2026-06-10
+
+> Purely visual + arrow-key nav. Inventory + decisions:
+> `docs/handover/CHANNEL_LIST_MAP.md` (D1–D6). `tsc` 0 · `eslint` 0 · `next
+> build --webpack` green. ID prefix `CL-RS`.
+
+**The ENTIRE Stage-B diff (3 files — name-checked per the hard rule):**
+1. `src/lib/hooks/useCellNav.tsx` — **added** arrow-key nav in `NavCell` keydown
+   (↑/↓ rows, ←/→ cells **only at the caret edge**; scoped to text cells so the
+   smart selects keep their own ↑↓ option-nav). Nothing else changed.
+2. `src/components/rider-pack/channel-list-cells/ChannelListSectionBand.tsx` —
+   tokenised (`--color-lp-orange`→`--lp-orange`; surface→`--lp-panel`). Structure
+   unchanged (D3: keep the 3 blocks, no left gutter).
+3. `src/components/rider-pack/ChannelListEditor.tsx` — **one line**: outer
+   container `--lp-surface`→`--lp-panel` + `shadow-sm` (raised panel).
+
+**Untouched (zero changes):** 11 columns + picker + lazy backfill · 10 smart
+cells · drag-reorder · Outputs sub-grid · 5 counters + StageBoxPatch ·
+stage-plot link · templates · advance · export · data model / RowPatch / RPCs.
+
+- **CL-RS-01** (code-verified) raised panel + tokenised bands; Adam confirms
+  visual parity vs the budget `<Grid>`.
+- **CL-RS-02** (code-verified, needs-live) arrow-key nav: ↑/↓ rows, ←/→ at caret
+  edge; mid-text editing + selects' own ↑↓ unaffected.
+- **CL-RS-03..10** (needs-live) every preserved feature (columns/picker, mic
+  search + +48 flash, stage-box/sub-snake pickers + Manage + Patch, cable/stand/
+  position/provider/notes, outputs stereo+numbering, the 5 counters, drag-
+  reorder, the stage-plot link, templates/advance/export) renders + works
+  exactly as before. (Full detail: CHANNEL_LIST_MAP.md §1–7.)
+
 ## Retired
 
 #### CHL-20 — Tour-default currency applied to channel list cells
