@@ -153,6 +153,14 @@ spreadsheet behaviours + wire the shared export. Keep all the smart cells.**
   `<GridExport>`. Light touch — the editor's guts are good.
 - Adam confirmed the prior mic-search/combobox fix (§CL-FIX-6) is in place.
 
+### Future feature (post re-skin) — "hot shot" device flag
+A **Radial HotShot** splits a mic to two desk inputs (mic ↔ talkback). Fitting one
+on a channel **adds an XLR**. So it's NOT a cable-length option — it's a
+**per-channel device flag** (lives near Mic/DI) that **increments the XLR / cable
+inventory count by one** when set. Surface it in the cable/XLR counter and the
+export **production summary**'s cable/XLR roll-up. A small feature, NOT part of the
+re-skin pass; do after channel list is re-skinned (or alongside `<GridExport>`).
+
 ## Shared ROUTING RAIL (hard consistency rule)
 The **days-on-left rail** (date · city · day-type pill) must be **one shared
 component** rendered identically wherever days are indexed — Advance, Payroll,

@@ -11,10 +11,16 @@ cells, data, reorder, counters, outputs, the stage-plot link, templates, or expo
   read-only `ChannelListTourSheet` (operations display) — note it as a quick
   follow-up if it ends up looking inconsistent beside the re-skinned editor, but
   not this pass.
-- **D2 — "hot shot" = MEMORY SLIP. PRESERVE the 8 cable lengths exactly as they
-  are. Do NOT add "hot shot."** (Adam confirmed it was a slip — it doesn't exist;
-  adding it would be a feature, not a re-skin. If Adam later wants hot-shot as a
-  9th cable option that's a trivial one-string follow-up, NOT part of this pass.)
+- **D2 — "hot shot" is a real DEVICE, not a cable length — and it's a FUTURE
+  FEATURE, NOT this re-skin.** Adam clarified: a Radial HotShot splits a mic to two
+  desk inputs (mic ↔ talkback), and **fitting one on a channel adds an XLR**. So
+  it's NOT a cable-picker option (CC was right it isn't there); it's a per-channel
+  device flag that should **+1 the XLR / cable inventory count**. For THIS pass:
+  **preserve the existing 8 cable lengths + the counters exactly as-is; do NOT add
+  hot shot.** The hot-shot feature (a channel flag in the Mic/DI area that adds an
+  XLR to the cable/inventory count) is a **separate follow-up** — see
+  `GRID_SURFACES_DESIGN.md` (channel list). It also feeds the export production
+  summary's cable/XLR roll-up.
 - **D3 — Tokenise the existing `ChannelListSectionBand` to the canonical look; do
   NOT force a left gutter.** Good catch: channel list's "sections" are 3
   structural blocks (Inputs / Outputs / Inventory), not budget-style row-groups —
