@@ -349,7 +349,52 @@ re-syncs per BUD-47 (last-txn removal preserves Actual). (`.txn-del` in grid.css
 > **Phase 3 budget = complete** once BUD-46…49 live-verify (BUD-41…45 already
 > green). Then merge `feat/personnel-unify` → main and start Rooming.
 > Still out of scope (Phase 4): the txn **🔗 Link** (`transaction_links`),
-> Income / settlement / projections.
+> settlement / projections.
+
+## Income tab → canonical `<Grid>` (BUD-50…54) — 2026-06-11
+
+> Migrated `BudgetIncomeTab` onto the same `<Grid>` as Expenses. Map:
+> `docs/handover/BUDGET_INCOME_MAP.md`. **The P&L bridge is preserved** — same
+> income field names, same `post_tax = pre_tax × (1 − wh/100)` rule, same
+> `/api/budget/income` upsert, so `computeBudgetPnl`'s `income_gross` is
+> unchanged. New file `BudgetIncomeGrid.tsx`; legacy `BudgetIncomeTab.tsx` kept
+> **unmounted** as a fallback until the P&L parity is live-verified.
+> Two additive `<Grid>` props (default-safe): `allowAddRows` (Income=false) +
+> Column `ro` (Show read-only). `tsc` 0 · `eslint` 0 · build green · adapter 7/7.
+
+#### BUD-50 — Income renders on `<Grid>`
+**Do**: Budget → **Income** tab.
+**Expect**: rows = the tour's **shows** (one per routing date; populated from
+the GET's income + routing_only merge — a new routing date appears automatically;
+**no add/delete**, no Group/Add-section chips). Projected columns: Show (read-only)
+· Guarantee · WH% · Post-tax · Overage · Merch · VIP · Total.
+
+#### BUD-51 — Edit recomputes + persists (no reload)
+**Do**: Edit Guarantee / WH% / Overage / Merch / VIP on a show.
+**Expect**: **Post-tax + Total recompute live** (calc columns); the value
+persists via `POST /api/budget/income` (single field, merge-safe), optimistic,
+no reload. WH% clamps 0–100 on save.
+
+#### BUD-52 — Projected ↔ Actual toggle
+**Do**: Flip the segmented toggle above the grid.
+**Expect**: the **column set swaps** (Actual = Guarantee/Overage/Merch/VIP/Total,
+no WH%/Post-tax — actuals are net); actual cells edit + persist to the `actual_*`
+fields.
+
+#### BUD-53 — P&L bridge (the must-not-move check)  ⟵ Adam, Chrome
+**Do**: Note the Summary P&L **income** for a set of inputs, then re-enter the
+same inputs via the new grid.
+**Expect**: `computeBudgetPnl`'s **`income_gross` is identical** to pre-migration
+for identical inputs (field names + post-tax rule + upsert unchanged).
+
+#### BUD-54 — Currency follows DISPLAY
+**Do**: Flip the **Display** selector.
+**Expect**: income cells + totals convert via the same `fx` as Expenses (source
+figure + red ≈ note when display ≠ tour currency).
+
+> Default-safety proof (BUD-46 invariant): no existing `<Grid>` consumer sets
+> `allowAddRows`/`ro` (grep clean) — Expenses (`BudgetGridView`), `/grid-demo`,
+> and `gridModel` are byte-for-byte unchanged.
 
 > **Still deferred to the grid-default flip (called out):** row/section
 > **reorder** persistence (`sort_order`), and the slide's Transactions/

@@ -97,6 +97,11 @@ export interface GridProps {
   /** Async transactions/documents CRUD for the slide + 📎 cell. Absent on the
       demo (in-memory). Phase 3 Steps 3–5. */
   lineApi?: GridLineApi;
+  /** Fixed flat structure when false: hides the per-section "＋ Add line"
+      button + the toolbar's Group-by + "＋ Add section" chips. Default true
+      (Expenses / demo / every existing consumer unchanged). Income — rows are
+      routing-anchored, no sections/statuses — passes false. */
+  allowAddRows?: boolean;
 }
 
 type ReorderKind = 'section' | 'row' | 'col';
@@ -128,6 +133,7 @@ export function Grid({
   onReorderRow,
   onReorderSection,
   lineApi,
+  allowAddRows = true,
 }: GridProps) {
   const fx = fxProp ?? demoFx;
   // Totals / section-header / KPI maths must use the SAME injected FX + display
@@ -301,7 +307,9 @@ export function Grid({
   const startEdit = useCallback(
     (prefill?: string) => {
       const key = NC()[sel().fc];
-      const t = colDef(cols(), key)?.type;
+      const cdef = colDef(cols(), key);
+      const t = cdef?.type;
+      if (cdef?.ro) return;
       if (t === 'status' || t === 'dropdown' || t === 'check') return;
       const og = getRowObj();
       if (
@@ -1511,7 +1519,7 @@ export function Grid({
             if (!isFormula(sec)) f++;
             return node;
           })}
-          {sec.kind === 'normal' ? (
+          {sec.kind === 'normal' && allowAddRows ? (
             <div className="addline">
               <button type="button" onClick={() => addLine(si)}>
                 ＋ Add line
@@ -1550,13 +1558,17 @@ export function Grid({
             }}
           />
         </div>
-        <span className="chip" onClick={toggleGroup} role="button">
-          <span className="muted">Group</span>
-          <span className="accent">{groupRef.current === 'section' ? 'Section' : 'Status'}</span>
-        </span>
-        <span className="chip" onClick={addSection} role="button">
-          ＋ Add section
-        </span>
+        {allowAddRows ? (
+          <>
+            <span className="chip" onClick={toggleGroup} role="button">
+              <span className="muted">Group</span>
+              <span className="accent">{groupRef.current === 'section' ? 'Section' : 'Status'}</span>
+            </span>
+            <span className="chip" onClick={addSection} role="button">
+              ＋ Add section
+            </span>
+          </>
+        ) : null}
         <span className="chip" onClick={resetWidths} role="button">
           ⇄ Reset widths
         </span>

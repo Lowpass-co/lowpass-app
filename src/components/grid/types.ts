@@ -33,6 +33,10 @@ export interface Column {
   min: number;
   resize: boolean;
   hidden?: boolean;
+  /** Read-only cell (no edit on Enter / type / double-click). Default editable
+      — existing columns omit it, so behaviour is unchanged. Used by Income's
+      routing-derived Show column. */
+  ro?: boolean;
   options?: string[];
   optColors?: Record<string, string>;
   /** number-formula column: result = row[a] (op) row[b]. Serialisable. */

@@ -43,6 +43,20 @@ them off; report fails by ID.
   then, advance has no editor — known gap.)
 - [ ] **SMK-PAY-04** — Summary view totals match the Rates view.
 
+## Budget Income → `<Grid>` (BUD-50…54). Your manual checks (P&L parity is the key one):
+> Migrated `BudgetIncomeTab` onto the canonical `<Grid>`. The legacy tab is kept
+> unmounted as a fallback until you confirm parity. See `budget.md` BUD-50…54.
+- [ ] **SMK-INC-01** — Income renders on the Grid: rows = shows, read-only Show
+  column, **no add/delete** affordances; projected columns present.
+- [ ] **SMK-INC-02** — Edit Guarantee/WH%/Overage/Merch/VIP → **Post-tax + Total
+  recompute live**, persist with no reload (POST `/api/budget/income`).
+- [ ] **SMK-INC-03** — Projected↔Actual toggle swaps the column set; actuals persist.
+- [ ] **SMK-INC-04** — **P&L parity**: the Summary `income_gross` matches the old
+  value for the same inputs (field names + post-tax rule + upsert unchanged).
+- [ ] **SMK-INC-05** — Display-currency flip converts income cells + totals.
+- [ ] **SMK-INC-06** — Regression: **Expenses** + `/grid-demo` still show
+  add-line / Group / Add-section exactly as before (allowAddRows default).
+
 ## Channel list — re-skin shipped (Option A: visual + arrow-key nav only). Your manual checks:
 > Only 3 files changed (useCellNav, ChannelListSectionBand, ChannelListEditor
 > outer container); every feature is otherwise untouched — these confirm the

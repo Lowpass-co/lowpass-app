@@ -32,7 +32,7 @@ import { resolveArtistLogoUrl } from '@/lib/artists/imageUrl';
 import { BudgetSpreadsheetView } from '@/components/budget/BudgetSpreadsheetView';
 import { BudgetGridToggle } from '@/components/budget/BudgetGridToggle';
 import { BudgetGridView } from '@/components/budget/BudgetGridView';
-import { BudgetIncomeTab } from '@/components/budget/BudgetIncomeTab';
+import { BudgetIncomeGrid } from '@/components/budget/BudgetIncomeGrid';
 import { BudgetEmptyState } from '@/components/budget/BudgetEmptyState';
 import { BudgetSettingsTab } from '@/components/budget/BudgetSettingsTab';
 import { ReceiptInbox } from '@/components/budget/ReceiptInbox';
@@ -322,9 +322,12 @@ export default async function BudgetTourPage({
             )
           ) : null}
 
-          {/* Stage 3 Phase 2 — per-show income (feeds the Summary P&L). */}
+          {/* Stage 3 Phase 2 — per-show income (feeds the Summary P&L).
+              Migrated onto the canonical <Grid> (BUD-50). The legacy
+              BudgetIncomeTab is retained, unmounted, as a fallback until the
+              P&L parity is live-verified — remove it then. */}
           {tab === 'income' ? (
-            <BudgetIncomeTab tourId={tourId} tourCurrency={tourCurrency} />
+            <BudgetIncomeGrid tourId={tourId} tourCurrency={tourCurrency} />
           ) : null}
 
           {/* Budget Phase A §A2 — Actuals tab removed; the
