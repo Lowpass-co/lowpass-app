@@ -1618,9 +1618,11 @@ export function Grid({
             🗑 Delete line
           </span>
         ) : null}
-        <span className={`chip${popRef.current === 'filter' ? ' on' : ''}`} onClick={(e) => openPop('filter', e)} role="button">
-          ⚲ Filter
-        </span>
+        {statusUniverse(cols(), data()).length > 0 ? (
+          <span className={`chip${popRef.current === 'filter' ? ' on' : ''}`} onClick={(e) => openPop('filter', e)} role="button">
+            ⚲ Filter
+          </span>
+        ) : null}
         <span className={`chip${popRef.current === 'cols' || popRef.current === 'addcol' ? ' on' : ''}`} onClick={(e) => openPop('cols', e)} role="button">
           ▦ Columns
         </span>
