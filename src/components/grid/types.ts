@@ -39,6 +39,10 @@ export interface Column {
   ro?: boolean;
   options?: string[];
   optColors?: Record<string, string>;
+  /** Display labels for dropdown option values (value → label). The stored
+      value is unchanged; only the cell text is prettied. Additive — budget uses
+      `status`, not `dropdown`, so it's unaffected. */
+  optLabels?: Record<string, string>;
   /** number-formula column: result = row[a] (op) row[b]. Serialisable. */
   formula?: { a: string; op: FormulaOp; b: string };
   /** computed column. NOT serialised into undo snapshots — re-hydrated by

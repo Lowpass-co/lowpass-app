@@ -43,6 +43,25 @@ them off; report fails by ID.
   then, advance has no editor — known gap.)
 - [ ] **SMK-PAY-04** — Summary view totals match the Rates view.
 
+## Rooming + Payroll matrices rebuilt ON `<Grid>` (wide mode) — MTX-01…09. Your manual checks:
+> Both matrices are now `<Grid>` instances (people=rows, days=columns) via
+> additive opt-in wide mode. The budget invariant is the key one. See
+> `docs/smoke-tests/rooming.md` MTX-01…09 + `MATRIX_ON_GRID_MAP.md`.
+- [ ] **SMK-MTX-01** — Both matrices: people are rows, days are columns; frozen
+  person column stays visible while scrolling horizontally.
+- [ ] **SMK-MTX-02** — **Drag-to-select** works across day cells (the feature
+  that was lost); the active ring shows.
+- [ ] **SMK-MTX-03** — Day cells are **tint-filled** by room code / day status;
+  clicking opens the dropdown and the pick persists (no reload).
+- [ ] **SMK-MTX-04** — Rooming **rooms-per-night footer** + shared-room letter
+  counting correct; off-roster people are greyed rows + removable (✕).
+- [ ] **SMK-MTX-05** — Payroll **week markers** on Monday day-headers; all
+  routing dates incl. no-tour appear.
+- [ ] **SMK-MTX-06** — **Budget feeds unchanged**: edit rooming/payroll cells →
+  Budget Accommodation + Salary reconcile exactly as before.
+- [ ] **SMK-MTX-07** — **THE INVARIANT**: Budget Expenses + Income grids and
+  `/grid-demo` are visually + behaviourally identical to before wide mode.
+
 ## Budget Income → `<Grid>` (BUD-50…54). Your manual checks (P&L parity is the key one):
 > Migrated `BudgetIncomeTab` onto the canonical `<Grid>`. The legacy tab is kept
 > unmounted as a fallback until you confirm parity. See `budget.md` BUD-50…54.
