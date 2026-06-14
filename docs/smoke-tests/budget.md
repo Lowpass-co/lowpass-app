@@ -363,11 +363,20 @@ re-syncs per BUD-47 (last-txn removal preserves Actual). (`.txn-del` in grid.css
 > Column `ro` (Show read-only). `tsc` 0 · `eslint` 0 · build green · adapter 7/7.
 
 #### BUD-50 — Income renders on `<Grid>`
+> **Preview FAIL → FIXED.** First cut self-fetched on the client and got stuck on
+> "Loading income…" (the client fetch never committed after a 200 — a runtime
+> lifecycle bug tsc/eslint/build can't catch). **Fix:** Income is now **prop-fed**
+> like Expenses — `page.tsx` server-fetches via the shared `loadTourIncome` +
+> `toIncomeRows` (`src/lib/budget/income.ts`, the SAME merge the GET route now
+> calls) and passes `initialRows`; `BudgetIncomeGrid` renders the `<Grid>`
+> synchronously from props with **no loading gate**. The client GET stays only
+> for the post-save failure resync. Bridge unchanged (same fields/upsert/P&L).
 **Do**: Budget → **Income** tab.
-**Expect**: rows = the tour's **shows** (one per routing date; populated from
-the GET's income + routing_only merge — a new routing date appears automatically;
-**no add/delete**, no Group/Add-section chips). Projected columns: Show (read-only)
-· Guarantee · WH% · Post-tax · Overage · Merch · VIP · Total.
+**Expect**: rows = the tour's **shows** (one per routing date; the income +
+routing_only merge — a new routing date appears automatically; **no add/delete**,
+no Group/Add-section chips). Projected columns: Show (read-only) · Guarantee ·
+WH% · Post-tax · Overage · Merch · VIP · Total. **Renders immediately (no
+spinner).**
 
 #### BUD-51 — Edit recomputes + persists (no reload)
 **Do**: Edit Guarantee / WH% / Overage / Merch / VIP on a show.

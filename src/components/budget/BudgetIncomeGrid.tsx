@@ -14,37 +14,16 @@
    only changes how the cells render. (BUD-50..54.)
    ============================================ */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Loader2 } from 'lucide-react';
 import { Grid } from '@/components/grid/Grid';
 import type { Column, GridFx, Row, Section } from '@/components/grid/types';
 import { convertToCurrency } from '@/lib/budget/fx';
+import { toIncomeRows, type IncomeRow } from '@/lib/budget/income';
 import { useToast } from '@/components/ui/Toast';
 
 const CUR_SYMBOL: Record<string, string> = { GBP: '£', USD: '$', EUR: '€', CAD: 'C$', AUD: 'A$', JPY: '¥' };
 const CURRENCIES = ['GBP', 'USD', 'EUR', 'CAD', 'AUD', 'JPY'];
-
-interface IncomeRow {
-  routing_id: string;
-  date: string | null;
-  venue_name: string | null;
-  city: string | null;
-  pre_tax_guarantee: number;
-  withholding_pct: number;
-  pre_tax_overage: number;
-  merch_income: number;
-  vip_income: number;
-  actual_guarantee: number;
-  actual_overage: number;
-  actual_merch: number;
-  actual_vip: number;
-}
-type ServerIncome = Partial<IncomeRow> & {
-  routing_id: string;
-  routing?: { date?: string; venue_name?: string; city?: string } | null;
-};
-type RoutingOnly = { id: string; date?: string | null; venue_name?: string | null; city?: string | null };
 
 const num = (v: unknown): number => {
   const x = Number(v);
@@ -55,13 +34,23 @@ const postTax = (pre: number, wh: number) => pre * (1 - clamp(wh, 0, 100) / 100)
 const showLabel = (r: IncomeRow) =>
   `${r.date ? r.date.slice(5) + ' · ' : ''}${r.venue_name || r.city || 'Show'}`;
 
-export function BudgetIncomeGrid({ tourId, tourCurrency }: { tourId: string; tourCurrency: string }) {
+export function BudgetIncomeGrid({
+  tourId,
+  tourCurrency,
+  initialRows,
+}: {
+  tourId: string;
+  tourCurrency: string;
+  initialRows: IncomeRow[];
+}) {
   const { showToast } = useToast();
   const searchParams = useSearchParams();
   const native = (tourCurrency || 'GBP').toUpperCase();
   const display = (searchParams.get('display') ?? native).toUpperCase();
-  const [rows, setRows] = useState<IncomeRow[] | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  // Prop-fed (server-fetched) → synchronous render, no client-fetch loading gate
+  // that could get stuck (BUD-50). The client GET stays ONLY for the post-edit
+  // failure resync below.
+  const [rows, setRows] = useState<IncomeRow[]>(initialRows);
   const [view, setView] = useState<'projected' | 'actual'>('projected');
 
   const fx: GridFx = useMemo(
@@ -75,50 +64,17 @@ export function BudgetIncomeGrid({ tourId, tourCurrency }: { tourId: string; tou
     [display, native],
   );
 
+  // Re-fetch on a failed save only (the initial render is prop-fed). Uses the
+  // shared mapping so it can't drift from the server load.
   const load = useCallback(async () => {
     try {
       const res = await fetch(`/api/budget/income?tour_id=${encodeURIComponent(tourId)}`);
-      if (!res.ok) throw new Error(`Failed to load income (${res.status})`);
-      const body = (await res.json()) as { income?: ServerIncome[]; routing_only?: RoutingOnly[] };
-      const fromIncome: IncomeRow[] = (body.income ?? []).map((i) => ({
-        routing_id: i.routing_id,
-        date: i.routing?.date ?? null,
-        venue_name: i.routing?.venue_name ?? null,
-        city: i.routing?.city ?? null,
-        pre_tax_guarantee: num(i.pre_tax_guarantee),
-        withholding_pct: num(i.withholding_pct),
-        pre_tax_overage: num(i.pre_tax_overage),
-        merch_income: num(i.merch_income),
-        vip_income: num(i.vip_income),
-        actual_guarantee: num(i.actual_guarantee),
-        actual_overage: num(i.actual_overage),
-        actual_merch: num(i.actual_merch),
-        actual_vip: num(i.actual_vip),
-      }));
-      const fromRouting: IncomeRow[] = (body.routing_only ?? []).map((r) => ({
-        routing_id: r.id,
-        date: r.date ?? null,
-        venue_name: r.venue_name ?? null,
-        city: r.city ?? null,
-        pre_tax_guarantee: 0,
-        withholding_pct: 0,
-        pre_tax_overage: 0,
-        merch_income: 0,
-        vip_income: 0,
-        actual_guarantee: 0,
-        actual_overage: 0,
-        actual_merch: 0,
-        actual_vip: 0,
-      }));
-      setRows([...fromIncome, ...fromRouting].sort((a, b) => (a.date ?? '').localeCompare(b.date ?? '')));
-    } catch (err) {
-      setLoadError(err instanceof Error ? err.message : 'Failed to load income');
+      if (!res.ok) return;
+      setRows(toIncomeRows(await res.json()));
+    } catch {
+      /* leave the optimistic rows in place */
     }
   }, [tourId]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
 
   // Grid column id → income field, by view. Returns null for non-persisting
   // columns (idx/show/posttax/total). Keeps the field names byte-identical.
@@ -235,15 +191,7 @@ export function BudgetIncomeGrid({ tourId, tourCurrency }: { tourId: string; tou
         })}
       </div>
 
-      {loadError ? (
-        <div style={{ borderRadius: 'var(--lp-radius-md)', border: '1px solid var(--color-lp-status-needs-review)', background: 'color-mix(in srgb, var(--color-lp-status-needs-review) 10%, transparent)', color: 'var(--lp-text)', fontSize: 13, padding: 12 }}>
-          {loadError}
-        </div>
-      ) : rows === null ? (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '40px 0', color: 'var(--lp-text-tertiary)', fontSize: 13 }}>
-          <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> Loading income…
-        </div>
-      ) : rows.length === 0 ? (
+      {rows.length === 0 ? (
         <div style={{ borderRadius: 'var(--lp-radius-lg)', border: '1px solid var(--lp-border-strong)', background: 'var(--lp-bg)', color: 'var(--lp-text-tertiary)', fontSize: 13, padding: '32px 16px', textAlign: 'center' }}>
           No shows on this tour yet — add routing dates to enter income.
         </div>
