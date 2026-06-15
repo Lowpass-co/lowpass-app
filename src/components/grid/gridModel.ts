@@ -122,6 +122,11 @@ export function rowMatches(row: Row, query: string, statusFilter: Set<string>): 
     )
       return false;
   }
+  // Statusless rows (matrices, income — no status field, no status column) are
+  // never subject to the status filter, else statusUniverse=[] → empty Set →
+  // has("undefined")=false hides every row. Budget rows always carry a status,
+  // so this never short-circuits them (the filter popup behaves as before).
+  if (row.status == null || row.status === '') return true;
   return statusFilter.has(String(row.status));
 }
 

@@ -1061,3 +1061,62 @@
 .lp-gso-memviewer .mv-field { margin-bottom: 14px; }
 .lp-gso-memviewer .mv-field label { display: block; font-size: var(--lp-text-2xs); letter-spacing: 0.1em; text-transform: uppercase; color: var(--lp-text-tertiary); font-weight: 600; margin-bottom: 4px; }
 .lp-gso-memviewer .mv-field div { color: var(--lp-text); font-size: var(--lp-text-sm); line-height: 1.5; }
+
+/* ============================================
+   WIDE MODE — people × many-day matrices (rooming / payroll).
+   ENTIRELY gated on .lp-grid[data-wide]; budget / income / demo never set it,
+   so every rule below is inert for them. (MTX — additive.)
+   ============================================ */
+
+/* The frozen-column cells must escape the section card's overflow:hidden so
+   they stick to .gridwrap (the only horizontal scroller). */
+.lp-grid[data-wide] .section { overflow: visible; }
+
+/* Freeze the leading column (person) across header, rows, and footer. */
+.lp-grid[data-wide] .gridhead .hc:first-child,
+.lp-grid[data-wide] #gr-sections .row .c:first-child,
+.lp-grid[data-wide] .gr-foot .c:first-child {
+  position: sticky;
+  left: 0;
+  background: var(--gr-panel);
+  border-right: 1px solid var(--gr-border);
+  z-index: 2;
+}
+/* The header/footer corners sit above the scrolling row cells. */
+.lp-grid[data-wide] .gridhead .hc:first-child { z-index: var(--lp-z-sticky); }
+
+/* Optional per-column footer row (rooms-per-night etc.), aligned to --cols. */
+.lp-grid .gr-foot {
+  display: grid;
+  grid-template-columns: var(--cols);
+  margin-top: var(--lp-space-2);
+  background: var(--gr-panel);
+  border: 1px solid var(--gr-border);
+  border-radius: var(--lp-radius-lg);
+  font-variant-numeric: tabular-nums;
+}
+.lp-grid .gr-foot .c {
+  padding: 8px;
+  font-weight: 700;
+  color: var(--gr-text-2);
+  border-right: 1px solid var(--gr-border-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.lp-grid .gr-foot .c:first-child { justify-content: flex-start; }
+
+/* Per-row class hook (additive; undefined on budget rows → no class). Off-roster
+   rooming people render greyed. */
+.lp-grid .row.offroster { opacity: 0.6; }
+
+/* Wide dropdown cell: the tint fills the whole cell (vs the budget pill). */
+.lp-grid .ddcell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  width: 100%;
+  font-weight: 600;
+  color: var(--lp-text);
+}

@@ -313,8 +313,8 @@ export default function ChannelListEditor({
 
   return (
     <div
-      className="w-full max-w-full min-w-0 rounded-xl border"
-      style={{ backgroundColor: 'var(--lp-surface)', borderColor: 'var(--lp-border)' }}
+      className="w-full max-w-full min-w-0 rounded-xl border shadow-sm"
+      style={{ backgroundColor: 'var(--lp-panel)', borderColor: 'var(--lp-border)' }}
     >
       <div
         className="flex flex-col gap-2 border-b px-4 py-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between"

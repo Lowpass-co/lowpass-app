@@ -32,7 +32,7 @@ import { resolveArtistLogoUrl } from '@/lib/artists/imageUrl';
 import { BudgetSpreadsheetView } from '@/components/budget/BudgetSpreadsheetView';
 import { BudgetGridToggle } from '@/components/budget/BudgetGridToggle';
 import { BudgetGridView } from '@/components/budget/BudgetGridView';
-import { BudgetIncomeTab } from '@/components/budget/BudgetIncomeTab';
+import { BudgetIncomeGrid } from '@/components/budget/BudgetIncomeGrid';
 import { BudgetEmptyState } from '@/components/budget/BudgetEmptyState';
 import { BudgetSettingsTab } from '@/components/budget/BudgetSettingsTab';
 import { ReceiptInbox } from '@/components/budget/ReceiptInbox';
@@ -44,6 +44,7 @@ import { resolveBudgetTab } from '@/components/budget/budget-tab-utils';
 import { BudgetDensityProvider } from '@/components/budget/BudgetDensityContext';
 import { enrichLinesWithTransactionAggregates } from '@/lib/budget/transactions';
 import { enrichLinesWithAttachmentCounts } from '@/lib/budget/attachments';
+import { loadTourIncome, toIncomeRows } from '@/lib/budget/income';
 import { BudgetSummaryTab } from '@/components/budget/BudgetSummaryTab';
 import { BudgetTabPlaceholder } from '@/components/budget/BudgetTabPlaceholder';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
@@ -218,6 +219,12 @@ export default async function BudgetTourPage({
     startIso: p.startDate,
   }));
   const tourCurrency = (tour.currency as string | null) ?? 'GBP';
+  // BUD-50 fix — Income is prop-fed (server-fetched here, like Expenses) rather
+  // than client-fetched, so it renders synchronously and can't get stuck on a
+  // client fetch that never commits. Same merge lib as the GET route.
+  const initialIncome = workspaceId
+    ? toIncomeRows(await loadTourIncome(supabase, tourId, workspaceId))
+    : [];
   /* Budget Phase A §A2 — enrich every line with effective_actual_cost
      + transaction_count. Sum of transactions overrides actual_cost
      when present (§A1 derivation rule). One extra round-trip; cheap
@@ -322,9 +329,12 @@ export default async function BudgetTourPage({
             )
           ) : null}
 
-          {/* Stage 3 Phase 2 — per-show income (feeds the Summary P&L). */}
+          {/* Stage 3 Phase 2 — per-show income (feeds the Summary P&L).
+              Migrated onto the canonical <Grid> (BUD-50). The legacy
+              BudgetIncomeTab is retained, unmounted, as a fallback until the
+              P&L parity is live-verified — remove it then. */}
           {tab === 'income' ? (
-            <BudgetIncomeTab tourId={tourId} tourCurrency={tourCurrency} />
+            <BudgetIncomeGrid tourId={tourId} tourCurrency={tourCurrency} initialRows={initialIncome} />
           ) : null}
 
           {/* Budget Phase A §A2 — Actuals tab removed; the

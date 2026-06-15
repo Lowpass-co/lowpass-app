@@ -97,6 +97,25 @@ export interface GridProps {
   /** Async transactions/documents CRUD for the slide + 📎 cell. Absent on the
       demo (in-memory). Phase 3 Steps 3–5. */
   lineApi?: GridLineApi;
+  /** Fixed flat structure when false: hides the per-section "＋ Add line"
+      button + the toolbar's Group-by + "＋ Add section" chips. Default true
+      (Expenses / demo / every existing consumer unchanged). Income — rows are
+      routing-anchored, no sections/statuses — passes false. */
+  allowAddRows?: boolean;
+  /* ---- WIDE MODE (additive, opt-in — budget never sets these) ---------- */
+  /** Wide (people × many-day matrix) mode: sets data-wide (frozen-column CSS),
+      and dropdown cells fill the whole cell with the optColor tint instead of a
+      pill. Default false → budget/demo/income unchanged. */
+  wide?: boolean;
+  /** Number of leading columns to freeze (sticky-left) under `wide`. Matrices
+      pass 1 (the person column). Default 0. */
+  frozenCols?: number;
+  /** Custom header content per column id (e.g. the matrix's date·city·day-type
+      pill). Falls back to the column label. Additive. */
+  headerFor?: (colId: string) => React.ReactNode;
+  /** Optional footer row (rendered on the same --cols grid) — one cell per
+      column id (e.g. rooming rooms-per-night). Additive — only when passed. */
+  columnFooter?: (colId: string) => React.ReactNode;
 }
 
 type ReorderKind = 'section' | 'row' | 'col';
@@ -128,6 +147,11 @@ export function Grid({
   onReorderRow,
   onReorderSection,
   lineApi,
+  allowAddRows = true,
+  wide = false,
+  frozenCols = 0,
+  headerFor,
+  columnFooter,
 }: GridProps) {
   const fx = fxProp ?? demoFx;
   // Totals / section-header / KPI maths must use the SAME injected FX + display
@@ -301,7 +325,9 @@ export function Grid({
   const startEdit = useCallback(
     (prefill?: string) => {
       const key = NC()[sel().fc];
-      const t = colDef(cols(), key)?.type;
+      const cdef = colDef(cols(), key);
+      const t = cdef?.type;
+      if (cdef?.ro) return;
       if (t === 'status' || t === 'dropdown' || t === 'check') return;
       const og = getRowObj();
       if (
@@ -1321,11 +1347,17 @@ export function Grid({
     const cls = isActive ? ' active' : selected ? ' selected' : '';
     const mut = t === 'money' && !row[id] ? ' muted0' : '';
     const numCls = t === 'money' || t === 'number' ? ' num' : '';
+    // Wide mode (matrices): fill the whole cell with the optColor tint. The
+    // selection style (active/selected) takes precedence (spread last).
+    const wideTint = wide && t === 'dropdown' ? col.optColors?.[String(row[id])] : null;
     return (
       <div
         key={key}
         className={`c cell${numCls}${mut}${cls}`}
-        style={selStyle(isActive, selected)}
+        style={{
+          ...(wideTint ? { background: `color-mix(in srgb, ${wideTint} 20%, transparent)` } : null),
+          ...selStyle(isActive, selected),
+        }}
         data-r={fi}
         data-c={ci}
         onPointerDown={(e) => onCellPointerDown(e, fi, ci)}
@@ -1383,13 +1415,16 @@ export function Grid({
         </span>
       );
     if (t === 'dropdown') {
-      const cc = col.optColors && col.optColors[String(row[id])];
+      const raw = String(row[id] ?? '');
+      const cc = col.optColors && col.optColors[raw];
+      const val = col.optLabels?.[raw] ?? (raw || '—');
+      // Wide mode (matrices): the tint fills the whole CELL (applied to the
+      // wrapper in renderCell) — here we just render the centred value. Budget
+      // keeps the pill (border/text colour). Gated → budget unchanged.
+      if (wide) return <span className="ddcell">{val}</span>;
       return (
-        <span
-          className="ddpill"
-          style={cc ? { color: cc, borderColor: cc } : undefined}
-        >
-          {String(row[id] ?? '') || '—'}
+        <span className="ddpill" style={cc ? { color: cc, borderColor: cc } : undefined}>
+          {val}
         </span>
       );
     }
@@ -1504,14 +1539,14 @@ export function Grid({
           {visRows.map(({ row, ri }) => {
             const fi = isFormula(sec) ? -1 : f;
             const node = (
-              <div className="row" data-si={si} data-ri={ri} data-uid={row._uid} key={row._uid ?? ri}>
+              <div className={`row${row._rowClass ? ` ${String(row._rowClass)}` : ''}`} data-si={si} data-ri={ri} data-uid={row._uid} key={row._uid ?? ri}>
                 {vis.map((c) => renderCell(sec, row, ri, c, fi, c.id))}
               </div>
             );
             if (!isFormula(sec)) f++;
             return node;
           })}
-          {sec.kind === 'normal' ? (
+          {sec.kind === 'normal' && allowAddRows ? (
             <div className="addline">
               <button type="button" onClick={() => addLine(si)}>
                 ＋ Add line
@@ -1536,7 +1571,13 @@ export function Grid({
   const numCols = cols().filter((c) => c.type === 'money' || c.type === 'number');
 
   return (
-    <div className="lp-grid" data-density={densityRef.current} ref={rootRef} style={{ '--cols': colsTemplate } as React.CSSProperties}>
+    <div
+      className="lp-grid"
+      data-density={densityRef.current}
+      data-wide={wide && frozenCols > 0 ? '' : undefined}
+      ref={rootRef}
+      style={{ '--cols': colsTemplate } as React.CSSProperties}
+    >
       {/* toolbar */}
       <div className="gr-toolbar">
         <div className="gr-search">
@@ -1550,13 +1591,17 @@ export function Grid({
             }}
           />
         </div>
-        <span className="chip" onClick={toggleGroup} role="button">
-          <span className="muted">Group</span>
-          <span className="accent">{groupRef.current === 'section' ? 'Section' : 'Status'}</span>
-        </span>
-        <span className="chip" onClick={addSection} role="button">
-          ＋ Add section
-        </span>
+        {allowAddRows ? (
+          <>
+            <span className="chip" onClick={toggleGroup} role="button">
+              <span className="muted">Group</span>
+              <span className="accent">{groupRef.current === 'section' ? 'Section' : 'Status'}</span>
+            </span>
+            <span className="chip" onClick={addSection} role="button">
+              ＋ Add section
+            </span>
+          </>
+        ) : null}
         <span className="chip" onClick={resetWidths} role="button">
           ⇄ Reset widths
         </span>
@@ -1573,9 +1618,11 @@ export function Grid({
             🗑 Delete line
           </span>
         ) : null}
-        <span className={`chip${popRef.current === 'filter' ? ' on' : ''}`} onClick={(e) => openPop('filter', e)} role="button">
-          ⚲ Filter
-        </span>
+        {statusUniverse(cols(), data()).length > 0 ? (
+          <span className={`chip${popRef.current === 'filter' ? ' on' : ''}`} onClick={(e) => openPop('filter', e)} role="button">
+            ⚲ Filter
+          </span>
+        ) : null}
         <span className={`chip${popRef.current === 'cols' || popRef.current === 'addcol' ? ' on' : ''}`} onClick={(e) => openPop('cols', e)} role="button">
           ▦ Columns
         </span>
@@ -1610,12 +1657,12 @@ export function Grid({
                 data-colid={c.id}
                 onPointerDown={(e) => {
                   if ((e.target as HTMLElement).classList.contains('grip')) return;
-                  if (c.id === 'idx') return;
+                  if (wide || c.id === 'idx') return; // wide: day columns are fixed-order
                   startReorder(e, 'col', e.currentTarget);
                 }}
                 onDoubleClick={(e) => {
                   e.stopPropagation();
-                  if (c.id === 'idx') return;
+                  if (wide || c.id === 'idx') return;
                   promptRef.current = {
                     title: 'Rename column',
                     placeholder: c.label,
@@ -1629,12 +1676,21 @@ export function Grid({
                   render();
                 }}
               >
-                {c.label}
+                {headerFor ? headerFor(c.id) : c.label}
                 {c.resize ? <span className="grip" onPointerDown={(e) => startResize(e, c.id)} /> : null}
               </div>
             ))}
           </div>
           <div id="gr-sections">{renderSections()}</div>
+          {columnFooter ? (
+            <div className="gr-foot">
+              {vis.map((c) => (
+                <div key={c.id} className={`c${c.type === 'money' || c.type === 'number' ? ' num' : ''}`}>
+                  {columnFooter(c.id)}
+                </div>
+              ))}
+            </div>
+          ) : null}
         </div>
       </div>
 

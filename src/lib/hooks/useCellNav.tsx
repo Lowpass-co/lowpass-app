@@ -168,15 +168,55 @@ export function NavCell({ row, col, onCancelEdit, children }: NavCellProps) {
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (e.defaultPrevented) return;
+    const target = e.target as HTMLElement;
+    const textEl =
+      target instanceof HTMLTextAreaElement || target instanceof HTMLInputElement
+        ? target
+        : null;
+    const isText =
+      target instanceof HTMLTextAreaElement ||
+      (target instanceof HTMLInputElement &&
+        (target.type === 'text' ||
+          target.type === 'search' ||
+          target.type === 'email' ||
+          target.type === 'number'));
+
+    /* Arrow-key cell nav (canonical-grid parity). Scoped to text-shaped cells
+       so the smart selects keep their own ↑↓ option-nav (BrandedSelect
+       stopsPropagation on its keys while open, so this never fires there).
+       ←/→ only jump cells when the caret is at the text edge — mid-text they
+       move the cursor as usual, so editing is untouched. */
+    if (isText && !e.nativeEvent.isComposing) {
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        focusCell({ row: row - 1, col });
+        return;
+      }
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        focusCell({ row: row + 1, col });
+        return;
+      }
+      if (e.key === 'ArrowLeft' && textEl) {
+        const atStart = (textEl.selectionStart ?? 0) === 0 && (textEl.selectionEnd ?? 0) === 0;
+        if (atStart) {
+          e.preventDefault();
+          focusCell({ row, col: col - 1 });
+          return;
+        }
+      }
+      if (e.key === 'ArrowRight' && textEl) {
+        const len = textEl.value.length;
+        const atEnd = (textEl.selectionStart ?? 0) === len && (textEl.selectionEnd ?? 0) === len;
+        if (atEnd) {
+          e.preventDefault();
+          focusCell({ row, col: col + 1 });
+          return;
+        }
+      }
+    }
+
     if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
-      const target = e.target as HTMLElement;
-      const isText =
-        target instanceof HTMLTextAreaElement ||
-        (target instanceof HTMLInputElement &&
-          (target.type === 'text' ||
-            target.type === 'search' ||
-            target.type === 'email' ||
-            target.type === 'number'));
       if (isText) {
         e.preventDefault();
         focusCell({ row: row + 1, col });

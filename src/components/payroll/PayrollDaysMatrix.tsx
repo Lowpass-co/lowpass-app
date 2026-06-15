@@ -1,46 +1,65 @@
 'use client';
 
 /* ============================================
-   LOWPASS — <PayrollDaysMatrix> (Stage B — rail flip)
+   LOWPASS — <PayrollDaysMatrix> (rebuilt ON the canonical <Grid>, wide mode)
 
-   Replaces the horizontal week-tab sheet: days DOWN the left (the shared
-   RailNightCell — same night cell as <RoutingRail>), people ACROSS the top,
-   cells = day type (Show / Off-Travel / No-Tour). Grouped by WEEK (week-divider
-   rows), ALL routing dates incl. no-tour (D5). Tokenised day-type colours.
-   Optimistic writes via the shared hook → unchanged budget Salary feed.
+   people = rows (frozen person column), routing dates = day dropdown columns
+   (DAY_OPTIONS show/off_travel/no_tour, optColors → cell-fill tint). All
+   routing dates incl. no-tour. Week treatment: the week label + a divider on
+   each Monday's day-header (D1 light option — no column-group machinery).
+   Writes go through usePayrollGrid (saveDayStatus) → the budget Salary feed is
+   UNCHANGED (view layer only).
    ============================================ */
 
 import { useMemo } from 'react';
-import { InlineEditCell } from '@/components/spreadsheet-view/InlineEditCell';
-import { RailNightCell, type RailEntry } from '@/components/routing/RoutingRail';
-import { getWeekStart } from './payroll-utils';
-import { formatWeekLabel } from '@/lib/routing/week';
-import {
-  DAY_OPTIONS,
-  dayStatusTint,
-  usePayrollGrid,
-  type PayrollPerson,
-  type RoutingDay,
-} from './usePayrollGrid';
+import { Grid } from '@/components/grid/Grid';
+import type { Column, Row, Section } from '@/components/grid/types';
+import { colourForDayType, labelForDayType } from '@/lib/routing/dayType';
+import { getWeekStart, formatWeekLabel } from '@/lib/routing/week';
+import { DAY_OPTIONS, usePayrollGrid, type RoutingDay } from './usePayrollGrid';
 
-const RAIL_W = 210;
-const PERSON_W = 104;
+const DAY_CODES = DAY_OPTIONS.map((o) => o.value);
+const DAY_OPTCOLORS: Record<string, string> = {
+  show: 'var(--color-lp-day-show)',
+  off_travel: 'var(--color-lp-warning)',
+};
+const DAY_OPTLABELS: Record<string, string> = { show: 'Show', off_travel: 'Off / Travel', no_tour: '—' };
 
-function splitName(name: string): { forename: string; surname: string } {
-  const parts = (name ?? '').trim().split(/\s+/);
-  return { forename: parts[0] ?? '', surname: parts.slice(1).join(' ') };
+function toPerson(pr: Record<string, unknown>): { id: string; name: string } {
+  return { id: pr.id as string, name: (pr.person_name as string) ?? '' };
 }
-function toPerson(pr: Record<string, unknown>): PayrollPerson {
-  return {
-    id: pr.id as string,
-    person_name: (pr.person_name as string) ?? '',
-    role: (pr.role as string) ?? '',
-    show_rate: Number(pr.show_rate) || 0,
-    off_rate: Number(pr.off_rate) || 0,
-    rehearsal_rate: Number((pr as { rehearsal_rate?: number }).rehearsal_rate) || 0,
-    per_diem: Number(pr.per_diem) || 0,
-    advance_fee: Number(pr.advance_fee) || 0,
-  };
+
+function DayHeader({ day, weekStart }: { day: RoutingDay; weekStart: boolean }) {
+  const dt = (day.day_type ?? '').trim();
+  const d = day.date ? day.date.slice(5) : '';
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: 2,
+        lineHeight: 1.15,
+        padding: '2px 0',
+        borderLeft: weekStart ? '2px solid var(--lp-orange)' : undefined,
+        marginLeft: weekStart ? -1 : undefined,
+      }}
+    >
+      {weekStart ? (
+        <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.06em', color: 'var(--lp-orange)' }}>
+          {formatWeekLabel(getWeekStart(day.date))}
+        </span>
+      ) : null}
+      <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--lp-text)' }}>{d}</span>
+      {day.city ? <span style={{ fontSize: 9, color: 'var(--lp-text-tertiary)', maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis' }}>{day.city}</span> : null}
+      {dt ? (
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 8, fontWeight: 600, color: colourForDayType(dt) }}>
+          <span style={{ width: 5, height: 5, borderRadius: '50%', background: colourForDayType(dt) }} />
+          {labelForDayType(dt) || dt}
+        </span>
+      ) : null}
+    </div>
+  );
 }
 
 export function PayrollDaysMatrix({
@@ -57,107 +76,60 @@ export function PayrollDaysMatrix({
   const { statusOf, saveDayStatus } = usePayrollGrid(tourId, routingDates, payrollEntries);
   const people = useMemo(() => personnelRates.map(toPerson), [personnelRates]);
 
-  // dates sorted + grouped by Monday week.
-  const weeks = useMemo(() => {
-    const sorted = [...routingDates].filter((r) => r.date).sort((a, b) => a.date.localeCompare(b.date));
-    const groups: { week: string; days: RoutingDay[] }[] = [];
-    for (const r of sorted) {
-      const ws = getWeekStart(r.date);
-      const last = groups[groups.length - 1];
-      if (last && last.week === ws) last.days.push(r);
-      else groups.push({ week: ws, days: [r] });
+  // Sort dates; mark each week-start (first date of its Monday week).
+  const days = useMemo(() => [...routingDates].filter((r) => r.date).sort((a, b) => a.date.localeCompare(b.date)), [routingDates]);
+  const weekStartIds = useMemo(() => {
+    const set = new Set<string>();
+    let prevWeek: string | null = null;
+    for (const d of days) {
+      const w = getWeekStart(d.date);
+      if (w !== prevWeek) {
+        set.add(d.date);
+        prevWeek = w;
+      }
     }
-    return groups;
-  }, [routingDates]);
+    return set;
+  }, [days]);
+  const dayByDate = useMemo(() => new Map(days.map((d) => [d.date, d])), [days]);
 
-  const cols = `${RAIL_W}px repeat(${people.length}, ${PERSON_W}px)`;
-  const stickyLeft: React.CSSProperties = { position: 'sticky', left: 0, zIndex: 2, background: 'var(--lp-panel)' };
-  const headCell: React.CSSProperties = {
-    padding: '8px 6px',
-    fontSize: 11,
-    fontWeight: 700,
-    color: 'var(--lp-text-secondary)',
-    background: 'var(--lp-surface)',
-    borderBottom: '1px solid var(--lp-border)',
-    textAlign: 'center',
-  };
+  const columns: Column[] = useMemo(
+    () => [
+      { id: 'person', label: 'Person', type: 'text', ro: true, w: 180, min: 130, resize: true },
+      ...days.map<Column>((d) => ({ id: d.date, label: d.date.slice(5), type: 'dropdown', options: DAY_CODES, optColors: DAY_OPTCOLORS, optLabels: DAY_OPTLABELS, w: 92, min: 76, resize: true })),
+    ],
+    [days],
+  );
+
+  const data: Section[] = useMemo(() => {
+    const rows: Row[] = people.map((p) => {
+      const row: Row = { _uid: p.id, person: p.name };
+      for (const d of days) row[d.date] = statusOf(p.id, d.date);
+      return row;
+    });
+    return [{ name: 'Personnel', kind: 'normal', _uid: 'payroll', rows }];
+  }, [people, days, statusOf]);
 
   if (people.length === 0) {
     return <div style={{ padding: 16, color: 'var(--lp-text-secondary)', fontSize: 13 }}>No personnel on this tour yet.</div>;
   }
 
   return (
-    <div style={{ overflowX: 'auto', border: '1px solid var(--lp-border)', borderRadius: 'var(--lp-radius-lg)' }}>
-      <div style={{ display: 'grid', gridTemplateColumns: cols, minWidth: 'fit-content' }}>
-        {/* header */}
-        <div style={{ ...headCell, ...stickyLeft, textAlign: 'left' }}>Day</div>
-        {people.map((p) => {
-          const { forename, surname } = splitName(p.person_name);
-          return (
-            <div key={p.id} style={headCell} title={`${p.person_name}${p.role ? ` · ${p.role}` : ''}`}>
-              <div style={{ fontWeight: 700, color: 'var(--lp-text)' }}>{forename}</div>
-              <div style={{ fontWeight: 500, color: 'var(--lp-text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis' }}>{surname}</div>
-            </div>
-          );
-        })}
-
-        {weeks.map((wk) => (
-          <div key={wk.week} style={{ display: 'contents' }}>
-            {/* week divider */}
-            <div
-              style={{
-                gridColumn: '1 / -1',
-                position: 'sticky',
-                left: 0,
-                padding: '6px 10px',
-                fontSize: 11,
-                fontWeight: 700,
-                letterSpacing: '0.08em',
-                textTransform: 'uppercase',
-                color: 'var(--lp-text-tertiary)',
-                background: 'var(--lp-bg-deep)',
-                borderBottom: '1px solid var(--lp-border)',
-                borderTop: '1px solid var(--lp-border)',
-              }}
-            >
-              {formatWeekLabel(wk.week)}
-            </div>
-            {wk.days.map((r) => {
-              const entry: RailEntry = { id: r.id, date: r.date, city: r.city, venueName: r.venue_name, dayType: r.day_type };
-              return (
-                <div key={r.id} style={{ display: 'contents' }}>
-                  <div style={{ ...stickyLeft, padding: '8px 10px', borderBottom: '1px solid var(--lp-border-subtle)' }}>
-                    <RailNightCell entry={entry} />
-                  </div>
-                  {people.map((p) => {
-                    const status = statusOf(p.id, r.date.slice(0, 10));
-                    return (
-                      <div
-                        key={p.id}
-                        style={{
-                          borderBottom: '1px solid var(--lp-border-subtle)',
-                          borderLeft: '1px solid var(--lp-border-subtle)',
-                          background: dayStatusTint(status),
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}
-                      >
-                        <InlineEditCell
-                          value={status}
-                          type="select"
-                          options={DAY_OPTIONS}
-                          onSave={async (v) => saveDayStatus(p.id, r.date.slice(0, 10), String(v))}
-                        />
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            })}
-          </div>
-        ))}
-      </div>
-    </div>
+    <Grid
+      key={`payroll-days:${tourId}:${people.length}:${days.length}`}
+      initialColumns={columns}
+      initialData={data}
+      wide
+      frozenCols={1}
+      allowAddRows={false}
+      onEdit={(personId, colId, value) => {
+        if (colId === 'person') return;
+        saveDayStatus(String(personId), colId, String(value));
+      }}
+      headerFor={(colId) => {
+        if (colId === 'person') return 'Person';
+        const d = dayByDate.get(colId);
+        return d ? <DayHeader day={d} weekStart={weekStartIds.has(colId)} /> : colId;
+      }}
+    />
   );
 }

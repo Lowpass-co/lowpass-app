@@ -9,6 +9,7 @@
 
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { loadTourIncome } from '@/lib/budget/income';
 
 function postTaxFromPreTax(preTax: number, withholdingPct: number): number {
   return preTax * (1 - withholdingPct / 100);
@@ -48,51 +49,9 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Tour not found' }, { status: 404 });
   }
 
-  const { data: routingRows, error: routingError } = await supabase
-    .from('routing')
-    .select('id, date, venue_name, city, day_type')
-    .eq('tour_id', tourId)
-    .order('date', { ascending: true });
-
-  if (routingError) {
-    return NextResponse.json({ error: routingError.message }, { status: 500 });
-  }
-
-  const routingIds = (routingRows ?? []).map((r) => r.id);
-  if (routingIds.length === 0) {
-    return NextResponse.json({
-      income: [],
-      routing_only: routingRows ?? [],
-    });
-  }
-
-  const { data: incomeRows, error: incomeError } = await supabase
-    .from('budget_income')
-    .select('*, routing(date, venue_name, city, day_type)')
-    .in('routing_id', routingIds)
-    .eq('workspace_id', profile.workspace_id);
-
-  if (incomeError) {
-    return NextResponse.json({ error: incomeError.message }, { status: 500 });
-  }
-
-  const incomeWithRouting = (incomeRows ?? []).map((row) => ({
-    ...row,
-    routing: Array.isArray(row.routing) ? row.routing[0] : row.routing,
-  }));
-  const incomeSorted = incomeWithRouting.slice().sort((a, b) => {
-    const dateA = (a.routing as { date?: string })?.date ?? '';
-    const dateB = (b.routing as { date?: string })?.date ?? '';
-    return dateA.localeCompare(dateB);
-  });
-
-  const incomeRoutingIds = new Set((incomeRows ?? []).map((r) => r.routing_id));
-  const routingOnly = (routingRows ?? []).filter((r) => !incomeRoutingIds.has(r.id));
-
-  return NextResponse.json({
-    income: incomeSorted,
-    routing_only: routingOnly,
-  });
+  // Shared with the server page (BudgetIncomeGrid is prop-fed) — one merge.
+  const payload = await loadTourIncome(supabase, tourId, profile.workspace_id);
+  return NextResponse.json(payload);
 }
 
 export async function POST(request: Request) {

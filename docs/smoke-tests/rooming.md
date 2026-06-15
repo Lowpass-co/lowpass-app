@@ -75,3 +75,33 @@ roster row.
 rooming edits that net to the same rooms, then re-open Budget.
 **Expect**: the derived `hotel_booking` Accommodation lines reconcile exactly as
 before (same hotels/rooms/assignments; the restructure changed no writes).
+
+## Matrices rebuilt ON the canonical `<Grid>` (wide mode) — MTX-01…09 (2026-06-11)
+
+> RoomingMatrix + PayrollDaysMatrix are now **`<Grid>` instances** (people =
+> rows, days = dropdown columns), via additive opt-in "wide mode". Map:
+> `docs/handover/MATRIX_ON_GRID_MAP.md`. `tsc` 0 · `eslint` 0 · build green ·
+> adapter 7/7 · fees 8/8.
+
+**Additive `<Grid>` changes (all default-off → budget/income/demo unchanged):**
+`wide?` (data-wide) · `frozenCols?` (sticky-left) · `headerFor?` (day-pill
+headers) · `columnFooter?` (rooms-per-night) · `Column.ro` (frozen person col,
+read-only) · `Column.optLabels` (pretty dropdown text) · `row._rowClass`
+(off-roster greying) · dropdown cell-fill tint in wide. **Budget invariant
+proven:** grep shows no consumer in `src/components/budget/*` or `grid-demo/*`
+sets any of these → `BudgetGridView.tsx`, `BudgetIncomeGrid.tsx`,
+`gridModel.ts` (`template()`), and `/grid-demo/*` are byte-for-byte unchanged.
+
+- **MTX-01** Both matrices: people = rows, days = columns (orientation flipped).
+- **MTX-02** Frozen person column + horizontal scroll (names stay visible).
+- **MTX-03** Native drag-select range + ring across day cells (the lost feature).
+- **MTX-04** Day-cell dropdown **tints fill the cell** (room code / day status).
+- **MTX-05** Edit a cell → writes via `saveCell`/`saveDayStatus` (optimistic, no
+  reload); **budget Accommodation + Salary feeds unchanged**.
+- **MTX-06** Rooming **rooms-per-night** column footer; shared-room letter count.
+- **MTX-07** Payroll **week markers** (label + orange divider on each Monday
+  day-header); all routing dates incl. no-tour.
+- **MTX-08** Off-roster people = **greyed rows** + a remove strip (✕); roommates
+  keep their room when one is removed.
+- **MTX-09** **Budget grid (Expenses + Income) + `/grid-demo` visually +
+  behaviourally identical** — the invariant.
