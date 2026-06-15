@@ -15,8 +15,11 @@ const RiderPackDetailsSlideOver = dynamic(
   { ssr: false }
 );
 
-export function RiderPacksTourClient({ tourId, tourName, rows }: { tourId: string; tourName: string; rows: RiderPackRowVm[] }) {
+export function RiderPacksTourClient({ tourId, tourName, rows: initialRows }: { tourId: string; tourName: string; rows: RiderPackRowVm[] }) {
   const router = useRouter();
+  // Local copy so a delete removes the row optimistically (then router.refresh()
+  // re-fetches the server list).
+  const [rows, setRows] = useState<RiderPackRowVm[]>(initialRows);
   const [detailsId, setDetailsId] = useState<string | null>(null);
 
   const recipients = useMemo(() => {
@@ -110,7 +113,10 @@ export function RiderPacksTourClient({ tourId, tourName, rows }: { tourId: strin
         searchPlaceholder="Search rider packs…"
         emptyState="No rider packs for this tour."
         onRowClick={(row) => {
-          router.push(`/tours/${tourId}/rider-packs/${row.id}`);
+          // Direct push into Operations (no /tours redirect hop). The legacy
+          // /tours/[id]/rider-packs/[packId] redirect also resolves now that the
+          // operations editor page exists.
+          router.push(`/operations/${tourId}/riders/${row.id}`);
         }}
       />
 
@@ -120,7 +126,17 @@ export function RiderPacksTourClient({ tourId, tourName, rows }: { tourId: strin
         ? (() => {
             const row = rows.find((r) => r.id === detailsId);
             if (!row) return null;
-            return <RiderPackDetailsSlideOver pack={row} onClose={() => setDetailsId(null)} />;
+            return (
+              <RiderPackDetailsSlideOver
+                pack={row}
+                onClose={() => setDetailsId(null)}
+                onDeleted={() => {
+                  setRows((prev) => prev.filter((r) => r.id !== row.id));
+                  setDetailsId(null);
+                  router.refresh();
+                }}
+              />
+            );
           })()
         : null}
     </div>

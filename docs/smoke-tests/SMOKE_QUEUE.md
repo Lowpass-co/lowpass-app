@@ -43,6 +43,19 @@ them off; report fails by ID.
   then, advance has no editor — known gap.)
 - [ ] **SMK-PAY-04** — Summary view totals match the Rates view.
 
+## Riders fix — Open (proper operations route) + Delete. Your manual checks:
+> The Income/matrix "0 rows" fix is separate; this is the rider-packs list.
+> See `docs/smoke-tests/riders.md` RID-01…04.
+- [ ] **SMK-RID-01** — Open: Operations → tour → Riders → click a pack → the
+  editor loads (no 404), in Operations chrome. Also via the legacy
+  `/tours/[id]/rider-packs/[id]` URL (redirect resolves).
+- [ ] **SMK-RID-02** — Same pack at `/rider-packs/[id]` renders an identical
+  editor body (shared `RiderPackEditorView`); only the outer shell differs.
+- [ ] **SMK-RID-03** — Delete: row `…` → **Delete pack** → confirm → the row
+  disappears + the list refreshes; reopening 404s. (One pack only.)
+- [ ] **SMK-RID-04** — "Loading packs…" left rail in the editor resolves (D5 —
+  no code bug found; if stuck, capture the `/api/rider-packs` network timing).
+
 ## Rooming + Payroll matrices rebuilt ON `<Grid>` (wide mode) — MTX-01…09. Your manual checks:
 > Both matrices are now `<Grid>` instances (people=rows, days=columns) via
 > additive opt-in wide mode. The budget invariant is the key one. See
