@@ -43,18 +43,23 @@ them off; report fails by ID.
   then, advance has no editor — known gap.)
 - [ ] **SMK-PAY-04** — Summary view totals match the Rates view.
 
-## Riders fix — Open (proper operations route) + Delete. Your manual checks:
-> The Income/matrix "0 rows" fix is separate; this is the rider-packs list.
-> See `docs/smoke-tests/riders.md` RID-01…04.
-- [ ] **SMK-RID-01** — Open: Operations → tour → Riders → click a pack → the
-  editor loads (no 404), in Operations chrome. Also via the legacy
-  `/tours/[id]/rider-packs/[id]` URL (redirect resolves).
-- [ ] **SMK-RID-02** — Same pack at `/rider-packs/[id]` renders an identical
-  editor body (shared `RiderPackEditorView`); only the outer shell differs.
-- [ ] **SMK-RID-03** — Delete: row `…` → **Delete pack** → confirm → the row
-  disappears + the list refreshes; reopening 404s. (One pack only.)
-- [ ] **SMK-RID-04** — "Loading packs…" left rail in the editor resolves (D5 —
-  no code bug found; if stuck, capture the `/api/rider-packs` network timing).
+## Riders fix (`ff9cf8a`) — Claude-verified this session:
+- ✅ **SMK-RID-01 Open** — clicking the pack opened
+  `/operations/[tourId]/riders/[id]` (no 404), in Operations chrome. **The 404 is
+  fixed.**
+- ✅ **SMK-RID-02** — the standalone `/rider-packs/[id]` route renders the identical
+  editor body; only the outer shell differs. Confirmed.
+- ✅ **SMK-RID-03 Delete (wiring)** — `…` → detail slide-over → footer confirm
+  ("Delete "CS | One Off Plot"? This permanently removes the pack, its sections, and
+  its history. This can't be undone.") + Delete permanently / Cancel. Cancel works. I
+  did NOT execute the permanent delete.
+  - [ ] **You: run the destructive half** — Delete permanently → pack gone + list
+    refreshes + reopening 404s. (Use a throwaway pack, or accept losing "CS | One Off
+    Plot".)
+- [ ] **SMK-RID-04 (minor, non-blocking)** — the left "packs" rail doesn't list the
+  existing pack: shows "Loading packs…" (stuck) on `/rider-packs/[id]` and "No rider
+  packs in this context yet" on the operations route. Editor itself is fine. Worth a
+  follow-up fix, not a merge blocker.
 
 ## Rooming + Payroll matrices rebuilt ON `<Grid>` (wide mode) — MTX-01…09. Your manual checks:
 > Both matrices are now `<Grid>` instances (people=rows, days=columns) via
@@ -107,7 +112,18 @@ them off; report fails by ID.
   (Google Docs / ⌘P) all behave as before.
 
 ---
-Already Chrome-verified by Claude (no action needed): BUD-41 (currency↔DISPLAY),
-BUD-43/44 (slide txn/doc load), BUD-45 (📎 count), BUD-46 (Grid default), BUD-47
-(Actual live-update both directions), RAIL-05 (Advance rail intact), OPS-17
-salary-population (208), `/grid-demo` untouched.
+Already Chrome-verified by Claude (no action needed):
+- **Income (95c9086):** renders 31 shows (BUD-50); edit recompute — guarantee 1000 →
+  post-tax 1000, WH 10% → post-tax/total £900 (BUD-51); **P&L parity** — Summary Gross
+  income = £900 = persistence + `computeBudgetPnl` feed intact (SMK-INC-04 / BUD-53).
+- **Payroll Days matrix (eeb84f8/95c9086):** 5 crew as rows, tint-filled day cells,
+  frozen PERSON column, week dividers.
+- **Rooming matrix:** frozen column survives horizontal scroll; structure correct.
+- **rowMatches regression:** Expenses renders; status filter works (uncheck draft → 0
+  rows, re-check → 12) — statusless rows always visible, status-bearing rows filter as
+  before.
+- **Riders (ff9cf8a):** RID-01 Open (404 fixed), RID-02 identical body, RID-03 Delete
+  wiring (see above).
+- Earlier: BUD-41 (currency↔DISPLAY), BUD-43/44 (slide txn/doc load), BUD-45 (📎
+  count), BUD-46 (Grid default), BUD-47 (Actual live-update), RAIL-05 (Advance rail),
+  OPS-17 salary-population (208), `/grid-demo` untouched.
