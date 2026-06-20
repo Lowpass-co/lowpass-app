@@ -434,6 +434,27 @@ All ✅ confirmed on the running preview by driving the actual UI:
 Not yet live-verified (CC-claimed): **SLIDE-06** doc-rename → transaction
 propagation (doc-id reference). **Settlement visual polish** still deferred.
 
+## Core bugs — 2026-06-21 (GRID_CORE_FIX_MAP, awaiting Chrome-verify)
+
+Affect EVERY grid (budget / income / payroll-days / rooming / `/grid-demo`).
+Fixes isolated to the keyboard + paste handlers in `Grid.tsx` — no row-render
+change.
+
+- **CORE-01** — Tab advances exactly ONE editable cell (not +2). Repro: edit a
+  cell on budget Expenses (and income), type a value, press Tab → lands on the
+  next editable cell, not two over. Shift+Tab steps one back. (Fix: document
+  `keydown` handler now bails for any key originating from the grid's `.editing`
+  input, so the edit-input's own Tab is the single mover — `Grid.tsx` onKey
+  guard + input onKeyDown.)
+- **CORE-02** — Paste (⌘V) updates the cell display **immediately** and
+  **persists** across reload. Repro: copy a cell, ⌘V into another → new value
+  shows at once and survives a reload; matrix footers/totals update; multi-cell
+  paste fills every target. (Fix: `doPaste` fires `onEdit` per pasted cell,
+  same commit path as a normal edit.)
+- **CORE-03** — No regression: arrow-nav, the read-only-column skip (variance /
+  calc are correctly NOT landed on by arrows — unchanged), normal single-cell
+  edit, and budget / income / `grid-demo` visuals are all identical.
+
 ## New — 2026-06-08 live review (queued for next grid polish pass)
 
 - **Derived source pill doesn't animate** — the `🔗 ROOMING` / `🔗 PAYROLL`

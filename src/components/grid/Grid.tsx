@@ -386,7 +386,14 @@ export function Grid({
         const k = NC()[c0 + dc];
         if (!k) return;
         const t = colDef(cols(), k)?.type;
-        o.row[k] = t === 'money' || t === 'number' ? parseFloat(String(val).replace(/[^0-9.\-]/g, '')) || 0 : val;
+        const v: string | number =
+          t === 'money' || t === 'number' ? parseFloat(String(val).replace(/[^0-9.\-]/g, '')) || 0 : val;
+        o.row[k] = v;
+        // Bug 2 (paste stale): commit through the SAME path a normal edit uses
+        // (see commitEdit) so the paste persists + the parent (hook / PATCH /
+        // POST) learns of it and footers/totals update — not just the in-memory
+        // dataRef. Without this, a re-seed reverts the cell to its old value.
+        if (o.row._uid) onEditRef.current?.(o.row._uid, k, v);
       }),
     );
     render();
@@ -744,6 +751,12 @@ export function Grid({
       }
       if (editRef.current) return;
       if (inField) return;
+      // Bug 1 (Tab +2): hard-suppress the document handler for any key that
+      // ORIGINATED from the grid's editing input — that input owns its own
+      // Enter/Tab/Escape (it stopPropagation's, but if the native event still
+      // reaches document, this guards against the duplicate Tab move()). Nav-mode
+      // events don't originate from `.editing`, so this is inert for them.
+      if ((e.target as HTMLElement | null)?.closest?.('.cell .editing')) return;
       if (menuRef.current || confirmRef.current || promptRef.current || warnRef.current) return;
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'c') {
         e.preventDefault();
