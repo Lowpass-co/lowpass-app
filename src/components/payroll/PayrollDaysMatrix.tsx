@@ -16,7 +16,7 @@ import { Grid } from '@/components/grid/Grid';
 import type { Column, Row, Section } from '@/components/grid/types';
 import { colourForDayType, labelForDayType } from '@/lib/routing/dayType';
 import { getWeekStart, formatWeekLabel } from '@/lib/routing/week';
-import { DAY_OPTIONS, usePayrollGrid, type RoutingDay } from './usePayrollGrid';
+import { DAY_OPTIONS, type RoutingDay, type PayrollPerson } from './usePayrollGrid';
 
 const DAY_CODES = DAY_OPTIONS.map((o) => o.value);
 const DAY_OPTCOLORS: Record<string, string> = {
@@ -25,8 +25,19 @@ const DAY_OPTCOLORS: Record<string, string> = {
 };
 const DAY_OPTLABELS: Record<string, string> = { show: 'Show', off_travel: 'Off / Travel', no_tour: '—' };
 
-function toPerson(pr: Record<string, unknown>): { id: string; name: string } {
-  return { id: pr.id as string, name: (pr.person_name as string) ?? '' };
+/** Build the full rate-bearing person from a personnel_rates row (for totalsFor
+ *  + the frozen Total column). */
+function toPerson(pr: Record<string, unknown>): PayrollPerson {
+  return {
+    id: pr.id as string,
+    person_name: (pr.person_name as string) ?? '',
+    role: (pr.role as string) ?? '',
+    show_rate: Number(pr.show_rate) || 0,
+    off_rate: Number(pr.off_rate) || 0,
+    rehearsal_rate: Number(pr.rehearsal_rate) || 0,
+    per_diem: Number(pr.per_diem) || 0,
+    advance_fee: Number(pr.advance_fee) || 0,
+  };
 }
 
 function DayHeader({ day, weekStart }: { day: RoutingDay; weekStart: boolean }) {
@@ -62,19 +73,35 @@ function DayHeader({ day, weekStart }: { day: RoutingDay; weekStart: boolean }) 
   );
 }
 
+/** Per-person fee totals (only `totalFee` is consumed here). */
+type PersonTotals = { totalFee: number };
+
 export function PayrollDaysMatrix({
-  tourId,
   routingDates,
   personnelRates,
-  payrollEntries,
+  currency,
+  statusOf,
+  saveDayStatus,
+  totalsFor,
 }: {
-  tourId: string;
   routingDates: RoutingDay[];
   personnelRates: Record<string, unknown>[];
-  payrollEntries: Record<string, unknown>[];
+  currency: string;
+  /** Lifted from PayrollView's shared usePayrollGrid (PAY-01). */
+  statusOf: (personnelId: string, date: string) => string;
+  saveDayStatus: (personnelId: string, date: string, status: string) => void | Promise<void>;
+  totalsFor: (p: PayrollPerson) => PersonTotals;
 }) {
-  const { statusOf, saveDayStatus } = usePayrollGrid(tourId, routingDates, payrollEntries);
   const people = useMemo(() => personnelRates.map(toPerson), [personnelRates]);
+  const money = useMemo(
+    () =>
+      new Intl.NumberFormat('en-GB', {
+        style: 'currency',
+        currency: (currency || 'GBP').trim().toUpperCase(),
+        maximumFractionDigits: 0,
+      }),
+    [currency],
+  );
 
   // Sort dates; mark each week-start (first date of its Monday week).
   const days = useMemo(() => [...routingDates].filter((r) => r.date).sort((a, b) => a.date.localeCompare(b.date)), [routingDates]);
@@ -94,7 +121,10 @@ export function PayrollDaysMatrix({
 
   const columns: Column[] = useMemo(
     () => [
-      { id: 'person', label: 'Person', type: 'text', ro: true, w: 180, min: 130, resize: true },
+      // MTX-06 — person + a frozen Total column (frozenCols=2). Fixed widths so
+      // the second frozen column's sticky-left offset is deterministic.
+      { id: 'person', label: 'Person', type: 'text', ro: true, w: 180, min: 180, resize: false },
+      { id: '__total', label: 'Total', type: 'text', ro: true, w: 104, min: 104, resize: false },
       ...days.map<Column>((d) => ({ id: d.date, label: d.date.slice(5), type: 'dropdown', options: DAY_CODES, optColors: DAY_OPTCOLORS, optLabels: DAY_OPTLABELS, w: 92, min: 76, resize: true })),
     ],
     [days],
@@ -102,12 +132,12 @@ export function PayrollDaysMatrix({
 
   const data: Section[] = useMemo(() => {
     const rows: Row[] = people.map((p) => {
-      const row: Row = { _uid: p.id, person: p.name };
+      const row: Row = { _uid: p.id, person: p.person_name, __total: money.format(totalsFor(p).totalFee) };
       for (const d of days) row[d.date] = statusOf(p.id, d.date);
       return row;
     });
     return [{ name: 'Personnel', kind: 'normal', _uid: 'payroll', rows }];
-  }, [people, days, statusOf]);
+  }, [people, days, statusOf, totalsFor, money]);
 
   if (people.length === 0) {
     return <div style={{ padding: 16, color: 'var(--lp-text-secondary)', fontSize: 13 }}>No personnel on this tour yet.</div>;
@@ -115,18 +145,19 @@ export function PayrollDaysMatrix({
 
   return (
     <Grid
-      key={`payroll-days:${tourId}:${people.length}:${days.length}`}
+      key={`payroll-days:${people.length}:${days.length}`}
       initialColumns={columns}
       initialData={data}
       wide
-      frozenCols={1}
+      frozenCols={2}
       allowAddRows={false}
       onEdit={(personId, colId, value) => {
-        if (colId === 'person') return;
+        if (colId === 'person' || colId === '__total') return;
         saveDayStatus(String(personId), colId, String(value));
       }}
       headerFor={(colId) => {
         if (colId === 'person') return 'Person';
+        if (colId === '__total') return 'Total';
         const d = dayByDate.get(colId);
         return d ? <DayHeader day={d} weekStart={weekStartIds.has(colId)} /> : colId;
       }}

@@ -962,6 +962,13 @@ export function Grid({
   const nc = NC();
   const s = sel();
 
+  // MTX-06 — second frozen column (wide matrices with frozenCols >= 2). The
+  // sticky-left offset for the 2nd column is the width of the 1st frozen column
+  // (which is fixed-width in those matrices, so this is stable). budget/income
+  // never set `wide`, so this is inert there.
+  const frozen2 = wide && frozenCols >= 2 && vis.length >= 2;
+  const frozen2Left = frozen2 ? Number(widths()[vis[0].id] ?? vis[0].w) || 0 : 0;
+
   // Selection visuals as INLINE styles (#1) — the orange active ring + the
   // range tint. Inline so no stylesheet cascade / specificity issue can
   // hide them; the .active/.selected classes stay for the radius/glow too.
@@ -1575,8 +1582,9 @@ export function Grid({
       className="lp-grid"
       data-density={densityRef.current}
       data-wide={wide && frozenCols > 0 ? '' : undefined}
+      data-frozen2={frozen2 ? '' : undefined}
       ref={rootRef}
-      style={{ '--cols': colsTemplate } as React.CSSProperties}
+      style={{ '--cols': colsTemplate, '--frz2-left': `${frozen2Left}px` } as React.CSSProperties}
     >
       {/* toolbar */}
       <div className="gr-toolbar">

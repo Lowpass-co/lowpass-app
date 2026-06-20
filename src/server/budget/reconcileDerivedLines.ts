@@ -169,14 +169,15 @@ async function computePayrollDesired(
   // shared helper the payroll sheets use, instead of trusting the persisted
   // total_fee column (which can lag behind the rates after the OPS-17a math
   // fix). This guarantees the budget Salary/Per-Diem == the payroll display.
+  // Day counts come from the per-week entries; the advance comes from the rate
+  // card (below) — NOT entries.advance_fee — so we no longer select it.
   const { data: entries } = await supabase
     .from('payroll_entries')
-    .select('personnel_id, day_statuses, advance_fee')
+    .select('personnel_id, day_statuses')
     .eq('tour_id', tourId)
     .eq('workspace_id', workspaceId);
 
   const countsBy = new Map<string, { show: number; offTravel: number; rehearsal: number; active: number }>();
-  const advanceBy = new Map<string, number>();
   for (const e of entries ?? []) {
     const id = e.personnel_id as string;
     const c = countDayStatuses((e.day_statuses as Record<string, string>) ?? {});
@@ -186,7 +187,6 @@ async function computePayrollDesired(
     acc.rehearsal += c.rehearsal;
     acc.active += c.active;
     countsBy.set(id, acc);
-    advanceBy.set(id, (advanceBy.get(id) ?? 0) + (Number(e.advance_fee) || 0));
   }
 
   const salary: Desired[] = [];
@@ -197,7 +197,10 @@ async function computePayrollDesired(
       ? `${String(p.person_name)} — ${String(p.role)}`
       : String(p.person_name);
     const counts = countsBy.get(id) ?? { show: 0, offTravel: 0, rehearsal: 0, active: 0 };
-    const fee = computeTotalFee(p, counts, advanceBy.get(id) ?? 0);
+    // PAY-04: rate-card advance is the single source (matches the payroll
+    // displays + budget/summary routes; survives a day-status edit, which
+    // zeroes the per-week entries.advance_fee).
+    const fee = computeTotalFee(p, counts, Number(p.advance_fee) || 0);
     const pd = computeTotalPerDiem(p, counts);
     // One Salary line per roster member (named + costed; 0 until days set).
     salary.push({ sourceId: id, label, total: fee });

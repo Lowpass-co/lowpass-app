@@ -1085,6 +1085,21 @@
 /* The header/footer corners sit above the scrolling row cells. */
 .lp-grid[data-wide] .gridhead .hc:first-child { z-index: var(--lp-z-sticky); }
 
+/* MTX-06 — optional SECOND frozen column (payroll Total). Gated on
+   [data-frozen2] so the rooming matrix (frozenCols=1) is untouched. The
+   sticky-left offset is the first frozen column's width, emitted as --frz2-left
+   by Grid.tsx. */
+.lp-grid[data-wide][data-frozen2] .gridhead .hc:nth-child(2),
+.lp-grid[data-wide][data-frozen2] #gr-sections .row .c:nth-child(2),
+.lp-grid[data-wide][data-frozen2] .gr-foot .c:nth-child(2) {
+  position: sticky;
+  left: var(--frz2-left, 0px);
+  background: var(--gr-panel);
+  border-right: 1px solid var(--gr-border);
+  z-index: 2;
+}
+.lp-grid[data-wide][data-frozen2] .gridhead .hc:nth-child(2) { z-index: var(--lp-z-sticky); }
+
 /* Optional per-column footer row (rooms-per-night etc.), aligned to --cols. */
 .lp-grid .gr-foot {
   display: grid;

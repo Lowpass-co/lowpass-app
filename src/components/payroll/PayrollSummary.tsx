@@ -29,9 +29,9 @@ export function PayrollSummary({
   payrollEntries,
 }: PayrollSummaryProps) {
   const rows = useMemo(() => {
-    type Agg = { show: number; offTravel: number; rehearsal: number; advanceFee: number };
+    type Agg = { show: number; offTravel: number; rehearsal: number };
     const entriesByPerson = new Map<string, Agg>();
-    const emptyAgg = (): Agg => ({ show: 0, offTravel: 0, rehearsal: 0, advanceFee: 0 });
+    const emptyAgg = (): Agg => ({ show: 0, offTravel: 0, rehearsal: 0 });
     for (const e of payrollEntries) {
       const pid = e.personnel_id as string;
       const c = countDayStatuses((e.day_statuses as Record<string, string>) ?? {});
@@ -39,7 +39,6 @@ export function PayrollSummary({
       existing.show += c.show;
       existing.offTravel += c.offTravel;
       existing.rehearsal += c.rehearsal;
-      existing.advanceFee += Number((e as { advance_fee?: number }).advance_fee) || 0;
       entriesByPerson.set(pid, existing);
     }
 
@@ -64,8 +63,9 @@ export function PayrollSummary({
         active: agg.show + agg.offTravel + agg.rehearsal,
       };
       // OPS-17a — split by day type via the shared helper (no show_rate
-      // fallback for travel days). Matches the persisted total_fee + budget.
-      const totalFee = computeTotalFee(rate, counts, agg.advanceFee);
+      // fallback for travel days). PAY-04 — advance from the rate card
+      // (pr.advance_fee), the single source matching Rates / Days / budget.
+      const totalFee = computeTotalFee(rate, counts, Number(pr.advance_fee) || 0);
       const totalPerDiem = computeTotalPerDiem(rate, counts);
 
       return {
