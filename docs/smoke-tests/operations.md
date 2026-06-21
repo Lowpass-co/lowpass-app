@@ -269,6 +269,14 @@ to the person name) shows each person's total fee, staying visible while scrolli
 the day columns horizontally. (Refreshes on view re-entry — see map caveat.)
 **Needs-live** (the sticky-left offset of the 2nd frozen column).
 
+#### PAY-11 — frozen cells stay opaque on scroll (selected row)
+**Do**: Select a row (click a day cell), then scroll the day columns horizontally.
+**Expect**: the frozen **Person** + **Total** cells stay fully opaque — the
+scrolling day cells do NOT bleed through the name, even on the selected/active
+(tinted) row. The selection tint is still visible on the frozen cells (composited
+over an opaque underlay). **Needs-live** (the scroll). (Fix: opaque `::before`
+underlay on frozen body cells in `grid.css`; also covers the rooming matrix.)
+
 #### PAY-10 — OPS-17 still holds + reconcile intact
 **Do**: Ben (21 show × £300, 10 travel × £0, advance £0) → Budget Salary line.
 **Expect**: still **£6,300**; Salary/Per-Diem reconcile unchanged (advance now

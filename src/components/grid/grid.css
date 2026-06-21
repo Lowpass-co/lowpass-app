@@ -1100,6 +1100,32 @@
 }
 .lp-grid[data-wide][data-frozen2] .gridhead .hc:nth-child(2) { z-index: var(--lp-z-sticky); }
 
+/* Frozen-column bleed fix — the selection/active tint (selStyle) is an INLINE
+   semi-transparent background that OVERRIDES the frozen cell's own opaque
+   background, so on a selected row the horizontally-scrolling day cells bled
+   through the frozen Person/Total cells. Paint an opaque ::before UNDERLAY (above
+   the scrolling cells via the sticky cell's z-index:2 context, below the cell's
+   text) so the cell is never see-through; the tint is re-composited onto the
+   underlay for .selected/.active so it stays visible. Body rows only — the
+   header/footer frozen cells carry no selection tint. */
+.lp-grid[data-wide] #gr-sections .row .c:first-child::before,
+.lp-grid[data-wide][data-frozen2] #gr-sections .row .c:nth-child(2)::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--gr-panel);
+  pointer-events: none;
+}
+.lp-grid[data-wide] #gr-sections .row .c.selected:first-child::before,
+.lp-grid[data-wide][data-frozen2] #gr-sections .row .c.selected:nth-child(2)::before {
+  background: linear-gradient(#FF450017, #FF450017), var(--gr-panel);
+}
+.lp-grid[data-wide] #gr-sections .row .c.active:first-child::before,
+.lp-grid[data-wide][data-frozen2] #gr-sections .row .c.active:nth-child(2)::before {
+  background: linear-gradient(#FF450021, #FF450021), var(--gr-panel);
+}
+
 /* Optional per-column footer row (rooms-per-night etc.), aligned to --cols. */
 .lp-grid .gr-foot {
   display: grid;
