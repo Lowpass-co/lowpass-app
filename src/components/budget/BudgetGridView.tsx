@@ -36,6 +36,16 @@ const STATUS_CONFIG: GridStatusConfig = { options: STATUS_OPTIONS, colors: STATU
 const CUR_SYMBOL: Record<string, string> = { GBP: '£', USD: '$', EUR: '€', CAD: 'C$', AUD: 'A$', JPY: '¥' };
 const CURRENCIES = ['GBP', 'USD', 'EUR', 'CAD', 'AUD', 'JPY'];
 
+/** BUD-01 — receipt chip label: the receipt's own number, plus the vendor when
+ *  set (attach-created receipts are blank, so this is graceful when empty).
+ *  Falls back to 'Receipt' only if the number is somehow missing. */
+function receiptChipLabel(number: string | null | undefined, vendor: string | null | undefined): string {
+  const num = (number ?? '').trim();
+  const ven = (vendor ?? '').trim();
+  if (!num) return 'Receipt';
+  return ven ? `${num} · ${ven}` : num;
+}
+
 /** Document "type" chip from a filename / MIME (real attachments have no
  *  category column — show the extension, e.g. PDF / PNG). */
 function docTypeFromName(name: string, fileType?: string | null): string {
@@ -231,15 +241,16 @@ export function BudgetGridView({ lines, sections, tourCurrency, tourId }: Budget
             amount: number;
             receipt_id: string | null;
             receipt_number: string | null;
+            receipt_vendor: string | null;
           }) => ({
             id: t.id,
             date: t.paid_at ?? '',
             desc: t.vendor_name ?? '',
             amount: Number(t.amount) || 0,
             receipt: t.receipt_id ?? null,
-            // BUD-48 — real receipt number when joined; fall back to a generic
-            // label only if the number is somehow missing.
-            receiptLabel: t.receipt_id ? (t.receipt_number ?? 'Receipt') : undefined,
+            // BUD-48/BUD-01 — real receipt number (+ vendor) when joined; fall
+            // back to a generic label only if the number is somehow missing.
+            receiptLabel: t.receipt_id ? receiptChipLabel(t.receipt_number, t.receipt_vendor) : undefined,
           }),
         );
       },
@@ -284,7 +295,10 @@ export function BudgetGridView({ lines, sections, tourCurrency, tourId }: Budget
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ receipt_id: receipt.id }),
         });
-        return { receiptId: receipt.id as string, label: (receipt.receipt_number as string) ?? 'Receipt' };
+        return {
+          receiptId: receipt.id as string,
+          label: receiptChipLabel(receipt.receipt_number as string | null, receipt.vendor as string | null),
+        };
       },
       listDocuments: async (lineId) => {
         const res = await fetch(`/api/budget/line-items/${lineId}/attachments`);

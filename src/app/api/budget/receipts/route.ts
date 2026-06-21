@@ -122,46 +122,67 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Tour not found' }, { status: 404 });
   }
 
-  const { data: existingReceipts } = await supabase
-    .from('expense_receipts')
-    .select('receipt_number')
-    .eq('tour_id', tour_id)
-    .eq('workspace_id', profile.workspace_id);
-
-  let maxNum = 0;
-  for (const r of existingReceipts ?? []) {
-    const n = parseReceiptNumber(r.receipt_number as string);
-    if (n > maxNum) maxNum = n;
-  }
-  const receiptNumber = formatReceiptNumber(maxNum + 1);
-
   const inBudget = !!body.in_budget;
   const linkedLineItemId = body.linked_line_item_id ?? null;
   const costTour = Number(body.cost_tour_currency) || 0;
 
-  const { data: created, error: insertError } = await supabase
-    .from('expense_receipts')
-    .insert({
-      tour_id,
-      workspace_id: profile.workspace_id,
-      receipt_number: receiptNumber,
-      date: body.date ?? null,
-      vendor: body.vendor ?? null,
-      category: body.category ?? null,
-      description: body.description ?? null,
-      payment_method: body.payment_method ?? 'card',
-      cost_tour_currency: costTour,
-      cost_home_currency: Number(body.cost_home_currency) || 0,
-      receipt_file_url: body.receipt_file_url ?? null,
-      in_budget: inBudget,
-      linked_line_item_id: linkedLineItemId,
-      notes: body.notes ?? null,
-    })
-    .select()
-    .single();
+  /* BUD-01 — atomic-ish per-tour numbering. The next R-00n is max+1 over the
+     tour's existing receipts; we DON'T swallow the read error (a silent failure
+     used to yield maxNum 0 → duplicate "R-001"), and we RETRY on a UNIQUE
+     violation (migration 209's expense_receipts_tour_receipt_number_key) so two
+     near-simultaneous attaches can't collide. */
+  const baseRow = {
+    tour_id,
+    workspace_id: profile.workspace_id,
+    date: body.date ?? null,
+    vendor: body.vendor ?? null,
+    category: body.category ?? null,
+    description: body.description ?? null,
+    payment_method: body.payment_method ?? 'card',
+    cost_tour_currency: costTour,
+    cost_home_currency: Number(body.cost_home_currency) || 0,
+    receipt_file_url: body.receipt_file_url ?? null,
+    in_budget: inBudget,
+    linked_line_item_id: linkedLineItemId,
+    notes: body.notes ?? null,
+  };
 
-  if (insertError) {
-    return NextResponse.json({ error: insertError.message }, { status: 500 });
+  let created: Record<string, unknown> | null = null;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const { data: existingReceipts, error: readError } = await supabase
+      .from('expense_receipts')
+      .select('receipt_number')
+      .eq('tour_id', tour_id)
+      .eq('workspace_id', profile.workspace_id);
+    if (readError) {
+      return NextResponse.json({ error: readError.message }, { status: 500 });
+    }
+    let maxNum = 0;
+    for (const r of existingReceipts ?? []) {
+      const n = parseReceiptNumber(r.receipt_number as string);
+      if (n > maxNum) maxNum = n;
+    }
+    const receiptNumber = formatReceiptNumber(maxNum + 1);
+
+    const { data: row, error: insertError } = await supabase
+      .from('expense_receipts')
+      .insert({ ...baseRow, receipt_number: receiptNumber })
+      .select()
+      .single();
+
+    if (!insertError && row) {
+      created = row;
+      break;
+    }
+    // 23505 = unique_violation: another receipt grabbed this number — recompute.
+    if (insertError && insertError.code === '23505') continue;
+    if (insertError) {
+      return NextResponse.json({ error: insertError.message }, { status: 500 });
+    }
+  }
+
+  if (!created) {
+    return NextResponse.json({ error: 'Could not allocate a receipt number' }, { status: 500 });
   }
 
   if (inBudget && linkedLineItemId && costTour !== 0) {

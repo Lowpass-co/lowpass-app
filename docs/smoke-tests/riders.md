@@ -11,6 +11,7 @@
 | RID-02 | code-verified | shared body renders on both routes (extract, no dup) |
 | RID-03 | code-verified | Delete: slide-over footer → confirm → DELETE → list drops + refresh |
 | RID-04 | **needs-live** | "Loading packs…" rail (no code bug found — D5 live re-check) |
+| RID-05 | **needs-live** | Create: "+ New rider pack" → POST → opens new pack's editor |
 
 `tsc` 0 · `eslint` 0 · `next build --webpack` green (route
 `ƒ /operations/[tourId]/riders/[id]` compiled).
@@ -61,6 +62,15 @@ and reopening it 404s. Blast radius = one pack (1:1 folder↔pack).
 **Expect**: it resolves to the sibling packs. (No code bug found — the GET
 accepts the rail's params + returns `{packs}`. If it's actually stuck, capture
 the `/api/rider-packs` network status/timing — its own ticket.)
+
+## RID-05 — Create a new rider pack  ⟵ Adam, Chrome
+**Do**: On an **empty** Riders list (e.g. after deleting the only pack), click
+**"+ New rider pack"** in the header.
+**Expect**: `POST /api/rider-packs` with `{ scope:'tour', artist_id, tour_id }`
+creates a folder + pack and the new pack's editor **opens** at
+`/operations/[tourId]/riders/[newId]`. The button shows "Creating…" while in
+flight; on error a toast appears and the list is unchanged. `artist_id` is the
+tour's artist (added to the page's tour select; `tours.artist_id` is NOT NULL).
 
 > Don't delete the editor body's other consumers: templates (assign-to-tour),
 > channel-list/stage-plot, and the `/rider-packs/[id]` route are unchanged

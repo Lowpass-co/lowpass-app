@@ -338,6 +338,20 @@ not a generic "Receipt". The transactions GET joins `expense_receipts`
 (`receipt_number`).
 **Last verified**: code/build green; Adam live.
 
+#### BUD-55 — receipt numbers are UNIQUE per tour (+ vendor on chip)
+**Do**: Attach **two** receipts (to two transactions); reload; reopen the slides.
+**Expect**: each chip shows its **own** number (`R-001`, `R-002`) — no shared
+"R-001". When a receipt has a vendor, the chip reads `R-00n · Vendor`.
+**Why it was broken**: the receipts POST swallowed its max-query error and was
+non-atomic → every receipt stored `R-001`; no UNIQUE guard let it persist
+(BUD-01). **Fix**: migration `209` renumbers existing dups per tour + adds
+`UNIQUE (tour_id, receipt_number)`; the POST no longer swallows the read error,
+computes max defensively, and **retries on `23505`**; the txn GET also embeds
+`vendor`. Format unchanged (`R-00n`).
+**Migration**: run `npm run db:migrate` (209) before this passes on a tour that
+already has dup `R-001`s.
+**Last verified**: tsc 0, eslint 0, build green; Adam live.
+
 #### BUD-49 — transaction row has a discoverable delete
 **Do**: Open a line's slide → Transactions. Look at a transaction row.
 **Expect**: a clear **trash button** (lucide `Trash2`, bordered, hover turns red)

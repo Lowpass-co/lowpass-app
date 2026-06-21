@@ -44,23 +44,28 @@ export async function GET(
   const tourGate = await requireTourInWorkspace(supabase, ctx.tour_id, auth.workspaceId);
   if (tourGate) return tourGate;
 
-  // BUD-48 — embed the linked receipt's number so loaded receipts render their
-  // real number (not a generic "Receipt"). FK receipt_id → expense_receipts.
+  // BUD-48/BUD-01 — embed the linked receipt's number (+ vendor) so loaded
+  // receipts render their real number, not a generic "Receipt". FK receipt_id →
+  // expense_receipts.
   const { data, error } = await supabase
     .from('budget_line_item_transactions')
-    .select('*, receipt:expense_receipts(receipt_number)')
+    .select('*, receipt:expense_receipts(receipt_number, vendor)')
     .eq('line_item_id', lineItemId)
     .order('sort_order', { ascending: true })
     .order('created_at', { ascending: true });
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  // Flatten the embedded receipt to a `receipt_number` field on each txn.
+  // Flatten the embedded receipt to `receipt_number` + `receipt_vendor` fields.
   const transactions = (data ?? []).map((row) => {
     const { receipt, ...txn } = row as BudgetLineItemTransaction & {
-      receipt?: { receipt_number?: string | null } | null;
+      receipt?: { receipt_number?: string | null; vendor?: string | null } | null;
     };
-    return { ...txn, receipt_number: receipt?.receipt_number ?? null };
+    return {
+      ...txn,
+      receipt_number: receipt?.receipt_number ?? null,
+      receipt_vendor: receipt?.vendor ?? null,
+    };
   });
   return NextResponse.json({ transactions });
 }

@@ -28,7 +28,7 @@ export default async function OperationsTourRidersPage({ params }: { params: Pro
 
   const { data: tour, error: tourErr } = await supabase
     .from('tours')
-    .select('id, name, workspace_id')
+    .select('id, name, workspace_id, artist_id')
     .eq('id', tourId)
     .eq('workspace_id', profile.workspace_id)
     .maybeSingle();
@@ -62,7 +62,7 @@ export default async function OperationsTourRidersPage({ params }: { params: Pro
 
   return (
     <div className="mx-auto w-full px-4 pt-6">
-      <RiderPacksTourClient tourId={tour.id} tourName={tour.name ?? 'Tour'} rows={rows} />
+      <RiderPacksTourClient tourId={tour.id} tourName={tour.name ?? 'Tour'} artistId={tour.artist_id} rows={rows} />
     </div>
   );
 }
