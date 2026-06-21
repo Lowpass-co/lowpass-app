@@ -442,10 +442,16 @@ change.
 
 - **CORE-01** — Tab advances exactly ONE editable cell (not +2). Repro: edit a
   cell on budget Expenses (and income), type a value, press Tab → lands on the
-  next editable cell, not two over. Shift+Tab steps one back. (Fix: document
-  `keydown` handler now bails for any key originating from the grid's `.editing`
-  input, so the edit-input's own Tab is the single mover — `Grid.tsx` onKey
-  guard + input onKeyDown.)
+  next editable cell, not two over. Shift+Tab steps one back.
+  **Fix v2 (cb9ea2f's `.cell .editing` guard FAILED on deploy — still +2):**
+  the edit-input's Tab does `commitEdit()` + one `move()`; React flushes that
+  commit SYNCHRONOUSLY before the native event bubbles to the document handler,
+  so by then `editRef` is null, the input is detached (`inField` false), and the
+  old `closest('.cell .editing')` ancestor-walk returned null → all guards
+  missed → the document handler fired a 2nd move. New guard tests the event
+  TARGET's OWN `tagName==='INPUT' && classList.contains('editing')` (survives
+  detachment, no ancestor walk), placed first in `onKey`. Input handler keeps
+  preventDefault + stopPropagation + one move.
 - **CORE-02** — Paste (⌘V) updates the cell display **immediately** and
   **persists** across reload. Repro: copy a cell, ⌘V into another → new value
   shows at once and survives a reload; matrix footers/totals update; multi-cell

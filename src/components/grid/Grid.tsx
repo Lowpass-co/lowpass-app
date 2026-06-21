@@ -740,6 +740,15 @@ export function Grid({
   /* ---- keyboard ---- */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // Bug 1 (Tab +2): hard-suppress the document handler for any key that
+      // ORIGINATED in the grid's editing input. The input owns its own Tab/Enter
+      // (commitEdit + one move). React flushes that commit SYNCHRONOUSLY before
+      // the native event bubbles here, so by now editRef is null, the input is
+      // detached (activeElement = body → inField false), and a `.cell` ancestor
+      // lookup fails. We therefore test the event TARGET's OWN tag+class, which
+      // survives detachment — no ancestor walk. Without this, Tab moves twice.
+      const tgt = e.target as HTMLElement | null;
+      if (tgt && tgt.tagName === 'INPUT' && (tgt as HTMLInputElement).classList?.contains('editing')) return;
       const inField =
         document.activeElement && /^(input|select|textarea)$/i.test(document.activeElement.tagName);
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'z') {
@@ -751,12 +760,6 @@ export function Grid({
       }
       if (editRef.current) return;
       if (inField) return;
-      // Bug 1 (Tab +2): hard-suppress the document handler for any key that
-      // ORIGINATED from the grid's editing input — that input owns its own
-      // Enter/Tab/Escape (it stopPropagation's, but if the native event still
-      // reaches document, this guards against the duplicate Tab move()). Nav-mode
-      // events don't originate from `.editing`, so this is inert for them.
-      if ((e.target as HTMLElement | null)?.closest?.('.cell .editing')) return;
       if (menuRef.current || confirmRef.current || promptRef.current || warnRef.current) return;
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'c') {
         e.preventDefault();
