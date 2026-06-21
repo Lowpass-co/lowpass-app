@@ -126,7 +126,6 @@ export function usePayrollGrid(
   const totalsFor = useCallback(
     (p: PayrollPerson) => {
       const acc = { show: 0, offTravel: 0, rehearsal: 0, active: 0 };
-      let advance = 0;
       for (const e of entries) {
         if (e.personnel_id !== p.id) continue;
         const c = countDayStatuses((e.day_statuses as Record<string, string>) ?? {});
@@ -134,8 +133,13 @@ export function usePayrollGrid(
         acc.offTravel += c.offTravel;
         acc.rehearsal += c.rehearsal;
         acc.active += c.active;
-        advance += Number((e as { advance_fee?: number }).advance_fee) || 0;
       }
+      // PAY-04: the rate-card advance (personnel_rates.advance_fee — the value
+      // edited in the Rates "Advance" column) is the SINGLE source of truth for
+      // the advance component. The per-week payroll_entries.advance_fee is no
+      // longer summed here (it gets zeroed by saveDayStatus, which dropped the
+      // advance from totals). Matches the budget reconcile + summary routes.
+      const advance = Number(p.advance_fee) || 0;
       const rate: RateLike = {
         show_rate: p.show_rate,
         off_rate: p.off_rate,

@@ -17,6 +17,7 @@ import type { PersonnelRate } from '@/types';
 import { PayrollSummary } from './PayrollSummary';
 import { PayrollRatesSpreadsheet } from './PayrollRatesSpreadsheet';
 import { PayrollDaysMatrix } from './PayrollDaysMatrix';
+import { usePayrollGrid, type RoutingDay } from './usePayrollGrid';
 import { AddPersonToTourButton } from '@/components/operations/personnel/AddPersonToTourButton';
 
 interface PayrollViewProps {
@@ -48,6 +49,17 @@ export function PayrollView({
   const excludePersonIds = useMemo(
     () => rates.map((r) => r.person_id).filter((id): id is string => typeof id === 'string'),
     [rates],
+  );
+
+  // PAY-01/PAY-04 — the day-status state is lifted HERE (PayrollView never
+  // unmounts on a tab switch), mirroring the existing `rates` lift above. The
+  // three views consume the SAME hook, so an edit in the Days matrix survives
+  // navigating to Rates and back, and all three read identical day data.
+  // `entries` (live) replaces the stale page-load `payrollEntries` prop.
+  const { statusOf, saveDayStatus, totalsFor, entries } = usePayrollGrid(
+    tourId,
+    routingDates as RoutingDay[],
+    payrollEntries,
   );
 
   return (
@@ -108,15 +120,17 @@ export function PayrollView({
           <PayrollRatesSpreadsheet
             currency={currency}
             initialRates={rates as unknown as PersonnelRate[]}
-            payrollEntries={payrollEntries}
+            payrollEntries={entries}
             canSeeCommission={false}
           />
         ) : view === 'days' ? (
           <PayrollDaysMatrix
-            tourId={tourId}
             routingDates={routingDates}
             personnelRates={rates}
-            payrollEntries={payrollEntries}
+            currency={currency}
+            statusOf={statusOf}
+            saveDayStatus={saveDayStatus}
+            totalsFor={totalsFor}
           />
         ) : (
           <PayrollSummary
@@ -124,7 +138,7 @@ export function PayrollView({
             currency={currency}
             personnelRates={rates}
             routingDates={routingDates}
-            payrollEntries={payrollEntries}
+            payrollEntries={entries}
           />
         )}
       </div>
