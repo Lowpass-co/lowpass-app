@@ -14,6 +14,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { fetchTransactionAggregates } from '@/lib/budget/transactions';
+import { logServerError } from '@/lib/log/serverError';
 
 export type AllocationSegment = { label: string; amount: number };
 export type BurnBucket = { key: string; amount: number };
@@ -43,6 +44,12 @@ type RoutingRow = {
 
 function isoWeekKey(iso: string): string {
   const d = new Date(`${iso}T12:00:00Z`);
+  // P0 — a malformed date yields a garbage "NaN-WNaN" bucket key (and corrupts
+  // the burn chart) rather than throwing; guard + log + fall back to the month.
+  if (Number.isNaN(d.getTime())) {
+    logServerError('getBudgetPanelData.isoWeekKey: invalid date', new Error('Invalid date'), { iso });
+    return (iso ?? '').slice(0, 7) || 'unknown';
+  }
   // ISO 8601 week: Thursday in the same week determines the ISO year.
   const tmp = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
   const dayNum = (tmp.getUTCDay() + 6) % 7; // 0 = Monday
@@ -69,7 +76,23 @@ function daysBetween(startIso: string, endIso: string): number {
   return Math.max(0, Math.round((e - s) / 86400000));
 }
 
+const EMPTY_PANEL_DATA: BudgetPanelData = { allocation: [], burn: [], burnGranularity: 'daily' };
+
 export async function getBudgetPanelData(
+  supabase: SupabaseClient,
+  tourId: string,
+): Promise<BudgetPanelData> {
+  // P0 — the donut/burn panel must never crash the budget page; degrade to
+  // empty panel data + log.
+  try {
+    return await getBudgetPanelDataImpl(supabase, tourId);
+  } catch (err) {
+    logServerError('getBudgetPanelData failed', err, { tourId });
+    return EMPTY_PANEL_DATA;
+  }
+}
+
+async function getBudgetPanelDataImpl(
   supabase: SupabaseClient,
   tourId: string,
 ): Promise<BudgetPanelData> {

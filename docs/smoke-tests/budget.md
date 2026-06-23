@@ -20,6 +20,26 @@ Reference tour: "Warning Support". Templates picker needs a NEW empty tour.
 | BUD-19 | FIXED | click-to-rename templates + consistent picker (Fix-pack C) |
 | BUD-20 | FIXED | summary reads live from `section_id`; no phantom sections (Fix-pack A) |
 
+## P0 — budget SSR crash hardening (fix/budget-ssr-hardening)
+
+#### BUD-58 — a bad/edge-date tour renders instead of 500-ing
+**Do**: Open the budget for the **Good Neighbours / South Africa Aug'26** tour
+(the one that crashed the whole page with "Refresh, something went wrong").
+**Expect**: the budget grid renders (it may degrade — no phase strip / empty
+burn panel if that tour's data is the edge case), and the **real cause is logged
+to the Vercel function logs** (`[lp] …`), not shown as a crash.
+**Why it crashed**: the page awaited a top-level `Promise.all` of the server data
+fns **unwrapped**, and `computeTourPhases.shiftDate` did `new Date(bad).toISOString()`
+which **throws `RangeError: Invalid time value`** on a malformed date → the whole
+SSR 500'd. **Fix**: guard the date helpers (`shiftDate`, `isoWeekKey`) so an
+invalid date logs + falls back instead of throwing; self-guard `computeTourPhases`
+/ `getBudgetPanelData` / `loadTourIncome` (degrade to empty + log); `.catch` the
+two enrich awaits; `generateMetadata` `.single()`→`.maybeSingle()`. New
+`logServerError` helper (console.error → Vercel; no swallowing — Sentry-ready).
+**Still wanted**: the actual Good Neighbours trace/URL to confirm the exact
+thrower (the hardening is safe either way).
+**Last verified**: tsc 0, eslint 0, build green; Adam live.
+
 ## Fixed this pass (retest on next deploy)
 
 - **Budget is the landing tab** (BUD-13) — `resolveBudgetTab` defaults to `budget`.

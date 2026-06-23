@@ -31,6 +31,7 @@
    ============================================ */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { logServerError } from '@/lib/log/serverError';
 
 export type TourPhaseKey = 'pre-prod' | 'rehearsals' | 'show-days' | 'wrap';
 
@@ -51,9 +52,16 @@ export interface TourPhase {
 const REHEARSAL_TYPES = new Set<string>(['rehearsal']);
 const SHOW_TYPES = new Set<string>(['show', 'festival']);
 
-/** Add `days` to an ISO YYYY-MM-DD string, return ISO YYYY-MM-DD. */
+/** Add `days` to an ISO YYYY-MM-DD string, return ISO YYYY-MM-DD.
+ *  P0 — guard against a malformed date: `.toISOString()` THROWS
+ *  `RangeError: Invalid time value` on an Invalid Date, which would take down
+ *  the whole budget SSR. Degrade to the input (+ log) instead of throwing. */
 function shiftDate(iso: string, days: number): string {
   const d = new Date(`${iso}T12:00:00Z`);
+  if (Number.isNaN(d.getTime())) {
+    logServerError('computeTourPhases.shiftDate: invalid date', new Error('Invalid date'), { iso });
+    return (iso ?? '').slice(0, 10);
+  }
   d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
 }
@@ -78,6 +86,20 @@ function classifyDayType(dayTypeCsv: string | null | undefined): {
 }
 
 export async function computeTourPhases(
+  supabase: SupabaseClient,
+  tourId: string,
+): Promise<TourPhase[]> {
+  // P0 — never let phase computation crash the budget page; degrade to no
+  // phases (the strip simply doesn't render) + log the real cause.
+  try {
+    return await computeTourPhasesImpl(supabase, tourId);
+  } catch (err) {
+    logServerError('computeTourPhases failed', err, { tourId });
+    return [];
+  }
+}
+
+async function computeTourPhasesImpl(
   supabase: SupabaseClient,
   tourId: string,
 ): Promise<TourPhase[]> {

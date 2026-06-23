@@ -51,6 +51,7 @@ import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { computeTourPhases } from '@/server/budget/computeTourPhases';
 import { getBudgetPanelData } from '@/server/budget/getBudgetPanelData';
 import { reconcileDerivedBudgetLines } from '@/server/budget/reconcileDerivedLines';
+import { logServerError } from '@/lib/log/serverError';
 import type {
   IncomeInput,
   CommissionInput,
@@ -72,7 +73,10 @@ export async function generateMetadata({
     .from('tours')
     .select('name')
     .eq('id', tourId)
-    .single();
+    // P0 — .maybeSingle() returns { data: null } on no-row instead of THROWING
+    // (a thrown metadata error reads as a generic failure); the page itself
+    // notFound()s the missing tour.
+    .maybeSingle();
   return { title: tour?.name ? `${tour.name} — Budget` : 'Budget' };
 }
 
@@ -230,15 +234,23 @@ export default async function BudgetTourPage({
      when present (§A1 derivation rule). One extra round-trip; cheap
      because we only fetch (line_item_id, amount). */
   const rawLines = (lineItemsRes.data ?? []) as BudgetLineItem[];
+  // P0 — the two enrichment round-trips must never crash the budget page; on a
+  // failure degrade to the un-enriched lines (zeroed aggregate fields) + log.
   const txnEnriched = await enrichLinesWithTransactionAggregates(
     supabase,
     rawLines,
-  );
+  ).catch((err) => {
+    logServerError('enrichLinesWithTransactionAggregates failed', err, { tourId });
+    return rawLines.map((l) => ({ ...l, transaction_sum: 0, transaction_count: 0 }));
+  });
   // Phase 3 Step 5 — also attach attachment_count for the grid's 📎 cell.
   const lines: BudgetLineItem[] = await enrichLinesWithAttachmentCounts(
     supabase,
     txnEnriched,
-  );
+  ).catch((err) => {
+    logServerError('enrichLinesWithAttachmentCounts failed', err, { tourId });
+    return txnEnriched.map((l) => ({ ...l, attachment_count: 0 }));
+  });
   const routingDateById: Record<string, string> = {};
   for (const r of (routingRes.data ?? []) as Array<{
     id: string;

@@ -8,6 +8,7 @@
    ============================================ */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { logServerError } from '@/lib/log/serverError';
 
 export interface ServerIncome {
   routing_id: string;
@@ -59,6 +60,21 @@ const n = (v: unknown): number => {
 /** Routing + budget_income merge (income rows + routing-only zero rows).
  *  Caller must have already auth'd + resolved the workspace + tour. */
 export async function loadTourIncome(
+  supabase: SupabaseClient,
+  tourId: string,
+  workspaceId: string,
+): Promise<TourIncomePayload> {
+  // P0 — the income prop-feed runs in the budget page's SSR; a data-shape edge
+  // here must degrade to "no income" rather than crash the whole page.
+  try {
+    return await loadTourIncomeImpl(supabase, tourId, workspaceId);
+  } catch (err) {
+    logServerError('loadTourIncome failed', err, { tourId });
+    return { income: [], routing_only: [] };
+  }
+}
+
+async function loadTourIncomeImpl(
   supabase: SupabaseClient,
   tourId: string,
   workspaceId: string,
