@@ -15,7 +15,6 @@
    ============================================ */
 
 import { usePathname, useSearchParams } from 'next/navigation';
-import { BarChart3, Settings } from 'lucide-react';
 import { ProductSubBar } from '@/components/shell-v2/ProductSubBar';
 import { TourIdentityChip } from '@/components/shell-v2/TourIdentityChip';
 import { BudgetExportControls } from '@/components/budget/BudgetExportControls';
@@ -61,14 +60,14 @@ export function BudgetContextBand({
             tourName={tourName}
           />
         }
+        /* Phase 0 — SUMMARY | EXPENSES | INCOME | SETTINGS as four equal tabs.
+           Reports retired (export lives in rightSlot); Settings moved out of the
+           corner into the main row, plain (no icon) to match the content tabs. */
         items={[
           { key: 'summary', label: 'Summary', href: hrefFor('summary'), active: active === 'summary' },
           { key: 'budget', label: 'Expenses', href: hrefFor('budget'), active: active === 'budget' },
           { key: 'income', label: 'Income', href: hrefFor('income'), active: active === 'income' },
-        ]}
-        cornerItems={[
-          { key: 'reports', label: 'Reports', href: hrefFor('reports'), active: active === 'reports', Icon: BarChart3, scroll: false },
-          { key: 'settings', label: 'Settings', href: hrefFor('settings'), active: active === 'settings', Icon: Settings, scroll: false },
+          { key: 'settings', label: 'Settings', href: hrefFor('settings'), active: active === 'settings' },
         ]}
         rightSlot={
           <div className="flex items-center gap-2">

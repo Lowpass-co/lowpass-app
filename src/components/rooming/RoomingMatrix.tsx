@@ -16,16 +16,11 @@ import { X } from 'lucide-react';
 import { Grid } from '@/components/grid/Grid';
 import type { Column, Row, Section } from '@/components/grid/types';
 import { colourForDayType, labelForDayType } from '@/lib/routing/dayType';
-import { ROOM_OPTIONS, useRoomingGrid, type RoutingNight, type RosterPerson } from './useRoomingGrid';
+import { ROOM_OPTIONS, ROOM_CODE_HUE, useRoomingGrid, type RoutingNight, type RosterPerson } from './useRoomingGrid';
 
 const ROOM_CODES = ROOM_OPTIONS.map((o) => o.value);
-const ROOM_OPTCOLORS: Record<string, string> = {
-  SGL: 'var(--color-lp-day-travel)',
-  'DBL (A)': 'var(--color-lp-day-rehearsal)',
-  'DBL (B)': 'var(--color-lp-day-rehearsal)',
-  'DBL (C)': 'var(--color-lp-day-rehearsal)',
-  'DBL (D)': 'var(--color-lp-day-rehearsal)',
-};
+// MTX-03 — one distinct token hue per room code (shared with the Cards view).
+const ROOM_OPTCOLORS: Record<string, string> = ROOM_CODE_HUE;
 
 function DayHeader({ night }: { night: RoutingNight }) {
   const dt = (night.day_type ?? '').trim();

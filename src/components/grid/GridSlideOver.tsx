@@ -493,7 +493,7 @@ export function GridSlideOver({
       <div className="so-sec-h">
         <h5>Transactions</h5>
         <button type="button" className="so-add" onClick={addTxn}>
-          ＋ Add
+          ＋ Add transaction
         </button>
       </div>
       <div>
@@ -565,6 +565,31 @@ export function GridSlideOver({
             </div>
           ))
         )}
+        {/* Prominent bottom add — where a user expects to add another row
+            (the header "＋ Add transaction" is easy to miss). Same addTxn path. */}
+        <button
+          type="button"
+          onClick={addTxn}
+          className="btn-transition"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 6,
+            width: '100%',
+            marginTop: 'var(--lp-space-2)',
+            padding: 'var(--lp-space-2)',
+            borderRadius: 'var(--lp-radius-md)',
+            border: '1px dashed var(--lp-border-strong)',
+            background: 'transparent',
+            color: 'var(--lp-text-secondary)',
+            fontSize: 13,
+            fontWeight: 600,
+            cursor: 'pointer',
+          }}
+        >
+          ＋ Add transaction
+        </button>
       </div>
     </div>
   );

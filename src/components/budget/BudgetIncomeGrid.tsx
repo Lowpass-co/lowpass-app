@@ -20,6 +20,7 @@ import { Grid } from '@/components/grid/Grid';
 import type { Column, GridFx, Row, Section } from '@/components/grid/types';
 import { convertToCurrency } from '@/lib/budget/fx';
 import { toIncomeRows, type IncomeRow } from '@/lib/budget/income';
+import { labelForDayType } from '@/lib/routing/dayType';
 import { useToast } from '@/components/ui/Toast';
 
 const CUR_SYMBOL: Record<string, string> = { GBP: '£', USD: '$', EUR: '€', CAD: 'C$', AUD: 'A$', JPY: '¥' };
@@ -31,8 +32,15 @@ const num = (v: unknown): number => {
 };
 const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));
 const postTax = (pre: number, wh: number) => pre * (1 - clamp(wh, 0, 100) / 100);
-const showLabel = (r: IncomeRow) =>
-  `${r.date ? r.date.slice(5) + ' · ' : ''}${r.venue_name || r.city || 'Show'}`;
+
+/** INC-01 — read-only routing-context fields (Date · Type · Venue · City),
+ *  from the routing each income row already carries. Display-only. */
+const routingFields = (r: IncomeRow) => ({
+  date: r.date ? r.date.slice(5) : '',
+  daytype: r.day_type ? labelForDayType(r.day_type) || r.day_type : '—',
+  venue: r.venue_name ?? '',
+  city: r.city ?? '',
+});
 
 export function BudgetIncomeGrid({
   tourId,
@@ -123,12 +131,18 @@ export function BudgetIncomeGrid({
 
   const columns: Column[] = useMemo(() => {
     const idx: Column = { id: 'idx', label: '#', type: 'idx', w: 46, min: 40, resize: false };
-    const show: Column = { id: 'show', label: 'Show', type: 'text', ro: true, w: 240, min: 150, resize: true };
+    // INC-01 — read-only routing context (mirrors the matrices' day headers).
+    const routingCols: Column[] = [
+      { id: 'date', label: 'Date', type: 'text', ro: true, w: 72, min: 58, resize: true },
+      { id: 'daytype', label: 'Type', type: 'text', ro: true, w: 78, min: 56, resize: true },
+      { id: 'venue', label: 'Venue', type: 'text', ro: true, w: 168, min: 110, resize: true },
+      { id: 'city', label: 'City', type: 'text', ro: true, w: 110, min: 80, resize: true },
+    ];
     const money = (id: string, label: string): Column => ({ id, label, type: 'money', w: 120, min: 90, resize: true });
     if (view === 'projected') {
       return [
         idx,
-        show,
+        ...routingCols,
         money('guarantee', 'Guarantee'),
         { id: 'wh', label: 'WH %', type: 'number', w: 80, min: 60, resize: true },
         { id: 'posttax', label: 'Post-tax', type: 'calc', w: 120, min: 90, resize: true, calc: (r: Row) => postTax(num(r.guarantee), num(r.wh)) },
@@ -148,7 +162,7 @@ export function BudgetIncomeGrid({
     }
     return [
       idx,
-      show,
+      ...routingCols,
       money('guarantee', 'Guarantee'),
       money('overage', 'Overage'),
       money('merch', 'Merch'),
@@ -160,8 +174,8 @@ export function BudgetIncomeGrid({
   const data: Section[] = useMemo(() => {
     const gridRows: Row[] = (rows ?? []).map((r) =>
       view === 'projected'
-        ? { _uid: r.routing_id, cur: native, show: showLabel(r), guarantee: r.pre_tax_guarantee, wh: r.withholding_pct, overage: r.pre_tax_overage, merch: r.merch_income, vip: r.vip_income }
-        : { _uid: r.routing_id, cur: native, show: showLabel(r), guarantee: r.actual_guarantee, overage: r.actual_overage, merch: r.actual_merch, vip: r.actual_vip },
+        ? { _uid: r.routing_id, cur: native, ...routingFields(r), guarantee: r.pre_tax_guarantee, wh: r.withholding_pct, overage: r.pre_tax_overage, merch: r.merch_income, vip: r.vip_income }
+        : { _uid: r.routing_id, cur: native, ...routingFields(r), guarantee: r.actual_guarantee, overage: r.actual_overage, merch: r.actual_merch, vip: r.actual_vip },
     );
     return [{ name: 'Shows', kind: 'normal', _uid: 'income', rows: gridRows }];
   }, [rows, view, native]);

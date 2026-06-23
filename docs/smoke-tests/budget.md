@@ -372,6 +372,34 @@ computes max defensively, and **retries on `23505`**; the txn GET also embeds
 already has dup `R-001`s.
 **Last verified**: tsc 0, eslint 0, build green; Adam live.
 
+#### BUD-56 — Phase 0 tab bar (SUMMARY | EXPENSES | INCOME | SETTINGS)
+**Do**: Open `/budget/[tourId]`. Read the context-band tabs. Then hit a stale
+`?tab=reports`.
+**Expect**: exactly **Summary · Expenses · Income · Settings** as four equal
+tabs (Settings moved out of the corner, plain — no gear icon; Reports gone).
+`?tab=reports` lands on **Summary** (no 404). Grid/Classic toggle + every tab
+body still render. (`BudgetContextBand` items; `resolveBudgetTab` maps
+`reports → summary`.)
+**Last verified**: tsc 0, eslint 0, build green; Adam live.
+
+#### BUD-57 — "Add transaction" is obvious
+**Do**: Open a line's slide-over → Transactions.
+**Expect**: a clear **"＋ Add transaction"** control — the section-header button
+is relabelled (was "＋ Add") AND a full-width dashed **"＋ Add transaction"**
+button sits at the **bottom** of the list (where you expect to add a row).
+Clicking either adds a transaction via the real route (`addTxn` → `lineApi
+.addTransaction`); the trailing-row path still works.
+**Last verified**: tsc 0, eslint 0, build green; Adam live.
+
+#### INC-01 — income grid shows routing context columns
+**Do**: Budget → Income.
+**Expect**: read-only **Date · Type · Venue · City** columns (replacing the
+combined "Show" column), from the routing each income row carries (Type =
+Show/Travel/Off via `labelForDayType`). Money columns + totals/P&L unchanged
+(field names + `/api/budget/income` write path byte-identical; the new columns
+are `ro`). (`IncomeRow.day_type` added; `BudgetIncomeGrid` routingCols.)
+**Last verified**: tsc 0, eslint 0, build green; Adam live.
+
 #### BUD-49 — transaction row has a discoverable delete
 **Do**: Open a line's slide → Transactions. Look at a transaction row.
 **Expect**: a clear **trash button** (lucide `Trash2`, bordered, hover turns red)

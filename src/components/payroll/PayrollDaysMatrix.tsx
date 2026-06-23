@@ -44,29 +44,72 @@ function DayHeader({ day, weekStart }: { day: RoutingDay; weekStart: boolean }) 
   const dt = (day.day_type ?? '').trim();
   const d = day.date ? day.date.slice(5) : '';
   return (
+    /* MTX-05 — the week label / date / city / day-type used to collide in the
+       narrow column (no whiteSpace:nowrap → city + type wrapped). Full-width
+       children + nowrap + ellipsis truncate cleanly; a bit more gap/padding
+       gives each row breathing room. */
     <div
       style={{
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        gap: 2,
-        lineHeight: 1.15,
-        padding: '2px 0',
+        gap: 3,
+        lineHeight: 1.2,
+        padding: '4px 4px 3px',
+        width: '100%',
+        minWidth: 0,
+        boxSizing: 'border-box',
         borderLeft: weekStart ? '2px solid var(--lp-orange)' : undefined,
         marginLeft: weekStart ? -1 : undefined,
       }}
     >
       {weekStart ? (
-        <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.06em', color: 'var(--lp-orange)' }}>
+        <span
+          style={{
+            fontSize: 8,
+            fontWeight: 700,
+            letterSpacing: '0.06em',
+            color: 'var(--lp-orange)',
+            maxWidth: '100%',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
           {formatWeekLabel(getWeekStart(day.date))}
         </span>
       ) : null}
-      <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--lp-text)' }}>{d}</span>
-      {day.city ? <span style={{ fontSize: 9, color: 'var(--lp-text-tertiary)', maxWidth: 80, overflow: 'hidden', textOverflow: 'ellipsis' }}>{day.city}</span> : null}
+      <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--lp-text)', whiteSpace: 'nowrap' }}>{d}</span>
+      {day.city ? (
+        <span
+          title={day.city}
+          style={{
+            fontSize: 9,
+            color: 'var(--lp-text-tertiary)',
+            maxWidth: '100%',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {day.city}
+        </span>
+      ) : null}
       {dt ? (
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: 8, fontWeight: 600, color: colourForDayType(dt) }}>
-          <span style={{ width: 5, height: 5, borderRadius: '50%', background: colourForDayType(dt) }} />
-          {labelForDayType(dt) || dt}
+        <span
+          title={labelForDayType(dt) || dt}
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 3,
+            maxWidth: '100%',
+            fontSize: 8,
+            fontWeight: 600,
+            color: colourForDayType(dt),
+          }}
+        >
+          <span style={{ width: 5, height: 5, borderRadius: '50%', background: colourForDayType(dt), flexShrink: 0 }} />
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{labelForDayType(dt) || dt}</span>
         </span>
       ) : null}
     </div>

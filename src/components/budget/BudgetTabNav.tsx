@@ -28,11 +28,12 @@ export { type BudgetTab, resolveBudgetTab };
 
 /* Budget Phase A §A2 — Actuals tab removed. Proposed / Actual /
    Variance render side-by-side per row on the Budget tab grid. */
+/* Phase 0 — Reports retired; bar is Summary | Expenses | Income | Settings.
+   (This component is retired/unmounted; kept compiling for any stray import.) */
 const TABS: ReadonlyArray<{ id: BudgetTab; label: string }> = [
   { id: 'summary', label: 'Summary' },
-  { id: 'budget', label: 'Budget' },
+  { id: 'budget', label: 'Expenses' },
   { id: 'income', label: 'Income' },
-  { id: 'reports', label: 'Reports' },
   { id: 'settings', label: 'Settings' },
 ];
 

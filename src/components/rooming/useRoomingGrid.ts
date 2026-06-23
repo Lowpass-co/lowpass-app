@@ -44,11 +44,24 @@ export function isNightAway(dayType?: string): boolean {
   return !HOME_TYPES.has(first);
 }
 
-/** Colour-key a room code via tokens (SGL ≈ blue, DBL ≈ violet). Token-clean. */
+/** MTX-03 — ONE token-based hue per room code so a matrix is scannable by
+ *  colour (previously SGL=blue, every DBL=violet → indistinguishable). The
+ *  matrix uses these solid hues as cell-fill `optColors`; the Cards view tints
+ *  them via `roomCodeTint`. Token-clean (canonical day hues). */
+export const ROOM_CODE_HUE: Record<string, string> = {
+  SGL: 'var(--color-lp-day-travel)', // blue
+  'DBL (A)': 'var(--color-lp-day-show)', // green
+  'DBL (B)': 'var(--color-lp-day-press)', // pink
+  'DBL (C)': 'var(--color-lp-day-radio)', // amber
+  'DBL (D)': 'var(--color-lp-day-tv)', // red
+};
+
+/** Colour-key a room code via tokens — the Cards-view tint (the matrix uses the
+ *  solid `ROOM_CODE_HUE` directly as its dropdown `optColors`). Token-clean. */
 export function roomCodeTint(code: string): string | undefined {
-  if (code === 'SGL') return 'color-mix(in srgb, var(--color-lp-day-travel) 14%, transparent)';
-  if (code.startsWith('DBL')) return 'color-mix(in srgb, var(--color-lp-day-rehearsal) 14%, transparent)';
-  return undefined;
+  const hue = ROOM_CODE_HUE[code];
+  if (!hue) return undefined;
+  return `color-mix(in srgb, ${hue} 16%, transparent)`;
 }
 
 interface GridPerson {

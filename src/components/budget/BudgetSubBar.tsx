@@ -13,7 +13,7 @@
    ============================================ */
 
 import { usePathname, useSearchParams } from 'next/navigation';
-import { BarChart3, Settings } from 'lucide-react';
+import { Settings } from 'lucide-react';
 import { ProductSubBar } from '@/components/shell-v2/ProductSubBar';
 import { BudgetDensityToggle } from './BudgetDensityToggle';
 import { resolveBudgetTab, type BudgetTab } from './budget-tab-utils';
@@ -40,14 +40,6 @@ export function BudgetSubBar() {
         { key: 'income', label: 'Income', href: hrefFor('income'), active: active === 'income' },
       ]}
       cornerItems={[
-        {
-          key: 'reports',
-          label: 'Reports',
-          href: hrefFor('reports'),
-          active: active === 'reports',
-          Icon: BarChart3,
-          scroll: false,
-        },
         {
           key: 'settings',
           label: 'Settings',

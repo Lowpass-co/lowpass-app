@@ -12,7 +12,7 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
 import { RoutingRail, type RailEntry } from '@/components/routing/RoutingRail';
-import { roomCodeTint, useRoomingGrid, type RoutingNight, type RosterPerson } from './useRoomingGrid';
+import { roomCodeTint, ROOM_CODE_HUE, useRoomingGrid, type RoutingNight, type RosterPerson } from './useRoomingGrid';
 
 const ASSIGNABLE = ['SGL', 'DBL (A)', 'DBL (B)', 'DBL (C)', 'DBL (D)'];
 
@@ -94,13 +94,21 @@ export function RoomingCards({
                   <div
                     key={`${c.code}:${i}`}
                     style={{
-                      border: '1px solid var(--lp-border)',
+                      border: '1px solid var(--lp-border-strong)',
                       borderRadius: 'var(--lp-radius-lg)',
                       background: roomCodeTint(c.code) ?? 'var(--lp-panel)',
+                      boxShadow: 'var(--lp-shadow-sm)',
                       padding: 12,
                     }}
                   >
-                    <div style={{ fontWeight: 700, fontSize: 12, color: 'var(--lp-text)', marginBottom: 8 }}>{c.code}</div>
+                    {/* ROOM-01 — canonical card header: hue dot + code badge + count. */}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: ROOM_CODE_HUE[c.code] ?? 'var(--lp-text-tertiary)', flexShrink: 0 }} />
+                      <span style={{ fontWeight: 700, fontSize: 12, color: 'var(--lp-text)' }}>{c.code}</span>
+                      <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 600, color: 'var(--lp-text-tertiary)' }}>
+                        {c.occupants.length}
+                      </span>
+                    </div>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
                       {c.occupants.map((name) => (
                         <span

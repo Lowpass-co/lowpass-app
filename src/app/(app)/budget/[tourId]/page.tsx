@@ -46,7 +46,6 @@ import { enrichLinesWithTransactionAggregates } from '@/lib/budget/transactions'
 import { enrichLinesWithAttachmentCounts } from '@/lib/budget/attachments';
 import { loadTourIncome, toIncomeRows } from '@/lib/budget/income';
 import { BudgetSummaryTab } from '@/components/budget/BudgetSummaryTab';
-import { BudgetTabPlaceholder } from '@/components/budget/BudgetTabPlaceholder';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { computeTourPhases } from '@/server/budget/computeTourPhases';
 import { getBudgetPanelData } from '@/server/budget/getBudgetPanelData';
@@ -284,7 +283,9 @@ export default async function BudgetTourPage({
           <BudgetPhaseStripClient phases={phases} />
         </BudgetPhaseStripGate>
 
-        <div className="space-y-6 px-4 pt-4">
+        {/* Phase 0 — content top matches the section rhythm so the grid isn't
+            jammed under the sticky band/burn/phase stack. */}
+        <div className="space-y-6 px-4 pt-6">
           {tab === 'summary' ? (
             <BudgetSummaryTab
               tourId={tourId}
@@ -349,20 +350,10 @@ export default async function BudgetTourPage({
             <BudgetIncomeGrid tourId={tourId} tourCurrency={tourCurrency} initialRows={initialIncome} />
           ) : null}
 
-          {/* Budget Phase A §A2 — Actuals tab removed; the
-              Budget grid now shows Proposed / Actual / Variance
-              per row + per-section + tour-wide. Stale ?tab=actuals
-              URLs resolve to 'summary' via resolveBudgetTab. */}
-
-          {tab === 'reports' ? (
-            <BudgetTabPlaceholder
-              subtitle="Budget · reports"
-              title="Reports"
-              body="Custom reports and exports across the budget will live here. The existing PDF / XLSX export from the Budget tab is wired and reachable today."
-              linkLabel="Open Budget tab + export"
-              linkHref={`/budget/${tourId}?tab=budget`}
-            />
-          ) : null}
+          {/* Budget Phase A §A2 / Phase 0 — Actuals + Reports tabs removed.
+              The grid shows Proposed / Actual / Variance per row; export lives
+              on the context band. Stale ?tab=actuals|reports resolve to
+              budget|summary via resolveBudgetTab (no 404). */}
 
           {tab === 'settings' ? (
             <BudgetSettingsTab tourId={tourId} sections={sections} />

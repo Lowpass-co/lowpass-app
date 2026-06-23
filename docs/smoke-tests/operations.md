@@ -282,6 +282,29 @@ underlay on frozen body cells in `grid.css`; also covers the rooming matrix.)
 **Expect**: still **£6,300**; Salary/Per-Diem reconcile unchanged (advance now
 read from the rate card, neutral for Ben). **Needs-live**.
 
+## Polish batch — 2026-06-23 (BUDGET_POLISH_MAP)
+
+#### MTX-03 — rooming room codes are distinct colours
+**Do**: Rooming → matrix (and Cards). Assign different codes (SGL, DBL A/B/C/D).
+**Expect**: each room code has its **own** token hue (was SGL=blue, every
+DBL=violet → indistinguishable). Matrix cell-fill + Cards tint use the SAME
+palette (`ROOM_CODE_HUE` in `useRoomingGrid.ts`; `roomCodeTint` derives from
+it). Token-clean. **Needs-live**.
+
+#### ROOM-01 — rooming Cards view refreshed
+**Do**: Rooming → Cards view.
+**Expect**: room cards read canonical — raised surface (`--lp-shadow-sm` +
+`--lp-border-strong`), a header with a **hue dot + code badge + occupant count**,
+token tints per code. Assign (pool select) / unassign (chip ✕) still work
+(unchanged `saveCell` → budget feed intact). **Needs-live**.
+
+#### MTX-05 — payroll Days-matrix headers uncramped
+**Do**: Payroll → Days matrix. Read the day-column headers.
+**Expect**: week label / date / city / day-type no longer collide — full-width
+children with `nowrap` + ellipsis truncate cleanly (city + type get `title`
+tooltips), more gap/padding. (`DayHeader` in `PayrollDaysMatrix.tsx`.) Token
+colours unchanged. **Needs-live**.
+
 ## Retired
 
 (None yet.)

@@ -41,6 +41,8 @@ export interface IncomeRow {
   date: string | null;
   venue_name: string | null;
   city: string | null;
+  /** INC-01 — routing day type (show/travel/off…) for the read-only Type column. */
+  day_type: string | null;
   pre_tax_guarantee: number;
   withholding_pct: number;
   pre_tax_overage: number;
@@ -115,6 +117,7 @@ export function toIncomeRows(payload: TourIncomePayload): IncomeRow[] {
     date: i.routing?.date ?? null,
     venue_name: i.routing?.venue_name ?? null,
     city: i.routing?.city ?? null,
+    day_type: i.routing?.day_type ?? null,
     pre_tax_guarantee: n(i.pre_tax_guarantee),
     withholding_pct: n(i.withholding_pct),
     pre_tax_overage: n(i.pre_tax_overage),
@@ -130,6 +133,7 @@ export function toIncomeRows(payload: TourIncomePayload): IncomeRow[] {
     date: r.date ?? null,
     venue_name: r.venue_name ?? null,
     city: r.city ?? null,
+    day_type: r.day_type ?? null,
     pre_tax_guarantee: 0,
     withholding_pct: 0,
     pre_tax_overage: 0,

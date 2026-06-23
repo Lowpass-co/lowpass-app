@@ -10,30 +10,28 @@
    existing client-side imports.
    ============================================ */
 
-/* Budget Phase A §A2 — 'actuals' removed. Proposed / Actual /
-   Variance now live side-by-side on the Budget tab grid. Stale
-   bookmarks with ?tab=actuals fall through to 'summary' by the
-   default branch below. */
+/* Budget Phase 0 — the bar is SUMMARY | EXPENSES | INCOME | SETTINGS.
+   'actuals' (Phase A) and 'reports' (Phase 0) are retired: their stale
+   bookmarks redirect-by-resolution rather than 404 — 'reports' → 'summary'
+   (its export lives on the context band), 'actuals'/unknown → 'budget'. */
 export type BudgetTab =
   | 'summary'
   | 'budget'
   | 'income'
-  | 'reports'
   | 'settings';
 
 export function resolveBudgetTab(
   raw: string | string[] | undefined,
 ): BudgetTab {
   const candidate = Array.isArray(raw) ? raw[0] : raw;
-  /* Budget is the landing tab — the TM almost always wants the line-item
-     grid first. Summary/Income/Reports/Settings are explicit; everything
-     else (no ?tab, stale ?tab=actuals, unknown) falls through to Budget. */
   switch (candidate) {
     case 'summary':
     case 'income':
-    case 'reports':
     case 'settings':
       return candidate;
+    // Phase 0 — Reports tab removed; stale ?tab=reports lands on Summary.
+    case 'reports':
+      return 'summary';
     case 'budget':
     default:
       return 'budget';
