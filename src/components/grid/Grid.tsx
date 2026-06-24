@@ -76,8 +76,10 @@ export interface GridProps {
   /** Phase 2 wires the slide-over here; Phase 1 leaves it undefined. */
   onOpenRow?: (si: number, ri: number) => void;
   /** Persistence hook — fires after a cell commit / status / dropdown / check
-      edit, with the row's _uid (= DB id on real surfaces). Phase 3. */
-  onEdit?: (rowUid: string, field: string, value: unknown) => void;
+      edit, with the row's _uid (= DB id on real surfaces). Phase 3. May return a
+      Promise; the fill-handle (#2) reverts the optimistic value if it rejects.
+      Returning void (the default) keeps the existing fire-and-forget behaviour. */
+  onEdit?: (rowUid: string, field: string, value: unknown) => void | Promise<unknown>;
   /** Currency/FX injection (default: demo static table). */
   fx?: GridFx;
   /** Status set for the slide's status menu (default: canonical 4). */
@@ -933,14 +935,35 @@ export function Grid({
               if (!k || cd?.ro) continue;
               const o = flat()[r];
               if (!o) continue;
+              // GV2-02 fix — mirror the normal-edit derived lock (renderCell
+              // :1460): NEVER write est/act of a derived (Payroll/Rooming-
+              // reconciled) section. Those 🔒 cells are source-owned + the server
+              // rejects them ("Could not save"). data()[o.si] is the row's section.
+              const tsec = data()[o.si];
+              if (tsec?.kind === 'derived' && (k === 'est' || k === 'act')) continue;
               if (!wrote) {
                 pushUndo();
                 wrote = true;
               }
-              o.row[k] = srcVal;
-              if (srcFormula !== undefined) o.row[`${k}__f`] = srcFormula;
-              else delete o.row[`${k}__f`];
-              if (o.row._uid) onEditRef.current?.(o.row._uid, k, srcVal);
+              const targetRow = o.row;
+              const prevVal = targetRow[k];
+              const prevFormula = targetRow[`${k}__f`];
+              targetRow[k] = srcVal;
+              if (srcFormula !== undefined) targetRow[`${k}__f`] = srcFormula;
+              else delete targetRow[`${k}__f`];
+              if (targetRow._uid) {
+                const ret = onEditRef.current?.(targetRow._uid, k, srcVal);
+                // Revert-on-failure: if onEdit returns a rejecting promise, roll
+                // this cell's optimistic value back immediately (not on reload).
+                if (ret && typeof (ret as Promise<unknown>).then === 'function') {
+                  void (ret as Promise<unknown>).then(undefined, () => {
+                    targetRow[k] = prevVal;
+                    if (prevFormula !== undefined) targetRow[`${k}__f`] = prevFormula;
+                    else delete targetRow[`${k}__f`];
+                    render();
+                  });
+                }
+              }
             }
           }
           if (wrote) render();

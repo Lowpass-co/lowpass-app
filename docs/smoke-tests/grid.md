@@ -15,6 +15,12 @@ edit is byte-identical.
   bottom-right. Drag it down/across → the range fills with the source value and
   **persists** (fires `onEdit`, survives reload). Doesn't disturb shift/body
   drag-select. Enabled: budget, income, both matrices, demo.
+  **Fix (post-verify):** the fill loop now skips **locked derived cells** — it
+  mirrors the normal-edit guard (`renderCell` derived est/act), so dragging over
+  a Payroll/Rooming-reconciled Salary/Accommodation 🔒 cell leaves it untouched
+  (no "Could not save"); only editable cells are written. Plus revert-on-failure:
+  if an `onEdit` rejects mid-fill, that cell's optimistic value rolls back
+  immediately (onEdit may now return a Promise; void stays fire-and-forget).
 - **GV2-03 — click-twice-to-open (D2 Grid-wide).** On a dropdown/status cell:
   1st click **selects** (no menu), 2nd click on the now-active cell **opens** the
   menu. Surfaces: budget `status`, rooming + payroll day cells, demo. (Income has
