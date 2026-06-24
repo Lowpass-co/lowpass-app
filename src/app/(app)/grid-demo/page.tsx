@@ -225,9 +225,9 @@ export default function GridDemoPage() {
       </div>
       {/* key by view → the Grid remounts with the right column + data set */}
       {view === 'expenses' ? (
-        <Grid key="expenses" initialColumns={EXPENSE_COLS} initialData={EXPENSE_DATA} />
+        <Grid key="expenses" initialColumns={EXPENSE_COLS} initialData={EXPENSE_DATA} fillHandle clickTwiceToOpen />
       ) : (
-        <Grid key="income" initialColumns={INCOME_COLS} initialData={INCOME_DATA} />
+        <Grid key="income" initialColumns={INCOME_COLS} initialData={INCOME_DATA} fillHandle clickTwiceToOpen />
       )}
     </div>
   );

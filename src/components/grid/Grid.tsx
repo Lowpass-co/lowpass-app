@@ -44,6 +44,7 @@ import {
   visCols,
   withCalc,
 } from './gridModel';
+import { evaluateFormula } from '@/lib/grid/formula';
 import { GridMenu, type MenuConfig } from './GridMenu';
 import { GridSlideOver } from './GridSlideOver';
 import {
@@ -114,8 +115,23 @@ export interface GridProps {
       pill). Falls back to the column label. Additive. */
   headerFor?: (colId: string) => React.ReactNode;
   /** Optional footer row (rendered on the same --cols grid) — one cell per
-      column id (e.g. rooming rooms-per-night). Additive — only when passed. */
-  columnFooter?: (colId: string) => React.ReactNode;
+      column id (e.g. rooming rooms-per-night). Additive — only when passed.
+      Grid-v2: receives the Grid's LIVE flat rows as a 2nd arg so the footer can
+      reflect in-grid edits without a parent re-render (existing callers ignore
+      it → unchanged). */
+  columnFooter?: (colId: string, liveRows?: Row[]) => React.ReactNode;
+  /* ---- GRID-V2 INTERACTION (additive, opt-in — default off) ------------- */
+  /** Excel fill-handle: a drag target on the active cell's bottom-right that
+      fills the dragged range with the source value (persists via onEdit).
+      Default off → no handle rendered, existing drag-select untouched. (#2) */
+  fillHandle?: boolean;
+  /** Dropdown/status cells: require the cell to be ALREADY active before a click
+      opens the menu (1st click selects, 2nd opens). Default off → single-click
+      opens (unchanged). (#3) */
+  clickTwiceToOpen?: boolean;
+  /** After Tab lands on a dropdown/status cell, auto-open its menu (fast matrix
+      entry). Default off → Tab just moves (unchanged). (#4) */
+  tabOpensMenu?: boolean;
 }
 
 type ReorderKind = 'section' | 'row' | 'col';
@@ -152,6 +168,9 @@ export function Grid({
   frozenCols = 0,
   headerFor,
   columnFooter,
+  fillHandle = false,
+  clickTwiceToOpen = false,
+  tabOpensMenu = false,
 }: GridProps) {
   const fx = fxProp ?? demoFx;
   // Totals / section-header / KPI maths must use the SAME injected FX + display
@@ -204,6 +223,8 @@ export function Grid({
   const rootRef = useRef<HTMLDivElement>(null);
   const overlayRef = useRef<OverlayHandle>(null);
   const selDragRef = useRef(false);
+  /** Grid-v2 #2 — active fill-handle drag (source cell). null when not filling. */
+  const fillDragRef = useRef<{ fromR: number; fromC: number } | null>(null);
   const rzRef = useRef<{ key: string; x: number; w: number } | null>(null);
   const reRef = useRef<{
     kind: ReorderKind;
@@ -313,7 +334,27 @@ export function Grid({
     const t = colDef(cols(), key)?.type;
     let v: string | number = input.value;
     pushUndo();
-    if (t === 'money' || t === 'number') v = parseFloat(String(v).replace(/[^0-9.\-]/g, '')) || 0;
+    if (t === 'money' || t === 'number') {
+      // Grid-v2 #1 — formula input: `=1+1` commits 2. Safe arithmetic only (no
+      // eval). Only a leading `=` triggers it, so every plain numeric edit is
+      // byte-identical to before. D1 — retain the `=…` string on a sidecar
+      // `<key>__f` field so re-opening the cell shows the formula (in-session;
+      // not persisted — onEdit still fires the numeric result).
+      const raw = String(v).trim();
+      if (raw.startsWith('=')) {
+        const result = evaluateFormula(raw.slice(1));
+        if (result !== null) {
+          v = result;
+          if (o) o.row[`${key}__f`] = raw;
+        } else {
+          v = parseFloat(raw.replace(/[^0-9.\-]/g, '')) || 0;
+          if (o) delete o.row[`${key}__f`];
+        }
+      } else {
+        v = parseFloat(raw.replace(/[^0-9.\-]/g, '')) || 0;
+        if (o) delete o.row[`${key}__f`];
+      }
+    }
     if (o) {
       o.row[key] = v;
       if (o.row._uid) onEditRef.current?.(o.row._uid, key, v);
@@ -812,6 +853,20 @@ export function Grid({
         case 'Tab':
           e.preventDefault();
           move(0, e.shiftKey ? -1 : 1);
+          // Grid-v2 #4 — after Tab lands, auto-open the dropdown/status menu
+          // (fast matrix entry). Opt-in (tabOpensMenu); rAF so the post-move
+          // render has painted the new .cell.active to anchor the menu. The
+          // shipped editing-input Tab guard at the top of onKey is untouched.
+          if (tabOpensMenu) {
+            requestAnimationFrame(() => {
+              const k = NC()[sel().fc];
+              const ty = colDef(cols(), k)?.type;
+              const o = flat()[sel().fr];
+              const cellEl = rootRef.current?.querySelector('.cell.active') as HTMLElement | null;
+              if (o && cellEl && ty === 'status') openStatusMenu(cellEl, o, k);
+              else if (o && cellEl && ty === 'dropdown') openDropMenu(cellEl, o, k);
+            });
+          }
           break;
         default:
           if (e.key.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey) {
@@ -828,12 +883,15 @@ export function Grid({
     // refs everywhere → stable; the callbacks are memoised.
   }, [doCopy, doPaste, doDelete, move, redo, undo, startEdit, pushUndo, render]);
 
-  /* ---- drag-select ---- */
+  /* ---- drag-select + fill-handle (#2) ---- */
   useEffect(() => {
     const onMove = (e: PointerEvent) => {
-      if (!selDragRef.current) return;
+      // Both gestures extend the selection focus to the hovered cell; the
+      // difference is what pointerup does (fill writes the source value).
+      if (!selDragRef.current && !fillDragRef.current) return;
       if (e.buttons === 0) {
         selDragRef.current = false;
+        fillDragRef.current = null;
         return;
       }
       const el = document.elementFromPoint(e.clientX, e.clientY);
@@ -850,6 +908,45 @@ export function Grid({
       }
     };
     const onUp = () => {
+      if (fillDragRef.current) {
+        // #2 — write the SOURCE cell's value across the previewed range, through
+        // the same commit path as a normal edit (persists via onEdit). Skips the
+        // source itself + read-only cells.
+        const fd = fillDragRef.current;
+        fillDragRef.current = null;
+        const s = sel();
+        const r0 = Math.min(s.ar, s.fr),
+          r1 = Math.max(s.ar, s.fr),
+          c0 = Math.min(s.ac, s.fc),
+          c1 = Math.max(s.ac, s.fc);
+        const srcKey = NC()[fd.fromC];
+        const srcObj = flat()[fd.fromR];
+        if (srcObj && srcKey) {
+          const srcVal = srcObj.row[srcKey];
+          const srcFormula = srcObj.row[`${srcKey}__f`];
+          let wrote = false;
+          for (let r = r0; r <= r1; r++) {
+            for (let c = c0; c <= c1; c++) {
+              if (r === fd.fromR && c === fd.fromC) continue;
+              const k = NC()[c];
+              const cd = colDef(cols(), k);
+              if (!k || cd?.ro) continue;
+              const o = flat()[r];
+              if (!o) continue;
+              if (!wrote) {
+                pushUndo();
+                wrote = true;
+              }
+              o.row[k] = srcVal;
+              if (srcFormula !== undefined) o.row[`${k}__f`] = srcFormula;
+              else delete o.row[`${k}__f`];
+              if (o.row._uid) onEditRef.current?.(o.row._uid, k, srcVal);
+            }
+          }
+          if (wrote) render();
+        }
+        return;
+      }
       selDragRef.current = false;
     };
     document.addEventListener('pointermove', onMove);
@@ -858,14 +955,20 @@ export function Grid({
       document.removeEventListener('pointermove', onMove);
       document.removeEventListener('pointerup', onUp);
     };
-  }, [render]);
+  }, [render, pushUndo]);
 
   /* ---- cell pointer interaction ---- */
   const onCellPointerDown = (e: React.PointerEvent, r: number, c: number) => {
     const target = e.target as HTMLElement;
-    if (target.classList.contains('openbtn') || target.classList.contains('chk')) return;
+    // Grid-v2 #2 — the fill-handle is a distinct hit target; grabbing it must
+    // NOT start a selection / drag-select.
+    if (target.classList.contains('openbtn') || target.classList.contains('chk') || target.classList.contains('fillhandle')) return;
     e.preventDefault();
     if (editRef.current) commitEdit();
+    // Grid-v2 #3 — capture whether this cell was ALREADY the active cell BEFORE
+    // we move the selection (so click-twice-to-open can require a 2nd click).
+    const prev = sel();
+    const wasActive = !e.shiftKey && prev.fr === r && prev.fc === c;
     const s = sel();
     if (e.shiftKey) {
       s.fr = r;
@@ -876,12 +979,17 @@ export function Grid({
     }
     render();
     if (!e.shiftKey) {
-      const k = NC()[c];
-      const t = colDef(cols(), k)?.type;
-      const o = flat()[r];
-      const cellEl = e.currentTarget as HTMLElement;
-      if (o && t === 'status') openStatusMenu(cellEl, o, k);
-      else if (o && t === 'dropdown') openDropMenu(cellEl, o, k);
+      // #3 — default: a single click opens the dropdown immediately (unchanged).
+      // When clickTwiceToOpen is on, the cell must already be active.
+      const shouldOpen = clickTwiceToOpen ? wasActive : true;
+      if (shouldOpen) {
+        const k = NC()[c];
+        const t = colDef(cols(), k)?.type;
+        const o = flat()[r];
+        const cellEl = e.currentTarget as HTMLElement;
+        if (o && t === 'status') openStatusMenu(cellEl, o, k);
+        else if (o && t === 'dropdown') openDropMenu(cellEl, o, k);
+      }
     }
   };
 
@@ -1038,7 +1146,9 @@ export function Grid({
         const o = flat()[editRef.current!.r];
         const key = NC()[editRef.current!.c];
         if (pf === undefined) {
-          el.value = String(o?.row[key] ?? '');
+          // Grid-v2 #1 (D1) — re-edit shows the retained `=…` formula if the
+          // cell was committed from one; else the stored value.
+          el.value = String(o?.row[`${key}__f`] ?? o?.row[key] ?? '');
           el.select();
         } else {
           // type-to-edit: cursor at end
@@ -1386,6 +1496,19 @@ export function Grid({
         onPointerDown={(e) => onCellPointerDown(e, fi, ci)}
       >
         {showEdit ? renderEditInput() : cellInner(row, col, sec, ri)}
+        {/* Grid-v2 #2 — fill-handle on the active cell's bottom-right (opt-in).
+            Its own pointerdown starts the fill drag; the cell handler ignores
+            `.fillhandle` so it doesn't start a selection. */}
+        {fillHandle && isActive && !showEdit ? (
+          <span
+            className="fillhandle"
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              fillDragRef.current = { fromR: fi, fromC: ci };
+            }}
+          />
+        ) : null}
       </div>
     );
   };

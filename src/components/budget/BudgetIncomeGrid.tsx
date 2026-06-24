@@ -217,6 +217,7 @@ export function BudgetIncomeGrid({
           fx={fx}
           onEdit={onEdit}
           allowAddRows={false}
+          fillHandle
         />
       )}
     </section>

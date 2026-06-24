@@ -1,5 +1,32 @@
 # Canonical Grid smoke tests
 
+## Grid-v2 interaction — B1 (feat/grid-v2-interaction, awaiting Chrome-verify)
+
+All additive/opt-in. Confirmed-unchanged where not enabled: income (no dropdowns;
+fill-handle only), and any Grid not passing the props. Formula is the only
+always-on change — but it only fires on a leading `=`, so every plain numeric
+edit is byte-identical.
+
+- **GV2-01 — formula input.** On budget Expenses (or `/grid-demo`), type `=1+1`
+  in a money cell → commits **2** (not "11"). `=2*(3+4)-1` → 13. Re-open the cell
+  → shows the `=…` formula again (D1 retain, in-session). A non-`=` numeric edit
+  is unchanged. **No eval** — `src/lib/grid/formula.ts` (24 unit checks).
+- **GV2-02 — fill-handle.** Active cell shows a small orange square at its
+  bottom-right. Drag it down/across → the range fills with the source value and
+  **persists** (fires `onEdit`, survives reload). Doesn't disturb shift/body
+  drag-select. Enabled: budget, income, both matrices, demo.
+- **GV2-03 — click-twice-to-open (D2 Grid-wide).** On a dropdown/status cell:
+  1st click **selects** (no menu), 2nd click on the now-active cell **opens** the
+  menu. Surfaces: budget `status`, rooming + payroll day cells, demo. (Income has
+  no dropdowns.)
+- **GV2-04 — Tab auto-opens menu (D3 matrices only).** In the rooming/payroll
+  matrix, Tab onto a day cell moves there **and** opens its menu (fast entry).
+  Budget status-tabbing is NOT changed (prop off there). Doesn't regress the
+  shipped editing-input Tab guard.
+
+> **Last verified**: tsc 0, eslint 0, `next build --webpack` green; formula
+> 24/24. Adam Chrome-verifies the four above.
+
 > **Last bulk verification**: 2026-06-08 (Adam, `/grid-demo` on
 > `feat/personnel-unify` preview) — first smoke of Phase 1 core + Phase 2
 > slide. Results logged below; fixes handed to CC in

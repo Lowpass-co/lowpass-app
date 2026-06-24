@@ -348,6 +348,8 @@ export function BudgetGridView({ lines, sections, tourCurrency, tourId }: Budget
       fx={fx}
       slideStatuses={STATUS_CONFIG}
       slideLineVariant
+      fillHandle
+      clickTwiceToOpen
       onEdit={onEdit}
       onAddLine={onAddLine}
       onAddSection={onAddSection}

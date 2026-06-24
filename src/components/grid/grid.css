@@ -349,6 +349,21 @@
   border-radius: var(--lp-radius-sm);
   z-index: var(--lp-z-elevated);
 }
+/* Grid-v2 #2 — fill-handle (only rendered on the active cell when the opt-in
+   `fillHandle` prop is set). A small square at the bottom-right corner; its own
+   pointerdown starts the fill drag. */
+.lp-grid .cell .fillhandle {
+  position: absolute;
+  right: -1px;
+  bottom: -1px;
+  width: 8px;
+  height: 8px;
+  background: var(--lp-orange);
+  border: 1px solid var(--gr-panel);
+  cursor: crosshair;
+  z-index: var(--lp-z-elevated);
+}
+
 .lp-grid .cell-fx { position: relative; cursor: cell; }
 .lp-grid .cell .editing,
 .lp-grid .cell-fx .editing {

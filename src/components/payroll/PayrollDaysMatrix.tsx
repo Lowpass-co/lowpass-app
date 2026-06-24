@@ -194,6 +194,9 @@ export function PayrollDaysMatrix({
       wide
       frozenCols={2}
       allowAddRows={false}
+      fillHandle
+      clickTwiceToOpen
+      tabOpensMenu
       onEdit={(personId, colId, value) => {
         if (colId === 'person' || colId === '__total') return;
         saveDayStatus(String(personId), colId, String(value));

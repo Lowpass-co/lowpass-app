@@ -124,6 +124,9 @@ export function RoomingMatrix({
         wide
         frozenCols={1}
         allowAddRows={false}
+        fillHandle
+        clickTwiceToOpen
+        tabOpensMenu
         onEdit={(personName, colId, value) => {
           if (colId === 'person') return;
           saveCell(String(personName), colId, String(value));
