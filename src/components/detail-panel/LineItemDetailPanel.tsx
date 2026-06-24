@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { X, Lightbulb, Pencil, Trash2 } from 'lucide-react';
+import { X, Lightbulb, Pencil, Trash2, AlertTriangle, Sparkles } from 'lucide-react';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import {
   nightsBetweenHotelStay,
@@ -13,6 +13,8 @@ import { RoutingDateField } from '@/components/spreadsheet-view/RoutingDateField
 import { cn } from '@/lib/utils';
 import { useToast } from '@/components/ui/Toast';
 import { detectAiCap, aiCapMessage } from '@/lib/ai/client';
+import { useSuggestionsPreference } from './useSuggestionsPreference';
+import type { BudgetFinding } from '@/lib/budget/rules';
 
 const STATUS_OPTIONS = [
   { value: 'draft', label: 'Draft' },
@@ -114,6 +116,13 @@ export function LineItemDetailPanel({ lineItemId, tourId, onClose }: LineItemDet
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [suggestionsDismissed, setSuggestionsDismissed] = useState<Set<number>>(new Set());
   const [suggestionsLoading, setSuggestionsLoading] = useState(false);
+  // AI assistant gate (opt-in). `enabled` resolves the per-user
+  // preference over the workspace default; the panel only auto-fires
+  // when it's true. A manual trigger is always available regardless.
+  const { enabled: suggestionsEnabled, loaded: prefLoaded } = useSuggestionsPreference();
+  const [assistantRequested, setAssistantRequested] = useState(false);
+  const [findings, setFindings] = useState<BudgetFinding[]>([]);
+  const [findingsDismissed, setFindingsDismissed] = useState<Set<string>>(new Set());
   const [rooms, setRooms] = useState<HotelRoomAssignmentRow[]>([]);
   const [roomsLoading, setRoomsLoading] = useState(false);
   const [hotelBooking, setHotelBooking] = useState<{
@@ -181,6 +190,13 @@ export function LineItemDetailPanel({ lineItemId, tourId, onClose }: LineItemDet
   useEffect(() => {
     if (lineItemId) {
       setTab('overview');
+      // Reset the assistant surface on open / line-item switch so a
+      // disabled panel shows the manual trigger (not stale results).
+      setAssistantRequested(false);
+      setSuggestions([]);
+      setSuggestionsDismissed(new Set());
+      setFindings([]);
+      setFindingsDismissed(new Set());
       fetchDetails();
     } else {
       setLineItem(null);
@@ -189,6 +205,8 @@ export function LineItemDetailPanel({ lineItemId, tourId, onClose }: LineItemDet
       setLinkedItems([]);
       setSuggestions([]);
       setSuggestionsDismissed(new Set());
+      setFindings([]);
+      setFindingsDismissed(new Set());
       setHotelBooking(null);
     }
   }, [lineItemId, fetchDetails]);
@@ -235,11 +253,42 @@ export function LineItemDetailPanel({ lineItemId, tourId, onClose }: LineItemDet
     }
   }, [lineItemId, tourId, lineItem, showToast]);
 
-  useEffect(() => {
-    if (lineItem && lineItemId) {
-      fetchSuggestions();
+  // Deterministic rules findings (free; no model call). Tour-scoped, so
+  // the same for every line item in the tour.
+  const fetchRules = useCallback(async () => {
+    if (!tourId) return;
+    try {
+      const res = await fetch('/api/budget/rules-check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tour_id: tourId }),
+      });
+      if (!res.ok) {
+        setFindings([]);
+        return;
+      }
+      const json = await res.json().catch(() => ({}));
+      setFindings(Array.isArray(json.findings) ? json.findings : []);
+      setFindingsDismissed(new Set());
+    } catch {
+      setFindings([]);
     }
-  }, [lineItemId, lineItem?.id]); // eslint-disable-line react-hooks/exhaustive-deps -- only when panel opens / line item changes
+  }, [tourId]);
+
+  // Fire the whole assistant surface (rules + LLM suggestions). Used by
+  // both the opt-in auto-fire and the always-available manual trigger.
+  const runAssistant = useCallback(() => {
+    setAssistantRequested(true);
+    void fetchSuggestions();
+    void fetchRules();
+  }, [fetchSuggestions, fetchRules]);
+
+  useEffect(() => {
+    // Opt-in gate: auto-fire only once the preference resolves to true.
+    if (lineItem && lineItemId && prefLoaded && suggestionsEnabled) {
+      runAssistant();
+    }
+  }, [lineItemId, lineItem?.id, prefLoaded, suggestionsEnabled]); // eslint-disable-line react-hooks/exhaustive-deps -- only when panel opens / line item changes / preference flips on
 
   const saveStatus = useCallback(async (newValue: string | number) => {
     if (!lineItemId) return;
@@ -498,6 +547,13 @@ export function LineItemDetailPanel({ lineItemId, tourId, onClose }: LineItemDet
 
   const currency = 'GBP';
   const formatter = new Intl.NumberFormat('en-GB', { style: 'currency', currency, minimumFractionDigits: 2 });
+
+  // Assistant surface is empty when, after a fetch, neither a rules
+  // finding nor an LLM suggestion remains visible.
+  const visibleFindingsCount = findings.filter((f) => !findingsDismissed.has(f.id)).length;
+  const visibleSuggestionsCount = suggestions.filter((_, i) => !suggestionsDismissed.has(i)).length;
+  const assistantEmpty =
+    !suggestionsLoading && visibleFindingsCount === 0 && visibleSuggestionsCount === 0;
 
   return (
     <>
@@ -784,34 +840,106 @@ export function LineItemDetailPanel({ lineItemId, tourId, onClose }: LineItemDet
                   </div>
 
                   <div className="mt-6">
-                    <h3 className="text-xs font-bold uppercase tracking-wider text-lp-text-secondary mb-2">AI suggestions</h3>
-                    {suggestionsLoading ? (
-                      <p className="text-sm text-lp-text-tertiary">Loading…</p>
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                      <h3 className="text-xs font-bold uppercase tracking-wider text-lp-text-secondary">AI suggestions</h3>
+                      {assistantRequested && !suggestionsLoading && (
+                        <button
+                          type="button"
+                          onClick={runAssistant}
+                          className="text-xs font-semibold text-lp-orange hover:underline"
+                        >
+                          Refresh
+                        </button>
+                      )}
+                    </div>
+
+                    {!assistantRequested ? (
+                      /* Always-available on-demand path — opt-out removes the
+                         automatic firing, not this manual trigger. */
+                      <div className="space-y-2">
+                        <button
+                          type="button"
+                          onClick={runAssistant}
+                          className="inline-flex items-center gap-2 rounded-lg border border-lp-border bg-lp-surface/60 px-3 py-2 text-sm font-semibold text-lp-text hover:border-lp-orange/45 hover:bg-lp-orange/[0.04]"
+                        >
+                          <Sparkles className="h-4 w-4 text-lp-orange" />
+                          Get suggestions
+                        </button>
+                        <p className="text-xs text-lp-text-tertiary">
+                          {suggestionsEnabled
+                            ? 'Checking for suggestions…'
+                            : 'AI suggestions are off — fetch them on demand any time.'}
+                        </p>
+                      </div>
                     ) : (
-                      <ul className="space-y-2">
-                        {suggestions.map((s, i) =>
-                          suggestionsDismissed.has(i) ? null : (
-                            <li
-                              key={i}
+                      <div className="space-y-2">
+                        {/* Deterministic rules findings, above the LLM suggestions. */}
+                        {findings.map((f) =>
+                          findingsDismissed.has(f.id) ? null : (
+                            <div
+                              key={f.id}
                               className="flex items-start gap-2 rounded-lg border border-lp-border bg-amber-500/5 px-3 py-2 text-sm"
                             >
-                              <Lightbulb className="h-4 w-4 shrink-0 text-amber-500 mt-0.5" />
-                              <span className="flex-1 text-lp-text">{s}</span>
+                              <AlertTriangle
+                                className={cn(
+                                  'h-4 w-4 shrink-0 mt-0.5',
+                                  f.severity === 'warn' ? 'text-amber-500' : 'text-lp-text-tertiary'
+                                )}
+                              />
+                              <div className="min-w-0 flex-1">
+                                <p className="font-semibold text-lp-text">{f.title}</p>
+                                <p className="text-lp-text-secondary">{f.detail}</p>
+                                {f.suggestedAction ? (
+                                  /* TODO: wire to a line-item create path once one
+                                     exists; informational only for now (no write
+                                     surface invented in this ticket). */
+                                  <p className="mt-1 text-xs text-lp-text-tertiary">
+                                    Suggested: add “{f.suggestedAction.label}”.
+                                  </p>
+                                ) : null}
+                              </div>
                               <button
                                 type="button"
-                                onClick={() => setSuggestionsDismissed((prev) => new Set(prev).add(i))}
+                                onClick={() => setFindingsDismissed((prev) => new Set(prev).add(f.id))}
                                 className="shrink-0 text-lp-text-tertiary hover:text-lp-text"
                                 aria-label="Dismiss"
                               >
                                 <X className="h-4 w-4" />
                               </button>
-                            </li>
+                            </div>
                           )
                         )}
-                        {suggestions.length === 0 && !suggestionsLoading && (
-                          <p className="text-sm text-lp-text-tertiary">No suggestions right now.</p>
+
+                        {/* LLM suggestions. */}
+                        {suggestionsLoading ? (
+                          <p className="text-sm text-lp-text-tertiary">Loading…</p>
+                        ) : (
+                          <>
+                            {suggestions.map((s, i) =>
+                              suggestionsDismissed.has(i) ? null : (
+                                <div
+                                  key={i}
+                                  className="flex items-start gap-2 rounded-lg border border-lp-border bg-amber-500/5 px-3 py-2 text-sm"
+                                >
+                                  <Lightbulb className="h-4 w-4 shrink-0 text-amber-500 mt-0.5" />
+                                  <span className="flex-1 text-lp-text">{s}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => setSuggestionsDismissed((prev) => new Set(prev).add(i))}
+                                    className="shrink-0 text-lp-text-tertiary hover:text-lp-text"
+                                    aria-label="Dismiss"
+                                  >
+                                    <X className="h-4 w-4" />
+                                  </button>
+                                </div>
+                              )
+                            )}
+                            {assistantEmpty && (
+                              <p className="text-sm text-lp-text-tertiary">No suggestions right now.</p>
+                            )}
+                          </>
                         )}
-                      </ul>
+                      </div>
                     )}
                   </div>
                 </div>

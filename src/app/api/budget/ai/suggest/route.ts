@@ -9,6 +9,7 @@ import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { withAiUsage, aiCapExceededResponse } from '@/lib/ai/usage';
 import { getCached, setCached } from '@/lib/rate-limit';
+import { hasCarnet as detectCarnet, hasHaulage as detectHaulage } from '@/lib/budget/rules';
 
 /* Sprint 12 §SAFE — server-side dedupe. The detail panel
    auto-fires this endpoint on open, so opening + closing +
@@ -91,12 +92,10 @@ export async function POST(request: Request) {
     .eq('tour_id', tour_id)
     .eq('workspace_id', profile.workspace_id);
 
-  const hasCarnet = (lineItems.data ?? []).some(
-    (i: { label?: string }) => (i.label ?? '').toLowerCase().includes('carnet')
-  );
-  const hasHaulage = (lineItems.data ?? []).some(
-    (i: { label?: string }) => (i.label ?? '').toLowerCase().match(/haulage|freight|truck/)
-  );
+  // Shared, unit-tested detectors (src/lib/budget/rules.ts) — single
+  // source of truth, also used by /api/budget/rules-check.
+  const hasCarnet = detectCarnet(lineItems.data ?? []);
+  const hasHaulage = detectHaulage(lineItems.data ?? []);
 
   try {
     const { result: response, blocked, blockReason } = await withAiUsage(
