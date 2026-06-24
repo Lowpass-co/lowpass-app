@@ -188,6 +188,9 @@ export function Grid({
   onReorderSectionRef.current = onReorderSection;
   const [tick, force] = useReducer((x: number) => x + 1, 0);
   const render = useCallback(() => force(), []);
+  /** Grid-v2 #2 — true while a fill-handle drag is in progress (drives the
+      circle cursor + the pulsing range-preview CSS via data-filling). */
+  const [filling, setFilling] = useState(false);
 
   /* ---- source of truth (refs) ---- */
   const uidc = useRef(0);
@@ -893,7 +896,10 @@ export function Grid({
       if (!selDragRef.current && !fillDragRef.current) return;
       if (e.buttons === 0) {
         selDragRef.current = false;
-        fillDragRef.current = null;
+        if (fillDragRef.current) {
+          fillDragRef.current = null;
+          setFilling(false);
+        }
         return;
       }
       const el = document.elementFromPoint(e.clientX, e.clientY);
@@ -916,6 +922,7 @@ export function Grid({
         // source itself + read-only cells.
         const fd = fillDragRef.current;
         fillDragRef.current = null;
+        setFilling(false);
         const s = sel();
         const r0 = Math.min(s.ar, s.fr),
           r1 = Math.max(s.ar, s.fr),
@@ -1529,6 +1536,7 @@ export function Grid({
               e.stopPropagation();
               e.preventDefault();
               fillDragRef.current = { fromR: fi, fromC: ci };
+              setFilling(true);
             }}
           />
         ) : null}
@@ -1745,6 +1753,7 @@ export function Grid({
       data-density={densityRef.current}
       data-wide={wide && frozenCols > 0 ? '' : undefined}
       data-frozen2={frozen2 ? '' : undefined}
+      data-filling={filling ? '' : undefined}
       ref={rootRef}
       style={{ '--cols': colsTemplate, '--frz2-left': `${frozen2Left}px` } as React.CSSProperties}
     >
