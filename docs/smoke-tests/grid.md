@@ -23,6 +23,13 @@ edit is byte-identical.
   matrix, Tab onto a day cell moves there **and** opens its menu (fast entry).
   Budget status-tabbing is NOT changed (prop off there). Doesn't regress the
   shipped editing-input Tab guard.
+- **GV2-05 — live Total (#5, B2).** In the payroll Days matrix, edit a day cell
+  (set/clear a SHOW/OFF) → the frozen **Total** column ticks **immediately**
+  (not only on tab re-entry). The Total is a Grid-native `calc` column computing
+  from the row's live day cells + the rate card via the **same**
+  `fees.ts computeTotalFee` (+ rate-card advance) as Rates/Summary — so the live
+  cell **equals** the persisted Rates/Summary total (no PAY-04 drift). No reseed,
+  no ref-model change.
 
 > **Last verified**: tsc 0, eslint 0, `next build --webpack` green; formula
 > 24/24. Adam Chrome-verifies the four above.

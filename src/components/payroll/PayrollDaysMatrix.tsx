@@ -13,9 +13,10 @@
 
 import { useMemo } from 'react';
 import { Grid } from '@/components/grid/Grid';
-import type { Column, Row, Section } from '@/components/grid/types';
+import type { Column, GridFx, Row, Section } from '@/components/grid/types';
 import { colourForDayType, labelForDayType } from '@/lib/routing/dayType';
 import { getWeekStart, formatWeekLabel } from '@/lib/routing/week';
+import { countDayStatuses, computeTotalFee, type RateLike } from '@/lib/payroll/fees';
 import { DAY_OPTIONS, type RoutingDay, type PayrollPerson } from './usePayrollGrid';
 
 const DAY_CODES = DAY_OPTIONS.map((o) => o.value);
@@ -116,16 +117,12 @@ function DayHeader({ day, weekStart }: { day: RoutingDay; weekStart: boolean }) 
   );
 }
 
-/** Per-person fee totals (only `totalFee` is consumed here). */
-type PersonTotals = { totalFee: number };
-
 export function PayrollDaysMatrix({
   routingDates,
   personnelRates,
   currency,
   statusOf,
   saveDayStatus,
-  totalsFor,
 }: {
   routingDates: RoutingDay[];
   personnelRates: Record<string, unknown>[];
@@ -133,9 +130,9 @@ export function PayrollDaysMatrix({
   /** Lifted from PayrollView's shared usePayrollGrid (PAY-01). */
   statusOf: (personnelId: string, date: string) => string;
   saveDayStatus: (personnelId: string, date: string, status: string) => void | Promise<void>;
-  totalsFor: (p: PayrollPerson) => PersonTotals;
 }) {
   const people = useMemo(() => personnelRates.map(toPerson), [personnelRates]);
+  const ratesById = useMemo(() => new Map(people.map((p) => [p.id, p])), [people]);
   const money = useMemo(
     () =>
       new Intl.NumberFormat('en-GB', {
@@ -144,6 +141,18 @@ export function PayrollDaysMatrix({
         maximumFractionDigits: 0,
       }),
     [currency],
+  );
+  // MTX-06 live total — calc columns render via the Grid's fx; pass a minimal one
+  // so the Total formats in the tour currency (no conversion — rates are native).
+  const fx: GridFx = useMemo(
+    () => ({
+      displayCurrency: (currency || 'GBP').toUpperCase(),
+      currencies: [(currency || 'GBP').toUpperCase()],
+      toDisplay: (amount: number) => amount,
+      symbol: () => '',
+      formatDisplay: (amount: number) => money.format(Number(amount) || 0),
+    }),
+    [currency, money],
   );
 
   // Sort dates; mark each week-start (first date of its Monday week).
@@ -162,25 +171,44 @@ export function PayrollDaysMatrix({
   }, [days]);
   const dayByDate = useMemo(() => new Map(days.map((d) => [d.date, d])), [days]);
 
-  const columns: Column[] = useMemo(
-    () => [
-      // MTX-06 — person + a frozen Total column (frozenCols=2). Fixed widths so
-      // the second frozen column's sticky-left offset is deterministic.
+  const columns: Column[] = useMemo(() => {
+    const dayIds = days.map((d) => d.date);
+    // MTX-06 LIVE total (#5) — computed from the row's OWN live day-status cells
+    // + the person's rate card (closure), via the SAME fees.ts computeTotalFee
+    // (+ rate-card advance) as Rates / Summary / the budget reconcile — so the
+    // live cell can't diverge from the persisted total (no PAY-04 redux). calc
+    // re-runs on every render, so a day edit ticks the Total instantly.
+    const totalCalc = (row: Row): number => {
+      const p = ratesById.get(String(row._uid));
+      if (!p) return 0;
+      const dayStatuses: Record<string, string> = {};
+      for (const id of dayIds) dayStatuses[id] = String(row[id] ?? '');
+      const counts = countDayStatuses(dayStatuses);
+      const rate: RateLike = {
+        show_rate: p.show_rate,
+        off_rate: p.off_rate,
+        rehearsal_rate: p.rehearsal_rate,
+        per_diem: p.per_diem,
+      };
+      return computeTotalFee(rate, counts, p.advance_fee);
+    };
+    return [
+      // person + a frozen Total column (frozenCols=2). Fixed widths so the
+      // second frozen column's sticky-left offset is deterministic.
       { id: 'person', label: 'Person', type: 'text', ro: true, w: 180, min: 180, resize: false },
-      { id: '__total', label: 'Total', type: 'text', ro: true, w: 104, min: 104, resize: false },
+      { id: '__total', label: 'Total', type: 'calc', w: 104, min: 104, resize: false, calc: totalCalc },
       ...days.map<Column>((d) => ({ id: d.date, label: d.date.slice(5), type: 'dropdown', options: DAY_CODES, optColors: DAY_OPTCOLORS, optLabels: DAY_OPTLABELS, w: 92, min: 76, resize: true })),
-    ],
-    [days],
-  );
+    ];
+  }, [days, ratesById]);
 
   const data: Section[] = useMemo(() => {
     const rows: Row[] = people.map((p) => {
-      const row: Row = { _uid: p.id, person: p.person_name, __total: money.format(totalsFor(p).totalFee) };
+      const row: Row = { _uid: p.id, person: p.person_name };
       for (const d of days) row[d.date] = statusOf(p.id, d.date);
       return row;
     });
     return [{ name: 'Personnel', kind: 'normal', _uid: 'payroll', rows }];
-  }, [people, days, statusOf, totalsFor, money]);
+  }, [people, days, statusOf]);
 
   if (people.length === 0) {
     return <div style={{ padding: 16, color: 'var(--lp-text-secondary)', fontSize: 13 }}>No personnel on this tour yet.</div>;
@@ -191,6 +219,7 @@ export function PayrollDaysMatrix({
       key={`payroll-days:${people.length}:${days.length}`}
       initialColumns={columns}
       initialData={data}
+      fx={fx}
       wide
       frozenCols={2}
       allowAddRows={false}

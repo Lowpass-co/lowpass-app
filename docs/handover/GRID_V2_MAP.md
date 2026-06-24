@@ -2,13 +2,14 @@
 
 > 5 interaction features in the canonical `<Grid>`. Highest blast radius yet —
 > every change **additive / opt-in**; default behaviour unchanged. **Status:**
-> **Status:** B1 applied (formula #1, fill-handle #2, click-twice #3,
-> Tab-auto-menu #4) — tsc 0, eslint 0, build green, formula 24/24. Decisions:
-> **D1 retain formula** (in-session `<key>__f` sidecar), **D2 click-twice
-> Grid-wide**, **D3 Tab-menu matrices-only**. **B2 (#5 live totals)** still
-> pending — verdict below = cleanly additive (calc-column), its own push.
-> Channel-list is the **legacy SpreadsheetGrid**, not the canonical `<Grid>` → out
-> of scope for these props. Awaiting Chrome-verify of GV2-01..04.
+> **Status:** B1 + B2 applied — tsc 0, eslint 0, build green, formula 24/24.
+> B1 = formula #1 (D1 retain via `<key>__f` sidecar), fill-handle #2, click-twice
+> #3 (D2 Grid-wide), Tab-auto-menu #4 (D3 matrices-only). **B2 = #5 live totals**:
+> MTX-06 Total is now a Grid-native `calc` column (live by construction) using the
+> SAME `fees.ts computeTotalFee` + rate-card advance as Rates/Summary → the live
+> cell equals the persisted total (no PAY-04 drift). No reseed, no ref-model
+> change. Channel-list is the **legacy SpreadsheetGrid** → out of scope. Awaiting
+> Chrome-verify of GV2-01..05.
 
 All line numbers are `src/components/grid/Grid.tsx` unless noted.
 

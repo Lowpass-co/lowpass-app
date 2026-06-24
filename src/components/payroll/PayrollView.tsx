@@ -56,7 +56,7 @@ export function PayrollView({
   // three views consume the SAME hook, so an edit in the Days matrix survives
   // navigating to Rates and back, and all three read identical day data.
   // `entries` (live) replaces the stale page-load `payrollEntries` prop.
-  const { statusOf, saveDayStatus, totalsFor, entries } = usePayrollGrid(
+  const { statusOf, saveDayStatus, entries } = usePayrollGrid(
     tourId,
     routingDates as RoutingDay[],
     payrollEntries,
@@ -130,7 +130,6 @@ export function PayrollView({
             currency={currency}
             statusOf={statusOf}
             saveDayStatus={saveDayStatus}
-            totalsFor={totalsFor}
           />
         ) : (
           <PayrollSummary
