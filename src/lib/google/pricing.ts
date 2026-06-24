@@ -27,7 +27,14 @@ export type GoogleEndpoint =
   | 'google.places.details'
   | 'google.places.nearby'
   | 'google.places.airports'
-  | 'google.cse.find-image';
+  | 'google.cse.find-image'
+  // Generative Language API — Gemini text embeddings (RAG index). Token-
+  // priced upstream (gemini-embedding-001 ≈ $0.15 / 1M input tokens), but
+  // recorded here as a flat representative per-call cost so it rides the
+  // same ai_usage_events google lane as the Maps endpoints. Negligible &
+  // approximate. This is the google provider lane — NOT the Anthropic
+  // dollar-cap (sumMonthCost filters provider <> 'google').
+  | 'ai.embeddings';
 
 /** Representative list price, USD per 1,000 calls (see header — approximate). */
 const USD_PER_1000: Record<GoogleEndpoint, number> = {
@@ -38,6 +45,7 @@ const USD_PER_1000: Record<GoogleEndpoint, number> = {
   'google.places.nearby': 32, // Nearby Search
   'google.places.airports': 2.83, // Autocomplete-backed airport pick
   'google.cse.find-image': 5, // Custom Search JSON API ($5 / 1000, 10k/day cap)
+  'ai.embeddings': 0.03, // gemini-embedding-001 — ~$0.15/1M tok; ≈ $0.03/1k calls at ~200 tok/call
 };
 
 /** Approximate micro-USD cost of one successful Google call for `endpoint`. */
