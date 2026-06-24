@@ -363,6 +363,31 @@
   cursor: crosshair;
   z-index: var(--lp-z-elevated);
 }
+/* Hover affordance — a ring animates in (scales/pulses) around the handle so it
+   reads "grab me to fill" BEFORE the drag starts. The handle is stationary →
+   pure CSS, no pointer-tracking. Hidden by default; only the :hover state runs
+   the animation, so nothing else is affected. */
+.lp-grid .cell .fillhandle::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--lp-orange);
+  border-radius: 50%;
+  transform: translate(-50%, -50%) scale(0);
+  opacity: 0;
+  pointer-events: none;
+}
+.lp-grid .cell .fillhandle:hover::after {
+  animation: lp-fillhandle-ring 0.9s ease-in-out infinite;
+}
+@keyframes lp-fillhandle-ring {
+  0% { transform: translate(-50%, -50%) scale(0.4); opacity: 0; }
+  40% { opacity: 0.85; }
+  100% { transform: translate(-50%, -50%) scale(1.25); opacity: 0; }
+}
 
 /* Grid-v2 #2 affordance — while a fill-drag is active (`data-filling`):
    (1) the cursor becomes an orange ring/circle so it unmistakably reads "I'm
