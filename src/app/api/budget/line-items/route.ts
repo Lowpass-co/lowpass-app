@@ -10,6 +10,7 @@
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { reconcileDerivedBudgetLines } from '@/server/budget/reconcileDerivedLines';
+import { removeRecordChunksSafe } from '@/lib/ai/rag/reindex';
 
 export async function GET(request: Request) {
   const supabase = await createServerSupabaseClient();
@@ -559,5 +560,11 @@ export async function DELETE(request: Request) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  // RAG erasure cascade: drop the chunk for the deleted line item. (Create/
+  // update embedding is left to the bulk reindex — budget line items churn
+  // too frequently in the grid to embed per-keystroke. See done report.)
+  removeRecordChunksSafe(profile.workspace_id, 'budget_line_item', id);
+
   return new Response(null, { status: 204 });
 }
