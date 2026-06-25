@@ -22,6 +22,7 @@ export interface ServerIncome {
   actual_overage?: number | null;
   actual_merch?: number | null;
   actual_vip?: number | null;
+  actual_deductions?: number | null;
 }
 export interface RoutingOnly {
   id: string;
@@ -52,6 +53,8 @@ export interface IncomeRow {
   actual_overage: number;
   actual_merch: number;
   actual_vip: number;
+  /** Phase 1 — settlement-fed deductions (actual-only; read-only in the grid). */
+  actual_deductions: number;
 }
 
 const n = (v: unknown): number => {
@@ -127,6 +130,7 @@ export function toIncomeRows(payload: TourIncomePayload): IncomeRow[] {
     actual_overage: n(i.actual_overage),
     actual_merch: n(i.actual_merch),
     actual_vip: n(i.actual_vip),
+    actual_deductions: n(i.actual_deductions),
   }));
   const fromRouting: IncomeRow[] = (payload.routing_only ?? []).map((r) => ({
     routing_id: r.id,
@@ -143,6 +147,7 @@ export function toIncomeRows(payload: TourIncomePayload): IncomeRow[] {
     actual_overage: 0,
     actual_merch: 0,
     actual_vip: 0,
+    actual_deductions: 0,
   }));
   return [...fromIncome, ...fromRouting].sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''));
 }

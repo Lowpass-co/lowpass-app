@@ -20,6 +20,26 @@ Reference tour: "Warning Support". Templates picker needs a NEW empty tour.
 | BUD-19 | FIXED | click-to-rename templates + consistent picker (Fix-pack C) |
 | BUD-20 | FIXED | summary reads live from `section_id`; no phantom sections (Fix-pack A) |
 
+## Income redesign — Phase 1: Settlement (feat/income-settlement-phase1)
+
+> Migration **215** (`budget_income.actual_deductions`, additive nullable). Run
+> `npm run db:migrate`. tsc 0, eslint 0, build green. Actuals are unversioned —
+> no `budget_version_income`/lock change.
+
+- **INC-DED-01 — settlement upserts income (data-loss fix).** Settle a show that
+  has **no** income row → a `budget_income` row is **created** for that
+  `routing_id` with `actual_guarantee/overage/merch/deductions` (settlement POST
+  upserts, was update-if-exists). The Income → **Actual** view shows it.
+- **INC-DED-02 — deductions reach income + reduce NET.** Settle a show **with**
+  deductions → `budget_income.actual_deductions` populated; the Summary P&L's
+  **actual** income (and NET) drops by exactly that amount (no longer overstated).
+  `computeBudgetPnl` subtracts it from both actual sums.
+- **INC-DED-03 — VIP stays manual.** Settling does **not** touch `actual_vip`
+  (settlement has no VIP source); an existing manual VIP survives a re-settle.
+- **INC-DED-04 — Actual view shows Deductions (read-only).** The income Actual
+  view has a read-only **Deductions** column; the row Total = guarantee + overage
+  + merch + vip − deductions. Projected view + the versioning lock unchanged.
+
 ## Budget Versioning Phase 1 — B2 (UI, feat/budget-versioning-b2)
 
 > Wires the live B1 contract. tsc 0, eslint 0, build green. Chrome-verify on the

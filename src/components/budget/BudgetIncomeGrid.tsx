@@ -173,7 +173,9 @@ export function BudgetIncomeGrid({
       money('overage', 'Overage'),
       money('merch', 'Merch'),
       money('vip', 'VIP'),
-      { id: 'total', label: 'Total', type: 'calc', w: 130, min: 100, resize: true, calc: (r: Row) => num(r.guarantee) + num(r.overage) + num(r.merch) + num(r.vip) },
+      // Phase 1 — settlement-fed deductions (read-only; reduces the actual total).
+      { id: 'deductions', label: 'Deductions', type: 'money', w: 120, min: 90, resize: true, ro: true },
+      { id: 'total', label: 'Total', type: 'calc', w: 130, min: 100, resize: true, calc: (r: Row) => num(r.guarantee) + num(r.overage) + num(r.merch) + num(r.vip) - num(r.deductions) },
     ];
   }, [view, versionLocked]);
 
@@ -181,7 +183,7 @@ export function BudgetIncomeGrid({
     const gridRows: Row[] = (rows ?? []).map((r) =>
       view === 'projected'
         ? { _uid: r.routing_id, cur: native, ...routingFields(r), guarantee: r.pre_tax_guarantee, wh: r.withholding_pct, overage: r.pre_tax_overage, merch: r.merch_income, vip: r.vip_income }
-        : { _uid: r.routing_id, cur: native, ...routingFields(r), guarantee: r.actual_guarantee, overage: r.actual_overage, merch: r.actual_merch, vip: r.actual_vip },
+        : { _uid: r.routing_id, cur: native, ...routingFields(r), guarantee: r.actual_guarantee, overage: r.actual_overage, merch: r.actual_merch, vip: r.actual_vip, deductions: r.actual_deductions },
     );
     return [{ name: 'Shows', kind: 'normal', _uid: 'income', rows: gridRows }];
   }, [rows, view, native]);

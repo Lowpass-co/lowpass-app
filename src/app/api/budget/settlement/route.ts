@@ -236,29 +236,33 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: upsertError.message }, { status: 500 });
   }
 
+  // Settlement → income ACTUALS (one live layer; NOT versioned). Prefer the
+  // reconciled figures, fall back to day-of. VIP has no settlement source → left
+  // manual (untouched). actual_deductions (Phase 1) so the P&L stops overstating
+  // actual income.
   const actualGuarantee = settlement?.reconciled_guarantee ?? settlement?.day_of_guarantee ?? null;
   const actualOverage = settlement?.reconciled_overage ?? settlement?.day_of_overage ?? null;
   const actualMerch = settlement?.reconciled_merch ?? settlement?.day_of_merch ?? null;
+  const actualDeductions = settlement?.reconciled_deductions ?? settlement?.day_of_deductions ?? null;
 
-  const { data: incomeRow } = await supabase
+  // UPSERT on routing_id — a settled show with NO income row used to silently
+  // lose its actuals (update-if-exists). Create the row so actuals are never
+  // dropped. (actual_vip omitted → preserved on an existing row, NULL on a new
+  // one — settlement isn't a VIP source.)
+  await supabase
     .from('budget_income')
-    .select('id')
-    .eq('routing_id', routing_id)
-    .eq('workspace_id', profile.workspace_id)
-    .maybeSingle();
-
-  if (incomeRow) {
-    await supabase
-      .from('budget_income')
-      .update({
+    .upsert(
+      {
+        routing_id,
+        workspace_id: profile.workspace_id,
         actual_guarantee: actualGuarantee,
         actual_overage: actualOverage,
         actual_merch: actualMerch,
+        actual_deductions: actualDeductions,
         updated_at: now,
-      })
-      .eq('id', incomeRow.id)
-      .eq('workspace_id', profile.workspace_id);
-  }
+      },
+      { onConflict: 'routing_id' },
+    );
 
   return NextResponse.json(settlement);
 }

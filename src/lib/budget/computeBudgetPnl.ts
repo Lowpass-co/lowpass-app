@@ -94,6 +94,9 @@ export interface IncomeInput {
   actual_overage?: number | null;
   actual_merch?: number | null;
   actual_vip?: number | null;
+  /** Settlement-fed deductions (Phase 1) — subtracted from ACTUAL income so NET
+   *  reflects real receipts. Actual-only (unversioned). */
+  actual_deductions?: number | null;
 }
 
 export interface CommissionInput {
@@ -163,7 +166,8 @@ export function computeBudgetPnl(input: {
       num(i.actual_guarantee) +
       num(i.actual_overage) +
       num(i.actual_merch) +
-      num(i.actual_vip);
+      num(i.actual_vip) -
+      num(i.actual_deductions);
     preTaxProj +=
       num(i.pre_tax_guarantee ?? i.post_tax_guarantee) +
       num(i.pre_tax_overage) +
@@ -173,7 +177,8 @@ export function computeBudgetPnl(input: {
       num(i.actual_guarantee) +
       num(i.actual_overage) +
       num(i.actual_merch) +
-      num(i.actual_vip);
+      num(i.actual_vip) -
+      num(i.actual_deductions);
   }
 
   const insurancePct = num(settings?.insurance_pct);
