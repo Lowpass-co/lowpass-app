@@ -134,6 +134,13 @@ export interface GridProps {
   /** After Tab lands on a dropdown/status cell, auto-open its menu (fast matrix
       entry). Default off → Tab just moves (unchanged). (#4) */
   tabOpensMenu?: boolean;
+  /** Versioning B2 — when the active budget version is approved/locked, the
+      PROPOSED (`est`) cells render read-only (mirrors the derived-lock); actuals
+      stay editable. An edit attempt fires onLockedEdit. Default off. */
+  versionLocked?: boolean;
+  /** Raised when the user tries to edit a version-locked proposed cell (→ the
+      Unlock-or-New-Version modal lives in the host). */
+  onLockedEdit?: () => void;
 }
 
 type ReorderKind = 'section' | 'row' | 'col';
@@ -173,7 +180,11 @@ export function Grid({
   fillHandle = false,
   clickTwiceToOpen = false,
   tabOpensMenu = false,
+  versionLocked = false,
+  onLockedEdit,
 }: GridProps) {
+  const onLockedEditRef = useRef(onLockedEdit);
+  onLockedEditRef.current = onLockedEdit;
   const fx = fxProp ?? demoFx;
   // Totals / section-header / KPI maths must use the SAME injected FX + display
   // currency as the cells — not gridModel's USD-pivot `disp`/`fmt`. (BUD-40.)
@@ -374,6 +385,12 @@ export function Grid({
       const cdef = colDef(cols(), key);
       const t = cdef?.type;
       if (cdef?.ro) return;
+      // Versioning (B2) — proposed (est) is read-only on an approved version;
+      // an edit attempt raises the Unlock-or-New-Version modal (host-owned).
+      if (versionLocked && key === 'est') {
+        onLockedEditRef.current?.();
+        return;
+      }
       if (t === 'status' || t === 'dropdown' || t === 'check') return;
       const og = getRowObj();
       if (
@@ -1485,9 +1502,11 @@ export function Grid({
       return <div key={key} className="c" />;
     }
     // Derived sections lock BOTH estimate AND actual — the source module
-    // (Payroll/Rooming/…) owns them and the reconcile pass regenerates both
-    // each load (GRID_SPEC §6, Phase 3 decision 2).
-    if (sec.kind === 'derived' && (id === 'est' || id === 'act')) {
+    // (Payroll/Rooming/…) owns them. Versioning (B2): an approved version locks
+    // the PROPOSED (est) cell across ALL sections (actuals stay editable) — a
+    // click raises the Unlock-or-New-Version modal. (GRID_SPEC §6.)
+    const versionLockedEst = versionLocked && id === 'est';
+    if ((sec.kind === 'derived' && (id === 'est' || id === 'act')) || versionLockedEst) {
       const ci2 = nc.indexOf(id);
       const active2 = ci2 >= 0 && s.fr === fi && s.fc === ci2;
       const cls = active2 ? ' active' : ci2 >= 0 && inSel(s, fi, ci2) ? ' selected' : '';
@@ -1499,6 +1518,7 @@ export function Grid({
           data-r={fi}
           data-c={ci2}
           onPointerDown={(e) => onCellPointerDown(e, fi, ci2)}
+          onClick={versionLockedEst ? () => onLockedEditRef.current?.() : undefined}
         >
           {moneyContent(row, id)}
           <span className="lockmini">🔒</span>

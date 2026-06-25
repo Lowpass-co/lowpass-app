@@ -51,6 +51,7 @@ import { computeTourPhases } from '@/server/budget/computeTourPhases';
 import { getBudgetPanelData } from '@/server/budget/getBudgetPanelData';
 import { reconcileDerivedBudgetLines } from '@/server/budget/reconcileDerivedLines';
 import { resolveActiveVersion, getProposedLineMap, getProposedIncomeMap } from '@/server/budget/versions';
+import type { BudgetVersionVm } from '@/components/budget/versioning/versionApi';
 import { logServerError } from '@/lib/log/serverError';
 import type {
   IncomeInput,
@@ -85,7 +86,7 @@ export default async function BudgetTourPage({
   searchParams,
 }: {
   params: Promise<{ tourId: string }>;
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; version?: string }>;
 }) {
   const { tourId } = await params;
   const sp = await searchParams;
@@ -258,13 +259,33 @@ export default async function BudgetTourPage({
      every downstream surface (grid / classic / summary / income) reads the
      versioned proposed. No-op until the snapshot exists (212 backfills v1). */
   const activeVersion = await resolveActiveVersion(supabase, tourId, workspaceId);
-  if (activeVersion) {
-    const proposedByLine = await getProposedLineMap(supabase, activeVersion.id);
+  // B2 — version selector list + approver capability + the VIEWED version (the
+  // active head by default, or `?version=` for read-only history). Only a DRAFT
+  // is editable; anything else (approved / superseded / a non-head view) is
+  // version-locked.
+  const [{ data: versionRows }, { data: canApproveRaw }] = await Promise.all([
+    supabase
+      .from('budget_versions')
+      .select('id, version_number, status, note, approved_by, approved_at, parent_version_id')
+      .eq('tour_id', tourId)
+      .eq('workspace_id', workspaceId)
+      .order('version_number', { ascending: true }),
+    supabase.rpc('is_budget_approver'),
+  ]);
+  const versions = (versionRows ?? []) as unknown as BudgetVersionVm[];
+  const canApprove = Boolean(canApproveRaw);
+  const requestedVersionId = typeof sp.version === 'string' ? sp.version : undefined;
+  const viewed =
+    (requestedVersionId && versions.find((v) => v.id === requestedVersionId)) || activeVersion;
+  const versionLocked = !!viewed && viewed.status !== 'draft';
+
+  if (viewed) {
+    const proposedByLine = await getProposedLineMap(supabase, viewed.id);
     for (const l of lines) {
       const p = proposedByLine.get(l.id);
       if (p !== undefined) (l as { proposed_cost: number }).proposed_cost = p;
     }
-    const proposedIncome = await getProposedIncomeMap(supabase, activeVersion.id);
+    const proposedIncome = await getProposedIncomeMap(supabase, viewed.id);
     for (const row of initialIncome) {
       const pi = proposedIncome.get(row.routing_id);
       if (pi) {
@@ -301,6 +322,9 @@ export default async function BudgetTourPage({
           tourName={(tour.name as string | null) ?? 'Tour'}
           tourCurrency={tourCurrency}
           lines={lines}
+          tourId={tourId}
+          versions={versions}
+          viewedVersionId={viewed?.id ?? null}
         />
         <BudgetBurnBar lines={lines} tourCurrency={tourCurrency} />
         {/* Phase strip when this tour tracks phases (BUD-18). Phase 4.2 —
@@ -362,6 +386,9 @@ export default async function BudgetTourPage({
                       sections={sections}
                       tourCurrency={tourCurrency}
                       tourId={tourId}
+                      versionLocked={versionLocked}
+                      lockedVersionId={viewed?.id ?? null}
+                      canApprove={canApprove}
                     />
                   }
                 />
@@ -374,7 +401,7 @@ export default async function BudgetTourPage({
               BudgetIncomeTab is retained, unmounted, as a fallback until the
               P&L parity is live-verified — remove it then. */}
           {tab === 'income' ? (
-            <BudgetIncomeGrid tourId={tourId} tourCurrency={tourCurrency} initialRows={initialIncome} />
+            <BudgetIncomeGrid tourId={tourId} tourCurrency={tourCurrency} initialRows={initialIncome} versionLocked={versionLocked} />
           ) : null}
 
           {/* Budget Phase A §A2 / Phase 0 — Actuals + Reports tabs removed.
@@ -383,7 +410,13 @@ export default async function BudgetTourPage({
               budget|summary via resolveBudgetTab (no 404). */}
 
           {tab === 'settings' ? (
-            <BudgetSettingsTab tourId={tourId} sections={sections} />
+            <BudgetSettingsTab
+              tourId={tourId}
+              sections={sections}
+              versions={versions}
+              activeVersionId={activeVersion?.id ?? null}
+              canApprove={canApprove}
+            />
           ) : null}
         </div>
 

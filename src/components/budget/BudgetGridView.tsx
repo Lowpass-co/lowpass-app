@@ -13,9 +13,10 @@
    src/lib/budget/fx.ts; formula sections live on the Summary tab (excluded).
    ============================================ */
 
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Grid } from '@/components/grid/Grid';
+import { VersionLockModal } from '@/components/budget/versioning/VersionLockModal';
 import type { Column, GridFx, GridLineApi, GridStatusConfig } from '@/components/grid/types';
 import { budgetToGridSections, gridEditToPatch } from '@/lib/grid/budgetAdapter';
 import { convertToCurrency } from '@/lib/budget/fx';
@@ -73,11 +74,20 @@ export interface BudgetGridViewProps {
   sections: BudgetSection[];
   tourCurrency: string;
   tourId: string;
+  /** B2 — the active version is approved → proposed (est) cells read-only. */
+  versionLocked?: boolean;
+  /** the locked/viewed version id (for the Unlock-or-New-Version modal). */
+  lockedVersionId?: string | null;
+  canApprove?: boolean;
 }
 
-export function BudgetGridView({ lines, sections, tourCurrency, tourId }: BudgetGridViewProps) {
+export function BudgetGridView({
+  lines, sections, tourCurrency, tourId,
+  versionLocked = false, lockedVersionId = null, canApprove = false,
+}: BudgetGridViewProps) {
   const router = useRouter();
   const { showToast } = useToast();
+  const [lockModalOpen, setLockModalOpen] = useState(false);
   // `native` = the tour's own currency (fallback for currency-less lines).
   // `display` = the page DISPLAY selector (?display=), shared with the burn bar
   // + export controls. Flipping it re-renders this client component (via
@@ -113,7 +123,11 @@ export function BudgetGridView({ lines, sections, tourCurrency, tourId }: Budget
         body: JSON.stringify({ id: rowUid, ...patch }),
       })
         .then((res) => {
-          if (!res.ok) {
+          if (res.status === 423) {
+            // VERSION_LOCKED — raise the Unlock-or-New-Version modal, not a toast.
+            setLockModalOpen(true);
+            router.refresh();
+          } else if (!res.ok) {
             showToast('Could not save the change', 'error');
             router.refresh();
           }
@@ -339,25 +353,36 @@ export function BudgetGridView({ lines, sections, tourCurrency, tourId }: Budget
   );
 
   return (
-    <Grid
-      // re-init when the line/section COUNT changes (add/delete via a refresh);
-      // cell edits don't change counts, so the grid keeps its session state.
-      key={`${tourId}:${lines.length}:${sections.length}`}
-      initialColumns={EXPENSE_COLS}
-      initialData={data}
-      fx={fx}
-      slideStatuses={STATUS_CONFIG}
-      slideLineVariant
-      fillHandle
-      clickTwiceToOpen
-      onEdit={onEdit}
-      onAddLine={onAddLine}
-      onAddSection={onAddSection}
-      onRenameSection={onRenameSection}
-      onDeleteRow={onDeleteRow}
-      onReorderRow={onReorderRow}
-      onReorderSection={onReorderSection}
-      lineApi={lineApi}
-    />
+    <>
+      <Grid
+        // re-init when the line/section COUNT changes (add/delete via a refresh);
+        // cell edits don't change counts, so the grid keeps its session state.
+        key={`${tourId}:${lines.length}:${sections.length}:${versionLocked ? 'locked' : 'draft'}`}
+        initialColumns={EXPENSE_COLS}
+        initialData={data}
+        fx={fx}
+        slideStatuses={STATUS_CONFIG}
+        slideLineVariant
+        fillHandle
+        clickTwiceToOpen
+        versionLocked={versionLocked}
+        onLockedEdit={() => setLockModalOpen(true)}
+        onEdit={onEdit}
+        onAddLine={onAddLine}
+        onAddSection={onAddSection}
+        onRenameSection={onRenameSection}
+        onDeleteRow={onDeleteRow}
+        onReorderRow={onReorderRow}
+        onReorderSection={onReorderSection}
+        lineApi={lineApi}
+      />
+      <VersionLockModal
+        open={lockModalOpen}
+        versionId={lockedVersionId}
+        canApprove={canApprove}
+        tourId={tourId}
+        onClose={() => setLockModalOpen(false)}
+      />
+    </>
   );
 }

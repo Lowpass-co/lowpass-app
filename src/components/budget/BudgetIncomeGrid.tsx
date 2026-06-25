@@ -46,10 +46,13 @@ export function BudgetIncomeGrid({
   tourId,
   tourCurrency,
   initialRows,
+  versionLocked = false,
 }: {
   tourId: string;
   tourCurrency: string;
   initialRows: IncomeRow[];
+  /** B2 — approved version → projected (proposed) income columns read-only. */
+  versionLocked?: boolean;
 }) {
   const { showToast } = useToast();
   const searchParams = useSearchParams();
@@ -140,15 +143,18 @@ export function BudgetIncomeGrid({
     ];
     const money = (id: string, label: string): Column => ({ id, label, type: 'money', w: 120, min: 90, resize: true });
     if (view === 'projected') {
+      // B2 — projected (proposed) income is read-only on an approved version;
+      // the ACTUALS view (below) always stays editable.
+      const pMoney = (id: string, label: string): Column => ({ ...money(id, label), ro: versionLocked });
       return [
         idx,
         ...routingCols,
-        money('guarantee', 'Guarantee'),
-        { id: 'wh', label: 'WH %', type: 'number', w: 80, min: 60, resize: true },
+        pMoney('guarantee', 'Guarantee'),
+        { id: 'wh', label: 'WH %', type: 'number', w: 80, min: 60, resize: true, ro: versionLocked },
         { id: 'posttax', label: 'Post-tax', type: 'calc', w: 120, min: 90, resize: true, calc: (r: Row) => postTax(num(r.guarantee), num(r.wh)) },
-        money('overage', 'Overage'),
-        money('merch', 'Merch'),
-        money('vip', 'VIP'),
+        pMoney('overage', 'Overage'),
+        pMoney('merch', 'Merch'),
+        pMoney('vip', 'VIP'),
         {
           id: 'total',
           label: 'Total',
@@ -169,7 +175,7 @@ export function BudgetIncomeGrid({
       money('vip', 'VIP'),
       { id: 'total', label: 'Total', type: 'calc', w: 130, min: 100, resize: true, calc: (r: Row) => num(r.guarantee) + num(r.overage) + num(r.merch) + num(r.vip) },
     ];
-  }, [view]);
+  }, [view, versionLocked]);
 
   const data: Section[] = useMemo(() => {
     const gridRows: Row[] = (rows ?? []).map((r) =>
@@ -211,7 +217,7 @@ export function BudgetIncomeGrid({
         </div>
       ) : (
         <Grid
-          key={`income:${tourId}:${view}:${rows.length}`}
+          key={`income:${tourId}:${view}:${rows.length}:${versionLocked ? 'locked' : 'draft'}`}
           initialColumns={columns}
           initialData={data}
           fx={fx}

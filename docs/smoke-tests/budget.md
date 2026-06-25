@@ -20,6 +20,39 @@ Reference tour: "Warning Support". Templates picker needs a NEW empty tour.
 | BUD-19 | FIXED | click-to-rename templates + consistent picker (Fix-pack C) |
 | BUD-20 | FIXED | summary reads live from `section_id`; no phantom sections (Fix-pack A) |
 
+## Budget Versioning Phase 1 — B2 (UI, feat/budget-versioning-b2)
+
+> Wires the live B1 contract. tsc 0, eslint 0, build green. Chrome-verify on the
+> preview.
+
+- **BUD-VER-07 — version selector + Current pill.** The budget sub-bar shows
+  `vN · status ▾` (beside the tour identity). Dropdown lists every version
+  (number + status); the approved one carries the orange **Current** pill (in the
+  dropdown AND as a persistent chip). Selecting a non-active version views it via
+  `?version=` (read-only).
+- **BUD-VER-08 — read-only-when-locked proposed.** On an approved version the
+  Expenses **est** cells render locked (🔒, mirror the derived-lock); **act**
+  stays editable. Income **projected** columns are read-only; the **actuals** view
+  stays editable. (Grid `versionLocked` prop, default off → drafts unchanged.)
+- **BUD-VER-09 — Unlock-or-New-Version modal.** Editing a locked est cell (click
+  or keypress) raises the modal *"This budget is approved & locked — Unlock &
+  re-approve / Create a new version"* — **not a toast**. A `423 VERSION_LOCKED`
+  API response raises the same modal. A non-approver sees the explanation only
+  (no unlock/amend).
+- **BUD-VER-10 — Settings approval controls.** Settings tab → "Versions &
+  approval" card: **Approve & lock** (draft + approver, optional note) / **Unlock
+  & re-approve** / **New version from approved** (amend). Hidden for
+  non-approvers (server also enforces).
+- **BUD-VER-11 — amend switches version.** Amend → new draft v(n+1) clones v1 +
+  v1→superseded; the selector updates and the page switches to the new draft
+  (`?version=`).
+- **BUD-VER-12 — income proposed from version_income.** Income projected values
+  come from the active version's `budget_version_income` (B1 overlay); actuals
+  stay on `budget_income.actual_*`; P&L variance reads approved-version income.
+
+> **AI "Add it"** is still a TODO — when built it must surface `423` as the
+> BUD-VER-09 modal (noted, not built).
+
 ## Budget Versioning Phase 1 — B1 (data + state, feat/budget-versioning-b1)
 
 > Migration **212**. Run `npm run db:migrate` (backfills a DRAFT **v1** per

@@ -20,6 +20,8 @@ import { TourIdentityChip } from '@/components/shell-v2/TourIdentityChip';
 import { BudgetExportControls } from '@/components/budget/BudgetExportControls';
 import { AppDensityToggle } from '@/lib/density/appDensity';
 import { resolveBudgetTab, type BudgetTab } from './budget-tab-utils';
+import { VersionSelector } from './versioning/VersionSelector';
+import type { BudgetVersionVm } from './versioning/versionApi';
 import type { BudgetLineItem } from '@/types';
 
 interface BudgetContextBandProps {
@@ -28,6 +30,9 @@ interface BudgetContextBandProps {
   tourName: string;
   tourCurrency: string;
   lines: BudgetLineItem[];
+  tourId: string;
+  versions: BudgetVersionVm[];
+  viewedVersionId: string | null;
 }
 
 export function BudgetContextBand({
@@ -36,6 +41,9 @@ export function BudgetContextBand({
   tourName,
   tourCurrency,
   lines,
+  tourId,
+  versions,
+  viewedVersionId,
 }: BudgetContextBandProps) {
   const pathname = usePathname() ?? '';
   const searchParams = useSearchParams();
@@ -54,11 +62,14 @@ export function BudgetContextBand({
         ariaLabel="Budget tabs"
         scroll={false}
         leftSlot={
-          <TourIdentityChip
-            artistName={artistName}
-            artistLogoUrl={artistLogoUrl}
-            tourName={tourName}
-          />
+          <div className="flex items-center gap-3">
+            <TourIdentityChip
+              artistName={artistName}
+              artistLogoUrl={artistLogoUrl}
+              tourName={tourName}
+            />
+            <VersionSelector tourId={tourId} versions={versions} viewedVersionId={viewedVersionId} />
+          </div>
         }
         /* Phase 0 — SUMMARY | EXPENSES | INCOME | SETTINGS as four equal tabs.
            Reports retired (export lives in rightSlot); Settings moved out of the
