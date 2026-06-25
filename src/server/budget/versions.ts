@@ -85,23 +85,34 @@ export async function getProposedLineMap(
 }
 
 /** Proposed income columns per routing_id for a version. */
+export interface ProposedIncome {
+  pre_tax_guarantee: number;
+  withholding_pct: number;
+  pre_tax_overage: number;
+  merch_income: number;
+  vip_income: number;
+  /** Phase 2 — the show's native currency (NULL = tour currency). */
+  currency: string | null;
+}
+
 export async function getProposedIncomeMap(
   supabase: SupabaseClient,
   versionId: string,
-): Promise<Map<string, Record<string, number>>> {
-  const m = new Map<string, Record<string, number>>();
+): Promise<Map<string, ProposedIncome>> {
+  const m = new Map<string, ProposedIncome>();
   const { data } = await supabase
     .from('budget_version_income')
-    .select('routing_id, pre_tax_guarantee, withholding_pct, pre_tax_overage, merch_income, vip_income')
+    .select('routing_id, pre_tax_guarantee, withholding_pct, pre_tax_overage, merch_income, vip_income, currency')
     .eq('version_id', versionId);
   for (const r of data ?? []) {
-    const { routing_id, ...vals } = r as Record<string, unknown>;
-    m.set(routing_id as string, {
-      pre_tax_guarantee: Number(vals.pre_tax_guarantee) || 0,
-      withholding_pct: Number(vals.withholding_pct) || 0,
-      pre_tax_overage: Number(vals.pre_tax_overage) || 0,
-      merch_income: Number(vals.merch_income) || 0,
-      vip_income: Number(vals.vip_income) || 0,
+    const v = r as Record<string, unknown>;
+    m.set(v.routing_id as string, {
+      pre_tax_guarantee: Number(v.pre_tax_guarantee) || 0,
+      withholding_pct: Number(v.withholding_pct) || 0,
+      pre_tax_overage: Number(v.pre_tax_overage) || 0,
+      merch_income: Number(v.merch_income) || 0,
+      vip_income: Number(v.vip_income) || 0,
+      currency: (v.currency as string | null) ?? null,
     });
   }
   return m;

@@ -40,6 +40,33 @@ Reference tour: "Warning Support". Templates picker needs a NEW empty tour.
   view has a read-only **Deductions** column; the row Total = guarantee + overage
   + merch + vip − deductions. Projected view + the versioning lock unchanged.
 
+## Income redesign — Phase 2: Per-show currency (feat/income-currency-phase2)
+
+> Migration **216** (`budget_income.currency` + `budget_version_income.currency`
+> mirror, additive nullable; new `budget_fx_rates` table — per-tour, **unversioned**,
+> RLS via `get_my_workspace_id()`). Run `npm run db:migrate`. tsc 0, eslint 0,
+> build green. Currency is **proposed structure** → it follows the versioning lock.
+
+- **INC-CUR-01 — per-show currency picker.** Income grid has a **Ccy** dropdown per
+  show; options = the tour currency + every currency with an FX rate (Settings).
+  Picking the tour currency stores `null`; any other stores the upper-cased code on
+  `budget_income.currency`. Both Projected + Actual views show the same picker.
+- **INC-CUR-02 — native-currency amounts.** A show set to a non-tour currency renders
+  its money cells in that currency (e.g. €1000 with a red ≈ tour-currency note), via
+  the row's `cur`. Tour-currency shows are unchanged.
+- **INC-CUR-03 — FX-rate editor (Settings).** Budget → **Settings** → **FX rates**:
+  add `EUR 1.17`, see `1 EUR = 1.17 <tour ccy>`; remove it (confirm dialog) →
+  GET/POST/DELETE `/api/budget/fx-rates`. Adding the tour currency or a non-positive
+  rate is rejected with a toast. Unversioned — editable on an approved budget.
+- **INC-CUR-04 — P&L converts to tour currency.** A foreign-currency show **with** an
+  FX rate → its gross/merch/pre-tax convert to the tour currency in the Summary P&L
+  (`computeBudgetPnl` × `toTourCurrency`); a foreign show with **no** rate converts
+  1:1. Totals stay in the single tour currency.
+- **INC-CUR-05 — currency follows the version lock.** Approve a version → the **Ccy**
+  cell goes read-only (projected view) and editing income 423s; the projected
+  `currency` is snapshotted into `budget_version_income` and re-overlaid on the
+  approved view. Unlock → editable again. Actuals + Phase-1 deductions unaffected.
+
 ## Budget Versioning Phase 1 — B2 (UI, feat/budget-versioning-b2)
 
 > Wires the live B1 contract. tsc 0, eslint 0, build green. Chrome-verify on the

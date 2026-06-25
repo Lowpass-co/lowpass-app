@@ -47,16 +47,22 @@ export function BudgetIncomeGrid({
   tourCurrency,
   initialRows,
   versionLocked = false,
+  fxRates = {},
 }: {
   tourId: string;
   tourCurrency: string;
   initialRows: IncomeRow[];
   /** B2 — approved version → projected (proposed) income columns read-only. */
   versionLocked?: boolean;
+  /** Phase 2 — per-tour FX map; its keys are the selectable foreign currencies. */
+  fxRates?: Record<string, number>;
 }) {
   const { showToast } = useToast();
   const searchParams = useSearchParams();
   const native = (tourCurrency || 'GBP').toUpperCase();
+  // Phase 2 — the per-show currency options: the tour currency + any currency
+  // with an FX rate. (Add more rates in budget Settings to widen the picker.)
+  const currencyOptions = useMemo(() => Array.from(new Set([native, ...Object.keys(fxRates)])), [native, fxRates]);
   const display = (searchParams.get('display') ?? native).toUpperCase();
   // Prop-fed (server-fetched) → synchronous render, no client-fetch loading gate
   // that could get stuck (BUD-50). The client GET stays ONLY for the post-edit
@@ -110,7 +116,12 @@ export function BudgetIncomeGrid({
 
   const onEdit = useCallback(
     (routingId: string, columnId: string, value: unknown) => {
-      const patch = patchFor(columnId, num(value));
+      // Phase 2 — currency is a STRING (a proposed dropdown), not a number; the
+      // tour currency clears to null. Everything else routes through patchFor.
+      const patch: Partial<IncomeRow> | null =
+        columnId === 'currency'
+          ? { currency: String(value).toUpperCase() === native ? null : String(value).toUpperCase() }
+          : patchFor(columnId, num(value));
       if (!patch) return; // show / posttax / total — not persisted
       setRows((prev) => prev?.map((r) => (r.routing_id === routingId ? { ...r, ...patch } : r)) ?? prev);
       void fetch('/api/budget/income', {
@@ -119,7 +130,10 @@ export function BudgetIncomeGrid({
         body: JSON.stringify({ routing_id: routingId, ...patch }),
       })
         .then((res) => {
-          if (!res.ok) {
+          if (res.status === 423) {
+            showToast('This budget is approved & locked.', 'error');
+            void load();
+          } else if (!res.ok) {
             showToast('Could not save income', 'error');
             void load();
           }
@@ -129,7 +143,7 @@ export function BudgetIncomeGrid({
           void load();
         });
     },
-    [patchFor, showToast, load],
+    [patchFor, showToast, load, native],
   );
 
   const columns: Column[] = useMemo(() => {
@@ -140,6 +154,8 @@ export function BudgetIncomeGrid({
       { id: 'daytype', label: 'Type', type: 'text', ro: true, w: 78, min: 56, resize: true },
       { id: 'venue', label: 'Venue', type: 'text', ro: true, w: 168, min: 110, resize: true },
       { id: 'city', label: 'City', type: 'text', ro: true, w: 110, min: 80, resize: true },
+      // Phase 2 — per-show currency (proposed structure → read-only when locked).
+      { id: 'currency', label: 'Ccy', type: 'dropdown', options: currencyOptions, ro: versionLocked, w: 70, min: 56, resize: true },
     ];
     const money = (id: string, label: string): Column => ({ id, label, type: 'money', w: 120, min: 90, resize: true });
     if (view === 'projected') {
@@ -177,14 +193,17 @@ export function BudgetIncomeGrid({
       { id: 'deductions', label: 'Deductions', type: 'money', w: 120, min: 90, resize: true, ro: true },
       { id: 'total', label: 'Total', type: 'calc', w: 130, min: 100, resize: true, calc: (r: Row) => num(r.guarantee) + num(r.overage) + num(r.merch) + num(r.vip) - num(r.deductions) },
     ];
-  }, [view, versionLocked]);
+  }, [view, versionLocked, currencyOptions]);
 
   const data: Section[] = useMemo(() => {
-    const gridRows: Row[] = (rows ?? []).map((r) =>
-      view === 'projected'
-        ? { _uid: r.routing_id, cur: native, ...routingFields(r), guarantee: r.pre_tax_guarantee, wh: r.withholding_pct, overage: r.pre_tax_overage, merch: r.merch_income, vip: r.vip_income }
-        : { _uid: r.routing_id, cur: native, ...routingFields(r), guarantee: r.actual_guarantee, overage: r.actual_overage, merch: r.actual_merch, vip: r.actual_vip, deductions: r.actual_deductions },
-    );
+    // Phase 2 — `cur` = the row's native currency drives the money cells' source
+    // display (€1000 ≈ £…); `currency` is the picker cell value.
+    const gridRows: Row[] = (rows ?? []).map((r) => {
+      const rowCur = r.currency || native;
+      return view === 'projected'
+        ? { _uid: r.routing_id, cur: rowCur, currency: rowCur, ...routingFields(r), guarantee: r.pre_tax_guarantee, wh: r.withholding_pct, overage: r.pre_tax_overage, merch: r.merch_income, vip: r.vip_income }
+        : { _uid: r.routing_id, cur: rowCur, currency: rowCur, ...routingFields(r), guarantee: r.actual_guarantee, overage: r.actual_overage, merch: r.actual_merch, vip: r.actual_vip, deductions: r.actual_deductions };
+    });
     return [{ name: 'Shows', kind: 'normal', _uid: 'income', rows: gridRows }];
   }, [rows, view, native]);
 

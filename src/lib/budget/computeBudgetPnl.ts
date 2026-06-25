@@ -31,6 +31,7 @@
 import { normalizeCommissionPct } from '@/lib/commission-pct';
 import { getEffectiveActual } from '@/lib/budget/transactions';
 import { convertToCurrency } from '@/lib/budget/fx';
+import { toTourCurrency, type FxRateMap } from '@/lib/budget/fxRates';
 import { isIncomeRow } from '@/lib/budget/income-rows';
 import type { BudgetLineItem } from '@/types';
 
@@ -97,6 +98,8 @@ export interface IncomeInput {
   /** Settlement-fed deductions (Phase 1) — subtracted from ACTUAL income so NET
    *  reflects real receipts. Actual-only (unversioned). */
   actual_deductions?: number | null;
+  /** Phase 2 — the show's native currency (NULL = tour currency). */
+  currency?: string | null;
 }
 
 export interface CommissionInput {
@@ -128,9 +131,13 @@ export function computeBudgetPnl(input: {
   commissions: CommissionInput[];
   settings: PnlSettingsInput | null;
   tourCurrency: string;
+  /** Phase 2 — per-tour FX map (1 <currency> = rate <tour ccy>); converts each
+   *  show's native income into the tour currency before totalling. */
+  fxRates?: FxRateMap;
 }): BudgetPnl {
   const { lines, income, commissions, settings } = input;
   const currency = (input.tourCurrency || 'GBP').toUpperCase();
+  const fxRates = input.fxRates ?? {};
 
   // Base expenses — every non-income line, in tour currency.
   let baseProjected = 0;
@@ -159,26 +166,29 @@ export function computeBudgetPnl(input: {
   let preTaxProj = 0;
   let preTaxAct = 0;
   for (const i of income) {
-    merchProj += num(i.merch_income);
-    merchAct += num(i.actual_merch);
-    grossProj += postTaxGuar(i) + postTaxOver(i) + num(i.merch_income) + num(i.vip_income);
+    // Phase 2 — convert this show's native income → tour currency. f is the
+    // row's rate (1 for the tour currency / a currency with no rate).
+    const f = toTourCurrency(1, i.currency, currency, fxRates);
+    merchProj += num(i.merch_income) * f;
+    merchAct += num(i.actual_merch) * f;
+    grossProj += (postTaxGuar(i) + postTaxOver(i) + num(i.merch_income) + num(i.vip_income)) * f;
     grossAct +=
-      num(i.actual_guarantee) +
-      num(i.actual_overage) +
-      num(i.actual_merch) +
-      num(i.actual_vip) -
-      num(i.actual_deductions);
+      (num(i.actual_guarantee) +
+        num(i.actual_overage) +
+        num(i.actual_merch) +
+        num(i.actual_vip) -
+        num(i.actual_deductions)) * f;
     preTaxProj +=
-      num(i.pre_tax_guarantee ?? i.post_tax_guarantee) +
-      num(i.pre_tax_overage) +
-      num(i.merch_income) +
-      num(i.vip_income);
+      (num(i.pre_tax_guarantee ?? i.post_tax_guarantee) +
+        num(i.pre_tax_overage) +
+        num(i.merch_income) +
+        num(i.vip_income)) * f;
     preTaxAct +=
-      num(i.actual_guarantee) +
-      num(i.actual_overage) +
-      num(i.actual_merch) +
-      num(i.actual_vip) -
-      num(i.actual_deductions);
+      (num(i.actual_guarantee) +
+        num(i.actual_overage) +
+        num(i.actual_merch) +
+        num(i.actual_vip) -
+        num(i.actual_deductions)) * f;
   }
 
   const insurancePct = num(settings?.insurance_pct);

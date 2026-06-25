@@ -51,6 +51,7 @@ import { computeTourPhases } from '@/server/budget/computeTourPhases';
 import { getBudgetPanelData } from '@/server/budget/getBudgetPanelData';
 import { reconcileDerivedBudgetLines } from '@/server/budget/reconcileDerivedLines';
 import { resolveActiveVersion, getProposedLineMap, getProposedIncomeMap } from '@/server/budget/versions';
+import { loadTourFxRates } from '@/lib/budget/fxRates';
 import type { BudgetVersionVm } from '@/components/budget/versioning/versionApi';
 import { logServerError } from '@/lib/log/serverError';
 import type {
@@ -294,9 +295,14 @@ export default async function BudgetTourPage({
         row.pre_tax_overage = pi.pre_tax_overage;
         row.merch_income = pi.merch_income;
         row.vip_income = pi.vip_income;
+        row.currency = pi.currency;
       }
     }
   }
+
+  // Phase 2 — per-tour FX map (1 currency = rate tour-ccy) for the P&L + the
+  // income grid's currency picker. Unversioned (a conversion assumption).
+  const fxRates = await loadTourFxRates(supabase, tourId, workspaceId);
 
   const routingDateById: Record<string, string> = {};
   for (const r of (routingRes.data ?? []) as Array<{
@@ -349,6 +355,7 @@ export default async function BudgetTourPage({
               burn={panelData.burn}
               phaseBoundaries={phaseBoundaries}
               tourCurrency={tourCurrency}
+              fxRates={fxRates}
             />
           ) : null}
 
@@ -401,7 +408,7 @@ export default async function BudgetTourPage({
               BudgetIncomeTab is retained, unmounted, as a fallback until the
               P&L parity is live-verified — remove it then. */}
           {tab === 'income' ? (
-            <BudgetIncomeGrid tourId={tourId} tourCurrency={tourCurrency} initialRows={initialIncome} versionLocked={versionLocked} />
+            <BudgetIncomeGrid tourId={tourId} tourCurrency={tourCurrency} initialRows={initialIncome} versionLocked={versionLocked} fxRates={fxRates} />
           ) : null}
 
           {/* Budget Phase A §A2 / Phase 0 — Actuals + Reports tabs removed.
@@ -412,6 +419,7 @@ export default async function BudgetTourPage({
           {tab === 'settings' ? (
             <BudgetSettingsTab
               tourId={tourId}
+              tourCurrency={tourCurrency}
               sections={sections}
               versions={versions}
               activeVersionId={activeVersion?.id ?? null}

@@ -123,7 +123,7 @@ export async function POST(request: Request) {
   // Lock guard — a write touching PROPOSED income (pre_tax_*, withholding_pct,
   // merch, vip) on a tour whose active version is approved → 423. Actual-only
   // (actual_*) writes pass (settlement-fed actuals are the live layer).
-  const PROPOSED_INCOME = ['pre_tax_guarantee', 'withholding_pct', 'pre_tax_overage', 'merch_income', 'vip_income'];
+  const PROPOSED_INCOME = ['pre_tax_guarantee', 'withholding_pct', 'pre_tax_overage', 'merch_income', 'vip_income', 'currency'];
   if (PROPOSED_INCOME.some((k) => (body as Record<string, unknown>)[k] !== undefined)) {
     const { locked, version } = await resolveLockState(supabase, routingRow.tour_id as string, workspaceId);
     if (locked) {
@@ -155,6 +155,13 @@ export async function POST(request: Request) {
   const preTaxGuarantee = numMerge(body.pre_tax_guarantee, existing?.pre_tax_guarantee);
   const withholdingPct = numMerge(body.withholding_pct, existing?.withholding_pct);
   const preTaxOverage = numMerge(body.pre_tax_overage, existing?.pre_tax_overage);
+  // Phase 2 — per-show currency (proposed structure → versioned). '' / null clears
+  // to the tour currency.
+  const bodyCurrency = (body as { currency?: string | null }).currency;
+  const currencyVal =
+    bodyCurrency !== undefined
+      ? (bodyCurrency ? String(bodyCurrency).toUpperCase() : null)
+      : ((existing?.currency as string | null) ?? null);
 
   const payload: Record<string, unknown> = {
     routing_id,
@@ -166,6 +173,7 @@ export async function POST(request: Request) {
     post_tax_overage: postTaxFromPreTax(preTaxOverage, withholdingPct),
     merch_income: numMerge(body.merch_income, existing?.merch_income),
     vip_income: numMerge(body.vip_income, existing?.vip_income),
+    currency: currencyVal,
     actual_guarantee: nullableMerge(body.actual_guarantee, existing?.actual_guarantee),
     actual_overage: nullableMerge(body.actual_overage, existing?.actual_overage),
     actual_merch: nullableMerge(body.actual_merch, existing?.actual_merch),
@@ -193,6 +201,7 @@ export async function POST(request: Request) {
         version_id: active.id, routing_id, workspace_id: workspaceId,
         pre_tax_guarantee: preTaxGuarantee, withholding_pct: withholdingPct, pre_tax_overage: preTaxOverage,
         merch_income: Number(payload.merch_income) || 0, vip_income: Number(payload.vip_income) || 0,
+        currency: currencyVal,
       },
       { onConflict: 'version_id,routing_id' },
     );

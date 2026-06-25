@@ -59,12 +59,14 @@ const inputStyle: React.CSSProperties = {
 
 export function BudgetSettingsTab({
   tourId,
+  tourCurrency = 'GBP',
   sections,
   versions = [],
   activeVersionId = null,
   canApprove = false,
 }: {
   tourId: string;
+  tourCurrency?: string;
   sections: BudgetSection[];
   versions?: BudgetVersionVm[];
   activeVersionId?: string | null;
@@ -76,9 +78,190 @@ export function BudgetSettingsTab({
       <PhaseToggleCard />
       <OverheadsCard tourId={tourId} />
       <CommissionsCard tourId={tourId} />
+      <FxRatesCard tourId={tourId} tourCurrency={tourCurrency} />
       <TourSectionsCard tourId={tourId} sections={sections} />
       <TemplatesCard tourId={tourId} />
     </div>
+  );
+}
+
+/* -------------------------------------------------- */
+/* FX rates — per-tour currency map (Income Phase 2). */
+/* Converts each show's foreign income → tour currency */
+/* in the Summary P&L. Unversioned (a conversion       */
+/* assumption, like the overhead %s above).            */
+/* -------------------------------------------------- */
+type FxRate = { currency: string; rate_to_tour_currency: number };
+
+function FxRatesCard({ tourId, tourCurrency }: { tourId: string; tourCurrency: string }) {
+  const { showToast } = useToast();
+  const { requestConfirm, dialog } = useBudgetConfirm();
+  const native = (tourCurrency || 'GBP').toUpperCase();
+  const [rates, setRates] = useState<FxRate[] | null>(null);
+  const [currency, setCurrency] = useState('');
+  const [rate, setRate] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/budget/fx-rates?tour_id=${encodeURIComponent(tourId)}`);
+      if (!res.ok) throw new Error(`Failed (${res.status})`);
+      const d = (await res.json()) as { rates?: FxRate[] };
+      setRates(d.rates ?? []);
+    } catch {
+      setRates([]);
+    }
+  }, [tourId]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  const add = async () => {
+    const c = currency.trim().toUpperCase();
+    const r = Number(rate);
+    if (!c || !Number.isFinite(r) || r <= 0) {
+      showToast('Enter a currency and a positive rate.', 'error');
+      return;
+    }
+    if (c === native) {
+      showToast('The tour currency is always 1:1.', 'error');
+      return;
+    }
+    setBusy(true);
+    try {
+      const res = await fetch('/api/budget/fx-rates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tour_id: tourId, currency: c, rate: r }),
+      });
+      if (!res.ok) {
+        const b = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(b.error ?? `Save failed (${res.status})`);
+      }
+      setCurrency('');
+      setRate('');
+      await load();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Save failed', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const remove = (c: string) =>
+    requestConfirm({
+      title: 'Remove FX rate?',
+      message: `Remove the ${c} rate? Shows in ${c} will fall back to a 1:1 conversion in the P&L.`,
+      confirmLabel: 'Remove rate',
+      onConfirm: () => {
+        const before = rates;
+        setRates((prev) => prev?.filter((x) => x.currency !== c) ?? prev);
+        void (async () => {
+          try {
+            const res = await fetch('/api/budget/fx-rates', {
+              method: 'DELETE',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ tour_id: tourId, currency: c }),
+            });
+            if (!res.ok) throw new Error(`Delete failed (${res.status})`);
+          } catch (err) {
+            if (before) setRates(before);
+            showToast(err instanceof Error ? err.message : 'Delete failed', 'error');
+          }
+        })();
+      },
+    });
+
+  return (
+    <section className="rounded-lg border p-4" style={cardStyle}>
+      <h2 className="lp-h3">FX rates</h2>
+      <p className="mt-1" style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text-secondary)' }}>
+        Convert each show&apos;s foreign income to {native} in the Summary P&amp;L. A rate is{' '}
+        <em>1 unit of the currency in {native}</em> (e.g. EUR 1.17). Shows with no rate convert 1:1.
+      </p>
+
+      <ul className="mt-3 space-y-1.5">
+        {rates === null ? (
+          <li style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text-tertiary)' }}>Loading…</li>
+        ) : rates.length === 0 ? (
+          <li style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text-tertiary)' }}>
+            No FX rates yet — foreign income totals 1:1 in {native}.
+          </li>
+        ) : (
+          rates.map((r) => (
+            <li
+              key={r.currency}
+              className="flex items-center gap-3 rounded-md border px-2.5 py-1.5"
+              style={{ borderColor: 'var(--lp-border)', background: 'var(--lp-bg)' }}
+            >
+              <span className="w-12 shrink-0" style={{ fontSize: 'var(--lp-text-base)', fontWeight: 'var(--lp-weight-medium)', color: 'var(--lp-text)' }}>
+                {r.currency}
+              </span>
+              <span style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text-secondary)' }}>
+                1 {r.currency} = {r.rate_to_tour_currency} {native}
+              </span>
+              <button
+                type="button"
+                aria-label={`Remove ${r.currency}`}
+                title="Remove rate"
+                onClick={() => remove(r.currency)}
+                className="btn-transition ml-auto rounded p-1"
+                style={{ color: 'var(--lp-text-tertiary)' }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.color = 'var(--color-lp-error)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.color = 'var(--lp-text-tertiary)';
+                }}
+              >
+                <Trash2 className="h-3.5 w-3.5" aria-hidden />
+              </button>
+            </li>
+          ))
+        )}
+      </ul>
+
+      <div className="mt-3 flex items-center gap-2">
+        <input
+          value={currency}
+          onChange={(e) => setCurrency(e.target.value.toUpperCase())}
+          placeholder="EUR"
+          maxLength={3}
+          aria-label="Currency code"
+          className="w-20"
+          style={{ ...inputStyle, textTransform: 'uppercase' }}
+        />
+        <input
+          value={rate}
+          onChange={(e) => setRate(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') void add();
+          }}
+          placeholder="1.17"
+          inputMode="decimal"
+          aria-label={`Rate in ${native}`}
+          className="w-24"
+          style={{ ...inputStyle, textAlign: 'right' }}
+        />
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() => void add()}
+          className="btn-transition inline-flex items-center gap-1.5 rounded-md px-3 py-1.5"
+          style={{
+            background: 'var(--color-lp-orange)',
+            color: 'var(--lp-text-inverse)',
+            fontSize: 'var(--lp-text-sm)',
+            fontWeight: 'var(--lp-weight-medium)',
+            opacity: busy ? 0.6 : 1,
+          }}
+        >
+          <Plus className="h-4 w-4" aria-hidden /> Add rate
+        </button>
+      </div>
+      {dialog}
+    </section>
   );
 }
 

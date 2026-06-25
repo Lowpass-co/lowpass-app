@@ -96,6 +96,8 @@ export interface BudgetSummaryTabProps {
   burn: BurnBucket[];
   phaseBoundaries: BurnPhaseBoundary[];
   tourCurrency: string;
+  /** Phase 2 — per-tour FX map for converting per-show foreign income to tour ccy. */
+  fxRates?: Record<string, number>;
 }
 
 export function BudgetSummaryTab({
@@ -109,6 +111,7 @@ export function BudgetSummaryTab({
   burn,
   phaseBoundaries,
   tourCurrency,
+  fxRates = {},
 }: BudgetSummaryTabProps) {
   const searchParams = useSearchParams();
   const displayCurrency = (
@@ -125,8 +128,9 @@ export function BudgetSummaryTab({
         commissions,
         settings,
         tourCurrency,
+        fxRates,
       }),
-    [lines, income, commissions, settings, tourCurrency],
+    [lines, income, commissions, settings, tourCurrency, fxRates],
   );
 
   /* Phase E — per-section rollup mirroring the GN sheet's SUMMARY tab.
