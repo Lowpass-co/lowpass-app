@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import type { DealMemoInput, DealMemoStatus } from '@/lib/types/deal-memo';
 import { mapListRow } from '@/lib/deal-memos/mapDealMemo';
+import { reindexRecordSafe } from '@/lib/ai/rag/reindex';
 
 async function enrichMany(
   supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
@@ -136,6 +137,9 @@ export async function POST(request: Request) {
 
   const { data: row, error } = await supabase.from('deal_memos').insert(patch).select('*').single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // RAG incremental upkeep (best-effort; never blocks the save).
+  reindexRecordSafe({ workspaceId, userId: user.id }, 'deal_memo', (row as { id: string }).id);
 
   const enriched = await enrichMany(supabase, [row as Record<string, unknown>]);
   return NextResponse.json({ dealMemo: enriched[0] });

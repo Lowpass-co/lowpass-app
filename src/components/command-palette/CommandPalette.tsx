@@ -20,7 +20,7 @@
    ============================================ */
 
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   Plane,
   User as UserIcon,
@@ -36,9 +36,12 @@ import {
   Search as SearchIcon,
   X as CloseIcon,
   Clock,
+  Sparkles,
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useEntityRouting } from '@/components/entity/EntityRoutingContext';
+import { useSuggestionsPreference } from '@/components/detail-panel/useSuggestionsPreference';
+import { askHistory, looksLikeQuestion, type AskResult } from '@/lib/search/ask';
 import {
   clearRecent,
   loadRecent,
@@ -211,7 +214,22 @@ function PaletteInner({
   userId: string | null;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const entityRouting = useEntityRouting();
+
+  // Route context for the Ask scope: a tour (operations/budget/advance) or
+  // an artist. Lets "ask your history" default to what you're looking at.
+  const ctxTourId = useMemo(() => {
+    const m = pathname?.match(/^\/(?:operations|budget|advance)\/([^/]+)/);
+    return m ? m[1] : null;
+  }, [pathname]);
+  const ctxArtistId = useMemo(() => {
+    const m = pathname?.match(/^\/artists\/([^/]+)/);
+    return m ? m[1] : null;
+  }, [pathname]);
+  const hasScopeContext = Boolean(ctxTourId || ctxArtistId);
+  const scopeLabel = ctxTourId ? 'This tour' : ctxArtistId ? 'This artist' : '';
+  const [scopeMode, setScopeMode] = useState<'context' | 'workspace'>('context');
 
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -219,6 +237,35 @@ function PaletteInner({
   const [selectedIndex, setSelectedIndex] = useState(0);
   // Snapshot recents at mount (re-snapshot when user clears via the button).
   const [recent, setRecent] = useState<RecentItem[]>(() => loadRecent(userId));
+
+  // RAG "ask your history" — gated by the build-#1 opt-in preference.
+  const { enabled: askEnabled } = useSuggestionsPreference();
+  const [ask, setAsk] = useState<{ query: string; loading: boolean; result: AskResult | null }>({
+    query: '',
+    loading: false,
+    result: null,
+  });
+  const runAsk = useCallback(
+    (q: string) => {
+      const scope =
+        scopeMode === 'context' && ctxTourId
+          ? { tourId: ctxTourId }
+          : scopeMode === 'context' && ctxArtistId
+            ? { artistId: ctxArtistId }
+            : undefined;
+      setAsk({ query: q, loading: true, result: null });
+      void askHistory(q, scope).then((result) => {
+        // Ignore a stale answer if the user has since changed the query.
+        setAsk((prev) => (prev.query === q ? { query: q, loading: false, result } : prev));
+      });
+    },
+    [scopeMode, ctxTourId, ctxArtistId],
+  );
+  // Flipping scope invalidates any shown answer so the user re-asks deliberately.
+  const toggleScope = useCallback(() => {
+    setScopeMode((m) => (m === 'context' ? 'workspace' : 'context'));
+    setAsk({ query: '', loading: false, result: null });
+  }, []);
 
   // useDeferredValue lets React's scheduler defer search-firing during
   // bursts of typing without us needing to manage a setTimeout / setState
@@ -360,6 +407,11 @@ function PaletteInner({
   }
 
   const empty = flatList.length === 0;
+  const curQ = debounced.trim();
+  // The Ask affordance shows only when the opt-in is on AND the query reads
+  // like a question (build-#1 gate → non-invasive).
+  const showAsk = askEnabled && looksLikeQuestion(curQ);
+  const askForCurrent = ask.query === curQ ? ask : null;
 
   return (
     <div
@@ -415,7 +467,79 @@ function PaletteInner({
         </div>
 
         <div ref={listRef} className="max-h-[380px] overflow-y-auto py-1" role="listbox">
-          {empty && debounced.trim() && !loading ? (
+          {showAsk ? (
+            <div className="border-b px-3 py-2" style={{ borderColor: 'var(--lp-border)' }}>
+              {hasScopeContext ? (
+                <div className="mb-1 flex items-center justify-end gap-1 px-2 text-xs" style={{ color: 'var(--lp-text-tertiary)' }}>
+                  <span>Scope:</span>
+                  <button
+                    type="button"
+                    onClick={toggleScope}
+                    className="rounded px-1.5 py-0.5 font-medium"
+                    style={{
+                      color: 'var(--color-lp-orange)',
+                      background: 'color-mix(in srgb, var(--color-lp-orange) 8%, transparent)',
+                    }}
+                  >
+                    {scopeMode === 'context' ? scopeLabel : 'Whole workspace'} ▾
+                  </button>
+                </div>
+              ) : null}
+              {!askForCurrent || (!askForCurrent.loading && !askForCurrent.result) ? (
+                <button
+                  type="button"
+                  onClick={() => runAsk(curQ)}
+                  className="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left text-sm"
+                  style={{ color: 'var(--lp-text)' }}
+                >
+                  <Sparkles className="h-4 w-4 shrink-0" style={{ color: 'var(--color-lp-orange)' }} />
+                  <span className="min-w-0 flex-1 truncate">
+                    Ask your history: «{curQ}»
+                  </span>
+                </button>
+              ) : askForCurrent.loading ? (
+                <div className="flex items-center gap-2 px-2 py-2 text-sm" style={{ color: 'var(--lp-text-tertiary)' }}>
+                  <Sparkles className="h-4 w-4 shrink-0 animate-pulse" style={{ color: 'var(--color-lp-orange)' }} />
+                  Searching your history…
+                </div>
+              ) : askForCurrent.result ? (
+                <div className="space-y-2 px-2 py-2">
+                  {askForCurrent.result.error ? (
+                    <p className="text-sm" style={{ color: 'var(--lp-text-tertiary)' }}>
+                      {askForCurrent.result.error}
+                    </p>
+                  ) : (
+                    <>
+                      <p className="text-sm leading-relaxed" style={{ color: 'var(--lp-text)' }}>
+                        {askForCurrent.result.answer}
+                      </p>
+                      {askForCurrent.result.sources.length > 0 ? (
+                        <div className="flex flex-wrap gap-1.5">
+                          {askForCurrent.result.sources.map((s) => (
+                            <span
+                              key={`${s.source_kind}-${s.source_id}`}
+                              className="inline-flex max-w-full items-center gap-1 truncate rounded-md px-2 py-0.5 text-xs"
+                              title={s.snippet}
+                              style={{
+                                background: 'color-mix(in srgb, var(--color-lp-orange) 8%, transparent)',
+                                color: 'var(--lp-text-secondary)',
+                              }}
+                            >
+                              {s.source_kind.replace(/_/g, ' ')}
+                              {s.city ? ` · ${s.city}` : ''}
+                              {s.date ? ` · ${s.date}` : ''}
+                            </span>
+                          ))}
+                        </div>
+                      ) : null}
+                    </>
+                  )}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+
+          {empty && debounced.trim() && !loading && !showAsk ? (
             <div className="px-4 py-12 text-center text-sm" style={{ color: 'var(--lp-text-tertiary)' }}>
               No matches for «{debounced.trim()}»
             </div>

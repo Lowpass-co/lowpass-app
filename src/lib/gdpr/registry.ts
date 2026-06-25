@@ -118,6 +118,17 @@ export const REGISTRY: TableRule[] = [
   { table: 'budget_line_item_notes', subjects: ['account'], piiColumns: ['created_by'], category: ['authorship'], links: [{ column: 'created_by', via: 'author_fk' }], action: 'nullify_author' },
 ];
 
+/* ── RAG index cascade (build #2, AI_ASSISTANT_ARCHITECTURE §2 Layer A) ──
+   A per-workspace semantic index (public.rag_chunks) embeds PII-STRIPPED
+   text derived from `deal_memos`, `venues`, and `budget_line_items`. When
+   the Art. 17 erasure executor is built (it does NOT exist yet — see
+   migration 207), it must, for every erased/anonymised row of those three
+   tables, also clear the derived chunk by calling
+   `deleteSourceChunks(workspaceId, table, sourceId)` from
+   src/lib/ai/rag/reindex.ts (RAG_INDEXED_TABLES maps table→source_kind).
+   Per-record deletes already cascade via the entity routes; this note is
+   the hook for the subject-level erasure walk. */
+
 /** Author-FK columns swept generically across the schema on account erasure
  *  (in addition to the explicit rows above). */
 export const GENERIC_AUTHOR_COLUMNS = [

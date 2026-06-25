@@ -11,6 +11,7 @@ import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { reconcileDerivedBudgetLines } from '@/server/budget/reconcileDerivedLines';
 import { resolveLockState, writeProposedToActiveDraft } from '@/server/budget/versions';
+import { removeRecordChunksSafe } from '@/lib/ai/rag/reindex';
 
 /** Fields that are part of the VERSIONED proposed (structure + proposed value);
  *  a write touching any of these against an APPROVED version is rejected (423).
@@ -618,6 +619,11 @@ export async function DELETE(request: Request) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  // RAG erasure cascade: drop the chunk for the deleted line item. (Create/
+  // update embedding is left to the bulk reindex — budget line items churn
+  // too frequently in the grid to embed per-keystroke. See done report.)
+  removeRecordChunksSafe(profile.workspace_id, 'budget_line_item', id);
 
   return new Response(null, { status: 204 });
 }

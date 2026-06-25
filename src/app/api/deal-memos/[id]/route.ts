@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import type { DealMemoInput, DealMemoStatus } from '@/lib/types/deal-memo';
 import { mapListRow } from '@/lib/deal-memos/mapDealMemo';
+import { reindexRecordSafe, removeRecordChunksSafe } from '@/lib/ai/rag/reindex';
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -88,6 +89,11 @@ export async function PATCH(request: Request, { params }: Params) {
 
   const dm = await loadEnrichedById(supabase, id);
   if (!dm) return NextResponse.json({ error: 'Not found' }, { status: 404 });
+
+  // RAG incremental upkeep (best-effort; never blocks the save).
+  const { data: prof } = await supabase.from('profiles').select('workspace_id').eq('id', user.id).maybeSingle();
+  if (prof?.workspace_id) reindexRecordSafe({ workspaceId: prof.workspace_id, userId: user.id }, 'deal_memo', id);
+
   return NextResponse.json({ dealMemo: dm });
 }
 
@@ -101,7 +107,12 @@ export async function DELETE(_: Request, { params }: Params) {
   if (!isAdmin) return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 
   const { id } = await params;
+  const { data: prof } = await supabase.from('profiles').select('workspace_id').eq('id', user.id).maybeSingle();
   const { error } = await supabase.from('deal_memos').delete().eq('id', id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // RAG erasure cascade: drop the chunk for the deleted record.
+  if (prof?.workspace_id) removeRecordChunksSafe(prof.workspace_id, 'deal_memo', id);
+
   return new Response(null, { status: 204 });
 }
