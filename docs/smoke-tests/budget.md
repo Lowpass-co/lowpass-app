@@ -20,6 +20,36 @@ Reference tour: "Warning Support". Templates picker needs a NEW empty tour.
 | BUD-19 | FIXED | click-to-rename templates + consistent picker (Fix-pack C) |
 | BUD-20 | FIXED | summary reads live from `section_id`; no phantom sections (Fix-pack A) |
 
+## Budget Versioning Phase 1 — B1 (data + state, feat/budget-versioning-b1)
+
+> Migration **212**. Run `npm run db:migrate` (backfills a DRAFT **v1** per
+> existing tour from current proposed). Code: tsc 0, eslint 0, build green,
+> reconcile-lock unit test 10/10. **DB-dependent items are Adam's to verify after
+> migrating** (the integrity layer can only be exercised against a live DB).
+
+- **BUD-VER-01 — approve atomic + one-Current.** Approve a draft → it becomes
+  `approved` (Current); any prior approved flips to `superseded` in one txn. A
+  concurrent second approve fails on the `one approved per tour` partial unique
+  index (409).
+- **BUD-VER-02 — route lock guard (423).** On a tour whose active version is
+  approved: a **proposed** write to `/api/budget/line-items` (PATCH or POST add)
+  or `/api/budget/income` (pre_tax_*) → **423 `VERSION_LOCKED`**; an **actual**
+  write (actual_cost / actual_* / receipts) → **200**; a **mixed** write → 423
+  (wholesale, no partial apply). Same guard = the AI "Add it" intercept.
+- **BUD-VER-03 — DB-level immutability.** A direct `UPDATE/INSERT/DELETE` on
+  `budget_version_lines/_sections/_income` whose parent version isn't `draft` is
+  **denied by the trigger** (not just the route) — a locked version is
+  uncorruptable even by a buggy server path.
+- **BUD-VER-04 — reconcile post-lock → actual only.** Lock a version → change a
+  `personnel_rates` rate → the locked **proposed snapshot is UNCHANGED** and
+  `budget_line_items.actual_cost` moved. (Logic locked by the unit test;
+  end-to-end is Adam's DB verify.)
+- **BUD-VER-05 — amend.** Amend → v2 clones v1's lines+income into a new draft
+  (`parent_version_id` set); v1 → `superseded`; v2 becomes Current on approval.
+- **BUD-VER-06 — approver gate.** approve/unlock/amend require
+  `is_budget_approver()` (admin OR a `budget_approver_grants` row) — server + the
+  status-change trigger; a non-approver → 403.
+
 ## P0 — budget SSR crash hardening (fix/budget-ssr-hardening)
 
 #### BUD-58 — a bad/edge-date tour renders instead of 500-ing

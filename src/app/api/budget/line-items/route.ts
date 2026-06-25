@@ -10,6 +10,16 @@
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { reconcileDerivedBudgetLines } from '@/server/budget/reconcileDerivedLines';
+import { resolveLockState, writeProposedToActiveDraft } from '@/server/budget/versions';
+
+/** Fields that are part of the VERSIONED proposed (structure + proposed value);
+ *  a write touching any of these against an APPROVED version is rejected (423).
+ *  Everything else (actual_cost, status, receipt links, notes…) is the live
+ *  actuals layer and always passes. */
+const PROPOSED_LINE_FIELDS = new Set([
+  'proposed_cost', 'label', 'category', 'quantity', 'currency',
+  'order_index', 'routing_id', 'section_id', 'section', 'sort_order', 'phase_tag',
+]);
 
 export async function GET(request: Request) {
   const supabase = await createServerSupabaseClient();
@@ -232,6 +242,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Tour not found' }, { status: 404 });
   }
 
+  // Lock guard — adding a line is a PROPOSED structure change; blocked when the
+  // active version is approved. (Also the AI "Add it" intercept.)
+  {
+    const { locked, version } = await resolveLockState(supabase, tour_id, profile.workspace_id);
+    if (locked) {
+      return NextResponse.json(
+        { error: 'This budget is approved & locked.', code: 'VERSION_LOCKED', versionId: version?.id ?? null },
+        { status: 423 },
+      );
+    }
+  }
+
   const { data: existing } = await supabase
     .from('budget_line_items')
     .select('order_index')
@@ -301,6 +323,11 @@ export async function POST(request: Request) {
     // BUD-15 disease — never let an RLS-filtered insert throw "no rows".
     return NextResponse.json({ error: 'Insert returned no row' }, { status: 500 });
   }
+  // Snapshot the new line's proposed into the active draft (canonical source).
+  await writeProposedToActiveDraft(supabase, {
+    tourId: tour_id, workspaceId: profile.workspace_id,
+    lineItemId: (created as { id: string }).id, proposedCost: Number(body.proposed_cost) || 0,
+  });
   return NextResponse.json(created);
 }
 
@@ -366,6 +393,25 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: 'id is required' }, { status: 400 });
   }
 
+  // Versioning lock guard — a write that touches a PROPOSED field on a line
+  // whose tour's active version is APPROVED is rejected wholesale (423), even if
+  // it also carries actual fields (no partial apply). Actual-only writes pass.
+  // This is also the AI "Add it" intercept (it PATCHes/POSTs here). (B1 §5)
+  const touchesProposed = Object.keys(updates).some((k) => PROPOSED_LINE_FIELDS.has(k));
+  if (touchesProposed) {
+    const { data: line } = await supabase
+      .from('budget_line_items').select('tour_id')
+      .eq('id', id).eq('workspace_id', profile.workspace_id).maybeSingle();
+    if (line) {
+      const { locked, version } = await resolveLockState(supabase, line.tour_id as string, profile.workspace_id);
+      if (locked) {
+        return NextResponse.json(
+          { error: 'This budget is approved & locked.', code: 'VERSION_LOCKED', versionId: version?.id ?? null },
+          { status: 423 },
+        );
+      }
+    }
+  }
   const { data: existingRow } = await supabase
     .from('budget_line_items')
     .select('id, flight_id, hotel_id, room_id, gear_id, tour_gear_id, source_entity_type')
@@ -493,6 +539,19 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: 'Line item not found' }, { status: 404 });
   }
 
+  // Write-through: mirror the new proposed_cost into the active DRAFT's snapshot
+  // (budget_version_lines) — the canonical proposed source. The legacy column is
+  // kept written one release as a fallback; reads come from the snapshot.
+  if (updates.proposed_cost !== undefined) {
+    const r = data as { tour_id?: string; proposed_cost?: number };
+    if (r.tour_id) {
+      await writeProposedToActiveDraft(supabase, {
+        tourId: r.tour_id, workspaceId: profile.workspace_id,
+        lineItemId: id, proposedCost: Number(r.proposed_cost) || 0,
+      });
+    }
+  }
+
   const row = data as {
     source_entity_type?: string | null;
     source_entity_id?: string | null;
@@ -559,5 +618,6 @@ export async function DELETE(request: Request) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
   return new Response(null, { status: 204 });
 }

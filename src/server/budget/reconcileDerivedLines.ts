@@ -27,6 +27,16 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { countDayStatuses, computeTotalFee, computeTotalPerDiem } from '@/lib/payroll/fees';
+import { resolveActiveVersion } from '@/server/budget/versions';
+import { derivedUpdatePayload, derivedInsertProposed } from '@/server/budget/derivedLockPolicy';
+
+/** Versioning context for one reconcile pass (§3a): when the active version is
+ *  APPROVED the derived feeds flow to ACTUALS only (the locked proposed baseline
+ *  is frozen); when DRAFT they write proposed (column + the draft snapshot). */
+interface VersionCtx {
+  locked: boolean;
+  draftVersionId: string | null;
+}
 
 const SECTION_ACCOMMODATION = 'Accommodation';
 const SECTION_SALARY = 'Salary';
@@ -252,9 +262,10 @@ async function reconcileType(
     legacySection: string;
     desired: Desired[];
     setHotelId?: boolean;
+    ctx: VersionCtx;
   },
 ): Promise<void> {
-  const { tourId, workspaceId, sourceType, sectionId, category, legacySection, desired, setHotelId } =
+  const { tourId, workspaceId, sourceType, sectionId, category, legacySection, desired, setHotelId, ctx } =
     opts;
 
   const { data: existing } = await supabase
@@ -269,40 +280,44 @@ async function reconcileType(
   for (const r of existing ?? []) {
     const sid = r.source_entity_id as string | null;
     if (sid) idBySource.set(sid, r.id as string);
-    // Delete derived rows whose source entity no longer exists.
+    // Source entity gone. Draft → delete the derived line. Locked → the proposed
+    // baseline is frozen (and deleting would cascade-fail on its immutable
+    // version_lines row); just zero the ACTUAL.
     if (!sid || !desiredIds.has(sid)) {
-      await supabase
-        .from('budget_line_items')
-        .delete()
-        .eq('id', r.id as string)
-        .eq('workspace_id', workspaceId);
+      if (ctx.locked) {
+        await supabase.from('budget_line_items')
+          .update({ actual_cost: 0, updated_at: new Date().toISOString() })
+          .eq('id', r.id as string).eq('workspace_id', workspaceId);
+      } else {
+        await supabase.from('budget_line_items')
+          .delete().eq('id', r.id as string).eq('workspace_id', workspaceId);
+      }
     }
   }
 
   for (const d of desired) {
     const existingId = idBySource.get(d.sourceId);
     if (existingId) {
+      // §3a — LOCKED: actual only (never the frozen proposed/structure).
       const payload: Record<string, unknown> = {
-        label: d.label,
-        proposed_cost: d.total,
-        actual_cost: d.total,
-        section_id: sectionId,
+        ...derivedUpdatePayload(ctx.locked, d, sectionId),
         updated_at: new Date().toISOString(),
       };
-      if (setHotelId && d.hotelId) payload.hotel_id = d.hotelId;
-      await supabase
-        .from('budget_line_items')
-        .update(payload)
-        .eq('id', existingId)
-        .eq('workspace_id', workspaceId);
+      if (!ctx.locked && setHotelId && d.hotelId) payload.hotel_id = d.hotelId;
+      await supabase.from('budget_line_items').update(payload).eq('id', existingId).eq('workspace_id', workspaceId);
+      if (!ctx.locked && ctx.draftVersionId) {
+        await mirrorProposed(supabase, ctx.draftVersionId, existingId, workspaceId, sectionId, d, category);
+      }
     } else {
-      await supabase.from('budget_line_items').insert({
+      // New derived entity. LOCKED → actuals-only line (proposed 0, NOT in the
+      // approved snapshot → shows as unbudgeted variance). DRAFT → proposed+actual.
+      const { data: ins } = await supabase.from('budget_line_items').insert({
         tour_id: tourId,
         workspace_id: workspaceId,
         category,
         label: d.label,
         quantity: 1,
-        proposed_cost: d.total,
+        proposed_cost: derivedInsertProposed(ctx.locked, d.total),
         actual_cost: d.total,
         source_entity_type: sourceType,
         source_entity_id: d.sourceId,
@@ -311,9 +326,28 @@ async function reconcileType(
         order_index: 0,
         sort_order: 0,
         ...(setHotelId && d.hotelId ? { hotel_id: d.hotelId } : {}),
-      });
+      }).select('id').maybeSingle();
+      if (!ctx.locked && ctx.draftVersionId && ins?.id) {
+        await mirrorProposed(supabase, ctx.draftVersionId, ins.id as string, workspaceId, sectionId, d, category);
+      }
     }
   }
+}
+
+/** Mirror a derived line's proposed into the active DRAFT's snapshot. */
+async function mirrorProposed(
+  supabase: SupabaseClient,
+  versionId: string,
+  lineItemId: string,
+  workspaceId: string,
+  sectionId: string | null,
+  d: Desired,
+  category: string,
+): Promise<void> {
+  await supabase.from('budget_version_lines').upsert(
+    { version_id: versionId, line_item_id: lineItemId, workspace_id: workspaceId, section_id: sectionId, label: d.label, category, proposed_cost: d.total },
+    { onConflict: 'version_id,line_item_id' },
+  );
 }
 
 /* ---- Public entry point ----------------------------------------- */
@@ -324,6 +358,13 @@ export async function reconcileDerivedBudgetLines(
   workspaceId: string,
 ): Promise<void> {
   try {
+    // §3a — resolve the active version ONCE. Approved → feeds touch actuals only.
+    const active = await resolveActiveVersion(supabase, tourId, workspaceId);
+    const ctx: VersionCtx = {
+      locked: active?.status === 'approved',
+      draftVersionId: active?.status === 'draft' ? active.id : null,
+    };
+
     const [hotelDesired, payroll] = await Promise.all([
       computeHotelDesired(supabase, tourId, workspaceId),
       computePayrollDesired(supabase, tourId, workspaceId),
@@ -345,6 +386,7 @@ export async function reconcileDerivedBudgetLines(
         legacySection: 'hotels',
         desired: hotelDesired,
         setHotelId: true,
+        ctx,
       });
     }
 
@@ -358,6 +400,7 @@ export async function reconcileDerivedBudgetLines(
         category: 'crew',
         legacySection: 'payroll',
         desired: payroll.salary,
+        ctx,
       });
     }
 
@@ -371,6 +414,7 @@ export async function reconcileDerivedBudgetLines(
         category: 'per_diems',
         legacySection: 'per_diems',
         desired: payroll.perDiem,
+        ctx,
       });
     }
   } catch {

@@ -10,6 +10,7 @@
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { loadTourIncome } from '@/lib/budget/income';
+import { resolveLockState, resolveActiveVersion } from '@/server/budget/versions';
 
 function postTaxFromPreTax(preTax: number, withholdingPct: number): number {
   return preTax * (1 - withholdingPct / 100);
@@ -119,6 +120,20 @@ export async function POST(request: Request) {
 
   const workspaceId = tourRow.workspace_id;
 
+  // Lock guard — a write touching PROPOSED income (pre_tax_*, withholding_pct,
+  // merch, vip) on a tour whose active version is approved → 423. Actual-only
+  // (actual_*) writes pass (settlement-fed actuals are the live layer).
+  const PROPOSED_INCOME = ['pre_tax_guarantee', 'withholding_pct', 'pre_tax_overage', 'merch_income', 'vip_income'];
+  if (PROPOSED_INCOME.some((k) => (body as Record<string, unknown>)[k] !== undefined)) {
+    const { locked, version } = await resolveLockState(supabase, routingRow.tour_id as string, workspaceId);
+    if (locked) {
+      return NextResponse.json(
+        { error: 'This budget is approved & locked.', code: 'VERSION_LOCKED', versionId: version?.id ?? null },
+        { status: 423 },
+      );
+    }
+  }
+
   /* Merge-safe upsert: per-cell edits send ONE field, so unprovided
      fields must keep their existing values (not get zeroed). Read the
      existing row, merge, recompute post-tax from the merged inputs. */
@@ -169,6 +184,18 @@ export async function POST(request: Request) {
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+  // Write-through: mirror the proposed income into the active DRAFT's snapshot.
+  const active = await resolveActiveVersion(supabase, routingRow.tour_id as string, workspaceId);
+  if (active?.status === 'draft') {
+    await supabase.from('budget_version_income').upsert(
+      {
+        version_id: active.id, routing_id, workspace_id: workspaceId,
+        pre_tax_guarantee: preTaxGuarantee, withholding_pct: withholdingPct, pre_tax_overage: preTaxOverage,
+        merch_income: Number(payload.merch_income) || 0, vip_income: Number(payload.vip_income) || 0,
+      },
+      { onConflict: 'version_id,routing_id' },
+    );
   }
   return NextResponse.json(data);
 }

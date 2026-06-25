@@ -50,6 +50,7 @@ import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { computeTourPhases } from '@/server/budget/computeTourPhases';
 import { getBudgetPanelData } from '@/server/budget/getBudgetPanelData';
 import { reconcileDerivedBudgetLines } from '@/server/budget/reconcileDerivedLines';
+import { resolveActiveVersion, getProposedLineMap, getProposedIncomeMap } from '@/server/budget/versions';
 import { logServerError } from '@/lib/log/serverError';
 import type {
   IncomeInput,
@@ -250,6 +251,32 @@ export default async function BudgetTourPage({
     logServerError('enrichLinesWithAttachmentCounts failed', err, { tourId });
     return txnEnriched.map((l) => ({ ...l, attachment_count: 0 }));
   });
+
+  /* Versioning (B1) — the proposed shown is the ACTIVE VERSION's snapshot, not
+     the legacy budget_line_items.proposed_cost column (kept write-through one
+     release as a fallback; never read). Actuals stay on the line. Overlay here so
+     every downstream surface (grid / classic / summary / income) reads the
+     versioned proposed. No-op until the snapshot exists (212 backfills v1). */
+  const activeVersion = await resolveActiveVersion(supabase, tourId, workspaceId);
+  if (activeVersion) {
+    const proposedByLine = await getProposedLineMap(supabase, activeVersion.id);
+    for (const l of lines) {
+      const p = proposedByLine.get(l.id);
+      if (p !== undefined) (l as { proposed_cost: number }).proposed_cost = p;
+    }
+    const proposedIncome = await getProposedIncomeMap(supabase, activeVersion.id);
+    for (const row of initialIncome) {
+      const pi = proposedIncome.get(row.routing_id);
+      if (pi) {
+        row.pre_tax_guarantee = pi.pre_tax_guarantee;
+        row.withholding_pct = pi.withholding_pct;
+        row.pre_tax_overage = pi.pre_tax_overage;
+        row.merch_income = pi.merch_income;
+        row.vip_income = pi.vip_income;
+      }
+    }
+  }
+
   const routingDateById: Record<string, string> = {};
   for (const r of (routingRes.data ?? []) as Array<{
     id: string;
