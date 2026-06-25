@@ -92,6 +92,23 @@ check('venue: nameless → null', buildVenueChunk({ id: 'v2', city: 'Berlin', ca
 }
 check('budget: labelless → null', buildBudgetLineItemChunk({ id: 'b2', proposed_cost: 10 }) === null);
 
+// ── F1: currency resolution (line currency, else tour currency) ──────
+check(
+  'budget: line currency wins',
+  buildBudgetLineItemChunk({ id: 'b3', label: 'PA', proposed_cost: 100, currency: 'USD', tour_currency: 'GBP' })
+    ?.content.includes('100 USD') === true,
+);
+check(
+  'budget: falls back to tour currency when line currency null',
+  buildBudgetLineItemChunk({ id: 'b4', label: 'PA', actual_cost: 115000, currency: null, tour_currency: 'GBP' })
+    ?.content.includes('115000 GBP') === true,
+);
+check(
+  'budget: no currency when neither set',
+  buildBudgetLineItemChunk({ id: 'b5', label: 'PA', proposed_cost: 50 })?.content.includes('50\n') === false &&
+    buildBudgetLineItemChunk({ id: 'b5', label: 'PA', proposed_cost: 50 })?.content.endsWith('50') === true,
+);
+
 // ── dispatch ─────────────────────────────────────────────────────────
 check('buildChunk dispatches venue', buildChunk('venue', { id: 'v3', name: 'O2' })?.content.includes('O2') === true);
 

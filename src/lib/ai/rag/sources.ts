@@ -127,7 +127,12 @@ export interface BudgetLineItemSource {
   label?: string | null;
   proposed_cost?: number | null;
   actual_cost?: number | null;
+  /** Per-line currency override (usually NULL in practice). */
   currency?: string | null;
+  /** Tour-level currency (tours.currency), resolved by the ingestion layer.
+   *  Used as the fallback when the line has no currency of its own — which
+   *  is the common case (see CC_RAG_CURRENCY_AND_SCOPE F1). */
+  tour_currency?: string | null;
   // non-PII context:
   tour_id?: string | null;
   routing_id?: string | null;
@@ -137,13 +142,16 @@ export interface BudgetLineItemSource {
 
 export function buildBudgetLineItemChunk(row: BudgetLineItemSource): RagChunkContent | null {
   if (!row.label) return null;
+  // Effective currency: the line's own, else the tour's. A 3-letter code is
+  // not personal data — the only field F1 adds to a chunk.
+  const cur = row.currency ?? row.tour_currency ?? null;
   const lines: string[] = [`Budget line: ${row.label}`];
   if (row.category) lines.push(`Category: ${row.category}`);
   if (typeof row.proposed_cost === 'number') {
-    lines.push(`Proposed cost: ${row.proposed_cost}${row.currency ? ` ${row.currency}` : ''}`);
+    lines.push(`Proposed cost: ${row.proposed_cost}${cur ? ` ${cur}` : ''}`);
   }
   if (typeof row.actual_cost === 'number' && row.actual_cost !== 0) {
-    lines.push(`Actual cost: ${row.actual_cost}${row.currency ? ` ${row.currency}` : ''}`);
+    lines.push(`Actual cost: ${row.actual_cost}${cur ? ` ${cur}` : ''}`);
   }
   if (row.city) lines.push(`City: ${row.city}`);
   if (row.show_date) lines.push(`Date: ${row.show_date}`);

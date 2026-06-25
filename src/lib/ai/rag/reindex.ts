@@ -121,17 +121,35 @@ async function fetchBudgetLineItems(
   const routingIds = Array.from(new Set(rows.map((r) => r.routing_id).filter(Boolean))) as string[];
   const routingById = await fetchRoutingContext(svc, routingIds);
 
+  // F1: the line's currency is almost always NULL — the real currency lives
+  // on the tour. Resolve tours.currency for the batch as the fallback.
+  const tourIds = Array.from(new Set(rows.map((r) => r.tour_id).filter(Boolean))) as string[];
+  const tourCurrencyById = await fetchTourCurrencies(svc, tourIds);
+
   const out: BuiltRow[] = [];
   for (const r of rows) {
     const ctx = r.routing_id ? routingById.get(r.routing_id) : undefined;
     const built = buildChunk('budget_line_item', {
       ...r,
+      tour_currency: r.tour_id ? tourCurrencyById.get(r.tour_id) ?? null : null,
       city: ctx?.city ?? null,
       show_date: ctx?.date ?? null,
     } as BudgetLineItemSource);
     if (built) out.push({ sourceId: r.id, built });
   }
   return out;
+}
+
+/** Map tour_id → tours.currency (the fallback for line items with no
+ *  currency of their own). Currency is a 3-letter code, not personal. */
+async function fetchTourCurrencies(svc: SupabaseClient, ids: string[]): Promise<Map<string, string | null>> {
+  const map = new Map<string, string | null>();
+  if (ids.length === 0) return map;
+  const { data } = await svc.from('tours').select('id, currency').in('id', ids);
+  for (const r of (data ?? []) as Array<{ id: string; currency: string | null }>) {
+    map.set(r.id, r.currency);
+  }
+  return map;
 }
 
 /** Routing rows are non-PII context (city/venue/date). venue_name is a
