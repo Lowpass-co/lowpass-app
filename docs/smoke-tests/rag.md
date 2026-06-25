@@ -52,7 +52,10 @@ B's data.
 
 **Expect**: A's answer + sources are drawn ONLY from A's chunks; B's data
 never appears. `match_rag_chunks` is SECURITY INVOKER, so A's RLS forbids
-reading B's rows even though the function is shared.
+reading B's rows even though the function is shared. NOTE: the optional
+tour/artist scope (`p_tour_ids`, migration 212) is ADDITIVE — it sits on
+top of the `workspace_id = ws` clause, never replaces it, so isolation is
+unchanged whether or not a scope is passed.
 
 **Last verified**:
 
@@ -87,6 +90,43 @@ source chips (kind · city · date). No invented numbers.
 **Expect**: No "Ask your history" affordance appears. Calling
 `POST /api/ai/rag/ask` directly returns `{ gated: true }` and makes no
 model call.
+
+**Last verified**:
+
+#### RAG-08 — Budget chunks carry currency
+
+**Do**: After a re-index (post-migration-212 deploy), `SELECT content FROM
+rag_chunks WHERE source_kind='budget_line_item'` for a GBP tour and a USD
+tour. (Most `budget_line_items.currency` are NULL — the value comes from
+`tours.currency`.)
+
+**Expect**: Lines read `Proposed cost: 115000 GBP` / `Actual cost: 100
+USD` — the tour currency, not a bare number. (Unit-enforced:
+`src/lib/ai/rag/sources.test.ts` currency-fallback checks.)
+
+**Last verified**:
+
+#### RAG-09 — No cross-currency summing
+
+**Do**: With suggestions ON, ask a workspace-wide question whose hits span
+a GBP tour and a USD tour ("what did we pay for audio").
+
+**Expect**: Per-currency subtotals (e.g. "GBP: £137,650 across 2 lines;
+USD: $100 across 1 line"), NOT a single blended total. The model is told
+exchange rates aren't provided.
+
+**Last verified**:
+
+#### RAG-10 — Tour-scoped ask
+
+**Do**: From inside a tour (`/budget/[tourId]` etc.), open ⌘K, ask a
+question. Confirm the scope pill reads "This tour". Then toggle it to
+"Whole workspace" and re-ask.
+
+**Expect**: Scoped → only that tour's lines (e.g. Dandelion '26 audio,
+not Ella Langley's). Workspace-wide → the blended (currency-grouped)
+answer. From the workspace dashboard (no tour/artist in the URL) there's
+no pill and it defaults to workspace-wide.
 
 **Last verified**:
 
