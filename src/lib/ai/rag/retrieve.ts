@@ -35,6 +35,7 @@ export async function retrieve(
   ctx: ReindexContext,
   queryText: string,
   k = 8,
+  opts: { tourIds?: string[] | null } = {},
 ): Promise<RagHit[]> {
   const q = queryText.trim();
   if (!q) return [];
@@ -48,10 +49,15 @@ export async function retrieve(
     return [];
   }
 
+  // Additive scope: a non-empty tourIds narrows to those tours; null/empty
+  // is whole-workspace (the workspace_id clause in the fn always applies).
+  const tourIds = opts.tourIds && opts.tourIds.length > 0 ? opts.tourIds : null;
+
   const { data, error } = await supabase.rpc('match_rag_chunks', {
     ws: ctx.workspaceId,
     query_embedding: toVectorLiteral(queryVec),
     match_count: k,
+    p_tour_ids: tourIds,
   });
   if (error || !data) return [];
 

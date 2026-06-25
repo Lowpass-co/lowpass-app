@@ -29,12 +29,22 @@ export function looksLikeQuestion(query: string): boolean {
   return /^(what|how much|how many|when|where|who|did we|do we|have we|which)\b/i.test(q);
 }
 
-export async function askHistory(question: string): Promise<AskResult> {
+/** Optional scope for the ask — narrows retrieval to one tour or artist. */
+export interface AskScope {
+  tourId?: string;
+  artistId?: string;
+}
+
+export async function askHistory(question: string, scope?: AskScope): Promise<AskResult> {
   try {
     const res = await fetch('/api/ai/rag/ask', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ question }),
+      body: JSON.stringify({
+        question,
+        tour_id: scope?.tourId,
+        artist_id: scope?.artistId,
+      }),
     });
     if (!res.ok) {
       return { answer: null, sources: [], error: `Ask failed (${res.status})` };

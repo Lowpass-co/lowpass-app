@@ -64,7 +64,7 @@ export async function POST(request: Request) {
   const enabled = await getSuggestionsEnabled(svc, workspaceId, user.id);
   if (!enabled) return NextResponse.json({ gated: true, answer: null, sources: [] });
 
-  let body: { question?: string };
+  let body: { question?: string; tour_id?: string; artist_id?: string };
   try {
     body = await request.json();
   } catch {
@@ -73,7 +73,26 @@ export async function POST(request: Request) {
   const question = (body.question ?? '').trim();
   if (!question) return NextResponse.json({ error: 'question required' }, { status: 400 });
 
-  const hits = await retrieve(supabase, { workspaceId, userId: user.id }, question, 8);
+  // Optional scope → tour ids. Resolved via the session client so RLS keeps
+  // it workspace-local; the filter is additive to the workspace clause in
+  // match_rag_chunks (cross-workspace isolation unchanged). Absent = whole
+  // workspace (preserved default).
+  let tourIds: string[] | null = null;
+  if (body.tour_id) {
+    tourIds = [body.tour_id];
+  } else if (body.artist_id) {
+    const { data: tours } = await supabase.from('tours').select('id').eq('artist_id', body.artist_id);
+    tourIds = (tours ?? []).map((t) => (t as { id: string }).id);
+    if (tourIds.length === 0) {
+      // Scoped to an artist with no tours → nothing to answer from.
+      return NextResponse.json({
+        answer: "I couldn't find anything in your workspace history to answer that yet.",
+        sources: [],
+      });
+    }
+  }
+
+  const hits = await retrieve(supabase, { workspaceId, userId: user.id }, question, 8, { tourIds });
   if (hits.length === 0) {
     return NextResponse.json({
       answer: "I couldn't find anything in your workspace history to answer that yet.",

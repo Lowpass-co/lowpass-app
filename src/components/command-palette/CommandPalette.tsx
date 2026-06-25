@@ -20,7 +20,7 @@
    ============================================ */
 
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import {
   Plane,
   User as UserIcon,
@@ -214,7 +214,22 @@ function PaletteInner({
   userId: string | null;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const entityRouting = useEntityRouting();
+
+  // Route context for the Ask scope: a tour (operations/budget/advance) or
+  // an artist. Lets "ask your history" default to what you're looking at.
+  const ctxTourId = useMemo(() => {
+    const m = pathname?.match(/^\/(?:operations|budget|advance)\/([^/]+)/);
+    return m ? m[1] : null;
+  }, [pathname]);
+  const ctxArtistId = useMemo(() => {
+    const m = pathname?.match(/^\/artists\/([^/]+)/);
+    return m ? m[1] : null;
+  }, [pathname]);
+  const hasScopeContext = Boolean(ctxTourId || ctxArtistId);
+  const scopeLabel = ctxTourId ? 'This tour' : ctxArtistId ? 'This artist' : '';
+  const [scopeMode, setScopeMode] = useState<'context' | 'workspace'>('context');
 
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SearchResult[]>([]);
@@ -230,12 +245,26 @@ function PaletteInner({
     loading: false,
     result: null,
   });
-  const runAsk = useCallback((q: string) => {
-    setAsk({ query: q, loading: true, result: null });
-    void askHistory(q).then((result) => {
-      // Ignore a stale answer if the user has since changed the query.
-      setAsk((prev) => (prev.query === q ? { query: q, loading: false, result } : prev));
-    });
+  const runAsk = useCallback(
+    (q: string) => {
+      const scope =
+        scopeMode === 'context' && ctxTourId
+          ? { tourId: ctxTourId }
+          : scopeMode === 'context' && ctxArtistId
+            ? { artistId: ctxArtistId }
+            : undefined;
+      setAsk({ query: q, loading: true, result: null });
+      void askHistory(q, scope).then((result) => {
+        // Ignore a stale answer if the user has since changed the query.
+        setAsk((prev) => (prev.query === q ? { query: q, loading: false, result } : prev));
+      });
+    },
+    [scopeMode, ctxTourId, ctxArtistId],
+  );
+  // Flipping scope invalidates any shown answer so the user re-asks deliberately.
+  const toggleScope = useCallback(() => {
+    setScopeMode((m) => (m === 'context' ? 'workspace' : 'context'));
+    setAsk({ query: '', loading: false, result: null });
   }, []);
 
   // useDeferredValue lets React's scheduler defer search-firing during
@@ -440,6 +469,22 @@ function PaletteInner({
         <div ref={listRef} className="max-h-[380px] overflow-y-auto py-1" role="listbox">
           {showAsk ? (
             <div className="border-b px-3 py-2" style={{ borderColor: 'var(--lp-border)' }}>
+              {hasScopeContext ? (
+                <div className="mb-1 flex items-center justify-end gap-1 px-2 text-xs" style={{ color: 'var(--lp-text-tertiary)' }}>
+                  <span>Scope:</span>
+                  <button
+                    type="button"
+                    onClick={toggleScope}
+                    className="rounded px-1.5 py-0.5 font-medium"
+                    style={{
+                      color: 'var(--color-lp-orange)',
+                      background: 'color-mix(in srgb, var(--color-lp-orange) 8%, transparent)',
+                    }}
+                  >
+                    {scopeMode === 'context' ? scopeLabel : 'Whole workspace'} ▾
+                  </button>
+                </div>
+              ) : null}
               {!askForCurrent || (!askForCurrent.loading && !askForCurrent.result) ? (
                 <button
                   type="button"
