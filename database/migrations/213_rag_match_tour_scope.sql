@@ -1,6 +1,10 @@
 -- ============================================
 -- LOWPASS — RAG retrieval: optional tour/artist scope
--- Migration 212
+-- Migration 213
+--
+-- (Renumbered from 212 → 213: 212 is taken by 212_budget_versioning.sql,
+--  which merged to main first. Same SQL, new number, to avoid a duplicate
+--  migration 212 on main.)
 --
 -- Supersedes match_rag_chunks() (migration 211) with an optional
 -- p_tour_ids filter so an "ask your history" query can be narrowed to a
@@ -48,9 +52,6 @@ AS $$
     (c.embedding <=> query_embedding) AS distance
   FROM public.rag_chunks c
   WHERE c.workspace_id = ws
-    -- Additive scope: NULL = whole workspace; otherwise only chunks whose
-    -- metadata.tour_id is in the list. Chunks with no tour_id (e.g. venues)
-    -- are excluded when a scope is given, which is the intended behaviour.
     AND (
       p_tour_ids IS NULL
       OR (c.metadata->>'tour_id') IS NOT NULL
