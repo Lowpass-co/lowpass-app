@@ -103,6 +103,8 @@ export async function POST(request: Request) {
               role: 'user',
               content: `You answer questions about a touring company's own records, using ONLY the context below. Do not invent figures — every number must come from the context. If the context doesn't answer the question, say so plainly. Cite the bracketed source numbers you used, e.g. [1].
 
+Each line shows its own currency. Never add amounts across different currencies into one total. If results span multiple currencies, report a subtotal per currency (e.g. "GBP: £X across N lines; USD: $Y across M lines") and state that converting to a single figure needs exchange rates not provided.
+
 Context:
 ${context}
 
