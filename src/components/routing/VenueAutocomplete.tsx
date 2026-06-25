@@ -12,6 +12,8 @@ import { createPortal } from 'react-dom';
 import { useToast } from '@/components/ui/Toast';
 
 export interface VenuePlaceResult {
+  /** Google Place ID — the cross-tenant canonical-venue dedupe key. */
+  place_id?: string;
   venue_name: string;
   address: string;
   city?: string;
@@ -211,6 +213,9 @@ export function VenueAutocomplete({
       // onChange(venueName) eliminates the batching window where
       // onBlur could fire between the two updates.
       onPlaceSelect?.({
+        // The Place ID we already have in hand — previously discarded.
+        // Feeds canonical-venue find-or-create on save (migration 214).
+        place_id: placeId,
         venue_name: venueName,
         // Pass null when no address — receiver should preserve
         // existing row.address rather than clobber with ''.

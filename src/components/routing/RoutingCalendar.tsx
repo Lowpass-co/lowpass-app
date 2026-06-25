@@ -290,6 +290,8 @@ export function RoutingCalendar({
                       venue_website: result.website,
                       venue_phone: result.phone,
                       venue_capacity: result.capacity ?? undefined,
+                      // Capture the Place ID for canonical-venue resolution on save.
+                      place_id: result.place_id,
                     })
                   }
                   placeholder="Venue"

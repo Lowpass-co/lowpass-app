@@ -8,6 +8,7 @@
 
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { findOrCreateCanonicalVenue } from '@/lib/venues/canonical';
 
 /**
  * Fields callers are allowed to PATCH on a routing row.
@@ -28,6 +29,7 @@ const ALLOWED_FIELDS = new Set<string>([
   'latitude',
   'longitude',
   'transport_to_next',
+  'canonical_venue_id',
 ]);
 
 export async function PATCH(
@@ -88,6 +90,21 @@ export async function PATCH(
   const updates: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(body ?? {})) {
     if (ALLOWED_FIELDS.has(k)) updates[k] = v;
+  }
+
+  // A freshly-picked Place ID (transient, not a column) resolves to a
+  // canonical venue server-side and sets canonical_venue_id.
+  const placeId = typeof body.place_id === 'string' ? body.place_id.trim() : '';
+  const venueName = typeof body.venue_name === 'string' ? body.venue_name : '';
+  if (placeId && venueName) {
+    const canonicalId = await findOrCreateCanonicalVenue({
+      placeId,
+      name: venueName,
+      city: typeof body.city === 'string' ? body.city : null,
+      lat: typeof body.latitude === 'number' ? body.latitude : null,
+      lng: typeof body.longitude === 'number' ? body.longitude : null,
+    });
+    if (canonicalId) updates.canonical_venue_id = canonicalId;
   }
 
   if (Object.keys(updates).length === 0) {

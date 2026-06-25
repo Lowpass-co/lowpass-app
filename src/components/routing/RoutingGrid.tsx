@@ -32,6 +32,12 @@ export interface RoutingRow {
   latitude?: number;
   longitude?: number;
   transport_to_next?: TransportToNext;
+  /** Transient — set when a venue is picked via Places this session;
+   *  the server resolves it to canonical_venue_id on save (migration 214). */
+  place_id?: string;
+  /** Round-tripped canonical link, preserved across the bulk delete+reinsert
+   *  save so an existing link survives an edit to another field. */
+  canonical_venue_id?: string | null;
 }
 
 const PRIMARY_SPEED_MPH: Record<PrimaryTransit, number> = {
@@ -368,6 +374,8 @@ function RoutingRowWithMenu({
                 venue_website: result.website,
                 venue_phone: result.phone,
                 venue_capacity: result.capacity ?? undefined,
+                // Capture the Place ID so the save resolves a canonical venue.
+                place_id: result.place_id,
               };
               if (result.address && result.address.trim()) {
                 updates.address = result.address;

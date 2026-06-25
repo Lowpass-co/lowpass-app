@@ -8,6 +8,7 @@
 
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { resolveCanonicalVenues, type CanonicalVenueFacts } from '@/lib/venues/canonical';
 
 export async function GET(
   request: Request,
@@ -107,7 +108,33 @@ export async function POST(
     return NextResponse.json({ error: deleteError.message }, { status: 500 });
   }
 
-  const insertRows = rows.map((r: { date: string; day_type?: string; city?: string; address?: string; venue_id?: string; venue_name?: string; venue_website?: string; venue_phone?: string; venue_capacity?: number | null; notes?: string; latitude?: number; longitude?: number; transport_to_next?: string }, i: number) => ({
+  type IncomingRow = {
+    date: string; day_type?: string; city?: string; address?: string; venue_id?: string;
+    venue_name?: string; venue_website?: string; venue_phone?: string; venue_capacity?: number | null;
+    notes?: string; latitude?: number; longitude?: number; transport_to_next?: string;
+    place_id?: string | null; canonical_venue_id?: string | null;
+  };
+  const typedRows = rows as IncomingRow[];
+
+  // Resolve any freshly-picked Place IDs to canonical venues (service-role,
+  // deduped). Rows without a place_id keep their round-tripped canonical link
+  // so the bulk delete+reinsert never drops an existing one.
+  const factsByPlaceId = new Map<string, CanonicalVenueFacts>();
+  for (const r of typedRows) {
+    const pid = r.place_id?.trim();
+    if (pid && r.venue_name && !factsByPlaceId.has(pid)) {
+      factsByPlaceId.set(pid, {
+        placeId: pid,
+        name: r.venue_name,
+        city: r.city ?? null,
+        lat: r.latitude ?? null,
+        lng: r.longitude ?? null,
+      });
+    }
+  }
+  const canonicalByPlaceId = await resolveCanonicalVenues(factsByPlaceId);
+
+  const insertRows = typedRows.map((r: IncomingRow, i: number) => ({
     tour_id: tourId,
     date: r.date,
     day_type: r.day_type ?? '',
@@ -122,6 +149,8 @@ export async function POST(
     latitude: r.latitude ?? null,
     longitude: r.longitude ?? null,
     transport_to_next: r.transport_to_next ?? 'default',
+    canonical_venue_id:
+      (r.place_id ? canonicalByPlaceId.get(r.place_id.trim()) : null) ?? r.canonical_venue_id ?? null,
     sequence: i,
   }));
 

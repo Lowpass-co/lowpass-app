@@ -95,7 +95,7 @@ function dateRange(start: string, end: string): string[] {
 function buildInitialRows(
   startDate: string,
   endDate: string,
-  existing: { date: string; day_type: string; city: string; address?: string; venue_name?: string; venue_website?: string; venue_phone?: string; venue_capacity?: number; notes?: string; latitude?: number; longitude?: number; transport_to_next?: string }[]
+  existing: { date: string; day_type: string; city: string; address?: string; venue_name?: string; venue_website?: string; venue_phone?: string; venue_capacity?: number; notes?: string; latitude?: number; longitude?: number; transport_to_next?: string; canonical_venue_id?: string | null }[]
 ): RoutingRow[] {
   const byDate = new Map(existing.map((r) => [r.date, r]));
   return dateRange(startDate, endDate).map((date) => {
@@ -116,6 +116,8 @@ function buildInitialRows(
       latitude: ex?.latitude,
       longitude: ex?.longitude,
       transport_to_next: (ex?.transport_to_next as RoutingRow['transport_to_next']) ?? 'default',
+      // Preserve the canonical link across the bulk delete+reinsert save.
+      canonical_venue_id: ex?.canonical_venue_id ?? null,
     };
   });
 }
@@ -279,6 +281,11 @@ export function RoutingEditor({
             latitude: r.latitude ?? null,
             longitude: r.longitude ?? null,
             transport_to_next: r.transport_to_next ?? 'default',
+            // place_id (transient, from a Places pick) resolves to a
+            // canonical venue server-side; canonical_venue_id is the
+            // round-tripped existing link to preserve when nothing was picked.
+            place_id: r.place_id ?? null,
+            canonical_venue_id: r.canonical_venue_id ?? null,
           })),
         }),
       });
