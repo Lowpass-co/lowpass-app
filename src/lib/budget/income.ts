@@ -24,6 +24,18 @@ export interface ServerIncome {
   actual_vip?: number | null;
   actual_deductions?: number | null;
   currency?: string | null;
+  // Phase 3 — projection inputs (proposed).
+  capacity?: number | null;
+  est_sell_thru?: number | null;
+  face_value?: number | null;
+  deal_type?: string | null;
+  deal_pct?: number | null;
+  deal_threshold?: number | null;
+  deal_pct_above?: number | null;
+  dollars_per_head?: number | null;
+  merch_fee_pct?: number | null;
+  vip_tickets?: number | null;
+  vip_price?: number | null;
 }
 export interface RoutingOnly {
   id: string;
@@ -58,6 +70,19 @@ export interface IncomeRow {
   actual_deductions: number;
   /** Phase 2 — the show's native currency (null = tour currency). Proposed. */
   currency: string | null;
+  // Phase 3 — projection inputs (proposed; %s stored 0–100). NULL = use the
+  // tour default (sell-thru / $-head / fee%) or no projection.
+  capacity: number | null;
+  est_sell_thru: number | null;
+  face_value: number | null;
+  deal_type: string | null;
+  deal_pct: number | null;
+  deal_threshold: number | null;
+  deal_pct_above: number | null;
+  dollars_per_head: number | null;
+  merch_fee_pct: number | null;
+  vip_tickets: number | null;
+  vip_price: number | null;
 }
 
 const n = (v: unknown): number => {
@@ -135,6 +160,17 @@ export function toIncomeRows(payload: TourIncomePayload): IncomeRow[] {
     actual_vip: n(i.actual_vip),
     actual_deductions: n(i.actual_deductions),
     currency: i.currency ?? null,
+    capacity: i.capacity ?? null,
+    est_sell_thru: i.est_sell_thru ?? null,
+    face_value: i.face_value ?? null,
+    deal_type: i.deal_type ?? null,
+    deal_pct: i.deal_pct ?? null,
+    deal_threshold: i.deal_threshold ?? null,
+    deal_pct_above: i.deal_pct_above ?? null,
+    dollars_per_head: i.dollars_per_head ?? null,
+    merch_fee_pct: i.merch_fee_pct ?? null,
+    vip_tickets: i.vip_tickets ?? null,
+    vip_price: i.vip_price ?? null,
   }));
   const fromRouting: IncomeRow[] = (payload.routing_only ?? []).map((r) => ({
     routing_id: r.id,
@@ -153,6 +189,17 @@ export function toIncomeRows(payload: TourIncomePayload): IncomeRow[] {
     actual_vip: 0,
     actual_deductions: 0,
     currency: null,
+    capacity: null,
+    est_sell_thru: null,
+    face_value: null,
+    deal_type: null,
+    deal_pct: null,
+    deal_threshold: null,
+    deal_pct_above: null,
+    dollars_per_head: null,
+    merch_fee_pct: null,
+    vip_tickets: null,
+    vip_price: null,
   }));
   return [...fromIncome, ...fromRouting].sort((a, b) => (a.date ?? '').localeCompare(b.date ?? ''));
 }

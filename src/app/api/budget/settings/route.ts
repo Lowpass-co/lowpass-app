@@ -110,6 +110,12 @@ export async function POST(request: Request) {
     accountancy_basis,
     notes,
     track_phases,
+    // Phase 3 — projection defaults + config (unversioned).
+    default_sell_thru,
+    default_dollars_per_head,
+    default_merch_fee_pct,
+    overage_haircut,
+    overage_tax_pct,
   } = body;
 
   if (!tour_id) {
@@ -150,6 +156,12 @@ export async function POST(request: Request) {
   if (validBasis(accountancy_basis)) payload.accountancy_basis = accountancy_basis;
   if (notes !== undefined) payload.notes = notes;
   if (track_phases !== undefined) payload.track_phases = Boolean(track_phases);
+  // Phase 3 — projection defaults (fractions) + config.
+  if (default_sell_thru !== undefined) payload.default_sell_thru = default_sell_thru;
+  if (default_dollars_per_head !== undefined) payload.default_dollars_per_head = default_dollars_per_head;
+  if (default_merch_fee_pct !== undefined) payload.default_merch_fee_pct = default_merch_fee_pct;
+  if (overage_haircut !== undefined) payload.overage_haircut = overage_haircut;
+  if (overage_tax_pct !== undefined) payload.overage_tax_pct = overage_tax_pct;
 
   const { data, error } = await supabase
     .from('budget_settings')

@@ -296,6 +296,18 @@ export default async function BudgetTourPage({
         row.merch_income = pi.merch_income;
         row.vip_income = pi.vip_income;
         row.currency = pi.currency;
+        // Phase 3 — overlay the projection inputs from the version snapshot.
+        row.capacity = pi.capacity;
+        row.est_sell_thru = pi.est_sell_thru;
+        row.face_value = pi.face_value;
+        row.deal_type = pi.deal_type;
+        row.deal_pct = pi.deal_pct;
+        row.deal_threshold = pi.deal_threshold;
+        row.deal_pct_above = pi.deal_pct_above;
+        row.dollars_per_head = pi.dollars_per_head;
+        row.merch_fee_pct = pi.merch_fee_pct;
+        row.vip_tickets = pi.vip_tickets;
+        row.vip_price = pi.vip_price;
       }
     }
   }

@@ -79,6 +79,7 @@ export function BudgetSettingsTab({
       <OverheadsCard tourId={tourId} />
       <CommissionsCard tourId={tourId} />
       <FxRatesCard tourId={tourId} tourCurrency={tourCurrency} />
+      <ProjectionDefaultsCard tourId={tourId} tourCurrency={tourCurrency} />
       <TourSectionsCard tourId={tourId} sections={sections} />
       <TemplatesCard tourId={tourId} />
     </div>
@@ -261,6 +262,116 @@ function FxRatesCard({ tourId, tourCurrency }: { tourId: string; tourCurrency: s
         </button>
       </div>
       {dialog}
+    </section>
+  );
+}
+
+/* -------------------------------------------------- */
+/* Projection defaults (Income Phase 3) — tour-wide    */
+/* fallbacks (sell-thru / $-head / fee%) + the overage  */
+/* config (haircut + tax off the top). Unversioned —    */
+/* a per-show input overrides the default when set.     */
+/* -------------------------------------------------- */
+type ProjDefaults = {
+  default_sell_thru: number;        // fraction
+  default_dollars_per_head: number; // native ccy
+  default_merch_fee_pct: number;    // fraction
+  overage_haircut: number;          // fraction
+  overage_tax_pct: number;          // fraction
+};
+
+function ProjectionDefaultsCard({ tourId, tourCurrency }: { tourId: string; tourCurrency: string }) {
+  const { showToast } = useToast();
+  const native = (tourCurrency || 'GBP').toUpperCase();
+  const [s, setS] = useState<ProjDefaults | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const res = await fetch(`/api/budget/settings?tour_id=${encodeURIComponent(tourId)}`);
+        if (!res.ok) throw new Error(`Failed (${res.status})`);
+        const d = (await res.json()) as Partial<ProjDefaults>;
+        if (!active) return;
+        setS({
+          default_sell_thru: Number(d.default_sell_thru ?? 0),
+          default_dollars_per_head: Number(d.default_dollars_per_head ?? 0),
+          default_merch_fee_pct: Number(d.default_merch_fee_pct ?? 0),
+          overage_haircut: Number(d.overage_haircut ?? 0.65),
+          overage_tax_pct: Number(d.overage_tax_pct ?? 0.08),
+        });
+      } catch {
+        if (active) setS({ default_sell_thru: 0, default_dollars_per_head: 0, default_merch_fee_pct: 0, overage_haircut: 0.65, overage_tax_pct: 0.08 });
+      }
+    })();
+    return () => { active = false; };
+  }, [tourId]);
+
+  const save = (patch: Partial<ProjDefaults>) => {
+    if (!s) return;
+    const prev = s;
+    setS({ ...s, ...patch });
+    void (async () => {
+      try {
+        const res = await fetch('/api/budget/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ tour_id: tourId, ...patch }),
+        });
+        if (!res.ok) throw new Error(`Save failed (${res.status})`);
+      } catch (err) {
+        setS(prev);
+        showToast(err instanceof Error ? err.message : 'Save failed', 'error');
+      }
+    })();
+  };
+
+  const pctRow = (key: keyof ProjDefaults, label: string, hint: string) => (
+    <div className="flex items-center gap-3" key={key}>
+      <span className="w-32 shrink-0" style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text)' }}>{label}</span>
+      <div className="flex items-center gap-1">
+        <input
+          type="number" min={0} step={0.5}
+          value={s ? +(s[key] * 100).toFixed(2) : 0}
+          onChange={(e) => save({ [key]: (Number(e.target.value) || 0) / 100 } as Partial<ProjDefaults>)}
+          disabled={!s}
+          className="w-16"
+          style={{ ...inputStyle, textAlign: 'right' }}
+        />
+        <span style={{ color: 'var(--lp-text-tertiary)' }}>%</span>
+      </div>
+      <span style={{ fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text-tertiary)' }}>{hint}</span>
+    </div>
+  );
+
+  return (
+    <section className="rounded-lg border p-4" style={cardStyle}>
+      <h2 className="lp-h3">Projection defaults</h2>
+      <p className="mt-1" style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text-secondary)' }}>
+        Tour-wide fallbacks for the income projection. A per-show value overrides
+        these; the overage config (haircut + tax) is the same for every show.
+      </p>
+      <div className="mt-3 space-y-2">
+        {pctRow('default_sell_thru', 'Sell-thru', 'default % of cap sold')}
+        <div className="flex items-center gap-3">
+          <span className="w-32 shrink-0" style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text)' }}>Merch $/head</span>
+          <div className="flex items-center gap-1">
+            <span style={{ color: 'var(--lp-text-tertiary)' }}>{native}</span>
+            <input
+              type="number" min={0} step={0.5}
+              value={s ? +s.default_dollars_per_head.toFixed(2) : 0}
+              onChange={(e) => save({ default_dollars_per_head: Number(e.target.value) || 0 })}
+              disabled={!s}
+              className="w-16"
+              style={{ ...inputStyle, textAlign: 'right' }}
+            />
+          </div>
+          <span style={{ fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text-tertiary)' }}>net per head</span>
+        </div>
+        {pctRow('default_merch_fee_pct', 'Merch fee', 'avg fee on merch')}
+        {pctRow('overage_haircut', 'Overage haircut', 'banked share of projected overage')}
+        {pctRow('overage_tax_pct', 'Box-office tax', 'taken off the top of gross')}
+      </div>
     </section>
   );
 }

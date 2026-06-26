@@ -93,7 +93,21 @@ export interface ProposedIncome {
   vip_income: number;
   /** Phase 2 — the show's native currency (NULL = tour currency). */
   currency: string | null;
+  // Phase 3 — projection inputs (proposed; nullable, %s stored 0–100).
+  capacity: number | null;
+  est_sell_thru: number | null;
+  face_value: number | null;
+  deal_type: string | null;
+  deal_pct: number | null;
+  deal_threshold: number | null;
+  deal_pct_above: number | null;
+  dollars_per_head: number | null;
+  merch_fee_pct: number | null;
+  vip_tickets: number | null;
+  vip_price: number | null;
 }
+
+const numOrNull = (v: unknown): number | null => (v == null ? null : Number(v));
 
 export async function getProposedIncomeMap(
   supabase: SupabaseClient,
@@ -102,7 +116,7 @@ export async function getProposedIncomeMap(
   const m = new Map<string, ProposedIncome>();
   const { data } = await supabase
     .from('budget_version_income')
-    .select('routing_id, pre_tax_guarantee, withholding_pct, pre_tax_overage, merch_income, vip_income, currency')
+    .select('routing_id, pre_tax_guarantee, withholding_pct, pre_tax_overage, merch_income, vip_income, currency, capacity, est_sell_thru, face_value, deal_type, deal_pct, deal_threshold, deal_pct_above, dollars_per_head, merch_fee_pct, vip_tickets, vip_price')
     .eq('version_id', versionId);
   for (const r of data ?? []) {
     const v = r as Record<string, unknown>;
@@ -113,6 +127,17 @@ export async function getProposedIncomeMap(
       merch_income: Number(v.merch_income) || 0,
       vip_income: Number(v.vip_income) || 0,
       currency: (v.currency as string | null) ?? null,
+      capacity: numOrNull(v.capacity),
+      est_sell_thru: numOrNull(v.est_sell_thru),
+      face_value: numOrNull(v.face_value),
+      deal_type: (v.deal_type as string | null) ?? null,
+      deal_pct: numOrNull(v.deal_pct),
+      deal_threshold: numOrNull(v.deal_threshold),
+      deal_pct_above: numOrNull(v.deal_pct_above),
+      dollars_per_head: numOrNull(v.dollars_per_head),
+      merch_fee_pct: numOrNull(v.merch_fee_pct),
+      vip_tickets: numOrNull(v.vip_tickets),
+      vip_price: numOrNull(v.vip_price),
     });
   }
   return m;

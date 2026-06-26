@@ -11,6 +11,7 @@ import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { loadTourIncome } from '@/lib/budget/income';
 import { resolveLockState, resolveActiveVersion } from '@/server/budget/versions';
+import { projectIncome, type DealType } from '@/lib/budget/incomeProjection';
 
 function postTaxFromPreTax(preTax: number, withholdingPct: number): number {
   return preTax * (1 - withholdingPct / 100);
@@ -79,6 +80,20 @@ export async function POST(request: Request) {
     pre_tax_overage?: number;
     merch_income?: number;
     vip_income?: number;
+    // Phase 3 — projection inputs (proposed). The engine materialises the value
+    // columns above from these (deal-aware, VS only).
+    capacity?: number | null;
+    est_sell_thru?: number | null;
+    face_value?: number | null;
+    deal_type?: string | null;
+    deal_pct?: number | null;
+    deal_threshold?: number | null;
+    deal_pct_above?: number | null;
+    dollars_per_head?: number | null;
+    merch_fee_pct?: number | null;
+    vip_tickets?: number | null;
+    vip_price?: number | null;
+    currency?: string | null;
     actual_guarantee?: number | null;
     actual_overage?: number | null;
     actual_merch?: number | null;
@@ -123,7 +138,12 @@ export async function POST(request: Request) {
   // Lock guard — a write touching PROPOSED income (pre_tax_*, withholding_pct,
   // merch, vip) on a tour whose active version is approved → 423. Actual-only
   // (actual_*) writes pass (settlement-fed actuals are the live layer).
-  const PROPOSED_INCOME = ['pre_tax_guarantee', 'withholding_pct', 'pre_tax_overage', 'merch_income', 'vip_income', 'currency'];
+  const PROPOSED_INCOME = [
+    'pre_tax_guarantee', 'withholding_pct', 'pre_tax_overage', 'merch_income', 'vip_income', 'currency',
+    // Phase 3 — projection inputs are proposed structure → versioned + lock-guarded.
+    'capacity', 'est_sell_thru', 'face_value', 'deal_type', 'deal_pct', 'deal_threshold',
+    'deal_pct_above', 'dollars_per_head', 'merch_fee_pct', 'vip_tickets', 'vip_price',
+  ];
   if (PROPOSED_INCOME.some((k) => (body as Record<string, unknown>)[k] !== undefined)) {
     const { locked, version } = await resolveLockState(supabase, routingRow.tour_id as string, workspaceId);
     if (locked) {
@@ -154,7 +174,6 @@ export async function POST(request: Request) {
 
   const preTaxGuarantee = numMerge(body.pre_tax_guarantee, existing?.pre_tax_guarantee);
   const withholdingPct = numMerge(body.withholding_pct, existing?.withholding_pct);
-  const preTaxOverage = numMerge(body.pre_tax_overage, existing?.pre_tax_overage);
   // Phase 2 — per-show currency (proposed structure → versioned). '' / null clears
   // to the tour currency.
   const bodyCurrency = (body as { currency?: string | null }).currency;
@@ -162,6 +181,79 @@ export async function POST(request: Request) {
     bodyCurrency !== undefined
       ? (bodyCurrency ? String(bodyCurrency).toUpperCase() : null)
       : ((existing?.currency as string | null) ?? null);
+
+  // ── Phase 3 — merge the projection inputs (proposed). ──
+  const dealType =
+    body.deal_type !== undefined
+      ? (body.deal_type ? String(body.deal_type).toUpperCase() : null)
+      : ((existing?.deal_type as string | null) ?? null);
+  const capacity = nullableMerge(body.capacity, existing?.capacity);
+  const estSellThru = nullableMerge(body.est_sell_thru, existing?.est_sell_thru);
+  const faceValue = nullableMerge(body.face_value, existing?.face_value);
+  const dealPct = nullableMerge(body.deal_pct, existing?.deal_pct);
+  const dealThreshold = nullableMerge(body.deal_threshold, existing?.deal_threshold);
+  const dealPctAbove = nullableMerge(body.deal_pct_above, existing?.deal_pct_above);
+  const dollarsPerHead = nullableMerge(body.dollars_per_head, existing?.dollars_per_head);
+  const merchFeePct = nullableMerge(body.merch_fee_pct, existing?.merch_fee_pct);
+  const vipTickets = nullableMerge(body.vip_tickets, existing?.vip_tickets);
+  const vipPrice = nullableMerge(body.vip_price, existing?.vip_price);
+
+  // Output value columns — start from the merged value, then let the engine
+  // materialise them when a projection INPUT changed (and the user didn't also
+  // hand-type the output in the same write — a direct edit always wins).
+  let preTaxOverage = numMerge(body.pre_tax_overage, existing?.pre_tax_overage);
+  let merchIncome = numMerge(body.merch_income, existing?.merch_income);
+  let vipIncome = numMerge(body.vip_income, existing?.vip_income);
+
+  const bodyKeys = Object.keys(body);
+  const has = (keys: string[]) => keys.some((k) => bodyKeys.includes(k));
+  const OVERAGE_INPUTS = ['capacity', 'est_sell_thru', 'face_value', 'deal_type', 'deal_pct', 'deal_threshold', 'deal_pct_above', 'withholding_pct', 'pre_tax_guarantee'];
+  const MERCH_INPUTS = ['capacity', 'est_sell_thru', 'dollars_per_head', 'merch_fee_pct'];
+  const VIP_INPUTS = ['vip_tickets', 'vip_price'];
+  const recomputeOverage = has(OVERAGE_INPUTS) && body.pre_tax_overage === undefined;
+  const recomputeMerch = has(MERCH_INPUTS) && body.merch_income === undefined;
+  const recomputeVip = has(VIP_INPUTS) && body.vip_income === undefined;
+
+  if (recomputeOverage || recomputeMerch || recomputeVip) {
+    // Per-tour defaults + config (UNVERSIONED) feed the engine; per-show inputs
+    // fall back to them when null. Normalise the 0–100 stored %s to fractions.
+    const { data: cfg } = await supabase
+      .from('budget_settings')
+      .select('default_sell_thru, default_dollars_per_head, default_merch_fee_pct, overage_haircut, overage_tax_pct')
+      .eq('tour_id', routingRow.tour_id)
+      .eq('workspace_id', workspaceId)
+      .maybeSingle();
+    const numOrNull = (v: unknown): number | null => (v == null ? null : Number(v));
+    const sellThru = estSellThru != null ? Number(estSellThru) / 100 : numOrNull(cfg?.default_sell_thru);
+    const perHead = dollarsPerHead != null ? Number(dollarsPerHead) : numOrNull(cfg?.default_dollars_per_head);
+    const feeFrac = merchFeePct != null ? Number(merchFeePct) / 100 : numOrNull(cfg?.default_merch_fee_pct);
+
+    const out = projectIncome(
+      {
+        capacity: numOrNull(capacity),
+        sellThru,
+        faceValue: numOrNull(faceValue),
+        dealType: (dealType as DealType | null),
+        dealPct: dealPct != null ? Number(dealPct) / 100 : null,
+        dealThreshold: numOrNull(dealThreshold),
+        dealPctAbove: dealPctAbove != null ? Number(dealPctAbove) / 100 : null,
+        dollarsPerHead: perHead,
+        merchFeePct: feeFrac,
+        vipTickets: numOrNull(vipTickets),
+        vipPrice: numOrNull(vipPrice),
+        preTaxGuarantee,
+      },
+      {
+        haircut: cfg?.overage_haircut != null ? Number(cfg.overage_haircut) : 0.65,
+        taxPct: cfg?.overage_tax_pct != null ? Number(cfg.overage_tax_pct) : 0.08,
+      },
+    );
+    // The engine writes a PRE-withholding overage; post_tax_overage (below)
+    // applies WH — exactly once. null = engine wrote nothing (PLUS/FLAT/short inputs).
+    if (recomputeOverage && out.preTaxOverage !== null) preTaxOverage = out.preTaxOverage;
+    if (recomputeMerch && out.merchIncome !== null) merchIncome = out.merchIncome;
+    if (recomputeVip && out.vipIncome !== null) vipIncome = out.vipIncome;
+  }
 
   const payload: Record<string, unknown> = {
     routing_id,
@@ -171,9 +263,14 @@ export async function POST(request: Request) {
     post_tax_guarantee: postTaxFromPreTax(preTaxGuarantee, withholdingPct),
     pre_tax_overage: preTaxOverage,
     post_tax_overage: postTaxFromPreTax(preTaxOverage, withholdingPct),
-    merch_income: numMerge(body.merch_income, existing?.merch_income),
-    vip_income: numMerge(body.vip_income, existing?.vip_income),
+    merch_income: merchIncome,
+    vip_income: vipIncome,
     currency: currencyVal,
+    // Phase 3 — projection inputs.
+    capacity, est_sell_thru: estSellThru, face_value: faceValue, deal_type: dealType,
+    deal_pct: dealPct, deal_threshold: dealThreshold, deal_pct_above: dealPctAbove,
+    dollars_per_head: dollarsPerHead, merch_fee_pct: merchFeePct,
+    vip_tickets: vipTickets, vip_price: vipPrice,
     actual_guarantee: nullableMerge(body.actual_guarantee, existing?.actual_guarantee),
     actual_overage: nullableMerge(body.actual_overage, existing?.actual_overage),
     actual_merch: nullableMerge(body.actual_merch, existing?.actual_merch),
@@ -200,8 +297,13 @@ export async function POST(request: Request) {
       {
         version_id: active.id, routing_id, workspace_id: workspaceId,
         pre_tax_guarantee: preTaxGuarantee, withholding_pct: withholdingPct, pre_tax_overage: preTaxOverage,
-        merch_income: Number(payload.merch_income) || 0, vip_income: Number(payload.vip_income) || 0,
+        merch_income: merchIncome, vip_income: vipIncome,
         currency: currencyVal,
+        // Phase 3 — mirror the projection inputs (versioning tax).
+        capacity, est_sell_thru: estSellThru, face_value: faceValue, deal_type: dealType,
+        deal_pct: dealPct, deal_threshold: dealThreshold, deal_pct_above: dealPctAbove,
+        dollars_per_head: dollarsPerHead, merch_fee_pct: merchFeePct,
+        vip_tickets: vipTickets, vip_price: vipPrice,
       },
       { onConflict: 'version_id,routing_id' },
     );

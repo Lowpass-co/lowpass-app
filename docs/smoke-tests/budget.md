@@ -67,6 +67,46 @@ Reference tour: "Warning Support". Templates picker needs a NEW empty tour.
   `currency` is snapshotted into `budget_version_income` and re-overlaid on the
   approved view. Unlock → editable again. Actuals + Phase-1 deductions unaffected.
 
+## Income redesign — Phase 3: Deal-aware projection engine (feat/income-projection-p3-stageb)
+
+> Migration **217** (per-show projection inputs on `budget_income` + the
+> `budget_version_income` mirror; tour config on `budget_settings` — all additive
+> nullable). Run `npm run db:migrate`. Engine `src/lib/budget/incomeProjection.ts`
+> (pure, unit-tested: `node --experimental-strip-types src/lib/budget/incomeProjection.test.ts`,
+> 20 checks). tsc 0, eslint 0, build green. Decisions LOCKED 2026-06-25.
+
+- **INC-PROJ-01 — VS tiered overage (marginal).** Projected view: set a show
+  `Deal=VS`, `Cap`, `Sell %`, `Face`, `Deal %` 55, `@ Tix` 275, `↑ %` 65,
+  `Guarantee`. The **Overage** cell fills from the engine: marginal share =
+  `perTicketNBOR × (55%×275 + 65%×(tickets−275))`, overage = `max(0, share −
+  guarantee) × haircut`. Hand-calc matches (worked example in the engine test:
+  Cap 500 × 80% = 400 tix, Face 30, tax 8% → overage pre-WH **2871.05**).
+- **INC-PROJ-02 — non-tiered VS.** Clear `@ Tix` → flat `Deal %` on all tickets
+  (`Deal % × tickets × perTicketNBOR`), overage recomputes.
+- **INC-PROJ-03 — overage floored at 0.** A guarantee that beats the % → Overage
+  fills **0** (never negative).
+- **INC-PROJ-04 — PLUS / FLAT no auto-overage.** `Deal=PLUS` or `FLAT` → the
+  engine writes **no** overage; the cell stays user-entered (PLUS is manual).
+- **INC-PROJ-05 — merch + VIP project.** `$/Head` × `Fee %` × `Cap` × `Sell %` →
+  **Merch** fills; `VIP Tix` × `VIP £` → **VIP** fills. Independent of deal type.
+- **INC-PROJ-06 — tour-default fallback.** Leave a show's `Sell %` / `$/Head` /
+  `Fee %` blank, set them in **Settings → Projection defaults** → the engine uses
+  the tour default. A per-show value overrides it.
+- **INC-PROJ-07 — overage config.** Settings → Projection defaults → `Overage
+  haircut` (0.65) + `Box-office tax` (0.08) change the projected overage for every
+  VS show on the next input edit.
+- **INC-PROJ-08 — user override.** Type directly into Overage / Merch / VIP → the
+  manual value is kept (a direct edit wins); it stays until a relevant input is
+  re-edited (which re-runs the engine).
+- **INC-PROJ-09 — P&L parity.** `computeBudgetPnl` total is unchanged from the
+  materialised values — the engine writes a **pre-withholding** overage into
+  `pre_tax_overage`; the P&L applies WH once (`postTaxOver`), no double-count.
+- **INC-PROJ-10 — versioning lock.** Approve a version → every projection input
+  cell (Cap/Sell/Face/Deal/Deal%/@Tix/↑%/$Head/Fee/VIP Tix/VIP£) goes read-only;
+  a write 423s; the inputs snapshot into `budget_version_income` and re-overlay on
+  the approved view. Unlock → editable. (Tour config in Settings stays editable —
+  unversioned.)
+
 ## Budget Versioning Phase 1 — B2 (UI, feat/budget-versioning-b2)
 
 > Wires the live B1 contract. tsc 0, eslint 0, build green. Chrome-verify on the
