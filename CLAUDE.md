@@ -21,7 +21,7 @@ src/
     m/          ← mobile PWA routes (pending UX18+)
   components/
     shell/      ← TopBar, LeftRail, PageShell, SlideOver (UX02/UX03 — shell-v1)
-    shell-v2/   ← ProductRail, ProductHeader, ProductShell (Product Split — current)
+    shell-v2/   ← ProductHeader (two-bar: TopProductNav + ProductSubBar), ProductShell (current). ProductRail retired (two-bar nav)
     data-table/ ← <DataTable> (UX05)
     spreadsheet-grid/ ← <SpreadsheetGrid> (UX06)
     timeline/   ← <TimelineDashboard> (UX07)
@@ -106,10 +106,17 @@ route group at `src/app/(app)/(workspace)/`. Layout
 (`(workspace)/layout.tsx`) mounts `WorkspaceTopBar` +
 `WorkspaceTabs`. NO `ProductRail` on the workspace tier.
 
-Artist + tour tiers use `<ProductShell>` (shell-v2:
-`ProductRail` + `ProductHeader`). Settings / Venues / Bugs
-also use `ProductShell` but with `active={null}` — the rail
-renders without any product highlighted.
+Artist + tour tiers use `<ProductShell>` (shell-v2). The nav
+is now **two horizontal bars** (see `CC_NAV_IA_TWO_BAR.md`),
+both inside `<ProductHeader>`: Bar 1 = `TopProductNav`
+(Home/Operations/Budget/Advance + switchers), Bar 2 =
+`ProductSubBar` (the active product's sub-tabs). The old left
+`ProductRail` component is **retired** (only the
+`ProductRailActive` type name lingers). Bar 1 also exposes a
+hover/click dropdown per product as a one-load cross-product
+jump shortcut — not a replacement for the persistent Bar 2.
+Settings / Venues / Bugs use `ProductShell` with `active={null}`
+(no product highlighted).
 
 **Adding a new surface:**
 - **Workspace tab** (sibling of Artists / Personnel /
@@ -189,7 +196,7 @@ Wrong: `'var(--lp-orange)' + '1a'` (concatenation doesn't resolve the var)
 
 ### Tour-internal navigation — ProductShell handles it; TourBreadcrumb is legacy
 
-Pages wrapped in `<ProductShell>` (everything under `/operations/[tourId]/`, `/budget/[tourId]/`, `/advance/[tourId]/`) get product-aware navigation from `<ProductHeader>` and `<ProductRail>` automatically. **No explicit `<TourBreadcrumb>` mount is needed** for those pages.
+Pages wrapped in `<ProductShell>` (everything under `/operations/[tourId]/`, `/budget/[tourId]/`, `/advance/[tourId]/`) get product-aware navigation from `<ProductHeader>` (the two-bar nav) automatically. **No explicit `<TourBreadcrumb>` mount is needed** for those pages.
 
 The legacy `<TourBreadcrumb>` component (`src/components/tours/TourBreadcrumb.tsx`) is currently imported by zero pages. It exists for any old `<PageShell>`-wrapped tour-internal page that ever needs to be reached directly. Since the redirects in `next.config.ts` now send every `/tours/[id]/*` URL to its product-prefixed equivalent, those legacy pages are unreachable by users — the requirement is effectively moot.
 
