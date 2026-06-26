@@ -23,7 +23,7 @@
    ============================================ */
 
 import './grid.css';
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useReducer, useRef, useState } from 'react';
+import { cloneElement, forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { Column, Density, GridFx, GridLineApi, GridStatusConfig, GroupBy, Row, Section, Sel, Snapshot } from './types';
 import {
@@ -141,6 +141,18 @@ export interface GridProps {
   /** Raised when the user tries to edit a version-locked proposed cell (→ the
       Unlock-or-New-Version modal lives in the host). */
   onLockedEdit?: () => void;
+  /** Income UX — leading columns to render as a recessed, look-don't-touch
+      REFERENCE block (routing date/venue/city, drawn from elsewhere). Adds a
+      `ref-col` class + a divider after the last. Additive, opt-in — default
+      undefined → every other consumer unchanged. */
+  referenceCols?: string[];
+}
+
+/** Imperative handle (opt-in via ref). Lets a host patch specific cells by row
+ *  `_uid` WITHOUT a remount — so engine-materialised values (Income's projected
+ *  overage/merch/VIP) surface in place, with no cursor jump / full-grid flash. */
+export interface GridHandle {
+  updateRowCells: (uid: string, patch: Record<string, unknown>) => void;
 }
 
 type ReorderKind = 'section' | 'row' | 'col';
@@ -157,7 +169,7 @@ function statusUniverse(columns: Column[], sections: Section[]): string[] {
   return [...set];
 }
 
-export function Grid({
+export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
   initialData,
   initialColumns,
   onOpenRow,
@@ -182,7 +194,8 @@ export function Grid({
   tabOpensMenu = false,
   versionLocked = false,
   onLockedEdit,
-}: GridProps) {
+  referenceCols,
+}: GridProps, ref) {
   const onLockedEditRef = useRef(onLockedEdit);
   onLockedEditRef.current = onLockedEdit;
   const fx = fxProp ?? demoFx;
@@ -206,6 +219,36 @@ export function Grid({
   /* ---- source of truth (refs) ---- */
   const uidc = useRef(0);
   const dataRef = useRef<Section[]>([]);
+
+  // Income UX — imperative cell patch by _uid (no remount → no cursor jump).
+  useImperativeHandle(
+    ref,
+    () => ({
+      updateRowCells(uid: string, patch: Record<string, unknown>) {
+        for (const sec of dataRef.current) {
+          const row = sec.rows.find((r) => r._uid === uid);
+          if (row) {
+            Object.assign(row, patch);
+            render();
+            return;
+          }
+        }
+      },
+    }),
+    [render],
+  );
+
+  // Income UX — recessed reference block (routing strip). Stable from the prop.
+  const refColSet = useMemo(() => new Set(referenceCols ?? []), [referenceCols]);
+  const refColEndId = referenceCols && referenceCols.length ? referenceCols[referenceCols.length - 1] : null;
+  /** Clone-merge the `ref-col` class onto a reference column's cell. */
+  const wrapCell = (cell: React.ReactElement, colId: string): React.ReactElement => {
+    if (!refColSet.has(colId)) return cell;
+    const el = cell as React.ReactElement<{ className?: string }>;
+    const base = el.props.className ?? '';
+    return cloneElement(el, { className: `${base} ref-col${colId === refColEndId ? ' ref-col-end' : ''}` });
+  };
+
   const colsRef = useRef<Column[]>([]);
   const widthsRef = useRef<Record<string, number>>({});
   const calcFns = useRef<Record<string, (row: Row) => number>>({});
@@ -1655,7 +1698,7 @@ export function Grid({
               const fi = f++;
               return (
                 <div className="row" key={row._uid ?? `${st}-${ri}`}>
-                  {vis.map((c) => renderCell({ kind: 'normal', _si: 0, name: '', rows: [] }, row, ri, c, fi, c.id))}
+                  {vis.map((c) => wrapCell(renderCell({ kind: 'normal', _si: 0, name: '', rows: [] }, row, ri, c, fi, c.id), c.id))}
                 </div>
               );
             })}
@@ -1737,7 +1780,7 @@ export function Grid({
             const fi = isFormula(sec) ? -1 : f;
             const node = (
               <div className={`row${row._rowClass ? ` ${String(row._rowClass)}` : ''}`} data-si={si} data-ri={ri} data-uid={row._uid} key={row._uid ?? ri}>
-                {vis.map((c) => renderCell(sec, row, ri, c, fi, c.id))}
+                {vis.map((c) => wrapCell(renderCell(sec, row, ri, c, fi, c.id), c.id))}
               </div>
             );
             if (!isFormula(sec)) f++;
@@ -1851,7 +1894,7 @@ export function Grid({
             {vis.map((c) => (
               <div
                 key={c.id}
-                className={`hc ${c.type === 'money' || c.type === 'number' || c.type === 'variance' ? 'num' : ''} ${c.id === 'idx' ? 'noreorder' : ''}`}
+                className={`hc ${c.type === 'money' || c.type === 'number' || c.type === 'variance' ? 'num' : ''} ${c.id === 'idx' ? 'noreorder' : ''}${refColSet.has(c.id) ? ' ref-col' : ''}${c.id === refColEndId ? ' ref-col-end' : ''}`}
                 data-ci={cols().indexOf(c)}
                 data-colid={c.id}
                 onPointerDown={(e) => {
@@ -2022,7 +2065,7 @@ export function Grid({
       ) : null}
     </div>
   );
-}
+});
 
 /* ============================================================
    Drag overlays — resize ghost + reorder insertion line (#6)

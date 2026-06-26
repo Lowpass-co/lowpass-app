@@ -107,6 +107,73 @@ Reference tour: "Warning Support". Templates picker needs a NEW empty tour.
   the approved view. Unlock → editable. (Tour config in Settings stays editable —
   unversioned.)
 
+## Income redesign — Phase 4: P&L / Summary refresh (feat/income-pnl-p4-summary)
+
+> Presentation only — **no money math, no schema, no migration**. `computeBudgetPnl`
+> gains a read-only `incomeBreakdown` (post-tax Guarantee/Overage/Merch/VIP +
+> actual-only Deductions) that **reconciles to gross** (no new math); the Summary
+> renders headline cards + a grouped income/expense report. tsc 0, eslint 0, build
+> green. The P&L stays a read-only report (NOT a Grid — D-PNL).
+
+- **INC-PNL-01 — headline cards.** Budget → **Summary**: three cards — Gross Income ·
+  Total Expenses · **Net (P&L)** — each Projected, Actual, and a Δ coloured by
+  direction (income/net green when up, expenses green when under). Tokens only.
+- **INC-PNL-02 — income breakdown.** The P&L report's **Income** group shows
+  **Guarantee / Overage / Merch / VIP** rows (post-tax), Projected · Actual · Δ,
+  then a **Gross income** subtotal — mirroring the reference sheet's income block.
+  For a tour with Phase-3 VS projections the Overage row is non-zero.
+- **INC-PNL-03 — breakdown reconciles.** Guarantee + Overage + Merch + VIP
+  (projected) **= Gross income** (projected); the same, minus **Deductions**, for
+  actual. (Deductions row appears only when an actual deduction exists.)
+- **INC-PNL-04 — expenses block.** Line-item expenses, the **commission** rows
+  (% · basis), and the **overheads** (Insurance / Contingency / Accountancy / Merch
+  COGS, each with its %·base) → **Total expenses** subtotal, Projected · Actual · Δ.
+- **INC-PNL-05 — net parity.** **Net = Gross − Total expenses** for both columns and
+  equals `computeBudgetPnl`'s `net` to the cent (unchanged from before Phase 4).
+- **INC-PNL-06 — version-aware variance.** Viewing an **approved** version: the
+  Projected column header reads **"Approved vN"**, a **Baseline vN** badge shows,
+  and the copy says variance reads Actual vs the approved baseline. A draft reads
+  "Projected" / "working projection". (Reuses the page's resolved version — no new
+  data path.)
+- **INC-PNL-07 — read-only.** No edit affordances on Summary; the % inputs stay in
+  Settings, line totals on the Budget tab. The existing chart + section summary +
+  variance + top-spend + recent-activity surfaces are unchanged.
+
+## Income grid UX polish (feat/income-grid-ux-polish)
+
+> Chrome only — no data-model / engine-math change. Additive, opt-in `<Grid>`
+> hooks: `referenceCols` (recessed reference block) + a `GridHandle` imperative
+> `updateRowCells` (forwardRef). Other Grid consumers (Expenses/Payroll/Rooming)
+> are unchanged. tsc 0, eslint 0, build green.
+
+- **INC-UX-01 — routing reads as a frozen reference.** The `#·Date·Type·Venue·City`
+  strip renders **recessed** (panel background, italic, muted) with a firm divider
+  before the first editable column (Currency). It reads as "drawn from elsewhere,
+  look-don't-touch" — visibly distinct from the editable income cells. *(Sticky-
+  freeze deferred — see note; this is the recessed-reference treatment.)*
+- **INC-UX-02 — view is unmistakable.** The Projected/Actual toggle is loud (filled
+  accent, shadow) and a one-line context cue + coloured dot states what you're
+  looking at ("Projected — forecast from the deal inputs" / "Actual — settled
+  figures"). A per-view accent rail tints the grid (orange = forecast, green =
+  settled). Engine-computed output headers (Overage/Merch/VIP, projected view)
+  carry a small **ƒ** + "computed (editable)" tooltip.
+- **INC-UX-03 — no cursor jump on a projection edit.** Edit Deal/Cap/Sell-thru/etc.
+  → the projected Overage/Merch/VIP cells update **in place** with no cursor jump
+  and no full-grid flash (imperative `gridRef.updateRowCells`, replacing the old
+  remount/re-seed).
+- **INC-UX-04 — currency is never stuck on GBP.** The Currency picker offers a
+  standard ISO list (GBP/USD/EUR/CAD/AUD/JPY/CHF/SEK/…) even when the tour has **no**
+  FX rates. Picking a currency with no rate converts **1:1** + toasts a nudge to add
+  one in Settings → FX rates. (Phase-2 FX map + conversion unchanged underneath.)
+- **INC-UX-05 — human headers + tooltips.** `Currency`, `Tier @ (tix)`, `Tier rate %`,
+  `Withhold %`, `Deal type` (was Ccy/@ Tix/↑ %/WH/Deal); each projection input has a
+  plain-English header tooltip describing what it feeds.
+- **INC-UX-06 — density.** Venue/City widths widened; deal/tier/withhold columns
+  sized for the new labels; consistent number alignment. Token-clean.
+- **Regression floor:** versioning lock still freezes proposed cells (read-only +
+  423); P1 deductions, P2 currency conversion, P3 projection materialisation all
+  intact; Expenses/Payroll/Rooming grids visually unchanged (opt-in props).
+
 ## Budget Versioning Phase 1 — B2 (UI, feat/budget-versioning-b2)
 
 > Wires the live B1 contract. tsc 0, eslint 0, build green. Chrome-verify on the

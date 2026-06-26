@@ -14,9 +14,9 @@
    only changes how the cells render. (BUD-50..54.)
    ============================================ */
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { Grid } from '@/components/grid/Grid';
+import { Grid, type GridHandle } from '@/components/grid/Grid';
 import type { Column, GridFx, Row, Section } from '@/components/grid/types';
 import { convertToCurrency } from '@/lib/budget/fx';
 import { toIncomeRows, type IncomeRow } from '@/lib/budget/income';
@@ -25,14 +25,42 @@ import { useToast } from '@/components/ui/Toast';
 
 const CUR_SYMBOL: Record<string, string> = { GBP: '£', USD: '$', EUR: '€', CAD: 'C$', AUD: 'A$', JPY: '¥' };
 const CURRENCIES = ['GBP', 'USD', 'EUR', 'CAD', 'AUD', 'JPY'];
+// #4 — the per-show currency picker offers a STANDARD list (not just rates that
+// already exist), so you can set a EUR show before any FX rate is configured. A
+// currency with no rate converts 1:1 (Phase-2 toTourCurrency) + nudges to Settings.
+const STD_CURRENCIES = ['GBP', 'USD', 'EUR', 'CAD', 'AUD', 'JPY', 'CHF', 'SEK', 'NOK', 'DKK', 'PLN', 'CZK', 'NZD', 'MXN'];
 // Phase 3 — deal types. VS auto-projects overage; PLUS is manual; FLAT = no backend.
 const DEAL_TYPES = ['VS', 'PLUS', 'FLAT'];
-// Editing any of these projection inputs re-runs the engine server-side → reload +
-// remount the grid so the materialised overage / merch / VIP appear.
+// Editing any of these projection inputs re-runs the engine server-side; we patch
+// the materialised overage / merch / VIP back in place (no remount → no cursor jump).
 const PROJECTION_INPUT_COLS = new Set([
   'cap', 'sellthru', 'face', 'deal', 'dealpct', 'dealthr', 'dealabove',
   'perhead', 'feepct', 'viptix', 'vipprice', 'guarantee', 'wh',
 ]);
+// #2 — projected OUTPUT cells the engine materialises (vs hand-entered inputs);
+// their headers carry a small ƒ + "computed" tooltip.
+const PROJECTED_OUTPUT_COLS = new Set(['overage', 'merch', 'vip']);
+// #5 — plain-English header tooltips: what each projection input feeds.
+const HEADER_TIP: Record<string, string> = {
+  currency: 'The show’s native currency. Converted to the tour currency in the P&L.',
+  cap: 'Venue capacity (tickets available).',
+  sellthru: 'Estimated % of capacity sold. Blank → tour default (Settings).',
+  face: 'Ticket face value, in the show’s currency.',
+  deal: 'Deal type. VS auto-projects overage; PLUS is manual; FLAT has no backend.',
+  dealpct: 'Base deal percentage of net box office.',
+  dealthr: 'Tiered VS: ticket count above which the higher rate applies.',
+  dealabove: 'Tiered VS: the escalated rate on tickets above the threshold.',
+  wh: 'Withholding tax %. Applied to guarantee + overage in the P&L.',
+  posttax: 'Guarantee after withholding (pre_tax × (1 − WH%)). Computed.',
+  overage: 'Projected for VS deals from the inputs (editable). Pre-withholding.',
+  perhead: 'Net merch spend per head. Blank → tour default (Settings).',
+  feepct: 'Average merch fee %. Blank → tour default (Settings).',
+  merch: 'Cap × Sell-thru × $/head × Fee%. Computed (editable).',
+  viptix: 'Number of VIP tickets.',
+  vipprice: 'VIP ticket price, in the show’s currency.',
+  vip: 'VIP tickets × price. Computed (editable).',
+  guarantee: 'Pre-tax guaranteed fee for the show.',
+};
 
 const num = (v: unknown): number => {
   const x = Number(v);
@@ -68,18 +96,21 @@ export function BudgetIncomeGrid({
   const { showToast } = useToast();
   const searchParams = useSearchParams();
   const native = (tourCurrency || 'GBP').toUpperCase();
-  // Phase 2 — the per-show currency options: the tour currency + any currency
-  // with an FX rate. (Add more rates in budget Settings to widen the picker.)
-  const currencyOptions = useMemo(() => Array.from(new Set([native, ...Object.keys(fxRates)])), [native, fxRates]);
+  // #4 — the picker offers the tour currency + a standard ISO list + any currency
+  // that already has an FX rate. No more chicken-and-egg "only GBP" when the tour
+  // has no rates configured.
+  const currencyOptions = useMemo(
+    () => Array.from(new Set([native, ...STD_CURRENCIES, ...Object.keys(fxRates)])),
+    [native, fxRates],
+  );
+  // #3 — imperative handle so engine-materialised cells update in place (no remount).
+  const gridRef = useRef<GridHandle | null>(null);
   const display = (searchParams.get('display') ?? native).toUpperCase();
   // Prop-fed (server-fetched) → synchronous render, no client-fetch loading gate
   // that could get stuck (BUD-50). The client GET stays ONLY for the post-edit
   // failure resync below.
   const [rows, setRows] = useState<IncomeRow[]>(initialRows);
   const [view, setView] = useState<'projected' | 'actual'>('projected');
-  // Phase 3 — bumped after a projection-input edit to remount the grid with the
-  // engine-materialised value columns (the Grid is ref-sourced post-mount).
-  const [reseed, setReseed] = useState(0);
 
   const fx: GridFx = useMemo(
     () => ({
@@ -140,12 +171,20 @@ export function BudgetIncomeGrid({
     (routingId: string, columnId: string, value: unknown) => {
       // Phase 2/3 — currency + deal type are STRING dropdowns, not numbers. The
       // tour currency clears to null. Everything else routes through patchFor.
-      const patch: Partial<IncomeRow> | null =
-        columnId === 'currency'
-          ? { currency: String(value).toUpperCase() === native ? null : String(value).toUpperCase() }
-          : columnId === 'deal'
-            ? { deal_type: String(value).toUpperCase() || null }
-            : patchFor(columnId, num(value));
+      let patch: Partial<IncomeRow> | null;
+      if (columnId === 'currency') {
+        const picked = String(value).toUpperCase();
+        const newCur = picked === native ? null : picked;
+        // #4 — frictionless: a currency with no rate yet converts 1:1; nudge to Settings.
+        if (newCur && fxRates[newCur] === undefined) {
+          showToast(`${newCur} has no FX rate — converting 1:1. Add one in Settings → FX rates.`);
+        }
+        patch = { currency: newCur };
+      } else if (columnId === 'deal') {
+        patch = { deal_type: String(value).toUpperCase() || null };
+      } else {
+        patch = patchFor(columnId, num(value));
+      }
       if (!patch) return; // show / posttax / total — not persisted
       setRows((prev) => prev?.map((r) => (r.routing_id === routingId ? { ...r, ...patch } : r)) ?? prev);
       void fetch('/api/budget/income', {
@@ -161,9 +200,20 @@ export function BudgetIncomeGrid({
             showToast('Could not save income', 'error');
             void load();
           } else if (PROJECTION_INPUT_COLS.has(columnId)) {
-            // Pull the engine-materialised overage / merch / VIP and remount.
-            await load();
-            setReseed((x) => x + 1);
+            // #3 — patch the engine-materialised overage / merch / VIP back in
+            // place (imperative, by routing_id) so they update with NO cursor
+            // jump or full-grid flash. The Grid is ref-sourced post-mount.
+            const updated = (await res.json().catch(() => null)) as Record<string, unknown> | null;
+            if (updated) {
+              const overage = num(updated.pre_tax_overage);
+              const merch = num(updated.merch_income);
+              const vip = num(updated.vip_income);
+              gridRef.current?.updateRowCells(routingId, { overage, merch, vip });
+              // keep React state coherent for the next legitimate remount (view switch).
+              setRows((prev) => prev?.map((r) => (r.routing_id === routingId
+                ? { ...r, pre_tax_overage: overage, merch_income: merch, vip_income: vip }
+                : r)) ?? prev);
+            }
           }
         })
         .catch(() => {
@@ -171,20 +221,21 @@ export function BudgetIncomeGrid({
           void load();
         });
     },
-    [patchFor, showToast, load, native],
+    [patchFor, showToast, load, native, fxRates],
   );
 
   const columns: Column[] = useMemo(() => {
     const idx: Column = { id: 'idx', label: '#', type: 'idx', w: 46, min: 40, resize: false };
     // INC-01 — read-only routing context (mirrors the matrices' day headers).
     const routingCols: Column[] = [
-      { id: 'date', label: 'Date', type: 'text', ro: true, w: 72, min: 58, resize: true },
-      { id: 'daytype', label: 'Type', type: 'text', ro: true, w: 78, min: 56, resize: true },
-      { id: 'venue', label: 'Venue', type: 'text', ro: true, w: 168, min: 110, resize: true },
-      { id: 'city', label: 'City', type: 'text', ro: true, w: 110, min: 80, resize: true },
-      // Phase 2 — per-show currency (proposed structure → read-only when locked).
-      { id: 'currency', label: 'Ccy', type: 'dropdown', options: currencyOptions, ro: versionLocked, w: 70, min: 56, resize: true },
+      { id: 'date', label: 'Date', type: 'text', ro: true, w: 74, min: 60, resize: true },
+      { id: 'daytype', label: 'Type', type: 'text', ro: true, w: 80, min: 58, resize: true },
+      { id: 'venue', label: 'Venue', type: 'text', ro: true, w: 188, min: 124, resize: true },
+      { id: 'city', label: 'City', type: 'text', ro: true, w: 128, min: 90, resize: true },
     ];
+    // #1 — per-show currency is the FIRST editable column, right after the frozen
+    // routing reference block (Phase 2 — read-only when version-locked).
+    const currency: Column = { id: 'currency', label: 'Currency', type: 'dropdown', options: currencyOptions, ro: versionLocked, w: 96, min: 76, resize: true };
     const money = (id: string, label: string): Column => ({ id, label, type: 'money', w: 120, min: 90, resize: true });
     if (view === 'projected') {
       // B2 — projected (proposed) income is read-only on an approved version;
@@ -196,18 +247,19 @@ export function BudgetIncomeGrid({
       return [
         idx,
         ...routingCols,
+        currency,
         // ── box-office inputs ──
         pNum('cap', 'Cap'),
         pNum('sellthru', 'Sell %'),
         pMoney('face', 'Face'),
         // ── deal (VS auto-projects overage; PLUS manual; FLAT none) ──
-        { id: 'deal', label: 'Deal', type: 'dropdown', options: DEAL_TYPES, ro: versionLocked, w: 74, min: 60, resize: true },
-        pNum('dealpct', 'Deal %'),
-        pNum('dealthr', '@ Tix', 64, 52),
-        pNum('dealabove', '↑ %', 60, 50),
+        { id: 'deal', label: 'Deal type', type: 'dropdown', options: DEAL_TYPES, ro: versionLocked, w: 92, min: 72, resize: true },
+        pNum('dealpct', 'Deal %', 78, 60),
+        pNum('dealthr', 'Tier @ (tix)', 98, 74),
+        pNum('dealabove', 'Tier rate %', 96, 74),
         // ── guarantee block ──
         pMoney('guarantee', 'Guarantee'),
-        pNum('wh', 'WH %', 80, 60),
+        pNum('wh', 'Withhold %', 96, 76),
         { id: 'posttax', label: 'Post-tax', type: 'calc', w: 120, min: 90, resize: true, calc: (r: Row) => postTax(num(r.guarantee), num(r.wh)) },
         // Overage — materialised by the engine for VS; editable (override). Post-tax
         // (WH applied) flows into the Total + the P&L, mirroring the guarantee block.
@@ -234,6 +286,7 @@ export function BudgetIncomeGrid({
     return [
       idx,
       ...routingCols,
+      currency,
       money('guarantee', 'Guarantee'),
       money('overage', 'Overage'),
       money('merch', 'Merch'),
@@ -243,6 +296,31 @@ export function BudgetIncomeGrid({
       { id: 'total', label: 'Total', type: 'calc', w: 130, min: 100, resize: true, calc: (r: Row) => num(r.guarantee) + num(r.overage) + num(r.merch) + num(r.vip) - num(r.deductions) },
     ];
   }, [view, versionLocked, currencyOptions]);
+
+  // #5 — human-readable header tooltips; #2 — a small ƒ on engine-materialised
+  // outputs (overage/merch/VIP) so it's clear they're computed-but-editable.
+  const labelById = useMemo(
+    () => Object.fromEntries(columns.map((c) => [c.id, c.label])) as Record<string, string>,
+    [columns],
+  );
+  const headerFor = useCallback(
+    (colId: string) => {
+      const label = labelById[colId] ?? colId;
+      const tip = HEADER_TIP[colId];
+      const computed = view === 'projected' && PROJECTED_OUTPUT_COLS.has(colId);
+      return (
+        <span title={tip} style={tip ? { cursor: 'help' } : undefined}>
+          {label}
+          {computed ? (
+            <span aria-hidden style={{ marginLeft: 3, color: 'var(--lp-orange)', fontWeight: 700, fontStyle: 'italic' }}>
+              ƒ
+            </span>
+          ) : null}
+        </span>
+      );
+    },
+    [labelById, view],
+  );
 
   const data: Section[] = useMemo(() => {
     // Phase 2 — `cur` = the row's native currency drives the money cells' source
@@ -263,29 +341,60 @@ export function BudgetIncomeGrid({
     return [{ name: 'Shows', kind: 'normal', _uid: 'income', rows: gridRows }];
   }, [rows, view, native]);
 
+  // #2 — make the active view unmistakable: a one-line context cue + a per-view
+  // accent so a glance tells you whether you're looking at forecast or settled
+  // numbers. Projected = orange (forecast); Actual = green (settled/real).
+  const isProjected = view === 'projected';
+  const viewAccent = isProjected ? 'var(--lp-orange)' : 'var(--color-lp-status-complete)';
+  const viewCue = isProjected
+    ? 'Projected — forecast from the deal inputs (VS overage, merch & VIP are computed, marked ƒ).'
+    : 'Actual — settled figures from reconciliation; deductions reduce the net.';
+
   return (
     <section style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      {/* Projected / Actual toggle */}
-      <div
-        role="tablist"
-        aria-label="Income view"
-        style={{ display: 'inline-flex', alignSelf: 'flex-start', gap: 2, border: '1px solid var(--lp-border)', borderRadius: 'var(--lp-radius-full)', padding: 3, background: 'var(--lp-panel)' }}
-      >
-        {(['projected', 'actual'] as const).map((v) => {
-          const on = view === v;
-          return (
-            <button
-              key={v}
-              type="button"
-              role="tab"
-              aria-selected={on}
-              onClick={() => setView(v)}
-              style={{ border: 0, cursor: 'pointer', borderRadius: 'var(--lp-radius-full)', padding: '5px 16px', fontSize: 13, fontWeight: 600, textTransform: 'capitalize', background: on ? 'var(--lp-orange)' : 'transparent', color: on ? 'var(--lp-text-inverse)' : 'var(--lp-text-secondary)', transition: 'background 0.16s ease, color 0.16s ease' }}
-            >
-              {v}
-            </button>
-          );
-        })}
+      {/* #2 — loud Projected / Actual toggle + context cue */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <div
+          role="tablist"
+          aria-label="Income view"
+          style={{ display: 'inline-flex', gap: 2, border: '1px solid var(--lp-border)', borderRadius: 'var(--lp-radius-full)', padding: 3, background: 'var(--lp-panel)' }}
+        >
+          {(['projected', 'actual'] as const).map((v) => {
+            const on = view === v;
+            const accent = v === 'projected' ? 'var(--lp-orange)' : 'var(--color-lp-status-complete)';
+            return (
+              <button
+                key={v}
+                type="button"
+                role="tab"
+                aria-selected={on}
+                onClick={() => setView(v)}
+                style={{
+                  border: 0, cursor: 'pointer', borderRadius: 'var(--lp-radius-full)', padding: '6px 18px',
+                  fontSize: 13, fontWeight: 700, textTransform: 'capitalize',
+                  background: on ? accent : 'transparent',
+                  color: on ? 'var(--lp-text-inverse)' : 'var(--lp-text-secondary)',
+                  boxShadow: on ? 'var(--lp-shadow-sm)' : 'none',
+                  transition: 'background 0.16s ease, color 0.16s ease',
+                }}
+              >
+                {v}
+              </button>
+            );
+          })}
+        </div>
+        <span
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 7, borderRadius: 'var(--lp-radius-md)',
+            padding: '5px 12px', fontSize: 'var(--lp-text-xs)', fontWeight: 500,
+            color: 'var(--lp-text-secondary)',
+            background: `color-mix(in srgb, ${viewAccent} 9%, transparent)`,
+            border: `1px solid color-mix(in srgb, ${viewAccent} 28%, transparent)`,
+          }}
+        >
+          <span aria-hidden style={{ width: 7, height: 7, borderRadius: '50%', background: viewAccent }} />
+          {viewCue}
+        </span>
       </div>
 
       {rows.length === 0 ? (
@@ -293,15 +402,22 @@ export function BudgetIncomeGrid({
           No shows on this tour yet — add routing dates to enter income.
         </div>
       ) : (
-        <Grid
-          key={`income:${tourId}:${view}:${rows.length}:${versionLocked ? 'locked' : 'draft'}:${reseed}`}
-          initialColumns={columns}
-          initialData={data}
-          fx={fx}
-          onEdit={onEdit}
-          allowAddRows={false}
-          fillHandle
-        />
+        // #2 — subtle per-view tint: a left accent rail so the whole grid reads
+        // as forecast (orange) or settled (green) at a glance.
+        <div style={{ borderLeft: `3px solid ${viewAccent}`, borderRadius: 'var(--lp-radius-md)', paddingLeft: 8, background: `color-mix(in srgb, ${viewAccent} 3%, transparent)` }}>
+          <Grid
+            ref={gridRef}
+            key={`income:${tourId}:${view}:${rows.length}:${versionLocked ? 'locked' : 'draft'}`}
+            initialColumns={columns}
+            initialData={data}
+            fx={fx}
+            onEdit={onEdit}
+            headerFor={headerFor}
+            referenceCols={['idx', 'date', 'daytype', 'venue', 'city']}
+            allowAddRows={false}
+            fillHandle
+          />
+        </div>
       )}
     </section>
   );

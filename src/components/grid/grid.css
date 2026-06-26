@@ -1224,3 +1224,29 @@
   font-weight: 600;
   color: var(--lp-text);
 }
+
+/* ============================================================
+   Income UX — REFERENCE columns (`referenceCols` prop). The routing strip
+   (date / day-type / venue / city) is pulled from elsewhere and is
+   look-don't-touch: render it recessed (panel background, muted text) with a
+   firm divider after the last one, so it reads as a separate, uneditable
+   reference rather than an editable income cell. Opt-in — only the income grid
+   passes referenceCols, so every other grid is unchanged.
+   ============================================================ */
+.lp-grid .c.ref-col,
+.lp-grid .hc.ref-col {
+  background: var(--lp-panel);
+  color: var(--lp-text-secondary);
+}
+.lp-grid .c.ref-col {
+  cursor: default;
+  font-style: italic;
+}
+.lp-grid .hc.ref-col {
+  font-style: italic;
+}
+/* firm divider between the frozen reference strip and the editable income cells */
+.lp-grid .c.ref-col-end,
+.lp-grid .hc.ref-col-end {
+  border-right: 2px solid var(--lp-border-strong);
+}
