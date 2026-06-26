@@ -107,6 +107,38 @@ Reference tour: "Warning Support". Templates picker needs a NEW empty tour.
   the approved view. Unlock → editable. (Tour config in Settings stays editable —
   unversioned.)
 
+## Income redesign — Phase 4: P&L / Summary refresh (feat/income-pnl-p4-summary)
+
+> Presentation only — **no money math, no schema, no migration**. `computeBudgetPnl`
+> gains a read-only `incomeBreakdown` (post-tax Guarantee/Overage/Merch/VIP +
+> actual-only Deductions) that **reconciles to gross** (no new math); the Summary
+> renders headline cards + a grouped income/expense report. tsc 0, eslint 0, build
+> green. The P&L stays a read-only report (NOT a Grid — D-PNL).
+
+- **INC-PNL-01 — headline cards.** Budget → **Summary**: three cards — Gross Income ·
+  Total Expenses · **Net (P&L)** — each Projected, Actual, and a Δ coloured by
+  direction (income/net green when up, expenses green when under). Tokens only.
+- **INC-PNL-02 — income breakdown.** The P&L report's **Income** group shows
+  **Guarantee / Overage / Merch / VIP** rows (post-tax), Projected · Actual · Δ,
+  then a **Gross income** subtotal — mirroring the reference sheet's income block.
+  For a tour with Phase-3 VS projections the Overage row is non-zero.
+- **INC-PNL-03 — breakdown reconciles.** Guarantee + Overage + Merch + VIP
+  (projected) **= Gross income** (projected); the same, minus **Deductions**, for
+  actual. (Deductions row appears only when an actual deduction exists.)
+- **INC-PNL-04 — expenses block.** Line-item expenses, the **commission** rows
+  (% · basis), and the **overheads** (Insurance / Contingency / Accountancy / Merch
+  COGS, each with its %·base) → **Total expenses** subtotal, Projected · Actual · Δ.
+- **INC-PNL-05 — net parity.** **Net = Gross − Total expenses** for both columns and
+  equals `computeBudgetPnl`'s `net` to the cent (unchanged from before Phase 4).
+- **INC-PNL-06 — version-aware variance.** Viewing an **approved** version: the
+  Projected column header reads **"Approved vN"**, a **Baseline vN** badge shows,
+  and the copy says variance reads Actual vs the approved baseline. A draft reads
+  "Projected" / "working projection". (Reuses the page's resolved version — no new
+  data path.)
+- **INC-PNL-07 — read-only.** No edit affordances on Summary; the % inputs stay in
+  Settings, line totals on the Budget tab. The existing chart + section summary +
+  variance + top-spend + recent-activity surfaces are unchanged.
+
 ## Budget Versioning Phase 1 — B2 (UI, feat/budget-versioning-b2)
 
 > Wires the live B1 contract. tsc 0, eslint 0, build green. Chrome-verify on the

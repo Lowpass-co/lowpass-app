@@ -98,6 +98,11 @@ export interface BudgetSummaryTabProps {
   tourCurrency: string;
   /** Phase 2 — per-tour FX map for converting per-show foreign income to tour ccy. */
   fxRates?: Record<string, number>;
+  /** Phase 4 — the viewed version is approved → the Projected column is the
+   *  APPROVED baseline (variance reads vs it), not a working draft. */
+  versionApproved?: boolean;
+  /** Phase 4 — e.g. "v3" for the baseline badge. */
+  versionLabel?: string | null;
 }
 
 export function BudgetSummaryTab({
@@ -112,6 +117,8 @@ export function BudgetSummaryTab({
   phaseBoundaries,
   tourCurrency,
   fxRates = {},
+  versionApproved = false,
+  versionLabel = null,
 }: BudgetSummaryTabProps) {
   const searchParams = useSearchParams();
   const displayCurrency = (
@@ -286,8 +293,9 @@ export function BudgetSummaryTab({
         currency={tourCurrency}
       />
 
-      {/* Stage 3 — the P&L waterfall (manager-PDF order). */}
-      <PnlWaterfall pnl={pnl} />
+      {/* Phase 4 — headline P&L cards + the refreshed income/expense report. */}
+      <PnlHeadlineCards pnl={pnl} versionApproved={versionApproved} versionLabel={versionLabel} />
+      <PnlReport pnl={pnl} versionApproved={versionApproved} versionLabel={versionLabel} />
 
       {/* Phase E — per-section rollup (GN SUMMARY tab) */}
       {sectionRollup.rows.length > 0 ? (
@@ -812,9 +820,13 @@ function VariancePanel({
 }
 
 /* ============================================
-   Stage 3 — P&L waterfall (manager-PDF order). Computed rows are
-   read-only by nature (no inputs here — the % inputs live in Settings;
-   line totals are edited on the Budget tab). Projected vs Actual.
+   Phase 4 — P&L / Summary visual refresh. Headline cards (Gross · Expenses ·
+   Net) + a grouped income/expense report surfacing the Phase-3 income
+   breakdown (Guarantee / Overage / Merch / VIP), Projected · Actual · Δ. The
+   P&L is a read-only report (NOT a Grid — D-PNL). Single source of truth stays
+   `computeBudgetPnl` — these components only present its values; no money math
+   lives here. Variance is version-aware (Projected = the approved baseline when
+   a version is approved). The % inputs live in Settings; line totals on Budget.
    ============================================ */
 
 const BASIS_LABEL: Record<string, string> = {
@@ -837,175 +849,253 @@ function pctLabel(frac: number): string {
   return `${p % 1 === 0 ? p.toFixed(0) : p.toFixed(1)}%`;
 }
 
-function PnlWaterfall({ pnl }: { pnl: BudgetPnl }) {
-  const cur = pnl.currency;
-  const cellNum: React.CSSProperties = {
-    textAlign: 'right',
-    padding: '5px 8px',
-    fontVariantNumeric: 'tabular-nums',
-  };
-  const rowBorder = '1px solid var(--lp-border-subtle)';
+const netColor = (v: number) =>
+  v > 0
+    ? 'var(--color-lp-status-complete)'
+    : v < 0
+      ? 'var(--color-lp-error)'
+      : 'var(--lp-text)';
 
-  type Row = {
-    key: string;
-    label: string;
-    sub?: string;
-    pair: { projected: number; actual: number };
-    kind?: 'income' | 'expense' | 'subtotal' | 'net';
-  };
-  const rows: Row[] = [
-    { key: 'gross', label: 'Gross income', pair: pnl.grossIncome, kind: 'income' },
-    { key: 'base', label: 'Line-item expenses', pair: pnl.baseExpenses, kind: 'expense' },
+/** Δ colour by direction: income/net are good when actual ≥ projected; expenses
+ *  are good when actual ≤ projected (under budget). 0 reads neutral. */
+function deltaColor(delta: number, goodWhenPositive: boolean): string {
+  if (delta === 0) return 'var(--lp-text-tertiary)';
+  const good = goodWhenPositive ? delta > 0 : delta < 0;
+  return good ? 'var(--color-lp-status-complete)' : 'var(--color-lp-error)';
+}
+
+function formatDelta(delta: number, currency: string): string {
+  return `${delta >= 0 ? '+' : ''}${formatCurrency(delta, currency)}`;
+}
+
+/* ---- Phase 4 — headline cards: Gross income · Total expenses · Net ---- */
+function PnlHeadlineCards({
+  pnl,
+  versionApproved,
+  versionLabel,
+}: {
+  pnl: BudgetPnl;
+  versionApproved: boolean;
+  versionLabel: string | null;
+}) {
+  const cur = pnl.currency;
+  const cards: Array<{ key: string; label: string; pair: { projected: number; actual: number }; good: boolean; tone?: boolean }> = [
+    { key: 'gross', label: 'Gross income', pair: pnl.grossIncome, good: true },
+    { key: 'exp', label: 'Total expenses', pair: pnl.totalExpenses, good: false },
+    { key: 'net', label: 'Net (P&L)', pair: pnl.net, good: true, tone: true },
+  ];
+  const projectedLabel = versionApproved && versionLabel ? `Approved ${versionLabel}` : 'Projected';
+  return (
+    <div className="grid gap-3 sm:grid-cols-3">
+      {cards.map((c) => {
+        const delta = c.pair.actual - c.pair.projected;
+        const bigColor = c.tone ? netColor(c.pair.projected) : 'var(--lp-text)';
+        return (
+          <section
+            key={c.key}
+            className="rounded-lg border p-4"
+            style={{ borderColor: 'var(--lp-border-strong)', background: 'var(--lp-surface)' }}
+          >
+            <div
+              style={{
+                fontSize: 'var(--lp-text-2xs)', fontWeight: 'var(--lp-weight-semibold)',
+                letterSpacing: 'var(--lp-tracking-caps)', textTransform: 'uppercase',
+                color: 'var(--lp-text-tertiary)',
+              }}
+            >
+              {c.label}
+            </div>
+            <div
+              className="lp-mono mt-1"
+              style={{ fontSize: '22px', fontWeight: 'var(--lp-weight-bold)', color: bigColor, fontVariantNumeric: 'tabular-nums' }}
+            >
+              {formatCurrency(c.pair.projected, cur)}
+            </div>
+            <div style={{ fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-tertiary)' }}>{projectedLabel}</div>
+            <div className="mt-1.5 flex items-baseline justify-between gap-2" style={{ fontSize: 'var(--lp-text-xs)' }}>
+              <span style={{ color: 'var(--lp-text-secondary)' }}>
+                Actual{' '}
+                <span className="lp-mono" style={{ color: c.tone ? netColor(c.pair.actual) : 'var(--lp-text)' }}>
+                  {formatCurrency(c.pair.actual, cur)}
+                </span>
+              </span>
+              <span className="lp-mono" style={{ color: deltaColor(delta, c.good), fontWeight: 'var(--lp-weight-semibold)' }}>
+                {formatDelta(delta, cur)}
+              </span>
+            </div>
+          </section>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ---- Phase 4 — the income/expense report (refresh of the P&L waterfall) ----
+   Income breakdown (the Phase-3 components: Guarantee / Overage / Merch / VIP)
+   → Gross subtotal; then expenses (line items, commissions, overheads) → Total;
+   then Net. Projected · Actual · Δ. Read-only. Source = computeBudgetPnl. */
+type ReportRowDef = {
+  key: string;
+  label: string;
+  sub?: string;
+  pair: { projected: number; actual: number };
+  kind: 'line' | 'subtotal' | 'net';
+  /** Δ good-direction: true = more is better (income/net), false = expenses. */
+  good: boolean;
+};
+
+function ReportRow({ r, cur }: { r: ReportRowDef; cur: string }) {
+  const delta = r.pair.actual - r.pair.projected;
+  const isTotal = r.kind === 'subtotal' || r.kind === 'net';
+  const topBorder = isTotal ? '2px solid var(--lp-border-strong)' : '1px solid var(--lp-border-subtle)';
+  const weight = isTotal ? 'var(--lp-weight-bold)' : 'var(--lp-weight-medium)';
+  const labelColor = r.kind === 'net' ? netColor(r.pair.actual || r.pair.projected) : 'var(--lp-text)';
+  const numColor = r.kind === 'net'
+    ? { p: netColor(r.pair.projected), a: netColor(r.pair.actual) }
+    : { p: 'var(--lp-text-secondary)', a: 'var(--lp-text)' };
+  const cell: React.CSSProperties = { textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: weight };
+  return (
+    <div
+      style={{
+        display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 116px 116px 116px',
+        alignItems: 'baseline', gap: 8, padding: '5px 8px', borderTop: topBorder,
+      }}
+    >
+      <div style={{ minWidth: 0 }}>
+        <span style={{ color: labelColor, fontWeight: weight, fontSize: 'var(--lp-text-sm)' }}>{r.label}</span>
+        {r.sub ? (
+          <span className="ml-2" style={{ fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-tertiary)' }}>{r.sub}</span>
+        ) : null}
+      </div>
+      <span className="lp-mono" style={{ ...cell, color: numColor.p }}>{formatCurrency(r.pair.projected, cur)}</span>
+      <span className="lp-mono" style={{ ...cell, color: numColor.a }}>{formatCurrency(r.pair.actual, cur)}</span>
+      <span className="lp-mono" style={{ ...cell, color: deltaColor(delta, r.good) }}>{formatDelta(delta, cur)}</span>
+    </div>
+  );
+}
+
+function GroupHeader({ label }: { label: string }) {
+  return (
+    <div
+      style={{
+        padding: '8px 8px 4px', fontSize: 'var(--lp-text-2xs)', fontWeight: 'var(--lp-weight-semibold)',
+        letterSpacing: 'var(--lp-tracking-caps)', textTransform: 'uppercase', color: 'var(--lp-text-tertiary)',
+      }}
+    >
+      {label}
+    </div>
+  );
+}
+
+function PnlReport({
+  pnl,
+  versionApproved,
+  versionLabel,
+}: {
+  pnl: BudgetPnl;
+  versionApproved: boolean;
+  versionLabel: string | null;
+}) {
+  const cur = pnl.currency;
+  const b = pnl.incomeBreakdown;
+
+  // Income side — the Phase-3 components (post-tax), then the gross subtotal.
+  const incomeRows: ReportRowDef[] = [
+    { key: 'guarantee', label: 'Guarantee', sub: 'post-tax', pair: b.guarantee, kind: 'line', good: true },
+    { key: 'overage', label: 'Overage', sub: 'post-tax', pair: b.overage, kind: 'line', good: true },
+    { key: 'merch', label: 'Merch', pair: b.merch, kind: 'line', good: true },
+    { key: 'vip', label: 'VIP', pair: b.vip, kind: 'line', good: true },
+    ...(b.deductions.actual !== 0
+      ? [{ key: 'deductions', label: 'Deductions', sub: 'settlement', pair: b.deductions, kind: 'line' as const, good: false }]
+      : []),
+    { key: 'gross', label: 'Gross income', pair: pnl.grossIncome, kind: 'subtotal', good: true },
+  ];
+
+  // Expense side — line items, commissions, overheads, then the total.
+  const expenseRows: ReportRowDef[] = [
+    { key: 'base', label: 'Line-item expenses', pair: pnl.baseExpenses, kind: 'line', good: false },
     ...pnl.commissionRows.map((c) => ({
       key: `comm-${c.id}`,
       label: c.label || 'Commission',
       sub: `${pctLabel(c.pct)} · ${BASIS_LABEL[c.basis] ?? c.basis}`,
       pair: { projected: c.projected, actual: c.actual },
-      kind: 'expense' as const,
+      kind: 'line' as const,
+      good: false,
     })),
-    {
-      key: 'insurance',
-      label: 'Insurance',
-      sub: `${pctLabel(pnl.pct.insurance)} of ${OVERHEAD_BASIS_LABEL[pnl.basis.insurance]}`,
-      pair: pnl.insurance,
-      kind: 'expense',
-    },
-    {
-      key: 'contingency',
-      label: 'Contingency',
-      sub: `${pctLabel(pnl.pct.contingency)} of ${OVERHEAD_BASIS_LABEL[pnl.basis.contingency]}`,
-      pair: pnl.contingency,
-      kind: 'expense',
-    },
+    { key: 'insurance', label: 'Insurance', sub: `${pctLabel(pnl.pct.insurance)} of ${OVERHEAD_BASIS_LABEL[pnl.basis.insurance]}`, pair: pnl.insurance, kind: 'line', good: false },
+    { key: 'contingency', label: 'Contingency', sub: `${pctLabel(pnl.pct.contingency)} of ${OVERHEAD_BASIS_LABEL[pnl.basis.contingency]}`, pair: pnl.contingency, kind: 'line', good: false },
     ...(pnl.pct.accountancy > 0
-      ? [
-          {
-            key: 'accountancy',
-            label: 'Accountancy',
-            sub: `${pctLabel(pnl.pct.accountancy)} of ${OVERHEAD_BASIS_LABEL[pnl.basis.accountancy]}`,
-            pair: pnl.accountancy,
-            kind: 'expense' as const,
-          },
-        ]
+      ? [{ key: 'accountancy', label: 'Accountancy', sub: `${pctLabel(pnl.pct.accountancy)} of ${OVERHEAD_BASIS_LABEL[pnl.basis.accountancy]}`, pair: pnl.accountancy, kind: 'line' as const, good: false }]
       : []),
     ...(pnl.pct.merchCogs > 0
-      ? [
-          {
-            key: 'cogs',
-            label: 'Merch COGS',
-            sub: `${pctLabel(pnl.pct.merchCogs)} of merch`,
-            pair: pnl.cogs,
-            kind: 'expense' as const,
-          },
-        ]
+      ? [{ key: 'cogs', label: 'Merch COGS', sub: `${pctLabel(pnl.pct.merchCogs)} of merch`, pair: pnl.cogs, kind: 'line' as const, good: false }]
       : []),
-    { key: 'total', label: 'Total expenses', pair: pnl.totalExpenses, kind: 'subtotal' },
-    { key: 'net', label: 'Net (profit / loss)', pair: pnl.net, kind: 'net' },
+    { key: 'total', label: 'Total expenses', pair: pnl.totalExpenses, kind: 'subtotal', good: false },
   ];
 
-  const netColor = (v: number) =>
-    v > 0
-      ? 'var(--color-lp-status-complete)'
-      : v < 0
-        ? 'var(--color-lp-error)'
-        : 'var(--lp-text)';
+  const netRow: ReportRowDef = { key: 'net', label: 'Net (profit / loss)', pair: pnl.net, kind: 'net', good: true };
+  const projectedHeader = versionApproved && versionLabel ? `Approved ${versionLabel}` : 'Projected';
 
   return (
     <section
       className="rounded-lg border p-4"
       style={{ borderColor: 'var(--lp-border-strong)', background: 'var(--lp-surface)' }}
     >
-      <h2 className="lp-h3">Profit &amp; loss</h2>
-      <p
-        className="mt-1"
-        style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text-secondary)' }}
-      >
-        Income − expenses − commissions − overheads. Computed live from the
-        line items, income and commission % — read-only here.
+      <div className="flex items-baseline justify-between gap-3">
+        <h2 className="lp-h3">Profit &amp; loss</h2>
+        {versionApproved && versionLabel ? (
+          <span
+            className="shrink-0 rounded-full px-2 py-0.5"
+            style={{
+              fontSize: 'var(--lp-text-2xs)', fontWeight: 'var(--lp-weight-semibold)',
+              letterSpacing: 'var(--lp-tracking-caps)', textTransform: 'uppercase',
+              color: 'var(--color-lp-orange)',
+              background: 'color-mix(in srgb, var(--color-lp-orange) 12%, transparent)',
+            }}
+          >
+            Baseline {versionLabel}
+          </span>
+        ) : null}
+      </div>
+      <p className="mt-1" style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text-secondary)' }}>
+        Income breakdown − expenses − commissions − overheads. Read-only, computed
+        live from `computeBudgetPnl`.{' '}
+        {versionApproved && versionLabel
+          ? `Variance reads Actual vs the approved baseline (${versionLabel}).`
+          : 'Variance reads Actual vs the working projection.'}
       </p>
+
       <div className="mt-3 overflow-x-auto">
-        <table className="lp-dense w-full" style={{ borderCollapse: 'collapse' }}>
-          <thead>
-            <tr>
-              {(['', 'Projected', 'Actual'] as const).map((h, i) => (
-                <th
-                  key={h || 'label'}
-                  style={{
-                    textAlign: i === 0 ? 'left' : 'right',
-                    fontSize: 'var(--lp-text-2xs)',
-                    fontWeight: 'var(--lp-weight-semibold)',
-                    letterSpacing: 'var(--lp-tracking-caps)',
-                    textTransform: 'uppercase',
-                    color: 'var(--lp-text-tertiary)',
-                    padding: '6px 8px',
-                    borderBottom: rowBorder,
-                  }}
-                >
-                  {h}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => {
-              const isTotal = r.kind === 'subtotal' || r.kind === 'net';
-              const topBorder = isTotal ? '2px solid var(--lp-border-strong)' : rowBorder;
-              const labelColor =
-                r.kind === 'income'
-                  ? 'var(--color-lp-status-complete)'
-                  : r.kind === 'net'
-                    ? netColor(r.pair.actual || r.pair.projected)
-                    : 'var(--lp-text)';
-              const weight =
-                isTotal || r.kind === 'income'
-                  ? 'var(--lp-weight-bold)'
-                  : 'var(--lp-weight-medium)';
-              return (
-                <tr key={r.key}>
-                  <td style={{ padding: '5px 8px', borderTop: topBorder }}>
-                    <span style={{ color: labelColor, fontWeight: weight }}>
-                      {r.label}
-                    </span>
-                    {r.sub ? (
-                      <span
-                        className="ml-2"
-                        style={{
-                          fontSize: 'var(--lp-text-2xs)',
-                          color: 'var(--lp-text-tertiary)',
-                        }}
-                      >
-                        {r.sub}
-                      </span>
-                    ) : null}
-                  </td>
-                  <td
-                    className="lp-mono"
-                    style={{
-                      ...cellNum,
-                      borderTop: topBorder,
-                      color:
-                        r.kind === 'net' ? netColor(r.pair.projected) : 'var(--lp-text-secondary)',
-                      fontWeight: weight,
-                    }}
-                  >
-                    {formatCurrency(r.pair.projected, cur)}
-                  </td>
-                  <td
-                    className="lp-mono"
-                    style={{
-                      ...cellNum,
-                      borderTop: topBorder,
-                      color: r.kind === 'net' ? netColor(r.pair.actual) : 'var(--lp-text)',
-                      fontWeight: weight,
-                    }}
-                  >
-                    {formatCurrency(r.pair.actual, cur)}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        <div style={{ minWidth: 520 }}>
+          {/* column header */}
+          <div
+            style={{
+              display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 116px 116px 116px', gap: 8,
+              padding: '6px 8px', borderBottom: '1px solid var(--lp-border-subtle)',
+            }}
+          >
+            <span />
+            {[projectedHeader, 'Actual', 'Δ'].map((h) => (
+              <span
+                key={h}
+                style={{
+                  textAlign: 'right', fontSize: 'var(--lp-text-2xs)', fontWeight: 'var(--lp-weight-semibold)',
+                  letterSpacing: 'var(--lp-tracking-caps)', textTransform: 'uppercase', color: 'var(--lp-text-tertiary)',
+                }}
+              >
+                {h}
+              </span>
+            ))}
+          </div>
+
+          <GroupHeader label="Income" />
+          {incomeRows.map((r) => <ReportRow key={r.key} r={r} cur={cur} />)}
+
+          <GroupHeader label="Expenses" />
+          {expenseRows.map((r) => <ReportRow key={r.key} r={r} cur={cur} />)}
+
+          <ReportRow r={netRow} cur={cur} />
+        </div>
       </div>
     </section>
   );

@@ -368,6 +368,8 @@ export default async function BudgetTourPage({
               phaseBoundaries={phaseBoundaries}
               tourCurrency={tourCurrency}
               fxRates={fxRates}
+              versionApproved={versionLocked}
+              versionLabel={viewed ? `v${viewed.version_number}` : null}
             />
           ) : null}
 
