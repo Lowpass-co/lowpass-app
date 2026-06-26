@@ -17,6 +17,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Grid } from '@/components/grid/Grid';
 import { VersionLockModal } from '@/components/budget/versioning/VersionLockModal';
+import type { VersionStatus } from '@/components/budget/versioning/versionApi';
 import { AddReceiptPanel, type AddReceiptResult } from '@/components/budget/AddReceiptPanel';
 import type { Column, GridFx, GridLineApi, GridStatusConfig } from '@/components/grid/types';
 import { budgetToGridSections, gridEditToPatch } from '@/lib/grid/budgetAdapter';
@@ -80,11 +81,16 @@ export interface BudgetGridViewProps {
   /** the locked/viewed version id (for the Unlock-or-New-Version modal). */
   lockedVersionId?: string | null;
   canApprove?: boolean;
+  /** State-fix B1 — the viewed version's status + the editable draft head, so the
+   *  lock modal is status-aware (Current → unlock; historical → switch to draft). */
+  viewedStatus?: VersionStatus;
+  draftVersionId?: string | null;
 }
 
 export function BudgetGridView({
   lines, sections, tourCurrency, tourId,
   versionLocked = false, lockedVersionId = null, canApprove = false,
+  viewedStatus = 'draft', draftVersionId = null,
 }: BudgetGridViewProps) {
   const router = useRouter();
   const { showToast } = useToast();
@@ -403,6 +409,8 @@ export function BudgetGridView({
         versionId={lockedVersionId}
         canApprove={canApprove}
         tourId={tourId}
+        viewedStatus={viewedStatus}
+        draftVersionId={draftVersionId}
         onClose={() => setLockModalOpen(false)}
       />
       {receiptPanel ? (

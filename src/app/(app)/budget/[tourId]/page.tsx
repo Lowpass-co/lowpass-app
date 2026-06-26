@@ -275,10 +275,19 @@ export default async function BudgetTourPage({
   ]);
   const versions = (versionRows ?? []) as unknown as BudgetVersionVm[];
   const canApprove = Boolean(canApproveRaw);
+  // State-fix B1 — ONE viewed version, resolved once + threaded to every tab.
+  // Default landing = the approved Current (the signed-off baseline) if one
+  // exists, else the editable draft head. `?version=` overrides for read-only
+  // history. The draft head (if any) is the editable working copy.
+  const approvedVersion = versions.find((v) => v.status === 'approved') ?? null;
+  const draftHead = activeVersion?.status === 'draft' ? activeVersion : null;
+  const defaultViewed = approvedVersion ?? activeVersion;
   const requestedVersionId = typeof sp.version === 'string' ? sp.version : undefined;
   const viewed =
-    (requestedVersionId && versions.find((v) => v.id === requestedVersionId)) || activeVersion;
+    (requestedVersionId && versions.find((v) => v.id === requestedVersionId)) || defaultViewed;
   const versionLocked = !!viewed && viewed.status !== 'draft';
+  const viewedStatus = (viewed?.status ?? 'draft') as 'draft' | 'approved' | 'superseded';
+  const draftVersionId = draftHead?.id ?? null;
 
   if (viewed) {
     const proposedByLine = await getProposedLineMap(supabase, viewed.id);
@@ -410,6 +419,8 @@ export default async function BudgetTourPage({
                       versionLocked={versionLocked}
                       lockedVersionId={viewed?.id ?? null}
                       canApprove={canApprove}
+                      viewedStatus={viewedStatus}
+                      draftVersionId={draftVersionId}
                     />
                   }
                 />
@@ -422,7 +433,17 @@ export default async function BudgetTourPage({
               BudgetIncomeTab is retained, unmounted, as a fallback until the
               P&L parity is live-verified — remove it then. */}
           {tab === 'income' ? (
-            <BudgetIncomeGrid tourId={tourId} tourCurrency={tourCurrency} initialRows={initialIncome} versionLocked={versionLocked} fxRates={fxRates} />
+            <BudgetIncomeGrid
+              tourId={tourId}
+              tourCurrency={tourCurrency}
+              initialRows={initialIncome}
+              versionLocked={versionLocked}
+              lockedVersionId={viewed?.id ?? null}
+              canApprove={canApprove}
+              viewedStatus={viewedStatus}
+              draftVersionId={draftVersionId}
+              fxRates={fxRates}
+            />
           ) : null}
 
           {/* Budget Phase A §A2 / Phase 0 — Actuals + Reports tabs removed.
@@ -436,7 +457,7 @@ export default async function BudgetTourPage({
               tourCurrency={tourCurrency}
               sections={sections}
               versions={versions}
-              activeVersionId={activeVersion?.id ?? null}
+              viewedVersionId={viewed?.id ?? null}
               canApprove={canApprove}
             />
           ) : null}

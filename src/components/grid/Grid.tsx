@@ -138,6 +138,11 @@ export interface GridProps {
       PROPOSED (`est`) cells render read-only (mirrors the derived-lock); actuals
       stay editable. An edit attempt fires onLockedEdit. Default off. */
   versionLocked?: boolean;
+  /** Which column ids the version-lock applies to. Default `['est']` (Expenses).
+      Income passes its proposed-column ids for the PROJECTED view and `[]` for the
+      Actual view, so actuals never lock and a locked proposed edit fires the modal
+      on BOTH grids. Editing one of these (when versionLocked) → onLockedEdit. */
+  versionLockedCols?: string[];
   /** Raised when the user tries to edit a version-locked proposed cell (→ the
       Unlock-or-New-Version modal lives in the host). */
   onLockedEdit?: () => void;
@@ -193,6 +198,7 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
   clickTwiceToOpen = false,
   tabOpensMenu = false,
   versionLocked = false,
+  versionLockedCols,
   onLockedEdit,
   referenceCols,
 }: GridProps, ref) {
@@ -237,6 +243,10 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
     }),
     [render],
   );
+
+  // Versioning — which columns the lock applies to (default Expenses' `est`).
+  const versionLockedColSet = useMemo(() => new Set(versionLockedCols ?? ['est']), [versionLockedCols]);
+  const isVersionLocked = (key: string) => versionLocked && versionLockedColSet.has(key);
 
   // Income UX — recessed reference block (routing strip). Stable from the prop.
   const refColSet = useMemo(() => new Set(referenceCols ?? []), [referenceCols]);
@@ -430,7 +440,7 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
       if (cdef?.ro) return;
       // Versioning (B2) — proposed (est) is read-only on an approved version;
       // an edit attempt raises the Unlock-or-New-Version modal (host-owned).
-      if (versionLocked && key === 'est') {
+      if (isVersionLocked(key)) {
         onLockedEditRef.current?.();
         return;
       }
@@ -525,7 +535,7 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
         const k = NC()[c];
         const cd = colDef(cols(), k);
         if (!k || cd?.ro) continue;
-        if (versionLocked && k === 'est') continue;
+        if (isVersionLocked(k)) continue;
         if (tsec?.kind === 'derived' && (k === 'est' || k === 'act')) continue;
         if (!wrote) {
           pushUndo();
@@ -1563,7 +1573,7 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
     // (Payroll/Rooming/…) owns them. Versioning (B2): an approved version locks
     // the PROPOSED (est) cell across ALL sections (actuals stay editable) — a
     // click raises the Unlock-or-New-Version modal. (GRID_SPEC §6.)
-    const versionLockedEst = versionLocked && id === 'est';
+    const versionLockedEst = isVersionLocked(id);
     if ((sec.kind === 'derived' && (id === 'est' || id === 'act')) || versionLockedEst) {
       const ci2 = nc.indexOf(id);
       const active2 = ci2 >= 0 && s.fr === fi && s.fc === ci2;
