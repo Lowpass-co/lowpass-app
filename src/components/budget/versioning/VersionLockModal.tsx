@@ -12,7 +12,8 @@
 import { useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useToast } from '@/components/ui/Toast';
-import { unlockVersion, amendVersion, type VersionStatus } from './versionApi';
+import { unlockVersion, amendVersion, type VersionStatus, type BudgetVersionVm } from './versionApi';
+import { RollbackConfirmModal } from './RollbackConfirmModal';
 
 export function VersionLockModal({
   open,
@@ -21,6 +22,7 @@ export function VersionLockModal({
   tourId,
   viewedStatus = 'approved',
   draftVersionId = null,
+  versions = [],
   onClose,
 }: {
   open: boolean;
@@ -33,6 +35,9 @@ export function VersionLockModal({
   viewedStatus?: VersionStatus;
   /** The editable draft head, for the "switch to draft" jump (null = none yet). */
   draftVersionId?: string | null;
+  /** B2 — the full version list, so a historical version can offer "Make this
+   *  version Current" (rollback) with the enumerated affected-versions confirm. */
+  versions?: BudgetVersionVm[];
   onClose: () => void;
 }) {
   const router = useRouter();
@@ -40,11 +45,14 @@ export function VersionLockModal({
   const searchParams = useSearchParams();
   const { showToast } = useToast();
   const [busy, setBusy] = useState(false);
+  const [rollbackOpen, setRollbackOpen] = useState(false);
   if (!open) return null;
 
   // A historical version (not the approved Current) is read-only — there's
-  // nothing to unlock; point the user at the editable draft instead.
+  // nothing to unlock; point the user at the editable draft instead. It can
+  // also be restored as the Current baseline (rollback).
   const historical = viewedStatus !== 'approved';
+  const rollbackTarget = versions.find((v) => v.id === versionId) ?? null;
   const goToDraft = () => {
     const params = new URLSearchParams(searchParams);
     if (draftVersionId) params.set('version', draftVersionId);
@@ -112,13 +120,24 @@ export function VersionLockModal({
             {historical || !canApprove ? 'Close' : 'Cancel'}
           </button>
           {historical ? (
-            <button
-              type="button" onClick={goToDraft} disabled={busy}
-              className="btn-transition"
-              style={{ border: 0, borderRadius: 'var(--lp-radius-md)', padding: '6px 12px', fontSize: 13, fontWeight: 700, color: 'var(--lp-text-inverse)', background: 'var(--lp-orange)', cursor: 'pointer' }}
-            >
-              Switch to the draft
-            </button>
+            <>
+              {canApprove && rollbackTarget ? (
+                <button
+                  type="button" onClick={() => setRollbackOpen(true)} disabled={busy}
+                  className="btn-transition"
+                  style={{ border: '1px solid var(--lp-border)', borderRadius: 'var(--lp-radius-md)', padding: '6px 12px', fontSize: 13, fontWeight: 600, color: 'var(--lp-text)', background: 'var(--lp-surface)', cursor: 'pointer' }}
+                >
+                  Make this version Current
+                </button>
+              ) : null}
+              <button
+                type="button" onClick={goToDraft} disabled={busy}
+                className="btn-transition"
+                style={{ border: 0, borderRadius: 'var(--lp-radius-md)', padding: '6px 12px', fontSize: 13, fontWeight: 700, color: 'var(--lp-text-inverse)', background: 'var(--lp-orange)', cursor: 'pointer' }}
+              >
+                Switch to the draft
+              </button>
+            </>
           ) : canApprove ? (
             <>
               <button
@@ -139,6 +158,13 @@ export function VersionLockModal({
           ) : null}
         </div>
       </div>
+
+      <RollbackConfirmModal
+        open={rollbackOpen}
+        versions={versions}
+        target={rollbackTarget}
+        onClose={() => { setRollbackOpen(false); onClose(); }}
+      />
     </div>
   );
 }

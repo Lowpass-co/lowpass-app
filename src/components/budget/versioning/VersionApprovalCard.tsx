@@ -12,7 +12,8 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/components/ui/Toast';
-import { approveVersion, unlockVersion, amendVersion, type BudgetVersionVm } from './versionApi';
+import { approveVersion, unlockVersion, amendVersion, STATUS_LABEL, type BudgetVersionVm } from './versionApi';
+import { RollbackConfirmModal } from './RollbackConfirmModal';
 
 export function VersionApprovalCard({
   tourId,
@@ -31,6 +32,7 @@ export function VersionApprovalCard({
   const { showToast } = useToast();
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
+  const [rollbackOpen, setRollbackOpen] = useState(false);
 
   // The viewed version drives the card (was `activeVersionId` = the head → the
   // cross-tab disagreement). Approve a draft / Unlock the approved Current / a
@@ -73,7 +75,7 @@ export function VersionApprovalCard({
 
       <div className="mt-3 flex items-center gap-2 text-sm text-lp-text">
         <span className="text-lp-text-secondary">Viewing:</span>
-        {viewed ? <span className="font-medium">v{viewed.version_number} · {viewed.status}</span> : <span>—</span>}
+        {viewed ? <span className="font-medium">v{viewed.version_number} · {STATUS_LABEL[viewed.status]}</span> : <span>—</span>}
         {approved ? <span className="text-xs text-lp-text-tertiary">(Current: v{approved.version_number})</span> : null}
       </div>
 
@@ -82,9 +84,20 @@ export function VersionApprovalCard({
           You don&rsquo;t have budget-approver permission. Ask an approver to lock, unlock, or create a new version.
         </p>
       ) : historical ? (
-        <p className="mt-3 text-xs text-lp-text-tertiary">
-          This is a historical version (read-only). Switch to the {draftHead ? 'draft' : 'current'} version to make changes.
-        </p>
+        <div className="mt-3 space-y-2">
+          <p className="text-xs text-lp-text-tertiary">
+            This is a historical version (read-only). Switch to the {draftHead ? 'draft' : 'current'} version to make changes — or restore it as the Current baseline.
+          </p>
+          <button
+            type="button"
+            disabled={busy || !viewed}
+            onClick={() => setRollbackOpen(true)}
+            className="btn-transition rounded-md px-3 py-1.5 text-sm font-semibold text-lp-text-inverse disabled:opacity-60"
+            style={{ background: 'var(--lp-orange)' }}
+          >
+            Make this version Current
+          </button>
+        </div>
       ) : viewed?.status === 'draft' ? (
         <div className="mt-3 space-y-2">
           <input
@@ -125,6 +138,13 @@ export function VersionApprovalCard({
           </button>
         </div>
       ) : null}
+
+      <RollbackConfirmModal
+        open={rollbackOpen}
+        versions={versions}
+        target={viewed}
+        onClose={() => setRollbackOpen(false)}
+      />
     </section>
   );
 }

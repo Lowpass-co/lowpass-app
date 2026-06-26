@@ -251,6 +251,39 @@ Reference tour: "Warning Support". Templates picker needs a NEW empty tour.
   so Expenses + Payroll/Rooming/demo behave exactly as before (the generalisation is
   opt-in).
 
+## Versioning STATE/NAV fix — B2: rollback (feat/versioning-rollback-b2)
+
+> Migration **219** (widen `budget_versions_status_check` to add **`rolled_back`** +
+> `budget_version_rollback(p_version_id)` RPC). Run `npm run db:migrate`. Status-only
+> changes (no snapshot writes) — the immutability trigger is untouched; the approver
+> gate + the one-approved index already cover it. tsc 0, eslint 0, build green.
+
+- **VER-RB-01 — roll back v3 → v1.** With v1 (superseded), v2 (approved Current), v3
+  (draft head): view v1 → Settings/lock-modal **"Make this version Current"** → the
+  confirm modal lists **"v2 (superseded), v3 (draft — unsaved working copy)"** + the
+  draft-loss warning → confirm → **v1 is Current/locked**, **v2 + v3 badged "rolled
+  back"**, all four tabs agree (lands on v1, proposed locked).
+- **VER-RB-02 — draft loss is warned, not silent.** When an affected version is a
+  **draft**, the confirm modal shows the red **"unsaved draft will be discarded"**
+  gate; it never auto-dismisses.
+- **VER-RB-03 — rolled_back is read-only + viewable.** A `rolled_back` version is
+  selectable in the picker (badged "rolled back"), opens **read-only** (all proposed
+  cells locked — reuses the B1 non-draft lock path), and its lock modal offers
+  **"Switch to the draft"** + **"Make this version Current"**.
+- **VER-RB-04 — roll forward.** After VER-RB-01 (v1 Current, v2/v3 rolled_back),
+  re-select **v3** → Make Current → v3 becomes Current, **v1 + v2 rolled_back**. The
+  `status='approved'` demote clause catches the former Current even though it's a
+  LOWER number than the target.
+- **VER-RB-05 — non-approver blocked.** A non-approver sees **no** rollback action
+  (Settings shows the read-only note; the lock modal omits the button); a direct POST
+  to `…/rollback` returns **403** (`is_budget_approver()` gate, mapped via `_rpc-status`).
+- **VER-RB-06 — one-approved index never trips.** The RPC **demotes first** (former
+  Current + everything newer → rolled_back) **then promotes** the target, so
+  `budget_versions_one_approved_per_tour` never sees two approved rows mid-txn.
+- **VER-RB-07 — guards intact.** Target must be **non-draft** ("cannot roll back to
+  the working draft") and **not already Current** ("already Current"). Frozen
+  snapshots are untouched (status-only writes).
+
 ## Budget Versioning Phase 1 — B2 (UI, feat/budget-versioning-b2)
 
 > Wires the live B1 contract. tsc 0, eslint 0, build green. Chrome-verify on the

@@ -23,7 +23,7 @@ import { toIncomeRows, type IncomeRow } from '@/lib/budget/income';
 import { labelForDayType } from '@/lib/routing/dayType';
 import { useToast } from '@/components/ui/Toast';
 import { VersionLockModal } from '@/components/budget/versioning/VersionLockModal';
-import type { VersionStatus } from '@/components/budget/versioning/versionApi';
+import type { VersionStatus, BudgetVersionVm } from '@/components/budget/versioning/versionApi';
 
 // State-fix B1 — the editable PROPOSED columns (projected view). When the viewed
 // version is locked these fire the Unlock/New-version modal on an edit attempt
@@ -98,6 +98,7 @@ export function BudgetIncomeGrid({
   canApprove = false,
   viewedStatus = 'draft',
   draftVersionId = null,
+  versions = [],
   fxRates = {},
 }: {
   tourId: string;
@@ -112,6 +113,8 @@ export function BudgetIncomeGrid({
   viewedStatus?: VersionStatus;
   /** The editable draft head (for "switch to draft" on a historical version). */
   draftVersionId?: string | null;
+  /** B2 — the full version list, for the historical lock modal's rollback path. */
+  versions?: BudgetVersionVm[];
   /** Phase 2 — per-tour FX map; its keys are the selectable foreign currencies. */
   fxRates?: Record<string, number>;
 }) {
@@ -470,6 +473,7 @@ export function BudgetIncomeGrid({
         tourId={tourId}
         viewedStatus={viewedStatus}
         draftVersionId={draftVersionId}
+        versions={versions}
         onClose={() => setLockModalOpen(false)}
       />
     </section>

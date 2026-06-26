@@ -286,7 +286,7 @@ export default async function BudgetTourPage({
   const viewed =
     (requestedVersionId && versions.find((v) => v.id === requestedVersionId)) || defaultViewed;
   const versionLocked = !!viewed && viewed.status !== 'draft';
-  const viewedStatus = (viewed?.status ?? 'draft') as 'draft' | 'approved' | 'superseded';
+  const viewedStatus = viewed?.status ?? 'draft';
   const draftVersionId = draftHead?.id ?? null;
 
   if (viewed) {
@@ -421,6 +421,7 @@ export default async function BudgetTourPage({
                       canApprove={canApprove}
                       viewedStatus={viewedStatus}
                       draftVersionId={draftVersionId}
+                      versions={versions}
                     />
                   }
                 />
@@ -442,6 +443,7 @@ export default async function BudgetTourPage({
               canApprove={canApprove}
               viewedStatus={viewedStatus}
               draftVersionId={draftVersionId}
+              versions={versions}
               fxRates={fxRates}
             />
           ) : null}
