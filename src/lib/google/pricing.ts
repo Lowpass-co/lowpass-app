@@ -17,7 +17,26 @@
 
    Source to confirm: https://mapsplatform.google.com/pricing/ and
    https://developers.google.com/custom-search/v1/overview#pricing
-   Last set: 2026-06-07 (mark FRAGILE — re-check at next billing review).
+
+   ⚠️ THESE ARE LIST-PRICE ESTIMATES FOR CAPPING + DASHBOARD VISIBILITY —
+   NOT the invoice. Since 2025-03-01 Google replaced the pooled $200/mo
+   credit with a PER-SKU monthly free tier: 10,000 free calls/month for
+   each Essentials SKU (Directions, Places Autocomplete, Place Details,
+   Geocoding all qualify). So the REAL charge for a SKU is typically $0
+   until that SKU alone exceeds 10k calls in a month — the dashboard's
+   running total over-states spend at low volume. The estimates exist to
+   (a) enforce the internal cap and (b) flag when a SKU approaches its free
+   limit at scale (hundreds/thousands of workspaces).
+
+   Verified live against developers.google.com/maps/billing-and-pricing on
+   2026-06-25 — all figures below match Google's current list prices.
+   FRAGILE — re-check at next billing review.
+
+   Note on Places Autocomplete: the figure below is the Per-Request SKU.
+   With a session token (F2 — VenueAutocomplete / PlacesAutocompleteInput
+   thread one), the typing session + its Place Details call bill as a
+   single Per-Session SKU (Essentials, unlimited free), so a real
+   session-tokened lookup typically costs $0.
    ============================================================ */
 
 export type GoogleEndpoint =
@@ -38,10 +57,10 @@ export type GoogleEndpoint =
 
 /** Representative list price, USD per 1,000 calls (see header — approximate). */
 const USD_PER_1000: Record<GoogleEndpoint, number> = {
-  'google.geocode': 5, // Geocoding API
-  'google.directions': 5, // Directions API (basic)
-  'google.places.autocomplete': 2.83, // Autocomplete — per request (session pricing varies)
-  'google.places.details': 17, // Place Details (Basic+Contact+Atmosphere mask ≈ higher; list ~$17)
+  'google.geocode': 5, // Geocoding API — Essentials, $5/1k (verified 2026-06-25)
+  'google.directions': 5, // Directions — Essentials, $5/1k (verified 2026-06-25)
+  'google.places.autocomplete': 2.83, // Autocomplete Per-Request — Essentials, $2.83/1k (verified 2026-06-25; Per-Session is free, see header)
+  'google.places.details': 17, // Place Details — Pro tier $17/1k (our field mask incl. contact+atmosphere → Pro; verified 2026-06-25)
   'google.places.nearby': 32, // Nearby Search
   'google.places.airports': 2.83, // Autocomplete-backed airport pick
   'google.cse.find-image': 5, // Custom Search JSON API ($5 / 1000, 10k/day cap)
