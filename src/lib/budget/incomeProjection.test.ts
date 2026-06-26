@@ -57,6 +57,22 @@ const base: ProjectionInput = {
   check('VS tiered: full formula incl 30% WH', approx(out.preTaxOverage! * (1 - 0.3), 2009.735));
 }
 
+/* ---- 1b. O2 Apollo (Adam's live case — projection FIX repro) ----------- */
+// Cap 3500 × 90% = 3150 tix. Face 40, tax 8% → perTicket 36.8. No threshold →
+// share = 0.80 × 3150 × 36.8 = 92,736. Guarantee 1000 →
+// overage(pre-WH) = max(0, 92736 − 1000) × 0.65 = 91,736 × 0.65 = 59,628.40
+// (NOT 0, NOT ~100). WH 10% applied downstream by the P&L → post-WH 53,665.56.
+{
+  const input: ProjectionInput = {
+    ...base, capacity: 3500, sellThru: 0.9, faceValue: 40, dealType: 'VS',
+    dealPct: 0.8, preTaxGuarantee: 1000,
+  };
+  check('O2 Apollo: artist share', approx(artistShare(input, cfg.taxPct)!, 92736));
+  const out = projectIncome(input, cfg);
+  check('O2 Apollo: overage pre-WH', approx(out.preTaxOverage!, 59628.4));
+  check('O2 Apollo: overage post-10%-WH', approx(out.preTaxOverage! * (1 - 0.1), 53665.56));
+}
+
 /* ---- 2. VS, TIERED but tickets BELOW threshold → flat base % ---------- */
 // Cap 300 × 80% = 240 ≤ 275 → share = 0.55 × 240 × 27.6 = 3643.2
 {

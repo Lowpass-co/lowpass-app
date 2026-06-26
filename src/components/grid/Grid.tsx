@@ -1235,6 +1235,11 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
   // figure in the row's currency; a foreign currency renders red + a ≈
   // converted tag/tooltip in the display currency (C1).
   const moneyContent = (row: Row, id: string) => {
+    // A money cell whose value is EXPLICITLY null/undefined renders "—" (blank),
+    // distinct from a real 0 ("£0"). Used by Income's computed outputs to show
+    // "not yet computable" without a misleading literal 0. Existing callers pass
+    // numbers (never null), so their cells are unaffected.
+    if (row[id] === null || row[id] === undefined) return '—';
     const cc = (row.cur as string) || fx.displayCurrency;
     const raw = Number(row[id]) || 0;
     if (cc !== fx.displayCurrency) {

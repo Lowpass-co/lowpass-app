@@ -445,6 +445,11 @@ export default async function BudgetTourPage({
               draftVersionId={draftVersionId}
               versions={versions}
               fxRates={fxRates}
+              projectionDefaults={{
+                sellThru: budgetSettings?.default_sell_thru != null ? Number(budgetSettings.default_sell_thru) : null,
+                dollarsPerHead: budgetSettings?.default_dollars_per_head != null ? Number(budgetSettings.default_dollars_per_head) : null,
+                merchFeePct: budgetSettings?.default_merch_fee_pct != null ? Number(budgetSettings.default_merch_fee_pct) : null,
+              }}
             />
           ) : null}
 

@@ -199,8 +199,14 @@ export async function POST(request: Request) {
   const vipPrice = nullableMerge(body.vip_price, existing?.vip_price);
 
   // Output value columns — start from the merged value, then let the engine
-  // materialise them when a projection INPUT changed (and the user didn't also
-  // hand-type the output in the same write — a direct edit always wins).
+  // materialise them when a projection INPUT changed.
+  //
+  // PROJECTION-FIX: the outputs are COMPUTED BY DEFAULT. We recompute whenever an
+  // input changes — regardless of whether the body also carries the output. The
+  // old gate (`&& body.pre_tax_overage === undefined`) made a stray 0 in
+  // pre_tax_overage read as a manual override and silently froze the formula
+  // (Adam's bug). The grid now renders the outputs read-only (computed-locked), so
+  // they're never hand-typed here; a deliberate override is a separate feature (#28).
   let preTaxOverage = numMerge(body.pre_tax_overage, existing?.pre_tax_overage);
   let merchIncome = numMerge(body.merch_income, existing?.merch_income);
   let vipIncome = numMerge(body.vip_income, existing?.vip_income);
@@ -210,9 +216,9 @@ export async function POST(request: Request) {
   const OVERAGE_INPUTS = ['capacity', 'est_sell_thru', 'face_value', 'deal_type', 'deal_pct', 'deal_threshold', 'deal_pct_above', 'withholding_pct', 'pre_tax_guarantee'];
   const MERCH_INPUTS = ['capacity', 'est_sell_thru', 'dollars_per_head', 'merch_fee_pct'];
   const VIP_INPUTS = ['vip_tickets', 'vip_price'];
-  const recomputeOverage = has(OVERAGE_INPUTS) && body.pre_tax_overage === undefined;
-  const recomputeMerch = has(MERCH_INPUTS) && body.merch_income === undefined;
-  const recomputeVip = has(VIP_INPUTS) && body.vip_income === undefined;
+  const recomputeOverage = has(OVERAGE_INPUTS);
+  const recomputeMerch = has(MERCH_INPUTS);
+  const recomputeVip = has(VIP_INPUTS);
 
   if (recomputeOverage || recomputeMerch || recomputeVip) {
     // Per-tour defaults + config (UNVERSIONED) feed the engine; per-show inputs
@@ -249,10 +255,14 @@ export async function POST(request: Request) {
       },
     );
     // The engine writes a PRE-withholding overage; post_tax_overage (below)
-    // applies WH — exactly once. null = engine wrote nothing (PLUS/FLAT/short inputs).
-    if (recomputeOverage && out.preTaxOverage !== null) preTaxOverage = out.preTaxOverage;
-    if (recomputeMerch && out.merchIncome !== null) merchIncome = out.merchIncome;
-    if (recomputeVip && out.vipIncome !== null) vipIncome = out.vipIncome;
+    // applies WH — exactly once. The engine returns null for PLUS / FLAT / no-deal
+    // / insufficient inputs → we CLEAR the output to 0 (not leave it stale), so a
+    // former-VS overage can't leak into the P&L after the deal type changes. The
+    // grid then shows a blank "—" (not £0) via its own computability check; a
+    // computed 0 (VS where the guarantee beats the %) stays £0.
+    if (recomputeOverage) preTaxOverage = out.preTaxOverage ?? 0;
+    if (recomputeMerch) merchIncome = out.merchIncome ?? 0;
+    if (recomputeVip) vipIncome = out.vipIncome ?? 0;
   }
 
   const payload: Record<string, unknown> = {

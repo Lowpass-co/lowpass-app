@@ -330,7 +330,7 @@ function ProjectionDefaultsCard({ tourId, tourCurrency }: { tourId: string; tour
 
   const pctRow = (key: keyof ProjDefaults, label: string, hint: string) => (
     <div className="flex items-center gap-3" key={key}>
-      <span className="w-32 shrink-0" style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text)' }}>{label}</span>
+      <span className="w-32 shrink-0" title={hint} style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text)', cursor: 'help' }}>{label}</span>
       <div className="flex items-center gap-1">
         <input
           type="number" min={0} step={0.5}
@@ -371,8 +371,8 @@ function ProjectionDefaultsCard({ tourId, tourCurrency }: { tourId: string; tour
           <span style={{ fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text-tertiary)' }}>net per head</span>
         </div>
         {pctRow('default_merch_fee_pct', 'Merch fee', 'avg fee on merch')}
-        {pctRow('overage_haircut', 'Overage haircut', 'banked share of projected overage')}
-        {pctRow('overage_tax_pct', 'Box-office tax', 'taken off the top of gross')}
+        {pctRow('overage_haircut', 'Overage haircut', 'Overage haircut — projected overage is discounted to this fraction (default 65%) to budget conservatively.')}
+        {pctRow('overage_tax_pct', 'Box-office tax', 'Box-office tax — taken off the top of gross box office before the deal split (default 8%).')}
       </div>
     </section>
   );

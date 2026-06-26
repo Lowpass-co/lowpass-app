@@ -63,13 +63,13 @@ const HEADER_TIP: Record<string, string> = {
   dealabove: 'Tiered VS: the escalated rate on tickets above the threshold.',
   wh: 'Withholding tax %. Applied to guarantee + overage in the P&L.',
   posttax: 'Guarantee after withholding (pre_tax × (1 − WH%)). Computed.',
-  overage: 'Projected for VS deals from the inputs (editable). Pre-withholding.',
-  perhead: 'Net merch spend per head. Blank → tour default (Settings).',
-  feepct: 'Average merch fee %. Blank → tour default (Settings).',
-  merch: 'Cap × Sell-thru × $/head × Fee%. Computed (editable).',
+  overage: 'ƒ Computed (read-only) for VS deals, pre-withholding. Blank until the inputs are complete.',
+  perhead: 'Net merch spend per head. Blank inherits the tour default (Settings → Projection defaults); type a value to override this show.',
+  feepct: 'Average merch fee %. Blank inherits the tour default (Settings → Projection defaults); type a value to override this show.',
+  merch: 'ƒ Computed (read-only): Cap × Sell-thru × $/head × Fee%. Blank until the inputs are complete.',
   viptix: 'Number of VIP tickets.',
   vipprice: 'VIP ticket price, in the show’s currency.',
-  vip: 'VIP tickets × price. Computed (editable).',
+  vip: 'ƒ Computed (read-only): VIP tickets × price. Blank until both are set.',
   guarantee: 'Pre-tax guaranteed fee for the show.',
 };
 
@@ -100,6 +100,7 @@ export function BudgetIncomeGrid({
   draftVersionId = null,
   versions = [],
   fxRates = {},
+  projectionDefaults,
 }: {
   tourId: string;
   tourCurrency: string;
@@ -117,9 +118,29 @@ export function BudgetIncomeGrid({
   versions?: BudgetVersionVm[];
   /** Phase 2 — per-tour FX map; its keys are the selectable foreign currencies. */
   fxRates?: Record<string, number>;
+  /** PROJECTION-FIX — the tour's projection defaults (Settings, FRACTIONS), so the
+   *  grid knows whether merch/overage are computable (→ value vs blank "—") and can
+   *  signal that a blank $/head / fee% inherits the default. */
+  projectionDefaults?: { sellThru: number | null; dollarsPerHead: number | null; merchFeePct: number | null };
 }) {
   const { showToast } = useToast();
   const [lockModalOpen, setLockModalOpen] = useState(false);
+  const defSellThru = projectionDefaults?.sellThru ?? null;
+  const defPerHead = projectionDefaults?.dollarsPerHead ?? null;
+  const defFeePct = projectionDefaults?.merchFeePct ?? null;
+  // PROJECTION-FIX — is each output computable from this row's inputs (+ tour
+  // defaults)? A not-computable output renders blank "—", never a stray 0.
+  const overageComputable = useCallback(
+    (r: IncomeRow) =>
+      r.deal_type === 'VS' && r.capacity != null && (r.est_sell_thru != null || defSellThru != null) && r.face_value != null && r.deal_pct != null,
+    [defSellThru],
+  );
+  const merchComputable = useCallback(
+    (r: IncomeRow) =>
+      r.capacity != null && (r.est_sell_thru != null || defSellThru != null) && (r.dollars_per_head != null || defPerHead != null) && (r.merch_fee_pct != null || defFeePct != null),
+    [defSellThru, defPerHead, defFeePct],
+  );
+  const vipComputable = useCallback((r: IncomeRow) => r.vip_tickets != null && r.vip_price != null, []);
   const searchParams = useSearchParams();
   const native = (tourCurrency || 'GBP').toUpperCase();
   // #4 — the picker offers the tour currency + a standard ISO list + any currency
@@ -234,13 +255,16 @@ export function BudgetIncomeGrid({
             // jump or full-grid flash. The Grid is ref-sourced post-mount.
             const updated = (await res.json().catch(() => null)) as Record<string, unknown> | null;
             if (updated) {
-              const overage = num(updated.pre_tax_overage);
-              const merch = num(updated.merch_income);
-              const vip = num(updated.vip_income);
+              const u = updated as unknown as IncomeRow;
+              // Patch the cell to the computed value, or null → "—" when the row
+              // isn't computable (matches the data-mapping blank logic — no stray 0).
+              const overage = overageComputable(u) ? num(updated.pre_tax_overage) : null;
+              const merch = merchComputable(u) ? num(updated.merch_income) : null;
+              const vip = vipComputable(u) ? num(updated.vip_income) : null;
               gridRef.current?.updateRowCells(routingId, { overage, merch, vip });
               // keep React state coherent for the next legitimate remount (view switch).
               setRows((prev) => prev?.map((r) => (r.routing_id === routingId
-                ? { ...r, pre_tax_overage: overage, merch_income: merch, vip_income: vip }
+                ? { ...r, pre_tax_overage: num(updated.pre_tax_overage), merch_income: num(updated.merch_income), vip_income: num(updated.vip_income) }
                 : r)) ?? prev);
             }
           }
@@ -250,7 +274,7 @@ export function BudgetIncomeGrid({
           void load();
         });
     },
-    [patchFor, showToast, load, native, fxRates],
+    [patchFor, showToast, load, native, fxRates, overageComputable, merchComputable, vipComputable],
   );
 
   const columns: Column[] = useMemo(() => {
@@ -276,6 +300,10 @@ export function BudgetIncomeGrid({
       // Phase 3 — projection INPUT cell (number).
       const pNum = (id: string, label: string, w = 72, min = 56): Column =>
         ({ id, label, type: 'number', w, min, resize: true });
+      // PROJECTION-FIX — computed OUTPUT cell: read-only (computed-locked, ƒ
+      // header). The engine drives it; a stray value can never suppress the
+      // formula. (Deliberate override is #28.)
+      const cMoney = (id: string, label: string): Column => ({ ...money(id, label), ro: true });
       return [
         idx,
         ...routingCols,
@@ -293,17 +321,16 @@ export function BudgetIncomeGrid({
         pMoney('guarantee', 'Guarantee'),
         pNum('wh', 'Withhold %', 96, 76),
         { id: 'posttax', label: 'Post-tax', type: 'calc', w: 120, min: 90, resize: true, calc: (r: Row) => postTax(num(r.guarantee), num(r.wh)) },
-        // Overage — materialised by the engine for VS; editable (override). Post-tax
-        // (WH applied) flows into the Total + the P&L, mirroring the guarantee block.
-        pMoney('overage', 'Overage'),
-        // ── merch inputs → merch ──
+        // Overage — engine-computed for VS (read-only); blank "—" until computable.
+        cMoney('overage', 'Overage'),
+        // ── merch inputs → merch (computed) ──
         pMoney('perhead', '$/Head'),
         pNum('feepct', 'Fee %'),
-        pMoney('merch', 'Merch'),
-        // ── VIP inputs → VIP ──
+        cMoney('merch', 'Merch'),
+        // ── VIP inputs → VIP (computed) ──
         pNum('viptix', 'VIP Tix'),
         pMoney('vipprice', 'VIP £'),
-        pMoney('vip', 'VIP'),
+        cMoney('vip', 'VIP'),
         {
           id: 'total',
           label: 'Total',
@@ -371,7 +398,12 @@ export function BudgetIncomeGrid({
       return view === 'projected'
         ? {
             _uid: r.routing_id, cur: rowCur, currency: rowCur, ...routingFields(r),
-            guarantee: r.pre_tax_guarantee, wh: r.withholding_pct, overage: r.pre_tax_overage, merch: r.merch_income, vip: r.vip_income,
+            guarantee: r.pre_tax_guarantee, wh: r.withholding_pct,
+            // PROJECTION-FIX — computed outputs: the value when computable, else
+            // null → the grid renders "—" (NOT a literal 0). Kills the persistent 0.
+            overage: overageComputable(r) ? r.pre_tax_overage : null,
+            merch: merchComputable(r) ? r.merch_income : null,
+            vip: vipComputable(r) ? r.vip_income : null,
             // Phase 3 — projection inputs (null → blank cell, falls back to tour default).
             cap: r.capacity, sellthru: r.est_sell_thru, face: r.face_value,
             deal: r.deal_type ?? '', dealpct: r.deal_pct, dealthr: r.deal_threshold, dealabove: r.deal_pct_above,
@@ -380,7 +412,7 @@ export function BudgetIncomeGrid({
         : { _uid: r.routing_id, cur: rowCur, currency: rowCur, ...routingFields(r), guarantee: r.actual_guarantee, overage: r.actual_overage, merch: r.actual_merch, vip: r.actual_vip, deductions: r.actual_deductions };
     });
     return [{ name: 'Shows', kind: 'normal', _uid: 'income', rows: gridRows }];
-  }, [rows, view, native]);
+  }, [rows, view, native, overageComputable, merchComputable, vipComputable]);
 
   // #2 — make the active view unmistakable: a one-line context cue + a per-view
   // accent so a glance tells you whether you're looking at forecast or settled
@@ -388,7 +420,7 @@ export function BudgetIncomeGrid({
   const isProjected = view === 'projected';
   const viewAccent = isProjected ? 'var(--lp-orange)' : 'var(--color-lp-status-complete)';
   const viewCue = isProjected
-    ? 'Projected — forecast from the deal inputs (VS overage, merch & VIP are computed, marked ƒ).'
+    ? 'Projected — forecast from the deal inputs. Overage, Merch & VIP (ƒ) are computed read-only; blank "—" = inputs incomplete.'
     : 'Actual — settled figures from reconciliation; deductions reduce the net.';
 
   return (

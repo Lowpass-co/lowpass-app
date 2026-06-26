@@ -251,6 +251,40 @@ Reference tour: "Warning Support". Templates picker needs a NEW empty tour.
   so Expenses + Payroll/Rooming/demo behave exactly as before (the generalisation is
   opt-in).
 
+## Income projection FIX — outputs compute reliably (fix/income-projection-outputs)
+
+> No engine-math change (`incomeProjection.ts` verified, +O2 Apollo case → 23/23).
+> Grid contract + output-cell lock + persistent-0 fix. No schema. tsc 0, eslint 0,
+> build green.
+
+- **INC-PFX-01 — O2 Apollo computes (the repro).** Projected view, one show: Cap
+  3500, Sell-thru 90, Face £40, Deal **VS**, Deal % 80, Withhold 10, Guarantee
+  £1000 (defaults haircut 0.65 / tax 0.08). The **Overage** cell shows **≈£59,628**
+  (pre-WH; engine `max(0, 0.8×3150×36.8 − 1000)×0.65`) — **not 0, not ~100**.
+- **INC-PFX-02 — outputs are computed-locked (read-only).** Overage / Merch / VIP
+  in the Projected view are **read-only** (ƒ header). You can't type into them; a
+  stray value can never suppress the formula. (Deliberate hand-override is #28.)
+- **INC-PFX-03 — no persistent 0; blank "—".** A not-yet-computable output shows
+  **"—"**, not £0: Overage is blank until `Deal=VS` + Cap/Sell/Face/Deal% are set;
+  Merch until Cap/Sell + $/head + Fee% (per-show or tour default); VIP until both
+  VIP tix + price. A genuine computed 0 (guarantee beats the %) still shows £0.
+- **INC-PFX-04 — recompute on any input, no override-freeze.** Editing ANY input
+  (Cap/Sell/Face/Deal/Deal%/@Tix/↑%/Withhold/Guarantee/$Head/Fee/VIP tix/price)
+  refreshes the materialised cell. The route recomputes **by default** (dropped the
+  `body.pre_tax_overage === undefined` gate) — a stored 0 no longer reads as a
+  manual override. Switching VS→PLUS/FLAT **clears** the overage (no stale leak
+  into the P&L).
+- **INC-PFX-05 — $/head + fee% live in one place.** The grid `$/Head` and `Fee %`
+  columns are **per-show overrides**; blank **inherits the tour default** (Settings
+  → Projection defaults) — the header tooltip says so. Not two independent copies
+  of the same number.
+- **INC-PFX-06 — haircut/tax clarity.** Settings → Projection defaults: hovering
+  **Overage haircut** / **Box-office tax** shows the explainer tooltip (default 65%
+  discount / 8% off the top).
+- **INC-PFX-07 — P&L parity.** `computeBudgetPnl` still reads the materialised
+  `pre_tax_overage`/`merch_income`/`vip_income`; the income breakdown + Net are
+  unchanged from the computed values. P1/P2 + the versioning lock unaffected.
+
 ## Versioning STATE/NAV fix — B2: rollback (feat/versioning-rollback-b2)
 
 > Migration **219** (widen `budget_versions_status_check` to add **`rolled_back`** +
