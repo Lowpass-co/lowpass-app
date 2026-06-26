@@ -1250,3 +1250,14 @@
 .lp-grid .hc.ref-col-end {
   border-right: 2px solid var(--lp-border-strong);
 }
+
+/* ============================================================
+   Receipts B1.5 — file-drop target. A row being hovered with a FILE drag (an
+   image/PDF receipt) highlights so you know where it'll land. Opt-in via the
+   onFileDropToRow prop (budget Expenses only); no other grid sets it.
+   ============================================================ */
+.lp-grid .row.file-drop-target {
+  background: color-mix(in srgb, var(--lp-orange) 9%, transparent);
+  box-shadow: inset 0 0 0 2px var(--lp-orange);
+  border-radius: var(--lp-radius-sm);
+}

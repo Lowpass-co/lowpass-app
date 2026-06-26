@@ -39,6 +39,10 @@ const STATUS_CONFIG: GridStatusConfig = { options: STATUS_OPTIONS, colors: STATU
 const CUR_SYMBOL: Record<string, string> = { GBP: '£', USD: '$', EUR: '€', CAD: 'C$', AUD: 'A$', JPY: '¥' };
 const CURRENCIES = ['GBP', 'USD', 'EUR', 'CAD', 'AUD', 'JPY'];
 
+// Receipts B1.5 — drop-onto-grid guard (mirrors the upload route's ALLOWED + 10MB).
+const RECEIPT_ALLOWED_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+const RECEIPT_MAX_SIZE = 10 * 1024 * 1024;
+
 /** BUD-01 — receipt chip label: the receipt's own number, plus the vendor when
  *  set (attach-created receipts are blank, so this is graceful when empty).
  *  Falls back to 'Receipt' only if the number is somehow missing. */
@@ -102,8 +106,26 @@ export function BudgetGridView({
   // it and stashes a resolver; the panel's onClose resolves the awaiting promise
   // so the slide-over can reflect the saved receipt.
   const [receiptPanel, setReceiptPanel] = useState<
-    { lineId: string; txnId?: string; resolve: (r: AddReceiptResult | null) => void } | null
+    { lineId: string; txnId?: string; file?: File; resolve: (r: AddReceiptResult | null) => void } | null
   >(null);
+
+  // Receipts B1.5 — drag a receipt image/PDF straight onto a line-item row →
+  // open the SAME AddReceiptPanel scrape flow, pre-targeted to that line + the
+  // file already in the pipeline. Guard mirrors AddReceiptPanel's upload limits.
+  const handleFileDropToRow = useCallback(
+    (lineId: string, file: File) => {
+      if (!RECEIPT_ALLOWED_TYPES.includes(file.type)) {
+        showToast('Drop a receipt image (JPG/PNG/WebP) or PDF.', 'error');
+        return;
+      }
+      if (file.size > RECEIPT_MAX_SIZE) {
+        showToast('Receipt too large (max 10MB).', 'error');
+        return;
+      }
+      setReceiptPanel({ lineId, file, resolve: () => {} });
+    },
+    [showToast],
+  );
   // `native` = the tour's own currency (fallback for currency-less lines).
   // `display` = the page DISPLAY selector (?display=), shared with the burn bar
   // + export controls. Flipping it re-renders this client component (via
@@ -405,6 +427,7 @@ export function BudgetGridView({
         onDeleteRow={onDeleteRow}
         onReorderRow={onReorderRow}
         onReorderSection={onReorderSection}
+        onFileDropToRow={handleFileDropToRow}
         lineApi={lineApi}
       />
       <VersionLockModal
@@ -423,6 +446,7 @@ export function BudgetGridView({
           tourCurrency={tourCurrency}
           lineId={receiptPanel.lineId}
           txnId={receiptPanel.txnId}
+          initialFile={receiptPanel.file}
           onClose={(result) => {
             receiptPanel.resolve(result);
             setReceiptPanel(null);
