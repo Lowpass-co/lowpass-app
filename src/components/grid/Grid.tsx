@@ -151,6 +151,12 @@ export interface GridProps {
       `ref-col` class + a divider after the last. Additive, opt-in — default
       undefined → every other consumer unchanged. */
   referenceCols?: string[];
+  /** Receipts B1.5 — opt-in file-drop onto a row. When set, a FILE (image/PDF)
+      dragged over a row highlights it; on drop the host gets (rowUid, file).
+      Default undefined → no behaviour change (Payroll/Rooming/Income/Channel-List
+      unaffected). Uses HTML5 drag-drop (dataTransfer.files) — entirely separate
+      from the pointer-based row reorder, which is untouched. */
+  onFileDropToRow?: (rowUid: string, file: File) => void;
 }
 
 /** Imperative handle (opt-in via ref). Lets a host patch specific cells by row
@@ -201,6 +207,7 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
   versionLockedCols,
   onLockedEdit,
   referenceCols,
+  onFileDropToRow,
 }: GridProps, ref) {
   const onLockedEditRef = useRef(onLockedEdit);
   onLockedEditRef.current = onLockedEdit;
@@ -247,6 +254,35 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
   // Versioning — which columns the lock applies to (default Expenses' `est`).
   const versionLockedColSet = useMemo(() => new Set(versionLockedCols ?? ['est']), [versionLockedCols]);
   const isVersionLocked = (key: string) => versionLocked && versionLockedColSet.has(key);
+
+  // Receipts B1.5 — which row a FILE is being dragged over (for the highlight).
+  // A ref + render() (not state) so it never causes a stale-closure re-render
+  // race with the grid's own reducer. Inert unless onFileDropToRow is set.
+  const fileDragUidRef = useRef<string | null>(null);
+  const hasFileDrag = (e: React.DragEvent) => Array.from(e.dataTransfer.types || []).includes('Files');
+  /** HTML5 file-drop handlers for a row (separate from pointer-based reorder).
+   *  Returns {} when the prop is off, so non-budget grids are untouched. */
+  const fileDropProps = (uid?: string): React.HTMLAttributes<HTMLDivElement> => {
+    if (!onFileDropToRow || !uid) return {};
+    return {
+      onDragOver: (e) => {
+        if (!hasFileDrag(e)) return; // ignore text / row-reorder drags
+        e.preventDefault();
+        if (fileDragUidRef.current !== uid) { fileDragUidRef.current = uid; render(); }
+      },
+      onDragLeave: () => {
+        if (fileDragUidRef.current === uid) { fileDragUidRef.current = null; render(); }
+      },
+      onDrop: (e) => {
+        if (!hasFileDrag(e)) return;
+        e.preventDefault();
+        fileDragUidRef.current = null;
+        render();
+        const f = e.dataTransfer.files?.[0];
+        if (f) onFileDropToRow(uid, f);
+      },
+    };
+  };
 
   // Income UX — recessed reference block (routing strip). Stable from the prop.
   const refColSet = useMemo(() => new Set(referenceCols ?? []), [referenceCols]);
@@ -1727,7 +1763,11 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
             {rows.map(({ row, ri }) => {
               const fi = f++;
               return (
-                <div className="row" key={row._uid ?? `${st}-${ri}`}>
+                <div
+                  className={`row${fileDragUidRef.current === row._uid ? ' file-drop-target' : ''}`}
+                  key={row._uid ?? `${st}-${ri}`}
+                  {...fileDropProps(row._uid ? String(row._uid) : undefined)}
+                >
                   {vis.map((c) => wrapCell(renderCell({ kind: 'normal', _si: 0, name: '', rows: [] }, row, ri, c, fi, c.id), c.id))}
                 </div>
               );
@@ -1809,7 +1849,11 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
           {visRows.map(({ row, ri }) => {
             const fi = isFormula(sec) ? -1 : f;
             const node = (
-              <div className={`row${row._rowClass ? ` ${String(row._rowClass)}` : ''}`} data-si={si} data-ri={ri} data-uid={row._uid} key={row._uid ?? ri}>
+              <div
+                className={`row${row._rowClass ? ` ${String(row._rowClass)}` : ''}${fileDragUidRef.current === row._uid ? ' file-drop-target' : ''}`}
+                data-si={si} data-ri={ri} data-uid={row._uid} key={row._uid ?? ri}
+                {...fileDropProps(row._uid ? String(row._uid) : undefined)}
+              >
                 {vis.map((c) => wrapCell(renderCell(sec, row, ri, c, fi, c.id), c.id))}
               </div>
             );

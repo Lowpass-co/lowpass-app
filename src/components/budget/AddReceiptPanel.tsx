@@ -15,7 +15,7 @@
    All API work goes through the shared useReceiptScan seam.
    ============================================ */
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { FileText, Loader2, Upload, X } from 'lucide-react';
 import {
   useReceiptScan,
@@ -48,12 +48,16 @@ export function AddReceiptPanel({
   tourCurrency,
   lineId,
   txnId,
+  initialFile,
   onClose,
 }: {
   tourId: string;
   tourCurrency: string;
   lineId: string;
   txnId?: string;
+  /** Receipts B1.5 — a file already in hand (dragged onto the grid row). When set,
+   *  the panel skips the pick step and auto-starts the scrape pipeline on mount. */
+  initialFile?: File | null;
   onClose: (result: AddReceiptResult | null) => void;
 }) {
   const scan = useReceiptScan(tourId, tourCurrency);
@@ -120,6 +124,19 @@ export function AddReceiptPanel({
     },
     [handleFile],
   );
+
+  // B1.5 — a file dragged onto the grid row arrives via `initialFile`: auto-start
+  // the scrape pipeline once on mount (skip the pick step).
+  const startedRef = useRef(false);
+  useEffect(() => {
+    if (initialFile && !startedRef.current) {
+      startedRef.current = true;
+      // One-shot kickoff of the async scrape after mount (it sets state via its
+      // own phases); the set-state-in-effect rule is intentionally suppressed.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      void handleFile(initialFile);
+    }
+  }, [initialFile, handleFile]);
 
   // ── confirm → persist fields + back the amount with a transaction ──
   const onSave = useCallback(async () => {

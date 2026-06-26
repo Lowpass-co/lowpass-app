@@ -285,6 +285,24 @@ Reference tour: "Warning Support". Templates picker needs a NEW empty tour.
   `pre_tax_overage`/`merch_income`/`vip_income`; the income breakdown + Net are
   unchanged from the computed values. P1/P2 + the versioning lock unaffected.
 
+## Receipts B1.5 — drag a receipt onto a budget row (feat/receipts-b15-drag)
+
+> No schema. Reuses the B1 AddReceiptPanel + useReceiptScan seam (no second OCR
+> path). Opt-in `onFileDropToRow` on `<Grid>` (default off → Payroll/Rooming/
+> Income/Channel-List unchanged). tsc 0, eslint 0, build green.
+
+- **RCP-DRAG-01 — drag an image onto a line → scrape → backs that line.** Budget →
+  **Expenses**: drag a receipt image from the desktop over a line-item row → the row
+  **highlights** (orange ring). Drop → the **AddReceiptPanel** opens pre-targeted to
+  that line with the file **already scanning** (image → Claude Vision OCR prefill;
+  PDF → stored, no scan). Confirm → the amount lands as a **transaction on that
+  line** (reconciled into the actual — never a direct `actual_cost` write, same
+  invariant as B1) + the receipt links with a thumbnail.
+- **RCP-DRAG-02 — guard + no regressions.** Non-image/PDF or >10MB → toast, panel
+  doesn't open. A text / row-reorder drag is unaffected (file-drop only fires for
+  `dataTransfer.types` containing `Files`; row reorder is pointer-based). Other
+  product grids don't accept drops (the prop is opt-in, Expenses-only).
+
 ## Versioning STATE/NAV fix — B2: rollback (feat/versioning-rollback-b2)
 
 > Migration **219** (widen `budget_versions_status_check` to add **`rolled_back`** +
