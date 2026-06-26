@@ -293,7 +293,9 @@ export function BudgetIncomeGrid({
       money('vip', 'VIP'),
       // Phase 1 — settlement-fed deductions (read-only; reduces the actual total).
       { id: 'deductions', label: 'Deductions', type: 'money', w: 120, min: 90, resize: true, ro: true },
-      { id: 'total', label: 'Total', type: 'calc', w: 130, min: 100, resize: true, calc: (r: Row) => num(r.guarantee) + num(r.overage) + num(r.merch) + num(r.vip) - num(r.deductions) },
+      // Actuals total IS net (guarantee + overage + merch + vip − deductions) —
+      // labelled "Net" to match settlement's reconciled_net. Projected stays "Total".
+      { id: 'total', label: 'Net', type: 'calc', w: 130, min: 100, resize: true, calc: (r: Row) => num(r.guarantee) + num(r.overage) + num(r.merch) + num(r.vip) - num(r.deductions) },
     ];
   }, [view, versionLocked, currencyOptions]);
 

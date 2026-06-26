@@ -437,6 +437,11 @@ write back to the grid row and are **undoable (⌘Z)**.
   globals.css. See `docs/handover/CC_GRID_FIXPASS_3.md`. (Earlier guess —
   "focused cell not flagged active" — was wrong; the class applies, the token
   is dead.)
+- **GRID-36** — Backspace/Delete now respects read-only. `doDelete` (`Grid.tsx`)
+  skips `ro` columns (incl `referenceCols`), version-locked `est`, and derived
+  est/act — same guard as type-edit (`startEdit`) + paste. Select a read-only cell
+  on income/payroll/rooming/expenses, press Backspace → nothing clears; editable
+  cells still clear. (Was: any ro cell could be wiped with Backspace.)
 - **GRID-13/19/20** — no insertion line on row/section drag; row + section
   reorder **snap** (FLIP stomped: `.row` `gr-rise` mount animation overrides the
   inline transform; section FLIP selector may miss `.section` nodes).

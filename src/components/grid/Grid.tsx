@@ -505,23 +505,38 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
     render();
   }, [pushUndo, render]);
   const doDelete = useCallback(() => {
-    pushUndo();
     const s = sel();
     const r0 = Math.min(s.ar, s.fr),
       r1 = Math.max(s.ar, s.fr),
       c0 = Math.min(s.ac, s.fc),
       c1 = Math.max(s.ac, s.fc);
+    // Read-only cells are immutable to Backspace/Delete too — mirror the
+    // type-edit (startEdit :430) and paste (:1002) guards: column `ro` (incl
+    // the `referenceCols` reference block), the version-locked proposed (`est`)
+    // cell, and the derived (Payroll/Rooming) est/act source-lock. Defer
+    // pushUndo until the first real clear so an all-read-only selection is a
+    // genuine no-op (no empty undo entry, no needless render).
+    let wrote = false;
     for (let r = r0; r <= r1; r++) {
       const o = flat()[r];
       if (!o) continue;
+      const tsec = data()[o.si];
       for (let c = c0; c <= c1; c++) {
-        const k = NC()[c],
-          t = colDef(cols(), k)?.type;
+        const k = NC()[c];
+        const cd = colDef(cols(), k);
+        if (!k || cd?.ro) continue;
+        if (versionLocked && k === 'est') continue;
+        if (tsec?.kind === 'derived' && (k === 'est' || k === 'act')) continue;
+        if (!wrote) {
+          pushUndo();
+          wrote = true;
+        }
+        const t = cd?.type;
         o.row[k] = t === 'money' || t === 'number' ? 0 : t === 'status' ? 'budgeted' : t === 'check' ? false : '';
       }
     }
-    render();
-  }, [pushUndo, render]);
+    if (wrote) render();
+  }, [pushUndo, render, versionLocked]);
 
   /* ---- menus ---- */
   const closeMenu = useCallback(() => {

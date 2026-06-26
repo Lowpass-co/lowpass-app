@@ -173,6 +173,16 @@ Reference tour: "Warning Support". Templates picker needs a NEW empty tour.
 - **Regression floor:** versioning lock still freezes proposed cells (read-only +
   423); P1 deductions, P2 currency conversion, P3 projection materialisation all
   intact; Expenses/Payroll/Rooming grids visually unchanged (opt-in props).
+- **INC-UX-07 — Backspace respects read-only (GRID-36, grid-core).** Select a
+  routing reference cell (Date/Type/Venue/City) and press **Backspace/Delete** →
+  **nothing clears** (was: it wiped the cell — `doDelete` had no ro guard). Editable
+  income cells still clear. Also holds for version-locked proposed cells + the
+  derived Payroll/Rooming est/act lock — verify on income, payroll, rooming,
+  expenses (`Grid.doDelete` now mirrors the startEdit/paste guard).
+- **INC-UX-08 — Actuals total reads "Net".** The Actuals view's last column is
+  labelled **Net** (= guarantee + overage + merch + vip − deductions, matching
+  settlement's `reconciled_net`). The Projected view's column stays **Total** (no
+  deductions). Label-only; no math change.
 
 ## Budget Versioning Phase 1 — B2 (UI, feat/budget-versioning-b2)
 
