@@ -60,6 +60,12 @@ export function PlacesAutocompleteInput({
   const abortRef = useRef<AbortController | null>(null);
   /** Incremented so stale autocomplete responses do not open the list. */
   const fetchGenerationRef = useRef(0);
+  // F2 — one Places session token per typing session (see VenueAutocomplete).
+  const sessionTokenRef = useRef<string | null>(null);
+  const ensureSessionToken = () => {
+    if (!sessionTokenRef.current) sessionTokenRef.current = crypto.randomUUID();
+    return sessionTokenRef.current;
+  };
 
   useEffect(() => {
     setQuery(value);
@@ -86,7 +92,10 @@ export function PlacesAutocompleteInput({
     const gen = ++fetchGenerationRef.current;
     debounceRef.current = setTimeout(() => {
       setLoading(true);
-      const body: { input: string; includedPrimaryTypes?: string[] } = { input: query };
+      const body: { input: string; includedPrimaryTypes?: string[]; sessiontoken: string } = {
+        input: query,
+        sessiontoken: ensureSessionToken(),
+      };
       if (includedPrimaryTypes?.length) body.includedPrimaryTypes = includedPrimaryTypes;
       fetch('/api/places/autocomplete', {
         method: 'POST',
@@ -168,8 +177,14 @@ export function PlacesAutocompleteInput({
     abortRef.current?.abort();
     abortRef.current = new AbortController();
     const signal = abortRef.current.signal;
+    // Close the billing session with the Details call, then reset.
+    const sessiontoken = sessionTokenRef.current;
+    sessionTokenRef.current = null;
     try {
-      const res = await fetch(`/api/places/details?placeId=${encodeURIComponent(placeId)}`, { signal });
+      const res = await fetch(
+        `/api/places/details?placeId=${encodeURIComponent(placeId)}${sessiontoken ? `&sessiontoken=${encodeURIComponent(sessiontoken)}` : ''}`,
+        { signal },
+      );
       if (!res.ok) {
         onChange(text);
         return;
@@ -239,7 +254,10 @@ export function PlacesAutocompleteInput({
           setLoading(true);
           const gen = fetchGenerationRef.current;
           const inputForRequest = query;
-          const body: { input: string; includedPrimaryTypes?: string[] } = { input: inputForRequest };
+          const body: { input: string; includedPrimaryTypes?: string[]; sessiontoken: string } = {
+            input: inputForRequest,
+            sessiontoken: ensureSessionToken(),
+          };
           if (includedPrimaryTypes?.length) body.includedPrimaryTypes = includedPrimaryTypes;
           fetch('/api/places/autocomplete', {
             method: 'POST',
