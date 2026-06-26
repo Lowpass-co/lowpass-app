@@ -17,6 +17,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Grid } from '@/components/grid/Grid';
 import { VersionLockModal } from '@/components/budget/versioning/VersionLockModal';
+import { AddReceiptPanel, type AddReceiptResult } from '@/components/budget/AddReceiptPanel';
 import type { Column, GridFx, GridLineApi, GridStatusConfig } from '@/components/grid/types';
 import { budgetToGridSections, gridEditToPatch } from '@/lib/grid/budgetAdapter';
 import { convertToCurrency } from '@/lib/budget/fx';
@@ -88,6 +89,12 @@ export function BudgetGridView({
   const router = useRouter();
   const { showToast } = useToast();
   const [lockModalOpen, setLockModalOpen] = useState(false);
+  // Receipts overhaul B1 — the Add-Receipt panel. `onAddReceipt` (lineApi) opens
+  // it and stashes a resolver; the panel's onClose resolves the awaiting promise
+  // so the slide-over can reflect the saved receipt.
+  const [receiptPanel, setReceiptPanel] = useState<
+    { lineId: string; txnId?: string; resolve: (r: AddReceiptResult | null) => void } | null
+  >(null);
   // `native` = the tour's own currency (fallback for currency-less lines).
   // `display` = the page DISPLAY selector (?display=), shared with the burn bar
   // + export controls. Flipping it re-renders this client component (via
@@ -314,6 +321,21 @@ export function BudgetGridView({
           label: receiptChipLabel(receipt.receipt_number as string | null, receipt.vendor as string | null),
         };
       },
+      // Receipts overhaul B1 — open the real Add-Receipt panel (drop → upload →
+      // scan → confirm) and resolve when the user saves/cancels.
+      onAddReceipt: (ctx) =>
+        new Promise<AddReceiptResult | null>((resolve) => {
+          setReceiptPanel({ lineId: ctx.lineId, txnId: ctx.txnId, resolve });
+        }),
+      signReceiptUrl: async (receiptId) => {
+        try {
+          const res = await fetch(`/api/budget/receipts/sign?receipt_id=${encodeURIComponent(receiptId)}`);
+          if (!res.ok) return null;
+          return ((await res.json()) as { url: string | null }).url;
+        } catch {
+          return null;
+        }
+      },
       listDocuments: async (lineId) => {
         const res = await fetch(`/api/budget/line-items/${lineId}/attachments`);
         if (!res.ok) return [];
@@ -383,6 +405,18 @@ export function BudgetGridView({
         tourId={tourId}
         onClose={() => setLockModalOpen(false)}
       />
+      {receiptPanel ? (
+        <AddReceiptPanel
+          tourId={tourId}
+          tourCurrency={tourCurrency}
+          lineId={receiptPanel.lineId}
+          txnId={receiptPanel.txnId}
+          onClose={(result) => {
+            receiptPanel.resolve(result);
+            setReceiptPanel(null);
+          }}
+        />
+      ) : null}
     </>
   );
 }

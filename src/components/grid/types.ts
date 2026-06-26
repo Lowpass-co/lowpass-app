@@ -171,6 +171,15 @@ export interface GridLineApi {
   deleteTransaction: (txnId: string) => Promise<void>;
   /** create/link an expense_receipts row + set the txn's receipt_id. */
   attachReceipt: (lineId: string, txnId: string) => Promise<{ receiptId: string; label: string }>;
+  /** Receipts overhaul B1 — open the real desktop Add-Receipt panel (drop →
+   *  upload → scan → confirm) instead of minting a blank numbered pill. Resolves
+   *  with the saved receipt, or null on cancel. `txnId` present → back that
+   *  transaction; absent → line-level (the panel adds a transaction for the
+   *  amount). When provided, the slide-over prefers this over `attachReceipt`. */
+  onAddReceipt?: (ctx: { lineId: string; txnId?: string }) => Promise<{ receiptId: string; label: string; amount: number } | null>;
+  /** Receipts overhaul B1 — a short-lived SIGNED URL for a receipt's stored file
+   *  (the bucket is private), for the chip thumbnail + lightbox. null = no file. */
+  signReceiptUrl?: (receiptId: string) => Promise<string | null>;
   listDocuments: (lineId: string) => Promise<Doc[]>;
   addDocument: (lineId: string, file: File) => Promise<Doc>;
   renameDocument: (lineId: string, docId: string, name: string) => Promise<void>;
