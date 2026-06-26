@@ -62,19 +62,21 @@ export function BudgetSettingsTab({
   tourCurrency = 'GBP',
   sections,
   versions = [],
-  activeVersionId = null,
+  viewedVersionId = null,
   canApprove = false,
 }: {
   tourId: string;
   tourCurrency?: string;
   sections: BudgetSection[];
   versions?: BudgetVersionVm[];
-  activeVersionId?: string | null;
+  /** State-fix B1 — the VIEWED version (?version=), so Settings agrees with the
+   *  other tabs (was activeVersionId = the head → cross-tab disagreement). */
+  viewedVersionId?: string | null;
   canApprove?: boolean;
 }) {
   return (
     <div className="mx-auto w-full max-w-[820px] space-y-5 py-2">
-      <VersionApprovalCard tourId={tourId} versions={versions} activeVersionId={activeVersionId} canApprove={canApprove} />
+      <VersionApprovalCard tourId={tourId} versions={versions} viewedVersionId={viewedVersionId} canApprove={canApprove} />
       <PhaseToggleCard />
       <OverheadsCard tourId={tourId} />
       <CommissionsCard tourId={tourId} />

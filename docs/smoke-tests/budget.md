@@ -218,6 +218,39 @@ Reference tour: "Warning Support". Templates picker needs a NEW empty tour.
   the demo slide-over (no `lineApi`) keeps its in-memory receipt behaviour
   (`onAddReceipt`/`signReceiptUrl` are opt-in).
 
+## Versioning STATE/NAV fix — B1 (feat/versioning-state-fix-b1)
+
+> Client state-resolution fix (no schema). One `viewed` version threaded to all
+> four tabs incl. Settings; default landing = the approved Current; income lock
+> corrected (actuals never lock; modal not toaster). tsc 0, eslint 0, build green.
+
+- **VER-STATE-01 — single source / Settings agrees.** Approve V2; open the budget →
+  lands on **Current V2 (locked)**. **Settings** now shows "Viewing v2 · approved"
+  with **Unlock & re-approve / New version** (was: keyed off the head → showed Draft
+  + Approve). Expenses/Income/Summary/Settings all show **locked** consistently.
+- **VER-STATE-02 — default = approved Current.** With an approved Current + a draft
+  head, opening with no `?version=` lands on the **Current** (signed-off baseline,
+  proposed locked), not the editable draft. (`page.tsx` `defaultViewed = approvedVersion ?? activeVersion`.)
+- **VER-STATE-03 — persistent indicator.** The selector always shows **"Viewing
+  v{n} · {status} — Current v{approved}"** so the version + lock state are never
+  ambiguous.
+- **VER-STATE-04 — read-only history, all selectable.** Every version is selectable
+  in the picker. Selecting a **superseded** V1 → proposed read-only; editing a
+  proposed cell → the modal says **"You're viewing a historical version… Switch to
+  the draft"** (button jumps to the draft head). Selecting the **draft** head →
+  editable (the selector now `set`s `?version=` for the draft when a Current exists).
+- **VER-STATE-05 — income actuals NEVER lock.** On a locked (approved/superseded)
+  version, the Income **Actual** view is fully editable — guarantee/overage/merch/vip
+  actuals, **and currency** (the live settlement ccy). The shared `currency` column
+  no longer bleeds its lock into the Actual view (`versionLockedCols` is projected-only).
+- **VER-STATE-06 — income modal, not toaster.** Editing a **locked proposed** income
+  cell (Projected view) raises the **VersionLockModal** on the edit attempt — same as
+  Expenses — not a bottom toast. (Grid `versionLockedCols` → `onLockedEdit`; the 423
+  stays as the server backstop, also → modal.)
+- **VER-STATE-07 — Expenses unchanged.** The Grid version-lock default is `['est']`,
+  so Expenses + Payroll/Rooming/demo behave exactly as before (the generalisation is
+  opt-in).
+
 ## Budget Versioning Phase 1 — B2 (UI, feat/budget-versioning-b2)
 
 > Wires the live B1 contract. tsc 0, eslint 0, build green. Chrome-verify on the

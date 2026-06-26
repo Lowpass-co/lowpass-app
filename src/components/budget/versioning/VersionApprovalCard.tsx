@@ -17,12 +17,14 @@ import { approveVersion, unlockVersion, amendVersion, type BudgetVersionVm } fro
 export function VersionApprovalCard({
   tourId,
   versions,
-  activeVersionId,
+  viewedVersionId,
   canApprove,
 }: {
   tourId: string;
   versions: BudgetVersionVm[];
-  activeVersionId: string | null;
+  /** State-fix B1 — Settings keys off the VIEWED version (the one in ?version=),
+   *  NOT the active head — so its lock state + actions agree with every other tab. */
+  viewedVersionId: string | null;
   canApprove: boolean;
 }) {
   const router = useRouter();
@@ -30,8 +32,13 @@ export function VersionApprovalCard({
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const active = versions.find((v) => v.id === activeVersionId) ?? versions[versions.length - 1] ?? null;
+  // The viewed version drives the card (was `activeVersionId` = the head → the
+  // cross-tab disagreement). Approve a draft / Unlock the approved Current / a
+  // historical version is read-only here.
+  const viewed = versions.find((v) => v.id === viewedVersionId) ?? versions[versions.length - 1] ?? null;
   const approved = versions.find((v) => v.status === 'approved') ?? null;
+  const historical = !!viewed && viewed.status !== 'draft' && viewed.status !== 'approved';
+  const draftHead = [...versions].reverse().find((v) => v.status === 'draft') ?? null;
 
   const act = async (fn: () => Promise<Response>, push?: (id: string) => string) => {
     if (busy) return;
@@ -65,8 +72,8 @@ export function VersionApprovalCard({
       </p>
 
       <div className="mt-3 flex items-center gap-2 text-sm text-lp-text">
-        <span className="text-lp-text-secondary">Active:</span>
-        {active ? <span className="font-medium">v{active.version_number} · {active.status}</span> : <span>—</span>}
+        <span className="text-lp-text-secondary">Viewing:</span>
+        {viewed ? <span className="font-medium">v{viewed.version_number} · {viewed.status}</span> : <span>—</span>}
         {approved ? <span className="text-xs text-lp-text-tertiary">(Current: v{approved.version_number})</span> : null}
       </div>
 
@@ -74,7 +81,11 @@ export function VersionApprovalCard({
         <p className="mt-3 text-xs text-lp-text-tertiary">
           You don&rsquo;t have budget-approver permission. Ask an approver to lock, unlock, or create a new version.
         </p>
-      ) : active?.status === 'draft' ? (
+      ) : historical ? (
+        <p className="mt-3 text-xs text-lp-text-tertiary">
+          This is a historical version (read-only). Switch to the {draftHead ? 'draft' : 'current'} version to make changes.
+        </p>
+      ) : viewed?.status === 'draft' ? (
         <div className="mt-3 space-y-2">
           <input
             value={note}
@@ -84,20 +95,20 @@ export function VersionApprovalCard({
           />
           <button
             type="button"
-            disabled={busy || !active}
-            onClick={() => active && void act(() => approveVersion(active.id, note.trim() || undefined))}
+            disabled={busy || !viewed}
+            onClick={() => viewed && void act(() => approveVersion(viewed.id, note.trim() || undefined))}
             className="btn-transition rounded-md px-3 py-1.5 text-sm font-semibold text-lp-text-inverse disabled:opacity-60"
             style={{ background: 'var(--lp-orange)' }}
           >
             {busy ? 'Approving…' : 'Approve & lock'}
           </button>
         </div>
-      ) : active?.status === 'approved' ? (
+      ) : viewed?.status === 'approved' ? (
         <div className="mt-3 flex flex-wrap gap-2">
           <button
             type="button"
             disabled={busy}
-            onClick={() => void act(() => unlockVersion(active.id))}
+            onClick={() => void act(() => unlockVersion(viewed.id))}
             className="btn-transition rounded-md px-3 py-1.5 text-sm font-semibold text-lp-text-inverse disabled:opacity-60"
             style={{ background: 'var(--lp-orange)' }}
           >
@@ -106,7 +117,7 @@ export function VersionApprovalCard({
           <button
             type="button"
             disabled={busy}
-            onClick={() => void act(() => amendVersion(active.id), (id) => `/budget/${tourId}?tab=budget&version=${id}`)}
+            onClick={() => void act(() => amendVersion(viewed.id), (id) => `/budget/${tourId}?tab=budget&version=${id}`)}
             className="btn-transition rounded-md border border-lp-border px-3 py-1.5 text-sm font-medium text-lp-text disabled:opacity-60"
             style={{ background: 'var(--lp-surface)' }}
           >

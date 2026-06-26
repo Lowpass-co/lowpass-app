@@ -22,6 +22,17 @@ import { convertToCurrency } from '@/lib/budget/fx';
 import { toIncomeRows, type IncomeRow } from '@/lib/budget/income';
 import { labelForDayType } from '@/lib/routing/dayType';
 import { useToast } from '@/components/ui/Toast';
+import { VersionLockModal } from '@/components/budget/versioning/VersionLockModal';
+import type { VersionStatus } from '@/components/budget/versioning/versionApi';
+
+// State-fix B1 — the editable PROPOSED columns (projected view). When the viewed
+// version is locked these fire the Unlock/New-version modal on an edit attempt
+// (via the Grid's versionLockedCols). The Actual view passes [] so actuals never
+// lock (settled figures stay editable on any version).
+const INCOME_PROPOSED_COLS = [
+  'currency', 'cap', 'sellthru', 'face', 'deal', 'dealpct', 'dealthr', 'dealabove',
+  'guarantee', 'wh', 'overage', 'perhead', 'feepct', 'merch', 'viptix', 'vipprice', 'vip',
+];
 
 const CUR_SYMBOL: Record<string, string> = { GBP: '£', USD: '$', EUR: '€', CAD: 'C$', AUD: 'A$', JPY: '¥' };
 const CURRENCIES = ['GBP', 'USD', 'EUR', 'CAD', 'AUD', 'JPY'];
@@ -83,17 +94,29 @@ export function BudgetIncomeGrid({
   tourCurrency,
   initialRows,
   versionLocked = false,
+  lockedVersionId = null,
+  canApprove = false,
+  viewedStatus = 'draft',
+  draftVersionId = null,
   fxRates = {},
 }: {
   tourId: string;
   tourCurrency: string;
   initialRows: IncomeRow[];
-  /** B2 — approved version → projected (proposed) income columns read-only. */
+  /** B2 — viewed version is non-draft → projected (proposed) income cells lock. */
   versionLocked?: boolean;
+  /** State-fix B1 — the viewed version + its status, for the lock modal (parity
+   *  with Expenses: edit a locked proposed cell → the modal, not a toast). */
+  lockedVersionId?: string | null;
+  canApprove?: boolean;
+  viewedStatus?: VersionStatus;
+  /** The editable draft head (for "switch to draft" on a historical version). */
+  draftVersionId?: string | null;
   /** Phase 2 — per-tour FX map; its keys are the selectable foreign currencies. */
   fxRates?: Record<string, number>;
 }) {
   const { showToast } = useToast();
+  const [lockModalOpen, setLockModalOpen] = useState(false);
   const searchParams = useSearchParams();
   const native = (tourCurrency || 'GBP').toUpperCase();
   // #4 — the picker offers the tour currency + a standard ISO list + any currency
@@ -194,7 +217,10 @@ export function BudgetIncomeGrid({
       })
         .then(async (res) => {
           if (res.status === 423) {
-            showToast('This budget is approved & locked.', 'error');
+            // Backstop — a locked proposed edit normally fires the modal on the
+            // edit ATTEMPT (Grid versionLockedCols → onLockedEdit) before this
+            // POST; if one slips through, show the modal too, not a toast.
+            setLockModalOpen(true);
             void load();
           } else if (!res.ok) {
             showToast('Could not save income', 'error');
@@ -234,16 +260,19 @@ export function BudgetIncomeGrid({
       { id: 'city', label: 'City', type: 'text', ro: true, w: 128, min: 90, resize: true },
     ];
     // #1 — per-show currency is the FIRST editable column, right after the frozen
-    // routing reference block (Phase 2 — read-only when version-locked).
-    const currency: Column = { id: 'currency', label: 'Currency', type: 'dropdown', options: currencyOptions, ro: versionLocked, w: 96, min: 76, resize: true };
+    // routing reference block. State-fix B1 — the version-lock is applied by the
+    // Grid (versionLockedCols, PROJECTED view only) so a locked proposed edit fires
+    // the modal; in the Actual view currency is the live settlement ccy → editable.
+    const currency: Column = { id: 'currency', label: 'Currency', type: 'dropdown', options: currencyOptions, w: 96, min: 76, resize: true };
     const money = (id: string, label: string): Column => ({ id, label, type: 'money', w: 120, min: 90, resize: true });
     if (view === 'projected') {
-      // B2 — projected (proposed) income is read-only on an approved version;
-      // the ACTUALS view (below) always stays editable.
-      const pMoney = (id: string, label: string): Column => ({ ...money(id, label), ro: versionLocked });
-      // Phase 3 — projection INPUT cell (number; read-only when locked).
+      // B2/state-fix — proposed cells are normal columns; the Grid locks them
+      // (versionLockedCols) when the viewed version is non-draft → the modal fires
+      // on an edit attempt. The Actual view (below) never locks.
+      const pMoney = money;
+      // Phase 3 — projection INPUT cell (number).
       const pNum = (id: string, label: string, w = 72, min = 56): Column =>
-        ({ id, label, type: 'number', w, min, resize: true, ro: versionLocked });
+        ({ id, label, type: 'number', w, min, resize: true });
       return [
         idx,
         ...routingCols,
@@ -253,7 +282,7 @@ export function BudgetIncomeGrid({
         pNum('sellthru', 'Sell %'),
         pMoney('face', 'Face'),
         // ── deal (VS auto-projects overage; PLUS manual; FLAT none) ──
-        { id: 'deal', label: 'Deal type', type: 'dropdown', options: DEAL_TYPES, ro: versionLocked, w: 92, min: 72, resize: true },
+        { id: 'deal', label: 'Deal type', type: 'dropdown', options: DEAL_TYPES, w: 92, min: 72, resize: true },
         pNum('dealpct', 'Deal %', 78, 60),
         pNum('dealthr', 'Tier @ (tix)', 98, 74),
         pNum('dealabove', 'Tier rate %', 96, 74),
@@ -297,7 +326,14 @@ export function BudgetIncomeGrid({
       // labelled "Net" to match settlement's reconciled_net. Projected stays "Total".
       { id: 'total', label: 'Net', type: 'calc', w: 130, min: 100, resize: true, calc: (r: Row) => num(r.guarantee) + num(r.overage) + num(r.merch) + num(r.vip) - num(r.deductions) },
     ];
-  }, [view, versionLocked, currencyOptions]);
+  }, [view, currencyOptions]);
+
+  // State-fix B1 — the version-lock applies to the PROPOSED columns in the
+  // PROJECTED view only; the Actual view passes [] so settled actuals never lock.
+  const versionLockedCols = useMemo(
+    () => (view === 'projected' ? INCOME_PROPOSED_COLS : []),
+    [view],
+  );
 
   // #5 — human-readable header tooltips; #2 — a small ƒ on engine-materialised
   // outputs (overage/merch/VIP) so it's clear they're computed-but-editable.
@@ -416,11 +452,26 @@ export function BudgetIncomeGrid({
             onEdit={onEdit}
             headerFor={headerFor}
             referenceCols={['idx', 'date', 'daytype', 'venue', 'city']}
+            versionLocked={versionLocked}
+            versionLockedCols={versionLockedCols}
+            onLockedEdit={() => setLockModalOpen(true)}
             allowAddRows={false}
             fillHandle
           />
         </div>
       )}
+
+      {/* State-fix B1 — parity with Expenses: a locked proposed-income edit raises
+          the Unlock/New-version modal (status-aware), not a bottom toast. */}
+      <VersionLockModal
+        open={lockModalOpen}
+        versionId={lockedVersionId}
+        canApprove={canApprove}
+        tourId={tourId}
+        viewedStatus={viewedStatus}
+        draftVersionId={draftVersionId}
+        onClose={() => setLockModalOpen(false)}
+      />
     </section>
   );
 }

@@ -49,18 +49,25 @@ export function VersionSelector({
   const viewed = versions.find((v) => v.id === viewedVersionId) ?? versions[versions.length - 1];
   const approved = versions.find((v) => v.status === 'approved');
 
-  const go = (versionId: string, isHead: boolean) => {
+  // State-fix B1 — the default landing (no ?version=) is the approved Current if
+  // one exists, else the draft head (mirrors page.tsx). Selecting the default
+  // clears ?version=; selecting anything else (incl. the draft head when a Current
+  // exists) sets it — so you can actually view the draft.
+  const headId = [...versions].reverse().find((v) => v.status !== 'superseded')?.id ?? viewed.id;
+  const defaultId = approved?.id ?? headId;
+  const go = (versionId: string) => {
     const params = new URLSearchParams(searchParams);
-    if (isHead) params.delete('version');
+    if (versionId === defaultId) params.delete('version');
     else params.set('version', versionId);
     setOpen(false);
     router.push(`${pathname}?${params.toString()}`);
   };
-  // the "head" (active) version = highest non-superseded; selecting it clears ?version.
-  const headId = [...versions].reverse().find((v) => v.status !== 'superseded')?.id ?? viewed.id;
 
   return (
     <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+      {/* Persistent orientation cue: "Viewing v{n} · {status}" so you always know
+          which version + lock state you're on (state-fix B1). */}
+      <span style={{ fontSize: 11, color: 'var(--lp-text-tertiary)' }}>Viewing</span>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
@@ -77,10 +84,11 @@ export function VersionSelector({
         <ChevronDown size={13} aria-hidden />
       </button>
 
-      {/* persistent Current chip on the bar (the approved baseline) */}
-      {approved && approved.id !== viewed.id ? (
+      {/* persistent Current reference (the approved baseline) — always shown when
+          one exists, so "— Current v{approved}" is always visible. */}
+      {approved ? (
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 11, color: 'var(--lp-text-tertiary)' }}>
-          <StatusPill status="approved" /> v{approved.version_number}
+          {approved.id === viewed.id ? '— this is Current' : <><span aria-hidden>—</span> <StatusPill status="approved" /> v{approved.version_number}</>}
         </span>
       ) : null}
 
@@ -102,7 +110,7 @@ export function VersionSelector({
                 type="button"
                 role="option"
                 aria-selected={v.id === viewed.id}
-                onClick={() => go(v.id, v.id === headId)}
+                onClick={() => go(v.id)}
                 className="btn-transition"
                 style={{
                   display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, width: '100%',

@@ -10,27 +10,48 @@
    ============================================ */
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useToast } from '@/components/ui/Toast';
-import { unlockVersion, amendVersion } from './versionApi';
+import { unlockVersion, amendVersion, type VersionStatus } from './versionApi';
 
 export function VersionLockModal({
   open,
   versionId,
   canApprove,
   tourId,
+  viewedStatus = 'approved',
+  draftVersionId = null,
   onClose,
 }: {
   open: boolean;
   versionId: string | null;
   canApprove: boolean;
   tourId: string;
+  /** State-fix B1 — the viewed version's status drives the modal: the approved
+   *  Current offers Unlock/New-version; a historical (superseded/rolled-back)
+   *  version offers "switch to the editable draft" instead. */
+  viewedStatus?: VersionStatus;
+  /** The editable draft head, for the "switch to draft" jump (null = none yet). */
+  draftVersionId?: string | null;
   onClose: () => void;
 }) {
   const router = useRouter();
+  const pathname = usePathname() ?? `/budget/${tourId}`;
+  const searchParams = useSearchParams();
   const { showToast } = useToast();
   const [busy, setBusy] = useState(false);
   if (!open) return null;
+
+  // A historical version (not the approved Current) is read-only — there's
+  // nothing to unlock; point the user at the editable draft instead.
+  const historical = viewedStatus !== 'approved';
+  const goToDraft = () => {
+    const params = new URLSearchParams(searchParams);
+    if (draftVersionId) params.set('version', draftVersionId);
+    else params.delete('version');
+    onClose();
+    router.push(`${pathname}?${params.toString()}`);
+  };
 
   const run = async (kind: 'unlock' | 'amend') => {
     if (!versionId || busy) return;
@@ -73,12 +94,14 @@ export function VersionLockModal({
         }}
       >
         <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--lp-text)', marginBottom: 8 }}>
-          This budget is approved &amp; locked
+          {historical ? 'You’re viewing a historical version' : 'This budget is approved & locked'}
         </h3>
         <p style={{ fontSize: 13, color: 'var(--lp-text-secondary)', marginBottom: 'var(--lp-space-4)' }}>
-          {canApprove
-            ? 'The proposed budget is the approved baseline. Unlock & re-approve to edit it in place, or create a new version (a duplicate you can amend). Actuals stay editable either way.'
-            : 'The proposed budget is the approved baseline and is read-only. Ask a budget approver to unlock it or create a new version. Actuals stay editable.'}
+          {historical
+            ? 'This version is read-only — it’s not the editable draft. Switch to the working draft to make changes. Actuals stay editable on any version.'
+            : canApprove
+              ? 'The proposed budget is the approved baseline. Unlock & re-approve to edit it in place, or create a new version (a duplicate you can amend). Actuals stay editable either way.'
+              : 'The proposed budget is the approved baseline and is read-only. Ask a budget approver to unlock it or create a new version. Actuals stay editable.'}
         </p>
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
           <button
@@ -86,9 +109,17 @@ export function VersionLockModal({
             className="btn-transition"
             style={{ border: '1px solid var(--lp-border)', borderRadius: 'var(--lp-radius-md)', padding: '6px 12px', fontSize: 13, color: 'var(--lp-text-secondary)', background: 'transparent', cursor: 'pointer' }}
           >
-            {canApprove ? 'Cancel' : 'Close'}
+            {historical || !canApprove ? 'Close' : 'Cancel'}
           </button>
-          {canApprove ? (
+          {historical ? (
+            <button
+              type="button" onClick={goToDraft} disabled={busy}
+              className="btn-transition"
+              style={{ border: 0, borderRadius: 'var(--lp-radius-md)', padding: '6px 12px', fontSize: 13, fontWeight: 700, color: 'var(--lp-text-inverse)', background: 'var(--lp-orange)', cursor: 'pointer' }}
+            >
+              Switch to the draft
+            </button>
+          ) : canApprove ? (
             <>
               <button
                 type="button" onClick={() => void run('amend')} disabled={busy}
