@@ -184,6 +184,40 @@ Reference tour: "Warning Support". Templates picker needs a NEW empty tour.
   settlement's `reconciled_net`). The Projected view's column stays **Total** (no
   deductions). Label-only; no math change.
 
+## Receipts overhaul — B1: desktop Add-Receipt + signed URLs (feat/receipts-overhaul-b1)
+
+> **No migration** (uses existing `expense_receipts` cols; currency/raw_ocr_json
+> land in B2). Reuses the existing upload/OCR/CRUD routes via a shared
+> `useReceiptScan` seam. Receipts bucket is **private** (063) — files served via
+> **signed** URLs. tsc 0, eslint 0, build green. Needs the `budget-receipts`
+> bucket (063 applied) + `ANTHROPIC_API_KEY` for OCR.
+
+- **RCPT-B1-01 — no more blank pill.** Budget Expenses → open a line → a
+  transaction → **＋ attach receipt** now opens the **Add-Receipt panel** (not a
+  blank numbered pill). Cancel → no orphan row (the draft is deleted).
+- **RCPT-B1-02 — drop + scan + prefill.** Drop (or pick) a receipt **image** in the
+  panel → it uploads, runs Claude Vision OCR, and **pre-fills** vendor / date /
+  amount / category / description in an **editable confirm form**. A PDF uploads +
+  stores but is **not** scanned ("PDF stored — enter details"). Manual edits stand.
+- **RCPT-B1-03 — viewable thumbnail + lightbox (no 403).** The panel shows a
+  thumbnail of the image (a **signed** URL — no 403); click → full-size lightbox.
+  PDF → an "open" affordance (new tab). The txn chip shows the thumbnail after save.
+- **RCPT-B1-04 — amount → transaction, never actual_cost.** On **Save** the amount
+  is written as a **transaction** on the line (line-level: a new txn; from a txn
+  chip: that txn's amount), `receipt_id` linked. The line's **actual reconciles**
+  from the transactions sum — `actual_cost` is **never** written directly (P1 +
+  versioning lock intact).
+- **RCPT-B1-05 — line-level scan (Documents).** Line slide-over → **Documents** →
+  **📷 Scan receipt** opens the panel with no transaction; on save it adds a
+  receipt-backed transaction and the txn list refreshes.
+- **RCPT-B1-06 — signed-URL fix.** `upload/route.ts` now returns a **signed** URL +
+  the storage **path** (stored in `receipt_file_url`); `GET /api/budget/receipts/sign?receipt_id=`
+  re-signs on read (workspace-scoped). The old `getPublicUrl` 403 is gone.
+- **RCPT-B1-07 — no regressions.** Documents upload (attachments), transactions,
+  the actuals reconcile, the versioning lock, and the income grids are unchanged;
+  the demo slide-over (no `lineApi`) keeps its in-memory receipt behaviour
+  (`onAddReceipt`/`signReceiptUrl` are opt-in).
+
 ## Budget Versioning Phase 1 — B2 (UI, feat/budget-versioning-b2)
 
 > Wires the live B1 contract. tsc 0, eslint 0, build green. Chrome-verify on the

@@ -27,6 +27,7 @@ import { Lock, Trash2 } from 'lucide-react';
 import type { Doc, GridFx, GridLineApi, GridStatusConfig, Row, Section, Txn } from './types';
 import type { MenuConfig } from './GridMenu';
 import { STATUSES, demoFx, formulaEst, variance } from './gridModel';
+import { ReceiptThumb } from './ReceiptThumb';
 
 const LINKCATS: Record<string, string[]> = {
   Person: ['Dillon Jordan', 'Megan Clark', 'Adam Rowley', 'Ben Quinton'],
@@ -395,8 +396,25 @@ export function GridSlideOver({
   );
 
   const attachReceipt = (e: React.MouseEvent, t: Txn) => {
-    // Real surface (budget): create/link an expense_receipts row + set
-    // receipt_id; the returned label rides on the txn (it's not a row.doc).
+    // Receipts overhaul B1 — prefer the real Add-Receipt panel (drop → upload →
+    // scan → confirm) over the blank-pill mint. Resolves with the saved receipt;
+    // the amount it confirmed has already been PATCHed onto this transaction.
+    if (lineApi?.onAddReceipt && row._uid && t.id) {
+      void lineApi
+        .onAddReceipt({ lineId: String(row._uid), txnId: t.id })
+        .then((res) => {
+          if (!res) return; // cancelled
+          commit(() => {
+            t.receipt = res.receiptId;
+            t.receiptLabel = res.label;
+            if (res.amount) t.amount = res.amount;
+            syncActualFromTxns();
+          });
+        })
+        .catch(() => {});
+      return;
+    }
+    // Legacy/fallback: create a blank numbered expense_receipts row + link it.
     if (lineApi && row._uid && t.id) {
       void lineApi
         .attachReceipt(String(row._uid), t.id)
@@ -547,7 +565,11 @@ export function GridSlideOver({
               </button>
               <div className="txn-receipt">
                 {t.receipt ? (
-                  <span className="rcpt has">📎 {receiptLabel(t)}</span>
+                  lineApi?.signReceiptUrl ? (
+                    <ReceiptThumb receiptId={String(t.receipt)} label={receiptLabel(t)} signUrl={lineApi.signReceiptUrl} />
+                  ) : (
+                    <span className="rcpt has">📎 {receiptLabel(t)}</span>
+                  )
                 ) : (
                   <span className="rcpt none" onClick={(e) => attachReceipt(e, t)}>
                     ＋ attach receipt
@@ -630,13 +652,34 @@ export function GridSlideOver({
     }
   };
 
+  // Receipts overhaul B1 — line-level scan: open the Add-Receipt panel (no txn);
+  // the panel adds a transaction for the amount, so refresh the txn list after.
+  const scanReceiptForLine = () => {
+    if (!lineApi?.onAddReceipt || !row._uid) return;
+    void lineApi
+      .onAddReceipt({ lineId: String(row._uid) })
+      .then(async (res) => {
+        if (!res) return;
+        const txns = await lineApi.listTransactions(String(row._uid)).catch(() => null);
+        if (txns) commit(() => { row.transactions = txns; syncActualFromTxns(); });
+      })
+      .catch(() => {});
+  };
+
   const DocsBlock = () => (
     <div>
       <div className="so-sec-h">
         <h5>Documents</h5>
-        <button type="button" className="so-add" onClick={addDoc}>
-          ＋ Add
-        </button>
+        <div style={{ display: 'inline-flex', gap: 6 }}>
+          {lineApi?.onAddReceipt ? (
+            <button type="button" className="so-add" onClick={scanReceiptForLine}>
+              📷 Scan receipt
+            </button>
+          ) : null}
+          <button type="button" className="so-add" onClick={addDoc}>
+            ＋ Add
+          </button>
+        </div>
       </div>
       <input
         ref={docFileRef}

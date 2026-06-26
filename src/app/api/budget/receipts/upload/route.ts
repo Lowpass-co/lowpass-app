@@ -96,6 +96,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(data.path);
-  return NextResponse.json({ url: urlData.publicUrl });
+  // The bucket is PRIVATE (migration 063, public=false) → a public URL 403s.
+  // Return the storage PATH (stored in receipt_file_url) + a short-lived SIGNED
+  // URL for immediate preview. Re-display re-signs via /api/budget/receipts/sign.
+  // `url` stays in the response shape for the existing ReceiptInbox consumer —
+  // now a working signed URL instead of a 403 public one.
+  const { data: signed } = await supabase.storage
+    .from(BUCKET)
+    .createSignedUrl(data.path, 3600);
+  return NextResponse.json({ path: data.path, url: signed?.signedUrl ?? null });
 }
