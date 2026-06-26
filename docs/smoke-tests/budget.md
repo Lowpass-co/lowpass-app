@@ -251,6 +251,28 @@ Reference tour: "Warning Support". Templates picker needs a NEW empty tour.
   so Expenses + Payroll/Rooming/demo behave exactly as before (the generalisation is
   opt-in).
 
+## Hardening (post-B2 verify, feat/connection-hydration-touch)
+
+> Three small defects surfaced during the B2 rollback live-verify. No schema.
+> tsc 0, eslint 0, build green.
+
+- **HARD-01 — no #418 hydration error / no Offline flash.** Cold-load a budget →
+  the console has **no React #418** and the connection pill shows **Live** with no
+  spurious "Offline" flash. `ConnectionIndicator` now seeds `online = true` on
+  server + client (identical first render) and reads `navigator.onLine` in a
+  post-mount effect (was seeded from `navigator.onLine` during render → SSR
+  mismatch).
+- **HARD-02 — `/api/tours/[id]/touch` returns 204, never 503.** On every tour load
+  the touch ping returns **204** in the network tab (was 503 when the handler
+  threw/timed out). The handler is wrapped to always 204 — auth failure, DB error,
+  or exception are logged server-side, never thrown (best-effort telemetry).
+- **HARD-03 — rolled-back version read-only on first render.** Immediately after a
+  rollback (before refresh/realtime), the just-rolled-back version is **read-only**
+  on the very first render — no transient editable `est` cell. The rollback now
+  lands on `?version={target.id}` (the target is guaranteed non-draft → locked via
+  `status !== 'draft'`), so the stale RSC cache can't resolve it as the editable
+  head.
+
 ## Versioning STATE/NAV fix — B2: rollback (feat/versioning-rollback-b2)
 
 > Migration **219** (widen `budget_versions_status_check` to add **`rolled_back`** +

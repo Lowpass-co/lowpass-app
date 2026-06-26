@@ -54,19 +54,28 @@ interface ConnectionStatusValue {
 const ConnectionStatusContext = createContext<ConnectionStatusValue | null>(null);
 
 export function ConnectionStatusProvider({ children }: { children: React.ReactNode }) {
-  // navigator.onLine is unreliable as a "real" connectivity
-  // signal but is the best browser-native source we have. The
-  // 'connecting' state acts as a 600ms bridge so we don't show
-  // a Live pill the instant the network event fires (which
-  // sometimes precedes the actual fetch coming back).
-  const [online, setOnline] = useState<boolean>(() =>
-    typeof navigator === 'undefined' ? true : navigator.onLine,
-  );
+  // navigator.onLine is unreliable as a "real" connectivity signal but is the
+  // best browser-native source we have. The 'connecting' state acts as a 600ms
+  // bridge so we don't show a Live pill the instant the network event fires
+  // (which sometimes precedes the actual fetch coming back).
+  //
+  // SSR HYDRATION (#418 fix): the initial render MUST be identical on server +
+  // client, so seed `online = true` (→ "Live") on BOTH — NOT navigator.onLine,
+  // which is undefined on the server and a real (possibly false / flapping) value
+  // on the client → mismatched HTML → React #418 + a spurious "Offline" flash.
+  // The real value is read in the effect below, AFTER mount.
+  const [online, setOnline] = useState(true);
   const [bridging, setBridging] = useState(false);
   const [saveFailure, setSaveFailure] = useState<SaveFailure | null>(null);
   const bridgeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    // Read real connectivity AFTER mount (post-hydration), never during the first
+    // render. If genuinely offline at load, the pill flips to Offline here. This
+    // one-shot post-mount sync IS the hydration-safe pattern (the #418 fix), so the
+    // set-state-in-effect rule is intentionally suppressed.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setOnline(navigator.onLine);
     const onOnline = () => {
       setBridging(true);
       setOnline(true);

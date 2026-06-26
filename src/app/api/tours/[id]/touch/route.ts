@@ -31,27 +31,25 @@ export async function POST(
   _request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  const supabase = await createServerSupabaseClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  // Best-effort telemetry: the <TourVisitTracker> island fires this and ignores
+  // the result, so this handler must be INCAPABLE of erroring the function —
+  // ALWAYS return 204, even on auth failure / DB error / thrown exception. (It
+  // was returning 401/500 and, when something inside threw or timed out, the
+  // platform surfaced a 503 on every tour load — log noise, never gating the UI.)
+  try {
+    const supabase = await createServerSupabaseClient();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const { id } = await params;
+      const { error } = await supabase
+        .from('tours')
+        .update({ last_visited_at: new Date().toISOString() })
+        .eq('id', id);
+      // RLS scopes the UPDATE; a user who can't see the tour matches zero rows.
+      if (error) console.error(`[tour-touch ${id}] update failed:`, error.message);
+    }
+  } catch (err) {
+    console.error('[tour-touch] ping failed (ignored):', err);
   }
-
-  const { id } = await params;
-
-  const { error } = await supabase
-    .from('tours')
-    .update({ last_visited_at: new Date().toISOString() })
-    .eq('id', id);
-
-  if (error) {
-    // Log but don't fail the page. The tracker is best-effort —
-    // a 500 here shouldn't block the user from seeing the tour.
-    console.error(`[tour-touch ${id}] update failed:`, error.message);
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
-
   return new NextResponse(null, { status: 204 });
 }

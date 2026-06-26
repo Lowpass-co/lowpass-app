@@ -54,11 +54,18 @@ export function RollbackConfirmModal({
         const j = await res.json().catch(() => ({}));
         throw new Error(typeof j.error === 'string' ? j.error : `Failed (${res.status})`);
       }
-      // Target is now the approved Current → clearing ?version lands on it.
+      // Land on the target EXPLICITLY (?version=target.id), not a cleared ?version
+      // that re-resolves the default/head. The target is now the approved Current,
+      // and — crucially — it is guaranteed non-draft (the rollback guard rejects a
+      // draft target), so `versionLocked = status !== 'draft'` is TRUE on the very
+      // first render after navigation, even against the stale RSC cache (the
+      // pre-refresh render). This kills the post-rollback "rolled-back version
+      // briefly editable" race: the viewed version is deterministically locked
+      // before router.refresh() brings the fresh `approved` status.
       const params = new URLSearchParams(searchParams);
-      params.delete('version');
+      params.set('version', target.id);
       onClose();
-      router.push(params.toString() ? `${pathname}?${params.toString()}` : pathname);
+      router.push(`${pathname}?${params.toString()}`);
       router.refresh();
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Rollback failed', 'error');
