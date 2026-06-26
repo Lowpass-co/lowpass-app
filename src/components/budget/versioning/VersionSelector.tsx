@@ -12,11 +12,11 @@
 import { useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { ChevronDown, Check } from 'lucide-react';
-import { type BudgetVersionVm, versionStatusColor } from './versionApi';
+import { type BudgetVersionVm, versionStatusColor, STATUS_LABEL } from './versionApi';
 
 function StatusPill({ status }: { status: BudgetVersionVm['status'] }) {
   const c = versionStatusColor(status);
-  const label = status === 'approved' ? 'Current' : status;
+  const label = status === 'approved' ? 'Current' : STATUS_LABEL[status];
   return (
     <span
       style={{
@@ -53,7 +53,7 @@ export function VersionSelector({
   // one exists, else the draft head (mirrors page.tsx). Selecting the default
   // clears ?version=; selecting anything else (incl. the draft head when a Current
   // exists) sets it — so you can actually view the draft.
-  const headId = [...versions].reverse().find((v) => v.status !== 'superseded')?.id ?? viewed.id;
+  const headId = [...versions].reverse().find((v) => v.status !== 'superseded' && v.status !== 'rolled_back')?.id ?? viewed.id;
   const defaultId = approved?.id ?? headId;
   const go = (versionId: string) => {
     const params = new URLSearchParams(searchParams);

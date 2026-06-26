@@ -14,7 +14,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { logServerError } from '@/lib/log/serverError';
 
-export type VersionStatus = 'draft' | 'approved' | 'superseded';
+export type VersionStatus = 'draft' | 'approved' | 'superseded' | 'rolled_back';
 
 export interface BudgetVersion {
   id: string;
@@ -28,8 +28,10 @@ export interface BudgetVersion {
   approved_at: string | null;
 }
 
-/** The working head version for a tour (latest non-superseded), or null if the
- *  tour has no versions yet (pre-backfill / brand-new tour). */
+/** The working head version for a tour (latest draft/approved), or null if the
+ *  tour has no versions yet (pre-backfill / brand-new tour). Excludes the
+ *  historical states — `superseded` AND `rolled_back` (B2) — so a rolled-back
+ *  higher-numbered version is never mistaken for the head. */
 export async function resolveActiveVersion(
   supabase: SupabaseClient,
   tourId: string,
@@ -40,7 +42,7 @@ export async function resolveActiveVersion(
     .select('*')
     .eq('tour_id', tourId)
     .eq('workspace_id', workspaceId)
-    .neq('status', 'superseded')
+    .not('status', 'in', '(superseded,rolled_back)')
     .order('version_number', { ascending: false })
     .limit(1)
     .maybeSingle();
