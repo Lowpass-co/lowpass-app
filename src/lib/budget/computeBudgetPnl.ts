@@ -55,9 +55,20 @@ export interface PnlCommissionRow {
   actual: number;
 }
 
+export interface BudgetIncomeBreakdown {
+  guarantee: PnlPair;
+  overage: PnlPair;
+  merch: PnlPair;
+  vip: PnlPair;
+  /** Phase 1 — settlement-fed deductions (actual-only). */
+  deductions: PnlPair;
+}
+
 export interface BudgetPnl {
   currency: string;
   grossIncome: PnlPair;
+  /** Phase 4 — post-tax income components of grossIncome (read-only breakdown). */
+  incomeBreakdown: BudgetIncomeBreakdown;
   merch: PnlPair;
   merchNet: PnlPair;
   /** Σ line-item actuals, excl. income rows. */
@@ -165,12 +176,30 @@ export function computeBudgetPnl(input: {
   let merchAct = 0;
   let preTaxProj = 0;
   let preTaxAct = 0;
+  // Phase 4 — read-only income breakdown accumulators (presentation only; these
+  // are the SAME post-tax components already summed into grossProj/grossAct — no
+  // new math). guarProj + overProj + merchProj + vipProj === grossProj;
+  // guarAct + overAct + merchAct + vipAct − dedAct === grossAct.
+  let guarProj = 0;
+  let guarAct = 0;
+  let overProj = 0;
+  let overAct = 0;
+  let vipProj = 0;
+  let vipAct = 0;
+  let dedAct = 0;
   for (const i of income) {
     // Phase 2 — convert this show's native income → tour currency. f is the
     // row's rate (1 for the tour currency / a currency with no rate).
     const f = toTourCurrency(1, i.currency, currency, fxRates);
     merchProj += num(i.merch_income) * f;
     merchAct += num(i.actual_merch) * f;
+    guarProj += postTaxGuar(i) * f;
+    guarAct += num(i.actual_guarantee) * f;
+    overProj += postTaxOver(i) * f;
+    overAct += num(i.actual_overage) * f;
+    vipProj += num(i.vip_income) * f;
+    vipAct += num(i.actual_vip) * f;
+    dedAct += num(i.actual_deductions) * f;
     grossProj += (postTaxGuar(i) + postTaxOver(i) + num(i.merch_income) + num(i.vip_income)) * f;
     grossAct +=
       (num(i.actual_guarantee) +
@@ -337,6 +366,16 @@ export function computeBudgetPnl(input: {
   return {
     currency,
     grossIncome: { projected: grossProj, actual: grossAct },
+    // Phase 4 — read-only income breakdown (post-tax components of grossIncome,
+    // mirroring the reference sheet's PROJECTED/ACTUAL income rows). Deductions are
+    // actual-only (Phase 1) and subtract from the actual gross.
+    incomeBreakdown: {
+      guarantee: { projected: guarProj, actual: guarAct },
+      overage: { projected: overProj, actual: overAct },
+      merch: { projected: merchProj, actual: merchAct },
+      vip: { projected: vipProj, actual: vipAct },
+      deductions: { projected: 0, actual: dedAct },
+    },
     merch: { projected: merchProj, actual: merchAct },
     merchNet: { projected: merchProj - cogsProj, actual: merchAct - cogsAct },
     baseExpenses: { projected: baseProjected, actual: baseActual },
