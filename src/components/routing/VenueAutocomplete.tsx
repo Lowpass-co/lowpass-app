@@ -57,6 +57,16 @@ export function VenueAutocomplete({
   // in finally so any failure path (including aborted fetch)
   // releases the suppression.
   const isPickingRef = useRef(false);
+  // F2 — one Places session token per typing session. Reused across the
+  // debounced autocomplete requests and passed to the final Place Details
+  // call, so Google bills the whole lookup as ONE session (Per Session SKU,
+  // unlimited free) instead of N Per-Request calls + a separate Details
+  // charge. Reset after a pick so the next lookup is a fresh session.
+  const sessionTokenRef = useRef<string | null>(null);
+  const ensureSessionToken = () => {
+    if (!sessionTokenRef.current) sessionTokenRef.current = crypto.randomUUID();
+    return sessionTokenRef.current;
+  };
 
   useEffect(() => {
     setHighlightedIndex((i) => (suggestions.length ? Math.min(i, suggestions.length - 1) : 0));
@@ -89,7 +99,7 @@ export function VenueAutocomplete({
       fetch('/api/places/autocomplete', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ input: query }),
+        body: JSON.stringify({ input: query, sessiontoken: ensureSessionToken() }),
       })
         .then((r) => r.json())
         .then((data) => {
@@ -155,9 +165,13 @@ export function VenueAutocomplete({
     abortRef.current?.abort();
     abortRef.current = new AbortController();
     const signal = abortRef.current.signal;
+    // Close the billing session: pass this session's token to Details, then
+    // reset so the next venue lookup starts a fresh session.
+    const sessiontoken = sessionTokenRef.current;
+    sessionTokenRef.current = null;
     try {
       const res = await fetch(
-        `/api/places/details?placeId=${encodeURIComponent(placeId)}`,
+        `/api/places/details?placeId=${encodeURIComponent(placeId)}${sessiontoken ? `&sessiontoken=${encodeURIComponent(sessiontoken)}` : ''}`,
         { signal },
       );
       if (!res.ok) {
@@ -323,7 +337,7 @@ export function VenueAutocomplete({
               fetch('/api/places/autocomplete', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ input: query }),
+                body: JSON.stringify({ input: query, sessiontoken: ensureSessionToken() }),
               })
                 .then((r) => r.json())
                 .then((data) => {

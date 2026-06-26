@@ -20,7 +20,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Places API not configured' }, { status: 503 });
   }
 
-  let body: { input?: string; includedPrimaryTypes?: string[] };
+  let body: { input?: string; includedPrimaryTypes?: string[]; sessiontoken?: string };
   try {
     body = await request.json();
   } catch {
@@ -37,6 +37,11 @@ export async function POST(request: Request) {
     requestPayload.includedPrimaryTypes = body.includedPrimaryTypes.filter(
       (t): t is string => typeof t === 'string' && t.length > 0
     );
+  }
+  // F2 — a Places session token bundles this session's autocomplete
+  // requests + the final Place Details call into ONE billed session.
+  if (typeof body.sessiontoken === 'string' && body.sessiontoken.length > 0) {
+    requestPayload.sessionToken = body.sessiontoken;
   }
 
   const res = await fetch(PLACES_AUTOCOMPLETE_URL, {

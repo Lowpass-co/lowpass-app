@@ -46,7 +46,13 @@ export async function GET(request: Request) {
     ...(includeIata ? ['iataCode'] : []),
   ].join(',');
 
-  const url = `https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}`;
+  // F2 — close the Places session opened by the autocomplete requests, so
+  // the whole lookup bills as one session rather than a separate Details
+  // charge. (place_id capture is unaffected — the client already holds it.)
+  const sessiontoken = searchParams.get('sessiontoken')?.trim();
+  const url =
+    `https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}` +
+    (sessiontoken ? `?sessionToken=${encodeURIComponent(sessiontoken)}` : '');
   const res = await fetch(url, {
     method: 'GET',
     headers: {
