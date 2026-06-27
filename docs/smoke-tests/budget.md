@@ -387,6 +387,31 @@ Reference tour: "Warning Support". Templates picker needs a NEW empty tour.
   `dataTransfer.types` containing `Files`; row reorder is pointer-based). Other
   product grids don't accept drops (the prop is opt-in, Expenses-only).
 
+## Receipts B2 — bulk scrape inbox + searchable (feat/receipts-b2)
+
+> Migration **222** (`expense_receipts.raw_ocr_json` jsonb + `extracted_text` text +
+> trigram index; idempotent, down-block). Per-receipt OCR is ON in the bulk inbox,
+> routed entirely through the `useReceiptScan` seam (same metering / signed URLs /
+> transaction-backing invariant as B1; no second OCR path). tsc 0, eslint 0, build
+> green. Run `npm run db:migrate`.
+
+- **RCP-BULK-01 — drop N files → each scrapes + confirms.** Budget → **Receipts** →
+  drop several images. Each row: create → signed upload → **OCR** → a **Needs review**
+  status with an editable vendor / amount / date prefilled from the scrape. PDFs show
+  "PDF stored — scan is image-only". Click **Link & confirm** → pick a budget line →
+  the row goes **✓ Linked** and that line gets a **reconciled transaction** for the
+  amount (never a direct `actual_cost` write — `in_budget:false`, same as B1). A 20-file
+  drop is triageable via the per-receipt status (scanning / needs review / linked).
+- **RCP-SEARCH-01 — ⌘K finds a receipt by vendor / extracted text.** After a scrape,
+  ⌘K a vendor name (or a word the OCR pulled from the receipt body) → the receipt
+  surfaces under **Receipts**. Selecting it lands on that tour's budget and opens the
+  inbox with the receipt at the top + a **View file** (signed URL) action. Search runs
+  through the **scoped** `/api/budget/receipts?q=` route (workspace_id + RLS; never a
+  broad query), fuzzy-ranked via `fuzzy.ts`. No raw OCR text in logs or errors (PII).
+- **RCP-BULK-02 — no B1 regression.** The single Add-Receipt panel + the B1.5
+  drag-onto-row flow are unchanged (both still go through `useReceiptScan`); signed
+  URLs only; PDFs store-but-don't-scan everywhere.
+
 ## Versioning STATE/NAV fix — B2: rollback (feat/versioning-rollback-b2)
 
 > Migration **219** (widen `budget_versions_status_check` to add **`rolled_back`** +

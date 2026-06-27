@@ -39,6 +39,35 @@ export async function GET(request: Request) {
   }
 
   const { searchParams } = new URL(request.url);
+
+  // B2 — workspace-scoped receipt SEARCH (⌘K). When `q` is present we search the
+  // user's OWN workspace receipts (financial/PII never leave the workspace — the
+  // explicit workspace_id filter + RLS), pre-filtering candidates by ILIKE over
+  // vendor / description / extracted_text / receipt_number; the ⌘K provider
+  // fuzzy-ranks them. No tour_id required (search spans the workspace's tours).
+  const q = searchParams.get('q');
+  if (q != null) {
+    // Strip characters that break PostgREST's `.or(...)` grammar (commas, parens)
+    // and escape ILIKE wildcards. Search is a contains-match, so this is lossless
+    // enough for ⌘K.
+    const term = q.trim().replace(/[(),]/g, ' ').trim();
+    if (term.length < 2) return NextResponse.json({ receipts: [] });
+    const like = `%${term.replace(/[%_\\]/g, (m) => `\\${m}`)}%`;
+    const { data, error } = await supabase
+      .from('expense_receipts')
+      .select('id, tour_id, receipt_number, vendor, date, category, cost_tour_currency')
+      .eq('workspace_id', profile.workspace_id)
+      .or(`vendor.ilike.${like},description.ilike.${like},extracted_text.ilike.${like},receipt_number.ilike.${like}`)
+      .order('date', { ascending: false, nullsFirst: false })
+      .limit(30);
+    if (error) {
+      // Don't surface raw OCR/PII in the error; log only a generic message.
+      console.error('[receipts-search] query failed:', error.message);
+      return NextResponse.json({ error: 'Search failed' }, { status: 500 });
+    }
+    return NextResponse.json({ receipts: data ?? [] });
+  }
+
   const tourId = searchParams.get('tour_id');
   if (!tourId) {
     return NextResponse.json({ error: 'tour_id is required' }, { status: 400 });

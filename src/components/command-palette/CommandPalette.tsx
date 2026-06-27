@@ -65,6 +65,7 @@ const KIND_LABEL: Record<SearchKind, string> = {
   'bug-report': 'Bug reports',
   'rider-pack': 'Rider packs',
   'rental-job': 'Rental jobs',
+  receipt: 'Receipts',
 };
 
 const KIND_ICON: Record<SearchKind, typeof UserIcon> = {
@@ -79,6 +80,7 @@ const KIND_ICON: Record<SearchKind, typeof UserIcon> = {
   'bug-report': Bug,
   'rider-pack': BookOpen,
   'rental-job': Wrench,
+  receipt: Receipt,
 };
 
 const GROUP_ORDER: SearchKind[] = [
