@@ -487,6 +487,7 @@ export function BudgetIncomeGrid({
             onEdit={onEdit}
             headerFor={headerFor}
             referenceCols={['idx', 'date', 'daytype', 'venue', 'city']}
+            columnPrefsKey={`income-cols:${tourId}`}
             versionLocked={versionLocked}
             versionLockedCols={versionLockedCols}
             onLockedEdit={() => setLockModalOpen(true)}

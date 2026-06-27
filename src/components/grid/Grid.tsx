@@ -157,6 +157,12 @@ export interface GridProps {
       unaffected). Uses HTML5 drag-drop (dataTransfer.files) — entirely separate
       from the pointer-based row reorder, which is untouched. */
   onFileDropToRow?: (rowUid: string, file: File) => void;
+  /** Income polish R2 (A3) — opt-in per-tour column hide/show persistence. When
+      set, the Columns popover's hidden/shown choices persist to
+      `localStorage[columnPrefsKey]` (a list of hidden column ids) and restore on
+      mount. The `idx` + `referenceCols` columns are never hideable. Default
+      undefined → no persistence (every other grid unchanged). */
+  columnPrefsKey?: string;
 }
 
 /** Imperative handle (opt-in via ref). Lets a host patch specific cells by row
@@ -208,6 +214,7 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
   onLockedEdit,
   referenceCols,
   onFileDropToRow,
+  columnPrefsKey,
 }: GridProps, ref) {
   const onLockedEditRef = useRef(onLockedEdit);
   onLockedEditRef.current = onLockedEdit;
@@ -904,6 +911,36 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
     });
   });
 
+  /* ---- A3: per-tour column hide/show persistence (opt-in via columnPrefsKey) ----
+     idx + the reference block are structural and never hideable. We restore the
+     persisted hidden set AFTER mount (in an effect) so the server render and the
+     first client render agree — applying it during render would risk a hydration
+     mismatch. */
+  const isHideLocked = useCallback(
+    (id: string) => id === 'idx' || refColSet.has(id),
+    [refColSet],
+  );
+  useEffect(() => {
+    if (!columnPrefsKey || typeof window === 'undefined') return;
+    let hiddenIds: Set<string>;
+    try {
+      const raw = window.localStorage.getItem(columnPrefsKey);
+      if (!raw) return;
+      hiddenIds = new Set(JSON.parse(raw) as string[]);
+    } catch {
+      return; // malformed prefs — ignore, default = all shown
+    }
+    let changed = false;
+    for (const c of colsRef.current) {
+      const next = hiddenIds.has(c.id) && !isHideLocked(c.id);
+      if (!!c.hidden !== next) {
+        c.hidden = next;
+        changed = true;
+      }
+    }
+    if (changed) render();
+  }, [columnPrefsKey, isHideLocked, render]);
+
   /* ---- keyboard ---- */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -996,10 +1033,33 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
           break;
         default:
           if (e.key.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey) {
-            const t = colDef(cols(), NC()[sel().fc])?.type;
+            const k = NC()[sel().fc];
+            const cd = colDef(cols(), k);
+            const t = cd?.type;
             if (t === 'text' || t === 'money' || t === 'number') {
               e.preventDefault();
               startEdit(e.key);
+            } else if (t === 'dropdown' && k !== 'daytype' && cd?.options?.length && !cd.ro) {
+              // A1 — type-to-select: with a dropdown cell active, typing a letter
+              // jumps to + commits the first option whose (display) label starts
+              // with it (V→VS, P→PLUS, D→… currency). Same commit path as the menu;
+              // doesn't touch click-open, Tab-auto-open, or Esc. A version-locked
+              // proposed dropdown fires the lock modal instead (parity with edits).
+              const opt = cd.options.find((op) => (cd.optLabels?.[op] ?? op).toLowerCase().startsWith(e.key.toLowerCase()));
+              if (opt !== undefined) {
+                e.preventDefault();
+                if (isVersionLocked(k)) {
+                  onLockedEditRef.current?.();
+                } else {
+                  const o = getRowObj();
+                  if (o?.row && opt !== String(o.row[k])) {
+                    pushUndo();
+                    o.row[k] = opt;
+                    if (o.row._uid) onEditRef.current?.(o.row._uid as string, k, opt);
+                    render();
+                  }
+                }
+              }
             }
           }
       }
@@ -1291,9 +1351,19 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
     return fx.formatDisplay(raw);
   };
 
-  const renderEditInput = () => (
+  const renderEditInput = () => {
+    // A2 — number-entry affordance: money/number edit inputs are right-aligned +
+    // get the decimal soft-keyboard (inputMode). The input is type="text" (no
+    // native spinner arrows — they'd break the grid's keyboard model) and already
+    // select-all-on-focus (el.select() below), so typing replaces. Pure
+    // presentation — commit/parse, the fill-handle, and copy-paste are untouched.
+    const editKey = NC()[editRef.current!.c];
+    const numericEdit = ((t) => t === 'money' || t === 'number')(colDef(cols(), editKey)?.type);
+    return (
     <input
       className="editing"
+      inputMode={numericEdit ? 'decimal' : undefined}
+      style={numericEdit ? { textAlign: 'right' } : undefined}
       defaultValue={editRef.current?.prefill ?? ''}
       autoFocus
       ref={(el) => {
@@ -1331,7 +1401,8 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
         if (editRef.current) commitEdit();
       }}
     />
-  );
+    );
+  };
 
   /** one cell → JSX (mirrors dispCell). fi = flat row index. */
   const renderCell = (sec: Section, row: Row, ri: number, col: Column, fi: number, key: string) => {
@@ -2043,11 +2114,22 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
         <ColumnsPop
           anchor={popAnchorRef.current}
           cols={cols()}
+          lockedCols={refColSet}
           onToggle={(id, hidden) => {
+            if (isHideLocked(id)) return; // structural columns can't be hidden
             pushUndo();
             const c = colDef(cols(), id);
             if (c) c.hidden = hidden;
             selRef.current = { ar: 0, ac: 0, fr: 0, fc: 0 };
+            // A3 — persist the hidden set per tour (opt-in via columnPrefsKey).
+            if (columnPrefsKey && typeof window !== 'undefined') {
+              try {
+                const hiddenIds = cols().filter((cc) => cc.hidden).map((cc) => cc.id);
+                window.localStorage.setItem(columnPrefsKey, JSON.stringify(hiddenIds));
+              } catch {
+                /* localStorage unavailable (private mode / quota) — non-fatal */
+              }
+            }
             render();
           }}
           onDelete={(id) => {
@@ -2252,6 +2334,7 @@ function ColumnsPop({
   onDelete,
   onAdd,
   onClose,
+  lockedCols,
 }: {
   anchor: { left: number; bottom: number };
   cols: Column[];
@@ -2259,12 +2342,14 @@ function ColumnsPop({
   onDelete: (id: string) => void;
   onAdd: () => void;
   onClose: () => void;
+  /** A3 — structural columns (idx + reference block) excluded from the hide/show checklist. */
+  lockedCols?: Set<string>;
 }) {
   return (
     <PopShell anchor={anchor} onClose={onClose}>
       <div className="ttl">Columns</div>
       {cols
-        .filter((c) => c.id !== 'idx' && c.id !== 'item')
+        .filter((c) => c.id !== 'idx' && c.id !== 'item' && !lockedCols?.has(c.id))
         .map((c) => (
           <label key={c.id}>
             <input type="checkbox" defaultChecked={!c.hidden} onChange={(e) => onToggle(c.id, !e.target.checked)} /> {c.label}

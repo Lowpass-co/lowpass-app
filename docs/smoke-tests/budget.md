@@ -285,6 +285,31 @@ Reference tour: "Warning Support". Templates picker needs a NEW empty tour.
   `pre_tax_overage`/`merch_income`/`vip_income`; the income breakdown + Net are
   unchanged from the computed values. P1/P2 + the versioning lock unaffected.
 
+## Income grid polish R2 (feat/income-grid-r2)
+
+> No schema. Three grid-core polish items, all additive/opt-in so Payroll /
+> Rooming / Channel-List / Expenses are unchanged. tsc 0, eslint 0, build green.
+
+- **ING-R2-01 — dropdown type-to-select.** Income Projected view: **select** (don't
+  open) a **Deal type** cell, press **V** → it jumps to **VS**; **P** → **PLUS**;
+  **F** → **FLAT**. Same on the **Ccy** column (**D** → a $-currency). Click-open,
+  Tab-auto-open, and Esc still work; a version-locked proposed dropdown fires the
+  lock modal instead of changing. `daytype` (bespoke) and read-only output dropdowns
+  don't respond. Verify Payroll **rate-type** / **status** dropdowns behave the same.
+- **ING-R2-02 — number-entry boxes.** Editing a money/number cell (e.g. Cap, Face,
+  Guarantee): the input is **right-aligned**, has no native spinner arrows, gets the
+  decimal soft-keyboard on touch (`inputMode`), and is **select-all-on-focus** so the
+  first keystroke replaces. Money formatting (currency symbol, "—" blank for null)
+  and commit/parse are unchanged from INC-PFX-03. Text cells (Venue/City) still
+  left-aligned.
+- **ING-R2-03 — per-tour column hide/show, persisted.** Income toolbar → **Columns**:
+  the checklist omits the structural columns (**#** + the reference block
+  date/type/venue/city — always shown). Uncheck a column (e.g. **Withhold**) → it
+  leaves the render **and** Tab order but its data/compute are untouched (Overage
+  still computes). Reload → the hidden set persists (localStorage `income-cols:<tourId>`),
+  and a **different tour** is unaffected (per-tour key). Default = all shown. Payroll /
+  Rooming Columns popovers are unchanged (no `columnPrefsKey` → no persistence).
+
 ## Receipts B1.5 — drag a receipt onto a budget row (feat/receipts-b15-drag)
 
 > No schema. Reuses the B1 AddReceiptPanel + useReceiptScan seam (no second OCR
