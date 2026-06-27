@@ -49,6 +49,28 @@ Reference tour: "Warning Support". Templates picker needs a NEW empty tour.
 - **EXP-BUD-06 — old quick-PDF gone.** The Export menu shows **XLSX** +
   **Branded PDF…** only; the client-side jspdf "PDF summary" is removed.
 
+## Document Export — Rooming slice (#8 — feat/export-rooming)
+
+> No migration (read-only). Second surface on the SHARED shell (`shell.ts`
+> unchanged). Standard hotel rooming-list grouped by hotel. tsc 0, eslint 0,
+> build green. (Render proof = the downloaded PDF; the puppeteer pipeline is
+> shared with Budget.)
+
+- **EXP-ROOM-01 — branded rooming list, grouped by hotel.** Operations → Rooming →
+  **Branded PDF** → Download. A4 with the SAME letterhead as Budget (artist · tour ·
+  logo · dates) + Lowpass footer. Body: one block per hotel (name · address · phone ·
+  stay span), then guest rows — **guest · room type · check-in · check-out · nights** —
+  sorted by check-in, with a per-hotel `N guests / total nights` subtotal.
+- **EXP-ROOM-02 — matches the Rooming surface.** The guests/rooms in the PDF equal
+  what the Rooming grid shows for that tour (same `hotels`/`rooms`/`room_assignments`
+  query + the same roster filter — only tour-roster members; a null-person_id
+  assignment is kept, not dropped). Nights = check-out − check-in.
+- **EXP-ROOM-03 — RLS gated + read-only.** A foreign-workspace tourId 404s (rooming
+  is PII — no cross-workspace leak); export writes nothing. A tour with no hotels →
+  "No hotels booked for this tour."
+- **EXP-ROOM-04 — shell unchanged.** `src/lib/export/shell.ts` is byte-identical to
+  the Budget slice (the shell stays generic for Payroll/Routing).
+
 ## Income redesign — Phase 1: Settlement (feat/income-settlement-phase1)
 
 > Migration **215** (`budget_income.actual_deductions`, additive nullable). Run
