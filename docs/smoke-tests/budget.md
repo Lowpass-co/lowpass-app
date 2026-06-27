@@ -20,6 +20,35 @@ Reference tour: "Warning Support". Templates picker needs a NEW empty tour.
 | BUD-19 | FIXED | click-to-rename templates + consistent picker (Fix-pack C) |
 | BUD-20 | FIXED | summary reads live from `section_id`; no phantom sections (Fix-pack A) |
 
+## Document Export — Budget slice (#8 — feat/export-budget)
+
+> No migration (read-only). Server-rendered HTML → A4 PDF via the existing
+> puppeteer pipeline (`getBrowser()`); the shared shell (`src/lib/export/shell.ts`)
+> is the reusable letterhead/footer for all four surfaces. Retires the old
+> client-side jspdf "PDF summary". tsc 0, eslint 0, build green.
+
+- **EXP-BUD-01 — P&L matches the Summary tab to the cent.** Budget → **Export →
+  Branded PDF…** → Download. The PDF's Gross income / Total expenses / **Net**
+  equal the Summary tab's figures exactly (same `computeBudgetPnl` inputs: lines
+  with the viewed-version proposed overlay + raw `budget_income` + commissions +
+  settings + fx). Section subtotals sum to Base expenses.
+- **EXP-BUD-02 — scope toggle selects columns.** The dialog's **Both + Variance**
+  (default) renders Projected · Actual · Variance (= actual − projected) per row +
+  total; **Projected** / **Actual** render a single column. Income variance is
+  green when actual ≥ projected; expense variance green when actual ≤ projected.
+- **EXP-BUD-03 — branded A4 + logo.** A4 letterhead with the artist logo
+  (`resolveArtistLogoUrl` → **base64 data-URI inlined**, not a network URL),
+  artist · tour · tour dates · generated-on; footer = Lowpass mark + page x/y.
+  No logo → artist-initials block.
+- **EXP-BUD-04 — native + converted on foreign rows.** A foreign-currency line or
+  show prints native AND tour-currency (e.g. `€1,000 (£850)`); same-currency rows
+  print one amount. Totals are in the tour currency.
+- **EXP-BUD-05 — RLS gated + read-only.** A foreign-workspace tourId 404s (no
+  cross-workspace leak); export writes nothing. A locked/approved version exports
+  fine (read-only).
+- **EXP-BUD-06 — old quick-PDF gone.** The Export menu shows **XLSX** +
+  **Branded PDF…** only; the client-side jspdf "PDF summary" is removed.
+
 ## Income redesign — Phase 1: Settlement (feat/income-settlement-phase1)
 
 > Migration **215** (`budget_income.actual_deductions`, additive nullable). Run

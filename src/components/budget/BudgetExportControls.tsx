@@ -4,12 +4,12 @@
    Page-header strip with:
      - display-currency switcher (?display=USD|GBP|EUR — converts the
        UI numbers via lib/budget/fx; underlying data unchanged)
-     - "Export…" menu (XLSX flat dump or PDF summary)
+     - "Export…" menu: XLSX flat dump (client-side) + a branded PDF
+       (#8 — server-rendered, opens <ExportDialog>).
 
-   Exports run entirely client-side using the already-installed
-   xlsx + jspdf libraries. PDF intentionally simple (table dump with
-   header line); the rich variant-style "summary with charts" is a
-   follow-up that needs the chart components rendered to canvas.
+   The XLSX dump stays client-side (xlsx). The old client-side jspdf
+   "PDF summary" is RETIRED (#8 D6) — the branded server PDF replaces
+   it as the single export path.
    ============================================ */
 
 'use client';
@@ -18,8 +18,8 @@ import { useCallback, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { ChevronDown, Download, FileSpreadsheet, FileText } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import { jsPDF } from 'jspdf';
 import { convertToCurrency } from '@/lib/budget/fx';
+import { ExportDialog } from '@/components/budget/ExportDialog';
 import type { BudgetLineItem } from '@/types';
 
 const DISPLAY_OPTIONS: ReadonlyArray<{ code: string; label: string }> = [
@@ -34,20 +34,15 @@ export type BudgetExportControlsProps = {
   lines: BudgetLineItem[];
   tourCurrency: string;
   tourName: string;
+  /** #8 — for the branded server PDF export route. */
+  tourId: string;
 };
-
-function abbrevFmt(value: number, currency: string): string {
-  return value.toLocaleString('en-GB', {
-    style: 'currency',
-    currency: currency.toUpperCase(),
-    maximumFractionDigits: 2,
-  });
-}
 
 export function BudgetExportControls({
   lines,
   tourCurrency,
   tourName,
+  tourId,
 }: BudgetExportControlsProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -55,6 +50,10 @@ export function BudgetExportControls({
 
   const display = (searchParams.get('display') ?? tourCurrency).toUpperCase();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [pdfOpen, setPdfOpen] = useState(false);
+  // The viewed version (if the user is on a historical `?version=` view) — the
+  // PDF's projected baseline matches what's on screen (#8 D1).
+  const viewedVersionId = searchParams.get('version');
 
   const setDisplay = useCallback(
     (code: string) => {
@@ -89,66 +88,6 @@ export function BudgetExportControls({
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Budget');
     XLSX.writeFile(wb, `${tourName.replace(/[^\w\s-]/g, '').slice(0, 60) || 'budget'}.xlsx`);
-    setMenuOpen(false);
-  }, [lines, tourCurrency, tourName, display]);
-
-  const exportPdf = useCallback(() => {
-    const doc = new jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
-    doc.setFontSize(16);
-    doc.text(`${tourName} — Budget`, 40, 40);
-    doc.setFontSize(10);
-    doc.setTextColor(110);
-    doc.text(
-      `Display currency: ${display}${display !== tourCurrency.toUpperCase() ? ` (converted from ${tourCurrency})` : ''}`,
-      40,
-      58,
-    );
-    doc.setTextColor(0);
-
-    let y = 90;
-    const colX = [40, 220, 340, 430, 520, 610, 700];
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'bold');
-    ['Item', 'Category', 'Status', 'Currency', 'Estimated', 'Actual', 'Variance'].forEach(
-      (label, i) => doc.text(label, colX[i], y),
-    );
-    doc.setFont('helvetica', 'normal');
-    y += 14;
-
-    let totalEst = 0;
-    let totalAct = 0;
-    for (const line of lines) {
-      if (y > 540) {
-        doc.addPage();
-        y = 60;
-      }
-      const rowCurrency = (line.currency || tourCurrency).toUpperCase();
-      const est = convertToCurrency(Number(line.proposed_cost ?? 0), rowCurrency, display);
-      const act = convertToCurrency(Number(line.actual_cost ?? 0), rowCurrency, display);
-      totalEst += est;
-      totalAct += act;
-      const variance = est > 0 ? ((act - est) / est) * 100 : 0;
-      doc.text((line.label ?? '').slice(0, 36), colX[0], y);
-      doc.text(((line.category ?? '') as string).slice(0, 18), colX[1], y);
-      doc.text((line.status ?? '—').toString(), colX[2], y);
-      doc.text(rowCurrency, colX[3], y);
-      doc.text(abbrevFmt(est, display), colX[4], y);
-      doc.text(abbrevFmt(act, display), colX[5], y);
-      doc.text(`${variance.toFixed(1)}%`, colX[6], y);
-      y += 14;
-    }
-
-    if (y > 520) {
-      doc.addPage();
-      y = 60;
-    }
-    y += 8;
-    doc.setFont('helvetica', 'bold');
-    doc.text('Totals', colX[0], y);
-    doc.text(abbrevFmt(totalEst, display), colX[4], y);
-    doc.text(abbrevFmt(totalAct, display), colX[5], y);
-
-    doc.save(`${tourName.replace(/[^\w\s-]/g, '').slice(0, 60) || 'budget'}.pdf`);
     setMenuOpen(false);
   }, [lines, tourCurrency, tourName, display]);
 
@@ -226,7 +165,10 @@ export function BudgetExportControls({
             </button>
             <button
               type="button"
-              onClick={exportPdf}
+              onClick={() => {
+                setMenuOpen(false);
+                setPdfOpen(true);
+              }}
               className="btn-transition flex w-full items-center gap-2 px-3 py-2 text-left text-sm"
               style={{ color: 'var(--lp-text)' }}
             >
@@ -235,11 +177,15 @@ export function BudgetExportControls({
                 style={{ color: 'var(--lp-text-tertiary)' }}
                 aria-hidden
               />
-              PDF summary
+              Branded PDF…
             </button>
           </div>
         ) : null}
       </div>
+
+      {pdfOpen ? (
+        <ExportDialog tourId={tourId} versionId={viewedVersionId} onClose={() => setPdfOpen(false)} />
+      ) : null}
     </div>
   );
 }

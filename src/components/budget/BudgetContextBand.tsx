@@ -87,7 +87,7 @@ export function BudgetContextBand({
                 collapsed into this band). Drives the same `lowpass:density`
                 preference every grid reads via useAppDensity. */}
             <AppDensityToggle />
-            <BudgetExportControls lines={lines} tourCurrency={tourCurrency} tourName={tourName} />
+            <BudgetExportControls lines={lines} tourCurrency={tourCurrency} tourName={tourName} tourId={tourId} />
           </div>
         }
       />
