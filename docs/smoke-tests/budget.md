@@ -314,6 +314,37 @@ Reference tour: "Warning Support". Templates picker needs a NEW empty tour.
   `pre_tax_overage`/`merch_income`/`vip_income`; the income breakdown + Net are
   unchanged from the computed values. P1/P2 + the versioning lock unaffected.
 
+## Income ACTUALS enrichment (#24 — feat/income-actuals)
+
+> Migration 221 — `actual_tickets_sold` / `actual_gross` / `actual_capacity` on
+> `budget_income`; `day_of_`/`reconciled_` tickets + gross on `settlement` (cascade
+> mirrors `actual_deductions`). Model (b): settlement-authoritative — the new
+> fields are INFORMATIONAL, they NEVER enter `income_gross` / `computeBudgetPnl`.
+> Actual-only → not versioned, never lock. Engine (`incomeProjection.ts`) untouched.
+> tsc 0, eslint 0, build green.
+
+- **INC-ACT-01 — real attendance + Sell%.** Budget → Income → **Actual**. New
+  editable columns **Cap · Tickets · Gross**. Enter Cap 3000 + Tickets 2580 on an
+  un-settled show → **Sell%** shows **86%** (= tickets ÷ settled cap, NOT the
+  projected cap). Blank Cap → Sell% shows "—".
+- **INC-ACT-02 — ƒ Overage reference (read-only).** Beside the settled **Overage**,
+  the **ƒ Overage** column shows the overage the engine implies from the REAL
+  tickets/gross + the row's PROJECTED deal terms (VS only; "—" for PLUS/FLAT or
+  missing inputs). It's read-only (ƒ header), never writes, and does NOT change the
+  settled Overage or the P&L. Editing Tickets/Gross updates it in place.
+- **INC-ACT-03 — variance strip.** With ≥1 real actual entered, a read-only
+  **Variance** strip shows projected→actual for Sell-through, Gross, Overage, Merch,
+  VIP (green when actual ≥ projected, red otherwise). Presentation only.
+- **INC-ACT-04 — settlement cascade.** Saving a settlement with reconciled (or
+  day-of) tickets/gross **overwrites** `actual_tickets_sold` / `actual_gross` on the
+  income row (prefers reconciled), exactly like `actual_deductions`. `actual_capacity`
+  is grid-entry only — a settlement run leaves it untouched.
+- **INC-ACT-05 — P&L + invariants unchanged.** The Summary P&L **Net** is identical
+  before/after entering tickets/gross/cap (they never feed `income_gross`). The new
+  Actual columns are editable and **never lock** (Actual view passes `[]` to
+  `versionLockedCols`); they're absent from `budget_version_income`. Per-show
+  currency (216) applies to **Gross**; the projected view + #28 override are unchanged.
+
 ## Income output override (#28 — feat/income-output-override)
 
 > Migration 220 (3 boolean flags on `budget_income` + `budget_version_income`;

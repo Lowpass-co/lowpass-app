@@ -27,6 +27,10 @@ export interface ServerIncome {
   actual_merch?: number | null;
   actual_vip?: number | null;
   actual_deductions?: number | null;
+  // #24 — real attendance + gross box office + settled cap (actual context).
+  actual_tickets_sold?: number | null;
+  actual_gross?: number | null;
+  actual_capacity?: number | null;
   currency?: string | null;
   // Phase 3 — projection inputs (proposed).
   capacity?: number | null;
@@ -77,6 +81,12 @@ export interface IncomeRow {
   actual_vip: number;
   /** Phase 1 — settlement-fed deductions (actual-only; read-only in the grid). */
   actual_deductions: number;
+  // #24 — real attendance + gross box office + settled cap (actual-only,
+  // informational; NULL = not entered → the grid blanks Sell% / variance). These
+  // NEVER feed income_gross / computeBudgetPnl.
+  actual_tickets_sold: number | null;
+  actual_gross: number | null;
+  actual_capacity: number | null;
   /** Phase 2 — the show's native currency (null = tour currency). Proposed. */
   currency: string | null;
   // Phase 3 — projection inputs (proposed; %s stored 0–100). NULL = use the
@@ -171,6 +181,10 @@ export function toIncomeRows(payload: TourIncomePayload): IncomeRow[] {
     actual_merch: n(i.actual_merch),
     actual_vip: n(i.actual_vip),
     actual_deductions: n(i.actual_deductions),
+    // #24 — keep NULL when not entered (so Sell% / variance can blank), not 0.
+    actual_tickets_sold: i.actual_tickets_sold ?? null,
+    actual_gross: i.actual_gross ?? null,
+    actual_capacity: i.actual_capacity ?? null,
     currency: i.currency ?? null,
     capacity: i.capacity ?? null,
     est_sell_thru: i.est_sell_thru ?? null,
@@ -203,6 +217,9 @@ export function toIncomeRows(payload: TourIncomePayload): IncomeRow[] {
     actual_merch: 0,
     actual_vip: 0,
     actual_deductions: 0,
+    actual_tickets_sold: null,
+    actual_gross: null,
+    actual_capacity: null,
     currency: null,
     capacity: null,
     est_sell_thru: null,
