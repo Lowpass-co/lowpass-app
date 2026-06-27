@@ -103,6 +103,11 @@ export async function POST(request: Request) {
     actual_overage?: number | null;
     actual_merch?: number | null;
     actual_vip?: number | null;
+    // #24 — real attendance + gross + settled cap (informational ACTUAL context;
+    // these NEVER feed income_gross / the recompute / the projected outputs).
+    actual_tickets_sold?: number | null;
+    actual_gross?: number | null;
+    actual_capacity?: number | null;
     drop_count?: number | null;
     notes?: string | null;
   };
@@ -307,6 +312,10 @@ export async function POST(request: Request) {
     actual_overage: nullableMerge(body.actual_overage, existing?.actual_overage),
     actual_merch: nullableMerge(body.actual_merch, existing?.actual_merch),
     actual_vip: nullableMerge(body.actual_vip, existing?.actual_vip),
+    // #24 — real attendance + gross + settled cap (actual-only, informational).
+    actual_tickets_sold: nullableMerge(body.actual_tickets_sold, existing?.actual_tickets_sold),
+    actual_gross: nullableMerge(body.actual_gross, existing?.actual_gross),
+    actual_capacity: nullableMerge(body.actual_capacity, existing?.actual_capacity),
     drop_count:
       body.drop_count !== undefined ? body.drop_count : (existing?.drop_count ?? null),
     notes: body.notes !== undefined ? body.notes : (existing?.notes ?? null),

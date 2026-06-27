@@ -143,6 +143,12 @@ export async function POST(request: Request) {
     reconciled_notes?: string | null;
     deal_memo_text?: string | null;
     deal_memo_file_url?: string | null;
+    // #24 — real attendance + gross box office (informational; cascade into
+    // budget_income.actual_tickets_sold / actual_gross, prefer reconciled).
+    day_of_tickets_sold?: number | null;
+    reconciled_tickets_sold?: number | null;
+    day_of_gross?: number | null;
+    reconciled_gross?: number | null;
   };
   try {
     body = await request.json();
@@ -221,6 +227,11 @@ export async function POST(request: Request) {
   if (body.reconciled_notes !== undefined) payload.reconciled_notes = body.reconciled_notes;
   if (body.deal_memo_text !== undefined) payload.deal_memo_text = body.deal_memo_text;
   if (body.deal_memo_file_url !== undefined) payload.deal_memo_file_url = body.deal_memo_file_url;
+  // #24 — real attendance + gross (informational context for income actuals).
+  if (body.day_of_tickets_sold !== undefined) payload.day_of_tickets_sold = body.day_of_tickets_sold;
+  if (body.reconciled_tickets_sold !== undefined) payload.reconciled_tickets_sold = body.reconciled_tickets_sold;
+  if (body.day_of_gross !== undefined) payload.day_of_gross = body.day_of_gross;
+  if (body.reconciled_gross !== undefined) payload.reconciled_gross = body.reconciled_gross;
 
   if (status === 'reconciled') {
     payload.reconciled_at = now;
@@ -244,6 +255,11 @@ export async function POST(request: Request) {
   const actualOverage = settlement?.reconciled_overage ?? settlement?.day_of_overage ?? null;
   const actualMerch = settlement?.reconciled_merch ?? settlement?.day_of_merch ?? null;
   const actualDeductions = settlement?.reconciled_deductions ?? settlement?.day_of_deductions ?? null;
+  // #24 — real attendance + gross box office cascade (informational; prefer
+  // reconciled over day-of, exactly like the money figures). actual_capacity is
+  // NOT a settlement figure (grid-entry only) → never written here.
+  const actualTicketsSold = settlement?.reconciled_tickets_sold ?? settlement?.day_of_tickets_sold ?? null;
+  const actualGross = settlement?.reconciled_gross ?? settlement?.day_of_gross ?? null;
 
   // UPSERT on routing_id — a settled show with NO income row used to silently
   // lose its actuals (update-if-exists). Create the row so actuals are never
@@ -259,6 +275,9 @@ export async function POST(request: Request) {
         actual_overage: actualOverage,
         actual_merch: actualMerch,
         actual_deductions: actualDeductions,
+        // #24 — real attendance + gross (informational; never feeds income_gross).
+        actual_tickets_sold: actualTicketsSold,
+        actual_gross: actualGross,
         updated_at: now,
       },
       { onConflict: 'routing_id' },

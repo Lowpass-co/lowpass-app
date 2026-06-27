@@ -454,6 +454,9 @@ export default async function BudgetTourPage({
                 sellThru: budgetSettings?.default_sell_thru != null ? Number(budgetSettings.default_sell_thru) : null,
                 dollarsPerHead: budgetSettings?.default_dollars_per_head != null ? Number(budgetSettings.default_dollars_per_head) : null,
                 merchFeePct: budgetSettings?.default_merch_fee_pct != null ? Number(budgetSettings.default_merch_fee_pct) : null,
+                // #24 — feed the formula-overage reference the tour's real config.
+                haircut: budgetSettings?.overage_haircut != null ? Number(budgetSettings.overage_haircut) : null,
+                taxPct: budgetSettings?.overage_tax_pct != null ? Number(budgetSettings.overage_tax_pct) : null,
               }}
             />
           ) : null}

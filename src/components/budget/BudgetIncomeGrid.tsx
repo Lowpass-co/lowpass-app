@@ -19,6 +19,7 @@ import { useSearchParams } from 'next/navigation';
 import { Grid, type GridHandle } from '@/components/grid/Grid';
 import type { Column, GridFx, Row, Section } from '@/components/grid/types';
 import { convertToCurrency } from '@/lib/budget/fx';
+import { projectIncome } from '@/lib/budget/incomeProjection';
 import { toIncomeRows, type IncomeRow } from '@/lib/budget/income';
 import { labelForDayType } from '@/lib/routing/dayType';
 import { useToast } from '@/components/ui/Toast';
@@ -71,7 +72,17 @@ const HEADER_TIP: Record<string, string> = {
   vipprice: 'VIP ticket price, in the show’s currency.',
   vip: 'ƒ Computed (read-only): VIP tickets × price. Blank until both are set. Right-click → Override formula to hand-enter.',
   guarantee: 'Pre-tax guaranteed fee for the show.',
+  // #24 — Actual-view real-context columns.
+  acap: 'Real settled capacity (sellable cap after kills/holds). Drives Sell% — hand-entered (settlement doesn’t carry it).',
+  tickets: 'Real paid attendance (settlement-fed when reconciled, else hand-entered).',
+  sellpct: 'Real sell-through = tickets ÷ settled capacity. Compare to the projected Sell %.',
+  gross: 'Real gross box office (settlement-fed when reconciled, else hand-entered). Informational — never changes the P&L.',
+  fovref: 'ƒ Reference only (read-only): the overage the engine would produce from the REAL tickets/gross + this row’s projected deal terms. Never written — settlement stays authoritative.',
 };
+
+// #24 — Actual-view real-context inputs that drive Sell% + the formula-overage
+// reference (so editing one re-derives those read-only cells in place).
+const ACTUAL_CONTEXT_COLS = new Set(['acap', 'tickets', 'gross']);
 
 const num = (v: unknown): number => {
   const x = Number(v);
@@ -79,6 +90,40 @@ const num = (v: unknown): number => {
 };
 const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x));
 const postTax = (pre: number, wh: number) => pre * (1 - clamp(wh, 0, 100) / 100);
+
+// #24 — read-only "formula overage" at REAL attendance (D2). Feeds the REAL
+// tickets + REAL gross + the row's PROJECTED deal terms into the SAME projection
+// engine. Pure read; NEVER written; never a second source of truth — a reporting
+// reference answering "what should the overage have been at this real attendance?".
+// VS-only (engine rule: PLUS is manual, FLAT has no backend → null = blank "—").
+function formulaOverageRef(r: IncomeRow, cfg: { haircut: number; taxPct: number }): number | null {
+  const tickets = r.actual_tickets_sold;
+  const gross = r.actual_gross;
+  if (r.deal_type !== 'VS' || tickets == null || tickets <= 0 || gross == null) return null;
+  const out = projectIncome(
+    {
+      capacity: tickets, // real attendance → engine tickets = round(tickets × 1)
+      sellThru: 1,
+      faceValue: gross / tickets, // real per-ticket gross
+      dealType: 'VS',
+      dealPct: r.deal_pct != null ? r.deal_pct / 100 : null,
+      dealThreshold: r.deal_threshold,
+      dealPctAbove: r.deal_pct_above != null ? r.deal_pct_above / 100 : null,
+      dollarsPerHead: null,
+      merchFeePct: null,
+      vipTickets: null,
+      vipPrice: null,
+      preTaxGuarantee: r.pre_tax_guarantee,
+    },
+    cfg,
+  );
+  return out.preTaxOverage;
+}
+// #24 — real sell-through display string ("86%"); blank until cap + tickets exist.
+function actualSellPctStr(r: { actual_tickets_sold: number | null; actual_capacity: number | null }): string {
+  if (r.actual_tickets_sold == null || r.actual_capacity == null || r.actual_capacity <= 0) return '—';
+  return `${Math.round((r.actual_tickets_sold / r.actual_capacity) * 100)}%`;
+}
 
 /** INC-01 — read-only routing-context fields (Date · Type · Venue · City),
  *  from the routing each income row already carries. Display-only. */
@@ -121,13 +166,26 @@ export function BudgetIncomeGrid({
   /** PROJECTION-FIX — the tour's projection defaults (Settings, FRACTIONS), so the
    *  grid knows whether merch/overage are computable (→ value vs blank "—") and can
    *  signal that a blank $/head / fee% inherits the default. */
-  projectionDefaults?: { sellThru: number | null; dollarsPerHead: number | null; merchFeePct: number | null };
+  projectionDefaults?: {
+    sellThru: number | null;
+    dollarsPerHead: number | null;
+    merchFeePct: number | null;
+    // #24 — overage haircut + box-office tax (FRACTIONS) for the read-only
+    // formula-overage reference. Null → engine defaults (0.65 / 0.08).
+    haircut?: number | null;
+    taxPct?: number | null;
+  };
 }) {
   const { showToast } = useToast();
   const [lockModalOpen, setLockModalOpen] = useState(false);
   const defSellThru = projectionDefaults?.sellThru ?? null;
   const defPerHead = projectionDefaults?.dollarsPerHead ?? null;
   const defFeePct = projectionDefaults?.merchFeePct ?? null;
+  // #24 — config for the formula-overage reference (engine defaults when unset).
+  const projCfg = useMemo(
+    () => ({ haircut: projectionDefaults?.haircut ?? 0.65, taxPct: projectionDefaults?.taxPct ?? 0.08 }),
+    [projectionDefaults?.haircut, projectionDefaults?.taxPct],
+  );
   // PROJECTION-FIX — is each output computable from this row's inputs (+ tour
   // defaults)? A not-computable output renders blank "—", never a stray 0.
   const overageComputable = useCallback(
@@ -209,6 +267,10 @@ export function BudgetIncomeGrid({
       if (columnId === 'overage') return { actual_overage: value };
       if (columnId === 'merch') return { actual_merch: value };
       if (columnId === 'vip') return { actual_vip: value };
+      // #24 — real attendance + gross + settled cap (informational; never P&L).
+      if (columnId === 'tickets') return { actual_tickets_sold: value };
+      if (columnId === 'gross') return { actual_gross: value };
+      if (columnId === 'acap') return { actual_capacity: value };
       return null;
     },
     [view],
@@ -269,6 +331,20 @@ export function BudgetIncomeGrid({
                 ? { ...r, pre_tax_overage: num(updated.pre_tax_overage), merch_income: num(updated.merch_income), vip_income: num(updated.vip_income) }
                 : r)) ?? prev);
             }
+          } else if (ACTUAL_CONTEXT_COLS.has(columnId)) {
+            // #24 — a real tickets/gross/cap edit re-derives the read-only Sell% +
+            // formula-overage reference in place (the route returns the merged row).
+            const updated = (await res.json().catch(() => null)) as Record<string, unknown> | null;
+            if (updated) {
+              const u = updated as unknown as IncomeRow;
+              gridRef.current?.updateRowCells(routingId, {
+                sellpct: actualSellPctStr(u),
+                fovref: formulaOverageRef(u, projCfg),
+              });
+              setRows((prev) => prev?.map((r) => (r.routing_id === routingId
+                ? { ...r, actual_tickets_sold: u.actual_tickets_sold ?? null, actual_gross: u.actual_gross ?? null, actual_capacity: u.actual_capacity ?? null }
+                : r)) ?? prev);
+            }
           }
         })
         .catch(() => {
@@ -276,7 +352,7 @@ export function BudgetIncomeGrid({
           void load();
         });
     },
-    [patchFor, showToast, load, native, fxRates, overageComputable, merchComputable, vipComputable],
+    [patchFor, showToast, load, native, fxRates, overageComputable, merchComputable, vipComputable, projCfg],
   );
 
   // #28 — manual override of a computed output. The grid column id → its override
@@ -413,18 +489,34 @@ export function BudgetIncomeGrid({
         },
       ];
     }
+    // #24 — Actual real-context: editable Cap / Tickets / Gross, a read-only
+    // Sell% (tickets ÷ cap), and a read-only ƒ overage REFERENCE beside the
+    // settled Overage. The reference + Sell% are presentation-only (precomputed +
+    // patched in place); none of these feed income_gross.
+    const aNum = (id: string, label: string, w = 78, min = 60): Column =>
+      ({ id, label, type: 'number', w, min, resize: true });
+    const refMoney = (id: string, label: string): Column => ({ ...money(id, label), ro: true });
     return [
       idx,
       ...routingCols,
       currency,
+      // ── real attendance block ──
+      aNum('acap', 'Cap'),
+      aNum('tickets', 'Tickets', 90, 70),
+      { id: 'sellpct', label: 'Sell%', type: 'text', ro: true, w: 70, min: 54, resize: true },
+      money('gross', 'Gross'),
+      // ── settled money (settlement-authoritative) ──
       money('guarantee', 'Guarantee'),
       money('overage', 'Overage'),
+      // ƒ reference — what the engine implies at the REAL attendance (read-only).
+      refMoney('fovref', 'ƒ Overage'),
       money('merch', 'Merch'),
       money('vip', 'VIP'),
       // Phase 1 — settlement-fed deductions (read-only; reduces the actual total).
       { id: 'deductions', label: 'Deductions', type: 'money', w: 120, min: 90, resize: true, ro: true },
       // Actuals total IS net (guarantee + overage + merch + vip − deductions) —
       // labelled "Net" to match settlement's reconciled_net. Projected stays "Total".
+      // (Tickets/Gross/Cap/Sell%/ƒOverage are excluded — Net is unchanged.)
       { id: 'total', label: 'Net', type: 'calc', w: 130, min: 100, resize: true, calc: (r: Row) => num(r.guarantee) + num(r.overage) + num(r.merch) + num(r.vip) - num(r.deductions) },
     ];
   }, [view, currencyOptions]);
@@ -436,6 +528,38 @@ export function BudgetIncomeGrid({
     [view],
   );
 
+  // #24 — projected-vs-actual variance, aggregated in the DISPLAY currency.
+  // Presentation-only: read from the same rows the grid shows; computeBudgetPnl
+  // is NOT involved and income_gross is untouched.
+  const variance = useMemo(() => {
+    if (view !== 'actual') return null;
+    const toD = (a: number, cur: string | null) => fx.toDisplay(a, cur || native);
+    let projTickets = 0, actTickets = 0, projCap = 0, actCap = 0;
+    let projGross = 0, actGross = 0, projOver = 0, actOver = 0, projMerch = 0, actMerch = 0, projVip = 0, actVip = 0;
+    let anyActual = false;
+    for (const r of rows) {
+      const cur = r.currency;
+      const st = r.est_sell_thru != null ? r.est_sell_thru / 100 : defSellThru;
+      if (r.capacity != null) projCap += r.capacity;
+      if (r.capacity != null && st != null) {
+        projTickets += Math.round(r.capacity * st);
+        if (r.face_value != null) projGross += toD(r.capacity * st * r.face_value, cur);
+      }
+      projOver += toD(postTax(num(r.pre_tax_overage), num(r.withholding_pct)), cur);
+      projMerch += toD(num(r.merch_income), cur);
+      projVip += toD(num(r.vip_income), cur);
+      if (r.actual_capacity != null) actCap += r.actual_capacity;
+      if (r.actual_tickets_sold != null) { actTickets += r.actual_tickets_sold; anyActual = true; }
+      if (r.actual_gross != null) { actGross += toD(r.actual_gross, cur); anyActual = true; }
+      actOver += toD(num(r.actual_overage), cur);
+      actMerch += toD(num(r.actual_merch), cur);
+      actVip += toD(num(r.actual_vip), cur);
+    }
+    const projST = projCap > 0 ? projTickets / projCap : null;
+    const actST = actCap > 0 ? actTickets / actCap : null;
+    return { projTickets, actTickets, projST, actST, projGross, actGross, projOver, actOver, projMerch, actMerch, projVip, actVip, anyActual };
+  }, [view, rows, fx, native, defSellThru]);
+
   // #5 — human-readable header tooltips; #2 — a small ƒ on engine-materialised
   // outputs (overage/merch/VIP) so it's clear they're computed-but-editable.
   const labelById = useMemo(
@@ -446,7 +570,9 @@ export function BudgetIncomeGrid({
     (colId: string) => {
       const label = labelById[colId] ?? colId;
       const tip = HEADER_TIP[colId];
-      const computed = view === 'projected' && PROJECTED_OUTPUT_COLS.has(colId);
+      // ƒ glyph: projected computed outputs, AND the Actual-view formula-overage
+      // reference (#24 — read-only, "what the engine implies at real attendance").
+      const computed = (view === 'projected' && PROJECTED_OUTPUT_COLS.has(colId)) || (view === 'actual' && colId === 'fovref');
       return (
         <span title={tip} style={tip ? { cursor: 'help' } : undefined}>
           {label}
@@ -482,10 +608,18 @@ export function BudgetIncomeGrid({
             deal: r.deal_type ?? '', dealpct: r.deal_pct, dealthr: r.deal_threshold, dealabove: r.deal_pct_above,
             perhead: r.dollars_per_head, feepct: r.merch_fee_pct, viptix: r.vip_tickets, vipprice: r.vip_price,
           }
-        : { _uid: r.routing_id, cur: rowCur, currency: rowCur, ...routingFields(r), guarantee: r.actual_guarantee, overage: r.actual_overage, merch: r.actual_merch, vip: r.actual_vip, deductions: r.actual_deductions };
+        : {
+            _uid: r.routing_id, cur: rowCur, currency: rowCur, ...routingFields(r),
+            guarantee: r.actual_guarantee, overage: r.actual_overage, merch: r.actual_merch, vip: r.actual_vip, deductions: r.actual_deductions,
+            // #24 — real attendance + gross + settled cap (editable). NULL → blank.
+            acap: r.actual_capacity, tickets: r.actual_tickets_sold, gross: r.actual_gross,
+            // read-only derived: sell-through string + the formula-overage reference
+            // (recomputed in place on edit via updateRowCells).
+            sellpct: actualSellPctStr(r), fovref: formulaOverageRef(r, projCfg),
+          };
     });
     return [{ name: 'Shows', kind: 'normal', _uid: 'income', rows: gridRows }];
-  }, [rows, view, native, overageComputable, merchComputable, vipComputable]);
+  }, [rows, view, native, overageComputable, merchComputable, vipComputable, projCfg]);
 
   // #2 — make the active view unmistakable: a one-line context cue + a per-view
   // accent so a glance tells you whether you're looking at forecast or settled
@@ -494,7 +628,7 @@ export function BudgetIncomeGrid({
   const viewAccent = isProjected ? 'var(--lp-orange)' : 'var(--color-lp-status-complete)';
   const viewCue = isProjected
     ? 'Projected — forecast from the deal inputs. Overage, Merch & VIP (ƒ) are computed read-only; blank "—" = inputs incomplete.'
-    : 'Actual — settled figures from reconciliation; deductions reduce the net.';
+    : 'Actual — settled figures from reconciliation; deductions reduce the net. Enter real Cap / Tickets / Gross for Sell% + variance; the ƒ Overage is a read-only reference (the P&L is unchanged by them).';
 
   return (
     <section style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -542,6 +676,43 @@ export function BudgetIncomeGrid({
           {viewCue}
         </span>
       </div>
+
+      {/* #24 — projected-vs-actual variance strip (Actual view, read-only). */}
+      {variance && variance.anyActual ? (
+        <div
+          style={{
+            display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center',
+            padding: '8px 12px', borderRadius: 'var(--lp-radius-md)',
+            border: '1px solid var(--lp-border)', background: 'var(--lp-panel)',
+          }}
+        >
+          <span style={{ fontSize: 'var(--lp-text-xs)', fontWeight: 700, color: 'var(--lp-text-secondary)', textTransform: 'uppercase', letterSpacing: 0.4 }}>
+            Variance
+          </span>
+          {([
+            { label: 'Sell-through', proj: variance.projST != null ? `${Math.round(variance.projST * 100)}%` : '—', act: variance.actST != null ? `${Math.round(variance.actST * 100)}%` : '—', good: (variance.actST ?? 0) >= (variance.projST ?? 0) },
+            { label: 'Gross', proj: fx.formatDisplay(variance.projGross), act: fx.formatDisplay(variance.actGross), good: variance.actGross >= variance.projGross },
+            { label: 'Overage', proj: fx.formatDisplay(variance.projOver), act: fx.formatDisplay(variance.actOver), good: variance.actOver >= variance.projOver },
+            { label: 'Merch', proj: fx.formatDisplay(variance.projMerch), act: fx.formatDisplay(variance.actMerch), good: variance.actMerch >= variance.projMerch },
+            { label: 'VIP', proj: fx.formatDisplay(variance.projVip), act: fx.formatDisplay(variance.actVip), good: variance.actVip >= variance.projVip },
+          ] as const).map((c) => (
+            <span
+              key={c.label}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 'var(--lp-text-xs)',
+                padding: '3px 9px', borderRadius: 'var(--lp-radius-full)',
+                background: `color-mix(in srgb, ${c.good ? 'var(--color-lp-status-complete)' : 'var(--color-lp-error)'} 9%, transparent)`,
+                border: `1px solid color-mix(in srgb, ${c.good ? 'var(--color-lp-status-complete)' : 'var(--color-lp-error)'} 26%, transparent)`,
+              }}
+            >
+              <span style={{ color: 'var(--lp-text-tertiary)', fontWeight: 600 }}>{c.label}</span>
+              <span style={{ color: 'var(--lp-text-secondary)' }}>{c.proj}</span>
+              <span aria-hidden style={{ color: 'var(--lp-text-tertiary)' }}>→</span>
+              <span style={{ color: c.good ? 'var(--color-lp-status-complete)' : 'var(--color-lp-error)', fontWeight: 700 }}>{c.act}</span>
+            </span>
+          ))}
+        </div>
+      ) : null}
 
       {rows.length === 0 ? (
         <div style={{ borderRadius: 'var(--lp-radius-lg)', border: '1px solid var(--lp-border-strong)', background: 'var(--lp-bg)', color: 'var(--lp-text-tertiary)', fontSize: 13, padding: '32px 16px', textAlign: 'center' }}>
