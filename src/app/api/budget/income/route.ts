@@ -80,6 +80,11 @@ export async function POST(request: Request) {
     pre_tax_overage?: number;
     merch_income?: number;
     vip_income?: number;
+    // #28 — per-output manual override flags. When true the route stops
+    // recomputing that output from the inputs and keeps the hand-entered value.
+    overage_is_override?: boolean;
+    merch_is_override?: boolean;
+    vip_is_override?: boolean;
     // Phase 3 — projection inputs (proposed). The engine materialises the value
     // columns above from these (deal-aware, VS only).
     capacity?: number | null;
@@ -143,6 +148,8 @@ export async function POST(request: Request) {
     // Phase 3 — projection inputs are proposed structure → versioned + lock-guarded.
     'capacity', 'est_sell_thru', 'face_value', 'deal_type', 'deal_pct', 'deal_threshold',
     'deal_pct_above', 'dollars_per_head', 'merch_fee_pct', 'vip_tickets', 'vip_price',
+    // #28 — setting/clearing an override is a proposed change → lock-guarded too.
+    'overage_is_override', 'merch_is_override', 'vip_is_override',
   ];
   if (PROPOSED_INCOME.some((k) => (body as Record<string, unknown>)[k] !== undefined)) {
     const { locked, version } = await resolveLockState(supabase, routingRow.tour_id as string, workspaceId);
@@ -211,14 +218,25 @@ export async function POST(request: Request) {
   let merchIncome = numMerge(body.merch_income, existing?.merch_income);
   let vipIncome = numMerge(body.vip_income, existing?.vip_income);
 
+  // #28 — per-output override flags (merge: body wins, else keep existing). When
+  // set, the matching output is HAND-ENTERED and the engine must not recompute it.
+  const boolMerge = (b: boolean | undefined, ex: unknown): boolean =>
+    b !== undefined ? !!b : !!ex;
+  const overageIsOverride = boolMerge(body.overage_is_override, existing?.overage_is_override);
+  const merchIsOverride = boolMerge(body.merch_is_override, existing?.merch_is_override);
+  const vipIsOverride = boolMerge(body.vip_is_override, existing?.vip_is_override);
+
   const bodyKeys = Object.keys(body);
   const has = (keys: string[]) => keys.some((k) => bodyKeys.includes(k));
   const OVERAGE_INPUTS = ['capacity', 'est_sell_thru', 'face_value', 'deal_type', 'deal_pct', 'deal_threshold', 'deal_pct_above', 'withholding_pct', 'pre_tax_guarantee'];
   const MERCH_INPUTS = ['capacity', 'est_sell_thru', 'dollars_per_head', 'merch_fee_pct'];
   const VIP_INPUTS = ['vip_tickets', 'vip_price'];
-  const recomputeOverage = has(OVERAGE_INPUTS);
-  const recomputeMerch = has(MERCH_INPUTS);
-  const recomputeVip = has(VIP_INPUTS);
+  // Recompute when an input changed OR the override was just CLEARED (refill from
+  // the engine immediately) — but NEVER while the override is set (the gate is the
+  // explicit flag, so a stray 0 can't freeze the formula: an unset flag recomputes).
+  const recomputeOverage = !overageIsOverride && (has(OVERAGE_INPUTS) || body.overage_is_override === false);
+  const recomputeMerch = !merchIsOverride && (has(MERCH_INPUTS) || body.merch_is_override === false);
+  const recomputeVip = !vipIsOverride && (has(VIP_INPUTS) || body.vip_is_override === false);
 
   if (recomputeOverage || recomputeMerch || recomputeVip) {
     // Per-tour defaults + config (UNVERSIONED) feed the engine; per-show inputs
@@ -275,6 +293,10 @@ export async function POST(request: Request) {
     post_tax_overage: postTaxFromPreTax(preTaxOverage, withholdingPct),
     merch_income: merchIncome,
     vip_income: vipIncome,
+    // #28 — persist the override flags (the value lives in the columns above).
+    overage_is_override: overageIsOverride,
+    merch_is_override: merchIsOverride,
+    vip_is_override: vipIsOverride,
     currency: currencyVal,
     // Phase 3 — projection inputs.
     capacity, est_sell_thru: estSellThru, face_value: faceValue, deal_type: dealType,
@@ -308,6 +330,8 @@ export async function POST(request: Request) {
         version_id: active.id, routing_id, workspace_id: workspaceId,
         pre_tax_guarantee: preTaxGuarantee, withholding_pct: withholdingPct, pre_tax_overage: preTaxOverage,
         merch_income: merchIncome, vip_income: vipIncome,
+        // #28 — mirror the override flags into the draft snapshot (lock with it).
+        overage_is_override: overageIsOverride, merch_is_override: merchIsOverride, vip_is_override: vipIsOverride,
         currency: currencyVal,
         // Phase 3 — mirror the projection inputs (versioning tax).
         capacity, est_sell_thru: estSellThru, face_value: faceValue, deal_type: dealType,

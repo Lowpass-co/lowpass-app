@@ -304,6 +304,11 @@ export default async function BudgetTourPage({
         row.pre_tax_overage = pi.pre_tax_overage;
         row.merch_income = pi.merch_income;
         row.vip_income = pi.vip_income;
+        // #28 — overlay the override flags so a viewed version shows which
+        // outputs were hand-entered (read-only here; the non-draft lock applies).
+        row.overage_is_override = pi.overage_is_override;
+        row.merch_is_override = pi.merch_is_override;
+        row.vip_is_override = pi.vip_is_override;
         row.currency = pi.currency;
         // Phase 3 — overlay the projection inputs from the version snapshot.
         row.capacity = pi.capacity;

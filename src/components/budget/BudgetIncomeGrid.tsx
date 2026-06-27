@@ -63,13 +63,13 @@ const HEADER_TIP: Record<string, string> = {
   dealabove: 'Tiered VS: the escalated rate on tickets above the threshold.',
   wh: 'Withholding tax %. Applied to guarantee + overage in the P&L.',
   posttax: 'Guarantee after withholding (pre_tax × (1 − WH%)). Computed.',
-  overage: 'ƒ Computed (read-only) for VS deals, pre-withholding. Blank until the inputs are complete.',
+  overage: 'ƒ Computed (read-only) for VS deals, pre-withholding. Blank until the inputs are complete. Right-click → Override formula to hand-enter (e.g. a PLUS/one-off deal).',
   perhead: 'Net merch spend per head. Blank inherits the tour default (Settings → Projection defaults); type a value to override this show.',
   feepct: 'Average merch fee %. Blank inherits the tour default (Settings → Projection defaults); type a value to override this show.',
-  merch: 'ƒ Computed (read-only): Cap × Sell-thru × $/head × Fee%. Blank until the inputs are complete.',
+  merch: 'ƒ Computed (read-only): Cap × Sell-thru × $/head × Fee%. Blank until the inputs are complete. Right-click → Override formula to hand-enter.',
   viptix: 'Number of VIP tickets.',
   vipprice: 'VIP ticket price, in the show’s currency.',
-  vip: 'ƒ Computed (read-only): VIP tickets × price. Blank until both are set.',
+  vip: 'ƒ Computed (read-only): VIP tickets × price. Blank until both are set. Right-click → Override formula to hand-enter.',
   guarantee: 'Pre-tax guaranteed fee for the show.',
 };
 
@@ -258,9 +258,11 @@ export function BudgetIncomeGrid({
               const u = updated as unknown as IncomeRow;
               // Patch the cell to the computed value, or null → "—" when the row
               // isn't computable (matches the data-mapping blank logic — no stray 0).
-              const overage = overageComputable(u) ? num(updated.pre_tax_overage) : null;
-              const merch = merchComputable(u) ? num(updated.merch_income) : null;
-              const vip = vipComputable(u) ? num(updated.vip_income) : null;
+              // #28 — an OVERRIDDEN output is hand-entered: never blank it, never
+              // overwrite with a recompute (the route already left it untouched).
+              const overage = u.overage_is_override || overageComputable(u) ? num(updated.pre_tax_overage) : null;
+              const merch = u.merch_is_override || merchComputable(u) ? num(updated.merch_income) : null;
+              const vip = u.vip_is_override || vipComputable(u) ? num(updated.vip_income) : null;
               gridRef.current?.updateRowCells(routingId, { overage, merch, vip });
               // keep React state coherent for the next legitimate remount (view switch).
               setRows((prev) => prev?.map((r) => (r.routing_id === routingId
@@ -275,6 +277,75 @@ export function BudgetIncomeGrid({
         });
     },
     [patchFor, showToast, load, native, fxRates, overageComputable, merchComputable, vipComputable],
+  );
+
+  // #28 — manual override of a computed output. The grid column id → its override
+  // FLAG column + the materialised VALUE column (the value lives in that column —
+  // computeBudgetPnl reads it unchanged; the flag just gates the route's recompute).
+  const isComputable = useCallback(
+    (colId: string, r: IncomeRow) =>
+      colId === 'overage' ? overageComputable(r) : colId === 'merch' ? merchComputable(r) : vipComputable(r),
+    [overageComputable, merchComputable, vipComputable],
+  );
+  const isOutputOverridden = useCallback(
+    (routingId: string, colId: string) => {
+      const r = rows.find((x) => x.routing_id === routingId);
+      if (!r) return false;
+      return colId === 'overage' ? r.overage_is_override : colId === 'merch' ? r.merch_is_override : colId === 'vip' ? r.vip_is_override : false;
+    },
+    [rows],
+  );
+  // POST a single override-flag change; share the lock/error handling with onEdit.
+  const postOverrideFlag = useCallback(
+    (routingId: string, flagField: 'overage_is_override' | 'merch_is_override' | 'vip_is_override', value: boolean) =>
+      fetch('/api/budget/income', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ routing_id: routingId, [flagField]: value }),
+      }),
+    [],
+  );
+  const setOverride = useCallback(
+    (routingId: string, colId: string) => {
+      const flagField = colId === 'overage' ? 'overage_is_override' : colId === 'merch' ? 'merch_is_override' : 'vip_is_override';
+      const valueField = colId === 'overage' ? 'pre_tax_overage' : colId === 'merch' ? 'merch_income' : 'vip_income';
+      // Optimistic: flag the row + surface the stored value in the (now editable)
+      // cell so the user types over a real basis (a PLUS row's overage was "—").
+      let stored = 0;
+      setRows((prev) => prev.map((r) => {
+        if (r.routing_id !== routingId) return r;
+        stored = num(r[valueField]);
+        return { ...r, [flagField]: true };
+      }));
+      gridRef.current?.updateRowCells(routingId, { [colId]: stored });
+      void postOverrideFlag(routingId, flagField, true).then((res) => {
+        if (res.status === 423) { setLockModalOpen(true); void load(); }
+        else if (!res.ok) { showToast('Could not override', 'error'); void load(); }
+      });
+    },
+    [postOverrideFlag, load, showToast],
+  );
+  const clearOverride = useCallback(
+    (routingId: string, colId: string) => {
+      const flagField = colId === 'overage' ? 'overage_is_override' : colId === 'merch' ? 'merch_is_override' : 'vip_is_override';
+      const valueField = colId === 'overage' ? 'pre_tax_overage' : colId === 'merch' ? 'merch_income' : 'vip_income';
+      setRows((prev) => prev.map((r) => (r.routing_id === routingId ? { ...r, [flagField]: false } : r)));
+      // Clearing the flag → the route recomputes from the inputs and returns the
+      // fresh value; patch the cell to it (or "—" when the row isn't computable).
+      void postOverrideFlag(routingId, flagField, false).then(async (res) => {
+        if (res.status === 423) { setLockModalOpen(true); void load(); return; }
+        if (!res.ok) { showToast('Could not revert', 'error'); void load(); return; }
+        const updated = (await res.json().catch(() => null)) as Record<string, unknown> | null;
+        if (!updated) return;
+        const u = updated as unknown as IncomeRow;
+        const val = isComputable(colId, u) ? num(updated[valueField]) : null;
+        gridRef.current?.updateRowCells(routingId, { [colId]: val });
+        setRows((prev) => prev.map((r) => (r.routing_id === routingId
+          ? { ...r, pre_tax_overage: num(updated.pre_tax_overage), merch_income: num(updated.merch_income), vip_income: num(updated.vip_income) }
+          : r)) ?? prev);
+      });
+    },
+    [postOverrideFlag, load, showToast, isComputable],
   );
 
   const columns: Column[] = useMemo(() => {
@@ -401,9 +472,11 @@ export function BudgetIncomeGrid({
             guarantee: r.pre_tax_guarantee, wh: r.withholding_pct,
             // PROJECTION-FIX — computed outputs: the value when computable, else
             // null → the grid renders "—" (NOT a literal 0). Kills the persistent 0.
-            overage: overageComputable(r) ? r.pre_tax_overage : null,
-            merch: merchComputable(r) ? r.merch_income : null,
-            vip: vipComputable(r) ? r.vip_income : null,
+            // #28 — an OVERRIDDEN output is a real hand-entered value; always show
+            // it (never blank), regardless of whether the inputs are complete.
+            overage: r.overage_is_override || overageComputable(r) ? r.pre_tax_overage : null,
+            merch: r.merch_is_override || merchComputable(r) ? r.merch_income : null,
+            vip: r.vip_is_override || vipComputable(r) ? r.vip_income : null,
             // Phase 3 — projection inputs (null → blank cell, falls back to tour default).
             cap: r.capacity, sellthru: r.est_sell_thru, face: r.face_value,
             deal: r.deal_type ?? '', dealpct: r.deal_pct, dealthr: r.deal_threshold, dealabove: r.deal_pct_above,
@@ -488,6 +561,19 @@ export function BudgetIncomeGrid({
             headerFor={headerFor}
             referenceCols={['idx', 'date', 'daytype', 'venue', 'city']}
             columnPrefsKey={`income-cols:${tourId}`}
+            cellOverride={
+              view === 'projected'
+                ? {
+                    cols: ['overage', 'merch', 'vip'],
+                    isOverridden: isOutputOverridden,
+                    onSet: setOverride,
+                    onClear: clearOverride,
+                    warnBody:
+                      'This output will stop tracking the formula — the P&L will use the number you type. Enter the pre-withholding value; revert any time to recompute.',
+                    inputHint: 'Pre-withholding value',
+                  }
+                : undefined
+            }
             versionLocked={versionLocked}
             versionLockedCols={versionLockedCols}
             onLockedEdit={() => setLockModalOpen(true)}

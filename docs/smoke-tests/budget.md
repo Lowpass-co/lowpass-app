@@ -285,6 +285,36 @@ Reference tour: "Warning Support". Templates picker needs a NEW empty tour.
   `pre_tax_overage`/`merch_income`/`vip_income`; the income breakdown + Net are
   unchanged from the computed values. P1/P2 + the versioning lock unaffected.
 
+## Income output override (#28 — feat/income-output-override)
+
+> Migration 220 (3 boolean flags on `budget_income` + `budget_version_income`;
+> also patches `amend_budget_version` to carry the full income column set — fixes
+> a latent 217 gap). Per-output manual override of a computed projected output.
+> Storage = Option A (flag gates the route recompute; value stays in the existing
+> column → computeBudgetPnl unchanged). WH unchanged (override is pre-WH). The
+> grid seam is opt-in (`cellOverride`) so Payroll / Rooming / Channel-List /
+> Expenses are untouched. tsc 0, eslint 0, build green.
+
+- **INC-OVR-01 — override a computed output.** Projected view, a VS show whose
+  **Overage** computes (e.g. ≈£59,628). Right-click the Overage cell → **Override
+  formula** → warning modal → **Override**. The cell becomes editable (input
+  tooltipped *Pre-withholding value*); type a number → Enter. It shows a distinct
+  **✎** marker + faint violet wash (NOT the orange ƒ). The same works on **Merch**
+  / **VIP**, and on a **PLUS/FLAT** show whose output was blank "—".
+- **INC-OVR-02 — override survives an input edit.** With Overage overridden, edit
+  an unrelated input on that row (Cap / Face / Deal %). The overridden Overage
+  value does **not** change; the *other*, non-overridden outputs (Merch/VIP) still
+  recompute. (Route gate: `recomputeOverage = has(OVERAGE_INPUTS) && !overage_is_override`.)
+- **INC-OVR-03 — revert to formula.** Right-click an overridden cell → **Revert to
+  formula** → the ✎ marker clears, the cell goes read-only ƒ again, and it
+  recomputes from the current inputs (or "—" if they're incomplete).
+- **INC-OVR-04 — overrides lock + snapshot with the version.** An overridden
+  output persists into the draft snapshot, is **read-only** when viewing an
+  approved/Current version (the non-draft lock — right-click → override fires the
+  Unlock modal, not an edit), and the P&L (`computeBudgetPnl`) uses the override
+  value. Amending an approved version carries the override (and the projection
+  inputs) into the new draft.
+
 ## Income grid polish R2 (feat/income-grid-r2)
 
 > No schema. Three grid-core polish items, all additive/opt-in so Payroll /

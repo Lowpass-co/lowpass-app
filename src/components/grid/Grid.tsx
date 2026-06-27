@@ -163,6 +163,23 @@ export interface GridProps {
       mount. The `idx` + `referenceCols` columns are never hideable. Default
       undefined → no persistence (every other grid unchanged). */
   columnPrefsKey?: string;
+  /** #28 — per-cell manual override of a COMPUTED (read-only) output cell.
+      Opt-in. For a column listed in `cols`: when `isOverridden(uid,col)` is true
+      the cell ignores its column `ro` (becomes editable) and shows a distinct ✎
+      marker; right-clicking an override-capable output opens a menu — "Override
+      formula" (→ warn → editable) or "Revert to formula" (→ host recomputes).
+      Mirrors the per-cell `isVersionLocked` seam. Default undefined → no
+      behaviour change (every other grid + non-output cell unchanged). */
+  cellOverride?: {
+    cols: string[];
+    isOverridden: (rowUid: string, colId: string) => boolean;
+    onSet: (rowUid: string, colId: string) => void;
+    onClear: (rowUid: string, colId: string) => void;
+    /** confirm body shown before enabling an override. */
+    warnBody?: string;
+    /** tooltip on the edit input + ✎ marker (e.g. "Pre-withholding value"). */
+    inputHint?: string;
+  };
 }
 
 /** Imperative handle (opt-in via ref). Lets a host patch specific cells by row
@@ -215,9 +232,17 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
   referenceCols,
   onFileDropToRow,
   columnPrefsKey,
+  cellOverride,
 }: GridProps, ref) {
   const onLockedEditRef = useRef(onLockedEdit);
   onLockedEditRef.current = onLockedEdit;
+  // #28 — live ref so the keydown/right-click handlers read the latest override
+  // config without re-subscribing. `pendingOverrideRef` is a synchronous bridge:
+  // the moment the user confirms an override we want the cell editable, before
+  // the host's optimistic state round-trips back through props.
+  const cellOverrideRef = useRef(cellOverride);
+  cellOverrideRef.current = cellOverride;
+  const pendingOverrideRef = useRef<Set<string>>(new Set());
   const fx = fxProp ?? demoFx;
   // Totals / section-header / KPI maths must use the SAME injected FX + display
   // currency as the cells — not gridModel's USD-pivot `disp`/`fmt`. (BUD-40.)
@@ -261,6 +286,16 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
   // Versioning — which columns the lock applies to (default Expenses' `est`).
   const versionLockedColSet = useMemo(() => new Set(versionLockedCols ?? ['est']), [versionLockedCols]);
   const isVersionLocked = (key: string) => versionLocked && versionLockedColSet.has(key);
+
+  // #28 — per-cell override seam. `isOverrideCol` = the column supports override
+  // at all; `isCellOverridden` = THIS row's output is currently overridden (host
+  // truth ∪ the synchronous pending bridge) → editable + ✎-marked.
+  const isOverrideCol = (key: string) => !!cellOverrideRef.current?.cols.includes(key);
+  const isCellOverridden = (uid: string | undefined, key: string): boolean => {
+    if (!uid || !isOverrideCol(key)) return false;
+    if (pendingOverrideRef.current.has(`${uid}:${key}`)) return true;
+    return !!cellOverrideRef.current?.isOverridden(uid, key);
+  };
 
   // Receipts B1.5 — which row a FILE is being dragged over (for the highlight).
   // A ref + render() (not state) so it never causes a stale-closure re-render
@@ -480,7 +515,10 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
       const key = NC()[sel().fc];
       const cdef = colDef(cols(), key);
       const t = cdef?.type;
-      if (cdef?.ro) return;
+      // #28 — a computed (ro) output stays read-only UNLESS this cell is overridden,
+      // in which case it's hand-editable (the value lives in the same column).
+      const ovUid = getRowObj()?.row?._uid as string | undefined;
+      if (cdef?.ro && !isCellOverridden(ovUid, key)) return;
       // Versioning (B2) — proposed (est) is read-only on an approved version;
       // an edit attempt raises the Unlock-or-New-Version modal (host-owned).
       if (isVersionLocked(key)) {
@@ -596,6 +634,61 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
     menuRef.current = null;
     render();
   }, [render]);
+
+  // #28 — right-click an override-capable output → set/clear the manual override.
+  // "Override formula" warns (consequence is the P&L stops tracking the formula),
+  // then enables + opens the editor; "Revert to formula" clears the flag so the
+  // host recomputes. A version-locked cell can't be overridden → fires the modal.
+  const openOverrideMenu = (
+    anchorEl: HTMLElement,
+    row: Row,
+    id: string,
+    fi: number,
+    ci: number,
+    overridden: boolean,
+  ) => {
+    const co = cellOverrideRef.current;
+    const uid = row._uid as string | undefined;
+    if (!co || !uid) return;
+    if (isVersionLocked(id)) {
+      onLockedEditRef.current?.();
+      return;
+    }
+    const a = anchorEl.getBoundingClientRect();
+    menuRef.current = {
+      anchor: { left: a.left, bottom: a.bottom },
+      options: overridden
+        ? [{ value: '__revert__', label: 'Revert to formula' }]
+        : [{ value: '__override__', label: 'Override formula' }],
+      onPick: (v) => {
+        closeMenu();
+        if (v === '__override__') {
+          confirmRef.current = {
+            title: 'Override the formula?',
+            body:
+              co.warnBody ??
+              'This output will stop tracking the formula — the P&L will use the number you type. You can revert to the formula later.',
+            confirmLabel: 'Override',
+            onYes: () => {
+              // Bridge: mark overridden synchronously so startEdit sees an
+              // editable cell before the host's optimistic state round-trips.
+              pendingOverrideRef.current.add(`${uid}:${id}`);
+              co.onSet(uid, id);
+              selRef.current = { ar: fi, ac: ci, fr: fi, fc: ci };
+              render();
+              startEdit();
+            },
+          };
+          render();
+        } else if (v === '__revert__') {
+          pendingOverrideRef.current.delete(`${uid}:${id}`);
+          co.onClear(uid, id);
+          render();
+        }
+      },
+    };
+    render();
+  };
 
   /* ---- slide-over (Phase 2) ---- */
   const openSlide = useCallback(
@@ -1359,9 +1452,12 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
     // presentation — commit/parse, the fill-handle, and copy-paste are untouched.
     const editKey = NC()[editRef.current!.c];
     const numericEdit = ((t) => t === 'money' || t === 'number')(colDef(cols(), editKey)?.type);
+    // #28 — editing an overridden output: surface the value's meaning (pre-WH).
+    const overrideHint = isOverrideCol(editKey) ? cellOverrideRef.current?.inputHint : undefined;
     return (
     <input
       className="editing"
+      title={overrideHint}
       inputMode={numericEdit ? 'decimal' : undefined}
       style={numericEdit ? { textAlign: 'right' } : undefined}
       defaultValue={editRef.current?.prefill ?? ''}
@@ -1713,10 +1809,14 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
     // Wide mode (matrices): fill the whole cell with the optColor tint. The
     // selection style (active/selected) takes precedence (spread last).
     const wideTint = wide && t === 'dropdown' ? col.optColors?.[String(row[id])] : null;
+    // #28 — right-click an override-capable output to set/clear the override;
+    // an overridden cell wears a distinct ✎ marker (NOT the header ƒ).
+    const overridable = isOverrideCol(id);
+    const overridden = overridable && isCellOverridden(row._uid as string | undefined, id);
     return (
       <div
         key={key}
-        className={`c cell${numCls}${mut}${cls}`}
+        className={`c cell${numCls}${mut}${cls}${overridden ? ' cell-override' : ''}`}
         style={{
           ...(wideTint ? { background: `color-mix(in srgb, ${wideTint} 20%, transparent)` } : null),
           ...selStyle(isActive, selected),
@@ -1724,8 +1824,26 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
         data-r={fi}
         data-c={ci}
         onPointerDown={(e) => onCellPointerDown(e, fi, ci)}
+        onContextMenu={
+          overridable
+            ? (e) => {
+                e.preventDefault();
+                openOverrideMenu(e.currentTarget, row, id, fi, ci, !!overridden);
+              }
+            : undefined
+        }
       >
         {showEdit ? renderEditInput() : cellInner(row, col, sec, ri)}
+        {overridden && !showEdit ? (
+          <span
+            className="cell-override-mark"
+            aria-hidden
+            title={cellOverrideRef.current?.inputHint ?? 'Manual override (right-click to revert)'}
+            style={{ position: 'absolute', top: 1, left: 3, fontSize: 9, lineHeight: 1, color: 'var(--lp-violet)', fontWeight: 700, pointerEvents: 'none' }}
+          >
+            ✎
+          </span>
+        ) : null}
         {/* Grid-v2 #2 — fill-handle on the active cell's bottom-right (opt-in).
             Its own pointerdown starts the fill drag; the cell handler ignores
             `.fillhandle` so it doesn't start a selection. */}

@@ -432,6 +432,13 @@
 .lp-grid .cell-lock { position: relative; }
 .lp-grid .lockmini { margin-left: 6px; opacity: 0.4; font-size: var(--lp-text-2xs); }
 
+/* #28 — a manually-overridden computed output: faint violet wash + the ✎ marker
+   (set inline) so it reads as hand-entered, distinct from the orange ƒ header. */
+.lp-grid .cell-override {
+  background: color-mix(in srgb, var(--lp-violet) 9%, transparent);
+  box-shadow: inset 2px 0 0 0 var(--lp-violet);
+}
+
 .lp-grid .chk {
   width: 16px;
   height: 16px;

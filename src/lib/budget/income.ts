@@ -18,6 +18,10 @@ export interface ServerIncome {
   pre_tax_overage?: number;
   merch_income?: number;
   vip_income?: number;
+  // #28 — per-output manual override flags.
+  overage_is_override?: boolean | null;
+  merch_is_override?: boolean | null;
+  vip_is_override?: boolean | null;
   actual_guarantee?: number | null;
   actual_overage?: number | null;
   actual_merch?: number | null;
@@ -62,6 +66,11 @@ export interface IncomeRow {
   pre_tax_overage: number;
   merch_income: number;
   vip_income: number;
+  // #28 — per-output manual override flags (proposed; default false). When true,
+  // that output is hand-entered and the engine won't recompute it.
+  overage_is_override: boolean;
+  merch_is_override: boolean;
+  vip_is_override: boolean;
   actual_guarantee: number;
   actual_overage: number;
   actual_merch: number;
@@ -154,6 +163,9 @@ export function toIncomeRows(payload: TourIncomePayload): IncomeRow[] {
     pre_tax_overage: n(i.pre_tax_overage),
     merch_income: n(i.merch_income),
     vip_income: n(i.vip_income),
+    overage_is_override: !!i.overage_is_override,
+    merch_is_override: !!i.merch_is_override,
+    vip_is_override: !!i.vip_is_override,
     actual_guarantee: n(i.actual_guarantee),
     actual_overage: n(i.actual_overage),
     actual_merch: n(i.actual_merch),
@@ -183,6 +195,9 @@ export function toIncomeRows(payload: TourIncomePayload): IncomeRow[] {
     pre_tax_overage: 0,
     merch_income: 0,
     vip_income: 0,
+    overage_is_override: false,
+    merch_is_override: false,
+    vip_is_override: false,
     actual_guarantee: 0,
     actual_overage: 0,
     actual_merch: 0,

@@ -93,6 +93,10 @@ export interface ProposedIncome {
   pre_tax_overage: number;
   merch_income: number;
   vip_income: number;
+  /** #28 — per-output manual override flags (proposed; default false). */
+  overage_is_override: boolean;
+  merch_is_override: boolean;
+  vip_is_override: boolean;
   /** Phase 2 — the show's native currency (NULL = tour currency). */
   currency: string | null;
   // Phase 3 — projection inputs (proposed; nullable, %s stored 0–100).
@@ -118,7 +122,7 @@ export async function getProposedIncomeMap(
   const m = new Map<string, ProposedIncome>();
   const { data } = await supabase
     .from('budget_version_income')
-    .select('routing_id, pre_tax_guarantee, withholding_pct, pre_tax_overage, merch_income, vip_income, currency, capacity, est_sell_thru, face_value, deal_type, deal_pct, deal_threshold, deal_pct_above, dollars_per_head, merch_fee_pct, vip_tickets, vip_price')
+    .select('routing_id, pre_tax_guarantee, withholding_pct, pre_tax_overage, merch_income, vip_income, overage_is_override, merch_is_override, vip_is_override, currency, capacity, est_sell_thru, face_value, deal_type, deal_pct, deal_threshold, deal_pct_above, dollars_per_head, merch_fee_pct, vip_tickets, vip_price')
     .eq('version_id', versionId);
   for (const r of data ?? []) {
     const v = r as Record<string, unknown>;
@@ -128,6 +132,9 @@ export async function getProposedIncomeMap(
       pre_tax_overage: Number(v.pre_tax_overage) || 0,
       merch_income: Number(v.merch_income) || 0,
       vip_income: Number(v.vip_income) || 0,
+      overage_is_override: !!v.overage_is_override,
+      merch_is_override: !!v.merch_is_override,
+      vip_is_override: !!v.vip_is_override,
       currency: (v.currency as string | null) ?? null,
       capacity: numOrNull(v.capacity),
       est_sell_thru: numOrNull(v.est_sell_thru),
