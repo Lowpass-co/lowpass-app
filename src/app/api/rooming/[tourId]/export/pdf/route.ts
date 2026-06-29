@@ -13,9 +13,9 @@ import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { loadRoomingExportData } from '@/lib/export/rooming-data';
 import { buildRoomingBodyHtml } from '@/lib/export/rooming-pdf';
-import { renderDocument, PAGE_PDF_OPTIONS, PDF_HEADER_TEMPLATE, pdfFooterTemplate } from '@/lib/export/shell';
+import { renderDocument } from '@/lib/export/shell';
+import { exportPdfResponse } from '@/lib/export/render';
 import { fetchLogoDataUri, lowpassMarkDataUri } from '@/lib/export/logo';
-import { getBrowser, closePage } from '@/lib/rider-packs/puppeteer';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -58,48 +58,33 @@ export async function POST(
     .maybeSingle();
   if (!tour) return NextResponse.json({ error: 'Tour not found' }, { status: 404 });
 
-  const data = await loadRoomingExportData(
-    supabase,
-    { id: tour.id as string, name: (tour.name as string) || 'Tour', start_date: tour.start_date as string | null, end_date: tour.end_date as string | null, artist_id: tour.artist_id as string | null },
-    profile.workspace_id as string,
-  );
+  // Build + render inside the shared helper so a loader/render throw is logged +
+  // returned as a real 500 (never a silent non-PDF). RLS-scoped tour resolved above.
+  return exportPdfResponse('rooming', async () => {
+    const data = await loadRoomingExportData(
+      supabase,
+      { id: tour.id as string, name: (tour.name as string) || 'Tour', start_date: tour.start_date as string | null, end_date: tour.end_date as string | null, artist_id: tour.artist_id as string | null },
+      profile.workspace_id as string,
+    );
 
-  const [logoDataUri, markDataUri] = await Promise.all([fetchLogoDataUri(data.logoUrl), lowpassMarkDataUri()]);
+    const [logoDataUri, markDataUri] = await Promise.all([fetchLogoDataUri(data.logoUrl), lowpassMarkDataUri()]);
 
-  const bodyHtml = buildRoomingBodyHtml(data);
-  const html = renderDocument({
-    letterhead: {
-      artistName: data.artist?.name ?? null,
-      tourName: data.tour.name,
-      tourDates: tourDateRange(data.tour.start_date, data.tour.end_date),
-      logoDataUri,
-      generatedOn: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
-    },
-    title: 'Rooming list',
-    subtitle: `${data.hotels.length} hotel${data.hotels.length === 1 ? '' : 's'}`,
-    bodyHtml,
-  });
-
-  const footerNote = `${data.artist?.name ? `${data.artist.name} — ` : ''}${data.tour.name} · Rooming`;
-  const browser = await getBrowser();
-  const page = await browser.newPage();
-  try {
-    await page.setContent(html, { waitUntil: 'load', timeout: 20_000 });
-    const buffer = await page.pdf({
-      ...PAGE_PDF_OPTIONS,
-      headerTemplate: PDF_HEADER_TEMPLATE,
-      footerTemplate: pdfFooterTemplate(footerNote, markDataUri),
-    });
-    const filename = `${sanitize(data.artist?.name ?? '')} — ${sanitize(data.tour.name)} — Rooming.pdf`.replace(/^ — /, '');
-    return new Response(new Uint8Array(buffer), {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="${filename}"`,
-        'Cache-Control': 'no-store',
+    const bodyHtml = buildRoomingBodyHtml(data);
+    const html = renderDocument({
+      letterhead: {
+        artistName: data.artist?.name ?? null,
+        tourName: data.tour.name,
+        tourDates: tourDateRange(data.tour.start_date, data.tour.end_date),
+        logoDataUri,
+        generatedOn: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
       },
+      title: 'Rooming list',
+      subtitle: `${data.hotels.length} hotel${data.hotels.length === 1 ? '' : 's'}`,
+      bodyHtml,
     });
-  } finally {
-    await closePage(page);
-  }
+
+    const footerNote = `${data.artist?.name ? `${data.artist.name} — ` : ''}${data.tour.name} · Rooming`;
+    const filename = `${sanitize(data.artist?.name ?? '')} — ${sanitize(data.tour.name)} — Rooming.pdf`.replace(/^ — /, '');
+    return { html, footerNote, markDataUri, filename };
+  });
 }

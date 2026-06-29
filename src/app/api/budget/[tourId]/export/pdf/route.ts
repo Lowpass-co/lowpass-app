@@ -14,9 +14,9 @@ import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { loadBudgetExportData } from '@/lib/export/budget-data';
 import { buildBudgetBodyHtml, type ExportScope } from '@/lib/export/budget-pdf';
-import { renderDocument, PAGE_PDF_OPTIONS, PDF_HEADER_TEMPLATE, pdfFooterTemplate } from '@/lib/export/shell';
+import { renderDocument } from '@/lib/export/shell';
+import { exportPdfResponse } from '@/lib/export/render';
 import { fetchLogoDataUri, lowpassMarkDataUri } from '@/lib/export/logo';
-import { getBrowser, closePage } from '@/lib/rider-packs/puppeteer';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -65,53 +65,38 @@ export async function POST(
     .maybeSingle();
   if (!tour) return NextResponse.json({ error: 'Tour not found' }, { status: 404 });
 
-  const data = await loadBudgetExportData(
-    supabase,
-    { id: tour.id as string, name: (tour.name as string) || 'Tour', currency: tour.currency as string | null, start_date: tour.start_date as string | null, end_date: tour.end_date as string | null, artist_id: tour.artist_id as string | null },
-    profile.workspace_id as string,
-    { versionId },
-  );
+  // Build + render inside the shared helper so a loader/render throw is logged +
+  // returned as a real 500 (never a silent non-PDF). RLS-scoped tour resolved above.
+  return exportPdfResponse('budget', async () => {
+    const data = await loadBudgetExportData(
+      supabase,
+      { id: tour.id as string, name: (tour.name as string) || 'Tour', currency: tour.currency as string | null, start_date: tour.start_date as string | null, end_date: tour.end_date as string | null, artist_id: tour.artist_id as string | null },
+      profile.workspace_id as string,
+      { versionId },
+    );
 
-  const [logoDataUri, markDataUri] = await Promise.all([fetchLogoDataUri(data.logoUrl), lowpassMarkDataUri()]);
+    const [logoDataUri, markDataUri] = await Promise.all([fetchLogoDataUri(data.logoUrl), lowpassMarkDataUri()]);
 
-  const scopeLabel = scope === 'projected' ? 'Projected' : scope === 'actual' ? 'Actual' : 'Projected vs Actual';
-  const versionLabel = data.viewed ? `v${data.viewed.version_number} (${data.viewed.status})` : null;
-  const subtitle = [versionLabel, scopeLabel].filter(Boolean).join(' · ');
+    const scopeLabel = scope === 'projected' ? 'Projected' : scope === 'actual' ? 'Actual' : 'Projected vs Actual';
+    const versionLabel = data.viewed ? `v${data.viewed.version_number} (${data.viewed.status})` : null;
+    const subtitle = [versionLabel, scopeLabel].filter(Boolean).join(' · ');
 
-  const bodyHtml = buildBudgetBodyHtml(data, { scope });
-  const html = renderDocument({
-    letterhead: {
-      artistName: data.artist?.name ?? null,
-      tourName: data.tour.name,
-      tourDates: tourDateRange(data.tour.start_date, data.tour.end_date),
-      logoDataUri,
-      generatedOn: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
-    },
-    title: 'Budget',
-    subtitle,
-    bodyHtml,
-  });
-
-  const footerNote = `${data.artist?.name ? `${data.artist.name} — ` : ''}${data.tour.name} · Budget`;
-  const browser = await getBrowser();
-  const page = await browser.newPage();
-  try {
-    await page.setContent(html, { waitUntil: 'load', timeout: 20_000 });
-    const buffer = await page.pdf({
-      ...PAGE_PDF_OPTIONS,
-      headerTemplate: PDF_HEADER_TEMPLATE,
-      footerTemplate: pdfFooterTemplate(footerNote, markDataUri),
-    });
-    const filename = `${sanitize(data.artist?.name ?? '')} — ${sanitize(data.tour.name)} — Budget.pdf`.replace(/^ — /, '');
-    return new Response(new Uint8Array(buffer), {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="${filename}"`,
-        'Cache-Control': 'no-store',
+    const bodyHtml = buildBudgetBodyHtml(data, { scope });
+    const html = renderDocument({
+      letterhead: {
+        artistName: data.artist?.name ?? null,
+        tourName: data.tour.name,
+        tourDates: tourDateRange(data.tour.start_date, data.tour.end_date),
+        logoDataUri,
+        generatedOn: new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }),
       },
+      title: 'Budget',
+      subtitle,
+      bodyHtml,
     });
-  } finally {
-    await closePage(page);
-  }
+
+    const footerNote = `${data.artist?.name ? `${data.artist.name} — ` : ''}${data.tour.name} · Budget`;
+    const filename = `${sanitize(data.artist?.name ?? '')} — ${sanitize(data.tour.name)} — Budget.pdf`.replace(/^ — /, '');
+    return { html, footerNote, markDataUri, filename };
+  });
 }

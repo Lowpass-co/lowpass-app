@@ -71,6 +71,31 @@ Reference tour: "Warning Support". Templates picker needs a NEW empty tour.
 - **EXP-ROOM-04 — shell unchanged.** `src/lib/export/shell.ts` is byte-identical to
   the Budget slice (the shell stays generic for Payroll/Routing).
 
+## Document Export — render hardening (#8 — fix/export-pdf-render)
+
+> "PDF cannot be generated" was a SILENT route failure (any throw → the client's
+> generic message). The render path itself is proven good (a local Chrome renders
+> the EXACT `page.pdf` options + the real `shell.ts` output — both the
+> logo-letterhead/img-footer path and the prod null-mark/initials path). So the fix
+> is robustness + visibility in the SHARED path (`src/lib/export/render.ts`), not a
+> content change. tsc 0, eslint 0, build green.
+
+- **EXP-FIX-01 — failures are surfaced, never silent.** A budget/rooming export
+  that errors now returns **500 JSON `{ error, detail }`** and logs the real
+  exception (`[export:<surface>] PDF generation failed: <stack>`) server-side —
+  no PII (it's a budget/rooming doc). The client can show the detail instead of the
+  blanket "PDF cannot be generated."
+- **EXP-FIX-02 — footer fallback.** `page.pdf()` runs with the header/footer
+  templates first (the one thing the export does beyond the proven-good rider
+  route); if Chromium ever rejects them it retries once **without** header/footer
+  (the rider's known-good options) → a PDF always comes back.
+- **EXP-FIX-03 — logo fetch can't hang the function.** `fetchLogoDataUri` now has
+  an 8s `AbortController` timeout — a slow/blocked artist-logo host degrades to the
+  initials fallback instead of pushing the render toward `maxDuration`.
+- **EXP-FIX-04 — shared path.** Both routes render through `exportPdfResponse(...)`,
+  so Budget, Rooming, and the future Payroll/Routing inherit the surfacing +
+  fallback + timeout. `shell.ts` (the HTML) stays render-logic-free.
+
 ## Income redesign — Phase 1: Settlement (feat/income-settlement-phase1)
 
 > Migration **215** (`budget_income.actual_deductions`, additive nullable). Run
