@@ -49,6 +49,53 @@ Reference tour: "Warning Support". Templates picker needs a NEW empty tour.
 - **EXP-BUD-06 — old quick-PDF gone.** The Export menu shows **XLSX** +
   **Branded PDF…** only; the client-side jspdf "PDF summary" is removed.
 
+## Document Export — Rooming slice (#8 — feat/export-rooming)
+
+> No migration (read-only). Second surface on the SHARED shell (`shell.ts`
+> unchanged). Standard hotel rooming-list grouped by hotel. tsc 0, eslint 0,
+> build green. (Render proof = the downloaded PDF; the puppeteer pipeline is
+> shared with Budget.)
+
+- **EXP-ROOM-01 — branded rooming list, grouped by hotel.** Operations → Rooming →
+  **Branded PDF** → Download. A4 with the SAME letterhead as Budget (artist · tour ·
+  logo · dates) + Lowpass footer. Body: one block per hotel (name · address · phone ·
+  stay span), then guest rows — **guest · room type · check-in · check-out · nights** —
+  sorted by check-in, with a per-hotel `N guests / total nights` subtotal.
+- **EXP-ROOM-02 — matches the Rooming surface.** The guests/rooms in the PDF equal
+  what the Rooming grid shows for that tour (same `hotels`/`rooms`/`room_assignments`
+  query + the same roster filter — only tour-roster members; a null-person_id
+  assignment is kept, not dropped). Nights = check-out − check-in.
+- **EXP-ROOM-03 — RLS gated + read-only.** A foreign-workspace tourId 404s (rooming
+  is PII — no cross-workspace leak); export writes nothing. A tour with no hotels →
+  "No hotels booked for this tour."
+- **EXP-ROOM-04 — shell unchanged.** `src/lib/export/shell.ts` is byte-identical to
+  the Budget slice (the shell stays generic for Payroll/Routing).
+
+## Document Export — render hardening (#8 — fix/export-pdf-render)
+
+> "PDF cannot be generated" was a SILENT route failure (any throw → the client's
+> generic message). The render path itself is proven good (a local Chrome renders
+> the EXACT `page.pdf` options + the real `shell.ts` output — both the
+> logo-letterhead/img-footer path and the prod null-mark/initials path). So the fix
+> is robustness + visibility in the SHARED path (`src/lib/export/render.ts`), not a
+> content change. tsc 0, eslint 0, build green.
+
+- **EXP-FIX-01 — failures are surfaced, never silent.** A budget/rooming export
+  that errors now returns **500 JSON `{ error, detail }`** and logs the real
+  exception (`[export:<surface>] PDF generation failed: <stack>`) server-side —
+  no PII (it's a budget/rooming doc). The client can show the detail instead of the
+  blanket "PDF cannot be generated."
+- **EXP-FIX-02 — footer fallback.** `page.pdf()` runs with the header/footer
+  templates first (the one thing the export does beyond the proven-good rider
+  route); if Chromium ever rejects them it retries once **without** header/footer
+  (the rider's known-good options) → a PDF always comes back.
+- **EXP-FIX-03 — logo fetch can't hang the function.** `fetchLogoDataUri` now has
+  an 8s `AbortController` timeout — a slow/blocked artist-logo host degrades to the
+  initials fallback instead of pushing the render toward `maxDuration`.
+- **EXP-FIX-04 — shared path.** Both routes render through `exportPdfResponse(...)`,
+  so Budget, Rooming, and the future Payroll/Routing inherit the surfacing +
+  fallback + timeout. `shell.ts` (the HTML) stays render-logic-free.
+
 ## Income redesign — Phase 1: Settlement (feat/income-settlement-phase1)
 
 > Migration **215** (`budget_income.actual_deductions`, additive nullable). Run

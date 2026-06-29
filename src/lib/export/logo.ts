@@ -20,8 +20,12 @@ const MAX_LOGO_BYTES = 3_000_000; // 3MB — a letterhead logo is never larger.
  *  network error — the caller renders the initials fallback instead. */
 export async function fetchLogoDataUri(url: string | null | undefined): Promise<string | null> {
   if (!url || !/^https?:\/\//i.test(url)) return null;
+  // Hard timeout — a slow/blocked logo host must never hold the whole export
+  // function open (it has no business pushing a PDF render toward maxDuration).
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8_000);
   try {
-    const res = await fetch(url, { cache: 'no-store' });
+    const res = await fetch(url, { cache: 'no-store', signal: controller.signal });
     if (!res.ok) return null;
     const contentType = res.headers.get('content-type') ?? '';
     if (!contentType.startsWith('image/')) return null;
@@ -29,7 +33,9 @@ export async function fetchLogoDataUri(url: string | null | undefined): Promise<
     if (buf.byteLength === 0 || buf.byteLength > MAX_LOGO_BYTES) return null;
     return `data:${contentType};base64,${buf.toString('base64')}`;
   } catch {
-    return null;
+    return null; // abort / network / parse → initials fallback, never throws
+  } finally {
+    clearTimeout(timer);
   }
 }
 
