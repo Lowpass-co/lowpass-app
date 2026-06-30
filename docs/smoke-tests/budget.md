@@ -20,6 +20,37 @@ Reference tour: "Warning Support". Templates picker needs a NEW empty tour.
 | BUD-19 | FIXED | click-to-rename templates + consistent picker (Fix-pack C) |
 | BUD-20 | FIXED | summary reads live from `section_id`; no phantom sections (Fix-pack A) |
 
+## P&L brick dashboard — Phase 1 (#29 — feat/sprint-dashboard)
+
+> Sprint Part 4. The Summary tab becomes discrete, typed BRICKS (show/hide +
+> drag-reorder, mirroring the export template-builder section model). Phase 1 keeps
+> the layout IN-MEMORY (no DB — persistence is Phase 2) and the DEFAULT reproduces
+> today's Summary unchanged. Bricks: `overview` (allocation + burn-rate charts) ·
+> `pnl` (computeBudgetPnl net / gross income / total expenses headline + report) ·
+> `sections` (expense-by-section rollup) · `variance` · `top-spend` · `activity`.
+> (Deferred to a later phase: splitting pnl into separate net/gross/expenses bricks,
+> and a per-show-pnl brick — income rows aren't show-keyed in computeBudgetPnl yet.)
+> Floor: tsc 0, eslint 0, build green.
+
+- **DASH-01 — default = today's Summary unchanged.** `DEFAULT_DASHBOARD_CONFIG` lists
+  the 6 bricks in canonical order (overview · pnl · sections · variance · top-spend ·
+  activity), all shown. `BrickFrame` renders each via flex `order = index`, so the
+  default DOM order === the visual order — no layout change on load. (Proven: order
+  string + all-shown + count = 6.)
+- **DASH-02 — config normalize fills to default.** `normalizeDashboardConfig(undefined
+  | garbage)` deep-equals DEFAULT — the renderer can always rely on a complete, valid
+  brick set (the Phase-2 persistence seam).
+- **DASH-03 — normalize preserves + repairs.** A saved layout keeps its order +
+  hidden flags; unknown ids are dropped, duplicates collapse to first occurrence, and
+  any brick missing from the saved set is appended in canonical order (so a brick
+  added in code shows up for users on an older saved layout). (Proven: activity-hidden
+  kept first, dup pnl ignored, bogus dropped, the other 4 appended canonical, 6 total.)
+- **DASH-04 — show/hide + drag-reorder.** The customizer's pure ops: hiding a brick
+  sets `show=false` (others unaffected); dragging `pnl` above `overview` reorders the
+  config array so `pnl` lands at index 0 (flex `order` 0). The customizer mirrors the
+  export Sections accordion (GripVertical drag + Eye toggle) + a Reset-to-default.
+  computeBudgetPnl is the single source for every figure (presentation only).
+
 ## Two-bar nav + budget chrome polish (#27 — feat/sprint-nav)
 
 > Sprint Part 3. Three polish targets. Floor: tsc 0, eslint 0, build green.

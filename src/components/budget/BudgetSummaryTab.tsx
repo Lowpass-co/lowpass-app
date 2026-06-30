@@ -15,10 +15,16 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { ArrowDown, ArrowUp, History } from 'lucide-react';
 import { BudgetOverviewPanels } from '@/components/budget/BudgetOverviewPanels';
+import { DashboardCustomizer } from '@/components/budget/dashboard/DashboardCustomizer';
+import {
+  DEFAULT_DASHBOARD_CONFIG,
+  type DashboardBrickId,
+  type DashboardConfig,
+} from '@/components/budget/dashboard/dashboardConfig';
 import { convertToCurrency } from '@/lib/budget/fx';
 import { getEffectiveActual } from '@/lib/budget/transactions';
 import {
@@ -124,6 +130,11 @@ export function BudgetSummaryTab({
   const displayCurrency = (
     searchParams.get('display') ?? tourCurrency
   ).toUpperCase();
+
+  /* Phase 1 (#29) — in-memory dashboard layout. DEFAULT reproduces today's
+     Summary (same bricks, same order, all shown); the customizer mutates this
+     state only (persistence is Phase 2). */
+  const [dash, setDash] = useState<DashboardConfig>(DEFAULT_DASHBOARD_CONFIG);
 
   /* Stage 3 — the P&L waterfall, recomputed live from the (optimistic)
      line overlay via the shared pure helper. Single source of truth. */
@@ -284,7 +295,15 @@ export function BudgetSummaryTab({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
+      {/* #29 — brick layout toolbar. Default = today's Summary unchanged. */}
+      <div className="flex justify-end">
+        <DashboardCustomizer config={dash} onChange={setDash} />
+      </div>
+
+      {/* Bricks render in config order (flex `order`) + visibility. */}
+      <div className="flex flex-col gap-6">
+      <BrickFrame id="overview" config={dash}>
       {/* Charts moved here from the line-item view */}
       <BudgetOverviewPanels
         allocation={allocation}
@@ -292,11 +311,15 @@ export function BudgetSummaryTab({
         phaseBoundaries={phaseBoundaries}
         currency={tourCurrency}
       />
+      </BrickFrame>
 
+      <BrickFrame id="pnl" config={dash}>
       {/* Phase 4 — headline P&L cards + the refreshed income/expense report. */}
       <PnlHeadlineCards pnl={pnl} versionApproved={versionApproved} versionLabel={versionLabel} />
       <PnlReport pnl={pnl} versionApproved={versionApproved} versionLabel={versionLabel} />
+      </BrickFrame>
 
+      <BrickFrame id="sections" config={dash}>
       {/* Phase E — per-section rollup (GN SUMMARY tab) */}
       {sectionRollup.rows.length > 0 ? (
         <section
@@ -446,7 +469,9 @@ export function BudgetSummaryTab({
           </div>
         </section>
       ) : null}
+      </BrickFrame>
 
+      <BrickFrame id="variance" config={dash}>
       {/* Variance summary card */}
       <section
         className="rounded-lg border p-4"
@@ -502,7 +527,9 @@ export function BudgetSummaryTab({
           />
         </div>
       </section>
+      </BrickFrame>
 
+      <BrickFrame id="top-spend" config={dash}>
       {/* Top spend categories */}
       <section
         className="rounded-lg border p-4"
@@ -580,7 +607,9 @@ export function BudgetSummaryTab({
           </ul>
         )}
       </section>
+      </BrickFrame>
 
+      <BrickFrame id="activity" config={dash}>
       {/* Recent activity */}
       <section
         className="rounded-lg border p-4"
@@ -660,6 +689,30 @@ export function BudgetSummaryTab({
           </ul>
         )}
       </section>
+      </BrickFrame>
+      </div>
+    </div>
+  );
+}
+
+/* #29 — one dashboard brick: shown/hidden + positioned by the in-memory config.
+   Flex `order` = the brick's index in the config, so the customizer's drag-reorder
+   moves it without touching this JSX. `space-y-6` preserves the inter-element
+   rhythm for multi-child bricks (e.g. P&L cards + report). */
+function BrickFrame({
+  id,
+  config,
+  children,
+}: {
+  id: DashboardBrickId;
+  config: DashboardConfig;
+  children: React.ReactNode;
+}) {
+  const idx = config.bricks.findIndex((b) => b.id === id);
+  if (idx < 0 || !config.bricks[idx].show) return null;
+  return (
+    <div className="space-y-6" style={{ order: idx }}>
+      {children}
     </div>
   );
 }
