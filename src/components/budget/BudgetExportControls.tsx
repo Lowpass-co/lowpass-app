@@ -4,8 +4,8 @@
    Page-header strip with:
      - display-currency switcher (?display=USD|GBP|EUR — converts the
        UI numbers via lib/budget/fx; underlying data unchanged)
-     - "Export…" menu: XLSX flat dump (client-side) + a branded PDF
-       (#8 — server-rendered, opens <ExportDialog>).
+     - "Export" menu: XLSX flat dump (client-side) + a branded PDF
+       (#8 — server-rendered, opens <ExportTemplateEditor>).
 
    The XLSX dump stays client-side (xlsx). The old client-side jspdf
    "PDF summary" is RETIRED (#8 D6) — the branded server PDF replaces
@@ -19,7 +19,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { ChevronDown, Download, FileSpreadsheet, FileText } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { convertToCurrency } from '@/lib/budget/fx';
-import { ExportDialog } from '@/components/budget/ExportDialog';
+import { ExportTemplateEditor } from '@/components/export/ExportTemplateEditor';
 import type { BudgetLineItem } from '@/types';
 
 const DISPLAY_OPTIONS: ReadonlyArray<{ code: string; label: string }> = [
@@ -50,7 +50,7 @@ export function BudgetExportControls({
 
   const display = (searchParams.get('display') ?? tourCurrency).toUpperCase();
   const [menuOpen, setMenuOpen] = useState(false);
-  const [pdfOpen, setPdfOpen] = useState(false);
+  const [editorOpen, setEditorOpen] = useState(false);
   // The viewed version (if the user is on a historical `?version=` view) — the
   // PDF's projected baseline matches what's on screen (#8 D1).
   const viewedVersionId = searchParams.get('version');
@@ -167,7 +167,7 @@ export function BudgetExportControls({
               type="button"
               onClick={() => {
                 setMenuOpen(false);
-                setPdfOpen(true);
+                setEditorOpen(true);
               }}
               className="btn-transition flex w-full items-center gap-2 px-3 py-2 text-left text-sm"
               style={{ color: 'var(--lp-text)' }}
@@ -177,14 +177,19 @@ export function BudgetExportControls({
                 style={{ color: 'var(--lp-text-tertiary)' }}
                 aria-hidden
               />
-              Branded PDF…
+              PDF…
             </button>
           </div>
         ) : null}
       </div>
 
-      {pdfOpen ? (
-        <ExportDialog tourId={tourId} versionId={viewedVersionId} onClose={() => setPdfOpen(false)} />
+      {editorOpen ? (
+        <ExportTemplateEditor
+          surface="budget"
+          tourId={tourId}
+          versionId={viewedVersionId}
+          onClose={() => setEditorOpen(false)}
+        />
       ) : null}
     </div>
   );

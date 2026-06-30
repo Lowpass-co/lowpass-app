@@ -26,6 +26,20 @@ import { NextResponse } from 'next/server';
 import { getBrowser, closePage } from '@/lib/rider-packs/puppeteer';
 import { PAGE_PDF_OPTIONS, PDF_HEADER_TEMPLATE, pdfFooterTemplate } from '@/lib/export/shell';
 
+/** A header-safe `Content-Disposition` value (RFC 5987). HTTP header values must be
+ *  Latin-1 (≤255), so a filename with an em dash (—, U+2014, the "<Artist> — <Tour>"
+ *  separator) or an accent (José, Beyoncé) makes `new Response` throw
+ *  "Cannot convert argument to a ByteString". We emit BOTH:
+ *    - filename="…"  — ASCII fallback (non-ASCII → '-', quotes/backslashes stripped),
+ *      Latin-1 safe so it can never throw.
+ *    - filename*=UTF-8''… — the real Unicode name (percent-encoded → ASCII) for
+ *      modern browsers.
+ *  Shared here so Budget, Rooming, and the future Payroll/Routing all inherit it. */
+function contentDisposition(filename: string): string {
+  const asciiFallback = filename.normalize('NFKD').replace(/[^\x20-\x7E]/g, '-').replace(/["\\]/g, '');
+  return `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
+}
+
 export interface ExportDoc {
   /** The full self-contained shell HTML (renderDocument output). */
   html: string;
@@ -35,6 +49,9 @@ export interface ExportDoc {
   markDataUri: string | null;
   /** Content-Disposition filename. */
   filename: string;
+  /** Phase 2 — footer styling (show / page numbers / summary line). Absent →
+   *  today's footer (mark + note + page numbers). */
+  footer?: { show?: boolean; pageNumbers?: boolean; summaryLine?: boolean };
 }
 
 /** Build the doc (loaders + html) then render + stream it. The `build` callback is
@@ -45,18 +62,24 @@ export async function exportPdfResponse(
   build: () => Promise<ExportDoc>,
 ): Promise<Response> {
   try {
-    const { html, footerNote, markDataUri, filename } = await build();
+    const { html, footerNote, markDataUri, filename, footer } = await build();
 
     const browser = await getBrowser();
     const page = await browser.newPage();
     try {
       await page.setContent(html, { waitUntil: 'load', timeout: 20_000 });
+      // Footer: show:false → a minimal non-empty template (Chromium needs one to
+      // honour the bottom margin) with no mark/note/numbers.
+      const footerTemplate =
+        footer?.show === false
+          ? '<span></span>'
+          : pdfFooterTemplate(footerNote, markDataUri, { summaryLine: footer?.summaryLine, pageNumbers: footer?.pageNumbers });
       let buffer: Uint8Array;
       try {
         buffer = await page.pdf({
           ...PAGE_PDF_OPTIONS,
           headerTemplate: PDF_HEADER_TEMPLATE,
-          footerTemplate: pdfFooterTemplate(footerNote, markDataUri),
+          footerTemplate,
         });
       } catch (footerErr) {
         // The header/footer templates are the only thing this does beyond the
@@ -68,7 +91,7 @@ export async function exportPdfResponse(
         status: 200,
         headers: {
           'Content-Type': 'application/pdf',
-          'Content-Disposition': `attachment; filename="${filename}"`,
+          'Content-Disposition': contentDisposition(filename),
           'Cache-Control': 'no-store',
         },
       });
@@ -76,9 +99,19 @@ export async function exportPdfResponse(
       await closePage(page);
     }
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    // Log the REAL exception (type + stack) so a failure is never invisible again.
-    console.error(`[export:${surface}] PDF generation failed:`, err instanceof Error ? err.stack ?? err.message : message);
-    return NextResponse.json({ error: 'Could not generate the PDF', detail: message }, { status: 500 });
+    return exportErrorResponse(surface, err);
   }
+}
+
+/** The ONE error response for a failing export. Logs the real exception (type +
+ *  stack) server-side AND returns it as a 500 JSON body — `{ error, detail, stack }`
+ *  — so a failure is never a silent non-PDF again. Used by exportPdfResponse's own
+ *  catch AND by the route handlers wrapping their ENTIRE body (auth / params /
+ *  workspace-RLS / loaders / build / render) so NO throw can escape as a bare 500.
+ *  Safe to surface: it's a budget/rooming doc — the stack carries no card/PII data. */
+export function exportErrorResponse(surface: string, err: unknown): NextResponse {
+  const message = err instanceof Error ? err.message : String(err);
+  const stack = err instanceof Error ? err.stack ?? null : null;
+  console.error(`[export:${surface}] PDF generation failed: ${message}\n${stack ?? ''}`);
+  return NextResponse.json({ error: 'Could not generate the PDF', detail: message, stack }, { status: 500 });
 }

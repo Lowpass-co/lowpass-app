@@ -1,30 +1,27 @@
 /* ============================================
-   LOWPASS — POST /api/rooming/[tourId]/export/pdf  (#8 Document Export)
+   LOWPASS — POST /api/routing/[tourId]/export/preview  (#8 Template Builder)
 
-   Streams a branded hotel rooming-list PDF, driven by the TemplateConfig (P1).
-   READ-ONLY, workspace-RLS scoped (rooming is PII — a foreign tour 404s).
-   Body: { config?: TemplateConfig }.
+   Returns the SAME document HTML the PDF route prints (buildRoutingExport), as
+   { html } — NO puppeteer — for the editor's live <iframe srcDoc> preview.
+   READ-ONLY, workspace-RLS scoped. Body: { config?: TemplateConfig }.
    ============================================ */
 
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
-import { exportPdfResponse, exportErrorResponse } from '@/lib/export/render';
-import { lowpassMarkDataUri } from '@/lib/export/logo';
-import { buildRoomingExport } from '@/lib/export/build';
+import { exportErrorResponse } from '@/lib/export/render';
+import { buildRoutingExport } from '@/lib/export/build';
 import { normalizeConfig } from '@/lib/export/template-config';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60;
 
 export async function POST(
   request: Request,
   { params }: { params: Promise<{ tourId: string }> },
-): Promise<NextResponse | Response> {
-  // TOTAL guard — every step inside the try → always JSON on failure.
+): Promise<NextResponse> {
   try {
     const { tourId } = await params;
     const body = (await request.json().catch(() => ({}))) as { config?: unknown };
-    const config = normalizeConfig('rooming', body.config);
+    const config = normalizeConfig('routing', body.config);
 
     const supabase = await createServerSupabaseClient();
     const { data: { user } } = await supabase.auth.getUser();
@@ -41,17 +38,14 @@ export async function POST(
       .maybeSingle();
     if (!tour) return NextResponse.json({ error: 'Tour not found' }, { status: 404 });
 
-    return exportPdfResponse('rooming', async () => {
-      const { html, footerNote, filename, footer } = await buildRoomingExport(
-        supabase,
-        { id: tour.id as string, name: (tour.name as string) || 'Tour', start_date: tour.start_date as string | null, end_date: tour.end_date as string | null, artist_id: tour.artist_id as string | null },
-        profile.workspace_id as string,
-        config,
-      );
-      const markDataUri = await lowpassMarkDataUri();
-      return { html, footerNote, markDataUri, filename, footer };
-    });
+    const { html } = await buildRoutingExport(
+      supabase,
+      { id: tour.id as string, name: (tour.name as string) || 'Tour', start_date: tour.start_date as string | null, end_date: tour.end_date as string | null, artist_id: tour.artist_id as string | null },
+      profile.workspace_id as string,
+      config,
+    );
+    return NextResponse.json({ html });
   } catch (err) {
-    return exportErrorResponse('rooming', err);
+    return exportErrorResponse('routing-preview', err);
   }
 }

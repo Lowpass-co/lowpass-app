@@ -1,8 +1,9 @@
 /* ============================================
    LOWPASS — Budget PDF body (#8 Document Export, Budget slice)
 
-   buildBudgetBodyHtml(data, { scope }) → the per-surface BODY html the shared
-   shell (shell.ts) wraps. Two parts:
+   buildBudgetBodyHtml(data, config) → the per-surface BODY html the shared
+   shell (shell.ts) wraps. The TemplateConfig (P1) drives section order/visibility
+   + scope; DEFAULT config reproduces the original two-part output byte-for-byte:
 
      1. Summary P&L — straight from computeBudgetPnl (the SAME math the Summary tab
         runs), rendered with the scope's column set. Reconciles to the cent because
@@ -25,6 +26,7 @@ import { getEffectiveActual } from '@/lib/budget/transactions';
 import { isIncomeRow } from '@/lib/budget/income-rows';
 import { escapeHtml as esc } from '@/lib/export/shell';
 import type { BudgetExportData, ExportIncomeRow } from '@/lib/export/budget-data';
+import type { TemplateConfig } from '@/lib/export/template-config';
 
 export type ExportScope = 'projected' | 'actual' | 'both';
 
@@ -73,8 +75,35 @@ function row(label: string, pair: PnlPair, scope: ExportScope, ccy: string, good
   return `<tr class="${cls}"><td>${esc(label)}</td>${pairCells(pair, scope, ccy, goodWhen)}</tr>`;
 }
 
-export function buildBudgetBodyHtml(data: BudgetExportData, opts: { scope: ExportScope }): string {
-  const scope = opts.scope;
+/** P1 template builder. `config.sections` (order + visibility) drives WHICH blocks
+ *  render and in what order; `config.scope` picks the columns. The DEFAULT config
+ *  (all sections shown, canonical order) reproduces the pre-template output
+ *  byte-for-byte — verified. PRESENTATION ONLY: the numbers come from
+ *  computeBudgetPnl regardless of config (reconciliation invariant). */
+export function buildBudgetBodyHtml(data: BudgetExportData, config: TemplateConfig): string {
+  const scope: ExportScope = (config.scope as ExportScope) ?? 'both';
+
+  // Each section id → its self-contained HTML. Default order
+  // [pnl-summary, income-detail, expense-detail] concatenates to today's output.
+  const sections: Record<string, () => string> = {
+    'pnl-summary': () => renderPnlSummary(data, scope),
+    // The leading "\n    " + page-break preserve the original summary+detail
+    // concatenation byte-for-byte when all three are shown in default order.
+    'income-detail': () =>
+      `\n    <div class="lp-page-break"></div>\n    <div class="lp-sec-head">Income detail (by show)</div>\n    ${buildIncomeDetail(data.income, scope, data.tour.currency, data.fxRates)}`,
+    'expense-detail': () =>
+      `\n    <div class="lp-sec-head">Expense detail (by section)</div>\n    ${buildExpenseDetail(data, scope, data.tour.currency)}`,
+  };
+
+  return config.sections
+    .filter((s) => s.show)
+    .map((s) => sections[s.id]?.() ?? '')
+    .join('');
+}
+
+/** The P&L summary block (income breakdown → expenses by section + overheads →
+ *  Net) — extracted from the original builder so it's a toggleable section. */
+function renderPnlSummary(data: BudgetExportData, scope: ExportScope): string {
   const ccy = data.tour.currency;
   const fxRates = data.fxRates;
 
@@ -132,7 +161,7 @@ export function buildBudgetBodyHtml(data: BudgetExportData, opts: { scope: Expor
   /* ---------- NET ---------- */
   const netRow = row('NET', pnl.net, scope, ccy, 'higher', 'lp-subtotal');
 
-  const summary = `
+  return `
     <div class="lp-sec-head">Profit &amp; Loss</div>
     <table class="lp-tbl">
       <thead><tr><th>Income</th>${valHeads}</tr></thead>
@@ -145,21 +174,6 @@ export function buildBudgetBodyHtml(data: BudgetExportData, opts: { scope: Expor
     <table class="lp-tbl">
       <tbody>${netRow}</tbody>
     </table>`;
-
-  /* ---------- Detail: income per show ---------- */
-  const incomeDetail = buildIncomeDetail(data.income, scope, ccy, fxRates);
-
-  /* ---------- Detail: expenses by section (full lines) ---------- */
-  const expenseDetail = buildExpenseDetail(data, scope, ccy);
-
-  const detail = `
-    <div class="lp-page-break"></div>
-    <div class="lp-sec-head">Income detail (by show)</div>
-    ${incomeDetail}
-    <div class="lp-sec-head">Expense detail (by section)</div>
-    ${expenseDetail}`;
-
-  return summary + detail;
 }
 
 /** Per-show income: projected (post-tax gross) vs actual (gross − deductions),

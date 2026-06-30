@@ -15,6 +15,7 @@ import { useToast } from '@/components/ui/Toast';
 import { StyledSelect } from '@/components/ui/StyledSelect';
 import { RoutingGrid, type RoutingRow } from './RoutingGrid';
 import { RoutingCalendar } from './RoutingCalendar';
+import { RoutingExportButton } from './RoutingExportButton';
 import type { PrimaryTransit } from './RoutingMap';
 import { useRealtimeRows } from '@/lib/realtime/useRealtimeRows';
 import { RealtimeIndicator } from '@/components/realtime/RealtimeIndicator';
@@ -351,6 +352,7 @@ export function RoutingEditor({
           <RealtimeIndicator connected={realtimeConnected} />
         </div>
         <div className="flex items-center gap-2">
+          <RoutingExportButton tourId={tourId} />
           <button
             type="button"
             onClick={async () => {

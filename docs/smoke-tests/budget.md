@@ -47,7 +47,8 @@ Reference tour: "Warning Support". Templates picker needs a NEW empty tour.
   cross-workspace leak); export writes nothing. A locked/approved version exports
   fine (read-only).
 - **EXP-BUD-06 — old quick-PDF gone.** The Export menu shows **XLSX** +
-  **Branded PDF…** only; the client-side jspdf "PDF summary" is removed.
+  **PDF…** only; the client-side jspdf "PDF summary" is removed. (P1: **PDF…** now
+  opens the `ExportTemplateEditor`, not the old one-shot dialog.)
 
 ## Document Export — Rooming slice (#8 — feat/export-rooming)
 
@@ -57,7 +58,8 @@ Reference tour: "Warning Support". Templates picker needs a NEW empty tour.
 > shared with Budget.)
 
 - **EXP-ROOM-01 — branded rooming list, grouped by hotel.** Operations → Rooming →
-  **Branded PDF** → Download. A4 with the SAME letterhead as Budget (artist · tour ·
+  **Export…** → Download PDF (P1: opens the `ExportTemplateEditor`). A4 with the SAME
+  letterhead as Budget (artist · tour ·
   logo · dates) + Lowpass footer. Body: one block per hotel (name · address · phone ·
   stay span), then guest rows — **guest · room type · check-in · check-out · nights** —
   sorted by check-in, with a per-hotel `N guests / total nights` subtotal.
@@ -70,6 +72,182 @@ Reference tour: "Warning Support". Templates picker needs a NEW empty tour.
   "No hotels booked for this tour."
 - **EXP-ROOM-04 — shell unchanged.** `src/lib/export/shell.ts` is byte-identical to
   the Budget slice (the shell stays generic for Payroll/Routing).
+
+## Document Export — Template Builder Phase 1 (#8 — feat/export-template-p1)
+
+> The tiny Export dialog is replaced by a wide **editor** (`ExportTemplateEditor`):
+> left = a LIVE preview (an `<iframe srcDoc>` of the SAME server HTML the PDF route
+> prints — WYSIWYG by construction), right = settings. A pure presentation-only
+> `TemplateConfig` (`src/lib/export/template-config.ts`) drives the body builders +
+> shell; the numbers ALWAYS come from `computeBudgetPnl` (reconciliation holds). One
+> shared build path (`src/lib/export/build.ts`) feeds BOTH the `…/export/pdf` and the
+> new `…/export/preview` routes (budget + rooming). No persistence yet (P1). tsc 0,
+> eslint 0, build green.
+
+- **EXP-TPL-01 — default config = unchanged PDF.** Budget → **Export → PDF…** opens
+  the editor; **Download PDF** with no changes produces the byte-for-byte same body
+  as before (EXP-BUD-01 / EXP-ROOM-01 stay green). `DEFAULT_BUDGET_CONFIG` join =
+  the original `summary + detail` concatenation (verified: `renderPnlSummary` returns
+  the identical summary literal; the income/expense section strings reconstruct the
+  original `detail` exactly under canonical order).
+- **EXP-TPL-02 — hide a section → gone from preview AND PDF.** Toggle the eye on
+  **Income detail** (budget) or a section's visibility → it disappears from the live
+  preview immediately AND from the downloaded PDF. Same builder server-side, so they
+  agree. Budget sections: P&L summary / Income detail / Expense detail. Rooming: Hotel
+  rooming list.
+- **EXP-TPL-03 — reorder → reflected in both.** Drag **Expense detail** above
+  **Income detail** → the preview reorders AND the PDF reorders. `config.sections`
+  array position = render order.
+- **EXP-TPL-04 — page size + logo + scope.** A4↔Letter changes the `@page size`
+  (preview + PDF); the logo checkbox shows/hides the letterhead logo/initials block;
+  the budget scope (Projected / Actual / Both + Variance) picks the columns. All
+  presentation-only — the figures never change.
+- **EXP-TPL-05 — preview matches the PDF (WYSIWYG).** The `…/export/preview` route
+  returns `{ html }` from `buildBudgetExport`/`buildRoomingExport`; the `…/export/pdf`
+  route prints the SAME build output. The only difference is the PDF's page-number
+  footer (print-only). RLS-gated + read-only like the PDF routes (foreign tour 404s).
+- **EXP-TPL-06 — config is coerced server-side.** A malformed/hostile `config` body
+  is run through `normalizeConfig` — unknown section ids dropped, missing sections
+  restored, page size / scope clamped — so a bad config can never crash the builder
+  or smuggle a non-section. Back-compat: `?scope=` / `?version=` query still work.
+
+## Document Export — Template persistence (#8 — feat/export-template-persist)
+
+> Phase 3: save / apply / set-default templates, shared across a workspace's tours.
+> `export_templates` (migration 224): id · workspace_id (NULL = the read-only GLOBAL
+> tier) · surface · name · config jsonb · is_default · timestamps. RLS workspace-
+> scoped via `get_my_workspace_id()` (+ global read); a partial unique index =
+> ONE default per (workspace, surface); a CHECK forbids a global template being a
+> default. CRUD: `/api/export/templates` (GET list, POST save, PATCH rename/set-
+> default, DELETE) — all workspace-scoped; the global tier is read-only (no client
+> writes a NULL workspace_id). Editor: a Templates panel (save / apply / set-default /
+> delete + the global list). tsc 0, eslint 0, build green.
+
+- **EXP-TPL3-01 — save → lists for that surface in that workspace only.** Saving the
+  current settings as a named template (POST, `config` coerced by `normalizeConfig`)
+  makes it appear in the editor's Templates list for that surface. RLS: a second
+  workspace can't see it (`export_templates_select` = own workspace OR global).
+- **EXP-TPL3-02 — set default → a new export opens with it.** Star a workspace
+  template → `is_default` (the route clears the prior default first, so the partial
+  unique index never rejects). Re-opening the editor for that surface auto-applies the
+  workspace default (`refreshTemplates(applyDefault)` on mount).
+- **EXP-TPL3-03 — apply a global template → copy-on-apply.** A Global (workspace_id
+  NULL) template lists with a globe badge; applying it loads its config into the live
+  editor (editor STATE only — no DB write); editing + Save creates a workspace-owned
+  copy. A PATCH/DELETE against a global row is rejected (403 "Read-only template").
+- **EXP-TPL3-04 — one default enforced.** The partial unique index
+  `export_templates_one_default (workspace_id, surface) WHERE is_default` allows at
+  most one default per (workspace, surface); the CHECK
+  `export_templates_global_not_default` forbids a global row being a default.
+- **EXP-TPL3-05 — presentation-only persists.** A saved template stores only a
+  `TemplateConfig` (presentation) — never data; applying it can reorder/hide/restyle
+  but never changes a number. The tour stores no `template_id` (render-time selection,
+  D-APPLY).
+
+## Document Export — Routing surface (#8 — feat/export-routing)
+
+> The fourth export surface, config-aware. `loadRoutingExportData` reads the
+> `routing` table (one row per tour day — migration 001 + the canonical-venue join,
+> migration 214) ordered by date; `buildRoutingBodyHtml` emits one row per day
+> (date · day-type · city · venue + address sub-line · capacity), ALL days (show +
+> travel/off/etc. — D7), plus an OPTIONAL per-day **advance summary** (a best-effort
+> read of `advance_instances` status + filled-field counts; the data is free-form so
+> we summarise rather than guess labels). The advance summary is a section toggle
+> **OFF by default** (D7). NOT a daysheet (Adam uses Master Tour for those). Routes:
+> `POST /api/routing/[tourId]/export/{pdf,preview}`. UI: "Export…" on the Routing
+> surface. tsc 0, eslint 0, build green.
+
+- **EXP-ROUTE-01 — all routing days listed.** Every day of the tour appears (not just
+  shows): date · day-type · city · venue (+ address sub-line) · capacity, ordered by
+  date. Non-show days (Travel/Off/Press/etc.) are included (proven: a travel + off +
+  show day all render; the day-type column labels each).
+- **EXP-ROUTE-02 — advance summary appears only when toggled.** The default routing
+  PDF is the itinerary table only; the per-day advance summary section is OFF by
+  default (D7). Toggling it on (editor / config) adds a best-effort per-day block
+  (status + filled-field count) for the days that have an advance instance (proven:
+  default has no "Advance summary"; toggled-on lists only days with an advance; a
+  partial config that omits the section keeps it OFF via `normalizeConfig`).
+- **EXP-ROUTE-03 — config-aware + RLS gated.** The days / advance-summary sections
+  show/hide + reorder (preview + PDF); the Part-A styling panel applies. READ-ONLY,
+  workspace-RLS scoped — a foreign-workspace tour 404s. Venue/city prefer the
+  canonical-venue join, falling back to the denormalised routing columns.
+
+## Document Export — Payroll surface (#8 — feat/export-payroll)
+
+> The third export surface, config-aware from birth (inherits the P1+P2 template
+> system: section show/hide/reorder + the full styling panel). `loadPayrollExportData`
+> mirrors the Payroll page's loaders (tour_personnel roster + personnel_rates +
+> payroll_entries) and computes every total via the SHARED pure `src/lib/payroll/
+> fees.ts` (`countDayStatuses` / `computeTotalFee` / `computeTotalPerDiem`) — NOT
+> re-derived. `buildPayrollBodyHtml` emits a run sheet + per-person statements (one
+> page each) in ONE multi-page PDF. Routes: `POST /api/payroll/[tourId]/export/{pdf,
+> preview}`. UI: "Export…" on the Payroll surface opens the shared editor
+> (surface="payroll"). tsc 0, eslint 0, build green.
+
+- **EXP-PAY-01 — run sheet totals match the Payroll tab.** Every crew member in one
+  table: role, day-type rates (Show/Off/Reh), day counts (S/O/R), fee, per-diem,
+  total + a grand-total row. The per-person fee = `computeTotalFee(rate, counts,
+  advance)` summed over the person's weekly entries, per-diem = `computeTotalPerDiem`
+  — the exact fees.ts math the Payroll surface uses, so the run-sheet totals
+  reconcile with the Payroll tab to the penny (proven: `grandTotal === Σ person
+  totals`; each `person.total === fee + perDiemTotal`).
+- **EXP-PAY-02 — statements paginate one-per-person.** After the run sheet, each
+  crew member gets their own page (`lp-page-break`): weekly schedule (Show/Off/Reh +
+  fee/per-diem per week), rate breakdown (days × rate, advance if any, per-diem), and
+  the **Amount due**. (Proven: N persons → N page-breaks; advance line appears only
+  when the person has an advance.)
+- **EXP-PAY-03 — internal rate NEVER appears.** `personnel_rates.internal_rate` (the
+  company's cost — D5) is never SELECTed by the loader and never reaches the builder;
+  it appears in neither the run sheet nor any statement. (Proven: the string
+  `internal` is absent from the rendered HTML; the loader's select list omits it.)
+- **EXP-PAY-04 — config-aware + RLS gated.** The run sheet / statements sections
+  show/hide + reorder (preview + PDF); the Part-A styling panel applies. READ-ONLY,
+  workspace-RLS scoped — a foreign-workspace tour 404s (payroll is financial PII, no
+  cross-workspace leak). Currency from `tour.currency`.
+
+## Document Export — Template Builder Phase 2: styling (#8 — feat/export-template-p2)
+
+> The editor gains the daysheets-style styling layer: a **General** panel (font
+> family / size / B&W / dashed dividers / borderless), a **Header** panel (show,
+> logo position + height + radius, element show/hide/reorder, title/subtitle/
+> generated toggles, + a background image in Part A4) and a **Footer** panel
+> (show / page numbers / summary line). All PRESENTATION-ONLY — the config drives
+> `shell.ts` (CSS overrides + a config-driven letterhead) via the `general`/`header`
+> groups; the body builders + `computeBudgetPnl` are untouched. Every style group's
+> DEFAULT emits NO extra CSS / today's exact letterhead, so the default doc is
+> byte-for-byte today's output. **Proven:** `renderDocument` with the default
+> `general`/`header` === the committed P1 output across every letterhead variant
+> (logo / initials / absent artist / dates / subtitle / Letter / no-logo); the
+> footer default === the P1 footer. tsc 0, eslint 0, build green.
+
+- **EXP-TPL2-01 — General styling → preview AND PDF.** Font (Sans/Serif/Mono),
+  font-size scale (85–120%, via `body { zoom }`), B&W (greyscales the whole doc incl.
+  images), dashed dividers above each section head, and borderless (no table boxes)
+  each change the live `<iframe>` preview immediately AND the downloaded PDF (same
+  server builder). B&W injects `html { filter: grayscale(100%) }`.
+- **EXP-TPL2-02 — Header controls.** Show-header off → no letterhead; logo position
+  Left/Right; logo height + corner-radius sliders; the Artist / Tour / Dates elements
+  show/hide + drag-reorder in the meta block; title / subtitle / generated-date
+  toggles. All reflected in preview + PDF.
+- **EXP-TPL2-03 — Footer controls (print-only).** Show-footer, page-numbers, and the
+  summary-line + Lowpass-mark toggles change the downloaded PDF's repeating footer
+  (the editor notes the footer is print-only — it isn't in the live preview, which is
+  a single self-contained page, not paginated).
+- **EXP-TPL2-04 — image upload (Part A4).** The Header panel uploads a header
+  **logo** (overrides the artist logo) and a **background image** (a faded layer
+  behind the letterhead at the opacity slider's value) to the PRIVATE `export-assets`
+  bucket (migration 223, workspace-scoped RLS) via `POST /api/export/assets` →
+  `{ path }`. The render resolves the path → base64 data-URI server-side
+  (`fetchExportAssetDataUri`, workspace-prefix guarded), so the browser never holds a
+  URL (private-bucket-safe). Both appear in preview + PDF; a foreign-workspace path is
+  rejected (no cross-workspace asset read). 5MB cap, image MIME allowlist.
+- **EXP-TPL2-05 — DEFAULT still = P1 output (no regression).** With no styling
+  changes the document is byte-for-byte the Phase-1 output: each style group's default
+  emits no override and the letterhead is the committed P1 letterhead (proven by the
+  `renderDocument`-equivalence check above). EXP-BUD-01 / EXP-ROOM-01 stay green.
+- **EXP-TPL2-06 — presentation-only invariant.** No styling control can change a
+  number: the body builders read the same `data` / `computeBudgetPnl` output; styling
+  is CSS + letterhead HTML only. Reconciliation holds under every style combination.
 
 ## Document Export — render hardening (#8 — fix/export-pdf-render)
 
@@ -95,6 +273,41 @@ Reference tour: "Warning Support". Templates picker needs a NEW empty tour.
 - **EXP-FIX-04 — shared path.** Both routes render through `exportPdfResponse(...)`,
   so Budget, Rooming, and the future Payroll/Routing inherit the surfacing +
   fallback + timeout. `shell.ts` (the HTML) stays render-logic-free.
+
+## Document Export — pre-render 500 + TOTAL guard (#8 — fix/export-500-loader)
+
+> The export still 500'd with an **empty body** in prod (the guard wasn't wrapping
+> the throwing line). Reproduced `loadBudgetExportData` + `buildBudgetBodyHtml`
+> against the **real DB** (incl. Warning Support + Simple Plan) — neither throws;
+> both produce HTML. Two fixes: a real loader bug + a TOTAL guard. Rendered a real
+> 3-page PDF end-to-end. tsc 0, eslint 0, build green.
+
+- **EXP-FIX-05 — income was silently dropped (real bug).** `loadBudgetExportData`
+  filtered `routing` by `.eq('workspace_id', …)`, but **`routing` has no
+  `workspace_id` column** (it's tour-scoped; the page at `page.tsx:151` filters by
+  `tour_id` only). The query errored → `routingIds` empty → **every export's P&L
+  showed £0 income**. Fixed to match the page. Verified live: Warning Support income
+  rows 0→1, Simple Plan 0→3.
+- **EXP-FIX-06 — TOTAL guard, never a bare 500.** Both export routes wrap their
+  **entire** handler (params, auth, workspace-RLS, loaders, build, render) in one
+  try/catch → `exportErrorResponse(surface, err)` → **always** `500 JSON
+  { error, detail, stack }` + a server log `[export:<surface>] PDF generation
+  failed: …`. Verified: a thrown error returns `status 500` with the message + stack,
+  not 0 bytes. (Diagnosis: the loader/body don't throw → the prod 500 is in the
+  render/`getBrowser` env path, which this guard now surfaces verbatim.)
+- **EXP-FIX-07 — end-to-end render proof.** `loadBudgetExportData` → `buildBudgetBodyHtml`
+  → `renderDocument` → Chrome `page.pdf` (the exact shell options + footer) produces a
+  valid **3-page `%PDF-1.4`** for Warning Support, with income present.
+- **EXP-FIX-08 — THE root cause: em-dash in the filename header.** The download
+  filename `<Artist> — <Tour> — Budget.pdf` uses an em dash (—, U+2014); HTTP header
+  values must be Latin-1, so `new Response` threw `Cannot convert argument to a
+  ByteString` building `Content-Disposition` — AFTER a full 5.5s render (the PDF was
+  fine). Fixed with one shared RFC-5987 helper in `render.ts`: `filename="…"` ASCII
+  fallback (non-ASCII → `-`, quotes/backslashes stripped) + `filename*=UTF-8''…` for
+  the real Unicode name. Verified: the raw header throws the exact `TypeError`; the
+  RFC-5987 header builds the `Response` cleanly for an em dash AND accents
+  (José/Beyoncé). Budget/Rooming/future surfaces inherit it (built in the shared
+  Response path). Export now returns **200 · application/pdf**.
 
 ## Income redesign — Phase 1: Settlement (feat/income-settlement-phase1)
 

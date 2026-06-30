@@ -12,6 +12,7 @@
 
 import { escapeHtml as esc } from '@/lib/export/shell';
 import type { RoomingExportData, RoomingHotel } from '@/lib/export/rooming-data';
+import type { TemplateConfig } from '@/lib/export/template-config';
 
 function fmtDate(d: string | null): string {
   if (!d) return '—';
@@ -57,9 +58,18 @@ function hotelBlock(h: RoomingHotel): string {
     </table>`;
 }
 
-export function buildRoomingBodyHtml(data: RoomingExportData): string {
-  if (data.hotels.length === 0) {
-    return `<p class="lp-native">No hotels booked for this tour.</p>`;
-  }
-  return data.hotels.map(hotelBlock).join('');
+/** P1 template builder. Rooming has one coarse section (`hotels`) for now — the
+ *  config's show/hide toggles it; the order is trivial with a single section.
+ *  DEFAULT (hotels shown) reproduces the pre-template output. Presentation only. */
+export function buildRoomingBodyHtml(data: RoomingExportData, config: TemplateConfig): string {
+  const sections: Record<string, () => string> = {
+    hotels: () =>
+      data.hotels.length === 0
+        ? `<p class="lp-native">No hotels booked for this tour.</p>`
+        : data.hotels.map(hotelBlock).join(''),
+  };
+  return config.sections
+    .filter((s) => s.show)
+    .map((s) => sections[s.id]?.() ?? '')
+    .join('');
 }

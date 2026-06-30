@@ -1,18 +1,18 @@
 'use client';
 
 /* ============================================
-   LOWPASS — <RoomingExportButton> (#8 Document Export, Rooming slice)
+   LOWPASS — <PayrollExportButton> (#8 Document Export, Payroll slice)
 
-   "Export…" — opens the <ExportTemplateEditor> (live preview + settings) for the
-   branded rooming-list PDF. (The old direct one-shot download is retired in favour
-   of the editor; rooming has no scope toggle but gets section/page/logo controls.)
+   "Export…" — opens the shared <ExportTemplateEditor> (live preview + settings) for
+   the branded Payroll PDF (run sheet + per-person statements). Same editor as Budget
+   / Rooming, surface="payroll" (sections: run sheet / statements + the styling panel).
    ============================================ */
 
 import { useState } from 'react';
 import { FileText } from 'lucide-react';
 import { ExportTemplateEditor } from '@/components/export/ExportTemplateEditor';
 
-export function RoomingExportButton({ tourId }: { tourId: string }) {
+export function PayrollExportButton({ tourId }: { tourId: string }) {
   const [open, setOpen] = useState(false);
 
   return (
@@ -28,12 +28,12 @@ export function RoomingExportButton({ tourId }: { tourId: string }) {
           fontWeight: 'var(--lp-weight-medium)',
           cursor: 'pointer',
         }}
-        title="Export a branded rooming-list PDF"
+        title="Export a branded payroll PDF (run sheet + statements)"
       >
         <FileText className="h-4 w-4" aria-hidden />
         Export…
       </button>
-      {open ? <ExportTemplateEditor surface="rooming" tourId={tourId} onClose={() => setOpen(false)} /> : null}
+      {open ? <ExportTemplateEditor surface="payroll" tourId={tourId} onClose={() => setOpen(false)} /> : null}
     </>
   );
 }

@@ -65,7 +65,10 @@ export async function loadBudgetExportData(
     supabase.from('budget_sections').select('*').eq('tour_id', tourId).eq('workspace_id', workspaceId)
       .order('sort_order', { ascending: true }).order('created_at', { ascending: true }),
     supabase.from('budget_settings').select('*').eq('tour_id', tourId).eq('workspace_id', workspaceId).maybeSingle(),
-    supabase.from('routing').select('id, date, venue_name, city').eq('tour_id', tourId).eq('workspace_id', workspaceId),
+    // NOTE: routing has NO workspace_id column (scoped by tour_id; RLS via the
+    // tour) — filtering it errored, which silently dropped ALL income from the
+    // export P&L. Match the page (page.tsx:151 = .eq('tour_id') only).
+    supabase.from('routing').select('id, date, venue_name, city').eq('tour_id', tourId),
     tour.artist_id
       ? supabase.from('artists').select('id, name, branding, spotify_id, spotify_image_url').eq('id', tour.artist_id).maybeSingle()
       : Promise.resolve({ data: null }),
