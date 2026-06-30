@@ -47,7 +47,8 @@ Reference tour: "Warning Support". Templates picker needs a NEW empty tour.
   cross-workspace leak); export writes nothing. A locked/approved version exports
   fine (read-only).
 - **EXP-BUD-06 — old quick-PDF gone.** The Export menu shows **XLSX** +
-  **Branded PDF…** only; the client-side jspdf "PDF summary" is removed.
+  **PDF…** only; the client-side jspdf "PDF summary" is removed. (P1: **PDF…** now
+  opens the `ExportTemplateEditor`, not the old one-shot dialog.)
 
 ## Document Export — Rooming slice (#8 — feat/export-rooming)
 
@@ -57,7 +58,8 @@ Reference tour: "Warning Support". Templates picker needs a NEW empty tour.
 > shared with Budget.)
 
 - **EXP-ROOM-01 — branded rooming list, grouped by hotel.** Operations → Rooming →
-  **Branded PDF** → Download. A4 with the SAME letterhead as Budget (artist · tour ·
+  **Export…** → Download PDF (P1: opens the `ExportTemplateEditor`). A4 with the SAME
+  letterhead as Budget (artist · tour ·
   logo · dates) + Lowpass footer. Body: one block per hotel (name · address · phone ·
   stay span), then guest rows — **guest · room type · check-in · check-out · nights** —
   sorted by check-in, with a per-hotel `N guests / total nights` subtotal.
@@ -70,6 +72,44 @@ Reference tour: "Warning Support". Templates picker needs a NEW empty tour.
   "No hotels booked for this tour."
 - **EXP-ROOM-04 — shell unchanged.** `src/lib/export/shell.ts` is byte-identical to
   the Budget slice (the shell stays generic for Payroll/Routing).
+
+## Document Export — Template Builder Phase 1 (#8 — feat/export-template-p1)
+
+> The tiny Export dialog is replaced by a wide **editor** (`ExportTemplateEditor`):
+> left = a LIVE preview (an `<iframe srcDoc>` of the SAME server HTML the PDF route
+> prints — WYSIWYG by construction), right = settings. A pure presentation-only
+> `TemplateConfig` (`src/lib/export/template-config.ts`) drives the body builders +
+> shell; the numbers ALWAYS come from `computeBudgetPnl` (reconciliation holds). One
+> shared build path (`src/lib/export/build.ts`) feeds BOTH the `…/export/pdf` and the
+> new `…/export/preview` routes (budget + rooming). No persistence yet (P1). tsc 0,
+> eslint 0, build green.
+
+- **EXP-TPL-01 — default config = unchanged PDF.** Budget → **Export → PDF…** opens
+  the editor; **Download PDF** with no changes produces the byte-for-byte same body
+  as before (EXP-BUD-01 / EXP-ROOM-01 stay green). `DEFAULT_BUDGET_CONFIG` join =
+  the original `summary + detail` concatenation (verified: `renderPnlSummary` returns
+  the identical summary literal; the income/expense section strings reconstruct the
+  original `detail` exactly under canonical order).
+- **EXP-TPL-02 — hide a section → gone from preview AND PDF.** Toggle the eye on
+  **Income detail** (budget) or a section's visibility → it disappears from the live
+  preview immediately AND from the downloaded PDF. Same builder server-side, so they
+  agree. Budget sections: P&L summary / Income detail / Expense detail. Rooming: Hotel
+  rooming list.
+- **EXP-TPL-03 — reorder → reflected in both.** Drag **Expense detail** above
+  **Income detail** → the preview reorders AND the PDF reorders. `config.sections`
+  array position = render order.
+- **EXP-TPL-04 — page size + logo + scope.** A4↔Letter changes the `@page size`
+  (preview + PDF); the logo checkbox shows/hides the letterhead logo/initials block;
+  the budget scope (Projected / Actual / Both + Variance) picks the columns. All
+  presentation-only — the figures never change.
+- **EXP-TPL-05 — preview matches the PDF (WYSIWYG).** The `…/export/preview` route
+  returns `{ html }` from `buildBudgetExport`/`buildRoomingExport`; the `…/export/pdf`
+  route prints the SAME build output. The only difference is the PDF's page-number
+  footer (print-only). RLS-gated + read-only like the PDF routes (foreign tour 404s).
+- **EXP-TPL-06 — config is coerced server-side.** A malformed/hostile `config` body
+  is run through `normalizeConfig` — unknown section ids dropped, missing sections
+  restored, page size / scope clamped — so a bad config can never crash the builder
+  or smuggle a non-section. Back-compat: `?scope=` / `?version=` query still work.
 
 ## Document Export — render hardening (#8 — fix/export-pdf-render)
 

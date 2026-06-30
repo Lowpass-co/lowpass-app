@@ -25,6 +25,9 @@ export interface ShellLetterhead {
   tourDates?: string | null;
   /** Base64 data URI (NEVER a network URL — see logo.ts). Null → initials block. */
   logoDataUri?: string | null;
+  /** Template config — show the logo/initials block at all (default true). When
+   *  false the letterhead is text-only. */
+  showLogo?: boolean;
   /** Formatted generation timestamp, e.g. "27 Jun 2026". */
   generatedOn: string;
 }
@@ -37,6 +40,8 @@ export interface ShellDocument {
   subtitle?: string | null;
   /** The per-surface body HTML (opaque to the shell). */
   bodyHtml: string;
+  /** Template config — page size (default A4). */
+  pageSize?: 'A4' | 'Letter';
 }
 
 const esc = (s: string): string =>
@@ -136,11 +141,18 @@ export function pdfFooterTemplate(footerNote: string, markDataUri: string | null
 /** Compose the full self-contained A4 HTML document. The body is opaque. */
 export function renderDocument(doc: ShellDocument): string {
   const { letterhead: lh, title, subtitle, bodyHtml } = doc;
-  const logo = lh.logoDataUri
-    ? `<img class="lp-lh-logo" src="${lh.logoDataUri}" alt="" />`
-    : `<div class="lp-lh-initials">${esc(initials(lh.artistName || lh.tourName))}</div>`;
+  // Template config: showLogo:false → text-only letterhead (no logo, no initials).
+  const logo =
+    lh.showLogo === false
+      ? ''
+      : lh.logoDataUri
+        ? `<img class="lp-lh-logo" src="${lh.logoDataUri}" alt="" />`
+        : `<div class="lp-lh-initials">${esc(initials(lh.artistName || lh.tourName))}</div>`;
+  // Template config: page size (A4 default). The override @page (size only) merges
+  // with SHELL_CSS's @page margin, so Letter keeps the same margins.
+  const pageStyle = doc.pageSize && doc.pageSize !== 'A4' ? `<style>@page { size: ${doc.pageSize}; }</style>` : '';
   return `<!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8" /><style>${SHELL_CSS}</style></head>
+<html lang="en"><head><meta charset="utf-8" /><style>${SHELL_CSS}</style>${pageStyle}</head>
 <body>
   <header class="lp-letterhead">
     ${logo}
