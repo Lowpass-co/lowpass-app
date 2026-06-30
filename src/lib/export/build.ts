@@ -208,9 +208,13 @@ export async function buildRoutingExport(
   workspaceId: string,
   config: TemplateConfig,
 ): Promise<ExportBuild> {
-  const data = await loadRoutingExportData(supabase, tour);
+  const data = await loadRoutingExportData(supabase, tour, { range: config.dateRange, travelTimes: config.routing.travelTimes });
   const logoDataUri = config.logo ? await resolveLogo(supabase, workspaceId, config, data.logoUrl) : null;
   const bgDataUri = await fetchExportAssetDataUri(supabase, workspaceId, config.header.bgAssetPath);
+
+  const viewLabel = config.routing.view === 'calendar' ? 'Calendar' : null;
+  const rangeLabel = config.dateRange.from || config.dateRange.to ? tourDateRange(config.dateRange.from, config.dateRange.to) : null;
+  const subtitle = [`${data.days.length} day${data.days.length === 1 ? '' : 's'}`, viewLabel, rangeLabel].filter(Boolean).join(' · ');
 
   const html = renderDocument({
     letterhead: {
@@ -223,7 +227,7 @@ export async function buildRoutingExport(
     },
     pageSize: config.pageSize,
     title: 'Routing',
-    subtitle: `${data.days.length} day${data.days.length === 1 ? '' : 's'}`,
+    subtitle,
     general: config.general,
     header: config.header,
     bgDataUri,

@@ -114,7 +114,7 @@ export async function buildXlsxExport(
     artistName = data.artist?.name ?? null;
     label = 'Payroll';
   } else {
-    const data = await loadRoutingExportData(supabase, tour);
+    const data = await loadRoutingExportData(supabase, tour, { range: config.dateRange });
     sheets = routingSheets(data);
     artistName = data.artist?.name ?? null;
     label = 'Routing';

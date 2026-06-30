@@ -20,6 +20,30 @@ Reference tour: "Warning Support". Templates picker needs a NEW empty tour.
 | BUD-19 | FIXED | click-to-rename templates + consistent picker (Fix-pack C) |
 | BUD-20 | FIXED | summary reads live from `section_id`; no phantom sections (Fix-pack A) |
 
+## Document Export v2 — routing upgrade (#8 — feat/export-v2-routing)
+
+> Routing is external + was "almost ASCII." Two views, travel times, the shared
+> date range. jsonb config, no migration. tsc 0, eslint 0, build green.
+
+- **EXP-V2F-01 — restyled list view.** The itinerary table gains coloured day-type
+  chips (Show/Travel/Off/Rehearsal/Festival/Press…), zebra rows, and an optional
+  **travel-time** column. Default view = list, no travel column (proven).
+- **EXP-V2F-02 — travel times (cache + approx).** When toggled, each day shows the
+  drive time to the next day, read from the existing `drive_time_cache`
+  (origin/dest "lat,lng", mode 'driving') — the export NEVER calls Google (cost-
+  hardening). Uncached legs fall back to a straight-line (haversine) estimate
+  prefixed `~`. (Proven: a cached leg shows "2h 10m"; an uncached leg shows
+  "~1h 30m".)
+- **EXP-V2F-03 — calendar view.** `routing.view = 'calendar'` renders a print-
+  friendly month grid (Mon-start, one block per month) with each day's day-type chip
+  + city + venue; a **light / dark** theme toggle. (Proven: "March 2026" grid with
+  weekday heads + the venue; dark theme uses the dark palette.)
+- **EXP-V2F-04 — shared date range + all days.** The Part-E date-range control now
+  applies to routing (filters days within [from,to]; default = whole tour). All days
+  (show + non-show) still listed. Workspace-RLS scoped. The range applies to the
+  Excel export too. **Map view is a flagged follow-up** (needs a static-map image
+  service; the routing lat/lng is already loaded) — not shipped in this batch.
+
 ## Document Export v2 — payroll upgrade (#8 — feat/export-v2-payroll)
 
 > Payroll goes out to crew to invoice against — clearer + flexible. Mode toggle,

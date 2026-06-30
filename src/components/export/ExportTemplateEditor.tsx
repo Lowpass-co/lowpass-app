@@ -58,6 +58,16 @@ const PAYROLL_MODES: ReadonlyArray<{ value: 'combined' | 'individual'; label: st
   { value: 'individual', label: 'Individual (statements only)' },
 ];
 
+const ROUTING_VIEWS: ReadonlyArray<{ value: 'list' | 'calendar'; label: string }> = [
+  { value: 'list', label: 'List (itinerary table)' },
+  { value: 'calendar', label: 'Calendar (month grid)' },
+];
+
+const CALENDAR_THEMES: ReadonlyArray<{ value: 'light' | 'dark'; label: string }> = [
+  { value: 'light', label: 'Light' },
+  { value: 'dark', label: 'Dark' },
+];
+
 const FORMATS: ReadonlyArray<{ value: ExportFormat; label: string }> = [
   { value: 'pdf', label: 'PDF (print)' },
   { value: 'excel', label: 'Excel (data)' },
@@ -236,6 +246,9 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
   }, []);
   const setRange = useCallback((k: 'from' | 'to', v: string) => {
     setConfig((c) => ({ ...c, dateRange: { ...c.dateRange, [k]: v || null } }));
+  }, []);
+  const setRouting = useCallback(<K extends keyof TemplateConfig['routing']>(k: K, v: TemplateConfig['routing'][K]) => {
+    setConfig((c) => ({ ...c, routing: { ...c.routing, [k]: v } }));
   }, []);
 
   // --- Phase 3: saved templates (workspace + global tier) ---
@@ -617,7 +630,22 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
               </AccordionGroup>
             ) : null}
 
-            {surface === 'payroll' ? (
+            {surface === 'routing' ? (
+              <AccordionGroup id="routing" label="Routing" defaultOpen>
+                <FieldLabel>View</FieldLabel>
+                <Segmented options={ROUTING_VIEWS} value={config.routing.view} onChange={(v) => setRouting('view', v)} />
+                {config.routing.view === 'calendar' ? (
+                  <>
+                    <FieldLabel>Calendar theme</FieldLabel>
+                    <Segmented options={CALENDAR_THEMES} value={config.routing.calendarTheme} onChange={(v) => setRouting('calendarTheme', v)} />
+                  </>
+                ) : (
+                  <Toggle label="Travel times (between days)" checked={config.routing.travelTimes} onChange={(v) => setRouting('travelTimes', v)} />
+                )}
+              </AccordionGroup>
+            ) : null}
+
+            {surface === 'payroll' || surface === 'routing' ? (
               <AccordionGroup id="daterange" label="Date range">
                 <DateRangeField range={config.dateRange} onChange={setRange} />
               </AccordionGroup>

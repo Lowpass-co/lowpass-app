@@ -17,6 +17,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { resolveArtistLogoUrl } from '@/lib/artists/imageUrl';
+import type { DateRange } from '@/lib/export/template-config';
 
 export interface RoutingAdvanceSummary {
   status: string;
@@ -32,6 +33,26 @@ export interface RoutingDayRow {
   address: string | null;
   capacity: number | null;
   advance: RoutingAdvanceSummary | null;
+  lat: number | null;
+  lng: number | null;
+  /** Part F — travel minutes to the NEXT day (null = unknown). */
+  legMins: number | null;
+  /** True when legMins is a straight-line approximation (no cached drive time). */
+  legApprox: boolean;
+}
+
+export interface RoutingLoadOptions {
+  range?: DateRange;
+  travelTimes?: boolean;
+}
+
+/** Haversine distance (km) between two coords. */
+function haversineKm(aLat: number, aLng: number, bLat: number, bLng: number): number {
+  const R = 6371;
+  const dLat = ((bLat - aLat) * Math.PI) / 180;
+  const dLng = ((bLng - aLng) * Math.PI) / 180;
+  const s = Math.sin(dLat / 2) ** 2 + Math.cos((aLat * Math.PI) / 180) * Math.cos((bLat * Math.PI) / 180) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.min(1, Math.sqrt(s)));
 }
 
 export interface RoutingExportData {
@@ -75,13 +96,15 @@ function summariseAdvanceData(data: unknown): { filledFields: number; sections: 
 export async function loadRoutingExportData(
   supabase: SupabaseClient,
   tour: { id: string; name: string; start_date: string | null; end_date: string | null; artist_id: string | null },
+  opts?: RoutingLoadOptions,
 ): Promise<RoutingExportData> {
   const tourId = tour.id;
+  const range = opts?.range;
 
   const [routingRes, artistRes] = await Promise.all([
     supabase
       .from('routing')
-      .select('id, date, day_type, city, address, venue_name, venue_capacity, canonical_venue_id, canonical_venues(name, city, capacity)')
+      .select('id, date, day_type, city, address, venue_name, venue_capacity, latitude, longitude, canonical_venue_id, canonical_venues(name, city, capacity)')
       .eq('tour_id', tourId)
       .order('date', { ascending: true }),
     tour.artist_id
@@ -89,7 +112,7 @@ export async function loadRoutingExportData(
       : Promise.resolve({ data: null }),
   ]);
 
-  const routingRaw = (routingRes.data ?? []) as Array<{
+  const routingAll = (routingRes.data ?? []) as Array<{
     id: string;
     date: string;
     day_type: string | null;
@@ -97,9 +120,13 @@ export async function loadRoutingExportData(
     address: string | null;
     venue_name: string | null;
     venue_capacity: number | null;
+    latitude: number | null;
+    longitude: number | null;
     canonical_venue_id: string | null;
     canonical_venues?: { name?: string | null; city?: string | null; capacity?: number | null } | Array<{ name?: string | null; city?: string | null; capacity?: number | null }> | null;
   }>;
+  // Date-range filter (Part E shared control; null = whole tour).
+  const routingRaw = routingAll.filter((r) => (!range?.from || r.date >= range.from) && (!range?.to || r.date <= range.to));
 
   // Advance instances for these routing days (best-effort; toggle off by default).
   const routingIds = routingRaw.map((r) => r.id);
@@ -128,8 +155,50 @@ export async function loadRoutingExportData(
       address: (r.address ?? '') || null,
       capacity: typeof capacity === 'number' ? capacity : null,
       advance,
+      lat: typeof r.latitude === 'number' ? r.latitude : null,
+      lng: typeof r.longitude === 'number' ? r.longitude : null,
+      legMins: null,
+      legApprox: false,
     };
   });
+
+  // Part F — leg travel times between consecutive days with coords. Reads the
+  // existing drive_time_cache (origin/dest "lat,lng", mode 'driving') — NEVER calls
+  // Google from the export (cost-hardening). Uncached legs fall back to a straight-
+  // line (haversine) approximation, flagged legApprox.
+  if (opts?.travelTimes) {
+    const legs: Array<{ i: number; origin: string; dest: string; aLat: number; aLng: number; bLat: number; bLng: number }> = [];
+    for (let i = 0; i < days.length - 1; i++) {
+      const a = days[i];
+      const b = days[i + 1];
+      if (a.lat != null && a.lng != null && b.lat != null && b.lng != null) {
+        legs.push({ i, origin: `${a.lat},${a.lng}`, dest: `${b.lat},${b.lng}`, aLat: a.lat, aLng: a.lng, bLat: b.lat, bLng: b.lng });
+      }
+    }
+    if (legs.length) {
+      const origins = Array.from(new Set(legs.map((l) => l.origin)));
+      const { data: cacheRows } = await supabase
+        .from('drive_time_cache')
+        .select('origin, destination, duration_seconds')
+        .in('origin', origins)
+        .eq('mode', 'driving');
+      const cache = new Map<string, number>();
+      for (const c of (cacheRows ?? []) as Array<{ origin: string; destination: string; duration_seconds: number }>) {
+        cache.set(`${c.origin}|${c.destination}`, c.duration_seconds);
+      }
+      for (const leg of legs) {
+        const cached = cache.get(`${leg.origin}|${leg.dest}`);
+        if (cached != null) {
+          days[leg.i].legMins = Math.round(cached / 60);
+          days[leg.i].legApprox = false;
+        } else {
+          const km = haversineKm(leg.aLat, leg.aLng, leg.bLat, leg.bLng);
+          days[leg.i].legMins = Math.round((km / 75) * 60); // ~75 km/h rough driving avg
+          days[leg.i].legApprox = true;
+        }
+      }
+    }
+  }
 
   const artistRow = artistRes.data as { id: string; name: string; branding: unknown; spotify_id: string | null; spotify_image_url: string | null } | null;
   const logoUrl = artistRow ? await resolveArtistLogoUrl(artistRow) : null;

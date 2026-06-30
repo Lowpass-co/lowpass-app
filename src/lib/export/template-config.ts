@@ -102,6 +102,14 @@ export interface DateRange {
   to: string | null;
 }
 
+/** Routing-surface options (Part F). */
+export type RoutingView = 'list' | 'calendar';
+export interface RoutingOptions {
+  view: RoutingView; // 'list' = the itinerary table; 'calendar' = a month grid
+  calendarTheme: 'light' | 'dark'; // calendar view only
+  travelTimes: boolean; // show leg travel time between days (cache/approx)
+}
+
 /** Payroll-surface options (Part E). */
 export type PayrollMode = 'combined' | 'individual';
 export interface PayrollOptions {
@@ -135,6 +143,8 @@ export interface TemplateConfig {
   dateRange: DateRange;
   /** Part E — payroll-surface options (only meaningful for surface 'payroll'). */
   payroll: PayrollOptions;
+  /** Part F — routing-surface options (only meaningful for surface 'routing'). */
+  routing: RoutingOptions;
 }
 
 /** The section ids each surface's body builder owns (coarse, P1). Additive — new
@@ -201,6 +211,7 @@ export const DEFAULT_FOOTER: FooterStyle = {
 
 export const DEFAULT_DATE_RANGE: DateRange = { from: null, to: null };
 export const DEFAULT_PAYROLL_OPTIONS: PayrollOptions = { mode: 'combined', personId: null, daysGrid: true, venuePerDay: false, advance: true };
+export const DEFAULT_ROUTING_OPTIONS: RoutingOptions = { view: 'list', calendarTheme: 'light', travelTimes: false };
 
 export const DEFAULT_BUDGET_CONFIG: TemplateConfig = {
   v: 1,
@@ -215,6 +226,7 @@ export const DEFAULT_BUDGET_CONFIG: TemplateConfig = {
   footer: DEFAULT_FOOTER,
   dateRange: DEFAULT_DATE_RANGE,
   payroll: DEFAULT_PAYROLL_OPTIONS,
+  routing: DEFAULT_ROUTING_OPTIONS,
 };
 
 export const DEFAULT_ROOMING_CONFIG: TemplateConfig = {
@@ -229,6 +241,7 @@ export const DEFAULT_ROOMING_CONFIG: TemplateConfig = {
   footer: DEFAULT_FOOTER,
   dateRange: DEFAULT_DATE_RANGE,
   payroll: DEFAULT_PAYROLL_OPTIONS,
+  routing: DEFAULT_ROUTING_OPTIONS,
 };
 
 export const DEFAULT_PAYROLL_CONFIG: TemplateConfig = {
@@ -243,6 +256,7 @@ export const DEFAULT_PAYROLL_CONFIG: TemplateConfig = {
   footer: DEFAULT_FOOTER,
   dateRange: DEFAULT_DATE_RANGE,
   payroll: DEFAULT_PAYROLL_OPTIONS,
+  routing: DEFAULT_ROUTING_OPTIONS,
 };
 
 /** Routing: the advance summary is OFF by default (D7 — itinerary first; the
@@ -262,6 +276,7 @@ export const DEFAULT_ROUTING_CONFIG: TemplateConfig = {
   footer: DEFAULT_FOOTER,
   dateRange: DEFAULT_DATE_RANGE,
   payroll: DEFAULT_PAYROLL_OPTIONS,
+  routing: DEFAULT_ROUTING_OPTIONS,
 };
 
 export function defaultConfig(surface: ExportSurface): TemplateConfig {
@@ -394,6 +409,16 @@ function normalizePayroll(input: unknown): PayrollOptions {
   return base;
 }
 
+function normalizeRouting(input: unknown): RoutingOptions {
+  const base: RoutingOptions = { ...DEFAULT_ROUTING_OPTIONS };
+  if (!input || typeof input !== 'object') return base;
+  const r = input as Partial<RoutingOptions>;
+  if (r.view === 'list' || r.view === 'calendar') base.view = r.view;
+  if (r.calendarTheme === 'light' || r.calendarTheme === 'dark') base.calendarTheme = r.calendarTheme;
+  base.travelTimes = bool(r.travelTimes, DEFAULT_ROUTING_OPTIONS.travelTimes);
+  return base;
+}
+
 /** Coerce an untrusted (request-body) config onto the surface's default — keeps
  *  the canonical section set + order rules, drops unknown ids, restores any
  *  missing section, clamps page size / scope / every style field. A malformed
@@ -432,5 +457,6 @@ export function normalizeConfig(surface: ExportSurface, input: unknown): Templat
   base.footer = normalizeFooter(c.footer);
   base.dateRange = normalizeDateRange(c.dateRange);
   if (surface === 'payroll') base.payroll = normalizePayroll(c.payroll);
+  if (surface === 'routing') base.routing = normalizeRouting(c.routing);
   return base;
 }
