@@ -107,15 +107,93 @@ function renderList(data: RoutingExportData, opts: RoutingViewOpts): string {
     </table>`;
 }
 
-/** Map view placeholder — the static-map image service is a flagged follow-up
- *  (cost-hardening: no live Google calls). The routing lat/lng is already loaded;
- *  this renders the leg list as a fallback so the toggle is fully wired. */
-function renderMapPlaceholder(data: RoutingExportData): string {
-  const pts = data.days.filter((d) => d.lat != null && d.lng != null).length;
+/** A self-contained SVG dot-and-line route map from the routing lat/lng (migration
+ *  009) — NO live Google / static-map calls (cost-hardening). Points are projected
+ *  with a simple equirectangular projection (longitude scaled by cos(mean latitude)
+ *  so regional tours aren't stretched), connected in date order. Show/festival days
+ *  get a filled orange dot + city label; other coordinate-bearing days a small grey
+ *  dot. A richer tiled basemap is a flagged follow-up. Pure; hex colours (doc-local,
+ *  matching the day chips). */
+function renderRouteMap(data: RoutingExportData): string {
+  const pts = data.days
+    .filter((d) => d.lat != null && d.lng != null)
+    .map((d) => ({ lat: d.lat as number, lng: d.lng as number, city: d.city, dayType: d.dayType, date: d.date, venue: d.venue }));
+  const total = data.days.length;
+
+  if (pts.length < 2) {
+    return `
+    <div class="lp-sec-head">Route map</div>
+    <div class="lp-native" style="margin:-2px 0 8px;">${pts.length} of ${total} day${total === 1 ? '' : 's'} have coordinates — at least two are needed to draw a route. Use the list / calendar views.</div>`;
+  }
+
+  const W = 760;
+  const H = 380;
+  const pad = 46;
+  const meanLatRad = (pts.reduce((a, p) => a + p.lat, 0) / pts.length) * (Math.PI / 180);
+  const cosLat = Math.max(0.2, Math.cos(meanLatRad));
+  const xs = pts.map((p) => p.lng * cosLat);
+  const ys = pts.map((p) => p.lat);
+  const minX = Math.min(...xs), maxX = Math.max(...xs);
+  const minY = Math.min(...ys), maxY = Math.max(...ys);
+  const spanX = Math.max(1e-4, maxX - minX);
+  const spanY = Math.max(1e-4, maxY - minY);
+  // Preserve aspect ratio: use the tighter scale so the route isn't distorted.
+  const scale = Math.min((W - pad * 2) / spanX, (H - pad * 2) / spanY);
+  const drawnW = spanX * scale;
+  const drawnH = spanY * scale;
+  const offX = (W - drawnW) / 2;
+  const offY = (H - drawnH) / 2;
+  const project = (p: { lat: number; lng: number }) => ({
+    x: offX + (p.lng * cosLat - minX) * scale,
+    // SVG y is top-down; north (max latitude) sits at the top.
+    y: offY + (maxY - p.lat) * scale,
+  });
+
+  const projected = pts.map(project);
+  const path = projected.map((q, i) => `${i === 0 ? 'M' : 'L'}${q.x.toFixed(1)} ${q.y.toFixed(1)}`).join(' ');
+
+  const isShow = (t: string) => t === 'show' || t === 'festival';
+  // Dots + labels. Label only show/festival days, and dedupe a city repeated on
+  // consecutive points so a multi-night run isn't stamped twice.
+  let lastLabel = '';
+  const markers = pts
+    .map((p, i) => {
+      const q = projected[i];
+      const show = isShow(p.dayType);
+      const r = show ? 4 : 2.4;
+      const fill = show ? '#FF4500' : '#b8b1a8';
+      const stroke = show ? '#7a2200' : '#8a837b';
+      const dot = `<circle cx="${q.x.toFixed(1)}" cy="${q.y.toFixed(1)}" r="${r}" fill="${fill}" stroke="${stroke}" stroke-width="0.8"/>`;
+      let label = '';
+      const city = (p.city ?? '').trim();
+      if (show && city && city !== lastLabel) {
+        lastLabel = city;
+        // Nudge the label above the dot; anchor middle.
+        label = `<text x="${q.x.toFixed(1)}" y="${(q.y - r - 3).toFixed(1)}" text-anchor="middle" font-size="9" fill="#3a342e">${esc(city)}</text>`;
+      }
+      if (!show) lastLabel = '';
+      return dot + label;
+    })
+    .join('');
+
+  // Start/end emphasis ring.
+  const start = projected[0];
+  const end = projected[projected.length - 1];
+  const showCount = pts.filter((p) => isShow(p.dayType)).length;
+
+  const svg =
+    `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;max-height:200mm;display:block;">` +
+    `<rect x="0.5" y="0.5" width="${W - 1}" height="${H - 1}" rx="8" fill="#faf8f5" stroke="#e4ded6" stroke-width="1"/>` +
+    `<path d="${path}" fill="none" stroke="#c97a5c" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="5 3"/>` +
+    `<circle cx="${start.x.toFixed(1)}" cy="${start.y.toFixed(1)}" r="7" fill="none" stroke="#1f7a4d" stroke-width="1.4"/>` +
+    `<circle cx="${end.x.toFixed(1)}" cy="${end.y.toFixed(1)}" r="7" fill="none" stroke="#b4452f" stroke-width="1.4"/>` +
+    markers +
+    `</svg>`;
+
   return `
     <div class="lp-sec-head">Route map</div>
-    <div class="lp-native" style="margin:-2px 0 8px;">A static route map is coming soon — ${pts} of ${data.days.length} day${data.days.length === 1 ? '' : 's'} have coordinates. For now, use the list / calendar views.</div>
-    <div style="border:1px dashed var(--lp-border-strong);border-radius:8px;height:180px;display:flex;align-items:center;justify-content:center;color:var(--lp-text-tertiary);font-size:11px;">Route map preview</div>`;
+    <div class="lp-native" style="margin:-2px 0 8px;">${pts.length} of ${total} day${total === 1 ? '' : 's'} mapped · ${showCount} show${showCount === 1 ? '' : 's'} · green ring = start, red ring = end. Schematic (no basemap) — straight-line legs.</div>
+    ${svg}`;
 }
 
 /** A print-friendly month-grid calendar (light or dark). */
@@ -210,8 +288,8 @@ export function buildRoutingBodyHtml(data: RoutingExportData, config: TemplateCo
   const list = () => renderList(data, { travelTimes: r.travelTimes, columns: r.columns });
   const renderDays = () => {
     if (r.view === 'calendar') return renderCalendar(data, r.calendarTheme);
-    if (r.view === 'map') return renderMapPlaceholder(data);
-    if (r.view === 'both') return `${list()}\n    <div class="lp-page-break"></div>${renderMapPlaceholder(data)}`;
+    if (r.view === 'map') return renderRouteMap(data);
+    if (r.view === 'both') return `${list()}\n    <div class="lp-page-break"></div>${renderRouteMap(data)}`;
     return list();
   };
   const sections: Record<string, () => string> = {

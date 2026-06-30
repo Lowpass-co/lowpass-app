@@ -20,6 +20,27 @@ Reference tour: "Warning Support". Templates picker needs a NEW empty tour.
 | BUD-19 | FIXED | click-to-rename templates + consistent picker (Fix-pack C) |
 | BUD-20 | FIXED | summary reads live from `section_id`; no phantom sections (Fix-pack A) |
 
+## Routing Map view — SVG dot-and-line (feat/sprint-routing-map)
+
+> Sprint Part 5. The routing export's **Map** / **Both** views now render a real
+> self-contained SVG route map from the routing lat/lng (migration 009) — NO live
+> Google / static-map calls (cost-hardening). Replaces the old `renderMapPlaceholder`.
+> The editor's view label changed "Map (coming soon)" → "Map (route)". A richer tiled
+> basemap stays a flagged follow-up. Floor: tsc 0, eslint 0, build green.
+
+- **EXP-ROUTE-MAP-01 — SVG route from lat/lng.** `renderRouteMap` projects the
+  coordinate-bearing days (equirectangular, longitude scaled by cos(mean lat) so
+  regional tours aren't stretched), connects them in date order with a dashed
+  `<path>`, dots each day (show/festival = orange + city label, else small grey),
+  rings the start (green) + end (red). NO external map URL / tile / `<img>`. (Proven:
+  `<svg>` + `<path d="M…">` + ≥3 circles + London/Paris/Berlin labels + "3 of 4 days
+  mapped" caption with the no-coords off day excluded; no googleapis/staticmap/mapbox/
+  tile/img.)
+- **EXP-ROUTE-MAP-02 — Both = list + map.** `view='both'` renders the itinerary list
+  then the map beneath (page-break between). (Proven: `<table>` index < `<svg>` index.)
+- **EXP-ROUTE-MAP-03 — graceful under-2 coords.** Fewer than two mapped days → a
+  friendly "at least two are needed" note, no `<svg>`, no crash. (Proven.)
+
 ## P&L brick dashboard — Phase 1 (#29 — feat/sprint-dashboard)
 
 > Sprint Part 4. The Summary tab becomes discrete, typed BRICKS (show/hide +

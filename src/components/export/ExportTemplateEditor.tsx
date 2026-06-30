@@ -61,7 +61,7 @@ const PAYROLL_MODES: ReadonlyArray<{ value: 'combined' | 'individual'; label: st
 const ROUTING_VIEWS: ReadonlyArray<{ value: 'list' | 'calendar' | 'map' | 'both'; label: string }> = [
   { value: 'list', label: 'List (itinerary table)' },
   { value: 'calendar', label: 'Calendar (month grid)' },
-  { value: 'map', label: 'Map (coming soon)' },
+  { value: 'map', label: 'Map (route)' },
   { value: 'both', label: 'Both (list + map)' },
 ];
 
