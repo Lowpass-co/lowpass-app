@@ -357,6 +357,7 @@ export default async function BudgetTourPage({
           tourId={tourId}
           versions={versions}
           viewedVersionId={viewed?.id ?? null}
+          canApprove={canApprove}
         />
         <BudgetBurnBar lines={lines} tourCurrency={tourCurrency} />
         {/* Phase strip when this tour tracks phases (BUD-18). Phase 4.2 —

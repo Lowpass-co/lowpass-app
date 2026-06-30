@@ -11,8 +11,47 @@
 
 import { useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { ChevronDown, Check } from 'lucide-react';
-import { type BudgetVersionVm, versionStatusColor, STATUS_LABEL } from './versionApi';
+import { ChevronDown, Check, Lock, Unlock, GitBranch } from 'lucide-react';
+import { useToast } from '@/components/ui/Toast';
+import {
+  type BudgetVersionVm,
+  versionStatusColor,
+  STATUS_LABEL,
+  approveVersion,
+  unlockVersion,
+  amendVersion,
+} from './versionApi';
+
+function ActionRow({
+  icon,
+  label,
+  disabled,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="btn-transition"
+      style={{
+        display: 'flex', alignItems: 'center', gap: 8, width: '100%',
+        border: 0, background: 'transparent', borderRadius: 'var(--lp-radius-sm)',
+        padding: '6px 8px', fontSize: 12, fontWeight: 600,
+        color: 'var(--lp-orange)', cursor: disabled ? 'default' : 'pointer',
+        opacity: disabled ? 0.6 : 1,
+      }}
+    >
+      {icon}
+      {label}
+    </button>
+  );
+}
 
 function StatusPill({ status }: { status: BudgetVersionVm['status'] }) {
   const c = versionStatusColor(status);
@@ -35,15 +74,22 @@ export function VersionSelector({
   tourId,
   versions,
   viewedVersionId,
+  canApprove = false,
 }: {
   tourId: string;
   versions: BudgetVersionVm[];
   viewedVersionId: string | null;
+  /** Approver capability (RPC is_budget_approver) — gates the inline
+   *  approve / unlock / amend actions in the dropdown (B2 lived in Settings;
+   *  #27 surfaces it on the chip directly). */
+  canApprove?: boolean;
 }) {
   const router = useRouter();
+  const { showToast } = useToast();
   const pathname = usePathname() ?? `/budget/${tourId}`;
   const searchParams = useSearchParams();
   const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
   if (!versions.length) return null;
 
   const viewed = versions.find((v) => v.id === viewedVersionId) ?? versions[versions.length - 1];
@@ -62,6 +108,34 @@ export function VersionSelector({
     setOpen(false);
     router.push(`${pathname}?${params.toString()}`);
   };
+
+  // Inline approve / unlock / amend on the VIEWED version — mirrors
+  // VersionApprovalCard.act (server enforces the approver gate; here we hide
+  // the affordances for non-approvers). `push` navigates to a freshly-created
+  // amend version; otherwise just refresh the server data.
+  const act = async (fn: () => Promise<Response>, push?: (id: string) => string) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      const res = await fn();
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(typeof j.error === 'string' ? j.error : `Failed (${res.status})`);
+      }
+      setOpen(false);
+      if (push) {
+        const v = await res.json();
+        router.push(push(v.id));
+      }
+      router.refresh();
+    } catch (err) {
+      showToast(err instanceof Error ? err.message : 'Action failed', 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const canAct = canApprove && (viewed.status === 'draft' || viewed.status === 'approved');
 
   return (
     <div style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
@@ -125,6 +199,41 @@ export function VersionSelector({
                 <StatusPill status={v.status} />
               </button>
             ))}
+
+            {/* Inline approve / unlock / amend on the viewed version (#27 — was
+                Settings-only). Approver-gated; the server re-checks. */}
+            {canAct ? (
+              <div style={{ borderTop: '1px solid var(--lp-border)', marginTop: 4, paddingTop: 4 }}>
+                {viewed.status === 'draft' ? (
+                  <ActionRow
+                    icon={<Lock size={12} aria-hidden />}
+                    label={busy ? 'Approving…' : 'Approve & lock'}
+                    disabled={busy}
+                    onClick={() => void act(() => approveVersion(viewed.id))}
+                  />
+                ) : (
+                  <>
+                    <ActionRow
+                      icon={<Unlock size={12} aria-hidden />}
+                      label={busy ? 'Working…' : 'Unlock & re-approve'}
+                      disabled={busy}
+                      onClick={() => void act(() => unlockVersion(viewed.id))}
+                    />
+                    <ActionRow
+                      icon={<GitBranch size={12} aria-hidden />}
+                      label={busy ? 'Working…' : 'New version from approved'}
+                      disabled={busy}
+                      onClick={() =>
+                        void act(
+                          () => amendVersion(viewed.id),
+                          (id) => `/budget/${tourId}?tab=budget&version=${id}`,
+                        )
+                      }
+                    />
+                  </>
+                )}
+              </div>
+            ) : null}
           </div>
         </>
       ) : null}

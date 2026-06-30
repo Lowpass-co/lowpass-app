@@ -42,7 +42,17 @@ export function TopProductNav({ active, homeHref }: TopProductNavProps) {
     if (closeTimer.current) clearTimeout(closeTimer.current);
     setOpenKey(key);
   }, []);
-  const close = useCallback(() => setOpenKey(null), []);
+  // Forgiving hover-intent close: a short grace period so a diagonal mouse path
+  // from the product chip down to its menu doesn't dismiss it mid-travel.
+  const scheduleClose = useCallback(() => {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    closeTimer.current = setTimeout(() => setOpenKey(null), 180);
+  }, []);
+  // Immediate close (Escape / focus-out) — no grace period.
+  const close = useCallback(() => {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    setOpenKey(null);
+  }, []);
 
   return (
     <nav
@@ -70,7 +80,7 @@ export function TopProductNav({ active, homeHref }: TopProductNavProps) {
             key={p.key}
             className="relative flex items-center"
             onMouseEnter={() => hasMenu && open(p.key)}
-            onMouseLeave={close}
+            onMouseLeave={scheduleClose}
             onBlur={(e) => {
               // Close when focus leaves the whole product group.
               if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
@@ -129,7 +139,10 @@ export function TopProductNav({ active, homeHref }: TopProductNavProps) {
                 onKeyDown={(e) => {
                   if (e.key === 'Escape') close();
                 }}
-                className="btn-transition inline-flex items-center rounded-md py-1.5 pr-2"
+                /* Whole-button target: the caret spans the full chip height + a
+                   wider hit area (pl-1.5 pr-2.5) so a tap anywhere on the right
+                   of the chip toggles the menu — not just a 12px glyph. */
+                className="btn-transition inline-flex items-center self-stretch rounded-md py-1.5 pl-1.5 pr-2.5"
                 style={{
                   color: isActive ? 'var(--color-lp-orange)' : 'var(--lp-text-tertiary)',
                   opacity: tourRequired ? 0.45 : 1,
@@ -146,15 +159,23 @@ export function TopProductNav({ active, homeHref }: TopProductNavProps) {
               </button>
             ) : null}
 
-            {isOpen ? (
+            {hasMenu ? (
               <div
                 role="menu"
                 aria-label={`${p.label} pages`}
+                aria-hidden={!isOpen}
                 className="absolute left-0 top-full z-50 mt-1 min-w-[180px] rounded-lg border py-1"
                 style={{
                   background: 'var(--lp-surface)',
                   borderColor: 'var(--lp-border-strong)',
                   boxShadow: 'var(--lp-shadow-popover)',
+                  // Animate open AND close: kept mounted, faded + lifted when shut.
+                  opacity: isOpen ? 1 : 0,
+                  transform: isOpen ? 'translateY(0)' : 'translateY(-4px)',
+                  visibility: isOpen ? 'visible' : 'hidden',
+                  pointerEvents: isOpen ? 'auto' : 'none',
+                  transition:
+                    'opacity var(--lp-duration-fast) var(--lp-ease-standard), transform var(--lp-duration-fast) var(--lp-ease-standard)',
                 }}
                 onKeyDown={(e) => {
                   const items = Array.from(

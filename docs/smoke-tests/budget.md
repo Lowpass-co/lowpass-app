@@ -20,6 +20,40 @@ Reference tour: "Warning Support". Templates picker needs a NEW empty tour.
 | BUD-19 | FIXED | click-to-rename templates + consistent picker (Fix-pack C) |
 | BUD-20 | FIXED | summary reads live from `section_id`; no phantom sections (Fix-pack A) |
 
+## Two-bar nav + budget chrome polish (#27 — feat/sprint-nav)
+
+> Sprint Part 3. Three polish targets. Floor: tsc 0, eslint 0, build green.
+> Verification is build + endpoint-existence + structural (these are client-UI
+> chrome — no pure node harness; the metric math is untouched so the
+> presentation-only invariant holds by construction).
+
+- **NAV-POL-01 — forgiving hover-intent dropdown close.** `TopProductNav`'s product
+  dropdowns no longer dismiss the instant the cursor leaves the chip: `onMouseLeave`
+  now calls `scheduleClose` (a 180 ms grace timer, cancelled on re-enter / re-open),
+  so a diagonal mouse path from the chip down to its menu survives. Escape /
+  focus-out still close immediately (`close`). (Verified: `onMouseLeave={scheduleClose}`
+  wired; timer cleared in `open`/`close`.)
+- **NAV-POL-02 — animated open/close + wider target.** The menu is kept mounted and
+  animated both ways (opacity + `translateY`, `visibility`/`pointer-events` gated on
+  `isOpen`) instead of hard mount/unmount. The caret toggle spans the full chip
+  height with a wider hit area (`self-stretch pl-1.5 pr-2.5`) so a tap anywhere on the
+  chip's right edge opens the menu. (Verified: `visibility: isOpen` style present.)
+- **NAV-POL-03 — version chip → approve / unlock / amend inline.** The `VersionSelector`
+  dropdown gains an approver-gated actions block on the VIEWED version (was
+  Settings-only): draft → **Approve & lock** (`approveVersion`); approved → **Unlock &
+  re-approve** (`unlockVersion`) + **New version from approved** (`amendVersion` →
+  navigates to `?version=<new>`). Mirrors `VersionApprovalCard.act` (toast on error,
+  `router.refresh`). `canApprove` threads page → `BudgetContextBand` → selector; the
+  server re-checks `is_budget_approver`. (Verified: the 3 POST endpoints
+  `/api/budget/versions/[id]/{approve,unlock,amend}` exist; actions gated by `canAct`.)
+- **NAV-POL-04 — burn bar collapsed to one status line.** `BudgetBurnBar`'s three
+  stacked column-blocks (26 px Runway number · meter · Variance block) are now a single
+  inline row (`py-2`, half-height): `Remaining $X of $Y` · meter (8 px, committed
+  marker kept) · `$X spent · N% · committed $Z` · `vs Committed ↕$X`. "Remaining … of …"
+  renders exactly once. The metric `useMemo` (total/committed/spent/remaining/variance
+  via `convertToCurrency` + `getEffectiveActual`) is UNCHANGED — presentation only.
+  (Verified: exactly 1 "Remaining" label + 1 "of {m.total}" in the file.)
+
 ## Document Export — Stage Plot surface (6th) (#8 — feat/sprint-stage-plot)
 
 > The 6th export surface. **Plot-id keyed** (a stage plot lives in the artist

@@ -33,6 +33,7 @@ interface BudgetContextBandProps {
   tourId: string;
   versions: BudgetVersionVm[];
   viewedVersionId: string | null;
+  canApprove: boolean;
 }
 
 export function BudgetContextBand({
@@ -43,6 +44,7 @@ export function BudgetContextBand({
   tourId,
   versions,
   viewedVersionId,
+  canApprove,
 }: BudgetContextBandProps) {
   const pathname = usePathname() ?? '';
   const searchParams = useSearchParams();
@@ -67,7 +69,7 @@ export function BudgetContextBand({
               artistLogoUrl={artistLogoUrl}
               tourName={tourName}
             />
-            <VersionSelector tourId={tourId} versions={versions} viewedVersionId={viewedVersionId} />
+            <VersionSelector tourId={tourId} versions={versions} viewedVersionId={viewedVersionId} canApprove={canApprove} />
           </div>
         }
         /* Phase 0 — SUMMARY | EXPENSES | INCOME | SETTINGS as four equal tabs.

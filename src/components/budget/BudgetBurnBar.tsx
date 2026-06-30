@@ -121,134 +121,105 @@ export function BudgetBurnBar({ lines, tourCurrency }: BudgetBurnBarProps) {
     : 'var(--color-lp-status-complete)';
 
   return (
+    /* #27 — ONE status line. The old three stacked column-blocks (big Runway
+       number · meter · Variance block) collapsed into a single inline row, so
+       "Remaining $X of $Y" reads exactly once and the bar is half the height. */
     <div
-      className="lp-budget-burn-bar flex items-center gap-6 border-b px-6 py-3"
+      className="lp-budget-burn-bar flex items-center gap-4 border-b px-6 py-2"
       style={{
         background: 'var(--lp-panel)',
         borderColor: 'var(--lp-border-strong)',
       }}
     >
-      {/* Runway — led large. */}
-      <div className="flex shrink-0 flex-col">
-        <span
-          style={{
-            fontSize: '10px',
-            fontWeight: 700,
-            letterSpacing: '0.1em',
-            textTransform: 'uppercase',
-            color: 'var(--lp-text-tertiary)',
-          }}
-        >
+      {/* Remaining — the single runway figure, inline (no stacked label). */}
+      <span className="shrink-0 whitespace-nowrap" style={{ fontSize: '12px', color: 'var(--lp-text-tertiary)' }}>
+        <span style={{ fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', fontSize: '10px' }}>
           Remaining
-        </span>
+        </span>{' '}
         <span
           className="lp-mono"
           style={{
-            fontSize: '26px',
+            fontSize: '15px',
             fontWeight: 700,
-            lineHeight: 1.05,
             color: m.remaining >= 0 ? 'var(--lp-text)' : 'var(--color-lp-error)',
           }}
         >
           {formatMoney(m.remaining, displayCurrency)}
-        </span>
-        <span style={{ fontSize: '11px', color: 'var(--lp-text-secondary)' }}>
-          of {formatMoney(m.total, displayCurrency)} budget
-        </span>
-      </div>
+        </span>{' '}
+        <span style={{ color: 'var(--lp-text-secondary)' }}>of {formatMoney(m.total, displayCurrency)}</span>
+      </span>
 
-      {/* Meter — spent / budget, with the committed marker. */}
-      <div className="min-w-0 flex-1">
-        <div className="mb-1 flex items-baseline justify-between gap-2">
-          <span style={{ fontSize: '11px', color: 'var(--lp-text-secondary)' }}>
-            <span className="lp-mono" style={{ color: 'var(--lp-text)', fontWeight: 600 }}>
-              {formatAbbrev(m.spent, displayCurrency)}
-            </span>{' '}
-            spent · {Math.round(m.pctUsed)}% used
-          </span>
-          {m.over ? (
-            <span
-              style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-lp-error)' }}
-            >
-              Over budget
-            </span>
-          ) : null}
-        </div>
-
+      {/* Meter — spent / budget, with the committed marker. The caption sits
+          inline to the right of the bar (no third stacked line). */}
+      <div
+        role="progressbar"
+        aria-valuenow={Math.round(m.pctUsed)}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-label="Budget spent"
+        className="relative min-w-0 flex-1 overflow-visible rounded-full"
+        style={{
+          height: 8,
+          background: 'color-mix(in srgb, var(--lp-text) 8%, transparent)',
+        }}
+      >
         <div
-          role="progressbar"
-          aria-valuenow={Math.round(m.pctUsed)}
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-label="Budget spent"
-          className="relative w-full overflow-visible rounded-full"
+          className="absolute left-0 top-0 h-full rounded-full"
           style={{
-            height: 10,
-            background: 'color-mix(in srgb, var(--lp-text) 8%, transparent)',
+            width: `${fillPct}%`,
+            background: fillColor,
+            transition: 'width var(--lp-duration-slow) var(--lp-ease-standard)',
           }}
-        >
+        />
+        {/* Committed marker — thin line on the same scale. */}
+        {m.committed > 0 ? (
           <div
-            className="absolute left-0 top-0 h-full rounded-full"
+            className="absolute"
+            title={`Committed ${formatMoney(m.committed, displayCurrency)}`}
             style={{
-              width: `${fillPct}%`,
-              background: fillColor,
-              transition: 'width var(--lp-duration-slow) var(--lp-ease-standard)',
+              left: `${m.committedPct}%`,
+              top: -3,
+              height: 14,
+              width: 2,
+              borderRadius: 1,
+              background: 'var(--lp-text-secondary)',
+              transform: 'translateX(-1px)',
             }}
           />
-          {/* Committed marker — thin line on the same scale. */}
-          {m.committed > 0 ? (
-            <div
-              className="absolute"
-              title={`Committed ${formatMoney(m.committed, displayCurrency)}`}
-              style={{
-                left: `${m.committedPct}%`,
-                top: -2,
-                height: 14,
-                width: 2,
-                borderRadius: 1,
-                background: 'var(--lp-text-secondary)',
-                transform: 'translateX(-1px)',
-              }}
-            />
-          ) : null}
-        </div>
-
-        <div className="mt-1">
-          <span style={{ fontSize: '11px', color: 'var(--lp-text-tertiary)' }}>
-            Committed{' '}
-            <span className="lp-mono" style={{ color: 'var(--lp-text-secondary)' }}>
-              {formatAbbrev(m.committed, displayCurrency)}
-            </span>
-          </span>
-        </div>
+        ) : null}
       </div>
 
-      {/* vs Committed — actuals vs what you committed to. Distinct from
-          the grid's "Variance" (actuals vs estimate) so one word doesn't
-          name two metrics. */}
-      <div className="flex shrink-0 flex-col items-end">
-        <span
-          style={{
-            fontSize: '10px',
-            fontWeight: 700,
-            letterSpacing: '0.1em',
-            textTransform: 'uppercase',
-            color: 'var(--lp-text-tertiary)',
-          }}
-        >
+      {/* Spent / used caption + committed — inline. */}
+      <span className="shrink-0 whitespace-nowrap" style={{ fontSize: '11px', color: 'var(--lp-text-secondary)' }}>
+        <span className="lp-mono" style={{ color: 'var(--lp-text)', fontWeight: 600 }}>
+          {formatAbbrev(m.spent, displayCurrency)}
+        </span>{' '}
+        spent · {Math.round(m.pctUsed)}% · committed{' '}
+        <span className="lp-mono" style={{ color: 'var(--lp-text-secondary)' }}>
+          {formatAbbrev(m.committed, displayCurrency)}
+        </span>
+      </span>
+
+      {m.over ? (
+        <span className="shrink-0" style={{ fontSize: '11px', fontWeight: 600, color: 'var(--color-lp-error)' }}>
+          Over budget
+        </span>
+      ) : null}
+
+      {/* vs Committed — actuals vs what you committed to. Distinct from the
+          grid's "Variance" (actuals vs estimate) so one word doesn't name two
+          metrics. Inline, end of the row. */}
+      <span
+        className="lp-mono inline-flex shrink-0 items-center gap-1 whitespace-nowrap"
+        title={varianceOver ? 'over committed' : 'under committed'}
+        style={{ fontSize: '13px', fontWeight: 700, color: varianceColor }}
+      >
+        <span style={{ fontSize: '10px', fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--lp-text-tertiary)' }}>
           vs Committed
         </span>
-        <span
-          className="lp-mono inline-flex items-center gap-1"
-          style={{ fontSize: '18px', fontWeight: 700, color: varianceColor }}
-        >
-          <VarianceIcon className="h-4 w-4" aria-hidden />
-          {formatAbbrev(Math.abs(m.variance), displayCurrency)}
-        </span>
-        <span style={{ fontSize: '11px', color: 'var(--lp-text-tertiary)' }}>
-          {varianceOver ? 'over committed' : 'under committed'}
-        </span>
-      </div>
+        <VarianceIcon className="h-3.5 w-3.5" aria-hidden />
+        {formatAbbrev(Math.abs(m.variance), displayCurrency)}
+      </span>
     </div>
   );
 }
