@@ -91,6 +91,11 @@ const PAGE_PX: Record<PageSize, { w: number; h: number }> = {
   Letter: { w: 816, h: 1056 },
 };
 
+/** The PDF's page.pdf margins (16/14/20 mm) at 96dpi — the preview frames the
+ *  content inside these so the on-screen page reads like a printed sheet AND the
+ *  content wraps at the SAME width the PDF prints (true WYSIWYG). */
+const MARGIN_PX = { top: 60, side: 53, bottom: 76 };
+
 const ls = {
   get(key: string): string | null {
     try { return typeof window !== 'undefined' ? window.localStorage.getItem(key) : null; } catch { return null; }
@@ -456,6 +461,9 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
   const scale = zoom ?? fitScale;
   const page = PAGE_PX[config.pageSize];
   const isExcel = config.format === 'excel';
+  // ONE pill: even if the data has a stale duplicate, only the first workspace
+  // default for this surface shows the "Default" pill.
+  const effectiveDefaultId = templates.find((t) => t.isDefault && !t.isGlobal)?.id ?? null;
 
   const title =
     surface === 'budget' ? 'Export Budget' : surface === 'payroll' ? 'Export Payroll' : surface === 'routing' ? 'Export Routing' : 'Export Rooming list';
@@ -524,14 +532,15 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
                   {previewError ? (
                     <div style={{ alignSelf: 'center', textAlign: 'center', color: 'var(--lp-text-tertiary)', fontSize: 13 }}>{previewError}</div>
                   ) : (
-                    <div style={{ width: page.w * scale, height: docHeight * scale, flex: '0 0 auto' }}>
-                      <div style={{ width: page.w, transform: `scale(${scale})`, transformOrigin: 'top left', boxShadow: '0 2px 24px rgba(0,0,0,0.22)', background: '#fff', borderRadius: 2 }}>
+                    <div style={{ width: page.w * scale, height: (docHeight + MARGIN_PX.top + MARGIN_PX.bottom) * scale, flex: '0 0 auto' }}>
+                      {/* the page sheet — white, with the PDF's print margins as padding */}
+                      <div style={{ width: page.w, transform: `scale(${scale})`, transformOrigin: 'top left', boxShadow: '0 2px 24px rgba(0,0,0,0.25)', background: '#fff', borderRadius: 2, padding: `${MARGIN_PX.top}px ${MARGIN_PX.side}px ${MARGIN_PX.bottom}px`, boxSizing: 'border-box' }}>
                         <iframe
                           ref={iframeRef}
                           title="Export preview"
                           srcDoc={previewHtml}
                           onLoad={measureDoc}
-                          style={{ width: page.w, height: docHeight, border: 0, display: 'block', background: '#fff' }}
+                          style={{ width: page.w - MARGIN_PX.side * 2, height: docHeight, border: 0, display: 'block', background: '#fff' }}
                         />
                       </div>
                     </div>
@@ -556,6 +565,7 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
                     <TemplateRow
                       key={t.id}
                       t={t}
+                      isDefault={t.id === effectiveDefaultId}
                       selected={selectedTemplateId === t.id}
                       onApply={() => applyTemplate(t)}
                       onSetDefault={() => void setDefaultTemplate(t.id)}
@@ -579,37 +589,6 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
                 </button>
               </div>
               <p style={{ fontSize: 11, color: 'var(--lp-text-tertiary)' }}>Templates are shared across this workspace’s tours. Applying a Global template copies it in — edit + Save to keep your own.</p>
-            </AccordionGroup>
-
-            <AccordionGroup id="sections" label="Sections" defaultOpen>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                {config.sections.map((s) => (
-                  <div
-                    key={s.id}
-                    draggable
-                    onDragStart={() => setDragId(s.id)}
-                    onDragOver={(e) => { e.preventDefault(); if (dragId && dragId !== s.id) reorder(dragId, s.id); }}
-                    onDragEnd={() => setDragId(null)}
-                    style={{
-                      display: 'flex', alignItems: 'center', gap: 8, padding: '7px 8px',
-                      borderRadius: 'var(--lp-radius-md)', border: '1px solid var(--lp-border)',
-                      background: dragId === s.id ? 'color-mix(in srgb, var(--lp-orange) 8%, transparent)' : 'var(--lp-surface, transparent)',
-                      cursor: 'grab', opacity: s.show ? 1 : 0.55,
-                    }}
-                  >
-                    <GripVertical className="h-4 w-4" style={{ color: 'var(--lp-text-tertiary)', flex: '0 0 auto' }} aria-hidden />
-                    <span style={{ flex: 1, fontSize: 13, color: 'var(--lp-text)' }}>{SECTION_LABELS[s.id] ?? s.id}</span>
-                    <button
-                      type="button" onClick={() => toggleSection(s.id)} className="btn-transition"
-                      aria-label={s.show ? 'Hide section' : 'Show section'} aria-pressed={s.show}
-                      style={{ border: 0, background: 'transparent', cursor: 'pointer', color: s.show ? 'var(--lp-orange)' : 'var(--lp-text-tertiary)', padding: 2 }}
-                    >
-                      {s.show ? <Eye className="h-4 w-4" aria-hidden /> : <EyeOff className="h-4 w-4" aria-hidden />}
-                    </button>
-                  </div>
-                ))}
-              </div>
-              <p style={{ fontSize: 11, color: 'var(--lp-text-tertiary)', marginTop: 6 }}>Drag to reorder · eye to show/hide.</p>
             </AccordionGroup>
 
             {surface === 'budget' ? (
@@ -650,6 +629,37 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
                 <DateRangeField range={config.dateRange} onChange={setRange} />
               </AccordionGroup>
             ) : null}
+
+            <AccordionGroup id="sections" label="Sections" defaultOpen>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {config.sections.map((s) => (
+                  <div
+                    key={s.id}
+                    draggable
+                    onDragStart={() => setDragId(s.id)}
+                    onDragOver={(e) => { e.preventDefault(); if (dragId && dragId !== s.id) reorder(dragId, s.id); }}
+                    onDragEnd={() => setDragId(null)}
+                    style={{
+                      display: 'flex', alignItems: 'center', gap: 8, padding: '7px 8px',
+                      borderRadius: 'var(--lp-radius-md)', border: '1px solid var(--lp-border)',
+                      background: dragId === s.id ? 'color-mix(in srgb, var(--lp-orange) 8%, transparent)' : 'var(--lp-surface, transparent)',
+                      cursor: 'grab', opacity: s.show ? 1 : 0.55,
+                    }}
+                  >
+                    <GripVertical className="h-4 w-4" style={{ color: 'var(--lp-text-tertiary)', flex: '0 0 auto' }} aria-hidden />
+                    <span style={{ flex: 1, fontSize: 13, color: 'var(--lp-text)' }}>{SECTION_LABELS[s.id] ?? s.id}</span>
+                    <button
+                      type="button" onClick={() => toggleSection(s.id)} className="btn-transition"
+                      aria-label={s.show ? 'Hide section' : 'Show section'} aria-pressed={s.show}
+                      style={{ border: 0, background: 'transparent', cursor: 'pointer', color: s.show ? 'var(--lp-orange)' : 'var(--lp-text-tertiary)', padding: 2 }}
+                    >
+                      {s.show ? <Eye className="h-4 w-4" aria-hidden /> : <EyeOff className="h-4 w-4" aria-hidden />}
+                    </button>
+                  </div>
+                ))}
+              </div>
+              <p style={{ fontSize: 11, color: 'var(--lp-text-tertiary)', marginTop: 6 }}>Drag to reorder · eye to show/hide.</p>
+            </AccordionGroup>
 
             {isExcel ? null : (
             <>
@@ -831,40 +841,44 @@ function ZoomBtn({ onClick, title, children }: { onClick: () => void; title: str
   );
 }
 
-function TemplateRow({ t, selected, onApply, onSetDefault, onDelete }: { t: SavedTemplate; selected: boolean; onApply: () => void; onSetDefault: () => void; onDelete: () => void }) {
+function TemplateRow({ t, isDefault, selected, onApply, onSetDefault, onDelete }: { t: SavedTemplate; isDefault: boolean; selected: boolean; onApply: () => void; onSetDefault: () => void; onDelete: () => void }) {
   const [hover, setHover] = useState(false);
+  const stop = (fn: () => void) => (e: React.MouseEvent) => { e.stopPropagation(); fn(); };
   return (
+    // The WHOLE row applies the template (and re-previews) — Adam: clicking the row
+    // should select it. Inner buttons stopPropagation.
     <div
+      role="button" tabIndex={0}
+      onClick={onApply}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onApply(); } }}
       onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+      title="Apply this template"
       style={{
-        display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', borderRadius: 'var(--lp-radius-md)',
+        display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', borderRadius: 'var(--lp-radius-md)', cursor: 'pointer',
         border: `1px solid ${selected ? 'var(--lp-orange)' : 'var(--lp-border)'}`,
         background: selected ? 'color-mix(in srgb, var(--lp-orange) 9%, transparent)' : hover ? 'color-mix(in srgb, var(--lp-orange) 4%, transparent)' : 'transparent',
         transform: hover && !selected ? 'translateX(2px)' : 'none',
         transition: 'transform 0.12s ease, background 0.12s ease, border-color 0.12s ease',
       }}
     >
-      <button
-        type="button" onClick={onApply} className="btn-transition" title="Apply this template"
-        style={{ flex: 1, textAlign: 'left', border: 0, background: 'transparent', cursor: 'pointer', fontSize: 13, color: 'var(--lp-text)', fontWeight: selected ? 700 : 500, display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0 }}
-      >
+      <span style={{ flex: 1, fontSize: 13, color: 'var(--lp-text)', fontWeight: selected ? 700 : 500, display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
         {t.isGlobal ? <Globe className="h-3.5 w-3.5" style={{ color: 'var(--lp-text-tertiary)', flex: '0 0 auto' }} aria-hidden /> : null}
         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.name}</span>
-      </button>
+      </span>
       {!t.isGlobal ? (
         <>
           <button
-            type="button" onClick={onSetDefault} className="btn-transition" title={t.isDefault ? 'Workspace default' : 'Set as workspace default'}
+            type="button" onClick={stop(onSetDefault)} className="btn-transition" title={isDefault ? 'Workspace default' : 'Set as workspace default'}
             style={{
-              border: `1px solid ${t.isDefault ? 'var(--lp-orange)' : 'var(--lp-border)'}`, borderRadius: 'var(--lp-radius-full, 999px)',
+              border: `1px solid ${isDefault ? 'var(--lp-orange)' : 'var(--lp-border)'}`, borderRadius: 'var(--lp-radius-full, 999px)',
               padding: '2px 8px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', cursor: 'pointer',
-              color: t.isDefault ? 'var(--lp-text-inverse)' : 'var(--lp-text-tertiary)',
-              background: t.isDefault ? 'var(--lp-orange)' : 'transparent',
+              color: isDefault ? 'var(--lp-text-inverse)' : 'var(--lp-text-tertiary)',
+              background: isDefault ? 'var(--lp-orange)' : 'transparent',
             }}
           >
             Default
           </button>
-          <button type="button" onClick={onDelete} className="btn-transition" title="Delete template" aria-label="Delete" style={{ border: 0, background: 'transparent', cursor: 'pointer', color: 'var(--lp-text-tertiary)', padding: 2 }}>
+          <button type="button" onClick={stop(onDelete)} className="btn-transition" title="Delete template" aria-label="Delete" style={{ border: 0, background: 'transparent', cursor: 'pointer', color: 'var(--lp-text-tertiary)', padding: 2 }}>
             <Trash2 className="h-4 w-4" aria-hidden />
           </button>
         </>

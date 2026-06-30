@@ -20,6 +20,30 @@ Reference tour: "Warning Support". Templates picker needs a NEW empty tour.
 | BUD-19 | FIXED | click-to-rename templates + consistent picker (Fix-pack C) |
 | BUD-20 | FIXED | summary reads live from `section_id`; no phantom sections (Fix-pack A) |
 
+## Document Export v2.1 — editor & preview polish (#8 — feat/export-v21-editor)
+
+> Polish from Adam's v2 smoke. Editor-only, no schema. tsc 0, eslint 0, build green.
+
+- **EXP-V21A-01 — printable page preview.** The preview renders as a real sheet: a
+  white page with the PDF's print margins (16/14/20 mm @ 96dpi) as padding, and the
+  iframe content sized to the CONTENT width (page − side margins) so the on-screen
+  wrap matches the PDF exactly (true WYSIWYG) and nothing is flush to the edge. The
+  header/logo are no longer hard against the page border.
+- **EXP-V21A-02 — hide-header toggle.** The Header group's "Show header" toggle
+  removes the entire letterhead (and the running header) when off; content starts at
+  the top margin. (Present + verified — `config.header.show` → shell omits the
+  letterhead + build sets `runningHeader: null`.)
+- **EXP-V21A-03 — one Default pill.** The "Default" pill now shows on exactly ONE
+  template per surface (the first workspace default) even if the data has a stale
+  duplicate; the PATCH route still clears the previous default before setting the new
+  one (the partial-unique index allows only one).
+- **EXP-V21A-04 — click-to-apply + re-preview.** The WHOLE template row is clickable
+  (not just the name) — clicking applies that template's config, which re-renders the
+  live preview; inner Default/Delete buttons stop propagation. Hover + selected states
+  remain.
+- **EXP-V21A-05 — control order.** Format + the surface-mode controls (Figures /
+  Payroll / Routing / Date range) now sit ABOVE the Sections group in the panel.
+
 ## Document Export v2 — rooming polish (#8 — feat/export-v2-rooming)
 
 > The third external doc gets the E/F external-quality standard: the shared date
