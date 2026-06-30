@@ -22,12 +22,15 @@ export interface RoomingAssignmentRow {
   checkIn: string;
   checkOut: string;
   nights: number;
+  /** Stable key for grouping guests who share a room (Part E). */
+  roomKey: string;
 }
 
 export interface RoomingHotel {
   name: string;
   address: string | null;
   city: string | null;
+  country: string | null;
   phone: string | null;
   /** Earliest check-in / latest check-out across this hotel's rows. */
   spanStart: string | null;
@@ -51,6 +54,23 @@ const nightsBetween = (checkIn: string, checkOut: string): number =>
         (24 * 60 * 60 * 1000),
     ),
   );
+
+function addDays(date: string, days: number): string {
+  const d = new Date(`${date}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return date;
+  d.setDate(d.getDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+/** Presentation-only nights/checkout calc (Part E — fix the off-by-one). A block
+ *  whose stored ends_on is on/before its starts_on is ONE night: nights = 1,
+ *  check-out = the day after check-in. Multi-day stays are unchanged (ends_on is the
+ *  checkout date). Never mutates the source room data. */
+function stayNights(startsOn: string, endsOn: string): { nights: number; checkOut: string } {
+  const raw = nightsBetween(startsOn, endsOn);
+  if (raw < 1) return { nights: 1, checkOut: addDays(startsOn, 1) };
+  return { nights: raw, checkOut: endsOn };
+}
 
 export async function loadRoomingExportData(
   supabase: SupabaseClient,
@@ -84,8 +104,10 @@ export async function loadRoomingExportData(
     name: string;
     address?: string | null;
     city?: string | null;
+    country?: string | null;
     phone?: string | null;
     rooms?: Array<{
+      id?: string;
       room_type?: string | null;
       room_number?: string | null;
       room_assignments?: Array<{
@@ -98,29 +120,37 @@ export async function loadRoomingExportData(
   }>;
 
   const hotels: RoomingHotel[] = hotelsRaw.map((h) => {
-    const rows: RoomingAssignmentRow[] = (h.rooms ?? []).flatMap((room) =>
-      (room.room_assignments ?? [])
+    const rows: RoomingAssignmentRow[] = (h.rooms ?? []).flatMap((room) => {
+      const roomKey = room.id ?? `${room.room_type ?? ''}|${room.room_number ?? ''}`;
+      return (room.room_assignments ?? [])
         // Mirror the page filter: roster members (or a not-yet-linked null id).
         .filter((ra) => !ra.person_id || rosterPersonIds.has(ra.person_id))
         // Part E/G shared date range — keep stays that OVERLAP [from,to] (null = open).
         .filter((ra) => (!range?.from || ra.ends_on >= range.from) && (!range?.to || ra.starts_on <= range.to))
         .map((ra) => {
           const person = Array.isArray(ra.persons) ? ra.persons[0] : ra.persons;
+          const { nights, checkOut } = stayNights(ra.starts_on, ra.ends_on);
           return {
             guest: person?.full_name ?? null,
             roomType: room.room_type ?? null,
             roomNumber: room.room_number ?? null,
             checkIn: ra.starts_on,
-            checkOut: ra.ends_on,
-            nights: nightsBetween(ra.starts_on, ra.ends_on),
+            checkOut,
+            nights,
+            roomKey,
           };
-        }),
+        });
+    });
+    // Group guests sharing a room: order by room, then check-in, then guest.
+    rows.sort(
+      (a, b) =>
+        a.roomKey.localeCompare(b.roomKey) ||
+        (a.checkIn ?? '').localeCompare(b.checkIn ?? '') ||
+        (a.guest ?? '').localeCompare(b.guest ?? ''),
     );
-    // Stable order: by check-in, then guest name.
-    rows.sort((a, b) => (a.checkIn ?? '').localeCompare(b.checkIn ?? '') || (a.guest ?? '').localeCompare(b.guest ?? ''));
     const spanStart = rows.reduce<string | null>((min, r) => (min === null || r.checkIn < min ? r.checkIn : min), null);
     const spanEnd = rows.reduce<string | null>((max, r) => (max === null || r.checkOut > max ? r.checkOut : max), null);
-    return { name: h.name, address: h.address ?? null, city: h.city ?? null, phone: h.phone ?? null, spanStart, spanEnd, rows };
+    return { name: h.name, address: h.address ?? null, city: h.city ?? null, country: h.country ?? null, phone: h.phone ?? null, spanStart, spanEnd, rows };
   });
 
   const artistRow = artistRes.data as { id: string; name: string; branding: unknown; spotify_id: string | null; spotify_image_url: string | null } | null;

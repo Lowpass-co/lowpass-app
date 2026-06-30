@@ -20,6 +20,25 @@ Reference tour: "Warning Support". Templates picker needs a NEW empty tour.
 | BUD-19 | FIXED | click-to-rename templates + consistent picker (Fix-pack C) |
 | BUD-20 | FIXED | summary reads live from `section_id`; no phantom sections (Fix-pack A) |
 
+## Document Export v2.1 — rooming polish (#8 — feat/export-v21-rooming)
+
+> jsonb/calc only (no migration). tsc 0, eslint 0, build green.
+
+- **EXP-V21E-01 — city + country, name fallback.** The hotel band shows city +
+  country; when a hotel is unnamed / "Unassigned Hotel" the heading falls back to
+  city/country. (Proven: an "Unassigned Hotel" in Paris/France renders "Paris,
+  France" as the heading, not "Unassigned Hotel".) `rooming-data` loads hotel country
+  (best-effort) + Excel gains a Country column.
+- **EXP-V21E-02 — nights off-by-one fix (real bug).** A single-day block
+  (stored ends_on on/before starts_on) is now ONE night with check-out = the day
+  after check-in; multi-day stays are unchanged (ends_on is the checkout date).
+  Presentation/calc only — the source room data is never mutated. (Proven:
+  2 Oct→2 Oct = 1 night, checkout 3 Oct; 2 Oct→4 Oct = 2 nights, checkout 4 Oct.)
+- **EXP-V21E-03 — group shared-room guests.** Guests sharing a room are grouped
+  together (rows sorted by room key; the room-type cell rowspans the sharers + shows
+  "shared · N"), keeping Adam's preferred formatting. (Proven: two guests in room 201
+  share one rowspan=2 room cell; a single-occupancy guest is ungrouped.)
+
 ## Document Export v2.1 — routing polish (#8 — feat/export-v21-routing)
 
 > jsonb config (no migration). tsc 0, eslint 0, build green.

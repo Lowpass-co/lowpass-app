@@ -139,23 +139,28 @@ function budgetSheet(data: BudgetExportData): SheetSpec {
 }
 
 function roomingSheet(data: RoomingExportData): SheetSpec {
-  const rows = data.hotels.flatMap((h) =>
-    h.rows.map((r) => ({
-      hotel: h.name || '—',
+  const rows = data.hotels.flatMap((h) => {
+    const place = [h.city, h.country].filter(Boolean).join(', ');
+    const named = h.name && h.name.trim() && h.name.trim().toLowerCase() !== 'unassigned hotel';
+    const hotelLabel = named ? h.name : place || '—';
+    return h.rows.map((r) => ({
+      hotel: hotelLabel,
       city: h.city || '',
+      country: h.country || '',
       guest: r.guest || '—',
       roomType: r.roomType || '',
       roomNumber: r.roomNumber || '',
       checkIn: r.checkIn || '',
       checkOut: r.checkOut || '',
       nights: r.nights,
-    })),
-  );
+    }));
+  });
   return {
     name: 'Rooming',
     columns: [
       { header: 'Hotel', key: 'hotel' },
       { header: 'City', key: 'city' },
+      { header: 'Country', key: 'country' },
       { header: 'Guest', key: 'guest' },
       { header: 'Room type', key: 'roomType' },
       { header: 'Room #', key: 'roomNumber' },
