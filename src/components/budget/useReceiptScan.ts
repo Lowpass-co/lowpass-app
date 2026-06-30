@@ -75,8 +75,10 @@ export interface OcrOutcome {
 
 export interface UseReceiptScan {
   /** Run Claude Vision OCR on an image (skips PDFs → {data:null}). Best-effort:
-   *  a failure returns an error message; the caller still proceeds to manual entry. */
-  ocr: (file: File) => Promise<OcrOutcome>;
+   *  a failure returns an error message; the caller still proceeds to manual entry.
+   *  B2 — pass `receiptId` so the route persists the extraction (raw_ocr_json +
+   *  extracted_text) for ⌘K search. Omit it for a stateless pre-create scan. */
+  ocr: (file: File, receiptId?: string | null) => Promise<OcrOutcome>;
   /** Create the expense_receipts row (auto-numbered). */
   createReceipt: (fields: ReceiptFields) => Promise<ReceiptRow>;
   /** Upload a file to the private bucket → { path, url }. Caller stores `path`. */
@@ -95,7 +97,7 @@ export function useReceiptScan(tourId: string, tourCurrency: string): UseReceipt
   return useMemo<UseReceiptScan>(() => {
     const native = (tourCurrency || 'GBP').toUpperCase();
     return {
-      async ocr(file) {
+      async ocr(file, receiptId) {
         if (!isOcrableImage(file)) {
           return { data: null, error: null }; // PDF / non-image → manual entry, no scan
         }
@@ -104,6 +106,8 @@ export function useReceiptScan(tourId: string, tourCurrency: string): UseReceipt
           fd.set('file', file);
           fd.set('tour_id', tourId);
           fd.set('currency', native);
+          // B2 — when supplied, the route persists the extraction onto this receipt.
+          if (receiptId) fd.set('receipt_id', receiptId);
           const res = await fetch('/api/budget/receipts/ocr', { method: 'POST', body: fd });
           if (!res.ok) {
             const body = (await res.json().catch(() => ({}))) as { error?: string };

@@ -412,7 +412,7 @@ export default async function BudgetTourPage({
                       income={incomeRows}
                       commissions={commissionRows}
                       settings={budgetSettings}
-                      receiptSlot={<ReceiptInbox tourId={tourId} lineItems={lines} />}
+                      receiptSlot={<ReceiptInbox tourId={tourId} tourCurrency={tourCurrency} lineItems={lines} />}
                     />
                   }
                   grid={

@@ -37,7 +37,8 @@ export type SearchKind =
   | 'budget-line'
   | 'bug-report'
   | 'rider-pack'
-  | 'rental-job';
+  | 'rental-job'
+  | 'receipt';
 
 export type SearchAction =
   | { type: 'open-entity'; kind: EntityKind; id: string }
@@ -236,6 +237,43 @@ async function searchBudgetLines(query: string): Promise<SearchResult[]> {
   return results;
 }
 
+/** B2 — receipt search. Runs through the SCOPED receipt route (never a broad
+ *  client query) because receipts are workspace financial/PII; the route filters
+ *  by workspace_id + RLS over vendor / description / extracted_text / number. We
+ *  fuzzy-rank for display, but keep server-matched rows even when the fuzzy match
+ *  is only on extracted_text (not in the label) via a baseline score. */
+async function searchReceipts(query: string): Promise<SearchResult[]> {
+  const q = query.trim();
+  if (q.length < 2) return [];
+  let receipts: Array<{ id: string; tour_id: string; receipt_number: string | null; vendor: string | null; date: string | null; category: string | null; cost_tour_currency: number | null }>;
+  try {
+    const res = await fetch(`/api/budget/receipts?q=${encodeURIComponent(q)}`);
+    if (!res.ok) return [];
+    receipts = ((await res.json()) as { receipts?: typeof receipts }).receipts ?? [];
+  } catch {
+    return [];
+  }
+  const results: SearchResult[] = [];
+  for (const r of receipts) {
+    const label = (r.vendor && r.vendor.trim()) || r.receipt_number || 'Receipt';
+    const amount = r.cost_tour_currency ? `£${Math.round(r.cost_tour_currency).toLocaleString('en-GB')}` : null;
+    const secondary = ['Receipt', r.date, amount, r.category].filter(Boolean).join(' · ');
+    const scored = scoreCandidate(q, label, secondary);
+    results.push({
+      id: r.id,
+      kind: 'receipt',
+      label,
+      secondary,
+      // Server already relevance-filtered (incl. extracted text); baseline keeps
+      // an extracted-text-only hit visible even when the label doesn't fuzzy-match.
+      score: scored?.score ?? 1,
+      ranges: scored?.ranges ?? [],
+      action: { type: 'navigate', href: `/budget/${r.tour_id}?tab=budget&receipt=${r.id}` },
+    });
+  }
+  return results;
+}
+
 async function searchBugReports(query: string): Promise<SearchResult[]> {
   const supabase = createClient();
   const q = query.trim();
@@ -346,6 +384,7 @@ export async function searchAll(query: string, opts?: { limit?: number }): Promi
     ...ENTITY_KINDS.map((kind) => searchEntityKind(trimmed, kind)),
     searchTours(trimmed),
     searchBudgetLines(trimmed),
+    searchReceipts(trimmed),
     searchBugReports(trimmed),
     searchRiderPacks(trimmed),
     searchRentalJobs(trimmed),

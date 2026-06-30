@@ -58,6 +58,24 @@ function looksLikeAnthropicCreditError(err: unknown): boolean {
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'] as const;
 
+/** Flat, searchable text from the Vision extraction — vendor + description +
+ *  line-item descriptions + category, deduped + length-capped. NEVER logged. */
+function buildExtractedText(data: unknown): string {
+  if (!data || typeof data !== 'object') return '';
+  const d = data as Record<string, unknown>;
+  const parts: string[] = [];
+  for (const k of ['vendor', 'description', 'category', 'payment_method'] as const) {
+    if (typeof d[k] === 'string' && (d[k] as string).trim()) parts.push((d[k] as string).trim());
+  }
+  if (Array.isArray(d.line_items)) {
+    for (const li of d.line_items as Array<Record<string, unknown>>) {
+      if (li && typeof li.description === 'string' && li.description.trim()) parts.push(li.description.trim());
+    }
+  }
+  if (typeof d.date === 'string' && d.date.trim()) parts.push(d.date.trim());
+  return parts.join(' ').slice(0, 2000);
+}
+
 export async function POST(request: Request) {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
@@ -86,6 +104,11 @@ export async function POST(request: Request) {
   const tourId = (formData.get('tour_id') as string | null) ?? '';
   const tourGate = await requireTourInWorkspace(supabase, tourId, workspaceId);
   if (tourGate) return tourGate;
+
+  // B2 — optional: the receipt this scan belongs to. When present we persist the
+  // raw extraction onto it (workspace-scoped) so the ⌘K search can match it
+  // without re-scanning. Absent → stateless scan (the B1 panel can call before create).
+  const receiptId = (formData.get('receipt_id') as string | null) || null;
 
   const file = formData.get('file') as File | null;
   if (!file?.size) {
@@ -169,6 +192,24 @@ If any field is unclear, use null. Tour currency is ${tourCurrency}.`,
     /* Stamp the rate limit only after success so a 5xx/422
        doesn't lock the operator out of retrying. */
     markRateLimit(lastCallByUser, user.id);
+
+    /* B2 — persist the extraction onto the receipt (when one is supplied) so the
+       ⌘K search can match it. extracted_text is a flat, searchable concat of the
+       scrape. Workspace-scoped UPDATE (RLS + explicit filter). Best-effort: a
+       persist failure must NOT fail the scan response. We deliberately log NO raw
+       OCR text (financial/PII) — only the receipt id on error. */
+    if (receiptId) {
+      const extractedText = buildExtractedText(receiptData);
+      const { error: persistError } = await supabase
+        .from('expense_receipts')
+        .update({ raw_ocr_json: receiptData, extracted_text: extractedText })
+        .eq('id', receiptId)
+        .eq('workspace_id', workspaceId);
+      if (persistError) {
+        console.error(`[receipt-ocr] persist failed for receipt ${receiptId}: ${persistError.message}`);
+      }
+    }
+
     return NextResponse.json(receiptData);
   } catch (err) {
     console.error('Receipt OCR error:', err);
