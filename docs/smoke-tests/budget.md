@@ -20,6 +20,24 @@ Reference tour: "Warning Support". Templates picker needs a NEW empty tour.
 | BUD-19 | FIXED | click-to-rename templates + consistent picker (Fix-pack C) |
 | BUD-20 | FIXED | summary reads live from `section_id`; no phantom sections (Fix-pack A) |
 
+## Opportunistic cleanup (feat/sprint-cleanup)
+
+> Sprint Part 7. Confirmed-dead code removed (re-grepped for importers first). The
+> documented load-bearing `src/_legacy/budget/` tree is UNTOUCHED.
+
+- **CLEANUP-01 — `src/components/_legacy/sidebar/` deleted.** Pre-UX02 sidebar
+  (`Sidebar.tsx`, `SidebarTourPicker.tsx`, README — reference only). Re-verified ZERO
+  code importers (`grep _legacy/sidebar` + sibling/relative + component-name greps all
+  empty). The now-empty `src/components/_legacy/` directory went with it.
+- **CLEANUP-02 — `BudgetStatsStrip.tsx` deleted.** The legacy five-stat KPI strip,
+  superseded by `BudgetBurnBar` (Phase 3 redesign) and explicitly named as dead
+  triple-bar code in the handover notes. ZERO code importers (only doc + self refs).
+- **CLEANUP-03 — floor green after deletions.** tsc 0 · `next build --webpack` green;
+  no dangling references to either deleted module. (Pre-existing repo-wide eslint debt
+  in untouched files — e.g. `hotel-rate.ts` — is unrelated and not introduced here.)
+- Note: the dead stage-plot `pdf-render.ts` + `dev-pdf` route were already removed in
+  Part 2 (reuse + retire).
+
 ## Live FX — per-show locked rates (#currency 2.5 — feat/sprint-live-fx)
 
 > Sprint Part 6 (map-then-build). Per-show FX: while PROJECTED a show converts its
