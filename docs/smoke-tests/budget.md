@@ -20,6 +20,27 @@ Reference tour: "Warning Support". Templates picker needs a NEW empty tour.
 | BUD-19 | FIXED | click-to-rename templates + consistent picker (Fix-pack C) |
 | BUD-20 | FIXED | summary reads live from `section_id`; no phantom sections (Fix-pack A) |
 
+## Document Export v2.1 — Excel rework (#8 — feat/export-v21-xlsx)
+
+> Adam: "the Excel option is SO bad." Rebuilt `src/lib/export/xlsx.ts` on **ExcelJS**
+> (the community `xlsx` can't write cell styles) into a proper data file. tsc 0,
+> eslint 0, build green. (Verified: ExcelJS round-trips freeze/autofilter/bold-header/
+> numeric-cells/numFmt/totals.)
+
+- **EXP-V21B-01 — auto-sized columns.** Every column auto-sizes to its content
+  (header + cells, capped) — no more "Manches"/"Düsseldo" truncation.
+- **EXP-V21B-02 — real numeric cells.** Money/quantity cells are real numbers with a
+  currency/number format (`"£"#,##0`, `#,##0`) so totals + filters work in Excel.
+- **EXP-V21B-03 — styled header.** The header row is bold, brand-orange fill, white
+  text, with the **top row frozen** + **autofilter** on the header.
+- **EXP-V21B-04 — clean per-surface columns + totals.** Budget = Section/Item/Qty/
+  Currency/Projected+Actual (native) + Projected/Actual/Variance in tour currency +
+  a TOTAL row (the tour-ccy columns sum; same conversion as the P&L). Payroll =
+  crew/role/day-counts/rates/Fee/Per-diem/Total + a GRAND TOTAL (no internal rate).
+  Routing = Date/Day-type/City/**Country**/Venue/Address/**Travel to next** (capacity
+  + raw advance junk removed; `not_started` etc. gone). Rooming = Hotel/City/Guest/
+  Room type/Room #/Check-in/Check-out/Nights + a nights TOTAL.
+
 ## Document Export v2.1 — editor & preview polish (#8 — feat/export-v21-editor)
 
 > Polish from Adam's v2 smoke. Editor-only, no schema. tsc 0, eslint 0, build green.

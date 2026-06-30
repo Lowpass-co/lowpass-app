@@ -29,6 +29,7 @@ export interface RoutingDayRow {
   date: string;
   dayType: string;
   city: string | null;
+  country: string | null;
   venue: string | null;
   address: string | null;
   capacity: number | null;
@@ -104,7 +105,7 @@ export async function loadRoutingExportData(
   const [routingRes, artistRes] = await Promise.all([
     supabase
       .from('routing')
-      .select('id, date, day_type, city, address, venue_name, venue_capacity, latitude, longitude, canonical_venue_id, canonical_venues(name, city, capacity)')
+      .select('id, date, day_type, city, address, venue_name, venue_capacity, latitude, longitude, canonical_venue_id, canonical_venues(name, city, country, capacity)')
       .eq('tour_id', tourId)
       .order('date', { ascending: true }),
     tour.artist_id
@@ -123,7 +124,7 @@ export async function loadRoutingExportData(
     latitude: number | null;
     longitude: number | null;
     canonical_venue_id: string | null;
-    canonical_venues?: { name?: string | null; city?: string | null; capacity?: number | null } | Array<{ name?: string | null; city?: string | null; capacity?: number | null }> | null;
+    canonical_venues?: { name?: string | null; city?: string | null; country?: string | null; capacity?: number | null } | Array<{ name?: string | null; city?: string | null; country?: string | null; capacity?: number | null }> | null;
   }>;
   // Date-range filter (Part E shared control; null = whole tour).
   const routingRaw = routingAll.filter((r) => (!range?.from || r.date >= range.from) && (!range?.to || r.date <= range.to));
@@ -142,6 +143,7 @@ export async function loadRoutingExportData(
     const canon = Array.isArray(r.canonical_venues) ? r.canonical_venues[0] : r.canonical_venues;
     const venue = (canon?.name ?? r.venue_name) || null;
     const city = (canon?.city ?? r.city) || null;
+    const country = canon?.country || null;
     const capacity = (canon?.capacity ?? r.venue_capacity) ?? null;
     const adv = advanceByRoutingId.get(r.id);
     const advance: RoutingAdvanceSummary | null = adv
@@ -151,6 +153,7 @@ export async function loadRoutingExportData(
       date: r.date,
       dayType: (r.day_type ?? '').trim(),
       city,
+      country,
       venue,
       address: (r.address ?? '') || null,
       capacity: typeof capacity === 'number' ? capacity : null,

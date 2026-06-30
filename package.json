@@ -28,6 +28,7 @@
     "clsx": "^2.1.1",
     "decimal.js": "^10.6.0",
     "downshift": "^9.3.4",
+    "exceljs": "^4.4.0",
     "googleapis": "^171.4.0",
     "html2canvas-pro": "^2.0.2",
     "jspdf": "^4.2.1",
