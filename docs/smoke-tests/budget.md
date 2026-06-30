@@ -20,6 +20,36 @@ Reference tour: "Warning Support". Templates picker needs a NEW empty tour.
 | BUD-19 | FIXED | click-to-rename templates + consistent picker (Fix-pack C) |
 | BUD-20 | FIXED | summary reads live from `section_id`; no phantom sections (Fix-pack A) |
 
+## Document Export v2 — editor & layout polish (#8 — feat/export-v2-editor)
+
+> Editor UX from Adam's live smoke. All in `ExportTemplateEditor.tsx` + a shared
+> `<ExportButton>`. Presentation-only; no schema. tsc 0, eslint 0, build green.
+
+- **EXP-V2A-01 — modal above all chrome.** The editor renders via `createPortal`
+  to `document.body`, so the ProductHeader (a positioned app-chrome ancestor) no
+  longer bleeds through the top of the modal; the backdrop covers the full viewport.
+- **EXP-V2A-02 — collapsible settings.** Each settings group (Templates / Sections /
+  Figures / General / Page size / Header / Footer) is a collapsible `AccordionGroup`;
+  open/closed persists per group in `localStorage` (`lp-export-accordion:<id>`).
+  Templates + Sections (+ budget Figures) open by default.
+- **EXP-V2A-03 — preview zoom + page boundary.** The preview renders the page at its
+  true CSS-px width (A4 794 / Letter 816) inside a white sheet with a drop-shadow
+  boundary, **fit-to-width by default**; zoom out/in/fit buttons + ⌘/Ctrl-scroll +
+  double-click toggle. Switching A4 ↔ Letter visibly changes the sheet width (reflow
+  is now visible). The sheet height tracks the rendered doc (same-origin srcDoc
+  measure), so all content shows.
+- **EXP-V2A-04 — default pill + row states.** The hollow star is gone; each workspace
+  template row has a **Default pill** that turns orange when active (click to set
+  default). Rows animate on hover (slide + tint) and show a clear selected state
+  (orange border + fill + bold) — clicking a row applies it.
+- **EXP-V2A-05 — open behaviour + save prompt.** Opening Export… for a surface
+  applies the **last-used template** for that surface (localStorage
+  `lp-export-last-template:<surface>`), else the workspace default. Closing or
+  downloading with unsaved changes prompts "Save these settings as a template?"
+  (Save / Don't save / Cancel) before proceeding; the header shows a "• unsaved" hint.
+- **EXP-V2A-06 — universal orange Export button.** All four surfaces use the shared
+  `<ExportButton>` (identical orange styling) — Routing is no longer grey.
+
 ## Document Export — Budget slice (#8 — feat/export-budget)
 
 > No migration (read-only). Server-rendered HTML → A4 PDF via the existing

@@ -15,7 +15,8 @@
    ============================================ */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Eye, EyeOff, GripVertical, Globe, Loader2, Star, Trash2, Upload, X } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { ChevronRight, Eye, EyeOff, GripVertical, Globe, Loader2, Maximize2, Trash2, Upload, X, ZoomIn, ZoomOut } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
 import {
   defaultConfig,
@@ -62,6 +63,22 @@ const LOGO_ALIGNS: ReadonlyArray<{ value: Align; label: string }> = [
   { value: 'right', label: 'Right' },
 ];
 
+/** Printable page widths at 96dpi (CSS px) — drives the preview page boundary so
+ *  A4 ↔ Letter reflow is visible. A4 210mm ≈ 794px; Letter 8.5in = 816px. */
+const PAGE_PX: Record<PageSize, { w: number; h: number }> = {
+  A4: { w: 794, h: 1123 },
+  Letter: { w: 816, h: 1056 },
+};
+
+const ls = {
+  get(key: string): string | null {
+    try { return typeof window !== 'undefined' ? window.localStorage.getItem(key) : null; } catch { return null; }
+  },
+  set(key: string, val: string) {
+    try { if (typeof window !== 'undefined') window.localStorage.setItem(key, val); } catch { /* ignore quota/SSR */ }
+  },
+};
+
 export interface ExportTemplateEditorProps {
   surface: ExportSurface;
   tourId: string;
@@ -86,6 +103,29 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [dragId, setDragId] = useState<string | null>(null);
+
+  // Preview zoom: null = fit-to-width (default), else an explicit scale.
+  const [zoom, setZoom] = useState<number | null>(null);
+  const [fitScale, setFitScale] = useState(1);
+  const [docHeight, setDocHeight] = useState(1123);
+  const previewWrapRef = useRef<HTMLDivElement | null>(null);
+  const iframeRef = useRef<HTMLIFrameElement | null>(null);
+  // srcDoc is same-origin → measure the rendered doc height so the page sheet
+  // shows ALL content (not a clipped fixed height) at the page width.
+  const measureDoc = useCallback(() => {
+    try {
+      const h = iframeRef.current?.contentDocument?.documentElement?.scrollHeight;
+      if (h && h > 0) setDocHeight(h);
+    } catch { /* cross-origin guard — never throws the editor */ }
+  }, []);
+
+  // Dirty tracking — the config JSON as of the last clean point (open / apply /
+  // save). Drives the "Save these settings as a template?" prompt on close/export.
+  const baselineRef = useRef<string>('');
+  const [promptSave, setPromptSave] = useState<null | 'close' | 'download'>(null);
+  const [promptName, setPromptName] = useState('');
+
+  const LAST_USED_KEY = `lp-export-last-template:${surface}`;
 
   const base = `/api/${surface}/${encodeURIComponent(tourId)}/export`;
 
@@ -175,7 +215,12 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
   const [templates, setTemplates] = useState<SavedTemplate[]>([]);
   const [newTemplateName, setNewTemplateName] = useState('');
   const [savingTemplate, setSavingTemplate] = useState(false);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const appliedDefaultRef = useRef(false);
+
+  // Seed the dirty baseline with the initial config (the no-template case); the
+  // template effect overwrites it if a template auto-applies on open.
+  if (baselineRef.current === '') baselineRef.current = JSON.stringify(config);
 
   const refreshTemplates = useCallback(async (applyDefault: boolean) => {
     try {
@@ -185,13 +230,23 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
       setTemplates(list);
       if (applyDefault && !appliedDefaultRef.current) {
         appliedDefaultRef.current = true;
+        // Open behaviour: the last-used template for this surface, else the
+        // workspace default, else the current (default) config.
+        const lastId = ls.get(LAST_USED_KEY);
+        const last = lastId ? list.find((t) => t.id === lastId) : undefined;
         const def = list.find((t) => t.isDefault && !t.isGlobal);
-        if (def) setConfig(normalizeConfig(surface, def.config));
+        const chosen = last ?? def;
+        if (chosen) {
+          const cfg = normalizeConfig(surface, chosen.config);
+          setConfig(cfg);
+          setSelectedTemplateId(chosen.id);
+          baselineRef.current = JSON.stringify(cfg);
+        }
       }
     } catch {
       /* templates are optional — a fetch failure leaves the editor usable */
     }
-  }, [surface]);
+  }, [LAST_USED_KEY, surface]);
 
   useEffect(() => {
     void refreshTemplates(true);
@@ -200,12 +255,18 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
   // Apply a template's config into the live editor. Copy-on-apply for global: this
   // only loads config into editor STATE — Save creates a workspace-owned row.
   const applyTemplate = useCallback((t: SavedTemplate) => {
-    setConfig(normalizeConfig(surface, t.config));
-  }, [surface]);
+    const cfg = normalizeConfig(surface, t.config);
+    setConfig(cfg);
+    setSelectedTemplateId(t.id);
+    baselineRef.current = JSON.stringify(cfg);
+    if (!t.isGlobal) ls.set(LAST_USED_KEY, t.id);
+  }, [LAST_USED_KEY, surface]);
 
-  const saveTemplate = useCallback(async () => {
-    const name = newTemplateName.trim();
-    if (!name || savingTemplate) return;
+  // Core save — returns true on success. Stamps the dirty baseline + last-used so
+  // a freshly-saved template is "clean".
+  const doSaveTemplate = useCallback(async (rawName: string): Promise<boolean> => {
+    const name = rawName.trim();
+    if (!name) return false;
     setSavingTemplate(true);
     try {
       const res = await fetch('/api/export/templates', {
@@ -215,17 +276,30 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
       });
       if (!res.ok) {
         showToast('Could not save the template', 'error');
-        return;
+        return false;
       }
-      setNewTemplateName('');
+      const { template } = (await res.json()) as { template?: { id: string } };
+      baselineRef.current = JSON.stringify(config);
+      if (template?.id) {
+        setSelectedTemplateId(template.id);
+        ls.set(LAST_USED_KEY, template.id);
+      }
       await refreshTemplates(false);
       showToast('Template saved', 'success');
+      return true;
     } catch {
       showToast('Could not save the template', 'error');
+      return false;
     } finally {
       setSavingTemplate(false);
     }
-  }, [config, newTemplateName, refreshTemplates, savingTemplate, showToast, surface]);
+  }, [LAST_USED_KEY, config, refreshTemplates, showToast, surface]);
+
+  const saveTemplate = useCallback(async () => {
+    if (savingTemplate) return;
+    const ok = await doSaveTemplate(newTemplateName);
+    if (ok) setNewTemplateName('');
+  }, [doSaveTemplate, newTemplateName, savingTemplate]);
 
   const setDefaultTemplate = useCallback(async (id: string) => {
     try {
@@ -274,7 +348,7 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
     }
   }, [setHeader, showToast]);
 
-  const download = useCallback(async () => {
+  const doDownload = useCallback(async () => {
     if (busy) return;
     setBusy(true);
     try {
@@ -306,23 +380,61 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
     }
   }, [base, busy, config, onClose, showToast, surface, versionId]);
 
+  // Dirty = the config diverged from the last clean point (open / apply / save).
+  const dirty = baselineRef.current !== JSON.stringify(config);
+
+  // Close / download gate on a "Save these settings?" prompt when dirty.
+  const requestClose = useCallback(() => {
+    if (dirty) { setPromptName(''); setPromptSave('close'); } else onClose();
+  }, [dirty, onClose]);
+  const requestDownload = useCallback(() => {
+    if (dirty) { setPromptName(''); setPromptSave('download'); } else void doDownload();
+  }, [dirty, doDownload]);
+  const proceedAfterPrompt = useCallback((action: 'close' | 'download') => {
+    setPromptSave(null);
+    if (action === 'download') void doDownload();
+    else onClose();
+  }, [doDownload, onClose]);
+
+  // Fit-to-width: scale the page so its width fills the preview pane (recomputed on
+  // resize + page-size change). zoom === null → use this fit scale.
+  useEffect(() => {
+    const el = previewWrapRef.current;
+    if (!el) return;
+    const compute = () => {
+      const avail = el.clientWidth - 32;
+      const pageW = PAGE_PX[config.pageSize].w;
+      if (avail > 0) setFitScale(Math.max(0.2, Math.min(2, avail / pageW)));
+    };
+    compute();
+    const ro = new ResizeObserver(compute);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [config.pageSize]);
+
+  const scale = zoom ?? fitScale;
+  const page = PAGE_PX[config.pageSize];
+
   const title =
     surface === 'budget' ? 'Export Budget' : surface === 'payroll' ? 'Export Payroll' : surface === 'routing' ? 'Export Routing' : 'Export Rooming list';
 
-  return (
+  // Portal to <body> so a transformed/positioned app-chrome ancestor (the
+  // ProductHeader) can't constrain or bleed through this full-viewport modal.
+  return createPortal(
     <div
       role="dialog"
       aria-modal="true"
-      onClick={onClose}
+      onClick={requestClose}
       style={{
         position: 'fixed', inset: 0, zIndex: 'var(--lp-z-command-palette)' as unknown as number,
-        background: 'color-mix(in srgb, var(--lp-bg-deep) 60%, transparent)',
+        background: 'color-mix(in srgb, var(--lp-bg-deep) 66%, transparent)',
         display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 'var(--lp-space-4)',
       }}
     >
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
+          position: 'relative',
           width: 'min(1100px, 96vw)', height: 'min(820px, 92vh)', display: 'flex', flexDirection: 'column',
           background: 'var(--lp-panel)', border: '1px solid var(--lp-border)', borderRadius: 'var(--lp-radius-lg)',
           boxShadow: 'var(--lp-shadow-lg, 0 12px 32px rgba(0,0,0,0.3))', overflow: 'hidden',
@@ -330,9 +442,9 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
       >
         {/* header */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 'var(--lp-space-4) var(--lp-space-5)', borderBottom: '1px solid var(--lp-border)' }}>
-          <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--lp-text)' }}>{title}</h3>
+          <h3 style={{ fontSize: 16, fontWeight: 700, color: 'var(--lp-text)' }}>{title}{dirty ? <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 600, color: 'var(--lp-text-tertiary)' }}>• unsaved</span> : null}</h3>
           <button
-            type="button" onClick={onClose} aria-label="Close" className="btn-transition"
+            type="button" onClick={requestClose} aria-label="Close" className="btn-transition"
             style={{ border: 0, background: 'transparent', cursor: 'pointer', color: 'var(--lp-text-tertiary)', padding: 4, borderRadius: 'var(--lp-radius-md)' }}
           >
             <X className="h-5 w-5" aria-hidden />
@@ -342,53 +454,55 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
         {/* body: preview | settings */}
         <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
           {/* preview */}
-          <div style={{ flex: 1, minWidth: 0, position: 'relative', background: 'var(--lp-bg-subtle)', display: 'flex', alignItems: 'stretch', justifyContent: 'center', padding: 'var(--lp-space-4)' }}>
-            {previewError ? (
-              <div style={{ alignSelf: 'center', textAlign: 'center', color: 'var(--lp-text-tertiary)', fontSize: 13 }}>{previewError}</div>
-            ) : (
-              <iframe
-                title="Export preview"
-                srcDoc={previewHtml}
-                style={{ width: '100%', height: '100%', border: '1px solid var(--lp-border)', borderRadius: 'var(--lp-radius-md)', background: '#fff' }}
-              />
-            )}
-            {previewing ? (
-              <div style={{ position: 'absolute', top: 'var(--lp-space-4)', right: 'var(--lp-space-4)', display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, color: 'var(--lp-text-tertiary)', background: 'var(--lp-panel)', padding: '3px 8px', borderRadius: 'var(--lp-radius-full, 999px)', border: '1px solid var(--lp-border)' }}>
-                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> Updating…
-              </div>
-            ) : null}
+          <div style={{ flex: 1, minWidth: 0, position: 'relative', display: 'flex', flexDirection: 'column', minHeight: 0, background: 'var(--lp-bg-subtle)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', borderBottom: '1px solid var(--lp-border)' }}>
+              <ZoomBtn onClick={() => setZoom(Math.max(0.25, scale - 0.1))} title="Zoom out"><ZoomOut className="h-4 w-4" aria-hidden /></ZoomBtn>
+              <span style={{ fontSize: 11, color: 'var(--lp-text-tertiary)', minWidth: 38, textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>{Math.round(scale * 100)}%</span>
+              <ZoomBtn onClick={() => setZoom(Math.min(2, scale + 0.1))} title="Zoom in"><ZoomIn className="h-4 w-4" aria-hidden /></ZoomBtn>
+              <ZoomBtn onClick={() => setZoom(null)} title="Fit to width"><Maximize2 className="h-4 w-4" aria-hidden /></ZoomBtn>
+              <span style={{ fontSize: 11, color: 'var(--lp-text-tertiary)', marginLeft: 'auto' }}>{config.pageSize}{zoom === null ? ' · fit' : ''}</span>
+              {previewing ? <Loader2 className="h-3.5 w-3.5 animate-spin" style={{ color: 'var(--lp-text-tertiary)' }} aria-hidden /> : null}
+            </div>
+            <div
+              ref={previewWrapRef}
+              onWheel={(e) => { if (e.ctrlKey || e.metaKey) { e.preventDefault(); setZoom(Math.min(2, Math.max(0.25, scale - e.deltaY * 0.0025))); } }}
+              onDoubleClick={() => setZoom(zoom === null ? 1 : null)}
+              style={{ flex: 1, minHeight: 0, overflow: 'auto', display: 'flex', justifyContent: 'center', alignItems: 'flex-start', padding: 16 }}
+            >
+              {previewError ? (
+                <div style={{ alignSelf: 'center', textAlign: 'center', color: 'var(--lp-text-tertiary)', fontSize: 13 }}>{previewError}</div>
+              ) : (
+                <div style={{ width: page.w * scale, height: docHeight * scale, flex: '0 0 auto' }}>
+                  <div style={{ width: page.w, transform: `scale(${scale})`, transformOrigin: 'top left', boxShadow: '0 2px 24px rgba(0,0,0,0.22)', background: '#fff', borderRadius: 2 }}>
+                    <iframe
+                      ref={iframeRef}
+                      title="Export preview"
+                      srcDoc={previewHtml}
+                      onLoad={measureDoc}
+                      style={{ width: page.w, height: docHeight, border: 0, display: 'block', background: '#fff' }}
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* settings */}
           <div style={{ width: 320, flex: '0 0 320px', borderLeft: '1px solid var(--lp-border)', overflowY: 'auto', padding: 'var(--lp-space-5)', display: 'flex', flexDirection: 'column', gap: 'var(--lp-space-5)' }}>
-            <Group label="Templates">
+            <AccordionGroup id="templates" label="Templates" defaultOpen>
               {templates.length === 0 ? (
                 <p style={{ fontSize: 11, color: 'var(--lp-text-tertiary)' }}>No saved templates yet. Save the current settings below.</p>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                   {templates.map((t) => (
-                    <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', borderRadius: 'var(--lp-radius-md)', border: '1px solid var(--lp-border)' }}>
-                      <button
-                        type="button" onClick={() => applyTemplate(t)} className="btn-transition"
-                        title="Apply this template" style={{ flex: 1, textAlign: 'left', border: 0, background: 'transparent', cursor: 'pointer', fontSize: 13, color: 'var(--lp-text)', display: 'inline-flex', alignItems: 'center', gap: 6 }}
-                      >
-                        {t.isDefault ? <Star className="h-3.5 w-3.5" style={{ color: 'var(--lp-orange)', fill: 'var(--lp-orange)' }} aria-hidden /> : null}
-                        {t.isGlobal ? <Globe className="h-3.5 w-3.5" style={{ color: 'var(--lp-text-tertiary)' }} aria-hidden /> : null}
-                        <span>{t.name}</span>
-                      </button>
-                      {!t.isGlobal ? (
-                        <>
-                          <button type="button" onClick={() => void setDefaultTemplate(t.id)} className="btn-transition" title="Set as workspace default" aria-label="Set as default" style={{ border: 0, background: 'transparent', cursor: 'pointer', color: t.isDefault ? 'var(--lp-orange)' : 'var(--lp-text-tertiary)', padding: 2 }}>
-                            <Star className="h-4 w-4" aria-hidden />
-                          </button>
-                          <button type="button" onClick={() => void deleteTemplate(t.id)} className="btn-transition" title="Delete template" aria-label="Delete" style={{ border: 0, background: 'transparent', cursor: 'pointer', color: 'var(--lp-text-tertiary)', padding: 2 }}>
-                            <Trash2 className="h-4 w-4" aria-hidden />
-                          </button>
-                        </>
-                      ) : (
-                        <span style={{ fontSize: 10, color: 'var(--lp-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Global</span>
-                      )}
-                    </div>
+                    <TemplateRow
+                      key={t.id}
+                      t={t}
+                      selected={selectedTemplateId === t.id}
+                      onApply={() => applyTemplate(t)}
+                      onSetDefault={() => void setDefaultTemplate(t.id)}
+                      onDelete={() => void deleteTemplate(t.id)}
+                    />
                   ))}
                 </div>
               )}
@@ -407,9 +521,9 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
                 </button>
               </div>
               <p style={{ fontSize: 11, color: 'var(--lp-text-tertiary)' }}>Templates are shared across this workspace’s tours. Applying a Global template copies it in — edit + Save to keep your own.</p>
-            </Group>
+            </AccordionGroup>
 
-            <Group label="Sections">
+            <AccordionGroup id="sections" label="Sections" defaultOpen>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {config.sections.map((s) => (
                   <div
@@ -438,28 +552,28 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
                 ))}
               </div>
               <p style={{ fontSize: 11, color: 'var(--lp-text-tertiary)', marginTop: 6 }}>Drag to reorder · eye to show/hide.</p>
-            </Group>
+            </AccordionGroup>
 
             {surface === 'budget' ? (
-              <Group label="Figures">
+              <AccordionGroup id="figures" label="Figures" defaultOpen>
                 <Segmented options={SCOPES} value={config.scope ?? 'both'} onChange={(v) => setConfig((c) => ({ ...c, scope: v }))} />
-              </Group>
+              </AccordionGroup>
             ) : null}
 
-            <Group label="General">
+            <AccordionGroup id="general" label="General">
               <FieldLabel>Font</FieldLabel>
               <Segmented options={FONT_FAMILIES} value={config.general.fontFamily} onChange={(v) => setGeneral('fontFamily', v)} />
               <Slider label="Font size" value={config.general.fontScale} min={0.85} max={1.2} step={0.05} format={(v) => `${Math.round(v * 100)}%`} onChange={(v) => setGeneral('fontScale', v)} />
               <Toggle label="Black & white" checked={config.general.monochrome} onChange={(v) => setGeneral('monochrome', v)} />
               <Toggle label="Dashed dividers" checked={config.general.dividers} onChange={(v) => setGeneral('dividers', v)} />
               <Toggle label="Borderless (hide boxes)" checked={config.general.hideBoxes} onChange={(v) => setGeneral('hideBoxes', v)} />
-            </Group>
+            </AccordionGroup>
 
-            <Group label="Page size">
+            <AccordionGroup id="page" label="Page size">
               <Segmented options={PAGE_SIZES} value={config.pageSize} onChange={(v) => setConfig((c) => ({ ...c, pageSize: v }))} />
-            </Group>
+            </AccordionGroup>
 
-            <Group label="Header">
+            <AccordionGroup id="header" label="Header">
               <Toggle label="Show header" checked={config.header.show} onChange={(v) => setHeader('show', v)} />
               <Toggle label="Show logo / initials" checked={config.logo} onChange={(v) => setConfig((c) => ({ ...c, logo: v }))} />
               <FieldLabel>Logo position</FieldLabel>
@@ -514,43 +628,138 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
               <Toggle label="Show document title" checked={config.header.showTitle} onChange={(v) => setHeader('showTitle', v)} />
               <Toggle label="Show subtitle" checked={config.header.showSubtitle} onChange={(v) => setHeader('showSubtitle', v)} />
               <Toggle label="Show “Generated” date" checked={config.header.showGenerated} onChange={(v) => setHeader('showGenerated', v)} />
-            </Group>
+            </AccordionGroup>
 
-            <Group label="Footer">
+            <AccordionGroup id="footer" label="Footer">
               <p style={{ fontSize: 11, color: 'var(--lp-text-tertiary)', marginBottom: 6 }}>The footer is print-only — it appears on the downloaded PDF, not the preview above.</p>
               <Toggle label="Show footer" checked={config.footer.show} onChange={(v) => setFooter('show', v)} />
               <Toggle label="Page numbers" checked={config.footer.pageNumbers} onChange={(v) => setFooter('pageNumbers', v)} />
               <Toggle label="Summary line + mark" checked={config.footer.summaryLine} onChange={(v) => setFooter('summaryLine', v)} />
-            </Group>
+            </AccordionGroup>
           </div>
         </div>
 
         {/* footer */}
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', padding: 'var(--lp-space-4) var(--lp-space-5)', borderTop: '1px solid var(--lp-border)' }}>
           <button
-            type="button" onClick={onClose} disabled={busy} className="btn-transition"
+            type="button" onClick={requestClose} disabled={busy} className="btn-transition"
             style={{ border: '1px solid var(--lp-border)', borderRadius: 'var(--lp-radius-md)', padding: '7px 14px', fontSize: 13, color: 'var(--lp-text-secondary)', background: 'transparent', cursor: 'pointer' }}
           >
             Cancel
           </button>
           <button
-            type="button" onClick={() => void download()} disabled={busy} className="btn-transition"
+            type="button" onClick={requestDownload} disabled={busy} className="btn-transition"
             style={{ border: 0, borderRadius: 'var(--lp-radius-md)', padding: '7px 16px', fontSize: 13, fontWeight: 700, color: 'var(--lp-text-inverse)', background: 'var(--lp-orange)', cursor: busy ? 'default' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
           >
             {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
             {busy ? 'Generating…' : 'Download PDF'}
           </button>
         </div>
+
+        {/* Save-settings prompt — shown on close/export when the config is dirty. */}
+        {promptSave ? (
+          <div onClick={(e) => e.stopPropagation()} style={{ position: 'absolute', inset: 0, zIndex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'color-mix(in srgb, var(--lp-bg-deep) 50%, transparent)', borderRadius: 'var(--lp-radius-lg)' }}>
+            <div style={{ width: 'min(420px, 90%)', background: 'var(--lp-panel)', border: '1px solid var(--lp-border)', borderRadius: 'var(--lp-radius-lg)', padding: 'var(--lp-space-5)', boxShadow: 'var(--lp-shadow-lg, 0 12px 32px rgba(0,0,0,0.3))' }}>
+              <h4 style={{ fontSize: 15, fontWeight: 700, color: 'var(--lp-text)', marginBottom: 4 }}>Save these settings as a template?</h4>
+              <p style={{ fontSize: 12, color: 'var(--lp-text-secondary)', marginBottom: 'var(--lp-space-4)' }}>You’ve changed the export settings. Save them to reuse across this workspace’s tours.</p>
+              <input
+                type="text" value={promptName} autoFocus onChange={(e) => setPromptName(e.target.value)} placeholder="Template name" maxLength={80}
+                onKeyDown={(e) => { if (e.key === 'Enter' && promptName.trim()) void doSaveTemplate(promptName).then((ok) => { if (ok) proceedAfterPrompt(promptSave); }); }}
+                style={{ width: '100%', padding: '8px 10px', fontSize: 13, borderRadius: 'var(--lp-radius-md)', border: '1px solid var(--lp-border)', background: 'transparent', color: 'var(--lp-text)', marginBottom: 'var(--lp-space-4)' }}
+              />
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <button type="button" onClick={() => setPromptSave(null)} className="btn-transition" style={{ border: '1px solid var(--lp-border)', borderRadius: 'var(--lp-radius-md)', padding: '6px 12px', fontSize: 13, color: 'var(--lp-text-secondary)', background: 'transparent', cursor: 'pointer' }}>Cancel</button>
+                <button type="button" onClick={() => proceedAfterPrompt(promptSave)} className="btn-transition" style={{ border: '1px solid var(--lp-border)', borderRadius: 'var(--lp-radius-md)', padding: '6px 12px', fontSize: 13, color: 'var(--lp-text)', background: 'transparent', cursor: 'pointer' }}>Don’t save</button>
+                <button type="button" onClick={() => void doSaveTemplate(promptName).then((ok) => { if (ok) proceedAfterPrompt(promptSave); })} disabled={!promptName.trim() || savingTemplate} className="btn-transition" style={{ border: 0, borderRadius: 'var(--lp-radius-md)', padding: '6px 14px', fontSize: 13, fontWeight: 700, color: 'var(--lp-text-inverse)', background: 'var(--lp-orange)', cursor: promptName.trim() ? 'pointer' : 'default' }}>{savingTemplate ? 'Saving…' : 'Save'}</button>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
+    </div>,
+    document.body,
+  );
+}
+
+const ACCORDION_KEY = (id: string) => `lp-export-accordion:${id}`;
+
+function AccordionGroup({ id, label, defaultOpen = false, children }: { id: string; label: string; defaultOpen?: boolean; children: React.ReactNode }) {
+  const [open, setOpen] = useState<boolean>(() => {
+    const saved = ls.get(ACCORDION_KEY(id));
+    return saved === null ? defaultOpen : saved === '1';
+  });
+  const toggle = () => {
+    setOpen((o) => {
+      ls.set(ACCORDION_KEY(id), o ? '0' : '1');
+      return !o;
+    });
+  };
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: open ? 8 : 0 }}>
+      <button
+        type="button" onClick={toggle} className="btn-transition"
+        aria-expanded={open}
+        style={{ display: 'flex', alignItems: 'center', gap: 6, border: 0, background: 'transparent', cursor: 'pointer', padding: 0, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 'var(--lp-tracking-caps, 0.06em)', color: 'var(--lp-text-tertiary)' }}
+      >
+        <ChevronRight className="h-3.5 w-3.5" style={{ transform: open ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s ease' }} aria-hidden />
+        {label}
+      </button>
+      {open ? <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>{children}</div> : null}
     </div>
   );
 }
 
-function Group({ label, children }: { label: string; children: React.ReactNode }) {
+function ZoomBtn({ onClick, title, children }: { onClick: () => void; title: string; children: React.ReactNode }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-      <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 'var(--lp-tracking-caps, 0.06em)', color: 'var(--lp-text-tertiary)' }}>{label}</div>
+    <button
+      type="button" onClick={onClick} title={title} aria-label={title} className="btn-transition"
+      style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--lp-border)', borderRadius: 'var(--lp-radius-md)', background: 'var(--lp-panel)', cursor: 'pointer', color: 'var(--lp-text-secondary)', width: 26, height: 26 }}
+    >
       {children}
+    </button>
+  );
+}
+
+function TemplateRow({ t, selected, onApply, onSetDefault, onDelete }: { t: SavedTemplate; selected: boolean; onApply: () => void; onSetDefault: () => void; onDelete: () => void }) {
+  const [hover, setHover] = useState(false);
+  return (
+    <div
+      onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', borderRadius: 'var(--lp-radius-md)',
+        border: `1px solid ${selected ? 'var(--lp-orange)' : 'var(--lp-border)'}`,
+        background: selected ? 'color-mix(in srgb, var(--lp-orange) 9%, transparent)' : hover ? 'color-mix(in srgb, var(--lp-orange) 4%, transparent)' : 'transparent',
+        transform: hover && !selected ? 'translateX(2px)' : 'none',
+        transition: 'transform 0.12s ease, background 0.12s ease, border-color 0.12s ease',
+      }}
+    >
+      <button
+        type="button" onClick={onApply} className="btn-transition" title="Apply this template"
+        style={{ flex: 1, textAlign: 'left', border: 0, background: 'transparent', cursor: 'pointer', fontSize: 13, color: 'var(--lp-text)', fontWeight: selected ? 700 : 500, display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0 }}
+      >
+        {t.isGlobal ? <Globe className="h-3.5 w-3.5" style={{ color: 'var(--lp-text-tertiary)', flex: '0 0 auto' }} aria-hidden /> : null}
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.name}</span>
+      </button>
+      {!t.isGlobal ? (
+        <>
+          <button
+            type="button" onClick={onSetDefault} className="btn-transition" title={t.isDefault ? 'Workspace default' : 'Set as workspace default'}
+            style={{
+              border: `1px solid ${t.isDefault ? 'var(--lp-orange)' : 'var(--lp-border)'}`, borderRadius: 'var(--lp-radius-full, 999px)',
+              padding: '2px 8px', fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.04em', cursor: 'pointer',
+              color: t.isDefault ? 'var(--lp-text-inverse)' : 'var(--lp-text-tertiary)',
+              background: t.isDefault ? 'var(--lp-orange)' : 'transparent',
+            }}
+          >
+            Default
+          </button>
+          <button type="button" onClick={onDelete} className="btn-transition" title="Delete template" aria-label="Delete" style={{ border: 0, background: 'transparent', cursor: 'pointer', color: 'var(--lp-text-tertiary)', padding: 2 }}>
+            <Trash2 className="h-4 w-4" aria-hidden />
+          </button>
+        </>
+      ) : (
+        <span style={{ fontSize: 10, color: 'var(--lp-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Global</span>
+      )}
     </div>
   );
 }
