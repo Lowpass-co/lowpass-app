@@ -621,6 +621,23 @@ export function BudgetIncomeGrid({
     return [{ name: 'Shows', kind: 'normal', _uid: 'income', rows: gridRows }];
   }, [rows, view, native, overageComputable, merchComputable, vipComputable, projCfg]);
 
+  // Live FX (#currency 2.5) — per-currency rate state across the shows. While a show
+  // is PROJECTED it converts at the LIVE rate (red); once it SETTLES the rate LOCKS
+  // (blue). A foreign currency with no configured rate shows 1:1 (never 0).
+  const fxSummary = useMemo(() => {
+    const nat = native.toUpperCase();
+    const byCcy = new Map<string, { ccy: string; live: number | null; projected: number; settled: number }>();
+    for (const r of rows) {
+      const ccy = (r.currency || '').toUpperCase();
+      if (!ccy || ccy === nat) continue;
+      const e = byCcy.get(ccy) ?? { ccy, live: fxRates[ccy] ?? null, projected: 0, settled: 0 };
+      if (r.locked_fx_rate != null) e.settled += 1;
+      else e.projected += 1;
+      byCcy.set(ccy, e);
+    }
+    return Array.from(byCcy.values()).sort((a, b) => a.ccy.localeCompare(b.ccy));
+  }, [rows, native, fxRates]);
+
   // #2 — make the active view unmistakable: a one-line context cue + a per-view
   // accent so a glance tells you whether you're looking at forecast or settled
   // numbers. Projected = orange (forecast); Actual = green (settled/real).
@@ -676,6 +693,52 @@ export function BudgetIncomeGrid({
           {viewCue}
         </span>
       </div>
+
+      {/* Live FX (#currency 2.5) — per-currency rate strip. Red = projected (live
+          rate, still moving); blue = settled (rate locked at settlement). */}
+      {fxSummary.length > 0 ? (
+        <div
+          style={{
+            display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center',
+            padding: '8px 12px', borderRadius: 'var(--lp-radius-md)',
+            border: '1px solid var(--lp-border)', background: 'var(--lp-panel)',
+          }}
+        >
+          <span style={{ fontSize: 'var(--lp-text-xs)', fontWeight: 700, color: 'var(--lp-text-secondary)', textTransform: 'uppercase', letterSpacing: 0.4 }}>
+            FX
+          </span>
+          {fxSummary.map((f) => {
+            const sym = CUR_SYMBOL[f.ccy] ?? `${f.ccy} `;
+            const natSym = CUR_SYMBOL[native.toUpperCase()] ?? `${native.toUpperCase()} `;
+            const liveLabel = f.live != null ? `1${sym}=${natSym}${f.live}` : '1:1 (no rate)';
+            return (
+              <span
+                key={f.ccy}
+                title={`${f.ccy}: ${f.projected} projected at the live rate, ${f.settled} locked at settlement`}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 'var(--lp-text-xs)',
+                  padding: '3px 10px', borderRadius: 'var(--lp-radius-full)',
+                  border: '1px solid var(--lp-border)', background: 'var(--lp-surface)',
+                }}
+              >
+                <span style={{ fontWeight: 700, color: 'var(--lp-text)' }}>{f.ccy}</span>
+                {f.projected > 0 ? (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--color-lp-error)' }}>
+                    <span aria-hidden style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--color-lp-error)' }} />
+                    {f.projected} live {liveLabel}
+                  </span>
+                ) : null}
+                {f.settled > 0 ? (
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--color-lp-info)' }}>
+                    <span aria-hidden style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--color-lp-info)' }} />
+                    {f.settled} locked
+                  </span>
+                ) : null}
+              </span>
+            );
+          })}
+        </div>
+      ) : null}
 
       {/* #24 — projected-vs-actual variance strip (Actual view, read-only). */}
       {variance && variance.anyActual ? (

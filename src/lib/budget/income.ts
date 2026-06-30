@@ -32,6 +32,8 @@ export interface ServerIncome {
   actual_gross?: number | null;
   actual_capacity?: number | null;
   currency?: string | null;
+  // Live FX (#currency 2.5) — rate locked at settlement (1 show ccy = rate tour ccy).
+  locked_fx_rate?: number | null;
   // Phase 3 — projection inputs (proposed).
   capacity?: number | null;
   est_sell_thru?: number | null;
@@ -89,6 +91,10 @@ export interface IncomeRow {
   actual_capacity: number | null;
   /** Phase 2 — the show's native currency (null = tour currency). Proposed. */
   currency: string | null;
+  /** Live FX (#currency 2.5) — rate locked at settlement (1 show ccy = rate tour
+   *  ccy). NULL = still projected → the grid shows the live rate in red; a value =
+   *  settled → shown in blue. */
+  locked_fx_rate: number | null;
   // Phase 3 — projection inputs (proposed; %s stored 0–100). NULL = use the
   // tour default (sell-thru / $-head / fee%) or no projection.
   capacity: number | null;
@@ -181,6 +187,7 @@ export function toIncomeRows(payload: TourIncomePayload): IncomeRow[] {
     actual_merch: n(i.actual_merch),
     actual_vip: n(i.actual_vip),
     actual_deductions: n(i.actual_deductions),
+    locked_fx_rate: i.locked_fx_rate ?? null,
     // #24 — keep NULL when not entered (so Sell% / variance can blank), not 0.
     actual_tickets_sold: i.actual_tickets_sold ?? null,
     actual_gross: i.actual_gross ?? null,
@@ -221,6 +228,7 @@ export function toIncomeRows(payload: TourIncomePayload): IncomeRow[] {
     actual_gross: null,
     actual_capacity: null,
     currency: null,
+    locked_fx_rate: null,
     capacity: null,
     est_sell_thru: null,
     face_value: null,

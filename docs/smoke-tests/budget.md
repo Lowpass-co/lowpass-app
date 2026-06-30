@@ -20,6 +20,39 @@ Reference tour: "Warning Support". Templates picker needs a NEW empty tour.
 | BUD-19 | FIXED | click-to-rename templates + consistent picker (Fix-pack C) |
 | BUD-20 | FIXED | summary reads live from `section_id`; no phantom sections (Fix-pack A) |
 
+## Live FX — per-show locked rates (#currency 2.5 — feat/sprint-live-fx)
+
+> Sprint Part 6 (map-then-build). Per-show FX: while PROJECTED a show converts its
+> native income at the tour's LIVE rate (`budget_fx_rates`, refreshable from the
+> existing `/api/budget/exchange-rate` vendor — no new vendor); once it SETTLES the
+> rate LOCKS (frozen on the row) so realised income never drifts. Migration 225 adds
+> `budget_income.locked_fx_rate` (nullable). **FLAG (resolved per the prompt): built
+> LOCK-ON-ACTUAL** — the rate freezes when settlement cascades actuals into the row
+> (write-once), NOT on show-date. Floor: tsc 0, eslint 0, build green.
+
+- **FX-LIVE-01 — projected uses the live rate.** computeBudgetPnl converts a
+  projected foreign row's income at the live `fxRates` rate. (Proven: €1000 projected
+  → £860 at live 0.86; £0 actual.)
+- **FX-LIVE-02 — settled uses the LOCKED rate.** A settled row (actuals + a
+  `locked_fx_rate`) totals its ACTUAL income at the frozen rate while PROJECTED still
+  uses the live rate — the two FX factors are split (`fLive` vs `fLocked`). (Proven:
+  €1000 actual → £900 at locked 0.90, NOT £860; projected still £860.)
+- **FX-LIVE-03 — missing rate → 1:1 (never zero).** A foreign currency with no
+  configured/locked rate converts 1:1 so income is never silently zeroed. (Proven:
+  CHF500 → £500 both projected + actual.)
+- **FX-LIVE-04 — tour-currency unaffected.** Home-currency shows apply no FX (the
+  common case is a no-op — no regression). (Proven: GBP 2000 proj / 1900 act.)
+- **FX-LIVE-05 — bad locked rate falls back to live.** `locked_fx_rate` ≤ 0 is
+  ignored → the live rate is used (never £0). (Proven: locked 0 → £860 live.)
+- **FX-LIVE-06 — net waterfall balances.** `net.actual = grossIncome.actual −
+  totalExpenses.actual` with the locked actual income. (Proven.)
+- **FX-LIVE-07 — lock-on-actual cascade + red/blue UI.** The settlement route writes
+  `locked_fx_rate` when actuals land (write-once; preserves an existing lock; tour
+  ccy / missing rate → 1:1). The income grid shows a per-currency FX strip: red dot +
+  live rate for projected shows, blue dot ("locked") once settled (`--color-lp-error`
+  / `--color-lp-info`). (Verified: cascade wiring + `fxSummary` memo over rows'
+  `currency` + `locked_fx_rate`; build green.)
+
 ## Routing Map view — SVG dot-and-line (feat/sprint-routing-map)
 
 > Sprint Part 5. The routing export's **Map** / **Both** views now render a real

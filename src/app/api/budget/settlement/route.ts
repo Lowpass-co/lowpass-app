@@ -261,27 +261,67 @@ export async function POST(request: Request) {
   const actualTicketsSold = settlement?.reconciled_tickets_sold ?? settlement?.day_of_tickets_sold ?? null;
   const actualGross = settlement?.reconciled_gross ?? settlement?.day_of_gross ?? null;
 
+  // Live FX (#currency 2.5) — LOCK-ON-ACTUAL. When actuals land, freeze the FX
+  // rate this show's native income converts at, so realised income never drifts
+  // with later market moves. Write-once: a row already locked keeps its rate.
+  // Missing rate / tour-currency show → 1:1 (never 0).
+  const hasActuals =
+    actualGuarantee != null || actualOverage != null || actualMerch != null || actualDeductions != null;
+  let lockedFxRate: number | null = null;
+  if (hasActuals) {
+    const { data: existing } = await supabase
+      .from('budget_income')
+      .select('currency, locked_fx_rate')
+      .eq('routing_id', routing_id)
+      .maybeSingle();
+    if (existing?.locked_fx_rate != null) {
+      lockedFxRate = Number(existing.locked_fx_rate); // already locked — preserve
+    } else {
+      const { data: routingRow } = await supabase.from('routing').select('tour_id').eq('id', routing_id).maybeSingle();
+      const tourId = (routingRow as { tour_id?: string } | null)?.tour_id ?? null;
+      const { data: tourRow } = tourId
+        ? await supabase.from('tours').select('currency').eq('id', tourId).maybeSingle()
+        : { data: null };
+      const tourCcy = String((tourRow as { currency?: string } | null)?.currency ?? 'GBP').toUpperCase();
+      const showCcy = String((existing as { currency?: string } | null)?.currency ?? '').toUpperCase();
+      if (!showCcy || showCcy === tourCcy) {
+        lockedFxRate = 1; // tour currency / unset → 1:1
+      } else if (tourId) {
+        const { data: fx } = await supabase
+          .from('budget_fx_rates')
+          .select('rate_to_tour_currency')
+          .eq('tour_id', tourId)
+          .eq('currency', showCcy)
+          .maybeSingle();
+        const r = Number((fx as { rate_to_tour_currency?: number } | null)?.rate_to_tour_currency);
+        lockedFxRate = Number.isFinite(r) && r > 0 ? r : 1; // missing → 1:1, never 0
+      } else {
+        lockedFxRate = 1;
+      }
+    }
+  }
+
   // UPSERT on routing_id — a settled show with NO income row used to silently
   // lose its actuals (update-if-exists). Create the row so actuals are never
   // dropped. (actual_vip omitted → preserved on an existing row, NULL on a new
   // one — settlement isn't a VIP source.)
-  await supabase
-    .from('budget_income')
-    .upsert(
-      {
-        routing_id,
-        workspace_id: profile.workspace_id,
-        actual_guarantee: actualGuarantee,
-        actual_overage: actualOverage,
-        actual_merch: actualMerch,
-        actual_deductions: actualDeductions,
-        // #24 — real attendance + gross (informational; never feeds income_gross).
-        actual_tickets_sold: actualTicketsSold,
-        actual_gross: actualGross,
-        updated_at: now,
-      },
-      { onConflict: 'routing_id' },
-    );
+  const incomePayload: Record<string, unknown> = {
+    routing_id,
+    workspace_id: profile.workspace_id,
+    actual_guarantee: actualGuarantee,
+    actual_overage: actualOverage,
+    actual_merch: actualMerch,
+    actual_deductions: actualDeductions,
+    // #24 — real attendance + gross (informational; never feeds income_gross).
+    actual_tickets_sold: actualTicketsSold,
+    actual_gross: actualGross,
+    updated_at: now,
+  };
+  // Only write locked_fx_rate when we resolved one — never clobber an existing
+  // lock with null on a settlement edit that carries no actuals.
+  if (lockedFxRate != null) incomePayload.locked_fx_rate = lockedFxRate;
+
+  await supabase.from('budget_income').upsert(incomePayload, { onConflict: 'routing_id' });
 
   return NextResponse.json(settlement);
 }

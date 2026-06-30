@@ -111,6 +111,10 @@ export interface IncomeInput {
   actual_deductions?: number | null;
   /** Phase 2 — the show's native currency (NULL = tour currency). */
   currency?: string | null;
+  /** Live FX (#currency 2.5) — the rate LOCKED at settlement (1 show ccy = rate
+   *  tour ccy). NULL = still projected → the P&L uses the live rate. Settled rows
+   *  use this frozen rate so realised income never drifts. Missing/≤0 → 1:1. */
+  locked_fx_rate?: number | null;
 }
 
 export interface CommissionInput {
@@ -188,36 +192,42 @@ export function computeBudgetPnl(input: {
   let vipAct = 0;
   let dedAct = 0;
   for (const i of income) {
-    // Phase 2 — convert this show's native income → tour currency. f is the
-    // row's rate (1 for the tour currency / a currency with no rate).
-    const f = toTourCurrency(1, i.currency, currency, fxRates);
-    merchProj += num(i.merch_income) * f;
-    merchAct += num(i.actual_merch) * f;
-    guarProj += postTaxGuar(i) * f;
-    guarAct += num(i.actual_guarantee) * f;
-    overProj += postTaxOver(i) * f;
-    overAct += num(i.actual_overage) * f;
-    vipProj += num(i.vip_income) * f;
-    vipAct += num(i.actual_vip) * f;
-    dedAct += num(i.actual_deductions) * f;
-    grossProj += (postTaxGuar(i) + postTaxOver(i) + num(i.merch_income) + num(i.vip_income)) * f;
+    // Live FX (#currency 2.5) — convert this show's native income → tour currency.
+    //   • PROJECTED amounts use the LIVE rate (fLive = the tour's current
+    //     budget_fx_rates, 1 for tour currency / a rate-less currency).
+    //   • ACTUAL amounts use the rate LOCKED at settlement (fLocked); a row that
+    //     hasn't settled yet (locked_fx_rate NULL) falls back to the live rate, so
+    //     nothing silently zeroes. Missing/≤0 locked rate → live rate (never 0).
+    const fLive = toTourCurrency(1, i.currency, currency, fxRates);
+    const lr = num(i.locked_fx_rate);
+    const fLocked = i.locked_fx_rate != null && lr > 0 ? lr : fLive;
+    merchProj += num(i.merch_income) * fLive;
+    merchAct += num(i.actual_merch) * fLocked;
+    guarProj += postTaxGuar(i) * fLive;
+    guarAct += num(i.actual_guarantee) * fLocked;
+    overProj += postTaxOver(i) * fLive;
+    overAct += num(i.actual_overage) * fLocked;
+    vipProj += num(i.vip_income) * fLive;
+    vipAct += num(i.actual_vip) * fLocked;
+    dedAct += num(i.actual_deductions) * fLocked;
+    grossProj += (postTaxGuar(i) + postTaxOver(i) + num(i.merch_income) + num(i.vip_income)) * fLive;
     grossAct +=
       (num(i.actual_guarantee) +
         num(i.actual_overage) +
         num(i.actual_merch) +
         num(i.actual_vip) -
-        num(i.actual_deductions)) * f;
+        num(i.actual_deductions)) * fLocked;
     preTaxProj +=
       (num(i.pre_tax_guarantee ?? i.post_tax_guarantee) +
         num(i.pre_tax_overage) +
         num(i.merch_income) +
-        num(i.vip_income)) * f;
+        num(i.vip_income)) * fLive;
     preTaxAct +=
       (num(i.actual_guarantee) +
         num(i.actual_overage) +
         num(i.actual_merch) +
         num(i.actual_vip) -
-        num(i.actual_deductions)) * f;
+        num(i.actual_deductions)) * fLocked;
   }
 
   const insurancePct = num(settings?.insurance_pct);
