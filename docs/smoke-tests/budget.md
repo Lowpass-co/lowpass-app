@@ -96,6 +96,31 @@ Reference tour: "Warning Support". Templates picker needs a NEW empty tour.
   so Budget, Rooming, and the future Payroll/Routing inherit the surfacing +
   fallback + timeout. `shell.ts` (the HTML) stays render-logic-free.
 
+## Document Export — pre-render 500 + TOTAL guard (#8 — fix/export-500-loader)
+
+> The export still 500'd with an **empty body** in prod (the guard wasn't wrapping
+> the throwing line). Reproduced `loadBudgetExportData` + `buildBudgetBodyHtml`
+> against the **real DB** (incl. Warning Support + Simple Plan) — neither throws;
+> both produce HTML. Two fixes: a real loader bug + a TOTAL guard. Rendered a real
+> 3-page PDF end-to-end. tsc 0, eslint 0, build green.
+
+- **EXP-FIX-05 — income was silently dropped (real bug).** `loadBudgetExportData`
+  filtered `routing` by `.eq('workspace_id', …)`, but **`routing` has no
+  `workspace_id` column** (it's tour-scoped; the page at `page.tsx:151` filters by
+  `tour_id` only). The query errored → `routingIds` empty → **every export's P&L
+  showed £0 income**. Fixed to match the page. Verified live: Warning Support income
+  rows 0→1, Simple Plan 0→3.
+- **EXP-FIX-06 — TOTAL guard, never a bare 500.** Both export routes wrap their
+  **entire** handler (params, auth, workspace-RLS, loaders, build, render) in one
+  try/catch → `exportErrorResponse(surface, err)` → **always** `500 JSON
+  { error, detail, stack }` + a server log `[export:<surface>] PDF generation
+  failed: …`. Verified: a thrown error returns `status 500` with the message + stack,
+  not 0 bytes. (Diagnosis: the loader/body don't throw → the prod 500 is in the
+  render/`getBrowser` env path, which this guard now surfaces verbatim.)
+- **EXP-FIX-07 — end-to-end render proof.** `loadBudgetExportData` → `buildBudgetBodyHtml`
+  → `renderDocument` → Chrome `page.pdf` (the exact shell options + footer) produces a
+  valid **3-page `%PDF-1.4`** for Warning Support, with income present.
+
 ## Income redesign — Phase 1: Settlement (feat/income-settlement-phase1)
 
 > Migration **215** (`budget_income.actual_deductions`, additive nullable). Run

@@ -15,7 +15,7 @@ import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { loadBudgetExportData } from '@/lib/export/budget-data';
 import { buildBudgetBodyHtml, type ExportScope } from '@/lib/export/budget-pdf';
 import { renderDocument } from '@/lib/export/shell';
-import { exportPdfResponse } from '@/lib/export/render';
+import { exportPdfResponse, exportErrorResponse } from '@/lib/export/render';
 import { fetchLogoDataUri, lowpassMarkDataUri } from '@/lib/export/logo';
 
 export const dynamic = 'force-dynamic';
@@ -43,6 +43,10 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ tourId: string }> },
 ): Promise<NextResponse | Response> {
+  // TOTAL guard — auth, params, the workspace-RLS check, the loaders, the HTML
+  // build AND the render are all inside this try, so NO throw can escape as a bare
+  // empty 500. A failing export ALWAYS returns JSON { error, detail, stack }.
+  try {
   const { tourId } = await params;
   const url = new URL(request.url);
   const scopeParam = url.searchParams.get('scope');
@@ -99,4 +103,7 @@ export async function POST(
     const filename = `${sanitize(data.artist?.name ?? '')} — ${sanitize(data.tour.name)} — Budget.pdf`.replace(/^ — /, '');
     return { html, footerNote, markDataUri, filename };
   });
+  } catch (err) {
+    return exportErrorResponse('budget', err);
+  }
 }

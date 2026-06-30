@@ -14,7 +14,7 @@ import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { loadRoomingExportData } from '@/lib/export/rooming-data';
 import { buildRoomingBodyHtml } from '@/lib/export/rooming-pdf';
 import { renderDocument } from '@/lib/export/shell';
-import { exportPdfResponse } from '@/lib/export/render';
+import { exportPdfResponse, exportErrorResponse } from '@/lib/export/render';
 import { fetchLogoDataUri, lowpassMarkDataUri } from '@/lib/export/logo';
 
 export const dynamic = 'force-dynamic';
@@ -40,6 +40,10 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ tourId: string }> },
 ): Promise<NextResponse | Response> {
+  // TOTAL guard — every step (auth, params, RLS, loaders, build, render) is inside
+  // this try, so a failing export ALWAYS returns JSON { error, detail, stack },
+  // never a bare empty 500.
+  try {
   const { tourId } = await params;
 
   const supabase = await createServerSupabaseClient();
@@ -87,4 +91,7 @@ export async function POST(
     const filename = `${sanitize(data.artist?.name ?? '')} — ${sanitize(data.tour.name)} — Rooming.pdf`.replace(/^ — /, '');
     return { html, footerNote, markDataUri, filename };
   });
+  } catch (err) {
+    return exportErrorResponse('rooming', err);
+  }
 }

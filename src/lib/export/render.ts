@@ -76,9 +76,19 @@ export async function exportPdfResponse(
       await closePage(page);
     }
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    // Log the REAL exception (type + stack) so a failure is never invisible again.
-    console.error(`[export:${surface}] PDF generation failed:`, err instanceof Error ? err.stack ?? err.message : message);
-    return NextResponse.json({ error: 'Could not generate the PDF', detail: message }, { status: 500 });
+    return exportErrorResponse(surface, err);
   }
+}
+
+/** The ONE error response for a failing export. Logs the real exception (type +
+ *  stack) server-side AND returns it as a 500 JSON body — `{ error, detail, stack }`
+ *  — so a failure is never a silent non-PDF again. Used by exportPdfResponse's own
+ *  catch AND by the route handlers wrapping their ENTIRE body (auth / params /
+ *  workspace-RLS / loaders / build / render) so NO throw can escape as a bare 500.
+ *  Safe to surface: it's a budget/rooming doc — the stack carries no card/PII data. */
+export function exportErrorResponse(surface: string, err: unknown): NextResponse {
+  const message = err instanceof Error ? err.message : String(err);
+  const stack = err instanceof Error ? err.stack ?? null : null;
+  console.error(`[export:${surface}] PDF generation failed: ${message}\n${stack ?? ''}`);
+  return NextResponse.json({ error: 'Could not generate the PDF', detail: message, stack }, { status: 500 });
 }
