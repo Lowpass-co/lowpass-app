@@ -16,7 +16,7 @@ import { normalizeConfig, type ExportSurface } from '@/lib/export/template-confi
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
 
-const SURFACES: ExportSurface[] = ['budget', 'rooming', 'payroll', 'routing'];
+const SURFACES: ExportSurface[] = ['budget', 'rooming', 'payroll', 'routing', 'channel-list'];
 
 export async function POST(request: Request): Promise<NextResponse | Response> {
   try {

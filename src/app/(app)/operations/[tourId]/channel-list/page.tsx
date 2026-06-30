@@ -9,6 +9,7 @@
 
 import { notFound } from 'next/navigation';
 import { ChannelListTourSheet } from '@/components/channel-list/ChannelListTourSheet';
+import { ExportButton } from '@/components/export/ExportButton';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { formatResolveError, resolvePack } from '@/lib/rider-packs/resolve';
 import type { RiderPack, ResolvedSection } from '@/lib/rider-packs/types';
@@ -64,6 +65,7 @@ export default async function OperationsTourChannelListPage({
           <h1 className="text-xl font-semibold tracking-tight text-lp-text">Channel list</h1>
           <p className="mt-0.5 text-sm text-lp-text-secondary">{tour.name ?? tourId}</p>
         </div>
+        {resolvedSection ? <ExportButton surface="channel-list" tourId={tour.id} title="Export the channel / input list (PDF or Excel)" /> : null}
       </header>
 
       {resolveError && !resolvedSection ? (

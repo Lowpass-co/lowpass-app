@@ -20,6 +20,29 @@ Reference tour: "Warning Support". Templates picker needs a NEW empty tour.
 | BUD-19 | FIXED | click-to-rename templates + consistent picker (Fix-pack C) |
 | BUD-20 | FIXED | summary reads live from `section_id`; no phantom sections (Fix-pack A) |
 
+## Document Export — Channel List surface (5th) (#8 — feat/export-channel-list)
+
+> The 5th export surface, same per-surface pattern as rooming/routing. No migration
+> (jsonb config). `loadChannelListExportData` mirrors the channel-list page (resolve
+> the first rider pack with a `channel_list` section → rows / sub-snakes / stage
+> boxes); the table matches the on-screen columns. tsc 0, eslint 0, build green.
+
+- **EXP-CHAN-01 — input list matches the page.** `buildChannelListBodyHtml` renders
+  the input table: # · Source · Mic/DI · Sub-snake · Stage I/O · Insert · Ph · Notes
+  — the same computed columns + formatting (sub-snake/stage-IO as `label-pos`, phantom
+  On/Off/—, mic·di joined) as `ChannelListTourSheet`. (Proven: Kick/Bass rows, phantom
+  On/Off, sub-snake SL-1 + stage-IO 16A-1.)
+- **EXP-CHAN-02 — outputs (IEM / mix) section.** A second section renders output rows
+  (# · Item · Destination · Qty · Format · Notes; stereo + position). Two coarse
+  sections (`inputs` / `outputs`) → show/hide + reorder via the section model.
+  (Proven: PSM1000 / Singer IEM / Stereo 1+2; hiding outputs leaves just the inputs.)
+- **EXP-CHAN-03 — routes + RLS + clean Excel.** `POST /api/channel-list/[tourId]/
+  export/{pdf,preview}` + `/api/export/xlsx` (surface `channel-list`). Excel = two
+  clean sheets (Input list + Outputs) with the v2.1 ExcelJS treatment (widths,
+  styled/frozen/filtered header). READ-ONLY; RLS scopes via `rider_packs.workspace_id`
+  (a foreign tour 404s). The shared orange **Export…** button mounts on the
+  channel-list page when a section exists; no channel list → a friendly message.
+
 ## Document Export v2.1 — rooming polish (#8 — feat/export-v21-rooming)
 
 > jsonb/calc only (no migration). tsc 0, eslint 0, build green.

@@ -498,7 +498,11 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
   const effectiveDefaultId = templates.find((t) => t.isDefault && !t.isGlobal)?.id ?? null;
 
   const title =
-    surface === 'budget' ? 'Export Budget' : surface === 'payroll' ? 'Export Payroll' : surface === 'routing' ? 'Export Routing' : 'Export Rooming list';
+    surface === 'budget' ? 'Export Budget'
+      : surface === 'payroll' ? 'Export Payroll'
+        : surface === 'routing' ? 'Export Routing'
+          : surface === 'channel-list' ? 'Export Channel list'
+            : 'Export Rooming list';
 
   // Portal to <body> so a transformed/positioned app-chrome ancestor (the
   // ProductHeader) can't constrain or bleed through this full-viewport modal.

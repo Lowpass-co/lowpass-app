@@ -16,7 +16,7 @@
    here later with no rework.
    ============================================ */
 
-export type ExportSurface = 'budget' | 'rooming' | 'payroll' | 'routing';
+export type ExportSurface = 'budget' | 'rooming' | 'payroll' | 'routing' | 'channel-list';
 export type PageSize = 'A4' | 'Letter';
 /** Output format — a styled print PDF, or a flat machine-readable Excel grid. */
 export type ExportFormat = 'pdf' | 'excel';
@@ -159,6 +159,7 @@ export const BUDGET_SECTION_IDS = ['pnl-summary', 'income-detail', 'expense-deta
 export const ROOMING_SECTION_IDS = ['hotels'] as const;
 export const PAYROLL_SECTION_IDS = ['run-sheet', 'statements'] as const;
 export const ROUTING_SECTION_IDS = ['days', 'advance-summary'] as const;
+export const CHANNEL_LIST_SECTION_IDS = ['inputs', 'outputs'] as const;
 
 /** Human labels for the editor's section list. */
 export const SECTION_LABELS: Record<string, string> = {
@@ -170,6 +171,8 @@ export const SECTION_LABELS: Record<string, string> = {
   statements: 'Per-person statements',
   days: 'Routing (all days)',
   'advance-summary': 'Advance summary (per day)',
+  inputs: 'Input list',
+  outputs: 'Outputs (IEM / mix)',
 };
 
 export const HEADER_ELEMENT_LABELS: Record<HeaderElementId, string> = {
@@ -285,10 +288,26 @@ export const DEFAULT_ROUTING_CONFIG: TemplateConfig = {
   routing: DEFAULT_ROUTING_OPTIONS,
 };
 
+export const DEFAULT_CHANNEL_LIST_CONFIG: TemplateConfig = {
+  v: 1,
+  surface: 'channel-list',
+  format: 'pdf',
+  pageSize: 'A4',
+  logo: true,
+  sections: CHANNEL_LIST_SECTION_IDS.map((id) => ({ id, show: true })),
+  general: DEFAULT_GENERAL,
+  header: DEFAULT_HEADER,
+  footer: DEFAULT_FOOTER,
+  dateRange: DEFAULT_DATE_RANGE,
+  payroll: DEFAULT_PAYROLL_OPTIONS,
+  routing: DEFAULT_ROUTING_OPTIONS,
+};
+
 export function defaultConfig(surface: ExportSurface): TemplateConfig {
   if (surface === 'budget') return structuredClone(DEFAULT_BUDGET_CONFIG);
   if (surface === 'payroll') return structuredClone(DEFAULT_PAYROLL_CONFIG);
   if (surface === 'routing') return structuredClone(DEFAULT_ROUTING_CONFIG);
+  if (surface === 'channel-list') return structuredClone(DEFAULT_CHANNEL_LIST_CONFIG);
   return structuredClone(DEFAULT_ROOMING_CONFIG);
 }
 

@@ -16,11 +16,13 @@ import { loadBudgetExportData } from '@/lib/export/budget-data';
 import { loadRoomingExportData } from '@/lib/export/rooming-data';
 import { loadPayrollExportData } from '@/lib/export/payroll-data';
 import { loadRoutingExportData } from '@/lib/export/routing-data';
+import { loadChannelListExportData } from '@/lib/export/channel-list-data';
 import type { ExportSurface, TemplateConfig } from '@/lib/export/template-config';
 import type { BudgetExportData } from '@/lib/export/budget-data';
 import type { RoomingExportData } from '@/lib/export/rooming-data';
 import type { PayrollExportData } from '@/lib/export/payroll-data';
 import type { RoutingExportData } from '@/lib/export/routing-data';
+import type { ChannelListExportData } from '@/lib/export/channel-list-data';
 
 const num = (v: unknown): number => (Number.isFinite(Number(v)) ? Number(v) : 0);
 
@@ -248,6 +250,41 @@ function routingSheet(data: RoutingExportData): SheetSpec {
   };
 }
 
+/** Channel list — the surface that most benefits from a clean Excel (engineers
+ *  reuse it). Inputs on one sheet, outputs on another. */
+function channelListSheets(data: ChannelListExportData): SheetSpec[] {
+  const inputs: SheetSpec = {
+    name: 'Input list',
+    columns: [
+      { header: '#', key: 'index', numFmt: QTY_FMT },
+      { header: 'Source', key: 'source' },
+      { header: 'Mic / DI', key: 'micDi' },
+      { header: 'Sub-snake', key: 'subSnake' },
+      { header: 'Stage I/O', key: 'stageIO' },
+      { header: 'Insert', key: 'insert' },
+      { header: 'Phantom', key: 'phantom' },
+      { header: 'Notes', key: 'notes' },
+    ],
+    rows: data.inputs.map((r) => ({ index: r.index, source: r.source, micDi: r.micDi, subSnake: r.subSnake, stageIO: r.stageIO, insert: r.insert, phantom: r.phantom, notes: r.notes })),
+  };
+  const specs = [inputs];
+  if (data.outputs.length) {
+    specs.push({
+      name: 'Outputs',
+      columns: [
+        { header: '#', key: 'index', numFmt: QTY_FMT },
+        { header: 'Item', key: 'item' },
+        { header: 'Destination', key: 'destination' },
+        { header: 'Qty', key: 'qty', numFmt: QTY_FMT },
+        { header: 'Format', key: 'format' },
+        { header: 'Notes', key: 'notes' },
+      ],
+      rows: data.outputs.map((r) => ({ index: r.index, item: r.item, destination: r.destination, qty: r.qty ?? '', format: `${r.stereo ? 'Stereo' : 'Mono'}${r.position ? ` (${r.position})` : ''}`, notes: r.notes })),
+    });
+  }
+  return specs;
+}
+
 export interface XlsxBuild {
   buffer: Buffer;
   filename: string;
@@ -262,18 +299,18 @@ export async function buildXlsxExport(
   config: TemplateConfig,
   versionId: string | null,
 ): Promise<XlsxBuild> {
-  let spec: SheetSpec;
+  let specs: SheetSpec[];
   let artistName: string | null = null;
   let label: string;
 
   if (surface === 'budget') {
     const data = await loadBudgetExportData(supabase, tour, workspaceId, { versionId });
-    spec = budgetSheet(data);
+    specs = [budgetSheet(data)];
     artistName = data.artist?.name ?? null;
     label = 'Budget';
   } else if (surface === 'rooming') {
     const data = await loadRoomingExportData(supabase, tour, workspaceId, { range: config.dateRange });
-    spec = roomingSheet(data);
+    specs = [roomingSheet(data)];
     artistName = data.artist?.name ?? null;
     label = 'Rooming';
   } else if (surface === 'payroll') {
@@ -282,19 +319,24 @@ export async function buildXlsxExport(
       personId: config.payroll.mode === 'individual' ? config.payroll.personId : null,
       selectedIds: config.payroll.selectedPersonIds,
     });
-    spec = payrollSheet(data);
+    specs = [payrollSheet(data)];
     artistName = data.artist?.name ?? null;
     label = 'Payroll';
+  } else if (surface === 'channel-list') {
+    const data = await loadChannelListExportData(supabase, tour);
+    specs = channelListSheets(data);
+    artistName = data.artist?.name ?? null;
+    label = 'Channel list';
   } else {
     const data = await loadRoutingExportData(supabase, tour, { range: config.dateRange, travelTimes: config.routing.travelTimes });
-    spec = routingSheet(data);
+    specs = [routingSheet(data)];
     artistName = data.artist?.name ?? null;
     label = 'Routing';
   }
 
   const wb = new ExcelJS.Workbook();
   wb.creator = 'Lowpass';
-  addSheet(wb, spec);
+  for (const spec of specs) addSheet(wb, spec);
   const buffer = Buffer.from(await wb.xlsx.writeBuffer());
   const filename = `${sanitize(artistName ?? '', '')} — ${sanitize(tour.name, label)} — ${label}.xlsx`.replace(/^ — /, '');
   return { buffer, filename };

@@ -18,6 +18,8 @@ import { loadPayrollExportData } from '@/lib/export/payroll-data';
 import { buildPayrollBodyHtml } from '@/lib/export/payroll-pdf';
 import { loadRoutingExportData } from '@/lib/export/routing-data';
 import { buildRoutingBodyHtml } from '@/lib/export/routing-pdf';
+import { loadChannelListExportData } from '@/lib/export/channel-list-data';
+import { buildChannelListBodyHtml } from '@/lib/export/channel-list-pdf';
 import { renderDocument } from '@/lib/export/shell';
 import { fetchLogoDataUri, fetchExportAssetDataUri } from '@/lib/export/logo';
 import type { FooterStyle, TemplateConfig } from '@/lib/export/template-config';
@@ -240,5 +242,44 @@ export async function buildRoutingExport(
 
   const footerNote = `${data.artist?.name ? `${data.artist.name} — ` : ''}${data.tour.name} · Routing`;
   const filename = `${sanitize(data.artist?.name ?? '', '')} — ${sanitize(data.tour.name, 'Routing')} — Routing.pdf`.replace(/^ — /, '');
+  return { html, footerNote, filename, footer: config.footer, runningHeader: config.header.show ? footerNote : null };
+}
+
+export interface ChannelListTourMeta {
+  id: string; name: string; artist_id: string | null;
+}
+
+export async function buildChannelListExport(
+  supabase: SupabaseClient,
+  tour: ChannelListTourMeta,
+  workspaceId: string,
+  config: TemplateConfig,
+): Promise<ExportBuild> {
+  const data = await loadChannelListExportData(supabase, tour);
+  const logoDataUri = config.logo ? await resolveLogo(supabase, workspaceId, config, data.logoUrl) : null;
+  const bgDataUri = await fetchExportAssetDataUri(supabase, workspaceId, config.header.bgAssetPath);
+
+  const subtitle = `${data.inputs.length} channel${data.inputs.length === 1 ? '' : 's'}${data.outputs.length ? ` · ${data.outputs.length} output${data.outputs.length === 1 ? '' : 's'}` : ''}`;
+
+  const html = renderDocument({
+    letterhead: {
+      artistName: data.artist?.name ?? null,
+      tourName: data.tour.name,
+      tourDates: null,
+      logoDataUri,
+      showLogo: config.logo,
+      generatedOn: nowStamp(),
+    },
+    pageSize: config.pageSize,
+    title: 'Channel list',
+    subtitle,
+    general: config.general,
+    header: config.header,
+    bgDataUri,
+    bodyHtml: buildChannelListBodyHtml(data, config),
+  });
+
+  const footerNote = `${data.artist?.name ? `${data.artist.name} — ` : ''}${data.tour.name} · Channel list`;
+  const filename = `${sanitize(data.artist?.name ?? '', '')} — ${sanitize(data.tour.name, 'Channel list')} — Channel list.pdf`.replace(/^ — /, '');
   return { html, footerNote, filename, footer: config.footer, runningHeader: config.header.show ? footerNote : null };
 }
