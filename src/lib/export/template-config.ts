@@ -18,6 +18,8 @@
 
 export type ExportSurface = 'budget' | 'rooming' | 'payroll' | 'routing';
 export type PageSize = 'A4' | 'Letter';
+/** Output format — a styled print PDF, or a flat machine-readable Excel grid. */
+export type ExportFormat = 'pdf' | 'excel';
 export type BudgetScope = 'projected' | 'actual' | 'both';
 
 /** A section in the document. Order = array position; `show` = visibility. */
@@ -75,6 +77,8 @@ export interface TemplateConfig {
   /** Schema version (forward-compat). */
   v: 1;
   surface: ExportSurface;
+  /** Output format — PDF (styled print doc) or Excel (flat data grid). Default 'pdf'. */
+  format: ExportFormat;
   pageSize: PageSize;
   /** Show the artist logo / initials block in the letterhead. */
   logo: boolean;
@@ -152,6 +156,7 @@ export const DEFAULT_FOOTER: FooterStyle = {
 export const DEFAULT_BUDGET_CONFIG: TemplateConfig = {
   v: 1,
   surface: 'budget',
+  format: 'pdf',
   pageSize: 'A4',
   logo: true,
   scope: 'both',
@@ -164,6 +169,7 @@ export const DEFAULT_BUDGET_CONFIG: TemplateConfig = {
 export const DEFAULT_ROOMING_CONFIG: TemplateConfig = {
   v: 1,
   surface: 'rooming',
+  format: 'pdf',
   pageSize: 'A4',
   logo: true,
   sections: ROOMING_SECTION_IDS.map((id) => ({ id, show: true })),
@@ -175,6 +181,7 @@ export const DEFAULT_ROOMING_CONFIG: TemplateConfig = {
 export const DEFAULT_PAYROLL_CONFIG: TemplateConfig = {
   v: 1,
   surface: 'payroll',
+  format: 'pdf',
   pageSize: 'A4',
   logo: true,
   sections: PAYROLL_SECTION_IDS.map((id) => ({ id, show: true })),
@@ -188,6 +195,7 @@ export const DEFAULT_PAYROLL_CONFIG: TemplateConfig = {
 export const DEFAULT_ROUTING_CONFIG: TemplateConfig = {
   v: 1,
   surface: 'routing',
+  format: 'pdf',
   pageSize: 'A4',
   logo: true,
   sections: [
@@ -283,6 +291,7 @@ export function normalizeConfig(surface: ExportSurface, input: unknown): Templat
   const c = input as Partial<TemplateConfig>;
 
   if (c.pageSize && PAGE_SIZES.includes(c.pageSize)) base.pageSize = c.pageSize;
+  if (c.format === 'pdf' || c.format === 'excel') base.format = c.format;
   if (typeof c.logo === 'boolean') base.logo = c.logo;
   if (surface === 'budget' && c.scope && SCOPES.includes(c.scope)) base.scope = c.scope;
 

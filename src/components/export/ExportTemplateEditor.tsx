@@ -16,7 +16,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronRight, Eye, EyeOff, GripVertical, Globe, Loader2, Maximize2, Trash2, Upload, X, ZoomIn, ZoomOut } from 'lucide-react';
+import { ChevronRight, Eye, EyeOff, FileSpreadsheet, GripVertical, Globe, Loader2, Maximize2, Trash2, Upload, X, ZoomIn, ZoomOut } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
 import {
   defaultConfig,
@@ -25,6 +25,7 @@ import {
   SECTION_LABELS,
   type Align,
   type BudgetScope,
+  type ExportFormat,
   type ExportSurface,
   type FontFamily,
   type HeaderElementId,
@@ -50,6 +51,11 @@ const SCOPES: ReadonlyArray<{ value: BudgetScope; label: string }> = [
   { value: 'both', label: 'Both + Variance' },
   { value: 'projected', label: 'Projected' },
   { value: 'actual', label: 'Actual' },
+];
+
+const FORMATS: ReadonlyArray<{ value: ExportFormat; label: string }> = [
+  { value: 'pdf', label: 'PDF (print)' },
+  { value: 'excel', label: 'Excel (data)' },
 ];
 
 const FONT_FAMILIES: ReadonlyArray<{ value: FontFamily; label: string }> = [
@@ -133,6 +139,8 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
   // the iframe. The server builder is the SAME one the PDF route uses → WYSIWYG.
   const reqId = useRef(0);
   useEffect(() => {
+    // Excel has no HTML preview (it's a flat data grid) — skip the round-trip.
+    if (config.format === 'excel') return;
     const id = ++reqId.current;
     const t = setTimeout(() => {
       void (async () => {
@@ -352,19 +360,20 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
     if (busy) return;
     setBusy(true);
     try {
-      const res = await fetch(`${base}/pdf`, {
+      const isExcel = config.format === 'excel';
+      const res = await fetch(isExcel ? '/api/export/xlsx' : `${base}/pdf`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ config, versionId }),
+        body: JSON.stringify(isExcel ? { surface, tourId, config, versionId } : { config, versionId }),
       });
       if (!res.ok) {
-        showToast(res.status === 404 ? 'Tour not found' : 'Could not generate the PDF', 'error');
+        showToast(res.status === 404 ? 'Tour not found' : isExcel ? 'Could not generate the Excel file' : 'Could not generate the PDF', 'error');
         setBusy(false);
         return;
       }
       const blob = await res.blob();
       const cd = res.headers.get('Content-Disposition') ?? '';
-      const name = /filename="(.+?)"/.exec(cd)?.[1] ?? `${surface}.pdf`;
+      const name = /filename="(.+?)"/.exec(cd)?.[1] ?? `${surface}.${isExcel ? 'xlsx' : 'pdf'}`;
       const objUrl = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = objUrl;
@@ -375,10 +384,10 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
       URL.revokeObjectURL(objUrl);
       onClose();
     } catch {
-      showToast('Could not generate the PDF', 'error');
+      showToast('Could not generate the export', 'error');
       setBusy(false);
     }
-  }, [base, busy, config, onClose, showToast, surface, versionId]);
+  }, [base, busy, config, onClose, showToast, surface, tourId, versionId]);
 
   // Dirty = the config diverged from the last clean point (open / apply / save).
   const dirty = baselineRef.current !== JSON.stringify(config);
@@ -414,6 +423,7 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
 
   const scale = zoom ?? fitScale;
   const page = PAGE_PX[config.pageSize];
+  const isExcel = config.format === 'excel';
 
   const title =
     surface === 'budget' ? 'Export Budget' : surface === 'payroll' ? 'Export Payroll' : surface === 'routing' ? 'Export Routing' : 'Export Rooming list';
@@ -455,40 +465,56 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
         <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
           {/* preview */}
           <div style={{ flex: 1, minWidth: 0, position: 'relative', display: 'flex', flexDirection: 'column', minHeight: 0, background: 'var(--lp-bg-subtle)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', borderBottom: '1px solid var(--lp-border)' }}>
-              <ZoomBtn onClick={() => setZoom(Math.max(0.25, scale - 0.1))} title="Zoom out"><ZoomOut className="h-4 w-4" aria-hidden /></ZoomBtn>
-              <span style={{ fontSize: 11, color: 'var(--lp-text-tertiary)', minWidth: 38, textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>{Math.round(scale * 100)}%</span>
-              <ZoomBtn onClick={() => setZoom(Math.min(2, scale + 0.1))} title="Zoom in"><ZoomIn className="h-4 w-4" aria-hidden /></ZoomBtn>
-              <ZoomBtn onClick={() => setZoom(null)} title="Fit to width"><Maximize2 className="h-4 w-4" aria-hidden /></ZoomBtn>
-              <span style={{ fontSize: 11, color: 'var(--lp-text-tertiary)', marginLeft: 'auto' }}>{config.pageSize}{zoom === null ? ' · fit' : ''}</span>
-              {previewing ? <Loader2 className="h-3.5 w-3.5 animate-spin" style={{ color: 'var(--lp-text-tertiary)' }} aria-hidden /> : null}
-            </div>
-            <div
-              ref={previewWrapRef}
-              onWheel={(e) => { if (e.ctrlKey || e.metaKey) { e.preventDefault(); setZoom(Math.min(2, Math.max(0.25, scale - e.deltaY * 0.0025))); } }}
-              onDoubleClick={() => setZoom(zoom === null ? 1 : null)}
-              style={{ flex: 1, minHeight: 0, overflow: 'auto', display: 'flex', justifyContent: 'center', alignItems: 'flex-start', padding: 16 }}
-            >
-              {previewError ? (
-                <div style={{ alignSelf: 'center', textAlign: 'center', color: 'var(--lp-text-tertiary)', fontSize: 13 }}>{previewError}</div>
-              ) : (
-                <div style={{ width: page.w * scale, height: docHeight * scale, flex: '0 0 auto' }}>
-                  <div style={{ width: page.w, transform: `scale(${scale})`, transformOrigin: 'top left', boxShadow: '0 2px 24px rgba(0,0,0,0.22)', background: '#fff', borderRadius: 2 }}>
-                    <iframe
-                      ref={iframeRef}
-                      title="Export preview"
-                      srcDoc={previewHtml}
-                      onLoad={measureDoc}
-                      style={{ width: page.w, height: docHeight, border: 0, display: 'block', background: '#fff' }}
-                    />
-                  </div>
+            {isExcel ? (
+              <div style={{ flex: 1, minHeight: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 'var(--lp-space-6, 32px)' }}>
+                <div style={{ maxWidth: 420, textAlign: 'center', color: 'var(--lp-text-secondary)' }}>
+                  <FileSpreadsheet className="h-10 w-10" style={{ color: 'var(--lp-text-tertiary)', margin: '0 auto 10px' }} aria-hidden />
+                  <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--lp-text)', marginBottom: 6 }}>Excel data grid</div>
+                  <p style={{ fontSize: 13, lineHeight: 1.5 }}>Excel format exports a flat, machine-readable spreadsheet — one row per line, plain headers — for the recipient to sort, filter and total. The print styling (fonts, header, page size) doesn’t apply. Click <strong>Download Excel</strong> to get the file.</p>
                 </div>
-              )}
-            </div>
+              </div>
+            ) : (
+              <>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 10px', borderBottom: '1px solid var(--lp-border)' }}>
+                  <ZoomBtn onClick={() => setZoom(Math.max(0.25, scale - 0.1))} title="Zoom out"><ZoomOut className="h-4 w-4" aria-hidden /></ZoomBtn>
+                  <span style={{ fontSize: 11, color: 'var(--lp-text-tertiary)', minWidth: 38, textAlign: 'center', fontVariantNumeric: 'tabular-nums' }}>{Math.round(scale * 100)}%</span>
+                  <ZoomBtn onClick={() => setZoom(Math.min(2, scale + 0.1))} title="Zoom in"><ZoomIn className="h-4 w-4" aria-hidden /></ZoomBtn>
+                  <ZoomBtn onClick={() => setZoom(null)} title="Fit to width"><Maximize2 className="h-4 w-4" aria-hidden /></ZoomBtn>
+                  <span style={{ fontSize: 11, color: 'var(--lp-text-tertiary)', marginLeft: 'auto' }}>{config.pageSize}{zoom === null ? ' · fit' : ''}</span>
+                  {previewing ? <Loader2 className="h-3.5 w-3.5 animate-spin" style={{ color: 'var(--lp-text-tertiary)' }} aria-hidden /> : null}
+                </div>
+                <div
+                  ref={previewWrapRef}
+                  onWheel={(e) => { if (e.ctrlKey || e.metaKey) { e.preventDefault(); setZoom(Math.min(2, Math.max(0.25, scale - e.deltaY * 0.0025))); } }}
+                  onDoubleClick={() => setZoom(zoom === null ? 1 : null)}
+                  style={{ flex: 1, minHeight: 0, overflow: 'auto', display: 'flex', justifyContent: 'center', alignItems: 'flex-start', padding: 16 }}
+                >
+                  {previewError ? (
+                    <div style={{ alignSelf: 'center', textAlign: 'center', color: 'var(--lp-text-tertiary)', fontSize: 13 }}>{previewError}</div>
+                  ) : (
+                    <div style={{ width: page.w * scale, height: docHeight * scale, flex: '0 0 auto' }}>
+                      <div style={{ width: page.w, transform: `scale(${scale})`, transformOrigin: 'top left', boxShadow: '0 2px 24px rgba(0,0,0,0.22)', background: '#fff', borderRadius: 2 }}>
+                        <iframe
+                          ref={iframeRef}
+                          title="Export preview"
+                          srcDoc={previewHtml}
+                          onLoad={measureDoc}
+                          style={{ width: page.w, height: docHeight, border: 0, display: 'block', background: '#fff' }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
           </div>
 
           {/* settings */}
           <div style={{ width: 320, flex: '0 0 320px', borderLeft: '1px solid var(--lp-border)', overflowY: 'auto', padding: 'var(--lp-space-5)', display: 'flex', flexDirection: 'column', gap: 'var(--lp-space-5)' }}>
+            <AccordionGroup id="format" label="Format" defaultOpen>
+              <Segmented options={FORMATS} value={config.format} onChange={(v) => setConfig((c) => ({ ...c, format: v }))} />
+            </AccordionGroup>
+
             <AccordionGroup id="templates" label="Templates" defaultOpen>
               {templates.length === 0 ? (
                 <p style={{ fontSize: 11, color: 'var(--lp-text-tertiary)' }}>No saved templates yet. Save the current settings below.</p>
@@ -560,6 +586,8 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
               </AccordionGroup>
             ) : null}
 
+            {isExcel ? null : (
+            <>
             <AccordionGroup id="general" label="General">
               <FieldLabel>Font</FieldLabel>
               <Segmented options={FONT_FAMILIES} value={config.general.fontFamily} onChange={(v) => setGeneral('fontFamily', v)} />
@@ -636,6 +664,8 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
               <Toggle label="Page numbers" checked={config.footer.pageNumbers} onChange={(v) => setFooter('pageNumbers', v)} />
               <Toggle label="Summary line + mark" checked={config.footer.summaryLine} onChange={(v) => setFooter('summaryLine', v)} />
             </AccordionGroup>
+            </>
+            )}
           </div>
         </div>
 
@@ -652,7 +682,7 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
             style={{ border: 0, borderRadius: 'var(--lp-radius-md)', padding: '7px 16px', fontSize: 13, fontWeight: 700, color: 'var(--lp-text-inverse)', background: 'var(--lp-orange)', cursor: busy ? 'default' : 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}
           >
             {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : null}
-            {busy ? 'Generating…' : 'Download PDF'}
+            {busy ? 'Generating…' : isExcel ? 'Download Excel' : 'Download PDF'}
           </button>
         </div>
 

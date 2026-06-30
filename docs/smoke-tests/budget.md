@@ -20,6 +20,31 @@ Reference tour: "Warning Support". Templates picker needs a NEW empty tour.
 | BUD-19 | FIXED | click-to-rename templates + consistent picker (Fix-pack C) |
 | BUD-20 | FIXED | summary reads live from `section_id`; no phantom sections (Fix-pack A) |
 
+## Document Export v2 — PDF ↔ Excel (#8 — feat/export-v2-format)
+
+> A format toggle in the editor + a server xlsx path. `format: 'pdf' | 'excel'` is a
+> new jsonb config field (no migration); default 'pdf' (byte-for-byte unaffected).
+> The old client-side XLSX button is retired. tsc 0, eslint 0, build green.
+
+- **EXP-V2C-01 — format toggle changes output + presentation.** The editor's
+  **Format** group toggles PDF / Excel. PDF = the styled print doc (unchanged). Excel
+  = a flat, machine-readable .xlsx (one row per line, plain headers) from
+  `/api/export/xlsx`, built by `src/lib/export/xlsx.ts` reusing the SAME loaders as
+  the PDF path (numbers agree). The Download button label updates to **Download PDF** /
+  **Download Excel**. (Verified: SheetJS writes a valid xlsx buffer server-side.)
+- **EXP-V2C-02 — Excel layouts per surface.** Budget → Section/Item/Qty/Currency/
+  Projected/Actual/Variance (expense lines). Rooming → Hotel/Address/City/Guest/Room
+  type/Room #/Check-in/Check-out/Nights. Payroll → Crew/Role/day counts/rates/Fee/
+  Per-diem/Total + grand total (NO internal rate — D5). Routing → Date/Day type/City/
+  Venue/Address/Capacity/Advance.
+- **EXP-V2C-03 — old XLSX button removed.** `BudgetExportControls` no longer has the
+  client-side XLSX menu item / jspdf; it uses the shared `<ExportButton>` (Excel now
+  lives inside the editor's format toggle). The display-currency switcher stays.
+- **EXP-V2C-04 — Excel-aware editor + RLS.** With Excel selected, the print-only
+  styling groups (General / Page size / Header / Footer) are hidden and the preview
+  shows an "Excel data grid" panel (no HTML preview). The xlsx route is workspace-RLS
+  scoped — a foreign tour 404s; payroll/rooming PII never leaks.
+
 ## Document Export v2 — multi-page layout (#8 — feat/export-v2-pagination)
 
 > Shared shell, all four surfaces. Fixes the "page 1 = banner then empty; content on

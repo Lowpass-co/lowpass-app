@@ -35,7 +35,7 @@ import { PAGE_PDF_OPTIONS, PDF_HEADER_TEMPLATE, pdfFooterTemplate, pdfRunningHea
  *    - filename*=UTF-8''… — the real Unicode name (percent-encoded → ASCII) for
  *      modern browsers.
  *  Shared here so Budget, Rooming, and the future Payroll/Routing all inherit it. */
-function contentDisposition(filename: string): string {
+export function contentDisposition(filename: string): string {
   const asciiFallback = filename.normalize('NFKD').replace(/[^\x20-\x7E]/g, '-').replace(/["\\]/g, '');
   return `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
 }

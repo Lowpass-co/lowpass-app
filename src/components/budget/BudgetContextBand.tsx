@@ -40,7 +40,6 @@ export function BudgetContextBand({
   artistLogoUrl,
   tourName,
   tourCurrency,
-  lines,
   tourId,
   versions,
   viewedVersionId,
@@ -87,7 +86,7 @@ export function BudgetContextBand({
                 collapsed into this band). Drives the same `lowpass:density`
                 preference every grid reads via useAppDensity. */}
             <AppDensityToggle />
-            <BudgetExportControls lines={lines} tourCurrency={tourCurrency} tourName={tourName} tourId={tourId} />
+            <BudgetExportControls tourCurrency={tourCurrency} tourId={tourId} />
           </div>
         }
       />
