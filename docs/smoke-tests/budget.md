@@ -111,6 +111,39 @@ Reference tour: "Warning Support". Templates picker needs a NEW empty tour.
   restored, page size / scope clamped — so a bad config can never crash the builder
   or smuggle a non-section. Back-compat: `?scope=` / `?version=` query still work.
 
+## Document Export — Template persistence (#8 — feat/export-template-persist)
+
+> Phase 3: save / apply / set-default templates, shared across a workspace's tours.
+> `export_templates` (migration 224): id · workspace_id (NULL = the read-only GLOBAL
+> tier) · surface · name · config jsonb · is_default · timestamps. RLS workspace-
+> scoped via `get_my_workspace_id()` (+ global read); a partial unique index =
+> ONE default per (workspace, surface); a CHECK forbids a global template being a
+> default. CRUD: `/api/export/templates` (GET list, POST save, PATCH rename/set-
+> default, DELETE) — all workspace-scoped; the global tier is read-only (no client
+> writes a NULL workspace_id). Editor: a Templates panel (save / apply / set-default /
+> delete + the global list). tsc 0, eslint 0, build green.
+
+- **EXP-TPL3-01 — save → lists for that surface in that workspace only.** Saving the
+  current settings as a named template (POST, `config` coerced by `normalizeConfig`)
+  makes it appear in the editor's Templates list for that surface. RLS: a second
+  workspace can't see it (`export_templates_select` = own workspace OR global).
+- **EXP-TPL3-02 — set default → a new export opens with it.** Star a workspace
+  template → `is_default` (the route clears the prior default first, so the partial
+  unique index never rejects). Re-opening the editor for that surface auto-applies the
+  workspace default (`refreshTemplates(applyDefault)` on mount).
+- **EXP-TPL3-03 — apply a global template → copy-on-apply.** A Global (workspace_id
+  NULL) template lists with a globe badge; applying it loads its config into the live
+  editor (editor STATE only — no DB write); editing + Save creates a workspace-owned
+  copy. A PATCH/DELETE against a global row is rejected (403 "Read-only template").
+- **EXP-TPL3-04 — one default enforced.** The partial unique index
+  `export_templates_one_default (workspace_id, surface) WHERE is_default` allows at
+  most one default per (workspace, surface); the CHECK
+  `export_templates_global_not_default` forbids a global row being a default.
+- **EXP-TPL3-05 — presentation-only persists.** A saved template stores only a
+  `TemplateConfig` (presentation) — never data; applying it can reorder/hide/restyle
+  but never changes a number. The tour stores no `template_id` (render-time selection,
+  D-APPLY).
+
 ## Document Export — Routing surface (#8 — feat/export-routing)
 
 > The fourth export surface, config-aware. `loadRoutingExportData` reads the

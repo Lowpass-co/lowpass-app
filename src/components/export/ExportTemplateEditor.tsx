@@ -15,11 +15,12 @@
    ============================================ */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Eye, EyeOff, GripVertical, Loader2, Upload, X } from 'lucide-react';
+import { Eye, EyeOff, GripVertical, Globe, Loader2, Star, Trash2, Upload, X } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
 import {
   defaultConfig,
   HEADER_ELEMENT_LABELS,
+  normalizeConfig,
   SECTION_LABELS,
   type Align,
   type BudgetScope,
@@ -29,6 +30,15 @@ import {
   type PageSize,
   type TemplateConfig,
 } from '@/lib/export/template-config';
+
+interface SavedTemplate {
+  id: string;
+  name: string;
+  surface: ExportSurface;
+  config: TemplateConfig;
+  isDefault: boolean;
+  isGlobal: boolean;
+}
 
 const PAGE_SIZES: ReadonlyArray<{ value: PageSize; label: string }> = [
   { value: 'A4', label: 'A4' },
@@ -161,6 +171,86 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
     setConfig((c) => ({ ...c, footer: { ...c.footer, [k]: v } }));
   }, []);
 
+  // --- Phase 3: saved templates (workspace + global tier) ---
+  const [templates, setTemplates] = useState<SavedTemplate[]>([]);
+  const [newTemplateName, setNewTemplateName] = useState('');
+  const [savingTemplate, setSavingTemplate] = useState(false);
+  const appliedDefaultRef = useRef(false);
+
+  const refreshTemplates = useCallback(async (applyDefault: boolean) => {
+    try {
+      const res = await fetch(`/api/export/templates?surface=${surface}`);
+      if (!res.ok) return;
+      const { templates: list } = (await res.json()) as { templates: SavedTemplate[] };
+      setTemplates(list);
+      if (applyDefault && !appliedDefaultRef.current) {
+        appliedDefaultRef.current = true;
+        const def = list.find((t) => t.isDefault && !t.isGlobal);
+        if (def) setConfig(normalizeConfig(surface, def.config));
+      }
+    } catch {
+      /* templates are optional — a fetch failure leaves the editor usable */
+    }
+  }, [surface]);
+
+  useEffect(() => {
+    void refreshTemplates(true);
+  }, [refreshTemplates]);
+
+  // Apply a template's config into the live editor. Copy-on-apply for global: this
+  // only loads config into editor STATE — Save creates a workspace-owned row.
+  const applyTemplate = useCallback((t: SavedTemplate) => {
+    setConfig(normalizeConfig(surface, t.config));
+  }, [surface]);
+
+  const saveTemplate = useCallback(async () => {
+    const name = newTemplateName.trim();
+    if (!name || savingTemplate) return;
+    setSavingTemplate(true);
+    try {
+      const res = await fetch('/api/export/templates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ surface, name, config }),
+      });
+      if (!res.ok) {
+        showToast('Could not save the template', 'error');
+        return;
+      }
+      setNewTemplateName('');
+      await refreshTemplates(false);
+      showToast('Template saved', 'success');
+    } catch {
+      showToast('Could not save the template', 'error');
+    } finally {
+      setSavingTemplate(false);
+    }
+  }, [config, newTemplateName, refreshTemplates, savingTemplate, showToast, surface]);
+
+  const setDefaultTemplate = useCallback(async (id: string) => {
+    try {
+      const res = await fetch('/api/export/templates', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, isDefault: true }),
+      });
+      if (!res.ok) { showToast('Could not set the default', 'error'); return; }
+      await refreshTemplates(false);
+    } catch {
+      showToast('Could not set the default', 'error');
+    }
+  }, [refreshTemplates, showToast]);
+
+  const deleteTemplate = useCallback(async (id: string) => {
+    try {
+      const res = await fetch(`/api/export/templates?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+      if (!res.ok && res.status !== 204) { showToast('Could not delete the template', 'error'); return; }
+      await refreshTemplates(false);
+    } catch {
+      showToast('Could not delete the template', 'error');
+    }
+  }, [refreshTemplates, showToast]);
+
   // Upload a header image (background / logo) → the private export-assets bucket;
   // store the returned path in the config (the render resolves it to a data-URI).
   const [uploading, setUploading] = useState<null | 'bgAssetPath' | 'logoAssetPath'>(null);
@@ -271,6 +361,54 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
 
           {/* settings */}
           <div style={{ width: 320, flex: '0 0 320px', borderLeft: '1px solid var(--lp-border)', overflowY: 'auto', padding: 'var(--lp-space-5)', display: 'flex', flexDirection: 'column', gap: 'var(--lp-space-5)' }}>
+            <Group label="Templates">
+              {templates.length === 0 ? (
+                <p style={{ fontSize: 11, color: 'var(--lp-text-tertiary)' }}>No saved templates yet. Save the current settings below.</p>
+              ) : (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  {templates.map((t) => (
+                    <div key={t.id} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '6px 8px', borderRadius: 'var(--lp-radius-md)', border: '1px solid var(--lp-border)' }}>
+                      <button
+                        type="button" onClick={() => applyTemplate(t)} className="btn-transition"
+                        title="Apply this template" style={{ flex: 1, textAlign: 'left', border: 0, background: 'transparent', cursor: 'pointer', fontSize: 13, color: 'var(--lp-text)', display: 'inline-flex', alignItems: 'center', gap: 6 }}
+                      >
+                        {t.isDefault ? <Star className="h-3.5 w-3.5" style={{ color: 'var(--lp-orange)', fill: 'var(--lp-orange)' }} aria-hidden /> : null}
+                        {t.isGlobal ? <Globe className="h-3.5 w-3.5" style={{ color: 'var(--lp-text-tertiary)' }} aria-hidden /> : null}
+                        <span>{t.name}</span>
+                      </button>
+                      {!t.isGlobal ? (
+                        <>
+                          <button type="button" onClick={() => void setDefaultTemplate(t.id)} className="btn-transition" title="Set as workspace default" aria-label="Set as default" style={{ border: 0, background: 'transparent', cursor: 'pointer', color: t.isDefault ? 'var(--lp-orange)' : 'var(--lp-text-tertiary)', padding: 2 }}>
+                            <Star className="h-4 w-4" aria-hidden />
+                          </button>
+                          <button type="button" onClick={() => void deleteTemplate(t.id)} className="btn-transition" title="Delete template" aria-label="Delete" style={{ border: 0, background: 'transparent', cursor: 'pointer', color: 'var(--lp-text-tertiary)', padding: 2 }}>
+                            <Trash2 className="h-4 w-4" aria-hidden />
+                          </button>
+                        </>
+                      ) : (
+                        <span style={{ fontSize: 10, color: 'var(--lp-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Global</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+              <div style={{ display: 'flex', gap: 6 }}>
+                <input
+                  type="text" value={newTemplateName} onChange={(e) => setNewTemplateName(e.target.value)}
+                  placeholder="Save current as…" maxLength={80}
+                  onKeyDown={(e) => { if (e.key === 'Enter') void saveTemplate(); }}
+                  style={{ flex: 1, minWidth: 0, padding: '6px 8px', fontSize: 12, borderRadius: 'var(--lp-radius-md)', border: '1px solid var(--lp-border)', background: 'transparent', color: 'var(--lp-text)' }}
+                />
+                <button
+                  type="button" onClick={() => void saveTemplate()} disabled={!newTemplateName.trim() || savingTemplate} className="btn-transition"
+                  style={{ border: '1px solid var(--lp-border)', borderRadius: 'var(--lp-radius-md)', padding: '6px 10px', fontSize: 12, fontWeight: 600, color: 'var(--lp-text)', background: 'transparent', cursor: newTemplateName.trim() ? 'pointer' : 'default' }}
+                >
+                  {savingTemplate ? '…' : 'Save'}
+                </button>
+              </div>
+              <p style={{ fontSize: 11, color: 'var(--lp-text-tertiary)' }}>Templates are shared across this workspace’s tours. Applying a Global template copies it in — edit + Save to keep your own.</p>
+            </Group>
+
             <Group label="Sections">
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {config.sections.map((s) => (
