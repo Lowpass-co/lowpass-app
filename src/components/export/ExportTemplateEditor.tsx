@@ -645,7 +645,7 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
               </AccordionGroup>
             ) : null}
 
-            {surface === 'payroll' || surface === 'routing' ? (
+            {surface === 'payroll' || surface === 'routing' || surface === 'rooming' ? (
               <AccordionGroup id="daterange" label="Date range">
                 <DateRangeField range={config.dateRange} onChange={setRange} />
               </AccordionGroup>

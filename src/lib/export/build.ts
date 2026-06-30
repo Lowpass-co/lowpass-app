@@ -124,9 +124,12 @@ export async function buildRoomingExport(
   workspaceId: string,
   config: TemplateConfig,
 ): Promise<ExportBuild> {
-  const data = await loadRoomingExportData(supabase, tour, workspaceId);
+  const data = await loadRoomingExportData(supabase, tour, workspaceId, { range: config.dateRange });
   const logoDataUri = config.logo ? await resolveLogo(supabase, workspaceId, config, data.logoUrl) : null;
   const bgDataUri = await fetchExportAssetDataUri(supabase, workspaceId, config.header.bgAssetPath);
+
+  const rangeLabel = config.dateRange.from || config.dateRange.to ? tourDateRange(config.dateRange.from, config.dateRange.to) : null;
+  const subtitle = [`${data.hotels.length} hotel${data.hotels.length === 1 ? '' : 's'}`, rangeLabel].filter(Boolean).join(' · ');
 
   const html = renderDocument({
     letterhead: {
@@ -139,7 +142,7 @@ export async function buildRoomingExport(
     },
     pageSize: config.pageSize,
     title: 'Rooming list',
-    subtitle: `${data.hotels.length} hotel${data.hotels.length === 1 ? '' : 's'}`,
+    subtitle,
     general: config.general,
     header: config.header,
     bgDataUri,

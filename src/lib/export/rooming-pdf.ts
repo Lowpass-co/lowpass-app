@@ -26,28 +26,41 @@ function dateSpan(start: string | null, end: string | null): string {
   return `${f(start)} → ${f(end)}`;
 }
 
-function hotelBlock(h: RoomingHotel): string {
-  const contact = [h.address, h.city, h.phone].filter(Boolean).map((s) => esc(String(s))).join(' · ');
-  const span = dateSpan(h.spanStart, h.spanEnd);
-  const head = `
-    <div class="lp-sec-head">${esc(h.name || 'Hotel')}</div>
-    <div class="lp-native" style="margin:-2px 0 4px;">${[contact, span ? `Stay: ${esc(span)}` : ''].filter(Boolean).join('  ·  ')}</div>`;
+/** A small room-type chip (doc-local styling via the shell's tokens). */
+function roomChip(t: string | null): string {
+  if (!t) return '<span class="lp-native">—</span>';
+  return `<span style="display:inline-block;padding:1px 7px;border-radius:9px;font-size:8px;font-weight:600;background:var(--lp-bg-subtle);border:1px solid var(--lp-border);color:var(--lp-text-secondary);">${esc(t)}</span>`;
+}
 
-  if (h.rows.length === 0) {
-    return `${head}<p class="lp-native">No guests assigned.</p>`;
-  }
+function hotelBlock(h: RoomingHotel): string {
+  const contact = [h.address, h.city, h.phone].filter(Boolean).map((s) => esc(String(s))).join('  ·  ');
+  const span = dateSpan(h.spanStart, h.spanEnd);
+  const totalNights = h.rows.reduce((sum, r) => sum + r.nights, 0);
+  const summary = h.rows.length
+    ? `${h.rows.length} guest${h.rows.length === 1 ? '' : 's'} · ${totalNights} night${totalNights === 1 ? '' : 's'}${span ? ` · ${esc(span)}` : ''}`
+    : 'No guests assigned';
+
+  // Branded hotel header band (orange left accent + contact + summary).
+  const head = `
+    <div style="border-left:3px solid var(--lp-orange);padding:5px 0 5px 10px;margin:16px 0 4px;">
+      <div style="font-size:13px;font-weight:800;color:var(--lp-text);">${esc(h.name || 'Hotel')}</div>
+      ${contact ? `<div style="font-size:9px;color:var(--lp-text-tertiary);margin-top:1px;">${contact}</div>` : ''}
+      <div style="font-size:9px;color:var(--lp-text-secondary);margin-top:2px;font-weight:600;">${summary}</div>
+    </div>`;
+
+  if (h.rows.length === 0) return head;
+
   const rows = h.rows
     .map(
-      (r) => `<tr>
+      (r, idx) => `<tr${idx % 2 === 1 ? ' style="background:#faf8f5;"' : ''}>
         <td>${esc(r.guest || '—')}</td>
-        <td>${esc(r.roomType || '—')}${r.roomNumber ? ` <span class="lp-native">#${esc(r.roomNumber)}</span>` : ''}</td>
+        <td>${roomChip(r.roomType)}${r.roomNumber ? ` <span class="lp-native">#${esc(r.roomNumber)}</span>` : ''}</td>
         <td>${fmtDate(r.checkIn)}</td>
         <td>${fmtDate(r.checkOut)}</td>
         <td class="num">${r.nights}</td>
       </tr>`,
     )
     .join('');
-  const totalNights = h.rows.reduce((sum, r) => sum + r.nights, 0);
   return `${head}
     <table class="lp-tbl">
       <thead><tr><th>Guest</th><th>Room type</th><th>Check-in</th><th>Check-out</th><th class="num">Nights</th></tr></thead>

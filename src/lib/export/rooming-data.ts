@@ -56,8 +56,10 @@ export async function loadRoomingExportData(
   supabase: SupabaseClient,
   tour: { id: string; name: string; start_date: string | null; end_date: string | null; artist_id: string | null },
   workspaceId: string,
+  opts?: { range?: { from: string | null; to: string | null } },
 ): Promise<RoomingExportData> {
   const tourId = tour.id;
+  const range = opts?.range;
 
   const [hotelsRes, rosterRes, artistRes] = await Promise.all([
     // Same query the rooming page runs (hotel → rooms → assignments → guest).
@@ -100,6 +102,8 @@ export async function loadRoomingExportData(
       (room.room_assignments ?? [])
         // Mirror the page filter: roster members (or a not-yet-linked null id).
         .filter((ra) => !ra.person_id || rosterPersonIds.has(ra.person_id))
+        // Part E/G shared date range — keep stays that OVERLAP [from,to] (null = open).
+        .filter((ra) => (!range?.from || ra.ends_on >= range.from) && (!range?.to || ra.starts_on <= range.to))
         .map((ra) => {
           const person = Array.isArray(ra.persons) ? ra.persons[0] : ra.persons;
           return {

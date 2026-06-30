@@ -20,6 +20,25 @@ Reference tour: "Warning Support". Templates picker needs a NEW empty tour.
 | BUD-19 | FIXED | click-to-rename templates + consistent picker (Fix-pack C) |
 | BUD-20 | FIXED | summary reads live from `section_id`; no phantom sections (Fix-pack A) |
 
+## Document Export v2 — rooming polish (#8 — feat/export-v2-rooming)
+
+> The third external doc gets the E/F external-quality standard: the shared date
+> range + a cleaner branded hotel-grouped layout. (Format toggle + header
+> customisation already apply from Parts C/D.) jsonb config, no migration. tsc 0,
+> eslint 0, build green.
+
+- **EXP-V2G-01 — branded hotel layout.** Each hotel is a header band (orange left
+  accent + name + contact + a "N guests · M nights · stay span" summary), then the
+  guest table with **room-type chips**, zebra rows, and the nights subtotal. (Proven:
+  the orange accent band, the summary line, the Double/Single chips, zebra + subtotal
+  all render.)
+- **EXP-V2G-02 — shared date range.** The Part-E date-range control applies to
+  rooming — assignments whose stay OVERLAPS [from,to] are kept (default = whole tour).
+  Wired through the PDF + Excel paths; editor shows the Date range group for rooming.
+- **EXP-V2G-03 — matches payroll/routing quality + RLS.** Rooming reuses the shared
+  header/format controls (Parts C/D) + the running header (Part B); workspace-RLS
+  scoped (rooming is PII — a foreign tour 404s; the roster filter is unchanged).
+
 ## Document Export v2 — routing upgrade (#8 — feat/export-v2-routing)
 
 > Routing is external + was "almost ASCII." Two views, travel times, the shared

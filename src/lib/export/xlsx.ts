@@ -101,7 +101,7 @@ export async function buildXlsxExport(
     artistName = data.artist?.name ?? null;
     label = 'Budget';
   } else if (surface === 'rooming') {
-    const data = await loadRoomingExportData(supabase, tour, workspaceId);
+    const data = await loadRoomingExportData(supabase, tour, workspaceId, { range: config.dateRange });
     sheets = roomingSheets(data);
     artistName = data.artist?.name ?? null;
     label = 'Rooming';
