@@ -111,6 +111,39 @@ Reference tour: "Warning Support". Templates picker needs a NEW empty tour.
   restored, page size / scope clamped — so a bad config can never crash the builder
   or smuggle a non-section. Back-compat: `?scope=` / `?version=` query still work.
 
+## Document Export — Payroll surface (#8 — feat/export-payroll)
+
+> The third export surface, config-aware from birth (inherits the P1+P2 template
+> system: section show/hide/reorder + the full styling panel). `loadPayrollExportData`
+> mirrors the Payroll page's loaders (tour_personnel roster + personnel_rates +
+> payroll_entries) and computes every total via the SHARED pure `src/lib/payroll/
+> fees.ts` (`countDayStatuses` / `computeTotalFee` / `computeTotalPerDiem`) — NOT
+> re-derived. `buildPayrollBodyHtml` emits a run sheet + per-person statements (one
+> page each) in ONE multi-page PDF. Routes: `POST /api/payroll/[tourId]/export/{pdf,
+> preview}`. UI: "Export…" on the Payroll surface opens the shared editor
+> (surface="payroll"). tsc 0, eslint 0, build green.
+
+- **EXP-PAY-01 — run sheet totals match the Payroll tab.** Every crew member in one
+  table: role, day-type rates (Show/Off/Reh), day counts (S/O/R), fee, per-diem,
+  total + a grand-total row. The per-person fee = `computeTotalFee(rate, counts,
+  advance)` summed over the person's weekly entries, per-diem = `computeTotalPerDiem`
+  — the exact fees.ts math the Payroll surface uses, so the run-sheet totals
+  reconcile with the Payroll tab to the penny (proven: `grandTotal === Σ person
+  totals`; each `person.total === fee + perDiemTotal`).
+- **EXP-PAY-02 — statements paginate one-per-person.** After the run sheet, each
+  crew member gets their own page (`lp-page-break`): weekly schedule (Show/Off/Reh +
+  fee/per-diem per week), rate breakdown (days × rate, advance if any, per-diem), and
+  the **Amount due**. (Proven: N persons → N page-breaks; advance line appears only
+  when the person has an advance.)
+- **EXP-PAY-03 — internal rate NEVER appears.** `personnel_rates.internal_rate` (the
+  company's cost — D5) is never SELECTed by the loader and never reaches the builder;
+  it appears in neither the run sheet nor any statement. (Proven: the string
+  `internal` is absent from the rendered HTML; the loader's select list omits it.)
+- **EXP-PAY-04 — config-aware + RLS gated.** The run sheet / statements sections
+  show/hide + reorder (preview + PDF); the Part-A styling panel applies. READ-ONLY,
+  workspace-RLS scoped — a foreign-workspace tour 404s (payroll is financial PII, no
+  cross-workspace leak). Currency from `tour.currency`.
+
 ## Document Export — Template Builder Phase 2: styling (#8 — feat/export-template-p2)
 
 > The editor gains the daysheets-style styling layer: a **General** panel (font

@@ -19,6 +19,7 @@ import { PayrollRatesSpreadsheet } from './PayrollRatesSpreadsheet';
 import { PayrollDaysMatrix } from './PayrollDaysMatrix';
 import { usePayrollGrid, type RoutingDay } from './usePayrollGrid';
 import { AddPersonToTourButton } from '@/components/operations/personnel/AddPersonToTourButton';
+import { PayrollExportButton } from '@/components/payroll/PayrollExportButton';
 
 interface PayrollViewProps {
   tourId: string;
@@ -66,13 +67,16 @@ export function PayrollView({
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
         <h1 style={{ fontSize: 20, fontWeight: 700, color: 'var(--lp-text)' }}>{tourName} — Payroll</h1>
-        <AddPersonToTourButton
-          tourId={tourId}
-          excludePersonIds={excludePersonIds}
-          onAdded={(result) => {
-            if (result?.rateCard) setRates((prev) => [...prev, result.rateCard as Record<string, unknown>]);
-          }}
-        />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <PayrollExportButton tourId={tourId} />
+          <AddPersonToTourButton
+            tourId={tourId}
+            excludePersonIds={excludePersonIds}
+            onAdded={(result) => {
+              if (result?.rateCard) setRates((prev) => [...prev, result.rateCard as Record<string, unknown>]);
+            }}
+          />
+        </div>
       </div>
 
       <div

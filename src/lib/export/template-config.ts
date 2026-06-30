@@ -16,7 +16,7 @@
    here later with no rework.
    ============================================ */
 
-export type ExportSurface = 'budget' | 'rooming';
+export type ExportSurface = 'budget' | 'rooming' | 'payroll';
 export type PageSize = 'A4' | 'Letter';
 export type BudgetScope = 'projected' | 'actual' | 'both';
 
@@ -94,6 +94,7 @@ export interface TemplateConfig {
  *  ids can be appended later without breaking a saved config. */
 export const BUDGET_SECTION_IDS = ['pnl-summary', 'income-detail', 'expense-detail'] as const;
 export const ROOMING_SECTION_IDS = ['hotels'] as const;
+export const PAYROLL_SECTION_IDS = ['run-sheet', 'statements'] as const;
 
 /** Human labels for the editor's section list. */
 export const SECTION_LABELS: Record<string, string> = {
@@ -101,6 +102,8 @@ export const SECTION_LABELS: Record<string, string> = {
   'income-detail': 'Income detail (by show)',
   'expense-detail': 'Expense detail (by section)',
   hotels: 'Hotel rooming list',
+  'run-sheet': 'Run sheet (all crew)',
+  statements: 'Per-person statements',
 };
 
 export const HEADER_ELEMENT_LABELS: Record<HeaderElementId, string> = {
@@ -166,8 +169,21 @@ export const DEFAULT_ROOMING_CONFIG: TemplateConfig = {
   footer: DEFAULT_FOOTER,
 };
 
+export const DEFAULT_PAYROLL_CONFIG: TemplateConfig = {
+  v: 1,
+  surface: 'payroll',
+  pageSize: 'A4',
+  logo: true,
+  sections: PAYROLL_SECTION_IDS.map((id) => ({ id, show: true })),
+  general: DEFAULT_GENERAL,
+  header: DEFAULT_HEADER,
+  footer: DEFAULT_FOOTER,
+};
+
 export function defaultConfig(surface: ExportSurface): TemplateConfig {
-  return surface === 'budget' ? structuredClone(DEFAULT_BUDGET_CONFIG) : structuredClone(DEFAULT_ROOMING_CONFIG);
+  if (surface === 'budget') return structuredClone(DEFAULT_BUDGET_CONFIG);
+  if (surface === 'payroll') return structuredClone(DEFAULT_PAYROLL_CONFIG);
+  return structuredClone(DEFAULT_ROOMING_CONFIG);
 }
 
 const PAGE_SIZES: PageSize[] = ['A4', 'Letter'];
