@@ -54,6 +54,36 @@ function formatPos(label: string, pos: number | null): string {
   return `${label}-${pos}`;
 }
 
+/** Map a resolved channel_list section → the export input/output rows. Shared by
+ *  the tour-scoped loader AND the stage-plot "include input list" combine. */
+export function channelDataFromSection(section: ResolvedSection | null): { inputs: ChannelInputRow[]; outputs: ChannelOutputRow[] } {
+  const subSnakes: SubSnake[] = section?.subSnakes ?? [];
+  const stageBoxes: StageBox[] = section?.stageBoxes ?? [];
+  const rows: ChannelListRow[] = section?.rows ?? [];
+  const inputRows = rows.filter((r) => (r.row_kind ?? 'input') !== 'output').sort((a, b) => a.row_index - b.row_index);
+  const outputRows = rows.filter((r) => (r.row_kind ?? 'input') === 'output').sort((a, b) => a.row_index - b.row_index);
+  const inputs: ChannelInputRow[] = inputRows.map((r) => ({
+    index: r.row_index,
+    source: (r.channel_name ?? '').trim() || '—',
+    micDi: [r.mic, r.di].filter((x) => (x ?? '').trim()).join(' · ') || '—',
+    subSnake: formatPos(labelLookup(subSnakes, r.sub_snake_id), r.sub_snake_position),
+    stageIO: formatPos(labelLookup(stageBoxes, r.stage_box_id), r.stage_box_position),
+    insert: (r.position ?? '').trim() || '—',
+    phantom: r.phantom_power === true ? 'On' : r.phantom_power === false ? 'Off' : '—',
+    notes: (r.notes ?? '').trim(),
+  }));
+  const outputs: ChannelOutputRow[] = outputRows.map((r) => ({
+    index: r.row_index,
+    item: (r.output_item ?? '').trim() || '—',
+    destination: (r.output_description ?? r.output_destination ?? '').trim() || '—',
+    qty: typeof r.output_qty === 'number' ? r.output_qty : null,
+    stereo: r.output_is_stereo === true,
+    position: (r.output_position ?? '').trim(),
+    notes: (r.output_notes ?? '').trim(),
+  }));
+  return { inputs, outputs };
+}
+
 // NOTE: no workspaceId param — channel_list_rows / sub_snakes / stage_boxes are
 // scoped via rider_packs.workspace_id (RLS), and the route already verified the tour
 // belongs to the workspace. resolvePack runs under the caller's RLS session.
@@ -85,33 +115,7 @@ export async function loadChannelListExportData(
     }
   }
 
-  const subSnakes: SubSnake[] = section?.subSnakes ?? [];
-  const stageBoxes: StageBox[] = section?.stageBoxes ?? [];
-  const rows: ChannelListRow[] = section?.rows ?? [];
-
-  const inputRows = rows.filter((r) => (r.row_kind ?? 'input') !== 'output').sort((a, b) => a.row_index - b.row_index);
-  const outputRows = rows.filter((r) => (r.row_kind ?? 'input') === 'output').sort((a, b) => a.row_index - b.row_index);
-
-  const inputs: ChannelInputRow[] = inputRows.map((r) => ({
-    index: r.row_index,
-    source: (r.channel_name ?? '').trim() || '—',
-    micDi: [r.mic, r.di].filter((x) => (x ?? '').trim()).join(' · ') || '—',
-    subSnake: formatPos(labelLookup(subSnakes, r.sub_snake_id), r.sub_snake_position),
-    stageIO: formatPos(labelLookup(stageBoxes, r.stage_box_id), r.stage_box_position),
-    insert: (r.position ?? '').trim() || '—',
-    phantom: r.phantom_power === true ? 'On' : r.phantom_power === false ? 'Off' : '—',
-    notes: (r.notes ?? '').trim(),
-  }));
-
-  const outputs: ChannelOutputRow[] = outputRows.map((r) => ({
-    index: r.row_index,
-    item: (r.output_item ?? '').trim() || '—',
-    destination: (r.output_description ?? r.output_destination ?? '').trim() || '—',
-    qty: typeof r.output_qty === 'number' ? r.output_qty : null,
-    stereo: r.output_is_stereo === true,
-    position: (r.output_position ?? '').trim(),
-    notes: (r.output_notes ?? '').trim(),
-  }));
+  const { inputs, outputs } = channelDataFromSection(section);
 
   const artistRow = artistRes.data as { id: string; name: string; branding: unknown; spotify_id: string | null; spotify_image_url: string | null } | null;
   const logoUrl = artistRow ? await resolveArtistLogoUrl(artistRow) : null;

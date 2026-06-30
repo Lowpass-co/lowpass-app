@@ -20,6 +20,42 @@ Reference tour: "Warning Support". Templates picker needs a NEW empty tour.
 | BUD-19 | FIXED | click-to-rename templates + consistent picker (Fix-pack C) |
 | BUD-20 | FIXED | summary reads live from `section_id`; no phantom sections (Fix-pack A) |
 
+## Document Export — Stage Plot surface (6th) (#8 — feat/sprint-stage-plot)
+
+> The 6th export surface. **Plot-id keyed** (a stage plot lives in the artist
+> library / a rider pack, not a tour) — routes are `/api/stage-plots/[id]/export/
+> {pdf,preview}`. The proven server-safe `buildStagePlotSvg` was **extracted** from
+> the retired `pdf-render.ts` into `src/lib/stage-plot/stageplot-svg.ts` (per-request
+> custom-icon map, race-free), reused by the unified shell; the old `pdf-render.ts` +
+> the `dev-pdf` route + the editor's client print-export were **deleted** (reuse +
+> retire, no parallel copy). Two coarse sections: `stage-diagram` (default on) +
+> `input-list` (default OFF → diagram-only). Excel is hidden for stage-plot (the
+> shared xlsx route is tour-id keyed). tsc 0, eslint 0, build green. Functional smoke
+> via `buildStagePlotBodyHtml` (node strip-types harness).
+
+- **EXP-PLOT-01 — diagram renders to the document.** Diagram-only (default config)
+  → the body contains the reconstructed `<svg class="lp-plot-svg">` with stage
+  orientation labels (US/DS/SR/SL/AUDIENCE) and per-item labels; NO input-list
+  section, NO channel rows. (Proven: kick + amp icons resolved from the built-in
+  registry — the "Kick" label only renders when `getIcon` resolves — and the
+  AUDIENCE marker present; "Input list"/"Snare Top" absent.)
+- **EXP-PLOT-02 — "include input list" toggle adds the table.** Turning the
+  `input-list` section on → the diagram is rendered AND the paired channel/input list
+  is rendered beneath it (the classic combined doc): Input list table + Outputs
+  (IEM / mix). Order: diagram ABOVE the list. (Proven: `<svg>` index < "Input list"
+  index; "Snare Top" + "IEM 1" rows present.)
+- **EXP-PLOT-03 — graceful no-paired-list.** Input-list ON but no channel_list pack
+  resolves (linked → tour → artist precedence, mirrors `loadPlotChannels`) → the
+  diagram still renders + a friendly "No channel list is paired" note (no crash).
+- **EXP-PLOT-04 — config drives order + DEFAULT byte-for-byte.** Section reorder is
+  honoured (input-list above diagram when reordered). `normalizeConfig('stage-plot',
+  undefined)` === `DEFAULT_STAGE_PLOT_CONFIG` (and `defaultConfig('stage-plot')`
+  matches); a garbage/foreign config normalizes to a valid stage-plot config (surface
+  forced, stage-plot section ids restored). The combined `<ExportButton
+  surface="stage-plot" tourId={plotId}>` mounts on both the artist-library plot
+  editor and the operations stage-plot (both via `StagePlotEditorClient`'s `actions`
+  slot). READ-ONLY; RLS via `loadStagePlot` (a foreign plot 404s).
+
 ## Document Export — Channel List surface (5th) (#8 — feat/export-channel-list)
 
 > The 5th export surface, same per-surface pattern as rooming/routing. No migration

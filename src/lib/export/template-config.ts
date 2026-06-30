@@ -16,7 +16,7 @@
    here later with no rework.
    ============================================ */
 
-export type ExportSurface = 'budget' | 'rooming' | 'payroll' | 'routing' | 'channel-list';
+export type ExportSurface = 'budget' | 'rooming' | 'payroll' | 'routing' | 'channel-list' | 'stage-plot';
 export type PageSize = 'A4' | 'Letter';
 /** Output format — a styled print PDF, or a flat machine-readable Excel grid. */
 export type ExportFormat = 'pdf' | 'excel';
@@ -160,6 +160,7 @@ export const ROOMING_SECTION_IDS = ['hotels'] as const;
 export const PAYROLL_SECTION_IDS = ['run-sheet', 'statements'] as const;
 export const ROUTING_SECTION_IDS = ['days', 'advance-summary'] as const;
 export const CHANNEL_LIST_SECTION_IDS = ['inputs', 'outputs'] as const;
+export const STAGE_PLOT_SECTION_IDS = ['stage-diagram', 'input-list'] as const;
 
 /** Human labels for the editor's section list. */
 export const SECTION_LABELS: Record<string, string> = {
@@ -173,6 +174,8 @@ export const SECTION_LABELS: Record<string, string> = {
   'advance-summary': 'Advance summary (per day)',
   inputs: 'Input list',
   outputs: 'Outputs (IEM / mix)',
+  'stage-diagram': 'Stage diagram',
+  'input-list': 'Input list (combined)',
 };
 
 export const HEADER_ELEMENT_LABELS: Record<HeaderElementId, string> = {
@@ -303,11 +306,30 @@ export const DEFAULT_CHANNEL_LIST_CONFIG: TemplateConfig = {
   routing: DEFAULT_ROUTING_OPTIONS,
 };
 
+export const DEFAULT_STAGE_PLOT_CONFIG: TemplateConfig = {
+  v: 1,
+  surface: 'stage-plot',
+  format: 'pdf',
+  pageSize: 'A4',
+  logo: true,
+  sections: [
+    { id: 'stage-diagram', show: true },
+    { id: 'input-list', show: false },
+  ],
+  general: DEFAULT_GENERAL,
+  header: DEFAULT_HEADER,
+  footer: DEFAULT_FOOTER,
+  dateRange: DEFAULT_DATE_RANGE,
+  payroll: DEFAULT_PAYROLL_OPTIONS,
+  routing: DEFAULT_ROUTING_OPTIONS,
+};
+
 export function defaultConfig(surface: ExportSurface): TemplateConfig {
   if (surface === 'budget') return structuredClone(DEFAULT_BUDGET_CONFIG);
   if (surface === 'payroll') return structuredClone(DEFAULT_PAYROLL_CONFIG);
   if (surface === 'routing') return structuredClone(DEFAULT_ROUTING_CONFIG);
   if (surface === 'channel-list') return structuredClone(DEFAULT_CHANNEL_LIST_CONFIG);
+  if (surface === 'stage-plot') return structuredClone(DEFAULT_STAGE_PLOT_CONFIG);
   return structuredClone(DEFAULT_ROOMING_CONFIG);
 }
 

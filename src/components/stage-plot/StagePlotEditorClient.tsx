@@ -9,6 +9,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { StagePlotEditor } from '@/components/stage-plot/StagePlotEditor';
+import { ExportButton } from '@/components/export/ExportButton';
 import { registerCustomIcons } from '@/lib/stage-plot/icons';
 import type { IconDescriptor } from '@/lib/stage-plot/icons/types';
 import type { Channel, EditorItem, EditorPlot } from '@/lib/stage-plot/editor-types';
@@ -63,7 +64,14 @@ export function StagePlotEditorClient({ plotId }: { plotId: string }) {
   }
   return (
     <div style={{ height: 'calc(100vh - 64px)' }}>
-      <StagePlotEditor initialPlot={data.plot} initialItems={data.items} initialCustomIcons={data.customs} channels={data.channels} onChange={persist} />
+      <StagePlotEditor
+        initialPlot={data.plot}
+        initialItems={data.items}
+        initialCustomIcons={data.customs}
+        channels={data.channels}
+        onChange={persist}
+        actions={<ExportButton surface="stage-plot" tourId={plotId} title="Export a branded stage-plot PDF" />}
+      />
     </div>
   );
 }

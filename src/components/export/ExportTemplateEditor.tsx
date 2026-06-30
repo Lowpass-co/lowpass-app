@@ -155,7 +155,10 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
 
   const LAST_USED_KEY = `lp-export-last-template:${surface}`;
 
-  const base = `/api/${surface}/${encodeURIComponent(tourId)}/export`;
+  // Stage-plot is plot-id keyed (/api/stage-plots/[id]/…); the rest are tour-id keyed.
+  const base = surface === 'stage-plot'
+    ? `/api/stage-plots/${encodeURIComponent(tourId)}/export`
+    : `/api/${surface}/${encodeURIComponent(tourId)}/export`;
 
   // Debounced live preview — POST the live config, render the returned HTML into
   // the iframe. The server builder is the SAME one the PDF route uses → WYSIWYG.
@@ -502,7 +505,8 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
       : surface === 'payroll' ? 'Export Payroll'
         : surface === 'routing' ? 'Export Routing'
           : surface === 'channel-list' ? 'Export Channel list'
-            : 'Export Rooming list';
+            : surface === 'stage-plot' ? 'Export Stage plot'
+              : 'Export Rooming list';
 
   // Portal to <body> so a transformed/positioned app-chrome ancestor (the
   // ProductHeader) can't constrain or bleed through this full-viewport modal.
@@ -588,9 +592,13 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
 
           {/* settings */}
           <div style={{ width: 320, flex: '0 0 320px', borderLeft: '1px solid var(--lp-border)', overflowY: 'auto', padding: 'var(--lp-space-5)', display: 'flex', flexDirection: 'column', gap: 'var(--lp-space-5)' }}>
-            <AccordionGroup id="format" label="Format" defaultOpen>
-              <Segmented options={FORMATS} value={config.format} onChange={(v) => setConfig((c) => ({ ...c, format: v }))} />
-            </AccordionGroup>
+            {/* Stage-plot is PDF-only — the shared xlsx route is tour-id keyed; a plot
+                isn't a tour, and the diagram has no tabular Excel form. */}
+            {surface === 'stage-plot' ? null : (
+              <AccordionGroup id="format" label="Format" defaultOpen>
+                <Segmented options={FORMATS} value={config.format} onChange={(v) => setConfig((c) => ({ ...c, format: v }))} />
+              </AccordionGroup>
+            )}
 
             <AccordionGroup id="templates" label="Templates" defaultOpen>
               {templates.length === 0 ? (

@@ -15,7 +15,6 @@ import type { IconDescriptor } from '@/lib/stage-plot/icons/types';
 import { IconPalette } from '@/components/stage-plot/IconPalette';
 import { ItemProperties } from '@/components/stage-plot/ItemProperties';
 import { StageCanvas } from '@/components/stage-plot/StageCanvas';
-import { buildStagePlotPdfHtml } from '@/lib/stage-plot/pdf-render';
 import { DEFAULT_PLOT, extractTitleBarFromItems, type Channel, type EditorItem, type EditorPlot } from '@/lib/stage-plot/editor-types';
 
 const uid = (): string =>
@@ -276,33 +275,6 @@ export function StagePlotEditor({ initialPlot, initialItems, channels: initialCh
     return () => window.removeEventListener('keydown', onKey);
   }, [selectedIds, deleteSelected, duplicateSelected]);
 
-  const [exporting, setExporting] = useState(false);
-  // Client-side print → "Save as PDF" (env-free, works everywhere).
-  // The server Puppeteer route (pdfEndpoint) renders the same HTML
-  // for automated / branded exports in production.
-  const exportPdf = useCallback(() => {
-    setExporting(true);
-    try {
-      const html = buildStagePlotPdfHtml(plot, items, {
-        title: plot.name,
-        timestamp: new Date().toISOString().slice(0, 16).replace('T', ' '),
-      });
-      const w = window.open('', '_blank');
-      if (!w) {
-        alert('Allow popups to export.');
-        return;
-      }
-      w.document.write(html);
-      w.document.close();
-      w.onload = () => {
-        w.focus();
-        w.print();
-      };
-    } finally {
-      setExporting(false);
-    }
-  }, [plot, items]);
-
   const selected = selectedIds.length === 1 ? items.find((it) => it.id === selectedIds[0]) ?? null : null;
 
   return (
@@ -316,14 +288,6 @@ export function StagePlotEditor({ initialPlot, initialItems, channels: initialCh
         <span style={{ fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-tertiary)' }}>{items.length} items</span>
         <button type="button" onClick={addText} style={toolBtn}>+ Text</button>
         <button type="button" onClick={addArrow} style={toolBtn}>+ Arrow</button>
-        <button
-          type="button"
-          onClick={exportPdf}
-          disabled={exporting}
-          style={{ fontSize: 'var(--lp-text-xs)', padding: '5px 12px', borderRadius: 6, border: '1px solid var(--lp-border)', background: 'var(--lp-surface)', color: 'var(--lp-text)', cursor: exporting ? 'default' : 'pointer' }}
-        >
-          {exporting ? 'Exporting…' : 'Export PDF'}
-        </button>
         {actions}
       </div>
       {(plot.subtitle || plot.tmName || plot.tmPhone || plot.tmEmail || plot.versionLabel) && (

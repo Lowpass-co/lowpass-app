@@ -60,6 +60,12 @@ function renderOutputs(data: ChannelListExportData): string {
     </table>`;
 }
 
+/** Inputs + outputs tables, unconditionally — for the stage-plot "include input
+ *  list" combine (which renders the diagram, then this beneath). */
+export function renderChannelListInputsOutputs(data: ChannelListExportData): string {
+  return renderInputs(data) + renderOutputs(data);
+}
+
 /** Template builder. `config.sections` (order + visibility) drives WHICH blocks
  *  render. DEFAULT: input list then outputs. Presentation only. */
 export function buildChannelListBodyHtml(data: ChannelListExportData, config: TemplateConfig): string {
