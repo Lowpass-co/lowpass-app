@@ -216,7 +216,8 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
     }
   }, [base, busy, config, onClose, showToast, surface, versionId]);
 
-  const title = surface === 'budget' ? 'Export Budget' : surface === 'payroll' ? 'Export Payroll' : 'Export Rooming list';
+  const title =
+    surface === 'budget' ? 'Export Budget' : surface === 'payroll' ? 'Export Payroll' : surface === 'routing' ? 'Export Routing' : 'Export Rooming list';
 
   return (
     <div

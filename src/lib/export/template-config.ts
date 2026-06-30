@@ -16,7 +16,7 @@
    here later with no rework.
    ============================================ */
 
-export type ExportSurface = 'budget' | 'rooming' | 'payroll';
+export type ExportSurface = 'budget' | 'rooming' | 'payroll' | 'routing';
 export type PageSize = 'A4' | 'Letter';
 export type BudgetScope = 'projected' | 'actual' | 'both';
 
@@ -95,6 +95,7 @@ export interface TemplateConfig {
 export const BUDGET_SECTION_IDS = ['pnl-summary', 'income-detail', 'expense-detail'] as const;
 export const ROOMING_SECTION_IDS = ['hotels'] as const;
 export const PAYROLL_SECTION_IDS = ['run-sheet', 'statements'] as const;
+export const ROUTING_SECTION_IDS = ['days', 'advance-summary'] as const;
 
 /** Human labels for the editor's section list. */
 export const SECTION_LABELS: Record<string, string> = {
@@ -104,6 +105,8 @@ export const SECTION_LABELS: Record<string, string> = {
   hotels: 'Hotel rooming list',
   'run-sheet': 'Run sheet (all crew)',
   statements: 'Per-person statements',
+  days: 'Routing (all days)',
+  'advance-summary': 'Advance summary (per day)',
 };
 
 export const HEADER_ELEMENT_LABELS: Record<HeaderElementId, string> = {
@@ -180,9 +183,26 @@ export const DEFAULT_PAYROLL_CONFIG: TemplateConfig = {
   footer: DEFAULT_FOOTER,
 };
 
+/** Routing: the advance summary is OFF by default (D7 — itinerary first; the
+ *  per-day advance summary is an opt-in toggle). */
+export const DEFAULT_ROUTING_CONFIG: TemplateConfig = {
+  v: 1,
+  surface: 'routing',
+  pageSize: 'A4',
+  logo: true,
+  sections: [
+    { id: 'days', show: true },
+    { id: 'advance-summary', show: false },
+  ],
+  general: DEFAULT_GENERAL,
+  header: DEFAULT_HEADER,
+  footer: DEFAULT_FOOTER,
+};
+
 export function defaultConfig(surface: ExportSurface): TemplateConfig {
   if (surface === 'budget') return structuredClone(DEFAULT_BUDGET_CONFIG);
   if (surface === 'payroll') return structuredClone(DEFAULT_PAYROLL_CONFIG);
+  if (surface === 'routing') return structuredClone(DEFAULT_ROUTING_CONFIG);
   return structuredClone(DEFAULT_ROOMING_CONFIG);
 }
 
@@ -278,8 +298,10 @@ export function normalizeConfig(surface: ExportSurface, input: unknown): Templat
         ordered.push({ id, show: (s as TemplateSection).show !== false });
       }
     }
-    // Append any canonical section the input omitted (kept visible by default).
-    for (const s of base.sections) if (!seen.has(s.id)) ordered.push({ id: s.id, show: true });
+    // Append any canonical section the input omitted, keeping ITS default
+    // visibility (so e.g. routing's advance-summary stays off-by-default when
+    // a partial config omits it).
+    for (const s of base.sections) if (!seen.has(s.id)) ordered.push({ id: s.id, show: s.show });
     if (ordered.length) base.sections = ordered;
   }
 

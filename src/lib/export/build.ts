@@ -16,6 +16,8 @@ import { loadRoomingExportData } from '@/lib/export/rooming-data';
 import { buildRoomingBodyHtml } from '@/lib/export/rooming-pdf';
 import { loadPayrollExportData } from '@/lib/export/payroll-data';
 import { buildPayrollBodyHtml } from '@/lib/export/payroll-pdf';
+import { loadRoutingExportData } from '@/lib/export/routing-data';
+import { buildRoutingBodyHtml } from '@/lib/export/routing-pdf';
 import { renderDocument } from '@/lib/export/shell';
 import { fetchLogoDataUri, fetchExportAssetDataUri } from '@/lib/export/logo';
 import type { FooterStyle, TemplateConfig } from '@/lib/export/template-config';
@@ -181,5 +183,43 @@ export async function buildPayrollExport(
 
   const footerNote = `${data.artist?.name ? `${data.artist.name} — ` : ''}${data.tour.name} · Payroll`;
   const filename = `${sanitize(data.artist?.name ?? '', '')} — ${sanitize(data.tour.name, 'Payroll')} — Payroll.pdf`.replace(/^ — /, '');
+  return { html, footerNote, filename, footer: config.footer };
+}
+
+export interface RoutingTourMeta {
+  id: string; name: string;
+  start_date: string | null; end_date: string | null; artist_id: string | null;
+}
+
+export async function buildRoutingExport(
+  supabase: SupabaseClient,
+  tour: RoutingTourMeta,
+  workspaceId: string,
+  config: TemplateConfig,
+): Promise<ExportBuild> {
+  const data = await loadRoutingExportData(supabase, tour);
+  const logoDataUri = config.logo ? await resolveLogo(supabase, workspaceId, config, data.logoUrl) : null;
+  const bgDataUri = await fetchExportAssetDataUri(supabase, workspaceId, config.header.bgAssetPath);
+
+  const html = renderDocument({
+    letterhead: {
+      artistName: data.artist?.name ?? null,
+      tourName: data.tour.name,
+      tourDates: tourDateRange(data.tour.start_date, data.tour.end_date),
+      logoDataUri,
+      showLogo: config.logo,
+      generatedOn: nowStamp(),
+    },
+    pageSize: config.pageSize,
+    title: 'Routing',
+    subtitle: `${data.days.length} day${data.days.length === 1 ? '' : 's'}`,
+    general: config.general,
+    header: config.header,
+    bgDataUri,
+    bodyHtml: buildRoutingBodyHtml(data, config),
+  });
+
+  const footerNote = `${data.artist?.name ? `${data.artist.name} — ` : ''}${data.tour.name} · Routing`;
+  const filename = `${sanitize(data.artist?.name ?? '', '')} — ${sanitize(data.tour.name, 'Routing')} — Routing.pdf`.replace(/^ — /, '');
   return { html, footerNote, filename, footer: config.footer };
 }

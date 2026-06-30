@@ -111,6 +111,34 @@ Reference tour: "Warning Support". Templates picker needs a NEW empty tour.
   restored, page size / scope clamped — so a bad config can never crash the builder
   or smuggle a non-section. Back-compat: `?scope=` / `?version=` query still work.
 
+## Document Export — Routing surface (#8 — feat/export-routing)
+
+> The fourth export surface, config-aware. `loadRoutingExportData` reads the
+> `routing` table (one row per tour day — migration 001 + the canonical-venue join,
+> migration 214) ordered by date; `buildRoutingBodyHtml` emits one row per day
+> (date · day-type · city · venue + address sub-line · capacity), ALL days (show +
+> travel/off/etc. — D7), plus an OPTIONAL per-day **advance summary** (a best-effort
+> read of `advance_instances` status + filled-field counts; the data is free-form so
+> we summarise rather than guess labels). The advance summary is a section toggle
+> **OFF by default** (D7). NOT a daysheet (Adam uses Master Tour for those). Routes:
+> `POST /api/routing/[tourId]/export/{pdf,preview}`. UI: "Export…" on the Routing
+> surface. tsc 0, eslint 0, build green.
+
+- **EXP-ROUTE-01 — all routing days listed.** Every day of the tour appears (not just
+  shows): date · day-type · city · venue (+ address sub-line) · capacity, ordered by
+  date. Non-show days (Travel/Off/Press/etc.) are included (proven: a travel + off +
+  show day all render; the day-type column labels each).
+- **EXP-ROUTE-02 — advance summary appears only when toggled.** The default routing
+  PDF is the itinerary table only; the per-day advance summary section is OFF by
+  default (D7). Toggling it on (editor / config) adds a best-effort per-day block
+  (status + filled-field count) for the days that have an advance instance (proven:
+  default has no "Advance summary"; toggled-on lists only days with an advance; a
+  partial config that omits the section keeps it OFF via `normalizeConfig`).
+- **EXP-ROUTE-03 — config-aware + RLS gated.** The days / advance-summary sections
+  show/hide + reorder (preview + PDF); the Part-A styling panel applies. READ-ONLY,
+  workspace-RLS scoped — a foreign-workspace tour 404s. Venue/city prefer the
+  canonical-venue join, falling back to the denormalised routing columns.
+
 ## Document Export — Payroll surface (#8 — feat/export-payroll)
 
 > The third export surface, config-aware from birth (inherits the P1+P2 template
