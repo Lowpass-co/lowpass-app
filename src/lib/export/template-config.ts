@@ -102,12 +102,17 @@ export interface DateRange {
   to: string | null;
 }
 
-/** Routing-surface options (Part F). */
-export type RoutingView = 'list' | 'calendar';
+/** Routing-surface options (Part F + v2.1 Part D). */
+export type RoutingView = 'list' | 'calendar' | 'map' | 'both';
+export interface RoutingColumns {
+  country: boolean; // default on (v2.1 D)
+  capacity: boolean; // default OFF (v2.1 D — removed from the list by default)
+}
 export interface RoutingOptions {
-  view: RoutingView; // 'list' = the itinerary table; 'calendar' = a month grid
+  view: RoutingView; // list | calendar | map (placeholder) | both (list + map)
   calendarTheme: 'light' | 'dark'; // calendar view only
   travelTimes: boolean; // show leg travel time between days (cache/approx)
+  columns: RoutingColumns; // list column picker
 }
 
 /** Payroll-surface options (Part E). */
@@ -212,7 +217,7 @@ export const DEFAULT_FOOTER: FooterStyle = {
 
 export const DEFAULT_DATE_RANGE: DateRange = { from: null, to: null };
 export const DEFAULT_PAYROLL_OPTIONS: PayrollOptions = { mode: 'combined', personId: null, selectedPersonIds: null, daysGrid: true, venuePerDay: false, advance: true };
-export const DEFAULT_ROUTING_OPTIONS: RoutingOptions = { view: 'list', calendarTheme: 'light', travelTimes: false };
+export const DEFAULT_ROUTING_OPTIONS: RoutingOptions = { view: 'list', calendarTheme: 'light', travelTimes: false, columns: { country: true, capacity: false } };
 
 export const DEFAULT_BUDGET_CONFIG: TemplateConfig = {
   v: 1,
@@ -414,12 +419,18 @@ function normalizePayroll(input: unknown): PayrollOptions {
 }
 
 function normalizeRouting(input: unknown): RoutingOptions {
-  const base: RoutingOptions = { ...DEFAULT_ROUTING_OPTIONS };
+  const base: RoutingOptions = { ...DEFAULT_ROUTING_OPTIONS, columns: { ...DEFAULT_ROUTING_OPTIONS.columns } };
   if (!input || typeof input !== 'object') return base;
   const r = input as Partial<RoutingOptions>;
-  if (r.view === 'list' || r.view === 'calendar') base.view = r.view;
+  if (r.view === 'list' || r.view === 'calendar' || r.view === 'map' || r.view === 'both') base.view = r.view;
   if (r.calendarTheme === 'light' || r.calendarTheme === 'dark') base.calendarTheme = r.calendarTheme;
   base.travelTimes = bool(r.travelTimes, DEFAULT_ROUTING_OPTIONS.travelTimes);
+  if (r.columns && typeof r.columns === 'object') {
+    base.columns = {
+      country: bool(r.columns.country, DEFAULT_ROUTING_OPTIONS.columns.country),
+      capacity: bool(r.columns.capacity, DEFAULT_ROUTING_OPTIONS.columns.capacity),
+    };
+  }
   return base;
 }
 

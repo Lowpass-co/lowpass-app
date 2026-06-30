@@ -54,27 +54,45 @@ const STATUS_LABELS: Record<string, string> = {
 
 interface RoutingViewOpts {
   travelTimes: boolean;
+  columns: { country: boolean; capacity: boolean };
 }
 
-/** The restyled itinerary list — day-type chips + zebra + an optional travel col. */
+/** Mode-of-transport glyph for a leg (transport_to_next). */
+function transportIcon(t: string): string {
+  if (t === 'fly') return '✈ ';
+  if (t === 'drive') return '🚐 ';
+  return '';
+}
+
+/** The restyled itinerary list — day-type chips, zebra, config-driven columns
+ *  (Country on / Capacity off by default), an optional travel column w/ transport
+ *  icon. */
 function renderList(data: RoutingExportData, opts: RoutingViewOpts): string {
   if (data.days.length === 0) return `<p class="lp-native">No routing for this tour.</p>`;
-  const travelHead = opts.travelTimes ? '<th>To next</th>' : '';
+  const cols = opts.columns;
+  const heads = [
+    '<th>Date</th>', '<th>Day</th>', '<th>City</th>',
+    cols.country ? '<th>Country</th>' : '',
+    '<th>Venue</th>',
+    cols.capacity ? '<th class="num">Capacity</th>' : '',
+    opts.travelTimes ? '<th>To next</th>' : '',
+  ].join('');
   const rows = data.days
     .map((d, idx) => {
       const venueCell = d.venue
         ? `${esc(d.venue)}${d.address ? `<div class="lp-native">${esc(d.address)}</div>` : ''}`
         : '<span class="lp-native">—</span>';
       const travelCell = opts.travelTimes
-        ? `<td class="lp-native">${d.legMins != null ? `${d.legApprox ? '~' : ''}${esc(fmtMins(d.legMins))}` : '—'}</td>`
+        ? `<td class="lp-native">${d.legMins != null ? `${transportIcon(d.transportToNext)}${d.legApprox ? '~' : ''}${esc(fmtMins(d.legMins))}` : '—'}</td>`
         : '';
       const zebra = idx % 2 === 1 ? ' style="background:#faf8f5;"' : '';
       return `<tr${zebra}>
         <td>${fmtDate(d.date)}</td>
         <td>${dayChip(d.dayType)}</td>
         <td>${esc(d.city ?? '—')}</td>
+        ${cols.country ? `<td>${esc(d.country ?? '—')}</td>` : ''}
         <td>${venueCell}</td>
-        <td class="num">${d.capacity ? d.capacity.toLocaleString('en-GB') : '—'}</td>
+        ${cols.capacity ? `<td class="num">${d.capacity ? d.capacity.toLocaleString('en-GB') : '—'}</td>` : ''}
         ${travelCell}
       </tr>`;
     })
@@ -84,9 +102,20 @@ function renderList(data: RoutingExportData, opts: RoutingViewOpts): string {
     <div class="lp-sec-head">Routing</div>
     <div class="lp-native" style="margin:-2px 0 4px;">${data.days.length} day${data.days.length === 1 ? '' : 's'} · ${showCount} show${showCount === 1 ? '' : 's'}${opts.travelTimes ? ' · travel times (~ = approx)' : ''}</div>
     <table class="lp-tbl">
-      <thead><tr><th>Date</th><th>Day</th><th>City</th><th>Venue</th><th class="num">Capacity</th>${travelHead}</tr></thead>
+      <thead><tr>${heads}</tr></thead>
       <tbody>${rows}</tbody>
     </table>`;
+}
+
+/** Map view placeholder — the static-map image service is a flagged follow-up
+ *  (cost-hardening: no live Google calls). The routing lat/lng is already loaded;
+ *  this renders the leg list as a fallback so the toggle is fully wired. */
+function renderMapPlaceholder(data: RoutingExportData): string {
+  const pts = data.days.filter((d) => d.lat != null && d.lng != null).length;
+  return `
+    <div class="lp-sec-head">Route map</div>
+    <div class="lp-native" style="margin:-2px 0 8px;">A static route map is coming soon — ${pts} of ${data.days.length} day${data.days.length === 1 ? '' : 's'} have coordinates. For now, use the list / calendar views.</div>
+    <div style="border:1px dashed var(--lp-border-strong);border-radius:8px;height:180px;display:flex;align-items:center;justify-content:center;color:var(--lp-text-tertiary);font-size:11px;">Route map preview</div>`;
 }
 
 /** A print-friendly month-grid calendar (light or dark). */
@@ -178,8 +207,15 @@ function renderAdvanceSummary(data: RoutingExportData): string {
  *  travel times, advance summary off (D7). */
 export function buildRoutingBodyHtml(data: RoutingExportData, config: TemplateConfig): string {
   const r = config.routing;
+  const list = () => renderList(data, { travelTimes: r.travelTimes, columns: r.columns });
+  const renderDays = () => {
+    if (r.view === 'calendar') return renderCalendar(data, r.calendarTheme);
+    if (r.view === 'map') return renderMapPlaceholder(data);
+    if (r.view === 'both') return `${list()}\n    <div class="lp-page-break"></div>${renderMapPlaceholder(data)}`;
+    return list();
+  };
   const sections: Record<string, () => string> = {
-    days: () => (r.view === 'calendar' ? renderCalendar(data, r.calendarTheme) : renderList(data, { travelTimes: r.travelTimes })),
+    days: renderDays,
     'advance-summary': () => renderAdvanceSummary(data),
   };
   return config.sections

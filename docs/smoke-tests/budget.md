@@ -20,6 +20,27 @@ Reference tour: "Warning Support". Templates picker needs a NEW empty tour.
 | BUD-19 | FIXED | click-to-rename templates + consistent picker (Fix-pack C) |
 | BUD-20 | FIXED | summary reads live from `section_id`; no phantom sections (Fix-pack A) |
 
+## Document Export v2.1 — routing polish (#8 — feat/export-v21-routing)
+
+> jsonb config (no migration). tsc 0, eslint 0, build green.
+
+- **EXP-V21D-01 — Lowpass checkbox.** The editor's `Toggle` is now a Lowpass-styled
+  checkbox (orange box + check icon), not the raw browser one — used by every toggle.
+- **EXP-V21D-02 — column picker.** The routing list has a column picker: **Country
+  ON by default, Capacity OFF** (matches the cleaned Excel from Part B). Toggling
+  Country/Capacity adds/removes the column. (Proven: default list has Country + no
+  Capacity; the picker flips them; `routing-data` now loads canonical-venue country.)
+- **EXP-V21D-03 — transport icon.** The travel/leg cell shows a mode-of-transport
+  glyph from `transport_to_next` — ✈ for fly, 🚐 for drive. (Proven.)
+- **EXP-V21D-04 — List / Calendar / Map / Both.** The view picker gains **Map**
+  (a wired placeholder — the static-map image service is a flagged follow-up;
+  cost-hardening = no live Google calls; lat/lng already loaded) and **Both**
+  (list + map). Calendar's light/dark toggle is clearly shown when Calendar is
+  selected. (Proven: map placeholder; both = list + map.)
+- **EXP-V21D-05 — reduced header present.** Routing already carries the Part-B reduced
+  running header band (`runningHeader` set for all four surfaces; the routing route
+  passes it) — verified; what reads as "footer at top" IS that slim band.
+
 ## Document Export v2.1 — payroll polish (#8 — feat/export-v21-payroll)
 
 > Payroll goes out to crew. jszip dep (no migration). Numbers from the same fees.ts

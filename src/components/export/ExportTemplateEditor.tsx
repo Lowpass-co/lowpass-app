@@ -16,7 +16,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronRight, Eye, EyeOff, FileSpreadsheet, FolderArchive, GripVertical, Globe, Loader2, Maximize2, Trash2, Upload, X, ZoomIn, ZoomOut } from 'lucide-react';
+import { Check, ChevronRight, Eye, EyeOff, FileSpreadsheet, FolderArchive, GripVertical, Globe, Loader2, Maximize2, Trash2, Upload, X, ZoomIn, ZoomOut } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
 import {
   defaultConfig,
@@ -58,9 +58,11 @@ const PAYROLL_MODES: ReadonlyArray<{ value: 'combined' | 'individual'; label: st
   { value: 'individual', label: 'Individual (statements only)' },
 ];
 
-const ROUTING_VIEWS: ReadonlyArray<{ value: 'list' | 'calendar'; label: string }> = [
+const ROUTING_VIEWS: ReadonlyArray<{ value: 'list' | 'calendar' | 'map' | 'both'; label: string }> = [
   { value: 'list', label: 'List (itinerary table)' },
   { value: 'calendar', label: 'Calendar (month grid)' },
+  { value: 'map', label: 'Map (coming soon)' },
+  { value: 'both', label: 'Both (list + map)' },
 ];
 
 const CALENDAR_THEMES: ReadonlyArray<{ value: 'light' | 'dark'; label: string }> = [
@@ -680,9 +682,15 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
                     <FieldLabel>Calendar theme</FieldLabel>
                     <Segmented options={CALENDAR_THEMES} value={config.routing.calendarTheme} onChange={(v) => setRouting('calendarTheme', v)} />
                   </>
-                ) : (
-                  <Toggle label="Travel times (between days)" checked={config.routing.travelTimes} onChange={(v) => setRouting('travelTimes', v)} />
-                )}
+                ) : null}
+                {config.routing.view === 'list' || config.routing.view === 'both' ? (
+                  <>
+                    <Toggle label="Travel times (between days)" checked={config.routing.travelTimes} onChange={(v) => setRouting('travelTimes', v)} />
+                    <FieldLabel>List columns</FieldLabel>
+                    <Toggle label="Country" checked={config.routing.columns.country} onChange={(v) => setRouting('columns', { ...config.routing.columns, country: v })} />
+                    <Toggle label="Capacity" checked={config.routing.columns.capacity} onChange={(v) => setRouting('columns', { ...config.routing.columns, capacity: v })} />
+                  </>
+                ) : null}
               </AccordionGroup>
             ) : null}
 
@@ -1034,12 +1042,25 @@ function SizeSlider({ label, value, def, min, max, onChange }: { label: string; 
   );
 }
 
+// Lowpass-branded checkbox (not the raw browser one) — used by every toggle.
 function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {
   return (
-    <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--lp-text)', cursor: 'pointer' }}>
-      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+    <button
+      type="button" role="checkbox" aria-checked={checked} onClick={() => onChange(!checked)} className="btn-transition"
+      style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--lp-text)', cursor: 'pointer', border: 0, background: 'transparent', padding: 0, textAlign: 'left' }}
+    >
+      <span
+        style={{
+          flex: '0 0 auto', width: 16, height: 16, borderRadius: 4, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          border: `1.5px solid ${checked ? 'var(--lp-orange)' : 'var(--lp-border-strong)'}`,
+          background: checked ? 'var(--lp-orange)' : 'transparent',
+          transition: 'background 0.12s ease, border-color 0.12s ease',
+        }}
+      >
+        {checked ? <Check className="h-3 w-3" style={{ color: 'var(--lp-text-inverse)' }} aria-hidden /> : null}
+      </span>
       {label}
-    </label>
+    </button>
   );
 }
 

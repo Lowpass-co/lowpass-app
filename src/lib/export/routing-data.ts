@@ -34,6 +34,8 @@ export interface RoutingDayRow {
   address: string | null;
   capacity: number | null;
   advance: RoutingAdvanceSummary | null;
+  /** Transport to the NEXT day — 'default' | 'fly' | 'drive' (for the leg icon). */
+  transportToNext: string;
   lat: number | null;
   lng: number | null;
   /** Part F — travel minutes to the NEXT day (null = unknown). */
@@ -105,7 +107,7 @@ export async function loadRoutingExportData(
   const [routingRes, artistRes] = await Promise.all([
     supabase
       .from('routing')
-      .select('id, date, day_type, city, address, venue_name, venue_capacity, latitude, longitude, canonical_venue_id, canonical_venues(name, city, country, capacity)')
+      .select('id, date, day_type, city, address, venue_name, venue_capacity, latitude, longitude, transport_to_next, canonical_venue_id, canonical_venues(name, city, country, capacity)')
       .eq('tour_id', tourId)
       .order('date', { ascending: true }),
     tour.artist_id
@@ -123,6 +125,7 @@ export async function loadRoutingExportData(
     venue_capacity: number | null;
     latitude: number | null;
     longitude: number | null;
+    transport_to_next: string | null;
     canonical_venue_id: string | null;
     canonical_venues?: { name?: string | null; city?: string | null; country?: string | null; capacity?: number | null } | Array<{ name?: string | null; city?: string | null; country?: string | null; capacity?: number | null }> | null;
   }>;
@@ -158,6 +161,7 @@ export async function loadRoutingExportData(
       address: (r.address ?? '') || null,
       capacity: typeof capacity === 'number' ? capacity : null,
       advance,
+      transportToNext: (r.transport_to_next ?? 'default') || 'default',
       lat: typeof r.latitude === 'number' ? r.latitude : null,
       lng: typeof r.longitude === 'number' ? r.longitude : null,
       legMins: null,
