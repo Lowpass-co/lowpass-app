@@ -41,14 +41,14 @@ export async function POST(
     if (!tour) return NextResponse.json({ error: 'Tour not found' }, { status: 404 });
 
     return exportPdfResponse('routing', async () => {
-      const { html, footerNote, filename, footer } = await buildRoutingExport(
+      const { html, footerNote, filename, footer, runningHeader } = await buildRoutingExport(
         supabase,
         { id: tour.id as string, name: (tour.name as string) || 'Tour', start_date: tour.start_date as string | null, end_date: tour.end_date as string | null, artist_id: tour.artist_id as string | null },
         profile.workspace_id as string,
         config,
       );
       const markDataUri = await lowpassMarkDataUri();
-      return { html, footerNote, markDataUri, filename, footer };
+      return { html, footerNote, markDataUri, filename, footer, runningHeader };
     });
   } catch (err) {
     return exportErrorResponse('routing', err);

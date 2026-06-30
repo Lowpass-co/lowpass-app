@@ -28,6 +28,9 @@ export interface ExportBuild {
   filename: string;
   /** Phase 2 — footer styling (the route passes this to the page.pdf footer). */
   footer: FooterStyle;
+  /** Part B — the reduced running header's left text, or null when the header is
+   *  hidden. The route passes it to the page.pdf repeating header. */
+  runningHeader: string | null;
 }
 
 function fmtDate(d: string | null): string | null {
@@ -107,7 +110,7 @@ export async function buildBudgetExport(
 
   const footerNote = `${data.artist?.name ? `${data.artist.name} — ` : ''}${data.tour.name} · Budget`;
   const filename = `${sanitize(data.artist?.name ?? '', '')} — ${sanitize(data.tour.name, 'Budget')} — Budget.pdf`.replace(/^ — /, '');
-  return { html, footerNote, filename, footer: config.footer };
+  return { html, footerNote, filename, footer: config.footer, runningHeader: config.header.show ? footerNote : null };
 }
 
 export interface RoomingTourMeta {
@@ -145,7 +148,7 @@ export async function buildRoomingExport(
 
   const footerNote = `${data.artist?.name ? `${data.artist.name} — ` : ''}${data.tour.name} · Rooming`;
   const filename = `${sanitize(data.artist?.name ?? '', '')} — ${sanitize(data.tour.name, 'Rooming')} — Rooming.pdf`.replace(/^ — /, '');
-  return { html, footerNote, filename, footer: config.footer };
+  return { html, footerNote, filename, footer: config.footer, runningHeader: config.header.show ? footerNote : null };
 }
 
 export interface PayrollTourMeta {
@@ -183,7 +186,7 @@ export async function buildPayrollExport(
 
   const footerNote = `${data.artist?.name ? `${data.artist.name} — ` : ''}${data.tour.name} · Payroll`;
   const filename = `${sanitize(data.artist?.name ?? '', '')} — ${sanitize(data.tour.name, 'Payroll')} — Payroll.pdf`.replace(/^ — /, '');
-  return { html, footerNote, filename, footer: config.footer };
+  return { html, footerNote, filename, footer: config.footer, runningHeader: config.header.show ? footerNote : null };
 }
 
 export interface RoutingTourMeta {
@@ -221,5 +224,5 @@ export async function buildRoutingExport(
 
   const footerNote = `${data.artist?.name ? `${data.artist.name} — ` : ''}${data.tour.name} · Routing`;
   const filename = `${sanitize(data.artist?.name ?? '', '')} — ${sanitize(data.tour.name, 'Routing')} — Routing.pdf`.replace(/^ — /, '');
-  return { html, footerNote, filename, footer: config.footer };
+  return { html, footerNote, filename, footer: config.footer, runningHeader: config.header.show ? footerNote : null };
 }

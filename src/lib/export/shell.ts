@@ -133,6 +133,20 @@ export const PAGE_PDF_OPTIONS = {
  *  page header. (Chromium requires a non-empty template to honour the margin.) */
 export const PDF_HEADER_TEMPLATE = '<span></span>';
 
+/** Reduced REPEATING header (Chromium renders per page): a slim one-line band —
+ *  "Artist — Tour · Surface" on the left, "Page x / y" on the right — that carries
+ *  the document's identity onto overflow pages. On page 1 the FULL letterhead banner
+ *  sits in the content below this slim margin band, so page 1 still reads as the full
+ *  header; pages 2+ have only this band. Chromium strips most CSS — inline only.
+ *  `noteText` is the same "Artist — Tour · Surface" string the footer uses. */
+export function pdfRunningHeaderTemplate(noteText: string): string {
+  return `
+<div style="width:100%;font-size:7px;color:#8a837b;font-family:-apple-system,Arial,sans-serif;padding:2px 14mm 0;display:flex;align-items:center;justify-content:space-between;">
+  <span style="font-weight:600;">${esc(noteText)}</span>
+  <span>Page <span class="pageNumber"></span> / <span class="totalPages"></span></span>
+</div>`;
+}
+
 /** Repeating footer (Chromium renders this per page): Lowpass mark + a note on
  *  the left, page x / y on the right. Chromium strips most CSS — inline only.
  *  Phase 2 — `opts` toggles the summary line (mark + note) and the page numbers;
@@ -242,7 +256,14 @@ function renderLetterhead(lh: ShellLetterhead, title: string, subtitle: string |
 
 /** Compose the full self-contained A4 HTML document. The body is opaque. */
 export function renderDocument(doc: ShellDocument): string {
-  const { letterhead: lh, title, subtitle, bodyHtml } = doc;
+  const { letterhead: lh, title, subtitle } = doc;
+  // Multi-page fix: a section builder may PREFIX its block with a page-break (e.g.
+  // budget income-detail, payroll statements) so it starts on a fresh page AFTER an
+  // earlier section. But if that section is the FIRST visible block (the earlier one
+  // is hidden/reordered), the leading break leaves page 1 with just the letterhead
+  // and pushes all content to page 2. Strip any leading page-break so content always
+  // flows directly under the letterhead on page 1.
+  const bodyHtml = doc.bodyHtml.replace(/^\s*(?:<div class="lp-page-break"><\/div>\s*)+/, '');
   // Template config: page size (A4 default). The override @page (size only) merges
   // with SHELL_CSS's @page margin, so Letter keeps the same margins.
   const pageStyle = doc.pageSize && doc.pageSize !== 'A4' ? `<style>@page { size: ${doc.pageSize}; }</style>` : '';

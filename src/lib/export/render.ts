@@ -24,7 +24,7 @@
 
 import { NextResponse } from 'next/server';
 import { getBrowser, closePage } from '@/lib/rider-packs/puppeteer';
-import { PAGE_PDF_OPTIONS, PDF_HEADER_TEMPLATE, pdfFooterTemplate } from '@/lib/export/shell';
+import { PAGE_PDF_OPTIONS, PDF_HEADER_TEMPLATE, pdfFooterTemplate, pdfRunningHeaderTemplate } from '@/lib/export/shell';
 
 /** A header-safe `Content-Disposition` value (RFC 5987). HTTP header values must be
  *  Latin-1 (≤255), so a filename with an em dash (—, U+2014, the "<Artist> — <Tour>"
@@ -52,6 +52,10 @@ export interface ExportDoc {
   /** Phase 2 — footer styling (show / page numbers / summary line). Absent →
    *  today's footer (mark + note + page numbers). */
   footer?: { show?: boolean; pageNumbers?: boolean; summaryLine?: boolean };
+  /** Part B — the reduced running header's left text ("Artist — Tour · Surface").
+   *  When set, a slim repeating header band is printed on every page (page 1's full
+   *  banner sits below it in the content). Null/absent → no running header. */
+  runningHeader?: string | null;
 }
 
 /** Build the doc (loaders + html) then render + stream it. The `build` callback is
@@ -62,7 +66,7 @@ export async function exportPdfResponse(
   build: () => Promise<ExportDoc>,
 ): Promise<Response> {
   try {
-    const { html, footerNote, markDataUri, filename, footer } = await build();
+    const { html, footerNote, markDataUri, filename, footer, runningHeader } = await build();
 
     const browser = await getBrowser();
     const page = await browser.newPage();
@@ -74,11 +78,14 @@ export async function exportPdfResponse(
         footer?.show === false
           ? '<span></span>'
           : pdfFooterTemplate(footerNote, markDataUri, { summaryLine: footer?.summaryLine, pageNumbers: footer?.pageNumbers });
+      // Part B — the reduced running header (repeats on every page). Page 1's full
+      // banner sits in the content below this slim margin band.
+      const headerTemplate = runningHeader ? pdfRunningHeaderTemplate(runningHeader) : PDF_HEADER_TEMPLATE;
       let buffer: Uint8Array;
       try {
         buffer = await page.pdf({
           ...PAGE_PDF_OPTIONS,
-          headerTemplate: PDF_HEADER_TEMPLATE,
+          headerTemplate,
           footerTemplate,
         });
       } catch (footerErr) {

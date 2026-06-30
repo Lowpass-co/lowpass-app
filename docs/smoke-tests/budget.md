@@ -20,6 +20,35 @@ Reference tour: "Warning Support". Templates picker needs a NEW empty tour.
 | BUD-19 | FIXED | click-to-rename templates + consistent picker (Fix-pack C) |
 | BUD-20 | FIXED | summary reads live from `section_id`; no phantom sections (Fix-pack A) |
 
+## Document Export v2 — multi-page layout (#8 — feat/export-v2-pagination)
+
+> Shared shell, all four surfaces. Fixes the "page 1 = banner then empty; content on
+> page 2 with no header" bug + adds a reduced running header. Presentation-only; the
+> default budget body still starts with the P&L summary (no leading break) so
+> byte-for-byte holds. tsc 0, eslint 0, build green.
+
+- **EXP-V2B-01 — content flows on page 1 (no empty first page).** `renderDocument`
+  strips any LEADING `lp-page-break` from the body, so when the first visible section
+  is one that prefixes a page-break (budget income-detail when the P&L summary is
+  hidden/reordered; payroll statements when the run-sheet is hidden; routing advance-
+  summary), content no longer jumps to page 2 leaving page 1 with just the letterhead.
+  (Proven: a body starting with a page-break renders with it removed and the content
+  intact; an INTERNAL break between sections is preserved.)
+- **EXP-V2B-02 — reduced running header on overflow pages.** `pdfRunningHeaderTemplate`
+  prints a slim one-line band — "Artist — Tour · Surface" left, "Page x / y" right —
+  via the puppeteer `headerTemplate` (threaded `ExportDoc.runningHeader` →
+  `build.ts`, set to the footer note when `header.show`). Page 1's FULL letterhead
+  banner sits in the content below this slim margin band; pages 2+ carry the band as
+  their header. Hidden when `header.show` is false.
+- **EXP-V2B-03 — footer page x/y stays correct.** The footer (Lowpass mark + note +
+  Page x/y) is unchanged; the new running header is additive. Applies to all four
+  surfaces (budget/rooming/payroll/routing) via the shared render.
+- **EXP-V2B-04 — default unchanged.** The default budget/rooming/payroll/routing body
+  does not start with a page-break, so the strip is a no-op there; reconciliation +
+  byte-for-byte (EXP-BUD-01 / EXP-ROOM-01) hold. (Chromium can't natively suppress a
+  `headerTemplate` on page 1 only, so the slim band also sits in page 1's top margin
+  above the full banner — unobtrusive; flagged.)
+
 ## Document Export v2 — editor & layout polish (#8 — feat/export-v2-editor)
 
 > Editor UX from Adam's live smoke. All in `ExportTemplateEditor.tsx` + a shared
