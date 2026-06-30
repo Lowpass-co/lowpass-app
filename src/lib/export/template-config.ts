@@ -50,6 +50,25 @@ export interface HeaderElement {
   show: boolean;
 }
 
+/** Per-element text overrides (Part D). null = use the real value (artist/tour
+ *  name, surface title, version/scope subtitle). Presentation-only — overriding the
+ *  DISPLAYED label never changes a number. */
+export interface HeaderTextOverrides {
+  artist: string | null;
+  tour: string | null;
+  title: string | null;
+  subtitle: string | null;
+}
+
+/** Per-element font-size overrides in px (Part D). null = the shell's default size. */
+export interface HeaderSizeOverrides {
+  artist: number | null;
+  tour: number | null;
+  dates: number | null;
+  title: number | null;
+  subtitle: number | null;
+}
+
 /** Letterhead config. Defaults reproduce today's letterhead byte-for-byte. */
 export interface HeaderStyle {
   show: boolean; // true — show the letterhead at all
@@ -63,6 +82,9 @@ export interface HeaderStyle {
   showTitle: boolean; // true — the doc title (e.g. "Budget")
   showSubtitle: boolean; // true — the version/scope subtitle
   showGenerated: boolean; // true — "Generated <date>"
+  text: HeaderTextOverrides; // Part D — custom label text (all null = defaults)
+  size: HeaderSizeOverrides; // Part D — custom font sizes (all null = defaults)
+  notes: string | null; // Part D — a free-text note block under the letterhead
 }
 
 /** Footer config (the page.pdf footer template — print-only, not in the live
@@ -145,6 +167,9 @@ export const DEFAULT_HEADER: HeaderStyle = {
   showTitle: true,
   showSubtitle: true,
   showGenerated: true,
+  text: { artist: null, tour: null, title: null, subtitle: null },
+  size: { artist: null, tour: null, dates: null, title: null, subtitle: null },
+  notes: null,
 };
 
 export const DEFAULT_FOOTER: FooterStyle = {
@@ -239,10 +264,40 @@ function normalizeGeneral(input: unknown): GeneralStyle {
   return base;
 }
 
+function strOrNull(v: unknown, max: number): string | null {
+  return typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : null;
+}
+function numOrNull(v: unknown, lo: number, hi: number): number | null {
+  return typeof v === 'number' && Number.isFinite(v) ? Math.min(hi, Math.max(lo, v)) : null;
+}
+
 function normalizeHeader(input: unknown): HeaderStyle {
-  const base: HeaderStyle = { ...DEFAULT_HEADER, elements: DEFAULT_HEADER.elements.map((e) => ({ ...e })) };
+  const base: HeaderStyle = {
+    ...DEFAULT_HEADER,
+    elements: DEFAULT_HEADER.elements.map((e) => ({ ...e })),
+    text: { ...DEFAULT_HEADER.text },
+    size: { ...DEFAULT_HEADER.size },
+  };
   if (!input || typeof input !== 'object') return base;
   const h = input as Partial<HeaderStyle>;
+  if (h.text && typeof h.text === 'object') {
+    base.text = {
+      artist: strOrNull(h.text.artist, 120),
+      tour: strOrNull(h.text.tour, 120),
+      title: strOrNull(h.text.title, 80),
+      subtitle: strOrNull(h.text.subtitle, 160),
+    };
+  }
+  if (h.size && typeof h.size === 'object') {
+    base.size = {
+      artist: numOrNull(h.size.artist, 6, 48),
+      tour: numOrNull(h.size.tour, 8, 60),
+      dates: numOrNull(h.size.dates, 6, 40),
+      title: numOrNull(h.size.title, 6, 48),
+      subtitle: numOrNull(h.size.subtitle, 6, 40),
+    };
+  }
+  base.notes = strOrNull(h.notes, 600);
   base.show = bool(h.show, DEFAULT_HEADER.show);
   if (h.logoAlign && ALIGNS.includes(h.logoAlign)) base.logoAlign = h.logoAlign;
   base.logoMaxHeight = clamp(h.logoMaxHeight, 16, 160, DEFAULT_HEADER.logoMaxHeight);

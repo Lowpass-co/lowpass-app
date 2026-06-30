@@ -212,6 +212,16 @@ function renderLetterhead(lh: ShellLetterhead, title: string, subtitle: string |
         ? `<img class="lp-lh-logo" src="${lh.logoDataUri}" alt=""${logoStyleAttr} />`
         : `<div class="lp-lh-initials"${logoStyleAttr}>${esc(initials(lh.artistName || lh.tourName))}</div>`;
 
+  // Part D — per-element text + size overrides (null = the real value / default
+  // size, so the default letterhead is byte-for-byte unchanged).
+  const txt = header?.text;
+  const size = header?.size;
+  const sz = (px: number | null | undefined): string => (px ? ` style="font-size:${px}px"` : '');
+  const artistText = txt?.artist ?? lh.artistName;
+  const tourText = txt?.tour ?? lh.tourName;
+  const titleText = txt?.title ?? title;
+  const subtitleText = txt?.subtitle ?? subtitle;
+
   // Meta zone (artist / tour / dates) — element order + visibility from header.
   const elements = header?.elements ?? [
     { id: 'artist' as const, show: true },
@@ -219,9 +229,9 @@ function renderLetterhead(lh: ShellLetterhead, title: string, subtitle: string |
     { id: 'dates' as const, show: true },
   ];
   const metaFor = (id: string): string => {
-    if (id === 'artist') return lh.artistName ? `<div class="lp-lh-artist">${esc(lh.artistName)}</div>` : '';
-    if (id === 'tour') return `<div class="lp-lh-tour">${esc(lh.tourName)}</div>`;
-    if (id === 'dates') return lh.tourDates ? `<div class="lp-lh-dates">${esc(lh.tourDates)}</div>` : '';
+    if (id === 'artist') return artistText ? `<div class="lp-lh-artist"${sz(size?.artist)}>${esc(artistText)}</div>` : '';
+    if (id === 'tour') return `<div class="lp-lh-tour"${sz(size?.tour)}>${esc(tourText)}</div>`;
+    if (id === 'dates') return lh.tourDates ? `<div class="lp-lh-dates"${sz(size?.dates)}>${esc(lh.tourDates)}</div>` : '';
     return '';
   };
   const metaParts = elements.map((e) => (e.show === false ? '' : metaFor(e.id)));
@@ -231,8 +241,8 @@ function renderLetterhead(lh: ShellLetterhead, title: string, subtitle: string |
   const showSubtitle = header ? header.showSubtitle : true;
   const showGenerated = header ? header.showGenerated : true;
   const rightParts = [
-    showTitle ? `<div class="lp-doc-title">${esc(title)}</div>` : '',
-    showSubtitle && subtitle ? `<div class="lp-doc-sub">${esc(subtitle)}</div>` : '',
+    showTitle ? `<div class="lp-doc-title"${sz(size?.title)}>${esc(titleText)}</div>` : '',
+    showSubtitle && subtitleText ? `<div class="lp-doc-sub"${sz(size?.subtitle)}>${esc(subtitleText)}</div>` : '',
     showGenerated ? `<div class="lp-doc-gen">Generated ${esc(lh.generatedOn)}</div>` : '',
   ];
 
@@ -243,6 +253,12 @@ function renderLetterhead(lh: ShellLetterhead, title: string, subtitle: string |
   const headerStyleAttr = bgDataUri ? ' style="position:relative;overflow:hidden"' : '';
   const zoneStyle = bgDataUri ? ' style="position:relative;z-index:1"' : '';
 
+  // Part D — a free-text note block under the letterhead (inline-styled so the
+  // default path, notes === null, adds nothing and stays byte-for-byte).
+  const notes = header?.notes
+    ? `\n  <div style="font-size:10px;color:var(--lp-text-secondary);line-height:1.5;white-space:pre-wrap;margin:0 0 14px;padding:8px 10px;background:var(--lp-bg-subtle);border:1px solid var(--lp-border);border-radius:6px;">${esc(header.notes)}</div>`
+    : '';
+
   return `<header class="lp-letterhead"${headerStyleAttr}>
     ${bg}${logo}
     <div class="lp-lh-meta"${zoneStyle}>
@@ -251,7 +267,7 @@ function renderLetterhead(lh: ShellLetterhead, title: string, subtitle: string |
     <div class="lp-lh-right"${zoneStyle}>
       ${rightParts.join('\n      ')}
     </div>
-  </header>`;
+  </header>${notes}`;
 }
 
 /** Compose the full self-contained A4 HTML document. The body is opaque. */

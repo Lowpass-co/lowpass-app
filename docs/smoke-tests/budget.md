@@ -20,6 +20,28 @@ Reference tour: "Warning Support". Templates picker needs a NEW empty tour.
 | BUD-19 | FIXED | click-to-rename templates + consistent picker (Fix-pack C) |
 | BUD-20 | FIXED | summary reads live from `section_id`; no phantom sections (Fix-pack A) |
 
+## Document Export v2 — header customisation (#8 — feat/export-v2-header)
+
+> The letterhead gets custom text + sizes + a notes block. All in the header jsonb
+> config (no migration); every field defaults to null → today's letterhead
+> byte-for-byte (proven: `renderDocument` with the default header === main's output;
+> overrides change output). Presentation-only — overriding a displayed label never
+> changes a number. tsc 0, eslint 0, build green.
+
+- **EXP-V2D-01 — custom header text.** `header.text.{artist,tour,title,subtitle}`
+  override the displayed label (blank = the real artist/tour name, surface title,
+  version/scope subtitle). Editor: text inputs in the Header group. (Proven: an
+  artist override replaces the real name; a title override replaces "Budget".)
+- **EXP-V2D-02 — custom font sizes.** `header.size.{artist,tour,dates,title,subtitle}`
+  set a px font-size per element (null = the shell's default); editor sliders with an
+  "auto" reset. Inline `font-size` is emitted only when set → default unchanged.
+- **EXP-V2D-03 — notes block.** `header.notes` renders a free-text, pre-wrapped note
+  block under the letterhead (inline-styled; null = nothing). Editor: a textarea
+  (600-char cap). (Proven: the note text appears in the rendered doc.)
+- **EXP-V2D-04 — default unchanged.** With no overrides the letterhead is byte-for-
+  byte today's output (EXP-BUD-01 / EXP-ROOM-01 hold); `normalizeConfig` clamps sizes
+  (6–60px) + caps text/notes length so a hostile config can't break the render.
+
 ## Document Export v2 — PDF ↔ Excel (#8 — feat/export-v2-format)
 
 > A format toggle in the editor + a server xlsx path. `format: 'pdf' | 'excel'` is a

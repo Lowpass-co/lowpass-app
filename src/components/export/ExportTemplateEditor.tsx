@@ -218,6 +218,13 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
   const setFooter = useCallback(<K extends keyof TemplateConfig['footer']>(k: K, v: TemplateConfig['footer'][K]) => {
     setConfig((c) => ({ ...c, footer: { ...c.footer, [k]: v } }));
   }, []);
+  // Part D — nested header text / size overrides (empty/null = the default value).
+  const setHeaderText = useCallback((k: keyof TemplateConfig['header']['text'], v: string) => {
+    setConfig((c) => ({ ...c, header: { ...c.header, text: { ...c.header.text, [k]: v.trim() ? v : null } } }));
+  }, []);
+  const setHeaderSize = useCallback((k: keyof TemplateConfig['header']['size'], v: number | null) => {
+    setConfig((c) => ({ ...c, header: { ...c.header, size: { ...c.header.size, [k]: v } } }));
+  }, []);
 
   // --- Phase 3: saved templates (workspace + global tier) ---
   const [templates, setTemplates] = useState<SavedTemplate[]>([]);
@@ -656,6 +663,22 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
               <Toggle label="Show document title" checked={config.header.showTitle} onChange={(v) => setHeader('showTitle', v)} />
               <Toggle label="Show subtitle" checked={config.header.showSubtitle} onChange={(v) => setHeader('showSubtitle', v)} />
               <Toggle label="Show “Generated” date" checked={config.header.showGenerated} onChange={(v) => setHeader('showGenerated', v)} />
+              <FieldLabel>Custom text (blank = default)</FieldLabel>
+              <TextField label="Artist" value={config.header.text.artist ?? ''} placeholder="(artist name)" onChange={(v) => setHeaderText('artist', v)} />
+              <TextField label="Tour" value={config.header.text.tour ?? ''} placeholder="(tour name)" onChange={(v) => setHeaderText('tour', v)} />
+              <TextField label="Title" value={config.header.text.title ?? ''} placeholder="(document title)" onChange={(v) => setHeaderText('title', v)} />
+              <TextField label="Subtitle" value={config.header.text.subtitle ?? ''} placeholder="(subtitle)" onChange={(v) => setHeaderText('subtitle', v)} />
+              <FieldLabel>Font sizes</FieldLabel>
+              <SizeSlider label="Artist size" value={config.header.size.artist} def={11} min={8} max={28} onChange={(v) => setHeaderSize('artist', v)} />
+              <SizeSlider label="Tour size" value={config.header.size.tour} def={19} min={10} max={40} onChange={(v) => setHeaderSize('tour', v)} />
+              <SizeSlider label="Title size" value={config.header.size.title} def={13} min={8} max={28} onChange={(v) => setHeaderSize('title', v)} />
+              <SizeSlider label="Subtitle size" value={config.header.size.subtitle} def={10} min={7} max={20} onChange={(v) => setHeaderSize('subtitle', v)} />
+              <FieldLabel>Notes (free text under the header)</FieldLabel>
+              <textarea
+                value={config.header.notes ?? ''} maxLength={600} rows={3} placeholder="e.g. Settlement terms, contact, anything you want on the letterhead…"
+                onChange={(e) => setHeader('notes', e.target.value.trim() ? e.target.value : null)}
+                style={{ width: '100%', resize: 'vertical', padding: '6px 8px', fontSize: 12, borderRadius: 'var(--lp-radius-md)', border: '1px solid var(--lp-border)', background: 'transparent', color: 'var(--lp-text)', fontFamily: 'inherit' }}
+              />
             </AccordionGroup>
 
             <AccordionGroup id="footer" label="Footer">
@@ -820,6 +843,36 @@ function ImageField({ label, set, uploading, onPick, onClear }: { label: string;
           </button>
         ) : null}
       </div>
+    </div>
+  );
+}
+
+function TextField({ label, value, placeholder, onChange }: { label: string; value: string; placeholder?: string; onChange: (v: string) => void }) {
+  return (
+    <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--lp-text-secondary)' }}>
+      <span style={{ flex: '0 0 56px' }}>{label}</span>
+      <input
+        type="text" value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)}
+        style={{ flex: 1, minWidth: 0, padding: '5px 8px', fontSize: 12, borderRadius: 'var(--lp-radius-md)', border: '1px solid var(--lp-border)', background: 'transparent', color: 'var(--lp-text)' }}
+      />
+    </label>
+  );
+}
+
+function SizeSlider({ label, value, def, min, max, onChange }: { label: string; value: number | null; def: number; min: number; max: number; onChange: (v: number | null) => void }) {
+  const current = value ?? def;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--lp-text-tertiary)' }}>
+        <span>{label}</span>
+        <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+          <span style={{ fontVariantNumeric: 'tabular-nums' }}>{current}px{value === null ? ' (auto)' : ''}</span>
+          {value !== null ? (
+            <button type="button" onClick={() => onChange(null)} className="btn-transition" title="Reset to default" style={{ border: 0, background: 'transparent', cursor: 'pointer', color: 'var(--lp-text-tertiary)', textDecoration: 'underline', fontSize: 10 }}>auto</button>
+          ) : null}
+        </span>
+      </div>
+      <input type="range" min={min} max={max} step={1} value={current} onChange={(e) => onChange(Number(e.target.value))} style={{ width: '100%', accentColor: 'var(--lp-orange)' }} />
     </div>
   );
 }
