@@ -15,7 +15,7 @@
    ============================================ */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Eye, EyeOff, GripVertical, Loader2, X } from 'lucide-react';
+import { Eye, EyeOff, GripVertical, Loader2, Upload, X } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
 import {
   defaultConfig,
@@ -161,6 +161,29 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
     setConfig((c) => ({ ...c, footer: { ...c.footer, [k]: v } }));
   }, []);
 
+  // Upload a header image (background / logo) → the private export-assets bucket;
+  // store the returned path in the config (the render resolves it to a data-URI).
+  const [uploading, setUploading] = useState<null | 'bgAssetPath' | 'logoAssetPath'>(null);
+  const uploadAsset = useCallback(async (field: 'bgAssetPath' | 'logoAssetPath', file: File) => {
+    setUploading(field);
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      const res = await fetch('/api/export/assets', { method: 'POST', body: fd });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        showToast(body.error ?? 'Could not upload the image', 'error');
+        return;
+      }
+      const { path } = (await res.json()) as { path: string };
+      setHeader(field, path);
+    } catch {
+      showToast('Could not upload the image', 'error');
+    } finally {
+      setUploading(null);
+    }
+  }, [setHeader, showToast]);
+
   const download = useCallback(async () => {
     if (busy) return;
     setBusy(true);
@@ -304,6 +327,23 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
               <Segmented options={LOGO_ALIGNS} value={config.header.logoAlign === 'right' ? 'right' : 'left'} onChange={(v) => setHeader('logoAlign', v)} />
               <Slider label="Logo height" value={config.header.logoMaxHeight} min={16} max={120} step={2} format={(v) => `${Math.round(v)}px`} onChange={(v) => setHeader('logoMaxHeight', v)} />
               <Slider label="Logo corner radius" value={config.header.logoRadius} min={0} max={40} step={1} format={(v) => `${Math.round(v)}px`} onChange={(v) => setHeader('logoRadius', v)} />
+              <ImageField
+                label="Header logo (overrides artist logo)"
+                set={Boolean(config.header.logoAssetPath)}
+                uploading={uploading === 'logoAssetPath'}
+                onPick={(f) => void uploadAsset('logoAssetPath', f)}
+                onClear={() => setHeader('logoAssetPath', null)}
+              />
+              <ImageField
+                label="Background image (faded)"
+                set={Boolean(config.header.bgAssetPath)}
+                uploading={uploading === 'bgAssetPath'}
+                onPick={(f) => void uploadAsset('bgAssetPath', f)}
+                onClear={() => setHeader('bgAssetPath', null)}
+              />
+              {config.header.bgAssetPath ? (
+                <Slider label="Background opacity" value={config.header.bgOpacity} min={0} max={1} step={0.05} format={(v) => `${Math.round(v * 100)}%`} onChange={(v) => setHeader('bgOpacity', v)} />
+              ) : null}
               <FieldLabel>Elements</FieldLabel>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {config.header.elements.map((e) => (
@@ -378,6 +418,32 @@ function Group({ label, children }: { label: string; children: React.ReactNode }
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return <div style={{ fontSize: 11, color: 'var(--lp-text-tertiary)', fontWeight: 600 }}>{children}</div>;
+}
+
+function ImageField({ label, set, uploading, onPick, onClear }: { label: string; set: boolean; uploading: boolean; onPick: (f: File) => void; onClear: () => void }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <FieldLabel>{label}</FieldLabel>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <label
+          className="btn-transition"
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 5, padding: '5px 9px', fontSize: 12, cursor: uploading ? 'default' : 'pointer', borderRadius: 'var(--lp-radius-md)', border: '1px solid var(--lp-border)', color: 'var(--lp-text-secondary)' }}
+        >
+          {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : <Upload className="h-3.5 w-3.5" aria-hidden />}
+          {set ? 'Replace' : 'Upload'}
+          <input
+            type="file" accept="image/jpeg,image/png,image/webp" style={{ display: 'none' }} disabled={uploading}
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) onPick(f); e.target.value = ''; }}
+          />
+        </label>
+        {set ? (
+          <button type="button" onClick={onClear} className="btn-transition" style={{ border: 0, background: 'transparent', cursor: 'pointer', fontSize: 12, color: 'var(--lp-text-tertiary)', textDecoration: 'underline' }}>
+            Remove
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
 }
 
 function Toggle({ label, checked, onChange }: { label: string; checked: boolean; onChange: (v: boolean) => void }) {

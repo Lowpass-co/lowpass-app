@@ -47,6 +47,22 @@ function nowStamp(): string {
   return new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
 
+/** The letterhead logo data-URI: an uploaded header logo (config.header.logoAssetPath,
+ *  private export-assets bucket) takes precedence; otherwise the artist logo. Both
+ *  degrade to null (→ initials block). */
+async function resolveLogo(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  config: TemplateConfig,
+  artistLogoUrl: string | null | undefined,
+): Promise<string | null> {
+  if (config.header.logoAssetPath) {
+    const uploaded = await fetchExportAssetDataUri(supabase, workspaceId, config.header.logoAssetPath);
+    if (uploaded) return uploaded;
+  }
+  return fetchLogoDataUri(artistLogoUrl);
+}
+
 export interface BudgetTourMeta {
   id: string; name: string; currency: string | null;
   start_date: string | null; end_date: string | null; artist_id: string | null;
@@ -60,7 +76,7 @@ export async function buildBudgetExport(
   versionId: string | null,
 ): Promise<ExportBuild> {
   const data = await loadBudgetExportData(supabase, tour, workspaceId, { versionId });
-  const logoDataUri = config.logo ? await fetchLogoDataUri(data.logoUrl) : null;
+  const logoDataUri = config.logo ? await resolveLogo(supabase, workspaceId, config, data.logoUrl) : null;
   const bgDataUri = await fetchExportAssetDataUri(supabase, workspaceId, config.header.bgAssetPath);
 
   const scopeLabel = config.scope === 'projected' ? 'Projected' : config.scope === 'actual' ? 'Actual' : 'Projected vs Actual';
@@ -102,7 +118,7 @@ export async function buildRoomingExport(
   config: TemplateConfig,
 ): Promise<ExportBuild> {
   const data = await loadRoomingExportData(supabase, tour, workspaceId);
-  const logoDataUri = config.logo ? await fetchLogoDataUri(data.logoUrl) : null;
+  const logoDataUri = config.logo ? await resolveLogo(supabase, workspaceId, config, data.logoUrl) : null;
   const bgDataUri = await fetchExportAssetDataUri(supabase, workspaceId, config.header.bgAssetPath);
 
   const html = renderDocument({

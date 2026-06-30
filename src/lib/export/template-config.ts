@@ -54,6 +54,7 @@ export interface HeaderStyle {
   logoAlign: Align; // 'left' (the logo is the first flex child today)
   logoMaxHeight: number; // 48 (matches .lp-lh-logo height)
   logoRadius: number; // 0
+  logoAssetPath: string | null; // null — an uploaded header logo (storage path); overrides the artist logo
   bgAssetPath: string | null; // null — a faded background image (storage path)
   bgOpacity: number; // 0.15 (only applies when bgAssetPath set)
   elements: HeaderElement[]; // [artist, tour, dates], all shown
@@ -123,6 +124,7 @@ export const DEFAULT_HEADER: HeaderStyle = {
   logoAlign: 'left',
   logoMaxHeight: 48,
   logoRadius: 0,
+  logoAssetPath: null,
   bgAssetPath: null,
   bgOpacity: 0.15,
   elements: [
@@ -203,6 +205,7 @@ function normalizeHeader(input: unknown): HeaderStyle {
   base.logoRadius = clamp(h.logoRadius, 0, 40, DEFAULT_HEADER.logoRadius);
   base.bgOpacity = clamp(h.bgOpacity, 0, 1, DEFAULT_HEADER.bgOpacity);
   base.bgAssetPath = typeof h.bgAssetPath === 'string' && h.bgAssetPath.trim() ? h.bgAssetPath.trim() : null;
+  base.logoAssetPath = typeof h.logoAssetPath === 'string' && h.logoAssetPath.trim() ? h.logoAssetPath.trim() : null;
   base.showTitle = bool(h.showTitle, DEFAULT_HEADER.showTitle);
   base.showSubtitle = bool(h.showSubtitle, DEFAULT_HEADER.showSubtitle);
   base.showGenerated = bool(h.showGenerated, DEFAULT_HEADER.showGenerated);

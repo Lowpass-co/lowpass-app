@@ -139,9 +139,14 @@ Reference tour: "Warning Support". Templates picker needs a NEW empty tour.
   summary-line + Lowpass-mark toggles change the downloaded PDF's repeating footer
   (the editor notes the footer is print-only — it isn't in the live preview, which is
   a single self-contained page, not paginated).
-- **EXP-TPL2-04 — background image (Part A4).** A header background image (uploaded to
-  the `export-assets` bucket) renders as a faded layer behind the letterhead at the
-  configured opacity, in preview + PDF. (See EXP-TPL2-A4 below.)
+- **EXP-TPL2-04 — image upload (Part A4).** The Header panel uploads a header
+  **logo** (overrides the artist logo) and a **background image** (a faded layer
+  behind the letterhead at the opacity slider's value) to the PRIVATE `export-assets`
+  bucket (migration 223, workspace-scoped RLS) via `POST /api/export/assets` →
+  `{ path }`. The render resolves the path → base64 data-URI server-side
+  (`fetchExportAssetDataUri`, workspace-prefix guarded), so the browser never holds a
+  URL (private-bucket-safe). Both appear in preview + PDF; a foreign-workspace path is
+  rejected (no cross-workspace asset read). 5MB cap, image MIME allowlist.
 - **EXP-TPL2-05 — DEFAULT still = P1 output (no regression).** With no styling
   changes the document is byte-for-byte the Phase-1 output: each style group's default
   emits no override and the letterhead is the committed P1 letterhead (proven by the
