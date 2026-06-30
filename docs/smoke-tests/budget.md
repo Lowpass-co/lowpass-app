@@ -20,6 +20,34 @@ Reference tour: "Warning Support". Templates picker needs a NEW empty tour.
 | BUD-19 | FIXED | click-to-rename templates + consistent picker (Fix-pack C) |
 | BUD-20 | FIXED | summary reads live from `section_id`; no phantom sections (Fix-pack A) |
 
+## Document Export v2 — payroll upgrade (#8 — feat/export-v2-payroll)
+
+> Payroll goes out to crew to invoice against — clearer + flexible. Mode toggle,
+> a shared date-range, invoice-clarity options. All in jsonb config (no migration).
+> Numbers from the SAME fees.ts (run-sheet totals unchanged → EXP-PAY-01 holds).
+> tsc 0, eslint 0, build green.
+
+- **EXP-V2E-01 — Combined vs Individual mode.** Combined = the master run sheet +
+  every per-person statement (today). Individual = statements only (the run sheet is
+  hidden), one page per person to send each crew member their own. (Proven: combined
+  has the run sheet + all statements; individual drops the run sheet, keeps the
+  statements.)
+- **EXP-V2E-02 — shared date-range picker.** `config.dateRange.{from,to}` (default
+  null = whole tour). The payroll loader counts only day_statuses within the range
+  (the one-time advance is dropped only if its week is fully out of range); editor
+  from/to date inputs + "Whole tour" reset. Default (no range) → counts + advance
+  identical to today (proven). The range is shared (Routing + Rooming adopt it in
+  Parts F/G).
+- **EXP-V2E-03 — invoice clarity.** Each statement shows a "N days worked" line; the
+  Payroll panel toggles the **Days grid** (weekly Show/Off/Reh), **Where we were** (a
+  per-day list date · type · city · venue, joined from routing), and the **Advance
+  fee** line. (Proven: venuePerDay adds the "Where we were" table with the city/venue;
+  daysGrid off removes the weekly grid; advance off hides the advance line.)
+- **EXP-V2E-04 — internal rate still excluded + RLS.** internal_rate is still never
+  loaded (D5); individual mode's per-person filter (`payroll.personId`, by rate-card
+  id) is applied in the loader. Workspace-RLS scoped; the date range + mode apply to
+  the Excel export too.
+
 ## Document Export v2 — header customisation (#8 — feat/export-v2-header)
 
 > The letterhead gets custom text + sizes + a notes block. All in the header jsonb

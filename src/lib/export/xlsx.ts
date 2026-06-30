@@ -106,7 +106,10 @@ export async function buildXlsxExport(
     artistName = data.artist?.name ?? null;
     label = 'Rooming';
   } else if (surface === 'payroll') {
-    const data = await loadPayrollExportData(supabase, tour, workspaceId);
+    const data = await loadPayrollExportData(supabase, tour, workspaceId, {
+      range: config.dateRange,
+      personId: config.payroll.mode === 'individual' ? config.payroll.personId : null,
+    });
     sheets = payrollSheets(data);
     artistName = data.artist?.name ?? null;
     label = 'Payroll';

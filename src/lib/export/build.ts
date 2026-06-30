@@ -162,9 +162,17 @@ export async function buildPayrollExport(
   workspaceId: string,
   config: TemplateConfig,
 ): Promise<ExportBuild> {
-  const data = await loadPayrollExportData(supabase, tour, workspaceId);
+  const data = await loadPayrollExportData(supabase, tour, workspaceId, {
+    range: config.dateRange,
+    personId: config.payroll.mode === 'individual' ? config.payroll.personId : null,
+    venuePerDay: config.payroll.venuePerDay,
+  });
   const logoDataUri = config.logo ? await resolveLogo(supabase, workspaceId, config, data.logoUrl) : null;
   const bgDataUri = await fetchExportAssetDataUri(supabase, workspaceId, config.header.bgAssetPath);
+
+  const modeLabel = config.payroll.mode === 'individual' ? 'Individual statements' : null;
+  const rangeLabel = config.dateRange.from || config.dateRange.to ? tourDateRange(config.dateRange.from, config.dateRange.to) : null;
+  const subtitle = [`${data.persons.length} crew · ${data.currency}`, modeLabel, rangeLabel].filter(Boolean).join(' · ');
 
   const html = renderDocument({
     letterhead: {
@@ -177,7 +185,7 @@ export async function buildPayrollExport(
     },
     pageSize: config.pageSize,
     title: 'Payroll',
-    subtitle: `${data.persons.length} crew · ${data.currency}`,
+    subtitle,
     general: config.general,
     header: config.header,
     bgDataUri,

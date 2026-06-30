@@ -53,6 +53,11 @@ const SCOPES: ReadonlyArray<{ value: BudgetScope; label: string }> = [
   { value: 'actual', label: 'Actual' },
 ];
 
+const PAYROLL_MODES: ReadonlyArray<{ value: 'combined' | 'individual'; label: string }> = [
+  { value: 'combined', label: 'Combined (run sheet + statements)' },
+  { value: 'individual', label: 'Individual (statements only)' },
+];
+
 const FORMATS: ReadonlyArray<{ value: ExportFormat; label: string }> = [
   { value: 'pdf', label: 'PDF (print)' },
   { value: 'excel', label: 'Excel (data)' },
@@ -224,6 +229,13 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
   }, []);
   const setHeaderSize = useCallback((k: keyof TemplateConfig['header']['size'], v: number | null) => {
     setConfig((c) => ({ ...c, header: { ...c.header, size: { ...c.header.size, [k]: v } } }));
+  }, []);
+  // Part E — payroll options + the shared date range.
+  const setPayroll = useCallback(<K extends keyof TemplateConfig['payroll']>(k: K, v: TemplateConfig['payroll'][K]) => {
+    setConfig((c) => ({ ...c, payroll: { ...c.payroll, [k]: v } }));
+  }, []);
+  const setRange = useCallback((k: 'from' | 'to', v: string) => {
+    setConfig((c) => ({ ...c, dateRange: { ...c.dateRange, [k]: v || null } }));
   }, []);
 
   // --- Phase 3: saved templates (workspace + global tier) ---
@@ -593,6 +605,24 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
               </AccordionGroup>
             ) : null}
 
+            {surface === 'payroll' ? (
+              <AccordionGroup id="payroll" label="Payroll" defaultOpen>
+                <FieldLabel>Mode</FieldLabel>
+                <Segmented options={PAYROLL_MODES} value={config.payroll.mode} onChange={(v) => setPayroll('mode', v)} />
+                <p style={{ fontSize: 11, color: 'var(--lp-text-tertiary)' }}>{config.payroll.mode === 'individual' ? 'Per-person statements only (one page each) — send each person their own. The run sheet is hidden.' : 'The master run sheet + every per-person statement.'}</p>
+                <FieldLabel>Statement includes</FieldLabel>
+                <Toggle label="Days grid (per week)" checked={config.payroll.daysGrid} onChange={(v) => setPayroll('daysGrid', v)} />
+                <Toggle label="Where we were (per day)" checked={config.payroll.venuePerDay} onChange={(v) => setPayroll('venuePerDay', v)} />
+                <Toggle label="Advance fee line" checked={config.payroll.advance} onChange={(v) => setPayroll('advance', v)} />
+              </AccordionGroup>
+            ) : null}
+
+            {surface === 'payroll' ? (
+              <AccordionGroup id="daterange" label="Date range">
+                <DateRangeField range={config.dateRange} onChange={setRange} />
+              </AccordionGroup>
+            ) : null}
+
             {isExcel ? null : (
             <>
             <AccordionGroup id="general" label="General">
@@ -819,6 +849,29 @@ function TemplateRow({ t, selected, onApply, onSetDefault, onDelete }: { t: Save
 
 function FieldLabel({ children }: { children: React.ReactNode }) {
   return <div style={{ fontSize: 11, color: 'var(--lp-text-tertiary)', fontWeight: 600 }}>{children}</div>;
+}
+
+function DateRangeField({ range, onChange }: { range: { from: string | null; to: string | null }; onChange: (k: 'from' | 'to', v: string) => void }) {
+  const inputStyle: React.CSSProperties = { flex: 1, minWidth: 0, padding: '5px 8px', fontSize: 12, borderRadius: 'var(--lp-radius-md)', border: '1px solid var(--lp-border)', background: 'transparent', color: 'var(--lp-text)' };
+  return (
+    <>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span style={{ fontSize: 11, color: 'var(--lp-text-tertiary)', flex: '0 0 32px' }}>From</span>
+        <input type="date" value={range.from ?? ''} onChange={(e) => onChange('from', e.target.value)} style={inputStyle} />
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+        <span style={{ fontSize: 11, color: 'var(--lp-text-tertiary)', flex: '0 0 32px' }}>To</span>
+        <input type="date" value={range.to ?? ''} onChange={(e) => onChange('to', e.target.value)} style={inputStyle} />
+      </div>
+      {range.from || range.to ? (
+        <button type="button" onClick={() => { onChange('from', ''); onChange('to', ''); }} className="btn-transition" style={{ alignSelf: 'flex-start', border: 0, background: 'transparent', cursor: 'pointer', fontSize: 11, color: 'var(--lp-text-tertiary)', textDecoration: 'underline' }}>
+          Whole tour
+        </button>
+      ) : (
+        <p style={{ fontSize: 11, color: 'var(--lp-text-tertiary)' }}>Blank = the whole tour.</p>
+      )}
+    </>
+  );
 }
 
 function ImageField({ label, set, uploading, onPick, onClear }: { label: string; set: boolean; uploading: boolean; onPick: (f: File) => void; onClear: () => void }) {

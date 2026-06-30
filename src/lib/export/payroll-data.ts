@@ -19,6 +19,21 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { resolveArtistLogoUrl } from '@/lib/artists/imageUrl';
 import { countDayStatuses, computeTotalFee, computeTotalPerDiem, type DayCounts } from '@/lib/payroll/fees';
+import type { DateRange } from '@/lib/export/template-config';
+
+/** A worked day with its location (Part E — the statement's "where we were" list). */
+export interface PayrollDayRow {
+  date: string;
+  status: string;
+  city: string | null;
+  venue: string | null;
+}
+
+export interface PayrollLoadOptions {
+  range?: DateRange;
+  personId?: string | null;
+  venuePerDay?: boolean;
+}
 
 export interface PayrollWeek {
   weekStart: string;
@@ -28,6 +43,8 @@ export interface PayrollWeek {
 }
 
 export interface PayrollPerson {
+  /** personnel_rates.id — used by the individual-mode person filter. */
+  id: string;
   name: string;
   role: string | null;
   showRate: number;
@@ -43,6 +60,9 @@ export interface PayrollPerson {
   total: number;
   /** Per-week breakdown for the statement page. */
   weeks: PayrollWeek[];
+  /** Per-day worked rows (date · status · city · venue) — only populated when
+   *  venuePerDay is requested. */
+  dayRows: PayrollDayRow[];
 }
 
 export interface PayrollExportData {
@@ -58,13 +78,28 @@ export interface PayrollExportData {
 
 const num = (v: unknown): number => Number(v) || 0;
 
+/** Keep only day_statuses whose date falls within [from,to] (null = open). */
+function filterStatusesByRange(statuses: Record<string, string> | null, range?: DateRange): Record<string, string> {
+  const all = statuses ?? {};
+  if (!range || (!range.from && !range.to)) return all;
+  const out: Record<string, string> = {};
+  for (const [date, status] of Object.entries(all)) {
+    if (range.from && date < range.from) continue;
+    if (range.to && date > range.to) continue;
+    out[date] = status;
+  }
+  return out;
+}
+
 export async function loadPayrollExportData(
   supabase: SupabaseClient,
   tour: { id: string; name: string; currency: string | null; start_date: string | null; end_date: string | null; artist_id: string | null },
   workspaceId: string,
+  opts?: PayrollLoadOptions,
 ): Promise<PayrollExportData> {
   const tourId = tour.id;
   const currency = (tour.currency || 'GBP').toUpperCase();
+  const range = opts?.range;
 
   const [rosterRes, ratesRes, entriesRes, artistRes] = await Promise.all([
     supabase.from('tour_personnel').select('id, person_id, role').eq('tour_id', tourId).eq('workspace_id', workspaceId),
@@ -123,7 +158,21 @@ export async function loadPayrollExportData(
     entriesByRateId.set(e.personnel_id, arr);
   }
 
-  const persons: PayrollPerson[] = rates.map((rate) => {
+  // Per-day venue map (Part E — "where we were") — only when requested.
+  const venueByDate = new Map<string, { city: string | null; venue: string | null }>();
+  if (opts?.venuePerDay) {
+    const { data: rt } = await supabase
+      .from('routing')
+      .select('date, city, venue_name, canonical_venues(name, city)')
+      .eq('tour_id', tourId);
+    for (const r of (rt ?? []) as Array<{ date: string; city: string | null; venue_name: string | null; canonical_venues?: { name?: string | null; city?: string | null } | Array<{ name?: string | null; city?: string | null }> | null }>) {
+      const canon = Array.isArray(r.canonical_venues) ? r.canonical_venues[0] : r.canonical_venues;
+      venueByDate.set(r.date, { city: (canon?.city ?? r.city) || null, venue: (canon?.name ?? r.venue_name) || null });
+    }
+  }
+  const rangeActive = !!(range && (range.from || range.to));
+
+  let persons: PayrollPerson[] = rates.map((rate) => {
     const rosterRow = rate.tour_personnel_id ? rosterById.get(rate.tour_personnel_id) : undefined;
     const liveName = rosterRow?.person_id ? nameByPersonId.get(rosterRow.person_id) : undefined;
     const name = (liveName && liveName.length ? liveName : rate.person_name?.trim() || '—') as string;
@@ -134,9 +183,15 @@ export async function loadPayrollExportData(
     let fee = 0;
     let perDiemTotal = 0;
     const weeks: PayrollWeek[] = [];
+    const dayRows: PayrollDayRow[] = [];
     for (const e of myEntries) {
-      const counts = countDayStatuses(e.day_statuses);
-      const wFee = computeTotalFee(rate, counts, e.advance_fee);
+      const filtered = filterStatusesByRange(e.day_statuses, range);
+      const counts = countDayStatuses(filtered);
+      // The one-time advance sits on the week-1 entry — drop it only if the date
+      // range fully excludes that week (no in-range days). Default (no range) is
+      // unchanged: the advance always applies.
+      const adv = rangeActive ? (counts.active > 0 ? e.advance_fee : 0) : e.advance_fee;
+      const wFee = computeTotalFee(rate, counts, adv);
       const wPd = computeTotalPerDiem(rate, counts);
       agg.show += counts.show;
       agg.offTravel += counts.offTravel;
@@ -144,10 +199,19 @@ export async function loadPayrollExportData(
       agg.active += counts.active;
       fee += wFee;
       perDiemTotal += wPd;
-      weeks.push({ weekStart: e.week_start, counts, fee: wFee, perDiem: wPd });
+      if (counts.active > 0 || !rangeActive) weeks.push({ weekStart: e.week_start, counts, fee: wFee, perDiem: wPd });
+      if (opts?.venuePerDay) {
+        for (const [date, status] of Object.entries(filtered)) {
+          if (status !== 'show' && status !== 'off_travel' && status !== 'rehearsal') continue;
+          const v = venueByDate.get(date);
+          dayRows.push({ date, status, city: v?.city ?? null, venue: v?.venue ?? null });
+        }
+      }
     }
+    dayRows.sort((a, b) => a.date.localeCompare(b.date));
 
     return {
+      id: rate.id,
       name,
       role,
       showRate: num(rate.show_rate),
@@ -159,8 +223,12 @@ export async function loadPayrollExportData(
       perDiemTotal,
       total: fee + perDiemTotal,
       weeks,
+      dayRows,
     };
   });
+
+  // Individual-mode person filter (by rate-card id).
+  if (opts?.personId) persons = persons.filter((p) => p.id === opts.personId);
 
   const grandFee = persons.reduce((s, p) => s + p.fee, 0);
   const grandPerDiem = persons.reduce((s, p) => s + p.perDiemTotal, 0);

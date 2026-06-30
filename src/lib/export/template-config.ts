@@ -95,6 +95,23 @@ export interface FooterStyle {
   summaryLine: boolean; // true — the "Artist — Tour · Surface" note + mark
 }
 
+/** Shared date-range filter (Part E) — null = the whole tour. Used by payroll /
+ *  routing / rooming to export a slice. ISO yyyy-mm-dd strings. */
+export interface DateRange {
+  from: string | null;
+  to: string | null;
+}
+
+/** Payroll-surface options (Part E). */
+export type PayrollMode = 'combined' | 'individual';
+export interface PayrollOptions {
+  mode: PayrollMode; // 'combined' = run sheet + statements; 'individual' = statements only
+  personId: string | null; // individual mode — narrow to one crew member's rate-card id
+  daysGrid: boolean; // statement: the weekly Show/Off/Reh grid
+  venuePerDay: boolean; // statement: a per-day "where we were" list (date · city · venue)
+  advance: boolean; // statement: the advance-fee line
+}
+
 export interface TemplateConfig {
   /** Schema version (forward-compat). */
   v: 1;
@@ -114,6 +131,10 @@ export interface TemplateConfig {
   header: HeaderStyle;
   /** Phase 2 — footer styling. */
   footer: FooterStyle;
+  /** Part E — shared date-range filter (null/null = whole tour). */
+  dateRange: DateRange;
+  /** Part E — payroll-surface options (only meaningful for surface 'payroll'). */
+  payroll: PayrollOptions;
 }
 
 /** The section ids each surface's body builder owns (coarse, P1). Additive — new
@@ -178,6 +199,9 @@ export const DEFAULT_FOOTER: FooterStyle = {
   summaryLine: true,
 };
 
+export const DEFAULT_DATE_RANGE: DateRange = { from: null, to: null };
+export const DEFAULT_PAYROLL_OPTIONS: PayrollOptions = { mode: 'combined', personId: null, daysGrid: true, venuePerDay: false, advance: true };
+
 export const DEFAULT_BUDGET_CONFIG: TemplateConfig = {
   v: 1,
   surface: 'budget',
@@ -189,6 +213,8 @@ export const DEFAULT_BUDGET_CONFIG: TemplateConfig = {
   general: DEFAULT_GENERAL,
   header: DEFAULT_HEADER,
   footer: DEFAULT_FOOTER,
+  dateRange: DEFAULT_DATE_RANGE,
+  payroll: DEFAULT_PAYROLL_OPTIONS,
 };
 
 export const DEFAULT_ROOMING_CONFIG: TemplateConfig = {
@@ -201,6 +227,8 @@ export const DEFAULT_ROOMING_CONFIG: TemplateConfig = {
   general: DEFAULT_GENERAL,
   header: DEFAULT_HEADER,
   footer: DEFAULT_FOOTER,
+  dateRange: DEFAULT_DATE_RANGE,
+  payroll: DEFAULT_PAYROLL_OPTIONS,
 };
 
 export const DEFAULT_PAYROLL_CONFIG: TemplateConfig = {
@@ -213,6 +241,8 @@ export const DEFAULT_PAYROLL_CONFIG: TemplateConfig = {
   general: DEFAULT_GENERAL,
   header: DEFAULT_HEADER,
   footer: DEFAULT_FOOTER,
+  dateRange: DEFAULT_DATE_RANGE,
+  payroll: DEFAULT_PAYROLL_OPTIONS,
 };
 
 /** Routing: the advance summary is OFF by default (D7 — itinerary first; the
@@ -230,6 +260,8 @@ export const DEFAULT_ROUTING_CONFIG: TemplateConfig = {
   general: DEFAULT_GENERAL,
   header: DEFAULT_HEADER,
   footer: DEFAULT_FOOTER,
+  dateRange: DEFAULT_DATE_RANGE,
+  payroll: DEFAULT_PAYROLL_OPTIONS,
 };
 
 export function defaultConfig(surface: ExportSurface): TemplateConfig {
@@ -336,6 +368,32 @@ function normalizeFooter(input: unknown): FooterStyle {
   return base;
 }
 
+/** Accept only a plausible ISO yyyy-mm-dd date, else null. */
+function isoDateOrNull(v: unknown): string | null {
+  return typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null;
+}
+
+function normalizeDateRange(input: unknown): DateRange {
+  if (!input || typeof input !== 'object') return { from: null, to: null };
+  const d = input as Partial<DateRange>;
+  let from = isoDateOrNull(d.from);
+  let to = isoDateOrNull(d.to);
+  if (from && to && from > to) [from, to] = [to, from]; // swap if reversed
+  return { from, to };
+}
+
+function normalizePayroll(input: unknown): PayrollOptions {
+  const base: PayrollOptions = { ...DEFAULT_PAYROLL_OPTIONS };
+  if (!input || typeof input !== 'object') return base;
+  const p = input as Partial<PayrollOptions>;
+  if (p.mode === 'combined' || p.mode === 'individual') base.mode = p.mode;
+  base.personId = typeof p.personId === 'string' && p.personId.trim() ? p.personId.trim() : null;
+  base.daysGrid = bool(p.daysGrid, DEFAULT_PAYROLL_OPTIONS.daysGrid);
+  base.venuePerDay = bool(p.venuePerDay, DEFAULT_PAYROLL_OPTIONS.venuePerDay);
+  base.advance = bool(p.advance, DEFAULT_PAYROLL_OPTIONS.advance);
+  return base;
+}
+
 /** Coerce an untrusted (request-body) config onto the surface's default — keeps
  *  the canonical section set + order rules, drops unknown ids, restores any
  *  missing section, clamps page size / scope / every style field. A malformed
@@ -372,5 +430,7 @@ export function normalizeConfig(surface: ExportSurface, input: unknown): Templat
   base.general = normalizeGeneral(c.general);
   base.header = normalizeHeader(c.header);
   base.footer = normalizeFooter(c.footer);
+  base.dateRange = normalizeDateRange(c.dateRange);
+  if (surface === 'payroll') base.payroll = normalizePayroll(c.payroll);
   return base;
 }
