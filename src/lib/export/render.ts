@@ -61,50 +61,53 @@ export interface ExportDoc {
 /** Build the doc (loaders + html) then render + stream it. The `build` callback is
  *  run INSIDE the try, so a loader/data throw is surfaced too — not just a render
  *  throw. `surface` tags the server log. */
+/** Render ONE ExportDoc to a PDF buffer via the shared puppeteer pipeline (the same
+ *  header/footer logic + footer-fallback as exportPdfResponse). Used by the single-
+ *  doc response AND the payroll zip (multiple docs in one request). `surface` only
+ *  tags the log. */
+export async function renderPdfBuffer(surface: string, doc: ExportDoc): Promise<Uint8Array> {
+  const { html, footerNote, markDataUri, footer, runningHeader } = doc;
+  const browser = await getBrowser();
+  const page = await browser.newPage();
+  try {
+    await page.setContent(html, { waitUntil: 'load', timeout: 20_000 });
+    // Footer: show:false → a minimal non-empty template (Chromium needs one to
+    // honour the bottom margin) with no mark/note/numbers.
+    const footerTemplate =
+      footer?.show === false
+        ? '<span></span>'
+        : pdfFooterTemplate(footerNote, markDataUri, { summaryLine: footer?.summaryLine, pageNumbers: footer?.pageNumbers });
+    // Part B — the reduced running header (repeats on every page). Page 1's full
+    // banner sits in the content below this slim margin band.
+    const headerTemplate = runningHeader ? pdfRunningHeaderTemplate(runningHeader) : PDF_HEADER_TEMPLATE;
+    try {
+      return await page.pdf({ ...PAGE_PDF_OPTIONS, headerTemplate, footerTemplate });
+    } catch (footerErr) {
+      // The header/footer templates are the only thing this does beyond the
+      // proven-good rider route — if Chromium rejects them, render plain.
+      console.error(`[export:${surface}] header/footer render failed, retrying plain:`, footerErr instanceof Error ? footerErr.message : footerErr);
+      return await page.pdf({ format: 'A4', printBackground: true, margin: { top: '16mm', right: '14mm', bottom: '16mm', left: '14mm' } });
+    }
+  } finally {
+    await closePage(page);
+  }
+}
+
 export async function exportPdfResponse(
   surface: string,
   build: () => Promise<ExportDoc>,
 ): Promise<Response> {
   try {
-    const { html, footerNote, markDataUri, filename, footer, runningHeader } = await build();
-
-    const browser = await getBrowser();
-    const page = await browser.newPage();
-    try {
-      await page.setContent(html, { waitUntil: 'load', timeout: 20_000 });
-      // Footer: show:false → a minimal non-empty template (Chromium needs one to
-      // honour the bottom margin) with no mark/note/numbers.
-      const footerTemplate =
-        footer?.show === false
-          ? '<span></span>'
-          : pdfFooterTemplate(footerNote, markDataUri, { summaryLine: footer?.summaryLine, pageNumbers: footer?.pageNumbers });
-      // Part B — the reduced running header (repeats on every page). Page 1's full
-      // banner sits in the content below this slim margin band.
-      const headerTemplate = runningHeader ? pdfRunningHeaderTemplate(runningHeader) : PDF_HEADER_TEMPLATE;
-      let buffer: Uint8Array;
-      try {
-        buffer = await page.pdf({
-          ...PAGE_PDF_OPTIONS,
-          headerTemplate,
-          footerTemplate,
-        });
-      } catch (footerErr) {
-        // The header/footer templates are the only thing this does beyond the
-        // proven-good rider route — if Chromium rejects them, render plain.
-        console.error(`[export:${surface}] header/footer render failed, retrying plain:`, footerErr instanceof Error ? footerErr.message : footerErr);
-        buffer = await page.pdf({ format: 'A4', printBackground: true, margin: { top: '16mm', right: '14mm', bottom: '16mm', left: '14mm' } });
-      }
-      return new Response(new Uint8Array(buffer), {
-        status: 200,
-        headers: {
-          'Content-Type': 'application/pdf',
-          'Content-Disposition': contentDisposition(filename),
-          'Cache-Control': 'no-store',
-        },
-      });
-    } finally {
-      await closePage(page);
-    }
+    const doc = await build();
+    const buffer = await renderPdfBuffer(surface, doc);
+    return new Response(new Uint8Array(buffer), {
+      status: 200,
+      headers: {
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': contentDisposition(doc.filename),
+        'Cache-Control': 'no-store',
+      },
+    });
   } catch (err) {
     return exportErrorResponse(surface, err);
   }

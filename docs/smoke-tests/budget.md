@@ -20,6 +20,26 @@ Reference tour: "Warning Support". Templates picker needs a NEW empty tour.
 | BUD-19 | FIXED | click-to-rename templates + consistent picker (Fix-pack C) |
 | BUD-20 | FIXED | summary reads live from `section_id`; no phantom sections (Fix-pack A) |
 
+## Document Export v2.1 — payroll polish (#8 — feat/export-v21-payroll)
+
+> Payroll goes out to crew. jszip dep (no migration). Numbers from the same fees.ts
+> (run-sheet totals unchanged). tsc 0, eslint 0, build green.
+
+- **EXP-V21C-01 — "Routing" grid, bigger breakdown.** The per-day list is relabelled
+  **Routing** (export + the editor toggle) and rendered as a clean bordered grid; the
+  fee breakdown is larger (12px body, 14px "Amount due") + headed "Fee breakdown".
+  (Proven: `>Routing<` present, "Where we were" gone; the larger font sizes render.)
+- **EXP-V21C-02 — folder export (zip).** `POST /api/payroll/[tourId]/export/zip` →
+  a .zip with the COMBINED run-sheet+statements PDF AND one statement PDF per person
+  (JSZip; the shared `renderPdfBuffer` renders each via the same puppeteer pipeline;
+  capped at 40 people for the function budget). Editor: a "Download all (zip)" button.
+  internal_rate never loaded (D5); workspace-RLS scoped.
+- **EXP-V21C-03 — people picker.** `config.payroll.selectedPersonIds` (null = All)
+  narrows who's in the export; the editor fetches the roster
+  (`GET /api/payroll/[tourId]/roster`) and shows "All crew" + per-person checkboxes.
+  The loader filters persons to the selection (+ the existing individual-mode single
+  filter). Default null → everyone (proven). The picker applies to PDF + Excel + zip.
+
 ## Document Export v2.1 — Excel rework (#8 — feat/export-v21-xlsx)
 
 > Adam: "the Excel option is SO bad." Rebuilt `src/lib/export/xlsx.ts` on **ExcelJS**

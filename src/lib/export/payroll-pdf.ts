@@ -131,11 +131,12 @@ function renderStatement(p: PayrollPerson, ccy: string, opts: StatementOpts): st
     </table>`
     : '';
 
-  // Optional per-day "where we were" list (date · status · city · venue).
+  // Optional per-day Routing list (date · type · city · venue) — a clean bordered
+  // grid (relabelled from "where we were" per Adam).
   const venueBlock =
     opts.venuePerDay && p.dayRows.length
       ? `
-    <div class="lp-sec-head" style="font-size:11px;">Where we were</div>
+    <div class="lp-sec-head" style="font-size:11px;">Routing</div>
     <table class="lp-tbl">
       <thead><tr><th>Date</th><th>Type</th><th>City</th><th>Venue</th></tr></thead>
       <tbody>${p.dayRows
@@ -153,11 +154,12 @@ function renderStatement(p: PayrollPerson, ccy: string, opts: StatementOpts): st
     <div class="lp-page-break"></div>
     <div class="lp-sec-head">${esc(p.name)}</div>
     <div class="lp-native" style="margin:-2px 0 6px;">${[esc(p.role ?? 'Crew'), esc(ccy), esc(worked)].join('  ·  ')}</div>${scheduleBlock}${venueBlock}
-    <table class="lp-tbl">
-      <thead><tr><th>Breakdown</th><th></th><th class="num">Amount</th></tr></thead>
+    <div class="lp-sec-head" style="font-size:11px;">Fee breakdown</div>
+    <table class="lp-tbl" style="font-size:12px;">
+      <thead><tr><th>Item</th><th></th><th class="num">Amount</th></tr></thead>
       <tbody>
         ${breakdown}
-        <tr class="lp-subtotal"><td colspan="2">Amount due</td><td class="num">${esc(money(p.total, ccy))}</td></tr>
+        <tr class="lp-subtotal" style="font-size:14px;"><td colspan="2">Amount due</td><td class="num">${esc(money(p.total, ccy))}</td></tr>
       </tbody>
     </table>`;
 }

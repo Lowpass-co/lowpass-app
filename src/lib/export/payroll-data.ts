@@ -32,6 +32,8 @@ export interface PayrollDayRow {
 export interface PayrollLoadOptions {
   range?: DateRange;
   personId?: string | null;
+  /** People picker — null/undefined = everyone; else only these rate-card ids. */
+  selectedIds?: string[] | null;
   venuePerDay?: boolean;
 }
 
@@ -227,7 +229,11 @@ export async function loadPayrollExportData(
     };
   });
 
-  // Individual-mode person filter (by rate-card id).
+  // People picker (multi-select) then the individual-mode single-person filter.
+  if (opts?.selectedIds && opts.selectedIds.length) {
+    const set = new Set(opts.selectedIds);
+    persons = persons.filter((p) => set.has(p.id));
+  }
   if (opts?.personId) persons = persons.filter((p) => p.id === opts.personId);
 
   const grandFee = persons.reduce((s, p) => s + p.fee, 0);

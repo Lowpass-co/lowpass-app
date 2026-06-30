@@ -16,7 +16,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronRight, Eye, EyeOff, FileSpreadsheet, GripVertical, Globe, Loader2, Maximize2, Trash2, Upload, X, ZoomIn, ZoomOut } from 'lucide-react';
+import { ChevronRight, Eye, EyeOff, FileSpreadsheet, FolderArchive, GripVertical, Globe, Loader2, Maximize2, Trash2, Upload, X, ZoomIn, ZoomOut } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
 import {
   defaultConfig,
@@ -255,6 +255,36 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
   const setRouting = useCallback(<K extends keyof TemplateConfig['routing']>(k: K, v: TemplateConfig['routing'][K]) => {
     setConfig((c) => ({ ...c, routing: { ...c.routing, [k]: v } }));
   }, []);
+
+  // Part C — the crew roster for the people picker + the zip "Download all".
+  const [roster, setRoster] = useState<Array<{ id: string; name: string }>>([]);
+  useEffect(() => {
+    if (surface !== 'payroll') return;
+    void (async () => {
+      try {
+        const res = await fetch(`/api/payroll/${encodeURIComponent(tourId)}/roster`);
+        if (res.ok) setRoster(((await res.json()) as { people: Array<{ id: string; name: string }> }).people);
+      } catch { /* picker degrades to All */ }
+    })();
+  }, [surface, tourId]);
+
+  const [zipBusy, setZipBusy] = useState(false);
+  const downloadZip = useCallback(async () => {
+    if (zipBusy) return;
+    setZipBusy(true);
+    try {
+      const res = await fetch(`/api/payroll/${encodeURIComponent(tourId)}/export/zip`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ config }),
+      });
+      if (!res.ok) { showToast('Could not generate the zip', 'error'); setZipBusy(false); return; }
+      const blob = await res.blob();
+      const cd = res.headers.get('Content-Disposition') ?? '';
+      const name = /filename="(.+?)"/.exec(cd)?.[1] ?? 'Payroll.zip';
+      const objUrl = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = objUrl; a.download = name;
+      document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(objUrl);
+    } catch { showToast('Could not generate the zip', 'error'); } finally { setZipBusy(false); }
+  }, [config, showToast, tourId, zipBusy]);
 
   // --- Phase 3: saved templates (workspace + global tier) ---
   const [templates, setTemplates] = useState<SavedTemplate[]>([]);
@@ -604,8 +634,40 @@ export function ExportTemplateEditor({ surface, tourId, versionId = null, initia
                 <p style={{ fontSize: 11, color: 'var(--lp-text-tertiary)' }}>{config.payroll.mode === 'individual' ? 'Per-person statements only (one page each) — send each person their own. The run sheet is hidden.' : 'The master run sheet + every per-person statement.'}</p>
                 <FieldLabel>Statement includes</FieldLabel>
                 <Toggle label="Days grid (per week)" checked={config.payroll.daysGrid} onChange={(v) => setPayroll('daysGrid', v)} />
-                <Toggle label="Where we were (per day)" checked={config.payroll.venuePerDay} onChange={(v) => setPayroll('venuePerDay', v)} />
+                <Toggle label="Routing (per day)" checked={config.payroll.venuePerDay} onChange={(v) => setPayroll('venuePerDay', v)} />
                 <Toggle label="Advance fee line" checked={config.payroll.advance} onChange={(v) => setPayroll('advance', v)} />
+                <FieldLabel>People</FieldLabel>
+                <Toggle
+                  label="All crew"
+                  checked={config.payroll.selectedPersonIds === null}
+                  onChange={(v) => setPayroll('selectedPersonIds', v ? null : roster.map((r) => r.id))}
+                />
+                {config.payroll.selectedPersonIds !== null && roster.length > 0 ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 168, overflowY: 'auto', paddingLeft: 6, borderLeft: '2px solid var(--lp-border)' }}>
+                    {roster.map((r) => (
+                      <Toggle
+                        key={r.id}
+                        label={r.name}
+                        checked={config.payroll.selectedPersonIds?.includes(r.id) ?? false}
+                        onChange={(v) =>
+                          setConfig((c) => {
+                            const cur = c.payroll.selectedPersonIds ?? [];
+                            const next = v ? Array.from(new Set([...cur, r.id])) : cur.filter((x) => x !== r.id);
+                            return { ...c, payroll: { ...c.payroll, selectedPersonIds: next } };
+                          })
+                        }
+                      />
+                    ))}
+                  </div>
+                ) : null}
+                <button
+                  type="button" onClick={() => void downloadZip()} disabled={zipBusy} className="btn-transition"
+                  style={{ marginTop: 4, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, border: '1px solid var(--lp-border)', borderRadius: 'var(--lp-radius-md)', padding: '7px 10px', fontSize: 12, fontWeight: 600, color: 'var(--lp-text)', background: 'transparent', cursor: zipBusy ? 'default' : 'pointer' }}
+                >
+                  {zipBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden /> : <FolderArchive className="h-3.5 w-3.5" aria-hidden />}
+                  {zipBusy ? 'Zipping…' : 'Download all (zip)'}
+                </button>
+                <p style={{ fontSize: 11, color: 'var(--lp-text-tertiary)' }}>Zip = the combined run sheet + one statement PDF per person.</p>
               </AccordionGroup>
             ) : null}
 

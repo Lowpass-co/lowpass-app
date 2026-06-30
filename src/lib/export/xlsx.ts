@@ -275,6 +275,7 @@ export async function buildXlsxExport(
     const data = await loadPayrollExportData(supabase, tour, workspaceId, {
       range: config.dateRange,
       personId: config.payroll.mode === 'individual' ? config.payroll.personId : null,
+      selectedIds: config.payroll.selectedPersonIds,
     });
     spec = payrollSheet(data);
     artistName = data.artist?.name ?? null;

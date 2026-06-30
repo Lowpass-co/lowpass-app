@@ -168,6 +168,7 @@ export async function buildPayrollExport(
   const data = await loadPayrollExportData(supabase, tour, workspaceId, {
     range: config.dateRange,
     personId: config.payroll.mode === 'individual' ? config.payroll.personId : null,
+    selectedIds: config.payroll.selectedPersonIds,
     venuePerDay: config.payroll.venuePerDay,
   });
   const logoDataUri = config.logo ? await resolveLogo(supabase, workspaceId, config, data.logoUrl) : null;

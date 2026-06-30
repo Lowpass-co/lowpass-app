@@ -114,9 +114,10 @@ export interface RoutingOptions {
 export type PayrollMode = 'combined' | 'individual';
 export interface PayrollOptions {
   mode: PayrollMode; // 'combined' = run sheet + statements; 'individual' = statements only
-  personId: string | null; // individual mode — narrow to one crew member's rate-card id
+  personId: string | null; // individual mode — narrow to one crew member's rate-card id (zip per-person)
+  selectedPersonIds: string[] | null; // people picker — null = everyone; else the included rate-card ids
   daysGrid: boolean; // statement: the weekly Show/Off/Reh grid
-  venuePerDay: boolean; // statement: a per-day "where we were" list (date · city · venue)
+  venuePerDay: boolean; // statement: a per-day routing list (date · city · venue)
   advance: boolean; // statement: the advance-fee line
 }
 
@@ -210,7 +211,7 @@ export const DEFAULT_FOOTER: FooterStyle = {
 };
 
 export const DEFAULT_DATE_RANGE: DateRange = { from: null, to: null };
-export const DEFAULT_PAYROLL_OPTIONS: PayrollOptions = { mode: 'combined', personId: null, daysGrid: true, venuePerDay: false, advance: true };
+export const DEFAULT_PAYROLL_OPTIONS: PayrollOptions = { mode: 'combined', personId: null, selectedPersonIds: null, daysGrid: true, venuePerDay: false, advance: true };
 export const DEFAULT_ROUTING_OPTIONS: RoutingOptions = { view: 'list', calendarTheme: 'light', travelTimes: false };
 
 export const DEFAULT_BUDGET_CONFIG: TemplateConfig = {
@@ -403,6 +404,9 @@ function normalizePayroll(input: unknown): PayrollOptions {
   const p = input as Partial<PayrollOptions>;
   if (p.mode === 'combined' || p.mode === 'individual') base.mode = p.mode;
   base.personId = typeof p.personId === 'string' && p.personId.trim() ? p.personId.trim() : null;
+  base.selectedPersonIds = Array.isArray(p.selectedPersonIds)
+    ? p.selectedPersonIds.filter((x): x is string => typeof x === 'string' && x.trim().length > 0)
+    : null;
   base.daysGrid = bool(p.daysGrid, DEFAULT_PAYROLL_OPTIONS.daysGrid);
   base.venuePerDay = bool(p.venuePerDay, DEFAULT_PAYROLL_OPTIONS.venuePerDay);
   base.advance = bool(p.advance, DEFAULT_PAYROLL_OPTIONS.advance);
