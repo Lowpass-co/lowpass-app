@@ -120,6 +120,16 @@ Reference tour: "Warning Support". Templates picker needs a NEW empty tour.
 - **EXP-FIX-07 — end-to-end render proof.** `loadBudgetExportData` → `buildBudgetBodyHtml`
   → `renderDocument` → Chrome `page.pdf` (the exact shell options + footer) produces a
   valid **3-page `%PDF-1.4`** for Warning Support, with income present.
+- **EXP-FIX-08 — THE root cause: em-dash in the filename header.** The download
+  filename `<Artist> — <Tour> — Budget.pdf` uses an em dash (—, U+2014); HTTP header
+  values must be Latin-1, so `new Response` threw `Cannot convert argument to a
+  ByteString` building `Content-Disposition` — AFTER a full 5.5s render (the PDF was
+  fine). Fixed with one shared RFC-5987 helper in `render.ts`: `filename="…"` ASCII
+  fallback (non-ASCII → `-`, quotes/backslashes stripped) + `filename*=UTF-8''…` for
+  the real Unicode name. Verified: the raw header throws the exact `TypeError`; the
+  RFC-5987 header builds the `Response` cleanly for an em dash AND accents
+  (José/Beyoncé). Budget/Rooming/future surfaces inherit it (built in the shared
+  Response path). Export now returns **200 · application/pdf**.
 
 ## Income redesign — Phase 1: Settlement (feat/income-settlement-phase1)
 

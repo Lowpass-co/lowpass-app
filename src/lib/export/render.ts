@@ -26,6 +26,20 @@ import { NextResponse } from 'next/server';
 import { getBrowser, closePage } from '@/lib/rider-packs/puppeteer';
 import { PAGE_PDF_OPTIONS, PDF_HEADER_TEMPLATE, pdfFooterTemplate } from '@/lib/export/shell';
 
+/** A header-safe `Content-Disposition` value (RFC 5987). HTTP header values must be
+ *  Latin-1 (≤255), so a filename with an em dash (—, U+2014, the "<Artist> — <Tour>"
+ *  separator) or an accent (José, Beyoncé) makes `new Response` throw
+ *  "Cannot convert argument to a ByteString". We emit BOTH:
+ *    - filename="…"  — ASCII fallback (non-ASCII → '-', quotes/backslashes stripped),
+ *      Latin-1 safe so it can never throw.
+ *    - filename*=UTF-8''… — the real Unicode name (percent-encoded → ASCII) for
+ *      modern browsers.
+ *  Shared here so Budget, Rooming, and the future Payroll/Routing all inherit it. */
+function contentDisposition(filename: string): string {
+  const asciiFallback = filename.normalize('NFKD').replace(/[^\x20-\x7E]/g, '-').replace(/["\\]/g, '');
+  return `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
+}
+
 export interface ExportDoc {
   /** The full self-contained shell HTML (renderDocument output). */
   html: string;
@@ -68,7 +82,7 @@ export async function exportPdfResponse(
         status: 200,
         headers: {
           'Content-Type': 'application/pdf',
-          'Content-Disposition': `attachment; filename="${filename}"`,
+          'Content-Disposition': contentDisposition(filename),
           'Cache-Control': 'no-store',
         },
       });
