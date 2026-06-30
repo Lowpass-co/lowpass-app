@@ -12,8 +12,10 @@
 
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
+import type { SupabaseClient } from '@supabase/supabase-js';
 
 const MAX_LOGO_BYTES = 3_000_000; // 3MB — a letterhead logo is never larger.
+const EXPORT_ASSETS_BUCKET = 'export-assets';
 
 /** Fetch a remote (artist) logo URL and inline it as a base64 data URI. Returns
  *  null for a non-http URL, a non-image response, an oversized asset, or any
@@ -36,6 +38,32 @@ export async function fetchLogoDataUri(url: string | null | undefined): Promise<
     return null; // abort / network / parse → initials fallback, never throws
   } finally {
     clearTimeout(timer);
+  }
+}
+
+/** Resolve a header/background image (config `header.bgAssetPath`, or an uploaded
+ *  header logo) from the private `export-assets` bucket → a base64 data URI for the
+ *  render. SECURITY: the path MUST live under the caller's workspace prefix
+ *  (`{workspaceId}/…`) — a path outside it is rejected so a hostile config can't
+ *  read another workspace's asset. Every failure degrades to null (no image), never
+ *  throws — a missing asset must not break the export. */
+export async function fetchExportAssetDataUri(
+  supabase: SupabaseClient,
+  workspaceId: string,
+  assetPath: string | null | undefined,
+): Promise<string | null> {
+  if (!assetPath || typeof assetPath !== 'string') return null;
+  // Workspace-prefix guard (defence-in-depth on top of bucket RLS).
+  if (!assetPath.startsWith(`${workspaceId}/`) || assetPath.includes('..')) return null;
+  try {
+    const { data, error } = await supabase.storage.from(EXPORT_ASSETS_BUCKET).download(assetPath);
+    if (error || !data) return null;
+    const buf = Buffer.from(await data.arrayBuffer());
+    if (buf.byteLength === 0 || buf.byteLength > MAX_LOGO_BYTES) return null;
+    const contentType = data.type && data.type.startsWith('image/') ? data.type : 'image/png';
+    return `data:${contentType};base64,${buf.toString('base64')}`;
+  } catch {
+    return null;
   }
 }
 

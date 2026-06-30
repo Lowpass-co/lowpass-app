@@ -111,6 +111,45 @@ Reference tour: "Warning Support". Templates picker needs a NEW empty tour.
   restored, page size / scope clamped — so a bad config can never crash the builder
   or smuggle a non-section. Back-compat: `?scope=` / `?version=` query still work.
 
+## Document Export — Template Builder Phase 2: styling (#8 — feat/export-template-p2)
+
+> The editor gains the daysheets-style styling layer: a **General** panel (font
+> family / size / B&W / dashed dividers / borderless), a **Header** panel (show,
+> logo position + height + radius, element show/hide/reorder, title/subtitle/
+> generated toggles, + a background image in Part A4) and a **Footer** panel
+> (show / page numbers / summary line). All PRESENTATION-ONLY — the config drives
+> `shell.ts` (CSS overrides + a config-driven letterhead) via the `general`/`header`
+> groups; the body builders + `computeBudgetPnl` are untouched. Every style group's
+> DEFAULT emits NO extra CSS / today's exact letterhead, so the default doc is
+> byte-for-byte today's output. **Proven:** `renderDocument` with the default
+> `general`/`header` === the committed P1 output across every letterhead variant
+> (logo / initials / absent artist / dates / subtitle / Letter / no-logo); the
+> footer default === the P1 footer. tsc 0, eslint 0, build green.
+
+- **EXP-TPL2-01 — General styling → preview AND PDF.** Font (Sans/Serif/Mono),
+  font-size scale (85–120%, via `body { zoom }`), B&W (greyscales the whole doc incl.
+  images), dashed dividers above each section head, and borderless (no table boxes)
+  each change the live `<iframe>` preview immediately AND the downloaded PDF (same
+  server builder). B&W injects `html { filter: grayscale(100%) }`.
+- **EXP-TPL2-02 — Header controls.** Show-header off → no letterhead; logo position
+  Left/Right; logo height + corner-radius sliders; the Artist / Tour / Dates elements
+  show/hide + drag-reorder in the meta block; title / subtitle / generated-date
+  toggles. All reflected in preview + PDF.
+- **EXP-TPL2-03 — Footer controls (print-only).** Show-footer, page-numbers, and the
+  summary-line + Lowpass-mark toggles change the downloaded PDF's repeating footer
+  (the editor notes the footer is print-only — it isn't in the live preview, which is
+  a single self-contained page, not paginated).
+- **EXP-TPL2-04 — background image (Part A4).** A header background image (uploaded to
+  the `export-assets` bucket) renders as a faded layer behind the letterhead at the
+  configured opacity, in preview + PDF. (See EXP-TPL2-A4 below.)
+- **EXP-TPL2-05 — DEFAULT still = P1 output (no regression).** With no styling
+  changes the document is byte-for-byte the Phase-1 output: each style group's default
+  emits no override and the letterhead is the committed P1 letterhead (proven by the
+  `renderDocument`-equivalence check above). EXP-BUD-01 / EXP-ROOM-01 stay green.
+- **EXP-TPL2-06 — presentation-only invariant.** No styling control can change a
+  number: the body builders read the same `data` / `computeBudgetPnl` output; styling
+  is CSS + letterhead HTML only. Reconciliation holds under every style combination.
+
 ## Document Export — render hardening (#8 — fix/export-pdf-render)
 
 > "PDF cannot be generated" was a SILENT route failure (any throw → the client's

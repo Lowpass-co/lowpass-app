@@ -49,6 +49,9 @@ export interface ExportDoc {
   markDataUri: string | null;
   /** Content-Disposition filename. */
   filename: string;
+  /** Phase 2 — footer styling (show / page numbers / summary line). Absent →
+   *  today's footer (mark + note + page numbers). */
+  footer?: { show?: boolean; pageNumbers?: boolean; summaryLine?: boolean };
 }
 
 /** Build the doc (loaders + html) then render + stream it. The `build` callback is
@@ -59,18 +62,24 @@ export async function exportPdfResponse(
   build: () => Promise<ExportDoc>,
 ): Promise<Response> {
   try {
-    const { html, footerNote, markDataUri, filename } = await build();
+    const { html, footerNote, markDataUri, filename, footer } = await build();
 
     const browser = await getBrowser();
     const page = await browser.newPage();
     try {
       await page.setContent(html, { waitUntil: 'load', timeout: 20_000 });
+      // Footer: show:false → a minimal non-empty template (Chromium needs one to
+      // honour the bottom margin) with no mark/note/numbers.
+      const footerTemplate =
+        footer?.show === false
+          ? '<span></span>'
+          : pdfFooterTemplate(footerNote, markDataUri, { summaryLine: footer?.summaryLine, pageNumbers: footer?.pageNumbers });
       let buffer: Uint8Array;
       try {
         buffer = await page.pdf({
           ...PAGE_PDF_OPTIONS,
           headerTemplate: PDF_HEADER_TEMPLATE,
-          footerTemplate: pdfFooterTemplate(footerNote, markDataUri),
+          footerTemplate,
         });
       } catch (footerErr) {
         // The header/footer templates are the only thing this does beyond the

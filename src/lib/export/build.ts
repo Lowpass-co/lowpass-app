@@ -15,13 +15,15 @@ import { buildBudgetBodyHtml } from '@/lib/export/budget-pdf';
 import { loadRoomingExportData } from '@/lib/export/rooming-data';
 import { buildRoomingBodyHtml } from '@/lib/export/rooming-pdf';
 import { renderDocument } from '@/lib/export/shell';
-import { fetchLogoDataUri } from '@/lib/export/logo';
-import type { TemplateConfig } from '@/lib/export/template-config';
+import { fetchLogoDataUri, fetchExportAssetDataUri } from '@/lib/export/logo';
+import type { FooterStyle, TemplateConfig } from '@/lib/export/template-config';
 
 export interface ExportBuild {
   html: string;
   footerNote: string;
   filename: string;
+  /** Phase 2 — footer styling (the route passes this to the page.pdf footer). */
+  footer: FooterStyle;
 }
 
 function fmtDate(d: string | null): string | null {
@@ -59,6 +61,7 @@ export async function buildBudgetExport(
 ): Promise<ExportBuild> {
   const data = await loadBudgetExportData(supabase, tour, workspaceId, { versionId });
   const logoDataUri = config.logo ? await fetchLogoDataUri(data.logoUrl) : null;
+  const bgDataUri = await fetchExportAssetDataUri(supabase, workspaceId, config.header.bgAssetPath);
 
   const scopeLabel = config.scope === 'projected' ? 'Projected' : config.scope === 'actual' ? 'Actual' : 'Projected vs Actual';
   const versionLabel = data.viewed ? `v${data.viewed.version_number} (${data.viewed.status})` : null;
@@ -76,12 +79,15 @@ export async function buildBudgetExport(
     pageSize: config.pageSize,
     title: 'Budget',
     subtitle,
+    general: config.general,
+    header: config.header,
+    bgDataUri,
     bodyHtml: buildBudgetBodyHtml(data, config),
   });
 
   const footerNote = `${data.artist?.name ? `${data.artist.name} — ` : ''}${data.tour.name} · Budget`;
   const filename = `${sanitize(data.artist?.name ?? '', '')} — ${sanitize(data.tour.name, 'Budget')} — Budget.pdf`.replace(/^ — /, '');
-  return { html, footerNote, filename };
+  return { html, footerNote, filename, footer: config.footer };
 }
 
 export interface RoomingTourMeta {
@@ -97,6 +103,7 @@ export async function buildRoomingExport(
 ): Promise<ExportBuild> {
   const data = await loadRoomingExportData(supabase, tour, workspaceId);
   const logoDataUri = config.logo ? await fetchLogoDataUri(data.logoUrl) : null;
+  const bgDataUri = await fetchExportAssetDataUri(supabase, workspaceId, config.header.bgAssetPath);
 
   const html = renderDocument({
     letterhead: {
@@ -110,10 +117,13 @@ export async function buildRoomingExport(
     pageSize: config.pageSize,
     title: 'Rooming list',
     subtitle: `${data.hotels.length} hotel${data.hotels.length === 1 ? '' : 's'}`,
+    general: config.general,
+    header: config.header,
+    bgDataUri,
     bodyHtml: buildRoomingBodyHtml(data, config),
   });
 
   const footerNote = `${data.artist?.name ? `${data.artist.name} — ` : ''}${data.tour.name} · Rooming`;
   const filename = `${sanitize(data.artist?.name ?? '', '')} — ${sanitize(data.tour.name, 'Rooming')} — Rooming.pdf`.replace(/^ — /, '');
-  return { html, footerNote, filename };
+  return { html, footerNote, filename, footer: config.footer };
 }

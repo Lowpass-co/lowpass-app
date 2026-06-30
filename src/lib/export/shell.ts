@@ -18,6 +18,8 @@
    defines the `var(--lp-*)` it uses in :root (same approach as pdf-render.ts).
    ============================================ */
 
+import type { GeneralStyle, HeaderStyle } from '@/lib/export/template-config';
+
 export interface ShellLetterhead {
   artistName: string | null;
   tourName: string;
@@ -42,6 +44,12 @@ export interface ShellDocument {
   bodyHtml: string;
   /** Template config — page size (default A4). */
   pageSize?: 'A4' | 'Letter';
+  /** Phase 2 — document styling. Absent → today's output (no overrides). */
+  general?: GeneralStyle;
+  /** Phase 2 — letterhead styling (element order/visibility, logo, background). */
+  header?: HeaderStyle;
+  /** Phase 2 — the resolved background-image data URI (header.bgAssetPath → logo.ts). */
+  bgDataUri?: string | null;
 }
 
 const esc = (s: string): string =>
@@ -126,47 +134,124 @@ export const PAGE_PDF_OPTIONS = {
 export const PDF_HEADER_TEMPLATE = '<span></span>';
 
 /** Repeating footer (Chromium renders this per page): Lowpass mark + a note on
- *  the left, page x / y on the right. Chromium strips most CSS — inline only. */
-export function pdfFooterTemplate(footerNote: string, markDataUri: string | null): string {
+ *  the left, page x / y on the right. Chromium strips most CSS — inline only.
+ *  Phase 2 — `opts` toggles the summary line (mark + note) and the page numbers;
+ *  defaults preserve today's footer byte-for-byte. */
+export function pdfFooterTemplate(
+  footerNote: string,
+  markDataUri: string | null,
+  opts?: { summaryLine?: boolean; pageNumbers?: boolean },
+): string {
+  const summaryLine = opts?.summaryLine !== false;
+  const pageNumbers = opts?.pageNumbers !== false;
   const mark = markDataUri
     ? `<img src="${markDataUri}" style="height:9px;width:auto;vertical-align:middle;opacity:0.7;" />`
     : `<span style="font-weight:700;letter-spacing:0.5px;">LOWPASS</span>`;
+  const left = summaryLine
+    ? `<span style="display:inline-flex;align-items:center;gap:5px;">${mark}<span>${esc(footerNote)}</span></span>`
+    : `<span></span>`;
+  const right = pageNumbers ? `<span>Page <span class="pageNumber"></span> / <span class="totalPages"></span></span>` : `<span></span>`;
   return `
 <div style="width:100%;font-size:7px;color:#8a837b;font-family:-apple-system,Arial,sans-serif;padding:0 14mm;display:flex;align-items:center;justify-content:space-between;">
-  <span style="display:inline-flex;align-items:center;gap:5px;">${mark}<span>${esc(footerNote)}</span></span>
-  <span>Page <span class="pageNumber"></span> / <span class="totalPages"></span></span>
+  ${left}
+  ${right}
 </div>`;
+}
+
+/** The embed-safe font stacks for `general.fontFamily`. 'system' === the SHELL_CSS
+ *  default (so it emits NO override). No network @font-face — all OS-resident. */
+const FONT_STACKS: Record<string, string> = {
+  serif: 'Georgia, "Times New Roman", "Liberation Serif", serif',
+  mono: '"SF Mono", Menlo, Consolas, "Liberation Mono", monospace',
+};
+
+/** Phase-2 general styling → an extra `<style>` block. CRITICAL: returns '' when
+ *  every field is its default, so the default document is byte-for-byte today's
+ *  output (SHELL_CSS is never modified). Presentation only. */
+function generalOverrideCss(g?: GeneralStyle): string {
+  if (!g) return '';
+  const rules: string[] = [];
+  if (g.fontFamily && FONT_STACKS[g.fontFamily]) rules.push(`body { font-family: ${FONT_STACKS[g.fontFamily]}; }`);
+  if (g.fontScale && g.fontScale !== 1) rules.push(`body { zoom: ${g.fontScale}; }`);
+  if (g.monochrome) rules.push(`html { filter: grayscale(100%); }`);
+  if (g.dividers) rules.push(`.lp-sec-head { border-top: 1px dashed var(--lp-border-strong); padding-top: 10px; }`);
+  if (g.hideBoxes) rules.push(`.lp-tbl, .lp-tbl th, .lp-tbl td, .lp-tbl tr.lp-subtotal td { border: none !important; }`);
+  return rules.length ? `<style>${rules.join('\n')}</style>` : '';
+}
+
+/** Resolve the letterhead. Built from `header` (defaults reproduce today's exact
+ *  letterhead bytes); `header.show === false` omits it entirely. */
+function renderLetterhead(lh: ShellLetterhead, title: string, subtitle: string | null | undefined, header: HeaderStyle | undefined, bgDataUri: string | null | undefined): string {
+  if (header && header.show === false) return '';
+
+  // Logo (left block) — config.logo gates it via showLogo; align/size/radius via header.
+  const logoStyle: string[] = [];
+  if (header && header.logoMaxHeight !== 48) logoStyle.push(`height:${header.logoMaxHeight}px`);
+  if (header && header.logoRadius) logoStyle.push(`border-radius:${header.logoRadius}px`);
+  // logoAlign: left (default) keeps order; right pushes the logo to the end.
+  if (header && header.logoAlign === 'right') logoStyle.push('order:9', 'margin-left:auto');
+  const logoStyleAttr = logoStyle.length ? ` style="${logoStyle.join(';')}"` : '';
+  const logo =
+    lh.showLogo === false
+      ? ''
+      : lh.logoDataUri
+        ? `<img class="lp-lh-logo" src="${lh.logoDataUri}" alt=""${logoStyleAttr} />`
+        : `<div class="lp-lh-initials"${logoStyleAttr}>${esc(initials(lh.artistName || lh.tourName))}</div>`;
+
+  // Meta zone (artist / tour / dates) — element order + visibility from header.
+  const elements = header?.elements ?? [
+    { id: 'artist' as const, show: true },
+    { id: 'tour' as const, show: true },
+    { id: 'dates' as const, show: true },
+  ];
+  const metaFor = (id: string): string => {
+    if (id === 'artist') return lh.artistName ? `<div class="lp-lh-artist">${esc(lh.artistName)}</div>` : '';
+    if (id === 'tour') return `<div class="lp-lh-tour">${esc(lh.tourName)}</div>`;
+    if (id === 'dates') return lh.tourDates ? `<div class="lp-lh-dates">${esc(lh.tourDates)}</div>` : '';
+    return '';
+  };
+  const metaParts = elements.map((e) => (e.show === false ? '' : metaFor(e.id)));
+
+  // Right zone (title / subtitle / generated) — show toggles from header.
+  const showTitle = header ? header.showTitle : true;
+  const showSubtitle = header ? header.showSubtitle : true;
+  const showGenerated = header ? header.showGenerated : true;
+  const rightParts = [
+    showTitle ? `<div class="lp-doc-title">${esc(title)}</div>` : '',
+    showSubtitle && subtitle ? `<div class="lp-doc-sub">${esc(subtitle)}</div>` : '',
+    showGenerated ? `<div class="lp-doc-gen">Generated ${esc(lh.generatedOn)}</div>` : '',
+  ];
+
+  // Background image (faded photo) — only when an asset resolved; positioned layer.
+  const bg = bgDataUri
+    ? `<div style="position:absolute;inset:0;background-image:url('${bgDataUri}');background-size:cover;background-position:center;opacity:${header?.bgOpacity ?? 0.15};z-index:0;"></div>`
+    : '';
+  const headerStyleAttr = bgDataUri ? ' style="position:relative;overflow:hidden"' : '';
+  const zoneStyle = bgDataUri ? ' style="position:relative;z-index:1"' : '';
+
+  return `<header class="lp-letterhead"${headerStyleAttr}>
+    ${bg}${logo}
+    <div class="lp-lh-meta"${zoneStyle}>
+      ${metaParts.join('\n      ')}
+    </div>
+    <div class="lp-lh-right"${zoneStyle}>
+      ${rightParts.join('\n      ')}
+    </div>
+  </header>`;
 }
 
 /** Compose the full self-contained A4 HTML document. The body is opaque. */
 export function renderDocument(doc: ShellDocument): string {
   const { letterhead: lh, title, subtitle, bodyHtml } = doc;
-  // Template config: showLogo:false → text-only letterhead (no logo, no initials).
-  const logo =
-    lh.showLogo === false
-      ? ''
-      : lh.logoDataUri
-        ? `<img class="lp-lh-logo" src="${lh.logoDataUri}" alt="" />`
-        : `<div class="lp-lh-initials">${esc(initials(lh.artistName || lh.tourName))}</div>`;
   // Template config: page size (A4 default). The override @page (size only) merges
   // with SHELL_CSS's @page margin, so Letter keeps the same margins.
   const pageStyle = doc.pageSize && doc.pageSize !== 'A4' ? `<style>@page { size: ${doc.pageSize}; }</style>` : '';
+  const styleOverride = generalOverrideCss(doc.general);
+  const letterhead = renderLetterhead(lh, title, subtitle, doc.header, doc.bgDataUri);
   return `<!DOCTYPE html>
-<html lang="en"><head><meta charset="utf-8" /><style>${SHELL_CSS}</style>${pageStyle}</head>
+<html lang="en"><head><meta charset="utf-8" /><style>${SHELL_CSS}</style>${pageStyle}${styleOverride}</head>
 <body>
-  <header class="lp-letterhead">
-    ${logo}
-    <div class="lp-lh-meta">
-      ${lh.artistName ? `<div class="lp-lh-artist">${esc(lh.artistName)}</div>` : ''}
-      <div class="lp-lh-tour">${esc(lh.tourName)}</div>
-      ${lh.tourDates ? `<div class="lp-lh-dates">${esc(lh.tourDates)}</div>` : ''}
-    </div>
-    <div class="lp-lh-right">
-      <div class="lp-doc-title">${esc(title)}</div>
-      ${subtitle ? `<div class="lp-doc-sub">${esc(subtitle)}</div>` : ''}
-      <div class="lp-doc-gen">Generated ${esc(lh.generatedOn)}</div>
-    </div>
-  </header>
+  ${letterhead}
   ${bodyHtml}
 </body></html>`;
 }
