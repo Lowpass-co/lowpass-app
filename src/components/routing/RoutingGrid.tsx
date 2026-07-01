@@ -11,7 +11,7 @@ import { createPortal } from 'react-dom';
 import { parseRoutingDate, distanceMiles, formatRoutingDateShort } from '@/lib/utils';
 import { DayTypeDropdown } from './DayTypeDropdown';
 import { VenueAutocomplete } from './VenueAutocomplete';
-import { Bus, Car, Plane, Trash2, ExternalLink, Eraser } from 'lucide-react';
+import { Bus, Car, Plane, Trash2, ExternalLink, Eraser, Link2 } from 'lucide-react';
 import { ContextMenu } from '@/components/ui/ContextMenu';
 import { DeleteConfirmationModal } from '@/components/ui/DeleteConfirmationModal';
 import type { PrimaryTransit } from './RoutingMap';
@@ -23,6 +23,9 @@ export interface RoutingRow {
   date: string;
   day_type: string;
   city: string;
+  /** Country (routing.country, migration 103) — now surfaced as a grid column +
+   *  auto-filled from a library venue pick. */
+  country?: string;
   address?: string;
   venue_name?: string;
   venue_website?: string;
@@ -240,24 +243,11 @@ export function RoutingGrid({
       <table className="w-full min-w-[640px] text-sm">
         <thead>
           <tr className="border-b border-lp-border bg-lp-bg-secondary">
-            <th className={cn(cellPadX, cellPadY, 'text-left text-[10px] font-semibold uppercase tracking-widest lp-table-header-text')}>
-              Date
-            </th>
-            <th className={cn(cellPadX, cellPadY, 'text-left text-[10px] font-semibold uppercase tracking-widest lp-table-header-text')}>
-              Day type
-            </th>
-            <th className={cn(cellPadX, cellPadY, 'text-left text-[10px] font-semibold uppercase tracking-widest lp-table-header-text')}>
-              {compact ? 'Location' : 'Venue'}
-            </th>
-            <th className={cn(cellPadX, cellPadY, 'text-left text-[10px] font-semibold uppercase tracking-widest lp-table-header-text')}>
-              Address
-            </th>
-            <th className={cn(cellPadX, cellPadY, 'text-left text-[10px] font-semibold uppercase tracking-widest lp-table-header-text')}>
-              Notes
-            </th>
-            <th className={cn(cellPadX, cellPadY, 'text-left text-[10px] font-semibold uppercase tracking-widest lp-table-header-text')}>
-              Transport mode
-            </th>
+            {(['Date', 'Venue', 'City', 'Country', 'Address', 'Day', 'Notes', 'Transport'] as const).map((h) => (
+              <th key={h} className={cn(cellPadX, cellPadY, 'text-left text-[10px] font-semibold uppercase tracking-widest lp-table-header-text')}>
+                {h}
+              </th>
+            ))}
             <th className="w-10 px-2 py-3" aria-label="Actions" />
           </tr>
         </thead>
@@ -282,7 +272,7 @@ export function RoutingGrid({
                 />
                 {nextRow && (
                   <tr className="border-b border-lp-border bg-lp-bg-secondary/50">
-                    <td colSpan={7} className="px-4 py-1.5 align-middle">
+                    <td colSpan={9} className="px-4 py-1.5 align-middle">
                       <TravelBox
                         row={row}
                         nextRow={nextRow}
@@ -345,9 +335,90 @@ function RoutingRowWithMenu({
         className="border-b border-lp-border last:border-0 hover:bg-lp-surface-hover animate-fade-in transition-colors duration-150"
         style={{ animationDelay: `${rowIndex * 30}ms` }}
       >
+        {/* Date */}
         <td className={cn(cellPadX, cellPadY, 'whitespace-nowrap text-sm font-medium text-lp-text')}>
           {formatRoutingDateShort(row.date)}
         </td>
+        {/* Venue — library-first autocomplete + linked marker */}
+        <td className={cn(cellPadX, cellPadY)}>
+          <div className="flex items-center gap-1.5">
+            {row.canonical_venue_id ? (
+              <Link2 className="h-3.5 w-3.5 shrink-0" style={{ color: 'var(--lp-orange)' }} aria-label="Linked to the venue library" />
+            ) : null}
+            <div className="min-w-0 flex-1">
+              <VenueAutocomplete
+                value={row.venue_name ?? ''}
+                onChange={(venue_name) => updateRow(rowIndex, { venue_name })}
+                onLibrarySelect={(m) => {
+                  // Pick an existing library venue → LINK + auto-fill facts (no
+                  // Places billing). Address stays editable; a later manual edit
+                  // only sets `address` so canonical_venue_id survives.
+                  const updates: Partial<RoutingRow> = {
+                    venue_name: m.name,
+                    canonical_venue_id: m.id,
+                    place_id: undefined, // already canonical — no Places resolve on save
+                  };
+                  if (m.city) updates.city = m.city;
+                  if (m.country) updates.country = m.country;
+                  if (m.address) updates.address = m.address;
+                  if (m.lat != null) updates.latitude = m.lat;
+                  if (m.lng != null) updates.longitude = m.lng;
+                  if (m.capacity != null) updates.venue_capacity = m.capacity;
+                  updateRow(rowIndex, updates);
+                }}
+                onPlaceSelect={(result) => {
+                  // "Create new" (Google) path — only overwrite address when the
+                  // pick returned one; capture place_id so save resolves canonical.
+                  const updates: Partial<RoutingRow> = {
+                    venue_name: result.venue_name,
+                    city: result.city ?? row.city,
+                    country: result.country ?? row.country,
+                    latitude: result.latitude,
+                    longitude: result.longitude,
+                    venue_website: result.website,
+                    venue_phone: result.phone,
+                    venue_capacity: result.capacity ?? undefined,
+                    place_id: result.place_id,
+                  };
+                  if (result.address && result.address.trim()) updates.address = result.address;
+                  updateRow(rowIndex, updates);
+                }}
+                placeholder={compact ? 'Location' : 'Venue'}
+              />
+            </div>
+          </div>
+        </td>
+        {/* City */}
+        <td className={cn(cellPadX, cellPadY)}>
+          <input
+            type="text"
+            value={row.city ?? ''}
+            onChange={(e) => updateRow(rowIndex, { city: e.target.value })}
+            placeholder="City"
+            className="w-full min-w-[90px] rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:border-lp-orange focus:outline-none focus:ring-2 focus:ring-lp-orange/20"
+          />
+        </td>
+        {/* Country */}
+        <td className={cn(cellPadX, cellPadY)}>
+          <input
+            type="text"
+            value={row.country ?? ''}
+            onChange={(e) => updateRow(rowIndex, { country: e.target.value })}
+            placeholder="Country"
+            className="w-full min-w-[80px] rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:border-lp-orange focus:outline-none focus:ring-2 focus:ring-lp-orange/20"
+          />
+        </td>
+        {/* Address — editable; a manual edit does NOT unlink the canonical venue */}
+        <td className={cn(cellPadX, cellPadY)}>
+          <input
+            type="text"
+            value={row.address ?? ''}
+            onChange={(e) => updateRow(rowIndex, { address: e.target.value })}
+            placeholder="Address"
+            className="w-full min-w-[100px] rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:border-lp-orange focus:outline-none focus:ring-2 focus:ring-lp-orange/20"
+          />
+        </td>
+        {/* Day (type) */}
         <td className={cn(cellPadX, cellPadY)}>
           <DayTypeDropdown
             value={row.day_type ?? ''}
@@ -355,46 +426,7 @@ function RoutingRowWithMenu({
             customTypes={customDayTypes}
           />
         </td>
-        <td className={cn(cellPadX, cellPadY)}>
-          <VenueAutocomplete
-            value={row.venue_name ?? ''}
-            onChange={(venue_name) => updateRow(rowIndex, { venue_name })}
-            onPlaceSelect={(result) => {
-              // Sprint 8.6 §3 — only overwrite address when the
-              // pick actually returned one. VenueAutocomplete
-              // passes empty string when /api/places/details has
-              // no formattedAddress; preserving the existing
-              // row.address in that case matches Adam's UX
-              // expectation that "the pick filled what it could,
-              // and didn't blank what it couldn't."
-              const updates: Partial<RoutingRow> = {
-                venue_name: result.venue_name,
-                city: result.city ?? row.city,
-                latitude: result.latitude,
-                longitude: result.longitude,
-                venue_website: result.website,
-                venue_phone: result.phone,
-                venue_capacity: result.capacity ?? undefined,
-                // Capture the Place ID so the save resolves a canonical venue.
-                place_id: result.place_id,
-              };
-              if (result.address && result.address.trim()) {
-                updates.address = result.address;
-              }
-              updateRow(rowIndex, updates);
-            }}
-            placeholder={compact ? 'Location' : 'Venue'}
-          />
-        </td>
-        <td className={cn(cellPadX, cellPadY)}>
-          <input
-            type="text"
-            value={row.address ?? row.city}
-            onChange={(e) => updateRow(rowIndex, { address: e.target.value })}
-            placeholder="Address"
-            className="w-full min-w-[100px] rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:border-lp-orange focus:outline-none focus:ring-2 focus:ring-lp-orange/20"
-          />
-        </td>
+        {/* Notes */}
         <td className={cn(cellPadX, cellPadY)}>
           <input
             type="text"
@@ -404,6 +436,7 @@ function RoutingRowWithMenu({
             className="w-full min-w-[120px] rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:border-lp-orange focus:outline-none focus:ring-2 focus:ring-lp-orange/20"
           />
         </td>
+        {/* Transport */}
         <td className={cn(cellPadX, cellPadY)}>
           {nextRow ? (
             <TransportPills

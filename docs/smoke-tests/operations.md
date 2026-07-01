@@ -334,6 +334,41 @@ colours unchanged. **Needs-live**.
   "prove created" bar — the redirect fix is the demonstrable, non-regressing
   create-unblock; the modal refactor is a larger follow-up needing live access.
 
+## Venue-first, library-aware routing grid (feat/routing-venue-search — UI)
+
+> The routing grid is now venue-first + library-aware. Columns reordered to
+> **Date · Venue · City · Country · Address · Day** (Notes + Transport retained as
+> trailing columns; the between-row TravelBox unchanged). `country` (routing.country,
+> mig 103 — previously dropped by the save/load path) is now threaded end-to-end.
+> `VenueAutocomplete` is library-first: keystroke → `GET /api/venues/canonical/search`
+> (no Places billing); the Google path is invoked ONLY from "Create new" — session
+> token + `handleSelect` byte-for-byte (fewer Places calls than before). Floor green.
+> **UI verified live by Adam** via this script.
+
+Adam live-test script (on preview, a tour with an existing routing grid):
+- **ROUTE-VEN-01 (library search first):** in a Venue cell, type ≥2 chars of a known
+  venue → the dropdown shows library matches as `◆ Name — City, Country · cap` (orange
+  ◆), NO Google logo/billing. Expected: matches appear from the library.
+- **ROUTE-VEN-02 (pick → link + auto-fill):** click a match → Venue fills; City,
+  Country, Address auto-fill from the venue; an orange link icon shows to the left of
+  the Venue cell (row linked to `canonical_venue_id`). Expected: those cells populate;
+  the link marker appears.
+- **ROUTE-VEN-03 (manual address, no unlink):** edit the Address cell by hand → the
+  text persists AND the orange link marker stays (a manual edit does NOT unlink).
+  Save + reload → address + link survive.
+- **ROUTE-VEN-04 (no match → create):** type a venue not in the library → click
+  “Create ‘<typed>’ as a new venue” → Google suggestions appear; pick one → it fills +
+  (on Save) resolves to a canonical venue (via `place_id` → `findOrCreateCanonicalVenue`
+  → the library grows). Expected: Google list only on create-new; picked venue fills.
+- **ROUTE-VEN-05 (keyboard):** with the dropdown open, ArrowDown/Up moves the
+  highlight across matches + the create row; Enter accepts the highlighted item.
+  Expected: keyboard selects without the mouse.
+- **ROUTE-VEN-06 (country round-trips):** set/auto-fill Country on a row → Save →
+  reload → Country persists (the mig-103 column, now threaded through save/load).
+- **ROUTE-VEN-07 (no billing regression):** in the Network tab, typing in Venue hits
+  `/api/venues/canonical/search` only — `/api/places/autocomplete` fires ONLY after
+  clicking “Create new”. Expected: fewer Places calls than before.
+
 ## Routing view revamp (feat/routing-revamp)
 
 > RESTYLE to the app's canonical language (Adam's call: keep the bespoke routing

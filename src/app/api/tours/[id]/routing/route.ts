@@ -109,7 +109,7 @@ export async function POST(
   }
 
   type IncomingRow = {
-    date: string; day_type?: string; city?: string; address?: string; venue_id?: string;
+    date: string; day_type?: string; city?: string; country?: string; address?: string; venue_id?: string;
     venue_name?: string; venue_website?: string; venue_phone?: string; venue_capacity?: number | null;
     notes?: string; latitude?: number; longitude?: number; transport_to_next?: string;
     place_id?: string | null; canonical_venue_id?: string | null;
@@ -143,6 +143,7 @@ export async function POST(
     date: r.date,
     day_type: r.day_type ?? '',
     city: r.city ?? '',
+    country: r.country ?? null,
     address: r.address ?? '',
     venue_id: r.venue_id || null,
     venue_name: r.venue_name || null,

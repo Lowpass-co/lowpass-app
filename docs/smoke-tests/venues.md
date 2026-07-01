@@ -87,16 +87,11 @@ duplicate candidates and never overwrites an existing
   query are escaped so a literal `%`/`_` can't widen the match. Limit 8, name-ordered.
   (Verified: build registers `ƒ /api/venues/canonical/search`; escape helper proven;
   tsc/eslint clean.)
-- **PENDING (Part 2 remainder, not yet landed):** the venue-field UI integration
-  (library matches shown first as `name — city, country · cap`; pick → link
-  `canonical_venue_id` + auto-fill city/country/address/lat-lng/cap + orange linked
-  marker; "Create '<typed>' as new venue" → Google Places → `findOrCreateCanonicalVenue`
-  → link), the grid column reorder (Date · Venue · City · Country · Address · Day),
-  and the Tab-across keyboard flow. These are changes to the load-bearing
-  `VenueAutocomplete` (careful Places billing/session/onBlur logic) + the routing grid
-  and need a live DOM run to verify — carried to a continuation with fresh context
-  rather than rushed. The search API + the Part-1 library enrichment they build on are
-  landed.
+- **ROUTE-VEN UI — LANDED** (see the routing section in `operations.md` for the
+  library-first grid + the Adam live-test script). The venue field is now
+  library-first (keystroke → the search API, no Places billing); the Google path is
+  invoked ONLY from "Create new". Places session-token + `handleSelect` are byte-for-
+  byte — the billing invariant is preserved (fewer Places calls than before).
 
 ## Venue library — address + capacity enrichment (feat/venue-lib-address)
 

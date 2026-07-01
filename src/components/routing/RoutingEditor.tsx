@@ -96,7 +96,7 @@ function dateRange(start: string, end: string): string[] {
 function buildInitialRows(
   startDate: string,
   endDate: string,
-  existing: { date: string; day_type: string; city: string; address?: string; venue_name?: string; venue_website?: string; venue_phone?: string; venue_capacity?: number; notes?: string; latitude?: number; longitude?: number; transport_to_next?: string; canonical_venue_id?: string | null }[]
+  existing: { date: string; day_type: string; city: string; country?: string; address?: string; venue_name?: string; venue_website?: string; venue_phone?: string; venue_capacity?: number; notes?: string; latitude?: number; longitude?: number; transport_to_next?: string; canonical_venue_id?: string | null }[]
 ): RoutingRow[] {
   const byDate = new Map(existing.map((r) => [r.date, r]));
   return dateRange(startDate, endDate).map((date) => {
@@ -108,6 +108,7 @@ function buildInitialRows(
       date,
       day_type: effectiveDayType,
       city: ex?.city ?? '',
+      country: ex?.country ?? '',
       address: ex?.address ?? '',
       venue_name: ex?.venue_name ?? '',
       venue_website: ex?.venue_website,
@@ -273,6 +274,7 @@ export function RoutingEditor({
             date: r.date,
             day_type: r.day_type ?? '',
             city: r.city,
+            country: r.country || null,
             address: r.address || null,
             venue_name: r.venue_name || null,
             venue_website: r.venue_website || null,

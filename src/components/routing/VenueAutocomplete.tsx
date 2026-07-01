@@ -26,22 +26,44 @@ export interface VenuePlaceResult {
   capacity?: number | null;
 }
 
+/** A hit from the world-readable venue library (GET /api/venues/canonical/search). */
+export interface LibraryVenueMatch {
+  id: string;
+  name: string;
+  city: string | null;
+  country: string | null;
+  address: string | null;
+  capacity: number | null;
+  lat: number | null;
+  lng: number | null;
+}
+
 export function VenueAutocomplete({
   value,
   onChange,
   onPlaceSelect,
+  onLibrarySelect,
   placeholder = 'Venue',
   className,
 }: {
   value: string;
   onChange: (venueName: string) => void;
   onPlaceSelect?: (result: VenuePlaceResult) => void;
+  /** Library-first (venue-library-aware routing): fired when the user picks an
+   *  existing canonical venue. Links canonical_venue_id + auto-fills facts with NO
+   *  Google Places billing. onPlaceSelect stays the create-new (Google) path. */
+  onLibrarySelect?: (match: LibraryVenueMatch) => void;
   placeholder?: string;
   className?: string;
 }) {
   const { showToast } = useToast();
   const [query, setQuery] = useState(value);
   const [suggestions, setSuggestions] = useState<{ placeId: string; text: string }[]>([]);
+  // Library-first: matches from the venue library (cheap, no Places billing).
+  // `mode` = 'library' while type-to-searching the library (default); flips to
+  // 'places' only when the user chooses "Create new" → the Google path.
+  const [libraryMatches, setLibraryMatches] = useState<LibraryVenueMatch[]>([]);
+  const [mode, setMode] = useState<'library' | 'places'>('library');
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(0);
@@ -68,9 +90,14 @@ export function VenueAutocomplete({
     return sessionTokenRef.current;
   };
 
+  // 'library' mode renders [libraryMatches…, "Create new"]; 'places' mode renders
+  // the Google suggestions. totalItems drives highlight bounds + open-gating.
+  const totalItems = mode === 'library' ? libraryMatches.length + 1 : suggestions.length;
+  const hasDropdown = open && totalItems > 0;
+
   useEffect(() => {
-    setHighlightedIndex((i) => (suggestions.length ? Math.min(i, suggestions.length - 1) : 0));
-  }, [suggestions.length]);
+    setHighlightedIndex((i) => (totalItems ? Math.min(i, totalItems - 1) : 0));
+  }, [totalItems]);
 
   useEffect(() => {
     const list = listRef.current;
@@ -88,6 +115,7 @@ export function VenueAutocomplete({
 
   useEffect(() => {
     if (query.length < 2) {
+      setLibraryMatches([]);
       setSuggestions([]);
       if (!queryFromUserRef.current) setOpen(false);
       return;
@@ -96,20 +124,20 @@ export function VenueAutocomplete({
     debounceRef.current = setTimeout(() => {
       setLoading(true);
       const fromUser = queryFromUserRef.current;
-      fetch('/api/places/autocomplete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ input: query, sessiontoken: ensureSessionToken() }),
-      })
-        .then((r) => r.json())
-        .then((data) => {
-          setSuggestions(data.suggestions ?? []);
+      // Library-first: type-to-search the venue library (cheap, NO Places billing).
+      // The Google Places path is invoked ONLY from the "Create new" row below.
+      fetch(`/api/venues/canonical/search?q=${encodeURIComponent(query)}`)
+        .then((r) => (r.ok ? r.json() : { venues: [] }))
+        .then((data: { venues?: LibraryVenueMatch[] }) => {
+          setLibraryMatches(data.venues ?? []);
+          setMode('library');
+          setSuggestions([]);
           setHighlightedIndex(0);
           if (fromUser) setOpen(true);
         })
-        .catch(() => setSuggestions([]))
+        .catch(() => setLibraryMatches([]))
         .finally(() => setLoading(false));
-    }, 300);
+    }, 250);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
@@ -119,14 +147,14 @@ export function VenueAutocomplete({
   const dropdownRef = useRef<HTMLUListElement | null>(null);
 
   useLayoutEffect(() => {
-    if (open && suggestions.length > 0 && containerRef.current) {
+    if (hasDropdown && containerRef.current) {
       const input = containerRef.current.querySelector('input');
       const rect = input?.getBoundingClientRect();
       if (rect) setDropdownRect({ top: rect.bottom + 4, left: rect.left, width: rect.width });
     } else {
       setDropdownRect(null);
     }
-  }, [open, suggestions.length]);
+  }, [hasDropdown]);
 
   useEffect(() => {
     const close = (e: MouseEvent) => {
@@ -143,8 +171,13 @@ export function VenueAutocomplete({
   }, []);
 
   const selectByIndex = (i: number) => {
-    const s = suggestions[i];
-    if (s) handleSelect(s.placeId, s.text);
+    if (mode === 'library') {
+      if (i < libraryMatches.length) handleLibrarySelect(libraryMatches[i]);
+      else handleCreateNew();
+    } else {
+      const s = suggestions[i];
+      if (s) handleSelect(s.placeId, s.text);
+    }
   };
 
   const handleSelect = async (placeId: string, text: string) => {
@@ -266,6 +299,41 @@ export function VenueAutocomplete({
     }
   };
 
+  // Pick an existing library venue — link + auto-fill with NO Places billing.
+  const handleLibrarySelect = (m: LibraryVenueMatch) => {
+    isPickingRef.current = true;
+    setOpen(false);
+    setLibraryMatches([]);
+    setSuggestions([]);
+    queryFromUserRef.current = false;
+    setQuery(m.name);
+    if (onLibrarySelect) onLibrarySelect(m);
+    else onChange(m.name);
+    isPickingRef.current = false;
+  };
+
+  // "Create new" — the ONLY entry into the Google path. Opens a Places session
+  // (token logic unchanged) + shows Google matches for the typed name; picking one
+  // runs the existing handleSelect (Details → onPlaceSelect → canonical on save).
+  const handleCreateNew = () => {
+    if (query.trim().length < 2) return;
+    setLoading(true);
+    setMode('places');
+    fetch('/api/places/autocomplete', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ input: query, sessiontoken: ensureSessionToken() }),
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        setSuggestions(data.suggestions ?? []);
+        setHighlightedIndex(0);
+        setOpen(true);
+      })
+      .catch(() => setSuggestions([]))
+      .finally(() => setLoading(false));
+  };
+
   const listRefCallback = (el: HTMLUListElement | null) => {
     listRef.current = el;
     dropdownRef.current = el;
@@ -301,10 +369,10 @@ export function VenueAutocomplete({
           }
         }}
         onKeyDown={(e) => {
-          if (!open || suggestions.length === 0) return;
+          if (!open || totalItems === 0) return;
           if (e.key === 'ArrowDown') {
             e.preventDefault();
-            setHighlightedIndex((i) => Math.min(i + 1, suggestions.length - 1));
+            setHighlightedIndex((i) => Math.min(i + 1, totalItems - 1));
             return;
           }
           if (e.key === 'ArrowUp') {
@@ -330,18 +398,16 @@ export function VenueAutocomplete({
         onFocus={() => {
           if (query.length >= 2) {
             queryFromUserRef.current = true;
-            if (suggestions.length > 0) {
+            if (totalItems > 0) {
               setOpen(true);
             } else {
+              // Re-run the cheap library search (no Places billing on focus).
               setLoading(true);
-              fetch('/api/places/autocomplete', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ input: query, sessiontoken: ensureSessionToken() }),
-              })
-                .then((r) => r.json())
-                .then((data) => {
-                  setSuggestions(data.suggestions ?? []);
+              setMode('library');
+              fetch(`/api/venues/canonical/search?q=${encodeURIComponent(query)}`)
+                .then((r) => (r.ok ? r.json() : { venues: [] }))
+                .then((data: { venues?: LibraryVenueMatch[] }) => {
+                  setLibraryMatches(data.venues ?? []);
                   setHighlightedIndex(0);
                   setOpen(true);
                 })
@@ -358,27 +424,65 @@ export function VenueAutocomplete({
           …
         </span>
       )}
-      {open && suggestions.length > 0 && dropdownRect && typeof document !== 'undefined' &&
+      {hasDropdown && dropdownRect && typeof document !== 'undefined' &&
         createPortal(
           <ul
             ref={listRefCallback}
             role="listbox"
             className="lp-dropdown-layer fixed max-h-52 overflow-y-auto rounded-xl border border-lp-border bg-lp-surface py-1 shadow-lg"
-            style={{ top: dropdownRect.top, left: dropdownRect.left, width: dropdownRect.width, minWidth: 200 }}
+            style={{ top: dropdownRect.top, left: dropdownRect.left, width: dropdownRect.width, minWidth: 240 }}
           >
-            {suggestions.map((s, i) => (
-              <li key={s.placeId} role="option" aria-selected={i === highlightedIndex}>
-                <button
-                  type="button"
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => handleSelect(s.placeId, s.text)}
-                  onMouseEnter={() => setHighlightedIndex(i)}
-                  className={`w-full px-3 py-2 text-left text-sm text-lp-text hover:bg-lp-surface-hover ${i === highlightedIndex ? 'bg-lp-surface-hover' : ''}`}
-                >
-                  {s.text}
-                </button>
-              </li>
-            ))}
+            {mode === 'library' ? (
+              <>
+                {libraryMatches.map((m, i) => {
+                  const meta = [m.city, m.country].filter(Boolean).join(', ');
+                  return (
+                    <li key={m.id} role="option" aria-selected={i === highlightedIndex}>
+                      <button
+                        type="button"
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => handleLibrarySelect(m)}
+                        onMouseEnter={() => setHighlightedIndex(i)}
+                        className={`flex w-full items-baseline gap-2 px-3 py-2 text-left text-sm hover:bg-lp-surface-hover ${i === highlightedIndex ? 'bg-lp-surface-hover' : ''}`}
+                      >
+                        {/* library-linked marker (orange) */}
+                        <span aria-hidden style={{ color: 'var(--lp-orange)', flex: '0 0 auto', lineHeight: 1.2 }}>◆</span>
+                        <span className="min-w-0 flex-1 truncate text-lp-text">{m.name}</span>
+                        {meta ? <span className="shrink-0 text-xs text-lp-text-tertiary">{meta}{m.capacity ? ` · ${m.capacity.toLocaleString('en-GB')}` : ''}</span> : null}
+                      </button>
+                    </li>
+                  );
+                })}
+                {/* Create-new — the ONLY entry into the Google Places path. */}
+                <li role="option" aria-selected={highlightedIndex === libraryMatches.length}>
+                  <button
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={handleCreateNew}
+                    onMouseEnter={() => setHighlightedIndex(libraryMatches.length)}
+                    className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-lp-text-secondary hover:bg-lp-surface-hover ${highlightedIndex === libraryMatches.length ? 'bg-lp-surface-hover' : ''}`}
+                    style={{ borderTop: libraryMatches.length ? '1px solid var(--lp-border)' : undefined }}
+                  >
+                    <span aria-hidden>＋</span>
+                    <span>Create <span className="font-medium text-lp-text">“{query.trim()}”</span> as a new venue</span>
+                  </button>
+                </li>
+              </>
+            ) : (
+              suggestions.map((s, i) => (
+                <li key={s.placeId} role="option" aria-selected={i === highlightedIndex}>
+                  <button
+                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => handleSelect(s.placeId, s.text)}
+                    onMouseEnter={() => setHighlightedIndex(i)}
+                    className={`w-full px-3 py-2 text-left text-sm text-lp-text hover:bg-lp-surface-hover ${i === highlightedIndex ? 'bg-lp-surface-hover' : ''}`}
+                  >
+                    {s.text}
+                  </button>
+                </li>
+              ))
+            )}
           </ul>,
           document.body
         )}
