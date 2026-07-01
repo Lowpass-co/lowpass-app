@@ -129,6 +129,10 @@ export async function POST(
         city: r.city ?? null,
         lat: r.latitude ?? null,
         lng: r.longitude ?? null,
+        // Migration 226 — carry address + capacity into the library so the row's
+        // Google facts populate/backfill the canonical venue.
+        address: r.address ?? null,
+        capacity: r.venue_capacity ?? null,
       });
     }
   }

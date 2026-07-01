@@ -75,6 +75,26 @@ duplicate candidates and never overwrites an existing
 
 (None yet.)
 
+## Venue library — address + capacity enrichment (feat/venue-lib-address)
+
+> Migration 226 adds `canonical_venues.address` (facts only; NO RLS change — stays
+> world-readable, service-role write). `findOrCreateCanonicalVenue` now stores
+> address + capacity on create and BACKFILLS them on find (fill-only). The routing
+> POST threads `r.address` + `r.venue_capacity` into the facts so a Place pick
+> populates the library. Verified: node harness with an in-memory mock service client.
+
+- **VEN-LIB-01 — create stores address + capacity.** Creating a venue from a Place
+  writes name/city/country/lat/lng + `address` (formatted) + `capacity`. (Proven.)
+- **VEN-LIB-02 — backfill on find.** An existing row with `address IS NULL` (predates
+  226) / `capacity IS NULL` gets both backfilled on the next find — no duplicate row,
+  same canonical id returned. (Proven.)
+- **VEN-LIB-03 — fill-only, never overwrites.** A row that already has an
+  address/capacity (e.g. hand-edited) is left untouched on find. (Proven.)
+- **VEN-LIB-04 — guards + RLS.** Empty placeId/name → null, no write. Migration adds
+  NO policy/grant — `canonical_venues` stays world-read / service-role-write only
+  (the 214 policies are untouched; no client write path). (Proven: grep finds no RLS
+  in 226; guard test writes nothing.)
+
 ## Retired
 
 (None yet.)
