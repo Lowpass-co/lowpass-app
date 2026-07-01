@@ -580,6 +580,33 @@ behaviour (drag does nothing? doesn't persist?).
 
 **Tracked in**: feat/advance-builder-fixes §2.
 
+## Venue-info auto-fill from the linked venue (feat/advance-venue-autofill)
+
+> Direction A — world-readable venue FACTS flow INTO the private, workspace-scoped
+> advance (never advance data leaving the workspace). The advance GET already
+> pre-filled the Venue Info section (venue_name/address/website/capacity) from the
+> routing row; this adds the LINKED canonical venue (routing.canonical_venue_id →
+> canonical_venues.name/address/capacity, from Part 1) as a FALLBACK tier when a
+> routing fact is still blank. NON-DESTRUCTIVE — `current.X ?? routing.X ?? canon.X`
+> only fills blank fields, never overwrites a user entry. (No separate "locked
+> advance" concept exists on advance_instances; the non-destructive fill respects
+> whatever's already saved, so it's safe on any advance.) The template has only
+> name/address/capacity/website venue fields, so those are what's filled. Floor green.
+> Verified: node harness on the exact merge expression.
+
+- **ADV-VEN-01 — fills from routing.** A blank advance's Venue Info gets
+  venue_name/address/capacity from the routing row. (Proven.)
+- **ADV-VEN-02 — canonical library fallback.** When a routing fact is blank and the
+  row is library-linked, the canonical venue's address/capacity/name fill it; routing
+  still wins over canonical when both are present. (Proven.)
+- **ADV-VEN-03 — non-destructive.** A user-entered venue name/address/capacity is
+  NEVER overwritten by routing or the canonical venue on reload. (Proven.)
+- **ADV-VEN-04 — no source → blank.** No routing + no canonical → the field stays
+  blank, no crash. (Proven.)
+- **RLS / Direction A.** The canonical venue is read via the authed server client
+  (world-readable facts); only the routing rows for THIS tour are read; nothing reads
+  another workspace's advance data. The advance stays workspace-private.
+
 ## Retired
 
 (None yet.)

@@ -42,7 +42,7 @@ export async function GET(
 
   const { data: routing, error: routingErr } = await supabase
     .from('routing')
-    .select('id, date, venue_name, city, day_type, address, venue_website, venue_phone, venue_capacity, latitude, longitude')
+    .select('id, date, venue_name, city, day_type, address, venue_website, venue_phone, venue_capacity, latitude, longitude, canonical_venue_id')
     .eq('id', routingId)
     .eq('tour_id', tourId)
     .single();
@@ -107,22 +107,44 @@ export async function GET(
       last_updated_by_name,
     };
 
-    // Pre-fill Venue Info section from routing (venue_name, address, venue_website, venue_capacity)
+    // Pre-fill Venue Info section from routing, then the LINKED canonical venue as a
+    // fallback (Direction A — world-readable venue FACTS flowing INTO this private,
+    // workspace-scoped advance; never advance data leaving the workspace). NON-
+    // DESTRUCTIVE: `current.X ??` only fills BLANK fields — a user entry is never
+    // overwritten, so this is safe on any advance (there is no separate "locked"
+    // advance concept; the fill respects whatever's already there).
     const venueInfoSection = advance.sections.find((sec) =>
       (sec.fields as { id?: string }[]).some((f) => f.id === 'venue_name')
     );
     if (venueInfoSection && routing) {
       const tid = venueInfoSection.template_id;
       const current = advance.data[tid] ?? {};
-      const r = routing as { venue_name?: string | null; address?: string | null; venue_website?: string | null; venue_phone?: string | null; venue_capacity?: number | null };
+      const r = routing as { venue_name?: string | null; address?: string | null; venue_website?: string | null; venue_phone?: string | null; venue_capacity?: number | null; canonical_venue_id?: string | null };
+
+      // Only load the canonical venue when a fact is still missing after routing —
+      // avoids a query when routing already covers everything.
+      let canon: { name?: string | null; address?: string | null; capacity?: number | null } | null = null;
+      const needsFill =
+        (current.venue_name ?? r.venue_name) == null ||
+        (current.venue_address ?? r.address) == null ||
+        (current.venue_capacity ?? r.venue_capacity) == null;
+      if (r.canonical_venue_id && needsFill) {
+        const { data: cv } = await supabase
+          .from('canonical_venues')
+          .select('name, address, capacity')
+          .eq('id', r.canonical_venue_id)
+          .maybeSingle();
+        canon = (cv as { name?: string | null; address?: string | null; capacity?: number | null } | null) ?? null;
+      }
+
       advance.data = {
         ...advance.data,
         [tid]: {
           ...current,
-          venue_name: current.venue_name ?? r.venue_name ?? undefined,
-          venue_address: current.venue_address ?? r.address ?? undefined,
+          venue_name: current.venue_name ?? r.venue_name ?? canon?.name ?? undefined,
+          venue_address: current.venue_address ?? r.address ?? canon?.address ?? undefined,
           venue_website: current.venue_website ?? r.venue_website ?? undefined,
-          venue_capacity: current.venue_capacity ?? r.venue_capacity ?? undefined,
+          venue_capacity: current.venue_capacity ?? r.venue_capacity ?? canon?.capacity ?? undefined,
         },
       };
     }
