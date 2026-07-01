@@ -75,6 +75,29 @@ duplicate candidates and never overwrites an existing
 
 (None yet.)
 
+## Venue-library search API (feat/routing-venue-search — Part 2 foundation)
+
+> `GET /api/venues/canonical/search?q=&city=` — type-to-search the world-readable
+> venue library (`ilike` on name, optional city narrow), returning the facts the
+> routing grid auto-fills from (id · name · city · country · address · capacity ·
+> lat · lng). Auth-gated (RLS SELECT); facts only, no workspace data. This is the
+> enabling foundation for venue-first routing.
+
+- **ROUTE-VEN-00 — search endpoint.** `q` < 2 chars → empty. ilike wildcards in the
+  query are escaped so a literal `%`/`_` can't widen the match. Limit 8, name-ordered.
+  (Verified: build registers `ƒ /api/venues/canonical/search`; escape helper proven;
+  tsc/eslint clean.)
+- **PENDING (Part 2 remainder, not yet landed):** the venue-field UI integration
+  (library matches shown first as `name — city, country · cap`; pick → link
+  `canonical_venue_id` + auto-fill city/country/address/lat-lng/cap + orange linked
+  marker; "Create '<typed>' as new venue" → Google Places → `findOrCreateCanonicalVenue`
+  → link), the grid column reorder (Date · Venue · City · Country · Address · Day),
+  and the Tab-across keyboard flow. These are changes to the load-bearing
+  `VenueAutocomplete` (careful Places billing/session/onBlur logic) + the routing grid
+  and need a live DOM run to verify — carried to a continuation with fresh context
+  rather than rushed. The search API + the Part-1 library enrichment they build on are
+  landed.
+
 ## Venue library — address + capacity enrichment (feat/venue-lib-address)
 
 > Migration 226 adds `canonical_venues.address` (facts only; NO RLS change — stays
