@@ -9,26 +9,15 @@
 'use client';
 
 import { useState, useEffect, useRef, Fragment } from 'react';
-import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, Polyline, Tooltip, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { parseRoutingDate, getDayTypeLabel, getDayTypeColor, firstDayType } from '@/lib/utils';
 import { greatCirclePoints } from '@/lib/utils';
+import { brandedPinSvg, PIN_SIZE, PIN_ANCHOR, PIN_TOOLTIP_ANCHOR } from '@/lib/routing/mapPin';
 import type { RoutingRow } from './RoutingGrid';
 import { cn } from '@/lib/utils';
 
 import 'leaflet/dist/leaflet.css';
-
-// Fix default marker icons in Next.js (Leaflet expects window)
-const defaultIcon =
-  typeof window !== 'undefined'
-    ? L.icon({
-        iconUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png',
-        iconRetinaUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png',
-        shadowUrl: 'https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png',
-        iconSize: [25, 41],
-        iconAnchor: [12, 41],
-      })
-    : null;
 
 const ROUTE_COLORS = {
   default: '#0ea5e9',   // sky-500
@@ -52,7 +41,7 @@ function transportIconLabel(transportToNext: TransportToNext, primaryTransit: Pr
 function createTransportDivIcon(transportToNext: TransportToNext, primaryTransit: PrimaryTransit): L.DivIcon {
   const label = transportIconLabel(transportToNext, primaryTransit);
   return L.divIcon({
-    html: `<div style="width:28px;height:28px;border-radius:6px;background:white;box-shadow:0 1px 3px rgba(0,0,0,0.2);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;letter-spacing:0.02em;color:#374151">${label}</div>`,
+    html: `<div style="width:28px;height:28px;border-radius:6px;background:var(--lp-panel,#fff);box-shadow:0 1px 3px rgba(0,0,0,0.2);display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;letter-spacing:0.02em;color:var(--lp-text-secondary,#374151)">${label}</div>`,
     iconSize: [28, 28],
     iconAnchor: [14, 14],
     className: 'transport-midpoint-icon',
@@ -234,18 +223,24 @@ export function RoutingMap({ rows, primaryTransit, onSelectDate }: RoutingMapPro
         />
         {boundsPoints.length > 0 && <FitBoundsOnce points={boundsPoints} />}
 
-        {pointsWithCoords.map(({ row, i, coord }) => {
+        {pointsWithCoords.map(({ row, coord }) => {
           const parsedDate = parseRoutingDate(row.date);
           const dateFormatted = parsedDate.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
           const dateShort = parsedDate.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
           const dayTypeColors = row.day_type ? getDayTypeColor(firstDayType(row.day_type)) : null;
+          // Branded inline pin — matches the export map's orange treatment
+          // (routing-pdf renderRouteMap): show/festival = brand orange, other days
+          // = a muted on-brand tint. Fixed size, tip anchored, NO transform →
+          // Leaflet locks the tip to the coordinate across every zoom (no drift).
+          const dt = row.day_type ? firstDayType(row.day_type) : '';
+          const pinFill = dt === 'show' || dt === 'festival'
+            ? 'var(--lp-orange,#FF4500)'
+            : 'var(--lp-text-tertiary,#8a837b)';
           const markerIcon = L.divIcon({
-            html: `<div class="flex flex-col items-center" style="transform: translate(-50%,-100%)">
-              <span style="font-size:10px;font-weight:600;white-space:nowrap;color:var(--lp-text);background:white;padding:2px 5px;border-radius:4px;box-shadow:0 1px 2px rgba(0,0,0,0.15);margin-bottom:2px">${dateShort}</span>
-              <img src="https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png" alt="" style="width:25px;height:41px" />
-            </div>`,
-            iconSize: [60, 50],
-            iconAnchor: [12, 41],
+            html: brandedPinSvg(pinFill),
+            iconSize: PIN_SIZE,
+            iconAnchor: PIN_ANCHOR,
+            tooltipAnchor: PIN_TOOLTIP_ANCHOR,
             className: 'border-0 bg-transparent',
           });
           return (
@@ -254,6 +249,9 @@ export function RoutingMap({ rows, primaryTransit, onSelectDate }: RoutingMapPro
               position={[coord.lat, coord.lng]}
               icon={markerIcon}
             >
+              {/* Date label lives in a permanent Tooltip (anchored at the pin top),
+                  so its variable width can never shift the pin tip. */}
+              <Tooltip permanent direction="top" className="lp-route-pin-date">{dateShort}</Tooltip>
               <Popup>
                 <div style={{ minWidth: '180px' }}>
                   <div style={{ color: '#999', fontSize: '13px' }}>{dateFormatted}</div>

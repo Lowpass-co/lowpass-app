@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import { MapContainer, TileLayer, Marker, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { greatCirclePoints } from '@/lib/utils';
+import { brandedPinSvg, PIN_SIZE, PIN_ANCHOR } from '@/lib/routing/mapPin';
 
 import 'leaflet/dist/leaflet.css';
 
@@ -68,13 +69,16 @@ function toCoord(lat: unknown, lng: unknown): { lat: number; lng: number } | nul
   return { lat: la, lng: lo };
 }
 
-const DOT_ICON =
+// Branded teardrop shared with the in-app routing map (src/lib/routing/mapPin).
+// Fixed size + tip anchor, no transform → the tip locks to the coordinate at any
+// zoom. Token-clean (var(--lp-orange) inside the inline SVG).
+const PIN_ICON =
   typeof window !== 'undefined'
     ? L.divIcon({
-        html: `<div style="width:8px;height:8px;border-radius:50%;background:#FF4500;border:2px solid rgba(255,69,0,0.35);box-shadow:0 0 8px rgba(255,69,0,0.55)"></div>`,
-        iconSize: [8, 8],
-        iconAnchor: [4, 4],
-        className: '',
+        html: brandedPinSvg(),
+        iconSize: PIN_SIZE,
+        iconAnchor: PIN_ANCHOR,
+        className: 'border-0 bg-transparent',
       })
     : null;
 
@@ -202,7 +206,7 @@ export function BudgetRoutingMap({ rows }: { rows: MapRow[] }) {
           <Marker
             key={i}
             position={[coord.lat, coord.lng]}
-            icon={DOT_ICON ?? undefined}
+            icon={PIN_ICON ?? undefined}
           />
         ))}
 

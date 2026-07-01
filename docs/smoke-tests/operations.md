@@ -305,6 +305,36 @@ children with `nowrap` + ellipsis truncate cleanly (city + type get `title`
 tooltips), more gap/padding. (`DayHeader` in `PayrollDaysMatrix.tsx`.) Token
 colours unchanged. **Needs-live**.
 
+## Branded, exact map pins (feat/tour-map-pins)
+
+> The routing maps' Leaflet pins were the stock unpkg blue teardrop (external CDN)
+> with a double-anchor drift (`iconAnchor:[12,41]` on a `[60,50]` box + an inner
+> `transform: translate(-50%,-100%)` + a variable-width date label above the pin →
+> pins sat off-true and crawled on zoom). Both `RoutingMap.tsx` and
+> `BudgetRoutingMap.tsx` now use ONE shared branded pin (`src/lib/routing/mapPin.ts`).
+> CHECK-FIRST correction: `BudgetRoutingMap` did NOT use the stock marker — it used a
+> branded orange **dot** with hardcoded `#FF4500`; now unified + tokenised.
+> Verification: module-level functional smoke + build (a live Leaflet render needs an
+> authenticated tour with lat/lng — not exercised headlessly).
+
+- **MAP-PIN-01 — branded, inline, no external fetch.** `brandedPinSvg()` is an inline
+  SVG teardrop filled with `var(--lp-orange)` (matches the export map's orange
+  treatment). No `<img>`, no unpkg/CDN/.png. The dead `defaultIcon` (unpkg `L.icon`)
+  was removed; `createTransportDivIcon` tokenised (`white`→`var(--lp-panel)`,
+  `#374151`→`var(--lp-text-secondary)`). Show/festival = orange, other days = a muted
+  on-brand tint (mirrors renderRouteMap). (Proven: svg + orange token + no external
+  URL/img.)
+- **MAP-PIN-02 — deterministic tip anchor (drift killed).** `iconSize = PIN_SIZE`
+  (the SVG's real px), `iconAnchor = [W/2, H]` = the bottom-centre tip, and the pin
+  html has NO `translate()` / transform. The teardrop path tip is drawn exactly at
+  (W/2, H) so the anchor lands on it. Leaflet reprojects a fixed px anchor to the
+  lat/lng at every zoom → the tip locks to the coordinate. (Proven: anchor math + no
+  transform + tip coordinate; simulated constant tip offset across zoom 3/8/14.)
+- **MAP-PIN-03 — label can't move the pin.** The date label moved out of the anchored
+  pin into a permanent Leaflet `<Tooltip>` (`tooltipAnchor = [0, -H]` = pin top). The
+  pin SVG is pure shapes — no `<text>`/`<span>`/font-size baked in — so a
+  variable-width label can never shift the anchored tip. (Proven.)
+
 ## Retired
 
 (None yet.)
