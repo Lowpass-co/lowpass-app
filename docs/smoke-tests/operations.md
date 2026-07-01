@@ -305,6 +305,35 @@ children with `nowrap` + ellipsis truncate cleanly (city + type get `title`
 tooltips), more gap/padding. (`DayHeader` in `PayrollDaysMatrix.tsx`.) Token
 colours unchanged. **Needs-live**.
 
+## Tour creation — 404 root cause fixed (feat/tour-create-modal)
+
+> Adam couldn't create a tour. **Root cause (confirmed, single):** the bare
+> `next.config.ts` redirect `/tours/:id → /operations/:id` had an unconstrained
+> `:id`, so `/tours/create` matched `:id='create'` and 301'd to `/operations/create`
+> → 404. EVERY create entry point (tours-list button + empty-state, AppTopBar,
+> ShellTopBarClient, DashboardArtistGate, DashboardTourList, TourPicker, JobModal)
+> routes through `/tours/create`, so create was dead app-wide (only the switcher,
+> which opens the slide-over directly, escaped it). **No second bug:** the POST
+> `/api/tours` route (requires artist_id + name + dates; inserts with
+> `workspace_id = profile.workspace_id`), the RLS INSERT policy (migration 004:
+> `WITH CHECK workspace_id = get_my_workspace_id()`), and the `TourCreateSlideOver`
+> submit were all verified sound.
+
+- **TOUR-CREATE-01 — redirect constrained (create unblocked).** `/tours/:id` now
+  matches only a UUID (`:id([0-9a-fA-F-]{36})`), so `/tours/create` no longer
+  mis-301s and the create page loads for every entry point. (Proven: regex matches a
+  real UUID, rejects `create`; build green.) **301-cache gotcha:** the old permanent
+  redirect caches hard — verify in incognito / after clearing the redirect cache.
+- **FLAGGED — remaining Part-3 scope not landed here:** the one-modal migration
+  (`TourCreateSlideOver` → `<Modal size='lg'>`), repointing all 8 entry points to
+  open that modal (needs a shared modal host), retiring the full-page wizard
+  (`tours/create/page.tsx` + `TourWizard`), and rehoming `DashboardTourCard`'s
+  `?edit=` push to `EditTourSlideOver`. Deferred because (a) safely deleting the
+  wizard requires all 8 entry points repointed + a live create/edit to verify, and
+  (b) an authenticated end-to-end tour INSERT can't be run headlessly to satisfy the
+  "prove created" bar — the redirect fix is the demonstrable, non-regressing
+  create-unblock; the modal refactor is a larger follow-up needing live access.
+
 ## Routing view revamp (feat/routing-revamp)
 
 > RESTYLE to the app's canonical language (Adam's call: keep the bespoke routing

@@ -178,7 +178,13 @@ const nextConfig: NextConfig = {
         permanent: true,
       },
       {
-        source: '/tours/:id',
+        // Constrain :id to a UUID so a STATIC segment (e.g. /tours/create) is not
+        // mis-301'd to /operations/<segment> → 404. This bare rule was the create
+        // blocker: /tours/create matched :id='create' and redirected to a page that
+        // doesn't exist. (301s cache hard — test the fix in incognito / after a
+        // cache clear.) The suffixed /tours/:id/* rules need a real path segment,
+        // so only this bare one needed constraining.
+        source: '/tours/:id([0-9a-fA-F-]{36})',
         destination: '/operations/:id',
         permanent: true,
       },
