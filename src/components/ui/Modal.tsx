@@ -27,7 +27,7 @@ import { useEffect, useId, useRef } from 'react';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-type Size = 'sm' | 'md' | 'lg';
+type Size = 'sm' | 'md' | 'lg' | 'xl';
 
 interface ModalProps {
   open: boolean;
@@ -48,6 +48,8 @@ const SIZE_CLASS: Record<Size, string> = {
   sm: 'max-w-md',
   md: 'max-w-2xl',
   lg: 'max-w-4xl',
+  // xl — wide enough for the routing grid (tour create/edit modal).
+  xl: 'max-w-6xl',
 };
 
 export function Modal({

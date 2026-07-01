@@ -6,6 +6,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useArtistTourContext } from '@/contexts/ArtistTourContext';
 import { TopBar } from '@/components/shell/TopBar';
 import { useCommandPalette } from '@/components/command-palette/CommandPaletteContext';
+import { useTourEditor } from '@/contexts/TourEditorContext';
 import type { ShellData } from '@/lib/shell/types';
 
 export type ShellTopBarClientProps = {
@@ -18,6 +19,7 @@ export function ShellTopBarClient({ shellData }: ShellTopBarClientProps) {
   const { signOut } = useAuth();
   const { setSelectedTourId, setSelectedArtistId } = useArtistTourContext();
   const palette = useCommandPalette();
+  const { openCreateTour } = useTourEditor();
 
   const activeTourId = useMemo(() => {
     const m = pathname.match(/^\/tours\/([^/]+)/);
@@ -40,8 +42,8 @@ export function ShellTopBarClient({ shellData }: ShellTopBarClientProps) {
   );
 
   const onCreateTour = useCallback(() => {
-    router.push('/tours/create');
-  }, [router]);
+    openCreateTour();
+  }, [openCreateTour]);
 
   // UX08b — TopBar's ⌘K trigger flips the same provider state the global
   // shortcut listener owns. Two-way binding via CommandPaletteContext.

@@ -334,6 +334,51 @@ colours unchanged. **Needs-live**.
   "prove created" bar — the redirect fix is the demonstrable, non-regressing
   create-unblock; the modal refactor is a larger follow-up needing live access.
 
+## Tour create/edit modal — one modal, wizard retired (feat/tour-editor-modal)
+
+> ONE `<Modal size="xl">` for create AND edit (`TourEditorModal`), hosted app-wide by
+> `TourEditorProvider` + `useTourEditor()` (mounted in `(app)/layout.tsx`, next to the
+> other providers). Tabbed **Details | Routing** (active tab underlined in orange);
+> Step 1 = Artist (Existing/New for create; locked on edit) · Name · Dates · Region ·
+> Currency (NO party-size counts); Step 2 = the Part-2 venue-first RoutingGrid. Minimum
+> to create = artist + name + dates (routing skippable). ALL 8 `/tours/create` entry
+> points repointed; the full-page wizard (`tours/create/page.tsx` + `TourWizard`) and
+> `TourCreateSlideOver` are DELETED (zero real importers, grep-verified). Floor green.
+> **UI verified live by Adam** via this script. **Live authenticated create is Adam's
+> click** (headless can't auth-INSERT).
+
+Entry points repointed (all now open the modal, none navigate to /tours/create):
+switcher (`ArtistTourSwitcherClientWrapper`), tours-list button + empty-state
+(`tours/page.tsx` via `NewTourButton`), `AppTopBar`, `ShellTopBarClient`,
+`DashboardArtistGate` (`DashboardChooseTour`), `DashboardTourList`, `TourPicker`,
+`JobModal`. Edit: `DashboardTourCard` → `openEditTour(id)`.
+
+Adam live-test script (on preview, incognito to dodge the old 301 cache):
+- **TOUR-MODAL-01 (opens everywhere):** click New Tour from the switcher, the AppTopBar
+  “NEW TOUR”, and the tours-list button → the wide modal opens on the Details tab each
+  time. Expected: modal, not a 404 or the old wizard page.
+- **TOUR-MODAL-02 (create — minimum):** pick an Existing artist · type a name · set
+  start+end dates → “Skip routing & create”. Expected: the tour is created and opens at
+  /operations/<id>. (Adam's live click — the auth-INSERT can't run headless.)
+- **TOUR-MODAL-03 (create — with routing):** on Details click “Next: routing →” → the
+  Routing tab seeds one row per date · venue-search a couple → “Create tour · N days”.
+  Expected: tour + routing created; opens Operations.
+- **TOUR-MODAL-04 (new artist):** Artist toggle → New → type an artist name + tour
+  name + dates → create. Expected: the artist is created (POST /api/artists) then the
+  tour under it.
+- **TOUR-MODAL-05 (edit — same modal, pre-filled):** on a tour card → ⋯ → Edit tour →
+  the SAME modal opens in edit mode, artist locked, Name/Dates/Region/Currency
+  pre-filled → change the name → “Save changes”. Expected: PATCH persists; the list
+  refreshes.
+- **TOUR-MODAL-06 (wizard gone):** manually visiting /tours/create no longer renders a
+  wizard (the page is deleted); every “New tour” affordance opens the modal instead.
+  Expected: no wizard anywhere; grep shows zero /tours/create links.
+- **FLAGGED (not a fork — a scoped follow-up):** the Operations **summary** page still
+  uses `EditTourSlideOver` (its drawer) for tour edit (it's the one real importer left).
+  Fully retiring that drawer = repoint `OperationsSummaryClient`'s edit trigger to
+  `openEditTour(tourId)` + delete `EditTourSlideOver` — a clean 1-file continuation.
+  The modal edit already works from the dashboard card.
+
 ## Venue-first, library-aware routing grid (feat/routing-venue-search — UI)
 
 > The routing grid is now venue-first + library-aware. Columns reordered to

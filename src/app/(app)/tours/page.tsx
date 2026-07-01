@@ -5,7 +5,7 @@
    ============================================ */
 
 import { Plus } from 'lucide-react';
-import Link from 'next/link';
+import { NewTourButton } from '@/components/shell-v2/NewTourButton';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { parseWorkspaceArtistId } from '@/lib/artist-scope';
 import { ToursListWithFilters } from '@/components/tours/ToursListWithFilters';
@@ -71,13 +71,12 @@ export default async function ToursPage({
               : 'All tours across all artists — routing and advance progress.'}
           </p>
         </div>
-        <Link
-          href="/tours/create"
+        <NewTourButton
           className="btn-transition btn-primary-press flex items-center gap-2 rounded-lg bg-lp-orange px-4 py-2.5 text-sm font-medium text-white hover:bg-lp-orange-hover"
         >
           <Plus size={16} />
           New Tour
-        </Link>
+        </NewTourButton>
       </div>
 
       {error ? (
@@ -91,13 +90,12 @@ export default async function ToursPage({
             <p className="mt-1 text-sm text-lp-text-tertiary">
               Create your first tour to get started.
             </p>
-            <Link
-              href="/tours/create"
+            <NewTourButton
               className="mt-4 inline-flex items-center gap-2 rounded-lg bg-lp-orange px-4 py-2.5 text-sm font-medium text-white hover:bg-lp-orange-hover"
             >
               <Plus size={16} />
               New Tour
-            </Link>
+            </NewTourButton>
           </div>
         </div>
       ) : (

@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils';
 import { ContextMenu } from '@/components/ui/ContextMenu';
 import { DeleteConfirmationModal } from '@/components/ui/DeleteConfirmationModal';
 import { useToast } from '@/components/ui/Toast';
+import { useTourEditor } from '@/contexts/TourEditorContext';
 
 const statusColors: Record<string, string> = {
   planning: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
@@ -21,12 +22,13 @@ const statusColors: Record<string, string> = {
 export function DashboardTourCard({ tour, onDeleted }: { tour: Tour; onDeleted?: () => void }) {
   const router = useRouter();
   const { showToast } = useToast();
+  const { openEditTour } = useTourEditor();
   const artistName = tour.artist?.name ?? '—';
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
   const contextMenuItems = [
-    { label: 'Edit tour', icon: Pencil, onClick: () => router.push(`/tours/create?edit=${tour.id}`) },
+    { label: 'Edit tour', icon: Pencil, onClick: () => openEditTour(tour.id) },
     { label: 'Delete tour', icon: Trash2, variant: 'danger' as const, onClick: () => setDeleteOpen(true) },
   ];
 

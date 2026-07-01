@@ -24,6 +24,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Briefcase, DollarSign, ClipboardList, ChevronRight } from 'lucide-react';
 import { useArtistTourContext } from '@/contexts/ArtistTourContext';
+import { useTourEditor } from '@/contexts/TourEditorContext';
 import type { HomeTourSummary } from '@/server/home/getHomeData';
 
 const STATUS_META: Record<string, { label: string; color: string }> = {
@@ -82,6 +83,7 @@ function lastActivity(t: HomeTourSummary): string | null {
 
 export function TourPicker({ tours }: { tours: HomeTourSummary[] }) {
   const router = useRouter();
+  const { openCreateTour } = useTourEditor();
   const { selectedTourId, setSelectedTourId } = useArtistTourContext();
   const selected = tours.find((t) => t.id === selectedTourId) ?? null;
 
@@ -112,8 +114,9 @@ export function TourPicker({ tours }: { tours: HomeTourSummary[] }) {
         >
           Create a tour to open Operations, Budget, and Advance for it.
         </p>
-        <Link
-          href="/tours/create"
+        <button
+          type="button"
+          onClick={() => openCreateTour()}
           className="btn-transition mt-4 inline-flex items-center gap-1.5 rounded-md px-3.5 py-2"
           style={{
             fontSize: 13,
@@ -123,7 +126,7 @@ export function TourPicker({ tours }: { tours: HomeTourSummary[] }) {
           }}
         >
           Create a tour →
-        </Link>
+        </button>
       </section>
     );
   }

@@ -16,6 +16,7 @@ import { DarkModeToggle } from './DarkModeToggle';
 import { AppTopBarBreadcrumb } from './AppTopBarBreadcrumb';
 import { ManageTourSegmentNav } from './ManageTourSegmentNav';
 import { useArtistTourContext } from '@/contexts/ArtistTourContext';
+import { useTourEditor } from '@/contexts/TourEditorContext';
 import { cn } from '@/lib/utils';
 import { useRouter } from 'next/navigation';
 
@@ -25,6 +26,7 @@ interface AppTopBarProps {
 
 export function AppTopBar({ onMenuClick }: AppTopBarProps) {
   const router = useRouter();
+  const { openCreateTour } = useTourEditor();
   const { selectedArtistId, selectedTourId, hydrated } = useArtistTourContext();
   const compactNewTour = hydrated && !!selectedArtistId;
 
@@ -42,8 +44,9 @@ export function AppTopBar({ onMenuClick }: AppTopBarProps) {
             <Menu size={20} />
           </button>
 
-          <Link
-            href="/tours/create"
+          <button
+            type="button"
+            onClick={() => openCreateTour()}
             title={compactNewTour ? 'New tour' : undefined}
             aria-label={compactNewTour ? 'New tour' : undefined}
             className={cn(
@@ -57,7 +60,7 @@ export function AppTopBar({ onMenuClick }: AppTopBarProps) {
           >
             <Plus size={compactNewTour ? 18 : 14} strokeWidth={compactNewTour ? 2 : 2.5} className="shrink-0" />
             {!compactNewTour && <span className="whitespace-nowrap">NEW TOUR</span>}
-          </Link>
+          </button>
 
           <Suspense
             fallback={

@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { Plus, ArrowUpDown, Check, ChevronDown } from 'lucide-react';
 import type { Tour, TourStatus } from '@/types';
 import { DashboardTourCard } from '@/components/dashboard/DashboardTourCard';
+import { useTourEditor } from '@/contexts/TourEditorContext';
 import { cn } from '@/lib/utils';
 
 type SortOrder = 'date_asc' | 'date_desc' | 'artist_asc' | 'artist_desc';
@@ -23,6 +24,7 @@ function artistSortKey(tour: Tour): string {
 }
 
 export function DashboardTourList({ tours }: { tours: Tour[] }) {
+  const { openCreateTour } = useTourEditor();
   const [sortOrder, setSortOrder] = useState<SortOrder>('date_desc');
   const [statusFilter, setStatusFilter] = useState<'' | TourStatus>('');
   const [sortMenuOpen, setSortMenuOpen] = useState(false);
@@ -233,13 +235,14 @@ export function DashboardTourList({ tours }: { tours: Tour[] }) {
       {!tours.length ? (
         <div className="mt-4 rounded-xl border-2 border-dashed border-lp-border p-8 text-center">
           <p className="text-lp-text-secondary">No active tours yet.</p>
-          <Link
-            href="/tours/create"
+          <button
+            type="button"
+            onClick={() => openCreateTour()}
             className="mt-3 inline-flex items-center gap-2 rounded-lg bg-lp-orange px-4 py-2.5 text-sm font-medium text-white hover:bg-lp-orange-hover"
           >
             <Plus size={16} />
             Create your first tour
-          </Link>
+          </button>
         </div>
       ) : filteredAndSorted.length === 0 ? (
         <div className="mt-4 rounded-xl border border-lp-border/60 bg-lp-surface/40 px-4 py-8 text-center text-sm text-lp-text-secondary">

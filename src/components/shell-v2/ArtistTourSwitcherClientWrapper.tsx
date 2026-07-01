@@ -28,12 +28,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import { ArtistTourSwitcher } from './ArtistTourSwitcher';
-import { TourCreateSlideOver } from './TourCreateSlideOver';
 import { ArtistCreateSlideOver } from './ArtistCreateSlideOver';
 import { TourDeleteConfirmationModal } from './TourDeleteConfirmationModal';
 import { ArtistDeleteConfirmationModal } from '@/components/artists/ArtistDeleteConfirmationModal';
 import { useArtistTourContext } from '@/contexts/ArtistTourContext';
 import { useSwitcherState } from '@/contexts/SwitcherStateContext';
+import { useTourEditor } from '@/contexts/TourEditorContext';
 
 export type ArtistMin = {
   id: string;
@@ -64,11 +64,11 @@ export function ArtistTourSwitcherClientWrapper({
   initialArtistId,
 }: ArtistTourSwitcherClientWrapperProps) {
   const { selectedArtistId } = useArtistTourContext();
+  const { openCreateTour } = useTourEditor();
   const router = useRouter();
   const pathname = usePathname();
-  const [isCreateTourOpen, setIsCreateTourOpen] = useState(false);
-  // Sprint 8 §5 — artist creation slide-over state, parallel
-  // to the tour creation state above.
+  // Tour create/edit now lives in the app-wide TourEditorProvider modal
+  // (openCreateTour). Artist creation keeps its own slide-over.
   const [isCreateArtistOpen, setIsCreateArtistOpen] = useState(false);
   // Sprint 8.1 §5 — tour deletion modal state. The wrapper owns
   // the modal so the switcher itself can stay focused on its
@@ -192,47 +192,8 @@ export function ArtistTourSwitcherClientWrapper({
     });
   }, [initialTours]);
 
-  const handleTourCreated = useCallback(
-    (tour: TourMin) => {
-      // Optimistic prepend so the new tour appears in the
-      // switcher's tours pane immediately. Edge case noted for
-      // a future sprint: a stale slide-over closure could in
-      // theory POST for artist A while the user has already
-      // switched to artist B; the response would land in B's
-      // list. Defer.
-      setTours((prev) => [tour, ...prev]);
-
-      // Sprint 6.2 §4 — navigate to the new tour's surface so
-      // the page actually reflects the new selection. Without
-      // this, the slide-over would close but the page would
-      // stay on the previous tour (or artist home), and the
-      // user would have to manually click the new tour in the
-      // switcher to navigate. Adam's smoke: "PASS - but could
-      // only select the tour in the picker after refresh."
-      //
-      // Mirrors the product-match logic in handleTourClick.
-      // Path-aware hydration on the new URL handles the
-      // selectedTourId state update — no explicit setter call
-      // needed (the slide-over previously called
-      // setSelectedTourId which fired a syncUrlParams
-      // router.replace racing the navigation; that's been
-      // removed in this sprint too).
-      const productMatch = pathname?.match(
-        /^\/(budget|advance|operations)\//,
-      );
-      if (productMatch) {
-        router.push(`/${productMatch[1]}/${tour.id}`);
-        return;
-      }
-      if (pathname?.startsWith('/artists/')) {
-        router.push(`/budget/${tour.id}`);
-        return;
-      }
-      // Other paths — keep the new tour in the list, no forced
-      // navigation. User can pick it from the switcher.
-    },
-    [pathname, router],
-  );
+  // Tour-created navigation now lives in the TourEditorProvider's onSaved
+  // (router.refresh + push to /operations/<id>).
 
   // Sprint 8 §5 — artist creation success path. Prepend the new
   // artist to local state so the switcher's artists pane shows
@@ -303,29 +264,16 @@ export function ArtistTourSwitcherClientWrapper({
     ];
   }, [createdArtists, initialArtists]);
 
-  // Lean projection for the tour slide-over's artist picker
-  // fallback — only id+name needed.
-  const tourArtistOptions = useMemo(
-    () => mergedArtists.map((a) => ({ id: a.id, name: a.name })),
-    [mergedArtists],
-  );
-
   return (
     <>
       <ArtistTourSwitcher
         initialArtists={mergedArtists}
         tours={tours}
         toursLoading={toursLoading}
-        onCreateTour={() => setIsCreateTourOpen(true)}
+        onCreateTour={() => openCreateTour()}
         onCreateArtist={() => setIsCreateArtistOpen(true)}
         onDeleteTour={(tour) => setTourToDelete(tour)}
         onDeleteArtist={(artist) => setArtistToDelete(artist)}
-      />
-      <TourCreateSlideOver
-        open={isCreateTourOpen}
-        onClose={() => setIsCreateTourOpen(false)}
-        artists={tourArtistOptions}
-        onCreated={handleTourCreated}
       />
       <ArtistCreateSlideOver
         open={isCreateArtistOpen}

@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { ArrowLeft, Plus } from 'lucide-react';
 import { useArtistTourContext } from '@/contexts/ArtistTourContext';
+import { useTourEditor } from '@/contexts/TourEditorContext';
 import { NewArtistSlideOver } from '@/components/artists/NewArtistSlideOver';
 import type { Tour } from '@/types';
 import { cn } from '@/lib/utils';
@@ -224,6 +225,7 @@ function DashboardChooseTour({
   onPickTour: (tourId: string) => void;
 }) {
   const router = useRouter();
+  const { openCreateTour } = useTourEditor();
   const list = tours.slice(0, 20);
 
   return (
@@ -293,12 +295,13 @@ function DashboardChooseTour({
           ))}
       </div>
 
-      <Link
-        href="/tours/create"
+      <button
+        type="button"
+        onClick={() => openCreateTour()}
         className="mt-6 inline-flex items-center justify-center rounded-lg border border-lp-orange bg-lp-orange px-4 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
       >
         New tour
-      </Link>
+      </button>
     </div>
   );
 }

@@ -9,6 +9,7 @@ import { X, ExternalLink, ChevronDown, ChevronRight } from 'lucide-react';
 import Link from 'next/link';
 import { createClient } from '@/lib/supabase-client';
 import { useToast } from '@/components/ui/Toast';
+import { useTourEditor } from '@/contexts/TourEditorContext';
 import { StyledSelect, type StyledSelectOption } from '@/components/ui/StyledSelect';
 import {
   type EquipmentArtistOption,
@@ -38,6 +39,7 @@ export function JobModal({
   onClose,
 }: Props) {
   const { showToast } = useToast();
+  const { openCreateTour } = useTourEditor();
   const [name, setName] = useState(editing?.name ?? '');
   const [client, setClient] = useState(editing?.client_name ?? '');
   const [artistId, setArtistId] = useState(editing?.artist_id ?? '');
@@ -221,15 +223,14 @@ export function JobModal({
               />
             </Field>
             {workspaceId ? (
-              <Link
-                href="/tours/create"
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                type="button"
+                onClick={() => openCreateTour()}
                 className="inline-flex items-center gap-1 text-xs font-semibold transition-opacity hover:opacity-80"
                 style={{ color: '#FF4500' }}
               >
                 Add new tour <ExternalLink size={12} />
-              </Link>
+              </button>
             ) : null}
           </div>
 
