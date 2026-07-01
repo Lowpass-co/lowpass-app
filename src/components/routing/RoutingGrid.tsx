@@ -71,11 +71,12 @@ function formatHours(hours: number): string {
   return m ? `${h}h ${m}m` : `${h}h`;
 }
 
-/** Red only if over 10h or over 450 miles. */
-function travelColor(hours: number, miles: number): string {
-  if (hours > 10 || miles > 450) return 'text-red-600 dark:text-red-400';
-  if (hours >= 5) return 'text-amber-600 dark:text-amber-400';
-  return 'text-emerald-600 dark:text-emerald-400';
+/** Semantic travel colour as an lp token (over-limit / warning / ok). Applied
+ *  inline so it reads from the canonical status palette, not raw Tailwind. */
+function travelColorVar(hours: number, miles: number): string {
+  if (hours > 10 || miles > 450) return 'var(--color-lp-error)';
+  if (hours >= 5) return 'var(--color-lp-status-needs-review)';
+  return 'var(--color-lp-status-complete)';
 }
 
 /** Transport mode pill buttons for the Travel column. */
@@ -177,7 +178,7 @@ function TravelBox({
     const speed = getSpeedMph(primaryTransit, transportToNext);
     hours = miles / speed;
   }
-  const colorClass = travelColor(hours, miles);
+  const travelColor = travelColorVar(hours, miles);
   const Icon = transportToNext === 'fly' || primaryTransit === 'flight' ? Plane : primaryTransit === 'car' ? Car : Bus;
   const showLoading = useGoogleDrive && driveLoading;
 
@@ -187,12 +188,12 @@ function TravelBox({
       className="inline-flex items-center gap-2 rounded-lg border border-lp-border bg-lp-surface px-2 py-1 text-sm hover:bg-lp-surface-hover hover:border-lp-border-light transition-colors cursor-pointer"
       style={{ transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)' }}
     >
-      <Icon className={cn('h-3.5 w-3.5 shrink-0', colorClass)} />
+      <Icon className="h-3.5 w-3.5 shrink-0" style={{ color: travelColor }} />
       {showLoading ? (
         <span className="text-lp-text-tertiary">…</span>
       ) : (
         <>
-          <span className={cn('font-medium', colorClass)}>{formatHours(hours)}</span>
+          <span className="font-medium" style={{ color: travelColor }}>{formatHours(hours)}</span>
           <span className="text-lp-text-tertiary">·</span>
           <span className="text-lp-text-secondary">{Math.round(miles)} mi</span>
         </>
@@ -391,7 +392,7 @@ function RoutingRowWithMenu({
             value={row.address ?? row.city}
             onChange={(e) => updateRow(rowIndex, { address: e.target.value })}
             placeholder="Address"
-            className="w-full min-w-[100px] rounded-xl border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:border-lp-orange focus:outline-none focus:ring-2 focus:ring-lp-orange/20"
+            className="w-full min-w-[100px] rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:border-lp-orange focus:outline-none focus:ring-2 focus:ring-lp-orange/20"
           />
         </td>
         <td className={cn(cellPadX, cellPadY)}>
@@ -400,7 +401,7 @@ function RoutingRowWithMenu({
             value={row.notes ?? ''}
             onChange={(e) => updateRow(rowIndex, { notes: e.target.value })}
             placeholder="Notes"
-            className="w-full min-w-[120px] rounded-xl border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:border-lp-orange focus:outline-none focus:ring-2 focus:ring-lp-orange/20"
+            className="w-full min-w-[120px] rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:border-lp-orange focus:outline-none focus:ring-2 focus:ring-lp-orange/20"
           />
         </td>
         <td className={cn(cellPadX, cellPadY)}>

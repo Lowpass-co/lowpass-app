@@ -305,6 +305,40 @@ children with `nowrap` + ellipsis truncate cleanly (city + type get `title`
 tooltips), more gap/padding. (`DayHeader` in `PayrollDaysMatrix.tsx`.) Token
 colours unchanged. **Needs-live**.
 
+## Routing view revamp (feat/routing-revamp)
+
+> RESTYLE to the app's canonical language (Adam's call: keep the bespoke routing
+> engine + venue-autocomplete + date-seeding — do NOT migrate to `<SpreadsheetGrid>`).
+> Restyle + a functional audit of the CRUD/save path. Verification: static code-path
+> audit + build (a live DOM run needs an authenticated tour with routing — not
+> exercised headlessly; flagged).
+
+- **ROUTE-UI-01 — token-clean chrome.** The three views (`RoutingGrid` /
+  `RoutingCalendar` / `RoutingEditor`) now carry ZERO raw-Tailwind colour classes
+  (grepped clean). `travelColor` red/amber/emerald → the lp status palette
+  (`--color-lp-error` / `--color-lp-status-needs-review` / `--color-lp-status-complete`),
+  applied inline. The save-error banner → `--color-lp-error` + `color-mix`. Cell inputs
+  flattened `rounded-xl`→`rounded-lg` to read grid-like. Header (`lp-table-header-text`,
+  `bg-lp-bg-secondary`, uppercase tracking), row hover (`hover:bg-lp-surface-hover`) and
+  the day-type / transport pills were already canonical + token-based. (Proven: grep
+  finds no `text-(red|amber|emerald|…)-\d` in any of the three; build green.)
+- **ROUTE-UI-02 — save round-trip carries the full row (audit).** `handleSave`
+  (`RoutingEditor.tsx:263`) POSTs `/api/tours/[id]/routing` with every field —
+  `date · day_type · city · address · venue_name/website/phone/capacity · notes ·
+  latitude · longitude · transport_to_next · place_id · canonical_venue_id` — so an
+  edit persists and survives reload. (Verified by reading the payload builder
+  272–290; live persist not run headlessly.)
+- **ROUTE-UI-03 — venue pick writes lat/lng (audit).** `VenueAutocomplete`'s
+  `onPlaceSelect` (`RoutingGrid.tsx:361`) merges `latitude`/`longitude` + `place_id`
+  (canonical resolve on save) into the row via the immutable `updateRow`; address is
+  only overwritten when the pick returned one. Delete routes through `onDeleteRow` +
+  `DeleteConfirmationModal` (single-row). (Verified by reading the handlers; the
+  bespoke engine + autocomplete + date-seeding are unchanged, so DEFAULT data renders
+  unchanged.)
+- Note (pre-existing, out of scope): `RoutingGrid`'s `TravelBox` drive-time effect
+  trips a `react-hooks` setState-in-effect eslint error in unchanged code (empty diff
+  vs main) — not introduced here; the `next build` floor is green.
+
 ## Branded, exact map pins (feat/tour-map-pins)
 
 > The routing maps' Leaflet pins were the stock unpkg blue teardrop (external CDN)
