@@ -813,6 +813,7 @@ export function BudgetIncomeGrid({
             onLockedEdit={() => setLockModalOpen(true)}
             allowAddRows={false}
             fillHandle
+            plainEditableMoney
           />
         </div>
       )}

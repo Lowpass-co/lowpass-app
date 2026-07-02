@@ -131,6 +131,11 @@ export interface GridProps {
       opens the menu (1st click selects, 2nd opens). Default off → single-click
       opens (unchanged). (#3) */
   clickTwiceToOpen?: boolean;
+  /** Revamp #3 — editable money cells render as a PLAIN number (no currency
+      symbol); the symbol is reserved for locked / computed (ro) cells so an
+      editable field reads as editable. Opt-in per grid (Budget · Income) so
+      other money grids (Expenses) keep the symbol on every cell. */
+  plainEditableMoney?: boolean;
   /** After Tab lands on a dropdown/status cell, auto-open its menu (fast matrix
       entry). Default off → Tab just moves (unchanged). (#4) */
   tabOpensMenu?: boolean;
@@ -226,6 +231,7 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
   fillHandle = false,
   clickTwiceToOpen = false,
   tabOpensMenu = false,
+  plainEditableMoney = false,
   versionLocked = false,
   versionLockedCols,
   onLockedEdit,
@@ -1423,7 +1429,7 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
   // Money cell content via the injected FX (default = demo). Shows the SOURCE
   // figure in the row's currency; a foreign currency renders red + a ≈
   // converted tag/tooltip in the display currency (C1).
-  const moneyContent = (row: Row, id: string) => {
+  const moneyContent = (row: Row, id: string, plain = false) => {
     // A money cell whose value is EXPLICITLY null/undefined renders "—" (blank),
     // distinct from a real 0 ("£0"). Used by Income's computed outputs to show
     // "not yet computable" without a misleading literal 0. Existing callers pass
@@ -1433,14 +1439,20 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
     const raw = Number(row[id]) || 0;
     if (cc !== fx.displayCurrency) {
       const conv = fx.formatDisplay(fx.toDisplay(raw, cc));
+      // #3 (plain) — editable cells drop the leading currency symbol so the
+      // value reads as a plain, typeable number; the ≈ display-currency tag
+      // stays for cross-currency context.
       return (
         <span className="fxconv" title={`≈ ${conv} in ${fx.displayCurrency}`}>
-          {fx.symbol(cc)}
+          {plain ? null : fx.symbol(cc)}
           {raw.toLocaleString('en-US')}
           <span className="fxtag">≈{conv}</span>
         </span>
       );
     }
+    // #3 — plain editable money: number only, no symbol (the symbol is reserved
+    // for locked / computed cells so an editable field looks editable).
+    if (plain) return raw.toLocaleString('en-US');
     return fx.formatDisplay(raw);
   };
 
@@ -1891,7 +1903,9 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
         </>
       );
     }
-    if (t === 'money') return moneyContent(row, id);
+    // #3 — editable money reads as a plain number; ro/computed money keeps the
+    // symbol. Scoped by the plainEditableMoney opt-in (Budget · Income only).
+    if (t === 'money') return moneyContent(row, id, plainEditableMoney && !col.ro);
     if (t === 'number') return (row[id] ?? '') === '' ? '' : String(row[id]);
     if (t === 'check')
       return (
