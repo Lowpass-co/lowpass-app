@@ -12,6 +12,7 @@ import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { loadTourIncome } from '@/lib/budget/income';
 import { resolveLockState, resolveActiveVersion } from '@/server/budget/versions';
 import { projectIncome, type DealType } from '@/lib/budget/incomeProjection';
+import { seedActualGuarantee } from '@/lib/budget/seedActualGuarantee';
 
 function postTaxFromPreTax(preTax: number, withholdingPct: number): number {
   return preTax * (1 - withholdingPct / 100);
@@ -308,7 +309,15 @@ export async function POST(request: Request) {
     deal_pct: dealPct, deal_threshold: dealThreshold, deal_pct_above: dealPctAbove,
     dollars_per_head: dollarsPerHead, merch_fee_pct: merchFeePct,
     vip_tickets: vipTickets, vip_price: vipPrice,
-    actual_guarantee: nullableMerge(body.actual_guarantee, existing?.actual_guarantee),
+    // #4 — first-time seed: the settled Actual guarantee pre-fills from the
+    // projected (pre-tax) guarantee so settlement starts from the deal number.
+    // Never overwrites an actual already present (conservative — see helper).
+    actual_guarantee: seedActualGuarantee({
+      merged: nullableMerge(body.actual_guarantee, existing?.actual_guarantee),
+      bodyEntered: body.actual_guarantee !== undefined,
+      existing: (existing?.actual_guarantee as number | null) ?? null,
+      projected: preTaxGuarantee,
+    }),
     actual_overage: nullableMerge(body.actual_overage, existing?.actual_overage),
     actual_merch: nullableMerge(body.actual_merch, existing?.actual_merch),
     actual_vip: nullableMerge(body.actual_vip, existing?.actual_vip),
