@@ -104,6 +104,11 @@ export function StagePlotEditor({ initialPlot, initialItems, channels: initialCh
           depthFt: icon?.footprint.depth_ft,
           layer: 'main' as const,
           label: icon?.label,
+          // revamp #22 — labels default OFF for NEW items (at the creation site,
+          // NOT the render default): the StageCanvas render still treats a MISSING
+          // labelPosition as 'bottom', so existing saved plots are untouched; only
+          // freshly-added items start hidden. Toggle a label back on per item.
+          labelPosition: 'hidden' as const,
         },
       ]);
       setSelectedIds([id]);
