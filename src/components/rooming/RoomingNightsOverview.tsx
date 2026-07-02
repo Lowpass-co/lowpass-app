@@ -68,17 +68,20 @@ export function RoomingNightsOverview({
   }
 
   return (
-    <div style={{ overflowX: 'auto', border: '1px solid var(--lp-border)', borderRadius: 'var(--lp-radius-lg)' }}>
-      <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 720 }}>
+    // revamp #19 — sits on the page (Phase-1 #12 de-box): no outer boxed
+    // border/radius; the header underline + row dividers carry the structure.
+    <div style={{ overflowX: 'auto' }}>
+      <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 760 }}>
         <thead>
           <tr>
             <th style={th}>Hotel</th>
             <th style={th}>City</th>
             <th style={th}>In → Out</th>
             <th style={{ ...th, textAlign: 'right' }}>Nights</th>
-            <th style={{ ...th, textAlign: 'right' }}>S</th>
-            <th style={{ ...th, textAlign: 'right' }}>D</th>
-            <th style={{ ...th, textAlign: 'right' }}>T</th>
+            {/* revamp #19 — spell out the room types (no reason to abbreviate). */}
+            <th style={{ ...th, textAlign: 'right' }}>Single</th>
+            <th style={{ ...th, textAlign: 'right' }}>Double</th>
+            <th style={{ ...th, textAlign: 'right' }}>Triple</th>
             <th style={{ ...th, textAlign: 'right' }}>Pax</th>
             <th style={{ ...th, textAlign: 'right' }}>Cost</th>
           </tr>
@@ -93,7 +96,11 @@ export function RoomingNightsOverview({
                 background: selectedId === r.id ? 'var(--lp-surface)' : undefined,
               }}
             >
-              <td style={{ ...td, fontWeight: 600, color: selectedId === r.id ? 'var(--lp-orange)' : 'var(--lp-text)' }}>{r.hotel}</td>
+              {/* revamp #19 — an unassigned hotel (no name yet) falls back to its
+                  city so the row is still identifiable, not blank. */}
+              <td style={{ ...td, fontWeight: 600, color: selectedId === r.id ? 'var(--lp-orange)' : 'var(--lp-text)' }}>
+                {r.hotel?.trim() ? r.hotel : (r.city?.trim() ? r.city : 'Unassigned')}
+              </td>
               <td style={{ ...td, color: 'var(--lp-text-secondary)' }}>{r.city || '—'}</td>
               <td style={{ ...td, color: 'var(--lp-text-secondary)' }}>
                 {fmtDate(r.inDate)} → {fmtDate(r.outDate)}
