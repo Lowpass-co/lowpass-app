@@ -10,6 +10,10 @@
 
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+// b2 — totals now sum a person's rate lines (personnel_rate_lines × rate_types)
+// via computeTotals, instead of the legacy rate_type-branched inline math.
+import { computeTotals } from '@/lib/payroll/fees';
+import { loadTourRateContext, rateLinesFor } from '@/lib/payroll/loadRateLines';
 
 type DayStatus = 'show' | 'off_travel' | 'rehearsal' | 'no_tour';
 type RoutingDayType = string;
@@ -57,34 +61,6 @@ function countDayStatuses(
   }
   const active = show + offTravel + rehearsal;
   return { show, offTravel, rehearsal, active };
-}
-
-function computeWeekFeeAndPerDiem(
-  dayStatuses: Record<string, DayStatus>,
-  personnel: {
-    rate_type: string;
-    show_rate: number;
-    off_rate: number;
-    rehearsal_rate: number;
-    per_diem: number;
-  },
-  advanceFee: number
-): { total_fee: number; total_per_diem: number } {
-  const { show, offTravel, rehearsal, active } = countDayStatuses(dayStatuses);
-  const rateType = (personnel?.rate_type ?? 'day_rate') as string;
-  let totalFee: number;
-  if (rateType === 'split_rate') {
-    const showRate = Number(personnel.show_rate) || 0;
-    const offRate = Number(personnel.off_rate) || 0;
-    const rehRate = Number(personnel.rehearsal_rate) || 0;
-    totalFee = show * showRate + offTravel * offRate + rehearsal * rehRate + advanceFee;
-  } else {
-    const offRate = Number(personnel.off_rate) || 0;
-    totalFee = active * offRate + advanceFee;
-  }
-  const perDiemRate = Number(personnel.per_diem) || 0;
-  const totalPerDiem = active * perDiemRate;
-  return { total_fee: totalFee, total_per_diem: totalPerDiem };
 }
 
 export async function POST(request: Request) {
@@ -147,6 +123,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: personnelError.message }, { status: 500 });
   }
 
+  // b2 — the rate-lines source: the workspace catalog + every person's lines.
+  const rateCtx = await loadTourRateContext(supabase, tour_id, profile.workspace_id as string);
+
   const routingByDate = new Map<string, { day_type: string }>();
   const weekStarts = new Set<string>();
   for (const r of routingRows ?? []) {
@@ -172,11 +151,14 @@ export async function POST(request: Request) {
         dayStatuses[dateStr] = r ? dayTypeToStatus(r.day_type) : 'no_tour';
       }
       const advanceFee = weekIndex === 0 ? advanceFeeTotal : 0;
-      const { total_fee, total_per_diem } = computeWeekFeeAndPerDiem(
-        dayStatuses,
-        person,
-        advanceFee
-      );
+      // Rate-lines totals: sum this person's lines over the week's day counts.
+      // The advance is a flat_once charge applied ONCE (week 0) — so drop
+      // flat_once lines for weeks > 0. Reconciles to the legacy per-week math
+      // for both split_rate (a1/a2/a3) and day_rate (a6) — proven in the harness.
+      const counts = countDayStatuses(dayStatuses);
+      const allLines = rateLinesFor(rateCtx, person.id as string, person, advanceFeeTotal);
+      const lines = weekIndex === 0 ? allLines : allLines.filter((l) => l.basis !== 'flat_once');
+      const { totalFee: total_fee, totalPerDiem: total_per_diem } = computeTotals(lines, counts);
       const { error: upsertError } = await supabase
         .from('payroll_entries')
         .upsert(

@@ -13,7 +13,7 @@
    No 'use client', no supabase — server + client + the node harness all import it.
    ============================================ */
 
-import type { DayStatus, RateBucket, RateBasis, RateLine, RateLike } from './fees.ts';
+import type { DayStatus, RateBucket, RateBasis, RateLine, RateLike } from './fees';
 
 /** The rate_types row shape this model needs (bucket / basis / day_statuses). */
 export interface RateTypeMeta {
