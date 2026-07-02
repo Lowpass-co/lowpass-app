@@ -30,11 +30,14 @@ interface PayrollViewProps {
   payrollEntries: Record<string, unknown>[];
 }
 
-type ViewId = 'rates' | 'days' | 'summary';
+type ViewId = 'rates' | 'days';
+// #18 2a — the Rates (editable) + Summary (read-only totals) tabs collapse onto
+// ONE page (Adam's proposal): edit the rates, see the totals right below. The
+// Days matrix stays its own view — it's the per-day day-type input that feeds
+// the counts.
 const VIEWS: { id: ViewId; label: string }[] = [
-  { id: 'rates', label: 'Rates & totals' },
+  { id: 'rates', label: 'Rates & Summary' },
   { id: 'days', label: 'Days matrix' },
-  { id: 'summary', label: 'Summary' },
 ];
 
 export function PayrollView({
@@ -121,13 +124,30 @@ export function PayrollView({
 
       <div style={{ minHeight: 300 }}>
         {view === 'rates' ? (
-          <PayrollRatesSpreadsheet
-            currency={currency}
-            initialRates={rates as unknown as PersonnelRate[]}
-            payrollEntries={entries}
-            canSeeCommission={false}
-          />
-        ) : view === 'days' ? (
+          // #18 2a — two grids on one page: editable Rates on top, read-only
+          // Summary totals below (from computeTotalFee/PerDiem — unchanged).
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+            <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <TwoGridHeading label="Rates" hint="editable" />
+              <PayrollRatesSpreadsheet
+                currency={currency}
+                initialRates={rates as unknown as PersonnelRate[]}
+                payrollEntries={entries}
+                canSeeCommission={false}
+              />
+            </section>
+            <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <TwoGridHeading label="Summary" hint="totals · read-only" />
+              <PayrollSummary
+                tourId={tourId}
+                currency={currency}
+                personnelRates={rates}
+                routingDates={routingDates}
+                payrollEntries={entries}
+              />
+            </section>
+          </div>
+        ) : (
           <PayrollDaysMatrix
             routingDates={routingDates}
             personnelRates={rates}
@@ -135,16 +155,20 @@ export function PayrollView({
             statusOf={statusOf}
             saveDayStatus={saveDayStatus}
           />
-        ) : (
-          <PayrollSummary
-            tourId={tourId}
-            currency={currency}
-            personnelRates={rates}
-            routingDates={routingDates}
-            payrollEntries={entries}
-          />
         )}
       </div>
+    </div>
+  );
+}
+
+/** #18 2a — makes the editable-vs-computed split obvious on the two-grid page. */
+function TwoGridHeading({ label, hint }: { label: string; hint: string }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+      <h2 style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--lp-text-secondary)' }}>
+        {label}
+      </h2>
+      <span style={{ fontSize: 11, color: 'var(--lp-text-tertiary)' }}>· {hint}</span>
     </div>
   );
 }
