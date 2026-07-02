@@ -8,16 +8,32 @@
      - POST /api/budget/payroll    (persists total_fee / total_per_diem)
      - reconcileDerivedBudgetLines (budget Salary / Per-Diem section)
 
-   Fee splits BY DAY TYPE:
-     total_fee = show_days      × show_rate
-               + off/travel_days × off_rate        (the "travel rate")
-               + rehearsal_days  × rehearsal_rate
-               + advance_fee
-     total_per_diem = (show + off/travel + rehearsal) × per_diem
+   ─────────────────────────────────────────────────────────────────────
+   EXTENSIBLE RATE MODEL (b2, migration 228)
+   ─────────────────────────────────────────────────────────────────────
+   The totals are now a sum over a person's RATE LINES, each of which has:
+     - bucket : 'fee'      → contributes to total_fee
+               'per_diem'  → contributes to total_per_diem (kept separate)
+     - basis  : 'per_day_status' → amount × (days whose status ∈ dayStatuses)
+               'per_active_day'  → amount × active days (every engaged day)
+               'flat_once'       → amount × 1 (the advance rule)
+
+   The four legacy hardcoded rates map onto five default lines:
+     show_rate      → fee   / per_day_status ['show']
+     off_rate       → fee   / per_day_status ['off_travel']   (the travel rate)
+     rehearsal_rate → fee   / per_day_status ['rehearsal']
+     per_diem       → per_diem / per_active_day
+     advance_fee    → fee   / flat_once
+
+   THE MONEY INVARIANT: the legacy computeTotalFee / computeTotalPerDiem
+   below now DELEGATE to the new engine via ratesToLines(). The arithmetic
+   is byte-for-byte the same operations in the same order, so the redesign
+   moves no money — proven by src/lib/payroll/reconcile.harness.ts against
+   the fees.test.ts numbers.
 
    There is NO "use show_rate when off_rate is 0" fallback — travel days
    bill at the travel (off) rate exactly. So show_rate 300 with off_rate 0
-   over 21 show + 10 travel days = £6,300 (NOT £9,300). This is pure (no
+   over 21 show + 10 travel days = £6,300 (NOT £9,300). Pure module (no
    'use client', no imports) so server + client both import it.
    ============================================ */
 
@@ -34,6 +50,26 @@ export interface DayCounts {
   rehearsal: number;
   /** show + offTravel + rehearsal (every day the person is engaged). */
   active: number;
+}
+
+/** The three day statuses a `per_day_status` line can bill. */
+export type DayStatus = 'show' | 'off_travel' | 'rehearsal';
+export type RateBucket = 'fee' | 'per_diem';
+export type RateBasis = 'per_day_status' | 'per_active_day' | 'flat_once';
+
+/** One priced line for a person on a tour (a personnel_rate_lines row +
+ *  its rate_type's bucket/basis/day_statuses). */
+export interface RateLine {
+  bucket: RateBucket;
+  basis: RateBasis;
+  amount: number | string | null;
+  /** Which statuses a `per_day_status` line bills. Ignored otherwise. */
+  dayStatuses?: DayStatus[] | null;
+}
+
+export interface PayrollTotals {
+  totalFee: number;
+  totalPerDiem: number;
 }
 
 const num = (v: unknown): number => Number(v) || 0;
@@ -54,21 +90,75 @@ export function countDayStatuses(
   return { show, offTravel, rehearsal, active: show + offTravel + rehearsal };
 }
 
-/** total_fee = Σ(day-type days × that day-type's rate) + advance_fee. */
+/** Days a status covers, from the counts. */
+function daysForStatus(status: DayStatus, counts: DayCounts): number {
+  if (status === 'show') return counts.show;
+  if (status === 'off_travel') return counts.offTravel;
+  if (status === 'rehearsal') return counts.rehearsal;
+  return 0;
+}
+
+/** The value of ONE rate line for a person's day counts. Pure. */
+export function computeLineAmount(line: RateLine, counts: DayCounts): number {
+  const amount = num(line.amount);
+  switch (line.basis) {
+    case 'per_day_status': {
+      let days = 0;
+      for (const s of line.dayStatuses ?? []) days += daysForStatus(s, counts);
+      return amount * days;
+    }
+    case 'per_active_day':
+      return amount * counts.active;
+    case 'flat_once':
+      return amount * 1;
+    default:
+      return 0;
+  }
+}
+
+/** THE engine: sum a person's rate lines into fee + per-diem totals,
+ *  keeping the two buckets separate (today's split, preserved). */
+export function computeTotals(lines: RateLine[], counts: DayCounts): PayrollTotals {
+  let totalFee = 0;
+  let totalPerDiem = 0;
+  for (const line of lines) {
+    const value = computeLineAmount(line, counts);
+    if (line.bucket === 'per_diem') totalPerDiem += value;
+    else totalFee += value;
+  }
+  return { totalFee, totalPerDiem };
+}
+
+/**
+ * Map the four legacy hardcoded rates (+ advance) onto the five default
+ * rate lines, in the order that reproduces the legacy sum exactly. This is
+ * the bridge that lets every existing caller keep the same numbers while
+ * the engine becomes extensible.
+ */
+export function ratesToLines(
+  rate: RateLike,
+  advanceFee: number | string | null = 0,
+): RateLine[] {
+  return [
+    { bucket: 'fee', basis: 'per_day_status', dayStatuses: ['show'], amount: rate.show_rate ?? 0 },
+    { bucket: 'fee', basis: 'per_day_status', dayStatuses: ['off_travel'], amount: rate.off_rate ?? 0 },
+    { bucket: 'fee', basis: 'per_day_status', dayStatuses: ['rehearsal'], amount: rate.rehearsal_rate ?? 0 },
+    { bucket: 'per_diem', basis: 'per_active_day', amount: rate.per_diem ?? 0 },
+    { bucket: 'fee', basis: 'flat_once', amount: advanceFee ?? 0 },
+  ];
+}
+
+/** total_fee = Σ(day-type days × that day-type's rate) + advance_fee.
+ *  Delegates to the engine — identical arithmetic, proven equivalent. */
 export function computeTotalFee(
   rate: RateLike,
   counts: DayCounts,
   advanceFee: number | string | null = 0,
 ): number {
-  return (
-    counts.show * num(rate.show_rate) +
-    counts.offTravel * num(rate.off_rate) +
-    counts.rehearsal * num(rate.rehearsal_rate) +
-    num(advanceFee)
-  );
+  return computeTotals(ratesToLines(rate, advanceFee), counts).totalFee;
 }
 
-/** total_per_diem = every engaged day × per_diem rate. */
+/** total_per_diem = every engaged day × per_diem rate. Delegates. */
 export function computeTotalPerDiem(rate: RateLike, counts: DayCounts): number {
-  return counts.active * num(rate.per_diem);
+  return computeTotals(ratesToLines(rate), counts).totalPerDiem;
 }
