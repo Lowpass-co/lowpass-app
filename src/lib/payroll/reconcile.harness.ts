@@ -24,6 +24,15 @@ import {
   type RateLike,
   type DayCounts,
 } from './fees.ts';
+// UI phase — the reader-switch gate: totals sourced via the rate_types +
+// personnel_rate_lines model (DEFAULT_RATE_TYPES catalog) must equal the
+// legacy-column path for the five defaults.
+import {
+  DEFAULT_RATE_TYPES,
+  buildRateLines,
+  defaultLinesFromLegacy,
+  type RateLineRow,
+} from './rateLines.ts';
 
 const num = (v: unknown): number => Number(v) || 0;
 
@@ -90,6 +99,52 @@ for (const c of CASES) {
     ].join('  '),
   );
 }
+
+/* ── THE READER-SWITCH GATE ──────────────────────────────────────────
+   Every money reader is being switched to source amounts from
+   personnel_rate_lines (via the DEFAULT_RATE_TYPES catalog) instead of the
+   legacy personnel_rates.* columns. Prove the switch moves NO money: for the
+   five defaults, totals built from rate-lines === totals built from the legacy
+   columns, for BOTH buckets, on every case above.
+
+   `defaultLinesFromLegacy` mirrors migration 228's backfill (legacy column →
+   default rate-type amount); building via buildRateLines(rows, DEFAULT_RATE_TYPES)
+   is exactly the path the readers take from the DB. ─────────────────────── */
+console.log('\nReader-switch gate — rate-lines-sourced totals vs legacy-column totals\n');
+console.log(['case'.padEnd(46), 'legacy fee'.padStart(11), 'lines fee'.padStart(11), 'legacy PD'.padStart(10), 'lines PD'.padStart(10), 'ok'].join('  '));
+console.log('-'.repeat(100));
+for (const c of CASES) {
+  // Legacy-column path (what the readers used to do).
+  const legacyTotals = computeTotals(ratesToLines(c.rate, c.advance), c.counts);
+  // Rate-lines path #1: the direct legacy→default-lines bridge.
+  const linesTotalsA = computeTotals(defaultLinesFromLegacy(c.rate, c.advance), c.counts);
+  // Rate-lines path #2: assemble from personnel_rate_lines rows exactly as a
+  // reader would (rate_type_id → amount), through the catalog. This exercises
+  // buildRateLines (the reader helper), not just the bridge.
+  const rows: RateLineRow[] = [
+    { rate_type_id: DEFAULT_RATE_TYPES[0].id, amount: c.rate.show_rate ?? 0 },
+    { rate_type_id: DEFAULT_RATE_TYPES[1].id, amount: c.rate.off_rate ?? 0 },
+    { rate_type_id: DEFAULT_RATE_TYPES[2].id, amount: c.rate.rehearsal_rate ?? 0 },
+    { rate_type_id: DEFAULT_RATE_TYPES[3].id, amount: c.rate.per_diem ?? 0 },
+    { rate_type_id: DEFAULT_RATE_TYPES[4].id, amount: c.advance },
+  ];
+  const linesTotalsB = computeTotals(buildRateLines(rows, DEFAULT_RATE_TYPES), c.counts);
+
+  assert.equal(linesTotalsA.totalFee, legacyTotals.totalFee, `${c.label}: rate-lines fee ${linesTotalsA.totalFee} !== legacy ${legacyTotals.totalFee}`);
+  assert.equal(linesTotalsA.totalPerDiem, legacyTotals.totalPerDiem, `${c.label}: rate-lines PD ${linesTotalsA.totalPerDiem} !== legacy ${legacyTotals.totalPerDiem}`);
+  assert.equal(linesTotalsB.totalFee, legacyTotals.totalFee, `${c.label}: reader-assembled fee ${linesTotalsB.totalFee} !== legacy ${legacyTotals.totalFee}`);
+  assert.equal(linesTotalsB.totalPerDiem, legacyTotals.totalPerDiem, `${c.label}: reader-assembled PD ${linesTotalsB.totalPerDiem} !== legacy ${legacyTotals.totalPerDiem}`);
+  checks += 4;
+  console.log([
+    c.label.padEnd(46),
+    legacyTotals.totalFee.toFixed(2).padStart(11),
+    linesTotalsB.totalFee.toFixed(2).padStart(11),
+    legacyTotals.totalPerDiem.toFixed(2).padStart(10),
+    linesTotalsB.totalPerDiem.toFixed(2).padStart(10),
+    '✓',
+  ].join('  '));
+}
+console.log('-'.repeat(100));
 
 /* ── The fees.test.ts rounded assertions, via the engine ────────────── */
 const round = (n: number) => Math.round(n);
