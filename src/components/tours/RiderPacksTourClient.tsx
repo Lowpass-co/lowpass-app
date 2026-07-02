@@ -161,6 +161,7 @@ export function RiderPacksTourClient({
         columns={columns}
         rows={rows}
         rowKey={(row) => row.id}
+        flat
         searchPlaceholder="Search rider packs…"
         emptyState="No rider packs for this tour."
         onRowClick={(row) => {
@@ -180,7 +181,9 @@ export function RiderPacksTourClient({
             return (
               <RiderPackDetailsSlideOver
                 pack={row}
+                editorHref={`/operations/${tourId}/riders/${row.id}`}
                 onClose={() => setDetailsId(null)}
+                onUpdated={() => router.refresh()}
                 onDeleted={() => {
                   setRows((prev) => prev.filter((r) => r.id !== row.id));
                   setDetailsId(null);
