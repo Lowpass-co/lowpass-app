@@ -146,6 +146,56 @@ for (const c of CASES) {
 }
 console.log('-'.repeat(100));
 
+/* ── DAY_RATE GATE (migration 229) ───────────────────────────────────
+   A `day_rate` person is billed FLAT by generate: active × off_rate, IGNORING
+   show_rate. Migration 229 re-seeds them onto the a6 Day-rate line (= off_rate,
+   basis per_active_day) and REMOVES their a1/a2/a3 split lines. Prove the
+   rate-lines total (a6 flat + a4 per-diem + a5 advance) === generate's legacy
+   flat total, even when show_rate ≠ off_rate (the case the 5-defaults gate
+   missed). ─────────────────────────────────────────────────────────── */
+
+// Legacy reference = generate's day_rate branch, inlined independently.
+const dayRateLegacyFee = (offRate: number, active: number, adv: number): number =>
+  active * offRate + adv;
+const dayRateLegacyPerDiem = (perDiem: number, active: number): number => active * perDiem;
+
+// Assemble a day_rate person's rate lines EXACTLY as migration 229 leaves them:
+// a6 = off_rate (per_active_day), a4 = per_diem, a5 = advance. No a1/a2/a3.
+function dayRateLines(offRate: number, perDiem: number, adv: number): RateLineRow[] {
+  return [
+    { rate_type_id: DEFAULT_RATE_TYPES[5].id, amount: offRate },  // a6 Day rate
+    { rate_type_id: DEFAULT_RATE_TYPES[3].id, amount: perDiem },  // a4 Per diem
+    { rate_type_id: DEFAULT_RATE_TYPES[4].id, amount: adv },      // a5 Advance
+  ];
+}
+
+interface DayCase { label: string; showRate: number; offRate: number; perDiem: number; adv: number; counts: DayCounts; }
+const DAY_CASES: DayCase[] = [
+  // show_rate ≠ off_rate — the money-mover the split model would have introduced.
+  { label: 'Day-rate (show 500 IGNORED, off 300, 3+2d, adv 100)', showRate: 500, offRate: 300, perDiem: 0, adv: 100, counts: { show: 3, offTravel: 2, rehearsal: 0, active: 5 } },
+  { label: 'Day-rate + PD (off 275, pd 40, 4 show + 1 reh)', showRate: 999, offRate: 275, perDiem: 40, adv: 0, counts: { show: 4, offTravel: 0, rehearsal: 1, active: 5 } },
+];
+console.log('\nDay-rate gate (migration 229) — a6 flat line vs generate legacy flat total\n');
+console.log(['case'.padEnd(48), 'legacy fee'.padStart(11), 'a6 fee'.padStart(11), 'legacy PD'.padStart(10), 'a6 PD'.padStart(10), 'ok'].join('  '));
+console.log('-'.repeat(102));
+for (const d of DAY_CASES) {
+  const legacyFee = dayRateLegacyFee(d.offRate, d.counts.active, d.adv);
+  const legacyPd = dayRateLegacyPerDiem(d.perDiem, d.counts.active);
+  const totals = computeTotals(buildRateLines(dayRateLines(d.offRate, d.perDiem, d.adv), DEFAULT_RATE_TYPES), d.counts);
+  assert.equal(totals.totalFee, legacyFee, `${d.label}: rate-lines fee ${totals.totalFee} !== legacy day_rate ${legacyFee}`);
+  assert.equal(totals.totalPerDiem, legacyPd, `${d.label}: rate-lines PD ${totals.totalPerDiem} !== legacy day_rate ${legacyPd}`);
+  checks += 2;
+  console.log([
+    d.label.padEnd(48),
+    legacyFee.toFixed(2).padStart(11),
+    totals.totalFee.toFixed(2).padStart(11),
+    legacyPd.toFixed(2).padStart(10),
+    totals.totalPerDiem.toFixed(2).padStart(10),
+    '✓',
+  ].join('  '));
+}
+console.log('-'.repeat(102));
+
 /* ── The fees.test.ts rounded assertions, via the engine ────────────── */
 const round = (n: number) => Math.round(n);
 assert.equal(round(computeTotalFee({ show_rate: 635.95, off_rate: 635.95, per_diem: 0 }, { show: 2, offTravel: 4, rehearsal: 0, active: 6 }, 794.93)), 4611);

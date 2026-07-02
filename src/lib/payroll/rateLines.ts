@@ -33,6 +33,8 @@ export const DEFAULT_RATE_TYPE_IDS = {
   rehearsal: '00000000-0000-0000-0000-0000000000a3',
   perDiem: '00000000-0000-0000-0000-0000000000a4',
   advance: '00000000-0000-0000-0000-0000000000a5',
+  // Migration 229 — the day_rate fork resolution: a flat per-active-day fee.
+  dayRate: '00000000-0000-0000-0000-0000000000a6',
 } as const;
 
 export const DEFAULT_RATE_TYPES: RateTypeMeta[] = [
@@ -41,6 +43,10 @@ export const DEFAULT_RATE_TYPES: RateTypeMeta[] = [
   { id: DEFAULT_RATE_TYPE_IDS.rehearsal, name: 'Rehearsal', bucket: 'fee', basis: 'per_day_status', dayStatuses: ['rehearsal'], orderIndex: 2 },
   { id: DEFAULT_RATE_TYPE_IDS.perDiem, name: 'Per diem', bucket: 'per_diem', basis: 'per_active_day', dayStatuses: [], orderIndex: 3 },
   { id: DEFAULT_RATE_TYPE_IDS.advance, name: 'Advance', bucket: 'fee', basis: 'flat_once', dayStatuses: [], orderIndex: 4 },
+  // Day rate (migration 229): flat per engaged day — off_rate × active days. This
+  // is how a `day_rate` person is priced under the rate-lines model (their split
+  // Show/Off/Rehearsal lines are removed by 229's corrective backfill).
+  { id: DEFAULT_RATE_TYPE_IDS.dayRate, name: 'Day rate', bucket: 'fee', basis: 'per_active_day', dayStatuses: [], orderIndex: 5 },
 ];
 
 /** One personnel_rate_lines row: which type + the amount. */
