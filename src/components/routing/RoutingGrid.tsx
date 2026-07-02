@@ -238,11 +238,14 @@ export function RoutingGrid({
 }) {
   const cellPadX = compact ? 'px-2' : 'px-4';
   const cellPadY = compact ? 'py-2' : 'py-3';
+  // revamp #16 — grid sits ON the page (matches the Phase-1 #12 de-box of the
+  // .lp-grid family): no outer boxed border/radius; the header band + row
+  // dividers carry the structure. overflow-x-auto retained for column scroll.
   return (
-    <div className="relative z-0 overflow-x-auto rounded-xl border border-lp-border">
+    <div className="relative z-0 overflow-x-auto">
       <table className="w-full min-w-[640px] text-sm">
         <thead>
-          <tr className="border-b border-lp-border bg-lp-bg-secondary">
+          <tr className="border-y border-lp-border bg-lp-bg-secondary">
             {(['Date', 'Venue', 'City', 'Country', 'Address', 'Day', 'Notes', 'Transport'] as const).map((h) => (
               <th key={h} className={cn(cellPadX, cellPadY, 'text-left text-[10px] font-semibold uppercase tracking-widest lp-table-header-text')}>
                 {h}
