@@ -23,6 +23,8 @@ export type RoleTag =
   | 'mons'
   | 'ld'
   | 'backline'
+  // revamp #20 — BAND (musicians / performers). DB CHECK widened in migration 227.
+  | 'band'
   | 'management'
   | 'other';
 
@@ -34,6 +36,7 @@ export const ROLE_TAG_VALUES: ReadonlyArray<RoleTag> = [
   'mons',
   'ld',
   'backline',
+  'band',
   'management',
   'other',
 ] as const;
@@ -55,6 +58,7 @@ export const ROLE_TAG_OPTIONS: ReadonlyArray<RoleTagOption> = [
   { value: 'mons',       label: 'MONS',       description: 'Monitors Engineer' },
   { value: 'ld',         label: 'LD',         description: 'Lighting Designer' },
   { value: 'backline',   label: 'BACKLINE',   description: 'Backline Tech' },
+  { value: 'band',       label: 'BAND',       description: 'Band member / musician' },
   { value: 'management', label: 'MANAGEMENT', description: 'Artist management' },
   { value: 'other',      label: 'Other',      description: 'Catch-all (no specific role tag)' },
 ];
