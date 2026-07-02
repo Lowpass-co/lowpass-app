@@ -32,10 +32,13 @@ export interface BudgetSummaryDashboardProps {
   settings?: PnlSettingsInput | null;
   tourCurrency: string;
   fxRates?: Record<string, number>;
+  /** #24 — per-show labels aligned to `income` by index (routing venue name);
+   *  the per-show income brick uses these instead of "Show N". */
+  showLabels?: readonly (string | null | undefined)[];
 }
 
 export function BudgetSummaryDashboard({
-  lines, sections = [], income = [], commissions = [], settings = null, tourCurrency, fxRates = {},
+  lines, sections = [], income = [], commissions = [], settings = null, tourCurrency, fxRates = {}, showLabels,
 }: BudgetSummaryDashboardProps) {
   const searchParams = useSearchParams();
   const displayCurrency = (searchParams.get('display') ?? tourCurrency).toUpperCase();
@@ -47,7 +50,7 @@ export function BudgetSummaryDashboard({
   );
   const sectionRows = useMemo(() => expensesBySection(lines, sections, tourCurrency), [lines, sections, tourCurrency]);
   const burn = useMemo(() => burnFrom(lines, tourCurrency), [lines, tourCurrency]);
-  const shows = useMemo(() => perShowIncome(income, tourCurrency, fxRates), [income, tourCurrency, fxRates]);
+  const shows = useMemo(() => perShowIncome(income, tourCurrency, fxRates, showLabels), [income, tourCurrency, fxRates, showLabels]);
   void displayCurrency; // cards render in tour currency (pnl currency); ?display= is a later enhancement.
 
   const [config, setConfig] = useState<SummaryDashboardConfig>(DEFAULT_SUMMARY_CONFIG);
