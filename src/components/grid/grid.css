@@ -59,13 +59,15 @@
   --gr-pad-x: var(--lp-space-4);
 }
 
-/* ---- raised panel wrapper ---- */
+/* ---- wrapper (revamp #12) ----
+   The grid now SITS ON THE PAGE rather than floating in a raised, boxed
+   window: no outer border / radius / drop-shadow / panel fill / padding —
+   the page background shows through and the section cards + sticky header
+   provide the only structure. One shared change → income / payroll / rooming /
+   channel-list all de-box together. overflow-x stays so fixed columns scroll. */
 .lp-grid .gridwrap {
-  background: var(--gr-panel);
-  border: 1px solid var(--gr-border);
-  border-radius: var(--lp-radius-2xl);
-  padding: var(--lp-space-2);
-  box-shadow: var(--lp-shadow-lg);
+  background: transparent;
+  padding: 0;
   overflow-x: auto;
 }
 .lp-grid .gridinner {
