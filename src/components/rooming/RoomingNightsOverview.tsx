@@ -11,95 +11,14 @@
    ============================================ */
 
 import { useMemo } from 'react';
+import { summariseHotel, type RoomingHotel } from '@/lib/rooming/nightsSummary';
 
-interface HotelAssignment {
-  id: string;
-  room_id?: string | null;
-  person_name: string | null;
-  check_in: string | null;
-  check_out: string | null;
-  room_type: string | null;
-  rate_per_night: number;
-}
-export interface RoomingHotel {
-  id: string;
-  hotel_name: string;
-  city?: string | null;
-  room_assignments?: HotelAssignment[];
-}
+export type { RoomingHotel } from '@/lib/rooming/nightsSummary';
 
-function nightsBetween(start?: string | null, end?: string | null): number {
-  if (!start || !end) return 0;
-  const ms = new Date(`${end}T12:00:00`).getTime() - new Date(`${start}T12:00:00`).getTime();
-  return Number.isFinite(ms) && ms > 0 ? Math.round(ms / 86_400_000) : 0;
-}
 function fmtDate(d?: string | null): string {
   if (!d) return '—';
   const dt = new Date(`${d}T12:00:00`);
   return Number.isNaN(dt.getTime()) ? '—' : dt.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' });
-}
-
-interface StayRow {
-  id: string;
-  hotel: string;
-  city: string;
-  inDate: string | null;
-  outDate: string | null;
-  nights: number;
-  s: number;
-  d: number;
-  t: number;
-  pax: number;
-  cost: number;
-}
-
-function summariseHotel(h: RoomingHotel): StayRow {
-  const assignments = h.room_assignments ?? [];
-  // group by room_id (fallback: room_type) → one room
-  const rooms = new Map<string, { type: string; rate: number; start: string | null; end: string | null }>();
-  const pax = new Set<string>();
-  let inDate: string | null = null;
-  let outDate: string | null = null;
-  for (const a of assignments) {
-    if (a.person_name) pax.add(a.person_name);
-    if (a.check_in && (!inDate || a.check_in < inDate)) inDate = a.check_in;
-    if (a.check_out && (!outDate || a.check_out > outDate)) outDate = a.check_out;
-    const type = (a.room_type ?? '').trim();
-    if (!type || type === '-') continue;
-    const key = a.room_id ?? `${type}`;
-    const prev = rooms.get(key);
-    if (!prev) {
-      rooms.set(key, { type, rate: Number(a.rate_per_night) || 0, start: a.check_in, end: a.check_out });
-    } else {
-      if (a.check_in && (!prev.start || a.check_in < prev.start)) prev.start = a.check_in;
-      if (a.check_out && (!prev.end || a.check_out > prev.end)) prev.end = a.check_out;
-    }
-  }
-  let s = 0;
-  let d = 0;
-  let t = 0;
-  let cost = 0;
-  for (const room of rooms.values()) {
-    const up = room.type.toUpperCase();
-    if (up.startsWith('SGL') || up.startsWith('SINGLE')) s += 1;
-    else if (up.startsWith('DBL') || up.startsWith('DOUBLE') || up.startsWith('TWIN')) d += 1;
-    else if (up.startsWith('TPL') || up.startsWith('TRP') || up.startsWith('TRIPLE')) t += 1;
-    else d += 1; // default unknown paid rooms to "double" bucket
-    cost += room.rate * nightsBetween(room.start, room.end);
-  }
-  return {
-    id: h.id,
-    hotel: h.hotel_name,
-    city: h.city ?? '',
-    inDate,
-    outDate,
-    nights: nightsBetween(inDate, outDate),
-    s,
-    d,
-    t,
-    pax: pax.size,
-    cost,
-  };
 }
 
 export function RoomingNightsOverview({
