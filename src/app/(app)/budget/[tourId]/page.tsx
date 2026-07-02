@@ -45,7 +45,7 @@ import { BudgetDensityProvider } from '@/components/budget/BudgetDensityContext'
 import { enrichLinesWithTransactionAggregates } from '@/lib/budget/transactions';
 import { enrichLinesWithAttachmentCounts } from '@/lib/budget/attachments';
 import { loadTourIncome, toIncomeRows } from '@/lib/budget/income';
-import { BudgetSummaryTab } from '@/components/budget/BudgetSummaryTab';
+import { BudgetSummaryDashboard } from '@/components/budget/summary-cards/BudgetSummaryDashboard';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { computeTourPhases } from '@/server/budget/computeTourPhases';
 import { getBudgetPanelData } from '@/server/budget/getBudgetPanelData';
@@ -371,20 +371,16 @@ export default async function BudgetTourPage({
             jammed under the sticky band/burn/phase stack. */}
         <div className="space-y-6 px-4 pt-6">
           {tab === 'summary' ? (
-            <BudgetSummaryTab
-              tourId={tourId}
+            /* #29 — the Summary tab is now the customizable card dashboard.
+               Presentation-only over computeBudgetPnl (same figures as before). */
+            <BudgetSummaryDashboard
               lines={lines}
               sections={sections}
               income={incomeRows}
               commissions={commissionRows}
               settings={budgetSettings}
-              allocation={panelData.allocation}
-              burn={panelData.burn}
-              phaseBoundaries={phaseBoundaries}
               tourCurrency={tourCurrency}
               fxRates={fxRates}
-              versionApproved={versionLocked}
-              versionLabel={viewed ? `v${viewed.version_number}` : null}
             />
           ) : null}
 

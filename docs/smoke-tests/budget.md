@@ -71,6 +71,53 @@ Reference tour: "Warning Support". Templates picker needs a NEW empty tour.
   / `--color-lp-info`). (Verified: cascade wiring + `fxSummary` memo over rows'
   `currency` + `locked_fx_rate`; build green.)
 
+## Budget Summary → card dashboard (#29 — feat/budget-summary-cards)
+
+> The Summary tab is now the approved customizable brick dashboard
+> (`BudgetSummaryDashboard`). PRESENTATION-ONLY over `computeBudgetPnl` + the pure
+> `summaryData` derivations — no number recomputed/mutated. Phase 1: show/hide +
+> drag-reorder held IN-MEMORY (DEFAULT = the five approved bricks; persistence Phase 2).
+> Floor: tsc 0, eslint 0, build green. **UI verified live by Adam** via the click-test.
+>
+> **Brick → exact `computeBudgetPnl` (pnl.*) fields read (proves presentation-only):**
+> - `net-pnl`: `net.actual`, `net.projected`; margin = `net.actual / grossIncome.actual`;
+>   split bar = `grossIncome.actual`, `baseExpenses.actual`, and overheads =
+>   `commissions.actual + insurance.actual + contingency.actual + accountancy.actual + cogs.actual`.
+> - `gross-income`: `grossIncome.actual` + `grossIncome.projected`.
+> - `total-expenses`: `totalExpenses.actual` + `totalExpenses.projected`.
+> - `variance`: `grossIncome.{projected,actual}`, `totalExpenses.{projected,actual}`, `net.{projected,actual}`.
+> - `overheads-commissions`: `insurance.actual`, `accountancy.actual`, `contingency.actual`,
+>   `cogs.actual`, `pct.{insurance,accountancy,contingency,merchCogs}`, and `commissionRows[]`
+>   (`label`, `pct`, `actual`).
+> - `expenses-by-section`: per-section ACTUAL sums from `lines` (income rows excluded) —
+>   ties to `pnl.baseExpenses.actual` (proven). Same grouping as the old section rollup.
+> - `per-show-pnl`: per-show post-tax gross from `income[]` (same components as
+>   `grossIncome`) — Σ ties to `pnl.grossIncome.projected` (proven).
+> - `committed-burn`: `total/committed/spent/remaining` from `lines` statuses — the same
+>   figures the budget burn-bar header shows.
+
+- **BUDG-SUM-01** — `expenses-by-section` Σ === `pnl.baseExpenses.actual`; income rows
+  excluded; sorted desc. (Proven.)
+- **BUDG-SUM-02** — `per-show-pnl` Σ === `pnl.grossIncome.projected` (same post-tax
+  components, no new math). (Proven.)
+- **BUDG-SUM-03** — `committed-burn` total/spent/committed/remaining from line statuses.
+  (Proven.)
+- **BUDG-SUM-04** — DEFAULT = the 5 approved bricks (net-pnl · expenses-by-section ·
+  per-show-pnl · committed-burn · overheads-commissions), 3 palette hidden;
+  `normalize(undefined) === DEFAULT`. (Proven.)
+- **BUDG-SUM-05** — hide/reorder are config-only; the derived numbers never change.
+  (Proven.)
+- **Adam click-test:** open Budget · Summary → the 5 cards render, Net matches the old
+  Summary figure. Click **Customize** → grips + eyes appear → drag a card (order
+  changes, Net unchanged) → click an eye (card disappears, numbers unchanged) → **+ Add
+  card** → pick `gross-income` (it appears). Reload → layout resets to default (Phase-1
+  in-memory).
+- **Flag (per-show data):** `budget_income` (the `IncomeInput` the page passes) carries
+  no show name/date, so per-show rows are labelled "Show N" and show per-show INCOME
+  (true per-show NET needs a show→expense allocation model that doesn't exist). A small
+  follow-up can pass the routing join for real labels + net. The old Summary's charts /
+  income-report / activity / top-spend blocks are superseded by the approved card set.
+
 ## Routing Map view — SVG dot-and-line (feat/sprint-routing-map)
 
 > Sprint Part 5. The routing export's **Map** / **Both** views now render a real
