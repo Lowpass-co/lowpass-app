@@ -330,7 +330,9 @@ export function AdvanceUpcomingSidebar({
                     className="mt-1 flex items-baseline justify-between gap-2"
                     style={{ fontSize: '11px', color: 'var(--lp-text-tertiary)' }}
                   >
-                    <span className="lp-mono">{pct}% complete</span>
+                    <span>
+                      <span className="lp-mono">{pct}%</span> complete
+                    </span>
                     {overdue > 0 ? (
                       <span style={{ color: 'var(--color-lp-error, #EF4444)', fontWeight: 600 }}>
                         {overdue} overdue
