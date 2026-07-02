@@ -8,7 +8,7 @@
    ============================================ */
 
 import { notFound } from 'next/navigation';
-import { ChannelListTourSheet } from '@/components/channel-list/ChannelListTourSheet';
+import { ChannelListTourEditor } from '@/components/channel-list/ChannelListTourEditor';
 import { ExportButton } from '@/components/export/ExportButton';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { formatResolveError, resolvePack } from '@/lib/rider-packs/resolve';
@@ -40,6 +40,8 @@ export default async function OperationsTourChannelListPage({
 
   let resolvedSection: ResolvedSection | null = null;
   let resolvedPackId: string | null = null;
+  // #17 — keep the full pack so the tour tab can mount the editable editor.
+  let resolvedPack: RiderPack | null = null;
   let resolveError: string | null = null;
 
   for (const pack of packs ?? []) {
@@ -49,6 +51,7 @@ export default async function OperationsTourChannelListPage({
       if (sec) {
         resolvedSection = sec;
         resolvedPackId = pack.id as string;
+        resolvedPack = pack as RiderPack;
         break;
       }
     } catch (e) {
@@ -56,7 +59,6 @@ export default async function OperationsTourChannelListPage({
     }
   }
 
-  const tourCurrency = (tour.currency as string | null) ?? 'GBP';
 
   return (
     <div className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col space-y-4 px-4 pb-16 pt-6 print:max-w-none print:pb-8">
@@ -74,11 +76,15 @@ export default async function OperationsTourChannelListPage({
         </p>
       ) : null}
 
-      {resolvedPackId && resolvedSection ? (
-        <ChannelListTourSheet
-          packId={resolvedPackId}
+      {resolvedPackId && resolvedSection && resolvedPack ? (
+        /* #17 — editable in place: mount the rider channel-list editor (canonical
+           grid + dropdowns + StageBoxDialog patch grid) on the tour tab. An
+           inherited (artist-scope) list stays gated with the editor's own
+           "Override to edit here" prompt → the rider editor (tested fork). */
+        <ChannelListTourEditor
+          pack={resolvedPack}
           section={resolvedSection}
-          tourDefaultCurrency={tourCurrency}
+          packId={resolvedPackId}
           tourId={tour.id}
         />
       ) : (
