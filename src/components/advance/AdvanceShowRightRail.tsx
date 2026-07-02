@@ -70,11 +70,14 @@ export function AdvanceShowRightRail({
             No venue specs recorded.
           </p>
         ) : (
-          <dl className="flex flex-col">
+          <dl className="flex flex-col gap-2">
+            {/* revamp #23 — stacked label-above-value (not label-left/value-right)
+                so a long address or website URL wraps cleanly; and no .lp-mono —
+                these are free text, not numerics. */}
             {specs.map((row, i) => (
               <div
                 key={`${row.label}-${i}`}
-                className="flex items-baseline justify-between gap-3 py-1.5"
+                className="py-1.5"
                 style={{
                   borderBottom:
                     i === specs.length - 1
@@ -84,18 +87,20 @@ export function AdvanceShowRightRail({
               >
                 <dt
                   style={{
-                    fontSize: '13px',
-                    color: 'var(--lp-text-secondary)',
+                    fontSize: '11px',
+                    textTransform: 'uppercase',
+                    letterSpacing: '0.04em',
+                    color: 'var(--lp-text-tertiary)',
                   }}
                 >
                   {row.label}
                 </dt>
                 <dd
-                  className="lp-mono"
                   style={{
                     fontSize: '13px',
-                    color: 'var(--lp-text-mono)',
-                    textAlign: 'right',
+                    color: 'var(--lp-text)',
+                    marginTop: '2px',
+                    wordBreak: 'break-word',
                   }}
                 >
                   {row.value}
