@@ -267,7 +267,11 @@ export function VenueAutocomplete({
         // Pass null when no address — receiver should preserve
         // existing row.address rather than clobber with ''.
         address: formattedAddress ?? '',
-        city: d.locality,
+        // Routing-city fix — use the route's robust inferredCity (locality →
+        // postal_town → sublocality → admin_area) so venues without a `locality`
+        // component (e.g. UK postal_town like Manchester) don't land a BLANK city.
+        // Now English too (Part A languageCode=en). Fall back to raw locality.
+        city: d.inferredCity ?? d.locality,
         country: d.country,
         latitude: d.latitude,
         longitude: d.longitude,

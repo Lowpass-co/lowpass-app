@@ -14,6 +14,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { createServiceSupabaseClient } from '@/lib/supabase-server';
+import { fetchPlaceCityCountry } from '@/lib/venues/placeCity';
 
 export interface CanonicalVenueFacts {
   placeId: string;
@@ -89,6 +90,34 @@ export async function findOrCreateCanonicalVenue(
     return null;
   }
   return data.id as string;
+}
+
+/**
+ * DELIBERATE city/country normalization (routing-city fix) — distinct from the
+ * fill-only rule in findOrCreateCanonicalVenue. Fetches Place Details in English
+ * and OVERWRITES the canonical venue's `city` + `country` so a stored localized
+ * (København) or blank city becomes the English metro (Copenhagen). Keyed on the
+ * google_place_id. Returns the written {city, country}, or null when nothing was
+ * derived (key missing / call failed / no city) so the caller leaves the row as-is.
+ */
+export async function refreshCanonicalVenueCityCountry(
+  placeId: string,
+  svc: SupabaseClient = createServiceSupabaseClient(),
+): Promise<{ city: string | null; country: string | null } | null> {
+  const pid = placeId?.trim();
+  if (!pid) return null;
+  const derived = await fetchPlaceCityCountry(pid);
+  if (!derived || (derived.inferredCity == null && derived.country == null)) return null;
+  const patch: Record<string, unknown> = {};
+  if (derived.inferredCity != null) patch.city = derived.inferredCity;
+  if (derived.country != null) patch.country = derived.country;
+  if (Object.keys(patch).length === 0) return null;
+  const { error } = await svc.from('canonical_venues').update(patch).eq('google_place_id', pid);
+  if (error) {
+    console.error('[canonical-venues] city refresh failed', error);
+    return null;
+  }
+  return { city: derived.inferredCity, country: derived.country };
 }
 
 /**

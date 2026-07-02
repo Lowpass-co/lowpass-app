@@ -50,9 +50,13 @@ export async function GET(request: Request) {
   // the whole lookup bills as one session rather than a separate Details
   // charge. (place_id capture is unaffected — the client already holds it.)
   const sessiontoken = searchParams.get('sessiontoken')?.trim();
-  const url =
-    `https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}` +
-    (sessiontoken ? `?sessionToken=${encodeURIComponent(sessiontoken)}` : '');
+  // Routing-city fix — request ENGLISH so addressComponents (and thus
+  // inferredCity/country) come back as exonyms: København→Copenhagen,
+  // Wien→Vienna, München→Munich, Warszawa→Warsaw, Milano→Milan. Same call,
+  // no billing change. Combined with the (optional) session token.
+  const qs = new URLSearchParams({ languageCode: 'en' });
+  if (sessiontoken) qs.set('sessionToken', sessiontoken);
+  const url = `https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}?${qs.toString()}`;
   const res = await fetch(url, {
     method: 'GET',
     headers: {

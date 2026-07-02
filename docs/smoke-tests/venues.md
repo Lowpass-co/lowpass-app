@@ -75,6 +75,47 @@ duplicate candidates and never overwrites an existing
 
 (None yet.)
 
+## Routing city — reliable + English (feat/routing-city)
+
+> The routing PDF showed blank cities ("—" on O2 Apollo/Manchester, OVO Wembley/
+> London, Sentrum Scene/Oslo, Fållan/Stockholm, O2 universum/Prague) and localized
+> names (København, Wien, München, Warszawa, Milano). Three data-only fixes (export
+> logic UNCHANGED). No migration (city/country columns already exist).
+>
+> **A — English at the source:** `places/details/route.ts` now sends `languageCode=en`
+> (+ the session token) → addressComponents come back as English exonyms. Same call,
+> no billing change.
+> **A2 — blank-city gap closed:** `VenueAutocomplete` wrote raw `d.locality` (blank for
+> venues with no `locality`, e.g. UK `postal_town` like Manchester); now uses the
+> route's robust `d.inferredCity ?? d.locality` (locality → postal_town → sublocality
+> → admin_area).
+> **B — deliberate normalization:** `refreshCanonicalVenueCityCountry(placeId, svc)`
+> fetches Details (en) and OVERWRITES canonical city+country (distinct from the
+> fill-only `findOrCreateCanonicalVenue`). Shared `placeCity.ts` (`extractCityCountry` +
+> `fetchPlaceCityCountry`).
+> **C — backfill:** `POST /api/venues/canonical/backfill-city` (admin-gated, rides the
+> google rate lane, logs each call, capped 200/run, re-runnable): refresh each distinct
+> linked venue's city→English, then fill `routing.city` where blank from the linked
+> canonical.
+
+- **ROUTE-CITY-01..06 (unit, node harness on `extractCityCountry`):** locality →
+  metro; **postal_town fallback resolves Manchester (was blank)**; locality beats
+  sublocality (Stockholm over Johanneshov); sublocality only when no locality/
+  postal_town (Praha 9-Libeň — flagged as a district); the five localized→English
+  cases (Copenhagen/Vienna/Munich/Warsaw/Milan) resolve; empty → null. (All proven.)
+- **ROUTE-CITY-07 — Adam's live verification (Part D):** with `GOOGLE_PLACES_API_KEY`
+  set, as a workspace admin `POST /api/venues/canonical/backfill-city` once, then
+  re-export the Charlotte Sands / Simple Plan Support Fall'26 routing PDF and read the
+  CITY column. **Expected before → after:**
+  - O2 Apollo — — → **Manchester** · OVO Arena Wembley — — → **London** · Sentrum
+    Scene — — → **Oslo** · Fållan — — → **Stockholm** · O2 universum — — → **Prague**
+  - København → **Copenhagen** · Wien → **Vienna** · München → **Munich** · Warszawa →
+    **Warsaw** · Milano → **Milan**
+  - The backfill JSON reports `refreshed`, `routing_city_filled`, and `review_examples`
+    (any city that still looks like a district — e.g. contains a digit/hyphen — for
+    Adam to eyeball; the metro `locality` usually resolves cleanly).
+  (Headless can't auth + call Google + re-export — this is Adam's one live run.)
+
 ## Venue-library search API (feat/routing-venue-search — Part 2 foundation)
 
 > `GET /api/venues/canonical/search?q=&city=` — type-to-search the world-readable
