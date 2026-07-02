@@ -269,9 +269,17 @@ export function BudgetGridView({
     [persistOrder],
   );
 
+  // #5 — the grid's section list includes the synthetic "Ungrouped" pseudo-
+  // section (_uid 'ungrouped') and any not-yet-persisted uid, which have no
+  // budget_sections row. PATCHing those 404s and — because persistOrder uses
+  // Promise.all — rejected the WHOLE batch, so a valid reorder toasted an error
+  // and refreshed back to the old order ("reorder doesn't persist"). Persist
+  // only real DB section ids, re-indexed among themselves.
+  const knownSectionIds = useMemo(() => new Set(sections.map((s) => s.id)), [sections]);
   const onReorderSection = useCallback(
-    (orderedSectionUids: string[]) => persistOrder('/api/budget/sections', orderedSectionUids),
-    [persistOrder],
+    (orderedSectionUids: string[]) =>
+      persistOrder('/api/budget/sections', orderedSectionUids.filter((id) => knownSectionIds.has(id))),
+    [persistOrder, knownSectionIds],
   );
 
   // Steps 3–5 — async transactions/documents CRUD against the real tables.
