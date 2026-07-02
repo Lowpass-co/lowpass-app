@@ -69,6 +69,7 @@ export function DataTable<T>(props: DataTableProps<T>) {
     containerHeight = 'auto',
     columnWidthsKey,
     ariaLabel = 'Data table',
+    flat = false,
   } = props;
 
   // Grid system Phase 1 — density follows the one app-wide preference
@@ -334,16 +335,17 @@ export function DataTable<T>(props: DataTableProps<T>) {
 
   return (
     <div
-      className="mx-auto flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-xl"
+      className={`mx-auto flex min-h-0 w-full flex-1 flex-col overflow-hidden${flat ? '' : ' rounded-xl'}`}
       style={{
         /* Raised panel — an elevated surface distinct from the page
            (--lp-bg) + a visible shadow, so lists pop on dark where the
            bg/surface contrast is the elevation cue. Capped + centred like
            the spreadsheet panels so ultra-wide screens don't strand the
-           name column. */
-        border: '1px solid var(--lp-border-strong)',
-        backgroundColor: 'var(--lp-surface)',
-        boxShadow: 'var(--lp-shadow-md)',
+           name column. `flat` (revamp #21) drops the panel chrome so the
+           table sits ON the page like the Phase-1 grid family. */
+        border: flat ? 'none' : '1px solid var(--lp-border-strong)',
+        backgroundColor: flat ? 'transparent' : 'var(--lp-surface)',
+        boxShadow: flat ? 'none' : 'var(--lp-shadow-md)',
         fontVariantNumeric: 'tabular-nums',
         maxWidth: 1600,
       }}

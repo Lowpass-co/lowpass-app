@@ -60,6 +60,11 @@ export type DataTableProps<T> = {
   stickyHeader?: boolean;
   containerHeight?: string;
 
+  /** Revamp #21 — drop the raised-panel chrome (outer border / radius / shadow /
+   *  surface fill) so the table sits flat ON the page, matching the Phase-1 grid
+   *  family. Opt-in per caller; default keeps the boxed panel (no change). */
+  flat?: boolean;
+
   /** Enable per-column drag-to-resize, persisted under this localStorage
    *  key (e.g. per-tour). Omit to keep columns fixed (no handles) — so
    *  existing tables are unchanged unless they opt in. */
