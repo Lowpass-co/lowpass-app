@@ -1,11 +1,13 @@
-/* ============================================
-   LOWPASS — Stage Plot stage infrastructure icons (§SP1c)
+/* ============================================================
+   LOWPASS — Stage Plot infrastructure icons (v2 suite)
 
-   Generated against the locked icon contract (top-down, no
-   colour attrs, footprint outline unclassed, details in
-   .lp-ico-detail, letters in .lp-ico-label). Footprints are
-   real-world feet. Hand-tunable — edit freely.
-   ============================================ */
+   v2 grammar: top-down ft-true (viewBox = footprint x 100, art
+   edge-to-edge, footprint = FULL extent); elevation for tall/thin;
+   symbolic sizing for stage boxes / power / DI / talkback. No colour
+   attrs. Classes: unclassed = footprint fill, .lp-ico-tone = accent
+   fill (NEW - see README), .lp-ico-detail = stroke only,
+   .lp-ico-label = solid category-colour fill (text + bolt glyph).
+   ============================================================ */
 
 import type { IconDescriptor } from './types';
 
@@ -13,73 +15,64 @@ export const infrastructureIcons: IconDescriptor[] = [
   {
     "name": "infra-riser-4x4",
     "category": "infrastructure",
-    "label": "Riser 4x4",
+    "label": "Riser 4×4",
     "footprint": {
       "width_ft": 4,
       "depth_ft": 4
     },
+    "viewBox": "0 0 400 400",
     "keywords": [
       "riser",
-      "platform",
-      "stage",
-      "deck",
-      "4x4"
+      "4x4",
+      "drum riser"
     ],
-    "body": "<rect x=\"8\" y=\"8\" width=\"84\" height=\"84\" rx=\"5\"/>"
+    "body": "<rect x=\"3\" y=\"3\" width=\"394\" height=\"394\"/><line x1=\"3\" y1=\"3\" x2=\"397\" y2=\"397\" class=\"lp-ico-detail\"/><line x1=\"397\" y1=\"3\" x2=\"3\" y2=\"397\" class=\"lp-ico-detail\"/>"
   },
   {
     "name": "infra-riser-4x8",
     "category": "infrastructure",
-    "label": "Riser 4x8",
-    "footprint": {
-      "width_ft": 8,
-      "depth_ft": 4
-    },
-    "keywords": [
-      "riser",
-      "platform",
-      "stage",
-      "deck",
-      "4x8",
-      "wide"
-    ],
-    "body": "<rect x=\"8\" y=\"8\" width=\"84\" height=\"84\" rx=\"5\"/>"
-  },
-  {
-    "name": "infra-riser-8x8",
-    "category": "infrastructure",
-    "label": "Riser 8x8",
-    "footprint": {
-      "width_ft": 8,
-      "depth_ft": 8
-    },
-    "keywords": [
-      "riser",
-      "platform",
-      "stage",
-      "deck",
-      "8x8",
-      "large"
-    ],
-    "body": "<rect x=\"8\" y=\"8\" width=\"84\" height=\"84\" rx=\"5\"/>"
-  },
-  {
-    "name": "infra-riser-8x4",
-    "category": "infrastructure",
-    "label": "Riser 8x4",
+    "label": "Riser 4×8",
     "footprint": {
       "width_ft": 4,
       "depth_ft": 8
     },
+    "viewBox": "0 0 400 800",
     "keywords": [
       "riser",
-      "platform",
-      "stage",
-      "deck",
-      "8x4",
-      "deep"
+      "4x8"
     ],
-    "body": "<rect x=\"8\" y=\"8\" width=\"84\" height=\"84\" rx=\"5\"/>"
+    "body": "<rect x=\"3\" y=\"3\" width=\"394\" height=\"794\"/><line x1=\"3\" y1=\"3\" x2=\"397\" y2=\"797\" class=\"lp-ico-detail\"/><line x1=\"397\" y1=\"3\" x2=\"3\" y2=\"797\" class=\"lp-ico-detail\"/>"
+  },
+  {
+    "name": "infra-riser-8x8",
+    "category": "infrastructure",
+    "label": "Riser 8×8",
+    "footprint": {
+      "width_ft": 8,
+      "depth_ft": 8
+    },
+    "viewBox": "0 0 800 800",
+    "keywords": [
+      "riser",
+      "8x8"
+    ],
+    "body": "<rect x=\"3\" y=\"3\" width=\"794\" height=\"794\"/><line x1=\"3\" y1=\"3\" x2=\"797\" y2=\"797\" class=\"lp-ico-detail\"/><line x1=\"797\" y1=\"3\" x2=\"3\" y2=\"797\" class=\"lp-ico-detail\"/>"
+  },
+  {
+    "name": "infra-riser-8x4",
+    "category": "infrastructure",
+    "label": "Riser 8×4",
+    "footprint": {
+      "width_ft": 8,
+      "depth_ft": 4
+    },
+    "viewBox": "0 0 800 400",
+    "keywords": [
+      "riser",
+      "8x4",
+      "drum riser"
+    ],
+    "body": "<rect x=\"3\" y=\"3\" width=\"794\" height=\"394\"/><line x1=\"3\" y1=\"3\" x2=\"797\" y2=\"397\" class=\"lp-ico-detail\"/><line x1=\"797\" y1=\"3\" x2=\"3\" y2=\"397\" class=\"lp-ico-detail\"/>"
   },
   {
     "name": "infra-riser-custom",
@@ -89,32 +82,28 @@ export const infrastructureIcons: IconDescriptor[] = [
       "width_ft": 6,
       "depth_ft": 4
     },
+    "viewBox": "0 0 600 400",
     "keywords": [
       "riser",
-      "custom",
-      "platform",
-      "stage",
-      "deck"
+      "custom"
     ],
-    "body": "<rect x=\"8\" y=\"8\" width=\"84\" height=\"84\" rx=\"5\"/>"
+    "body": "<rect x=\"3\" y=\"3\" width=\"594\" height=\"394\" stroke-dasharray=\"18 12\"/><line x1=\"3\" y1=\"3\" x2=\"597\" y2=\"397\" class=\"lp-ico-detail\"/><line x1=\"597\" y1=\"3\" x2=\"3\" y2=\"397\" class=\"lp-ico-detail\"/>"
   },
   {
     "name": "infra-generator",
     "category": "infrastructure",
     "label": "Generator",
     "footprint": {
-      "width_ft": 4,
-      "depth_ft": 2.5
+      "width_ft": 3,
+      "depth_ft": 2
     },
+    "viewBox": "0 0 300 200",
     "keywords": [
       "generator",
-      "genset",
-      "power",
-      "fuel",
-      "gen",
-      "mains"
+      "genny",
+      "power"
     ],
-    "body": "<rect x=\"8\" y=\"26\" width=\"84\" height=\"48\" rx=\"5\"/><path d=\"M29 32 L21 43 L26 43 L23 54 L33 40 L27 40 Z\" class=\"lp-ico-detail\"/><line x1=\"50\" y1=\"34\" x2=\"84\" y2=\"34\" class=\"lp-ico-detail\"/><line x1=\"50\" y1=\"42\" x2=\"84\" y2=\"42\" class=\"lp-ico-detail\"/><line x1=\"50\" y1=\"50\" x2=\"84\" y2=\"50\" class=\"lp-ico-detail\"/><text class=\"lp-ico-label\" x=\"34\" y=\"62\" text-anchor=\"middle\" dominant-baseline=\"central\" font-size=\"13\">GEN</text>"
+    "body": "<rect x=\"3\" y=\"3\" width=\"294\" height=\"194\" rx=\"10\"/><rect x=\"250\" y=\"16\" width=\"30\" height=\"28\" rx=\"5\" class=\"lp-ico-tone\"/><line x1=\"150\" y1=\"24\" x2=\"150\" y2=\"70\" class=\"lp-ico-detail\"/><line x1=\"172\" y1=\"24\" x2=\"172\" y2=\"70\" class=\"lp-ico-detail\"/><line x1=\"194\" y1=\"24\" x2=\"194\" y2=\"70\" class=\"lp-ico-detail\"/><rect x=\"20\" y=\"126\" width=\"76\" height=\"56\" rx=\"6\" class=\"lp-ico-tone\"/><circle cx=\"40\" cy=\"154\" r=\"12\" class=\"lp-ico-tone\"/><line x1=\"36.2\" y1=\"149.7\" x2=\"36.2\" y2=\"157.6\" class=\"lp-ico-detail\"/><line x1=\"43.8\" y1=\"149.7\" x2=\"43.8\" y2=\"157.6\" class=\"lp-ico-detail\"/><circle cx=\"72\" cy=\"154\" r=\"12\" class=\"lp-ico-tone\"/><line x1=\"68.2\" y1=\"149.7\" x2=\"68.2\" y2=\"157.6\" class=\"lp-ico-detail\"/><line x1=\"75.8\" y1=\"149.7\" x2=\"75.8\" y2=\"157.6\" class=\"lp-ico-detail\"/><path d=\"M154.3 110 L130 141.7 L142.1 141.7 L135.6 166 L161.7 130.5 L148.7 130.5 Z\" class=\"lp-ico-label\"/>"
   },
   {
     "name": "infra-cable-ramp",
@@ -122,209 +111,272 @@ export const infrastructureIcons: IconDescriptor[] = [
     "label": "Cable ramp",
     "footprint": {
       "width_ft": 3,
-      "depth_ft": 1
+      "depth_ft": 1.2
     },
+    "viewBox": "0 0 300 120",
     "keywords": [
-      "cable",
-      "ramp",
-      "protector",
-      "channel",
-      "crossover"
+      "cable ramp",
+      "yellow jacket",
+      "protector"
     ],
-    "body": "<rect x=\"6\" y=\"34\" width=\"88\" height=\"32\" rx=\"4\"/><line x1=\"6\" y1=\"42\" x2=\"94\" y2=\"42\" class=\"lp-ico-detail\"/><line x1=\"6\" y1=\"50\" x2=\"94\" y2=\"50\" class=\"lp-ico-detail\"/><line x1=\"6\" y1=\"58\" x2=\"94\" y2=\"58\" class=\"lp-ico-detail\"/>"
+    "body": "<rect x=\"3\" y=\"3\" width=\"294\" height=\"114\" rx=\"6\"/><line x1=\"14\" y1=\"42\" x2=\"286\" y2=\"42\" class=\"lp-ico-detail\"/><line x1=\"14\" y1=\"60\" x2=\"286\" y2=\"60\" class=\"lp-ico-detail\"/><line x1=\"14\" y1=\"78\" x2=\"286\" y2=\"78\" class=\"lp-ico-detail\"/><line x1=\"16\" y1=\"14\" x2=\"30\" y2=\"30\" class=\"lp-ico-detail\"/><line x1=\"28\" y1=\"14\" x2=\"42\" y2=\"30\" class=\"lp-ico-detail\"/><line x1=\"40\" y1=\"14\" x2=\"54\" y2=\"30\" class=\"lp-ico-detail\"/><line x1=\"232\" y1=\"14\" x2=\"246\" y2=\"30\" class=\"lp-ico-detail\"/><line x1=\"244\" y1=\"14\" x2=\"258\" y2=\"30\" class=\"lp-ico-detail\"/><line x1=\"256\" y1=\"14\" x2=\"270\" y2=\"30\" class=\"lp-ico-detail\"/>"
   },
   {
     "name": "infra-barricade",
     "category": "infrastructure",
     "label": "Barricade",
     "footprint": {
-      "width_ft": 3.3,
-      "depth_ft": 0.8
+      "width_ft": 4,
+      "depth_ft": 1.3
     },
+    "viewBox": "0 0 400 130",
     "keywords": [
       "barricade",
       "barrier",
-      "crowd",
-      "fence",
-      "front"
+      "mojo"
     ],
-    "body": "<rect x=\"12\" y=\"44\" width=\"76\" height=\"12\" rx=\"2\"/><line x1=\"24\" y1=\"44\" x2=\"24\" y2=\"60\" class=\"lp-ico-detail\"/><line x1=\"40\" y1=\"44\" x2=\"40\" y2=\"60\" class=\"lp-ico-detail\"/><line x1=\"56\" y1=\"44\" x2=\"56\" y2=\"60\" class=\"lp-ico-detail\"/><line x1=\"72\" y1=\"44\" x2=\"72\" y2=\"60\" class=\"lp-ico-detail\"/>"
+    "body": "<rect x=\"3\" y=\"3\" width=\"394\" height=\"36\" rx=\"6\"/><line x1=\"40\" y1=\"39\" x2=\"40\" y2=\"100\" class=\"lp-ico-detail\"/><line x1=\"20\" y1=\"112\" x2=\"60\" y2=\"112\" class=\"lp-ico-detail\"/><line x1=\"104\" y1=\"39\" x2=\"104\" y2=\"100\" class=\"lp-ico-detail\"/><line x1=\"84\" y1=\"112\" x2=\"124\" y2=\"112\" class=\"lp-ico-detail\"/><line x1=\"168\" y1=\"39\" x2=\"168\" y2=\"100\" class=\"lp-ico-detail\"/><line x1=\"148\" y1=\"112\" x2=\"188\" y2=\"112\" class=\"lp-ico-detail\"/><line x1=\"232\" y1=\"39\" x2=\"232\" y2=\"100\" class=\"lp-ico-detail\"/><line x1=\"212\" y1=\"112\" x2=\"252\" y2=\"112\" class=\"lp-ico-detail\"/><line x1=\"296\" y1=\"39\" x2=\"296\" y2=\"100\" class=\"lp-ico-detail\"/><line x1=\"276\" y1=\"112\" x2=\"316\" y2=\"112\" class=\"lp-ico-detail\"/><line x1=\"360\" y1=\"39\" x2=\"360\" y2=\"100\" class=\"lp-ico-detail\"/><line x1=\"340\" y1=\"112\" x2=\"380\" y2=\"112\" class=\"lp-ico-detail\"/>"
   },
   {
     "name": "infra-truss",
     "category": "infrastructure",
     "label": "Truss",
     "footprint": {
-      "width_ft": 3,
+      "width_ft": 8,
       "depth_ft": 1
     },
+    "viewBox": "0 0 800 100",
     "keywords": [
       "truss",
-      "section",
-      "rigging",
-      "brace",
-      "overhead"
+      "stick",
+      "section"
     ],
-    "body": "<rect x=\"12\" y=\"40\" width=\"76\" height=\"20\" rx=\"1\"/><line x1=\"12\" y1=\"40\" x2=\"31\" y2=\"60\" class=\"lp-ico-detail\"/><line x1=\"31\" y1=\"40\" x2=\"12\" y2=\"60\" class=\"lp-ico-detail\"/><line x1=\"31\" y1=\"40\" x2=\"50\" y2=\"60\" class=\"lp-ico-detail\"/><line x1=\"50\" y1=\"40\" x2=\"31\" y2=\"60\" class=\"lp-ico-detail\"/><line x1=\"50\" y1=\"40\" x2=\"69\" y2=\"60\" class=\"lp-ico-detail\"/><line x1=\"69\" y1=\"40\" x2=\"50\" y2=\"60\" class=\"lp-ico-detail\"/><line x1=\"69\" y1=\"40\" x2=\"88\" y2=\"60\" class=\"lp-ico-detail\"/><line x1=\"88\" y1=\"40\" x2=\"69\" y2=\"60\" class=\"lp-ico-detail\"/>"
+    "body": "<rect x=\"3\" y=\"3\" width=\"794\" height=\"94\" rx=\"4\"/><path d=\"M20 20 L49.2 80 L78.5 20 L107.7 80 L136.9 20 L166.2 80 L195.4 20 L224.6 80 L253.8 20 L283.1 80 L312.3 20 L341.5 80 L370.8 20 L400 80 L429.2 20 L458.5 80 L487.7 20 L516.9 80 L546.2 20 L575.4 80 L604.6 20 L633.8 80 L663.1 20 L692.3 80 L721.5 20 L750.8 80 L780 20\" class=\"lp-ico-detail\"/>"
+  },
+  {
+    "name": "infra-truss-1x1",
+    "category": "infrastructure",
+    "label": "Truss 1×1",
+    "footprint": {
+      "width_ft": 1,
+      "depth_ft": 1
+    },
+    "viewBox": "0 0 100 100",
+    "keywords": [
+      "truss",
+      "tower section",
+      "12in"
+    ],
+    "body": "<rect x=\"3\" y=\"3\" width=\"94\" height=\"94\" rx=\"4\"/><line x1=\"3\" y1=\"3\" x2=\"97\" y2=\"97\" class=\"lp-ico-detail\"/><line x1=\"97\" y1=\"3\" x2=\"3\" y2=\"97\" class=\"lp-ico-detail\"/><circle cx=\"20\" cy=\"20\" r=\"9\" class=\"lp-ico-tone\"/><circle cx=\"80\" cy=\"20\" r=\"9\" class=\"lp-ico-tone\"/><circle cx=\"20\" cy=\"80\" r=\"9\" class=\"lp-ico-tone\"/><circle cx=\"80\" cy=\"80\" r=\"9\" class=\"lp-ico-tone\"/>"
   },
   {
     "name": "infra-lighting-tower",
     "category": "infrastructure",
     "label": "Light tower",
     "footprint": {
-      "width_ft": 2.5,
-      "depth_ft": 2.5
+      "width_ft": 2,
+      "depth_ft": 2
     },
+    "viewBox": "0 0 200 200",
     "keywords": [
-      "lighting",
       "tower",
-      "truss",
-      "vertical",
-      "totem",
-      "light"
+      "lighting",
+      "goalpost"
     ],
-    "body": "<rect x=\"30\" y=\"30\" width=\"40\" height=\"40\" rx=\"2\"/><line x1=\"30\" y1=\"30\" x2=\"70\" y2=\"70\" class=\"lp-ico-detail\"/><line x1=\"70\" y1=\"30\" x2=\"30\" y2=\"70\" class=\"lp-ico-detail\"/>"
+    "body": "<rect x=\"3\" y=\"3\" width=\"194\" height=\"194\" rx=\"6\"/><line x1=\"3\" y1=\"3\" x2=\"197\" y2=\"197\" class=\"lp-ico-detail\"/><line x1=\"197\" y1=\"3\" x2=\"3\" y2=\"197\" class=\"lp-ico-detail\"/><rect x=\"10\" y=\"10\" width=\"26\" height=\"26\" class=\"lp-ico-tone\"/><rect x=\"164\" y=\"10\" width=\"26\" height=\"26\" class=\"lp-ico-tone\"/><rect x=\"10\" y=\"164\" width=\"26\" height=\"26\" class=\"lp-ico-tone\"/><rect x=\"164\" y=\"164\" width=\"26\" height=\"26\" class=\"lp-ico-tone\"/><circle cx=\"100\" cy=\"100\" r=\"30\" class=\"lp-ico-tone\"/><line x1=\"100\" y1=\"70\" x2=\"100\" y2=\"54\" class=\"lp-ico-detail\"/>"
   },
   {
     "name": "infra-tech-table",
     "category": "infrastructure",
     "label": "FOH table",
     "footprint": {
-      "width_ft": 4,
-      "depth_ft": 2
+      "width_ft": 6,
+      "depth_ft": 2.5
     },
+    "viewBox": "0 0 600 250",
     "keywords": [
-      "tech",
       "foh",
-      "table",
-      "console",
-      "desk",
-      "front of house"
+      "tech table",
+      "control",
+      "desk"
     ],
-    "body": "<rect x=\"16\" y=\"34\" width=\"68\" height=\"32\" rx=\"2\"/><rect x=\"34\" y=\"42\" width=\"32\" height=\"16\" rx=\"2\" class=\"lp-ico-detail\"/><line x1=\"40\" y1=\"50\" x2=\"60\" y2=\"50\" class=\"lp-ico-detail\"/>"
+    "body": "<rect x=\"3\" y=\"3\" width=\"594\" height=\"244\" rx=\"8\"/><rect x=\"56\" y=\"66\" width=\"112\" height=\"72\" rx=\"6\" class=\"lp-ico-tone\"/><line x1=\"56\" y1=\"90\" x2=\"168\" y2=\"90\" class=\"lp-ico-detail\"/><rect x=\"240\" y=\"66\" width=\"112\" height=\"72\" rx=\"6\" class=\"lp-ico-tone\"/><line x1=\"240\" y1=\"90\" x2=\"352\" y2=\"90\" class=\"lp-ico-detail\"/><rect x=\"424\" y=\"46\" width=\"130\" height=\"152\" rx=\"8\" class=\"lp-ico-tone\"/><line x1=\"446\" y1=\"120\" x2=\"446\" y2=\"180\" class=\"lp-ico-detail\"/><line x1=\"476\" y1=\"120\" x2=\"476\" y2=\"180\" class=\"lp-ico-detail\"/><line x1=\"506\" y1=\"120\" x2=\"506\" y2=\"180\" class=\"lp-ico-detail\"/><line x1=\"536\" y1=\"120\" x2=\"536\" y2=\"180\" class=\"lp-ico-detail\"/>"
   },
   {
     "name": "infra-road-case",
     "category": "infrastructure",
     "label": "Road case",
     "footprint": {
-      "width_ft": 2.5,
-      "depth_ft": 1.5
+      "width_ft": 2,
+      "depth_ft": 1.4
     },
+    "viewBox": "0 0 200 140",
     "keywords": [
-      "road",
-      "case",
-      "flight",
-      "trunk",
-      "transport"
+      "road case",
+      "flight case",
+      "trunk"
     ],
-    "body": "<rect x=\"22\" y=\"34\" width=\"56\" height=\"32\" rx=\"2\"/><rect x=\"26\" y=\"38\" width=\"6\" height=\"6\" class=\"lp-ico-detail\"/><rect x=\"68\" y=\"38\" width=\"6\" height=\"6\" class=\"lp-ico-detail\"/><rect x=\"26\" y=\"56\" width=\"6\" height=\"6\" class=\"lp-ico-detail\"/><rect x=\"68\" y=\"56\" width=\"6\" height=\"6\" class=\"lp-ico-detail\"/><line x1=\"44\" y1=\"32\" x2=\"56\" y2=\"32\" class=\"lp-ico-detail\"/>"
+    "body": "<rect x=\"3\" y=\"3\" width=\"194\" height=\"134\" rx=\"10\"/><line x1=\"3\" y1=\"70\" x2=\"197\" y2=\"70\" class=\"lp-ico-detail\"/><rect x=\"30\" y=\"58\" width=\"22\" height=\"24\" rx=\"4\" class=\"lp-ico-tone\"/><rect x=\"148\" y=\"58\" width=\"22\" height=\"24\" rx=\"4\" class=\"lp-ico-tone\"/><circle cx=\"18\" cy=\"18\" r=\"5\" class=\"lp-ico-detail\"/><circle cx=\"182\" cy=\"18\" r=\"5\" class=\"lp-ico-detail\"/><circle cx=\"18\" cy=\"122\" r=\"5\" class=\"lp-ico-detail\"/><circle cx=\"182\" cy=\"122\" r=\"5\" class=\"lp-ico-detail\"/>"
   },
   {
     "name": "infra-power-1",
     "category": "infrastructure",
-    "label": "Power 1",
+    "label": "Power drop ×1",
     "footprint": {
-      "width_ft": 0.4,
-      "depth_ft": 0.4
+      "width_ft": 1.65,
+      "depth_ft": 1.65
     },
+    "viewBox": "0 0 165 165",
     "keywords": [
       "power",
-      "edison",
-      "socket",
       "outlet",
-      "drop",
-      "mains"
+      "socket",
+      "13a",
+      "edison"
     ],
-    "body": "<rect x=\"26\" y=\"20\" width=\"48\" height=\"60\" rx=\"6\"/><path d=\"M53 26 L45 37 L50 37 L47 48 L57 34 L51 34 Z\" class=\"lp-ico-detail\"/><rect x=\"45\" y=\"58\" width=\"10\" height=\"12\" rx=\"2\" class=\"lp-ico-detail\"/><line x1=\"48\" y1=\"60.5\" x2=\"48\" y2=\"64.5\" class=\"lp-ico-detail\"/><line x1=\"52\" y1=\"60.5\" x2=\"52\" y2=\"64.5\" class=\"lp-ico-detail\"/><circle cx=\"50\" cy=\"67.5\" r=\"0.9\" class=\"lp-ico-detail\"/>"
+    "body": "<g transform=\"scale(1.5)\"><path d=\"M25.9 2 L6 28.1 L16 28.1 L10.6 48 L32.1 18.9 L21.3 18.9 Z\" class=\"lp-ico-label\"/><circle cx=\"60\" cy=\"64\" r=\"42\"/><rect x=\"48\" y=\"46\" width=\"7\" height=\"21\" rx=\"3.5\" class=\"lp-ico-tone\"/><rect x=\"65\" y=\"46\" width=\"7\" height=\"21\" rx=\"3.5\" class=\"lp-ico-tone\"/><circle cx=\"60\" cy=\"82\" r=\"5\" class=\"lp-ico-tone\"/></g>"
   },
   {
     "name": "infra-power-2",
     "category": "infrastructure",
-    "label": "Power 2",
+    "label": "Power drop ×2",
     "footprint": {
-      "width_ft": 0.6,
-      "depth_ft": 0.4
+      "width_ft": 2.4,
+      "depth_ft": 1.5
     },
+    "viewBox": "0 0 240 150",
     "keywords": [
       "power",
-      "edison",
-      "socket",
-      "outlet",
       "duplex",
-      "mains"
+      "drop"
     ],
-    "body": "<rect x=\"18\" y=\"20\" width=\"64\" height=\"60\" rx=\"6\"/><path d=\"M53 26 L45 37 L50 37 L47 48 L57 34 L51 34 Z\" class=\"lp-ico-detail\"/><rect x=\"31\" y=\"58\" width=\"10\" height=\"12\" rx=\"2\" class=\"lp-ico-detail\"/><line x1=\"34\" y1=\"60.5\" x2=\"34\" y2=\"64.5\" class=\"lp-ico-detail\"/><line x1=\"38\" y1=\"60.5\" x2=\"38\" y2=\"64.5\" class=\"lp-ico-detail\"/><circle cx=\"36\" cy=\"67.5\" r=\"0.9\" class=\"lp-ico-detail\"/><rect x=\"59\" y=\"58\" width=\"10\" height=\"12\" rx=\"2\" class=\"lp-ico-detail\"/><line x1=\"62\" y1=\"60.5\" x2=\"62\" y2=\"64.5\" class=\"lp-ico-detail\"/><line x1=\"66\" y1=\"60.5\" x2=\"66\" y2=\"64.5\" class=\"lp-ico-detail\"/><circle cx=\"64\" cy=\"67.5\" r=\"0.9\" class=\"lp-ico-detail\"/>"
+    "body": "<g transform=\"scale(1.5)\"><path d=\"M25.1 0 L6 24.9 L15.5 24.9 L10.4 44 L30.9 16.1 L20.7 16.1 Z\" class=\"lp-ico-label\"/><rect x=\"4\" y=\"34\" width=\"152\" height=\"62\" rx=\"10\"/><circle cx=\"52\" cy=\"65\" r=\"22\" class=\"lp-ico-tone\"/><line x1=\"45\" y1=\"57.1\" x2=\"45\" y2=\"71.6\" class=\"lp-ico-detail\"/><line x1=\"59\" y1=\"57.1\" x2=\"59\" y2=\"71.6\" class=\"lp-ico-detail\"/><circle cx=\"112\" cy=\"65\" r=\"22\" class=\"lp-ico-tone\"/><line x1=\"105\" y1=\"57.1\" x2=\"105\" y2=\"71.6\" class=\"lp-ico-detail\"/><line x1=\"119\" y1=\"57.1\" x2=\"119\" y2=\"71.6\" class=\"lp-ico-detail\"/></g>"
   },
   {
     "name": "infra-power-4",
     "category": "infrastructure",
-    "label": "Power 4",
+    "label": "Power drop ×4",
     "footprint": {
-      "width_ft": 0.7,
-      "depth_ft": 0.6
+      "width_ft": 2.1,
+      "depth_ft": 2.1
     },
+    "viewBox": "0 0 210 210",
     "keywords": [
       "power",
-      "edison",
-      "socket",
-      "outlet",
       "quad",
-      "mains"
+      "drop"
     ],
-    "body": "<rect x=\"16\" y=\"16\" width=\"68\" height=\"68\" rx=\"6\"/><path d=\"M53 22 L45 33 L50 33 L47 44 L57 30 L51 30 Z\" class=\"lp-ico-detail\"/><rect x=\"31\" y=\"44\" width=\"10\" height=\"12\" rx=\"2\" class=\"lp-ico-detail\"/><line x1=\"34\" y1=\"46.5\" x2=\"34\" y2=\"50.5\" class=\"lp-ico-detail\"/><line x1=\"38\" y1=\"46.5\" x2=\"38\" y2=\"50.5\" class=\"lp-ico-detail\"/><circle cx=\"36\" cy=\"53.5\" r=\"0.9\" class=\"lp-ico-detail\"/><rect x=\"31\" y=\"64\" width=\"10\" height=\"12\" rx=\"2\" class=\"lp-ico-detail\"/><line x1=\"34\" y1=\"66.5\" x2=\"34\" y2=\"70.5\" class=\"lp-ico-detail\"/><line x1=\"38\" y1=\"66.5\" x2=\"38\" y2=\"70.5\" class=\"lp-ico-detail\"/><circle cx=\"36\" cy=\"73.5\" r=\"0.9\" class=\"lp-ico-detail\"/><rect x=\"59\" y=\"44\" width=\"10\" height=\"12\" rx=\"2\" class=\"lp-ico-detail\"/><line x1=\"62\" y1=\"46.5\" x2=\"62\" y2=\"50.5\" class=\"lp-ico-detail\"/><line x1=\"66\" y1=\"46.5\" x2=\"66\" y2=\"50.5\" class=\"lp-ico-detail\"/><circle cx=\"64\" cy=\"53.5\" r=\"0.9\" class=\"lp-ico-detail\"/><rect x=\"59\" y=\"64\" width=\"10\" height=\"12\" rx=\"2\" class=\"lp-ico-detail\"/><line x1=\"62\" y1=\"66.5\" x2=\"62\" y2=\"70.5\" class=\"lp-ico-detail\"/><line x1=\"66\" y1=\"66.5\" x2=\"66\" y2=\"70.5\" class=\"lp-ico-detail\"/><circle cx=\"64\" cy=\"73.5\" r=\"0.9\" class=\"lp-ico-detail\"/>"
+    "body": "<g transform=\"scale(1.5)\"><path d=\"M23.1 0 L4 24.9 L13.5 24.9 L8.4 44 L28.9 16.1 L18.7 16.1 Z\" class=\"lp-ico-label\"/><rect x=\"4\" y=\"36\" width=\"132\" height=\"100\" rx=\"10\"/><circle cx=\"40\" cy=\"66\" r=\"20\" class=\"lp-ico-tone\"/><line x1=\"33.6\" y1=\"58.8\" x2=\"33.6\" y2=\"72\" class=\"lp-ico-detail\"/><line x1=\"46.4\" y1=\"58.8\" x2=\"46.4\" y2=\"72\" class=\"lp-ico-detail\"/><circle cx=\"100\" cy=\"66\" r=\"20\" class=\"lp-ico-tone\"/><line x1=\"93.6\" y1=\"58.8\" x2=\"93.6\" y2=\"72\" class=\"lp-ico-detail\"/><line x1=\"106.4\" y1=\"58.8\" x2=\"106.4\" y2=\"72\" class=\"lp-ico-detail\"/><circle cx=\"40\" cy=\"108\" r=\"20\" class=\"lp-ico-tone\"/><line x1=\"33.6\" y1=\"100.8\" x2=\"33.6\" y2=\"114\" class=\"lp-ico-detail\"/><line x1=\"46.4\" y1=\"100.8\" x2=\"46.4\" y2=\"114\" class=\"lp-ico-detail\"/><circle cx=\"100\" cy=\"108\" r=\"20\" class=\"lp-ico-tone\"/><line x1=\"93.6\" y1=\"100.8\" x2=\"93.6\" y2=\"114\" class=\"lp-ico-detail\"/><line x1=\"106.4\" y1=\"100.8\" x2=\"106.4\" y2=\"114\" class=\"lp-ico-detail\"/></g>"
   },
   {
     "name": "infra-power-8",
     "category": "infrastructure",
-    "label": "Power 8",
+    "label": "Power drop ×8",
     "footprint": {
-      "width_ft": 1,
-      "depth_ft": 0.6
+      "width_ft": 2.85,
+      "depth_ft": 1.8
     },
+    "viewBox": "0 0 285 180",
     "keywords": [
       "power",
-      "edison",
-      "socket",
-      "outlet",
-      "strip",
-      "mains"
+      "8-way",
+      "drop"
     ],
-    "body": "<rect x=\"8\" y=\"18\" width=\"84\" height=\"64\" rx=\"6\"/><path d=\"M53 22 L45 33 L50 33 L47 44 L57 30 L51 30 Z\" class=\"lp-ico-detail\"/><rect x=\"19\" y=\"44\" width=\"10\" height=\"12\" rx=\"2\" class=\"lp-ico-detail\"/><line x1=\"22\" y1=\"46.5\" x2=\"22\" y2=\"50.5\" class=\"lp-ico-detail\"/><line x1=\"26\" y1=\"46.5\" x2=\"26\" y2=\"50.5\" class=\"lp-ico-detail\"/><circle cx=\"24\" cy=\"53.5\" r=\"0.9\" class=\"lp-ico-detail\"/><rect x=\"19\" y=\"64\" width=\"10\" height=\"12\" rx=\"2\" class=\"lp-ico-detail\"/><line x1=\"22\" y1=\"66.5\" x2=\"22\" y2=\"70.5\" class=\"lp-ico-detail\"/><line x1=\"26\" y1=\"66.5\" x2=\"26\" y2=\"70.5\" class=\"lp-ico-detail\"/><circle cx=\"24\" cy=\"73.5\" r=\"0.9\" class=\"lp-ico-detail\"/><rect x=\"36\" y=\"44\" width=\"10\" height=\"12\" rx=\"2\" class=\"lp-ico-detail\"/><line x1=\"39\" y1=\"46.5\" x2=\"39\" y2=\"50.5\" class=\"lp-ico-detail\"/><line x1=\"43\" y1=\"46.5\" x2=\"43\" y2=\"50.5\" class=\"lp-ico-detail\"/><circle cx=\"41\" cy=\"53.5\" r=\"0.9\" class=\"lp-ico-detail\"/><rect x=\"36\" y=\"64\" width=\"10\" height=\"12\" rx=\"2\" class=\"lp-ico-detail\"/><line x1=\"39\" y1=\"66.5\" x2=\"39\" y2=\"70.5\" class=\"lp-ico-detail\"/><line x1=\"43\" y1=\"66.5\" x2=\"43\" y2=\"70.5\" class=\"lp-ico-detail\"/><circle cx=\"41\" cy=\"73.5\" r=\"0.9\" class=\"lp-ico-detail\"/><rect x=\"54\" y=\"44\" width=\"10\" height=\"12\" rx=\"2\" class=\"lp-ico-detail\"/><line x1=\"57\" y1=\"46.5\" x2=\"57\" y2=\"50.5\" class=\"lp-ico-detail\"/><line x1=\"61\" y1=\"46.5\" x2=\"61\" y2=\"50.5\" class=\"lp-ico-detail\"/><circle cx=\"59\" cy=\"53.5\" r=\"0.9\" class=\"lp-ico-detail\"/><rect x=\"54\" y=\"64\" width=\"10\" height=\"12\" rx=\"2\" class=\"lp-ico-detail\"/><line x1=\"57\" y1=\"66.5\" x2=\"57\" y2=\"70.5\" class=\"lp-ico-detail\"/><line x1=\"61\" y1=\"66.5\" x2=\"61\" y2=\"70.5\" class=\"lp-ico-detail\"/><circle cx=\"59\" cy=\"73.5\" r=\"0.9\" class=\"lp-ico-detail\"/><rect x=\"71\" y=\"44\" width=\"10\" height=\"12\" rx=\"2\" class=\"lp-ico-detail\"/><line x1=\"74\" y1=\"46.5\" x2=\"74\" y2=\"50.5\" class=\"lp-ico-detail\"/><line x1=\"78\" y1=\"46.5\" x2=\"78\" y2=\"50.5\" class=\"lp-ico-detail\"/><circle cx=\"76\" cy=\"53.5\" r=\"0.9\" class=\"lp-ico-detail\"/><rect x=\"71\" y=\"64\" width=\"10\" height=\"12\" rx=\"2\" class=\"lp-ico-detail\"/><line x1=\"74\" y1=\"66.5\" x2=\"74\" y2=\"70.5\" class=\"lp-ico-detail\"/><line x1=\"78\" y1=\"66.5\" x2=\"78\" y2=\"70.5\" class=\"lp-ico-detail\"/><circle cx=\"76\" cy=\"73.5\" r=\"0.9\" class=\"lp-ico-detail\"/>"
+    "body": "<g transform=\"scale(1.5)\"><path d=\"M23.1 0 L4 24.9 L13.5 24.9 L8.4 44 L28.9 16.1 L18.7 16.1 Z\" class=\"lp-ico-label\"/><rect x=\"4\" y=\"36\" width=\"182\" height=\"80\" rx=\"10\"/><circle cx=\"28\" cy=\"62\" r=\"14\" class=\"lp-ico-tone\"/><line x1=\"23.5\" y1=\"57\" x2=\"23.5\" y2=\"66.2\" class=\"lp-ico-detail\"/><line x1=\"32.5\" y1=\"57\" x2=\"32.5\" y2=\"66.2\" class=\"lp-ico-detail\"/><circle cx=\"28\" cy=\"94\" r=\"14\" class=\"lp-ico-tone\"/><line x1=\"23.5\" y1=\"89\" x2=\"23.5\" y2=\"98.2\" class=\"lp-ico-detail\"/><line x1=\"32.5\" y1=\"89\" x2=\"32.5\" y2=\"98.2\" class=\"lp-ico-detail\"/><circle cx=\"72\" cy=\"62\" r=\"14\" class=\"lp-ico-tone\"/><line x1=\"67.5\" y1=\"57\" x2=\"67.5\" y2=\"66.2\" class=\"lp-ico-detail\"/><line x1=\"76.5\" y1=\"57\" x2=\"76.5\" y2=\"66.2\" class=\"lp-ico-detail\"/><circle cx=\"72\" cy=\"94\" r=\"14\" class=\"lp-ico-tone\"/><line x1=\"67.5\" y1=\"89\" x2=\"67.5\" y2=\"98.2\" class=\"lp-ico-detail\"/><line x1=\"76.5\" y1=\"89\" x2=\"76.5\" y2=\"98.2\" class=\"lp-ico-detail\"/><circle cx=\"116\" cy=\"62\" r=\"14\" class=\"lp-ico-tone\"/><line x1=\"111.5\" y1=\"57\" x2=\"111.5\" y2=\"66.2\" class=\"lp-ico-detail\"/><line x1=\"120.5\" y1=\"57\" x2=\"120.5\" y2=\"66.2\" class=\"lp-ico-detail\"/><circle cx=\"116\" cy=\"94\" r=\"14\" class=\"lp-ico-tone\"/><line x1=\"111.5\" y1=\"89\" x2=\"111.5\" y2=\"98.2\" class=\"lp-ico-detail\"/><line x1=\"120.5\" y1=\"89\" x2=\"120.5\" y2=\"98.2\" class=\"lp-ico-detail\"/><circle cx=\"160\" cy=\"62\" r=\"14\" class=\"lp-ico-tone\"/><line x1=\"155.5\" y1=\"57\" x2=\"155.5\" y2=\"66.2\" class=\"lp-ico-detail\"/><line x1=\"164.5\" y1=\"57\" x2=\"164.5\" y2=\"66.2\" class=\"lp-ico-detail\"/><circle cx=\"160\" cy=\"94\" r=\"14\" class=\"lp-ico-tone\"/><line x1=\"155.5\" y1=\"89\" x2=\"155.5\" y2=\"98.2\" class=\"lp-ico-detail\"/><line x1=\"164.5\" y1=\"89\" x2=\"164.5\" y2=\"98.2\" class=\"lp-ico-detail\"/></g>"
   },
   {
     "name": "infra-distro",
     "category": "infrastructure",
     "label": "Power distro",
     "footprint": {
-      "width_ft": 1.5,
-      "depth_ft": 1
+      "width_ft": 2.4,
+      "depth_ft": 2.1
     },
+    "viewBox": "0 0 240 210",
     "keywords": [
-      "power",
       "distro",
       "distribution",
-      "mains",
-      "pwr",
+      "16a",
+      "ceeform",
       "edison"
     ],
-    "body": "<rect x=\"12\" y=\"20\" width=\"76\" height=\"60\" rx=\"6\"/><path d=\"M31 30 L23 41 L28 41 L25 52 L35 38 L29 38 Z\" class=\"lp-ico-detail\"/><rect x=\"47\" y=\"32\" width=\"10\" height=\"12\" rx=\"2\" class=\"lp-ico-detail\"/><line x1=\"50\" y1=\"34.5\" x2=\"50\" y2=\"38.5\" class=\"lp-ico-detail\"/><line x1=\"54\" y1=\"34.5\" x2=\"54\" y2=\"38.5\" class=\"lp-ico-detail\"/><circle cx=\"52\" cy=\"41.5\" r=\"0.9\" class=\"lp-ico-detail\"/><rect x=\"47\" y=\"56\" width=\"10\" height=\"12\" rx=\"2\" class=\"lp-ico-detail\"/><line x1=\"50\" y1=\"58.5\" x2=\"50\" y2=\"62.5\" class=\"lp-ico-detail\"/><line x1=\"54\" y1=\"58.5\" x2=\"54\" y2=\"62.5\" class=\"lp-ico-detail\"/><circle cx=\"52\" cy=\"65.5\" r=\"0.9\" class=\"lp-ico-detail\"/><rect x=\"67\" y=\"32\" width=\"10\" height=\"12\" rx=\"2\" class=\"lp-ico-detail\"/><line x1=\"70\" y1=\"34.5\" x2=\"70\" y2=\"38.5\" class=\"lp-ico-detail\"/><line x1=\"74\" y1=\"34.5\" x2=\"74\" y2=\"38.5\" class=\"lp-ico-detail\"/><circle cx=\"72\" cy=\"41.5\" r=\"0.9\" class=\"lp-ico-detail\"/><rect x=\"67\" y=\"56\" width=\"10\" height=\"12\" rx=\"2\" class=\"lp-ico-detail\"/><line x1=\"70\" y1=\"58.5\" x2=\"70\" y2=\"62.5\" class=\"lp-ico-detail\"/><line x1=\"74\" y1=\"58.5\" x2=\"74\" y2=\"62.5\" class=\"lp-ico-detail\"/><circle cx=\"72\" cy=\"65.5\" r=\"0.9\" class=\"lp-ico-detail\"/><text class=\"lp-ico-label\" x=\"28\" y=\"64\" text-anchor=\"middle\" dominant-baseline=\"central\" font-size=\"11\">PWR</text>"
+    "body": "<g transform=\"scale(1.5)\"><path d=\"M23.1 0 L4 24.9 L13.5 24.9 L8.4 44 L28.9 16.1 L18.7 16.1 Z\" class=\"lp-ico-label\"/><rect x=\"4\" y=\"36\" width=\"152\" height=\"104\" rx=\"10\"/><circle cx=\"48\" cy=\"70\" r=\"23\" class=\"lp-ico-tone\"/><circle cx=\"40\" cy=\"65\" r=\"3\" class=\"lp-ico-detail\"/><circle cx=\"56\" cy=\"65\" r=\"3\" class=\"lp-ico-detail\"/><circle cx=\"48\" cy=\"79\" r=\"3\" class=\"lp-ico-detail\"/><line x1=\"44\" y1=\"47\" x2=\"52\" y2=\"47\" class=\"lp-ico-detail\"/><circle cx=\"112\" cy=\"70\" r=\"23\" class=\"lp-ico-tone\"/><circle cx=\"104\" cy=\"65\" r=\"3\" class=\"lp-ico-detail\"/><circle cx=\"120\" cy=\"65\" r=\"3\" class=\"lp-ico-detail\"/><circle cx=\"112\" cy=\"79\" r=\"3\" class=\"lp-ico-detail\"/><line x1=\"108\" y1=\"47\" x2=\"116\" y2=\"47\" class=\"lp-ico-detail\"/><circle cx=\"32\" cy=\"118\" r=\"12\" class=\"lp-ico-tone\"/><line x1=\"28.2\" y1=\"113.7\" x2=\"28.2\" y2=\"121.6\" class=\"lp-ico-detail\"/><line x1=\"35.8\" y1=\"113.7\" x2=\"35.8\" y2=\"121.6\" class=\"lp-ico-detail\"/><circle cx=\"64\" cy=\"118\" r=\"12\" class=\"lp-ico-tone\"/><line x1=\"60.2\" y1=\"113.7\" x2=\"60.2\" y2=\"121.6\" class=\"lp-ico-detail\"/><line x1=\"67.8\" y1=\"113.7\" x2=\"67.8\" y2=\"121.6\" class=\"lp-ico-detail\"/><circle cx=\"96\" cy=\"118\" r=\"12\" class=\"lp-ico-tone\"/><line x1=\"92.2\" y1=\"113.7\" x2=\"92.2\" y2=\"121.6\" class=\"lp-ico-detail\"/><line x1=\"99.8\" y1=\"113.7\" x2=\"99.8\" y2=\"121.6\" class=\"lp-ico-detail\"/><circle cx=\"128\" cy=\"118\" r=\"12\" class=\"lp-ico-tone\"/><line x1=\"124.2\" y1=\"113.7\" x2=\"124.2\" y2=\"121.6\" class=\"lp-ico-detail\"/><line x1=\"131.8\" y1=\"113.7\" x2=\"131.8\" y2=\"121.6\" class=\"lp-ico-detail\"/></g>"
   },
   {
-    "name": "infra-truss-1x1",
+    "name": "infra-rack-2u",
     "category": "infrastructure",
-    "label": "Truss 1x1",
+    "label": "Rack 2U",
     "footprint": {
-      "width_ft": 1,
-      "depth_ft": 1
+      "width_ft": 1.9,
+      "depth_ft": 0.9
     },
+    "viewBox": "0 0 190 90",
     "keywords": [
-      "truss",
-      "tower",
-      "stack",
-      "rigging",
-      "square"
+      "rack",
+      "2u"
     ],
-    "body": "<rect x=\"18\" y=\"18\" width=\"64\" height=\"64\" rx=\"3\"/><line x1=\"22\" y1=\"22\" x2=\"78\" y2=\"78\" class=\"lp-ico-detail\"/><line x1=\"78\" y1=\"22\" x2=\"22\" y2=\"78\" class=\"lp-ico-detail\"/><circle cx=\"26\" cy=\"26\" r=\"6\" class=\"lp-ico-detail\"/><circle cx=\"74\" cy=\"26\" r=\"6\" class=\"lp-ico-detail\"/><circle cx=\"26\" cy=\"74\" r=\"6\" class=\"lp-ico-detail\"/><circle cx=\"74\" cy=\"74\" r=\"6\" class=\"lp-ico-detail\"/>"
-  }
+    "body": "<rect x=\"3\" y=\"3\" width=\"184\" height=\"84\" rx=\"8\"/><line x1=\"22\" y1=\"8\" x2=\"22\" y2=\"80\" class=\"lp-ico-detail\"/><line x1=\"168\" y1=\"8\" x2=\"168\" y2=\"80\" class=\"lp-ico-detail\"/><rect x=\"28\" y=\"12.5\" width=\"134\" height=\"30\" rx=\"3\" class=\"lp-ico-tone\"/><circle cx=\"37\" cy=\"27.5\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"153\" cy=\"27.5\" r=\"2.2\" class=\"lp-ico-detail\"/><rect x=\"28\" y=\"47.5\" width=\"134\" height=\"30\" rx=\"3\" class=\"lp-ico-tone\"/><circle cx=\"37\" cy=\"62.5\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"153\" cy=\"62.5\" r=\"2.2\" class=\"lp-ico-detail\"/>"
+  },
+  {
+    "name": "infra-rack-4u",
+    "category": "infrastructure",
+    "label": "Rack 4U",
+    "footprint": {
+      "width_ft": 1.9,
+      "depth_ft": 1.5
+    },
+    "viewBox": "0 0 190 150",
+    "keywords": [
+      "rack",
+      "4u"
+    ],
+    "body": "<rect x=\"3\" y=\"3\" width=\"184\" height=\"144\" rx=\"8\"/><line x1=\"22\" y1=\"8\" x2=\"22\" y2=\"140\" class=\"lp-ico-detail\"/><line x1=\"168\" y1=\"8\" x2=\"168\" y2=\"140\" class=\"lp-ico-detail\"/><rect x=\"28\" y=\"12.5\" width=\"134\" height=\"27.5\" rx=\"3\" class=\"lp-ico-tone\"/><circle cx=\"37\" cy=\"26.3\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"153\" cy=\"26.3\" r=\"2.2\" class=\"lp-ico-detail\"/><rect x=\"28\" y=\"45\" width=\"134\" height=\"27.5\" rx=\"3\" class=\"lp-ico-tone\"/><circle cx=\"37\" cy=\"58.8\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"153\" cy=\"58.8\" r=\"2.2\" class=\"lp-ico-detail\"/><rect x=\"28\" y=\"77.5\" width=\"134\" height=\"27.5\" rx=\"3\" class=\"lp-ico-tone\"/><circle cx=\"37\" cy=\"91.3\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"153\" cy=\"91.3\" r=\"2.2\" class=\"lp-ico-detail\"/><rect x=\"28\" y=\"110\" width=\"134\" height=\"27.5\" rx=\"3\" class=\"lp-ico-tone\"/><circle cx=\"37\" cy=\"123.8\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"153\" cy=\"123.8\" r=\"2.2\" class=\"lp-ico-detail\"/>"
+  },
+  {
+    "name": "infra-rack-6u",
+    "category": "infrastructure",
+    "label": "Rack 6U",
+    "footprint": {
+      "width_ft": 1.9,
+      "depth_ft": 2
+    },
+    "viewBox": "0 0 190 200",
+    "keywords": [
+      "rack",
+      "6u"
+    ],
+    "body": "<rect x=\"3\" y=\"3\" width=\"184\" height=\"194\" rx=\"8\"/><line x1=\"22\" y1=\"8\" x2=\"22\" y2=\"190\" class=\"lp-ico-detail\"/><line x1=\"168\" y1=\"8\" x2=\"168\" y2=\"190\" class=\"lp-ico-detail\"/><rect x=\"28\" y=\"12.5\" width=\"134\" height=\"25\" rx=\"3\" class=\"lp-ico-tone\"/><circle cx=\"37\" cy=\"25\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"153\" cy=\"25\" r=\"2.2\" class=\"lp-ico-detail\"/><rect x=\"28\" y=\"42.5\" width=\"134\" height=\"25\" rx=\"3\" class=\"lp-ico-tone\"/><circle cx=\"37\" cy=\"55\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"153\" cy=\"55\" r=\"2.2\" class=\"lp-ico-detail\"/><rect x=\"28\" y=\"72.5\" width=\"134\" height=\"25\" rx=\"3\" class=\"lp-ico-tone\"/><circle cx=\"37\" cy=\"85\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"153\" cy=\"85\" r=\"2.2\" class=\"lp-ico-detail\"/><rect x=\"28\" y=\"102.5\" width=\"134\" height=\"25\" rx=\"3\" class=\"lp-ico-tone\"/><circle cx=\"37\" cy=\"115\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"153\" cy=\"115\" r=\"2.2\" class=\"lp-ico-detail\"/><rect x=\"28\" y=\"132.5\" width=\"134\" height=\"25\" rx=\"3\" class=\"lp-ico-tone\"/><circle cx=\"37\" cy=\"145\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"153\" cy=\"145\" r=\"2.2\" class=\"lp-ico-detail\"/><rect x=\"28\" y=\"162.5\" width=\"134\" height=\"25\" rx=\"3\" class=\"lp-ico-tone\"/><circle cx=\"37\" cy=\"175\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"153\" cy=\"175\" r=\"2.2\" class=\"lp-ico-detail\"/>"
+  },
+  {
+    "name": "infra-rack-12u",
+    "category": "infrastructure",
+    "label": "Rack 12U",
+    "footprint": {
+      "width_ft": 1.9,
+      "depth_ft": 3.2
+    },
+    "viewBox": "0 0 190 320",
+    "keywords": [
+      "rack",
+      "12u",
+      "tour rack"
+    ],
+    "body": "<rect x=\"3\" y=\"3\" width=\"184\" height=\"314\" rx=\"8\"/><line x1=\"22\" y1=\"8\" x2=\"22\" y2=\"284\" class=\"lp-ico-detail\"/><line x1=\"168\" y1=\"8\" x2=\"168\" y2=\"284\" class=\"lp-ico-detail\"/><rect x=\"28\" y=\"12.5\" width=\"134\" height=\"17.8\" rx=\"3\" class=\"lp-ico-tone\"/><circle cx=\"37\" cy=\"21.4\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"153\" cy=\"21.4\" r=\"2.2\" class=\"lp-ico-detail\"/><rect x=\"28\" y=\"35.3\" width=\"134\" height=\"17.8\" rx=\"3\" class=\"lp-ico-tone\"/><circle cx=\"37\" cy=\"44.2\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"153\" cy=\"44.2\" r=\"2.2\" class=\"lp-ico-detail\"/><rect x=\"28\" y=\"58.2\" width=\"134\" height=\"17.8\" rx=\"3\" class=\"lp-ico-tone\"/><circle cx=\"37\" cy=\"67.1\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"153\" cy=\"67.1\" r=\"2.2\" class=\"lp-ico-detail\"/><rect x=\"28\" y=\"81\" width=\"134\" height=\"17.8\" rx=\"3\" class=\"lp-ico-tone\"/><circle cx=\"37\" cy=\"89.9\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"153\" cy=\"89.9\" r=\"2.2\" class=\"lp-ico-detail\"/><rect x=\"28\" y=\"103.8\" width=\"134\" height=\"17.8\" rx=\"3\" class=\"lp-ico-tone\"/><circle cx=\"37\" cy=\"112.7\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"153\" cy=\"112.7\" r=\"2.2\" class=\"lp-ico-detail\"/><rect x=\"28\" y=\"126.7\" width=\"134\" height=\"17.8\" rx=\"3\" class=\"lp-ico-tone\"/><circle cx=\"37\" cy=\"135.6\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"153\" cy=\"135.6\" r=\"2.2\" class=\"lp-ico-detail\"/><rect x=\"28\" y=\"149.5\" width=\"134\" height=\"17.8\" rx=\"3\" class=\"lp-ico-tone\"/><circle cx=\"37\" cy=\"158.4\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"153\" cy=\"158.4\" r=\"2.2\" class=\"lp-ico-detail\"/><rect x=\"28\" y=\"172.3\" width=\"134\" height=\"17.8\" rx=\"3\" class=\"lp-ico-tone\"/><circle cx=\"37\" cy=\"181.2\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"153\" cy=\"181.2\" r=\"2.2\" class=\"lp-ico-detail\"/><rect x=\"28\" y=\"195.2\" width=\"134\" height=\"17.8\" rx=\"3\" class=\"lp-ico-tone\"/><circle cx=\"37\" cy=\"204.1\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"153\" cy=\"204.1\" r=\"2.2\" class=\"lp-ico-detail\"/><rect x=\"28\" y=\"218\" width=\"134\" height=\"17.8\" rx=\"3\" class=\"lp-ico-tone\"/><circle cx=\"37\" cy=\"226.9\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"153\" cy=\"226.9\" r=\"2.2\" class=\"lp-ico-detail\"/><rect x=\"28\" y=\"240.8\" width=\"134\" height=\"17.8\" rx=\"3\" class=\"lp-ico-tone\"/><circle cx=\"37\" cy=\"249.7\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"153\" cy=\"249.7\" r=\"2.2\" class=\"lp-ico-detail\"/><rect x=\"28\" y=\"263.7\" width=\"134\" height=\"17.8\" rx=\"3\" class=\"lp-ico-tone\"/><circle cx=\"37\" cy=\"272.6\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"153\" cy=\"272.6\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"53.2\" cy=\"302\" r=\"12\" class=\"lp-ico-tone\"/><circle cx=\"136.8\" cy=\"302\" r=\"12\" class=\"lp-ico-tone\"/>"
+  },
+  {
+    "name": "infra-rack-24u",
+    "category": "infrastructure",
+    "label": "Rack 24U",
+    "footprint": {
+      "width_ft": 1.9,
+      "depth_ft": 5.2
+    },
+    "viewBox": "0 0 190 520",
+    "keywords": [
+      "rack",
+      "24u",
+      "amp rack"
+    ],
+    "body": "<rect x=\"3\" y=\"3\" width=\"184\" height=\"514\" rx=\"8\"/><line x1=\"22\" y1=\"8\" x2=\"22\" y2=\"484\" class=\"lp-ico-detail\"/><line x1=\"168\" y1=\"8\" x2=\"168\" y2=\"484\" class=\"lp-ico-detail\"/><rect x=\"28\" y=\"12.5\" width=\"134\" height=\"14.8\" rx=\"3\" class=\"lp-ico-tone\"/><circle cx=\"37\" cy=\"19.9\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"153\" cy=\"19.9\" r=\"2.2\" class=\"lp-ico-detail\"/><rect x=\"28\" y=\"32.3\" width=\"134\" height=\"14.8\" rx=\"3\" class=\"lp-ico-tone\"/><circle cx=\"37\" cy=\"39.7\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"153\" cy=\"39.7\" r=\"2.2\" class=\"lp-ico-detail\"/><rect x=\"28\" y=\"52\" width=\"134\" height=\"14.8\" rx=\"3\" class=\"lp-ico-tone\"/><circle cx=\"37\" cy=\"59.4\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"153\" cy=\"59.4\" r=\"2.2\" class=\"lp-ico-detail\"/><rect x=\"28\" y=\"71.8\" width=\"134\" height=\"14.8\" rx=\"3\" class=\"lp-ico-tone\"/><circle cx=\"37\" cy=\"79.2\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"153\" cy=\"79.2\" r=\"2.2\" class=\"lp-ico-detail\"/><rect x=\"28\" y=\"91.5\" width=\"134\" height=\"14.8\" rx=\"3\" class=\"lp-ico-tone\"/><circle cx=\"37\" cy=\"98.9\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"153\" cy=\"98.9\" r=\"2.2\" class=\"lp-ico-detail\"/><rect x=\"28\" y=\"111.3\" width=\"134\" height=\"14.8\" rx=\"3\" class=\"lp-ico-tone\"/><circle cx=\"37\" cy=\"118.7\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"153\" cy=\"118.7\" r=\"2.2\" class=\"lp-ico-detail\"/><rect x=\"28\" y=\"131\" width=\"134\" height=\"14.8\" rx=\"3\" class=\"lp-ico-tone\"/><circle cx=\"37\" cy=\"138.4\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"153\" cy=\"138.4\" r=\"2.2\" class=\"lp-ico-detail\"/><rect x=\"28\" y=\"150.8\" width=\"134\" height=\"14.8\" rx=\"3\" class=\"lp-ico-tone\"/><circle cx=\"37\" cy=\"158.2\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"153\" cy=\"158.2\" r=\"2.2\" class=\"lp-ico-detail\"/><rect x=\"28\" y=\"170.5\" width=\"134\" height=\"14.8\" rx=\"3\" class=\"lp-ico-tone\"/><circle cx=\"37\" cy=\"177.9\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"153\" cy=\"177.9\" r=\"2.2\" class=\"lp-ico-detail\"/><rect x=\"28\" y=\"190.3\" width=\"134\" height=\"14.8\" rx=\"3\" class=\"lp-ico-tone\"/><circle cx=\"37\" cy=\"197.7\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"153\" cy=\"197.7\" r=\"2.2\" class=\"lp-ico-detail\"/><rect x=\"28\" y=\"210\" width=\"134\" height=\"14.8\" rx=\"3\" class=\"lp-ico-tone\"/><circle cx=\"37\" cy=\"217.4\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"153\" cy=\"217.4\" r=\"2.2\" class=\"lp-ico-detail\"/><rect x=\"28\" y=\"229.8\" width=\"134\" height=\"14.8\" rx=\"3\" class=\"lp-ico-tone\"/><circle cx=\"37\" cy=\"237.2\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"153\" cy=\"237.2\" r=\"2.2\" class=\"lp-ico-detail\"/><rect x=\"28\" y=\"249.5\" width=\"134\" height=\"14.8\" rx=\"3\" class=\"lp-ico-tone\"/><circle cx=\"37\" cy=\"256.9\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"153\" cy=\"256.9\" r=\"2.2\" class=\"lp-ico-detail\"/><rect x=\"28\" y=\"269.3\" width=\"134\" height=\"14.8\" rx=\"3\" class=\"lp-ico-tone\"/><circle cx=\"37\" cy=\"276.7\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"153\" cy=\"276.7\" r=\"2.2\" class=\"lp-ico-detail\"/><rect x=\"28\" y=\"289\" width=\"134\" height=\"14.8\" rx=\"3\" class=\"lp-ico-tone\"/><circle cx=\"37\" cy=\"296.4\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"153\" cy=\"296.4\" r=\"2.2\" class=\"lp-ico-detail\"/><rect x=\"28\" y=\"308.8\" width=\"134\" height=\"14.8\" rx=\"3\" class=\"lp-ico-tone\"/><circle cx=\"37\" cy=\"316.2\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"153\" cy=\"316.2\" r=\"2.2\" class=\"lp-ico-detail\"/><rect x=\"28\" y=\"328.5\" width=\"134\" height=\"14.8\" rx=\"3\" class=\"lp-ico-tone\"/><circle cx=\"37\" cy=\"335.9\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"153\" cy=\"335.9\" r=\"2.2\" class=\"lp-ico-detail\"/><rect x=\"28\" y=\"348.3\" width=\"134\" height=\"14.8\" rx=\"3\" class=\"lp-ico-tone\"/><circle cx=\"37\" cy=\"355.7\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"153\" cy=\"355.7\" r=\"2.2\" class=\"lp-ico-detail\"/><rect x=\"28\" y=\"368\" width=\"134\" height=\"14.8\" rx=\"3\" class=\"lp-ico-tone\"/><circle cx=\"37\" cy=\"375.4\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"153\" cy=\"375.4\" r=\"2.2\" class=\"lp-ico-detail\"/><rect x=\"28\" y=\"387.8\" width=\"134\" height=\"14.8\" rx=\"3\" class=\"lp-ico-tone\"/><circle cx=\"37\" cy=\"395.2\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"153\" cy=\"395.2\" r=\"2.2\" class=\"lp-ico-detail\"/><rect x=\"28\" y=\"407.5\" width=\"134\" height=\"14.8\" rx=\"3\" class=\"lp-ico-tone\"/><circle cx=\"37\" cy=\"414.9\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"153\" cy=\"414.9\" r=\"2.2\" class=\"lp-ico-detail\"/><rect x=\"28\" y=\"427.3\" width=\"134\" height=\"14.8\" rx=\"3\" class=\"lp-ico-tone\"/><circle cx=\"37\" cy=\"434.7\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"153\" cy=\"434.7\" r=\"2.2\" class=\"lp-ico-detail\"/><rect x=\"28\" y=\"447\" width=\"134\" height=\"14.8\" rx=\"3\" class=\"lp-ico-tone\"/><circle cx=\"37\" cy=\"454.4\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"153\" cy=\"454.4\" r=\"2.2\" class=\"lp-ico-detail\"/><rect x=\"28\" y=\"466.8\" width=\"134\" height=\"14.8\" rx=\"3\" class=\"lp-ico-tone\"/><circle cx=\"37\" cy=\"474.2\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"153\" cy=\"474.2\" r=\"2.2\" class=\"lp-ico-detail\"/><circle cx=\"53.2\" cy=\"502\" r=\"12\" class=\"lp-ico-tone\"/><circle cx=\"136.8\" cy=\"502\" r=\"12\" class=\"lp-ico-tone\"/>"
+  },
 ];

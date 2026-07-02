@@ -18,7 +18,6 @@
 import { CATEGORIES, CATEGORY_HEX, getCategory } from './categories';
 import { drumIcons } from './drums';
 import { drumAuxIcons } from './drums-aux';
-import { drumComposites } from './drums-composites';
 import { micIcons } from './mics';
 import { musicianIcons } from './musicians';
 import { ampIcons } from './amps';
@@ -36,7 +35,9 @@ import type { IconCategoryKey, IconDescriptor } from './types';
 export const ALL_ICONS: IconDescriptor[] = [
   ...drumIcons, // §SP1a·2a core kit
   ...drumAuxIcons, // §SP1a·2b aux percussion
-  ...drumComposites, // §SP1a·2b RH/LH kit composites
+  // Icon suite v2 (Adam: NEW KITS ONLY) — legacy ...drumComposites palette spread
+  // removed; the v2 drum-kit-* kits ship in drums.ts. kitLayout/KitPiece are still
+  // re-exported below (the editor's split/combine uses them).
   ...micIcons, // §SP1a·3 microphones
   ...musicianIcons, // §SP1a·3 musicians
   ...ampIcons, // §SP1b amplifiers & cabinets

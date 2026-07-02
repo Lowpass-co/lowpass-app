@@ -1,119 +1,264 @@
-/* ============================================
-   LOWPASS — Stage Plot microphone icons (§SP1, redesign)
+/* ============================================================
+   LOWPASS — Stage Plot microphones icons (v2 suite)
 
-   Recognizable PROFILE silhouettes (traced from the actual
-   mics), outline-rendered like the strings set rather than
-   top-down dots. viewBox 0 0 48 48, outline:true → line-art in
-   the category colour.
-
-   Footprints are real-world floor space: stand mics ~1 ft (the
-   base), handheld ~0.5 ft, worn/clipped mics ~0.3 ft (a headset
-   does NOT occupy a square foot).
-   ============================================ */
+   v2 grammar: top-down ft-true (viewBox = footprint x 100, art
+   edge-to-edge, footprint = FULL extent); elevation for tall/thin;
+   symbolic sizing for stage boxes / power / DI / talkback. No colour
+   attrs. Classes: unclassed = footprint fill, .lp-ico-tone = accent
+   fill (NEW - see README), .lp-ico-detail = stroke only,
+   .lp-ico-label = solid category-colour fill (text + bolt glyph).
+   ============================================================ */
 
 import type { IconDescriptor } from './types';
 
-/** Stem + round stand base. */
-const stand = (cx: number, fromY: number, baseY: number): string =>
-  `<path d="M${cx} ${fromY} L${cx} ${baseY - 2}"/><path d="M${cx - 6} ${baseY} Q${cx} ${baseY - 3.5} ${cx + 6} ${baseY}"/>`;
-
-/** SM58-style ball-grille head + tapered body, ball centred at (cx, ballY). */
-const sm58 = (cx: number, ballY: number, bodyBot: number): string =>
-  `<path d="M${cx} ${ballY - 6.3} C${cx - 6} ${ballY - 6.3} ${cx - 6.8} ${ballY - 3} ${cx - 6.8} ${ballY} C${cx - 6.8} ${ballY + 3.5} ${cx - 5.6} ${ballY + 5} ${cx - 5.3} ${ballY + 7} L${cx - 4.8} ${bodyBot - 2} C${cx - 4.8} ${bodyBot} ${cx - 2.6} ${bodyBot + 1} ${cx} ${bodyBot + 1} C${cx + 2.6} ${bodyBot + 1} ${cx + 4.8} ${bodyBot} ${cx + 4.8} ${bodyBot - 2} L${cx + 5.3} ${ballY + 7} C${cx + 5.6} ${ballY + 5} ${cx + 6.8} ${ballY + 3.5} ${cx + 6.8} ${ballY} C${cx + 6.8} ${ballY - 3} ${cx + 6} ${ballY - 6.3} ${cx} ${ballY - 6.3} Z"/>` +
-  `<path d="M${cx - 6.4} ${ballY - 1.5} Q${cx} ${ballY + 1} ${cx + 6.4} ${ballY - 1.5}"/>` +
-  `<path d="M${cx - 6} ${ballY + 2.5} Q${cx} ${ballY + 5} ${cx + 6} ${ballY + 2.5}"/>`;
-
 export const micIcons: IconDescriptor[] = [
   {
-    name: 'mic-vocal', category: 'mics', label: 'Vocal (SM58)',
-    footprint: { width_ft: 1, depth_ft: 1 }, viewBox: '0 0 48 48', outline: true,
-    keywords: ['sm58', 'vocal', 'dynamic', 'ball', 'shure'],
-    body: sm58(24, 12, 28) + stand(24, 29, 42),
+    "name": "mic-vocal",
+    "category": "mics",
+    "label": "Vocal (SM58)",
+    "footprint": {
+      "width_ft": 0.9,
+      "depth_ft": 0.35
+    },
+    "viewBox": "0 0 90 35",
+    "keywords": [
+      "sm58",
+      "vocal",
+      "handheld",
+      "dynamic"
+    ],
+    "body": "<circle cx=\"19\" cy=\"17.5\" r=\"14\" class=\"lp-ico-tone\"/><line x1=\"8\" y1=\"11\" x2=\"30\" y2=\"11\" class=\"lp-ico-detail\"/><line x1=\"8\" y1=\"24\" x2=\"30\" y2=\"24\" class=\"lp-ico-detail\"/><path d=\"M31 8 L74 11 Q84 12.5 84 17.5 Q84 23 74 24 L31 27 Z\"/><line x1=\"84\" y1=\"17.5\" x2=\"88\" y2=\"17.5\" class=\"lp-ico-detail\"/>"
   },
   {
-    name: 'mic-vocal-wireless', category: 'mics', label: 'Wireless (SM58)',
-    footprint: { width_ft: 0.5, depth_ft: 0.5 }, viewBox: '0 0 48 48', outline: true,
-    keywords: ['wireless', 'sm58', 'handheld', 'transmitter', 'shure'],
-    // SM58 head + longer fat body (transmitter) + antenna stub, no stand
-    body: sm58(24, 12, 36) + '<path d="M24 37 L24 43"/>',
+    "name": "mic-vocal-wireless",
+    "category": "mics",
+    "label": "Wireless (SM58)",
+    "footprint": {
+      "width_ft": 0.85,
+      "depth_ft": 0.35
+    },
+    "viewBox": "0 0 85 35",
+    "keywords": [
+      "wireless",
+      "radio",
+      "handheld"
+    ],
+    "body": "<circle cx=\"19\" cy=\"17.5\" r=\"14\" class=\"lp-ico-tone\"/><line x1=\"8\" y1=\"11\" x2=\"30\" y2=\"11\" class=\"lp-ico-detail\"/><line x1=\"8\" y1=\"24\" x2=\"30\" y2=\"24\" class=\"lp-ico-detail\"/><path d=\"M31 8 L72 11 Q81 12.5 81 17.5 Q81 23 72 24 L31 27 Z\"/><rect x=\"76\" y=\"14\" width=\"7\" height=\"7\" rx=\"3.5\" class=\"lp-ico-tone\"/>"
   },
   {
-    name: 'mic-condenser-pencil', category: 'mics', label: 'Pencil condenser',
-    footprint: { width_ft: 1, depth_ft: 1 }, viewBox: '0 0 48 48', outline: true,
-    keywords: ['pencil', 'condenser', 'small diaphragm', 'overhead'],
-    body: '<rect x="20.5" y="6" width="7" height="22" rx="3.5"/><path d="M20.5 10 L27.5 10"/>' + stand(24, 28, 42),
+    "name": "mic-condenser-pencil",
+    "category": "mics",
+    "label": "Pencil condenser",
+    "footprint": {
+      "width_ft": 0.8,
+      "depth_ft": 0.25
+    },
+    "viewBox": "0 0 80 25",
+    "keywords": [
+      "sdc",
+      "pencil",
+      "km184",
+      "sm81"
+    ],
+    "body": "<circle cx=\"13\" cy=\"12.5\" r=\"9\" class=\"lp-ico-tone\"/><rect x=\"20\" y=\"6\" width=\"54\" height=\"13\" rx=\"6.5\"/><line x1=\"74\" y1=\"12.5\" x2=\"78\" y2=\"12.5\" class=\"lp-ico-detail\"/>"
   },
   {
-    name: 'mic-condenser-large', category: 'mics', label: 'Large-diaphragm condenser',
-    footprint: { width_ft: 1, depth_ft: 1 }, viewBox: '0 0 48 48', outline: true,
-    keywords: ['condenser', 'large diaphragm', 'studio', 'u87'],
-    body: '<rect x="17" y="7" width="14" height="20" rx="6"/><path d="M17 13 L31 13"/><path d="M17 18 L31 18"/><path d="M17 23 L31 23"/>' + stand(24, 28, 42),
+    "name": "mic-condenser-large",
+    "category": "mics",
+    "label": "Large-diaphragm condenser",
+    "footprint": {
+      "width_ft": 0.9,
+      "depth_ft": 0.45
+    },
+    "viewBox": "0 0 90 45",
+    "keywords": [
+      "ldc",
+      "condenser",
+      "u87",
+      "studio"
+    ],
+    "body": "<circle cx=\"21\" cy=\"22.5\" r=\"16\" class=\"lp-ico-tone\"/><circle cx=\"21\" cy=\"22.5\" r=\"19.5\" class=\"lp-ico-detail\"/><rect x=\"38\" y=\"7\" width=\"46\" height=\"31\" rx=\"14\"/>"
   },
   {
-    name: 'mic-overhead', category: 'mics', label: 'Overhead (AKG C414)',
-    footprint: { width_ft: 1.2, depth_ft: 1.2 }, viewBox: '0 0 48 48', outline: true,
-    keywords: ['overhead', 'akg', 'c414', 'condenser', 'flat grille'],
-    // C414's distinctive flat rectangular headbasket + vertical grille
-    body: '<rect x="15" y="6" width="18" height="20" rx="3"/><path d="M20 9 L20 23"/><path d="M24 9 L24 23"/><path d="M28 9 L28 23"/>' + stand(24, 26, 42),
+    "name": "mic-overhead",
+    "category": "mics",
+    "label": "Overhead (AKG C414)",
+    "footprint": {
+      "width_ft": 0.8,
+      "depth_ft": 0.4
+    },
+    "viewBox": "0 0 80 40",
+    "keywords": [
+      "overhead",
+      "oh",
+      "c414",
+      "cymbal mic"
+    ],
+    "body": "<g transform=\"rotate(-16 40 20)\"><circle cx=\"14\" cy=\"20\" r=\"10\" class=\"lp-ico-tone\"/><rect x=\"22\" y=\"12\" width=\"48\" height=\"16\" rx=\"6\"/></g>"
   },
   {
-    name: 'mic-lavalier', category: 'mics', label: 'Lavalier',
-    footprint: { width_ft: 0.3, depth_ft: 0.3 }, viewBox: '0 0 48 48', outline: true,
-    keywords: ['lavalier', 'lav', 'lapel', 'tie clip'],
-    body: '<rect x="20.5" y="13" width="7" height="11" rx="3.5"/><path d="M24 24 Q28 31 22 38"/>',
+    "name": "mic-lavalier",
+    "category": "mics",
+    "label": "Lavalier",
+    "footprint": {
+      "width_ft": 0.5,
+      "depth_ft": 0.3
+    },
+    "viewBox": "0 0 50 30",
+    "keywords": [
+      "lav",
+      "lapel",
+      "clip"
+    ],
+    "body": "<circle cx=\"13\" cy=\"15\" r=\"9\" class=\"lp-ico-tone\"/><rect x=\"20\" y=\"9\" width=\"12\" height=\"12\" rx=\"3\"/><path d=\"M32 15 Q42 15 45 26\" class=\"lp-ico-detail\"/>"
   },
   {
-    name: 'mic-headset', category: 'mics', label: 'Headset',
-    footprint: { width_ft: 0.3, depth_ft: 0.3 }, viewBox: '0 0 48 48', outline: true,
-    keywords: ['headset', 'earset', 'worn', 'fitness'],
-    body: '<path d="M13 32 Q13 11 24 10 Q35 11 35 32"/><circle cx="34" cy="32" r="2.6"/><path d="M33 33 Q29 38 24 38"/><circle cx="23" cy="38" r="2.2"/>',
+    "name": "mic-headset",
+    "category": "mics",
+    "label": "Headset",
+    "footprint": {
+      "width_ft": 0.55,
+      "depth_ft": 0.5
+    },
+    "viewBox": "0 0 55 50",
+    "keywords": [
+      "headset",
+      "headworn",
+      "earset"
+    ],
+    "body": "<path d=\"M8 40 Q6 8 46 10\" class=\"lp-ico-detail\"/><circle cx=\"10\" cy=\"41\" r=\"8\" class=\"lp-ico-tone\"/><path d=\"M12 44 Q28 52 44 41\" class=\"lp-ico-detail\"/><circle cx=\"47\" cy=\"39\" r=\"5.5\" class=\"lp-ico-tone\"/>"
   },
   {
-    name: 'mic-shotgun', category: 'mics', label: 'Shotgun',
-    footprint: { width_ft: 0.8, depth_ft: 1.2 }, viewBox: '0 0 48 48', outline: true,
-    keywords: ['shotgun', 'boom', 'interference tube', 'directional'],
-    body: '<rect x="20.5" y="4" width="7" height="30" rx="3.5"/><path d="M21.5 9 L26.5 9"/><path d="M21.5 13 L26.5 13"/><path d="M21.5 17 L26.5 17"/><path d="M21.5 21 L26.5 21"/>' + stand(24, 34, 44),
+    "name": "mic-shotgun",
+    "category": "mics",
+    "label": "Shotgun",
+    "footprint": {
+      "width_ft": 1.3,
+      "depth_ft": 0.3
+    },
+    "viewBox": "0 0 130 30",
+    "keywords": [
+      "shotgun",
+      "boom",
+      "film"
+    ],
+    "body": "<rect x=\"22\" y=\"8\" width=\"102\" height=\"14\" rx=\"7\"/><rect x=\"22\" y=\"8\" width=\"26\" height=\"14\" rx=\"7\" class=\"lp-ico-tone\"/><line x1=\"58\" y1=\"15\" x2=\"68\" y2=\"15\" class=\"lp-ico-detail\"/><line x1=\"74\" y1=\"15\" x2=\"84\" y2=\"15\" class=\"lp-ico-detail\"/><line x1=\"90\" y1=\"15\" x2=\"100\" y2=\"15\" class=\"lp-ico-detail\"/><line x1=\"124\" y1=\"15\" x2=\"128\" y2=\"15\" class=\"lp-ico-detail\"/>"
   },
   {
-    name: 'mic-kick', category: 'mics', label: 'Kick (D6)',
-    footprint: { width_ft: 0.8, depth_ft: 0.8 }, viewBox: '0 0 48 48', outline: true,
-    keywords: ['kick', 'd6', 'beta52', 'bass drum'],
-    body: '<circle cx="24" cy="14" r="8.5"/><path d="M16.5 17 L18.5 28 Q18.5 30 24 30 Q29.5 30 29.5 28 L31.5 17 Z"/>' + stand(24, 30, 43),
+    "name": "mic-kick",
+    "category": "mics",
+    "label": "Kick (D6)",
+    "footprint": {
+      "width_ft": 0.7,
+      "depth_ft": 0.45
+    },
+    "viewBox": "0 0 70 45",
+    "keywords": [
+      "kick mic",
+      "d6",
+      "beta52",
+      "d112"
+    ],
+    "body": "<circle cx=\"16\" cy=\"22.5\" r=\"13\" class=\"lp-ico-tone\"/><path d=\"M27 8 L56 12 Q66 15 66 22.5 Q66 30 56 33 L27 37 Z\"/><line x1=\"66\" y1=\"22.5\" x2=\"69\" y2=\"22.5\" class=\"lp-ico-detail\"/>"
   },
   {
-    name: 'mic-ribbon', category: 'mics', label: 'Ribbon',
-    footprint: { width_ft: 1, depth_ft: 1 }, viewBox: '0 0 48 48', outline: true,
-    keywords: ['ribbon', 'royer', 'figure 8'],
-    body: '<rect x="18" y="7" width="12" height="23" rx="6"/><text class="lp-ico-label" x="24" y="17" text-anchor="middle" dominant-baseline="central" font-size="9">R</text>' + stand(24, 30, 43),
+    "name": "mic-ribbon",
+    "category": "mics",
+    "label": "Ribbon",
+    "footprint": {
+      "width_ft": 0.85,
+      "depth_ft": 0.4
+    },
+    "viewBox": "0 0 85 40",
+    "keywords": [
+      "ribbon",
+      "r121",
+      "fathead"
+    ],
+    "body": "<rect x=\"22\" y=\"6\" width=\"46\" height=\"28\" rx=\"13\"/><rect x=\"37\" y=\"12\" width=\"16\" height=\"16\" rx=\"7\" class=\"lp-ico-tone\"/><line x1=\"68\" y1=\"20\" x2=\"80\" y2=\"20\" class=\"lp-ico-detail\"/>"
   },
   {
-    name: 'mic-tom-clip', category: 'mics', label: 'Tom clip',
-    footprint: { width_ft: 0.3, depth_ft: 0.3 }, viewBox: '0 0 48 48', outline: true,
-    keywords: ['tom', 'clip', 'rim mount', 'drum mic'],
-    body: '<rect x="19" y="11" width="8" height="13" rx="4"/><path d="M27 15 Q33 15 33 21 Q33 27 27 27"/>',
+    "name": "mic-tom-clip",
+    "category": "mics",
+    "label": "Tom clip",
+    "footprint": {
+      "width_ft": 0.55,
+      "depth_ft": 0.4
+    },
+    "viewBox": "0 0 55 40",
+    "keywords": [
+      "clip",
+      "tom",
+      "e604",
+      "m201"
+    ],
+    "body": "<circle cx=\"14\" cy=\"20\" r=\"10\" class=\"lp-ico-tone\"/><rect x=\"22\" y=\"14\" width=\"15\" height=\"12\" rx=\"5\"/><path d=\"M39 10 L49 7 L49 33 L39 30\" class=\"lp-ico-detail\"/>"
   },
   {
-    name: 'mic-talkback', category: 'mics', label: 'Talkback',
-    footprint: { width_ft: 0.6, depth_ft: 0.6 }, viewBox: '0 0 48 48', outline: true,
-    keywords: ['talkback', 'com', 'desk', 'intercom'],
-    body: sm58(24, 11, 25) + '<text class="lp-ico-label" x="24" y="19" text-anchor="middle" dominant-baseline="central" font-size="6.5">TB</text><path d="M24 26 L24 31"/><rect x="16" y="31" width="16" height="5" rx="2"/>',
+    "name": "mic-talkback",
+    "category": "mics",
+    "label": "Talkback",
+    "footprint": {
+      "width_ft": 1.25,
+      "depth_ft": 0.4
+    },
+    "viewBox": "0 0 125 40",
+    "keywords": [
+      "talkback",
+      "shout",
+      "comm",
+      "tb",
+      "sm58"
+    ],
+    "body": "<circle cx=\"19\" cy=\"20\" r=\"14\" class=\"lp-ico-tone\"/><line x1=\"8\" y1=\"13.5\" x2=\"30\" y2=\"13.5\" class=\"lp-ico-detail\"/><line x1=\"8\" y1=\"26.5\" x2=\"30\" y2=\"26.5\" class=\"lp-ico-detail\"/><path d=\"M31 10.5 L74 13.5 Q84 15 84 20 Q84 25.5 74 26.5 L31 29.5 Z\"/><line x1=\"84\" y1=\"20\" x2=\"88\" y2=\"20\" class=\"lp-ico-detail\"/><text x=\"107\" y=\"29\" font-size=\"26\" text-anchor=\"middle\" class=\"lp-ico-label\">TB</text>"
   },
   {
-    name: 'mic-choir', category: 'mics', label: 'Hanging choir',
-    footprint: { width_ft: 0.3, depth_ft: 0.3 }, viewBox: '0 0 48 48', outline: true,
-    keywords: ['choir', 'hanging', 'overhead', 'condenser'],
-    body: '<path d="M24 5 L24 15"/><rect x="21" y="15" width="6" height="16" rx="3"/><path d="M21 27 L27 27"/>',
+    "name": "mic-choir",
+    "category": "mics",
+    "label": "Hanging choir",
+    "footprint": {
+      "width_ft": 0.6,
+      "depth_ft": 0.6
+    },
+    "viewBox": "0 0 60 60",
+    "keywords": [
+      "choir",
+      "hanging",
+      "overhead"
+    ],
+    "body": "<path d=\"M30 4 Q26 20 30 34\" class=\"lp-ico-detail\"/><rect x=\"25\" y=\"34\" width=\"10\" height=\"9\" rx=\"3\"/><circle cx=\"30\" cy=\"49\" r=\"9\" class=\"lp-ico-tone\"/>"
   },
   {
-    name: 'mic-pad-trigger', category: 'mics', label: 'Drum trigger',
-    footprint: { width_ft: 0.3, depth_ft: 0.3 }, viewBox: '0 0 48 48', outline: true,
-    keywords: ['trigger', 'drum', 'puck', 'ddrum'],
-    body: '<ellipse cx="24" cy="22" rx="10" ry="6.5"/><path d="M14 22 Q11.5 22 11.5 18.5"/><path d="M24 28.5 L24 34"/>',
+    "name": "mic-pad-trigger",
+    "category": "mics",
+    "label": "Drum trigger",
+    "footprint": {
+      "width_ft": 0.5,
+      "depth_ft": 0.4
+    },
+    "viewBox": "0 0 50 40",
+    "keywords": [
+      "trigger",
+      "pad",
+      "ddrum"
+    ],
+    "body": "<path d=\"M9 8 L9 32 L21 32\" class=\"lp-ico-detail\"/><rect x=\"17\" y=\"11\" width=\"24\" height=\"17\" rx=\"4\"/><circle cx=\"45\" cy=\"19.5\" r=\"4\" class=\"lp-ico-tone\"/>"
   },
   {
-    name: 'mic-area', category: 'mics', label: 'Area / ambient',
-    footprint: { width_ft: 1.2, depth_ft: 1 }, viewBox: '0 0 48 48', outline: true,
-    keywords: ['area', 'ambient', 'spaced pair', 'room'],
-    body: '<circle cx="17" cy="12" r="4.5"/><circle cx="31" cy="12" r="4.5"/><path d="M17 16.5 L17 26"/><path d="M31 16.5 L31 26"/><path d="M14 26 L34 26"/>' + stand(24, 26, 42),
+    "name": "mic-area",
+    "category": "mics",
+    "label": "Area / ambient",
+    "footprint": {
+      "width_ft": 0.9,
+      "depth_ft": 0.7
+    },
+    "viewBox": "0 0 90 70",
+    "keywords": [
+      "area",
+      "ambient",
+      "pzm",
+      "boundary"
+    ],
+    "body": "<rect x=\"21\" y=\"47\" width=\"48\" height=\"16\" rx=\"7\"/><path d=\"M27 47 Q45 18 63 47 Z\" class=\"lp-ico-tone\"/><path d=\"M18 40 Q45 2 72 40\" class=\"lp-ico-detail\"/>"
   },
 ];
