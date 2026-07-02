@@ -162,14 +162,10 @@ function PersonnelManageEditor({
   } = useAutoSave<EditState>({
     initialState: memberToState(member),
     onSave: async (s) => {
-      const trimmedRate = s.rateAmount.trim();
-      const parsedRate = trimmedRate === '' ? null : Number(trimmedRate);
-      if (parsedRate != null && Number.isNaN(parsedRate)) {
-        setValidationError('Rate amount must be a number.');
-        // Don't throw — keep status='saving' from flipping; the
-        // user is mid-edit. Skip the PATCH this round.
-        return;
-      }
+      // #18 SSOT — rates are NOT edited here anymore. Payroll's Rates grid owns
+      // rate editing (personnel_rates); the dangling tour_personnel simple rate
+      // (rate_amount/currency/period) is no longer written. This slide persists
+      // only the assignment meta (role / tag / dates / status).
       setValidationError(null);
       const res = await fetch(
         `/api/tours/${tourId}/personnel/${member.id}`,
@@ -182,9 +178,6 @@ function PersonnelManageEditor({
             starts_on: s.startsOn || null,
             ends_on: s.endsOn || null,
             status: s.status,
-            rate_amount: parsedRate,
-            rate_currency: s.rateCurrency || null,
-            rate_period: s.ratePeriod || null,
           }),
         },
       );
@@ -521,80 +514,10 @@ function PersonnelManageEditor({
             </div>
           </fieldset>
 
-          {/* Rate */}
-          <div>
-            <div
-              className="lp-label-caps"
-              style={{
-                marginBottom: 'var(--lp-space-1)',
-                fontSize: 'var(--lp-text-2xs)',
-                color: 'var(--lp-text-secondary)',
-              }}
-            >
-              Rate
-            </div>
-            <div
-              style={{
-                display: 'grid',
-                gridTemplateColumns: '1fr 80px 110px',
-                gap: 'var(--lp-space-2)',
-              }}
-            >
-              <input
-                type="text"
-                inputMode="decimal"
-                value={state.rateAmount}
-                onChange={(e) => set((p) => ({ ...p, rateAmount: e.target.value }))}
-                placeholder="amount"
-                style={{
-                  padding: 'var(--lp-space-2) var(--lp-space-3)',
-                  fontSize: 'var(--lp-text-sm)',
-                  color: 'var(--lp-text)',
-                  background: 'var(--lp-bg)',
-                  border: '1px solid var(--lp-border-strong)',
-                  borderRadius: 'var(--lp-radius-md)',
-                  outline: 'none',
-                }}
-              />
-              <input
-                type="text"
-                value={state.rateCurrency}
-                onChange={(e) =>
-                  set((p) => ({ ...p, rateCurrency: e.target.value.toUpperCase().slice(0, 3) }))
-                }
-                placeholder="GBP"
-                maxLength={3}
-                style={{
-                  padding: 'var(--lp-space-2) var(--lp-space-3)',
-                  fontSize: 'var(--lp-text-sm)',
-                  textAlign: 'center',
-                  color: 'var(--lp-text)',
-                  background: 'var(--lp-bg)',
-                  border: '1px solid var(--lp-border-strong)',
-                  borderRadius: 'var(--lp-radius-md)',
-                  outline: 'none',
-                }}
-              />
-              <select
-                value={state.ratePeriod}
-                onChange={(e) => set((p) => ({ ...p, ratePeriod: e.target.value }))}
-                style={{
-                  padding: 'var(--lp-space-2) var(--lp-space-3)',
-                  fontSize: 'var(--lp-text-sm)',
-                  color: 'var(--lp-text)',
-                  background: 'var(--lp-bg)',
-                  border: '1px solid var(--lp-border-strong)',
-                  borderRadius: 'var(--lp-radius-md)',
-                  outline: 'none',
-                }}
-              >
-                <option value="day">per day</option>
-                <option value="week">per week</option>
-                <option value="flat">flat</option>
-                <option value="hour">per hour</option>
-              </select>
-            </div>
-          </div>
+          {/* #18 SSOT — the dangling simple "Rate" field (tour_personnel
+              rate_amount/currency/period) is removed: payroll IGNORED it, and it
+              was the confusing third rate surface. Rates are edited ONCE, in the
+              payroll Rates grid; PersonnelRatesSection below shows them read-only. */}
 
           {validationError ? (
             <div
@@ -630,6 +553,7 @@ function PersonnelManageEditor({
               memberId={member.id}
               personId={member.person_id}
               currency={state.rateCurrency || 'GBP'}
+              readOnly
             />
           </div>
 

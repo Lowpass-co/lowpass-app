@@ -26,7 +26,8 @@
    ============================================ */
 
 import { useCallback, useEffect, useState } from 'react';
-import { Loader2 } from 'lucide-react';
+import Link from 'next/link';
+import { Loader2, ExternalLink } from 'lucide-react';
 import { budgetCurrencySymbol } from '@/lib/budget-currency';
 
 interface RatesState {
@@ -51,6 +52,10 @@ interface Props {
   memberId: string;
   personId: string;
   currency: string;
+  /** #18 SSOT — when true, display the person's rates read-only (TMs want to SEE
+   *  them on the card) and point to the payroll Rates grid, the single edit
+   *  surface. Omit for the editable context (e.g. the payroll grid itself). */
+  readOnly?: boolean;
 }
 
 function numToInput(n: number | null | undefined): string {
@@ -58,7 +63,7 @@ function numToInput(n: number | null | undefined): string {
   return String(n);
 }
 
-export function PersonnelRatesSection({ tourId, memberId, personId, currency }: Props) {
+export function PersonnelRatesSection({ tourId, memberId, personId, currency, readOnly = false }: Props) {
   const [state, setState] = useState<RatesState>({
     show_rate: '',
     off_rate: '',
@@ -170,24 +175,31 @@ export function PersonnelRatesSection({ tourId, memberId, personId, currency }: 
   ) => (
     <label className="flex items-center justify-between gap-3">
       <span className="text-sm text-lp-text-secondary">{label}</span>
-      <span className="relative inline-flex items-center">
-        <span
-          aria-hidden
-          className="pointer-events-none absolute left-2 text-xs text-lp-text-tertiary"
-        >
-          {symbol}
+      {readOnly ? (
+        // #18 SSOT — display-only; editing lives in the payroll Rates grid.
+        <span className="text-sm tabular-nums text-lp-text">
+          {state[field] ? `${symbol}${state[field]}` : '—'}
         </span>
-        <input
-          type="number"
-          step="0.01"
-          min="0"
-          value={state[field]}
-          onChange={(e) => setState((p) => ({ ...p, [field]: e.target.value }))}
-          onBlur={() => void commit(field, state[field])}
-          className="w-32 rounded-md border border-lp-border bg-lp-bg py-1.5 pl-6 pr-2 text-right text-sm tabular-nums text-lp-text outline-none focus:border-lp-orange/40"
-          aria-label={`${label}${adminOnly ? ' (admin only)' : ''}`}
-        />
-      </span>
+      ) : (
+        <span className="relative inline-flex items-center">
+          <span
+            aria-hidden
+            className="pointer-events-none absolute left-2 text-xs text-lp-text-tertiary"
+          >
+            {symbol}
+          </span>
+          <input
+            type="number"
+            step="0.01"
+            min="0"
+            value={state[field]}
+            onChange={(e) => setState((p) => ({ ...p, [field]: e.target.value }))}
+            onBlur={() => void commit(field, state[field])}
+            className="w-32 rounded-md border border-lp-border bg-lp-bg py-1.5 pl-6 pr-2 text-right text-sm tabular-nums text-lp-text outline-none focus:border-lp-orange/40"
+            aria-label={`${label}${adminOnly ? ' (admin only)' : ''}`}
+          />
+        </span>
+      )}
     </label>
   );
 
@@ -197,6 +209,15 @@ export function PersonnelRatesSection({ tourId, memberId, personId, currency }: 
         <h3 className="text-xs font-bold uppercase tracking-wider text-lp-text-secondary">
           Rates
         </h3>
+        {readOnly ? (
+          // #18 SSOT — one edit surface: the payroll Rates grid.
+          <Link
+            href={`/operations/${tourId}/payroll`}
+            className="inline-flex items-center gap-1 text-xs font-medium text-lp-orange hover:underline"
+          >
+            <ExternalLink className="h-3 w-3" aria-hidden /> Edit in Payroll
+          </Link>
+        ) : (
         <div className="relative">
           <button
             type="button"
@@ -240,6 +261,7 @@ export function PersonnelRatesSection({ tourId, memberId, personId, currency }: 
             </div>
           ) : null}
         </div>
+        )}
       </div>
 
       {loading ? (
