@@ -22,7 +22,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Loader2, Plus, RefreshCw } from 'lucide-react';
 import { useRealtimeRows } from '@/lib/realtime/useRealtimeRows';
-import { RealtimeIndicator } from '@/components/realtime/RealtimeIndicator';
 import { useToast } from '@/components/ui/Toast';
 import { toTitleCase } from '@/lib/text/toTitleCase';
 import { ConflictBanner } from './ConflictBanner';
@@ -192,8 +191,10 @@ export function PersonnelManagerClient({
     void fetchConflicts(list);
   }, [list, fetchConflicts]);
 
-  // Realtime sync — refetch on any tour_personnel change for this tour.
-  const { connected: realtimeConnected } = useRealtimeRows({
+  // Realtime sync — refetch on any tour_personnel change for this tour. The
+  // connection status is not shown here (the shell's ConnectionIndicator is the
+  // single Live pill; the per-surface one was redundant — revamp Phase 0).
+  useRealtimeRows({
     table: 'tour_personnel',
     filterColumn: 'tour_id',
     filterValue: tourId,
@@ -287,7 +288,6 @@ export function PersonnelManagerClient({
         style={{ gap: 'var(--lp-space-3)' }}
       >
         <div className="flex items-center" style={{ gap: 'var(--lp-space-2)' }}>
-          <RealtimeIndicator connected={realtimeConnected} />
           <span
             style={{
               fontSize: 'var(--lp-text-sm)',

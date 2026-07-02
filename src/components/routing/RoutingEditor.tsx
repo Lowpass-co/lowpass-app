@@ -18,7 +18,6 @@ import { RoutingCalendar } from './RoutingCalendar';
 import { RoutingExportButton } from './RoutingExportButton';
 import type { PrimaryTransit } from './RoutingMap';
 import { useRealtimeRows } from '@/lib/realtime/useRealtimeRows';
-import { RealtimeIndicator } from '@/components/realtime/RealtimeIndicator';
 
 const RoutingMap = dynamic(() => import('./RoutingMap').then((m) => m.RoutingMap), { ssr: false });
 
@@ -237,7 +236,10 @@ export function RoutingEditor({
      Suppresses the refetch if the local user is mid-edit
      (hasUserEditedRef) so we don't clobber unsaved keystrokes;
      they re-sync on the next event after Save flushes. */
-  const { connected: realtimeConnected } = useRealtimeRows({
+  // Live-sync subscription (kept for cross-device updates). The connection status
+  // is NOT surfaced here — the shell's top-right ConnectionIndicator is the single
+  // Live pill; the per-surface one was redundant (revamp Phase 0).
+  useRealtimeRows({
     table: 'routing',
     filterColumn: 'tour_id',
     filterValue: tourId,
@@ -354,11 +356,6 @@ export function RoutingEditor({
               </button>
             ))}
           </div>
-          {/* Sprint 9 §4 — Realtime "Live" indicator. Surfaces
-              the Supabase Realtime channel state so collaborators
-              know if cross-device sync is wired up. Edits keep
-              working offline; this is informational only. */}
-          <RealtimeIndicator connected={realtimeConnected} />
         </div>
         <div className="flex items-center gap-2">
           <RoutingExportButton tourId={tourId} />

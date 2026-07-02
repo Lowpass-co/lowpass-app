@@ -17,7 +17,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Loader2, Plane, Hotel } from 'lucide-react';
 import { useRealtimeRows } from '@/lib/realtime/useRealtimeRows';
-import { RealtimeIndicator } from '@/components/realtime/RealtimeIndicator';
 import type { MyScheduleResponse } from '@/lib/personnel/types';
 
 interface CrewMyScheduleClientProps {
@@ -98,7 +97,9 @@ export function CrewMyScheduleClient({ tourId }: CrewMyScheduleClientProps) {
     };
   }, [fetchData]);
 
-  const { connected: realtimeConnected } = useRealtimeRows({
+  // Live-sync subscription only — the shell's ConnectionIndicator is the single
+  // Live pill (the per-surface one was redundant — revamp Phase 0).
+  useRealtimeRows({
     table: 'tour_personnel',
     filterColumn: 'tour_id',
     filterValue: tourId,
@@ -172,7 +173,6 @@ export function CrewMyScheduleClient({ tourId }: CrewMyScheduleClientProps) {
         >
           My schedule — {person.display_name}
         </h1>
-        <RealtimeIndicator connected={realtimeConnected} />
       </div>
       <div
         style={{
