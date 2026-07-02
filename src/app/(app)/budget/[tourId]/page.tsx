@@ -148,7 +148,9 @@ export default async function BudgetTourPage({
         .order('sort_order', { ascending: true })
         .order('category')
         .order('order_index', { ascending: true }),
-      supabase.from('routing').select('id, date').eq('tour_id', tourId),
+      // #24 — venue_name + city so the per-show income brick can label each show
+      // with its real venue instead of "Show N".
+      supabase.from('routing').select('id, date, venue_name, city').eq('tour_id', tourId),
       // Budget redesign — section backbone + per-tour phase toggle.
       supabase
         .from('budget_sections')
@@ -331,12 +333,26 @@ export default async function BudgetTourPage({
   const fxRates = await loadTourFxRates(supabase, tourId, workspaceId);
 
   const routingDateById: Record<string, string> = {};
+  // #24 — routing_id → show label (venue → city → date) for the per-show brick.
+  const routingLabelById: Record<string, string> = {};
   for (const r of (routingRes.data ?? []) as Array<{
     id: string;
     date: string | null;
+    venue_name?: string | null;
+    city?: string | null;
   }>) {
-    if (r.id && r.date) routingDateById[r.id] = r.date.slice(0, 10);
+    if (!r.id) continue;
+    if (r.date) routingDateById[r.id] = r.date.slice(0, 10);
+    const label =
+      r.venue_name?.trim() ||
+      r.city?.trim() ||
+      (r.date ? new Date(`${r.date}T12:00:00`).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : '');
+    if (label) routingLabelById[r.id] = label;
   }
+  // Aligned to incomeRows by index (each carries routing_id at runtime).
+  const showLabels = incomeRows.map(
+    (row) => routingLabelById[(row as { routing_id?: string }).routing_id ?? ''] ?? null,
+  );
 
   return (
     /* §B4 — BudgetDensityProvider wraps the whole budget page
@@ -381,6 +397,7 @@ export default async function BudgetTourPage({
               settings={budgetSettings}
               tourCurrency={tourCurrency}
               fxRates={fxRates}
+              showLabels={showLabels}
             />
           ) : null}
 

@@ -89,10 +89,15 @@ export interface ShowIncome {
 
 /** Per-show income (tour currency) — each income row's post-tax gross, using the
  *  SAME post-tax components computeBudgetPnl sums into grossIncome (no new math).
- *  Labels are index-based: budget_income (IncomeInput) carries no show name/date,
- *  so richer labels + a true per-show NET (needs show-level expense allocation) are
- *  a flagged follow-up. */
-export function perShowIncome(income: IncomeInput[], tourCurrency: string, fxRates: FxRateMap): ShowIncome[] {
+ *  `labels` (aligned to `income` by index — e.g. the routing venue name) gives each
+ *  show a real name; the label is attached BEFORE the sort so it stays with its
+ *  row. Falls back to `Show N` when no label is supplied for that index (#24). */
+export function perShowIncome(
+  income: IncomeInput[],
+  tourCurrency: string,
+  fxRates: FxRateMap,
+  labels?: readonly (string | null | undefined)[],
+): ShowIncome[] {
   const ccy = (tourCurrency || 'GBP').toUpperCase();
   const postTaxGuar = (i: IncomeInput) =>
     i.post_tax_guarantee != null ? num(i.post_tax_guarantee) : num(i.pre_tax_guarantee) * (1 - num(i.withholding_pct) / 100);
@@ -102,7 +107,8 @@ export function perShowIncome(income: IncomeInput[], tourCurrency: string, fxRat
     .map((i, idx) => {
       const f = toTourCurrency(1, i.currency, ccy, fxRates);
       const gross = (postTaxGuar(i) + postTaxOver(i) + num(i.merch_income) + num(i.vip_income)) * f;
-      return { label: `Show ${idx + 1}`, income: gross };
+      const label = labels?.[idx]?.trim() || `Show ${idx + 1}`;
+      return { label, income: gross };
     })
     .filter((s) => s.income !== 0)
     .sort((a, b) => b.income - a.income);
