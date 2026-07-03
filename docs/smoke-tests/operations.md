@@ -481,3 +481,23 @@ Adam live-test script (on preview, a tour with an existing routing grid):
 ## Retired
 
 (None yet.)
+
+## Rates SSOT — Part A executed (2026-07-03)
+
+- **RATE-01** (needs-live) A person shows ONE tour rate — the Payroll Rates grid
+  cell and any rate surfaced elsewhere read the same `personnel_rate_lines` value.
+- **RATE-02** (needs-live) Edit a rate in the Payroll grid → budget Salary/Per-Diem
+  derived lines update to the same figure (both read the SSOT via `computeTotals`).
+- **RATE-03** (needs-live) Add a person to a tour → their card + a1–a5 rate lines
+  seed from `personnel.standard_rates`; the Add-person form no longer has a rate
+  amount field (only currency/period). The library `standard_rates` is unchanged.
+- **RATE-04** (needs-live, after migration 230) Backfill report: run discovery §4
+  query (b) → `cards_without_lines` = 0 after 230 applies; no rows lost (230 seeds
+  from each card's own legacy columns, so the fallback-computed number is preserved
+  exactly — zero money movement).
+- **RATE-05** (needs-live) Crew "my schedule" pay now reads the SSOT
+  (`personnel_rate_lines`), not `tour_personnel.rate_amount`. Basis unchanged
+  (daily rate × days-in-window, day-period gate). Only crew whose stored
+  rate_amount disagreed with their SSOT daily fee change — see the crew-pay
+  reconcile in RATES_SSOT_DISCOVERY_2026-07-03.md §7. Migration 230 applies
+  idempotently; 231 (column drop) is written but NOT applied.

@@ -172,3 +172,73 @@ migration, applied by Adam after sign-off.
 - Migration numbering: next free is **230** (highest on main = 229; verify across active branches before writing).
 
 Awaiting Adam's decision. Part B shipped independently in this pass (see the pass's closing note).
+
+---
+
+## 7. EXECUTED — Part A cutover (2026-07-03, discovery-approved) + crew-pay reconcile
+
+Part A ran on branch `feat/rates-ssot-part-a` (fold-in path). Migration 230 (backfill) +
+231 (drop, **NOT applied**) written; cutover live. `computeTotals` unchanged →
+`reconcile.harness.ts` still 52/52.
+
+### What changed on the money seam
+- `my-schedule/route.ts` — crew pay now = **SSOT daily fee × days-in-window** (basis
+  unchanged), reading `personnel_rate_lines` (a6 Day-rate for day-rate crew, a1 Show for
+  split), with a legacy-column fallback for cards not yet backfilled. `tour_personnel.rate_amount`
+  is no longer read (removed from the select).
+- Add-person seeds card + a1–a5 lines from `standard_rates` (no typed rate); `AddPersonnelSlideOver`
+  + `PersonSlideOver` no longer edit/write `rate_amount`. `TourPersonnelDetailSlideOver` deleted.
+
+### The crew-pay reconcile (before/after)
+**I could not run the live DB** (Adam applies migrations; no query access from this session), so
+this is the deterministic argument + the exact queries for Adam to confirm on apply.
+
+The re-point preserves the **day basis** (× calendar days in window) and moves only the rate
+**source**. So `new − old = (ssotDaily − rate_amount) × days`. A crew member's pay is **unchanged
+iff `ssotDaily == rate_amount`**. The divergent set is therefore exactly those rows — nothing else
+swings (no basis change, no new reader).
+
+⚠️ **Correction to §4 query (a):** the original query compared `rate_amount` against `coalesce(a1
+Show, show_rate)` for everyone — but day-rate crew carry their daily on **a6 (Day rate = off_rate)**,
+not a1 (which migration 229 deletes for them). So query (a) under-counts day-rate divergence. The
+re-point uses the **correct** per-rate-type daily. Use this corrected query for the true divergent set:
+
+```sql
+-- (a') crew whose stored rate_amount ≠ their SSOT daily fee (the set that moves).
+select tp.tour_id, tp.id as tour_personnel_id, tp.rate_amount,
+       case when pr.rate_type = 'day_rate'
+            then coalesce(a6.amount, pr.off_rate, 0)     -- day-rate → a6 / off_rate
+            else coalesce(a1.amount, pr.show_rate, 0)    -- split    → a1 / show_rate
+       end as ssot_daily
+from tour_personnel tp
+join personnel_rates pr on pr.tour_personnel_id = tp.id
+left join personnel_rate_lines a1 on a1.personnel_rate_id = pr.id
+     and a1.rate_type_id = '00000000-0000-0000-0000-0000000000a1'
+left join personnel_rate_lines a6 on a6.personnel_rate_id = pr.id
+     and a6.rate_type_id = '00000000-0000-0000-0000-0000000000a6'
+where tp.rate_amount is not null
+  and tp.rate_amount <> case when pr.rate_type = 'day_rate'
+        then coalesce(a6.amount, pr.off_rate, 0)
+        else coalesce(a1.amount, pr.show_rate, 0) end
+order by tp.tour_id;
+```
+
+**Worked proof (deterministic, no DB):**
+- *Non-divergent* — split crew, `rate_amount = 400`, a1 Show = `400`, window = 30 days:
+  old = 400×30 = **£12,000**; new = a1(400)×30 = **£12,000**. **No change** (by design).
+- *Divergent (day-rate)* — crew `rate_amount = 500` but a6 Day-rate = `450` (real daily), window = 20 days:
+  old = 500×20 = **£10,000**; new = a6(450)×20 = **£9,000**. Moves **to the correct SSOT figure** — this
+  is a row query (a') flags and query (a) would have MISSED (it compared against show_rate).
+
+**Guardrail check:** every swing is a member of query (a')'s set (a `ssotDaily ≠ rate_amount` row);
+there are **no swings from a basis change or an unmapped reader**. Before applying 231, Adam should run
+(a') to enumerate the exact crew who move and confirm the SSOT figure is the intended pay for each.
+
+### RATE-04 backfill count (run after applying 230)
+```sql
+select count(*) as cards_without_lines
+from personnel_rates pr
+where not exists (select 1 from personnel_rate_lines l where l.personnel_rate_id = pr.id);
+-- expect 0. 230 seeds from each card's OWN legacy columns, so every card's
+-- fallback-computed number is preserved exactly (zero money movement).
+```
