@@ -1506,6 +1506,15 @@ textarea::selection,
   fill: var(--ico-stroke, currentColor);
 }
 
+/* Icon suite v2 additions (design_handoff_icon_suite_v2). */
+/* .lp-ico-tone — the suite's second (softer) fill tone. */
+.lp-stage-icon[data-mode='library'] .lp-ico-tone { fill: currentColor; fill-opacity: 0.16; }
+.lp-stage-icon[data-mode='canvas'] .lp-ico-tone { fill: var(--ico-stroke); fill-opacity: 0.22; }
+/* .lp-ico-label now also applies to solid glyph paths (e.g. the power bolt),
+   not just <text>. */
+.lp-stage-icon .lp-ico-label { fill: currentColor; stroke: none; font-family: inherit; font-weight: 700; }
+.lp-stage-icon[data-mode='canvas'] .lp-ico-label { fill: var(--ico-stroke); }
+
 /* ============================================================
    Stage Plot canvas (§SP2a). Items render as nested <svg> in the
    stage SVG; fill/stroke come from per-item inline style, detail

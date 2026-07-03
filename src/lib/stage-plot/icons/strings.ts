@@ -1,12 +1,13 @@
-/* ============================================
-   LOWPASS — Stage Plot stringed instrument icons (§SP1, redesign)
+/* ============================================================
+   LOWPASS — Stage Plot stringed instruments icons (v2 suite)
 
-   Adam's redesigned outline set: realistic instrument
-   silhouettes authored in a 0 0 48 48 viewBox, rendered as pure
-   outline (outline:true) in the category colour rather than
-   filled. Electric re-authored to a strat-style double-cutaway
-   per the reference image.
-   ============================================ */
+   v2 grammar: top-down ft-true (viewBox = footprint x 100, art
+   edge-to-edge, footprint = FULL extent); elevation for tall/thin;
+   symbolic sizing for stage boxes / power / DI / talkback. No colour
+   attrs. Classes: unclassed = footprint fill, .lp-ico-tone = accent
+   fill (NEW - see README), .lp-ico-detail = stroke only,
+   .lp-ico-label = solid category-colour fill (text + bolt glyph).
+   ============================================================ */
 
 import type { IconDescriptor } from './types';
 
@@ -16,211 +17,206 @@ export const stringIcons: IconDescriptor[] = [
     "category": "strings",
     "label": "Electric guitar",
     "footprint": {
-      "width_ft": 1.4,
-      "depth_ft": 3.4
+      "width_ft": 1.1,
+      "depth_ft": 3.3
     },
-    "viewBox": "0 0 48 48",
-    "outline": true,
-    "body": "<path d=\"M24 27 C20.5 26 18.5 26.5 17.5 28.5 C16 26.5 13 27 12 30 C11 32.5 12.5 34.5 15 35 C12.5 36.5 11 40 12.5 43 C14.5 46 19.5 46.5 24 46 C28.5 46.5 33.5 46 35.5 43 C37 40 35.5 36.5 33 35 C35.5 34.5 37 32.5 36 30 C35 27 32 26.5 30.5 28.5 C29.5 26.5 27.5 26 24 27 Z\"/><path d=\"M22.7 7 L22.7 27\"/><path d=\"M25.3 7 L25.3 27\"/><path d=\"M22.3 27 L25.7 27\"/><path d=\"M22.7 12 L25.3 12\"/><path d=\"M22.7 16 L25.3 16\"/><path d=\"M22.7 20 L25.3 20\"/><path d=\"M24 7 L24.6 2.6 L19.8 1.8 L19.6 3.4 L23.4 4.4\"/><circle cx=\"20.6\" cy=\"2.4\" r=\"0.55\"/><circle cx=\"21.5\" cy=\"2.6\" r=\"0.55\"/><circle cx=\"22.4\" cy=\"2.8\" r=\"0.55\"/><circle cx=\"20.4\" cy=\"3.6\" r=\"0.55\"/><circle cx=\"21.3\" cy=\"3.8\" r=\"0.55\"/><circle cx=\"22.2\" cy=\"4\" r=\"0.55\"/><rect x=\"20\" y=\"31\" width=\"8\" height=\"1.8\" rx=\"0.6\"/><rect x=\"20\" y=\"35\" width=\"8\" height=\"1.8\" rx=\"0.6\"/><circle cx=\"29.5\" cy=\"40\" r=\"1\"/><circle cx=\"31\" cy=\"41.5\" r=\"1\"/>",
+    "viewBox": "0 0 110 330",
     "keywords": [
       "electric",
-      "guitar",
       "strat",
-      "solid body"
-    ]
+      "tele",
+      "guitar"
+    ],
+    "body": "<path d=\"M42 8 L64 4 L72 54 L46 58 Z\" class=\"lp-ico-tone\"/><rect x=\"48\" y=\"56\" width=\"14\" height=\"132\"/><path d=\"M42 185 C36 172 28 164 22 168 C16 173 22 188 32 198 C10 214 4 246 12 272 C22 306 40 324 55 324 C74 324 90 306 96 278 C102 252 96 224 78 208 C86 196 90 182 84 177 C79 173 70 180 66 188 C58 184 50 184 42 185 Z\"/><line x1=\"48\" y1=\"82\" x2=\"62\" y2=\"82\" class=\"lp-ico-detail\"/><line x1=\"48\" y1=\"106\" x2=\"62\" y2=\"106\" class=\"lp-ico-detail\"/><line x1=\"48\" y1=\"130\" x2=\"62\" y2=\"130\" class=\"lp-ico-detail\"/><line x1=\"48\" y1=\"154\" x2=\"62\" y2=\"154\" class=\"lp-ico-detail\"/><rect x=\"40\" y=\"220\" width=\"30\" height=\"9\" rx=\"4\" class=\"lp-ico-tone\"/><rect x=\"40\" y=\"238\" width=\"30\" height=\"9\" rx=\"4\" class=\"lp-ico-tone\"/><rect x=\"38\" y=\"262\" width=\"34\" height=\"10\" rx=\"3\" class=\"lp-ico-tone\"/><line x1=\"55\" y1=\"56\" x2=\"55\" y2=\"262\" class=\"lp-ico-detail\"/><circle cx=\"80\" cy=\"296\" r=\"5.5\" class=\"lp-ico-detail\"/><circle cx=\"90\" cy=\"282\" r=\"5.5\" class=\"lp-ico-detail\"/>"
   },
   {
     "name": "string-acoustic-guitar",
     "category": "strings",
     "label": "Acoustic guitar",
     "footprint": {
-      "width_ft": 1.5,
+      "width_ft": 1.3,
       "depth_ft": 3.4
     },
-    "viewBox": "0 0 48 48",
-    "outline": true,
-    "body": "<path d=\"M24 23.5 Q33.3 23.5 33.3 29.09 Q33.3 31.67 30.6 34.25 Q34 36.83 34 39.41 Q34 45 24 45 Q14 45 14 39.41 Q14 36.83 17.4 34.25 Q14.7 31.67 14.7 29.09 Q14.7 23.5 24 23.5 Z\"/><circle cx=\"24\" cy=\"33.5\" r=\"3.2\"/><path d=\"M20.6 38.2 L27.4 38.2\"/><circle cx=\"21.5\" cy=\"39.3\" r=\"0.7\"/><circle cx=\"26.5\" cy=\"39.3\" r=\"0.7\"/><path d=\"M22.65 10 L22.65 23.5\"/><path d=\"M25.35 10 L25.35 23.5\"/><path d=\"M22.25 23.5 L25.75 23.5\"/><path d=\"M22.65 14 L25.35 14\"/><path d=\"M22.65 16 L25.35 16\"/><path d=\"M22.65 18 L25.35 18\"/><path d=\"M22.65 20 L25.35 20\"/><path d=\"M22.6 10 L21.6 5.2 Q21.6 4.4 22.4 4.4 L25.6 4.4 Q26.4 4.4 26.4 5.2 L25.4 10\"/><circle cx=\"20.6\" cy=\"6\" r=\"0.7\"/><circle cx=\"20.6\" cy=\"7.6\" r=\"0.7\"/><circle cx=\"20.6\" cy=\"9.2\" r=\"0.7\"/><circle cx=\"27.4\" cy=\"6\" r=\"0.7\"/><circle cx=\"27.4\" cy=\"7.6\" r=\"0.7\"/><circle cx=\"27.4\" cy=\"9.2\" r=\"0.7\"/>",
+    "viewBox": "0 0 130 340",
     "keywords": [
       "acoustic",
-      "guitar",
-      "dreadnought"
-    ]
+      "dreadnought",
+      "guitar"
+    ],
+    "body": "<rect x=\"48\" y=\"4\" width=\"34\" height=\"54\" rx=\"6\" class=\"lp-ico-tone\"/><circle cx=\"56\" cy=\"16\" r=\"2.6\" class=\"lp-ico-detail\"/><circle cx=\"56\" cy=\"28\" r=\"2.6\" class=\"lp-ico-detail\"/><circle cx=\"56\" cy=\"40\" r=\"2.6\" class=\"lp-ico-detail\"/><circle cx=\"74\" cy=\"16\" r=\"2.6\" class=\"lp-ico-detail\"/><circle cx=\"74\" cy=\"28\" r=\"2.6\" class=\"lp-ico-detail\"/><circle cx=\"74\" cy=\"40\" r=\"2.6\" class=\"lp-ico-detail\"/><rect x=\"58\" y=\"58\" width=\"14\" height=\"120\"/><line x1=\"58\" y1=\"86\" x2=\"72\" y2=\"86\" class=\"lp-ico-detail\"/><line x1=\"58\" y1=\"112\" x2=\"72\" y2=\"112\" class=\"lp-ico-detail\"/><line x1=\"58\" y1=\"138\" x2=\"72\" y2=\"138\" class=\"lp-ico-detail\"/><line x1=\"58\" y1=\"162\" x2=\"72\" y2=\"162\" class=\"lp-ico-detail\"/><path d=\"M65 176 C48 176 36 186 33 202 C30 216 37 228 30 242 C12 268 14 306 42 326 C57 337 73 337 88 326 C116 306 118 268 100 242 C93 228 100 216 97 202 C94 186 82 176 65 176 Z\"/><circle cx=\"65\" cy=\"238\" r=\"26\" class=\"lp-ico-tone\"/><circle cx=\"65\" cy=\"238\" r=\"31\" class=\"lp-ico-detail\"/><rect x=\"43\" y=\"284\" width=\"44\" height=\"11\" rx=\"4\" class=\"lp-ico-tone\"/><line x1=\"65\" y1=\"58\" x2=\"65\" y2=\"284\" class=\"lp-ico-detail\"/>"
   },
   {
     "name": "string-bass-guitar",
     "category": "strings",
     "label": "Bass guitar",
     "footprint": {
-      "width_ft": 1.4,
-      "depth_ft": 3.9
+      "width_ft": 1.1,
+      "depth_ft": 3.8
     },
-    "viewBox": "0 0 48 48",
-    "outline": true,
-    "body": "<path d=\"M24 27 Q31.6 27 31.6 31.55 Q31.6 33.65 29.6 35.75 Q33 37.85 33 39.95 Q33 44.5 24 44.5 Q15 44.5 15 39.95 Q15 37.85 18.4 35.75 Q16.4 33.65 16.4 31.55 Q16.4 27 24 27 Z\"/><rect x=\"19.6\" y=\"33\" width=\"5\" height=\"2\" rx=\"0.6\"/><rect x=\"23.4\" y=\"35.4\" width=\"5\" height=\"2\" rx=\"0.6\"/><circle cx=\"29\" cy=\"40.5\" r=\"1\"/><path d=\"M22.75 7 L22.75 27\"/><path d=\"M25.25 7 L25.25 27\"/><path d=\"M22.35 27 L25.65 27\"/><path d=\"M22.75 13 L25.25 13\"/><path d=\"M22.75 16 L25.25 16\"/><path d=\"M22.75 19 L25.25 19\"/><path d=\"M22.75 22 L25.25 22\"/><path d=\"M22.8 7 L21.4 3.6 Q21.4 3 22 3 L26 3 Q26.6 3 26.6 3.6 L25.2 7\"/><circle cx=\"20.4\" cy=\"4.3\" r=\"1.3\"/><circle cx=\"20.4\" cy=\"6.2\" r=\"1.3\"/><circle cx=\"27.6\" cy=\"4.3\" r=\"1.3\"/><circle cx=\"27.6\" cy=\"6.2\" r=\"1.3\"/>",
+    "viewBox": "0 0 110 380",
     "keywords": [
       "bass",
-      "guitar",
-      "four string"
-    ]
+      "p-bass",
+      "jazz bass",
+      "4-string"
+    ],
+    "body": "<path d=\"M42 8 L62 4 L68 50 L46 54 Z\" class=\"lp-ico-tone\"/><circle cx=\"50\" cy=\"14\" r=\"2.6\" class=\"lp-ico-detail\"/><circle cx=\"52\" cy=\"26\" r=\"2.6\" class=\"lp-ico-detail\"/><circle cx=\"54\" cy=\"38\" r=\"2.6\" class=\"lp-ico-detail\"/><circle cx=\"56\" cy=\"48\" r=\"2.6\" class=\"lp-ico-detail\"/><rect x=\"48\" y=\"52\" width=\"13\" height=\"212\"/><line x1=\"48\" y1=\"86\" x2=\"61\" y2=\"86\" class=\"lp-ico-detail\"/><line x1=\"48\" y1=\"122\" x2=\"61\" y2=\"122\" class=\"lp-ico-detail\"/><line x1=\"48\" y1=\"158\" x2=\"61\" y2=\"158\" class=\"lp-ico-detail\"/><line x1=\"48\" y1=\"194\" x2=\"61\" y2=\"194\" class=\"lp-ico-detail\"/><line x1=\"48\" y1=\"230\" x2=\"61\" y2=\"230\" class=\"lp-ico-detail\"/><path d=\"M41 258 C35 244 26 236 20 240 C14 246 20 262 31 272 C12 288 8 318 16 340 C26 366 42 376 56 376 C74 376 88 364 93 340 C98 318 92 292 76 278 C84 266 88 252 82 247 C77 243 68 250 64 258 C56 254 48 254 41 258 Z\"/><rect x=\"38\" y=\"298\" width=\"16\" height=\"9\" rx=\"3\" class=\"lp-ico-tone\"/><rect x=\"56\" y=\"290\" width=\"16\" height=\"9\" rx=\"3\" class=\"lp-ico-tone\"/><rect x=\"40\" y=\"330\" width=\"32\" height=\"10\" rx=\"3\" class=\"lp-ico-tone\"/><line x1=\"54.5\" y1=\"52\" x2=\"54.5\" y2=\"330\" class=\"lp-ico-detail\"/><circle cx=\"78\" cy=\"352\" r=\"5\" class=\"lp-ico-detail\"/><circle cx=\"88\" cy=\"338\" r=\"5\" class=\"lp-ico-detail\"/>"
   },
   {
     "name": "string-classical-guitar",
     "category": "strings",
     "label": "Classical guitar",
     "footprint": {
-      "width_ft": 1.4,
-      "depth_ft": 3.2
+      "width_ft": 1.3,
+      "depth_ft": 3.3
     },
-    "viewBox": "0 0 48 48",
-    "outline": true,
-    "body": "<path d=\"M24 24 Q33 24 33 29.46 Q33 31.98 30.4 34.5 Q33.6 37.019999999999996 33.6 39.54 Q33.6 45 24 45 Q14.4 45 14.4 39.54 Q14.4 37.019999999999996 17.6 34.5 Q15 31.98 15 29.46 Q15 24 24 24 Z\"/><circle cx=\"24\" cy=\"34\" r=\"3.1\"/><path d=\"M20.8 38.6 L27.2 38.6\"/><path d=\"M22.5 11 L22.5 24\"/><path d=\"M25.5 11 L25.5 24\"/><path d=\"M22.1 24 L25.9 24\"/><path d=\"M22.5 14.9 L25.5 14.9\"/><path d=\"M22.5 16.8 L25.5 16.8\"/><path d=\"M22.5 18.7 L25.5 18.7\"/><path d=\"M22.5 20.6 L25.5 20.6\"/><path d=\"M22 11 L21.4 4.4 Q21.4 3.8 22 3.8 L26 3.8 Q26.6 3.8 26.6 4.4 L26 11\"/><rect x=\"22.4\" y=\"5.2\" width=\"1.3\" height=\"4.4\" rx=\"0.6\"/><rect x=\"24.3\" y=\"5.2\" width=\"1.3\" height=\"4.4\" rx=\"0.6\"/><circle cx=\"21\" cy=\"6\" r=\"0.7\"/><circle cx=\"21\" cy=\"8.4\" r=\"0.7\"/><circle cx=\"27\" cy=\"6\" r=\"0.7\"/><circle cx=\"27\" cy=\"8.4\" r=\"0.7\"/>",
+    "viewBox": "0 0 130 330",
     "keywords": [
       "classical",
       "nylon",
-      "spanish"
-    ]
+      "spanish",
+      "guitar"
+    ],
+    "body": "<rect x=\"48\" y=\"4\" width=\"34\" height=\"52\" rx=\"5\" class=\"lp-ico-tone\"/><rect x=\"54\" y=\"11\" width=\"8\" height=\"36\" rx=\"4\" class=\"lp-ico-detail\"/><rect x=\"68\" y=\"11\" width=\"8\" height=\"36\" rx=\"4\" class=\"lp-ico-detail\"/><rect x=\"57\" y=\"56\" width=\"16\" height=\"120\"/><line x1=\"57\" y1=\"84\" x2=\"73\" y2=\"84\" class=\"lp-ico-detail\"/><line x1=\"57\" y1=\"108\" x2=\"73\" y2=\"108\" class=\"lp-ico-detail\"/><line x1=\"57\" y1=\"132\" x2=\"73\" y2=\"132\" class=\"lp-ico-detail\"/><line x1=\"57\" y1=\"156\" x2=\"73\" y2=\"156\" class=\"lp-ico-detail\"/><path d=\"M65 174 C48 174 36 184 33 200 C30 214 36 226 30 238 C14 262 16 298 40 320 C54 332 76 332 90 320 C114 298 116 262 100 238 C94 226 100 214 97 200 C94 184 82 174 65 174 Z\"/><circle cx=\"65\" cy=\"230\" r=\"27\" class=\"lp-ico-tone\"/><rect x=\"44\" y=\"282\" width=\"42\" height=\"9\" class=\"lp-ico-tone\"/><line x1=\"65\" y1=\"56\" x2=\"65\" y2=\"282\" class=\"lp-ico-detail\"/>"
   },
   {
     "name": "string-12-string",
     "category": "strings",
     "label": "12-string",
     "footprint": {
-      "width_ft": 1.5,
-      "depth_ft": 3.4
+      "width_ft": 1.35,
+      "depth_ft": 3.5
     },
-    "viewBox": "0 0 48 48",
-    "outline": true,
-    "body": "<path d=\"M24 24.5 Q33.3 24.5 33.3 29.83 Q33.3 32.29 30.6 34.75 Q34 37.21 34 39.67 Q34 45 24 45 Q14 45 14 39.67 Q14 37.21 17.4 34.75 Q14.7 32.29 14.7 29.83 Q14.7 24.5 24 24.5 Z\"/><circle cx=\"24\" cy=\"34\" r=\"3.1\"/><path d=\"M20.6 38.6 L27.4 38.6\"/><path d=\"M22.6 11 L22.6 24.5\"/><path d=\"M25.4 11 L25.4 24.5\"/><path d=\"M22.200000000000003 24.5 L25.799999999999997 24.5\"/><path d=\"M22.5 11 L21.6 3 Q21.6 2.2 22.4 2.2 L25.6 2.2 Q26.4 2.2 26.4 3 L25.5 11\"/><circle cx=\"20.6\" cy=\"3.6\" r=\"0.65\"/><circle cx=\"20.6\" cy=\"5\" r=\"0.65\"/><circle cx=\"20.6\" cy=\"6.4\" r=\"0.65\"/><circle cx=\"20.6\" cy=\"7.8\" r=\"0.65\"/><circle cx=\"20.6\" cy=\"9.2\" r=\"0.65\"/><circle cx=\"20.6\" cy=\"10.4\" r=\"0.65\"/><circle cx=\"27.4\" cy=\"3.6\" r=\"0.65\"/><circle cx=\"27.4\" cy=\"5\" r=\"0.65\"/><circle cx=\"27.4\" cy=\"6.4\" r=\"0.65\"/><circle cx=\"27.4\" cy=\"7.8\" r=\"0.65\"/><circle cx=\"27.4\" cy=\"9.2\" r=\"0.65\"/><circle cx=\"27.4\" cy=\"10.4\" r=\"0.65\"/>",
+    "viewBox": "0 0 135 350",
     "keywords": [
       "12 string",
-      "twelve string",
-      "acoustic"
-    ]
+      "twelve",
+      "guitar"
+    ],
+    "body": "<rect x=\"45\" y=\"4\" width=\"45\" height=\"58\" rx=\"6\" class=\"lp-ico-tone\"/><circle cx=\"54\" cy=\"14\" r=\"2.4\" class=\"lp-ico-detail\"/><circle cx=\"54\" cy=\"25\" r=\"2.4\" class=\"lp-ico-detail\"/><circle cx=\"54\" cy=\"36\" r=\"2.4\" class=\"lp-ico-detail\"/><circle cx=\"54\" cy=\"47\" r=\"2.4\" class=\"lp-ico-detail\"/><circle cx=\"81\" cy=\"14\" r=\"2.4\" class=\"lp-ico-detail\"/><circle cx=\"81\" cy=\"25\" r=\"2.4\" class=\"lp-ico-detail\"/><circle cx=\"81\" cy=\"36\" r=\"2.4\" class=\"lp-ico-detail\"/><circle cx=\"81\" cy=\"47\" r=\"2.4\" class=\"lp-ico-detail\"/><rect x=\"60\" y=\"62\" width=\"15\" height=\"120\"/><line x1=\"60\" y1=\"90\" x2=\"75\" y2=\"90\" class=\"lp-ico-detail\"/><line x1=\"60\" y1=\"116\" x2=\"75\" y2=\"116\" class=\"lp-ico-detail\"/><line x1=\"60\" y1=\"142\" x2=\"75\" y2=\"142\" class=\"lp-ico-detail\"/><line x1=\"60\" y1=\"166\" x2=\"75\" y2=\"166\" class=\"lp-ico-detail\"/><path d=\"M67 180 C50 180 38 190 35 206 C32 220 39 232 32 246 C14 272 16 310 44 330 C59 341 75 341 90 330 C118 310 120 272 102 246 C95 232 102 220 99 206 C96 190 84 180 67 180 Z\"/><circle cx=\"67\" cy=\"242\" r=\"26\" class=\"lp-ico-tone\"/><rect x=\"45\" y=\"288\" width=\"44\" height=\"11\" rx=\"4\" class=\"lp-ico-tone\"/><line x1=\"64\" y1=\"62\" x2=\"64\" y2=\"288\" class=\"lp-ico-detail\"/><line x1=\"70\" y1=\"62\" x2=\"70\" y2=\"288\" class=\"lp-ico-detail\"/>"
   },
   {
     "name": "string-resonator",
     "category": "strings",
     "label": "Resonator",
     "footprint": {
-      "width_ft": 1.4,
-      "depth_ft": 3.2
+      "width_ft": 1.3,
+      "depth_ft": 3.3
     },
-    "viewBox": "0 0 48 48",
-    "outline": true,
-    "body": "<path d=\"M24 24 Q33 24 33 29.46 Q33 31.98 30.6 34.5 Q33.8 37.019999999999996 33.8 39.54 Q33.8 45 24 45 Q14.2 45 14.2 39.54 Q14.2 37.019999999999996 17.4 34.5 Q15 31.98 15 29.46 Q15 24 24 24 Z\"/><circle cx=\"24\" cy=\"36\" r=\"5.6\"/><circle cx=\"24\" cy=\"36\" r=\"1.6\"/><path d=\"M18.4 36 L29.6 36\"/><path d=\"M24 30.4 L24 41.6\"/><path d=\"M20.1 32.1 L27.9 39.9\"/><path d=\"M27.9 32.1 L20.1 39.9\"/><circle cx=\"20.5\" cy=\"28.5\" r=\"1.4\"/><circle cx=\"27.5\" cy=\"28.5\" r=\"1.4\"/><path d=\"M22.65 11 L22.65 24\"/><path d=\"M25.35 11 L25.35 24\"/><path d=\"M22.25 24 L25.75 24\"/><path d=\"M22.65 14.9 L25.35 14.9\"/><path d=\"M22.65 16.8 L25.35 16.8\"/><path d=\"M22.65 18.7 L25.35 18.7\"/><path d=\"M22.65 20.6 L25.35 20.6\"/><path d=\"M22.6 11 L21.6 5.6 Q21.6 4.8 22.4 4.8 L25.6 4.8 Q26.4 4.8 26.4 5.6 L25.4 11\"/><circle cx=\"20.7\" cy=\"6.4\" r=\"0.7\"/><circle cx=\"20.7\" cy=\"8\" r=\"0.7\"/><circle cx=\"20.7\" cy=\"9.6\" r=\"0.7\"/><circle cx=\"27.3\" cy=\"6.4\" r=\"0.7\"/><circle cx=\"27.3\" cy=\"8\" r=\"0.7\"/><circle cx=\"27.3\" cy=\"9.6\" r=\"0.7\"/>",
+    "viewBox": "0 0 130 330",
     "keywords": [
       "resonator",
-      "dobro"
-    ]
+      "dobro",
+      "steel"
+    ],
+    "body": "<rect x=\"48\" y=\"4\" width=\"34\" height=\"52\" rx=\"5\" class=\"lp-ico-tone\"/><rect x=\"58\" y=\"56\" width=\"14\" height=\"118\"/><line x1=\"58\" y1=\"84\" x2=\"72\" y2=\"84\" class=\"lp-ico-detail\"/><line x1=\"58\" y1=\"108\" x2=\"72\" y2=\"108\" class=\"lp-ico-detail\"/><line x1=\"58\" y1=\"132\" x2=\"72\" y2=\"132\" class=\"lp-ico-detail\"/><line x1=\"58\" y1=\"156\" x2=\"72\" y2=\"156\" class=\"lp-ico-detail\"/><path d=\"M65 172 C46 172 33 184 31 202 C29 216 34 226 30 238 C16 262 18 298 42 318 C55 330 75 330 88 318 C112 298 114 262 100 238 C96 226 101 216 99 202 C97 184 84 172 65 172 Z\"/><circle cx=\"65\" cy=\"248\" r=\"34\" class=\"lp-ico-tone\"/><circle cx=\"65\" cy=\"248\" r=\"15\" class=\"lp-ico-detail\"/><circle cx=\"44\" cy=\"198\" r=\"8\" class=\"lp-ico-detail\"/><circle cx=\"86\" cy=\"198\" r=\"8\" class=\"lp-ico-detail\"/><line x1=\"65\" y1=\"56\" x2=\"65\" y2=\"220\" class=\"lp-ico-detail\"/>"
   },
   {
     "name": "string-ukulele",
     "category": "strings",
     "label": "Ukulele",
     "footprint": {
-      "width_ft": 0.8,
-      "depth_ft": 1.6
+      "width_ft": 0.75,
+      "depth_ft": 1.8
     },
-    "viewBox": "0 0 48 48",
-    "outline": true,
-    "body": "<path d=\"M24 30 Q30.2 30 30.2 33.77 Q30.2 35.510000000000005 28.4 37.25 Q30.6 38.99 30.6 40.730000000000004 Q30.6 44.5 24 44.5 Q17.4 44.5 17.4 40.730000000000004 Q17.4 38.99 19.6 37.25 Q17.8 35.510000000000005 17.8 33.77 Q17.8 30 24 30 Z\"/><circle cx=\"24\" cy=\"37.5\" r=\"2.3\"/><path d=\"M21 41 L27 41\"/><path d=\"M22.9 20 L22.9 30\"/><path d=\"M25.1 20 L25.1 30\"/><path d=\"M22.5 30 L25.5 30\"/><path d=\"M22.9 23.75 L25.1 23.75\"/><path d=\"M22.9 25.5 L25.1 25.5\"/><path d=\"M22.9 27.25 L25.1 27.25\"/><path d=\"M23 20 L22.4 16.6 Q22.4 16 23 16 L25 16 Q25.6 16 25.6 16.6 L25 20\"/><circle cx=\"21.4\" cy=\"17\" r=\"0.75\"/><circle cx=\"21.4\" cy=\"18.8\" r=\"0.75\"/><circle cx=\"26.6\" cy=\"17\" r=\"0.75\"/><circle cx=\"26.6\" cy=\"18.8\" r=\"0.75\"/>",
+    "viewBox": "0 0 75 180",
     "keywords": [
       "ukulele",
-      "uke"
-    ]
+      "uke",
+      "soprano"
+    ],
+    "body": "<rect x=\"27\" y=\"3\" width=\"21\" height=\"26\" rx=\"4\" class=\"lp-ico-tone\"/><rect x=\"33\" y=\"29\" width=\"9\" height=\"58\"/><line x1=\"33\" y1=\"42\" x2=\"42\" y2=\"42\" class=\"lp-ico-detail\"/><line x1=\"33\" y1=\"56\" x2=\"42\" y2=\"56\" class=\"lp-ico-detail\"/><line x1=\"33\" y1=\"70\" x2=\"42\" y2=\"70\" class=\"lp-ico-detail\"/><path d=\"M37.5 85 C27 85 19 91 17 100 C15 108 19 114 16 121 C10 134 11 154 24 165 C31 171 44 171 51 165 C64 154 65 134 59 121 C56 114 60 108 58 100 C56 91 48 85 37.5 85 Z\"/><circle cx=\"37.5\" cy=\"126\" r=\"12\" class=\"lp-ico-tone\"/><rect x=\"28\" y=\"150\" width=\"19\" height=\"6\" rx=\"2\" class=\"lp-ico-tone\"/><line x1=\"37.5\" y1=\"29\" x2=\"37.5\" y2=\"150\" class=\"lp-ico-detail\"/>"
   },
   {
     "name": "string-mandolin",
     "category": "strings",
     "label": "Mandolin",
     "footprint": {
-      "width_ft": 0.8,
-      "depth_ft": 1.9
+      "width_ft": 0.95,
+      "depth_ft": 2.3
     },
-    "viewBox": "0 0 48 48",
-    "outline": true,
-    "body": "<path d=\"M24 27.5 C29.5 28.5 33 32.5 33 37.4 C33 42 29.2 44.5 24 44.5 C18.8 44.5 15 42 15 37.4 C15 32.5 18.5 28.5 24 27.5 Z\"/><ellipse cx=\"24\" cy=\"36.5\" rx=\"1.9\" ry=\"2.9\"/><path d=\"M20.4 40.4 L27.6 40.4\"/><path d=\"M22.8 17 L22.8 27.5\"/><path d=\"M25.2 17 L25.2 27.5\"/><path d=\"M22.400000000000002 27.5 L25.599999999999998 27.5\"/><path d=\"M22.8 20.875 L25.2 20.875\"/><path d=\"M22.8 22.75 L25.2 22.75\"/><path d=\"M22.8 24.625 L25.2 24.625\"/><path d=\"M23 17 L22.4 13.4 Q22.4 12.8 23 12.8 L25 12.8 Q25.6 12.8 25.6 13.4 L25 17\"/><circle cx=\"21.4\" cy=\"13.6\" r=\"0.7\"/><circle cx=\"21.4\" cy=\"15.2\" r=\"0.7\"/><circle cx=\"26.6\" cy=\"13.6\" r=\"0.7\"/><circle cx=\"26.6\" cy=\"15.2\" r=\"0.7\"/>",
+    "viewBox": "0 0 95 230",
     "keywords": [
-      "mandolin"
-    ]
+      "mandolin",
+      "a-style"
+    ],
+    "body": "<rect x=\"37\" y=\"3\" width=\"21\" height=\"28\" rx=\"4\" class=\"lp-ico-tone\"/><rect x=\"41\" y=\"31\" width=\"13\" height=\"64\"/><line x1=\"41\" y1=\"46\" x2=\"54\" y2=\"46\" class=\"lp-ico-detail\"/><line x1=\"41\" y1=\"62\" x2=\"54\" y2=\"62\" class=\"lp-ico-detail\"/><line x1=\"41\" y1=\"78\" x2=\"54\" y2=\"78\" class=\"lp-ico-detail\"/><path d=\"M47.5 92 C30 96 14 112 12 138 C10 168 26 190 47.5 190 C69 190 85 168 83 138 C81 112 65 96 47.5 92 Z\"/><ellipse cx=\"47.5\" cy=\"140\" rx=\"16\" ry=\"10\" class=\"lp-ico-tone\"/><rect x=\"36\" y=\"160\" width=\"23\" height=\"6\" rx=\"2\" class=\"lp-ico-tone\"/><line x1=\"47.5\" y1=\"31\" x2=\"47.5\" y2=\"160\" class=\"lp-ico-detail\"/><line x1=\"40\" y1=\"186\" x2=\"55\" y2=\"186\" class=\"lp-ico-detail\"/>"
   },
   {
     "name": "string-banjo",
     "category": "strings",
     "label": "Banjo",
     "footprint": {
-      "width_ft": 1,
-      "depth_ft": 2.5
+      "width_ft": 1.15,
+      "depth_ft": 3.2
     },
-    "viewBox": "0 0 48 48",
-    "outline": true,
-    "body": "<circle cx=\"24\" cy=\"35\" r=\"8.4\"/><circle cx=\"24\" cy=\"35\" r=\"6.6\"/><path d=\"M32.6 35 L33.6 35\"/><path d=\"M31.447818472546174 39.3 L32.31384387633061 39.8\"/><path d=\"M28.3 42.447818472546174 L28.8 43.31384387633061\"/><path d=\"M24 43.6 L24 44.6\"/><path d=\"M19.700000000000003 42.447818472546174 L19.200000000000003 43.31384387633061\"/><path d=\"M16.552181527453826 39.3 L15.686156123669388 39.8\"/><path d=\"M15.4 35 L14.4 35\"/><path d=\"M16.55218152745383 30.7 L15.68615612366939 30.2\"/><path d=\"M19.699999999999996 27.55218152745383 L19.199999999999996 26.68615612366939\"/><path d=\"M24 26.4 L24 25.4\"/><path d=\"M28.3 27.55218152745383 L28.8 26.68615612366939\"/><path d=\"M31.44781847254617 30.699999999999996 L32.31384387633061 30.199999999999996\"/><path d=\"M21 36.4 L27 36.4\"/><path d=\"M22.7 16 L22.7 26.5\"/><path d=\"M25.3 16 L25.3 26.5\"/><path d=\"M22.3 26.5 L25.7 26.5\"/><path d=\"M22.7 19.75 L25.3 19.75\"/><path d=\"M22.7 21.5 L25.3 21.5\"/><path d=\"M22.7 23.25 L25.3 23.25\"/><circle cx=\"28.6\" cy=\"21\" r=\"0.9\"/><path d=\"M22.7 16 L22.1 12.6 Q22.1 12 22.7 12 L25.3 12 Q25.9 12 25.9 12.6 L25.3 16\"/><circle cx=\"21.1\" cy=\"12.8\" r=\"0.7\"/><circle cx=\"21.1\" cy=\"14.4\" r=\"0.7\"/><circle cx=\"26.9\" cy=\"12.8\" r=\"0.7\"/><circle cx=\"26.9\" cy=\"14.4\" r=\"0.7\"/>",
+    "viewBox": "0 0 115 320",
     "keywords": [
-      "banjo"
-    ]
+      "banjo",
+      "5-string",
+      "bluegrass"
+    ],
+    "body": "<rect x=\"47\" y=\"4\" width=\"21\" height=\"38\" rx=\"4\" class=\"lp-ico-tone\"/><rect x=\"51\" y=\"42\" width=\"13\" height=\"158\"/><line x1=\"51\" y1=\"70\" x2=\"64\" y2=\"70\" class=\"lp-ico-detail\"/><line x1=\"51\" y1=\"100\" x2=\"64\" y2=\"100\" class=\"lp-ico-detail\"/><line x1=\"51\" y1=\"130\" x2=\"64\" y2=\"130\" class=\"lp-ico-detail\"/><line x1=\"51\" y1=\"160\" x2=\"64\" y2=\"160\" class=\"lp-ico-detail\"/><line x1=\"51\" y1=\"118\" x2=\"42\" y2=\"118\" class=\"lp-ico-detail\"/><circle cx=\"40\" cy=\"118\" r=\"3\" class=\"lp-ico-detail\"/><circle cx=\"57.5\" cy=\"252\" r=\"55\"/><circle cx=\"57.5\" cy=\"252\" r=\"43\" class=\"lp-ico-tone\"/><line x1=\"57.5\" y1=\"207\" x2=\"57.5\" y2=\"199\" class=\"lp-ico-detail\"/><line x1=\"80\" y1=\"213\" x2=\"84\" y2=\"206.1\" class=\"lp-ico-detail\"/><line x1=\"96.5\" y1=\"229.5\" x2=\"103.4\" y2=\"225.5\" class=\"lp-ico-detail\"/><line x1=\"102.5\" y1=\"252\" x2=\"110.5\" y2=\"252\" class=\"lp-ico-detail\"/><line x1=\"96.5\" y1=\"274.5\" x2=\"103.4\" y2=\"278.5\" class=\"lp-ico-detail\"/><line x1=\"80\" y1=\"291\" x2=\"84\" y2=\"297.9\" class=\"lp-ico-detail\"/><line x1=\"57.5\" y1=\"297\" x2=\"57.5\" y2=\"305\" class=\"lp-ico-detail\"/><line x1=\"35\" y1=\"291\" x2=\"31\" y2=\"297.9\" class=\"lp-ico-detail\"/><line x1=\"18.5\" y1=\"274.5\" x2=\"11.6\" y2=\"278.5\" class=\"lp-ico-detail\"/><line x1=\"12.5\" y1=\"252\" x2=\"4.5\" y2=\"252\" class=\"lp-ico-detail\"/><line x1=\"18.5\" y1=\"229.5\" x2=\"11.6\" y2=\"225.5\" class=\"lp-ico-detail\"/><line x1=\"35\" y1=\"213\" x2=\"31\" y2=\"206.1\" class=\"lp-ico-detail\"/><line x1=\"57.5\" y1=\"42\" x2=\"57.5\" y2=\"280\" class=\"lp-ico-detail\"/><rect x=\"48\" y=\"272\" width=\"19\" height=\"6\" rx=\"2\" class=\"lp-ico-tone\"/>"
   },
   {
     "name": "string-violin",
     "category": "strings",
     "label": "Violin",
     "footprint": {
-      "width_ft": 0.8,
+      "width_ft": 0.7,
       "depth_ft": 2
     },
-    "viewBox": "0 0 48 48",
-    "outline": true,
-    "body": "<path d=\"M24 26 Q30.4 26 30.4 30.16 Q30.4 32.08 27.9 34 Q30.9 35.92 30.9 37.84 Q30.9 42 24 42 Q17.1 42 17.1 37.84 Q17.1 35.92 20.1 34 Q17.6 32.08 17.6 30.16 Q17.6 26 24 26 Z\"/><path d=\"M21.6 32 q-1.2 1 0 2 q1.2 1 0 2\"/><path d=\"M26.4 32 q1.2 1 0 2 q-1.2 1 0 2\"/><path d=\"M21.3 36 L26.7 36\"/><path d=\"M24 36.4 L22.5 41.2 L25.5 41.2 Z\"/><circle cx=\"24\" cy=\"41.2\" r=\"0.6\"/><path d=\"M22.85 14 L22.85 26\"/><path d=\"M25.15 14 L25.15 26\"/><path d=\"M22.450000000000003 26 L25.549999999999997 26\"/><circle cx=\"24\" cy=\"7\" r=\"1.8\"/><path d=\"M24 7 q1.4 0 1.4 1.4\"/><path d=\"M22.6 8.6 L22.6 13.5\"/><path d=\"M25.4 8.6 L25.4 13.5\"/><circle cx=\"21.6\" cy=\"10\" r=\"0.85\"/><circle cx=\"21.6\" cy=\"12\" r=\"0.85\"/><circle cx=\"26.4\" cy=\"10\" r=\"0.85\"/><circle cx=\"26.4\" cy=\"12\" r=\"0.85\"/>",
+    "viewBox": "0 0 70 200",
     "keywords": [
       "violin",
       "fiddle"
-    ]
+    ],
+    "body": "<circle cx=\"35\" cy=\"22\" r=\"9\" class=\"lp-ico-tone\"/><line x1=\"22\" y1=\"16\" x2=\"30\" y2=\"16\" class=\"lp-ico-detail\"/><line x1=\"40\" y1=\"24\" x2=\"48\" y2=\"24\" class=\"lp-ico-detail\"/><rect x=\"30\" y=\"30\" width=\"10\" height=\"64\"/><path d=\"M35 92 C22 92 14 99 14 109 C14 118 21 122 21 129 C21 136 13 140 13 152 C13 170 22 182 35 182 C48 182 57 170 57 152 C57 140 49 136 49 129 C49 122 56 118 56 109 C56 99 48 92 35 92 Z\"/><path d=\"M27 120 Q23 132 27 144\" class=\"lp-ico-detail\"/><path d=\"M43 120 Q47 132 43 144\" class=\"lp-ico-detail\"/><path d=\"M31 156 L39 156 L37 176 L33 176 Z\" class=\"lp-ico-tone\"/><line x1=\"35\" y1=\"30\" x2=\"35\" y2=\"156\" class=\"lp-ico-detail\"/>"
   },
   {
     "name": "string-viola",
     "category": "strings",
     "label": "Viola",
     "footprint": {
-      "width_ft": 0.9,
-      "depth_ft": 2.2
+      "width_ft": 0.75,
+      "depth_ft": 2.15
     },
-    "viewBox": "0 0 48 48",
-    "outline": true,
-    "body": "<g transform=\"translate(24 26) scale(1.12) translate(-24 -26)\"><path d=\"M24 26 Q30.4 26 30.4 30.16 Q30.4 32.08 27.9 34 Q30.9 35.92 30.9 37.84 Q30.9 42 24 42 Q17.1 42 17.1 37.84 Q17.1 35.92 20.1 34 Q17.6 32.08 17.6 30.16 Q17.6 26 24 26 Z\"/><path d=\"M21.6 32 q-1.2 1 0 2 q1.2 1 0 2\"/><path d=\"M26.4 32 q1.2 1 0 2 q-1.2 1 0 2\"/><path d=\"M21.3 36 L26.7 36\"/><path d=\"M24 36.4 L22.5 41.2 L25.5 41.2 Z\"/><circle cx=\"24\" cy=\"41.2\" r=\"0.6\"/><path d=\"M22.85 14 L22.85 26\"/><path d=\"M25.15 14 L25.15 26\"/><path d=\"M22.450000000000003 26 L25.549999999999997 26\"/><circle cx=\"24\" cy=\"7\" r=\"1.8\"/><path d=\"M24 7 q1.4 0 1.4 1.4\"/><path d=\"M22.6 8.6 L22.6 13.5\"/><path d=\"M25.4 8.6 L25.4 13.5\"/><circle cx=\"21.6\" cy=\"10\" r=\"0.85\"/><circle cx=\"21.6\" cy=\"12\" r=\"0.85\"/><circle cx=\"26.4\" cy=\"10\" r=\"0.85\"/><circle cx=\"26.4\" cy=\"12\" r=\"0.85\"/></g>",
+    "viewBox": "0 0 75 215",
     "keywords": [
       "viola"
-    ]
+    ],
+    "body": "<g transform=\"scale(1.071)\"><circle cx=\"35\" cy=\"22\" r=\"9\" class=\"lp-ico-tone\"/><line x1=\"22\" y1=\"16\" x2=\"30\" y2=\"16\" class=\"lp-ico-detail\"/><line x1=\"40\" y1=\"24\" x2=\"48\" y2=\"24\" class=\"lp-ico-detail\"/><rect x=\"30\" y=\"30\" width=\"10\" height=\"64\"/><path d=\"M35 92 C22 92 14 99 14 109 C14 118 21 122 21 129 C21 136 13 140 13 152 C13 170 22 182 35 182 C48 182 57 170 57 152 C57 140 49 136 49 129 C49 122 56 118 56 109 C56 99 48 92 35 92 Z\"/><path d=\"M27 120 Q23 132 27 144\" class=\"lp-ico-detail\"/><path d=\"M43 120 Q47 132 43 144\" class=\"lp-ico-detail\"/><path d=\"M31 156 L39 156 L37 176 L33 176 Z\" class=\"lp-ico-tone\"/><line x1=\"35\" y1=\"30\" x2=\"35\" y2=\"156\" class=\"lp-ico-detail\"/></g>"
   },
   {
     "name": "string-cello",
     "category": "strings",
     "label": "Cello",
     "footprint": {
-      "width_ft": 1.6,
+      "width_ft": 1.4,
       "depth_ft": 4
     },
-    "viewBox": "0 0 48 48",
-    "outline": true,
-    "body": "<path d=\"M24 21 Q31.4 21 31.4 26.2 Q31.4 28.6 28.8 31 Q32.4 33.4 32.4 35.8 Q32.4 41 24 41 Q15.6 41 15.6 35.8 Q15.6 33.4 19.2 31 Q16.6 28.6 16.6 26.2 Q16.6 21 24 21 Z\"/><path d=\"M21.6 29 q-1.2 1 0 2 q1.2 1 0 2\"/><path d=\"M26.4 29 q1.2 1 0 2 q-1.2 1 0 2\"/><path d=\"M21.3 33 L26.7 33\"/><path d=\"M24 33.4 L22.5 40.2 L25.5 40.2 Z\"/><path d=\"M24 41 L24 46.5\"/><path d=\"M22.4 46.5 L25.6 46.5\"/><path d=\"M22.75 11 L22.75 21\"/><path d=\"M25.25 11 L25.25 21\"/><path d=\"M22.35 21 L25.65 21\"/><circle cx=\"24\" cy=\"4.5\" r=\"1.8\"/><path d=\"M24 4.5 q1.4 0 1.4 1.4\"/><path d=\"M22.6 6.1 L22.6 11\"/><path d=\"M25.4 6.1 L25.4 11\"/><circle cx=\"21.6\" cy=\"7.5\" r=\"0.85\"/><circle cx=\"21.6\" cy=\"9.5\" r=\"0.85\"/><circle cx=\"26.4\" cy=\"7.5\" r=\"0.85\"/><circle cx=\"26.4\" cy=\"9.5\" r=\"0.85\"/>",
+    "viewBox": "0 0 140 400",
     "keywords": [
-      "cello"
-    ]
+      "cello",
+      "violoncello"
+    ],
+    "body": "<g transform=\"scale(2)\"><circle cx=\"35\" cy=\"22\" r=\"9\" class=\"lp-ico-tone\"/><line x1=\"22\" y1=\"16\" x2=\"30\" y2=\"16\" class=\"lp-ico-detail\"/><line x1=\"40\" y1=\"24\" x2=\"48\" y2=\"24\" class=\"lp-ico-detail\"/><rect x=\"30\" y=\"30\" width=\"10\" height=\"64\"/><path d=\"M35 92 C22 92 14 99 14 109 C14 118 21 122 21 129 C21 136 13 140 13 152 C13 170 22 182 35 182 C48 182 57 170 57 152 C57 140 49 136 49 129 C49 122 56 118 56 109 C56 99 48 92 35 92 Z\"/><path d=\"M27 120 Q23 132 27 144\" class=\"lp-ico-detail\"/><path d=\"M43 120 Q47 132 43 144\" class=\"lp-ico-detail\"/><path d=\"M31 156 L39 156 L37 176 L33 176 Z\" class=\"lp-ico-tone\"/><line x1=\"35\" y1=\"30\" x2=\"35\" y2=\"156\" class=\"lp-ico-detail\"/></g><line x1=\"70\" y1=\"366\" x2=\"70\" y2=\"396\" class=\"lp-ico-detail\"/>"
   },
   {
     "name": "string-double-bass",
     "category": "strings",
     "label": "Double bass",
     "footprint": {
-      "width_ft": 2,
+      "width_ft": 2.1,
       "depth_ft": 6
     },
-    "viewBox": "0 0 48 48",
-    "outline": true,
-    "body": "<path d=\"M24 18.5 Q30.8 18.5 30.8 24.35 Q30.8 27.05 29.2 29.75 Q33.2 32.45 33.2 35.15 Q33.2 41 24 41 Q14.8 41 14.8 35.15 Q14.8 32.45 18.8 29.75 Q17.2 27.05 17.2 24.35 Q17.2 18.5 24 18.5 Z\"/><path d=\"M21.6 27.75 q-1.2 1 0 2 q1.2 1 0 2\"/><path d=\"M26.4 27.75 q1.2 1 0 2 q-1.2 1 0 2\"/><path d=\"M21.3 31.75 L26.7 31.75\"/><path d=\"M24 32.15 L22.5 40.2 L25.5 40.2 Z\"/><path d=\"M24 41 L24 47\"/><path d=\"M22.2 47 L25.8 47\"/><path d=\"M22.7 8.5 L22.7 18.5\"/><path d=\"M25.3 8.5 L25.3 18.5\"/><path d=\"M22.3 18.5 L25.7 18.5\"/><path d=\"M22.6 8.5 L21 5\"/><path d=\"M25.4 8.5 L27 5\"/><circle cx=\"20\" cy=\"6\" r=\"1.2\"/><circle cx=\"20\" cy=\"8.2\" r=\"1.2\"/><circle cx=\"28\" cy=\"6\" r=\"1.2\"/><circle cx=\"28\" cy=\"8.2\" r=\"1.2\"/><path d=\"M21.2 6 L18.6 6\"/><path d=\"M21.2 8.2 L18.6 8.2\"/><path d=\"M26.8 6 L29.4 6\"/><path d=\"M26.8 8.2 L29.4 8.2\"/>",
+    "viewBox": "0 0 210 600",
     "keywords": [
       "double bass",
-      "upright bass",
+      "upright",
       "contrabass"
-    ]
+    ],
+    "body": "<g transform=\"scale(3)\"><circle cx=\"35\" cy=\"22\" r=\"9\" class=\"lp-ico-tone\"/><line x1=\"22\" y1=\"16\" x2=\"30\" y2=\"16\" class=\"lp-ico-detail\"/><line x1=\"40\" y1=\"24\" x2=\"48\" y2=\"24\" class=\"lp-ico-detail\"/><rect x=\"30\" y=\"30\" width=\"10\" height=\"64\"/><path d=\"M35 92 C22 92 14 99 14 109 C14 118 21 122 21 129 C21 136 13 140 13 152 C13 170 22 182 35 182 C48 182 57 170 57 152 C57 140 49 136 49 129 C49 122 56 118 56 109 C56 99 48 92 35 92 Z\"/><path d=\"M27 120 Q23 132 27 144\" class=\"lp-ico-detail\"/><path d=\"M43 120 Q47 132 43 144\" class=\"lp-ico-detail\"/><path d=\"M31 156 L39 156 L37 176 L33 176 Z\" class=\"lp-ico-tone\"/><line x1=\"35\" y1=\"30\" x2=\"35\" y2=\"156\" class=\"lp-ico-detail\"/></g><line x1=\"105\" y1=\"550\" x2=\"105\" y2=\"594\" class=\"lp-ico-detail\"/>"
   },
   {
     "name": "string-lap-steel",
@@ -230,45 +226,45 @@ export const stringIcons: IconDescriptor[] = [
       "width_ft": 0.9,
       "depth_ft": 2.8
     },
-    "viewBox": "0 0 48 48",
-    "outline": true,
-    "body": "<rect x=\"18.5\" y=\"27\" width=\"11\" height=\"17\" rx=\"3.4\"/><rect x=\"20.5\" y=\"31.5\" width=\"7\" height=\"1.8\" rx=\"0.6\"/><path d=\"M20.5 37 L27.5 37\"/><circle cx=\"22.5\" cy=\"40\" r=\"0.7\"/><circle cx=\"25.5\" cy=\"40\" r=\"0.7\"/><path d=\"M22.5 9 L22.5 27\"/><path d=\"M25.5 9 L25.5 27\"/><path d=\"M22.1 27 L25.9 27\"/><path d=\"M22.5 9 L21.6 4.4 Q21.6 3.8 22.2 3.8 L25.8 3.8 Q26.4 3.8 26.4 4.4 L25.5 9\"/><circle cx=\"20.2\" cy=\"5\" r=\"0.75\"/><circle cx=\"20.2\" cy=\"6.6\" r=\"0.75\"/><circle cx=\"20.2\" cy=\"8.2\" r=\"0.75\"/><circle cx=\"27.8\" cy=\"5\" r=\"0.75\"/><circle cx=\"27.8\" cy=\"6.6\" r=\"0.75\"/><circle cx=\"27.8\" cy=\"8.2\" r=\"0.75\"/>",
+    "viewBox": "0 0 90 280",
     "keywords": [
       "lap steel",
-      "steel guitar"
-    ]
+      "pedal steel",
+      "slide"
+    ],
+    "body": "<path d=\"M32 4 L58 4 L58 168 L78 178 L78 274 L12 274 L12 178 L32 168 Z\"/><line x1=\"34\" y1=\"40\" x2=\"56\" y2=\"40\" class=\"lp-ico-detail\"/><line x1=\"34\" y1=\"68\" x2=\"56\" y2=\"68\" class=\"lp-ico-detail\"/><line x1=\"34\" y1=\"96\" x2=\"56\" y2=\"96\" class=\"lp-ico-detail\"/><line x1=\"34\" y1=\"124\" x2=\"56\" y2=\"124\" class=\"lp-ico-detail\"/><line x1=\"34\" y1=\"152\" x2=\"56\" y2=\"152\" class=\"lp-ico-detail\"/><rect x=\"22\" y=\"206\" width=\"46\" height=\"12\" rx=\"4\" class=\"lp-ico-tone\"/><rect x=\"20\" y=\"234\" width=\"50\" height=\"9\" rx=\"3\" class=\"lp-ico-tone\"/><line x1=\"45\" y1=\"8\" x2=\"45\" y2=\"234\" class=\"lp-ico-detail\"/><circle cx=\"24\" cy=\"258\" r=\"5\" class=\"lp-ico-detail\"/><circle cx=\"66\" cy=\"258\" r=\"5\" class=\"lp-ico-detail\"/>"
   },
   {
     "name": "string-harp",
     "category": "strings",
     "label": "Harp",
     "footprint": {
-      "width_ft": 2.2,
-      "depth_ft": 3.8
+      "width_ft": 3,
+      "depth_ft": 5
     },
-    "viewBox": "0 0 48 48",
-    "outline": true,
-    "body": "<path d=\"M16 43 L18 8\"/><path d=\"M18 8 Q26 3 33.5 11\"/><path d=\"M33.5 11 L30 43\"/><path d=\"M14.5 43 L31.5 43\"/><path d=\"M19.4 9.184038001041813 L19.8 42\"/><path d=\"M21.48 7.917947028896843 L21.36 42\"/><path d=\"M23.560000000000002 7.158825257292228 L22.92 42\"/><path d=\"M25.64 7.031541194742089 L24.48 42\"/><path d=\"M27.72 7.557031891984225 L26.04 42\"/><path d=\"M29.8 8.648858990830107 L27.6 42\"/>",
+    "viewBox": "0 0 300 500",
     "keywords": [
-      "harp"
-    ]
+      "harp",
+      "concert",
+      "pedal harp"
+    ],
+    "body": "<rect x=\"20\" y=\"42\" width=\"24\" height=\"418\" rx=\"12\"/><rect x=\"10\" y=\"458\" width=\"210\" height=\"36\" rx=\"12\"/><path d=\"M44 456 L266 62 L288 82 L68 470 Z\"/><path d=\"M28 44 Q150 -6 272 66 L262 86 Q154 24 38 64 Z\"/><line x1=\"64\" y1=\"52\" x2=\"64\" y2=\"444\" class=\"lp-ico-detail\"/><line x1=\"103.2\" y1=\"57.2\" x2=\"103.2\" y2=\"369.6\" class=\"lp-ico-detail\"/><line x1=\"142.4\" y1=\"62.4\" x2=\"142.4\" y2=\"295.2\" class=\"lp-ico-detail\"/><line x1=\"181.6\" y1=\"67.6\" x2=\"181.6\" y2=\"220.8\" class=\"lp-ico-detail\"/><line x1=\"220.8\" y1=\"72.8\" x2=\"220.8\" y2=\"146.4\" class=\"lp-ico-detail\"/><line x1=\"260\" y1=\"78\" x2=\"260\" y2=\"72\" class=\"lp-ico-detail\"/>"
   },
   {
     "name": "string-stand-single",
     "category": "strings",
     "label": "Guitar stand",
     "footprint": {
-      "width_ft": 1.2,
-      "depth_ft": 1.2
+      "width_ft": 1.5,
+      "depth_ft": 2.2
     },
-    "viewBox": "0 0 48 48",
-    "outline": true,
-    "body": "<path d=\"M24 16 L15 42\"/><path d=\"M24 16 L33 42\"/><path d=\"M13.5 42 L19 42\"/><path d=\"M29 42 L34.5 42\"/><path d=\"M17 30 L31 30\"/><path d=\"M24 16 L20.5 10\"/><path d=\"M24 16 L27.5 10\"/><path d=\"M20.5 10 L19.6 11.4\"/><path d=\"M27.5 10 L28.4 11.4\"/>",
+    "viewBox": "0 0 150 220",
     "keywords": [
-      "stand",
       "guitar stand",
       "a-frame"
-    ]
+    ],
+    "outline": true,
+    "body": "<line x1=\"75\" y1=\"18\" x2=\"34\" y2=\"205\" class=\"lp-ico-detail\"/><line x1=\"75\" y1=\"18\" x2=\"116\" y2=\"205\" class=\"lp-ico-detail\"/><line x1=\"75\" y1=\"18\" x2=\"75\" y2=\"196\" class=\"lp-ico-detail\"/><line x1=\"52\" y1=\"120\" x2=\"98\" y2=\"120\" class=\"lp-ico-detail\"/><circle cx=\"75\" cy=\"38\" r=\"7\" class=\"lp-ico-tone\"/><path d=\"M44 166 Q40 178 50 180\" class=\"lp-ico-detail\"/><path d=\"M106 166 Q110 178 100 180\" class=\"lp-ico-detail\"/>"
   },
   {
     "name": "string-stand-multi",
@@ -276,15 +272,14 @@ export const stringIcons: IconDescriptor[] = [
     "label": "Guitar rack",
     "footprint": {
       "width_ft": 3,
-      "depth_ft": 1.2
+      "depth_ft": 1.5
     },
-    "viewBox": "0 0 48 48",
-    "outline": true,
-    "body": "<path d=\"M7 30 L41 30\"/><path d=\"M9 30 L9 19\"/><path d=\"M39 30 L39 19\"/><path d=\"M9 19 L13 19 Q15 19 15 21 L15 23 Q15 25 17 25 L19 25 Q21 25 21 23 L21 21 Q21 19 23 19\"/><path d=\"M23 19 L25 19 Q27 19 27 21 L27 23 Q27 25 29 25 L31 25 Q33 25 33 23 L33 21 Q33 19 35 19 L39 19\"/><path d=\"M18 25 L18 16\"/><path d=\"M30 25 L30 16\"/><path d=\"M12 19 L12 16\"/><path d=\"M11 36 L17 36\"/><path d=\"M23 36 L29 36\"/><path d=\"M35 36 L41 36\"/>",
+    "viewBox": "0 0 300 150",
     "keywords": [
-      "rack",
-      "multi guitar",
-      "guitar rack"
-    ]
-  }
+      "guitar rack",
+      "multi stand",
+      "5-way"
+    ],
+    "body": "<rect x=\"3\" y=\"42\" width=\"294\" height=\"105\" rx=\"10\"/><line x1=\"50\" y1=\"42\" x2=\"50\" y2=\"147\" class=\"lp-ico-detail\"/><circle cx=\"50\" cy=\"22\" r=\"13\" class=\"lp-ico-tone\"/><line x1=\"100\" y1=\"42\" x2=\"100\" y2=\"147\" class=\"lp-ico-detail\"/><circle cx=\"100\" cy=\"22\" r=\"13\" class=\"lp-ico-tone\"/><line x1=\"150\" y1=\"42\" x2=\"150\" y2=\"147\" class=\"lp-ico-detail\"/><circle cx=\"150\" cy=\"22\" r=\"13\" class=\"lp-ico-tone\"/><line x1=\"200\" y1=\"42\" x2=\"200\" y2=\"147\" class=\"lp-ico-detail\"/><circle cx=\"200\" cy=\"22\" r=\"13\" class=\"lp-ico-tone\"/><line x1=\"250\" y1=\"42\" x2=\"250\" y2=\"147\" class=\"lp-ico-detail\"/><circle cx=\"250\" cy=\"22\" r=\"13\" class=\"lp-ico-tone\"/>"
+  },
 ];

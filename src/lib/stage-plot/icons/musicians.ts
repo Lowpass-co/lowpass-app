@@ -1,41 +1,49 @@
-/* ============================================
-   LOWPASS — Stage Plot musician icons (§SP1a·3, revised)
+/* ============================================================
+   LOWPASS — Stage Plot musicians icons (v2 suite)
 
-   Per review: a single generic person per gender, NOT one icon
-   per role. The musician's name + instrument is a CUSTOMISABLE
-   per-item label (the stage_plot_items.label field, shown small
-   inside/under the figure — surfaced in the properties panel at
-   §SP3), so any role is "Person + 'Jonny — Guitar'".
-
-   Top-down silhouette: head circle + shoulders. Female is
-   narrower-shouldered with a hair curve; male is broader.
-   Category colour = musicians (slate).
-   ============================================ */
+   v2 grammar: top-down ft-true (viewBox = footprint x 100, art
+   edge-to-edge, footprint = FULL extent); elevation for tall/thin;
+   symbolic sizing for stage boxes / power / DI / talkback. No colour
+   attrs. Classes: unclassed = footprint fill, .lp-ico-tone = accent
+   fill (NEW - see README), .lp-ico-detail = stroke only,
+   .lp-ico-label = solid category-colour fill (text + bolt glyph).
+   ============================================================ */
 
 import type { IconDescriptor } from './types';
 
 export const musicianIcons: IconDescriptor[] = [
   {
-    name: 'person-male',
-    category: 'musicians',
-    label: 'Person (male)',
-    footprint: { width_ft: 2, depth_ft: 2 },
-    keywords: ['musician', 'performer', 'man', 'player', 'people'],
-    body:
-      '<path d="M22 80 C22 54 78 54 78 80 Z"/>' +
-      '<circle cx="50" cy="34" r="14"/>',
+    "name": "person-male",
+    "category": "musicians",
+    "label": "Person (male)",
+    "footprint": {
+      "width_ft": 2.2,
+      "depth_ft": 1.6
+    },
+    "viewBox": "0 0 220 160",
+    "keywords": [
+      "person",
+      "musician",
+      "performer",
+      "man"
+    ],
+    "body": "<ellipse cx=\"110\" cy=\"78\" rx=\"102\" ry=\"52\"/><circle cx=\"110\" cy=\"78\" r=\"38\" class=\"lp-ico-tone\"/><line x1=\"110\" y1=\"116\" x2=\"110\" y2=\"132\" class=\"lp-ico-detail\"/>"
   },
   {
-    name: 'person-female',
-    category: 'musicians',
-    label: 'Person (female)',
-    footprint: { width_ft: 2, depth_ft: 2 },
-    keywords: ['musician', 'performer', 'woman', 'player', 'people'],
-    body:
-      '<path d="M24 80 C24 55 76 55 76 80 Z"/>' +
-      '<circle cx="50" cy="34" r="13"/>' +
-      // understated hair cue (short hairline over the crown) — same
-      // build as the male figure, just a small differentiator
-      '<path d="M38 29 Q50 21 62 29" class="lp-ico-detail"/>',
+    "name": "person-female",
+    "category": "musicians",
+    "label": "Person (female)",
+    "footprint": {
+      "width_ft": 2.2,
+      "depth_ft": 1.6
+    },
+    "viewBox": "0 0 220 160",
+    "keywords": [
+      "person",
+      "musician",
+      "performer",
+      "woman"
+    ],
+    "body": "<circle cx=\"110\" cy=\"32\" r=\"16\" class=\"lp-ico-tone\"/><ellipse cx=\"110\" cy=\"78\" rx=\"102\" ry=\"52\"/><circle cx=\"110\" cy=\"78\" r=\"38\" class=\"lp-ico-tone\"/><line x1=\"110\" y1=\"116\" x2=\"110\" y2=\"132\" class=\"lp-ico-detail\"/>"
   },
 ];

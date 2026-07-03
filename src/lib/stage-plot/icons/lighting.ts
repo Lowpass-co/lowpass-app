@@ -1,11 +1,13 @@
-/* ============================================
-   LOWPASS — Stage Plot lighting icons (§SP1c)
+/* ============================================================
+   LOWPASS — Stage Plot lighting icons (v2 suite)
 
-   Generated against the locked icon contract (top-down, no
-   colour attrs, footprint outline unclassed, details in
-   .lp-ico-detail, letters in .lp-ico-label). Footprints are
-   real-world feet. Hand-tunable — edit freely.
-   ============================================ */
+   v2 grammar: top-down ft-true (viewBox = footprint x 100, art
+   edge-to-edge, footprint = FULL extent); elevation for tall/thin;
+   symbolic sizing for stage boxes / power / DI / talkback. No colour
+   attrs. Classes: unclassed = footprint fill, .lp-ico-tone = accent
+   fill (NEW - see README), .lp-ico-detail = stroke only,
+   .lp-ico-label = solid category-colour fill (text + bolt glyph).
+   ============================================================ */
 
 import type { IconDescriptor } from './types';
 
@@ -15,97 +17,94 @@ export const lightingIcons: IconDescriptor[] = [
     "category": "lighting",
     "label": "Moving head",
     "footprint": {
-      "width_ft": 1,
-      "depth_ft": 1
+      "width_ft": 1.3,
+      "depth_ft": 1.5
     },
+    "viewBox": "0 0 130 150",
     "keywords": [
       "moving head",
       "mover",
-      "intelligent light",
-      "spot",
-      "beam"
+      "spot"
     ],
-    "body": "<circle cx=\"50\" cy=\"50\" r=\"22\"/><line x1=\"24\" y1=\"38\" x2=\"24\" y2=\"62\" class=\"lp-ico-detail\"/><line x1=\"76\" y1=\"38\" x2=\"76\" y2=\"62\" class=\"lp-ico-detail\"/>"
+    "body": "<rect x=\"10\" y=\"15\" width=\"110\" height=\"120\" rx=\"12\"/><circle cx=\"65\" cy=\"75\" r=\"40\" class=\"lp-ico-tone\"/><circle cx=\"65\" cy=\"75\" r=\"17\" class=\"lp-ico-detail\"/><line x1=\"65\" y1=\"35\" x2=\"65\" y2=\"20\" class=\"lp-ico-detail\"/>"
   },
   {
     "name": "light-par",
     "category": "lighting",
     "label": "PAR",
     "footprint": {
-      "width_ft": 0.8,
-      "depth_ft": 0.8
+      "width_ft": 0.9,
+      "depth_ft": 1.2
     },
+    "viewBox": "0 0 90 120",
     "keywords": [
       "par",
-      "par can",
-      "wash",
-      "fixture"
+      "can",
+      "led par"
     ],
-    "body": "<circle cx=\"50\" cy=\"50\" r=\"26\"/><circle cx=\"50\" cy=\"50\" r=\"16\" class=\"lp-ico-detail\"/>"
+    "body": "<line x1=\"10\" y1=\"32\" x2=\"10\" y2=\"88\" class=\"lp-ico-detail\"/><line x1=\"80\" y1=\"32\" x2=\"80\" y2=\"88\" class=\"lp-ico-detail\"/><line x1=\"10\" y1=\"60\" x2=\"20\" y2=\"60\" class=\"lp-ico-detail\"/><line x1=\"70\" y1=\"60\" x2=\"80\" y2=\"60\" class=\"lp-ico-detail\"/><circle cx=\"45\" cy=\"60\" r=\"37\"/><circle cx=\"45\" cy=\"60\" r=\"21\" class=\"lp-ico-tone\"/><line x1=\"45\" y1=\"97\" x2=\"45\" y2=\"110\" class=\"lp-ico-detail\"/>"
   },
   {
     "name": "light-wash",
     "category": "lighting",
     "label": "Wash",
     "footprint": {
-      "width_ft": 0.9,
-      "depth_ft": 0.9
+      "width_ft": 1.1,
+      "depth_ft": 1.3
     },
+    "viewBox": "0 0 110 130",
     "keywords": [
       "wash",
-      "led wash",
-      "fixture",
-      "flood"
+      "led wash"
     ],
-    "body": "<circle cx=\"50\" cy=\"50\" r=\"26\"/><circle cx=\"42\" cy=\"42\" r=\"3\" class=\"lp-ico-detail\"/><circle cx=\"58\" cy=\"42\" r=\"3\" class=\"lp-ico-detail\"/><circle cx=\"42\" cy=\"58\" r=\"3\" class=\"lp-ico-detail\"/><circle cx=\"58\" cy=\"58\" r=\"3\" class=\"lp-ico-detail\"/><circle cx=\"50\" cy=\"50\" r=\"3\" class=\"lp-ico-detail\"/>"
+    "body": "<rect x=\"10\" y=\"14\" width=\"90\" height=\"102\" rx=\"24\"/><circle cx=\"55\" cy=\"65\" r=\"30\" class=\"lp-ico-tone\"/><circle cx=\"25\" cy=\"27\" r=\"3\" class=\"lp-ico-detail\"/><circle cx=\"85\" cy=\"27\" r=\"3\" class=\"lp-ico-detail\"/><circle cx=\"25\" cy=\"103\" r=\"3\" class=\"lp-ico-detail\"/><circle cx=\"85\" cy=\"103\" r=\"3\" class=\"lp-ico-detail\"/>"
   },
   {
     "name": "light-strobe",
     "category": "lighting",
     "label": "Strobe",
     "footprint": {
-      "width_ft": 1,
-      "depth_ft": 0.6
+      "width_ft": 1.3,
+      "depth_ft": 0.7
     },
+    "viewBox": "0 0 130 70",
     "keywords": [
       "strobe",
-      "flash",
-      "lighting",
-      "fixture"
+      "atomic"
     ],
-    "body": "<rect x=\"20\" y=\"38\" width=\"24\" height=\"24\" rx=\"2\"/><path d=\"M52 36 A18 18 0 0 1 52 64\" class=\"lp-ico-detail\"/><path d=\"M60 30 A26 26 0 0 1 60 70\" class=\"lp-ico-detail\"/><path d=\"M68 24 A34 34 0 0 1 68 76\" class=\"lp-ico-detail\"/>"
+    "body": "<rect x=\"3\" y=\"3\" width=\"124\" height=\"64\" rx=\"8\"/><rect x=\"16\" y=\"26\" width=\"98\" height=\"18\" rx=\"9\" class=\"lp-ico-tone\"/><line x1=\"38\" y1=\"26\" x2=\"38\" y2=\"44\" class=\"lp-ico-detail\"/><line x1=\"60\" y1=\"26\" x2=\"60\" y2=\"44\" class=\"lp-ico-detail\"/><line x1=\"82\" y1=\"26\" x2=\"82\" y2=\"44\" class=\"lp-ico-detail\"/><line x1=\"104\" y1=\"26\" x2=\"104\" y2=\"44\" class=\"lp-ico-detail\"/>"
   },
   {
     "name": "light-blinder",
     "category": "lighting",
     "label": "Blinder",
     "footprint": {
-      "width_ft": 1.5,
-      "depth_ft": 0.8
+      "width_ft": 1.7,
+      "depth_ft": 0.9
     },
+    "viewBox": "0 0 170 90",
     "keywords": [
       "blinder",
-      "array",
-      "beam",
-      "lighting"
+      "2-lite",
+      "mole"
     ],
-    "body": "<rect x=\"18\" y=\"30\" width=\"44\" height=\"40\" rx=\"3\"/><circle cx=\"32\" cy=\"43\" r=\"7\" class=\"lp-ico-detail\"/><circle cx=\"48\" cy=\"43\" r=\"7\" class=\"lp-ico-detail\"/><circle cx=\"32\" cy=\"57\" r=\"7\" class=\"lp-ico-detail\"/><circle cx=\"48\" cy=\"57\" r=\"7\" class=\"lp-ico-detail\"/><line x1=\"64\" y1=\"38\" x2=\"82\" y2=\"34\" class=\"lp-ico-detail\"/><line x1=\"64\" y1=\"50\" x2=\"84\" y2=\"50\" class=\"lp-ico-detail\"/><line x1=\"64\" y1=\"62\" x2=\"82\" y2=\"66\" class=\"lp-ico-detail\"/>"
+    "body": "<rect x=\"3\" y=\"3\" width=\"164\" height=\"84\" rx=\"8\"/><circle cx=\"46\" cy=\"45\" r=\"28\" class=\"lp-ico-tone\"/><circle cx=\"46\" cy=\"45\" r=\"5\" class=\"lp-ico-detail\"/><circle cx=\"124\" cy=\"45\" r=\"28\" class=\"lp-ico-tone\"/><circle cx=\"124\" cy=\"45\" r=\"5\" class=\"lp-ico-detail\"/>"
   },
   {
     "name": "light-strip",
     "category": "lighting",
     "label": "Strip",
     "footprint": {
-      "width_ft": 3.3,
-      "depth_ft": 0.4
+      "width_ft": 4,
+      "depth_ft": 0.5
     },
+    "viewBox": "0 0 400 50",
     "keywords": [
       "strip",
-      "led bar",
       "batten",
-      "pixel bar"
+      "led bar"
     ],
-    "body": "<rect x=\"14\" y=\"44\" width=\"72\" height=\"12\" rx=\"2\"/><rect x=\"20\" y=\"47\" width=\"6\" height=\"6\" class=\"lp-ico-detail\"/><rect x=\"32\" y=\"47\" width=\"6\" height=\"6\" class=\"lp-ico-detail\"/><rect x=\"44\" y=\"47\" width=\"6\" height=\"6\" class=\"lp-ico-detail\"/><rect x=\"56\" y=\"47\" width=\"6\" height=\"6\" class=\"lp-ico-detail\"/><rect x=\"68\" y=\"47\" width=\"6\" height=\"6\" class=\"lp-ico-detail\"/>"
+    "body": "<rect x=\"3\" y=\"3\" width=\"394\" height=\"44\" rx=\"6\"/><circle cx=\"28\" cy=\"25\" r=\"14\" class=\"lp-ico-tone\"/><circle cx=\"77\" cy=\"25\" r=\"14\" class=\"lp-ico-tone\"/><circle cx=\"126\" cy=\"25\" r=\"14\" class=\"lp-ico-tone\"/><circle cx=\"175\" cy=\"25\" r=\"14\" class=\"lp-ico-tone\"/><circle cx=\"224\" cy=\"25\" r=\"14\" class=\"lp-ico-tone\"/><circle cx=\"273\" cy=\"25\" r=\"14\" class=\"lp-ico-tone\"/><circle cx=\"322\" cy=\"25\" r=\"14\" class=\"lp-ico-tone\"/><circle cx=\"371\" cy=\"25\" r=\"14\" class=\"lp-ico-tone\"/>"
   },
   {
     "name": "light-hazer",
@@ -113,49 +112,47 @@ export const lightingIcons: IconDescriptor[] = [
     "label": "Hazer",
     "footprint": {
       "width_ft": 1.5,
-      "depth_ft": 1
+      "depth_ft": 1.1
     },
+    "viewBox": "0 0 150 110",
     "keywords": [
       "hazer",
-      "haze",
-      "fog",
-      "machine",
-      "lighting"
+      "smoke",
+      "fog"
     ],
-    "body": "<rect x=\"20\" y=\"34\" width=\"44\" height=\"36\" rx=\"3\"/><polygon points=\"64,46 78,40 78,64 64,58\" class=\"lp-ico-detail\"/><text class=\"lp-ico-label\" x=\"42\" y=\"52\" text-anchor=\"middle\" dominant-baseline=\"central\" font-size=\"11\">HAZE</text>"
+    "body": "<rect x=\"3\" y=\"13\" width=\"144\" height=\"94\" rx=\"10\"/><path d=\"M104 34 L140 22 L140 46 Z\" class=\"lp-ico-tone\"/><line x1=\"20\" y1=\"40\" x2=\"80\" y2=\"40\" class=\"lp-ico-detail\"/><line x1=\"20\" y1=\"58\" x2=\"80\" y2=\"58\" class=\"lp-ico-detail\"/><line x1=\"20\" y1=\"76\" x2=\"80\" y2=\"76\" class=\"lp-ico-detail\"/>"
   },
   {
     "name": "light-floor-fan",
     "category": "lighting",
     "label": "Floor fan",
     "footprint": {
-      "width_ft": 1.5,
-      "depth_ft": 1.5
+      "width_ft": 1.7,
+      "depth_ft": 1.7
     },
+    "viewBox": "0 0 170 170",
     "keywords": [
       "fan",
-      "floor",
-      "wind",
-      "stage",
-      "lighting"
+      "floor fan",
+      "hair"
     ],
-    "body": "<circle cx=\"50\" cy=\"48\" r=\"30\"/><path d=\"M50 48 Q66 36 70 52\" class=\"lp-ico-detail\"/><path d=\"M50 48 Q60 66 44 72\" class=\"lp-ico-detail\"/><path d=\"M50 48 Q34 56 30 40\" class=\"lp-ico-detail\"/><path d=\"M50 48 Q44 30 62 26\" class=\"lp-ico-detail\"/><circle cx=\"50\" cy=\"48\" r=\"5\" class=\"lp-ico-detail\"/><rect x=\"40\" y=\"82\" width=\"20\" height=\"8\" rx=\"2\"/>"
+    "outline": true,
+    "body": "<circle cx=\"85\" cy=\"76\" r=\"62\"/><circle cx=\"85\" cy=\"76\" r=\"15\" class=\"lp-ico-tone\"/><path d=\"M85 30 Q110 46 97 64\" class=\"lp-ico-detail\"/><path d=\"M126 96 Q100 104 91 88\" class=\"lp-ico-detail\"/><path d=\"M44 96 Q58 122 76 90\" class=\"lp-ico-detail\"/><line x1=\"55\" y1=\"130\" x2=\"40\" y2=\"164\" class=\"lp-ico-detail\"/><line x1=\"115\" y1=\"130\" x2=\"130\" y2=\"164\" class=\"lp-ico-detail\"/><line x1=\"40\" y1=\"164\" x2=\"130\" y2=\"164\" class=\"lp-ico-detail\"/>"
   },
   {
     "name": "light-spot",
     "category": "lighting",
     "label": "Follow spot",
     "footprint": {
-      "width_ft": 1.5,
-      "depth_ft": 2
+      "width_ft": 1.8,
+      "depth_ft": 3
     },
+    "viewBox": "0 0 180 300",
     "keywords": [
-      "follow",
-      "spot",
+      "follow spot",
       "spotlight",
-      "barrel",
-      "lighting"
+      "super trouper"
     ],
-    "body": "<polygon points=\"30,14 70,14 62,58 38,58\"/><ellipse cx=\"50\" cy=\"14\" rx=\"20\" ry=\"5\" class=\"lp-ico-detail\"/><rect x=\"40\" y=\"58\" width=\"20\" height=\"14\" rx=\"2\"/><line x1=\"40\" y1=\"66\" x2=\"26\" y2=\"78\" class=\"lp-ico-detail\"/><line x1=\"60\" y1=\"66\" x2=\"74\" y2=\"78\" class=\"lp-ico-detail\"/><rect x=\"42\" y=\"72\" width=\"16\" height=\"12\" rx=\"2\"/>"
-  }
+    "body": "<path d=\"M62 70 L118 70 L106 18 L74 18 Z\"/><rect x=\"76\" y=\"30\" width=\"28\" height=\"14\" rx=\"6\" class=\"lp-ico-tone\"/><rect x=\"52\" y=\"70\" width=\"76\" height=\"160\" rx=\"16\"/><line x1=\"90\" y1=\"230\" x2=\"90\" y2=\"242\" class=\"lp-ico-detail\"/><line x1=\"90\" y1=\"242\" x2=\"30\" y2=\"292\" class=\"lp-ico-detail\"/><line x1=\"90\" y1=\"242\" x2=\"150\" y2=\"292\" class=\"lp-ico-detail\"/><line x1=\"90\" y1=\"242\" x2=\"90\" y2=\"296\" class=\"lp-ico-detail\"/>"
+  },
 ];
