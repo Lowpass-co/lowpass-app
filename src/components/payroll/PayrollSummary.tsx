@@ -1,10 +1,20 @@
 'use client';
 
+/* ============================================
+   LOWPASS — <PayrollSummary> (read-only totals · b2 rate-lines)
+
+   The Summary is now purely read-only: it sums each person's rate lines
+   (personnel_rate_lines × rate_types) via computeTotals over their aggregated
+   day counts. Rate editing lives in the Rates grid above; this mirror always
+   agrees with it (same amountMap + same engine). Reconciles to the legacy math
+   for the defaults — reconcile.harness.ts.
+   ============================================ */
+
 import { useMemo } from 'react';
 import { GridTable } from '@/components/spreadsheet-view/GridTable';
-import { InlineEditCell } from '@/components/spreadsheet-view/InlineEditCell';
-import { formatCurrency } from '@/lib/utils';
-import { countDayStatuses, computeTotalFee, computeTotalPerDiem, type RateLike } from '@/lib/payroll/fees';
+import { countDayStatuses, type DayCounts } from '@/lib/payroll/fees';
+import type { RateTypeMeta } from '@/lib/payroll/rateLines';
+import { personTotals, type LineAmountMap } from './rateLinesClient';
 
 function splitName(name: string): { forename: string; surname: string } {
   const parts = (name ?? '').trim().split(/\s+/);
@@ -14,107 +24,56 @@ function splitName(name: string): { forename: string; surname: string } {
 }
 
 interface PayrollSummaryProps {
-  tourId: string;
   currency: string;
   personnelRates: Record<string, unknown>[];
-  routingDates: { date?: string; day_type?: string }[];
   payrollEntries: Record<string, unknown>[];
+  rateTypes: RateTypeMeta[];
+  amountMap: LineAmountMap;
 }
 
-export function PayrollSummary({
-  tourId,
-  currency,
-  personnelRates,
-  routingDates,
-  payrollEntries,
-}: PayrollSummaryProps) {
+export function PayrollSummary({ currency, personnelRates, payrollEntries, rateTypes, amountMap }: PayrollSummaryProps) {
   const rows = useMemo(() => {
-    type Agg = { show: number; offTravel: number; rehearsal: number };
-    const entriesByPerson = new Map<string, Agg>();
-    const emptyAgg = (): Agg => ({ show: 0, offTravel: 0, rehearsal: 0 });
+    const entriesByPerson = new Map<string, DayCounts>();
     for (const e of payrollEntries) {
       const pid = e.personnel_id as string;
       const c = countDayStatuses((e.day_statuses as Record<string, string>) ?? {});
-      const existing = entriesByPerson.get(pid) ?? emptyAgg();
-      existing.show += c.show;
-      existing.offTravel += c.offTravel;
-      existing.rehearsal += c.rehearsal;
-      entriesByPerson.set(pid, existing);
+      const ex = entriesByPerson.get(pid) ?? { show: 0, offTravel: 0, rehearsal: 0, active: 0 };
+      ex.show += c.show; ex.offTravel += c.offTravel; ex.rehearsal += c.rehearsal; ex.active += c.active;
+      entriesByPerson.set(pid, ex);
     }
 
     return personnelRates.map((pr) => {
       const id = pr.id as string;
-      const personName = (pr.person_name as string) ?? '';
-      const { forename, surname } = splitName(personName);
-      const showRate = Number(pr.show_rate) || 0;
-      const offRate = Number(pr.off_rate) || 0;
-      const perDiemRate = Number(pr.per_diem) || 0;
-      const rate: RateLike = {
-        show_rate: showRate,
-        off_rate: offRate,
-        rehearsal_rate: Number((pr as { rehearsal_rate?: number }).rehearsal_rate) || 0,
-        per_diem: perDiemRate,
-      };
-      const agg = entriesByPerson.get(id) ?? emptyAgg();
-      const counts = {
-        show: agg.show,
-        offTravel: agg.offTravel,
-        rehearsal: agg.rehearsal,
-        active: agg.show + agg.offTravel + agg.rehearsal,
-      };
-      // OPS-17a — split by day type via the shared helper (no show_rate
-      // fallback for travel days). PAY-04 — advance from the rate card
-      // (pr.advance_fee), the single source matching Rates / Days / budget.
-      const totalFee = computeTotalFee(rate, counts, Number(pr.advance_fee) || 0);
-      const totalPerDiem = computeTotalPerDiem(rate, counts);
-
+      const { forename, surname } = splitName((pr.person_name as string) ?? '');
+      const counts = entriesByPerson.get(id) ?? { show: 0, offTravel: 0, rehearsal: 0, active: 0 };
+      const { totalFee, totalPerDiem } = personTotals(amountMap, id, rateTypes, counts);
       return {
         id,
         role: (pr.role as string) ?? '',
         forename,
         surname,
-        showRate,
-        offRate: offRate,
-        perDiemRate,
-        showDays: agg.show,
-        offTravelDays: agg.offTravel,
+        showDays: counts.show,
+        offTravelDays: counts.offTravel,
         totalFee,
         totalPerDiem,
       };
     });
-  }, [personnelRates, payrollEntries]);
+  }, [personnelRates, payrollEntries, rateTypes, amountMap]);
 
   const totals = useMemo(() => {
-    let fee = 0;
-    let pd = 0;
-    for (const r of rows) {
-      fee += r.totalFee;
-      pd += r.totalPerDiem;
-    }
+    let fee = 0; let pd = 0;
+    for (const r of rows) { fee += r.totalFee; pd += r.totalPerDiem; }
     return { totalFee: fee, totalPerDiem: pd };
   }, [rows]);
 
-  const saveRate = async (id: string, field: string, value: string | number) => {
-    const res = await fetch('/api/budget/personnel-rates', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id, [field]: value }),
-    });
-    if (!res.ok) throw new Error('Save failed');
-  };
-
   const COLS = [
-    { key: 'role', label: 'Role', width: '120px' },
-    { key: 'forename', label: 'Forename', width: '100px' },
-    { key: 'surname', label: 'Surname', width: '100px' },
-    { key: 'show_rate', label: 'Show Rate', width: '90px', align: 'right' as const },
-    { key: 'travel_rate', label: 'Travel Rate', width: '90px', align: 'right' as const },
-    { key: 'per_diem', label: 'Per Diem', width: '80px', align: 'right' as const },
-    { key: 'show_days', label: 'Show Days', width: '80px', align: 'right' as const },
-    { key: 'off_days', label: 'Off/Travel Days', width: '100px', align: 'right' as const },
-    { key: 'total_fee', label: 'Total Fee', width: '100px', align: 'right' as const },
-    { key: 'per_diem_rate', label: 'Per Diem Rate', width: '90px', align: 'right' as const },
-    { key: 'total_per_diem', label: 'Total Per Diem', width: '110px', align: 'right' as const },
+    { key: 'role', label: 'Role', width: '140px' },
+    { key: 'forename', label: 'Forename', width: '120px' },
+    { key: 'surname', label: 'Surname', width: '120px' },
+    { key: 'show_days', label: 'Show Days', width: '90px', align: 'right' as const },
+    { key: 'off_days', label: 'Off/Travel Days', width: '110px', align: 'right' as const },
+    { key: 'total_fee', label: 'Total Fee', width: '120px', align: 'right' as const },
+    { key: 'total_per_diem', label: 'Total Per Diem', width: '120px', align: 'right' as const },
   ];
 
   const formatter = new Intl.NumberFormat('en-GB', { style: 'currency', currency, minimumFractionDigits: 2 });
@@ -124,39 +83,22 @@ export function PayrollSummary({
       columns={COLS}
       footer={
         <>
-          <td colSpan={8} className="px-2 py-2 font-bold text-lp-text">TOTALS</td>
-          <td className="px-2 py-2 text-right tabular-nums">{formatter.format(totals.totalFee)}</td>
-          <td className="px-2 py-2" />
-          <td className="px-2 py-2 text-right tabular-nums">{formatter.format(totals.totalPerDiem)}</td>
+          <td colSpan={5} className="px-2 py-2 font-bold text-lp-text">TOTALS</td>
+          <td className="px-2 py-2 text-right tabular-nums font-semibold">{formatter.format(totals.totalFee)}</td>
+          <td className="px-2 py-2 text-right tabular-nums font-semibold">{formatter.format(totals.totalPerDiem)}</td>
         </>
       }
     >
       {rows.map((r) => (
-          <tr key={r.id} className="even:bg-lp-surface/30">
-            <td className="px-2 py-0">
-              <InlineEditCell value={r.role} type="text" onSave={(v) => saveRate(r.id, 'role', String(v))} />
-            </td>
-            <td className="px-2 py-0">
-              <InlineEditCell value={r.forename} type="text" onSave={(v) => saveRate(r.id, 'person_name', [v, r.surname].filter(Boolean).join(' '))} />
-            </td>
-            <td className="px-2 py-0">
-              <InlineEditCell value={r.surname} type="text" onSave={(v) => saveRate(r.id, 'person_name', [r.forename, v].filter(Boolean).join(' '))} />
-            </td>
-            <td className="px-2 py-0">
-              <InlineEditCell value={r.showRate} type="currency" currency={currency} onSave={(v) => saveRate(r.id, 'show_rate', v)} align="right" />
-            </td>
-            <td className="px-2 py-0">
-              <InlineEditCell value={r.offRate} type="currency" currency={currency} onSave={(v) => saveRate(r.id, 'off_rate', v)} align="right" />
-            </td>
-            <td className="px-2 py-0">
-              <InlineEditCell value={r.perDiemRate} type="currency" currency={currency} onSave={(v) => saveRate(r.id, 'per_diem', v)} align="right" />
-            </td>
-            <td className="px-2 py-1 text-sm text-lp-text-secondary text-right tabular-nums">{r.showDays}</td>
-            <td className="px-2 py-1 text-sm text-lp-text-secondary text-right tabular-nums">{r.offTravelDays}</td>
-            <td className="px-2 py-1 text-sm text-right tabular-nums">{formatter.format(r.totalFee)}</td>
-            <td className="px-2 py-1 text-sm text-lp-text-secondary text-right tabular-nums">{formatter.format(r.perDiemRate)}</td>
-            <td className="px-2 py-1 text-sm text-right tabular-nums">{formatter.format(r.totalPerDiem)}</td>
-          </tr>
+        <tr key={r.id} className="even:bg-lp-surface/30">
+          <td className="px-2 py-1 text-sm text-lp-text">{r.role}</td>
+          <td className="px-2 py-1 text-sm text-lp-text">{r.forename}</td>
+          <td className="px-2 py-1 text-sm text-lp-text">{r.surname}</td>
+          <td className="px-2 py-1 text-sm text-lp-text-secondary text-right tabular-nums">{r.showDays}</td>
+          <td className="px-2 py-1 text-sm text-lp-text-secondary text-right tabular-nums">{r.offTravelDays}</td>
+          <td className="px-2 py-1 text-sm text-right tabular-nums">{formatter.format(r.totalFee)}</td>
+          <td className="px-2 py-1 text-sm text-right tabular-nums">{formatter.format(r.totalPerDiem)}</td>
+        </tr>
       ))}
     </GridTable>
   );

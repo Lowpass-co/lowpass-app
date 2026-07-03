@@ -18,7 +18,12 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { resolveArtistLogoUrl } from '@/lib/artists/imageUrl';
-import { countDayStatuses, computeTotalFee, computeTotalPerDiem, type DayCounts } from '@/lib/payroll/fees';
+// b2 — fee/per-diem now sum a person's rate lines (personnel_rate_lines × rate_types)
+// via computeTotals, so custom types surface here too. Reconciles to the legacy
+// split for the 5 defaults and to the flat total for day_rate (a6) — proven in
+// reconcile.harness.ts. The advance stays sourced from the per-week entry below.
+import { countDayStatuses, computeTotals, type DayCounts } from '@/lib/payroll/fees';
+import { loadTourRateContext, rateLinesFor, type TourRateContext } from '@/lib/payroll/loadRateLines';
 import type { DateRange } from '@/lib/export/template-config';
 
 /** A worked day with its location (Part E — the statement's "where we were" list). */
@@ -174,6 +179,9 @@ export async function loadPayrollExportData(
   }
   const rangeActive = !!(range && (range.from || range.to));
 
+  // b2 — the rate-lines source: the workspace catalog + every person's lines.
+  const rateCtx: TourRateContext = await loadTourRateContext(supabase, tourId, workspaceId);
+
   let persons: PayrollPerson[] = rates.map((rate) => {
     const rosterRow = rate.tour_personnel_id ? rosterById.get(rate.tour_personnel_id) : undefined;
     const liveName = rosterRow?.person_id ? nameByPersonId.get(rosterRow.person_id) : undefined;
@@ -181,6 +189,9 @@ export async function loadPayrollExportData(
     const role = rosterRow?.role ?? rate.role ?? null;
 
     const myEntries = entriesByRateId.get(rate.id) ?? [];
+    // A person's base (non-advance) lines don't change week-to-week; the advance
+    // is applied per-entry below, so drop the flat_once line from the base set.
+    const baseLines = rateLinesFor(rateCtx, rate.id, rate, 0).filter((l) => l.basis !== 'flat_once');
     const agg: DayCounts = { show: 0, offTravel: 0, rehearsal: 0, active: 0 };
     let fee = 0;
     let perDiemTotal = 0;
@@ -193,8 +204,8 @@ export async function loadPayrollExportData(
       // range fully excludes that week (no in-range days). Default (no range) is
       // unchanged: the advance always applies.
       const adv = rangeActive ? (counts.active > 0 ? e.advance_fee : 0) : e.advance_fee;
-      const wFee = computeTotalFee(rate, counts, adv);
-      const wPd = computeTotalPerDiem(rate, counts);
+      const { totalFee: baseFee, totalPerDiem: wPd } = computeTotals(baseLines, counts);
+      const wFee = baseFee + num(adv);
       agg.show += counts.show;
       agg.offTravel += counts.offTravel;
       agg.rehearsal += counts.rehearsal;

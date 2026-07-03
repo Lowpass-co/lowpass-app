@@ -16,7 +16,9 @@ import { Grid } from '@/components/grid/Grid';
 import type { Column, GridFx, Row, Section } from '@/components/grid/types';
 import { colourForDayType, labelForDayType } from '@/lib/routing/dayType';
 import { getWeekStart, formatWeekLabel } from '@/lib/routing/week';
-import { countDayStatuses, computeTotalFee, type RateLike } from '@/lib/payroll/fees';
+import { countDayStatuses } from '@/lib/payroll/fees';
+import type { RateTypeMeta } from '@/lib/payroll/rateLines';
+import { personTotals, type LineAmountMap } from './rateLinesClient';
 import { DAY_OPTIONS, type RoutingDay, type PayrollPerson } from './usePayrollGrid';
 
 const DAY_CODES = DAY_OPTIONS.map((o) => o.value);
@@ -123,6 +125,8 @@ export function PayrollDaysMatrix({
   currency,
   statusOf,
   saveDayStatus,
+  rateTypes,
+  amountMap,
 }: {
   routingDates: RoutingDay[];
   personnelRates: Record<string, unknown>[];
@@ -130,6 +134,9 @@ export function PayrollDaysMatrix({
   /** Lifted from PayrollView's shared usePayrollGrid (PAY-01). */
   statusOf: (personnelId: string, date: string) => string;
   saveDayStatus: (personnelId: string, date: string, status: string) => void | Promise<void>;
+  /** b2 — the rate-lines source for the live Total column. */
+  rateTypes: RateTypeMeta[];
+  amountMap: LineAmountMap;
 }) {
   const people = useMemo(() => personnelRates.map(toPerson), [personnelRates]);
   const ratesById = useMemo(() => new Map(people.map((p) => [p.id, p])), [people]);
@@ -184,13 +191,9 @@ export function PayrollDaysMatrix({
       const dayStatuses: Record<string, string> = {};
       for (const id of dayIds) dayStatuses[id] = String(row[id] ?? '');
       const counts = countDayStatuses(dayStatuses);
-      const rate: RateLike = {
-        show_rate: p.show_rate,
-        off_rate: p.off_rate,
-        rehearsal_rate: p.rehearsal_rate,
-        per_diem: p.per_diem,
-      };
-      return computeTotalFee(rate, counts, p.advance_fee);
+      // b2 — fee from the person's rate lines (dynamic types), same engine as
+      // Rates / Summary / the budget reconcile, so the live cell can't diverge.
+      return personTotals(amountMap, p.id, rateTypes, counts).totalFee;
     };
     return [
       // person + a frozen Total column (frozenCols=2). Fixed widths so the
@@ -199,7 +202,7 @@ export function PayrollDaysMatrix({
       { id: '__total', label: 'Total', type: 'calc', w: 104, min: 104, resize: false, calc: totalCalc },
       ...days.map<Column>((d) => ({ id: d.date, label: d.date.slice(5), type: 'dropdown', options: DAY_CODES, optColors: DAY_OPTCOLORS, optLabels: DAY_OPTLABELS, w: 92, min: 76, resize: true })),
     ];
-  }, [days, ratesById]);
+  }, [days, ratesById, rateTypes, amountMap]);
 
   const data: Section[] = useMemo(() => {
     const rows: Row[] = people.map((p) => {

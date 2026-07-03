@@ -26,7 +26,12 @@
    ============================================ */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { countDayStatuses, computeTotalFee, computeTotalPerDiem } from '@/lib/payroll/fees';
+// b2 — Salary/Per-Diem derived lines now sum each person's rate lines
+// (personnel_rate_lines × rate_types) via computeTotals, so custom types feed the
+// budget too. Reconciles to legacy for the 5 defaults + day_rate — proven in
+// reconcile.harness.ts. Advance stays the rate-card single-source (flat_once ×1).
+import { countDayStatuses, computeTotals } from '@/lib/payroll/fees';
+import { loadTourRateContext, rateLinesFor } from '@/lib/payroll/loadRateLines';
 import { resolveActiveVersion } from '@/server/budget/versions';
 import { derivedUpdatePayload, derivedInsertProposed } from '@/server/budget/derivedLockPolicy';
 
@@ -175,6 +180,9 @@ async function computePayrollDesired(
     .not('tour_personnel_id', 'is', null);
   if (!persons?.length) return { salary: [], perDiem: [] };
 
+  // b2 — the rate-lines source (catalog + every person's lines) for this tour.
+  const rateCtx = await loadTourRateContext(supabase, tourId, workspaceId);
+
   // OPS-17b — compute fees from day_statuses + the rate card via the SAME
   // shared helper the payroll sheets use, instead of trusting the persisted
   // total_fee column (which can lag behind the rates after the OPS-17a math
@@ -209,9 +217,10 @@ async function computePayrollDesired(
     const counts = countsBy.get(id) ?? { show: 0, offTravel: 0, rehearsal: 0, active: 0 };
     // PAY-04: rate-card advance is the single source (matches the payroll
     // displays + budget/summary routes; survives a day-status edit, which
-    // zeroes the per-week entries.advance_fee).
-    const fee = computeTotalFee(p, counts, Number(p.advance_fee) || 0);
-    const pd = computeTotalPerDiem(p, counts);
+    // zeroes the per-week entries.advance_fee). The advance rides its flat_once
+    // line (a5), applied once over the aggregated counts.
+    const lines = rateLinesFor(rateCtx, id, p, Number(p.advance_fee) || 0);
+    const { totalFee: fee, totalPerDiem: pd } = computeTotals(lines, counts);
     // One Salary line per roster member (named + costed; 0 until days set).
     salary.push({ sourceId: id, label, total: fee });
     // Per-diem line only when there's a non-zero total.

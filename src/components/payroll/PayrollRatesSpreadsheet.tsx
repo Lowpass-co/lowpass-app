@@ -8,41 +8,12 @@ import PersonSlideOver from '@/components/entity/person/PersonSlideOver';
 import { useToast } from '@/components/ui/Toast';
 import type { PersonnelRate } from '@/types';
 import { cn } from '@/lib/utils';
-import { countDayStatuses, computeTotalFee, computeTotalPerDiem, type RateLike } from '@/lib/payroll/fees';
+import { countDayStatuses } from '@/lib/payroll/fees';
+import type { RateTypeMeta } from '@/lib/payroll/rateLines';
+import { amountOf, personTotals, type LineAmountMap } from './rateLinesClient';
 
-/** Per-person day counts + advance, aggregated from payroll_entries. */
-type PersonTotals = { show: number; offTravel: number; rehearsal: number; active: number; advance: number };
-
-/** The explicit computed columns (show/off-travel days · total fee · total PD ·
- *  advance) — read-only, derived from day_statuses via the shared fee helper so
- *  they always match the budget Salary feed. (Stage B "Rates & totals".) */
-function buildTotalsColumns(
-  currency: string,
-  countsByPerson: Map<string, PersonTotals>,
-): GridColumn<PersonnelRate>[] {
-  const ccy = currency.trim().toUpperCase() || 'GBP';
-  const money = new Intl.NumberFormat('en-GB', { style: 'currency', currency: ccy, minimumFractionDigits: 0 });
-  const countsOf = (id: string): PersonTotals =>
-    countsByPerson.get(id) ?? { show: 0, offTravel: 0, rehearsal: 0, active: 0, advance: 0 };
-  const rateOf = (r: PersonnelRate): RateLike => ({
-    show_rate: r.show_rate,
-    off_rate: r.off_rate,
-    rehearsal_rate: r.rehearsal_rate,
-    per_diem: r.per_diem,
-  });
-  // total_fee uses the rate-card advance (the editable Advance column below) so
-  // editing advance visibly moves the fee. The budget reconcile reads the
-  // per-week payroll_entries.advance_fee (synced at generate) — see PAY-02 note.
-  const adv = (r: PersonnelRate) => Number(r.advance_fee) || 0;
-  return [
-    { id: 'show_days', header: 'Show days', accessor: (r) => countsOf(r.id).show, align: 'right', width: 90, type: { kind: 'computed', render: (r) => String(countsOf((r as PersonnelRate).id).show || '—') } },
-    { id: 'off_days', header: 'Off/Travel', accessor: (r) => countsOf(r.id).offTravel, align: 'right', width: 96, type: { kind: 'computed', render: (r) => String(countsOf((r as PersonnelRate).id).offTravel || '—') } },
-    { id: 'total_fee', header: 'Total fee', accessor: (r) => computeTotalFee(rateOf(r), countsOf(r.id), adv(r)), align: 'right', width: 120, type: { kind: 'computed', render: (r) => { const row = r as PersonnelRate; return money.format(computeTotalFee(rateOf(row), countsOf(row.id), adv(row))); } } },
-    { id: 'total_pd', header: 'Total PD', accessor: (r) => computeTotalPerDiem(rateOf(r), countsOf(r.id)), align: 'right', width: 110, type: { kind: 'computed', render: (r) => { const row = r as PersonnelRate; return money.format(computeTotalPerDiem(rateOf(row), countsOf(row.id))); } } },
-    // Editable — PATCHes personnel_rates.advance_fee via the existing route.
-    { id: 'advance', header: 'Advance', accessor: 'advance_fee', align: 'right', width: 104, type: { kind: 'currency', currency: ccy, decimals: 2 } },
-  ];
-}
+/** Per-person day counts, aggregated from payroll_entries. */
+type PersonTotals = { show: number; offTravel: number; rehearsal: number; active: number };
 
 const PT_OPTIONS = [
   { value: 'principal', label: 'Principal / Mgmt' },
@@ -72,109 +43,111 @@ function groupKey(pt: string | undefined): GroupKey {
   return 'other';
 }
 
-function buildPayrollColumns(
-  currency: string,
-  canSeeCommission: boolean,
-): GridColumn<PersonnelRate>[] {
-  const ccy = currency.trim().toUpperCase() || 'GBP';
+/** rate_type column id ⇄ rate_type_id. */
+const RT_COL_PREFIX = 'rt_';
+const rtColId = (typeId: string) => `${RT_COL_PREFIX}${typeId}`;
+const rtColTypeId = (colId: string) => (colId.startsWith(RT_COL_PREFIX) ? colId.slice(RT_COL_PREFIX.length) : null);
+
+/** Identity/meta columns before the dynamic rate-type columns. */
+function buildLeadColumns(canSeeCommission: boolean): GridColumn<PersonnelRate>[] {
   const cols: GridColumn<PersonnelRate>[] = [
     { id: 'person_name', header: 'Person', accessor: 'person_name', type: { kind: 'text' }, width: 160, flex: true },
     { id: 'role', header: 'Role', accessor: 'role', type: { kind: 'text' }, width: 128 },
-    {
-      id: 'person_type',
-      header: 'Employment',
-      accessor: 'person_type',
-      type: { kind: 'select', options: PT_OPTIONS },
-      width: 144,
-    },
-    {
-      id: 'rate_type',
-      header: 'Rate type',
-      accessor: 'rate_type',
-      type: { kind: 'select', options: RT_OPTIONS },
-      width: 128,
-    },
-    { id: 'show_rate', header: 'Show', accessor: 'show_rate', type: { kind: 'currency', currency: ccy, decimals: 2 }, align: 'right', width: 112 },
-    { id: 'off_rate', header: 'Off', accessor: 'off_rate', type: { kind: 'currency', currency: ccy, decimals: 2 }, align: 'right', width: 112 },
-    { id: 'rehearsal_rate', header: 'Reh.', accessor: 'rehearsal_rate', type: { kind: 'currency', currency: ccy, decimals: 2 }, align: 'right', width: 112 },
-    { id: 'per_diem', header: 'PD', accessor: 'per_diem', type: { kind: 'currency', currency: ccy, decimals: 2 }, align: 'right', width: 112 },
+    { id: 'person_type', header: 'Employment', accessor: 'person_type', type: { kind: 'select', options: PT_OPTIONS }, width: 144 },
+    { id: 'rate_type', header: 'Rate type', accessor: 'rate_type', type: { kind: 'select', options: RT_OPTIONS }, width: 128 },
   ];
   if (canSeeCommission) {
-    cols.push({
-      id: 'commission',
-      header: 'Comm. %',
-      accessor: 'commission',
-      type: { kind: 'percent', decimals: 2 },
-      align: 'right',
-      width: 80,
-    });
+    cols.push({ id: 'commission', header: 'Comm. %', accessor: 'commission', type: { kind: 'percent', decimals: 2 }, align: 'right', width: 80 });
   }
-  cols.push({
-    id: 'base_rate_note',
-    header: 'Notes',
-    accessor: 'base_rate_note',
-    type: { kind: 'text' },
-    width: 192,
-  });
   return cols;
 }
 
-/** UX15 — tour personnel rate cards (edit source for Budget payroll mirror). */
+/** One editable currency column per rate type (fee bucket first, then per-diem;
+ *  each in catalog order). Cells read/write personnel_rate_lines.amount. */
+function buildRateTypeColumns(rateTypes: RateTypeMeta[], amountMap: LineAmountMap, ccy: string): GridColumn<PersonnelRate>[] {
+  const ordered = [...rateTypes].sort((a, b) => {
+    if (a.bucket !== b.bucket) return a.bucket === 'per_diem' ? 1 : -1; // fee cols first
+    return a.orderIndex - b.orderIndex;
+  });
+  return ordered.map((t) => ({
+    id: rtColId(t.id),
+    header: t.name,
+    accessor: (r: PersonnelRate) => amountOf(amountMap, r.id, t.id),
+    type: { kind: 'currency', currency: ccy, decimals: 2 },
+    align: 'right',
+    width: 112,
+  }));
+}
+
+/** Read-only computed totals (days + fee + per-diem) from the rate lines. */
+function buildTotalsColumns(
+  currency: string,
+  rateTypes: RateTypeMeta[],
+  amountMap: LineAmountMap,
+  countsByPerson: Map<string, PersonTotals>,
+): GridColumn<PersonnelRate>[] {
+  const ccy = currency.trim().toUpperCase() || 'GBP';
+  const money = new Intl.NumberFormat('en-GB', { style: 'currency', currency: ccy, minimumFractionDigits: 0 });
+  const countsOf = (id: string): PersonTotals => countsByPerson.get(id) ?? { show: 0, offTravel: 0, rehearsal: 0, active: 0 };
+  return [
+    { id: 'show_days', header: 'Show days', accessor: (r) => countsOf(r.id).show, align: 'right', width: 90, type: { kind: 'computed', render: (r) => String(countsOf((r as PersonnelRate).id).show || '—') } },
+    { id: 'off_days', header: 'Off/Travel', accessor: (r) => countsOf(r.id).offTravel, align: 'right', width: 96, type: { kind: 'computed', render: (r) => String(countsOf((r as PersonnelRate).id).offTravel || '—') } },
+    { id: 'total_fee', header: 'Total fee', accessor: (r) => personTotals(amountMap, r.id, rateTypes, countsOf(r.id)).totalFee, align: 'right', width: 120, type: { kind: 'computed', render: (r) => { const row = r as PersonnelRate; return money.format(personTotals(amountMap, row.id, rateTypes, countsOf(row.id)).totalFee); } } },
+    { id: 'total_pd', header: 'Total PD', accessor: (r) => personTotals(amountMap, r.id, rateTypes, countsOf(r.id)).totalPerDiem, align: 'right', width: 110, type: { kind: 'computed', render: (r) => { const row = r as PersonnelRate; return money.format(personTotals(amountMap, row.id, rateTypes, countsOf(row.id)).totalPerDiem); } } },
+  ];
+}
+
+/** b2 — tour personnel rate cards. Rate amounts now live in
+ *  personnel_rate_lines (dynamic columns from the workspace catalog); the
+ *  legacy show/off/reh/per_diem/advance columns are frozen. */
 export function PayrollRatesSpreadsheet({
   currency,
   initialRates,
   canSeeCommission,
   payrollEntries,
+  rateTypes,
+  amountMap,
+  onRateLineCommit,
 }: {
   currency: string;
   initialRates: PersonnelRate[];
   canSeeCommission?: boolean;
-  /** When provided, appends the read-only computed total columns (show days ·
-   *  off/travel days · total fee · total PD · advance) derived from day_statuses. */
   payrollEntries?: Record<string, unknown>[];
+  rateTypes: RateTypeMeta[];
+  amountMap: LineAmountMap;
+  /** Persist one cell edit (person × type). Returns after the PATCH resolves. */
+  onRateLineCommit: (personnelRateId: string, rateTypeId: string, amount: number) => Promise<void>;
 }) {
   const { showToast } = useToast();
   const [rates, setRates] = useState<PersonnelRate[]>(initialRates);
   const [personOpen, setPersonOpen] = useState<string | null>(null);
+  const ccy = currency.trim().toUpperCase() || 'GBP';
 
-  // Per-person day counts + advance from payroll_entries (for the totals cols).
+  // Per-person day counts from payroll_entries (for the totals cols).
   const countsByPerson = useMemo(() => {
     const m = new Map<string, PersonTotals>();
     for (const e of payrollEntries ?? []) {
       const pid = e.personnel_id as string;
       const c = countDayStatuses((e.day_statuses as Record<string, string>) ?? {});
-      const acc = m.get(pid) ?? { show: 0, offTravel: 0, rehearsal: 0, active: 0, advance: 0 };
-      acc.show += c.show;
-      acc.offTravel += c.offTravel;
-      acc.rehearsal += c.rehearsal;
-      acc.active += c.active;
-      acc.advance += Number((e as { advance_fee?: number }).advance_fee) || 0;
+      const acc = m.get(pid) ?? { show: 0, offTravel: 0, rehearsal: 0, active: 0 };
+      acc.show += c.show; acc.offTravel += c.offTravel; acc.rehearsal += c.rehearsal; acc.active += c.active;
       m.set(pid, acc);
     }
     return m;
   }, [payrollEntries]);
 
   const columns = useMemo(() => {
-    const base = buildPayrollColumns(currency, !!canSeeCommission);
-    if (!payrollEntries) return base;
-    // Insert the computed totals BEFORE the trailing Notes column.
-    const notesIdx = base.findIndex((c) => c.id === 'base_rate_note');
-    const totals = buildTotalsColumns(currency, countsByPerson);
-    const at = notesIdx === -1 ? base.length : notesIdx;
-    return [...base.slice(0, at), ...totals, ...base.slice(at)];
-  }, [currency, canSeeCommission, payrollEntries, countsByPerson]);
+    const lead = buildLeadColumns(!!canSeeCommission);
+    const rtCols = buildRateTypeColumns(rateTypes, amountMap, ccy);
+    const totals = payrollEntries ? buildTotalsColumns(currency, rateTypes, amountMap, countsByPerson) : [];
+    const notes: GridColumn<PersonnelRate> = { id: 'base_rate_note', header: 'Notes', accessor: 'base_rate_note', type: { kind: 'text' }, width: 192 };
+    return [...lead, ...rtCols, ...totals, notes];
+  }, [currency, ccy, canSeeCommission, payrollEntries, countsByPerson, rateTypes, amountMap]);
 
-  // Sort rows by group then keep insertion order within group; build section headers.
+  // Sort rows by group; build section headers.
   const { gridRows, sectionHeaders } = useMemo(() => {
-    const buckets: Record<GroupKey, PersonnelRate[]> = {
-      principal: [],
-      band: [],
-      crew: [],
-      other: [],
-    };
-    for (const r of rates) {
-      buckets[groupKey(r.person_type)].push(r);
-    }
+    const buckets: Record<GroupKey, PersonnelRate[]> = { principal: [], band: [], crew: [], other: [] };
+    for (const r of rates) buckets[groupKey(r.person_type)].push(r);
     const sorted: PersonnelRate[] = [];
     const headers: SectionHeader[] = [];
     let prevTrailingId: string | null = null;
@@ -191,34 +164,32 @@ export function PayrollRatesSpreadsheet({
 
   const onCommitCell = useCallback(
     async (rowId: string, columnId: string, raw: unknown): Promise<void> => {
-      const patch: Record<string, unknown> = {};
       const asString = (v: unknown): string => (v === null || v === undefined ? '' : String(v));
       const asNumber = (v: unknown): number => (typeof v === 'number' ? v : Number(v) || 0);
+
+      // Dynamic rate-type column → write personnel_rate_lines.amount.
+      const typeId = rtColTypeId(columnId);
+      if (typeId) {
+        try {
+          await onRateLineCommit(rowId, typeId, asNumber(raw));
+        } catch (e) {
+          showToast(e instanceof Error ? e.message : 'Save failed', 'error');
+        }
+        return;
+      }
+
+      // Otherwise a personnel_rates.* field (identity / employment / notes).
+      const patch: Record<string, unknown> = {};
       switch (columnId) {
         case 'person_name': patch.person_name = asString(raw).trim(); break;
         case 'role': patch.role = raw === '' || raw === null ? null : asString(raw); break;
         case 'person_type': patch.person_type = asString(raw) || 'crew'; break;
         case 'rate_type': patch.rate_type = asString(raw) || 'day_rate'; break;
-        case 'show_rate': patch.show_rate = asNumber(raw); break;
-        case 'off_rate': patch.off_rate = asNumber(raw); break;
-        case 'rehearsal_rate': patch.rehearsal_rate = asNumber(raw); break;
-        case 'per_diem': patch.per_diem = asNumber(raw); break;
-        case 'advance': patch.advance_fee = asNumber(raw); break;
-        case 'commission':
-          if (canSeeCommission) patch.commission = asNumber(raw);
-          break;
+        case 'commission': if (canSeeCommission) patch.commission = asNumber(raw); break;
         case 'base_rate_note': patch.base_rate_note = raw === null || raw === '' ? null : asString(raw); break;
         default: return;
       }
-
-      setRates((prev) =>
-        prev.map((r) =>
-          r.id === rowId
-            ? ({ ...r, ...(patch as Partial<PersonnelRate>), updated_at: new Date().toISOString() } as PersonnelRate)
-            : r,
-        ),
-      );
-
+      setRates((prev) => prev.map((r) => (r.id === rowId ? ({ ...r, ...(patch as Partial<PersonnelRate>), updated_at: new Date().toISOString() } as PersonnelRate) : r)));
       try {
         const res = await fetch('/api/budget/personnel-rates', {
           method: 'PATCH',
@@ -233,16 +204,13 @@ export function PayrollRatesSpreadsheet({
         showToast(e instanceof Error ? e.message : 'Save failed', 'error');
       }
     },
-    [showToast, canSeeCommission],
+    [showToast, canSeeCommission, onRateLineCommit],
   );
 
   const onRowOpen = useCallback(
     (row: PersonnelRate) => {
-      if (row.roster_personnel_id) {
-        setPersonOpen(row.roster_personnel_id);
-      } else {
-        showToast('Link this row to a roster person to open their profile.', 'error');
-      }
+      if (row.roster_personnel_id) setPersonOpen(row.roster_personnel_id);
+      else showToast('Link this row to a roster person to open their profile.', 'error');
     },
     [showToast],
   );
@@ -256,7 +224,6 @@ export function PayrollRatesSpreadsheet({
   }
 
   return (
-    // Raised panel (canonical-grid parity: lifted surface + border + shadow).
     <div
       className={cn('rounded-xl border border-lp-border shadow-sm', 'print:break-inside-avoid print:border-lp-border')}
       style={{ background: 'var(--lp-panel)' }}
@@ -285,9 +252,7 @@ export function PayrollSectionNav() {
       )}
       aria-label="Payroll groups"
     >
-      <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-wider lp-table-header-text">
-        Groups
-      </p>
+      <p className="mb-2 px-2 text-[10px] font-semibold uppercase tracking-wider lp-table-header-text">Groups</p>
       <ul className="flex flex-col gap-0.5">
         {SECTION_ORDER.filter((sid) => sid !== 'other').map((sid) => (
           <li key={sid}>

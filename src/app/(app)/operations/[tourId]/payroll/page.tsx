@@ -126,6 +126,20 @@ export default async function OperationsTourPayrollPage({ params }: { params: Pr
     const liveName = r.person_id ? nameByPersonId.get(r.person_id as string) : '';
     return liveName ? { ...r, person_name: liveName } : r;
   });
+
+  // b2 — the rate catalog (global defaults + this workspace's customs) + every
+  // person's rate line amounts, for the dynamic Rates grid.
+  const [{ data: rateTypeRows }, { data: rateLineRows }] = await Promise.all([
+    supabase
+      .from('rate_types')
+      .select('id, name, bucket, basis, day_statuses, order_index')
+      .or(`workspace_id.is.null,workspace_id.eq.${tour.workspace_id}`)
+      .order('order_index', { ascending: true }),
+    supabase
+      .from('personnel_rate_lines')
+      .select('personnel_rate_id, rate_type_id, amount')
+      .eq('tour_id', tourId),
+  ]);
   const payrollEntries = (payrollRows ?? [])
     .map((row: { personnel_rates?: unknown; personnel?: unknown }) => {
       const p = row.personnel_rates ?? row.personnel;
@@ -151,6 +165,8 @@ export default async function OperationsTourPayrollPage({ params }: { params: Pr
         routingDates={routingDates ?? []}
         personnelRates={personnelRates}
         payrollEntries={payrollEntries}
+        rateTypes={rateTypeRows ?? []}
+        rateLines={rateLineRows ?? []}
       />
     </div>
   );

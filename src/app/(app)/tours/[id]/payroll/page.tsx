@@ -19,7 +19,7 @@ export default async function PayrollPage({
 
   const { data: tour, error: tourError } = await supabase
     .from('tours')
-    .select('id, name, currency')
+    .select('id, name, currency, workspace_id')
     .eq('id', tourId)
     .single();
 
@@ -29,6 +29,8 @@ export default async function PayrollPage({
     { data: routingDates },
     { data: ratesRows },
     { data: payrollRows },
+    { data: rateTypeRows },
+    { data: rateLineRows },
   ] = await Promise.all([
     supabase.from('routing').select('*').eq('tour_id', tourId).order('date', { ascending: true }),
     supabase.from('personnel_rates').select('*').eq('tour_id', tourId).order('order_index'),
@@ -40,6 +42,15 @@ export default async function PayrollPage({
       `)
       .eq('tour_id', tourId)
       .order('week_start'),
+    supabase
+      .from('rate_types')
+      .select('id, name, bucket, basis, day_statuses, order_index')
+      .or(`workspace_id.is.null,workspace_id.eq.${tour.workspace_id}`)
+      .order('order_index', { ascending: true }),
+    supabase
+      .from('personnel_rate_lines')
+      .select('personnel_rate_id, rate_type_id, amount')
+      .eq('tour_id', tourId),
   ]);
 
   const personnelRates = ratesRows ?? [];
@@ -63,6 +74,8 @@ export default async function PayrollPage({
         routingDates={routingDates ?? []}
         personnelRates={personnelRates}
         payrollEntries={payrollEntries}
+        rateTypes={rateTypeRows ?? []}
+        rateLines={rateLineRows ?? []}
       />
     </div>
   );

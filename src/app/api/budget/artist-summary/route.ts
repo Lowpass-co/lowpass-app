@@ -15,6 +15,15 @@
 
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+// b2 — proposed Salary/Per-Diem now project each person's rate lines
+// (personnel_rate_lines × rate_types) via computeTotals over the tour-wide day
+// counts, so custom types are included. Reconciles to the legacy split /
+// day_rate-flat projection for the defaults — proven in reconcile.harness.ts.
+// (actual Salary/Per-Diem keep coming from persisted payroll_entries.)
+import { computeTotals, type DayCounts } from '@/lib/payroll/fees';
+import { rateLinesFor, type TourRateContext } from '@/lib/payroll/loadRateLines';
+import type { RateTypeMeta, RateLineRow } from '@/lib/payroll/rateLines';
+import type { RateBucket, RateBasis, DayStatus } from '@/lib/payroll/fees';
 
 const n = (x: unknown) => (x == null ? 0 : Number(x) || 0);
 const sum = (arr: number[]) => arr.reduce((a, b) => a + b, 0);
@@ -70,6 +79,8 @@ export async function GET(request: Request) {
     commissionsRes,
     flightsRes,
     routingRes,
+    rateTypesRes,
+    rateLinesRes,
   ] = await Promise.all([
     supabase.from('budget_settings')
       .select('tour_id, insurance_pct, contingency_pct, accountancy_pct')
@@ -81,7 +92,7 @@ export async function GET(request: Request) {
       .eq('workspace_id', wid),
 
     supabase.from('personnel_rates')
-      .select('tour_id, rate_type, show_rate, off_rate, rehearsal_rate, per_diem, advance_fee')
+      .select('id, tour_id, rate_type, show_rate, off_rate, rehearsal_rate, per_diem, advance_fee')
       .eq('workspace_id', wid)
       .in('tour_id', tourIds),
 
@@ -108,6 +119,19 @@ export async function GET(request: Request) {
     supabase.from('routing')
       .select('id, tour_id, date, day_type')
       .in('tour_id', tourIds),
+
+    // b2 — rate catalog (global defaults + this workspace's customs) …
+    supabase.from('rate_types')
+      .select('id, name, bucket, basis, day_statuses, order_index, workspace_id')
+      .or(`workspace_id.is.null,workspace_id.eq.${wid}`)
+      .order('order_index', { ascending: true }),
+
+    // … and every person's rate lines across these tours (personnel_rate_id is
+    // globally unique, so one map spans all the artist's tours).
+    supabase.from('personnel_rate_lines')
+      .select('personnel_rate_id, rate_type_id, amount')
+      .eq('workspace_id', wid)
+      .in('tour_id', tourIds),
   ]);
 
   const settings = settingsRes.data ?? [];
@@ -118,6 +142,26 @@ export async function GET(request: Request) {
   const commissions = commissionsRes.data ?? [];
   const flights = flightsRes.data ?? [];
   const routing = routingRes.data ?? [];
+
+  // b2 — assemble one rate context spanning every tour (personnel_rate_id is a
+  // PK, so the line map is unambiguous across tours).
+  const rateTypes: RateTypeMeta[] = ((rateTypesRes.data ?? []) as Array<{
+    id: string; name: string; bucket: string; basis: string; day_statuses: string[] | null; order_index: number;
+  }>).map((t) => ({
+    id: t.id,
+    name: t.name,
+    bucket: t.bucket as RateBucket,
+    basis: t.basis as RateBasis,
+    dayStatuses: (t.day_statuses ?? []) as DayStatus[],
+    orderIndex: t.order_index,
+  }));
+  const linesByRateId = new Map<string, RateLineRow[]>();
+  for (const r of (rateLinesRes.data ?? []) as Array<{ personnel_rate_id: string; rate_type_id: string; amount: number | string | null }>) {
+    const arr = linesByRateId.get(r.personnel_rate_id) ?? [];
+    arr.push({ rate_type_id: r.rate_type_id, amount: r.amount });
+    linesByRateId.set(r.personnel_rate_id, arr);
+  }
+  const rateCtx: TourRateContext = { types: rateTypes, linesByRateId };
 
   // Build routing_id → tour_id map for income (income is linked via routing)
   const routingTourMap: Record<string, string> = {};
@@ -144,14 +188,18 @@ export async function GET(request: Request) {
     const proposedIncome = sum(tourIncome.map(i => n(i.post_tax_guarantee) + n(i.merch_income) + n(i.vip_income)));
     const actualIncome = sum(tourIncome.map(i => n(i.actual_guarantee) + n(i.actual_overage) + n(i.actual_merch) + n(i.actual_vip)));
 
-    // Salaries + Per Diem
+    // Salaries + Per Diem — projected over the tour-wide day counts from each
+    // person's rate lines (advance rides its flat_once line, applied once).
     const tourPersonnel = personnel.filter(p => p.tour_id === tid);
-    const proposedSalaries = tourPersonnel.reduce((acc, p) => {
-      return acc + (p.rate_type === 'split_rate'
-        ? showDays * n(p.show_rate) + offDays * n(p.off_rate) + rehearsalDays * n(p.rehearsal_rate) + n(p.advance_fee)
-        : totalDays * n(p.off_rate) + n(p.advance_fee));
-    }, 0);
-    const proposedPerDiem = tourPersonnel.reduce((acc, p) => acc + totalDays * n(p.per_diem), 0);
+    const projCounts: DayCounts = { show: showDays, offTravel: offDays, rehearsal: rehearsalDays, active: totalDays };
+    let proposedSalaries = 0;
+    let proposedPerDiem = 0;
+    for (const p of tourPersonnel) {
+      const lines = rateLinesFor(rateCtx, p.id as string, p, n(p.advance_fee));
+      const { totalFee, totalPerDiem } = computeTotals(lines, projCounts);
+      proposedSalaries += totalFee;
+      proposedPerDiem += totalPerDiem;
+    }
     const tourPayroll = payroll.filter(e => e.tour_id === tid);
     const actualSalaries = sum(tourPayroll.map(e => n(e.total_fee)));
     const actualPerDiem = sum(tourPayroll.map(e => n(e.total_per_diem)));
