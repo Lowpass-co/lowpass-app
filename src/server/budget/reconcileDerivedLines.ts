@@ -44,8 +44,13 @@ interface VersionCtx {
 }
 
 const SECTION_ACCOMMODATION = 'Accommodation';
-const SECTION_SALARY = 'Salary';
-const SECTION_PER_DIEM = 'Per Diem';
+// Phase S — create the TEMPLATE name (plural) so a later template application
+// find-or-creates the same section; alias-match the singular so an existing
+// reconcile-made "Salary"/"Per Diem" is adopted, never twinned.
+const SECTION_SALARY = 'Salaries';
+const SALARY_ALIASES = ['Salary'];
+const SECTION_PER_DIEM = 'Per Diems';
+const PER_DIEM_ALIASES = ['Per Diem'];
 
 /** Distinguishes the two payroll-derived line families (same person id,
  *  different budget line) and the hotel family. */
@@ -240,14 +245,19 @@ async function ensureSection(
   tourId: string,
   workspaceId: string,
   name: string,
+  /** Phase S — extra names to ADOPT if present (e.g. the singular twin), so the
+   *  reconcile attaches to a template's existing section instead of creating one.
+   *  The section is CREATED under `name` when none of the aliases exist. */
+  aliases: string[] = [],
 ): Promise<string | null> {
   const { data: existing } = await supabase
     .from('budget_sections')
     .select('id, name, sort_order')
     .eq('tour_id', tourId)
     .eq('workspace_id', workspaceId);
+  const matchSet = new Set([name, ...aliases].map((n) => n.toLowerCase()));
   const found = (existing ?? []).find(
-    (s) => String(s.name).toLowerCase() === name.toLowerCase(),
+    (s) => matchSet.has(String(s.name).toLowerCase()),
   );
   if (found) return found.id as string;
   const maxSort = (existing ?? []).reduce(
@@ -404,7 +414,7 @@ export async function reconcileDerivedBudgetLines(
     }
 
     if (payroll.salary.length > 0) {
-      const sectionId = await ensureSection(supabase, tourId, workspaceId, SECTION_SALARY);
+      const sectionId = await ensureSection(supabase, tourId, workspaceId, SECTION_SALARY, SALARY_ALIASES);
       await reconcileType(supabase, {
         tourId,
         workspaceId,
@@ -418,7 +428,7 @@ export async function reconcileDerivedBudgetLines(
     }
 
     if (payroll.perDiem.length > 0) {
-      const sectionId = await ensureSection(supabase, tourId, workspaceId, SECTION_PER_DIEM);
+      const sectionId = await ensureSection(supabase, tourId, workspaceId, SECTION_PER_DIEM, PER_DIEM_ALIASES);
       await reconcileType(supabase, {
         tourId,
         workspaceId,
