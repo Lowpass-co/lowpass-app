@@ -21,8 +21,31 @@ import {
   fetchActiveGrants,
   canAccess,
 } from '@/lib/permissions/server';
+// Rates SSOT (Part A) — crew pay now reads personnel_rate_lines, not the
+// competing tour_personnel.rate_amount. See RATES_SSOT_DISCOVERY_2026-07-03 §3.
+import { DEFAULT_RATE_TYPE_IDS } from '@/lib/payroll/rateLines';
 
 export const dynamic = 'force-dynamic';
+
+/** The crew estimate's single daily fee, sourced from the SSOT (personnel_rate_lines):
+ *  a day-rate person's flat daily is their a6 "Day rate" line; a split person's is
+ *  their a1 "Show" line. Falls back to the frozen legacy columns for any card not
+ *  yet backfilled (migration 230), so the number is stable before + after apply.
+ *  Basis is unchanged (× calendar days in window) — only the rate SOURCE moves,
+ *  so only crew whose stored rate_amount disagreed with this figure change. */
+function ssotDailyRate(
+  card: { rate_type: string | null; show_rate: number | string | null; off_rate: number | string | null } | null,
+  lineByType: Map<string, number>,
+): number {
+  if (!card) return 0;
+  const isDayRate = (card.rate_type ?? '') === 'day_rate';
+  if (isDayRate) {
+    const a6 = lineByType.get(DEFAULT_RATE_TYPE_IDS.dayRate);
+    return a6 != null ? a6 : Number(card.off_rate) || 0;
+  }
+  const a1 = lineByType.get(DEFAULT_RATE_TYPE_IDS.show);
+  return a1 != null ? a1 : Number(card.show_rate) || 0;
+}
 
 interface ShowEntry {
   routing_id: string;
@@ -163,7 +186,9 @@ export async function GET(
     const { data: tp } = await supabase
       .from('tour_personnel')
       .select(
-        'role, employment_type, rate_amount, rate_currency, rate_period, starts_on, ends_on, status',
+        // rate_amount is intentionally NOT selected — crew pay reads the SSOT
+        // (personnel_rate_lines) below. The column is retired in migration 231.
+        'role, employment_type, rate_currency, rate_period, starts_on, ends_on, status',
       )
       .eq('tour_id', tourId)
       .eq('person_id', personId)
@@ -173,7 +198,6 @@ export async function GET(
     if (tp) {
       const a = tp as {
         role: string;
-        rate_amount: number | null;
         rate_currency: string | null;
         rate_period: string | null;
         starts_on: string | null;
@@ -187,12 +211,32 @@ export async function GET(
         status: a.status,
       };
       const days = daysBetweenInclusive(a.starts_on, a.ends_on);
-      const total =
-        a.rate_amount != null && a.rate_period === 'day' && days > 0
-          ? a.rate_amount * days
-          : null;
+
+      // Rates SSOT — the daily fee now comes from the person's rate lines, not
+      // the frozen tour_personnel.rate_amount. Load the card + its a1/a6 lines.
+      const { data: card } = await supabase
+        .from('personnel_rates')
+        .select('id, rate_type, show_rate, off_rate')
+        .eq('tour_id', tourId)
+        .eq('person_id', personId)
+        .maybeSingle<{ id: string; rate_type: string | null; show_rate: number | string | null; off_rate: number | string | null }>();
+      const lineByType = new Map<string, number>();
+      if (card?.id) {
+        const { data: lineRows } = await supabase
+          .from('personnel_rate_lines')
+          .select('rate_type_id, amount')
+          .eq('personnel_rate_id', card.id)
+          .in('rate_type_id', [DEFAULT_RATE_TYPE_IDS.show, DEFAULT_RATE_TYPE_IDS.dayRate]);
+        for (const l of (lineRows ?? []) as Array<{ rate_type_id: string; amount: number | string | null }>) {
+          lineByType.set(l.rate_type_id, Number(l.amount) || 0);
+        }
+      }
+      const dailyRate = ssotDailyRate(card, lineByType);
+      // Basis unchanged: daily rate × calendar days in the assignment window,
+      // gated on a day-period assignment exactly as before.
+      const total = dailyRate > 0 && a.rate_period === 'day' && days > 0 ? dailyRate * days : null;
       pay = {
-        rate_amount: a.rate_amount,
+        rate_amount: dailyRate > 0 ? dailyRate : null,
         rate_currency: a.rate_currency,
         rate_period: a.rate_period,
         days_in_window: days,

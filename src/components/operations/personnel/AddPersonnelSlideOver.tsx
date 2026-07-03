@@ -94,7 +94,9 @@ export function AddPersonnelSlideOver({
   const [startsOn, setStartsOn] = useState('');
   const [endsOn, setEndsOn] = useState('');
   const [status, setStatus] = useState<PersonnelStatus>('confirmed');
-  const [rateAmount, setRateAmount] = useState('');
+  // Rates SSOT (phase X) — no competing rate-amount input here; the tour rate is
+  // set only in the Payroll Rates grid, seeded from the person's library defaults.
+  // Currency + period stay as assignment metadata (the crew "my schedule" estimate).
   const [rateCurrency, setRateCurrency] = useState('GBP');
   const [ratePeriod, setRatePeriod] = useState('day');
 
@@ -125,7 +127,6 @@ export function AddPersonnelSlideOver({
     setStartsOn(tourStartDate ?? '');
     setEndsOn(tourEndDate ?? '');
     setStatus('confirmed');
-    setRateAmount('');
     setRateCurrency('GBP');
     setRatePeriod('day');
     setSubmitting(false);
@@ -242,13 +243,6 @@ export function AddPersonnelSlideOver({
     setSubmitting(true);
     setError(null);
     try {
-      const parsedRate =
-        rateAmount.trim() === '' ? null : Number(rateAmount);
-      if (parsedRate != null && Number.isNaN(parsedRate)) {
-        setError('Rate amount must be a number.');
-        setSubmitting(false);
-        return;
-      }
       const res = await fetch(`/api/tours/${tourId}/personnel`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -259,7 +253,8 @@ export function AddPersonnelSlideOver({
           starts_on: startsOn || null,
           ends_on: endsOn || null,
           status,
-          rate_amount: parsedRate,
+          // Rates SSOT — no rate_amount; the card + lines seed from the person's
+          // standard_rates server-side. Currency/period are assignment metadata.
           rate_currency: rateCurrency || null,
           rate_period: ratePeriod || null,
         }),
@@ -914,7 +909,7 @@ export function AddPersonnelSlideOver({
               </div>
             </fieldset>
 
-            {/* Rate */}
+            {/* Pay period — the rate itself is set in Payroll (Rates SSOT). */}
             <div>
               <div
                 className="lp-label-caps"
@@ -924,31 +919,15 @@ export function AddPersonnelSlideOver({
                   color: 'var(--lp-text-secondary)',
                 }}
               >
-                Rate (optional)
+                Pay period (optional) — set the rate in Payroll → Rates
               </div>
               <div
                 style={{
                   display: 'grid',
-                  gridTemplateColumns: '1fr 80px 110px',
+                  gridTemplateColumns: '80px 110px',
                   gap: 'var(--lp-space-2)',
                 }}
               >
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={rateAmount}
-                  onChange={(e) => setRateAmount(e.target.value)}
-                  placeholder="amount"
-                  style={{
-                    padding: 'var(--lp-space-2) var(--lp-space-3)',
-                    fontSize: 'var(--lp-text-sm)',
-                    color: 'var(--lp-text)',
-                    background: 'var(--lp-bg)',
-                    border: '1px solid var(--lp-border-strong)',
-                    borderRadius: 'var(--lp-radius-md)',
-                    outline: 'none',
-                  }}
-                />
                 <input
                   type="text"
                   value={rateCurrency}
