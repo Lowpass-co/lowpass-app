@@ -305,18 +305,23 @@ export async function POST(request: Request) {
   // lose its actuals (update-if-exists). Create the row so actuals are never
   // dropped. (actual_vip omitted → preserved on an existing row, NULL on a new
   // one — settlement isn't a VIP source.)
+  // Phase G — merge-safe upsert: OMIT any figure the settlement doesn't carry so
+  // its existing (carried) value is PRESERVED, never null-stomped. Mirrors the
+  // actual_vip omission + the locked_fx_rate write-when-resolved pattern below.
+  // On conflict, only the provided columns are updated; on a fresh row the
+  // omitted ones default to NULL (nothing to preserve).
   const incomePayload: Record<string, unknown> = {
     routing_id,
     workspace_id: profile.workspace_id,
-    actual_guarantee: actualGuarantee,
-    actual_overage: actualOverage,
-    actual_merch: actualMerch,
-    actual_deductions: actualDeductions,
-    // #24 — real attendance + gross (informational; never feeds income_gross).
-    actual_tickets_sold: actualTicketsSold,
-    actual_gross: actualGross,
     updated_at: now,
   };
+  if (actualGuarantee != null) incomePayload.actual_guarantee = actualGuarantee;
+  if (actualOverage != null) incomePayload.actual_overage = actualOverage;
+  if (actualMerch != null) incomePayload.actual_merch = actualMerch;
+  if (actualDeductions != null) incomePayload.actual_deductions = actualDeductions;
+  // #24 — real attendance + gross (informational; never feeds income_gross).
+  if (actualTicketsSold != null) incomePayload.actual_tickets_sold = actualTicketsSold;
+  if (actualGross != null) incomePayload.actual_gross = actualGross;
   // Only write locked_fx_rate when we resolved one — never clobber an existing
   // lock with null on a settlement edit that carries no actuals.
   if (lockedFxRate != null) incomePayload.locked_fx_rate = lockedFxRate;
