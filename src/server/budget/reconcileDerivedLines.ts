@@ -223,8 +223,12 @@ async function computePayrollDesired(
     const { totalFee: fee, totalPerDiem: pd } = computeTotals(lines, counts);
     // One Salary line per roster member (named + costed; 0 until days set).
     salary.push({ sourceId: id, label, total: fee });
-    // Per-diem line only when there's a non-zero total.
-    if (pd > 0) perDiem.push({ sourceId: id, label, total: pd });
+    // Phase D — Per-Diem is now SYMMETRIC with Salary: one line per roster
+    // member even when their per-diem is 0 (was gated behind pd > 0, which hid
+    // the whole Per-Diem section on tours with salary but no per-diem rate). A
+    // £0 line adds no money, so no double-count; the section gate at
+    // payroll.perDiem.length > 0 now fires whenever there are people, like Salary.
+    perDiem.push({ sourceId: id, label, total: pd });
   }
   return { salary, perDiem };
 }
