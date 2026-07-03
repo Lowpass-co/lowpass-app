@@ -10,6 +10,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { LayoutGrid, Calendar, MapPin, Download, Copy, Check, X, ClipboardCheck, Calculator, LayoutDashboard } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
 import { StyledSelect } from '@/components/ui/StyledSelect';
@@ -148,7 +149,6 @@ export function RoutingEditor({
   const [primaryTransit, setPrimaryTransit] = useState<PrimaryTransit>('bus_van');
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [saveSuccess, setSaveSuccess] = useState(false);
   const [afterSaveMenuOpen, setAfterSaveMenuOpen] = useState(false);
   const [customDayTypes, setCustomDayTypes] = useState<string[]>(initialCustomDayTypes);
   const { showToast } = useToast();
@@ -159,6 +159,19 @@ export function RoutingEditor({
   const gridWrapperRef = useRef<HTMLDivElement>(null);
   const hasUserEditedRef = useRef(false);
   const [advanceByDate, setAdvanceByDate] = useState<Record<string, { routing_id: string; status: string }>>({});
+
+  // Part 2 — autosave. Now SAFE: the POST is an id-preserving reconcile (Part 1),
+  // so a background save no longer cascade-wipes income/folders. Any user edit
+  // debounces a silent save; `rowsRef` keeps the debounced call from capturing a
+  // stale row set. scheduleAutosave is defined below (after saveRouting) and
+  // reached via a ref to avoid a temporal-dead-zone reference from updateRow.
+  const router = useRouter();
+  const rowsRef = useRef(rows);
+  useEffect(() => { rowsRef.current = rows; }, [rows]);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingSaveRef = useRef(false);
+  const scheduleAutosaveRef = useRef<(() => void) | null>(null);
+  const [autosave, setAutosave] = useState<'idle' | 'pending' | 'saving' | 'saved' | 'error'>('idle');
 
   useEffect(() => {
     setCustomDayTypes(initialCustomDayTypes);
@@ -204,6 +217,7 @@ export function RoutingEditor({
       }
       return prev.map((r, i) => (i === index ? merged : r));
     });
+    scheduleAutosaveRef.current?.();
   }, [readOnly]);
 
   useEffect(() => {
@@ -263,16 +277,20 @@ export function RoutingEditor({
       .catch(() => setAdvanceByDate({}));
   }, [tourId]);
 
-  const handleSave = useCallback(async () => {
+  /* The one persist path (id-preserving reconcile POST). `silent` = autosave
+     (subtle pill, no after-save menu / toast, no audit-log row). Reads rowsRef so
+     a debounced call always saves the latest rows; stable identity (no `rows`
+     dep) so timers never go stale. */
+  const saveRouting = useCallback(async (silent: boolean) => {
     setSaveError(null);
-    setSaveSuccess(false);
-    setSaving(true);
+    if (silent) setAutosave('saving'); else setSaving(true);
     try {
       const res = await fetch(`/api/tours/${tourId}/routing`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          dates: rows.map((r) => ({
+          autosave: silent,
+          dates: rowsRef.current.map((r) => ({
             date: r.date,
             day_type: r.day_type ?? '',
             city: r.city,
@@ -295,15 +313,42 @@ export function RoutingEditor({
         }),
       });
       if (!res.ok) throw new Error('Failed to save');
-      setSaveSuccess(true);
-      showToast('Routing saved');
-      setAfterSaveMenuOpen(true);
+      pendingSaveRef.current = false;
+      if (silent) setAutosave('saved');
+      else { showToast('Routing saved'); setAfterSaveMenuOpen(true); }
     } catch {
-      setSaveError('Failed to save routing. Please try again.');
+      if (silent) setAutosave('error'); else setSaveError('Failed to save routing. Please try again.');
     } finally {
-      setSaving(false);
+      if (!silent) setSaving(false);
     }
-  }, [tourId, rows, showToast]);
+  }, [tourId, showToast]);
+
+  const handleSave = useCallback(() => saveRouting(false), [saveRouting]);
+
+  /* Debounced autosave — called from every user edit path (via the ref). */
+  const scheduleAutosave = useCallback(() => {
+    if (readOnly) return;
+    pendingSaveRef.current = true;
+    setAutosave('pending');
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => { void saveRouting(true); }, 800);
+  }, [readOnly, saveRouting]);
+  useEffect(() => { scheduleAutosaveRef.current = scheduleAutosave; }, [scheduleAutosave]);
+
+  /* Flush a pending autosave NOW (before a hard navigation like Open advance). */
+  const flushSave = useCallback(async () => {
+    if (saveTimerRef.current) { clearTimeout(saveTimerRef.current); saveTimerRef.current = null; }
+    if (pendingSaveRef.current) await saveRouting(true);
+  }, [saveRouting]);
+
+  /* Warn on tab-close / reload while a save is still pending or in flight. */
+  useEffect(() => {
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (pendingSaveRef.current || saving) { e.preventDefault(); e.returnValue = ''; }
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [saving]);
 
   if (loading) {
     return (
@@ -381,21 +426,38 @@ export function RoutingEditor({
             iCal feed
           </button>
           {!readOnly && (view === 'grid' || view === 'calendar') && (
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={saving}
-              className="flex items-center gap-2 rounded-lg bg-lp-orange px-4 py-2 text-sm font-medium text-white hover:bg-lp-orange-hover disabled:opacity-50"
-            >
-              {saving ? (
-                <>
-                  <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                  Saving…
-                </>
-              ) : (
-                'Save routing'
-              )}
-            </button>
+            <>
+              {/* Part 2 — subtle autosave indicator: edits persist on their own;
+                  the button stays for an explicit flush. */}
+              <span
+                aria-live="polite"
+                className="text-xs"
+                style={{ color: autosave === 'error' ? 'var(--lp-danger)' : 'var(--lp-text-tertiary)', minWidth: 64 }}
+              >
+                {autosave === 'pending' || autosave === 'saving'
+                  ? 'Saving…'
+                  : autosave === 'saved'
+                    ? 'Saved ✓'
+                    : autosave === 'error'
+                      ? 'Save failed'
+                      : ''}
+              </span>
+              <button
+                type="button"
+                onClick={handleSave}
+                disabled={saving}
+                className="flex items-center gap-2 rounded-lg bg-lp-orange px-4 py-2 text-sm font-medium text-white hover:bg-lp-orange-hover disabled:opacity-50"
+              >
+                {saving ? (
+                  <>
+                    <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                    Saving…
+                  </>
+                ) : (
+                  'Save routing'
+                )}
+              </button>
+            </>
           )}
           {readOnly ? (
             <span
@@ -497,17 +559,27 @@ export function RoutingEditor({
           <div ref={gridWrapperRef}>
             <RoutingGrid
               rows={rows}
-              onChange={setRows}
+              onChange={(next) => {
+                hasUserEditedRef.current = true;
+                setRows(next);
+                scheduleAutosaveRef.current?.();
+              }}
               updateRow={updateRow}
               primaryTransit={primaryTransit}
               customDayTypes={customDayTypes}
               onAddCustomDayType={handleAddCustomDayType}
               tourId={tourId}
               advanceByDate={advanceByDate}
+              // Part 2 — flush a pending autosave before leaving for Advance so the
+              // edit can't be discarded by the (soft) navigation.
+              onOpenAdvance={(routingId) => {
+                void flushSave().finally(() => router.push(`/advance/${tourId}/${routingId}`));
+              }}
               onDeleteRow={(index) => {
                 hasUserEditedRef.current = true;
                 setSaveError(null);
                 setRows((prev) => prev.filter((_, i) => i !== index));
+                scheduleAutosaveRef.current?.();
               }}
             />
           </div>

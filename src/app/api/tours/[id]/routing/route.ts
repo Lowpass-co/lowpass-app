@@ -208,9 +208,12 @@ export async function POST(
   // (not per row) — entity_id points at the first row of the
   // saved batch as a representative anchor; field_changes
   // carries the count + tour_id for context.
+  // Part 2 — an autosave (`autosave: true`) skips this so debounced background
+  // saves don't spam the audit log; the manual "Save routing" still records one.
+  const isAutosave = body?.autosave === true;
   const insertedRows = (inserted ?? []) as Array<{ id: string; tour_id: string }>;
   const anchorId = insertedRows[0]?.id ?? null;
-  if (anchorId) {
+  if (anchorId && !isAutosave) {
     const { data: profile } = await supabase
       .from('profiles')
       .select('workspace_id')

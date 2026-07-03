@@ -215,6 +215,7 @@ export function RoutingGrid({
   tourId,
   advanceByDate = {},
   onDeleteRow,
+  onOpenAdvance,
   compact = false,
 }: {
   rows: RoutingRow[];
@@ -226,6 +227,9 @@ export function RoutingGrid({
   tourId?: string;
   advanceByDate?: Record<string, { routing_id: string; status: string }>;
   onDeleteRow?: (index: number) => void;
+  /** Part 2 — flush a pending autosave, then navigate to Advance (soft nav), so a
+   *  hard window.location.assign can't discard an unsaved routing edit. */
+  onOpenAdvance?: (routingId: string) => void;
   /** Sprint 8.1 §4 — compact variant for embedding inside the
    *  multi-step <TourCreateSlideOver>. Renames the Venue column
    *  header to "Location" (matches Adam's spec for the merged
@@ -267,6 +271,7 @@ export function RoutingGrid({
                   advanceByDate={advanceByDate}
                   updateRow={updateRow}
                   onDeleteRow={onDeleteRow}
+                  onOpenAdvance={onOpenAdvance}
                   primaryTransit={primaryTransit}
                   customDayTypes={customDayTypes}
                   onAddCustomDayType={onAddCustomDayType}
@@ -302,6 +307,7 @@ function RoutingRowWithMenu({
   advanceByDate,
   updateRow,
   onDeleteRow,
+  onOpenAdvance,
   primaryTransit,
   customDayTypes,
   onAddCustomDayType,
@@ -315,6 +321,7 @@ function RoutingRowWithMenu({
   advanceByDate: Record<string, { routing_id: string; status: string }>;
   updateRow: (index: number, updates: Partial<RoutingRow>) => void;
   onDeleteRow?: (index: number) => void;
+  onOpenAdvance?: (routingId: string) => void;
   primaryTransit: PrimaryTransit;
   customDayTypes?: string[];
   onAddCustomDayType?: (newType: string) => void;
@@ -327,7 +334,12 @@ function RoutingRowWithMenu({
   const advanceInfo = advanceByDate[row.date];
   const menuItems = [
     { label: 'Clear day', icon: Eraser, onClick: () => updateRow(rowIndex, { day_type: '', city: '', address: '', venue_name: '', venue_website: '', venue_phone: '', venue_capacity: undefined, notes: '', latitude: undefined, longitude: undefined, transport_to_next: 'default' }) },
-    ...(tourId && advanceInfo?.routing_id ? [{ label: 'Open advance', icon: ExternalLink, onClick: () => window.location.assign(`/advance/${tourId}/${advanceInfo.routing_id}`) }] : []),
+    ...(tourId && advanceInfo?.routing_id ? [{ label: 'Open advance', icon: ExternalLink, onClick: () => {
+      // Part 2 — flush any pending autosave, then navigate (soft nav). Falls back
+      // to the old hard nav only if no handler was wired.
+      if (onOpenAdvance) onOpenAdvance(advanceInfo.routing_id);
+      else window.location.assign(`/advance/${tourId}/${advanceInfo.routing_id}`);
+    } }] : []),
     ...(onDeleteRow && rowsLength > 1 ? [{ label: 'Delete day', icon: Trash2, variant: 'danger' as const, onClick: () => setDeleteOpen(true) }] : []),
   ].filter(Boolean) as { label: string; icon: typeof Eraser; onClick: () => void; variant?: 'danger' }[];
 
