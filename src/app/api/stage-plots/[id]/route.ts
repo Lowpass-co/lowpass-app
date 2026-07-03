@@ -23,7 +23,31 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   const data = await loadStagePlot(supabase, id);
   if (!data) return NextResponse.json({ error: 'Not found' }, { status: 404 });
   const channels = await loadPlotChannels(supabase, data.riderPackId);
-  return NextResponse.json({ ...data, channels });
+
+  // B2 — the current channel-list link + candidate channel-list packs on this
+  // tour, so the editor can offer a link/unlink control (RLS scopes candidates).
+  const { data: packRow } = await supabase
+    .from('rider_packs')
+    .select('tour_id, linked_rider_pack_id')
+    .eq('id', data.riderPackId)
+    .maybeSingle();
+  let linkCandidates: { id: string; title: string }[] = [];
+  if (packRow?.tour_id) {
+    const { data: cands } = await supabase
+      .from('rider_packs')
+      .select('id, title')
+      .eq('tour_id', packRow.tour_id)
+      .eq('kind', 'channel_list')
+      .order('updated_at', { ascending: false });
+    linkCandidates = (cands ?? []).map((c) => ({ id: c.id as string, title: (c.title as string) ?? 'Untitled' }));
+  }
+
+  return NextResponse.json({
+    ...data,
+    channels,
+    linkedRiderPackId: (packRow?.linked_rider_pack_id as string | null) ?? null,
+    linkCandidates,
+  });
 }
 
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {

@@ -10,12 +10,24 @@
 import { useEffect, useRef, useState } from 'react';
 import { StagePlotEditor } from '@/components/stage-plot/StagePlotEditor';
 import { ExportButton } from '@/components/export/ExportButton';
+import { LinkedRiderPackControl, type LinkCandidate } from '@/components/rider-pack/LinkedRiderPackControl';
 import { registerCustomIcons } from '@/lib/stage-plot/icons';
 import type { IconDescriptor } from '@/lib/stage-plot/icons/types';
 import type { Channel, EditorItem, EditorPlot } from '@/lib/stage-plot/editor-types';
 
+interface PlotLoad {
+  plot: EditorPlot;
+  items: EditorItem[];
+  customs: IconDescriptor[];
+  channels: Channel[];
+  riderPackId: string;
+  linkedRiderPackId: string | null;
+  linkCandidates: LinkCandidate[];
+}
+
 export function StagePlotEditorClient({ plotId }: { plotId: string }) {
-  const [data, setData] = useState<{ plot: EditorPlot; items: EditorItem[]; customs: IconDescriptor[]; channels: Channel[] } | null>(null);
+  const [data, setData] = useState<PlotLoad | null>(null);
+  const [linkedId, setLinkedId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -35,7 +47,16 @@ export function StagePlotEditorClient({ plotId }: { plotId: string }) {
         if (!live) return;
         const customs = (custom.items ?? []) as IconDescriptor[];
         registerCustomIcons(customs);
-        setData({ plot: d.plot, items: d.items, customs, channels: (d.channels ?? []) as Channel[] });
+        setData({
+          plot: d.plot,
+          items: d.items,
+          customs,
+          channels: (d.channels ?? []) as Channel[],
+          riderPackId: d.riderPackId as string,
+          linkedRiderPackId: (d.linkedRiderPackId as string | null) ?? null,
+          linkCandidates: (d.linkCandidates ?? []) as LinkCandidate[],
+        });
+        setLinkedId((d.linkedRiderPackId as string | null) ?? null);
       })
       .catch((e) => live && setError(e instanceof Error ? e.message : 'Load error'));
     return () => {
@@ -70,7 +91,30 @@ export function StagePlotEditorClient({ plotId }: { plotId: string }) {
         initialCustomIcons={data.customs}
         channels={data.channels}
         onChange={persist}
-        actions={<ExportButton surface="stage-plot" tourId={plotId} title="Export a branded stage-plot PDF" />}
+        actions={
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
+            {/* B2 — pair this stage plot with a tour channel-list pack; the
+                editor's Channels section then reads from the linked list. */}
+            <LinkedRiderPackControl
+              label="Channel list"
+              value={linkedId}
+              candidates={data.linkCandidates}
+              onCommit={async (next) => {
+                const res = await fetch(`/api/rider-packs/${data.riderPackId}`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ linked_rider_pack_id: next }),
+                });
+                if (!res.ok) {
+                  const j = await res.json().catch(() => ({}));
+                  throw new Error(typeof j.error === 'string' ? j.error : 'Link failed');
+                }
+                setLinkedId(next);
+              }}
+            />
+            <ExportButton surface="stage-plot" tourId={plotId} title="Export a branded stage-plot PDF" />
+          </div>
+        }
       />
     </div>
   );

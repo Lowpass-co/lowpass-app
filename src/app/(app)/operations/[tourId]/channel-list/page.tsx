@@ -9,6 +9,7 @@
 
 import { notFound } from 'next/navigation';
 import { ChannelListTourEditor } from '@/components/channel-list/ChannelListTourEditor';
+import { ChannelListEmptyState } from '@/components/channel-list/ChannelListEmptyState';
 import { ExportButton } from '@/components/export/ExportButton';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { formatResolveError, resolvePack } from '@/lib/rider-packs/resolve';
@@ -86,15 +87,22 @@ export default async function OperationsTourChannelListPage({
           section={resolvedSection}
           packId={resolvedPackId}
           tourId={tour.id}
+          /* B2 — stage-plot packs on this tour + the one (if any) currently
+             linked to this channel list, so the tab can link/unlink one. */
+          stagePlotCandidates={(packs ?? [])
+            .filter((p) => (p as { kind?: string }).kind === 'stage_plot')
+            .map((p) => ({ id: p.id as string, title: ((p as { title?: string }).title as string) ?? 'Untitled' }))}
+          linkedStagePlotId={
+            ((packs ?? []).find(
+              (p) => (p as { kind?: string }).kind === 'stage_plot' && (p as { linked_rider_pack_id?: string | null }).linked_rider_pack_id === resolvedPackId,
+            )?.id as string | undefined) ?? null
+          }
         />
       ) : (
         !resolveError && (
-          <p className="rounded-xl border border-dashed border-lp-border bg-lp-surface/60 px-4 py-8 text-center text-sm text-lp-text-secondary">
-            No channel list section found on a tour rider pack yet.{' '}
-            <a className="text-lp-orange hover:underline" href={`/operations/${tour.id}/riders`}>
-              Open rider packs →
-            </a>
-          </p>
+          /* B1 — create path: POST a channel_list section to the tour's most-recent
+             rider pack (endpoint seeds 16 blank rows), or prompt to create a pack. */
+          <ChannelListEmptyState tourId={tour.id} packId={(packs?.[0]?.id as string | undefined) ?? null} />
         )
       )}
     </div>
