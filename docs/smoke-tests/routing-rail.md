@@ -83,3 +83,15 @@ navigates as before; search + "Copy advance from…" still work.
 `day_type`.
 **Expect**: pill colour/label resolve from the FIRST type; unknown/empty →
 `off` token; never blank, never a crash.
+
+## Data-integrity pass — Routing (Phase R: BLOCKED — see below)
+
+- **INT-01** (BLOCKED) Routing persist: edit a cell + delete a day → refresh →
+  both stuck. NOT shipped — autosave was reverted. Root cause found: the only
+  routing persist path (`POST /api/tours/[id]/routing`) does delete-all + reinsert
+  with FRESH ids, and `budget_income.routing_id` is `ON DELETE CASCADE` with no
+  re-link — so **saving routing wipes all tour income**. Auto-firing that (the
+  sanctioned fallback) would destroy income on every edit. Safe fix = per-row
+  PATCH/DELETE, but `RoutingRow` carries no server id (keyed by date) so it needs
+  a real refactor + the income-cascade fixed first. Reported, not shipped.
+- **INT-02** (BLOCKED) Routing→Advance edit-flush — same blocker as INT-01.

@@ -501,3 +501,12 @@ Adam live-test script (on preview, a tour with an existing routing grid):
   rate_amount disagreed with their SSOT daily fee change — see the crew-pay
   reconcile in RATES_SSOT_DISCOVERY_2026-07-03.md §7. Migration 230 applies
   idempotently; 231 (column drop) is written but NOT applied.
+
+## Data-integrity pass — Payroll grid (Phase P)
+
+- **INT-03** (needs-live) Payroll Rates grid: type a value → Tab → moves to the
+  next EDITABLE cell (skips the read-only totals: show/off days, total fee/PD),
+  wrapping across rows; focus never leaves the grid; Shift+Tab reverses. Values
+  entered by type-then-Tab persist on refresh. A split_rate person's Show /
+  Off-Travel / Rehearsal cells each accept + persist distinct values. Confirm no
+  regression in Channel List / Budget grids (same SpreadsheetGrid primitive).

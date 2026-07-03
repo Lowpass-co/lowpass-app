@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Lowpass — Rates SSOT + Rider/Budget smoke</title>
+<style>
+  :root{
+    --bg:#0f1115; --panel:#171a21; --panel2:#1e222b; --line:#2a2f3a;
+    --ink:#e7e9ee; --muted:#9aa3b2; --orange:#FF4500;
+    --pass:#3fb950; --fail:#f85149; --blocked:#d29922; --idle:#5b6373;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;}
+  .wrap{max-width:860px;margin:0 auto;padding:28px 20px 140px;}
+  h1{font-size:22px;margin:0 0 4px;}
+  .sub{color:var(--muted);margin:0 0 20px;font-size:13.5px;}
+  .gate{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--orange);
+    border-radius:10px;padding:14px 16px;margin:0 0 22px;font-size:13.5px;}
+  .gate b{color:var(--ink)} .gate code{background:#000;padding:1px 6px;border-radius:5px;color:#ffd9c9;font-size:12.5px}
+  .gate ol{margin:8px 0 0;padding-left:20px} .gate li{margin:3px 0;color:var(--muted)}
+  .grouphd{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);
+    margin:26px 0 10px;border-bottom:1px solid var(--line);padding-bottom:6px;}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin:0 0 14px;}
+  .card.done-pass{border-left:3px solid var(--pass)}
+  .card.done-fail{border-left:3px solid var(--fail)}
+  .card.done-blocked{border-left:3px solid var(--blocked)}
+  .id{display:inline-block;font-weight:700;font-size:12.5px;letter-spacing:.03em;
+    background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:2px 8px;color:#cfe;}
+  .title{font-weight:600;margin:8px 0 6px;}
+  .steps{color:var(--muted);font-size:13.5px;margin:0 0 4px}
+  .exp{font-size:13px;margin:8px 0 12px;color:#bcd}
+  .exp b{color:var(--ink)}
+  .radios{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px}
+  .radios label{cursor:pointer;font-size:13px;border:1px solid var(--line);border-radius:20px;
+    padding:5px 13px;color:var(--muted);user-select:none;background:var(--panel2)}
+  .radios input{display:none}
+  .radios input:checked + span{color:#fff}
+  .radios label:has(input[value="pass"]:checked){border-color:var(--pass);background:#12351d;color:#fff}
+  .radios label:has(input[value="fail"]:checked){border-color:var(--fail);background:#3a1615;color:#fff}
+  .radios label:has(input[value="blocked"]:checked){border-color:var(--blocked);background:#3a2c0e;color:#fff}
+  textarea.note{width:100%;min-height:44px;resize:vertical;background:var(--panel2);
+    border:1px solid var(--line);border-radius:8px;color:var(--ink);padding:8px 10px;font:inherit;font-size:13.5px}
+  textarea.note::placeholder{color:#5b6373}
+  .bar{position:fixed;left:0;right:0;bottom:0;background:#0b0d11;border-top:1px solid var(--line);
+    padding:12px 20px;display:flex;gap:12px;align-items:center;justify-content:center}
+  .count{color:var(--muted);font-size:13px;margin-right:auto;max-width:420px}
+  .count b{color:var(--ink)}
+  button{font:inherit;font-weight:600;border-radius:9px;border:1px solid var(--line);
+    padding:10px 18px;cursor:pointer;background:var(--panel2);color:var(--ink)}
+  button.primary{background:var(--orange);border-color:var(--orange);color:#1a0a03}
+  button.primary:hover{filter:brightness(1.08)}
+  .out{max-width:860px;margin:20px auto 0;padding:0 20px}
+  .out textarea{width:100%;min-height:200px;background:#000;border:1px solid var(--line);border-radius:10px;
+    color:#d6f5df;padding:12px;font:12.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace}
+  .toast{position:fixed;bottom:70px;left:50%;transform:translateX(-50%);background:var(--pass);color:#03210c;
+    padding:9px 16px;border-radius:8px;font-weight:600;font-size:13.5px;opacity:0;transition:opacity .2s;pointer-events:none}
+  .toast.show{opacity:1}
+  .sess{margin:22px 0 0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Rates SSOT + Rider/Budget — smoke</h1>
+  <p class="sub">Part A (<code style="font-size:12px">feat/rates-ssot-part-a</code>) + Part B (rider/budget). Mark each, add notes, hit <b>Copy for Claude</b>.</p>
+
+  <div class="gate">
+    <b>Before the RATE tests:</b>
+    <ol>
+      <li>Apply migration <code>230</code> in the Supabase SQL editor (additive, zero money movement).</li>
+      <li>Run discovery query <code>(a')</code> — note how many crew rows will move, confirm each SSOT figure is the intended pay.</li>
+      <li>Smoke on the <code>feat/rates-ssot-part-a</code> Vercel preview (not main).</li>
+      <li>Do <b>not</b> apply migration 231 (the drops) until after this smoke passes.</li>
+    </ol>
+  </div>
+
+  <div id="tests"></div>
+
+  <div class="sess">
+    <div class="grouphd">Session notes (optional)</div>
+    <textarea id="session" class="note" placeholder="Anything else — preview URL, query (a') row count, surprises…"></textarea>
+  </div>
+</div>
+
+<div class="out">
+  <textarea id="output" readonly placeholder="Your pasteable results will appear here after you click Copy."></textarea>
+</div>
+
+<div class="bar">
+  <div class="count" id="count">0 of 9 marked</div>
+  <button id="reset">Reset</button>
+  <button class="primary" id="copy">Copy for Claude</button>
+</div>
+<div class="toast" id="toast">Copied to clipboard</div>
+
+<script>
+const TESTS = [
+  {group:"Part A — Rates SSOT (money path)"},
+  {id:"RATE-01", title:"One rate per person",
+   steps:"Open a person's slide-over, then the Payroll Rates grid for the same tour.",
+   exp:"The tour rate shows the <b>same number</b> in both places — no third/conflicting figure anywhere."},
+  {id:"RATE-02", title:"Payroll edit flows to budget",
+   steps:"Change a rate in the Payroll Rates grid, go to Budget → Expenses.",
+   exp:"The derived <b>Salary / Per-Diem</b> lines reflect the <b>same edited number</b>."},
+  {id:"RATE-03", title:"New person seeds from library",
+   steps:"Add a new person to the tour (note: no 'Rate (optional)' field anymore). Check their Payroll rate, then their library standard_rates.",
+   exp:"Rate lines <b>seed from the person's library default</b>. Editing the tour rate does <b>not</b> change the library default."},
+  {id:"RATE-04", title:"Backfill — nothing lost",
+   steps:"After applying 230, run the count query (cards_without_lines).",
+   exp:"Card-only people now have lines; <b>0 rows lost</b>. (DB check, not UI.)"},
+  {id:"RATE-05", title:"Crew 'my schedule' pay = SSOT",
+   steps:"Open a crew member's My Schedule. Cross-check against query (a').",
+   exp:"Pay reads the <b>SSOT daily × days</b>. Divergent crew from (a') now show the <b>correct line-derived</b> figure; everyone else is <b>unchanged</b>."},
+
+  {group:"Part B — Rider / Budget features"},
+  {id:"CHAN-01", title:"Channel list — create path",
+   steps:"On a tour with no channel list, use 'Create channel list', add a few channels, refresh.",
+   exp:"It <b>persists</b> and also shows up in the linked <b>rider pack</b>."},
+  {id:"RIDER-01", title:"Link stage-plot / channel-list to rider",
+   steps:"Link a stage-plot and a channel-list to a rider pack, then unlink. (If you have a 2nd workspace, try linking across — should be blocked.)",
+   exp:"Linked item <b>appears in the pack</b>; unlink <b>removes</b> it. Cross-workspace link is <b>refused</b>."},
+  {id:"BUD-COLLAPSE-01", title:"Budget section collapse",
+   steps:"Collapse a budget section (chevron), then reload the page.",
+   exp:"Rows + add-line <b>hide</b>, header + <b>subtotal stay</b>. State <b>survives reload</b>. Burn-bar totals <b>unchanged</b>."},
+];
+
+const state = {}; // id -> {status, note}
+const host = document.getElementById('tests');
+
+TESTS.forEach(t => {
+  if (t.group){
+    const h = document.createElement('div');
+    h.className = 'grouphd'; h.textContent = t.group;
+    host.appendChild(h); return;
+  }
+  state[t.id] = {status:'', note:''};
+  const card = document.createElement('div');
+  card.className = 'card'; card.dataset.id = t.id;
+  card.innerHTML = `
+    <span class="id">${t.id}</span>
+    <div class="title">${t.title}</div>
+    <div class="steps">${t.steps}</div>
+    <div class="exp">Expect: ${t.exp}</div>
+    <div class="radios">
+      ${['pass','fail','blocked'].map(v=>`
+        <label><input type="radio" name="${t.id}" value="${v}"><span>${v[0].toUpperCase()+v.slice(1)}</span></label>`).join('')}
+    </div>
+    <textarea class="note" placeholder="Notes${'…'} (what you saw, esp. on fail/blocked)"></textarea>`;
+  host.appendChild(card);
+
+  card.querySelectorAll('input[type=radio]').forEach(r=>{
+    r.addEventListener('change',()=>{
+      state[t.id].status = r.value;
+      card.classList.remove('done-pass','done-fail','done-blocked');
+      card.classList.add('done-'+r.value);
+      updateCount();
+    });
+  });
+  card.querySelector('textarea').addEventListener('input',e=>{ state[t.id].note = e.target.value; });
+});
+
+function updateCount(){
+  const ids = Object.keys(state);
+  const marked = ids.filter(i=>state[i].status).length;
+  const fails = ids.filter(i=>state[i].status==='fail').length;
+  const blocked = ids.filter(i=>state[i].status==='blocked').length;
+  let s = `<b>${marked}</b> of ${ids.length} marked`;
+  if(fails) s += ` · <b style="color:var(--fail)">${fails} fail</b>`;
+  if(blocked) s += ` · <b style="color:var(--blocked)">${blocked} blocked</b>`;
+  document.getElementById('count').innerHTML = s;
+}
+
+function icon(s){return s==='pass'?'✅':s==='fail'?'❌':s==='blocked'?'⛔':'⬜';}
+
+function build(){
+  const ids = Object.keys(state);
+  const pass = ids.filter(i=>state[i].status==='pass').length;
+  const fail = ids.filter(i=>state[i].status==='fail').length;
+  const blk = ids.filter(i=>state[i].status==='blocked').length;
+  const nr  = ids.filter(i=>!state[i].status).length;
+  let out = `SMOKE RESULTS — Rates SSOT (Part A) + Rider/Budget (Part B)\n`;
+  out += `Branch: feat/rates-ssot-part-a | ${new Date().toISOString().slice(0,16).replace('T',' ')}\n`;
+  out += `Summary: ${pass} pass, ${fail} fail, ${blk} blocked, ${nr} not run\n`;
+  out += `------------------------------------------------------------\n`;
+  let group='';
+  TESTS.forEach(t=>{
+    if(t.group){group=t.group; out += `\n[${group}]\n`; return;}
+    const st = state[t.id];
+    out += `${icon(st.status)} ${t.id} — ${st.status?st.status.toUpperCase():'NOT RUN'}`;
+    if(st.note.trim()) out += `\n    note: ${st.note.trim().replace(/\n/g,' ')}`;
+    out += `\n`;
+  });
+  const sess = document.getElementById('session').value.trim();
+  if(sess) out += `\nSession notes: ${sess.replace(/\n/g,' ')}\n`;
+  return out;
+}
+
+document.getElementById('copy').addEventListener('click',()=>{
+  const text = build();
+  document.getElementById('output').value = text;
+  const done = ()=>{const t=document.getElementById('toast');t.classList.add('show');setTimeout(()=>t.classList.remove('show'),1600);};
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(done).catch(()=>{ selectOut(); done(); });
+  } else { selectOut(); try{document.execCommand('copy');}catch(e){} done(); }
+});
+function selectOut(){const o=document.getElementById('output');o.focus();o.select();}
+
+document.getElementById('reset').addEventListener('click',()=>{
+  if(!confirm('Clear all responses?')) return;
+  location.reload();
+});
+
+updateCount();
+</script>
+</body>
+</html>

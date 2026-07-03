@@ -1808,3 +1808,16 @@ figure + red ≈ note when display ≠ tour currency).
   RATE-03 (new person seeds from `standard_rates`), RATE-04 (backfill loses zero
   rows) are NOT yet testable. Note discovery found a 4th live money surface
   (`tour_personnel.rate_amount` → crew my-schedule pay) beyond the prompt's scope.
+
+## Data-integrity pass — Budget (Phases G, D, S)
+
+- **INT-04** (needs-live) Guarantee carry (Phase G): set a projected guarantee →
+  it shows as actual → save a settlement with NO guarantee field → the actual
+  guarantee is STILL populated (not blanked). Same for overage/merch/deductions.
+- **INT-05** (needs-live) Per-Diem section (Phase D): roster people with no
+  per-diem rate → a Per-Diem section still appears in Budget → Expenses, mirroring
+  Salary (£0 lines shown). Totals still match Payroll (no double-count).
+- **INT-06** (needs-live, after migration 232) One salary section (Phase S): apply
+  a template to a fresh tour → payroll reconcile attaches derived salary lines to
+  the existing "Salaries" section — no second "Salary" section. Migration 232
+  collapses existing duplicate pairs on tours that currently show two.
