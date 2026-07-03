@@ -25,6 +25,7 @@
 import { useRouter } from 'next/navigation';
 import { useCallback, useState } from 'react';
 import ChannelListEditor from '@/components/rider-pack/ChannelListEditor';
+import { LinkedRiderPackControl, type LinkCandidate } from '@/components/rider-pack/LinkedRiderPackControl';
 import type { SavePillState } from '@/components/rider-pack/SaveStatePill';
 import type { RiderPack, ResolvedSection } from '@/lib/rider-packs/types';
 
@@ -33,17 +34,47 @@ export function ChannelListTourEditor({
   section,
   tourId,
   packId,
+  stagePlotCandidates = [],
+  linkedStagePlotId = null,
 }: {
   pack: RiderPack;
   section: ResolvedSection;
   tourId: string;
   packId: string;
+  /** B2 — stage-plot packs on the tour that can be paired with this channel list. */
+  stagePlotCandidates?: LinkCandidate[];
+  /** B2 — the stage-plot pack currently linked to this channel list, if any. */
+  linkedStagePlotId?: string | null;
 }) {
   const router = useRouter();
   const [pill, setPill] = useState<{ state: SavePillState; error: string | null }>({
     state: 'idle',
     error: null,
   });
+  const [linkedPlot, setLinkedPlot] = useState<string | null>(linkedStagePlotId);
+
+  // B2 — the FK lives on the stage-plot pack, so linking from this side edits
+  // the CHOSEN stage-plot pack's linked_rider_pack_id (→ this channel list) and
+  // clears the previous linker. Unlink clears whichever plot points here.
+  const setStagePlotLink = useCallback(
+    async (nextPlotId: string | null) => {
+      const patch = async (plotPackId: string, value: string | null) => {
+        const res = await fetch(`/api/rider-packs/${plotPackId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ linked_rider_pack_id: value }),
+        });
+        if (!res.ok) {
+          const j = await res.json().catch(() => ({}));
+          throw new Error(typeof j.error === 'string' ? j.error : 'Link failed');
+        }
+      };
+      if (linkedPlot && linkedPlot !== nextPlotId) await patch(linkedPlot, null);
+      if (nextPlotId) await patch(nextPlotId, packId);
+      setLinkedPlot(nextPlotId);
+    },
+    [linkedPlot, packId],
+  );
 
   const commitTitle = useCallback(
     async (title: string) => {
@@ -67,6 +98,15 @@ export function ChannelListTourEditor({
     // revamp #17 — sits ON the page (Phase-1 chrome): no boxed panel; the editor
     // carries its own grid structure.
     <div className="min-w-0">
+      {/* B2 — pair this channel list with a stage plot on the tour. */}
+      <div className="mb-2 flex justify-end print:hidden">
+        <LinkedRiderPackControl
+          label="Stage plot"
+          value={linkedPlot}
+          candidates={stagePlotCandidates}
+          onCommit={setStagePlotLink}
+        />
+      </div>
       <ChannelListEditor
         section={section}
         pack={pack}

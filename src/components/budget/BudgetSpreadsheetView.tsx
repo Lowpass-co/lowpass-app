@@ -28,6 +28,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import {
   AlertTriangle,
   ChevronDown,
+  ChevronRight,
   Columns3,
   Download,
   ExternalLink,
@@ -322,6 +323,8 @@ function phaseTagOf(line: BudgetLineItem): PhaseTag {
 }
 
 const GROUP_BY_LS_PREFIX = 'lp-budget-group-by:';
+/* B3 — per-tour, per-user collapsed section ids (mirrors the group-by pref). */
+const COLLAPSE_LS_PREFIX = 'lp-budget-collapsed:';
 
 export function BudgetSpreadsheetView({
   lines,
@@ -416,6 +419,32 @@ export function BudgetSpreadsheetView({
     if (typeof window !== 'undefined') {
       window.localStorage.setItem(GROUP_BY_LS_PREFIX + tourId, next);
     }
+  };
+
+  // B3 — collapsed section ids, restored per-tour on mount and persisted on
+  // toggle. Collapsing only hides a section's rows in the view; the burn-bar
+  // grand totals (which sum every line) and the versioning snapshot are
+  // untouched, so no number changes.
+  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const raw = window.localStorage.getItem(COLLAPSE_LS_PREFIX + tourId);
+      if (raw) setCollapsedSections(new Set(JSON.parse(raw) as string[]));
+    } catch {
+      /* ignore corrupt pref */
+    }
+  }, [tourId]);
+  const toggleCollapsed = (groupId: string) => {
+    setCollapsedSections((prev) => {
+      const next = new Set(prev);
+      if (next.has(groupId)) next.delete(groupId);
+      else next.add(groupId);
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(COLLAPSE_LS_PREFIX + tourId, JSON.stringify([...next]));
+      }
+      return next;
+    });
   };
 
   // Phase C — column / canvas sizing (persisted per tour).
@@ -1420,6 +1449,8 @@ export function BudgetSpreadsheetView({
                       key={group.id}
                       group={group}
                       colCount={colCount}
+                      collapsed={collapsedSections.has(group.id)}
+                      onToggleCollapsed={() => toggleCollapsed(group.id)}
                       trackPhases={trackPhases}
                       sectionBusy={sectionBusy}
                       tourId={tourId}
@@ -1741,6 +1772,9 @@ interface GroupRowsProps {
   };
   /** Number of visible columns (drives every full-row colSpan). */
   colCount: number;
+  /** B3 — section collapse: hide this group's rows, keep the header. */
+  collapsed: boolean;
+  onToggleCollapsed: () => void;
   /** When false, the Phase column is omitted. */
   trackPhases: boolean;
   /** Disables section header controls while a section write is pending. */
@@ -1800,6 +1834,8 @@ function GroupRows({
   autoEditSectionId,
   autoEditLineId,
   onAutoEditConsumed,
+  collapsed,
+  onToggleCollapsed,
 }: GroupRowsProps) {
   const isSectionGroup = group.sectionId !== undefined;
   const isRealSection =
@@ -1829,6 +1865,18 @@ function GroupRows({
               not drifting to the far right. */}
           <div className="flex items-center gap-3">
             <div className="flex min-w-0 items-center gap-1.5">
+              {/* B3 — collapse toggle: hides this section's rows (view only). */}
+              <button
+                type="button"
+                onClick={onToggleCollapsed}
+                className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded"
+                style={{ color: 'var(--lp-text-tertiary)', background: 'transparent', border: 'none', cursor: 'pointer' }}
+                aria-expanded={!collapsed}
+                aria-label={collapsed ? `Expand ${group.label} section` : `Collapse ${group.label} section`}
+                title={collapsed ? 'Expand section' : 'Collapse section'}
+              >
+                {collapsed ? <ChevronRight className="h-3.5 w-3.5" aria-hidden /> : <ChevronDown className="h-3.5 w-3.5" aria-hidden />}
+              </button>
               {/* Phase C — real sections get an inline-editable name +
                   delete; phase / legacy buckets stay read-only. Phase 3 —
                   formula sections show a lock + a fixed canonical name (the
@@ -1928,7 +1976,8 @@ function GroupRows({
       {/* Phase 3 — locked formula rows: computed, read-only, lock icon +
           formula hint. Values come straight from computeBudgetPnl (tour
           currency → display). The % is edited in Settings, not here. */}
-      {isFormula
+      {/* B3 — collapsed: skip the formula rows (header stays). */}
+      {!collapsed && isFormula
         ? formulaRows!.map((f, i) => {
             const proj = convertToCurrency(
               f.projected,
@@ -2016,7 +2065,8 @@ function GroupRows({
             );
           })
         : null}
-      {group.rows.map((row, i) => {
+      {/* B3 — collapsed: skip this section's data rows (header stays). */}
+      {!collapsed && group.rows.map((row, i) => {
         const lineNumber = runningStart + i + 1;
         bumpRunning(runningStart + group.rows.length);
         const selected = selectedIds.includes(row.id);
@@ -2384,6 +2434,8 @@ function GroupRows({
           users who want to add a line without committing to a
           section yet. */}
       {(() => {
+        // B3 — collapsed sections show only the header (no add-line affordance).
+        if (collapsed) return null;
         // Phase 3 — locked formula sections have no editable lines.
         if (isFormula) return null;
         // Section groups (incl. empty ones) get a direct "+ Add line"

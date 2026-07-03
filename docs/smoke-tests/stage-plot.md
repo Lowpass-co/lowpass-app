@@ -216,3 +216,13 @@ _(none recorded yet — populate as smoke runs surface gaps.)_
 ## Retired
 
 _(none yet.)_
+
+## Rider-pack linking (B2)
+
+- **RIDER-01** (needs-live) On the stage-plot editor, the "Channel list" picker
+  lists channel-list packs on the tour; selecting one PATCHes the stage plot's
+  `linked_rider_pack_id` and the linked list's channels appear in the editor.
+  Unlink clears it. From the Channel-list tab, the "Stage plot" picker links the
+  chosen stage-plot pack back to this list. Cross-workspace isolation: PATCHing
+  `linked_rider_pack_id` to a pack in another workspace 404s (RLS SELECT gate);
+  self-link 400s. (PATCH /api/rider-packs/[id]; `LinkedRiderPackControl`)

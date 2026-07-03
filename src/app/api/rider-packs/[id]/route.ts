@@ -18,6 +18,8 @@ const ALLOWED_PATCH_FIELDS = new Set<string>([
   'cover_logo_url',
   'cover_subtitle',
   'cover_disclaimer',
+  /* B2 — pair a stage-plot pack with a channel-list pack (validated below). */
+  'linked_rider_pack_id',
 ]);
 
 export async function GET(
@@ -81,6 +83,29 @@ export async function PATCH(
   }
   if (Object.keys(updates).length === 0) {
     return NextResponse.json({ error: 'No updatable fields in body' }, { status: 400 });
+  }
+
+  // B2 — the link target must be null (unlink) or a pack visible to this caller.
+  // RLS SELECT only returns same-workspace packs, so a cross-tenant id (or a bad
+  // id) resolves to nothing → reject. This is the cross-workspace isolation gate.
+  if (Object.prototype.hasOwnProperty.call(updates, 'linked_rider_pack_id')) {
+    const target = updates.linked_rider_pack_id;
+    if (target !== null && typeof target !== 'string') {
+      return NextResponse.json({ error: 'linked_rider_pack_id must be a pack id or null' }, { status: 400 });
+    }
+    if (typeof target === 'string') {
+      if (target === id) {
+        return NextResponse.json({ error: 'A pack cannot link to itself' }, { status: 400 });
+      }
+      const { data: linkTarget } = await supabase
+        .from('rider_packs')
+        .select('id')
+        .eq('id', target)
+        .maybeSingle();
+      if (!linkTarget) {
+        return NextResponse.json({ error: 'Linked pack not found in your workspace' }, { status: 404 });
+      }
+    }
   }
 
   const { data: before } = await supabase
