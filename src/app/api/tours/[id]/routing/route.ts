@@ -3,7 +3,10 @@
 
    GET: List routing (?lite=1 → { routing } subset + workspace check;
         default → full rows array for editors/budget).
-   POST: Upsert routing (replace all dates in range)
+   POST: ID-preserving reconcile of a tour's routing (UPDATE kept dates by
+        (tour_id, date), INSERT new, DELETE only removed). Preserves routing.id so
+        routing(id) children — budget_income, rider folders, advances — survive an
+        edit. (Was delete-all-reinsert, which cascade-wiped them.)
    ============================================ */
 
 import { NextResponse } from 'next/server';
@@ -98,14 +101,25 @@ export async function POST(
     return NextResponse.json({ error: 'dates array is required' }, { status: 400 });
   }
 
-  // Delete existing routing for this tour, then insert new rows
-  const { error: deleteError } = await supabase
+  // Part 1 — ID-PRESERVING RECONCILE (was delete-all-then-reinsert). The old
+  // path deleted every routing row for the tour and reinserted with fresh UUIDs,
+  // which cascade-deleted EVERY routing(id) child for the whole tour on every
+  // save: budget_income (+ settlement, rooming_grid, budget_version_income),
+  // rider_folders/packs/assets, advance_intake_links/form_configs/instances —
+  // and SET-NULLed budget_line_items, flights, deal_memos, rooms, expenses.
+  //
+  // Now: match by (tour_id, date) — routing has UNIQUE(tour_id, date) and the
+  // grid pins each row to a fixed date, so the date is a stable identity. UPDATE
+  // kept dates in place (routing.id preserved → children survive), INSERT
+  // genuinely-new dates, and DELETE only dates removed from the payload (their
+  // children cascade — correct, that show is gone). The upsert's ON CONFLICT
+  // DO UPDATE never touches the primary key, so ids are preserved.
+  const { data: existingRows, error: existingErr } = await supabase
     .from('routing')
-    .delete()
+    .select('id, date')
     .eq('tour_id', tourId);
-
-  if (deleteError) {
-    return NextResponse.json({ error: deleteError.message }, { status: 500 });
+  if (existingErr) {
+    return NextResponse.json({ error: existingErr.message }, { status: 500 });
   }
 
   type IncomingRow = {
@@ -138,7 +152,7 @@ export async function POST(
   }
   const canonicalByPlaceId = await resolveCanonicalVenues(factsByPlaceId);
 
-  const insertRows = typedRows.map((r: IncomingRow, i: number) => ({
+  const desiredRows = typedRows.map((r: IncomingRow, i: number) => ({
     tour_id: tourId,
     date: r.date,
     day_type: r.day_type ?? '',
@@ -159,13 +173,34 @@ export async function POST(
     sequence: i,
   }));
 
+  // UPDATE kept dates + INSERT new dates in one call. ON CONFLICT (tour_id, date)
+  // DO UPDATE keeps each existing row's primary key → its routing(id) children
+  // (income, folders, …) are untouched.
   const { data: inserted, error: insertError } = await supabase
     .from('routing')
-    .insert(insertRows)
+    .upsert(desiredRows, { onConflict: 'tour_id,date' })
     .select();
 
   if (insertError) {
     return NextResponse.json({ error: insertError.message }, { status: 500 });
+  }
+
+  // DELETE only the dates that are genuinely gone from the payload — their
+  // children cascade away, which is correct (the show was removed). Dates still
+  // present were UPDATEd above and keep their ids + children.
+  const desiredDates = new Set(desiredRows.map((d) => d.date));
+  const removedIds = (existingRows ?? [])
+    .filter((r) => !desiredDates.has(String((r as { date: string }).date)))
+    .map((r) => (r as { id: string }).id);
+  if (removedIds.length > 0) {
+    const { error: deleteError } = await supabase
+      .from('routing')
+      .delete()
+      .eq('tour_id', tourId)
+      .in('id', removedIds);
+    if (deleteError) {
+      return NextResponse.json({ error: deleteError.message }, { status: 500 });
+    }
   }
 
   // Sprint 9 §5 — audit_log row so the Routing page's
