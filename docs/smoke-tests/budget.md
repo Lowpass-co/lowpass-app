@@ -1784,3 +1784,27 @@ figure + red ≈ note when display ≠ tour currency).
 - Actual-vs-transactions override math (gates a `transactions.ts` refactor).
 - Deliberate gaps: per-artist template override UI; drag-reorder;
   top-level "Line item"/Quick-Add still create section-less lines.
+
+## Section collapse (B3)
+
+- **BUD-COLLAPSE-01** (needs-live) Click the chevron on a budget section header
+  → its rows (and the "+ Add line" affordance) hide; the header + "· count"
+  stay. State persists per-tour across reload (localStorage
+  `lp-budget-collapsed:<tourId>`). The burn-bar grand totals and the versioning
+  snapshot are unchanged (collapse sums nothing — it only hides rows). NB: this
+  grid has no per-section money subtotal by design (totals live in the burn bar
+  up top), so the header is name·count, not a subtotal row. The dead
+  `GridSectionHeader`/`collapseFilter` primitives target SpreadsheetGrid's
+  `DisplayEntry` model, which this custom grid doesn't use — collapse was
+  implemented in-place instead.
+
+## Rates SSOT (Part A — BLOCKED, discovery only)
+
+- **RATE-01..04** (BLOCKED — Part A migration not run) Discovery report at
+  `docs/handover/RATES_SSOT_DISCOVERY_2026-07-03.md`. The migration/backfill/
+  cutover are gated on Adam approving discovery AND on the CC_DATA_INTEGRITY_PASS
+  phase-X prereq landing (not merged). Until then: RATE-01 (one rate across
+  slide-over + Payroll grid), RATE-02 (edit rate → budget salary/PD match),
+  RATE-03 (new person seeds from `standard_rates`), RATE-04 (backfill loses zero
+  rows) are NOT yet testable. Note discovery found a 4th live money surface
+  (`tour_personnel.rate_amount` → crew my-schedule pay) beyond the prompt's scope.

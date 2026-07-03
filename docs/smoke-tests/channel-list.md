@@ -417,3 +417,12 @@ stage-plot link · templates · advance · export · data model / RowPatch / RPC
 
 Retired 2026-06-02. Not relevant: channel-list cells don't have
 currency-typed fields in Adam's workflow.
+
+## Create path (B1)
+
+- **CHAN-01** (needs-live) On a tour whose rider pack has no channel-list
+  section, the Channel-list tab shows "+ Create channel list". Clicking it POSTs
+  a `channel_list` section to the tour's most-recent rider pack (16 blank rows
+  seeded) and refreshes into the editable editor; the list also appears in the
+  rider pack. If the tour has NO rider pack, the tab prompts to create one under
+  Riders instead. (`ChannelListEmptyState` → POST /api/rider-packs/[id]/sections)

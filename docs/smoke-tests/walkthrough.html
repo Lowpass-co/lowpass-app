@@ -1,0 +1,181 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Lowpass — Full Walkthrough Smoke</title>
+<style>
+  :root{--bg:#0F0F0F;--surf:#1A1A1A;--surf2:#161616;--bd:#2E2E2E;--tx:#F5F5F5;--sec:#A3A3A3;--mut:#737373;--org:#FF4500;--grn:#10B981;--red:#EF4444;--mono:ui-monospace,'SF Mono',Menlo,monospace;--sans:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--tx);font-family:var(--sans);font-size:14px;line-height:1.5}
+  header{position:sticky;top:0;z-index:20;background:#0f0f0fe6;backdrop-filter:blur(8px);border-bottom:1px solid var(--bd);padding:12px 20px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  header h1{font-size:16px;font-weight:600;margin:0;letter-spacing:-.01em}
+  header .org{color:var(--org)}
+  .prog{font-family:var(--mono);font-size:12px;color:var(--sec)}
+  .prog b{color:var(--tx)}
+  .btn{background:var(--surf);border:1px solid var(--bd);color:var(--tx);border-radius:7px;padding:7px 12px;font-size:12.5px;cursor:pointer;font-family:var(--sans)}
+  .btn:hover{border-color:#3f3f3f}
+  .btn.pri{background:var(--org);border-color:var(--org);color:#fff;font-weight:500}
+  .main{display:flex;align-items:flex-start;gap:0}
+  /* BIN */
+  aside{position:sticky;top:57px;align-self:flex-start;width:236px;flex-shrink:0;height:calc(100vh - 57px);border-right:1px solid var(--bd);background:var(--surf2);display:flex;flex-direction:column;padding:12px}
+  aside h2{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--mut);margin:0 0 8px;display:flex;align-items:center;gap:6px}
+  aside h2 .n{font-family:var(--mono);color:var(--org)}
+  .bindrop{border:1.5px dashed var(--bd);border-radius:8px;padding:14px 8px;text-align:center;color:var(--mut);font-size:11.5px;transition:.12s;cursor:pointer}
+  .bindrop.hot{border-color:var(--org);color:var(--org);background:color-mix(in srgb,var(--org) 8%,transparent)}
+  .capto{font-family:var(--mono);font-size:10.5px;color:var(--org);margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .bshot .tag{font-family:var(--mono);font-size:10px;color:var(--sec);padding:4px 6px;display:flex;justify-content:space-between;align-items:center;gap:4px}
+  .binlist{margin-top:10px;overflow-y:auto;flex:1;display:flex;flex-direction:column;gap:10px}
+  .bshot{border:1px solid var(--bd);border-radius:8px;overflow:hidden;background:var(--bg)}
+  .bshot img{display:block;width:100%;cursor:grab}
+  .bshot img:active{cursor:grabbing}
+  .bshot .cap{display:flex;gap:4px;padding:5px}
+  .bshot input{flex:1;background:transparent;border:none;color:var(--tx);font-size:11px;font-family:var(--sans);outline:none;min-width:0}
+  .bshot input::placeholder{color:var(--mut)}
+  .bshot .x{background:transparent;border:none;color:var(--mut);cursor:pointer;font-size:12px;padding:0 2px}
+  .bshot .x:hover{color:var(--red)}
+  .bhint{font-size:10.5px;color:var(--mut);margin-top:8px;line-height:1.4}
+  /* CONTENT */
+  .wrap{flex:1;min-width:0;max-width:860px;margin:0 auto;padding:20px}
+  .sec{background:var(--surf);border:1px solid var(--bd);border-radius:10px;margin-bottom:12px;overflow:hidden}
+  .sec>summary{list-style:none;cursor:pointer;padding:13px 16px;display:flex;align-items:center;gap:10px;font-weight:500;font-size:15px}
+  .sec>summary::-webkit-details-marker{display:none}
+  .sec>summary .chev{color:var(--mut);transition:transform .15s}
+  .sec[open]>summary .chev{transform:rotate(90deg)}
+  .sec>summary .cnt{margin-left:auto;font-family:var(--mono);font-size:11px;color:var(--mut)}
+  .body{padding:4px 16px 16px}
+  .chk{display:flex;align-items:flex-start;gap:10px;padding:6px 0;border-top:1px solid #232323}
+  .chk:first-child{border-top:none}
+  .pill{flex-shrink:0;width:26px;height:22px;border-radius:6px;border:1px solid var(--bd);background:var(--surf2);color:var(--mut);font-size:13px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-family:var(--mono);user-select:none}
+  .pill[data-s="pass"]{background:color-mix(in srgb,var(--grn) 20%,transparent);border-color:var(--grn);color:var(--grn)}
+  .pill[data-s="fail"]{background:color-mix(in srgb,var(--red) 20%,transparent);border-color:var(--red);color:var(--red)}
+  .pill[data-s="skip"]{color:var(--sec)}
+  .chk label{flex:1;font-size:13.5px;color:var(--tx);padding-top:2px}
+  .chk.link label:before{content:"🔗 "}
+  .chk.star{background:color-mix(in srgb,var(--org) 6%,transparent);margin:0 -8px;padding:6px 8px;border-radius:6px}
+  .note{width:100%;background:var(--surf2);border:1px solid var(--bd);border-radius:8px;color:var(--tx);font-family:var(--sans);font-size:13px;padding:9px 11px;margin-top:10px;resize:vertical;min-height:56px}
+  .note::placeholder{color:var(--mut)}
+  table{width:100%;border-collapse:collapse;margin-top:6px;font-size:13px}
+  th,td{border:1px solid var(--bd);text-align:left}
+  th{background:var(--surf2);color:var(--sec);font-weight:500;padding:7px 9px;font-size:11.5px;text-transform:uppercase;letter-spacing:.04em}
+  td [contenteditable]{padding:7px 9px;min-height:20px;outline:none}
+  td [contenteditable]:focus{background:color-mix(in srgb,var(--org) 8%,transparent)}
+  .hint{color:var(--mut);font-size:12px;margin:0 0 10px}
+  .pre{background:color-mix(in srgb,var(--org) 8%,transparent);border:1px solid color-mix(in srgb,var(--org) 30%,transparent);border-radius:8px;padding:11px 14px;font-size:13px;margin-bottom:16px}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--org);color:#fff;padding:9px 16px;border-radius:8px;font-size:13px;opacity:0;transition:.2s;pointer-events:none;z-index:30}
+  .toast.show{opacity:1}
+</style>
+</head>
+<body>
+<header>
+  <h1><span class="org">lowpass</span> · walkthrough smoke</h1>
+  <span class="prog" id="prog">0 checked</span>
+  <button class="btn pri" id="copy">Copy report</button>
+  <button class="btn" id="expand">Expand all</button>
+  <button class="btn" id="reset">Reset</button>
+</header>
+<div class="main">
+  <aside>
+    <h2>📎 Screenshot bin <span class="n" id="binN">0</span></h2>
+    <div class="capto" id="capto">→ tagging to: §0</div>
+    <div class="bindrop" id="bindrop">Paste (⌘V) anywhere,<br>or drop images here</div>
+    <div class="binlist" id="binlist"></div>
+    <div class="bhint">Shots auto-tag to the stage you're scrolled to — no typing. When you send the report, <b>drag each thumbnail into our chat</b>; the tags are in the report so I can match them.<br><br>⚠ Bin is session-only if storage fills — drag them to chat before closing.</div>
+  </aside>
+  <div class="wrap">
+    <div class="pre"><b>How to use:</b> walk it top-to-bottom doing real work. Tap each pill to cycle <b>· → ✓ → ✗ → –</b>. Type notes; <b>paste/drag screenshots into the bin</b> on the left. Autosaves. <b>🔗 = carry-over check</b> — the priority (your rates bug's class). Hit <b>Copy report</b> when done, paste to me, and drag the bin shots into chat.<br><br><b>First:</b> confirm current deploy (main <code>28ad177</code>+) and migrations 226–229 ran — half of "unusable" is stale code / unapplied schema.</div>
+    <div id="app"></div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+<script>
+const SECTIONS=[
+ ["0 · Login & land",[["Log in → land somewhere sensible (not error/blank)",0],["Top bar: workspace, nav, search, avatar — nothing duplicated/overlapping",0],["One Live indicator only — no duplicate Live pills",0]]],
+ ["1 · Workspace / roster",[["Artists / Personnel / Equipment tabs load",0],["Roster scannable — who's active at a glance",0],["Clicking an artist enters their home cleanly",0],["An artist's tours/personnel match what's inside them",1]]],
+ ["2 · Create a tour (modal)",[["New Tour opens the MODAL from every entry (list, top bar, switcher, dashboard) — none 404",0],["Details: artist, name, dates, region, currency enter cleanly",0],["Skip & create with just name + dates works",0],["Routing step seeds a row per date; add/edit works",0],["Create → the tour actually opens",0],["Name/dates/currency/region appear correctly on the created tour",1],["Routing entered in the modal is there on the Routing tab",1]]],
+ ["3 · Enter the tour / nav",[["Two-bar nav is clear about where you are",0],["Artist + tour switchers work, don't lose your place",0],["Every sub-tab loads (Summary, Personnel, Routing, Ch list, Stage plot, Payroll, Rooming, Files, Riders)",0],["Back/forward/refresh keep you where you were",0]]],
+ ["4 · Routing",[["Grid flat on page; add/edit/delete a row works",0],["Venue: type → library matches; pick → City/Country/Address/cap auto-fill",0],["Tab / Enter / type-to-search behave (no lost focus / eaten keys)",0],["Cities English + not blank; manual address edit sticks & doesn't unlink",0],["Map: branded pins locked on zoom; Calendar loads",0],["Save → reload → persisted",0],["A venue set here shows in Advance (specs) + Budget (city) for that show",1]]],
+ ["5 · Personnel / crew — ⚠ RATES LIVE HERE",[["Add a person; set role, role tag (incl BAND), dates, status",0],["Manage slide: is there ONE place to type a rate, or several?",0],["Swap works",0],["Person added here appears in Payroll, Rooming, Advance (same name/role, not duplicated)",1]]],
+ ["6 · Payroll",[["Rates & Summary: rates grid obviously editable; totals below",0],["Days matrix: day types from routing; editing updates totals",0],["Grid on the page (not a boxed window); headers right",0],["A rate set in Personnel shows here unchanged (and vice-versa) — or note where it diverges",1],["Show/off/travel counts match Routing day types",1],["Payroll totals feed Budget salary section (same numbers)",1]]],
+ ["7 · Rooming",[["Matrix / Nights / Cards load; assign rooms works",0],["Nights: Single/Double/Triple spelled out; in→out consecutive; unassigned shows city",0],["Room count right (two singles = 2)",0],["Roster matches Personnel; dates match tour/routing",1]]],
+ ["8 · Budget · Income",[["Rows enter cleanly: cap (count, no £), sell%, face, deal, guarantee, fee%, FX",0],["Currency symbol only on locked cells; Projected/Actual toggle works",0],["Shows match Routing; Guarantee carries Projected→Actual",1],["FX: live or still typing manually? note which",1]]],
+ ["9 · Budget · Expenses",[["Add/edit line items; assign to sections; collapse sections",0],["Section reorder saves (no error); Approve & lock works without refresh",0],["Receipt drop / attach — exists / works?",0],["Salary/per-diems here match Payroll; totals roll into Summary",1]]],
+ ["10 · Budget · Summary + Settings",[["Summary cards render; Customize / Add card works",0],["Net matches the detailed P&L",0],["Settings: overheads, commissions, FX, projection defaults, sections enter + save",0],["Summary card numbers match Income + Expenses + Settings",1]]],
+ ["11 · Channel list",[["Editable in place (dropdowns mic/DI, phantom, position, stand, box); Manage Stage I/O opens",0],["Artist-inherited → Override to edit here behaves",0],["A channel list in a Rider and on the tour tab reference the same data",1]]],
+ ["12 · Stage plot",[["Place/move/rotate items; new items labels OFF; tick-boxes branded",0],["Icons right + scale ft-true (v2 suite); export matches the canvas",0],["Input list on the plot matches the Channel list",1]]],
+ ["13 · Riders",[["Create/open a pack; manage from the click-open detail",0],["Builder canvas + sections work",0],["Rider pulls the tour's stage plot / channel list / personnel correctly",1]]],
+ ["14 · Advance",[["Per-show form loads; fields enter + save",0],["Complete/Pending/Overdue tiles reflect real state; Send packet works",0],["Venue specs formatted right (no weird mono); left routing list usable",0],["Venue info pre-fills from the linked venue; show list matches Routing",1]]],
+ ["15 · Files",[["What's here today — useful or placeholder? note what you'd need",0]]],
+ ["16 · Exports (do each)",[["Routing / Rooming / Payroll / Ch list / Stage plot / Budget each export a clean PDF",0],["Each export matches what's on screen (city, venues, rates, totals, plot)",1]]],
+ ["A · Navigation (end to end)",[["Workspace→Artist→Tour→back repeatedly — never lost/dumped",0],["Every dropdown opens/closes cleanly, big enough target, doesn't snap shut",0],["No duplicated chrome (same nav/action 2–3×), no dead links, no 404s",0],["⌘K search finds + jumps correctly",0]]],
+ ["C · Data-entry mechanics (all grids)",[["Tab/arrow/Enter move predictably; typing never eaten/lost",0],["Copy/paste works; edits persist on reload (no silent loss)",0],["Focus doesn't jump; no double-save / stale-value flashes",0]]],
+];
+const SSOT=["Salary / rates","Personnel (who's on tour)","Venue / city","Tour dates","Currency","Show / day types","(add your own)"];
+const KEY='lp_smoke_v2', S=JSON.parse(localStorage.getItem(KEY)||'{}');
+if(!S.bin)S.bin=[];
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){toast('⚠ storage full — drag bin shots to chat + remove')}}
+const app=document.getElementById('app');
+SECTIONS.forEach((sec,si)=>{
+  const [title,checks]=sec;
+  const d=document.createElement('details');d.className='sec';d.dataset.title=title;
+  d.innerHTML=`<summary><span class="chev">▸</span>${title}<span class="cnt" id="cnt${si}"></span></summary><div class="body" id="body${si}"></div>`;
+  const body=d.querySelector('.body');
+  checks.forEach((c,ci)=>{
+    const [txt,link]=c;const id='c'+si+'_'+ci;const st=S[id]||'';
+    const row=document.createElement('div');row.className='chk'+(link?' link star':'');
+    row.innerHTML=`<div class="pill" data-id="${id}" data-s="${st}">${st==='pass'?'✓':st==='fail'?'✗':st==='skip'?'–':''}</div><label>${txt}</label>`;
+    body.appendChild(row);
+  });
+  const nid='n'+si;
+  const ta=document.createElement('textarea');ta.className='note';ta.placeholder='Free notes — anything the checks missed…';ta.value=S[nid]||'';
+  ta.addEventListener('input',()=>{S[nid]=ta.value;save()});
+  body.appendChild(ta);
+  app.appendChild(d);
+  updCnt(si,checks.length);
+});
+// SSOT audit before section C (last)
+const bsec=document.createElement('details');bsec.className='sec';bsec.open=true;bsec.dataset.title='B · SSOT audit';
+bsec.innerHTML=`<summary><span class="chev">▸</span>B · SINGLE SOURCE OF TRUTH audit ⭐<span class="cnt">priority</span></summary><div class="body"><p class="hint">The "4 places for rates" class. Each datum: every place it's entered/shown, do they agree, where it diverges.</p><table><thead><tr><th>Datum</th><th>Every place it appears</th><th>Agree?</th><th>Diverges where</th></tr></thead><tbody id="ssot"></tbody></table></div>`;
+app.insertBefore(bsec, app.children[app.children.length-1]);
+const tb=bsec.querySelector('#ssot');
+SSOT.forEach((label,ri)=>{const tr=document.createElement('tr');tr.innerHTML=`<td style="width:22%"><div contenteditable data-k="ss${ri}_0">${S['ss'+ri+'_0']||label}</div></td><td><div contenteditable data-k="ss${ri}_1">${S['ss'+ri+'_1']||''}</div></td><td style="width:12%"><div contenteditable data-k="ss${ri}_2">${S['ss'+ri+'_2']||''}</div></td><td><div contenteditable data-k="ss${ri}_3">${S['ss'+ri+'_3']||''}</div></td>`;tb.appendChild(tr);});
+document.querySelectorAll('[contenteditable]').forEach(el=>el.addEventListener('input',()=>{S[el.dataset.k]=el.textContent;save()}));
+
+app.addEventListener('click',e=>{
+  const p=e.target.closest('.pill');if(!p)return;
+  const order=['','pass','fail','skip'];const nx=order[(order.indexOf(p.dataset.s||'')+1)%4];
+  p.dataset.s=nx;p.textContent=nx==='pass'?'✓':nx==='fail'?'✗':nx==='skip'?'–':'';
+  S[p.dataset.id]=nx;save();progress();
+  updCnt(+p.dataset.id.slice(1).split('_')[0]);
+});
+function updCnt(si){const el=document.getElementById('cnt'+si);if(!el)return;const total=SECTIONS[si][1].length;const done=SECTIONS[si][1].filter((_,ci)=>S['c'+si+'_'+ci]).length;el.textContent=done+'/'+total;}
+function progress(){let done=0,total=0;SECTIONS.forEach((s,si)=>s[1].forEach((_,ci)=>{total++;if(S['c'+si+'_'+ci])done++}));document.getElementById('prog').innerHTML='<b>'+done+'</b> / '+total+' checked';}
+progress();
+
+// ---- BIN + scroll-spy auto-tag ----
+const binlist=document.getElementById('binlist'),bindrop=document.getElementById('bindrop'),binN=document.getElementById('binN'),capto=document.getElementById('capto');
+let currentSection=SECTIONS[0][0];
+function updCurrent(){const secs=[...document.querySelectorAll('details.sec')];let cur=secs[0];for(const s of secs){if(s.querySelector('summary').getBoundingClientRect().top<=120)cur=s}currentSection=cur?cur.dataset.title:SECTIONS[0][0];capto.textContent='→ tagging to: §'+currentSection;}
+let raf;window.addEventListener('scroll',()=>{if(raf)return;raf=requestAnimationFrame(()=>{updCurrent();raf=0})},{passive:true});updCurrent();
+function renderBin(){binlist.innerHTML='';S.bin.forEach((o,i)=>{const d=document.createElement('div');d.className='bshot';d.innerHTML=`<img src="${o.src}" draggable="true" alt="${o.tag||'screenshot'}"><div class="tag"><span>§${o.tag||'—'}</span><button class="x">✕</button></div>`;d.querySelector('.x').onclick=()=>{S.bin.splice(i,1);save();renderBin()};binlist.appendChild(d)});binN.textContent=S.bin.length;}
+function addImg(src){S.bin.push({src,tag:currentSection});save();renderBin();}
+function readFiles(files){[...files].forEach(f=>{if(!f.type.startsWith('image/'))return;const r=new FileReader();r.onload=()=>addImg(r.result);r.readAsDataURL(f)});}
+bindrop.addEventListener('dragover',e=>{e.preventDefault();bindrop.classList.add('hot')});
+bindrop.addEventListener('dragleave',()=>bindrop.classList.remove('hot'));
+bindrop.addEventListener('drop',e=>{e.preventDefault();bindrop.classList.remove('hot');readFiles(e.dataTransfer.files)});
+document.addEventListener('paste',e=>{const f=e.clipboardData&&e.clipboardData.files;if(f&&f.length&&[...f].some(x=>x.type.startsWith('image/'))){readFiles(f);toast('Added → §'+currentSection)}});
+renderBin();
+
+document.getElementById('copy').onclick=()=>{
+  let out='# Lowpass walkthrough — results\n\n';
+  SECTIONS.forEach((s,si)=>{let lines=[];s[1].forEach((c,ci)=>{const st=S['c'+si+'_'+ci];if(st)lines.push('  '+(st==='pass'?'✓':st==='fail'?'✗':'–')+' '+c[0])});const n=(S['n'+si]||'').trim();if(lines.length||n){out+='## '+s[0]+'\n'+lines.join('\n')+'\n';if(n)out+='  NOTES: '+n+'\n';out+='\n'}});
+  out+='## SSOT audit\n';SSOT.forEach((l,ri)=>{const a=S['ss'+ri+'_1']||'',ag=S['ss'+ri+'_2']||'',dv=S['ss'+ri+'_3']||'';if(a||ag||dv)out+='- '+(S['ss'+ri+'_0']||l)+': places=['+a+'] agree='+ag+' diverges='+dv+'\n'});
+  if(S.bin.length){out+='\n## Screenshots (dragged separately, in this order):\n';S.bin.forEach((o,i)=>out+='  '+(i+1)+'. §'+(o.tag||'—')+'\n')}
+  navigator.clipboard.writeText(out).then(()=>toast('Report copied — paste to me + drag the bin shots'));
+};
+document.getElementById('expand').onclick=()=>{const all=document.querySelectorAll('.sec');const open=[...all].every(s=>s.open);all.forEach(s=>s.open=!open);document.getElementById('expand').textContent=open?'Expand all':'Collapse all'};
+document.getElementById('reset').onclick=()=>{if(confirm('Clear everything incl the bin?')){localStorage.removeItem(KEY);location.reload()}};
+let tt;function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');clearTimeout(tt);tt=setTimeout(()=>t.classList.remove('show'),2200)}
+</script>
+</body>
+</html>
