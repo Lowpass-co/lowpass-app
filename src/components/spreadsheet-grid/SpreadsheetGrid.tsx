@@ -28,7 +28,7 @@ import {
   partitionRows,
 } from './utils/displayRows';
 import { valueToEditString } from './utils/format';
-import { getDataRowIdOrder, isReadOnly, nextCellId } from './utils/nav';
+import { getDataRowIdOrder, isReadOnly, nextCellId, nextEditableCell } from './utils/nav';
 import { parseInput } from './utils/parse';
 import { validateValue } from './utils/validate';
 
@@ -144,6 +144,20 @@ export function SpreadsheetGrid<T>(props: SpreadsheetGridProps<T>) {
   const colIds = useMemo(() => columns.map(c => c.id), [columns]);
   const dataIdOrder = useMemo(() => getDataRowIdOrder(displayFlat), [displayFlat]);
 
+  // Phase P — Tab walks only EDITABLE cells (skips read-only/computed columns
+  // like the payroll totals) so a typed value's commit always fires and focus
+  // never escapes the grid. Predicate resolves the live row + column.
+  const colById = useMemo(() => new Map(columns.map(c => [c.id, c])), [columns]);
+  const rowById = useMemo(() => new Map(rows.map(r => [r.id, r])), [rows]);
+  const isCellEditable = useCallback(
+    (rowId: string, colId: string) => {
+      const row = rowById.get(rowId);
+      const col = colById.get(colId);
+      return !!row && !!col && !isReadOnly(row, col);
+    },
+    [rowById, colById]
+  );
+
   useEffect(() => {
     if (sel.range) onSelectionChange?.(sel.range);
   }, [onSelectionChange, sel.range]);
@@ -224,7 +238,7 @@ export function SpreadsheetGrid<T>(props: SpreadsheetGridProps<T>) {
             const n = nextCellId(dataIdOrder, colIds, sel.focus, 1, 0);
             if (n) sel.moveFocus(n);
           } else if (nav === 'right' && sel.focus) {
-            const n = nextCellId(dataIdOrder, colIds, sel.focus, 0, 1);
+            const n = nextEditableCell(dataIdOrder, colIds, isCellEditable, sel.focus, 1);
             if (n) sel.moveFocus(n);
           }
           return;
@@ -236,11 +250,11 @@ export function SpreadsheetGrid<T>(props: SpreadsheetGridProps<T>) {
         const n = nextCellId(dataIdOrder, colIds, sel.focus, 1, 0);
         if (n) sel.moveFocus(n);
       } else if (nav === 'right') {
-        const n = nextCellId(dataIdOrder, colIds, sel.focus, 0, 1);
+        const n = nextEditableCell(dataIdOrder, colIds, isCellEditable, sel.focus, 1);
         if (n) sel.moveFocus(n);
       }
     },
-    [colIds, columns, commit, dataIdOrder, displayFlat, edit, onBulkEdit, rows, sel]
+    [colIds, columns, commit, dataIdOrder, displayFlat, edit, isCellEditable, onBulkEdit, rows, sel]
   );
 
   const onKeyDown = useCallback(
@@ -261,12 +275,21 @@ export function SpreadsheetGrid<T>(props: SpreadsheetGridProps<T>) {
           e.preventDefault();
           if (e.shiftKey) {
             void finishEdit('none');
-            const n = sel.focus && nextCellId(dataIdOrder, colIds, sel.focus, 0, -1);
+            const n = sel.focus && nextEditableCell(dataIdOrder, colIds, isCellEditable, sel.focus, -1);
             if (n) sel.moveFocus(n);
           } else {
             void finishEdit('right');
           }
         }
+        return;
+      }
+      // Phase P — Tab in NAVIGATE mode moves to the next editable cell and
+      // preventDefaults, so focus never falls through to the browser (the bug
+      // that dropped typed payroll rates after the last editable cell).
+      if (e.key === 'Tab' && sel.focus) {
+        e.preventDefault();
+        const n = nextEditableCell(dataIdOrder, colIds, isCellEditable, sel.focus, e.shiftKey ? -1 : 1);
+        if (n) sel.moveFocus(n);
         return;
       }
       if (e.key === 'Enter' && sel.focus) {
@@ -331,7 +354,7 @@ export function SpreadsheetGrid<T>(props: SpreadsheetGridProps<T>) {
         }
       }
     },
-    [colIds, columns, dataIdOrder, displayFlat, edit, finishEdit, onRowOpen, rows, sel]
+    [colIds, columns, dataIdOrder, displayFlat, edit, finishEdit, isCellEditable, onRowOpen, rows, sel]
   );
 
   const onCellDown = (rowId: string, colId: string, e: React.MouseEvent, sh: boolean) => {

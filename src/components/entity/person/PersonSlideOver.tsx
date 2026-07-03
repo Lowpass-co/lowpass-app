@@ -44,7 +44,8 @@ function TourPersonnelRowEditor({
 }) {
   const [role, setRole] = useState(tp.role);
   const [employmentType, setEmploymentType] = useState(tp.employmentType ?? '');
-  const [rateAmount, setRateAmount] = useState(tp.rateAmount != null ? String(tp.rateAmount) : '');
+  // Rates SSOT — no competing rate-amount edit here; the tour rate lives in the
+  // Payroll Rates grid (personnel_rate_lines). Currency/period stay as metadata.
   const [rateCurrency, setRateCurrency] = useState(tp.rateCurrency || 'GBP');
   const [ratePeriod, setRatePeriod] = useState(tp.ratePeriod ?? '');
   const [startsOn, setStartsOn] = useState(dateInput(tp.startsOn));
@@ -55,7 +56,6 @@ function TourPersonnelRowEditor({
   useEffect(() => {
     setRole(tp.role);
     setEmploymentType(tp.employmentType ?? '');
-    setRateAmount(tp.rateAmount != null ? String(tp.rateAmount) : '');
     setRateCurrency(tp.rateCurrency || 'GBP');
     setRatePeriod(tp.ratePeriod ?? '');
     setStartsOn(dateInput(tp.startsOn));
@@ -67,7 +67,6 @@ function TourPersonnelRowEditor({
     return {
       role: tp.role,
       employment_type: tp.employmentType ?? null,
-      rate_amount: tp.rateAmount,
       rate_currency: tp.rateCurrency || 'GBP',
       rate_period: tp.ratePeriod,
       starts_on: dateInput(tp.startsOn) || null,
@@ -76,17 +75,15 @@ function TourPersonnelRowEditor({
   }, [tp]);
 
   const dirty = useMemo(() => {
-    const nextAmount = rateAmount === '' ? null : Number(rateAmount);
     return (
       role !== baseline.role ||
       (employmentType || null) !== baseline.employment_type ||
-      nextAmount !== baseline.rate_amount ||
       rateCurrency !== baseline.rate_currency ||
       (ratePeriod || null) !== baseline.rate_period ||
       (startsOn || null) !== baseline.starts_on ||
       (endsOn || null) !== baseline.ends_on
     );
-  }, [baseline, role, employmentType, rateAmount, rateCurrency, ratePeriod, startsOn, endsOn]);
+  }, [baseline, role, employmentType, rateCurrency, ratePeriod, startsOn, endsOn]);
 
   const persist = async () => {
     setSaving(true);
@@ -95,7 +92,6 @@ function TourPersonnelRowEditor({
       const updated = await updateTourPersonnel(tp.id, {
         role,
         employment_type: employmentType === '' ? null : (employmentType as NonNullable<TourPersonnelPatch['employment_type']>),
-        rate_amount: rateAmount === '' ? null : Number(rateAmount),
         rate_currency: rateCurrency || 'GBP',
         rate_period: ratePeriod === '' ? null : (ratePeriod as NonNullable<TourPersonnelPatch['rate_period']>),
         starts_on: startsOn === '' ? null : startsOn,
@@ -143,14 +139,6 @@ function TourPersonnelRowEditor({
           <option value="band">Band</option>
           <option value="mgmt">Mgmt</option>
         </select>
-        <input
-          className={IC}
-          type="number"
-          step="0.01"
-          placeholder="Rate amount"
-          value={rateAmount}
-          onChange={(e) => setRateAmount(e.target.value)}
-        />
         <input
           className={IC}
           placeholder="ISO currency"

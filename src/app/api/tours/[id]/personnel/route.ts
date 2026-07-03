@@ -19,6 +19,10 @@ import {
   fetchActiveGrants,
   canAccess,
 } from '@/lib/permissions/server';
+// Rates SSOT (Part A) — seed the per-tour rate card + its SSOT rate lines from
+// the person's library defaults (personnel.standard_rates), NOT a hand-typed
+// rate_amount. See RATES_SSOT_DISCOVERY_2026-07-03 §3.
+import { DEFAULT_RATE_TYPE_IDS } from '@/lib/payroll/rateLines';
 
 export const dynamic = 'force-dynamic';
 
@@ -277,7 +281,8 @@ export async function POST(
     role,
     role_tag: roleTag,
     employment_type: typeof body.employment_type === 'string' ? body.employment_type : null,
-    rate_amount: typeof body.rate_amount === 'number' ? body.rate_amount : null,
+    // Rates SSOT — rate_amount is retired (my-schedule reads personnel_rate_lines;
+    // migration 231 drops the column). Currency/period stay as assignment metadata.
     rate_currency: typeof body.rate_currency === 'string' ? body.rate_currency : 'GBP',
     rate_period: typeof body.rate_period === 'string' ? body.rate_period : null,
     starts_on: typeof body.starts_on === 'string' ? body.starts_on : null,
@@ -337,6 +342,21 @@ export async function POST(
         .maybeSingle();
       rateCard = data as Record<string, unknown> | null;
     } else {
+      // Rates SSOT — seed the card + its lines from the person's LIBRARY defaults
+      // (personnel.standard_rates), not a hand-typed rate. This is phase X's
+      // fold-in: rate entry's only home is the Payroll Rates grid.
+      const { data: lib } = await supabase
+        .from('personnel')
+        .select('standard_rates')
+        .eq('id', personId)
+        .eq('workspace_id', tourWorkspaceId)
+        .maybeSingle();
+      const sr = ((lib as { standard_rates?: Record<string, unknown> } | null)?.standard_rates ?? {}) as Record<string, unknown>;
+      const showSeed = Number(sr.show_day_rate) || 0;
+      const offSeed = Number(sr.off_day_rate) || 0;
+      const travelSeed = Number(sr.travel_day_rate) || 0;
+      const pdSeed = Number(sr.per_diem_rate) || 0;
+
       const { data } = await supabase
         .from('personnel_rates')
         .insert({
@@ -347,11 +367,28 @@ export async function POST(
           person_type: 'crew',
           person_id: personId,
           tour_personnel_id: inserted.id,
-          show_rate: typeof body.rate_amount === 'number' ? body.rate_amount : 0,
+          show_rate: showSeed,
+          off_rate: offSeed,
+          rehearsal_rate: travelSeed,
+          per_diem: pdSeed,
         })
         .select('*')
         .maybeSingle();
       rateCard = data as Record<string, unknown> | null;
+
+      // Seed the SSOT rate lines (a1–a5) from the same library defaults so the
+      // new person has explicit lines immediately (RATE-03). a6/day-rate is left
+      // for the Payroll grid; advance (a5) starts at 0. Best-effort.
+      const cardId = (rateCard as { id?: string } | null)?.id;
+      if (cardId) {
+        await supabase.from('personnel_rate_lines').insert([
+          { tour_id: tourId, workspace_id: tourWorkspaceId, personnel_rate_id: cardId, rate_type_id: DEFAULT_RATE_TYPE_IDS.show, amount: showSeed },
+          { tour_id: tourId, workspace_id: tourWorkspaceId, personnel_rate_id: cardId, rate_type_id: DEFAULT_RATE_TYPE_IDS.offTravel, amount: offSeed },
+          { tour_id: tourId, workspace_id: tourWorkspaceId, personnel_rate_id: cardId, rate_type_id: DEFAULT_RATE_TYPE_IDS.rehearsal, amount: travelSeed },
+          { tour_id: tourId, workspace_id: tourWorkspaceId, personnel_rate_id: cardId, rate_type_id: DEFAULT_RATE_TYPE_IDS.perDiem, amount: pdSeed },
+          { tour_id: tourId, workspace_id: tourWorkspaceId, personnel_rate_id: cardId, rate_type_id: DEFAULT_RATE_TYPE_IDS.advance, amount: 0 },
+        ]);
+      }
     }
   } catch {
     /* rate-card seed is best-effort — the roster row is what matters */
