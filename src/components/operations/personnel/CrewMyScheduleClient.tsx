@@ -302,7 +302,7 @@ export function CrewMyScheduleClient({ tourId }: CrewMyScheduleClientProps) {
           >
             <span style={{ color: 'var(--lp-text-secondary)' }}>Rate</span>
             <span>
-              {formatMoney(pay.rate_amount, pay.rate_currency)}
+              {formatMoney(pay.dailyRate, pay.rate_currency)}
               {pay.rate_period ? (
                 <span
                   style={{

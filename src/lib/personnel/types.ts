@@ -95,7 +95,8 @@ export interface MyScheduleResponse {
     status: string;
   } | null;
   pay: {
-    rate_amount: number | null;
+    /** Rates SSOT — the caller's single daily fee from personnel_rate_lines. */
+    dailyRate: number | null;
     rate_currency: string | null;
     rate_period: string | null;
     days_in_window: number;
