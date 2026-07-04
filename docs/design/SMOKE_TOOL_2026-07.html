@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width">
+<title>Lowpass — Design Smoke Tool · 2026-07</title>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600&family=JetBrains+Mono:wght@400;500&family=Inter:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{--bg0:#0a0a0a;--bg:#0F0F0F;--s1:#1A1A1A;--s2:#252525;--br:#2E2E2E;--br2:#222;--t1:#F5F5F5;--t2:#A3A3A3;--t3:#737373;--t4:#525252;--or:#FF4500;--or2:#FF6A33;--orw:rgba(255,69,0,.05);--ok:#3fa87d;--okw:rgba(63,168,125,.1);--red:#d05c5c;
+--dshow:rgba(16,185,129,.5);--dreh:rgba(139,92,246,.45);--doff:rgba(107,114,128,.3);--dtrv:rgba(59,130,246,.4);--dshowT:#6fcfa8;--drehT:#b0a3e8;--doffT:#8a8a92}
+*{box-sizing:border-box;margin:0}
+body{background:#060607;font-family:Inter,system-ui,sans-serif;color:var(--t1);padding:28px 360px 80px 28px}
+.hd{max-width:1440px;margin:0 0 18px}
+.hd h1{font-family:'Barlow Condensed';font-weight:600;font-size:30px;letter-spacing:.03em;text-transform:uppercase}
+.hd p{color:var(--t2);font-size:13.5px;margin-top:6px;max-width:900px;line-height:1.6}
+.hd .legend{margin-top:10px;font-size:12px;color:var(--t3)}
+.hd .legend b{color:var(--t2);font-weight:500}
+.sur{max-width:1440px;margin:0 0 46px}
+.sur>h2{font-family:'Barlow Condensed';font-weight:600;font-size:20px;letter-spacing:.04em;text-transform:uppercase;color:var(--t2);margin:0 0 10px;display:flex;gap:12px;align-items:baseline}
+.sur>h2 span{font-family:'JetBrains Mono';font-size:11px;color:var(--t4);text-transform:none;letter-spacing:0}
+.frame{position:relative;background:var(--bg);border:1px solid var(--br);border-radius:14px;overflow:hidden;cursor:crosshair}
+.chrome{display:flex;align-items:center;gap:14px;padding:13px 22px;background:var(--bg0);border-bottom:1px solid var(--br2)}
+.logo{width:12px;height:12px;border-radius:3px;background:var(--or);flex:none}
+.crumb{font-size:13.5px;color:var(--t2)}.crumb b{color:var(--t1);font-weight:500}
+.sep{color:var(--t4);font-size:12px}
+.pill{display:inline-flex;align-items:center;gap:8px;background:var(--s1);border:1px solid var(--br);border-radius:16px;padding:4px 13px;font-size:13px;color:var(--t1)}
+.pill .cv{color:var(--t4);font-size:11px}
+.av{width:28px;height:28px;border-radius:50%;background:var(--or);color:var(--bg);font-size:11px;font-weight:500;display:flex;align-items:center;justify-content:center}
+.mini-av{width:22px;height:22px;border-radius:50%;background:var(--s2);color:var(--t2);font-size:10px;display:flex;align-items:center;justify-content:center;flex:none}
+.sp{flex:1}
+.saved{font-size:12px;color:var(--ok)}
+.nav{display:flex;align-items:center;gap:4px;padding:0 22px;background:var(--bg0);border-bottom:1px solid var(--br2)}
+.tab{font-size:13.5px;color:var(--t2);padding:11px 13px 12px;border-bottom:2px solid transparent}
+.tab.on{color:var(--t1);border-color:var(--or)}
+.nvd{width:1px;height:16px;background:var(--br);margin:0 6px}
+.btn{font-size:13px;color:var(--t1);border:1px solid var(--br);border-radius:7px;padding:6px 14px;display:inline-flex;gap:7px;align-items:center}
+.btn.pri{background:var(--or);color:var(--bg);border-color:var(--or)}
+.btn.dim{color:var(--t3)}
+.body{padding:24px 22px 26px}
+.h1{font-family:'Barlow Condensed';font-weight:600;font-size:32px;letter-spacing:.03em;text-transform:uppercase;line-height:1}
+.h2{font-family:'Barlow Condensed';font-weight:600;font-size:24px;letter-spacing:.03em;text-transform:uppercase}
+.lbl{font-size:11.5px;color:var(--t3);letter-spacing:.09em;text-transform:uppercase}
+.mut{color:var(--t2)}.mut2{color:var(--t3)}.mut3{color:var(--t4)}
+.mono{font-family:'JetBrains Mono';}
+.card{background:var(--s1);border:1px solid var(--br);border-radius:10px}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:11.5px;color:var(--t2);border:1px solid var(--br);border-radius:11px;padding:2px 10px}
+.chip .tick{width:3px;height:11px;border-radius:1px}
+.dot{width:7px;height:7px;border-radius:50%;display:inline-block}
+.fp{display:flex;gap:3px;align-items:flex-end}
+.fp .b{flex:1;border-radius:2px}
+.arrow{color:var(--or2);font-size:12.5px}
+.grh{display:flex;gap:10px;padding:9px 16px;background:var(--bg0);border-bottom:1px solid var(--br2);font-size:10.5px;color:var(--t3);letter-spacing:.09em;text-transform:uppercase}
+.gr{display:flex;gap:10px;align-items:center;padding:8px 16px;border-bottom:1px solid #191919;font-size:13px}
+.cellbox{background:#151517;border:1px solid var(--br);border-radius:6px;padding:6px 10px;font-size:13px;color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kbd{display:flex;gap:18px;padding:9px 16px;background:var(--bg0);border-top:1px solid var(--br2);font-size:12px;color:var(--t4)}
+.daypill{display:inline-flex;align-items:center;gap:7px;font-size:12px;color:var(--t2);background:var(--s1);border:1px solid var(--br);border-radius:11px;padding:3px 11px}
+.daypill .tick{width:3px;height:12px;border-radius:1px}
+.pin{position:absolute;width:24px;height:24px;border-radius:50% 50% 50% 4px;background:var(--or);color:var(--bg);font-size:11px;font-weight:600;display:flex;align-items:center;justify-content:center;transform:translate(-50%,-100%) rotate(0deg);cursor:pointer;z-index:20;box-shadow:0 2px 8px rgba(0,0,0,.5);font-family:'JetBrains Mono'}
+.pin.pro{background:var(--ok)}.pin.con{background:var(--red)}.pin.idea{background:#e0b13e}
+.pop{position:absolute;z-index:30;width:300px;background:#1c1c21;border:1px solid #3a3a41;border-radius:10px;padding:12px;box-shadow:0 8px 30px rgba(0,0,0,.6)}
+.pop textarea{width:100%;height:74px;background:#141416;border:1px solid var(--br);border-radius:6px;color:var(--t1);font-size:13px;padding:8px;font-family:Inter;resize:vertical}
+.pop .types{display:flex;gap:6px;margin:8px 0}
+.pop .types button{flex:1;font-size:11px;padding:4px 0;border-radius:6px;border:1px solid var(--br);background:transparent;color:var(--t2);cursor:pointer}
+.pop .types button.on{background:var(--s2);color:var(--t1);border-color:var(--t3)}
+.pop .acts{display:flex;gap:8px;justify-content:flex-end}
+.pop .acts button{font-size:12px;padding:5px 12px;border-radius:6px;border:1px solid var(--br);background:transparent;color:var(--t2);cursor:pointer}
+.pop .acts .sv{background:var(--or);color:var(--bg);border-color:var(--or)}
+#side{position:fixed;top:0;right:0;width:340px;height:100vh;background:#0c0c0e;border-left:1px solid var(--br2);padding:18px 16px;overflow-y:auto;z-index:50}
+#side h3{font-family:'Barlow Condensed';font-weight:600;font-size:18px;letter-spacing:.04em;text-transform:uppercase}
+#side .exp{width:100%;margin:12px 0;padding:9px;background:var(--or);color:var(--bg);border:none;border-radius:8px;font-size:13.5px;font-weight:500;cursor:pointer;font-family:Inter}
+#side .clr{width:100%;padding:7px;background:transparent;color:var(--t3);border:1px solid var(--br);border-radius:8px;font-size:12px;cursor:pointer;font-family:Inter}
+.sblock{border-top:1px solid var(--br2);padding:12px 0;margin-top:6px}
+.sblock h4{font-size:13px;font-weight:500;color:var(--t1)}
+.smk{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12px;color:var(--t2)}
+.smk .id{font-family:'JetBrains Mono';font-size:10.5px;color:var(--t4);width:64px;flex:none}
+.smk .tx{flex:1}
+.smk .v{font-size:10.5px;padding:2px 9px;border-radius:9px;border:1px solid var(--br);color:var(--t3);cursor:pointer;flex:none;min-width:58px;text-align:center;font-family:'JetBrains Mono'}
+.smk .v.pass{color:var(--ok);border-color:var(--ok)}
+.smk .v.fail{color:var(--red);border-color:var(--red)}
+.smk .v.change{color:#e0b13e;border-color:#e0b13e}
+.pc{width:100%;height:44px;background:#141416;border:1px solid var(--br);border-radius:6px;color:var(--t1);font-size:12px;padding:6px 8px;font-family:Inter;margin-top:6px;resize:vertical}
+.alist{margin-top:6px}
+.alist .a{font-size:11.5px;color:var(--t2);padding:3px 0;display:flex;gap:6px}
+.alist .a b{font-family:'JetBrains Mono';font-weight:400;color:var(--or2)}
+#modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:100;padding:60px}
+#modal .in{max-width:860px;margin:0 auto;background:#141416;border:1px solid var(--br);border-radius:12px;padding:20px}
+#modal textarea{width:100%;height:60vh;background:#0f0f10;border:1px solid var(--br);border-radius:8px;color:var(--t1);font-family:'JetBrains Mono';font-size:12px;padding:14px}
+#modal .acts{display:flex;gap:10px;justify-content:flex-end;margin-top:12px}
+#modal button{font-size:13px;padding:7px 16px;border-radius:7px;border:1px solid var(--br);background:transparent;color:var(--t1);cursor:pointer;font-family:Inter}
+</style>
+</head>
+<body>
+<div class="hd">
+<h1>Lowpass · design smoke tool</h1>
+<p><b style="color:var(--t1)">How to use:</b> click anywhere on a frame to drop a pin and write a note (mark it comment / pro / con / idea). Cycle each smoke ID through pass → change → fail. Add pros/cons per surface in the sidebar. Everything autosaves in this browser. When done, hit <b style="color:var(--or2)">Export feedback</b> and paste the result back to Claude.</p>
+<p class="legend"><b>Hue budget in force:</b> orange = act / attend · green = done / positive · red = destructive only · day-type hues live only inside date strips and day-pill ticks · everything else is neutral. If a screen still reads colorful, pin it.</p>
+</div>
+
+<!-- ============ 1 · WORKSPACE ============ -->
+<div class="sur" data-s="workspace"><h2>1 · Workspace <span>views tier</span></h2>
+<div class="frame" data-f="workspace">
+<div class="chrome"><span class="logo"></span><span class="crumb"><b>Lowpass</b></span><span class="sep">·</span><span class="crumb">Adam's Workspace <span class="cv">⌄</span></span><span class="sp"></span><span class="crumb mut3">⌕</span><span class="av">AD</span></div>
+<div class="nav"><span class="tab on">Artists</span><span class="tab">Personnel</span><span class="tab">Equipment</span><span class="sp"></span><span class="btn dim" style="margin:7px 0">+ New artist</span></div>
+<div class="body">
+<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:20px"><span class="h1">Artists <span class="mut3" style="font-size:24px">3</span></span><span class="lbl mono" style="color:var(--t2)">£142K COMMITTED · 3 TOURS · GBP</span></div>
+<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-bottom:26px">
+<div class="card" style="overflow:hidden">
+<div style="position:relative;height:190px;background:#16181c"><span style="position:absolute;top:-22px;right:-10px;font-family:'Barlow Condensed';font-weight:600;font-size:150px;line-height:1;color:rgba(255,255,255,.045)">CS</span><div style="position:absolute;left:18px;bottom:14px;font-family:'Barlow Condensed';font-weight:600;font-size:28px;letter-spacing:.04em;text-transform:uppercase;line-height:1.05">Charlotte<br>Sands</div></div>
+<div style="padding:14px 18px 8px;border-top:1px solid var(--br2)"><div style="display:flex;justify-content:space-between"><span style="font-size:13.5px">USA Headline '26</span><span style="font-size:12px;color:var(--or2)">Rehearsals in 65 days</span></div>
+<div class="fp" style="height:15px;margin-top:12px"><span class="b" style="height:10px;background:var(--doff)"></span><span class="b" style="height:10px;background:var(--dreh)"></span><span class="b" style="height:10px;background:var(--dreh)"></span><span class="b" style="height:15px;background:var(--dshow)"></span><span class="b" style="height:10px;background:var(--doff)"></span><span class="b" style="height:15px;background:var(--dshow)"></span><span class="b" style="height:15px;background:var(--dshow)"></span><span class="b" style="height:15px;background:var(--dshow)"></span><span class="b" style="height:10px;background:var(--doff)"></span><span class="b" style="height:15px;background:var(--dshow)"></span><span class="b" style="height:15px;background:var(--dshow)"></span><span class="b" style="height:10px;background:var(--doff)"></span></div></div>
+<div style="display:flex;justify-content:space-between;padding:12px 18px 14px"><span style="font-size:12.5px;color:var(--t2)">0 of 11 advances started</span><span class="arrow">Start advances →</span></div>
+</div>
+<div class="card" style="overflow:hidden">
+<div style="position:relative;height:190px;background:#1a1815"><span style="position:absolute;top:-22px;right:-10px;font-family:'Barlow Condensed';font-weight:600;font-size:150px;line-height:1;color:rgba(255,255,255,.045)">EL</span><div style="position:absolute;left:18px;bottom:14px;font-family:'Barlow Condensed';font-weight:600;font-size:28px;letter-spacing:.04em;text-transform:uppercase;line-height:1.05">Ella<br>Langley</div></div>
+<div style="padding:14px 18px 8px;border-top:1px solid var(--br2)"><div style="display:flex;justify-content:space-between"><span style="font-size:13.5px;color:var(--t2)">No tour on the calendar</span><span style="font-size:12px;color:var(--t3)">Off the road</span></div>
+<div class="fp" style="height:15px;margin-top:12px"><span class="b" style="height:10px;background:#1c1c20"></span><span class="b" style="height:10px;background:#1c1c20"></span><span class="b" style="height:10px;background:#1c1c20"></span><span class="b" style="height:10px;background:#1c1c20"></span><span class="b" style="height:10px;background:#1c1c20"></span><span class="b" style="height:10px;background:#1c1c20"></span><span class="b" style="height:10px;background:#1c1c20"></span><span class="b" style="height:10px;background:#1c1c20"></span><span class="b" style="height:10px;background:#1c1c20"></span><span class="b" style="height:10px;background:#1c1c20"></span><span class="b" style="height:10px;background:#1c1c20"></span><span class="b" style="height:10px;background:#1c1c20"></span></div></div>
+<div style="display:flex;justify-content:space-between;padding:12px 18px 14px"><span style="font-size:12.5px;color:var(--t2)">Production: 3 riders · 2 plots</span><span class="arrow">Plan a tour →</span></div>
+</div>
+<div class="card" style="overflow:hidden">
+<div style="position:relative;height:190px;background:#1b1517"><span style="position:absolute;top:-22px;right:-10px;font-family:'Barlow Condensed';font-weight:600;font-size:150px;line-height:1;color:rgba(255,255,255,.045)">GN</span><div style="position:absolute;left:18px;bottom:14px;font-family:'Barlow Condensed';font-weight:600;font-size:28px;letter-spacing:.04em;text-transform:uppercase;line-height:1.05">Good<br>Neighbours</div></div>
+<div style="padding:14px 18px 8px;border-top:1px solid var(--br2)"><div style="display:flex;justify-content:space-between"><span style="font-size:13.5px">EU Support · Aug '26</span><span style="font-size:12px;color:var(--t1)">First show in 52 days</span></div>
+<div class="fp" style="height:15px;margin-top:12px"><span class="b" style="height:10px;background:var(--dreh)"></span><span class="b" style="height:15px;background:var(--dshow)"></span><span class="b" style="height:10px;background:var(--doff)"></span><span class="b" style="height:15px;background:var(--dshow)"></span><span class="b" style="height:15px;background:var(--dshow)"></span><span class="b" style="height:10px;background:var(--doff)"></span><span class="b" style="height:15px;background:var(--dshow)"></span><span class="b" style="height:10px;background:var(--doff)"></span><span class="b" style="height:15px;background:var(--dshow)"></span><span class="b" style="height:15px;background:var(--dshow)"></span><span class="b" style="height:10px;background:var(--dtrv)"></span><span class="b" style="height:10px;background:var(--doff)"></span></div></div>
+<div style="display:flex;justify-content:space-between;padding:12px 18px 14px"><span style="font-size:12.5px;color:var(--or2)">3 crew unconfirmed</span><span class="arrow">Confirm crew →</span></div>
+</div>
+</div>
+<div class="lbl" style="margin-bottom:10px">Needs you · across the roster</div>
+<div style="display:flex;flex-direction:column;gap:7px">
+<div class="card" style="display:flex;align-items:center;gap:14px;padding:11px 16px;border-radius:9px"><span class="mini-av">CS</span><span style="font-size:13.5px;flex:1">USA Headline '26 — 11 advances untouched, rehearsals in 65 days</span><span class="arrow">Open Advance →</span></div>
+<div class="card" style="display:flex;align-items:center;gap:14px;padding:11px 16px;border-radius:9px"><span class="mini-av">CS</span><span style="font-size:13.5px;flex:1">The Warning Support — ended 13 Jun, settlement open</span><span class="arrow">Settle →</span></div>
+<div class="card" style="display:flex;align-items:center;gap:14px;padding:11px 16px;border-radius:9px"><span class="mini-av">GN</span><span style="font-size:13.5px;flex:1">EU Support — 3 of 8 crew unconfirmed, first show in 52 days</span><span class="arrow">Open Crew →</span></div>
+</div>
+</div>
+</div></div>
+
+<!-- ============ 2 · ARTIST ============ -->
+<div class="sur" data-s="artist"><h2>2 · Artist <span>views tier</span></h2>
+<div class="frame" data-f="artist">
+<div class="chrome"><span class="logo"></span><span class="crumb">Adam's Workspace</span><span class="sep">/</span><span class="pill"><span class="mini-av" style="width:20px;height:20px">CS</span>Charlotte Sands <span class="cv">⌄</span></span><span class="sp"></span><span class="crumb mut3">⌕</span><span class="av">AD</span></div>
+<div class="nav"><span class="tab on">Tours</span><span class="tab">Production</span><span class="tab">Business <span style="color:var(--t4);font-size:11px">🔒</span></span><span class="sp"></span><span class="btn dim" style="margin:7px 0">Edit profile</span></div>
+<div class="body">
+<div style="display:flex;align-items:center;gap:16px;margin-bottom:22px"><span class="mini-av" style="width:48px;height:48px;font-size:15px">CS</span><div style="flex:1"><div class="h1">Charlotte Sands</div><div style="font-size:12.5px;color:var(--t2);margin-top:6px">Linked on Spotify · Production: 3 riders · 2 stage plots · 4 channel lists</div></div><span class="btn pri">+ New tour</span></div>
+<div style="display:flex;flex-direction:column;gap:10px">
+<div class="card" style="padding:16px 18px;border-color:#3a3a3a">
+<div style="display:flex;justify-content:space-between;margin-bottom:10px"><span style="font-size:16px;font-weight:500">USA Headline '26</span><span style="font-size:12.5px;color:var(--or2)">Rehearsals in 65 days</span></div>
+<div class="fp" style="height:18px;margin-bottom:12px"><span class="b" style="height:12px;background:var(--doff)"></span><span class="b" style="height:12px;background:var(--dreh)"></span><span class="b" style="height:12px;background:var(--dreh)"></span><span class="b" style="height:12px;background:var(--dreh)"></span><span class="b" style="height:18px;background:var(--dshow)"></span><span class="b" style="height:12px;background:var(--doff)"></span><span class="b" style="height:18px;background:var(--dshow)"></span><span class="b" style="height:18px;background:var(--dshow)"></span><span class="b" style="height:18px;background:var(--dshow)"></span><span class="b" style="height:12px;background:var(--doff)"></span><span class="b" style="height:18px;background:var(--dshow)"></span><span class="b" style="height:12px;background:var(--doff)"></span><span class="b" style="height:18px;background:var(--dshow)"></span><span class="b" style="height:12px;background:var(--doff)"></span><span class="b" style="height:18px;background:var(--dshow)"></span><span class="b" style="height:18px;background:var(--dshow)"></span><span class="b" style="height:12px;background:var(--doff)"></span><span class="b" style="height:12px;background:var(--doff)"></span><span class="b" style="height:18px;background:var(--dshow)"></span><span class="b" style="height:12px;background:var(--doff)"></span><span class="b" style="height:18px;background:var(--dshow)"></span><span class="b" style="height:18px;background:var(--dshow)"></span><span class="b" style="height:12px;background:var(--doff)"></span><span class="b" style="height:12px;background:var(--doff)"></span></div>
+<div style="display:flex;gap:10px;align-items:center"><span class="mono" style="font-size:11.5px;color:var(--t3)">05–28 SEP · 11 SHOWS</span><span class="sp"></span><span class="chip"><span class="dot" style="background:var(--ok)"></span>Routing 24/24</span><span class="chip"><span class="dot" style="background:var(--or)"></span>Advance 0/11</span><span class="chip mono">$2,495 EST · $0 COM</span><span class="arrow">Open →</span></div>
+</div>
+<div class="card" style="padding:14px 18px;background:#141414">
+<div style="display:flex;gap:12px;align-items:center"><span style="font-size:14.5px;color:var(--t2);font-weight:500">Simple Plan Support | Fall '26</span><span class="mono" style="font-size:11.5px;color:var(--t4)">01–31 OCT · 21 SHOWS</span><span class="sp"></span><span style="font-size:12.5px;color:var(--t2)">First show in 90 days</span><span class="chip"><span class="dot" style="background:var(--or)"></span>Routing 26/31</span><span class="arrow">Open →</span></div>
+</div>
+<div class="card" style="padding:12px 18px;background:#111;border-color:var(--br2)">
+<div style="display:flex;gap:14px;align-items:center"><span style="font-size:13.5px;color:var(--t3)">The Warning Support</span><span class="mono" style="font-size:11px;color:var(--t4)">11–13 JUN · ENDED</span><span class="sp"></span><span style="font-size:12px;color:var(--or2)">Settlement open</span><span class="arrow">Settle →</span></div>
+</div>
+</div>
+</div>
+</div></div>
+<!-- ============ 3 · TOUR / ROUTING ============ -->
+<div class="sur" data-s="tour"><h2>3 · Tour — Routing <span>landing surface</span></h2>
+<div class="frame" data-f="tour">
+<div class="chrome"><span class="logo"></span><span class="crumb">Adam's Workspace</span><span class="sep">/</span><span class="pill"><span class="mini-av" style="width:20px;height:20px">CS</span>Charlotte Sands <span class="cv">⌄</span></span><span class="pill">USA Headline '26 <span class="cv">⌄</span></span><span class="sp"></span><span class="saved">● Saved · just now</span><span class="av">AD</span></div>
+<div class="nav"><span class="tab on">Routing</span><span class="nvd"></span><span class="tab">$ Budget</span><span class="tab">⧉ Advance</span><span class="nvd"></span><span class="tab">Crew</span><span class="tab">Production</span><span class="tab">Files</span></div>
+<div class="body">
+<div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:18px">
+<div><div class="h1">USA Headline '26</div><div style="font-size:13px;color:var(--t2);margin-top:7px"><span class="mono" style="font-size:12px">05–28 SEP</span> · 11 shows · 24 days · <span style="color:var(--or2)">planning</span></div></div>
+<div style="display:flex;gap:10px"><span class="btn">Calendar</span><span class="btn">Map</span><span class="btn pri">+ Add day</span></div>
+</div>
+<div style="display:flex;border:1px solid var(--br);border-radius:10px;background:#111;margin-bottom:20px">
+<div style="flex:1;padding:12px 16px;border-right:1px solid var(--br2)"><div class="lbl">Routing</div><div class="mono" style="font-size:15px;color:var(--ok);margin-top:4px">24 / 24 placed</div></div>
+<div style="flex:1;padding:12px 16px;border-right:1px solid var(--br2)"><div class="lbl">Advances</div><div class="mono" style="font-size:15px;color:var(--or2);margin-top:4px">0 / 11 started</div></div>
+<div style="flex:1;padding:12px 16px;border-right:1px solid var(--br2)"><div class="lbl">Crew</div><div class="mono" style="font-size:15px;color:var(--or2);margin-top:4px">5 conf · 3 open</div></div>
+<div style="flex:1;padding:12px 16px"><div class="lbl">Budget</div><div class="mono" style="font-size:15px;margin-top:4px">2,495 est · 0 com</div></div>
+</div>
+<div class="fp" style="height:44px;margin-bottom:6px">
+<span class="b mono" style="height:32px;background:var(--doff);color:var(--doffT);font-size:11px;text-align:center;padding-top:4px">5</span><span class="b mono" style="height:32px;background:var(--dreh);color:var(--drehT);font-size:11px;text-align:center;padding-top:4px">6</span><span class="b mono" style="height:32px;background:var(--dreh);color:var(--drehT);font-size:11px;text-align:center;padding-top:4px">7</span><span class="b mono" style="height:32px;background:var(--dreh);color:var(--drehT);font-size:11px;text-align:center;padding-top:4px">8</span><span class="b mono" style="height:44px;background:var(--dshow);color:var(--dshowT);font-size:11px;text-align:center;padding-top:4px;outline:1px solid #4bc491">9</span><span class="b mono" style="height:32px;background:var(--doff);color:var(--doffT);font-size:11px;text-align:center;padding-top:4px">10</span><span class="b mono" style="height:44px;background:var(--dshow);color:var(--dshowT);font-size:11px;text-align:center;padding-top:4px">11</span><span class="b mono" style="height:44px;background:var(--dshow);color:var(--dshowT);font-size:11px;text-align:center;padding-top:4px">12</span><span class="b mono" style="height:44px;background:var(--dshow);color:var(--dshowT);font-size:11px;text-align:center;padding-top:4px">13</span><span class="b mono" style="height:32px;background:var(--doff);color:var(--doffT);font-size:11px;text-align:center;padding-top:4px">14</span><span class="b mono" style="height:44px;background:var(--dshow);color:var(--dshowT);font-size:11px;text-align:center;padding-top:4px">15</span><span class="b mono" style="height:32px;background:var(--doff);color:var(--doffT);font-size:11px;text-align:center;padding-top:4px">16</span><span class="b mono" style="height:44px;background:var(--dshow);color:var(--dshowT);font-size:11px;text-align:center;padding-top:4px">17</span><span class="b mono" style="height:32px;background:var(--doff);color:var(--doffT);font-size:11px;text-align:center;padding-top:4px">18</span><span class="b mono" style="height:44px;background:var(--dshow);color:var(--dshowT);font-size:11px;text-align:center;padding-top:4px">19</span><span class="b mono" style="height:44px;background:var(--dshow);color:var(--dshowT);font-size:11px;text-align:center;padding-top:4px">20</span><span class="b mono" style="height:32px;background:var(--doff);color:var(--doffT);font-size:11px;text-align:center;padding-top:4px">21</span><span class="b mono" style="height:32px;background:var(--doff);color:var(--doffT);font-size:11px;text-align:center;padding-top:4px">22</span><span class="b mono" style="height:44px;background:var(--dshow);color:var(--dshowT);font-size:11px;text-align:center;padding-top:4px">23</span><span class="b mono" style="height:32px;background:var(--doff);color:var(--doffT);font-size:11px;text-align:center;padding-top:4px">24</span><span class="b mono" style="height:44px;background:var(--dshow);color:var(--dshowT);font-size:11px;text-align:center;padding-top:4px">25</span><span class="b mono" style="height:44px;background:var(--dshow);color:var(--dshowT);font-size:11px;text-align:center;padding-top:4px">26</span><span class="b mono" style="height:32px;background:var(--doff);color:var(--doffT);font-size:11px;text-align:center;padding-top:4px">27</span><span class="b mono" style="height:32px;background:var(--doff);color:var(--doffT);font-size:11px;text-align:center;padding-top:4px">28</span>
+</div>
+<div style="display:flex;justify-content:space-between;margin-bottom:18px"><span style="font-size:12px;color:var(--t3)">Sep · hover a day for its popover · click a show → its grid row / advance</span><span style="font-size:12px;color:var(--or2)">Wed 9 · EXIT/IN, Nashville — advance not started →</span></div>
+<div style="border:1px solid var(--br);border-radius:10px;overflow:hidden">
+<div class="grh"><span style="width:26px"></span><span style="width:100px">Date</span><span style="width:110px">Day</span><span style="flex:1">Venue</span><span style="width:110px">City</span><span style="width:90px">Notes</span><span style="width:56px">Trans</span></div>
+<div class="gr"><span class="mono" style="width:26px;font-size:11px;color:var(--t4);text-align:right">4</span><span class="mono" style="width:100px;font-size:12px">TUE 08 SEP</span><span style="width:110px"><span class="daypill"><span class="tick" style="background:#8B5CF6"></span>Rehearsal</span></span><span class="cellbox" style="flex:1">Studio Instrument Rentals</span><span class="cellbox" style="width:110px;color:var(--t2)">Nashville</span><span class="cellbox" style="width:90px;color:var(--t4)">Notes</span><span style="width:56px;color:var(--t3);text-align:center">🚌</span></div>
+<div style="padding:4px 16px 4px 46px;background:var(--bg0);font-size:11px;color:var(--t4)" class="mono">🚌 1m · 2 mi</div>
+<div class="gr" style="background:var(--orw)"><span class="mono" style="width:26px;font-size:11px;color:var(--t4);text-align:right">5</span><span class="mono" style="width:100px;font-size:12px">WED 09 SEP</span><span style="width:110px"><span class="daypill"><span class="tick" style="background:#10B981"></span>Show day</span></span><span class="cellbox" style="flex:1;border-color:var(--or)">EXIT/IN</span><span class="cellbox" style="width:110px;color:var(--t2)">Nashville</span><span class="cellbox" style="width:90px;color:var(--t4)">Notes</span><span style="width:56px;color:var(--t3);text-align:center">🚌</span></div>
+<div style="padding:4px 16px 4px 46px;background:var(--bg0);font-size:11px;color:var(--t4)" class="mono">🚌 5h 38m · 388 mi</div>
+<div class="gr"><span class="mono" style="width:26px;font-size:11px;color:var(--t4);text-align:right">6</span><span class="mono" style="width:100px;font-size:12px">THU 10 SEP</span><span style="width:110px"><span class="daypill"><span class="tick" style="background:#6B7280"></span>Day off</span></span><span class="cellbox" style="flex:1;color:var(--t2)">Roanoke stop</span><span class="cellbox" style="width:110px;color:var(--t2)">Roanoke</span><span class="cellbox" style="width:90px;color:var(--t4)">Notes</span><span style="width:56px;color:var(--t3);text-align:center">🚌</span></div>
+<div style="padding:9px 16px;background:#111;text-align:center;font-size:12px;color:var(--t2)">21 more days ↓</div>
+<div class="kbd"><span>↑↓←→ move</span><span>Enter edit</span><span>Tab next</span><span>⌘C/V copy · paste</span><span>drag date to reorder</span></div>
+</div>
+</div>
+</div></div>
+
+<!-- ============ 4 · ADVANCE BUILD ============ -->
+<div class="sur" data-s="build"><h2>4 · Advance — Build mode <span>tools tier</span></h2>
+<div class="frame" data-f="build">
+<div class="chrome"><span class="logo"></span><span class="crumb">Charlotte Sands</span><span class="sep">/</span><span class="crumb"><b>USA Headline '26</b></span><span class="sp"></span><span class="saved">● Saved · just now</span><span class="av">AD</span></div>
+<div class="chrome" style="border-top:none"><span style="display:flex;background:var(--s1);border:1px solid var(--br);border-radius:8px;padding:2px"><span style="font-size:13px;background:var(--t1);color:var(--bg);border-radius:6px;padding:4px 16px">Build</span><span style="font-size:13px;color:var(--t2);padding:4px 16px">Fill</span><span style="font-size:13px;color:var(--t2);padding:4px 16px">Review</span></span><span style="font-size:13.5px">USA Headline — Standard Show</span><span style="font-size:12px;color:var(--t3)">template · applies to 11 shows</span><span class="sp"></span><span class="btn dim">Apply template</span><span class="btn dim">Save as template</span></div>
+<div style="display:grid;grid-template-columns:1.55fr 1fr">
+<div style="padding:20px 18px 22px 22px;border-right:1px solid var(--br2)">
+<div style="border:1px dashed #3a3a3a;border-radius:10px;padding:14px 18px;margin-bottom:16px;display:flex;align-items:center;gap:12px"><span style="color:var(--or2);font-size:18px">⧉</span><div style="flex:1"><div style="font-size:13.5px">Parse a deal memo</div><div style="font-size:12px;color:var(--t3)">Drop a PDF — extracted fields wait for your review, nothing writes itself</div></div><span style="font-size:12px;color:var(--t2)">Upload ›</span></div>
+<div class="card" style="overflow:hidden;margin-bottom:14px">
+<div style="display:flex;align-items:center;gap:11px;padding:11px 15px;background:#111"><span style="color:var(--t4);font-size:13px">⋮⋮</span><span style="font-size:14px;font-weight:500;flex:1">Schedule</span><span class="chip"><span class="dot" style="background:var(--or)"></span>in progress</span><span class="chip">AD</span><span style="color:var(--t4)">⚑</span><span style="color:var(--t3)">⌄</span></div>
+<div class="gr" style="padding-left:44px;background:none"><span style="color:var(--t3)">◷</span><span style="flex:1;font-size:13px">Load in</span><span class="mono" style="font-size:10.5px;color:var(--t4)">TIME</span><span class="dot" style="background:var(--or);width:5px;height:5px"></span></div>
+<div class="gr" style="padding-left:44px"><span style="color:var(--t3)">◷</span><span style="flex:1;font-size:13px">Soundcheck</span><span class="mono" style="font-size:10.5px;color:var(--t4)">TIME</span><span class="dot" style="background:var(--or);width:5px;height:5px"></span></div>
+<div class="gr" style="padding-left:44px;background:var(--orw);outline:1px solid var(--or)"><span style="color:var(--t3)">◷</span><span style="flex:1;font-size:13px">Set time</span><span class="mono" style="font-size:10.5px;color:var(--t4)">TIME</span><span style="width:5px"></span></div>
+<div class="gr" style="padding-left:44px"><span style="color:var(--t3)">≡</span><span style="flex:1;font-size:13px">Schedule notes</span><span class="mono" style="font-size:10.5px;color:var(--t4)">TEXTAREA</span><span style="width:5px"></span></div>
+<div style="padding:9px 15px 11px 44px;font-size:12.5px;color:var(--t3)">+ Add field</div>
+</div>
+<div class="card" style="overflow:hidden;margin-bottom:14px">
+<div style="display:flex;align-items:center;gap:11px;padding:11px 15px;background:#111"><span style="color:var(--t4);font-size:13px">⋮⋮</span><span style="font-size:14px;font-weight:500;flex:1">Hospitality</span><span class="chip">tm only</span><span class="chip"><span class="dot" style="background:var(--t3)"></span>not started</span><span style="color:var(--t3)">⌄</span></div>
+<div class="gr" style="padding-left:44px"><span style="color:var(--t3)">☰</span><span style="flex:1;font-size:13px">Rider version</span><span class="mono" style="font-size:10.5px;color:var(--t4)">SELECT</span><span style="width:5px"></span></div>
+<div class="gr" style="padding-left:44px"><span style="color:var(--t3)">$</span><span style="flex:1;font-size:13px">Buyout amount</span><span class="mono" style="font-size:10.5px;color:var(--t4)">CURRENCY</span><span style="width:5px"></span></div>
+<div style="padding:9px 15px 11px 44px;font-size:12.5px;color:var(--t3)">+ Add field</div>
+</div>
+<div style="border:1px dashed var(--br);border-radius:10px;padding:12px;text-align:center;font-size:13px;color:var(--t3)">+ Add section — or start from one of 11 blueprints</div>
+</div>
+<div style="padding:20px 22px 22px 18px;background:#0c0c0c">
+<div class="lbl" style="margin-bottom:10px">Field</div>
+<div class="card" style="padding:14px 15px;margin-bottom:16px">
+<div style="font-size:11.5px;color:var(--t3);margin-bottom:4px">Label</div>
+<div class="cellbox" style="margin-bottom:12px">Set time</div>
+<div style="font-size:11.5px;color:var(--t3);margin-bottom:4px">Type</div>
+<div class="cellbox" style="margin-bottom:12px;display:flex;gap:9px;align-items:center"><span style="color:var(--or2)">◷</span>Time<span class="sp"></span><span style="font-size:11px;color:var(--t4)">1 of 12 ⌄</span></div>
+<div style="display:flex;justify-content:space-between;padding:6px 0"><span style="font-size:13px;color:var(--t2)">Required</span><span style="width:30px;height:17px;border-radius:9px;background:var(--or);position:relative"><span style="position:absolute;right:2px;top:2px;width:13px;height:13px;border-radius:50%;background:var(--bg)"></span></span></div>
+<div style="display:flex;justify-content:space-between;padding:6px 0"><span style="font-size:13px;color:var(--t2)">TM only</span><span style="width:30px;height:17px;border-radius:9px;background:var(--br);position:relative"><span style="position:absolute;left:2px;top:2px;width:13px;height:13px;border-radius:50%;background:var(--t3)"></span></span></div>
+<div style="display:flex;justify-content:space-between;padding:6px 0 2px"><span style="font-size:13px;color:var(--t2)">Venue can fill</span><span style="width:30px;height:17px;border-radius:9px;background:var(--or);position:relative"><span style="position:absolute;right:2px;top:2px;width:13px;height:13px;border-radius:50%;background:var(--bg)"></span></span></div>
+</div>
+<div class="lbl" style="margin-bottom:10px">Section — Schedule</div>
+<div class="card" style="padding:14px 15px">
+<div style="display:flex;justify-content:space-between;padding:5px 0"><span style="font-size:13px;color:var(--t2)">Status</span><span style="font-size:12.5px;color:var(--or2)">In progress ⌄</span></div>
+<div style="display:flex;justify-content:space-between;padding:5px 0"><span style="font-size:13px;color:var(--t2)">Assigned to</span><span style="font-size:12.5px">Adam ⌄</span></div>
+<div style="display:flex;justify-content:space-between;padding:5px 0"><span style="font-size:13px;color:var(--t2)">Intake</span><span style="font-size:12.5px;color:var(--ok)">Venue can fill 4 of 6</span></div>
+<div style="border-top:1px solid var(--br2);margin-top:9px;padding-top:10px;font-size:12.5px;color:var(--or2)">Save section to library →</div>
+</div>
+<div style="display:flex;gap:16px;margin-top:14px;font-size:12px;color:var(--t4)"><span>⌘S save</span><span>⌘D duplicate</span><span>drag ⋮⋮ reorder</span></div>
+</div>
+</div>
+</div></div>
+
+<!-- ============ 5 · ADVANCE FILL ============ -->
+<div class="sur" data-s="fill"><h2>5 · Advance — Fill mode <span>tools tier</span></h2>
+<div class="frame" data-f="fill">
+<div class="chrome"><span class="logo"></span><span class="crumb">Charlotte Sands</span><span class="sep">/</span><span class="crumb"><b>USA Headline '26</b></span><span class="sp"></span><span class="saved">● Saved · just now</span><span class="av">AD</span></div>
+<div class="chrome" style="border-top:none"><span style="display:flex;background:var(--s1);border:1px solid var(--br);border-radius:8px;padding:2px"><span style="font-size:13px;color:var(--t2);padding:4px 16px">Build</span><span style="font-size:13px;background:var(--t1);color:var(--bg);border-radius:6px;padding:4px 16px">Fill</span><span style="font-size:13px;color:var(--t2);padding:4px 16px">Review</span></span><span class="mono" style="font-size:13px;color:var(--t2)">WED 09 SEP</span><span class="daypill"><span class="tick" style="background:#10B981"></span>Show day</span><span style="font-size:14px;font-weight:500">EXIT/IN — Nashville</span><span class="sp"></span><span class="chip mono"><span class="dot" style="background:var(--or)"></span>IN PROGRESS · 3/8</span><span class="btn dim">Copy from previous ⌄</span></div>
+<div style="display:flex;align-items:center;gap:11px;padding:11px 22px;background:var(--orw);border-bottom:1px solid var(--br2)"><span style="color:var(--or2)">▣</span><span style="font-size:13.5px">The venue filled 3 fields · 2h ago</span><span style="font-size:12px;color:var(--t3)">via intake link</span><span class="sp"></span><span class="arrow">Review ›</span></div>
+<div style="display:grid;grid-template-columns:240px 1fr">
+<div style="border-right:1px solid var(--br2);padding:12px 0">
+<div style="display:flex;align-items:center;gap:10px;padding:9px 18px;background:var(--orw);border-left:2px solid var(--or)"><span class="dot" style="background:var(--or)"></span><span style="font-size:13.5px;flex:1">Schedule</span><span class="mono" style="font-size:11px;color:var(--or2)">4/6</span></div>
+<div style="display:flex;align-items:center;gap:10px;padding:9px 18px"><span class="dot" style="background:var(--ok)"></span><span style="font-size:13.5px;color:var(--t2);flex:1">Deal info</span><span class="mono" style="font-size:11px;color:var(--ok)">6/6</span></div>
+<div style="display:flex;align-items:center;gap:10px;padding:9px 18px"><span class="dot" style="background:var(--ok)"></span><span style="font-size:13.5px;color:var(--t2);flex:1">Key contacts</span><span class="mono" style="font-size:11px;color:var(--ok)">3/3</span></div>
+<div style="display:flex;align-items:center;gap:10px;padding:9px 18px"><span class="dot" style="background:var(--or)"></span><span style="font-size:13.5px;color:var(--t2);flex:1">Production</span><span class="mono" style="font-size:11px;color:var(--or2)">5/9</span></div>
+<div style="display:flex;align-items:center;gap:10px;padding:9px 18px"><span class="dot" style="background:var(--t4)"></span><span style="font-size:13.5px;color:var(--t2);flex:1">Hospitality</span><span class="chip" style="font-size:9.5px;padding:0 6px">tm</span><span class="mono" style="font-size:11px;color:var(--t4)">0/4</span></div>
+<div style="display:flex;align-items:center;gap:10px;padding:9px 18px"><span class="dot" style="background:var(--t4)"></span><span style="font-size:13.5px;color:var(--t2);flex:1">Transport</span><span class="mono" style="font-size:11px;color:var(--t4)">0/5</span></div>
+<div style="display:flex;align-items:center;gap:10px;padding:9px 18px"><span class="dot" style="background:var(--t4)"></span><span style="font-size:13.5px;color:var(--t2);flex:1">Rooms</span><span style="font-size:11px;color:var(--or2)">8 open</span></div>
+</div>
+<div style="padding:20px 22px">
+<div style="display:flex;align-items:center;gap:11px;margin-bottom:14px"><span style="color:var(--t3)">◷</span><span style="font-size:15px;font-weight:500;flex:1">Schedule</span><span class="chip">AD</span><span style="color:var(--t4)">⚑</span><span style="font-size:12px;color:var(--t3)">2 comments</span></div>
+<div class="card" style="overflow:hidden">
+<div class="gr"><span style="width:130px;font-size:13px;color:var(--t2)">Load in</span><span class="mono cellbox" style="border-color:transparent">14:00</span></div>
+<div class="gr"><span style="width:130px;font-size:13px;color:var(--t2)">Soundcheck</span><span class="mono cellbox" style="border-color:var(--or);background:#141414">16:30</span><span style="font-size:11px;color:var(--t4)">editing…</span></div>
+<div class="gr"><span style="width:130px;font-size:13px;color:var(--t2)">Doors</span><span class="mono cellbox" style="border-color:transparent">19:00</span></div>
+<div class="gr" style="background:var(--orw)"><span style="width:130px;font-size:13px;color:var(--t2)">Set time</span><span class="mono cellbox" style="border-color:transparent;color:var(--or2)">21:00</span><span style="font-size:11px;color:var(--t4)">75 min</span></div>
+<div class="gr"><span style="width:130px;font-size:13px;color:var(--t2)">Curfew</span><span class="mono cellbox" style="border-color:transparent">23:00</span></div>
+<div class="gr" style="border-bottom:none"><span style="width:130px;font-size:13px;color:var(--t2)">Notes</span><span style="font-size:13px;color:var(--t4);font-style:italic">Empty — venue may fill via intake</span></div>
+</div>
+<div style="display:flex;gap:16px;margin-top:12px;font-size:12px;color:var(--t4)"><span>click a value to edit</span><span>Tab next field</span><span>Esc revert</span><span>changes autosave</span></div>
+</div>
+</div>
+</div></div>
+<!-- ============ 6 · ADVANCE REVIEW ============ -->
+<div class="sur" data-s="review"><h2>6 · Advance — Review mode <span>tools tier</span></h2>
+<div class="frame" data-f="review">
+<div class="chrome"><span class="logo"></span><span class="crumb">Charlotte Sands</span><span class="sep">/</span><span class="crumb"><b>USA Headline '26</b></span><span class="sp"></span><span class="btn pri">Export day sheet</span><span class="av">AD</span></div>
+<div class="chrome" style="border-top:none"><span style="display:flex;background:var(--s1);border:1px solid var(--br);border-radius:8px;padding:2px"><span style="font-size:13px;color:var(--t2);padding:4px 16px">Build</span><span style="font-size:13px;color:var(--t2);padding:4px 16px">Fill</span><span style="font-size:13px;background:var(--t1);color:var(--bg);border-radius:6px;padding:4px 16px">Review</span></span><span class="mono" style="font-size:13px;color:var(--t2)">WED 09 SEP</span><span style="font-size:14px;font-weight:500">EXIT/IN — Nashville</span><span class="sp"></span></div>
+<div style="display:grid;grid-template-columns:1fr 1.15fr">
+<div style="padding:20px 20px 22px 22px;border-right:1px solid var(--br2)">
+<div class="lbl" style="margin-bottom:9px">What the venue sees</div>
+<div class="card" style="padding:15px 16px;background:#141414">
+<div style="display:flex;align-items:center;gap:10px;margin-bottom:11px"><span class="logo" style="width:9px;height:9px"></span><span style="font-size:12.5px">Charlotte Sands · 9 Sep · EXIT/IN</span><span class="sp"></span><span style="font-size:11px;color:var(--t4)">intake form</span></div>
+<div style="display:flex;flex-direction:column;gap:6px">
+<div style="display:flex;justify-content:space-between;padding:7px 11px;background:var(--s1);border-radius:6px"><span style="font-size:12.5px">Schedule</span><span style="font-size:11.5px;color:var(--or2)">4 fields to fill</span></div>
+<div style="display:flex;justify-content:space-between;padding:7px 11px;background:var(--s1);border-radius:6px"><span style="font-size:12.5px">Production</span><span style="font-size:11.5px;color:var(--or2)">6 fields to fill</span></div>
+<div style="display:flex;justify-content:space-between;padding:7px 11px;background:var(--s1);border-radius:6px"><span style="font-size:12.5px">Key contacts</span><span style="font-size:11.5px;color:var(--or2)">2 fields to fill</span></div>
+<div style="display:flex;justify-content:space-between;padding:7px 11px;background:#111;border-radius:6px;opacity:.5"><span style="font-size:12.5px;color:var(--t3)">Hospitality</span><span style="font-size:11.5px;color:var(--t4)">hidden — tm only</span></div>
+<div style="display:flex;justify-content:space-between;padding:7px 11px;background:#111;border-radius:6px;opacity:.5"><span style="font-size:12.5px;color:var(--t3)">Deal info</span><span style="font-size:11.5px;color:var(--t4)">hidden — tm only</span></div>
+</div>
+<div style="margin-top:11px;font-size:11.5px;color:var(--t3)">Files and contact fields never appear on intake · blank answers never overwrite your data</div>
+</div>
+<div class="lbl" style="margin:18px 0 9px">Activity</div>
+<div style="display:flex;flex-direction:column;gap:6px;font-size:12.5px">
+<div style="display:flex;gap:10px"><span class="mono" style="color:var(--t4)">14:22</span><span style="color:var(--t2)">Venue submitted 3 fields → <span style="color:var(--or2)">review in Fill</span></span></div>
+<div style="display:flex;gap:10px"><span class="mono" style="color:var(--t4)">11:04</span><span style="color:var(--t2)">Intake link opened · Nashville, TN</span></div>
+<div style="display:flex;gap:10px"><span class="mono" style="color:var(--t4)">Tue</span><span style="color:var(--t2)">Packet downloaded · 1 time</span></div>
+</div>
+</div>
+<div style="padding:20px 22px 22px 20px;background:#0c0c0c">
+<div class="lbl" style="margin-bottom:9px">Intake link</div>
+<div class="card" style="padding:14px 15px;margin-bottom:16px">
+<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><span class="mono" style="font-size:12px;color:var(--or2);flex:1;overflow:hidden;text-overflow:ellipsis">lowpass.app/advance-intake/x7Kq…9mF2</span><span class="btn dim" style="padding:3px 10px;font-size:12px">Copy</span><span style="font-size:12px;color:var(--red);border:1px solid rgba(208,92,92,.35);border-radius:7px;padding:3px 10px">Revoke</span></div>
+<div style="display:flex;justify-content:space-between;padding:5px 0"><span style="font-size:13px;color:var(--t2)">Expires</span><span class="mono" style="font-size:12px">08 SEP · day before show ⌄</span></div>
+<div style="display:flex;justify-content:space-between;padding:5px 0"><span style="font-size:13px;color:var(--t2)">Venue can fill</span><span style="font-size:12.5px">12 fields in 3 sections</span></div>
+<div style="display:flex;justify-content:space-between;padding:5px 0"><span style="font-size:13px;color:var(--t2)">Password</span><span style="width:30px;height:17px;border-radius:9px;background:var(--or);position:relative"><span style="position:absolute;right:2px;top:2px;width:13px;height:13px;border-radius:50%;background:var(--bg)"></span></span></div>
+<div style="margin-top:8px"><span class="mono cellbox" style="display:inline-block;font-size:12px">exitin-0909</span><span style="font-size:11px;color:var(--t3);margin-left:10px">share it separately</span></div>
+</div>
+<div class="lbl" style="margin-bottom:9px">Packet</div>
+<div class="card" style="overflow:hidden">
+<div class="gr"><span style="width:16px;height:16px;border-radius:4px;background:var(--or);color:var(--bg);font-size:10px;display:flex;align-items:center;justify-content:center">✓</span><span style="font-size:13px;flex:1">Rider — CS Standard v3</span><span style="font-size:11.5px;color:var(--t4)">14 pages</span></div>
+<div class="gr"><span style="width:16px;height:16px;border-radius:4px;background:var(--or);color:var(--bg);font-size:10px;display:flex;align-items:center;justify-content:center">✓</span><span style="font-size:13px;flex:1">Channel list — 24 in · 6 out</span><span style="font-size:11.5px;color:var(--t4)">2 pages</span></div>
+<div class="gr"><span style="width:16px;height:16px;border-radius:4px;background:var(--or);color:var(--bg);font-size:10px;display:flex;align-items:center;justify-content:center">✓</span><span style="font-size:13px;flex:1">Stage plot — with input list</span><span style="font-size:11.5px;color:var(--t4)">1 page</span></div>
+<div class="gr"><span style="width:16px;height:16px;border-radius:4px;background:var(--br)"></span><span style="font-size:13px;color:var(--t2);flex:1">Hire — backline rental sheet</span><span style="font-size:11.5px;color:var(--or2)">not in PDF yet</span></div>
+<div style="display:flex;align-items:center;gap:10px;padding:11px 16px;background:#111"><span style="font-size:11.5px;color:var(--t3)">Last built 2d ago · 17 pages</span><span class="sp"></span><span class="btn pri" style="font-size:12.5px;padding:5px 13px">Build packet PDF</span></div>
+</div>
+</div>
+</div>
+</div></div>
+
+<!-- ============ 7 · BUDGET GRID ============ -->
+<div class="sur" data-s="budget"><h2>7 · Budget — Grid at parity <span>tools tier</span></h2>
+<div class="frame" data-f="budget">
+<div class="chrome"><span class="logo"></span><span class="crumb">Charlotte Sands</span><span class="sep">/</span><span class="crumb"><b>USA Headline '26</b></span><span class="sp"></span><span class="saved">● Saved · just now</span><span class="av">AD</span></div>
+<div class="nav"><span class="tab">Summary</span><span class="tab on">Expenses</span><span class="tab">Income</span><span class="tab">Settings</span><span class="sp"></span><span class="mono" style="font-size:12px;color:var(--t2)">$ USD ⌄</span><span class="btn dim" style="margin:7px 0 7px 12px">Export ⌄</span></div>
+<div style="display:flex;align-items:center;gap:11px;padding:9px 22px;background:#111;border-bottom:1px solid var(--br2)"><span class="chip mono" style="color:var(--t1)">v3 DRAFT</span><span style="font-size:12px;color:var(--t3)">v2 approved 12 Jun · amend created this draft</span><span class="sp"></span><span class="btn dim" style="font-size:12px;padding:3px 11px">History ⌄</span><span class="btn pri" style="font-size:12px;padding:3px 11px">Approve v3</span></div>
+<div style="display:flex;align-items:center;gap:10px;padding:10px 22px;border-bottom:1px solid var(--br2)"><span style="color:var(--t4)">⌕</span><span style="font-size:12.5px;color:var(--t4);flex:1">Search items, vendors…</span><span class="chip">Group: Section ⌄</span><span class="chip">Columns ⌄</span><span style="font-size:12px;color:var(--t3)">⧉ drag receipts onto rows</span><span class="mono" style="font-size:12px;color:var(--t2)">est <b style="color:var(--t1);font-weight:500">5,176</b> · act <b style="color:var(--t1);font-weight:500">2,475</b></span></div>
+<div class="grh"><span style="width:24px"></span><span style="flex:1.6">Item</span><span style="flex:1">Vendor</span><span style="width:92px">Day</span><span style="width:80px;text-align:right">Est</span><span style="width:80px;text-align:right">Act</span><span style="width:64px;text-align:right">Var</span><span style="width:40px;text-align:center">⧉</span></div>
+<div style="display:flex;align-items:center;gap:10px;padding:8px 22px;background:#141414;border-bottom:1px solid #1c1c1c"><span style="color:var(--t4);font-size:11px">▾</span><span style="font-size:12.5px;font-weight:500;letter-spacing:.05em">ACCOMMODATION</span><span class="chip" style="font-size:10.5px">↗ from Rooming</span><span class="sp"></span><span class="mono" style="font-size:11.5px;color:var(--t4)">est 1,240 · act 0</span></div>
+<div class="gr" style="padding-left:46px"><span style="flex:1.6;font-size:13px;color:var(--t2)">Nashville · 5–8 Sep · 4 nts · SGL ×2</span><span style="flex:1;font-size:13px;color:var(--t3)">Hotel Indigo</span><span style="width:92px;font-size:11.5px;color:var(--t4)">Off/Reh</span><span class="mono" style="width:80px;text-align:right;font-size:12.5px;color:var(--t2)">640</span><span class="mono" style="width:80px;text-align:right;font-size:12.5px;color:var(--t4)">—</span><span style="width:64px"></span><span style="width:40px;text-align:center;color:var(--t4)">🔒</span></div>
+<div class="gr" style="padding-left:46px"><span style="flex:1.6;font-size:13px;color:var(--t2)">Roanoke · 10 Sep · 1 nt · SGL ×8</span><span style="flex:1;font-size:13px;color:var(--t3)">—</span><span style="width:92px;font-size:11.5px;color:var(--t4)">Day off</span><span class="mono" style="width:80px;text-align:right;font-size:12.5px;color:var(--t2)">600</span><span class="mono" style="width:80px;text-align:right;font-size:12.5px;color:var(--t4)">—</span><span style="width:64px"></span><span style="width:40px;text-align:center;color:var(--t4)">🔒</span></div>
+<div style="display:flex;align-items:center;gap:10px;padding:8px 22px;background:#141414;border-bottom:1px solid #1c1c1c"><span style="color:var(--t4);font-size:11px">▾</span><span style="font-size:12.5px;font-weight:500;letter-spacing:.05em">PRODUCTION</span><span class="chip" style="font-size:10.5px">custom</span><span class="sp"></span><span class="mono" style="font-size:11.5px;color:var(--t4)">est 3,300 · act 2,475</span></div>
+<div class="gr" style="padding-left:24px"><span class="mono" style="width:22px;font-size:11px;color:var(--t4);text-align:right">1</span><span style="flex:1.6;font-size:13px">Backline hire — Nashville run</span><span style="flex:1;font-size:13px;color:var(--t2)">SIR Nashville</span><span style="width:92px"><span class="daypill" style="font-size:11px;padding:2px 9px"><span class="tick" style="background:#8B5CF6;height:10px"></span>Rehearsal</span></span><span class="mono cellbox" style="width:80px;text-align:right;font-size:12.5px;border-color:transparent">1,800</span><span class="mono" style="width:80px;text-align:right;font-size:12.5px">1,800</span><span class="mono" style="width:64px;text-align:right;font-size:11.5px;color:var(--ok)">0.0%</span><span style="width:40px;text-align:center;color:var(--t2)">⧉</span></div>
+<div class="gr" style="padding-left:24px"><span class="mono" style="width:22px;font-size:11px;color:var(--t4);text-align:right">2</span><span style="flex:1.6;font-size:13px">Trailer rental</span><span style="flex:1;font-size:13px;color:var(--t2)">Ryder</span><span style="width:92px;font-size:11.5px;color:var(--t4)">Tour-wide</span><span class="mono cellbox" style="width:80px;text-align:right;font-size:12.5px;border-color:var(--or);background:#141414">1,500</span><span class="mono" style="width:80px;text-align:right;font-size:12.5px">675</span><span class="mono" style="width:64px;text-align:right;font-size:11.5px;color:var(--ok)">▼55%</span><span style="width:40px;text-align:center;color:var(--t4)">+</span></div>
+<div style="display:flex;align-items:center;gap:10px;padding:8px 22px;background:#141412;border-bottom:1px solid #1c1c1c"><span style="color:var(--t4);font-size:11px">▸</span><span style="font-size:12.5px;font-weight:500;letter-spacing:.05em">INSURANCE</span><span class="chip" style="font-size:10.5px">ƒ computed · 3% of expenses</span><span class="sp"></span><span class="mono" style="font-size:11.5px;color:var(--t4)">est 136 · set % in Settings</span></div>
+<div style="display:flex;align-items:center;gap:10px;padding:8px 22px;background:#141414"><span style="color:var(--t4);font-size:11px">▸</span><span style="font-size:12.5px;font-weight:500;letter-spacing:.05em">SALARY</span><span class="chip" style="font-size:10.5px">↗ from Payroll</span><span class="sp"></span><span class="mono" style="font-size:11.5px;color:var(--t4)">est 2,475 · act 2,475</span></div>
+<div class="kbd"><span>↑↓←→ move</span><span>Enter edit</span><span>Tab next</span><span>⌘C/V copy · paste</span><span>⌘. row menu</span><span>type over selection to bulk-fill</span></div>
+</div></div>
+<!-- ============ 8 · CHANNEL LIST ============ -->
+<div class="sur" data-s="channel"><h2>8 · Channel list editor <span>tools tier</span></h2>
+<div class="frame" data-f="channel">
+<div class="chrome"><span class="logo"></span><span class="crumb">Charlotte Sands</span><span class="sep">/</span><span class="crumb"><b>USA Headline '26</b></span><span class="crumb mut3">· Production · Channel list</span><span class="sp"></span><span class="saved">● Saved · just now</span><span class="av">AD</span></div>
+<div style="display:flex;align-items:center;gap:11px;padding:10px 22px;background:var(--s1);border-bottom:1px solid var(--br2)"><span style="color:var(--t3)">↘</span><span style="font-size:13px">Inherited from <b style="font-weight:500">CS — Standard Rider v3</b> (artist)</span><span style="font-size:12px;color:var(--t3)">read-only until overridden for this tour</span><span class="sp"></span><span class="btn pri" style="font-size:12.5px">Override for this tour</span></div>
+<div style="display:flex;align-items:center;gap:10px;padding:10px 22px;border-bottom:1px solid var(--br2)"><span class="btn dim">Sheet: Tour default ⌄</span><span class="chip">Columns ⌄ · 2 hidden</span><span class="sp"></span><span class="chip">+ 8 rows</span><span class="chip">Export PDF</span></div>
+<div class="grh"><span style="width:34px">#</span><span style="flex:1.4">Name</span><span style="flex:1">Mic / DI</span><span style="width:110px">Stand</span><span style="width:54px;text-align:center">48V</span><span style="width:66px">Box</span><span style="width:90px">Gear</span></div>
+<div class="gr" style="border-left:3px solid rgba(59,130,246,.5);padding-left:19px"><span class="mono" style="width:34px;font-size:12px;color:var(--t3)">1</span><span style="flex:1.4;font-size:13px">Kick in</span><span style="flex:1;font-size:13px;color:var(--t2)">Beta 91A</span><span style="width:110px;font-size:12px;color:var(--t4)">—</span><span style="width:54px;text-align:center"><span class="dot" style="background:var(--t1)"></span></span><span class="mono" style="width:66px;font-size:11.5px;color:var(--t3)">A1</span><span style="width:90px"></span></div>
+<div class="gr" style="border-left:3px solid rgba(59,130,246,.5);padding-left:19px"><span class="mono" style="width:34px;font-size:12px;color:var(--t3)">2</span><span style="flex:1.4;font-size:13px">Snare top</span><span style="flex:1;font-size:13px;color:var(--t2)">SM57</span><span style="width:110px;font-size:12px;color:var(--t4)">Short boom</span><span style="width:54px;text-align:center"><span class="dot" style="background:var(--br)"></span></span><span class="mono" style="width:66px;font-size:11.5px;color:var(--t3)">A2</span><span style="width:90px"></span></div>
+<div class="gr" style="border-left:3px solid rgba(63,168,125,.5);padding-left:19px"><span class="mono" style="width:34px;font-size:12px;color:var(--t3)">9</span><span style="flex:1.4;font-size:13px">Bass DI</span><span style="flex:1;font-size:13px;color:var(--t2)">Radial J48</span><span style="width:110px;font-size:12px;color:var(--t4)">—</span><span style="width:54px;text-align:center"><span class="dot" style="background:var(--t1)"></span></span><span class="mono" style="width:66px;font-size:11.5px;color:var(--t3)">B1</span><span style="width:90px"><span class="chip" style="font-size:10px;padding:1px 8px">owned</span></span></div>
+<div class="gr" style="border-left:3px solid rgba(63,168,125,.5);padding-left:19px"><span class="mono" style="width:34px;font-size:12px;color:var(--t3)">10</span><span style="flex:1.4;font-size:13px">GTR Charlotte</span><span style="flex:1;font-size:13px;color:var(--t2)">e906</span><span style="width:110px;font-size:12px;color:var(--t4)">Short boom</span><span style="width:54px;text-align:center"><span class="dot" style="background:var(--br)"></span></span><span class="mono" style="width:66px;font-size:11.5px;color:var(--t3)">B2</span><span style="width:90px"><span class="chip" style="font-size:10px;padding:1px 8px;color:var(--or2);border-color:rgba(255,69,0,.35)">rented</span></span></div>
+<div class="gr" style="border-left:3px solid rgba(236,72,153,.45);padding-left:19px"><span class="mono" style="width:34px;font-size:12px;color:var(--t3)">17</span><span style="flex:1.4;font-size:13px">Vox Charlotte</span><span style="flex:1;font-size:13px;color:var(--t2)">KSM9</span><span style="width:110px;font-size:12px;color:var(--t4)">Tall round</span><span style="width:54px;text-align:center"><span class="dot" style="background:var(--br)"></span></span><span class="mono" style="width:66px;font-size:11.5px;color:var(--t3)">C1</span><span style="width:90px"></span></div>
+<div class="grh" style="border-top:1px solid var(--br2)"><span style="width:34px">Out</span><span style="flex:1.4">Send</span><span style="flex:1">Destination</span><span style="width:110px">Qty</span><span style="width:54px"></span><span style="width:66px"></span><span style="width:90px"></span></div>
+<div class="gr"><span class="mono" style="width:34px;font-size:12px;color:var(--t3)">1-2</span><span style="flex:1.4;font-size:13px">Mains L/R <span class="chip" style="font-size:9.5px;padding:0 6px">stereo</span></span><span style="flex:1;font-size:13px;color:var(--t2)">House PA</span><span class="mono" style="width:110px;font-size:12px;color:var(--t3)">2</span><span style="width:54px"></span><span style="width:66px"></span><span style="width:90px"></span></div>
+<div class="gr" style="border-bottom:none"><span class="mono" style="width:34px;font-size:12px;color:var(--t3)">3</span><span style="flex:1.4;font-size:13px">IEM mix — Charlotte</span><span style="flex:1;font-size:13px;color:var(--t2)">PSM1000 ch1</span><span class="mono" style="width:110px;font-size:12px;color:var(--t3)">1</span><span style="width:54px"></span><span style="width:66px"></span><span style="width:90px"></span></div>
+<div class="kbd"><span>↑↓←→ move</span><span>Enter edit</span><span>Esc revert cell</span><span>drag ⋮⋮ reorder</span><span>⌘D duplicate row</span><span>stripes = stage boxes A/B/C</span></div>
+</div></div>
+
+<!-- ============ 9 · STAGE PLOT ============ -->
+<div class="sur" data-s="stage"><h2>9 · Stage plot <span>tools tier</span></h2>
+<div class="frame" data-f="stage">
+<div class="chrome"><span class="logo"></span><span class="crumb">Charlotte Sands</span><span class="sep">/</span><span class="crumb"><b>USA Headline '26</b></span><span class="crumb mut3">· Production · Stage plot</span><span class="sp"></span><span class="saved">● Saved · just now</span><span class="av">AD</span></div>
+<div style="display:flex;align-items:center;gap:10px;padding:10px 22px;border-bottom:1px solid var(--br2)"><span class="btn dim">Layer: Main ⌄</span><span style="font-size:12px;color:var(--t3)">house · <b style="color:var(--t1);font-weight:500">main</b> · annotations</span><span class="sp"></span><span class="mono" style="font-size:12px;color:var(--t4)">32 × 24 FT</span><span class="chip">− 100% +</span><span class="btn dim">Export PDF ⌄</span></div>
+<div style="display:grid;grid-template-columns:84px 1fr 260px">
+<div style="border-right:1px solid var(--br2);padding:14px 10px;display:flex;flex-direction:column;gap:8px;align-items:center">
+<span class="lbl" style="font-size:9px">Drums</span>
+<span style="width:44px;height:44px;border:1px solid var(--br);border-radius:9px;display:flex;align-items:center;justify-content:center;color:var(--t2);font-size:18px">◯</span>
+<span style="width:44px;height:44px;border:1px solid var(--br);border-radius:9px;display:flex;align-items:center;justify-content:center;color:var(--t2);font-size:17px">▢</span>
+<span class="lbl" style="font-size:9px;margin-top:6px">Amps</span>
+<span style="width:44px;height:44px;border:1px solid var(--br);border-radius:9px;display:flex;align-items:center;justify-content:center;color:var(--t2);font-size:17px">▤</span>
+<span class="lbl" style="font-size:9px;margin-top:6px">Mons</span>
+<span style="width:44px;height:44px;border:1px solid var(--br);border-radius:9px;display:flex;align-items:center;justify-content:center;color:var(--t2);font-size:17px">△</span>
+<span style="width:44px;height:44px;border:1px solid var(--br);border-radius:9px;display:flex;align-items:center;justify-content:center;color:var(--or2);font-size:16px">⚡</span>
+<span style="font-size:10.5px;color:var(--t4);text-align:center;margin-top:8px">164 icons<br>12 cats</span>
+</div>
+<div style="padding:16px;background:#0c0c0c">
+<svg viewBox="0 0 560 330" style="width:100%;display:block">
+<rect x="12" y="12" width="536" height="296" rx="5" fill="#111" stroke="#2E2E2E"/>
+<text x="280" y="32" text-anchor="middle" fill="#525252" font-size="10" letter-spacing="3">UPSTAGE</text>
+<text x="280" y="298" text-anchor="middle" fill="#525252" font-size="10" letter-spacing="3">DOWNSTAGE · AUDIENCE</text>
+<g><rect x="212" y="58" width="136" height="66" rx="6" fill="#1A1A1A" stroke="#3a3a3a"/><circle cx="258" cy="91" r="17" fill="none" stroke="#A3A3A3" stroke-width="1.6"/><circle cx="298" cy="91" r="10" fill="none" stroke="#A3A3A3" stroke-width="1.6"/><text x="280" y="140" text-anchor="middle" fill="#737373" font-size="10" font-family="JetBrains Mono">DRUM RISER 8×8 · USC</text></g>
+<g><rect x="86" y="122" width="52" height="38" rx="5" fill="#1A1A1A" stroke="#3a3a3a"/><rect x="96" y="132" width="32" height="18" rx="2" fill="none" stroke="#A3A3A3" stroke-width="1.5"/><text x="112" y="176" text-anchor="middle" fill="#737373" font-size="10" font-family="JetBrains Mono">GTR AMP · USL</text></g>
+<g><rect x="422" y="152" width="38" height="28" rx="4" fill="#1A1A1A" stroke="#3a3a3a"/><text x="441" y="171" text-anchor="middle" fill="#A3A3A3" font-size="10" font-family="JetBrains Mono">DI</text><text x="441" y="196" text-anchor="middle" fill="#737373" font-size="10" font-family="JetBrains Mono">BASS · USR</text></g>
+<g><path d="M250 244 L310 244 L299 268 L261 268 Z" fill="rgba(255,69,0,.07)" stroke="#FF4500" stroke-width="1.6"/><text x="280" y="284" text-anchor="middle" fill="#FF6A33" font-size="10" font-family="JetBrains Mono">WEDGE · DSC ⚡</text></g>
+<g><rect x="62" y="238" width="32" height="32" rx="6" fill="#1A1A1A" stroke="#3a3a3a"/><text x="78" y="259" text-anchor="middle" fill="#FF6A33" font-size="13">⚡</text><text x="78" y="286" text-anchor="middle" fill="#737373" font-size="10" font-family="JetBrains Mono">63A · DSL</text></g>
+</svg>
+<div style="display:flex;gap:16px;margin-top:10px;font-size:12px;color:var(--t4)"><span>drag from rail to place</span><span>snap: 1ft grid</span><span>position labels auto (USL…DSC)</span><span style="color:var(--or2)">no undo yet — flagged</span></div>
+</div>
+<div style="border-left:1px solid var(--br2);padding:16px;background:#0c0c0c">
+<div class="lbl" style="margin-bottom:9px">Item</div>
+<div class="card" style="padding:13px 14px;margin-bottom:14px">
+<div style="font-size:13.5px;font-weight:500">Wedge monitor</div>
+<div class="mono" style="font-size:11px;color:var(--t3);margin:4px 0 10px">DSC · 14.0, 20.5 FT · ROT 0°</div>
+<div style="display:flex;justify-content:space-between;padding:4px 0"><span style="font-size:12.5px;color:var(--t2)">Layer</span><span style="font-size:12px">Main ⌄</span></div>
+<div style="display:flex;justify-content:space-between;padding:4px 0"><span style="font-size:12.5px;color:var(--t2)">Power</span><span class="mono" style="font-size:12px;color:var(--or2)">16A · 230V</span></div>
+<div style="display:flex;justify-content:space-between;padding:4px 0"><span style="font-size:12.5px;color:var(--t2)">Locked</span><span style="font-size:12px;color:var(--t3)">off</span></div>
+</div>
+<div class="lbl" style="margin-bottom:9px">Linked channels</div>
+<div style="display:flex;flex-direction:column;gap:5px;margin-bottom:10px">
+<div style="display:flex;align-items:center;gap:9px;background:#141414;border:1px solid var(--br);border-radius:7px;padding:6px 10px"><span style="width:3px;height:14px;border-radius:1px;background:rgba(236,72,153,.6)"></span><span class="mono" style="font-size:11px;color:var(--t3)">21</span><span style="font-size:12px">Wedge mix L</span></div>
+<div style="display:flex;align-items:center;gap:9px;background:#141414;border:1px solid var(--br);border-radius:7px;padding:6px 10px"><span style="width:3px;height:14px;border-radius:1px;background:rgba(236,72,153,.6)"></span><span class="mono" style="font-size:11px;color:var(--t3)">22</span><span style="font-size:12px">Wedge mix R</span></div>
+</div>
+<span class="arrow" style="font-size:12.5px">+ Link channel row</span>
+<div style="border-top:1px solid var(--br2);margin-top:12px;padding-top:10px;font-size:11.5px;color:var(--t3)">PDF export: input list <b style="color:var(--t1);font-weight:500">off</b> · toggle in Export ⌄</div>
+</div>
+</div>
+</div></div>
+
+<!-- ============ 10 · RIDER BUILDER ============ -->
+<div class="sur" data-s="rider"><h2>10 · Rider builder <span>tools tier</span></h2>
+<div class="frame" data-f="rider">
+<div class="chrome"><span class="logo"></span><span class="crumb">Charlotte Sands</span><span class="sep">/</span><span class="crumb"><b>USA Headline '26</b></span><span class="crumb mut3">· Production · Riders</span><span class="sp"></span><span class="saved">● Saved · just now</span><span class="av">AD</span></div>
+<div style="display:flex;align-items:center;gap:11px;padding:10px 22px;background:var(--s1);border-bottom:1px solid var(--br2)"><span style="color:var(--t3)">↘</span><span style="font-size:13px">Tour instance of <b style="font-weight:500">CS — Standard Rider v3</b> (artist)</span><span style="font-size:12px;color:var(--t3)">2 of 8 sections overridden</span><span class="sp"></span><span class="btn dim" style="font-size:12px">View source</span><span class="btn dim" style="font-size:12px">Share /r link</span><span class="btn pri" style="font-size:12px">Export PDF</span></div>
+<div style="display:grid;grid-template-columns:230px 1fr">
+<div style="border-right:1px solid var(--br2);padding:12px 0">
+<div style="display:flex;align-items:center;gap:9px;padding:8px 18px"><span style="font-size:13px;color:var(--t2);flex:1">Contacts</span><span style="color:var(--t4);font-size:11px">↘</span></div>
+<div style="display:flex;align-items:center;gap:9px;padding:8px 18px;background:var(--orw);border-left:2px solid var(--or)"><span style="font-size:13px;flex:1">Audio / FOH</span><span class="chip" style="font-size:9.5px;padding:0 6px">overridden</span></div>
+<div style="display:flex;align-items:center;gap:9px;padding:8px 18px"><span style="font-size:13px;color:var(--t2);flex:1">Monitoring</span><span style="color:var(--t4);font-size:11px">↘</span></div>
+<div style="display:flex;align-items:center;gap:9px;padding:8px 18px"><span style="font-size:13px;color:var(--t2);flex:1">Backline</span><span class="chip" style="font-size:9.5px;padding:0 6px">overridden</span></div>
+<div style="display:flex;align-items:center;gap:9px;padding:8px 18px"><span style="font-size:13px;color:var(--t2);flex:1">Hospitality</span><span style="color:var(--t4);font-size:11px">↘</span></div>
+<div style="display:flex;align-items:center;gap:9px;padding:8px 18px"><span style="font-size:13px;color:var(--t2);flex:1">Catering</span><span style="color:var(--t4);font-size:11px">↘</span></div>
+<div style="display:flex;align-items:center;gap:9px;padding:8px 18px"><span style="font-size:13px;color:var(--t2);flex:1">Channel list</span><span class="mono" style="font-size:10px;color:var(--t4)">24in</span></div>
+<div style="padding:10px 18px 0;font-size:12px;color:var(--t3)">+ Section · 13 blueprints</div>
+</div>
+<div style="padding:20px 22px">
+<div style="display:flex;align-items:center;gap:11px;margin-bottom:13px"><span style="font-size:15px;font-weight:500;flex:1">Audio / FOH</span><span class="chip" style="font-size:10.5px">overridden for this tour</span><span style="font-size:11.5px;color:var(--t3)">view artist original</span><span style="font-size:11.5px;color:var(--t3)">revert</span></div>
+<div class="card" style="padding:14px 16px;margin-bottom:10px"><div class="lbl" style="font-size:10px;margin-bottom:7px">rich text</div><div style="font-size:13.5px;line-height:1.65">House console must be a <span style="color:var(--or2)">DiGiCo SD-series or Avid S6L</span>. FOH engineer travels with the band. 31-band GEQ on masters is not acceptable — system EQ access required.</div></div>
+<div class="card" style="padding:14px 16px;margin-bottom:10px"><div class="lbl" style="font-size:10px;margin-bottom:9px">fields</div><div style="display:flex;gap:28px"><div><div style="font-size:11px;color:var(--t3)">PA coverage</div><div style="font-size:13px">Full range, 105 dB @ mix</div></div><div><div style="font-size:11px;color:var(--t3)">Mix position</div><div style="font-size:13px">Rear centre, not under balcony</div></div><div><div style="font-size:11px;color:var(--t3)">System tech</div><div style="font-size:13px">Required from load-in</div></div></div></div>
+<div class="card" style="display:flex;align-items:center;gap:11px;padding:12px 16px;background:#141414;margin-bottom:10px"><span style="color:var(--t2)">▦</span><span style="font-size:13px">Channel list — 24 inputs · 6 outputs</span><span style="font-size:11px;color:var(--t4)">embedded section</span><span class="sp"></span><span class="arrow" style="font-size:12.5px">Open editor →</span></div>
+<div style="border:1px dashed var(--br);border-radius:10px;padding:12px 16px;opacity:.6;display:flex;align-items:center;gap:11px"><span style="color:var(--t4)">↘</span><span style="font-size:13px;color:var(--t2)">Hospitality — inherited from artist master, read-only</span><span class="sp"></span><span class="btn pri" style="font-size:11.5px;padding:3px 11px">Override</span></div>
+<div style="display:flex;gap:16px;margin-top:12px;font-size:12px;color:var(--t4)"><span>blocks: rich text · fields · channel list · asset</span><span>⌘D duplicate block</span><span>history logged, append-only</span></div>
+</div>
+</div>
+</div></div>
+
+<div id="side"></div>
+<div id="modal"><div class="in"><h3 style="font-family:'Barlow Condensed';font-size:20px;letter-spacing:.03em;text-transform:uppercase;margin-bottom:10px">Feedback export — paste this to Claude</h3><textarea id="mdout" readonly></textarea><div class="acts"><button id="mcopy">Copy to clipboard</button><button id="mclose">Close</button></div></div></div>
+
+<script>
+var SURFACES=[
+["workspace","1 · Workspace",[["WS-01","Card layout & photo/watermark treatment"],["WS-02","Derived status lines (verb + time anchor)"],["WS-03","Next-action verbs per card"],["WS-04","'Needs you' queue replaces activity feed"],["WS-05","Colour restraint on this screen"]]],
+["artist","2 · Artist",[["AR-01","Tour rows ranked by urgency (height = relevance)"],["AR-02","Product chips with single status dot"],["AR-03","Tours / Production / Business tab split"],["AR-04","Colour restraint on this screen"]]],
+["tour","3 · Tour — Routing",[["TR-01","Routing as the tour landing (no Overview page)"],["TR-02","Readiness rail contents & wording"],["TR-03","Day strip sizing & muted day-type hues"],["TR-04","Grid: DATE then DAY column order, day-pill ticks"],["TR-05","Drive chips as neutral interstitial rows"],["TR-06","Nav cluster: Routing | $ Budget ⧉ Advance | rest"]]],
+["build","4 · Advance Build",[["AB-01","Build/Fill/Review mode switcher"],["AB-02","Section blocks + field rows + grips"],["AB-03","Inspector (field props + section props)"],["AB-04","AI deal-memo card placement & review-first copy"],["AB-05","'Venue can fill' exposure in inspector"]]],
+["fill","5 · Advance Fill",[["AF-01","Section rail with fill counts"],["AF-02","Intake review banner & queue grammar"],["AF-03","Inline click-to-edit treatment"],["AF-04","Orange-only status dots (was blue)"]]],
+["review","6 · Advance Review",[["AV-01","Venue-view preview honesty (hidden shown as hidden)"],["AV-02","Intake link card (expiry preset, revoke, password)"],["AV-03","Packet builder + page counts + honest gaps"],["AV-04","Activity log"]]],
+["budget","7 · Budget Grid",[["BG-01","Version bar (draft/approved/Approve)"],["BG-02","Derived rows: lock + neutral 'from Rooming' chip"],["BG-03","Computed section treatment (ƒ chip)"],["BG-04","Vendor + Day columns (Classic parity)"],["BG-05","Colour restraint (green only on good variance)"]]],
+["channel","8 · Channel list",[["CL-01","Override gate banner (neutral, not purple)"],["CL-02","Stage-box stripes desaturated, legend in footer"],["CL-03","Phantom as filled/empty neutral dot"],["CL-04","Outputs sub-grid separation"],["CL-05","Ownership chips (rented = orange)"]]],
+["stage","9 · Stage plot",[["SP-01","Canvas / rail / inspector proportions"],["SP-02","Neutral item strokes, orange = selected only"],["SP-03","Linked channel chips w/ stripe tick"],["SP-04","Power in orange (attention)"]]],
+["rider","10 · Rider builder",[["RB-01","Inheritance banner (neutral ↘, not purple)"],["RB-02","Section rail states (↘ inherited / overridden chip)"],["RB-03","Per-section Override gate"],["RB-04","Heterogeneous blocks with micro-labels"]]]
+];
+var store=JSON.parse(localStorage.getItem("lp-smoke-v1")||"{}");
+store.pins=store.pins||[];store.verdicts=store.verdicts||{};store.pros=store.pros||{};store.cons=store.cons||{};
+function save(){localStorage.setItem("lp-smoke-v1",JSON.stringify(store))}
+var side=document.getElementById("side");
+var h='<h3>Smoke verdicts</h3><button class="exp" id="exp">Export feedback</button>';
+SURFACES.forEach(function(s){
+h+='<div class="sblock"><h4>'+s[1]+'</h4>';
+s[2].forEach(function(k){h+='<div class="smk"><span class="id">'+k[0]+'</span><span class="tx">'+k[1]+'</span><span class="v" data-v="'+k[0]+'">—</span></div>'});
+h+='<textarea class="pc" data-pro="'+s[0]+'" placeholder="Pros — what works"></textarea>';
+h+='<textarea class="pc" data-con="'+s[0]+'" placeholder="Cons — what does not"></textarea>';
+h+='<div class="alist" data-al="'+s[0]+'"></div></div>';
+});
+h+='<div style="padding:14px 0"><button class="clr" id="clr">Clear all feedback</button></div>';
+side.innerHTML=h;
+var CYCLE=["—","pass","change","fail"];
+document.querySelectorAll("[data-v]").forEach(function(b){
+var id=b.getAttribute("data-v");
+function paint(){var v=store.verdicts[id]||"—";b.textContent=v;b.className="v"+(v==="—"?"":" "+v)}
+paint();
+b.addEventListener("click",function(){var v=store.verdicts[id]||"—";store.verdicts[id]=CYCLE[(CYCLE.indexOf(v)+1)%4];save();paint()});
+});
+document.querySelectorAll("[data-pro],[data-con]").forEach(function(t){
+var pro=t.getAttribute("data-pro"),con=t.getAttribute("data-con");
+t.value=pro?(store.pros[pro]||""):(store.cons[con]||"");
+t.addEventListener("input",function(){if(pro)store.pros[pro]=t.value;else store.cons[con]=t.value;save()});
+});
+function renderPins(){
+document.querySelectorAll(".pin").forEach(function(p){p.remove()});
+document.querySelectorAll("[data-al]").forEach(function(a){a.innerHTML=""});
+store.pins.forEach(function(p,i){
+var f=document.querySelector('[data-f="'+p.s+'"]');if(!f)return;
+var el=document.createElement("div");el.className="pin "+(p.t||"");el.textContent=i+1;
+el.style.left=p.x+"%";el.style.top=p.y+"%";
+el.addEventListener("click",function(e){e.stopPropagation();openPop(f,p,el)});
+f.appendChild(el);
+var al=document.querySelector('[data-al="'+p.s+'"]');
+if(al){var r=document.createElement("div");r.className="a";r.innerHTML="<b>"+(i+1)+"</b> <span style='color:var(--t4)'>["+(p.t||"comment")+"]</span> "+(p.txt||"<i style='color:var(--t4)'>empty</i>");al.appendChild(r)}
+});}
+var curPop=null;
+function closePop(){if(curPop){curPop.remove();curPop=null}}
+function openPop(frame,pin,anchor){
+closePop();
+var pop=document.createElement("div");pop.className="pop";
+var lx=parseFloat(pin.x),ly=parseFloat(pin.y);
+pop.style.left=Math.min(lx,72)+"%";pop.style.top=ly+"%";
+pop.innerHTML='<textarea placeholder="What are you seeing / thinking?">'+(pin.txt||"")+'</textarea><div class="types">'+["comment","pro","con","idea"].map(function(t){return '<button data-t="'+t+'"'+((pin.t||"comment")===t?' class="on"':'')+'>'+t+'</button>'}).join("")+'</div><div class="acts"><button class="del">Delete</button><button class="sv">Save</button></div>';
+pop.addEventListener("click",function(e){e.stopPropagation()});
+pop.querySelectorAll("[data-t]").forEach(function(b){b.addEventListener("click",function(){pop.querySelectorAll("[data-t]").forEach(function(x){x.classList.remove("on")});b.classList.add("on");pin.t=b.getAttribute("data-t")})});
+pop.querySelector(".sv").addEventListener("click",function(){pin.txt=pop.querySelector("textarea").value;save();renderPins();closePop()});
+pop.querySelector(".del").addEventListener("click",function(){store.pins=store.pins.filter(function(x){return x!==pin});save();renderPins();closePop()});
+frame.appendChild(pop);curPop=pop;pop.querySelector("textarea").focus();
+}
+document.querySelectorAll(".frame").forEach(function(f){
+f.addEventListener("click",function(e){
+if(e.target.closest(".pin")||e.target.closest(".pop"))return;
+closePop();
+var r=f.getBoundingClientRect();
+var pin={s:f.getAttribute("data-f"),x:((e.clientX-r.left)/r.width*100).toFixed(2),y:((e.clientY-r.top)/r.height*100).toFixed(2),txt:"",t:"comment"};
+store.pins.push(pin);save();renderPins();
+openPop(f,pin,null);
+});});
+renderPins();
+document.getElementById("exp").addEventListener("click",function(){
+var md="# Lowpass design feedback — "+new Date().toISOString().slice(0,10)+"\n";
+SURFACES.forEach(function(s){
+md+="\n## "+s[1]+"\n";
+s[2].forEach(function(k){md+="- "+k[0]+" ["+(store.verdicts[k[0]]||"—")+"] "+k[1]+"\n"});
+if(store.pros[s[0]])md+="\n**Pros:** "+store.pros[s[0]]+"\n";
+if(store.cons[s[0]])md+="**Cons:** "+store.cons[s[0]]+"\n";
+var pins=store.pins.filter(function(p){return p.s===s[0]});
+if(pins.length){md+="\n**Pins:**\n";pins.forEach(function(p,i){md+="- ["+(p.t||"comment")+"] @ "+p.x+"%,"+p.y+"% — "+(p.txt||"(no text)")+"\n"})}
+});
+document.getElementById("mdout").value=md;
+document.getElementById("modal").style.display="block";
+});
+document.getElementById("mcopy").addEventListener("click",function(){document.getElementById("mdout").select();document.execCommand("copy");document.getElementById("mcopy").textContent="Copied ✓";setTimeout(function(){document.getElementById("mcopy").textContent="Copy to clipboard"},1500)});
+document.getElementById("mclose").addEventListener("click",function(){document.getElementById("modal").style.display="none"});
+document.getElementById("clr").addEventListener("click",function(){if(confirm("Wipe all pins, verdicts and notes?")){store={pins:[],verdicts:{},pros:{},cons:{}};save();location.reload()}});
+</script>
+</body>
+</html>
