@@ -98,9 +98,9 @@ export async function PATCH(
   if (body.employment_type === null || typeof body.employment_type === 'string') {
     patch.employment_type = (body.employment_type as string | null) ?? null;
   }
-  if (body.rate_amount === null || typeof body.rate_amount === 'number') {
-    patch.rate_amount = body.rate_amount as number | null;
-  }
+  // Stage 1 — tour_personnel.rate_amount is retired (my-schedule reads the SSOT
+  // via personnel_rate_lines; migration 231 drops the column). No longer written
+  // here — rate entry's single home is the Payroll grid → writeRates.
   if (body.rate_currency === null || typeof body.rate_currency === 'string') {
     patch.rate_currency = body.rate_currency as string | null;
   }

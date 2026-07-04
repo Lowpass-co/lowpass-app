@@ -26,6 +26,7 @@
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { getActiveMembership } from '@/lib/permissions/server';
+import { writeRates } from '@/server/payroll/writeRates';
 
 export const dynamic = 'force-dynamic';
 
@@ -147,50 +148,30 @@ export async function PUT(
     return Number.isFinite(n) && n >= 0 ? n : undefined;
   };
 
-  const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
   const show = num(body.show_rate);
   const off = num(body.off_rate);
   const pd = num(body.per_diem);
-  if (show !== undefined) patch.show_rate = show;
-  if (off !== undefined) patch.off_rate = off;
-  if (pd !== undefined) patch.per_diem = pd;
-  /* §P2 — internal_rate only writable by admin/manager. A
-     non-admin sending it is dropped silently (no error) so the
-     auto-save loop doesn't fail; the field isn't rendered for
-     them anyway. */
-  if (r.isAdmin && body.internal_rate !== undefined) {
-    patch.internal_rate = body.internal_rate === null ? null : num(body.internal_rate) ?? null;
-  }
+  /* §P2 — internal_rate only writable by admin/manager. A non-admin sending it is
+     dropped silently (no error) so the auto-save loop doesn't fail. */
+  const internalRate =
+    r.isAdmin && body.internal_rate !== undefined
+      ? body.internal_rate === null
+        ? null
+        : num(body.internal_rate) ?? null
+      : undefined;
 
-  /* Upsert by (tour_id, roster_personnel_id). Find first; if
-     no row, insert with the legacy person_name filled so old
-     SUMMARY-sheet joins resolve. */
-  const { data: existing } = await supabase
-    .from('personnel_rates')
-    .select('id')
-    .eq('tour_id', tourId)
-    .eq('roster_personnel_id', r.personId)
-    .maybeSingle<{ id: string }>();
-
-  if (existing) {
-    const { error } = await supabase
-      .from('personnel_rates')
-      .update(patch)
-      .eq('id', existing.id);
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  } else {
-    const { error } = await supabase.from('personnel_rates').insert({
-      tour_id: tourId,
-      workspace_id: r.workspaceId,
-      person_name: r.displayName,
-      roster_personnel_id: r.personId,
-      show_rate: show ?? 0,
-      off_rate: off ?? 0,
-      per_diem: pd ?? 0,
-      internal_rate: r.isAdmin ? (patch.internal_rate as number | null | undefined) ?? null : null,
-    });
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  }
+  // Stage 1 — the ONE rate writer: keeps personnel_rate_lines (SSOT) + the legacy
+  // mirror columns in lockstep, keyed by (tour_id, roster_personnel_id). Only the
+  // provided rate keys are written (undefined = preserved).
+  const result = await writeRates(supabase, {
+    tourId,
+    workspaceId: r.workspaceId,
+    rosterPersonnelId: r.personId,
+    identity: { person_name: r.displayName },
+    rates: { show_rate: show, off_rate: off, per_diem: pd },
+    internalRate,
+  });
+  if (result.error) return NextResponse.json({ error: result.error }, { status: 500 });
 
   return NextResponse.json({ ok: true });
 }

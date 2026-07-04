@@ -49,13 +49,8 @@ export async function PATCH(request: Request, { params }: Params) {
     }
     patch.employment_type = v;
   }
-  if ('rate_amount' in body) {
-    const v = body.rate_amount;
-    if (v !== null && typeof v !== 'number' && typeof v !== 'string') {
-      return NextResponse.json({ error: 'Invalid rate_amount' }, { status: 400 });
-    }
-    patch.rate_amount = v === null || v === '' ? null : Number(v);
-  }
+  // Stage 1 — tour_personnel.rate_amount is retired (SSOT = personnel_rate_lines;
+  // migration 231 drops the column). No longer written here.
   if ('rate_currency' in body) {
     const v = body.rate_currency;
     if (v !== null && (typeof v !== 'string' || v.length > 3)) {
