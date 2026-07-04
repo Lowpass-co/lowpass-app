@@ -60,9 +60,9 @@ type PersonnelRate = {
   role: string | null;
   person_type: string;
   rate_type: string;
-  show_rate: number;
-  off_rate: number;
-  rehearsal_rate: number;
+  showRate: number;
+  offRate: number;
+  rehearsalRate: number;
   per_diem: number;
   advance_fee: number;
   commission?: number;
@@ -109,7 +109,7 @@ function projectedFee(
   return activeDays * offRate + advanceFee;
 }
 
-/** Advance fee auto-suggest: (total_tour_days / 2) × (day_rate / 2). day_rate = off_rate for day_rate, show_rate for split_rate. §4 */
+/** Advance fee auto-suggest: (total_tour_days / 2) × (day_rate / 2). day_rate = offRate for day_rate, showRate for split_rate. §4 */
 function suggestedAdvanceFee(
   totalTourDays: number,
   rateType: string,
@@ -140,9 +140,9 @@ function computeRowMoney(
     counts.off,
     counts.rehearsal,
     activeForDiem,
-    Number(form.show_rate) || 0,
-    Number(form.off_rate) || 0,
-    Number(form.rehearsal_rate) || 0,
+    Number(form.showRate) || 0,
+    Number(form.offRate) || 0,
+    Number(form.rehearsalRate) || 0,
     Number(form.advance_fee) || 0
   );
   const commissionAmount =
@@ -475,8 +475,8 @@ export function SalariesTab({
               const suggestedAdv = suggestedAdvanceFee(
                 totalTourDays,
                 rateType,
-                Number(form.show_rate) || 0,
-                Number(form.off_rate) || 0
+                Number(form.showRate) || 0,
+                Number(form.offRate) || 0
               );
 
               return (
@@ -509,12 +509,12 @@ export function SalariesTab({
                           step="0.01"
                           min="0"
                           className="w-full rounded-md border border-lp-border bg-transparent px-2 py-1 text-right text-sm tabular-nums text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30"
-                          value={form.off_rate ?? ''}
-                          onChange={(e) => setEditForm((prev) => ({ ...prev, off_rate: e.target.value === '' ? undefined : Number(e.target.value) }))}
+                          value={form.offRate ?? ''}
+                          onChange={(e) => setEditForm((prev) => ({ ...prev, offRate: e.target.value === '' ? undefined : Number(e.target.value) }))}
                         />
                       ) : (
                         <div className="flex justify-end">
-                          <SalaryCurrencyCell symbol={currencySymbol} amount={form.off_rate ?? 0} className="text-lp-text" />
+                          <SalaryCurrencyCell symbol={currencySymbol} amount={form.offRate ?? 0} className="text-lp-text" />
                         </div>
                       )
                     )}
@@ -528,12 +528,12 @@ export function SalariesTab({
                           step="0.01"
                           min="0"
                           className="w-full rounded-md border border-lp-border bg-transparent px-2 py-1 text-right text-sm tabular-nums text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30"
-                          value={form.show_rate ?? ''}
-                          onChange={(e) => setEditForm((prev) => ({ ...prev, show_rate: e.target.value === '' ? undefined : Number(e.target.value) }))}
+                          value={form.showRate ?? ''}
+                          onChange={(e) => setEditForm((prev) => ({ ...prev, showRate: e.target.value === '' ? undefined : Number(e.target.value) }))}
                         />
                       ) : (
                         <div className="flex justify-end">
-                          <SalaryCurrencyCell symbol={currencySymbol} amount={form.show_rate ?? 0} className="text-lp-text" />
+                          <SalaryCurrencyCell symbol={currencySymbol} amount={form.showRate ?? 0} className="text-lp-text" />
                         </div>
                       )
                     ) : (
@@ -548,12 +548,12 @@ export function SalariesTab({
                           step="0.01"
                           min="0"
                           className="w-full rounded-md border border-lp-border bg-transparent px-2 py-1 text-right text-sm tabular-nums text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30"
-                          value={form.off_rate ?? ''}
-                          onChange={(e) => setEditForm((prev) => ({ ...prev, off_rate: e.target.value === '' ? undefined : Number(e.target.value) }))}
+                          value={form.offRate ?? ''}
+                          onChange={(e) => setEditForm((prev) => ({ ...prev, offRate: e.target.value === '' ? undefined : Number(e.target.value) }))}
                         />
                       ) : (
                         <div className="flex justify-end">
-                          <SalaryCurrencyCell symbol={currencySymbol} amount={form.off_rate ?? 0} className="text-lp-text" />
+                          <SalaryCurrencyCell symbol={currencySymbol} amount={form.offRate ?? 0} className="text-lp-text" />
                         </div>
                       )
                     ) : (
@@ -568,12 +568,12 @@ export function SalariesTab({
                           step="0.01"
                           min="0"
                           className="w-full rounded-md border border-lp-border bg-transparent px-2 py-1 text-right text-sm tabular-nums text-lp-text focus:border-lp-orange focus:outline-none focus:ring-1 focus:ring-lp-orange/30"
-                          value={form.rehearsal_rate ?? ''}
-                          onChange={(e) => setEditForm((prev) => ({ ...prev, rehearsal_rate: e.target.value === '' ? undefined : Number(e.target.value) }))}
+                          value={form.rehearsalRate ?? ''}
+                          onChange={(e) => setEditForm((prev) => ({ ...prev, rehearsalRate: e.target.value === '' ? undefined : Number(e.target.value) }))}
                         />
                       ) : (
                         <div className="flex justify-end">
-                          <SalaryCurrencyCell symbol={currencySymbol} amount={form.rehearsal_rate ?? 0} className="text-lp-text" />
+                          <SalaryCurrencyCell symbol={currencySymbol} amount={form.rehearsalRate ?? 0} className="text-lp-text" />
                         </div>
                       )
                     ) : (
@@ -610,7 +610,7 @@ export function SalariesTab({
                         <button
                           type="button"
                           className="rounded bg-lp-bg-tertiary px-2 py-1 text-xs text-lp-text-secondary hover:text-lp-text"
-                          onClick={() => handleUseSuggested(rateType, Number(form.show_rate) || 0, Number(form.off_rate) || 0)}
+                          onClick={() => handleUseSuggested(rateType, Number(form.showRate) || 0, Number(form.offRate) || 0)}
                         >
                           {`Use suggested (${currencySymbol}${fmtMoney(suggestedAdv)})`}
                         </button>

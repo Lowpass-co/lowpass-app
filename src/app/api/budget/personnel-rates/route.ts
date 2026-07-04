@@ -156,12 +156,27 @@ export async function POST(request: Request) {
     commission?: number;
     commission_note?: string | null;
     base_rate_note?: string | null;
+    // camelCase aliases some clients send; normalized to the snake_case DTO below.
+    showRate?: number;
+    offRate?: number;
+    rehearsalRate?: number;
+    perDiem?: number;
+    advanceFee?: number;
   };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
+
+  // Request-DTO normalization (one block): accept camelCase rate keys and fold
+  // them onto the snake_case DTO the handler maps to writeRates below. Nothing
+  // downstream reads the camelCase aliases.
+  if (body.showRate !== undefined) body.show_rate = Number(body.showRate);
+  if (body.offRate !== undefined) body.off_rate = Number(body.offRate);
+  if (body.rehearsalRate !== undefined) body.rehearsal_rate = Number(body.rehearsalRate);
+  if (body.perDiem !== undefined) body.per_diem = Number(body.perDiem);
+  if (body.advanceFee !== undefined) body.advance_fee = Number(body.advanceFee);
 
   const { tour_id } = body;
   if (!tour_id) {
@@ -340,12 +355,31 @@ export async function PATCH(request: Request) {
     commission_note?: string | null;
     base_rate_note?: string | null;
     order_index?: number;
+    // camelCase aliases some clients send; normalized to the snake_case DTO below.
+    showRate?: number;
+    offRate?: number;
+    rehearsalRate?: number;
+    perDiem?: number;
+    advanceFee?: number;
   };
   try {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
+
+  // Request-DTO normalization (one block): camelCase rate keys → snake_case DTO.
+  if (body.showRate !== undefined) body.show_rate = Number(body.showRate);
+  if (body.offRate !== undefined) body.off_rate = Number(body.offRate);
+  if (body.rehearsalRate !== undefined) body.rehearsal_rate = Number(body.rehearsalRate);
+  if (body.perDiem !== undefined) body.per_diem = Number(body.perDiem);
+  if (body.advanceFee !== undefined) body.advance_fee = Number(body.advanceFee);
+  // Drop the aliases so they don't leak into the ...updates spread below.
+  delete body.showRate;
+  delete body.offRate;
+  delete body.rehearsalRate;
+  delete body.perDiem;
+  delete body.advanceFee;
 
   const { id, ...updates } = body;
   if (!id) {
