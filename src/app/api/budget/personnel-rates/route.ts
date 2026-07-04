@@ -13,6 +13,7 @@ import { revalidatePath } from 'next/cache';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { findOrCreateWorkspacePersonnelByName } from '@/lib/personnel-workspace';
 import { isMissingRosterPersonnelIdColumn } from '@/lib/personnel-schema-fallback';
+import { writeRates } from '@/server/payroll/writeRates';
 import { PERMISSIONS } from '@/types';
 
 const PERSON_TYPE_ORDER: Record<string, number> = {
@@ -241,6 +242,9 @@ export async function POST(request: Request) {
 
   const orderIndex = (existing?.order_index ?? 0) + 1;
 
+  // Stage 1 — the card is created with identity/meta ONLY; the rate columns +
+  // personnel_rate_lines are written together by writeRates below, so this route
+  // never touches legacy rate columns directly and there's one keying scheme.
   const payload: Record<string, unknown> = {
     tour_id,
     workspace_id: profile.workspace_id,
@@ -248,11 +252,6 @@ export async function POST(request: Request) {
     role: body.role ?? null,
     person_type: body.person_type ?? 'crew',
     rate_type: body.rate_type ?? 'day_rate',
-    show_rate: Number(body.show_rate) || 0,
-    off_rate: Number(body.off_rate) || 0,
-    rehearsal_rate: Number(body.rehearsal_rate) || 0,
-    per_diem: Number(body.per_diem) || 0,
-    advance_fee: Number(body.advance_fee) || 0,
     commission: 0,
     commission_note: null,
     base_rate_note: body.base_rate_note ?? null,
@@ -276,7 +275,22 @@ export async function POST(request: Request) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  return NextResponse.json(canApprove ? created : stripCommission(created as Record<string, unknown>));
+
+  // Rate columns + lines via the ONE writer (reads the just-set rate_type).
+  const wr = await writeRates(supabase, {
+    workspaceId: profile.workspace_id,
+    cardId: (created as { id: string }).id,
+    rates: {
+      showRate: Number(body.show_rate) || 0,
+      offRate: Number(body.off_rate) || 0,
+      rehearsalRate: Number(body.rehearsal_rate) || 0,
+      perDiem: Number(body.per_diem) || 0,
+      advanceFee: Number(body.advance_fee) || 0,
+    },
+  });
+  if (wr.error) return NextResponse.json({ error: wr.error }, { status: 500 });
+  const finalCard = (wr.card ?? created) as Record<string, unknown>;
+  return NextResponse.json(canApprove ? finalCard : stripCommission(finalCard));
 }
 
 export async function PATCH(request: Request) {
@@ -325,16 +339,14 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: 'id is required' }, { status: 400 });
   }
 
+  // Stage 1 — identity/meta (non-rate columns) go in a direct update; rate_type
+  // is set HERE first so writeRates reads the new day/split layout. The five rate
+  // columns are NOT touched here — they + the lines are written by writeRates.
   const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (updates.person_name !== undefined) payload.person_name = updates.person_name;
   if (updates.role !== undefined) payload.role = updates.role;
   if (updates.person_type !== undefined) payload.person_type = updates.person_type;
   if (updates.rate_type !== undefined) payload.rate_type = updates.rate_type;
-  if (updates.show_rate !== undefined) payload.show_rate = updates.show_rate;
-  if (updates.off_rate !== undefined) payload.off_rate = updates.off_rate;
-  if (updates.rehearsal_rate !== undefined) payload.rehearsal_rate = updates.rehearsal_rate;
-  if (updates.per_diem !== undefined) payload.per_diem = updates.per_diem;
-  if (updates.advance_fee !== undefined) payload.advance_fee = updates.advance_fee;
   if (canApprove && updates.commission !== undefined) payload.commission = updates.commission;
   if (canApprove && updates.commission_note !== undefined) payload.commission_note = updates.commission_note;
   if (updates.base_rate_note !== undefined) payload.base_rate_note = updates.base_rate_note;
@@ -351,7 +363,28 @@ export async function PATCH(request: Request) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  return NextResponse.json(canApprove ? data : stripCommission(data as Record<string, unknown>));
+
+  // Rate fields (if any) → the ONE writer, keyed by card id (single scheme).
+  let card = data as Record<string, unknown>;
+  const hasRateEdit = (['show_rate', 'off_rate', 'rehearsal_rate', 'per_diem', 'advance_fee'] as const)
+    .some((k) => updates[k] !== undefined);
+  if (hasRateEdit) {
+    const wr = await writeRates(supabase, {
+      workspaceId: profile.workspace_id,
+      cardId: id,
+      rates: {
+        showRate: updates.show_rate,
+        offRate: updates.off_rate,
+        rehearsalRate: updates.rehearsal_rate,
+        perDiem: updates.per_diem,
+        advanceFee: updates.advance_fee,
+      },
+    });
+    if (wr.error) return NextResponse.json({ error: wr.error }, { status: 500 });
+    card = (wr.card ?? card) as Record<string, unknown>;
+  }
+
+  return NextResponse.json(canApprove ? card : stripCommission(card));
 }
 
 export async function DELETE(request: Request) {

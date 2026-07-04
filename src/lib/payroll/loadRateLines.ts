@@ -18,11 +18,17 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { buildRateLines, type RateTypeMeta, type RateLineRow } from './rateLines';
 import { ratesToLines, type RateLike, type RateLine, type DayStatus, type RateBucket, type RateBasis } from './fees';
 
+/** A card's legacy rate columns — the ONLY place they're read for the fallback. */
+type LegacyRateCard = RateLike & { advance_fee?: number | string | null };
+
 export interface TourRateContext {
   /** The workspace's rate_types (global defaults + customs), by order_index. */
   types: RateTypeMeta[];
   /** personnel_rate_id → its rate-line rows for this tour. */
   linesByRateId: Map<string, RateLineRow[]>;
+  /** personnel_rate_id → its legacy columns, for the transitional fallback.
+   *  Loaded here so no reader/component ever needs to select legacy columns. */
+  legacyByRateId: Map<string, LegacyRateCard>;
 }
 
 /** Load the tour's rate context (catalog + all rate lines) in two queries. */
@@ -31,7 +37,7 @@ export async function loadTourRateContext(
   tourId: string,
   workspaceId: string,
 ): Promise<TourRateContext> {
-  const [typesRes, linesRes] = await Promise.all([
+  const [typesRes, linesRes, legacyRes] = await Promise.all([
     supabase
       .from('rate_types')
       .select('id, name, bucket, basis, day_statuses, order_index, workspace_id')
@@ -40,6 +46,12 @@ export async function loadTourRateContext(
     supabase
       .from('personnel_rate_lines')
       .select('personnel_rate_id, rate_type_id, amount')
+      .eq('tour_id', tourId),
+    // Legacy columns for the fallback — read HERE only (grep-gate allowed), so no
+    // caller names them. Inert once every card has lines (migration 231 drops them).
+    supabase
+      .from('personnel_rates')
+      .select('id, show_rate, off_rate, rehearsal_rate, per_diem, advance_fee')
       .eq('tour_id', tourId),
   ]);
 
@@ -61,18 +73,44 @@ export async function loadTourRateContext(
     linesByRateId.set(r.personnel_rate_id, arr);
   }
 
-  return { types, linesByRateId };
+  const legacyByRateId = new Map<string, LegacyRateCard>();
+  for (const c of (legacyRes.data ?? []) as Array<{ id: string } & LegacyRateCard>) {
+    legacyByRateId.set(c.id, {
+      show_rate: c.show_rate,
+      off_rate: c.off_rate,
+      rehearsal_rate: c.rehearsal_rate,
+      per_diem: c.per_diem,
+      advance_fee: c.advance_fee,
+    });
+  }
+
+  return { types, linesByRateId, legacyByRateId };
 }
 
+/** Warned rate-ids (one line per id per process) so the fallback is visible but
+ *  not spammy — watch it go quiet as every card gets lines. */
+const warnedFallback = new Set<string>();
+
 /** A person's RateLines: from their rate_lines when present, else the legacy
- *  columns (ratesToLines) as a transitional fallback. */
+ *  columns as a transitional fallback (read from the ctx — callers never pass or
+ *  name legacy columns). Logs once per rate-id when the fallback fires. An
+ *  explicit `legacy`/`advanceFee` may still be passed (transitional callers). */
 export function rateLinesFor(
   ctx: TourRateContext,
   personnelRateId: string,
-  legacy: RateLike,
-  advanceFee: number | string | null = 0,
+  legacy?: RateLike,
+  advanceFee?: number | string | null,
 ): RateLine[] {
   const rows = ctx.linesByRateId.get(personnelRateId);
   if (rows && rows.length > 0) return buildRateLines(rows, ctx.types);
-  return ratesToLines(legacy, advanceFee);
+
+  const card = legacy ?? ctx.legacyByRateId.get(personnelRateId) ?? {};
+  const adv = advanceFee ?? (card as LegacyRateCard).advance_fee ?? 0;
+  if (!warnedFallback.has(personnelRateId)) {
+    warnedFallback.add(personnelRateId);
+    console.warn(
+      `[rates] fallback: personnel_rate ${personnelRateId} has no rate_lines — computing from legacy columns`,
+    );
+  }
+  return ratesToLines(card, adv);
 }

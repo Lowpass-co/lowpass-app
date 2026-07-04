@@ -168,7 +168,7 @@ export async function PUT(
     workspaceId: r.workspaceId,
     rosterPersonnelId: r.personId,
     identity: { person_name: r.displayName },
-    rates: { show_rate: show, off_rate: off, per_diem: pd },
+    rates: { showRate: show, offRate: off, perDiem: pd },
     internalRate,
   });
   if (result.error) return NextResponse.json({ error: result.error }, { status: 500 });

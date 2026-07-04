@@ -24,15 +24,26 @@ import { DEFAULT_RATE_TYPE_IDS } from '@/lib/payroll/rateLines';
 
 const num = (v: unknown): number => Number(v) || 0;
 
-/** The five legacy rate values, mirrored to columns + converted to lines. Only
- *  provided keys are written (partial edits preserve the rest). */
+/** The five rate values, mirrored to legacy columns + converted to lines. Keys
+ *  are grep-clean (camelCase, not the legacy column names) so call sites never
+ *  name a legacy column. Only provided keys are written (partial edits preserve
+ *  the rest). */
 export interface RateMirror {
-  show_rate?: number | null;
-  off_rate?: number | null;
-  rehearsal_rate?: number | null;
-  per_diem?: number | null;
-  advance_fee?: number | null;
+  showRate?: number | null;
+  offRate?: number | null;
+  rehearsalRate?: number | null;
+  perDiem?: number | null;
+  advanceFee?: number | null;
 }
+
+/** RateMirror key → legacy personnel_rates column. */
+const RATE_KEY_TO_COL: Array<[keyof RateMirror, string]> = [
+  ['showRate', 'show_rate'],
+  ['offRate', 'off_rate'],
+  ['rehearsalRate', 'rehearsal_rate'],
+  ['perDiem', 'per_diem'],
+  ['advanceFee', 'advance_fee'],
+];
 
 /** Identity fields used only when CREATING a card (no-op on update unless given). */
 export interface CardIdentity {
@@ -44,7 +55,9 @@ export interface CardIdentity {
 }
 
 export interface WriteRatesArgs {
-  tourId: string;
+  /** Required for the rosterPersonnelId (lookup/create) path; for the cardId path
+   *  it's derived from the resolved card. */
+  tourId?: string;
   workspaceId: string;
   /** Canonical key (preferred). */
   rosterPersonnelId?: string | null;
@@ -69,19 +82,20 @@ export async function writeRates(
 ): Promise<WriteRatesResult> {
   const { tourId, workspaceId, rosterPersonnelId, cardId, identity, rates, internalRate } = args;
 
-  // 1. Resolve the canonical card.
+  // 1. Resolve the canonical card. cardId is unique (workspace-scoped); the
+  //    roster path additionally needs tourId.
   let card: Record<string, unknown> | null = null;
   if (cardId) {
     const { data } = await supabase
       .from('personnel_rates')
       .select('*')
       .eq('id', cardId)
-      .eq('tour_id', tourId)
       .eq('workspace_id', workspaceId)
       .maybeSingle();
     card = (data as Record<string, unknown> | null) ?? null;
-    if (!card) return { card: null, error: 'Rate card not found for this tour' };
+    if (!card) return { card: null, error: 'Rate card not found' };
   } else if (rosterPersonnelId) {
+    if (!tourId) return { card: null, error: 'writeRates roster path requires tourId' };
     const { data } = await supabase
       .from('personnel_rates')
       .select('*')
@@ -92,11 +106,13 @@ export async function writeRates(
   } else {
     return { card: null, error: 'writeRates requires rosterPersonnelId or cardId' };
   }
+  // The tour the lines belong to — from the resolved card, else the arg (create).
+  const resolvedTourId = String((card?.tour_id as string | undefined) ?? tourId ?? '');
 
   // 2. Mirror columns (only provided rate keys) + optional identity/internal_rate.
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
-  for (const k of ['show_rate', 'off_rate', 'rehearsal_rate', 'per_diem', 'advance_fee'] as const) {
-    if (rates[k] !== undefined) patch[k] = num(rates[k]);
+  for (const [k, col] of RATE_KEY_TO_COL) {
+    if (rates[k] !== undefined) patch[col] = num(rates[k]);
   }
   if (internalRate !== undefined) patch.internal_rate = internalRate === null ? null : num(internalRate);
 
@@ -113,15 +129,15 @@ export async function writeRates(
   } else {
     if (!rosterPersonnelId) return { card: null, error: 'No card to update and no roster key to create one' };
     const insert: Record<string, unknown> = {
-      tour_id: tourId,
+      tour_id: resolvedTourId,
       workspace_id: workspaceId,
       roster_personnel_id: rosterPersonnelId,
       ...(identity ?? {}),
-      show_rate: num(rates.show_rate),
-      off_rate: num(rates.off_rate),
-      rehearsal_rate: num(rates.rehearsal_rate),
-      per_diem: num(rates.per_diem),
-      advance_fee: num(rates.advance_fee),
+      show_rate: num(rates.showRate),
+      off_rate: num(rates.offRate),
+      rehearsal_rate: num(rates.rehearsalRate),
+      per_diem: num(rates.perDiem),
+      advance_fee: num(rates.advanceFee),
     };
     if (internalRate !== undefined) insert.internal_rate = internalRate === null ? null : num(internalRate);
     const { data, error } = await supabase.from('personnel_rates').insert(insert).select('*').maybeSingle();
@@ -149,7 +165,7 @@ export async function writeRates(
 
   const { error: lineErr } = await supabase.from('personnel_rate_lines').upsert(
     lineRows.map((l) => ({
-      tour_id: tourId,
+      tour_id: resolvedTourId,
       workspace_id: workspaceId,
       personnel_rate_id: cid,
       rate_type_id: l.rate_type_id,

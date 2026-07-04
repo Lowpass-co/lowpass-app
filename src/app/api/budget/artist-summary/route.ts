@@ -161,7 +161,9 @@ export async function GET(request: Request) {
     arr.push({ rate_type_id: r.rate_type_id, amount: r.amount });
     linesByRateId.set(r.personnel_rate_id, arr);
   }
-  const rateCtx: TourRateContext = { types: rateTypes, linesByRateId };
+  // legacyByRateId stays empty here — this multi-tour ctx passes the legacy card
+  // explicitly to rateLinesFor (4th arg below), so the ctx fallback is unused.
+  const rateCtx: TourRateContext = { types: rateTypes, linesByRateId, legacyByRateId: new Map() };
 
   // Build routing_id → tour_id map for income (income is linked via routing)
   const routingTourMap: Record<string, string> = {};
