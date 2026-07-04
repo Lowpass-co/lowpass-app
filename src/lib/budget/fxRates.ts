@@ -43,3 +43,48 @@ export function toTourCurrency(
   const rate = rates[from];
   return Number.isFinite(rate) && rate > 0 ? amount * rate : amount;
 }
+
+/** The single-source FX resolution used everywhere (FX unify · Stage 2).
+ *  Precedence: an explicit `lockedRate` (a settled income row's locked_fx_rate,
+ *  or an actualized expense line's) wins → the tour's budget_fx_rates entry →
+ *  a FLAGGED 1:1 fallback (`missing: true`) so the caller can render a warning
+ *  chip instead of silently pivoting through a stale hardcoded table. Never
+ *  returns 0. Pure. */
+export interface TourFxRate {
+  /** 1 `from` unit = `rate` tour-currency units. */
+  rate: number;
+  /** True when there is no rate for this pair and 1:1 was used as a fallback. */
+  missing: boolean;
+  /** True when a locked/settled rate was used (not the live tour rate). */
+  locked: boolean;
+}
+
+export function tourFxRate(
+  from: string | null | undefined,
+  tourCurrency: string,
+  rates: FxRateMap,
+  lockedRate?: number | null,
+): TourFxRate {
+  if (lockedRate != null && Number.isFinite(lockedRate) && lockedRate > 0) {
+    return { rate: lockedRate, missing: false, locked: true };
+  }
+  const f = (from ?? '').toUpperCase();
+  const t = (tourCurrency || 'GBP').toUpperCase();
+  if (!f || f === t) return { rate: 1, missing: false, locked: false };
+  const r = rates[f];
+  if (Number.isFinite(r) && r > 0) return { rate: r, missing: false, locked: false };
+  return { rate: 1, missing: true, locked: false };
+}
+
+/** Convert `amount` (native `from`) into the tour currency via tourFxRate's
+ *  precedence (locked → tour rate → flagged 1:1). Pure. Replaces the static
+ *  GBP-pivot convertToCurrency for BOTH expenses and income. */
+export function convertToTour(
+  amount: number,
+  from: string | null | undefined,
+  tourCurrency: string,
+  rates: FxRateMap,
+  lockedRate?: number | null,
+): number {
+  return amount * tourFxRate(from, tourCurrency, rates, lockedRate).rate;
+}
