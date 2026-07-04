@@ -98,7 +98,7 @@ Source: mockup grading via `docs/design/SMOKE_TOOL_2026-07.html` (export 2026-07
 - VIS-RB-02 `locked` — Section rail states: ↘ inherited / overridden chip / mono badge for embedded channel list.
 - VIS-RB-03 `locked` — Per-section override, in place, "master untouched", view-original + revert.
 - VIS-RB-04 `changed` — Source labels dynamic by scope: show-level says "view tour original", tour-level says "view artist original".
-- VIS-RB-05 `new` — Field catalog expanded to advance-grade depth (blocked on advancewithme research).
+- VIS-RB-05 `new` — Field catalog expanded to advance-grade depth per the draft in `docs/design/COMPETITIVE_ADVANCEWITHME_2026-07.md` §6 (awaiting Adam's grading of the draft).
 
 ## Exports (all tools)
 
