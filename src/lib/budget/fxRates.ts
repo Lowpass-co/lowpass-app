@@ -88,3 +88,26 @@ export function convertToTour(
 ): number {
   return amount * tourFxRate(from, tourCurrency, rates, lockedRate).rate;
 }
+
+/** Convert `amount` from currency `from` into an arbitrary DISPLAY currency `to`,
+ *  pivoting through the tour currency using the tour-relative budget_fx_rates
+ *  (1 <ccy> = rate <tour ccy>). Replaces the static GBP-pivot for grids/tables
+ *  that let the operator pick a display currency ≠ the tour currency.
+ *    from → tour = amount × rate[from]     (rate 1 for the tour currency)
+ *    tour → to   = ÷ rate[to]              (rate 1 for the tour currency)
+ *  A missing rate on either leg is treated as 1 (flagged via tourFxRate when the
+ *  caller needs the warning chip). Pure. */
+export function convertVia(
+  amount: number,
+  from: string | null | undefined,
+  to: string | null | undefined,
+  tourCurrency: string,
+  rates: FxRateMap,
+): number {
+  const f = (from ?? '').toUpperCase();
+  const t = (to ?? '').toUpperCase();
+  if (!f || !t || f === t) return amount;
+  const toTour = tourFxRate(f, tourCurrency, rates).rate; // from → tour
+  const toDisp = tourFxRate(t, tourCurrency, rates).rate; // to → tour
+  return toDisp > 0 ? (amount * toTour) / toDisp : amount * toTour;
+}

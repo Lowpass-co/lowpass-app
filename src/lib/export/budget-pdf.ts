@@ -20,8 +20,7 @@
    ============================================ */
 
 import { computeBudgetPnl, type PnlPair } from '@/lib/budget/computeBudgetPnl';
-import { convertToCurrency } from '@/lib/budget/fx';
-import { toTourCurrency } from '@/lib/budget/fxRates';
+import { toTourCurrency, convertToTour } from '@/lib/budget/fxRates';
 import { getEffectiveActual } from '@/lib/budget/transactions';
 import { isIncomeRow } from '@/lib/budget/income-rows';
 import { escapeHtml as esc } from '@/lib/export/shell';
@@ -136,8 +135,9 @@ function renderPnlSummary(data: BudgetExportData, scope: ExportScope): string {
   for (const l of data.lines) {
     if (isIncomeRow(l)) continue;
     const rowCur = (l.currency || ccy).toUpperCase();
-    const proj = convertToCurrency(num(l.proposed_cost), rowCur, ccy);
-    const act = convertToCurrency(getEffectiveActual(l), rowCur, ccy);
+    const lLock = num(l.locked_fx_rate) > 0 ? num(l.locked_fx_rate) : null;
+    const proj = convertToTour(num(l.proposed_cost), rowCur, ccy, fxRates);
+    const act = convertToTour(getEffectiveActual(l), rowCur, ccy, fxRates, lLock);
     const key = l.section_id ?? '__none__';
     const cur = secAgg.get(key) ?? { name: (l.section_id && sectionName.get(l.section_id)) || l.section || 'Uncategorised', pair: { projected: 0, actual: 0 } };
     cur.pair.projected += proj;
@@ -242,8 +242,9 @@ function buildExpenseDetail(data: BudgetExportData, scope: ExportScope, ccy: str
           const rowCur = (l.currency || ccy).toUpperCase();
           const projN = num(l.proposed_cost);
           const actN = getEffectiveActual(l);
-          const projC = convertToCurrency(projN, rowCur, ccy);
-          const actC = convertToCurrency(actN, rowCur, ccy);
+          const lLock = num(l.locked_fx_rate) > 0 ? num(l.locked_fx_rate) : null;
+          const projC = convertToTour(projN, rowCur, ccy, data.fxRates);
+          const actC = convertToTour(actN, rowCur, ccy, data.fxRates, lLock);
           secProj += projC;
           secAct += actC;
           const cells =

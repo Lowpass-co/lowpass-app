@@ -11,7 +11,7 @@
 
 import ExcelJS from 'exceljs';
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { convertToCurrency } from '@/lib/budget/fx';
+import { convertToTour } from '@/lib/budget/fxRates';
 import { loadBudgetExportData } from '@/lib/export/budget-data';
 import { loadRoomingExportData } from '@/lib/export/rooming-data';
 import { loadPayrollExportData } from '@/lib/export/payroll-data';
@@ -108,8 +108,9 @@ function budgetSheet(data: BudgetExportData): SheetSpec {
       const lineCcy = (l.currency || ccy).toUpperCase();
       const proj = num(l.proposed_cost);
       const act = num(l.actual_cost);
-      const projTour = convertToCurrency(proj, lineCcy, ccy);
-      const actTour = convertToCurrency(act, lineCcy, ccy);
+      const lLock = num(l.locked_fx_rate) > 0 ? num(l.locked_fx_rate) : null;
+      const projTour = convertToTour(proj, lineCcy, ccy, data.fxRates);
+      const actTour = convertToTour(act, lineCcy, ccy, data.fxRates, lLock);
       return {
         section: String((l.section_id ? sectionName.get(l.section_id) : null) || l.section || l.category || 'Uncategorised'),
         item: l.label || '—',
