@@ -31,7 +31,46 @@ export interface TourRateContext {
   legacyByRateId: Map<string, LegacyRateCard>;
 }
 
-/** Load the tour's rate context (catalog + all rate lines) in two queries. */
+/** Assemble a TourRateContext from the three raw result sets. Shared by the
+ *  single-tour and multi-tour loaders so the mapping lives in one place. */
+function assembleRateContext(
+  typesData: unknown,
+  linesData: unknown,
+  legacyData: unknown,
+): TourRateContext {
+  const types: RateTypeMeta[] = ((typesData ?? []) as Array<{
+    id: string; name: string; bucket: string; basis: string; day_statuses: string[] | null; order_index: number;
+  }>).map((t) => ({
+    id: t.id,
+    name: t.name,
+    bucket: t.bucket as RateBucket,
+    basis: t.basis as RateBasis,
+    dayStatuses: (t.day_statuses ?? []) as DayStatus[],
+    orderIndex: t.order_index,
+  }));
+
+  const linesByRateId = new Map<string, RateLineRow[]>();
+  for (const r of (linesData ?? []) as Array<{ personnel_rate_id: string; rate_type_id: string; amount: number | string | null }>) {
+    const arr = linesByRateId.get(r.personnel_rate_id) ?? [];
+    arr.push({ rate_type_id: r.rate_type_id, amount: r.amount });
+    linesByRateId.set(r.personnel_rate_id, arr);
+  }
+
+  const legacyByRateId = new Map<string, LegacyRateCard>();
+  for (const c of (legacyData ?? []) as Array<{ id: string } & LegacyRateCard>) {
+    legacyByRateId.set(c.id, {
+      show_rate: c.show_rate,
+      off_rate: c.off_rate,
+      rehearsal_rate: c.rehearsal_rate,
+      per_diem: c.per_diem,
+      advance_fee: c.advance_fee,
+    });
+  }
+
+  return { types, linesByRateId, legacyByRateId };
+}
+
+/** Load the tour's rate context (catalog + all rate lines) in three queries. */
 export async function loadTourRateContext(
   supabase: SupabaseClient,
   tourId: string,
@@ -55,36 +94,35 @@ export async function loadTourRateContext(
       .eq('tour_id', tourId),
   ]);
 
-  const types: RateTypeMeta[] = ((typesRes.data ?? []) as Array<{
-    id: string; name: string; bucket: string; basis: string; day_statuses: string[] | null; order_index: number;
-  }>).map((t) => ({
-    id: t.id,
-    name: t.name,
-    bucket: t.bucket as RateBucket,
-    basis: t.basis as RateBasis,
-    dayStatuses: (t.day_statuses ?? []) as DayStatus[],
-    orderIndex: t.order_index,
-  }));
+  return assembleRateContext(typesRes.data, linesRes.data, legacyRes.data);
+}
 
-  const linesByRateId = new Map<string, RateLineRow[]>();
-  for (const r of (linesRes.data ?? []) as Array<{ personnel_rate_id: string; rate_type_id: string; amount: number | string | null }>) {
-    const arr = linesByRateId.get(r.personnel_rate_id) ?? [];
-    arr.push({ rate_type_id: r.rate_type_id, amount: r.amount });
-    linesByRateId.set(r.personnel_rate_id, arr);
-  }
+/** Load ONE rate context spanning several tours (personnel_rate_id is a PK, so
+ *  the line + legacy maps are unambiguous across tours). Used by cross-tour
+ *  readers (e.g. the artist budget summary) so they never name legacy columns. */
+export async function loadMultiTourRateContext(
+  supabase: SupabaseClient,
+  tourIds: string[],
+  workspaceId: string,
+): Promise<TourRateContext> {
+  const [typesRes, linesRes, legacyRes] = await Promise.all([
+    supabase
+      .from('rate_types')
+      .select('id, name, bucket, basis, day_statuses, order_index, workspace_id')
+      .or(`workspace_id.is.null,workspace_id.eq.${workspaceId}`)
+      .order('order_index', { ascending: true }),
+    supabase
+      .from('personnel_rate_lines')
+      .select('personnel_rate_id, rate_type_id, amount')
+      .in('tour_id', tourIds),
+    // Legacy fallback columns — read HERE only (grep-gate allowed).
+    supabase
+      .from('personnel_rates')
+      .select('id, show_rate, off_rate, rehearsal_rate, per_diem, advance_fee')
+      .in('tour_id', tourIds),
+  ]);
 
-  const legacyByRateId = new Map<string, LegacyRateCard>();
-  for (const c of (legacyRes.data ?? []) as Array<{ id: string } & LegacyRateCard>) {
-    legacyByRateId.set(c.id, {
-      show_rate: c.show_rate,
-      off_rate: c.off_rate,
-      rehearsal_rate: c.rehearsal_rate,
-      per_diem: c.per_diem,
-      advance_fee: c.advance_fee,
-    });
-  }
-
-  return { types, linesByRateId, legacyByRateId };
+  return assembleRateContext(typesRes.data, linesRes.data, legacyRes.data);
 }
 
 /** Warned rate-ids (one line per id per process) so the fallback is visible but

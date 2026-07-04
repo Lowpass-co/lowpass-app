@@ -115,7 +115,7 @@ export async function POST(request: Request) {
 
   const { data: personnelRows, error: personnelError } = await supabase
     .from('personnel_rates')
-    .select('id, rate_type, show_rate, off_rate, rehearsal_rate, per_diem, advance_fee')
+    .select('id, rate_type, per_diem, advance_fee')
     .eq('tour_id', tour_id)
     .eq('workspace_id', profile.workspace_id);
 
@@ -156,7 +156,10 @@ export async function POST(request: Request) {
       // flat_once lines for weeks > 0. Reconciles to the legacy per-week math
       // for both split_rate (a1/a2/a3) and day_rate (a6) — proven in the harness.
       const counts = countDayStatuses(dayStatuses);
-      const allLines = rateLinesFor(rateCtx, person.id as string, person, advanceFeeTotal);
+      // Rates SSOT — lines from personnel_rate_lines; ctx.legacyByRateId carries
+      // the fallback (advance included) so no legacy column is named here. The
+      // a5 advance line equals the card's advance_fee, matching advanceFeeTotal.
+      const allLines = rateLinesFor(rateCtx, person.id as string);
       const lines = weekIndex === 0 ? allLines : allLines.filter((l) => l.basis !== 'flat_once');
       const { totalFee: total_fee, totalPerDiem: total_per_diem } = computeTotals(lines, counts);
       const { error: upsertError } = await supabase

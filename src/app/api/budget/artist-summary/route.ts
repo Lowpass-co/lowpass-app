@@ -21,9 +21,7 @@ import { createServerSupabaseClient } from '@/lib/supabase-server';
 // day_rate-flat projection for the defaults — proven in reconcile.harness.ts.
 // (actual Salary/Per-Diem keep coming from persisted payroll_entries.)
 import { computeTotals, type DayCounts } from '@/lib/payroll/fees';
-import { rateLinesFor, type TourRateContext } from '@/lib/payroll/loadRateLines';
-import type { RateTypeMeta, RateLineRow } from '@/lib/payroll/rateLines';
-import type { RateBucket, RateBasis, DayStatus } from '@/lib/payroll/fees';
+import { rateLinesFor, loadMultiTourRateContext } from '@/lib/payroll/loadRateLines';
 
 const n = (x: unknown) => (x == null ? 0 : Number(x) || 0);
 const sum = (arr: number[]) => arr.reduce((a, b) => a + b, 0);
@@ -79,8 +77,6 @@ export async function GET(request: Request) {
     commissionsRes,
     flightsRes,
     routingRes,
-    rateTypesRes,
-    rateLinesRes,
   ] = await Promise.all([
     supabase.from('budget_settings')
       .select('tour_id, insurance_pct, contingency_pct, accountancy_pct')
@@ -92,7 +88,7 @@ export async function GET(request: Request) {
       .eq('workspace_id', wid),
 
     supabase.from('personnel_rates')
-      .select('id, tour_id, rate_type, show_rate, off_rate, rehearsal_rate, per_diem, advance_fee')
+      .select('id, tour_id')
       .eq('workspace_id', wid)
       .in('tour_id', tourIds),
 
@@ -119,19 +115,6 @@ export async function GET(request: Request) {
     supabase.from('routing')
       .select('id, tour_id, date, day_type')
       .in('tour_id', tourIds),
-
-    // b2 — rate catalog (global defaults + this workspace's customs) …
-    supabase.from('rate_types')
-      .select('id, name, bucket, basis, day_statuses, order_index, workspace_id')
-      .or(`workspace_id.is.null,workspace_id.eq.${wid}`)
-      .order('order_index', { ascending: true }),
-
-    // … and every person's rate lines across these tours (personnel_rate_id is
-    // globally unique, so one map spans all the artist's tours).
-    supabase.from('personnel_rate_lines')
-      .select('personnel_rate_id, rate_type_id, amount')
-      .eq('workspace_id', wid)
-      .in('tour_id', tourIds),
   ]);
 
   const settings = settingsRes.data ?? [];
@@ -143,27 +126,9 @@ export async function GET(request: Request) {
   const flights = flightsRes.data ?? [];
   const routing = routingRes.data ?? [];
 
-  // b2 — assemble one rate context spanning every tour (personnel_rate_id is a
-  // PK, so the line map is unambiguous across tours).
-  const rateTypes: RateTypeMeta[] = ((rateTypesRes.data ?? []) as Array<{
-    id: string; name: string; bucket: string; basis: string; day_statuses: string[] | null; order_index: number;
-  }>).map((t) => ({
-    id: t.id,
-    name: t.name,
-    bucket: t.bucket as RateBucket,
-    basis: t.basis as RateBasis,
-    dayStatuses: (t.day_statuses ?? []) as DayStatus[],
-    orderIndex: t.order_index,
-  }));
-  const linesByRateId = new Map<string, RateLineRow[]>();
-  for (const r of (rateLinesRes.data ?? []) as Array<{ personnel_rate_id: string; rate_type_id: string; amount: number | string | null }>) {
-    const arr = linesByRateId.get(r.personnel_rate_id) ?? [];
-    arr.push({ rate_type_id: r.rate_type_id, amount: r.amount });
-    linesByRateId.set(r.personnel_rate_id, arr);
-  }
-  // legacyByRateId stays empty here — this multi-tour ctx passes the legacy card
-  // explicitly to rateLinesFor (4th arg below), so the ctx fallback is unused.
-  const rateCtx: TourRateContext = { types: rateTypes, linesByRateId, legacyByRateId: new Map() };
+  // Rates SSOT — one rate context spanning every tour (catalog + all lines +
+  // the legacy-column fallback), so nothing here names a legacy column.
+  const rateCtx = await loadMultiTourRateContext(supabase, tourIds, wid);
 
   // Build routing_id → tour_id map for income (income is linked via routing)
   const routingTourMap: Record<string, string> = {};
@@ -197,7 +162,7 @@ export async function GET(request: Request) {
     let proposedSalaries = 0;
     let proposedPerDiem = 0;
     for (const p of tourPersonnel) {
-      const lines = rateLinesFor(rateCtx, p.id as string, p, n(p.advance_fee));
+      const lines = rateLinesFor(rateCtx, p.id as string);
       const { totalFee, totalPerDiem } = computeTotals(lines, projCounts);
       proposedSalaries += totalFee;
       proposedPerDiem += totalPerDiem;
