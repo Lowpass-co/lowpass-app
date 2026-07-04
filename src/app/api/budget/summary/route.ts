@@ -8,6 +8,8 @@
 
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { computeTotals } from '@/lib/payroll/fees';
+import { loadTourRateContext, rateLinesFor } from '@/lib/payroll/loadRateLines';
 
 interface SummaryLine {
   label: string;
@@ -97,7 +99,7 @@ export async function GET(request: Request) {
       .eq('tour_id', tourId),
     supabase
       .from('personnel_rates')
-      .select('rate_type, show_rate, off_rate, rehearsal_rate, per_diem, advance_fee, commission')
+      .select('id')
       .eq('workspace_id', wid)
       .eq('tour_id', tourId),
     supabase
@@ -151,23 +153,21 @@ export async function GET(request: Request) {
     sum(incomeRows.map((i) => n(i.actual_merch))) +
     sum(incomeRows.map((i) => n(i.actual_vip)));
 
-  // --- Salaries ---
-  const proposedSalaries = personnel.reduce((acc, p) => {
-    const rateType = p.rate_type ?? 'day_rate';
-    let salary: number;
-    if (rateType === 'split_rate') {
-      salary =
-        showDays * n(p.show_rate) +
-        offDays * n(p.off_rate) +
-        rehearsalDays * n(p.rehearsal_rate) +
-        n(p.advance_fee);
-    } else {
-      salary = totalDays * n(p.off_rate) + n(p.advance_fee);
-    }
-    return acc + salary;
-  }, 0);
+  // --- Salaries (rates SSOT) ---
+  // Compute each person's fee + per-diem from personnel_rate_lines via the
+  // engine, not the legacy personnel_rates.* columns. computeTotals over the
+  // default lines reproduces the old split/day-rate arithmetic exactly (the
+  // day-rate branch was already totalDays×off_rate = the a6 line).
+  const rateCtx = await loadTourRateContext(supabase, tourId, wid);
+  const dayCounts = { show: showDays, offTravel: offDays, rehearsal: rehearsalDays, active: totalDays };
+  let proposedSalaries = 0;
+  let proposedPerDiem = 0;
+  for (const p of personnel) {
+    const totals = computeTotals(rateLinesFor(rateCtx, p.id), dayCounts);
+    proposedSalaries += totals.totalFee;
+    proposedPerDiem += totals.totalPerDiem;
+  }
   const actualSalaries = sum(payrollEntries.map((e) => n(e.total_fee)));
-  const proposedPerDiem = personnel.reduce((acc, p) => acc + totalDays * n(p.per_diem), 0);
   const actualPerDiem = sum(payrollEntries.map((e) => n(e.total_per_diem)));
 
   // --- Direct expense categories ---

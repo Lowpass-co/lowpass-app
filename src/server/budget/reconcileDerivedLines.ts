@@ -179,7 +179,7 @@ async function computePayrollDesired(
   // un-rostered cards don't generate budget lines.
   const { data: persons } = await supabase
     .from('personnel_rates')
-    .select('id, person_name, role, order_index, show_rate, off_rate, rehearsal_rate, per_diem, advance_fee')
+    .select('id, person_name, role, order_index')
     .eq('tour_id', tourId)
     .eq('workspace_id', workspaceId)
     .not('tour_personnel_id', 'is', null);
@@ -224,7 +224,9 @@ async function computePayrollDesired(
     // displays + budget/summary routes; survives a day-status edit, which
     // zeroes the per-week entries.advance_fee). The advance rides its flat_once
     // line (a5), applied once over the aggregated counts.
-    const lines = rateLinesFor(rateCtx, id, p, Number(p.advance_fee) || 0);
+    // Rates SSOT — lines come from personnel_rate_lines; the ctx carries the
+    // legacy-column fallback (advance included) so this call names no columns.
+    const lines = rateLinesFor(rateCtx, id);
     const { totalFee: fee, totalPerDiem: pd } = computeTotals(lines, counts);
     // One Salary line per roster member (named + costed; 0 until days set).
     salary.push({ sourceId: id, label, total: fee });

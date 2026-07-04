@@ -114,7 +114,7 @@ export async function POST(request: Request) {
     supabase.from('budget_line_items').select('tour_id, category, actual_cost, proposed_cost').in('tour_id', tourIds),
     supabase.from('hotels').select('id, tour_id').in('tour_id', tourIds),
     supabase.from('flights').select('tour_id, cost_amount').in('tour_id', tourIds),
-    supabase.from('personnel_rates').select('tour_id, show_rate, off_rate, per_diem, person_type').in('tour_id', tourIds),
+    supabase.from('personnel_rates').select('tour_id, per_diem').in('tour_id', tourIds),
   ]);
 
   const routing = routingRes.data ?? [];
