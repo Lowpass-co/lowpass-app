@@ -63,9 +63,9 @@ interface Personnel {
   role: string | null;
   person_type: string;
   rate_type: string;
-  show_rate: number;
-  off_rate: number;
-  rehearsal_rate: number;
+  showRate: number;
+  offRate: number;
+  rehearsalRate: number;
   per_diem: number;
   advance_fee: number;
 }
@@ -1025,9 +1025,9 @@ function SalariesAccordionBody({
   const personRows = personnel.map(p => {
     let proposedSalary: number;
     if (p.rate_type === 'split_rate') {
-      proposedSalary = showDays * n(p.show_rate) + offDays * n(p.off_rate) + rehearsalDays * n(p.rehearsal_rate) + n(p.advance_fee);
+      proposedSalary = showDays * n(p.showRate) + offDays * n(p.offRate) + rehearsalDays * n(p.rehearsalRate) + n(p.advance_fee);
     } else {
-      proposedSalary = totalDays * n(p.off_rate) + n(p.advance_fee);
+      proposedSalary = totalDays * n(p.offRate) + n(p.advance_fee);
     }
     const proposedPerDiem = totalDays * n(p.per_diem);
     // Actual from payroll

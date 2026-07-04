@@ -20,9 +20,9 @@ export type CommissionContextIncomeRow = {
 type LineItemRow = { category: string; proposed_cost: number; actual_cost: number };
 type PersonnelRateRow = {
   rate_type: string;
-  show_rate: number;
-  off_rate: number;
-  rehearsal_rate?: number;
+  showRate: number;
+  offRate: number;
+  rehearsalRate?: number;
   per_diem: number;
   advance_fee: number;
 };
@@ -85,13 +85,13 @@ export function computeCommissionContext(
     if (rateType === 'split_rate') {
       return (
         acc +
-        routingShowDays * Number(p.show_rate) +
-        routingOffDays * Number(p.off_rate) +
-        routingRehearsalDays * Number(p.rehearsal_rate ?? 0) +
+        routingShowDays * Number(p.showRate) +
+        routingOffDays * Number(p.offRate) +
+        routingRehearsalDays * Number(p.rehearsalRate ?? 0) +
         Number(p.advance_fee ?? 0)
       );
     }
-    return acc + totalDays * Number(p.off_rate) + Number(p.advance_fee ?? 0);
+    return acc + totalDays * Number(p.offRate) + Number(p.advance_fee ?? 0);
   }, 0);
   const actualSalaries = sum(payrollEntries.map((e) => Number(e.total_fee)));
   const proposedPerDiem = personnel.reduce((acc, p) => acc + totalDays * Number(p.per_diem ?? 0), 0);
