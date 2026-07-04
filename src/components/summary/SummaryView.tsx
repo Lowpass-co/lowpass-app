@@ -31,9 +31,9 @@ interface PersonnelRate {
   role: string | null;
   person_type: string;
   rate_type: string;
-  show_rate: number;
-  off_rate: number;
-  rehearsal_rate: number;
+  showRate: number;
+  offRate: number;
+  rehearsalRate: number;
   advance_fee: number;
 }
 
@@ -231,15 +231,15 @@ export function SummaryView({
     function projected(p: PersonnelRate): number {
       const rateType = p.rate_type ?? 'day_rate';
       if (rateType === 'split_rate') {
-        return showDays * n(p.show_rate) + offDays * n(p.off_rate) + n(p.advance_fee);
+        return showDays * n(p.showRate) + offDays * n(p.offRate) + n(p.advance_fee);
       }
-      return totalDays * n(p.off_rate) + n(p.advance_fee);
+      return totalDays * n(p.offRate) + n(p.advance_fee);
     }
     return {
       crew: crew.map((p) => ({
         role: p.role ? `${p.person_name}|${p.role}` : p.person_name,
-        showRate: n(p.show_rate),
-        offRate: n(p.off_rate),
+        showRate: n(p.showRate),
+        offRate: n(p.offRate),
         showDays,
         offDays,
         projected: projected(p),
@@ -248,8 +248,8 @@ export function SummaryView({
       })),
       band: band.map((p) => ({
         role: p.role || p.person_name,
-        showRate: n(p.show_rate),
-        offRate: n(p.off_rate),
+        showRate: n(p.showRate),
+        offRate: n(p.offRate),
         showDays,
         offDays,
         projected: projected(p),

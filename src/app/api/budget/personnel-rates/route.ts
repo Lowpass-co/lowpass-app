@@ -14,6 +14,7 @@ import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { findOrCreateWorkspacePersonnelByName } from '@/lib/personnel-workspace';
 import { isMissingRosterPersonnelIdColumn } from '@/lib/personnel-schema-fallback';
 import { writeRates } from '@/server/payroll/writeRates';
+import { loadTourRateContext, rateAmountsFor } from '@/lib/payroll/loadRateLines';
 import { PERMISSIONS } from '@/types';
 
 const PERSON_TYPE_ORDER: Record<string, number> = {
@@ -96,9 +97,21 @@ export async function GET(request: Request) {
   }
 
   const canApprove = await canApproveBudget(supabase, user.id);
-  const list = (rows ?? []).map((r) =>
-    canApprove ? r : stripCommission(r as Record<string, unknown>)
-  );
+  // Rates SSOT — attach each card's individual rate amounts (camelCase) read
+  // from personnel_rate_lines so consumers never depend on the legacy columns.
+  const rateCtx = await loadTourRateContext(supabase, tourId, profile.workspace_id);
+  const list = (rows ?? []).map((r) => {
+    const base = canApprove ? r : stripCommission(r as Record<string, unknown>);
+    const a = rateAmountsFor(rateCtx, (r as { id: string }).id);
+    return {
+      ...(base as Record<string, unknown>),
+      showRate: a.showRate,
+      offRate: a.offRate,
+      rehearsalRate: a.rehearsalRate,
+      perDiem: a.perDiem,
+      advanceFee: a.advanceFee,
+    };
+  });
   list.sort((a, b) => {
     const orderA = PERSON_TYPE_ORDER[(a as { person_type?: string }).person_type ?? ''] ?? 4;
     const orderB = PERSON_TYPE_ORDER[(b as { person_type?: string }).person_type ?? ''] ?? 4;
