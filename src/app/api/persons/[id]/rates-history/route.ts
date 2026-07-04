@@ -19,15 +19,13 @@
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { getActiveMembership } from '@/lib/permissions/server';
+import { loadMultiTourRateContext, rateAmountsFor } from '@/lib/payroll/loadRateLines';
 
 export const dynamic = 'force-dynamic';
 
 interface HistoryRow {
   id: string;
   tour_id: string;
-  show_rate: number;
-  off_rate: number;
-  per_diem: number;
   internal_rate: number | null;
   updated_at: string;
   tours: { name: string | null } | { name: string | null }[] | null;
@@ -56,27 +54,34 @@ export async function GET(
 
   const { data } = await supabase
     .from('personnel_rates')
-    .select('id, tour_id, show_rate, off_rate, per_diem, internal_rate, updated_at, tours(name)')
+    .select('id, tour_id, internal_rate, updated_at, tours(name)')
     .eq('roster_personnel_id', personId)
     .eq('workspace_id', membership.workspace_id)
     .order('updated_at', { ascending: false })
     .limit(20);
 
-  const rows = (data ?? []) as HistoryRow[];
-  const history = rows
-    .filter((row) => row.tour_id !== excludeTour)
-    .map((row) => {
-      const tour = Array.isArray(row.tours) ? row.tours[0] : row.tours;
-      return {
-        tour_id: row.tour_id,
-        tour_name: tour?.name ?? 'Untitled tour',
-        show_rate: row.show_rate,
-        off_rate: row.off_rate,
-        per_diem: row.per_diem,
-        internal_rate: isAdmin ? row.internal_rate : null,
-        updated_at: row.updated_at,
-      };
-    });
+  const rows = ((data ?? []) as HistoryRow[]).filter((row) => row.tour_id !== excludeTour);
+
+  // Rates SSOT — the historical amounts come from personnel_rate_lines
+  // (rateAmountsFor) across every tour in the list, never the legacy columns.
+  const tourIds = Array.from(new Set(rows.map((r) => r.tour_id)));
+  const rateCtx = tourIds.length
+    ? await loadMultiTourRateContext(supabase, tourIds, membership.workspace_id)
+    : null;
+
+  const history = rows.map((row) => {
+    const tour = Array.isArray(row.tours) ? row.tours[0] : row.tours;
+    const a = rateCtx ? rateAmountsFor(rateCtx, row.id) : null;
+    return {
+      tour_id: row.tour_id,
+      tour_name: tour?.name ?? 'Untitled tour',
+      showRate: a?.showRate ?? 0,
+      offRate: a?.offRate ?? 0,
+      perDiem: a?.perDiem ?? 0,
+      internal_rate: isAdmin ? row.internal_rate : null,
+      updated_at: row.updated_at,
+    };
+  });
 
   return NextResponse.json({ history, is_admin: isAdmin });
 }

@@ -54,8 +54,8 @@ function mapTourPerson(row: TourPersonRow): TourPerson {
     personId: row.person_id,
     role: row.role,
     employmentType: row.employment_type,
-    // Rates SSOT — tour_personnel.rate_amount is retired (dropped by 231); pay
-    // reads personnel_rate_lines. This vestigial field is no longer sourced.
+    // Rates SSOT — the tour_personnel daily-rate column is retired (dropped by
+    // 231); pay reads personnel_rate_lines. This vestigial field is no longer set.
     rateAmount: null,
     rateCurrency: row.rate_currency ?? 'GBP',
     ratePeriod: row.rate_period,

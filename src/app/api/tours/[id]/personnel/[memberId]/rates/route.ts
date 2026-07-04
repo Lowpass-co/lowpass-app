@@ -4,10 +4,11 @@
 
    Reads + upserts the personnel_rates row for one tour
    assignment. Separate from the existing
-   /personnel/[memberId] PATCH (which targets tour_personnel.
-   rate_amount — a different, simpler single-rate field).
-   Payroll needs the show / off / per_diem / internal_rate
-   quartet from personnel_rates.
+   /personnel/[memberId] PATCH (which targets the retired
+   tour_personnel daily-rate column). Payroll needs the
+   show / off / per-diem / internal_rate quartet, read from
+   the SSOT rate lines (rateAmountsFor) and written via
+   writeRates. The GET/PUT wire keys are camelCase.
 
    personnel_rates keys legacy on (tour_id, person_name) with
    a roster_personnel_id FK to personnel(id) (migration 025 +
@@ -27,16 +28,9 @@ import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { getActiveMembership } from '@/lib/permissions/server';
 import { writeRates } from '@/server/payroll/writeRates';
+import { loadTourRateContext, rateAmountsFor } from '@/lib/payroll/loadRateLines';
 
 export const dynamic = 'force-dynamic';
-
-interface RatesRow {
-  id: string;
-  show_rate: number;
-  off_rate: number;
-  per_diem: number;
-  internal_rate: number | null;
-}
 
 function isAdminRole(role: string | undefined): boolean {
   return role === 'admin' || role === 'manager';
@@ -100,23 +94,27 @@ export async function GET(
   const r = await resolve(supabase, tourId, memberId);
   if (!r.ok) return r.response;
 
-  const { data: rates } = await supabase
+  const { data: card } = await supabase
     .from('personnel_rates')
-    .select('id, show_rate, off_rate, per_diem, internal_rate')
+    .select('id, internal_rate')
     .eq('tour_id', tourId)
     .eq('roster_personnel_id', r.personId)
-    .maybeSingle<RatesRow>();
+    .maybeSingle<{ id: string; internal_rate: number | null }>();
+
+  // Rates SSOT — the individual amounts come from personnel_rate_lines
+  // (rateAmountsFor), never the legacy columns. internal_rate (admin-only, not a
+  // rate type) stays on the card.
+  const rateCtx = await loadTourRateContext(supabase, tourId, r.workspaceId);
+  const a = card ? rateAmountsFor(rateCtx, card.id) : null;
 
   return NextResponse.json({
-    rates: rates
-      ? {
-          show_rate: rates.show_rate,
-          off_rate: rates.off_rate,
-          per_diem: rates.per_diem,
-          /* §P2 — only surface internal_rate to admins. */
-          internal_rate: r.isAdmin ? rates.internal_rate : null,
-        }
-      : { show_rate: 0, off_rate: 0, per_diem: 0, internal_rate: r.isAdmin ? null : null },
+    rates: {
+      showRate: a?.showRate ?? 0,
+      offRate: a?.offRate ?? 0,
+      perDiem: a?.perDiem ?? 0,
+      /* §P2 — only surface internal_rate to admins. */
+      internal_rate: r.isAdmin ? (card?.internal_rate ?? null) : null,
+    },
     is_admin: r.isAdmin,
   });
 }
@@ -131,9 +129,9 @@ export async function PUT(
   if (!r.ok) return r.response;
 
   let body: {
-    show_rate?: unknown;
-    off_rate?: unknown;
-    per_diem?: unknown;
+    showRate?: unknown;
+    offRate?: unknown;
+    perDiem?: unknown;
     internal_rate?: unknown;
   };
   try {
@@ -148,9 +146,9 @@ export async function PUT(
     return Number.isFinite(n) && n >= 0 ? n : undefined;
   };
 
-  const show = num(body.show_rate);
-  const off = num(body.off_rate);
-  const pd = num(body.per_diem);
+  const show = num(body.showRate);
+  const off = num(body.offRate);
+  const pd = num(body.perDiem);
   /* §P2 — internal_rate only writable by admin/manager. A non-admin sending it is
      dropped silently (no error) so the auto-save loop doesn't fail. */
   const internalRate =

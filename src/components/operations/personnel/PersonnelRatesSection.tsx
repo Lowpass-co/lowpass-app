@@ -8,9 +8,9 @@
    person) via /api/tours/[id]/personnel/[memberId]/rates.
 
    Four fields:
-     Show rate    → personnel_rates.show_rate
-     Travel rate  → personnel_rates.off_rate
-     Per diem     → personnel_rates.per_diem
+     Show rate    → personnel_rates.showRate
+     Travel rate  → personnel_rates.offRate
+     Per diem     → personnel_rates.perDiem
      Internal     → personnel_rates.internal_rate (ADMIN ONLY)
 
    The internal-rate row only renders when the GET response
@@ -31,18 +31,18 @@ import { Loader2, ExternalLink } from 'lucide-react';
 import { budgetCurrencySymbol } from '@/lib/budget-currency';
 
 interface RatesState {
-  show_rate: string;
-  off_rate: string;
-  per_diem: string;
+  showRate: string;
+  offRate: string;
+  perDiem: string;
   internal_rate: string;
 }
 
 interface HistoryEntry {
   tour_id: string;
   tour_name: string;
-  show_rate: number;
-  off_rate: number;
-  per_diem: number;
+  showRate: number;
+  offRate: number;
+  perDiem: number;
   internal_rate: number | null;
   updated_at: string;
 }
@@ -65,9 +65,9 @@ function numToInput(n: number | null | undefined): string {
 
 export function PersonnelRatesSection({ tourId, memberId, personId, currency, readOnly = false }: Props) {
   const [state, setState] = useState<RatesState>({
-    show_rate: '',
-    off_rate: '',
-    per_diem: '',
+    showRate: '',
+    offRate: '',
+    perDiem: '',
     internal_rate: '',
   });
   const [isAdmin, setIsAdmin] = useState(false);
@@ -91,9 +91,9 @@ export function PersonnelRatesSection({ tourId, memberId, personId, currency, re
         const rt = json.rates ?? {};
         setIsAdmin(!!json.is_admin);
         setState({
-          show_rate: numToInput(rt.show_rate),
-          off_rate: numToInput(rt.off_rate),
-          per_diem: numToInput(rt.per_diem),
+          showRate: numToInput(rt.showRate),
+          offRate: numToInput(rt.offRate),
+          perDiem: numToInput(rt.perDiem),
           internal_rate: numToInput(rt.internal_rate),
         });
       })
@@ -153,16 +153,16 @@ export function PersonnelRatesSection({ tourId, memberId, personId, currency, re
   const applyHistory = useCallback(
     (entry: HistoryEntry) => {
       setState({
-        show_rate: numToInput(entry.show_rate),
-        off_rate: numToInput(entry.off_rate),
-        per_diem: numToInput(entry.per_diem),
+        showRate: numToInput(entry.showRate),
+        offRate: numToInput(entry.offRate),
+        perDiem: numToInput(entry.perDiem),
         internal_rate: isAdmin ? numToInput(entry.internal_rate) : '',
       });
       setCopyOpen(false);
       /* Commit each copied field. internal_rate only when admin. */
-      void commit('show_rate', numToInput(entry.show_rate));
-      void commit('off_rate', numToInput(entry.off_rate));
-      void commit('per_diem', numToInput(entry.per_diem));
+      void commit('showRate', numToInput(entry.showRate));
+      void commit('offRate', numToInput(entry.offRate));
+      void commit('perDiem', numToInput(entry.perDiem));
       if (isAdmin) void commit('internal_rate', numToInput(entry.internal_rate));
     },
     [commit, isAdmin],
@@ -251,9 +251,9 @@ export function PersonnelRatesSection({ tourId, memberId, personId, currency, re
                     <span className="text-sm text-lp-text">{h.tour_name}</span>
                     <span className="text-[11px] text-lp-text-tertiary tabular-nums">
                       {symbol}
-                      {h.show_rate} / {symbol}
-                      {h.off_rate} / {symbol}
-                      {h.per_diem} pd
+                      {h.showRate} / {symbol}
+                      {h.offRate} / {symbol}
+                      {h.perDiem} pd
                     </span>
                   </button>
                 ))
@@ -270,9 +270,9 @@ export function PersonnelRatesSection({ tourId, memberId, personId, currency, re
         </div>
       ) : (
         <div className="space-y-2">
-          {rateField('Show rate', 'show_rate')}
-          {rateField('Travel rate', 'off_rate')}
-          {rateField('Per diem', 'per_diem')}
+          {rateField('Show rate', 'showRate')}
+          {rateField('Travel rate', 'offRate')}
+          {rateField('Per diem', 'perDiem')}
 
           {isAdmin ? (
             <>
