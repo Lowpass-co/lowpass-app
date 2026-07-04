@@ -60,9 +60,10 @@ export interface TourDataForSummary {
   line_items: Array<{ category: string; proposed_cost?: number; actual_cost?: number }>;
   personnel: Array<{
     rate_type?: string;
-    show_rate?: number;
-    off_rate?: number;
-    rehearsal_rate?: number;
+    /* Rates SSOT — camelCase amounts (from rateAmountsFor), never legacy cols. */
+    showRate?: number;
+    offRate?: number;
+    rehearsalRate?: number;
     per_diem?: number;
     advance_fee?: number;
     commission?: number;
@@ -200,12 +201,12 @@ export function computeBudgetSummary(tourData: TourDataForSummary): BudgetSummar
     const rateType = p.rate_type ?? 'day_rate';
     let salary: Decimal;
     if (rateType === 'split_rate') {
-      salary = d(showDays).times(p.show_rate ?? 0)
-        .plus(d(offDays).times(p.off_rate ?? 0))
-        .plus(d(rehearsalDays).times(p.rehearsal_rate ?? 0))
+      salary = d(showDays).times(p.showRate ?? 0)
+        .plus(d(offDays).times(p.offRate ?? 0))
+        .plus(d(rehearsalDays).times(p.rehearsalRate ?? 0))
         .plus(d(p.advance_fee ?? 0));
     } else {
-      salary = d(totalDays).times(p.off_rate ?? 0).plus(d(p.advance_fee ?? 0));
+      salary = d(totalDays).times(p.offRate ?? 0).plus(d(p.advance_fee ?? 0));
     }
     if (showCommission && (p.commission != null && Number(p.commission) !== 0)) {
       salary = salary.plus(d(totalDays).times(p.commission ?? 0));

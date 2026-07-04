@@ -23,7 +23,7 @@ import { resolveArtistLogoUrl } from '@/lib/artists/imageUrl';
 // split for the 5 defaults and to the flat total for day_rate (a6) — proven in
 // reconcile.harness.ts. The advance stays sourced from the per-week entry below.
 import { countDayStatuses, computeTotals, type DayCounts } from '@/lib/payroll/fees';
-import { loadTourRateContext, rateLinesFor, type TourRateContext } from '@/lib/payroll/loadRateLines';
+import { loadTourRateContext, rateLinesFor, rateAmountsFor, type TourRateContext } from '@/lib/payroll/loadRateLines';
 import type { DateRange } from '@/lib/export/template-config';
 
 /** A worked day with its location (Part E — the statement's "where we were" list). */
@@ -113,7 +113,7 @@ export async function loadPayrollExportData(
     // EXCLUDE internal_rate from the projection — never selected, never exposed.
     supabase
       .from('personnel_rates')
-      .select('id, tour_personnel_id, person_name, role, show_rate, off_rate, rehearsal_rate, per_diem, order_index')
+      .select('id, tour_personnel_id, person_name, role, order_index')
       .eq('tour_id', tourId)
       .eq('workspace_id', workspaceId)
       .not('tour_personnel_id', 'is', null)
@@ -144,10 +144,6 @@ export async function loadPayrollExportData(
     tour_personnel_id: string | null;
     person_name: string | null;
     role: string | null;
-    show_rate: number | string | null;
-    off_rate: number | string | null;
-    rehearsal_rate: number | string | null;
-    per_diem: number | string | null;
     order_index: number | null;
   }>;
 
@@ -191,7 +187,7 @@ export async function loadPayrollExportData(
     const myEntries = entriesByRateId.get(rate.id) ?? [];
     // A person's base (non-advance) lines don't change week-to-week; the advance
     // is applied per-entry below, so drop the flat_once line from the base set.
-    const baseLines = rateLinesFor(rateCtx, rate.id, rate, 0).filter((l) => l.basis !== 'flat_once');
+    const baseLines = rateLinesFor(rateCtx, rate.id).filter((l) => l.basis !== 'flat_once');
     const agg: DayCounts = { show: 0, offTravel: 0, rehearsal: 0, active: 0 };
     let fee = 0;
     let perDiemTotal = 0;
@@ -223,14 +219,16 @@ export async function loadPayrollExportData(
     }
     dayRows.sort((a, b) => a.date.localeCompare(b.date));
 
+    // Rates SSOT — display amounts from personnel_rate_lines (rateAmountsFor).
+    const amounts = rateAmountsFor(rateCtx, rate.id);
     return {
       id: rate.id,
       name,
       role,
-      showRate: num(rate.show_rate),
-      offRate: num(rate.off_rate),
-      rehearsalRate: num(rate.rehearsal_rate),
-      perDiemRate: num(rate.per_diem),
+      showRate: amounts.showRate,
+      offRate: amounts.offRate,
+      rehearsalRate: amounts.rehearsalRate,
+      perDiemRate: amounts.perDiem,
       days: agg,
       fee,
       perDiemTotal,
