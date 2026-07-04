@@ -25,7 +25,7 @@ import {
   type DashboardBrickId,
   type DashboardConfig,
 } from '@/components/budget/dashboard/dashboardConfig';
-import { convertToCurrency } from '@/lib/budget/fx';
+import { convertVia } from '@/lib/budget/fxRates';
 import { getEffectiveActual } from '@/lib/budget/transactions';
 import {
   computeBudgetPnl,
@@ -170,14 +170,10 @@ export function BudgetSummaryTab({
           return {
             proposed:
               acc.proposed +
-              convertToCurrency(
-                Number(line.proposed_cost ?? 0),
-                cur,
-                displayCurrency,
-              ),
+              convertVia(Number(line.proposed_cost ?? 0), cur, displayCurrency, tourCurrency, fxRates),
             actual:
               acc.actual +
-              convertToCurrency(getEffectiveActual(line), cur, displayCurrency),
+              convertVia(getEffectiveActual(line), cur, displayCurrency, tourCurrency, fxRates),
           };
         },
         { proposed: 0, actual: 0 },
@@ -220,16 +216,8 @@ export function BudgetSummaryTab({
     let totalActual = 0;
     for (const line of lines) {
       const lineCurrency = (line.currency || tourCurrency).toUpperCase();
-      const proposed = convertToCurrency(
-        Number(line.proposed_cost ?? 0),
-        lineCurrency,
-        displayCurrency,
-      );
-      const actual = convertToCurrency(
-        Number(line.actual_cost ?? 0),
-        lineCurrency,
-        displayCurrency,
-      );
+      const proposed = convertVia(Number(line.proposed_cost ?? 0), lineCurrency, displayCurrency, tourCurrency, fxRates);
+      const actual = convertVia(Number(line.actual_cost ?? 0), lineCurrency, displayCurrency, tourCurrency, fxRates);
       totalProposed += proposed;
       totalActual += actual;
       const cat = (line.category ?? 'other').toLowerCase();

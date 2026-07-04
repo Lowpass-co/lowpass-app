@@ -375,7 +375,7 @@ export default async function BudgetTourPage({
           viewedVersionId={viewed?.id ?? null}
           canApprove={canApprove}
         />
-        <BudgetBurnBar lines={lines} tourCurrency={tourCurrency} />
+        <BudgetBurnBar lines={lines} tourCurrency={tourCurrency} fxRates={fxRates} />
         {/* Phase strip when this tour tracks phases (BUD-18). Phase 4.2 —
             the gate reads the shared track-phases context so the Settings
             toggle animates this strip without a router.refresh. */}
@@ -423,6 +423,7 @@ export default async function BudgetTourPage({
                       duplicateMap={duplicatesToRecord(detectDuplicates(lines))}
                       tourCurrency={tourCurrency}
                       tourId={tourId}
+                      fxRates={fxRates}
                       income={incomeRows}
                       commissions={commissionRows}
                       settings={budgetSettings}
@@ -441,6 +442,7 @@ export default async function BudgetTourPage({
                       viewedStatus={viewedStatus}
                       draftVersionId={draftVersionId}
                       versions={versions}
+                      fxRates={fxRates}
                     />
                   }
                 />

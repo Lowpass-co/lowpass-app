@@ -21,7 +21,7 @@ import type { VersionStatus, BudgetVersionVm } from '@/components/budget/version
 import { AddReceiptPanel, type AddReceiptResult } from '@/components/budget/AddReceiptPanel';
 import type { Column, GridFx, GridLineApi, GridStatusConfig } from '@/components/grid/types';
 import { budgetToGridSections, gridEditToPatch } from '@/lib/grid/budgetAdapter';
-import { convertToCurrency } from '@/lib/budget/fx';
+import { convertVia, type FxRateMap } from '@/lib/budget/fxRates';
 import { useToast } from '@/components/ui/Toast';
 import type { BudgetLineItem, BudgetSection } from '@/types';
 
@@ -92,12 +92,14 @@ export interface BudgetGridViewProps {
   /** B2 — the full version list, so a historical version's lock modal can offer
    *  "Make this version Current" (rollback). */
   versions?: BudgetVersionVm[];
+  /** FX unify (Stage 2) — the tour's budget_fx_rates map for display conversion. */
+  fxRates?: FxRateMap;
 }
 
 export function BudgetGridView({
   lines, sections, tourCurrency, tourId,
   versionLocked = false, lockedVersionId = null, canApprove = false,
-  viewedStatus = 'draft', draftVersionId = null, versions = [],
+  viewedStatus = 'draft', draftVersionId = null, versions = [], fxRates = {},
 }: BudgetGridViewProps) {
   const router = useRouter();
   const { showToast } = useToast();
@@ -138,7 +140,7 @@ export function BudgetGridView({
     displayCurrency: display,
     currencies: CURRENCIES,
     // a currency-less line is in the NATIVE tour currency, not the display one.
-    toDisplay: (amount, from) => convertToCurrency(amount, (from || native).toUpperCase(), display),
+    toDisplay: (amount, from) => convertVia(amount, (from || native).toUpperCase(), display, native, fxRates),
     symbol: (cur) => CUR_SYMBOL[(cur || display).toUpperCase()] ?? `${(cur || display).toUpperCase()} `,
     formatDisplay: (amount) =>
       (CUR_SYMBOL[display] ?? `${display} `) + Math.round(Number(amount) || 0).toLocaleString('en-US'),

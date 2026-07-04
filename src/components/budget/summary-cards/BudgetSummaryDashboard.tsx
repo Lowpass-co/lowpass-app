@@ -48,8 +48,8 @@ export function BudgetSummaryDashboard({
     () => computeBudgetPnl({ lines, income, commissions, settings, tourCurrency, fxRates }),
     [lines, income, commissions, settings, tourCurrency, fxRates],
   );
-  const sectionRows = useMemo(() => expensesBySection(lines, sections, tourCurrency), [lines, sections, tourCurrency]);
-  const burn = useMemo(() => burnFrom(lines, tourCurrency), [lines, tourCurrency]);
+  const sectionRows = useMemo(() => expensesBySection(lines, sections, tourCurrency, fxRates), [lines, sections, tourCurrency, fxRates]);
+  const burn = useMemo(() => burnFrom(lines, tourCurrency, fxRates), [lines, tourCurrency, fxRates]);
   const shows = useMemo(() => perShowIncome(income, tourCurrency, fxRates, showLabels), [income, tourCurrency, fxRates, showLabels]);
   void displayCurrency; // cards render in tour currency (pnl currency); ?display= is a later enhancement.
 

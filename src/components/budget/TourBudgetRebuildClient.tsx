@@ -9,7 +9,7 @@ import { useToast } from '@/components/ui/Toast';
 import { spreadsheetColumnsFor } from '@/lib/budget/budgetUx14SectionColumns';
 import { SECTION_LABELS, type BudgetSectionKind, BUDGET_SECTION_ORDER } from '@/lib/budget/budgetUx14Kinds';
 import { defaultCategoryForUx14Section } from '@/lib/budget/defaultCategoryForUx14Section';
-import { convertToCurrency } from '@/lib/budget/fx';
+import { convertToTour, type FxRateMap } from '@/lib/budget/fxRates';
 import { resolveSectionForLine } from '@/lib/budget/normalizeBudgetSection';
 import { patchFieldsFromUx14Cell, ux14ColumnIsPersisted } from '@/lib/budget/ux14PatchFields';
 import type { BudgetLineItem } from '@/types';
@@ -194,6 +194,9 @@ export function TourBudgetRebuildClient({ tourId, initialLines, tourDefaultCurre
   );
 
   const tourCcy = tourDefaultCurrency.trim().toUpperCase() || 'GBP';
+  // FX unify (Stage 2) — this rebuild flow has no live parent (dead path); lines
+  // default to the tour currency, so an empty map converts them 1:1.
+  const fxRates: FxRateMap = {};
 
   const grandTotals = useMemo(() => {
     const flat = SECTION_IDS.flatMap((k) => grouped[k] ?? []);
@@ -201,7 +204,7 @@ export function TourBudgetRebuildClient({ tourId, initialLines, tourDefaultCurre
     for (const r of flat) {
       const amt = Number(r.proposed_cost ?? 0);
       const ccy = (r.currency && r.currency.trim().toUpperCase()) ?? tourCcy;
-      grandInTour += convertToCurrency(Number.isFinite(amt) ? amt : 0, ccy, tourCcy);
+      grandInTour += convertToTour(Number.isFinite(amt) ? amt : 0, ccy, tourCcy, fxRates);
     }
     const linked = flat.filter(
       (r) => !!(r.flight_id || r.hotel_id || r.room_id || r.gear_id || r.tour_gear_id)
@@ -348,7 +351,7 @@ export function TourBudgetRebuildClient({ tourId, initialLines, tourDefaultCurre
               <dd className="mt-3 text-xs text-lp-text-secondary">
                 {[...SECTION_IDS]
                   .filter((sid) => (grouped[sid] ?? []).length > 0)
-                  .map((sid) => `${SECTION_LABELS[sid]} (${computeSectionTotals(grouped[sid] ?? [], tourCcy).inPrimary.toLocaleString('en-GB', { minimumFractionDigits: 0 })})`)
+                  .map((sid) => `${SECTION_LABELS[sid]} (${computeSectionTotals(grouped[sid] ?? [], tourCcy, fxRates).inPrimary.toLocaleString('en-GB', { minimumFractionDigits: 0 })})`)
                   .join(' · ') ||
                   'Empty budget'}
               </dd>

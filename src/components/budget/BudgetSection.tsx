@@ -5,18 +5,23 @@ import { SpreadsheetGrid } from '@/components/spreadsheet-grid/SpreadsheetGrid';
 import type { GridColumn, GridRow } from '@/components/spreadsheet-grid/types';
 import type { BudgetSectionKind } from '@/lib/budget/budgetUx14Kinds';
 import { SECTION_LABELS } from '@/lib/budget/budgetUx14Kinds';
-import { convertToCurrency } from '@/lib/budget/fx';
+import { convertToTour, type FxRateMap } from '@/lib/budget/fxRates';
 import type { BudgetLineItem } from '@/types';
 import { cn } from '@/lib/utils';
 
-/** Sum proposed budget amounts into `primaryCurrency` via static FX lookup. */
-export function computeSectionTotals(rows: BudgetLineItem[], primaryCurrency: string) {
+/** Sum proposed budget amounts into `primaryCurrency` via the tour's FX map
+ *  (primaryCurrency is the tour currency at every call site). */
+export function computeSectionTotals(
+  rows: BudgetLineItem[],
+  primaryCurrency: string,
+  fxRates: FxRateMap = {},
+) {
   const primary = primaryCurrency.trim().toUpperCase();
   let inPrimary = 0;
   for (const r of rows) {
     const ccy = r.currency?.trim().toUpperCase() || primary;
     const amt = Number(r.proposed_cost ?? 0);
-    inPrimary += Number.isFinite(amt) ? convertToCurrency(amt, ccy, primary) : 0;
+    inPrimary += Number.isFinite(amt) ? convertToTour(amt, ccy, primary, fxRates) : 0;
   }
   const derivedCount = rows.filter(
     (r) => !!(r.flight_id || r.hotel_id || r.room_id || r.gear_id || r.tour_gear_id)
@@ -64,6 +69,8 @@ export type BudgetSectionProps = {
   rows: BudgetLineItem[];
   primaryCurrency: string;
   tourDefaultCurrency: string;
+  /** FX unify (Stage 2) — the tour's budget_fx_rates map. */
+  fxRates?: FxRateMap;
   footerNote?: string;
   onCommitCell: (rowId: string, columnId: string, value: unknown) => Promise<void>;
   onRowOpen?: (row: BudgetLineItem) => void;
@@ -78,6 +85,7 @@ export function BudgetSection({
   rows,
   primaryCurrency,
   tourDefaultCurrency,
+  fxRates = {},
   footerNote,
   onCommitCell,
   onRowOpen,
@@ -85,7 +93,7 @@ export function BudgetSection({
 }: BudgetSectionProps) {
   const primary = primaryCurrency.trim().toUpperCase() || tourDefaultCurrency.trim().toUpperCase();
   const tc = tourDefaultCurrency.trim().toUpperCase();
-  const totals = computeSectionTotals(rows, primary);
+  const totals = computeSectionTotals(rows, primary, fxRates);
 
   const sectionTotalDisplay = totals.inPrimary.toLocaleString('en-GB', {
     style: 'currency',
@@ -94,7 +102,7 @@ export function BudgetSection({
   });
 
   const tourConv =
-    primary !== tc ? convertToCurrency(totals.inPrimary, primary, tc) : totals.inPrimary;
+    primary !== tc ? convertToTour(totals.inPrimary, primary, tc, fxRates) : totals.inPrimary;
   const fxLabel =
     primary !== tc
       ? ` (${tc} ${tourConv.toLocaleString('en-GB', {

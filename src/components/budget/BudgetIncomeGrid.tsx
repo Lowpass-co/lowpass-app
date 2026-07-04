@@ -18,7 +18,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Grid, type GridHandle } from '@/components/grid/Grid';
 import type { Column, GridFx, Row, Section } from '@/components/grid/types';
-import { convertToCurrency } from '@/lib/budget/fx';
+import { convertVia } from '@/lib/budget/fxRates';
 import { projectIncome } from '@/lib/budget/incomeProjection';
 import { toIncomeRows, type IncomeRow } from '@/lib/budget/income';
 import { labelForDayType } from '@/lib/routing/dayType';
@@ -221,7 +221,7 @@ export function BudgetIncomeGrid({
     () => ({
       displayCurrency: display,
       currencies: CURRENCIES,
-      toDisplay: (amount, from) => convertToCurrency(amount, (from || native).toUpperCase(), display),
+      toDisplay: (amount, from) => convertVia(amount, (from || native).toUpperCase(), display, native, fxRates),
       symbol: (c) => CUR_SYMBOL[(c || display).toUpperCase()] ?? `${(c || display).toUpperCase()} `,
       formatDisplay: (amount) => (CUR_SYMBOL[display] ?? `${display} `) + Math.round(num(amount)).toLocaleString('en-US'),
     }),

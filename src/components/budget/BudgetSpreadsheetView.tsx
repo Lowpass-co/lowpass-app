@@ -49,7 +49,7 @@ import {
   type GridColumnDef,
 } from '@/components/budget/useBudgetGridSizing';
 import { useToast } from '@/components/ui/Toast';
-import { convertToCurrency } from '@/lib/budget/fx';
+import { convertVia, type FxRateMap } from '@/lib/budget/fxRates';
 import { useAppDensity } from '@/lib/density/appDensity';
 import { getEffectiveActual, getActualState } from '@/lib/budget/transactions';
 import { isIncomeRow, varianceColor } from '@/lib/budget/income-rows';
@@ -247,6 +247,8 @@ export interface BudgetSpreadsheetViewProps {
   duplicateMap?: Record<string, string[]>;
   tourCurrency: string;
   tourId: string;
+  /** FX unify (Stage 2) — the tour's budget_fx_rates map for display conversion. */
+  fxRates?: FxRateMap;
   /** §D: default grouping. The toggle inside this view persists
       changes per-tour via localStorage. */
   initialGroupBy?: BudgetSpreadsheetGroupBy;
@@ -275,21 +277,13 @@ function formatCurrency(value: number, currency: string): string {
   }
 }
 
-function variance(line: BudgetLineItem, displayCurrency: string, tourCurrency: string) {
+function variance(line: BudgetLineItem, displayCurrency: string, tourCurrency: string, fxRates: FxRateMap) {
   const cur = (line.currency || tourCurrency).toUpperCase();
-  const proposed = convertToCurrency(
-    Number(line.proposed_cost ?? 0),
-    cur,
-    displayCurrency,
-  );
+  const proposed = convertVia(Number(line.proposed_cost ?? 0), cur, displayCurrency, tourCurrency, fxRates);
   /* Budget Phase A §A2 — effective actual = sum of
      budget_line_item_transactions when present, else
      actual_cost fallback (§A1 derivation rule). */
-  const actual = convertToCurrency(
-    getEffectiveActual(line),
-    cur,
-    displayCurrency,
-  );
+  const actual = convertVia(getEffectiveActual(line), cur, displayCurrency, tourCurrency, fxRates);
   // §B spec: variance = actual − proposed. Negative reads as
   // under-budget (good, green); positive reads as over-budget (bad).
   const delta = actual - proposed;
@@ -335,6 +329,7 @@ export function BudgetSpreadsheetView({
   duplicateMap,
   tourCurrency,
   tourId,
+  fxRates = {},
   initialGroupBy = 'section',
   income = [],
   commissions = [],
@@ -1465,6 +1460,7 @@ export function BudgetSpreadsheetView({
                       duplicateMap={duplicateMap}
                       tourCurrency={tourCurrency}
                       displayCurrency={displayCurrency}
+                      fxRates={fxRates}
                       onCommitLine={commitLineEdit}
                       onAddRowToSection={handleAddToSection}
                       onAddLineToSection={addLineToSection}
@@ -1804,6 +1800,7 @@ interface GroupRowsProps {
   duplicateMap?: Record<string, string[]>;
   tourCurrency: string;
   displayCurrency: string;
+  fxRates: FxRateMap;
   /** Fix-pack B Task 2 — the section / line that should auto-open in
    *  name-edit mode, and a callback to clear that state once consumed. */
   autoEditSectionId: string | null;
@@ -1826,6 +1823,7 @@ function GroupRows({
   duplicateMap,
   tourCurrency,
   displayCurrency,
+  fxRates,
   onCommitLine,
   onAddRowToSection,
   onAddLineToSection,
@@ -1979,16 +1977,8 @@ function GroupRows({
       {/* B3 — collapsed: skip the formula rows (header stays). */}
       {!collapsed && isFormula
         ? formulaRows!.map((f, i) => {
-            const proj = convertToCurrency(
-              f.projected,
-              tourCurrency,
-              displayCurrency,
-            );
-            const act = convertToCurrency(
-              f.actual,
-              tourCurrency,
-              displayCurrency,
-            );
+            const proj = convertVia(f.projected, tourCurrency, displayCurrency, tourCurrency, fxRates);
+            const act = convertVia(f.actual, tourCurrency, displayCurrency, tourCurrency, fxRates);
             const delta = act - proj;
             const fPct = proj > 0 ? (delta / proj) * 100 : null;
             // Rows sit on the raised panel surface: even = transparent
@@ -2083,7 +2073,7 @@ function GroupRows({
         const txnCount = actualState.transactionCount;
         const hasMultiTxns = txnCount >= 2;
         const isOverride = actualState.isOverride;
-        const v = variance(row, displayCurrency, tourCurrency);
+        const v = variance(row, displayCurrency, tourCurrency, fxRates);
         /* §B1.3 — variance color through the income-aware
            helper. Expense rows: over budget = red. Income
            rows: over forecast = green. Helper handles the
@@ -2286,11 +2276,7 @@ function GroupRows({
                 currency={(row.currency || tourCurrency).toUpperCase()}
                 formatDisplay={(n) =>
                   formatCurrency(
-                    convertToCurrency(
-                      n,
-                      (row.currency || tourCurrency).toUpperCase(),
-                      displayCurrency,
-                    ),
+                    convertVia(n, (row.currency || tourCurrency).toUpperCase(), displayCurrency, tourCurrency, fxRates),
                     displayCurrency,
                   )
                 }
@@ -2320,11 +2306,7 @@ function GroupRows({
                 currency={(row.currency || tourCurrency).toUpperCase()}
                 formatDisplay={(n) =>
                   formatCurrency(
-                    convertToCurrency(
-                      n,
-                      (row.currency || tourCurrency).toUpperCase(),
-                      displayCurrency,
-                    ),
+                    convertVia(n, (row.currency || tourCurrency).toUpperCase(), displayCurrency, tourCurrency, fxRates),
                     displayCurrency,
                   )
                 }

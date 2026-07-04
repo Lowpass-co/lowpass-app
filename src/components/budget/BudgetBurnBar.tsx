@@ -23,7 +23,7 @@
 import { useMemo } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { ArrowDown, ArrowUp } from 'lucide-react';
-import { convertToCurrency } from '@/lib/budget/fx';
+import { convertVia, type FxRateMap } from '@/lib/budget/fxRates';
 import { getEffectiveActual } from '@/lib/budget/transactions';
 import type { BudgetLineItem } from '@/types';
 
@@ -31,6 +31,9 @@ interface BudgetBurnBarProps {
   lines: BudgetLineItem[];
   /** Tour's native currency. Display currency comes from ?display=. */
   tourCurrency: string;
+  /** FX unify (Stage 2) — the tour's budget_fx_rates map; display conversions
+   *  pivot through the tour currency via convertVia. */
+  fxRates?: FxRateMap;
 }
 
 const COMMITTED_STATUSES = new Set(['quoted', 'approved', 'paid']);
@@ -69,7 +72,7 @@ function formatAbbrev(value: number, currency: string): string {
 
 const clampPct = (n: number) => Math.max(0, Math.min(100, n));
 
-export function BudgetBurnBar({ lines, tourCurrency }: BudgetBurnBarProps) {
+export function BudgetBurnBar({ lines, tourCurrency, fxRates = {} }: BudgetBurnBarProps) {
   const searchParams = useSearchParams();
   const displayCurrency = (
     searchParams.get('display') ?? tourCurrency
@@ -81,15 +84,19 @@ export function BudgetBurnBar({ lines, tourCurrency }: BudgetBurnBarProps) {
     let spent = 0;
     for (const line of lines) {
       const cur = (line.currency || tourCurrency).toUpperCase();
-      const proposed = convertToCurrency(
+      const proposed = convertVia(
         Number(line.proposed_cost ?? 0),
         cur,
         displayCurrency,
+        tourCurrency,
+        fxRates,
       );
-      const actual = convertToCurrency(
+      const actual = convertVia(
         getEffectiveActual(line),
         cur,
         displayCurrency,
+        tourCurrency,
+        fxRates,
       );
       total += proposed;
       const status = (line.status ?? '').toLowerCase();

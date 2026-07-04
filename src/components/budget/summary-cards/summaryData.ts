@@ -7,8 +7,7 @@
    Node-testable so the presentation-only invariant is provable.
    ============================================ */
 
-import { convertToCurrency } from '@/lib/budget/fx';
-import { toTourCurrency, type FxRateMap } from '@/lib/budget/fxRates';
+import { toTourCurrency, convertToTour, type FxRateMap } from '@/lib/budget/fxRates';
 import { getEffectiveActual } from '@/lib/budget/transactions';
 import { isIncomeRow } from '@/lib/budget/income-rows';
 import type { IncomeInput } from '@/lib/budget/computeBudgetPnl';
@@ -35,6 +34,7 @@ export function expensesBySection(
   lines: BudgetLineItem[],
   sections: BudgetSection[],
   tourCurrency: string,
+  fxRates: FxRateMap = {},
 ): SectionExpense[] {
   const ccy = (tourCurrency || 'GBP').toUpperCase();
   const nameById = new Map(sections.map((s) => [s.id, s.name]));
@@ -42,7 +42,7 @@ export function expensesBySection(
   for (const l of lines) {
     if (isIncomeRow(l)) continue;
     const cur = (l.currency || ccy).toUpperCase();
-    const actual = convertToCurrency(getEffectiveActual(l), cur, ccy);
+    const actual = convertToTour(getEffectiveActual(l), cur, ccy, fxRates);
     const key = l.section_id && nameById.has(l.section_id) ? l.section_id : '__uncat__';
     byId.set(key, (byId.get(key) ?? 0) + actual);
   }
@@ -62,7 +62,7 @@ export interface BurnFigures {
 
 /** Committed / spent / remaining from line statuses (tour currency) — the SAME
  *  figures the budget burn-bar header shows. Presentation only. */
-export function burnFrom(lines: BudgetLineItem[], tourCurrency: string): BurnFigures {
+export function burnFrom(lines: BudgetLineItem[], tourCurrency: string, fxRates: FxRateMap = {}): BurnFigures {
   const ccy = (tourCurrency || 'GBP').toUpperCase();
   let total = 0;
   let committed = 0;
@@ -70,8 +70,8 @@ export function burnFrom(lines: BudgetLineItem[], tourCurrency: string): BurnFig
   for (const l of lines) {
     if (isIncomeRow(l)) continue;
     const cur = (l.currency || ccy).toUpperCase();
-    const proposed = convertToCurrency(num(l.proposed_cost), cur, ccy);
-    const actual = convertToCurrency(getEffectiveActual(l), cur, ccy);
+    const proposed = convertToTour(num(l.proposed_cost), cur, ccy, fxRates);
+    const actual = convertToTour(getEffectiveActual(l), cur, ccy, fxRates);
     const status = (l.status ?? '').toLowerCase();
     total += proposed;
     if (COMMITTED_STATUSES.has(status)) committed += proposed;

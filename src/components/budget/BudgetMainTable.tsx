@@ -24,7 +24,7 @@ import { AlertTriangle, ArrowDown, ArrowUp, Paperclip, Plus, Trash2, X } from 'l
 import { DataTable } from '@/components/data-table/DataTable';
 import { BudgetLineSlideOver } from '@/components/budget/BudgetLineSlideOver';
 import { useToast } from '@/components/ui/Toast';
-import { convertToCurrency } from '@/lib/budget/fx';
+import { convertVia, type FxRateMap } from '@/lib/budget/fxRates';
 import type { ColumnDef } from '@/components/data-table/types';
 import type { BudgetLineItem } from '@/types';
 import type {
@@ -116,6 +116,8 @@ export type BudgetMainTableProps = {
   duplicateMap?: Record<string, string[]>;
   tourCurrency: string;
   tourId: string;
+  /** FX unify (Stage 2) — the tour's budget_fx_rates map for display conversion. */
+  fxRates?: FxRateMap;
 };
 
 export function BudgetMainTable({
@@ -125,6 +127,7 @@ export function BudgetMainTable({
   duplicateMap,
   tourCurrency,
   tourId,
+  fxRates = {},
 }: BudgetMainTableProps) {
   const router = useRouter();
   const { showToast } = useToast();
@@ -198,16 +201,20 @@ export function BudgetMainTable({
     for (const line of filtered) {
       const rowCurrency = (line.currency || tourCurrency).toUpperCase();
       proposed +=
-        convertToCurrency(
+        convertVia(
           Number(line.proposed_cost ?? 0) || 0,
           rowCurrency,
           displayCurrency,
+          tourCurrency,
+          fxRates,
         ) || 0;
       actual +=
-        convertToCurrency(
+        convertVia(
           Number(line.actual_cost ?? 0) || 0,
           rowCurrency,
           displayCurrency,
+          tourCurrency,
+          fxRates,
         ) || 0;
     }
     return { proposed, actual };
@@ -267,7 +274,7 @@ export function BudgetMainTable({
         cell: (_value, row) => {
           const native = Number(row.proposed_cost ?? 0);
           const rowCurrency = (row.currency || tourCurrency).toUpperCase();
-          const converted = convertToCurrency(native, rowCurrency, displayCurrency);
+          const converted = convertVia(native, rowCurrency, displayCurrency, tourCurrency, fxRates);
           const showFootnote = rowCurrency !== displayCurrency.toUpperCase();
           return (
             <div className="flex flex-col items-end">
@@ -294,7 +301,7 @@ export function BudgetMainTable({
         cell: (_value, row) => {
           const native = Number(row.actual_cost ?? 0);
           const rowCurrency = (row.currency || tourCurrency).toUpperCase();
-          const converted = convertToCurrency(native, rowCurrency, displayCurrency);
+          const converted = convertVia(native, rowCurrency, displayCurrency, tourCurrency, fxRates);
           const showFootnote = rowCurrency !== displayCurrency.toUpperCase();
           return (
             <div className="flex flex-col items-end">
