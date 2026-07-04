@@ -15,7 +15,7 @@
    ============================================ */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { buildRateLines, type RateTypeMeta, type RateLineRow } from './rateLines';
+import { buildRateLines, DEFAULT_RATE_TYPE_IDS, type RateTypeMeta, type RateLineRow } from './rateLines';
 import { ratesToLines, type RateLike, type RateLine, type DayStatus, type RateBucket, type RateBasis } from './fees';
 
 /** A card's legacy rate columns — the ONLY place they're read for the fallback. */
@@ -151,4 +151,45 @@ export function rateLinesFor(
     );
   }
   return ratesToLines(card, adv);
+}
+
+/** The five individual rate amounts (camelCase, grep-clean) for a person —
+ *  for DISPLAY / EDIT surfaces that show a single rate rather than a total.
+ *  Sourced from the SSOT lines (a1 show / a2 off / a3 rehearsal / a4 per-diem /
+ *  a5 advance); a `day_rate` card carries the flat a6 line instead of the split
+ *  a1/a2/a3, so its amount surfaces as `offRate` — where writeRates mirrors the
+ *  day rate — and show/rehearsal read 0. Falls back to the ctx's legacy columns
+ *  for any card not yet backfilled (231-safe once the fallback goes quiet). */
+export interface RateAmounts {
+  showRate: number;
+  offRate: number;
+  rehearsalRate: number;
+  perDiem: number;
+  advanceFee: number;
+}
+
+export function rateAmountsFor(ctx: TourRateContext, personnelRateId: string): RateAmounts {
+  const rows = ctx.linesByRateId.get(personnelRateId);
+  if (rows && rows.length > 0) {
+    const amt = (id: string): number => {
+      const r = rows.find((x) => x.rate_type_id === id);
+      return r ? Number(r.amount) || 0 : 0;
+    };
+    const hasDay = rows.some((x) => x.rate_type_id === DEFAULT_RATE_TYPE_IDS.dayRate);
+    return {
+      showRate: hasDay ? 0 : amt(DEFAULT_RATE_TYPE_IDS.show),
+      offRate: hasDay ? amt(DEFAULT_RATE_TYPE_IDS.dayRate) : amt(DEFAULT_RATE_TYPE_IDS.offTravel),
+      rehearsalRate: hasDay ? 0 : amt(DEFAULT_RATE_TYPE_IDS.rehearsal),
+      perDiem: amt(DEFAULT_RATE_TYPE_IDS.perDiem),
+      advanceFee: amt(DEFAULT_RATE_TYPE_IDS.advance),
+    };
+  }
+  const legacy = ctx.legacyByRateId.get(personnelRateId);
+  return {
+    showRate: Number(legacy?.show_rate) || 0,
+    offRate: Number(legacy?.off_rate) || 0,
+    rehearsalRate: Number(legacy?.rehearsal_rate) || 0,
+    perDiem: Number(legacy?.per_diem) || 0,
+    advanceFee: Number(legacy?.advance_fee) || 0,
+  };
 }

@@ -8,6 +8,7 @@ import { notFound } from 'next/navigation';
 import { listAppPageShell } from '@/components/shell/app-page-shells';
 import type { Metadata } from 'next';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { loadTourRateContext, rateAmountsFor } from '@/lib/payroll/loadRateLines';
 import { TourOverviewClient } from '@/components/tour-overview/TourOverviewClient';
 import {
   computeBudgetData,
@@ -69,7 +70,7 @@ export default async function TourOverviewPage({
         .eq('workspace_id', workspaceId),
       supabase
         .from('personnel_rates')
-        .select('person_type, show_rate, off_rate, per_diem')
+        .select('id, person_type, per_diem')
         .eq('tour_id', id),
       supabase
         .from('payroll_entries')
@@ -106,7 +107,16 @@ export default async function TourOverviewPage({
   const lineItemsTyped = (lineItems ?? []) as Parameters<typeof computeBudgetData>[1];
   const instances = (instancesRes.data ?? []) as Parameters<typeof computeAdvanceData>[0];
   const settlements = (settlementRes.data ?? []) as Parameters<typeof computeSettlementData>[0];
-  const ratesForPayroll = (personnelRates ?? []) as Parameters<typeof computePayrollData>[1];
+  // Rates SSOT — the overview's rough weekly-cost projection reads each card's
+  // show/off/per-diem amounts from personnel_rate_lines (via rateAmountsFor),
+  // never the legacy columns.
+  const rateCtx = await loadTourRateContext(supabase, id, workspaceId);
+  const ratesForPayroll = ((personnelRates ?? []) as Array<{ id: string; person_type?: string | null; per_diem?: number | null }>).map(
+    (p) => {
+      const a = rateAmountsFor(rateCtx, p.id);
+      return { person_type: p.person_type, showRate: a.showRate, offRate: a.offRate, per_diem: p.per_diem };
+    },
+  ) as Parameters<typeof computePayrollData>[1];
   const payrollEntries = (payrollRows ?? []) as Parameters<typeof computePayrollData>[0];
 
   const showCount = routing.filter((r) => r.day_type === 'show' || r.day_type === 'festival').length;

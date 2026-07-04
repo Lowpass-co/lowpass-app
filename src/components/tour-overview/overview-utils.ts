@@ -274,8 +274,10 @@ interface RawPayrollEntry {
 
 interface RawPersonnelRate {
   person_type?: string | null;
-  show_rate?: number | null;
-  off_rate?: number | null;
+  /** Rates SSOT — the caller supplies these camelCase amounts via rateAmountsFor
+   *  (from personnel_rate_lines), so no legacy column name appears here. */
+  showRate?: number | null;
+  offRate?: number | null;
   per_diem?: number | null;
 }
 
@@ -308,7 +310,7 @@ export function computePayrollData(
   ).length;
 
   const avgWeeklyCost = rates.reduce(
-    (sum, r) => sum + (n(r.show_rate) + n(r.off_rate)) / 2 + n(r.per_diem) * 7,
+    (sum, r) => sum + (n(r.showRate) + n(r.offRate)) / 2 + n(r.per_diem) * 7,
     0
   );
   const projectedTotal = avgWeeklyCost * Math.max(totalWeeks, 1);

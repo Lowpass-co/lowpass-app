@@ -157,7 +157,7 @@ export async function GET(request: Request) {
   // Compute each person's fee + per-diem from personnel_rate_lines via the
   // engine, not the legacy personnel_rates.* columns. computeTotals over the
   // default lines reproduces the old split/day-rate arithmetic exactly (the
-  // day-rate branch was already totalDays×off_rate = the a6 line).
+  // day-rate branch was already totalDays × the flat day line, i.e. a6).
   const rateCtx = await loadTourRateContext(supabase, tourId, wid);
   const dayCounts = { show: showDays, offTravel: offDays, rehearsal: rehearsalDays, active: totalDays };
   let proposedSalaries = 0;
