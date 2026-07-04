@@ -28,7 +28,7 @@ export async function GET(request: Request) {
   if (!tourId) return NextResponse.json({ error: 'tour_id is required' }, { status: 400 });
   const { data, error } = await supabase
     .from('budget_fx_rates')
-    .select('currency, rate_to_tour_currency')
+    .select('currency, rate_to_tour_currency, updated_at')
     .eq('tour_id', tourId)
     .eq('workspace_id', w.workspaceId)
     .order('currency', { ascending: true });

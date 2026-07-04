@@ -94,7 +94,7 @@ export function BudgetSettingsTab({
 /* in the Summary P&L. Unversioned (a conversion       */
 /* assumption, like the overhead %s above).            */
 /* -------------------------------------------------- */
-type FxRate = { currency: string; rate_to_tour_currency: number };
+type FxRate = { currency: string; rate_to_tour_currency: number; updated_at?: string | null };
 
 function FxRatesCard({ tourId, tourCurrency }: { tourId: string; tourCurrency: string }) {
   const { showToast } = useToast();
@@ -204,6 +204,11 @@ function FxRatesCard({ tourId, tourCurrency }: { tourId: string; tourCurrency: s
               <span style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text-secondary)' }}>
                 1 {r.currency} = {r.rate_to_tour_currency} {native}
               </span>
+              {r.updated_at ? (
+                <span style={{ fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text-tertiary)' }}>
+                  updated {new Date(r.updated_at).toLocaleDateString('en-GB')}
+                </span>
+              ) : null}
               <button
                 type="button"
                 aria-label={`Remove ${r.currency}`}

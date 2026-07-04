@@ -52,6 +52,7 @@ import { getBudgetPanelData } from '@/server/budget/getBudgetPanelData';
 import { reconcileDerivedBudgetLines } from '@/server/budget/reconcileDerivedLines';
 import { resolveActiveVersion, getProposedLineMap, getProposedIncomeMap } from '@/server/budget/versions';
 import { loadTourFxRates } from '@/lib/budget/fxRates';
+import { FxMissingRateBanner } from '@/components/budget/FxMissingRateBanner';
 import type { BudgetVersionVm } from '@/components/budget/versioning/versionApi';
 import { logServerError } from '@/lib/log/serverError';
 import type {
@@ -354,6 +355,21 @@ export default async function BudgetTourPage({
     (row) => routingLabelById[(row as { routing_id?: string }).routing_id ?? ''] ?? null,
   );
 
+  // FX unify (Stage 2) — foreign currencies used in the budget that have NO
+  // budget_fx_rates entry convert 1:1 (a flagged fallback). Surface them via a
+  // warning banner rather than silently mis-totalling the P&L.
+  const fxTour = tourCurrency.toUpperCase();
+  const fxUsed = new Set<string>();
+  for (const l of lines) {
+    const c = (l.currency ?? '').toUpperCase();
+    if (c) fxUsed.add(c);
+  }
+  for (const i of incomeRows) {
+    const c = ((i as { currency?: string | null }).currency ?? '').toUpperCase();
+    if (c) fxUsed.add(c);
+  }
+  const fxMissing = [...fxUsed].filter((c) => c && c !== fxTour && fxRates[c] == null).sort();
+
   return (
     /* §B4 — BudgetDensityProvider wraps the whole budget page
        so the tab nav's density toggle + the grid + slide-over
@@ -376,6 +392,11 @@ export default async function BudgetTourPage({
           canApprove={canApprove}
         />
         <BudgetBurnBar lines={lines} tourCurrency={tourCurrency} fxRates={fxRates} />
+        <FxMissingRateBanner
+          missing={fxMissing}
+          tourCurrency={tourCurrency}
+          settingsHref={`/budget/${tourId}?tab=settings`}
+        />
         {/* Phase strip when this tour tracks phases (BUD-18). Phase 4.2 —
             the gate reads the shared track-phases context so the Settings
             toggle animates this strip without a router.refresh. */}
