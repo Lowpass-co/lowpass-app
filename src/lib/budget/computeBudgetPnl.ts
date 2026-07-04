@@ -30,8 +30,7 @@
 
 import { normalizeCommissionPct } from '@/lib/commission-pct';
 import { getEffectiveActual } from '@/lib/budget/transactions';
-import { convertToCurrency } from '@/lib/budget/fx';
-import { toTourCurrency, type FxRateMap } from '@/lib/budget/fxRates';
+import { toTourCurrency, convertToTour, type FxRateMap } from '@/lib/budget/fxRates';
 import { isIncomeRow } from '@/lib/budget/income-rows';
 import type { BudgetLineItem } from '@/types';
 
@@ -160,8 +159,16 @@ export function computeBudgetPnl(input: {
   for (const l of lines) {
     if (isIncomeRow(l)) continue;
     const lcur = (l.currency || currency).toUpperCase();
-    baseProjected += convertToCurrency(num(l.proposed_cost), lcur, currency);
-    baseActual += convertToCurrency(getEffectiveActual(l), lcur, currency);
+    // FX unify (Stage 2) — expenses now convert through the tour's budget_fx_rates
+    // (the same source income uses), NOT the deleted static GBP-pivot table.
+    //   • PROJECTED → the live tour rate.
+    //   • ACTUAL → the rate LOCKED when the line first actualized
+    //     (budget_line_items.locked_fx_rate, migration 234), else the live rate,
+    //     so realised expense never drifts once entered. Missing pair → 1:1
+    //     (flagged upstream for a warning chip; never silent stale math).
+    const lr = num(l.locked_fx_rate);
+    baseProjected += convertToTour(num(l.proposed_cost), lcur, currency, fxRates);
+    baseActual += convertToTour(getEffectiveActual(l), lcur, currency, fxRates, lr > 0 ? lr : null);
   }
 
   // Gross income (post-tax) + merch + pre-tax bases for commissions.

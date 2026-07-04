@@ -546,6 +546,11 @@ export interface BudgetLineItem {
   proposed_cost: number;
   actual_cost: number;
   currency: string | null;
+  /** FX unify · Stage 2 (migration 234) — the tour FX rate LOCKED when this line
+   *  first actualized (1 <line currency> = rate <tour currency>). NULL = not yet
+   *  actualized → the P&L converts the actual at the live tour rate. Projected
+   *  always uses the live rate. */
+  locked_fx_rate?: number | null;
   receipt_id: string | null;
   routing_id: string | null;
   notes: string | null;
