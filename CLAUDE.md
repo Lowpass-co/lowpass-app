@@ -205,13 +205,13 @@ If you ever DO add a new page directly under `src/app/(app)/tours/[id]/**` (whic
 
 ## Active project — Product Split
 
-The current architectural shift is the four-product split (Home / Operations / Budget / Advance). UX01–UX22 are merged. Product Split Phase 0–2 are on `main`. Phase 3 (Budget migration) is on `feat/product-split-phase3` awaiting verify+merge. The Advance visual redesign is on `feat/advance-visual-redesign` awaiting verify+merge. Phase 4 (Operations migration) hasn't been written yet.
+The current architectural shift is the four-product split (Home / Operations / Budget / Advance). UX01–UX22 are merged. Product Split Phase 0–3 **and** the Advance visual redesign are now merged to `main` (verified via `git merge-base --is-ancestor`, 2026-07-03 consolidation). Phase 4 (Operations migration) hasn't been written yet. `main` is the single line of development after the 2026-07-03 consolidation (see `docs/handover/CONSOLIDATION_2026-07-03.md`).
 
 Each product is URL-prefixed:
 
 - `/artists/[id]` — Home (artist-scoped overview)
 - `/operations/[tourId]/*` — Operations (placeholders pending Phase 4)
-- `/budget/[tourId]/*` — Budget (placeholders pending Phase 3 merge)
+- `/budget/[tourId]/*` — Budget (live)
 - `/advance/[tourId]/[routingId]` — Advance (live)
 
 Pre-overhaul UX01–UX22 prompts are in `docs/cursor-prompts/`. Active product-split + fix prompts are in `docs/handover/CC_*.md`. State-of-completion as of 2026-05-01 lives in `docs/handover/AUDIT_2026-05-01.md`.
