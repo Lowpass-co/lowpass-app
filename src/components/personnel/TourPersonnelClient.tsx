@@ -240,10 +240,13 @@ export function TourPersonnelClient({
       {
         id: 'rate',
         header: 'Rate',
-        accessor: (r) => r.show_rate,
+        // Rates SSOT — the effective primary rate: a day-rate card's flat daily
+        // (offRate = a6), else the split Show rate (showRate = a1). From rateAmountsFor.
+        accessor: (r) => (r.rate_type === 'day_rate' ? r.offRate : r.showRate) ?? 0,
         sortable: true,
         align: 'right',
-        cell: (_, r) => `${currency} ${Number(r.show_rate ?? 0).toLocaleString()}`,
+        cell: (_, r) =>
+          `${currency} ${Number((r.rate_type === 'day_rate' ? r.offRate : r.showRate) ?? 0).toLocaleString()}`,
       },
       {
         id: 'email',

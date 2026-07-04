@@ -7,6 +7,7 @@
 import { notFound } from 'next/navigation';
 import { listAppPageShell } from '@/components/shell/app-page-shells';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { loadTourRateContext, rateAmountsFor } from '@/lib/payroll/loadRateLines';
 import { TourPersonnelClient } from '@/components/personnel/TourPersonnelClient';
 import type { Personnel, PersonnelRate } from '@/types';
 
@@ -63,13 +64,21 @@ export default async function TourPersonnelPage({ params }: { params: Promise<{ 
       .order('lp_id', { ascending: true }),
   ]);
 
+  // Rates SSOT — attach each card's camelCase amounts (from personnel_rate_lines)
+  // so the client's Rate column reads the SSOT, not the legacy columns.
+  const rateCtx = await loadTourRateContext(supabase, tourId, profile.workspace_id);
+  const initialRates = ((ratesRes.data ?? []) as PersonnelRate[]).map((r) => {
+    const a = rateAmountsFor(rateCtx, r.id);
+    return { ...r, showRate: a.showRate, offRate: a.offRate, rehearsalRate: a.rehearsalRate, perDiem: a.perDiem, advanceFee: a.advanceFee };
+  });
+
   return listAppPageShell(
     <div className="mx-auto max-w-6xl space-y-6 pb-12">
       <TourPersonnelClient
         tourId={tour.id}
         tourName={tour.name ?? 'Tour'}
         currency={tour.currency ?? 'GBP'}
-        initialRates={(ratesRes.data ?? []) as PersonnelRate[]}
+        initialRates={initialRates}
         initialRoster={(rosterRes.data ?? []) as Personnel[]}
       />
     </div>

@@ -610,6 +610,14 @@ export interface PersonnelRate {
   show_rate: number;
   off_rate: number;
   rehearsal_rate: number;
+  /** Rates SSOT (camelCase) — the individual amounts read from
+   *  personnel_rate_lines, attached by the personnel-rates API (rateAmountsFor).
+   *  Consumers should read these, not the legacy columns above (dropped by 231). */
+  showRate?: number;
+  offRate?: number;
+  rehearsalRate?: number;
+  perDiem?: number;
+  advanceFee?: number;
   per_diem: number;
   advance_fee: number;
   commission: number;
