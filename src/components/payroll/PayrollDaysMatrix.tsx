@@ -28,16 +28,14 @@ const DAY_OPTCOLORS: Record<string, string> = {
 };
 const DAY_OPTLABELS: Record<string, string> = { show: 'Show', off_travel: 'Off / Travel', no_tour: '—' };
 
-/** Build the full rate-bearing person from a personnel_rates row (for totalsFor
- *  + the frozen Total column). */
+/** Build the person row from a personnel_rates row. Rate values are NOT read
+ *  from the card columns — the frozen Total column computes from the SSOT
+ *  amountMap (personTotals) — so only identity + non-gated fields are copied. */
 function toPerson(pr: Record<string, unknown>): PayrollPerson {
   return {
     id: pr.id as string,
     person_name: (pr.person_name as string) ?? '',
     role: (pr.role as string) ?? '',
-    show_rate: Number(pr.show_rate) || 0,
-    off_rate: Number(pr.off_rate) || 0,
-    rehearsal_rate: Number(pr.rehearsal_rate) || 0,
     per_diem: Number(pr.per_diem) || 0,
     advance_fee: Number(pr.advance_fee) || 0,
   };

@@ -38,7 +38,7 @@ export default async function PayrollPage({
       .from('payroll_entries')
       .select(`
         *,
-        personnel_rates(person_name, role, person_type, rate_type, show_rate, off_rate, rehearsal_rate, per_diem, advance_fee, order_index)
+        personnel_rates(person_name, role, person_type, rate_type, per_diem, advance_fee, order_index)
       `)
       .eq('tour_id', tourId)
       .order('week_start'),

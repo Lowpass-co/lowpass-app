@@ -47,7 +47,7 @@ export default async function OperationsTourPayrollPage({ params }: { params: Pr
       .from('payroll_entries')
       .select(`
         *,
-        personnel_rates(person_name, role, person_type, rate_type, show_rate, off_rate, rehearsal_rate, per_diem, advance_fee, order_index)
+        personnel_rates(person_name, role, person_type, rate_type, per_diem, advance_fee, order_index)
       `)
       .eq('tour_id', tourId)
       .order('week_start'),
@@ -98,7 +98,6 @@ export default async function OperationsTourPayrollPage({ params }: { params: Pr
       person_name: (m.person_id ? nameByPersonId.get(m.person_id) : '') || m.role || 'Unknown',
       role: m.role ?? '',
       person_type: 'crew',
-      show_rate: 0,
       order_index: maxOrder + 1 + i,
     }));
     try {

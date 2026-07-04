@@ -13,7 +13,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { getWeekStart } from './payroll-utils';
 import { useToast } from '@/components/ui/Toast';
-import { countDayStatuses, computeTotalFee, computeTotalPerDiem, type RateLike } from '@/lib/payroll/fees';
 
 export const DAY_OPTIONS = [
   { value: 'show', label: 'SHOW DAY' },
@@ -40,9 +39,8 @@ export interface PayrollPerson {
   id: string;
   person_name: string;
   role: string;
-  show_rate: number;
-  off_rate: number;
-  rehearsal_rate: number;
+  /* Rates SSOT — per-week fees are computed from personnel_rate_lines via the
+   *  client amountMap (personTotals), NOT from per-card rate columns. */
   per_diem: number;
   advance_fee: number;
 }
@@ -121,41 +119,5 @@ export function usePayrollGrid(
     [tourId, statusOf, entryByPersonWeek, showToast],
   );
 
-  /** Per-person counts + fee/PD totals from PERSISTED day_statuses (matches the
-   *  budget reconcile + PayrollSummary — not the routing-derived defaults). */
-  const totalsFor = useCallback(
-    (p: PayrollPerson) => {
-      const acc = { show: 0, offTravel: 0, rehearsal: 0, active: 0 };
-      for (const e of entries) {
-        if (e.personnel_id !== p.id) continue;
-        const c = countDayStatuses((e.day_statuses as Record<string, string>) ?? {});
-        acc.show += c.show;
-        acc.offTravel += c.offTravel;
-        acc.rehearsal += c.rehearsal;
-        acc.active += c.active;
-      }
-      // PAY-04: the rate-card advance (personnel_rates.advance_fee — the value
-      // edited in the Rates "Advance" column) is the SINGLE source of truth for
-      // the advance component. The per-week payroll_entries.advance_fee is no
-      // longer summed here (it gets zeroed by saveDayStatus, which dropped the
-      // advance from totals). Matches the budget reconcile + summary routes.
-      const advance = Number(p.advance_fee) || 0;
-      const rate: RateLike = {
-        show_rate: p.show_rate,
-        off_rate: p.off_rate,
-        rehearsal_rate: p.rehearsal_rate,
-        per_diem: p.per_diem,
-      };
-      return {
-        showDays: acc.show,
-        offTravelDays: acc.offTravel,
-        advance,
-        totalFee: computeTotalFee(rate, acc, advance),
-        totalPerDiem: computeTotalPerDiem(rate, acc),
-      };
-    },
-    [entries],
-  );
-
-  return { statusOf, saveDayStatus, totalsFor, entries };
+  return { statusOf, saveDayStatus, entries };
 }

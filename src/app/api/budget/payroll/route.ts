@@ -9,34 +9,10 @@
 
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
-import { countDayStatuses, computeTotalFee, computeTotalPerDiem } from '@/lib/payroll/fees';
+import { countDayStatuses, computeTotals } from '@/lib/payroll/fees';
+import { loadTourRateContext, rateLinesFor } from '@/lib/payroll/loadRateLines';
 
 type DayStatus = 'show' | 'off_travel' | 'rehearsal' | 'no_tour';
-
-/**
- * total_fee splits BY DAY TYPE (OPS-17a — fixed): show_days×show_rate +
- * off/travel_days×off_rate + rehearsal_days×rehearsal_rate + advance_fee.
- * NO show_rate fallback for travel days. Shared with the payroll displays
- * and the budget Salary reconcile via src/lib/payroll/fees.ts so they can
- * never disagree.
- */
-function computeWeekFeeAndPerDiem(
-  dayStatuses: Record<string, DayStatus>,
-  personnel: {
-    rate_type: string;
-    show_rate: number;
-    off_rate: number;
-    rehearsal_rate: number;
-    per_diem: number;
-  },
-  advanceFee: number
-): { total_fee: number; total_per_diem: number } {
-  const counts = countDayStatuses(dayStatuses);
-  return {
-    total_fee: computeTotalFee(personnel, counts, advanceFee),
-    total_per_diem: computeTotalPerDiem(personnel, counts),
-  };
-}
 
 export async function GET(request: Request) {
   const supabase = await createServerSupabaseClient();
@@ -77,7 +53,7 @@ export async function GET(request: Request) {
     .from('payroll_entries')
     .select(`
       *,
-      personnel_rates(person_name, role, person_type, rate_type, show_rate, off_rate, rehearsal_rate, per_diem, advance_fee, commission, order_index)
+      personnel_rates(person_name, role, person_type, rate_type, per_diem, advance_fee, commission, order_index)
     `)
     .eq('workspace_id', profile.workspace_id)
     .eq('tour_id', tourId)
@@ -165,7 +141,7 @@ export async function POST(request: Request) {
 
   const { data: personnel, error: personnelError } = await supabase
     .from('personnel_rates')
-    .select('id, rate_type, show_rate, off_rate, rehearsal_rate, per_diem, advance_fee')
+    .select('id')
     .eq('id', personnel_id)
     .eq('workspace_id', profile.workspace_id)
     .eq('tour_id', tour_id)
@@ -177,11 +153,16 @@ export async function POST(request: Request) {
 
   const dayStatuses = (body.day_statuses ?? {}) as Record<string, DayStatus>;
   const advanceFee = Number(body.advance_fee) || 0;
-  const { total_fee, total_per_diem } = computeWeekFeeAndPerDiem(
-    dayStatuses,
-    personnel,
-    advanceFee
-  );
+  // Rates SSOT — fee/per-diem from personnel_rate_lines via computeTotals. This
+  // week's advance comes from the request body (a per-week override), so the
+  // card's flat_once advance line is dropped from the base and the body advance
+  // is added once. Reproduces the legacy per-day-type math for split + day_rate.
+  const counts = countDayStatuses(dayStatuses);
+  const rateCtx = await loadTourRateContext(supabase, tour_id, profile.workspace_id as string);
+  const lines = rateLinesFor(rateCtx, personnel.id as string);
+  const base = computeTotals(lines.filter((l) => l.basis !== 'flat_once'), counts);
+  const total_fee = base.totalFee + advanceFee;
+  const total_per_diem = base.totalPerDiem;
 
   const payload = {
     tour_id,
