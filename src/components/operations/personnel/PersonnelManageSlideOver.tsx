@@ -73,7 +73,9 @@ function memberToState(m: PersonnelListItem): EditState {
     startsOn: m.starts_on ?? '',
     endsOn: m.ends_on ?? '',
     status: m.status,
-    rateAmount: m.rate_amount != null ? String(m.rate_amount) : '',
+    // Rates SSOT — the retired tour_personnel daily-rate column is no longer
+    // read (pay reads personnel_rate_lines). This field is vestigial UI state.
+    rateAmount: '',
     rateCurrency: m.rate_currency ?? 'GBP',
     ratePeriod: m.rate_period ?? 'day',
   };
@@ -145,7 +147,7 @@ function PersonnelManageEditor({
 }: EditorProps) {
   /* useAutoSave owns state. On every set() call the hook
      debounces 600ms and fires onSave with the latest state.
-     onSave validates rate_amount as a number; if it fails we
+     onSave validates the daily-rate field as a number; if it fails we
      surface a transient validationError without throwing — the
      hook keeps trying on the next field change. Throwing would
      flip status to 'error' and require the user to dismiss the
@@ -164,7 +166,7 @@ function PersonnelManageEditor({
     onSave: async (s) => {
       // #18 SSOT — rates are NOT edited here anymore. Payroll's Rates grid owns
       // rate editing (personnel_rates); the dangling tour_personnel simple rate
-      // (rate_amount/currency/period) is no longer written. This slide persists
+      // (daily-rate/currency/period) is no longer written. This slide persists
       // only the assignment meta (role / tag / dates / status).
       setValidationError(null);
       const res = await fetch(
@@ -515,7 +517,7 @@ function PersonnelManageEditor({
           </fieldset>
 
           {/* #18 SSOT — the dangling simple "Rate" field (tour_personnel
-              rate_amount/currency/period) is removed: payroll IGNORED it, and it
+              daily-rate/currency/period) is removed: payroll IGNORED it, and it
               was the confusing third rate surface. Rates are edited ONCE, in the
               payroll Rates grid; PersonnelRatesSection below shows them read-only. */}
 
@@ -538,7 +540,7 @@ function PersonnelManageEditor({
           {/* §P2 — payroll rates (show / travel / per-diem +
               admin-only internal "Lowpass" rate). Targets
               personnel_rates, separate from the single
-              rate_amount field above which lives on
+              daily-rate field above which lives on
               tour_personnel. Self-contained: own fetch +
               per-field auto-save. Currency hint from the
               assignment's rate currency (falls back to GBP). */}

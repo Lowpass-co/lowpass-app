@@ -3,7 +3,6 @@ import type { Person, TourPerson } from '@/lib/types/person';
 export type TourPersonnelPatch = {
   role?: string;
   employment_type?: 'staff' | 'freelance' | 'crew' | 'band' | 'mgmt' | null;
-  rate_amount?: number | null;
   rate_currency?: string | null;
   rate_period?: 'day' | 'week' | 'flat' | 'hour' | null;
   starts_on?: string | null;
@@ -38,7 +37,6 @@ type TourPersonRow = {
   person_id: string;
   role: string;
   employment_type: string | null;
-  rate_amount: number | null;
   rate_currency: string | null;
   rate_period: string | null;
   starts_on: string | null;
@@ -56,7 +54,9 @@ function mapTourPerson(row: TourPersonRow): TourPerson {
     personId: row.person_id,
     role: row.role,
     employmentType: row.employment_type,
-    rateAmount: row.rate_amount,
+    // Rates SSOT — tour_personnel.rate_amount is retired (dropped by 231); pay
+    // reads personnel_rate_lines. This vestigial field is no longer sourced.
+    rateAmount: null,
     rateCurrency: row.rate_currency ?? 'GBP',
     ratePeriod: row.rate_period,
     startsOn: row.starts_on,
@@ -144,7 +144,6 @@ export async function updateTourPersonnel(id: string, patch: TourPersonnelPatch)
   const body: Record<string, unknown> = {};
   if (patch.role !== undefined) body.role = patch.role;
   if (patch.employment_type !== undefined) body.employment_type = patch.employment_type;
-  if (patch.rate_amount !== undefined) body.rate_amount = patch.rate_amount;
   if (patch.rate_currency !== undefined) body.rate_currency = patch.rate_currency;
   if (patch.rate_period !== undefined) body.rate_period = patch.rate_period;
   if (patch.starts_on !== undefined) body.starts_on = patch.starts_on;

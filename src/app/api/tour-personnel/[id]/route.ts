@@ -49,7 +49,7 @@ export async function PATCH(request: Request, { params }: Params) {
     }
     patch.employment_type = v;
   }
-  // Stage 1 — tour_personnel.rate_amount is retired (SSOT = personnel_rate_lines;
+  // Stage 1 — the tour_personnel daily-rate column is retired (SSOT = personnel_rate_lines;
   // migration 231 drops the column). No longer written here.
   if ('rate_currency' in body) {
     const v = body.rate_currency;
@@ -94,7 +94,7 @@ export async function PATCH(request: Request, { params }: Params) {
     .update(patch)
     .eq('id', id)
     .select(
-      'id, workspace_id, tour_id, person_id, role, employment_type, rate_amount, rate_currency, rate_period, starts_on, ends_on, created_at, updated_at, tours(name)',
+      'id, workspace_id, tour_id, person_id, role, employment_type, rate_currency, rate_period, starts_on, ends_on, created_at, updated_at, tours(name)',
     )
     .single();
 
@@ -118,7 +118,6 @@ export async function PATCH(request: Request, { params }: Params) {
     person_id: data.person_id,
     role: data.role,
     employment_type: data.employment_type,
-    rate_amount: data.rate_amount,
     rate_currency: data.rate_currency,
     rate_period: data.rate_period,
     starts_on: data.starts_on,

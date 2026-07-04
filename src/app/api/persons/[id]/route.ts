@@ -14,7 +14,7 @@ export async function GET(_: Request, { params }: Params) {
 
   const { data: tourLinks } = await supabase
     .from('tour_personnel')
-    .select('id, workspace_id, tour_id, person_id, role, employment_type, rate_amount, rate_currency, rate_period, starts_on, ends_on, created_at, updated_at, tours(name)')
+    .select('id, workspace_id, tour_id, person_id, role, employment_type, rate_currency, rate_period, starts_on, ends_on, created_at, updated_at, tours(name)')
     .eq('person_id', id)
     .order('created_at', { ascending: false });
 

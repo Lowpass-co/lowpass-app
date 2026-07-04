@@ -210,7 +210,6 @@ export function AddPersonnelSlideOver({
           starts_on: tourStartDate ?? null,
           ends_on: tourEndDate ?? null,
           status: 'confirmed',
-          rate_amount: null,
           rate_currency: null,
           rate_period: null,
         }),
@@ -253,8 +252,8 @@ export function AddPersonnelSlideOver({
           starts_on: startsOn || null,
           ends_on: endsOn || null,
           status,
-          // Rates SSOT — no rate_amount; the card + lines seed from the person's
-          // standard_rates server-side. Currency/period are assignment metadata.
+          // Rates SSOT — no daily-rate column; the card + lines seed from the
+          // person's standard_rates server-side. Currency/period are assignment meta.
           rate_currency: rateCurrency || null,
           rate_period: ratePeriod || null,
         }),

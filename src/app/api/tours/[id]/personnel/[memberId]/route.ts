@@ -41,7 +41,6 @@ interface PatchPayload {
   /** Sprint 12 §9c.0 — structured role discriminator. */
   role_tag?: RoleTag;
   employment_type?: string | null;
-  rate_amount?: number | null;
   rate_currency?: string | null;
   rate_period?: string | null;
   starts_on?: string | null;
@@ -98,7 +97,7 @@ export async function PATCH(
   if (body.employment_type === null || typeof body.employment_type === 'string') {
     patch.employment_type = (body.employment_type as string | null) ?? null;
   }
-  // Stage 1 — tour_personnel.rate_amount is retired (my-schedule reads the SSOT
+  // Stage 1 — the tour_personnel daily-rate column is retired (my-schedule reads the SSOT
   // via personnel_rate_lines; migration 231 drops the column). No longer written
   // here — rate entry's single home is the Payroll grid → writeRates.
   if (body.rate_currency === null || typeof body.rate_currency === 'string') {

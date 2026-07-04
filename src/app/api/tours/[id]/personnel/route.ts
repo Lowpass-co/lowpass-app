@@ -21,7 +21,7 @@ import {
 } from '@/lib/permissions/server';
 // Rates SSOT (Part A) — seed the per-tour rate card + its SSOT rate lines from
 // the person's library defaults (personnel.standard_rates), NOT a hand-typed
-// rate_amount. See RATES_SSOT_DISCOVERY_2026-07-03 §3.
+// daily rate. See RATES_SSOT_DISCOVERY_2026-07-03 §3.
 import { DEFAULT_RATE_TYPE_IDS } from '@/lib/payroll/rateLines';
 
 export const dynamic = 'force-dynamic';
@@ -53,7 +53,6 @@ interface PersonnelListItem {
    *  the shape in src/lib/personnel/types.ts. */
   role_tag: 'tm' | 'tm2' | 'pm' | 'foh' | 'mons' | 'ld' | 'backline' | 'management' | 'other';
   employment_type: string | null;
-  rate_amount: number | null;
   rate_currency: string | null;
   rate_period: string | null;
   starts_on: string | null;
@@ -98,7 +97,7 @@ export async function GET(
     .select(
       /* Sprint 12 §9c.0 — role_tag added to the select so the
          PersonnelListItem shape (and downstream UI) sees it. */
-      'id, workspace_id, person_id, role, role_tag, employment_type, rate_amount, rate_currency, rate_period, starts_on, ends_on, status',
+      'id, workspace_id, person_id, role, role_tag, employment_type, rate_currency, rate_period, starts_on, ends_on, status',
     )
     .eq('tour_id', tourId)
     .order('role', { ascending: true });
@@ -146,7 +145,6 @@ export async function GET(
     role: string;
     role_tag: PersonnelListItem['role_tag'] | null;
     employment_type: string | null;
-    rate_amount: number | null;
     rate_currency: string | null;
     rate_period: string | null;
     starts_on: string | null;
@@ -168,7 +166,6 @@ export async function GET(
          resilient). */
       role_tag: r.role_tag ?? 'other',
       employment_type: r.employment_type,
-      rate_amount: r.rate_amount,
       rate_currency: r.rate_currency,
       rate_period: r.rate_period,
       starts_on: r.starts_on,
@@ -214,7 +211,6 @@ export async function POST(
        working. */
     role_tag?: unknown;
     employment_type?: unknown;
-    rate_amount?: unknown;
     rate_currency?: unknown;
     rate_period?: unknown;
     starts_on?: unknown;
@@ -281,7 +277,7 @@ export async function POST(
     role,
     role_tag: roleTag,
     employment_type: typeof body.employment_type === 'string' ? body.employment_type : null,
-    // Rates SSOT — rate_amount is retired (my-schedule reads personnel_rate_lines;
+    // Rates SSOT — the daily-rate column is retired (my-schedule reads personnel_rate_lines;
     // migration 231 drops the column). Currency/period stay as assignment metadata.
     rate_currency: typeof body.rate_currency === 'string' ? body.rate_currency : 'GBP',
     rate_period: typeof body.rate_period === 'string' ? body.rate_period : null,
@@ -367,9 +363,9 @@ export async function POST(
           person_type: 'crew',
           person_id: personId,
           tour_personnel_id: inserted.id,
-          show_rate: showSeed,
-          off_rate: offSeed,
-          rehearsal_rate: travelSeed,
+          // Rates SSOT — the card's amounts live in personnel_rate_lines (seeded
+          // below), not the legacy mirror columns; only per_diem (not gated) and
+          // identity are set here.
           per_diem: pdSeed,
         })
         .select('*')
