@@ -11,11 +11,24 @@
 --    RATES_SSOT_DISCOVERY_2026-07-03.md §4):
 --    • query (b) = 0  — every personnel_rates card has explicit lines
 --      (migration 230 applied; add-person seeds lines going forward).
+--      ── STILL ADAM'S PRODUCTION SOAK CHECK (data-level; not code).
 --    • query (a) reconciled — my-schedule crew pay reads the SSOT; the
 --      divergent-crew set moved to the correct line-derived figure and was
 --      signed off (before/after in the Part A done report).
+--      ── STILL ADAM'S PRODUCTION SOAK CHECK (data-level; not code).
 --    • grep proves zero live readers of personnel_rates.{show,off,rehearsal_rate,
 --      per_diem,advance_fee} and tour_personnel.rate_amount remain.
+--      ── ✅ MET as of Stage 1-B (2026-07-04). Every app reader/writer now goes
+--         through the SSOT: personnel_rate_lines via loadTourRateContext +
+--         rateLinesFor / rateAmountsFor + computeTotals, and writes through the
+--         single writeRates module. The amended grep gate is clean — the only
+--         remaining hits are in writeRates.ts, the SSOT lib (fees.ts /
+--         rateLines.ts / loadRateLines.ts), the payroll tests + harness, the
+--         type defs (types/index.ts, lib/types/payroll.ts, lib/personnel/types.ts),
+--         and the personnel-rates request-DTO handler (camelCase-normalized at the
+--         top). tour_personnel.rate_amount reads are fully retired (no live reader).
+--         So the CODE precondition is satisfied; only the two data-level soak
+--         checks above gate the actual DROP. HOLD remains until Adam signs those off.
 --
 -- HARD RULE 3: this drop is a SEPARATE migration from the 230 backfill — never
 -- drop a column in the same migration that backfills from it.
