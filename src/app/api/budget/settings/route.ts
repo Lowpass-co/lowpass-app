@@ -100,7 +100,6 @@ export async function POST(request: Request) {
     tour_id,
     currency_home,
     currency_tour,
-    exchange_rate,
     insurance_pct,
     contingency_pct,
     accountancy_pct,
@@ -145,8 +144,8 @@ export async function POST(request: Request) {
   };
   if (currency_home !== undefined) payload.currency_home = currency_home;
   if (currency_tour !== undefined) payload.currency_tour = currency_tour;
-  if (exchange_rate !== undefined) payload.exchange_rate = exchange_rate;
-  if (exchange_rate !== undefined) payload.exchange_rate_updated_at = new Date().toISOString();
+  // FX unify (Stage 2) — exchange_rate (store #3) is retired; per-currency FX
+  // lives in budget_fx_rates (migration 236 drops the column).
   if (insurance_pct !== undefined) payload.insurance_pct = insurance_pct;
   if (contingency_pct !== undefined) payload.contingency_pct = contingency_pct;
   if (accountancy_pct !== undefined) payload.accountancy_pct = accountancy_pct;

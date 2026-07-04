@@ -1,0 +1,44 @@
+-- ============================================
+-- LOWPASS — Collapse FX store #3: drop budget_settings.exchange_rate (FX unify · Stage 2)
+-- Migration 236
+-- ============================================
+--
+-- budget_settings.exchange_rate (+ exchange_rate_updated_at) was a single legacy
+-- SCALAR per tour — the third, disconnected FX store. The canonical FX truth is
+-- budget_fx_rates (per-currency, 1 <currency> = rate <tour currency>), which the
+-- P&L, grids, and exports now all read (Stage 2). The exchange-rate route now
+-- fetches live → upserts budget_fx_rates; budget/settings no longer writes the
+-- scalar. So this column is dead.
+--
+-- ⚠ DATA MOVEMENT — HELD (needs Adam's confirmation; CC could NOT inspect prod):
+--   The scalar carries no currency label and no direction, so moving it into the
+--   per-currency budget_fx_rates is ambiguous:
+--     • which currency? (presumably budget_settings.currency_home)
+--     • which direction? "1 home = X tour" (rate = exchange_rate) OR
+--       "1 tour = X home" (rate = 1 / exchange_rate)?
+--   If any budget_settings.exchange_rate values are LIVE and worth keeping, run:
+--       SELECT tour_id, currency_home, currency_tour, exchange_rate
+--         FROM public.budget_settings WHERE exchange_rate IS NOT NULL;
+--   then UNCOMMENT the backfill below after confirming the direction (flip to
+--   1.0 / bs.exchange_rate if it is "1 tour = X home"). It never overwrites an
+--   explicit budget_fx_rates row (ON CONFLICT DO NOTHING).
+--
+-- -- INSERT INTO public.budget_fx_rates
+-- --   (tour_id, workspace_id, currency, rate_to_tour_currency)
+-- -- SELECT bs.tour_id, bs.workspace_id, UPPER(bs.currency_home), bs.exchange_rate
+-- --   FROM public.budget_settings bs
+-- --  WHERE bs.exchange_rate IS NOT NULL
+-- --    AND bs.currency_home IS NOT NULL
+-- --    AND UPPER(bs.currency_home) <> UPPER(COALESCE(bs.currency_tour, 'GBP'))
+-- -- ON CONFLICT (tour_id, currency) DO NOTHING;
+--
+-- Idempotent. Down-block at the end.
+
+ALTER TABLE public.budget_settings DROP COLUMN IF EXISTS exchange_rate;
+ALTER TABLE public.budget_settings DROP COLUMN IF EXISTS exchange_rate_updated_at;
+
+-- ============================================
+-- DOWN MIGRATION (manual — uncomment to roll back)
+-- ============================================
+-- ALTER TABLE public.budget_settings ADD COLUMN exchange_rate NUMERIC;
+-- ALTER TABLE public.budget_settings ADD COLUMN exchange_rate_updated_at TIMESTAMPTZ;

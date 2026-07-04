@@ -430,8 +430,8 @@ export interface BudgetSettings {
   workspace_id: string;
   currency_home: string;
   currency_tour: string;
-  exchange_rate: number | null;
-  exchange_rate_updated_at: string | null;
+  /* FX unify (Stage 2) — exchange_rate + exchange_rate_updated_at (store #3) are
+     retired; per-currency FX lives in budget_fx_rates (migration 236 drops them). */
   insurance_pct: number;
   contingency_pct: number;
   accountancy_pct: number;
