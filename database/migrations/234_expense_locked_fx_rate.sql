@@ -1,0 +1,42 @@
+-- ============================================
+-- LOWPASS — Expense per-line LOCKED FX rate (FX unify · Stage 2)
+-- Migration 234
+-- ============================================
+--
+-- The EXPENSE-side mirror of budget_income.locked_fx_rate (migration 225).
+--
+-- DETERMINATION (per the CC_MASTER_SPRINT_FINISH migration gate — "determine the
+-- correct table from how transactions attach to budget_line_items"):
+--   The lock lives on budget_line_items, NOT budget_line_item_transactions.
+--   Transactions attach to a line item via line_item_id (migration 104) and roll
+--   UP into that line's actual (the sum of a line's transactions overrides its
+--   actual_cost). The P&L converts each line item's actual as ONE figure in the
+--   line's single native `currency`, so the FX rate is captured at the LINE-ITEM
+--   level the moment the line first actualizes (first transaction inserted OR
+--   actual_cost set). Locking per-transaction would fragment one line's conversion
+--   across rows and would not match the per-row P&L model.
+--
+--   • budget_line_items.locked_fx_rate — 1 <line currency> = rate <tour currency>,
+--     captured at first actualization (lock-on-actual, using the STORED tour rate
+--     from budget_fx_rates — deterministic, never a silent live fetch). NULL =
+--     not yet locked → the P&L uses the live tour rate. A tour-currency /
+--     rate-less line locks 1:1 (never 0).
+--
+-- ACTUALS-side conversion assumption (like budget_income.locked_fx_rate + the
+-- unversioned budget_fx_rates) → NOT mirrored into budget_version_lines.
+--
+-- NOTE (Stage 2 follow-up, out of scope for this column add): the sprint plan also
+-- collapses budget_settings.exchange_rate into budget_fx_rates. That data movement
+-- (if budget_settings.exchange_rate holds live values) is a Stage-2 investigation
+-- against production data — it is deliberately NOT bundled here so this migration
+-- stays a clean, additive column add.
+--
+-- Additive, nullable, idempotent. Down-block at the end.
+
+ALTER TABLE public.budget_line_items
+  ADD COLUMN IF NOT EXISTS locked_fx_rate NUMERIC;
+
+-- ============================================
+-- DOWN MIGRATION (manual — uncomment to roll back)
+-- ============================================
+-- ALTER TABLE public.budget_line_items DROP COLUMN IF EXISTS locked_fx_rate;
