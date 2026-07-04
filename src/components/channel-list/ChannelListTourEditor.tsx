@@ -117,7 +117,13 @@ export function ChannelListTourEditor({
         onOverride={() => router.push(`/tours/${tourId}/rider-packs/${packId}`)}
         onMoveUp={() => {}}
         onMoveDown={() => {}}
-        onStructureChange={() => router.refresh()}
+        /* §CL-NORELOAD — the editor now reconciles structural changes locally
+           (optimistic rows + a client-side refetch of stage boxes / sub-snakes /
+           columns), so no server refetch is needed here. The previous
+           router.refresh() re-ran this server page on every column toggle and
+           every keystroke-triggered I/O save, which read as a full page reload
+           and interrupted in-progress edits. A no-op is correct now. */
+        onStructureChange={() => {}}
       />
     </div>
   );

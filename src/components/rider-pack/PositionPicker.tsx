@@ -38,18 +38,32 @@ export default function PositionPicker({
   getOccupant,
 }: PositionPickerProps) {
   const [open, setOpen] = useState(false);
+  /* Type-to-search parity with the mic combobox: a filter input at the top of
+     the open menu narrows the assignable slots by their formatted label
+     (e.g. "SB1-7") or by box/loom name. */
+  const [filter, setFilter] = useState('');
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const filterRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) {
+      setFilter('');
+      return;
+    }
     const onDoc = (e: MouseEvent) => {
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
         setOpen(false);
       }
     };
     document.addEventListener('mousedown', onDoc);
-    return () => document.removeEventListener('mousedown', onDoc);
+    const raf = requestAnimationFrame(() => filterRef.current?.focus());
+    return () => {
+      document.removeEventListener('mousedown', onDoc);
+      cancelAnimationFrame(raf);
+    };
   }, [open]);
+
+  const needle = filter.trim().toLowerCase();
 
   const selectedEntity = useMemo(
     () => entities.find((e) => e.id === entityId) ?? null,
@@ -91,9 +105,52 @@ export default function PositionPicker({
           className="absolute left-0 z-40 mt-0.5 max-h-[320px] min-w-[14rem] overflow-y-auto rounded-md border border-lp-border bg-lp-surface py-1 shadow-lg"
           role="listbox"
         >
+          <div className="px-2 pb-1 pt-0.5">
+            <input
+              ref={filterRef}
+              type="text"
+              value={filter}
+              onChange={(e) => setFilter(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Escape') {
+                  e.stopPropagation();
+                  setOpen(false);
+                  return;
+                }
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  /* Pick the first free slot in the filtered view. */
+                  for (const ent of entities) {
+                    const cap = Math.max(1, Math.min(64, ent.capacity));
+                    const labelHit = !!needle && ent.label.toLowerCase().includes(needle);
+                    for (let pos = 1; pos <= cap; pos += 1) {
+                      const isThisRow = ent.id === entityId && pos === position;
+                      const blocked = (usedPositions[ent.id]?.has(pos) ?? false) && !isThisRow;
+                      const hit =
+                        !needle || labelHit || formatLabel(ent.label, pos).toLowerCase().includes(needle);
+                      if (hit && !blocked) {
+                        onChange(ent.id, pos);
+                        setOpen(false);
+                        return;
+                      }
+                    }
+                  }
+                }
+              }}
+              placeholder="Filter…"
+              aria-label="Filter I/O slots"
+              className="w-full rounded border border-lp-border bg-lp-bg px-1.5 py-1 text-[11px] text-lp-text outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-lp-orange)]"
+            />
+          </div>
           {entities.map((ent) => {
             const cap = Math.max(1, Math.min(64, ent.capacity));
             const usedN = usedCountFor(ent.id);
+            const labelHit = !!needle && ent.label.toLowerCase().includes(needle);
+            const shownPositions = Array.from({ length: cap }, (_, i) => i + 1).filter(
+              (pos) => !needle || labelHit || formatLabel(ent.label, pos).toLowerCase().includes(needle),
+            );
+            /* Hide a box/loom entirely when filtering and nothing in it matches. */
+            if (needle && !labelHit && shownPositions.length === 0) return null;
             return (
               <div key={ent.id} className="border-b border-lp-border px-2 py-1.5 last:border-b-0">
                 <div className="mb-1 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wide text-lp-text-secondary">
@@ -104,7 +161,7 @@ export default function PositionPicker({
                   </span>
                 </div>
                 <div className="space-y-0.5 pl-3">
-                  {Array.from({ length: cap }, (_, i) => i + 1).map((pos) => {
+                  {shownPositions.map((pos) => {
                     const isThisRow = ent.id === entityId && pos === position;
                     const blockedByOther = (usedPositions[ent.id]?.has(pos) ?? false) && !isThisRow;
                     const occ = blockedByOther && getOccupant ? getOccupant(ent.id, pos) : null;

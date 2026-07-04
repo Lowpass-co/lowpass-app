@@ -230,6 +230,22 @@ export function BrandedSelect({
           if (e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowDown') {
             e.preventDefault();
             setOpen(true);
+          } else if (
+            filterable &&
+            !open &&
+            e.key.length === 1 &&
+            /\S/.test(e.key) &&
+            !e.ctrlKey &&
+            !e.metaKey &&
+            !e.altKey
+          ) {
+            /* Type-to-search parity with the mic combobox: a printable key on
+               the CLOSED trigger opens the menu and seeds the filter with that
+               char, so the operator types straight into the cell to narrow the
+               list (rather than open-then-type). Only when `filterable`. */
+            e.preventDefault();
+            setFilter(e.key);
+            setOpen(true);
           }
         }}
         aria-haspopup="listbox"

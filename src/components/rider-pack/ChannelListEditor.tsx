@@ -107,8 +107,17 @@ export default function ChannelListEditor({
   const { showToast } = useToast();
   const [titleDraft, setTitleDraft] = useState(section.title);
   const [rows, setRows] = useState<ChannelListRow[]>(section.rows ?? []);
-  const subSnakes = section.subSnakes ?? [];
-  const stageBoxes = section.stageBoxes ?? [];
+  /* §CL-NORELOAD — structure (sub-snakes / stage boxes / enabled columns) is
+     held LOCALLY and reconciled client-side, so a structural edit never needs a
+     Next server refetch (router.refresh). That refetch was the source of the
+     "typing in the I/O customiser reloads the page" + "add-column reloads"
+     bugs: every structural mutation awaited onStructureChange → router.refresh,
+     which re-ran the server component, swapped the section prop, and reset
+     in-progress drafts. Seeded from props; re-seeded when the section prop
+     identity changes (parent refresh / section switch). */
+  const [subSnakes, setSubSnakes] = useState<SubSnake[]>(section.subSnakes ?? []);
+  const [stageBoxes, setStageBoxes] = useState<StageBox[]>(section.stageBoxes ?? []);
+  const [metadata, setMetadata] = useState(section.metadata ?? null);
   const [subDialog, setSubDialog] = useState(false);
   const [stageDialog, setStageDialog] = useState(false);
   const [multiAddOpen, setMultiAddOpen] = useState(false);
@@ -128,6 +137,17 @@ export default function ChannelListEditor({
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setRows(section.rows ?? []);
   }, [section.id, section.rows]);
+
+  /* §CL-NORELOAD — re-seed local structure whenever the parent passes fresh
+     section props (section switch, or a rider-side refresh). On the tour
+     surface these props are stable, so this only runs on mount / switch. */
+  useEffect(() => {
+    /* eslint-disable react-hooks/set-state-in-effect */
+    setSubSnakes(section.subSnakes ?? []);
+    setStageBoxes(section.stageBoxes ?? []);
+    setMetadata(section.metadata ?? null);
+    /* eslint-enable react-hooks/set-state-in-effect */
+  }, [section.id, section.subSnakes, section.stageBoxes, section.metadata]);
 
   useEffect(() => {
     const supabase = createClient();
@@ -253,6 +273,31 @@ export default function ChannelListEditor({
     [],
   );
 
+  /* §CL-NORELOAD — reconcile the grid with the server WITHOUT navigating.
+     Reads rows + stage boxes + sub-snakes client-side and swaps local state.
+     This replaces router.refresh() for the structural paths (I/O dialogs, the
+     stage-box patch modal, sub-snake edits) whose results touch data the grid
+     renders but that the mutating child doesn't push back optimistically. */
+  const refetchLocal = useCallback(async () => {
+    const supabase = createClient();
+    const [freshRows, boxes, snakes] = await Promise.all([
+      ch.listRows(supabase, section.id),
+      ch.listStageBoxes(supabase, section.id),
+      ch.listSubSnakes(supabase, section.id),
+    ]);
+    setRows(freshRows);
+    setStageBoxes(boxes);
+    setSubSnakes(snakes);
+  }, [section.id]);
+
+  /* Structural-change notifier handed to the I/O dialogs + inventory patch.
+     Does a local, non-navigating refetch, then still calls the parent hook
+     (a no-op on the tour surface; the rider PackEditor keeps its own sync). */
+  const notifyStructureChange = useCallback(async () => {
+    await refetchLocal();
+    await onStructureChange();
+  }, [refetchLocal, onStructureChange]);
+
   /* §CL-FIX-6 — enabled column set for this section. Derived
      from section.metadata.enabled_columns, or lazily from the
      server-loaded rows when absent (existing tours look
@@ -260,8 +305,8 @@ export default function ChannelListEditor({
      server snapshot) — NOT the local `rows` state — so columns
      don't flicker as the operator types. */
   const enabledKeys = useMemo(
-    () => getEnabledColumnKeys(section.metadata ?? null, section.rows ?? []),
-    [section.metadata, section.rows],
+    () => getEnabledColumnKeys(metadata ?? null, section.rows ?? []),
+    [metadata, section.rows],
   );
   const show = useMemo(() => new Set<ChannelListColumnKey>(enabledKeys), [enabledKeys]);
   const channelGridStyle = useMemo<CSSProperties>(
@@ -300,15 +345,17 @@ export default function ChannelListEditor({
       if (enable) current.add(key);
       else current.delete(key);
       const next = OPTIONAL_COLUMNS.filter((c) => current.has(c.key)).map((c) => c.key);
-      const nextMeta = { ...(section.metadata ?? {}), enabled_columns: next };
+      const nextMeta = { ...(metadata ?? {}), enabled_columns: next };
       try {
         await updateSection(pack.id, section.id, { metadata: nextMeta });
-        await onStructureChange();
+        /* §CL-NORELOAD — reflect the new column set locally (instant, no
+           refetch). The popover stays open; no page reload. */
+        setMetadata(nextMeta);
       } catch (err) {
         showToast(err instanceof Error ? err.message : 'Could not update columns', 'error');
       }
     },
-    [enabledKeys, section.metadata, pack.id, section.id, onStructureChange, showToast],
+    [enabledKeys, metadata, pack.id, section.id, showToast],
   );
 
   return (
@@ -647,7 +694,7 @@ export default function ChannelListEditor({
             rows={rows}
             stageBoxes={stageBoxes}
             subSnakes={subSnakes}
-            onStructureChange={onStructureChange}
+            onStructureChange={notifyStructureChange}
           />
         </div>
       </div>
@@ -656,21 +703,21 @@ export default function ChannelListEditor({
         open={subDialog}
         onClose={() => {
           setSubDialog(false);
-          void onStructureChange();
+          void notifyStructureChange();
         }}
         packId={pack.id}
         sectionId={section.id}
-        onChanged={onStructureChange}
+        onChanged={notifyStructureChange}
       />
       <StageBoxDialog
         open={stageDialog}
         onClose={() => {
           setStageDialog(false);
-          void onStructureChange();
+          void notifyStructureChange();
         }}
         packId={pack.id}
         sectionId={section.id}
-        onChanged={onStructureChange}
+        onChanged={notifyStructureChange}
       />
       <AddManyChannelsModal
         key={multiAddOpen ? 'multi-open' : 'multi-closed'}
@@ -1106,6 +1153,7 @@ function ChannelBlock({
               ariaLabel="Provider"
               minWidth={0}
               size="sm"
+              filterable
               className="w-full min-w-0"
               triggerClassName="min-h-8 w-full"
             />

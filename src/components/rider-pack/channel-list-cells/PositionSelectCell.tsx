@@ -48,6 +48,7 @@ export function PositionSelectCell({
       ariaLabel={ariaLabel}
       minWidth={0}
       size="sm"
+      filterable
       className="w-full min-w-0"
       triggerClassName="min-h-8 w-full"
     />
