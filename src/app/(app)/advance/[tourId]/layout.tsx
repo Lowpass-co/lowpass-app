@@ -55,7 +55,7 @@ export default async function AdvanceTourLayout({
       : Promise.resolve({ data: null }),
     supabase
       .from('routing')
-      .select('id, date')
+      .select('id, date, day_type')
       .eq('tour_id', tourId),
   ]);
 
@@ -78,10 +78,18 @@ export default async function AdvanceTourLayout({
   const routingRows = (routingRes.data ?? []) as Array<{
     id: string;
     date: string | null;
+    day_type: string | null;
   }>;
   const datedRoutingIds = routingRows
     .filter((r) => r.date)
     .map((r) => r.id);
+  // UX-walk §A.3 — routing rows are DAYS, not shows. The header stat must
+  // count actual show/festival days as "shows" and dated rows as "days".
+  const showDayCount = routingRows.filter((r) => {
+    if (!r.date) return false;
+    const types = (r.day_type ?? '').split(',').map((s) => s.trim());
+    return types.includes('show') || types.includes('festival');
+  }).length;
 
   const { data: advanceData } =
     datedRoutingIds.length > 0
@@ -127,7 +135,8 @@ export default async function AdvanceTourLayout({
           endDate={tourRow.end_date}
           product="advance"
           stats={{
-            showCount: datedRoutingIds.length,
+            showCount: showDayCount,
+            dayCount: datedRoutingIds.length,
             advanceCompletePercent,
             advancePendingCount: pendingCount,
           }}

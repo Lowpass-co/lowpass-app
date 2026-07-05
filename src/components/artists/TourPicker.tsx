@@ -9,7 +9,8 @@
 
    - no tour selected → a hero callout + a grid of selectable tour cards
      (status, dates, show count, last activity). Picking one selects it
-     and opens its Budget — and lights up the rail.
+     and opens its last-used product (see openTour) — and unlocks the
+     product bar above.
    - a tour selected → a compact "Active tour" banner with per-product
      quick links + a "Change tour" affordance that re-opens the picker.
 
@@ -164,7 +165,7 @@ export function TourPicker({ tours }: { tours: HomeTourSummary[] }) {
         style={{ fontSize: 14, color: 'var(--lp-text-secondary)' }}
       >
         Operations, Budget, and Advance all work on a specific tour. Choose
-        one to open it — the left rail unlocks once you do.
+        one to unlock Operations, Budget and Advance in the bar above.
       </p>
 
       <div

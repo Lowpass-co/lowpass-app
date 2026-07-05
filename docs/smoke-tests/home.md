@@ -88,6 +88,27 @@ to the normal picker / auto-skip).
 
 **Last verified**:
 
+## UX-walk mechanical fixes (§A items 1–7)
+
+- **UXW-01** (needs-live) Ops summary "Upcoming shows" dates match the Routing
+  grid + Advance list exactly (no one-day-early shift) — date-only strings now
+  parse local, not UTC (`parseRoutingDate`).
+- **UXW-02** (needs-live) "Next show" everywhere is the first **Show Day**, not
+  the first routing row: workspace artist card NEXT chip skips day-off / travel /
+  rehearsal rows (ops SHOWS stat already filtered).
+- **UXW-03** (needs-live) Advance header reads "N shows · M days" (show/festival
+  count + total dated routing days) — routing rows are never called "shows".
+- **UXW-04** (needs-live) Workspace + artist activity feeds no longer show an
+  all-"—" Actor column (dropped; the data only existed for a subset of rows).
+- **UXW-05** (needs-live) Artist-home "Pick a tour" panel copy no longer mentions
+  the retired left rail ("…unlock Operations, Budget and Advance in the bar above").
+- **UXW-06** (needs-live) Workspace stat reads "N ON TOUR NOW" (was "ACTIVE
+  TOURS", which collided with the "Active tour" selection banner); shows "N IN
+  PLANNING" when nothing is live.
+- **UXW-07** (needs-live) Currency whiplash: the workspace "£X COMMITTED"
+  mixed-currency aggregate is **deleted**; the artist "Budget committed" stat now
+  states its display currency ("· GBP").
+
 ## Known broken
 
 (None yet.)

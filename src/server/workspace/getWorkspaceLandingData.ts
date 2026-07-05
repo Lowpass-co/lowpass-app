@@ -68,6 +68,9 @@ export interface WorkspaceLandingData {
   stats: {
     artistCount: number;
     activeTourCount: number;
+    /** Tours in planning (status = 'planning'). UX-walk §A.6 — shown when
+     *  nothing is on tour right now so the stat isn't a bare "0". */
+    planningTourCount: number;
     showsThisMonth: number;
     budgetCommitted: number;
     budgetCurrency: string;
@@ -167,8 +170,11 @@ export async function getWorkspaceLandingData(
       .eq('workspace_id', workspaceId)
       .order('start_date', { ascending: false }),
     supabase
+      // UX-walk §A.2 — "Next show" must be the first SHOW DAY, not the first
+      // routing row (which may be a day off / travel / rehearsal).
       .from('routing')
       .select('tour_id, date, venue_name')
+      .in('day_type', ['show', 'festival'])
       .gte('date', new Date().toISOString().slice(0, 10))
       .order('date', { ascending: true }),
     supabase
@@ -367,6 +373,7 @@ export async function getWorkspaceLandingData(
 
   // Stats.
   const activeTourCount = tourRows.filter((t) => t.status === 'active').length;
+  const planningTourCount = tourRows.filter((t) => t.status === 'planning').length;
   const showsThisMonth = monthRoutingRes.count ?? 0;
   const budgetCommitted = budgetLines.reduce(
     (sum, l) => sum + (Number(l.proposed_cost) || 0),
@@ -627,6 +634,7 @@ export async function getWorkspaceLandingData(
     stats: {
       artistCount: artistRows.length,
       activeTourCount,
+      planningTourCount,
       showsThisMonth,
       budgetCommitted,
       budgetCurrency: workspaceRow?.currency ?? 'GBP',

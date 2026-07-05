@@ -29,21 +29,8 @@ import { ArtistHomeStagger } from '@/components/artists/ArtistHomeStagger';
 import { WorkspaceNewArtistButton } from '@/components/artists/WorkspaceNewArtistButton';
 import { getWorkspaceLandingData } from '@/server/workspace/getWorkspaceLandingData';
 
-const CURRENCY_SYMBOL: Record<string, string> = {
-  GBP: '£',
-  USD: '$',
-  EUR: '€',
-  AUD: 'A$',
-  CAD: 'C$',
-};
-
-function abbreviateCurrency(value: number, currency: string): string {
-  const sym = CURRENCY_SYMBOL[currency.toUpperCase()] ?? `${currency} `;
-  const abs = Math.abs(value);
-  if (abs >= 1_000_000) return `${sym}${(value / 1_000_000).toFixed(1)}M`;
-  if (abs >= 1_000) return `${sym}${Math.round(value / 1_000)}K`;
-  return `${sym}${Math.round(value)}`;
-}
+// (UX-walk §A.7) — the abbreviateCurrency / CURRENCY_SYMBOL helpers were only
+// used by the deleted workspace "COMMITTED" mixed-currency stat; removed with it.
 
 export default async function ArtistsLandingPage() {
   const supabase = await createServerSupabaseClient();
@@ -115,10 +102,25 @@ export default async function ArtistsLandingPage() {
               >
                 ·
               </span>
-              <span className="lp-mono" style={{ color: 'var(--lp-text)' }}>
-                {data.stats.activeTourCount}
-              </span>{' '}
-              ACTIVE {data.stats.activeTourCount === 1 ? 'TOUR' : 'TOURS'}
+              {/* UX-walk §A.6 — "ACTIVE TOURS" collided with the "Active tour"
+                  selection banner. This stat is in-progress-today → "ON TOUR
+                  NOW"; when nothing is live, show the planning pipeline instead
+                  of a bare "0 ON TOUR NOW". */}
+              {data.stats.activeTourCount > 0 ? (
+                <>
+                  <span className="lp-mono" style={{ color: 'var(--lp-text)' }}>
+                    {data.stats.activeTourCount}
+                  </span>{' '}
+                  ON TOUR NOW
+                </>
+              ) : (
+                <>
+                  <span className="lp-mono" style={{ color: 'var(--lp-text)' }}>
+                    {data.stats.planningTourCount}
+                  </span>{' '}
+                  IN PLANNING
+                </>
+              )}
               <span
                 aria-hidden
                 style={{
@@ -132,22 +134,11 @@ export default async function ArtistsLandingPage() {
                 {data.stats.showsThisMonth}
               </span>{' '}
               SHOWS THIS MONTH
-              <span
-                aria-hidden
-                style={{
-                  margin: '0 var(--lp-space-2)',
-                  color: 'var(--lp-text-tertiary)',
-                }}
-              >
-                ·
-              </span>
-              <span className="lp-mono" style={{ color: 'var(--lp-text)' }}>
-                {abbreviateCurrency(
-                  data.stats.budgetCommitted,
-                  data.stats.budgetCurrency,
-                )}
-              </span>{' '}
-              COMMITTED
+              {/* UX-walk §A.7 — the workspace "£175K COMMITTED" stat naively
+                  summed budget_line_items.proposed_cost across every tour +
+                  currency, so it mixed £/$/€ into a meaningless total and drove
+                  the cross-tier currency whiplash. It is slated for removal by
+                  the design pass, so it is deleted here rather than fixed. */}
             </div>
           </section>
 

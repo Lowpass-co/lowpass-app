@@ -82,6 +82,9 @@ export interface TourHeaderProps {
    *  label row below the tour name. */
   stats: {
     showCount: number | null;
+    /** Total dated routing days — rendered as "· N DAYS" after the show count
+     *  so routing rows are never mislabelled "shows" (UX-walk §A.3). */
+    dayCount?: number | null;
     // budget:
     budgetTotal?: number | null;
     budgetCurrency?: string | null;
@@ -112,6 +115,10 @@ export function TourHeader({
   const parts: string[] = [];
   if (stats.showCount != null && stats.showCount >= 0) {
     parts.push(`${stats.showCount} ${stats.showCount === 1 ? 'SHOW' : 'SHOWS'}`);
+  }
+  // UX-walk §A.3 — routing rows are days, not shows: show the day count too.
+  if (stats.dayCount != null && stats.dayCount > 0 && stats.dayCount !== stats.showCount) {
+    parts.push(`${stats.dayCount} ${stats.dayCount === 1 ? 'DAY' : 'DAYS'}`);
   }
   if (dateRange) parts.push(dateRange);
 

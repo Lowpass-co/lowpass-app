@@ -206,7 +206,9 @@ export default async function ArtistHomePage({
               value={String(stats.personnelActive)}
             />
             <StatTile
-              label="Budget committed"
+              // UX-walk §A.7 — state the display currency so the amount reads as
+              // an intentional single-currency figure, not currency whiplash.
+              label={`Budget committed · ${(stats.budgetCurrency ?? 'GBP').toUpperCase()}`}
               value={abbrevCurrency(stats.budgetCommitted, stats.budgetCurrency)}
             />
           </section>
@@ -611,8 +613,10 @@ function RecentActivityTable({ rows }: { rows: HomeActivityRow[] }) {
                 borderBottom: '1px solid var(--lp-border-subtle)',
               }}
             >
+              {/* UX-walk §A.4 — Actor column dropped: only budget rows resolve
+                  an actor (advance / tour-metadata rows have none), so the
+                  column was mostly "—" and read as broken. */}
               <Th>Product</Th>
-              <Th>Actor</Th>
               <Th>Tour</Th>
               <Th>Summary</Th>
               <Th align="right">When</Th>
@@ -622,7 +626,7 @@ function RecentActivityTable({ rows }: { rows: HomeActivityRow[] }) {
             {rows.length === 0 ? (
               <tr>
                 <td
-                  colSpan={5}
+                  colSpan={4}
                   className="px-3 py-6 text-center"
                   style={{ color: 'var(--lp-text-tertiary)' }}
                 >
@@ -639,11 +643,6 @@ function RecentActivityTable({ rows }: { rows: HomeActivityRow[] }) {
                 >
                   <Td>
                     <ActivityProductBadge product={row.product} />
-                  </Td>
-                  <Td>
-                    <span style={{ color: 'var(--lp-text)' }}>
-                      {row.actor || '—'}
-                    </span>
                   </Td>
                   <Td>
                     <span

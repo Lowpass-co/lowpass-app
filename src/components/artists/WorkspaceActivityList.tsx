@@ -77,8 +77,10 @@ export function WorkspaceActivityList({
               borderBottom: '1px solid var(--lp-border-subtle)',
             }}
           >
+            {/* UX-walk §A.4 — Actor column dropped: only advance rows carry an
+                actor (tours / budget / deal-memo sources have none), so the
+                column rendered an all-"—" placeholder that read as broken. */}
             <Th>Product</Th>
-            <Th>Actor</Th>
             <Th>Action</Th>
             <Th>Entity</Th>
             <Th align="right">When</Th>
@@ -117,11 +119,6 @@ export function WorkspaceActivityList({
               >
                 <Td>
                   <ProductBadge product={product} />
-                </Td>
-                <Td>
-                  <span style={{ color: 'var(--lp-text)' }}>
-                    {row.actor || '—'}
-                  </span>
                 </Td>
                 <Td>
                   <span

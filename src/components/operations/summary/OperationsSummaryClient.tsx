@@ -17,6 +17,7 @@
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { parseRoutingDate } from '@/lib/utils';
 import {
   AlertTriangle,
   Download,
@@ -110,7 +111,9 @@ function relativeTime(iso: string | null): string {
 
 function formatShowDate(iso: string | null): string {
   if (!iso) return '—';
-  const d = new Date(iso);
+  // UX-walk §A.1 — date-only strings must parse as LOCAL (noon), not UTC
+  // midnight, or every row renders a day early in negative-offset timezones.
+  const d = parseRoutingDate(iso);
   return d.toLocaleDateString(undefined, {
     month: 'short',
     day: 'numeric',
@@ -166,7 +169,8 @@ export function OperationsSummaryClient({
   const tourWindow = useMemo(() => {
     if (!tourStartDate || !tourEndDate) return '—';
     const fmt = (iso: string) => {
-      const d = new Date(iso);
+      // UX-walk §A.1 — parse date-only as local, not UTC (off-by-one guard).
+      const d = parseRoutingDate(iso);
       return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
     };
     return `${fmt(tourStartDate)}–${fmt(tourEndDate)}`;
