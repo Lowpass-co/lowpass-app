@@ -70,12 +70,14 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // If user exists and on auth route, redirect to dashboard.
-  // Public routes (e.g. /r/[token]) are fine to visit while signed in —
-  // do NOT redirect authenticated users away from them.
+  // If user exists and on an auth route, redirect to the workspace landing.
+  // Nav & entry fixpack item 3 — /dashboard is retired (folded into /), so
+  // sending here double-redirected through a dead URL; go straight to /artists
+  // (which may single-artist-auto-skip). Public routes (e.g. /r/[token]) are
+  // fine to visit while signed in — do NOT redirect authenticated users away.
   if (user && isAuthRoute) {
     const url = request.nextUrl.clone();
-    url.pathname = '/dashboard';
+    url.pathname = '/artists';
     return NextResponse.redirect(url);
   }
 

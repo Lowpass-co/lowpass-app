@@ -75,7 +75,10 @@ function LoginPageInner() {
       }
     }, 4500);
     setTimeout(() => {
-      router.push(nextPath ?? '/dashboard');
+      // Nav & entry fixpack item 3 — land directly on /artists (the workspace
+      // landing) instead of the retired /dashboard, which double-redirected.
+      // /artists itself may single-artist-auto-skip (Salvage #5). ?next= wins.
+      router.push(nextPath ?? '/artists');
       router.refresh();
     }, 420);
   };
