@@ -9,8 +9,9 @@
    open mid-flight.
 
    Route group `(home)` keeps the layout scoped to the artist
-   landing only — /artists/[id]/edit is wrapped by listAppPageShell
-   (a different shell archetype) and must not inherit ProductShell.
+   landing only — /artists/[id]/edit sits outside this group and
+   wraps its own <ProductShell active="home"> per-page (Nav & entry
+   fixpack item 4), so it does not inherit this layout.
    ============================================ */
 
 import type { ReactNode } from 'react';
