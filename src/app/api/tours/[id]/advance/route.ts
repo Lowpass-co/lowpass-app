@@ -183,7 +183,10 @@ export async function POST(
       .insert({
         tour_id: tourId,
         routing_id: null,
-        name: template_label,
+        // template_label is the SSOT for a template's user-facing name; every
+        // reader resolves `template_label ?? name`. The `name` column keeps its
+        // 'Default Advance' default here rather than duplicating the label
+        // (Salvage #3 — single write).
         template_label,
         is_template: true,
         is_default: false,

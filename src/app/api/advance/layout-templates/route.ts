@@ -139,7 +139,9 @@ export async function POST(request: Request) {
     .insert({
       tour_id,
       routing_id: null,
-      name: template_label,
+      // template_label is the SSOT for the template name (readers resolve
+      // `template_label ?? name`); `name` keeps its default rather than
+      // duplicating the label (Salvage #3 — single write).
       template_label,
       is_template: true,
       is_default: false,
