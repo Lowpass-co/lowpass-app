@@ -331,6 +331,19 @@ export async function POST(request: Request) {
     updated_at: new Date().toISOString(),
   };
 
+  // Stage 5 — actuals provenance. An explicit manual edit to any ACTUAL field
+  // marks the row 'manual', so the settlement cascade won't clobber it (it only
+  // writes NULL / 'settlement' rows). Proposed-only edits — which re-merge the
+  // existing actuals unchanged — and the seedActualGuarantee pre-fill do NOT
+  // count: we key off the body carrying the field, not the merged value.
+  const MANUAL_ACTUAL_FIELDS = [
+    'actual_guarantee', 'actual_overage', 'actual_merch', 'actual_vip',
+    'actual_tickets_sold', 'actual_gross', 'actual_capacity',
+  ];
+  if (MANUAL_ACTUAL_FIELDS.some((k) => (body as Record<string, unknown>)[k] !== undefined)) {
+    payload.actuals_source = 'manual';
+  }
+
   const { data, error } = await supabase
     .from('budget_income')
     .upsert(payload, { onConflict: 'routing_id' })

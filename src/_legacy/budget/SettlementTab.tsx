@@ -47,6 +47,23 @@ type SettlementRow = {
 
 type Row = { routing_id: string; routing: RoutingInfo; settlement: SettlementRow | null };
 
+// Stage 5 — the settlement→income actuals cascade skips a show whose income
+// actuals were entered manually (actuals_source='manual'), returning the fields
+// where the settlement value differs. This drives the per-row overwrite prompt.
+type ActualsConflict = {
+  routingId: string;
+  payload: Partial<SettlementRow>;
+  conflicts: Array<{ field: string; manual: number | null; settlement: number | null }>;
+};
+const CONFLICT_FIELD_LABELS: Record<string, string> = {
+  actual_guarantee: 'Guarantee',
+  actual_overage: 'Overage',
+  actual_merch: 'Merch',
+  actual_deductions: 'Deductions',
+  actual_tickets_sold: 'Tickets sold',
+  actual_gross: 'Gross',
+};
+
 export function SettlementTab({ tourId, currency = 'GBP' }: { tourId: string; currency?: string }) {
   const [loading, setLoading] = useState(true);
   const [rows, setRows] = useState<Row[]>([]);
@@ -55,6 +72,7 @@ export function SettlementTab({ tourId, currency = 'GBP' }: { tourId: string; cu
   const [form, setForm] = useState<SettlementRow | null>(null);
   const [saving, setSaving] = useState(false);
   const [uploadingField, setUploadingField] = useState<string | null>(null);
+  const [conflict, setConflict] = useState<ActualsConflict | null>(null);
   const cc = (currency ?? 'GBP').trim().toUpperCase() || 'GBP';
   const currencyInputPad = cc.length > 3 ? 'pl-12' : 'pl-10';
 
@@ -88,18 +106,39 @@ export function SettlementTab({ tourId, currency = 'GBP' }: { tourId: string; cu
 
   useEffect(() => load(), [load]);
 
-  const saveSettlement = async (routingId: string, payload: Partial<SettlementRow>) => {
+  const saveSettlement = async (
+    routingId: string,
+    payload: Partial<SettlementRow>,
+    opts?: { overwriteManual?: boolean },
+  ) => {
     setSaving(true);
     try {
       const res = await fetch('/api/budget/settlement', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ routing_id: routingId, ...payload }),
+        body: JSON.stringify({
+          routing_id: routingId,
+          ...payload,
+          ...(opts?.overwriteManual ? { overwrite_manual_actuals: true } : {}),
+        }),
       });
       if (!res.ok) throw new Error('Save failed');
+      // Stage 5 — the settlement row itself always saves; the response flags a
+      // manual-actuals conflict when the income cascade was skipped. Surface it
+      // as a per-row overwrite prompt (unless we already forced the overwrite).
+      const data = await res.json().catch(() => null);
+      const info = data?.actuals_conflict as
+        | { routing_id: string; conflicts: ActualsConflict['conflicts'] }
+        | null
+        | undefined;
       setExpandedId(null);
       setForm(null);
       load();
+      if (!opts?.overwriteManual && info && Array.isArray(info.conflicts) && info.conflicts.length > 0) {
+        setConflict({ routingId, payload, conflicts: info.conflicts });
+      } else {
+        setConflict(null);
+      }
     } catch (e) {
       setError((e as Error)?.message ?? 'Failed to save');
     } finally {
@@ -332,6 +371,69 @@ export function SettlementTab({ tourId, currency = 'GBP' }: { tourId: string; cu
             <div className="mt-6 flex justify-end gap-2">
               <button type="button" onClick={() => setExpandedId(null)} className="rounded-lg border border-lp-border px-4 py-2 text-sm font-medium text-lp-text hover:bg-lp-bg-tertiary">Cancel</button>
               <button type="button" onClick={() => saveSettlement(expandedId, form)} disabled={saving} className="rounded-lg bg-lp-orange px-4 py-2 text-sm font-medium text-white hover:bg-lp-orange/90 disabled:opacity-50">{saving ? 'Saving…' : 'Save'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Stage 5 — manual-actuals conflict prompt. The settlement saved, but
+          this show's income actuals were entered by hand, so the cascade left
+          them untouched. Let the user explicitly overwrite with the settlement
+          figures (sets actuals_source back to 'settlement'). */}
+      {conflict && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          className="fixed inset-0 z-[var(--lp-z-command-palette)] flex items-center justify-center p-4"
+          style={{ background: 'color-mix(in srgb, var(--lp-bg-deep) 60%, transparent)' }}
+          onClick={() => setConflict(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md rounded-xl border border-lp-border bg-lp-surface p-5 shadow-lg"
+          >
+            <h3 className="text-base font-bold text-lp-text">Income actuals were entered manually</h3>
+            <p className="mt-2 text-[13px] text-lp-text-secondary">
+              This show already has hand-entered income actuals, so the settlement did not
+              overwrite them. Overwrite with the settlement figures?
+            </p>
+            <ul className="mt-3 space-y-1">
+              {conflict.conflicts.map((c) => (
+                <li key={c.field} className="flex items-center justify-between text-[13px] text-lp-text">
+                  <span className="font-semibold">{CONFLICT_FIELD_LABELS[c.field] ?? c.field}</span>
+                  <span className="text-lp-text-tertiary">
+                    manual{' '}
+                    <span className="text-lp-text">
+                      <SpreadsheetCurrencyAmount amount={c.manual ?? 0} currency={cc} />
+                    </span>
+                    {' → '}settlement{' '}
+                    <span className="text-lp-text">
+                      <SpreadsheetCurrencyAmount amount={c.settlement ?? 0} currency={cc} />
+                    </span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setConflict(null)}
+                className="rounded-lg border border-lp-border px-4 py-2 text-sm font-medium text-lp-text hover:bg-lp-bg-tertiary"
+              >
+                Keep manual
+              </button>
+              <button
+                type="button"
+                disabled={saving}
+                onClick={() => {
+                  const c = conflict;
+                  setConflict(null);
+                  void saveSettlement(c.routingId, c.payload, { overwriteManual: true });
+                }}
+                className="rounded-lg bg-lp-orange px-4 py-2 text-sm font-medium text-white hover:bg-lp-orange/90 disabled:opacity-50"
+              >
+                Overwrite with settlement
+              </button>
             </div>
           </div>
         </div>

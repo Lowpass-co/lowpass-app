@@ -11,6 +11,7 @@
 
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { resolveActualsCascade } from '@/lib/budget/actualsProvenance';
 
 function dayOfNet(
   guarantee: number | null | undefined,
@@ -149,6 +150,10 @@ export async function POST(request: Request) {
     reconciled_tickets_sold?: number | null;
     day_of_gross?: number | null;
     reconciled_gross?: number | null;
+    // Stage 5 — when true, force the actuals cascade to overwrite a row whose
+    // actuals_source is 'manual' (set via the settlement UI's per-row conflict
+    // "overwrite" confirm). Absent/false = respect the manual provenance.
+    overwrite_manual_actuals?: boolean;
   };
   try {
     body = await request.json();
@@ -310,23 +315,70 @@ export async function POST(request: Request) {
   // actual_vip omission + the locked_fx_rate write-when-resolved pattern below.
   // On conflict, only the provided columns are updated; on a fresh row the
   // omitted ones default to NULL (nothing to preserve).
-  const incomePayload: Record<string, unknown> = {
-    routing_id,
-    workspace_id: profile.workspace_id,
-    updated_at: now,
-  };
-  if (actualGuarantee != null) incomePayload.actual_guarantee = actualGuarantee;
-  if (actualOverage != null) incomePayload.actual_overage = actualOverage;
-  if (actualMerch != null) incomePayload.actual_merch = actualMerch;
-  if (actualDeductions != null) incomePayload.actual_deductions = actualDeductions;
-  // #24 — real attendance + gross (informational; never feeds income_gross).
-  if (actualTicketsSold != null) incomePayload.actual_tickets_sold = actualTicketsSold;
-  if (actualGross != null) incomePayload.actual_gross = actualGross;
-  // Only write locked_fx_rate when we resolved one — never clobber an existing
-  // lock with null on a settlement edit that carries no actuals.
-  if (lockedFxRate != null) incomePayload.locked_fx_rate = lockedFxRate;
+  // Stage 5 — actuals provenance gate. The cascade writes ONLY rows whose
+  // actuals_source is NULL or 'settlement'. A 'manual' row (someone typed its
+  // actuals into the grid) is SKIPPED and its differing fields returned as a
+  // conflict list so the settlement UI can offer a per-row explicit overwrite
+  // (which re-POSTs with overwrite_manual_actuals=true). Existing invariant —
+  // settlement never null-stomps — is preserved: we still omit any figure the
+  // settlement doesn't carry.
+  const overwriteManual = body.overwrite_manual_actuals === true;
+  const { data: existingIncomeRow } = await supabase
+    .from('budget_income')
+    .select('actuals_source, actual_guarantee, actual_overage, actual_merch, actual_deductions, actual_tickets_sold, actual_gross')
+    .eq('routing_id', routing_id)
+    .maybeSingle();
+  const existingRow = (existingIncomeRow ?? {}) as Record<string, number | null | string>;
 
-  await supabase.from('budget_income').upsert(incomePayload, { onConflict: 'routing_id' });
+  const { skip: skipCascade, conflicts, writeSource } = resolveActualsCascade({
+    existingSource: (existingRow.actuals_source as string | null) ?? null,
+    existingActuals: {
+      actual_guarantee: existingRow.actual_guarantee as number | null,
+      actual_overage: existingRow.actual_overage as number | null,
+      actual_merch: existingRow.actual_merch as number | null,
+      actual_deductions: existingRow.actual_deductions as number | null,
+      actual_tickets_sold: existingRow.actual_tickets_sold as number | null,
+      actual_gross: existingRow.actual_gross as number | null,
+    },
+    settlementActuals: {
+      actual_guarantee: actualGuarantee,
+      actual_overage: actualOverage,
+      actual_merch: actualMerch,
+      actual_deductions: actualDeductions,
+      actual_tickets_sold: actualTicketsSold,
+      actual_gross: actualGross,
+    },
+    hasActuals,
+    overwriteManual,
+  });
 
-  return NextResponse.json(settlement);
+  if (!skipCascade) {
+    const incomePayload: Record<string, unknown> = {
+      routing_id,
+      workspace_id: profile.workspace_id,
+      updated_at: now,
+    };
+    if (actualGuarantee != null) incomePayload.actual_guarantee = actualGuarantee;
+    if (actualOverage != null) incomePayload.actual_overage = actualOverage;
+    if (actualMerch != null) incomePayload.actual_merch = actualMerch;
+    if (actualDeductions != null) incomePayload.actual_deductions = actualDeductions;
+    // #24 — real attendance + gross (informational; never feeds income_gross).
+    if (actualTicketsSold != null) incomePayload.actual_tickets_sold = actualTicketsSold;
+    if (actualGross != null) incomePayload.actual_gross = actualGross;
+    // Only write locked_fx_rate when we resolved one — never clobber an existing
+    // lock with null on a settlement edit that carries no actuals.
+    if (lockedFxRate != null) incomePayload.locked_fx_rate = lockedFxRate;
+    // Stamp provenance whenever we actually write settlement-derived actuals —
+    // flips a NULL row (and a manual row being overwritten) to 'settlement'.
+    if (writeSource) incomePayload.actuals_source = writeSource;
+
+    await supabase.from('budget_income').upsert(incomePayload, { onConflict: 'routing_id' });
+  }
+
+  return NextResponse.json({
+    ...settlement,
+    // Non-null only when the cascade was skipped because the income row is
+    // manually-owned; the UI prompts + re-POSTs with overwrite_manual_actuals.
+    actuals_conflict: skipCascade ? { routing_id, conflicts } : null,
+  });
 }

@@ -1821,3 +1821,21 @@ figure + red ≈ note when display ≠ tour currency).
   a template to a fresh tour → payroll reconcile attaches derived salary lines to
   the existing "Salaries" section — no second "Salary" section. Migration 232
   collapses existing duplicate pairs on tours that currently show two.
+
+## Income actuals provenance (Stage 5 — migration 235)
+
+Scripted proof (no DB): `node --experimental-strip-types
+src/lib/budget/actualsProvenance.harness.ts` → "18 checks passed, 0 failed".
+
+- **INC-02** (needs-live) Manual actual is protected: in Budget → Income, set a
+  show's actual guarantee by hand (grid) → its `actuals_source` becomes `manual`.
+  Then save a settlement for that show with a DIFFERENT guarantee → the income
+  actual is UNCHANGED and the Settlement UI shows a conflict prompt
+  (manual → settlement per field).
+- **INC-03** (needs-live) Overwrite path: on that prompt, click "Overwrite with
+  settlement" → the income actuals update to the settlement figures and
+  `actuals_source` flips back to `settlement`. "Keep manual" leaves them untouched.
+- **INC-04** (needs-live) Untouched / settlement rows are unaffected: a show with
+  NO manual actuals (source NULL) takes the settlement figures directly, no prompt;
+  re-settling a settlement-sourced row re-writes with no prompt. Existing invariant
+  preserved — settlement never null-stomps a figure it doesn't carry (INT-04).
