@@ -169,6 +169,6 @@ function formatRoutingLabel(r: NonNullable<PacketManifest['routing']>): string {
         month: 'short',
         year: 'numeric',
       });
-  const where = [r.venue_name, r.city].filter(Boolean).join(', ');
+  const where = [r.venue, r.city].filter(Boolean).join(', ');
   return where ? `${dateLabel} — ${where}` : dateLabel;
 }

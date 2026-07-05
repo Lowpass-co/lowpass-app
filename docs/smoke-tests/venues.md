@@ -123,6 +123,31 @@ canonical edit does NOT change that row.
 
 **Last verified**:
 
+#### VEN-10 — Exports resolve live/frozen (documents that leave the building)
+
+**Do**: Edit a canonical venue on `/venues` (change its name/address). Then, for
+an **upcoming** show linked to that venue, regenerate each export that carries a
+venue: routing export (list/calendar), payroll export with "venue per day",
+budget P&L export (per-show income detail), and the advance packet (PDF +
+public share link). Then check a **past/frozen** show linked to the same venue.
+
+**Expect**: The **upcoming** show's exports show the EDITED venue (resolved from
+canonical). The **past/frozen** show's exports show the SAVED SNAPSHOT — the edit
+does NOT rewrite history (the bug this closes: a past show linked to a
+later-renamed canonical row used to export the current name). No export writes to
+the DB — the freeze write stays in the routing GET; exports resolve read-only
+(the public packet uses the service client, so it resolves too).
+
+Every export venue value now flows through `resolveVenue()` — the ad-hoc
+`canon?.name ?? r.venue_name` frozen-unaware fallbacks are gone
+(`src/lib/export/{routing,payroll,budget}-data.ts`,
+`src/lib/advance-packet/manifest.ts`). Scripted proof (the exact resolver the
+export loaders call): `node --experimental-strip-types
+src/lib/venues/resolveVenue.harness.ts` → "18 checks passed" (case 1
+upcoming→canonical, case 2 past→snapshot).
+
+**Last verified**:
+
 ## Known broken
 
 (None yet.)

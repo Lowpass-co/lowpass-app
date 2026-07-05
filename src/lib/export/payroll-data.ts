@@ -25,6 +25,7 @@ import { resolveArtistLogoUrl } from '@/lib/artists/imageUrl';
 import { countDayStatuses, computeTotals, type DayCounts } from '@/lib/payroll/fees';
 import { loadTourRateContext, rateLinesFor, rateAmountsFor, type TourRateContext } from '@/lib/payroll/loadRateLines';
 import type { DateRange } from '@/lib/export/template-config';
+import { resolveVenue, type RoutingVenueSource } from '@/lib/venues/resolveVenue';
 
 /** A worked day with its location (Part E — the statement's "where we were" list). */
 export interface PayrollDayRow {
@@ -164,13 +165,15 @@ export async function loadPayrollExportData(
   // Per-day venue map (Part E — "where we were") — only when requested.
   const venueByDate = new Map<string, { city: string | null; venue: string | null }>();
   if (opts?.venuePerDay) {
+    // Venue SSOT — resolve live-vs-frozen (PURE READ; freeze stays in routing GET).
+    // A past show keeps its snapshot venue; only upcoming rows track canonical.
     const { data: rt } = await supabase
       .from('routing')
-      .select('date, city, venue_name, canonical_venues(name, city)')
+      .select('date, city, country, address, venue_name, venue_capacity, venue_frozen_at, canonical_venue_id, canonical:canonical_venues(id, name, address, city, country, capacity)')
       .eq('tour_id', tourId);
-    for (const r of (rt ?? []) as Array<{ date: string; city: string | null; venue_name: string | null; canonical_venues?: { name?: string | null; city?: string | null } | Array<{ name?: string | null; city?: string | null }> | null }>) {
-      const canon = Array.isArray(r.canonical_venues) ? r.canonical_venues[0] : r.canonical_venues;
-      venueByDate.set(r.date, { city: (canon?.city ?? r.city) || null, venue: (canon?.name ?? r.venue_name) || null });
+    for (const r of (rt ?? []) as Array<RoutingVenueSource & { date: string }>) {
+      const v = resolveVenue(r);
+      venueByDate.set(r.date, { city: v.city, venue: v.name });
     }
   }
   const rangeActive = !!(range && (range.from || range.to));

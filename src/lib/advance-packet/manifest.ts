@@ -22,6 +22,7 @@
    ============================================ */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { resolveVenue, type RoutingVenueSource } from '@/lib/venues/resolveVenue';
 
 export interface PacketDoc {
   kind: 'rider' | 'channel_list' | 'rental_job';
@@ -47,7 +48,9 @@ export interface PacketManifest {
     id: string;
     date: string;
     day_type: string;
-    venue_name?: string | null;
+    /** Venue SSOT — resolved DISPLAY value (live→canonical, past/frozen→snapshot),
+     *  stamped by getPacketManifest via resolveVenue. Consumers render this as-is. */
+    venue?: string | null;
     city?: string | null;
   } | null;
   docs: PacketDoc[];
@@ -82,19 +85,20 @@ export async function getPacketManifest(
 
   let routing: PacketManifest['routing'] = null;
   if (routingId) {
+    // Venue SSOT — join canonical + discriminators, resolve live-vs-frozen, and
+    // stamp the resolved DISPLAY value. PURE READ (this is the seam feeding the
+    // packet PDF route + PacketView + PublicPacketView) — no freeze write; the
+    // public route's service client + the authed client both read canonical.
     const { data: r } = await supabase
       .from('routing')
-      .select('id, date, day_type, venue_name, city')
+      .select('id, date, day_type, city, country, address, venue_name, venue_capacity, venue_frozen_at, canonical_venue_id, canonical:canonical_venues(id, name, address, city, country, capacity)')
       .eq('id', routingId)
       .eq('tour_id', tourId)
-      .maybeSingle<{
-        id: string;
-        date: string;
-        day_type: string;
-        venue_name: string | null;
-        city: string | null;
-      }>();
-    if (r) routing = r;
+      .maybeSingle<RoutingVenueSource & { id: string; date: string; day_type: string }>();
+    if (r) {
+      const v = resolveVenue(r);
+      routing = { id: r.id, date: r.date, day_type: r.day_type, venue: v.name, city: v.city };
+    }
   }
 
   /* Riders + channel lists. rider_packs.kind discriminates

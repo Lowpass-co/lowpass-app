@@ -3,8 +3,10 @@
 
    Mirrors the routing surface's data (the `routing` table — one row per tour day,
    migration 001 + 214 canonical venue link). Every day is included (show AND
-   travel/off/press/etc. — D7); the day_type distinguishes them. Venue/city prefer
-   the canonical_venues join, falling back to the denormalised routing columns.
+   travel/off/press/etc. — D7); the day_type distinguishes them. Venue/city/address
+   are resolved through resolveVenue (Venue SSOT): a live show reads the canonical
+   row, a past/frozen show reads its routing.venue_* snapshot — so an export never
+   rewrites a past show's venue when its canonical row is later renamed.
 
    Optional per-day advance summary (config toggle, OFF by default — D7): a
    BEST-EFFORT read of advance_instances (status + how many fields are filled in the
@@ -18,6 +20,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { resolveArtistLogoUrl } from '@/lib/artists/imageUrl';
 import type { DateRange } from '@/lib/export/template-config';
+import { resolveVenue, type RoutingVenueSource } from '@/lib/venues/resolveVenue';
 
 export interface RoutingAdvanceSummary {
   status: string;
@@ -107,7 +110,10 @@ export async function loadRoutingExportData(
   const [routingRes, artistRes] = await Promise.all([
     supabase
       .from('routing')
-      .select('id, date, day_type, city, address, venue_name, venue_capacity, latitude, longitude, transport_to_next, canonical_venue_id, canonical_venues(name, city, country, capacity)')
+      // Venue SSOT — SELECT the discriminators (venue_frozen_at, country) + the
+      // canonical join so resolveVenue can pick live-vs-frozen. PURE READ; the
+      // freeze WRITE stays in the routing GET chokepoint (never from an export).
+      .select('id, date, day_type, city, country, address, venue_name, venue_capacity, venue_frozen_at, latitude, longitude, transport_to_next, canonical_venue_id, canonical:canonical_venues(id, name, address, city, country, capacity)')
       .eq('tour_id', tourId)
       .order('date', { ascending: true }),
     tour.artist_id
@@ -115,20 +121,16 @@ export async function loadRoutingExportData(
       : Promise.resolve({ data: null }),
   ]);
 
-  const routingAll = (routingRes.data ?? []) as Array<{
-    id: string;
-    date: string;
-    day_type: string | null;
-    city: string | null;
-    address: string | null;
-    venue_name: string | null;
-    venue_capacity: number | null;
-    latitude: number | null;
-    longitude: number | null;
-    transport_to_next: string | null;
-    canonical_venue_id: string | null;
-    canonical_venues?: { name?: string | null; city?: string | null; country?: string | null; capacity?: number | null } | Array<{ name?: string | null; city?: string | null; country?: string | null; capacity?: number | null }> | null;
-  }>;
+  const routingAll = (routingRes.data ?? []) as Array<
+    RoutingVenueSource & {
+      id: string;
+      date: string;
+      day_type: string | null;
+      latitude: number | null;
+      longitude: number | null;
+      transport_to_next: string | null;
+    }
+  >;
   // Date-range filter (Part E shared control; null = whole tour).
   const routingRaw = routingAll.filter((r) => (!range?.from || r.date >= range.from) && (!range?.to || r.date <= range.to));
 
@@ -143,11 +145,9 @@ export async function loadRoutingExportData(
   }
 
   const days: RoutingDayRow[] = routingRaw.map((r) => {
-    const canon = Array.isArray(r.canonical_venues) ? r.canonical_venues[0] : r.canonical_venues;
-    const venue = (canon?.name ?? r.venue_name) || null;
-    const city = (canon?.city ?? r.city) || null;
-    const country = canon?.country || null;
-    const capacity = (canon?.capacity ?? r.venue_capacity) ?? null;
+    // Venue SSOT — resolve live-vs-frozen. A PAST show linked to a later-renamed
+    // canonical row exports its FROZEN snapshot, not the current canonical name.
+    const v = resolveVenue(r);
     const adv = advanceByRoutingId.get(r.id);
     const advance: RoutingAdvanceSummary | null = adv
       ? { status: adv.status, ...summariseAdvanceData(adv.data) }
@@ -155,11 +155,11 @@ export async function loadRoutingExportData(
     return {
       date: r.date,
       dayType: (r.day_type ?? '').trim(),
-      city,
-      country,
-      venue,
-      address: (r.address ?? '') || null,
-      capacity: typeof capacity === 'number' ? capacity : null,
+      city: v.city,
+      country: v.country,
+      venue: v.name,
+      address: v.address,
+      capacity: v.capacity,
       advance,
       transportToNext: (r.transport_to_next ?? 'default') || 'default',
       lat: typeof r.latitude === 'number' ? r.latitude : null,

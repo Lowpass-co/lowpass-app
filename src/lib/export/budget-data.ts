@@ -20,6 +20,7 @@ import type { BudgetLineItem, BudgetSection } from '@/types';
 import { enrichLinesWithTransactionAggregates } from '@/lib/budget/transactions';
 import { loadTourFxRates } from '@/lib/budget/fxRates';
 import type { FxRateMap } from '@/lib/budget/fxRates';
+import { resolveVenue, type RoutingVenueSource } from '@/lib/venues/resolveVenue';
 import { resolveActiveVersion, resolveApprovedVersion, getProposedLineMap, type VersionStatus } from '@/server/budget/versions';
 import { resolveArtistLogoUrl } from '@/lib/artists/imageUrl';
 import type { CommissionInput, IncomeInput, PnlSettingsInput } from '@/lib/budget/computeBudgetPnl';
@@ -68,7 +69,9 @@ export async function loadBudgetExportData(
     // NOTE: routing has NO workspace_id column (scoped by tour_id; RLS via the
     // tour) — filtering it errored, which silently dropped ALL income from the
     // export P&L. Match the page (page.tsx:151 = .eq('tour_id') only).
-    supabase.from('routing').select('id, date, venue_name, city').eq('tour_id', tourId),
+    // Venue SSOT — SELECT discriminators + canonical join so the venue stamped
+    // into each income row resolves live-vs-frozen (PURE READ; no freeze write).
+    supabase.from('routing').select('id, date, city, country, address, venue_name, venue_capacity, venue_frozen_at, canonical_venue_id, canonical:canonical_venues(id, name, address, city, country, capacity)').eq('tour_id', tourId),
     tour.artist_id
       ? supabase.from('artists').select('id, name, branding, spotify_id, spotify_image_url').eq('id', tour.artist_id).maybeSingle()
       : Promise.resolve({ data: null }),
@@ -81,9 +84,17 @@ export async function loadBudgetExportData(
   const logoUrl = artistRow ? await resolveArtistLogoUrl(artistRow) : null;
 
   // Income + commissions (the P&L inputs — RAW budget_income, matching the page).
-  const routingRows = (routingRes.data ?? []) as Array<{ id: string; date: string | null; venue_name: string | null; city: string | null }>;
-  const routingById = new Map(routingRows.map((r) => [r.id, r]));
-  const routingIds = routingRows.map((r) => r.id);
+  // Venue SSOT — resolve each routing row's venue before stamping it into the
+  // income ctx, so budget-pdf renders the live-vs-frozen value (no logic change
+  // in budget-pdf.ts — it just renders the resolved string).
+  const routingRaw = (routingRes.data ?? []) as Array<RoutingVenueSource & { id: string; date: string | null }>;
+  const routingById = new Map(
+    routingRaw.map((r) => {
+      const v = resolveVenue(r);
+      return [r.id, { id: r.id, date: r.date, venue_name: v.name, city: v.city }] as const;
+    }),
+  );
+  const routingIds = routingRaw.map((r) => r.id);
 
   const [incRes, commRes] = await Promise.all([
     routingIds.length
