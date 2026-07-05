@@ -26,3 +26,14 @@ Floor green · grep gate pasted · scripted proof: edit a canonical venue → up
 
 ## Out of scope
 Deleting the legacy `venues` table (flag its remaining readers instead) · venue dedup/merge tooling · design-pass restyling.
+
+## AMENDED 2026-07-05 — ruling (completion state + deferral)
+Shipped and verified at `origin/main e78d70b` (resolver `3d83bc2`/`f4728d8`/`6aa3d3f`; export/packet paths `e78d70b`):
+- `resolveVenue()` (`src/lib/venues/resolveVenue.ts`) is THE per-row live-vs-frozen resolver. On-read freeze (`freezePassedVenues`) is the SINGLE writer, owned by the routing GET (`api/tours/[id]/routing/route.ts`). Exports/packets call `resolveVenue` as a PURE READ — never freeze.
+- Converted consumers: routing GET chokepoint, operations summary, advance crew-block page, and ALL documents that leave the building (routing/payroll/budget export loaders, advance-packet manifest → PDF + PacketView + PublicPacketView). Grep-gate clean in `src/lib/export`, `src/components/advance-packet`, `src/app/api/advance-packets`.
+- Smoke: VEN-06..10 in `docs/smoke-tests/venues.md` (VEN-01..05 are the older canonical-LINKING tests, not resolve/freeze).
+
+DEFERRED to the design pass (ruling: pre-converting surfaces the redesign will rewrite is throwaway; bare grep-zero was NOT the P1 bar):
+- In-app SERVER loaders still read `venue_*` directly and must be routed through `resolveVenue` WHEN REBUILT: `getHomeData`, `getWorkspaceLandingData`, `getAdvanceBundle`, `contacts/*`, calendar events + `feed.ics`, `personnel/my-schedule`, `budget/rooming`, `advance/previously-played`, `advance/overview`. RAG index (`lib/ai/rag/*`) — low urgency.
+- Client routing components (`RoutingGrid/Editor/Calendar/Kanban/Map/Rail`, `TourRoutingList`) carry the literal `venue_name` token but render the already-resolved routing-GET payload — value is correct; token is cosmetic.
+- ADVANCE-JSONB render surfaces (`AdvanceShowReadView`, `MobileShowReader`, `advance-intake`) read the advance's OWN captured `data` JSONB, which can be hand-edited during advancing. Routing them through canonical would CLOBBER advance-local edits — this is a PRODUCT decision (does a live advance show current canonical or its own working copy?) requiring Adam's sign-off. Resolve in P3 (Advance decomposition), NOT silently.
