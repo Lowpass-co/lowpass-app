@@ -86,7 +86,7 @@ Advance: 12 field types + properties panel · drag-reorder · save-as-template +
 
 ## 13. Flags & open items
 
-- **Multi-user/permissions:** RLS helpers are workspace-scoped; per-artist grants touch every policy. Decide the model BEFORE building more surfaces. Crew view = auth-scoped `/m/*` + share surfaces, not a new desktop product.
+- **Multi-user/permissions:** DECIDED 2026-07-04 — see `PERMISSIONS_MODEL_2026-07.md` (schema-reserved artist scoping, crew day-sheet slice via tokenized links, vault = owner+managers fixed). Build remains unscheduled.
 - **Advance ↔ Production integration** (decided: spec it): advance sections may subscribe to production data read-only ("from Production" becomes true). Roadmap after the Advance decomposition.
 - **advancewithme research** — DONE 2026-07-04: see `COMPETITIVE_ADVANCEWITHME_2026-07.md` (teardown, beat-list, and the draft field catalog §6 that unblocks VIS-RB-05 pending Adam's grading). Note: no public field taxonomy exists on their site; catalog drafted from confirmed categories + industry practice.
 - Smoke-tool note: verdict buttons required scripts loaded; if reused, add a loading guard.
