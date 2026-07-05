@@ -323,7 +323,6 @@ export function RoutingEditor({
     }
   }, [tourId, showToast]);
 
-  const handleSave = useCallback(() => saveRouting(false), [saveRouting]);
 
   /* Debounced autosave — called from every user edit path (via the ref). */
   const scheduleAutosave = useCallback(() => {
@@ -425,39 +424,38 @@ export function RoutingEditor({
             <Download size={16} />
             iCal feed
           </button>
-          {!readOnly && (view === 'grid' || view === 'calendar') && (
-            <>
-              {/* Part 2 — subtle autosave indicator: edits persist on their own;
-                  the button stays for an explicit flush. */}
+          {!readOnly && (view === 'grid' || view === 'calendar') && autosave !== 'idle' && (
+            /* Design system §5 — autosave everywhere + SaveStatus pill; the
+               explicit "Save routing" button is retired (edits persist on their
+               own; nav guard + flush landed in the data-integrity pass). Dot +
+               label, no glyph. */
+            <span
+              aria-live="polite"
+              className="inline-flex items-center text-xs"
+              style={{ gap: 6, color: 'var(--lp-text-tertiary)', minWidth: 72 }}
+            >
               <span
-                aria-live="polite"
-                className="text-xs"
-                style={{ color: autosave === 'error' ? 'var(--lp-danger)' : 'var(--lp-text-tertiary)', minWidth: 64 }}
-              >
-                {autosave === 'pending' || autosave === 'saving'
-                  ? 'Saving…'
-                  : autosave === 'saved'
-                    ? 'Saved ✓'
-                    : autosave === 'error'
-                      ? 'Save failed'
-                      : ''}
-              </span>
-              <button
-                type="button"
-                onClick={handleSave}
-                disabled={saving}
-                className="flex items-center gap-2 rounded-lg bg-lp-orange px-4 py-2 text-sm font-medium text-white hover:bg-lp-orange-hover disabled:opacity-50"
-              >
-                {saving ? (
-                  <>
-                    <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-white border-t-transparent" />
-                    Saving…
-                  </>
-                ) : (
-                  'Save routing'
-                )}
-              </button>
-            </>
+                aria-hidden
+                style={{
+                  width: 6,
+                  height: 6,
+                  borderRadius: 999,
+                  background:
+                    autosave === 'error'
+                      ? 'var(--color-lp-error)'
+                      : autosave === 'saved'
+                        ? 'var(--color-lp-status-complete)'
+                        : 'var(--color-lp-warning)',
+                }}
+              />
+              {autosave === 'pending' || autosave === 'saving'
+                ? 'Saving…'
+                : autosave === 'saved'
+                  ? 'Saved'
+                  : autosave === 'error'
+                    ? 'Save failed'
+                    : ''}
+            </span>
           )}
           {readOnly ? (
             <span

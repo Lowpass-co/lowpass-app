@@ -44,9 +44,13 @@
   --color-lp-error: #EF4444;
   --color-lp-info: #3B82F6;
 
-  /* Advance status colours */
+  /* Advance status colours (DESIGN_DIRECTION §2 hue budget) — status dots are
+     orange / green / gray only. in-progress WAS blue #3B82F6 → now brand orange
+     (act / attend / in-progress share the one accent). not-started = gray,
+     complete = green. needs-review keeps amber for now (a distinct "someone
+     must look" signal); its recolor rides the tool-surface stages. */
   --color-lp-status-not-started: #9CA3AF;
-  --color-lp-status-in-progress: #3B82F6;
+  --color-lp-status-in-progress: var(--lp-orange);
   --color-lp-status-complete: #10B981;
   --color-lp-status-needs-review: #F59E0B;
 
@@ -300,6 +304,16 @@
   --lp-ease-emphasized: cubic-bezier(0.2, 0, 0, 1);
   --lp-ease-decelerate: cubic-bezier(0, 0, 0.2, 1);
   --lp-ease-accelerate: cubic-bezier(0.4, 0, 1, 1);
+
+  /* Design system 2026-07 (DESIGN_DIRECTION §6) — canonical motion names.
+     150–200ms ease-out is the house feel; --lp-dur-fast for micro
+     interactions (hover border-brighten, focus), --lp-dur-base for entrances /
+     popovers, --lp-dur-slow for the heaviest one-time transitions. All motion
+     is killed by the prefers-reduced-motion block below. */
+  --lp-dur-fast: var(--lp-duration-fast);   /* 100ms */
+  --lp-dur-base: var(--lp-duration-base);   /* 150ms */
+  --lp-dur-slow: var(--lp-duration-slow);   /* 200ms */
+  --lp-ease-out: var(--lp-ease-decelerate); /* cubic-bezier(0,0,0.2,1) */
 
   /* 4.5 Radii */
   --lp-radius-none: 0;
@@ -1558,4 +1572,23 @@ textarea::selection,
   fill: var(--lp-text-secondary);
   font-size: var(--lp-text-xs);
   letter-spacing: 0.25em;
+}
+
+/* ============================================================
+   Design system 2026-07 (DESIGN_DIRECTION §6) — global reduced-motion
+   kill-switch. On top of the per-component blocks above, any user with
+   prefers-reduced-motion gets near-instant animation + transition everywhere
+   (entrance staggers, fingerprint draw-in, count-ups, popover scale, the
+   in-progress pulse). Uses 0.01ms rather than 0 so animationend/transitionend
+   listeners still fire.
+   ============================================================ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

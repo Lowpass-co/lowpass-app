@@ -701,7 +701,7 @@ function PendingTasksPanel({ tourId, pending }: PendingTasksPanelProps) {
       {pending.awaitingContract.length === 0 &&
       pending.tentative.length === 0 &&
       pending.showsWithoutVenue.length === 0 ? (
-        <EmptyHint>Nothing pending. 🎉</EmptyHint>
+        <EmptyHint>Nothing pending.</EmptyHint>
       ) : null}
     </div>
   );

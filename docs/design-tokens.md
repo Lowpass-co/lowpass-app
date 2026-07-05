@@ -201,6 +201,29 @@ The `.lp-dropdown-layer` class in `globals.css` still uses `z-index: 1000` (unch
 
 **Rule of thumb:** hovers 100–150ms, fade/slide 200ms, slide-overs 250ms, full page 300ms.
 
+### Design system 2026-07 (DESIGN_DIRECTION §6) — canonical motion names
+
+The 2026-07 design pass names motion with a short vocabulary. These alias the
+durations above so both names resolve to the same value:
+
+| Token | Value | Use |
+|-------|-------|-----|
+| `--lp-dur-fast` | `--lp-duration-fast` (100ms) | hover border-brighten, focus, micro |
+| `--lp-dur-base` | `--lp-duration-base` (150ms) | entrances, popovers, staggers |
+| `--lp-dur-slow` | `--lp-duration-slow` (200ms) | heaviest one-time transitions |
+| `--lp-ease-out` | `--lp-ease-decelerate` (`cubic-bezier(0,0,0.2,1)`) | the house ease-out |
+
+**Motion rules (§6):** 150–200ms ease-out; entrance staggers 40–70ms/element;
+fingerprint bars draw in ~20ms/bar once per load; money/counts count up once;
+popovers scale from their anchor (transform-origin at the anchor, tail pointing
+to it) in ~140ms; hover = border brighten only (no scale/shadow); **one looping
+animation max per screen** (the in-progress pulse).
+
+**Reduced-motion kill-switch:** a global `@media (prefers-reduced-motion: reduce)`
+block in `globals.css` forces `animation-duration`/`transition-duration` to
+`0.01ms` on every element — all entrance staggers, draw-ins, count-ups, popover
+scales, and the in-progress pulse are disabled for users who ask for it.
+
 ---
 
 ## 7. Radii
