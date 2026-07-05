@@ -102,5 +102,15 @@ advances on every save. It is now an id-preserving reconcile, so autosave is saf
   cleared. Editing then Open-advance flushes the save first (edit not lost).
 - **INT-01** (needs-live, UNBLOCKED by ROUTE-01/03) Routing persist: edit a cell +
   delete a day → refresh → both stuck, no manual Save, income intact.
+- **ROUTE-04** (needs-live) **Advance-data guard (Salvage #4 — NO-OP with proof).**
+  Fill an advance form on a show (sections + field data) → edit that tour's routing
+  (change the venue/notes on a DIFFERENT date, and on the SAME date) and save → the
+  advance instance + form config + intake links on every kept date are intact.
+  Proof this needs no new code: `src/app/api/tours/[id]/routing/route.ts:179-182`
+  upserts on `(tour_id, date)`; `ON CONFLICT DO UPDATE` never rewrites the primary
+  key, so a kept date preserves `routing.id` and every `routing_id`-keyed advance
+  child survives. The DELETE (lines 188-204) only removes dates dropped from the
+  payload, so their advance children cascade — correct. The Part 1 reconcile already
+  is the guard; item 4 landed no code change.
 - **INT-02** (needs-live, UNBLOCKED) Routing→Advance: edit routing → Open Advance
   from the row menu → the edit is saved (flush-before-nav).
