@@ -127,6 +127,9 @@ export async function POST(
     .in('id', targetIds);
 
   const validTargetIds = (targetRoutings ?? []).map((r) => r.id);
+  if (validTargetIds.length === 0) {
+    return NextResponse.json({ copied: 0 });
+  }
 
   let sourceConfig: { id: string; sections: unknown } | null = null;
   let sourceInstance: { form_config_id: string; data: unknown; section_statuses: unknown; status: string } | null = null;
@@ -150,156 +153,150 @@ export async function POST(
     sourceInstance = inst ?? null;
   }
 
+  // ---- Batched fan-out (Salvage #2) ----
+  // Previously this looped per target doing ~4 awaited round-trips each
+  // (config SELECT, instance SELECT, then a write) — O(4N) queries for an
+  // N-date copy. A 10-show tour = ~40 sequential round-trips. Now every read
+  // is a single bulk SELECT keyed by routing_id, and every write is one bulk
+  // UPSERT (advance_instances has UNIQUE(routing_id); advance_form_configs is
+  // unique per (tour_id, routing_id)). Total: 2 prefetch SELECTs + at most 2
+  // config writes + 1 instance UPSERT, independent of N.
+  const nowIso = new Date().toISOString();
+
+  // (1) Prefetch every target's existing config in one query.
+  const { data: existingConfigs } = await supabase
+    .from('advance_form_configs')
+    .select('id, routing_id')
+    .eq('tour_id', tourId)
+    .in('routing_id', validTargetIds);
+  const configByRouting = new Map<string, string>();
+  const preExistingConfigIds: string[] = [];
+  for (const c of existingConfigs ?? []) {
+    configByRouting.set(c.routing_id, c.id);
+    preExistingConfigIds.push(c.id);
+  }
+
+  // (2) Create configs for targets that lack one — a single bulk insert. Both
+  // copy_sections and copy_data need a form_config_id for every target; new
+  // rows carry the source sections when copying sections, else an empty set.
+  const needConfig = validTargetIds.filter((rid) => !configByRouting.has(rid));
+  if (needConfig.length > 0) {
+    const sectionsForNew = (copy_sections ? sourceConfig?.sections : null) ?? [];
+    const { data: inserted, error: insErr } = await supabase
+      .from('advance_form_configs')
+      .insert(
+        needConfig.map((rid) => ({
+          tour_id: tourId,
+          routing_id: rid,
+          name: 'Default Advance',
+          is_default: false,
+          sections: sectionsForNew,
+          created_by_id: user.id,
+        })),
+      )
+      .select('id, routing_id');
+    if (insErr) {
+      return NextResponse.json({ error: `Failed to create target configs: ${insErr.message}` }, { status: 500 });
+    }
+    for (const c of inserted ?? []) configByRouting.set(c.routing_id, c.id);
+  }
+
+  // (3) When copying sections onto configs that already existed, overwrite
+  // their sections in one bulk update. Newly-created configs (step 2) already
+  // carry the source sections, so they're excluded here.
+  if (copy_sections && sourceConfig && preExistingConfigIds.length > 0) {
+    const { error: updErr } = await supabase
+      .from('advance_form_configs')
+      .update({ sections: sourceConfig.sections, updated_at: nowIso })
+      .in('id', preExistingConfigIds);
+    if (updErr) {
+      return NextResponse.json({ error: `Failed to update target sections: ${updErr.message}` }, { status: 500 });
+    }
+  }
+
+  // (4) Prefetch every target's existing instance in one query (drives both
+  // fill_blanks merge and status preservation).
+  const instanceByRouting = new Map<string, { id: string; data: unknown; section_statuses: unknown; status: string }>();
+  {
+    const { data: existingInstances } = await supabase
+      .from('advance_instances')
+      .select('id, routing_id, data, section_statuses, status')
+      .in('routing_id', validTargetIds);
+    for (const inst of existingInstances ?? []) {
+      instanceByRouting.set(inst.routing_id, {
+        id: inst.id,
+        data: inst.data,
+        section_statuses: inst.section_statuses,
+        status: inst.status,
+      });
+    }
+  }
+
+  // (5) Build all instance rows in-memory, then one bulk UPSERT on routing_id.
   let copied = 0;
 
-  for (const targetRoutingId of validTargetIds) {
-    let formConfigId: string | null = null;
-
-    if (copy_sections && sourceConfig) {
-      const { data: existingTargetConfig } = await supabase
-        .from('advance_form_configs')
-        .select('id')
-        .eq('tour_id', tourId)
-        .eq('routing_id', targetRoutingId)
-        .maybeSingle();
-
-      if (existingTargetConfig) {
-        const { error: updErr } = await supabase
-          .from('advance_form_configs')
-          .update({ sections: sourceConfig.sections, updated_at: new Date().toISOString() })
-          .eq('id', existingTargetConfig.id);
-        if (updErr) continue;
-        formConfigId = existingTargetConfig.id;
-      } else {
-        const { data: newConfig, error: insErr } = await supabase
-          .from('advance_form_configs')
-          .insert({
-            tour_id: tourId,
-            routing_id: targetRoutingId,
-            name: 'Default Advance',
-            is_default: false,
-            sections: sourceConfig.sections,
-            created_by_id: user.id,
-          })
-          .select('id')
-          .single();
-        if (insErr) continue;
-        formConfigId = newConfig.id;
-      }
-    }
-
-    if (copy_data) {
-      const { data: existingTargetConfig } = await supabase
-        .from('advance_form_configs')
-        .select('id')
-        .eq('tour_id', tourId)
-        .eq('routing_id', targetRoutingId)
-        .maybeSingle();
-
-      const targetFormConfigId = formConfigId ?? existingTargetConfig?.id;
-      if (!targetFormConfigId) {
-        const { data: newCfg } = await supabase
-          .from('advance_form_configs')
-          .insert({
-            tour_id: tourId,
-            routing_id: targetRoutingId,
-            name: 'Default Advance',
-            is_default: false,
-            sections: sourceConfig?.sections ?? [],
-            created_by_id: user.id,
-          })
-          .select('id')
-          .single();
-        if (!newCfg) continue;
-        formConfigId = newCfg.id;
-      }
-
-      const cfgId = formConfigId ?? existingTargetConfig?.id;
+  if (copy_data) {
+    const sourceData = (sourceInstance?.data ?? {}) as Record<string, Record<string, unknown>>;
+    const sourceStatuses = (sourceInstance?.section_statuses ?? {}) as Record<string, unknown>;
+    const rows: Array<Record<string, unknown>> = [];
+    for (const rid of validTargetIds) {
+      const cfgId = configByRouting.get(rid);
       if (!cfgId) continue;
-
-      const { data: existingInstance } = await supabase
-        .from('advance_instances')
-        .select('id, data, section_statuses, status')
-        .eq('routing_id', targetRoutingId)
-        .maybeSingle();
-
-      const sourceData = (sourceInstance?.data ?? {}) as Record<
-        string,
-        Record<string, unknown>
-      >;
-      const sourceStatuses = (sourceInstance?.section_statuses ?? {}) as Record<
-        string,
-        unknown
-      >;
-      const existingData =
-        ((existingInstance?.data ?? {}) as Record<string, Record<string, unknown>>);
-      const existingStatuses =
-        ((existingInstance?.section_statuses ?? {}) as Record<string, unknown>);
+      const existing = instanceByRouting.get(rid);
+      const existingData = (existing?.data ?? {}) as Record<string, Record<string, unknown>>;
+      const existingStatuses = (existing?.section_statuses ?? {}) as Record<string, unknown>;
 
       // Merge strategy. fill_blanks: destination wins per-field, source fills
       // only blanks. replace (default): source wins wholesale.
-      const mergedData =
-        mergeMode === 'fill_blanks'
-          ? mergeFillBlanks(sourceData, existingData)
-          : sourceData;
-      const mergedStatuses =
-        mergeMode === 'fill_blanks' ? existingStatuses : sourceStatuses;
+      const mergedData = mergeMode === 'fill_blanks' ? mergeFillBlanks(sourceData, existingData) : sourceData;
+      const mergedStatuses = mergeMode === 'fill_blanks' ? existingStatuses : sourceStatuses;
       const mergedStatus =
         mergeMode === 'fill_blanks'
-          ? (existingInstance?.status ?? sourceInstance?.status ?? 'not_started')
+          ? (existing?.status ?? sourceInstance?.status ?? 'not_started')
           : (sourceInstance?.status ?? 'not_started');
 
-      const payload = {
+      rows.push({
+        routing_id: rid,
         form_config_id: cfgId,
         data: mergedData,
         section_statuses: mergedStatuses,
         status: mergedStatus,
         last_updated_by_id: user.id,
-        last_updated_at: new Date().toISOString(),
-      };
-
-      if (existingInstance) {
-        const { error: updErr } = await supabase
-          .from('advance_instances')
-          .update(payload)
-          .eq('id', existingInstance.id);
-        if (!updErr) copied++;
-      } else {
-        const { error: insErr } = await supabase
-          .from('advance_instances')
-          .insert({
-            routing_id: targetRoutingId,
-            form_config_id: cfgId,
-            data: payload.data,
-            section_statuses: payload.section_statuses,
-            status: payload.status,
-            last_updated_by_id: user.id,
-          });
-        if (!insErr) copied++;
-      }
-    } else if (copy_sections && formConfigId) {
-      const { data: existingInstance } = await supabase
+        last_updated_at: nowIso,
+      });
+    }
+    if (rows.length > 0) {
+      const { error: upErr } = await supabase
         .from('advance_instances')
-        .select('id')
-        .eq('routing_id', targetRoutingId)
-        .maybeSingle();
-
-      if (existingInstance) {
-        const { error: updErr } = await supabase
-          .from('advance_instances')
-          .update({ form_config_id: formConfigId })
-          .eq('id', existingInstance.id);
-        if (!updErr) copied++;
-      } else {
-        const { error: insErr } = await supabase
-          .from('advance_instances')
-          .insert({
-            routing_id: targetRoutingId,
-            form_config_id: formConfigId,
-            status: 'not_started',
-          });
-        if (!insErr) copied++;
+        .upsert(rows, { onConflict: 'routing_id' });
+      if (upErr) {
+        return NextResponse.json({ error: `Failed to copy advance data: ${upErr.message}` }, { status: 500 });
       }
+      copied = rows.length;
+    }
+  } else if (copy_sections) {
+    // Sections-only: point each target instance at its (new/updated) config,
+    // preserving any existing status; create a not_started instance where none
+    // exists. data / section_statuses are left untouched on existing rows.
+    const rows: Array<Record<string, unknown>> = [];
+    for (const rid of validTargetIds) {
+      const cfgId = configByRouting.get(rid);
+      if (!cfgId) continue;
+      const existing = instanceByRouting.get(rid);
+      rows.push({
+        routing_id: rid,
+        form_config_id: cfgId,
+        status: existing?.status ?? 'not_started',
+      });
+    }
+    if (rows.length > 0) {
+      const { error: upErr } = await supabase
+        .from('advance_instances')
+        .upsert(rows, { onConflict: 'routing_id' });
+      if (upErr) {
+        return NextResponse.json({ error: `Failed to link advance sections: ${upErr.message}` }, { status: 500 });
+      }
+      copied = rows.length;
     }
   }
 
