@@ -2858,11 +2858,14 @@ function FillMode({
   );
 }
 
+// Salvage #6 — status dots use the --color-lp-status-* tokens (design-token
+// rule: no hardcoded Tailwind palette colours in component code). `dot` holds
+// the CSS var; the render site applies it as an inline background.
 const STATUS_OPTIONS = [
-  { value: 'not_started', label: 'Not Started', dot: 'bg-gray-500' },
-  { value: 'in_progress', label: 'In Progress', dot: 'bg-blue-500' },
-  { value: 'complete', label: 'Complete', dot: 'bg-emerald-500' },
-  { value: 'needs_review', label: 'Needs Review', dot: 'bg-amber-500' },
+  { value: 'not_started', label: 'Not Started', dot: 'var(--color-lp-status-not-started)' },
+  { value: 'in_progress', label: 'In Progress', dot: 'var(--color-lp-status-in-progress)' },
+  { value: 'complete', label: 'Complete', dot: 'var(--color-lp-status-complete)' },
+  { value: 'needs_review', label: 'Needs Review', dot: 'var(--color-lp-status-needs-review)' },
 ] as const;
 
 // ----- Key Contacts section (dynamic contact list) -----
@@ -4790,7 +4793,7 @@ function StatusDropdown({
               onClick={(e) => { e.stopPropagation(); onSelectStatus(opt.value); setOpen(false); }}
               className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-lp-text hover:bg-lp-surface-hover"
             >
-              <span className={cn('h-2 w-2 shrink-0 rounded-full', opt.dot)} />
+              <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: opt.dot }} />
               {opt.label}
             </button>
           ))}
