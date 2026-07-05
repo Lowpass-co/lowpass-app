@@ -35,22 +35,20 @@ export async function POST(
   const {
     data: { user },
   } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
   const { id } = await params;
 
-  const { error } = await supabase
-    .from('tours')
-    .update({ last_visited_at: new Date().toISOString() })
-    .eq('id', id);
-
-  if (error) {
-    // Log but don't fail the page. The tracker is best-effort —
-    // a 500 here shouldn't block the user from seeing the tour.
-    console.error(`[tour-touch ${id}] update failed:`, error.message);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  // Salvage #1 — best-effort liveness ping fired on every tour-scoped page load;
+  // it must ALWAYS return 204. A 401 (mid-session auth blip) or 500 (RLS/db) here
+  // surfaces as a console error on an otherwise-fine page. Skip the write when
+  // unauthenticated, log real errors, and always 204.
+  if (user) {
+    const { error } = await supabase
+      .from('tours')
+      .update({ last_visited_at: new Date().toISOString() })
+      .eq('id', id);
+    if (error) {
+      console.error(`[tour-touch ${id}] update failed:`, error.message);
+    }
   }
 
   return new NextResponse(null, { status: 204 });

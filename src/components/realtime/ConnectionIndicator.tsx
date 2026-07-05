@@ -59,14 +59,20 @@ export function ConnectionStatusProvider({ children }: { children: React.ReactNo
   // 'connecting' state acts as a 600ms bridge so we don't show
   // a Live pill the instant the network event fires (which
   // sometimes precedes the actual fetch coming back).
-  const [online, setOnline] = useState<boolean>(() =>
-    typeof navigator === 'undefined' ? true : navigator.onLine,
-  );
+  // Salvage #1 (hydration mismatch #418) — seed `true` so SSR and the first
+  // client render agree; read the real navigator.onLine in the effect below.
+  // Seeding from navigator.onLine here would diverge from the server (which is
+  // always `true`) whenever the client mounts offline.
+  const [online, setOnline] = useState<boolean>(true);
   const [bridging, setBridging] = useState(false);
   const [saveFailure, setSaveFailure] = useState<SaveFailure | null>(null);
   const bridgeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    // Sync the real connectivity value once mounted (post-hydration). One-shot
+    // read on mount — not a render loop.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (typeof navigator !== 'undefined') setOnline(navigator.onLine);
     const onOnline = () => {
       setBridging(true);
       setOnline(true);

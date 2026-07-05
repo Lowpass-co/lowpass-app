@@ -54,9 +54,12 @@ export function RollbackConfirmModal({
         const j = await res.json().catch(() => ({}));
         throw new Error(typeof j.error === 'string' ? j.error : `Failed (${res.status})`);
       }
-      // Target is now the approved Current → clearing ?version lands on it.
+      // Salvage #1 (rollback race) — target is now the approved Current, but
+      // dropping ?version lets the view resolve to the draft head (or stale
+      // pre-refresh state) instead. Pin the URL to the target so the page
+      // deterministically lands on the rolled-back-to version.
       const params = new URLSearchParams(searchParams);
-      params.delete('version');
+      params.set('version', target.id);
       onClose();
       router.push(params.toString() ? `${pathname}?${params.toString()}` : pathname);
       router.refresh();
