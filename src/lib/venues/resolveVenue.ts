@@ -236,6 +236,18 @@ export async function freezePassedVenues(
       console.error(`[venue-freeze ${r.id}] failed:`, error.message);
       continue;
     }
+    // Reflect the write into the in-memory row so a resolve pass in the SAME
+    // request renders the just-frozen snapshot (not the pre-freeze columns).
+    Object.assign(r, {
+      venue_name: live.name,
+      address: live.address,
+      venue_phone: live.phone,
+      venue_website: live.website,
+      venue_capacity: live.capacity,
+      city: live.city ?? r.city ?? '',
+      country: live.country,
+      venue_frozen_at: nowIso,
+    });
     frozenIds.push(r.id as string);
   }
   return frozenIds;

@@ -12,6 +12,45 @@
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { resolveCanonicalVenues, type CanonicalVenueFacts } from '@/lib/venues/canonical';
+import {
+  resolveVenue,
+  freezePassedVenues,
+  type RoutingVenueSource,
+} from '@/lib/venues/resolveVenue';
+
+/** Canonical join for the venue resolver (Venue SSOT). */
+const CANONICAL_JOIN =
+  'canonical:canonical_venues(id, name, address, city, country, capacity)';
+
+/** Run the on-read freeze, then fold each routing row's venue fields down to
+ *  their resolved SSOT value (live → canonical, past/frozen → snapshot) so every
+ *  client of this endpoint sees the truth without reading venue_* columns. The
+ *  joined `canonical` object is stripped from the response. */
+async function resolveRoutingVenues(
+  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
+  rows: RoutingVenueSource[],
+): Promise<Array<Record<string, unknown>>> {
+  // On-read freeze — first load after a show day passes snapshots canonical into
+  // routing.venue_* and stamps venue_frozen_at (no cron). Best-effort; mutates
+  // the frozen rows in place so the resolve pass below reflects the write.
+  await freezePassedVenues(supabase, rows);
+  return rows.map((r) => {
+    const v = resolveVenue(r);
+    const rest = { ...(r as Record<string, unknown>) };
+    delete rest.canonical;
+    return {
+      ...rest,
+      venue_name: v.name,
+      venue_phone: v.phone,
+      venue_website: v.website,
+      venue_capacity: v.capacity,
+      address: v.address,
+      city: v.city,
+      country: v.country,
+      venue_source: v.source,
+    };
+  });
+}
 
 export async function GET(
   request: Request,
@@ -49,27 +88,42 @@ export async function GET(
   }
 
   if (lite) {
+    // Venue SSOT — lite still resolves venue_name/city; needs the discriminator
+    // columns (canonical_venue_id, venue_frozen_at, date) + the canonical join.
     const { data, error } = await supabase
       .from('routing')
-      .select('id, date, day_type, city, venue_name, notes')
+      .select(
+        `id, date, day_type, city, country, notes, venue_name, venue_phone, venue_website, venue_capacity, address, canonical_venue_id, venue_frozen_at, ${CANONICAL_JOIN}`,
+      )
       .eq('tour_id', tourId)
       .order('date');
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
-    return NextResponse.json({ routing: data ?? [] });
+    const resolved = await resolveRoutingVenues(supabase, (data ?? []) as RoutingVenueSource[]);
+    // Keep the lite shape the callers expect (id, date, day_type, city, venue_name, notes).
+    const liteRows = resolved.map((r) => ({
+      id: r.id,
+      date: r.date,
+      day_type: r.day_type,
+      city: r.city,
+      venue_name: r.venue_name,
+      notes: r.notes,
+    }));
+    return NextResponse.json({ routing: liteRows });
   }
 
   const { data, error } = await supabase
     .from('routing')
-    .select('*')
+    .select(`*, ${CANONICAL_JOIN}`)
     .eq('tour_id', tourId)
     .order('date');
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  return NextResponse.json(data ?? []);
+  const resolved = await resolveRoutingVenues(supabase, (data ?? []) as RoutingVenueSource[]);
+  return NextResponse.json(resolved);
 }
 
 export async function POST(

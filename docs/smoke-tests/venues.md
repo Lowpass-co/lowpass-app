@@ -71,6 +71,58 @@ duplicate candidates and never overwrites an existing
 
 **Last verified**:
 
+## Venue SSOT — resolve + freeze (migration 237, `resolveVenue`)
+
+> Prereq: migration 237 applied (`routing.venue_frozen_at` exists). VEN-01..05
+> cover canonical LINKING; these cover RESOLUTION (live-vs-frozen) + freeze +
+> the /venues edit surface. Scripted proof (no DB):
+> `node --experimental-strip-types src/lib/venues/resolveVenue.harness.ts`
+> → "18 checks passed, 0 failed".
+
+#### VEN-06 — Editing a canonical venue flows to upcoming shows
+
+**Do**: On `/venues`, edit a venue (name/address/capacity) that an **upcoming**
+(future-dated) routing row references. Reload that tour's routing.
+
+**Expect**: The upcoming row shows the edited venue (routing GET resolves live
+from canonical). The `/venues` editor showed "N upcoming shows reference this
+venue" and listed them before saving.
+
+**Last verified**:
+
+#### VEN-07 — A past/frozen show does NOT change
+
+**Do**: Same edit as VEN-06, but check a **past** routing row (date < today) that
+referenced the same venue.
+
+**Expect**: The past row keeps its original venue snapshot — the edit does not
+rewrite history. The past show is not in the editor's propagation list.
+
+**Last verified**:
+
+#### VEN-08 — Live advance render reflects the edit
+
+**Do**: Open the advance for an **upcoming** show whose venue you just edited.
+
+**Expect**: The advance venue block shows the edited value while the day is live
+(resolved from canonical), not the older captured value.
+
+**Last verified**:
+
+#### VEN-09 — On-read freeze snapshots after the day passes
+
+**Do**: For a routing row whose show day has just passed (canonical-linked,
+`venue_frozen_at` still NULL), load the tour's routing (any consumer of the
+routing GET). Then edit the canonical venue on `/venues` and reload.
+
+**Expect**: The first load after the date passed wrote `venue_frozen_at` and
+snapshotted the canonical values into `routing.venue_*` (freeze happens in
+`resolveRoutingVenues` → `freezePassedVenues`, in
+`src/app/api/tours/[id]/routing/route.ts` GET). After freezing, the later
+canonical edit does NOT change that row.
+
+**Last verified**:
+
 ## Known broken
 
 (None yet.)

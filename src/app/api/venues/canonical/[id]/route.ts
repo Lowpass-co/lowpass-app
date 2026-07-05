@@ -1,0 +1,122 @@
+/* ============================================
+   LOWPASS — /api/venues/canonical/[id]  (Venue SSOT — venue edit)
+
+   GET   → the canonical venue + a propagation list: the current workspace's
+           UPCOMING/live routing rows that reference it (date ≥ today AND not
+           frozen). Past/frozen rows are NOT listed — their venue is snapshotted
+           and an edit here never rewrites them.
+   PATCH → edit the canonical facts (name/address/city/country/capacity). Writes
+           go through the service client because canonical_venues is world-read
+           but client-write-denied (migration 214). canonical_venues is a shared
+           cross-workspace directory — an edit is a facts correction that every
+           workspace's LIVE shows referencing it will reflect.
+   ============================================ */
+
+import { NextResponse } from 'next/server';
+import { createServerSupabaseClient, createServiceSupabaseClient } from '@/lib/supabase-server';
+
+const VENUE_COLS = 'id, name, address, city, country, capacity';
+
+function todayIso(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> },
+): Promise<NextResponse> {
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const { id } = await params;
+
+  const { data: venue, error } = await supabase
+    .from('canonical_venues')
+    .select(VENUE_COLS)
+    .eq('id', id)
+    .maybeSingle();
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!venue) return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
+
+  // Upcoming/live routing rows in THIS workspace that reference the venue (RLS
+  // scopes routing to the caller's workspace). Frozen / past rows excluded.
+  const { data: rows } = await supabase
+    .from('routing')
+    .select('id, date, city, tour:tours(id, name)')
+    .eq('canonical_venue_id', id)
+    .is('venue_frozen_at', null)
+    .gte('date', todayIso())
+    .order('date', { ascending: true });
+
+  const upcomingShows = (rows ?? []).map((r) => {
+    const tour = Array.isArray(r.tour) ? r.tour[0] : r.tour;
+    return {
+      routingId: r.id as string,
+      date: r.date as string,
+      city: (r.city as string | null) ?? null,
+      tourId: (tour as { id?: string } | null)?.id ?? null,
+      tourName: (tour as { name?: string } | null)?.name ?? 'Tour',
+    };
+  });
+
+  return NextResponse.json({ venue, upcomingShows });
+}
+
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> },
+): Promise<NextResponse> {
+  const supabase = await createServerSupabaseClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const { id } = await params;
+
+  let body: {
+    name?: string;
+    address?: string | null;
+    city?: string | null;
+    country?: string | null;
+    capacity?: number | null;
+  };
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
+  }
+
+  const patch: Record<string, unknown> = {};
+  if (body.name !== undefined) {
+    const name = String(body.name).trim();
+    if (!name) return NextResponse.json({ error: 'Name is required' }, { status: 400 });
+    patch.name = name;
+  }
+  if (body.address !== undefined) patch.address = body.address ? String(body.address).trim() : null;
+  if (body.city !== undefined) patch.city = body.city ? String(body.city).trim() : null;
+  if (body.country !== undefined) patch.country = body.country ? String(body.country).trim() : null;
+  if (body.capacity !== undefined) {
+    const n = Number(body.capacity);
+    patch.capacity = Number.isFinite(n) && n > 0 ? Math.round(n) : null;
+  }
+  if (Object.keys(patch).length === 0) {
+    return NextResponse.json({ error: 'Nothing to update' }, { status: 400 });
+  }
+
+  // Service client — canonical_venues is client-write-denied by RLS (mig 214).
+  const svc = createServiceSupabaseClient();
+  const { data, error } = await svc
+    .from('canonical_venues')
+    .update(patch)
+    .eq('id', id)
+    .select(VENUE_COLS)
+    .maybeSingle();
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!data) return NextResponse.json({ error: 'Venue not found' }, { status: 404 });
+
+  return NextResponse.json({ venue: data });
+}
