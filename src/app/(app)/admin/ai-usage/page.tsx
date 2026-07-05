@@ -17,7 +17,6 @@
 
 import { notFound } from 'next/navigation';
 import { getUserAndAdminStatus } from '@/lib/site-admin';
-import { ProductShell } from '@/components/shell-v2';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { getAiUsageReport, formatUsd } from '@/lib/ai/usage-report';
 import { AiUsageDashboard } from '@/components/admin/AiUsageDashboard';
@@ -87,9 +86,12 @@ export default async function AiUsagePage({
     prevMonthStartIso,
   });
 
+  // Nav & entry fixpack item 5 — admin/layout.tsx already wraps the whole
+  // /admin tree in listAppPageShell; wrapping again in <ProductShell> here
+  // double-chromed the page. Render bare content and let the layout provide
+  // the shell.
   return (
-    <ProductShell active={null} artistId={null} productName="AI Usage">
-      <div className="flex min-h-0 flex-1 flex-col gap-4 p-4">
+    <div className="flex min-h-0 flex-1 flex-col gap-4 p-4">
         <PageHeader
           title="AI Usage"
           subtitle="Cost + attribution across all workspaces."
@@ -135,7 +137,6 @@ export default async function AiUsagePage({
           <AiUsageDashboard report={report} />
         </div>
       </div>
-    </ProductShell>
   );
 }
 

@@ -188,6 +188,14 @@ const nextConfig: NextConfig = {
         destination: '/operations/:id',
         permanent: true,
       },
+      {
+        // Nav & entry fixpack item 5 — the bare /tours list page is a legacy
+        // surface (Tier-1 IA is /artists). Every /tours/:id* URL already
+        // redirects; this was the one gap. Send /tours → /artists.
+        source: '/tours',
+        destination: '/artists',
+        permanent: true,
+      },
 
       // ===== Library dropdown contents → new homes =====
       // Per decision #4: Library retires; subpaths migrate.
