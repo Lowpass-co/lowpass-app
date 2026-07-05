@@ -26,6 +26,8 @@
 
 import { ProductHeader, type ProductName } from './ProductHeader';
 import type { ProductRailActive } from './productNav';
+import { RememberTourProduct } from './RememberTourProduct';
+import { TOUR_PRODUCTS, type TourProduct } from '@/lib/nav/lastProduct';
 
 interface ProductShellProps {
   active: ProductRailActive;
@@ -58,7 +60,12 @@ export function ProductShell({
   // them; future cleanup can drop them entirely once all call
   // sites are updated.
   void artistId;
-  void tourId;
+  // Nav & entry fixpack item 1 — record last-product-used for this tour when
+  // the surface is one of the three products. Read back by openTour()/Resume.
+  const rememberProduct: TourProduct | null =
+    tourId && (TOUR_PRODUCTS as readonly string[]).includes(active as string)
+      ? (active as TourProduct)
+      : null;
   // Two-bar shell — the left ProductRail is replaced by the horizontal
   // top product bar inside <ProductHeader> (Bar 1), reclaiming the 56px
   // sidebar for content. The shell is now a vertical column: Bar 1 →
@@ -72,6 +79,9 @@ export function ProductShell({
         color: 'var(--lp-text)',
       }}
     >
+      {rememberProduct && tourId ? (
+        <RememberTourProduct tourId={tourId} product={rememberProduct} />
+      ) : null}
       <ProductHeader productName={productName} active={active} homeHref={homeHref} />
       {subNav ?? null}
       <main

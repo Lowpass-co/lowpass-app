@@ -25,6 +25,7 @@ import { useRouter } from 'next/navigation';
 import { Briefcase, DollarSign, ClipboardList, ChevronRight } from 'lucide-react';
 import { useArtistTourContext } from '@/contexts/ArtistTourContext';
 import { useTourEditor } from '@/contexts/TourEditorContext';
+import { tourHref } from '@/lib/nav/lastProduct';
 import type { HomeTourSummary } from '@/server/home/getHomeData';
 
 const STATUS_META: Record<string, { label: string; color: string }> = {
@@ -89,7 +90,9 @@ export function TourPicker({ tours }: { tours: HomeTourSummary[] }) {
 
   const openTour = (id: string) => {
     setSelectedTourId(id);
-    router.push(`/budget/${id}`);
+    // Nav & entry fixpack item 1 — open on the tour's last-used product
+    // (Operations fallback) instead of hardwiring Budget.
+    router.push(tourHref(id));
   };
 
   if (selected) {

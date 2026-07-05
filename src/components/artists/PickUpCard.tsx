@@ -8,21 +8,11 @@
    orange Resume button linking to the matching product surface.
    ============================================ */
 
-import Link from 'next/link';
-import { ArrowRight } from 'lucide-react';
 import { ArtistInitialsChip } from './ArtistInitialsChip';
+import { PickUpResumeButton } from './PickUpResumeButton';
 import type { WorkspaceLandingPickUp } from '@/server/workspace/getWorkspaceLandingData';
 
-const PRODUCT_LABELS: Record<WorkspaceLandingPickUp['resumeProduct'], string> = {
-  budget: 'Budget',
-  advance: 'Advance',
-  operations: 'Operations',
-};
-
 export function PickUpCard({ pickUp }: { pickUp: WorkspaceLandingPickUp }) {
-  const productLabel = PRODUCT_LABELS[pickUp.resumeProduct];
-  const href = `/${pickUp.resumeProduct}/${pickUp.tourId}`;
-
   return (
     <section
       style={{
@@ -104,23 +94,11 @@ export function PickUpCard({ pickUp }: { pickUp: WorkspaceLandingPickUp }) {
           </div>
         </div>
 
-        {/* Resume button */}
-        <Link
-          href={href}
-          className="btn-transition inline-flex shrink-0 items-center"
-          style={{
-            gap: 'var(--lp-space-2)',
-            padding: 'var(--lp-space-2) var(--lp-space-4)',
-            fontSize: 'var(--lp-text-sm)',
-            fontWeight: 'var(--lp-weight-semibold)',
-            color: 'var(--lp-text-inverse)',
-            background: 'var(--color-lp-orange)',
-            borderRadius: 'var(--lp-radius-md)',
-          }}
-        >
-          Resume {productLabel}
-          <ArrowRight aria-hidden size={14} strokeWidth={2.25} />
-        </Link>
+        {/* Resume button — client island resolves last-used product (item 1) */}
+        <PickUpResumeButton
+          tourId={pickUp.tourId}
+          fallbackProduct={pickUp.resumeProduct}
+        />
       </div>
     </section>
   );
