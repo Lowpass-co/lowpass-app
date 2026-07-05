@@ -16,6 +16,7 @@
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { resolveVenue, type RoutingVenueSource } from '@/lib/venues/resolveVenue';
 import { OperationsSummaryClient } from '@/components/operations/summary/OperationsSummaryClient';
 import {
   canAccess,
@@ -115,7 +116,12 @@ export default async function OperationsTourLandingPage({
   const [routingRes, tpRes, auditRes] = await Promise.all([
     supabase
       .from('routing')
-      .select('id, date, day_type, city, venue_name, venue_capacity')
+      // Venue SSOT — join canonical + the discriminator columns so venue_name /
+      // venue_capacity render resolved (live→canonical, past→snapshot). Freeze
+      // WRITES stay centralized in the routing GET; this SSR read resolves only.
+      .select(
+        'id, date, day_type, city, country, address, venue_name, venue_phone, venue_website, venue_capacity, canonical_venue_id, venue_frozen_at, canonical:canonical_venues(id, name, address, city, country, capacity)',
+      )
       .eq('tour_id', tourId)
       .order('date'),
     supabase
@@ -132,14 +138,19 @@ export default async function OperationsTourLandingPage({
       .limit(5),
   ]);
 
-  const routing = (routingRes.data ?? []) as Array<{
-    id: string;
-    date: string;
-    day_type: string | null;
-    city: string | null;
-    venue_name: string | null;
-    venue_capacity: number | null;
-  }>;
+  // Venue SSOT — resolve each routing row's venue (live→canonical, past→snapshot)
+  // and expose the resolved venue_name / venue_capacity the summary renders.
+  const routing = ((routingRes.data ?? []) as RoutingVenueSource[]).map((r) => {
+    const v = resolveVenue(r);
+    return {
+      id: r.id as string,
+      date: r.date as string,
+      day_type: r.day_type ?? null,
+      city: v.city,
+      venue_name: v.name,
+      venue_capacity: v.capacity,
+    };
+  });
   const tourPersonnel = (tpRes.data ?? []) as TourPersonnelJoined[];
   const auditRows = (auditRes.data ?? []) as Array<{
     id: string;

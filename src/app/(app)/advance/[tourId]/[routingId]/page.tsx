@@ -29,6 +29,7 @@
 
 import { notFound } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { resolveVenue, type RoutingVenueSource } from '@/lib/venues/resolveVenue';
 import { AdvanceShowReadView } from '@/components/advance/AdvanceShowReadView';
 import { AdvanceShowHeader } from '@/components/advance/AdvanceShowHeader';
 import { AdvanceUpcomingSidebar } from '@/components/advance/AdvanceUpcomingSidebar';
@@ -94,8 +95,11 @@ export default async function AdvanceShowPage({
   const [routingRes, tourRes, advanceRes] = await Promise.all([
     supabase
       .from('routing')
+      // Venue SSOT — join canonical + discriminators so the venue block resolves
+      // (live day → canonical, past/frozen → snapshot). Freeze writes stay in the
+      // routing GET; this render resolves only.
       .select(
-        'date, day_type, venue_name, city, address, venue_website, venue_phone, venue_capacity',
+        'id, date, day_type, city, country, address, venue_name, venue_website, venue_phone, venue_capacity, canonical_venue_id, venue_frozen_at, canonical:canonical_venues(id, name, address, city, country, capacity)',
       )
       .eq('id', routingId)
       .maybeSingle(),
@@ -113,18 +117,23 @@ export default async function AdvanceShowPage({
       .maybeSingle(),
   ]);
 
-  const routing = routingRes.data as
-    | {
-        date: string;
-        day_type: string | null;
-        venue_name: string | null;
-        city: string | null;
-        address: string | null;
-        venue_website: string | null;
-        venue_phone: string | null;
-        venue_capacity: number | null;
-      }
-    | null;
+  // Venue SSOT — resolve the venue block (live→canonical, past/frozen→snapshot).
+  const routingRaw = routingRes.data as (RoutingVenueSource & { date: string; day_type: string | null }) | null;
+  const routing = routingRaw
+    ? (() => {
+        const v = resolveVenue(routingRaw);
+        return {
+          date: routingRaw.date,
+          day_type: routingRaw.day_type,
+          venue_name: v.name,
+          city: v.city,
+          address: v.address,
+          venue_website: v.website,
+          venue_phone: v.phone,
+          venue_capacity: v.capacity,
+        };
+      })()
+    : null;
   const tourRow = tourRes.data as
     | { id: string; name: string }
     | null;

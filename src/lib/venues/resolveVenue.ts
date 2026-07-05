@@ -62,6 +62,8 @@ export interface CanonicalVenueRow {
 export interface RoutingVenueSource {
   id?: string;
   date?: string | null;
+  /** Carried through by some consumers (not used by the resolver). */
+  day_type?: string | null;
   venue_frozen_at?: string | null;
   canonical_venue_id?: string | null;
   venue_name?: string | null;
