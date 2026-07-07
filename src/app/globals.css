@@ -1611,3 +1611,18 @@ textarea::selection,
      rarely render inheritance chrome — this scopes it should any appear. */
   --lp-inheritance: var(--lp-text-tertiary);
 }
+
+/* ============================================================
+   Design system 2026-07 (§7) — TourFingerprint keyframes.
+   Bars draw in once per load (~20ms/bar via staggered animation-delay);
+   the anchored popover scales from its bottom-center anchor (~140ms). Both are
+   disabled by the global prefers-reduced-motion kill-switch above.
+   ============================================================ */
+@keyframes lp-fp-draw {
+  from { transform: scaleY(0); }
+  to   { transform: scaleY(1); }
+}
+@keyframes lp-fp-pop {
+  from { opacity: 0; transform: scale(0.85); }
+  to   { opacity: 1; transform: scale(1); }
+}
