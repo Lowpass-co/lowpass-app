@@ -25,6 +25,14 @@ import {
   resolveArtistBannerUrl,
   getArtistGradient,
 } from '@/lib/artists/imageUrl';
+import { resolveVenue, type RoutingVenueSource } from '@/lib/venues/resolveVenue';
+
+/** A day tick for the card-scale <TourFingerprint> — date + free-text day_type.
+ *  Venue is not carried at card scale (kept light + venue-guardrail-clean). */
+export interface WorkspaceLandingFingerprintDay {
+  date: string;
+  dayType: string;
+}
 
 export interface WorkspaceLandingArtist {
   id: string;
@@ -34,7 +42,14 @@ export interface WorkspaceLandingArtist {
   bannerGradient: string;
   activeTourCount: number;
   monthsUpcoming: number;
-  nextShow: { date: string; venue: string | null } | null;
+  /** Next SHOW day — city drives the standardized footer; venue resolved via
+   *  resolveVenue (venue SSOT). */
+  nextShow: { date: string; city: string | null; venue: string | null } | null;
+  /** Routing days of the artist's featured (nearest-upcoming) tour, for the
+   *  card-scale fingerprint. Empty when the artist has no dated routing. */
+  fingerprint: WorkspaceLandingFingerprintDay[];
+  /** Derived footer action (verb + href) — no mood words (§8). */
+  action: { label: string; href: string };
 }
 
 export interface WorkspaceLandingPickUp {
@@ -172,8 +187,11 @@ export async function getWorkspaceLandingData(
     supabase
       // UX-walk §A.2 — "Next show" must be the first SHOW DAY, not the first
       // routing row (which may be a day off / travel / rehearsal).
+      // Venue SSOT — join canonical + discriminators so nextShow.venue/city
+      // resolve live-vs-frozen (this loader is being rebuilt for the design pass,
+      // so the venue conversion is now in scope).
       .from('routing')
-      .select('tour_id, date, venue_name')
+      .select('id, tour_id, date, day_type, city, country, address, venue_name, venue_phone, venue_website, venue_capacity, venue_frozen_at, canonical_venue_id, canonical:canonical_venues(id, name, address, city, country, capacity)')
       .in('day_type', ['show', 'festival'])
       .gte('date', new Date().toISOString().slice(0, 10))
       .order('date', { ascending: true }),
@@ -251,11 +269,13 @@ export async function getWorkspaceLandingData(
   } | null;
   const artistRows = (artistsRes.data ?? []) as ArtistRow[];
   const tourRows = (toursRes.data ?? []) as TourRow[];
-  const upcomingRouting = (routingRes.data ?? []) as Array<{
-    tour_id: string;
-    date: string;
-    venue_name: string | null;
-  }>;
+  // Venue SSOT — resolve each upcoming row's venue/city (live→canonical,
+  // past/frozen→snapshot) instead of reading the raw venue_name column.
+  const upcomingRaw = (routingRes.data ?? []) as Array<RoutingVenueSource & { tour_id: string; date: string }>;
+  const upcomingRouting = upcomingRaw.map((r) => {
+    const v = resolveVenue(r);
+    return { tour_id: r.tour_id, date: r.date, city: v.city, venue: v.name };
+  });
   const budgetLines = (budgetRes.data ?? []) as Array<{
     proposed_cost: number | null;
   }>;
@@ -273,6 +293,37 @@ export async function getWorkspaceLandingData(
     const list = upcomingByTour.get(r.tour_id) ?? [];
     list.push(r);
     upcomingByTour.set(r.tour_id, list);
+  }
+
+  // Featured tour per artist = the tour of the nearest upcoming show; else the
+  // active tour; else the most recent. Drives the card fingerprint + the derived
+  // footer action's href.
+  const featuredTourByArtist = new Map<string, string>();
+  for (const a of artistRows) {
+    const artistTours = toursByArtist.get(a.id) ?? [];
+    let best: { tourId: string; date: string } | null = null;
+    for (const t of artistTours) {
+      const first = (upcomingByTour.get(t.id) ?? [])[0];
+      if (first && (!best || first.date < best.date)) best = { tourId: t.id, date: first.date };
+    }
+    const featured = best?.tourId ?? artistTours.find((t) => t.status === 'active')?.id ?? artistTours[0]?.id;
+    if (featured) featuredTourByArtist.set(a.id, featured);
+  }
+  // Fingerprint days (ALL day types) for the featured tours — one bounded query.
+  // date + day_type only: no venue read, so venue-guardrail-clean.
+  const featuredTourIds = Array.from(new Set(featuredTourByArtist.values()));
+  const fingerprintByTour = new Map<string, WorkspaceLandingFingerprintDay[]>();
+  if (featuredTourIds.length > 0) {
+    const { data: fpRows } = await supabase
+      .from('routing')
+      .select('tour_id, date, day_type')
+      .in('tour_id', featuredTourIds)
+      .order('date', { ascending: true });
+    for (const r of (fpRows ?? []) as Array<{ tour_id: string; date: string; day_type: string | null }>) {
+      const list = fingerprintByTour.get(r.tour_id) ?? [];
+      list.push({ date: r.date, dayType: r.day_type ?? 'off' });
+      fingerprintByTour.set(r.tour_id, list);
+    }
   }
 
   // Resolve image URLs for each artist in parallel. Cache layer
@@ -300,16 +351,26 @@ export async function getWorkspaceLandingData(
       }
       monthsUpcoming = Math.max(0, Math.min(24, monthsUpcoming));
 
-      // Next show across all this artist's tours.
+      // Next show across all this artist's tours (city + resolved venue).
       let nextShow: WorkspaceLandingArtist['nextShow'] = null;
       for (const t of artistTours) {
         const list = upcomingByTour.get(t.id) ?? [];
         if (list.length === 0) continue;
         const first = list[0];
         if (!nextShow || first.date < nextShow.date) {
-          nextShow = { date: first.date, venue: first.venue_name };
+          nextShow = { date: first.date, city: first.city, venue: first.venue };
         }
       }
+
+      const featuredTourId = featuredTourByArtist.get(a.id) ?? null;
+      const fingerprint = featuredTourId ? fingerprintByTour.get(featuredTourId) ?? [] : [];
+      // Derived footer action (§8 — verb + scope, no mood words).
+      const action: WorkspaceLandingArtist['action'] =
+        nextShow && featuredTourId
+          ? { label: 'Open tour', href: `/operations/${featuredTourId}` }
+          : artistTours.length === 0
+            ? { label: 'Plan a tour', href: `/artists/${a.id}` }
+            : { label: 'Add shows', href: featuredTourId ? `/operations/${featuredTourId}/routing` : `/artists/${a.id}` };
 
       return {
         id: a.id,
@@ -320,6 +381,8 @@ export async function getWorkspaceLandingData(
         activeTourCount: activeTours.length,
         monthsUpcoming,
         nextShow,
+        fingerprint,
+        action,
       };
     }),
   );

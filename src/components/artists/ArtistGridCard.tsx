@@ -21,10 +21,11 @@
 
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { Trash2 } from 'lucide-react';
+import { ArrowRight, Trash2 } from 'lucide-react';
 import { ContextMenu } from '@/components/ui/ContextMenu';
 import { ArtistInitialsChip } from './ArtistInitialsChip';
 import { ArtistDeleteConfirmationModal } from './ArtistDeleteConfirmationModal';
+import { TourFingerprint } from '@/components/tour/TourFingerprint';
 import type { WorkspaceLandingArtist } from '@/server/workspace/getWorkspaceLandingData';
 
 const MONTHS = [
@@ -168,8 +169,9 @@ export function ArtistGridCard({
           className="flex flex-col"
           style={{
             padding: '52px var(--lp-space-3) var(--lp-space-3)',
-            gap: 'var(--lp-space-1)',
+            gap: 'var(--lp-space-2)',
             pointerEvents: 'none',
+            height: 160,
           }}
         >
           <div
@@ -184,36 +186,67 @@ export function ArtistGridCard({
           >
             {artist.name}
           </div>
+
+          {/* Card-scale fingerprint of the featured tour. pointerEvents re-enabled
+              (parent content is inert) + above the click target for hover. */}
+          {artist.fingerprint.length > 0 ? (
+            <div style={{ pointerEvents: 'auto', position: 'relative', zIndex: 2 }}>
+              <TourFingerprint
+                days={artist.fingerprint}
+                size="card"
+                highlightDate={artist.nextShow?.date ?? null}
+                ariaLabel={`${artist.name} tour day strip`}
+              />
+            </div>
+          ) : (
+            <div style={{ fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text-tertiary)' }}>
+              <span className="lp-mono">{artist.activeTourCount}</span> active ·{' '}
+              <span className="lp-mono">{artist.monthsUpcoming}</span>{' '}
+              {artist.monthsUpcoming === 1 ? 'month' : 'months'} upcoming
+            </div>
+          )}
+
+          {/* Standardized footer (§8): left = Next: <date> · <city> (or Nothing
+              booked), right = derived action verb — same shape on every card. */}
           <div
-            style={{
-              fontSize: 'var(--lp-text-xs)',
-              color: 'var(--lp-text-secondary)',
-              fontVariantNumeric: 'tabular-nums',
-            }}
+            className="mt-auto flex items-center justify-between"
+            style={{ gap: 'var(--lp-space-2)', paddingTop: 'var(--lp-space-1)' }}
           >
-            <span className="lp-mono">{artist.activeTourCount}</span>{' '}
-            active ·{' '}
-            <span className="lp-mono">{artist.monthsUpcoming}</span>{' '}
-            {artist.monthsUpcoming === 1 ? 'month' : 'months'} upcoming
-          </div>
-          {artist.nextShow ? (
-            <div
-              className="truncate"
+            <span
+              className="min-w-0 truncate lp-label-caps"
               style={{
                 fontSize: 'var(--lp-text-2xs)',
-                fontWeight: 'var(--lp-weight-bold)',
                 letterSpacing: 'var(--lp-tracking-caps)',
                 textTransform: 'uppercase',
                 color: 'var(--lp-text-tertiary)',
-                marginTop: 4,
               }}
             >
-              Next: {formatNextDate(artist.nextShow.date)}
-              {artist.nextShow.venue
-                ? ` · ${shortenVenue(artist.nextShow.venue)}`
-                : ''}
-            </div>
-          ) : null}
+              {artist.nextShow ? (
+                <>
+                  Next:{' '}
+                  <span className="lp-mono" style={{ color: 'var(--lp-text-secondary)' }}>
+                    {formatNextDate(artist.nextShow.date)}
+                  </span>
+                  {artist.nextShow.city ? ` · ${shortenVenue(artist.nextShow.city)}` : ''}
+                </>
+              ) : (
+                'Nothing booked'
+              )}
+            </span>
+            <span
+              className="inline-flex shrink-0 items-center"
+              style={{
+                gap: 4,
+                fontSize: 'var(--lp-text-2xs)',
+                fontWeight: 'var(--lp-weight-semibold)',
+                color: 'var(--color-lp-orange)',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {artist.action.label}
+              <ArrowRight size={12} aria-hidden />
+            </span>
+          </div>
         </div>
       </div>
 
