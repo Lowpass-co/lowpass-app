@@ -24,7 +24,7 @@
 
 import { useMemo, useState } from 'react';
 import { useToast } from '@/components/ui/Toast';
-import { Loader2, X } from 'lucide-react';
+import { AlertTriangle, Loader2, X } from 'lucide-react';
 import { SlideOver } from '@/components/shell/SlideOver';
 import { TagEditor } from './TagEditor';
 import { PermissionMatrix } from './PermissionMatrix';
@@ -390,12 +390,16 @@ function MemberManageEditor({
               <div
                 className="lp-label-caps"
                 style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 'var(--lp-space-1)',
                   fontSize: 'var(--lp-text-2xs)',
                   color: 'var(--color-lp-orange)',
                   marginBottom: 'var(--lp-space-1)',
                 }}
               >
-                ⚠ Sensitive grants
+                <AlertTriangle size={12} aria-hidden />
+                Sensitive grants
               </div>
               This member will see:
               <ul style={{ marginTop: 4, marginLeft: 18, lineHeight: 1.6 }}>

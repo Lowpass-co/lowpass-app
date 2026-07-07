@@ -43,7 +43,7 @@ export default async function WorkspaceLayout({
 
   return (
     <div
-      className="flex min-h-screen flex-col"
+      className="lp-view-tier flex min-h-screen flex-col"
       style={{ background: 'var(--lp-bg)' }}
     >
       <WorkspaceTopBar workspaceName={workspaceName} />

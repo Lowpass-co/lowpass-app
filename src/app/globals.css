@@ -1592,3 +1592,22 @@ textarea::selection,
     scroll-behavior: auto !important;
   }
 }
+
+/* ============================================================
+   Design system 2026-07 (§2 hue budget) — VIEW-TIER recolor scope.
+
+   Per the pre-made ruling, the warning→orange and inheritance→gray recolors
+   apply ONLY within the view tiers (workspace / artist / tour landing), NOT to
+   the shared tokens — unmigrated tool surfaces keep their amber/purple until
+   their own stages. Applied via this wrapper class on the view-tier layout
+   roots; nesting a tool surface inside a view stays rare and is acceptable debt
+   until the tool stages land.
+   ============================================================ */
+.lp-view-tier {
+  /* Warnings read as brand orange inside views (act/attend/attention share the
+     one accent) rather than amber. */
+  --color-lp-warning: var(--lp-orange);
+  /* Inheritance UI is neutral gray ↘ in the new system (was purple). Views
+     rarely render inheritance chrome — this scopes it should any appear. */
+  --lp-inheritance: var(--lp-text-tertiary);
+}

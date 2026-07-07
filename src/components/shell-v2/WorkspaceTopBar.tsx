@@ -15,7 +15,15 @@
 import { Search } from 'lucide-react';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { ProductHeaderAvatarMenu } from './ProductHeaderAvatarMenu';
+import { ArtistTourSwitcherClientWrapper } from './ArtistTourSwitcherClientWrapper';
 import { toTitleCase } from '@/lib/text/toTitleCase';
+
+type SwitcherArtistMin = {
+  id: string;
+  name: string;
+  branding: unknown;
+  spotify_image_url: string | null;
+};
 
 interface WorkspaceTopBarProps {
   workspaceName: string;
@@ -25,9 +33,15 @@ export async function WorkspaceTopBar({
   workspaceName,
 }: WorkspaceTopBarProps) {
   const supabase = await createServerSupabaseClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Fetch the user + the workspace artist list in parallel — the artist list
+  // seeds the persistent artist/tour picker (design §5: picker pills on EVERY
+  // tier; workspace shows them contextual/empty). RLS scopes both to the caller.
+  const [{ data: userData }, { data: artistsRes }] = await Promise.all([
+    supabase.auth.getUser(),
+    supabase.from('artists').select('id, name, branding, spotify_image_url').order('name', { ascending: true }),
+  ]);
+  const user = userData?.user ?? null;
+  const initialArtists = (artistsRes ?? []) as SwitcherArtistMin[];
 
   let isSiteAdmin = false;
   let avatarUrl: string | null = null;
@@ -113,6 +127,21 @@ export async function WorkspaceTopBar({
         </span>
         {toTitleCase(workspaceName)}
       </span>
+
+      {/* Persistent artist + tour picker — present on every tier (design §5).
+          At the workspace tier no artist/tour is selected, so it renders its
+          contextual/empty state; picking one navigates into that scope. */}
+      <span
+        aria-hidden
+        style={{ width: 1, height: 16, background: 'var(--lp-border-subtle)', marginLeft: 'var(--lp-space-2)' }}
+      />
+      <div className="flex min-w-0 items-center">
+        <ArtistTourSwitcherClientWrapper
+          initialArtists={initialArtists}
+          initialTours={null}
+          initialArtistId={null}
+        />
+      </div>
 
       {/* Right-side actions */}
       <div className="ml-auto flex items-center" style={{ gap: 'var(--lp-space-2)' }}>
