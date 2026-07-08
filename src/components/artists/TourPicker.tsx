@@ -27,6 +27,7 @@ import { Briefcase, DollarSign, ClipboardList, ChevronRight } from 'lucide-react
 import { useArtistTourContext } from '@/contexts/ArtistTourContext';
 import { useTourEditor } from '@/contexts/TourEditorContext';
 import { tourHref } from '@/lib/nav/lastProduct';
+import { TourFingerprint } from '@/components/tour/TourFingerprint';
 import type { HomeTourSummary } from '@/server/home/getHomeData';
 
 const STATUS_META: Record<string, { label: string; color: string }> = {
@@ -189,71 +190,108 @@ function TourCard({
 }) {
   const meta = statusMeta(tour.status);
   const activity = lastActivity(tour);
+  // Design pass §7 · fingerprint mount #2 — highlight the next upcoming
+  // show/festival day so the tick reads at a glance.
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const highlightDate =
+    tour.fingerprint.find((d) => {
+      const first = d.dayType.split(',')[0]?.trim().toLowerCase();
+      return (first === 'show' || first === 'festival') && d.date >= todayIso;
+    })?.date ?? null;
   return (
-    <button
-      type="button"
-      onClick={onPick}
-      className="group btn-transition relative overflow-hidden rounded-lg border p-4 text-left outline-none active:scale-[0.985] focus-visible:ring-2 focus-visible:ring-[var(--color-lp-orange)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--lp-surface)]"
+    // Nav ruling — the card is a <div>, not a <button>: the fingerprint's day
+    // ticks are <button>s and nesting buttons is invalid HTML. An absolute-fill
+    // <button> is the click target (preserving onPick → openTour →
+    // setSelectedTourId + product-bar unlock); the fingerprint sits above it
+    // with its own pointer events so day-clicks don't trigger the card.
+    <div
+      className="group btn-transition relative overflow-hidden rounded-lg border p-4"
       style={{
         borderColor: 'var(--lp-border-strong)',
         background: 'var(--lp-bg-deep)',
       }}
     >
+      {/* absolute-fill click target — the whole card selects the tour */}
+      <button
+        type="button"
+        onClick={onPick}
+        aria-label={`Open ${tour.name}`}
+        className="absolute inset-0 z-0 cursor-pointer outline-none active:scale-[0.985] focus-visible:ring-2 focus-visible:ring-[var(--color-lp-orange)] focus-visible:ring-inset"
+        style={{ background: 'transparent', border: 0 }}
+      />
       {/* status accent stripe */}
       <span
         aria-hidden
-        className="absolute left-0 top-0 h-full"
+        className="absolute left-0 top-0 z-[1] h-full"
         style={{ width: 3, background: meta.color }}
       />
-      <div className="flex items-start justify-between gap-2 pl-1.5">
-        <span
-          className="min-w-0 truncate"
-          style={{ fontSize: 15, fontWeight: 600, color: 'var(--lp-text)' }}
+      {/* text content — pointer-events:none so clicks fall through to the
+          overlay button underneath */}
+      <div className="pointer-events-none relative z-[1]">
+        <div className="flex items-start justify-between gap-2 pl-1.5">
+          <span
+            className="min-w-0 truncate"
+            style={{ fontSize: 15, fontWeight: 600, color: 'var(--lp-text)' }}
+          >
+            {tour.name}
+          </span>
+          <ChevronRight
+            size={16}
+            className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
+            style={{ color: 'var(--color-lp-orange)' }}
+          />
+        </div>
+        <div className="mt-1.5 flex items-center gap-2 pl-1.5">
+          <span
+            className="inline-flex items-center rounded-full px-2 py-0.5"
+            style={{
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: '0.04em',
+              textTransform: 'uppercase',
+              color: meta.color,
+              background: `color-mix(in srgb, ${meta.color} 12%, transparent)`,
+            }}
+          >
+            {meta.label}
+          </span>
+          <span style={{ fontSize: 12, color: 'var(--lp-text-secondary)' }}>
+            {fmtRange(tour.startDate, tour.endDate)}
+          </span>
+        </div>
+        <div
+          className="mt-3 flex items-center gap-3 pl-1.5"
+          style={{ fontSize: 11, color: 'var(--lp-text-tertiary)' }}
         >
-          {tour.name}
-        </span>
-        <ChevronRight
-          size={16}
-          className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
-          style={{ color: 'var(--color-lp-orange)' }}
-        />
+          <span>
+            <span className="lp-mono" style={{ color: 'var(--lp-text-secondary)' }}>
+              {tour.showCount}
+            </span>{' '}
+            {tour.showCount === 1 ? 'show' : 'shows'}
+          </span>
+          {activity ? (
+            <>
+              <span aria-hidden>·</span>
+              <span>{activity}</span>
+            </>
+          ) : null}
+        </div>
       </div>
-      <div className="mt-1.5 flex items-center gap-2 pl-1.5">
-        <span
-          className="inline-flex items-center rounded-full px-2 py-0.5"
-          style={{
-            fontSize: 10,
-            fontWeight: 700,
-            letterSpacing: '0.04em',
-            textTransform: 'uppercase',
-            color: meta.color,
-            background: `color-mix(in srgb, ${meta.color} 12%, transparent)`,
-          }}
-        >
-          {meta.label}
-        </span>
-        <span style={{ fontSize: 12, color: 'var(--lp-text-secondary)' }}>
-          {fmtRange(tour.startDate, tour.endDate)}
-        </span>
-      </div>
-      <div
-        className="mt-3 flex items-center gap-3 pl-1.5"
-        style={{ fontSize: 11, color: 'var(--lp-text-tertiary)' }}
-      >
-        <span>
-          <span className="lp-mono" style={{ color: 'var(--lp-text-secondary)' }}>
-            {tour.showCount}
-          </span>{' '}
-          {tour.showCount === 1 ? 'show' : 'shows'}
-        </span>
-        {activity ? (
-          <>
-            <span aria-hidden>·</span>
-            <span>{activity}</span>
-          </>
-        ) : null}
-      </div>
-    </button>
+      {/* row-scale tour fingerprint (mount #2) — its own pointer events sit
+          above the overlay so day-ticks open their popover without selecting
+          the tour. */}
+      {tour.fingerprint.length > 0 ? (
+        <div className="pointer-events-auto relative z-[2] mt-3 pl-1.5">
+          <TourFingerprint
+            days={tour.fingerprint}
+            size="row"
+            weekMarkers
+            highlightDate={highlightDate}
+            ariaLabel={`${tour.name} day strip`}
+          />
+        </div>
+      ) : null}
+    </div>
   );
 }
 

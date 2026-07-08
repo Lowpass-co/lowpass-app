@@ -15,6 +15,7 @@
    ============================================ */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { resolveVenue, type RoutingVenueSource } from '@/lib/venues/resolveVenue';
 
 export type HomeArtist = {
   id: string;
@@ -37,6 +38,8 @@ export type HomeTourSummary = {
   startDate: string | null;
   endDate: string | null;
   showCount: number;
+  /** Routing days (date + day_type) for the row-scale <TourFingerprint>. */
+  fingerprint: Array<{ date: string; dayType: string }>;
   /** Per-product touch timestamps for the product cards. */
   lastBudgetTouchedAt: string | null;
   lastAdvanceTouchedAt: string | null;
@@ -232,15 +235,25 @@ export async function getHomeData(
   // tour-window months — but for the per-tour summary we want *all*
   // shows (not just this-month). One extra cheap query.
   const showCountByTour = new Map<string, number>();
+  // Fingerprint days per tour (date + day_type — venue-clean) for the row-scale
+  // <TourFingerprint>, built from the same all-routing query.
+  const fingerprintByTour = new Map<string, Array<{ date: string; dayType: string }>>();
   if (tourIds.length > 0) {
     const { data: allRouting } = await supabase
       .from('routing')
-      .select('tour_id, day_type')
-      .in('tour_id', tourIds);
+      .select('tour_id, date, day_type')
+      .in('tour_id', tourIds)
+      .order('date', { ascending: true });
     for (const r of (allRouting ?? []) as Array<{
       tour_id: string;
+      date: string | null;
       day_type: string | null;
     }>) {
+      if (r.date) {
+        const list = fingerprintByTour.get(r.tour_id) ?? [];
+        list.push({ date: r.date, dayType: r.day_type ?? 'off' });
+        fingerprintByTour.set(r.tour_id, list);
+      }
       const dt = (r.day_type ?? '').toLowerCase();
       if (!dt.includes('show') && !dt.includes('festival')) continue;
       showCountByTour.set(r.tour_id, (showCountByTour.get(r.tour_id) ?? 0) + 1);
@@ -288,6 +301,7 @@ export async function getHomeData(
     startDate: t.start_date,
     endDate: t.end_date,
     showCount: showCountByTour.get(t.id) ?? 0,
+    fingerprint: fingerprintByTour.get(t.id) ?? [],
     lastBudgetTouchedAt: budgetByTour.get(t.id) ?? null,
     lastAdvanceTouchedAt: advanceUpdatedByTour.get(t.id) ?? null,
     lastOpsTouchedAt: t.updated_at, // tours.updated_at is the closest "Ops touch" we have
@@ -412,8 +426,11 @@ export async function getHomeData(
   const calendarRes =
     tourIds.length > 0
       ? await supabase
+          // Venue SSOT — join canonical + discriminators so the calendar venue
+          // resolves live-vs-frozen (this loader is being extended for the
+          // design pass, so the venue conversion is in scope).
           .from('routing')
-          .select('id, tour_id, date, day_type, city, venue_name')
+          .select('id, tour_id, date, day_type, city, country, address, venue_name, venue_phone, venue_website, venue_capacity, venue_frozen_at, canonical_venue_id, canonical:canonical_venues(id, name, address, city, country, capacity)')
           .in('tour_id', tourIds)
           .gte('date', todayIso)
           .lte('date', in30)
@@ -421,24 +438,20 @@ export async function getHomeData(
       : { data: [] as unknown[] };
 
   const calendar: HomeCalendarCell[] = (
-    (calendarRes.data ?? []) as Array<{
-      id: string;
-      tour_id: string;
-      date: string | null;
-      day_type: string | null;
-      city: string | null;
-      venue_name: string | null;
-    }>
+    (calendarRes.data ?? []) as Array<RoutingVenueSource & { id: string; tour_id: string; date: string | null; day_type: string | null }>
   )
     .filter((r) => r.date)
-    .map((r) => ({
-      date: r.date as string,
-      dayType: r.day_type ?? '',
-      city: r.city,
-      venue: r.venue_name,
-      tourId: r.tour_id,
-      routingId: r.id,
-    }));
+    .map((r) => {
+      const v = resolveVenue(r);
+      return {
+        date: r.date as string,
+        dayType: r.day_type ?? '',
+        city: v.city,
+        venue: v.name,
+        tourId: r.tour_id,
+        routingId: r.id,
+      };
+    });
 
   // What's hot per product:
   //   Operations  → upcoming shows in next 30 days
