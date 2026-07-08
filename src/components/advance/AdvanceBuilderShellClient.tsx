@@ -51,10 +51,15 @@ export const ADVANCE_FIELD_SELECTED_EVENT = 'advance:field-selected';
 
 type FieldSelectionDetail = {
   id: string;
-  type: 'text' | 'checkbox' | 'number' | 'dropdown' | 'file';
+  /** VIS-AB-03 — any of the 12 model.tsx field types. */
+  type: string;
   label: string;
   required: boolean;
   helpText?: string;
+  placeholder?: string;
+  readOnly?: boolean;
+  /** VIS-AB-03 — TM-only (hidden from the venue intake form). */
+  tmOnly?: boolean;
   defaultAssigneeId?: string | null;
   dueOffsetDays?: number | null;
 };
@@ -227,6 +232,9 @@ export function AdvanceBuilderShellClient({
                     label: next.label,
                     required: next.required,
                     type: next.type,
+                    tm_only: next.tmOnly ?? false,
+                    placeholder: next.placeholder,
+                    helpText: next.helpText,
                   },
                 },
               }),

@@ -89,6 +89,16 @@ import { uniquifyFieldIds } from '../parts/uniquifyFieldIds';
 
 const CUSTOM_SECTION_ID = '__custom__';
 
+/* VIS-AB-05 — a venue can fill a field on the intake form only when it isn't
+   tm_only and its type is answerable (file + contact are TM-entered — mirrors
+   buildIntakeFormSchema). */
+const VENUE_NON_FILLABLE_TYPES = new Set(['file', 'contact']);
+function venueFillableCount(fields: FieldDef[] | undefined): number {
+  return (fields ?? []).filter(
+    (f) => !f.tm_only && !VENUE_NON_FILLABLE_TYPES.has(f.type),
+  ).length;
+}
+
 function SetupMode({
   tourId,
   routingId,
@@ -346,7 +356,7 @@ function SetupMode({
   const patchFieldById = useCallback(
     (
       fieldId: string,
-      patch: Partial<Pick<FieldDef, 'label' | 'required' | 'type'>>,
+      patch: Partial<FieldDef>,
     ) => {
       setSections((prev) =>
         prev.map((sec) => {
@@ -367,7 +377,7 @@ function SetupMode({
     function onFieldUpdated(e: Event) {
       const ce = e as CustomEvent<{
         fieldId: string;
-        patch: Partial<Pick<FieldDef, 'label' | 'required' | 'type'>>;
+        patch: Partial<FieldDef>;
       } | null>;
       if (!ce.detail) return;
       patchFieldById(ce.detail.fieldId, ce.detail.patch);
@@ -1116,6 +1126,19 @@ function SetupMode({
                   <GripVertical className="shrink-0 cursor-grab text-lp-text-tertiary active:cursor-grabbing" />
                   <SectionIcon icon={template?.icon ?? sec.template_id === CUSTOM_SECTION_ID ? 'clipboard' : undefined} />
                   <span className="flex-1 text-sm font-medium text-lp-text">{sec.label}</span>
+                  {/* VIS-AB-05 — "Venue can fill x of y" while building. */}
+                  {(sec.fields ?? []).length > 0 ? (
+                    <span
+                      className="shrink-0 text-lp-text-tertiary"
+                      style={{ fontSize: 11, whiteSpace: 'nowrap' }}
+                      title="Fields the venue can fill on the intake form (excludes TM-only + file / contact)"
+                    >
+                      Venue can fill{' '}
+                      <span className="lp-mono text-lp-text-secondary">{venueFillableCount(sec.fields)}</span>
+                      {' '}of{' '}
+                      <span className="lp-mono text-lp-text-secondary">{(sec.fields ?? []).length}</span>
+                    </span>
+                  ) : null}
                 </div>
                 <div className={cn('grid transition-[grid-template-rows] duration-300 ease-out', expanded ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')} style={{ transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)' }}>
                   <div className="min-h-0 overflow-hidden">
@@ -1185,13 +1208,14 @@ function SetupMode({
                                     new CustomEvent('advance:field-selected', {
                                       detail: {
                                         id: f.id,
-                                        type: (['text', 'checkbox', 'number', 'dropdown', 'file'] as const).includes(
-                                          f.type as 'text' | 'checkbox' | 'number' | 'dropdown' | 'file',
-                                        )
-                                          ? (f.type as 'text' | 'checkbox' | 'number' | 'dropdown' | 'file')
-                                          : 'text',
+                                        // VIS-AB-03 — real type (any of the 12), plus tm_only +
+                                        // help/placeholder so the inspector exposes them all.
+                                        type: f.type,
                                         label: f.label,
                                         required: f.required ?? false,
+                                        tmOnly: f.tm_only ?? false,
+                                        placeholder: typeof f.placeholder === 'string' ? f.placeholder : undefined,
+                                        helpText: typeof f.helpText === 'string' ? f.helpText : undefined,
                                       },
                                     }),
                                   );

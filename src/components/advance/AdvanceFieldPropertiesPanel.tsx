@@ -27,16 +27,39 @@
 
 'use client';
 
-import {
-  Type,
-  CheckSquare,
-  Hash,
-  ChevronDown,
-  Paperclip,
-  Trash2,
-} from 'lucide-react';
+import { Trash2 } from 'lucide-react';
 
-type FieldType = 'text' | 'checkbox' | 'number' | 'dropdown' | 'file';
+// VIS-AB-03 — the full 12 field types (model.tsx FIELD_TYPE_OPTIONS). Kept as a
+// local label map so the panel stays free of the JSX-heavy model import.
+type FieldType = string;
+
+const TYPE_ORDER = [
+  'text', 'textarea', 'select', 'number', 'currency', 'date', 'time',
+  'boolean', 'file', 'contact', 'url', 'slider',
+] as const;
+
+const TYPE_FRIENDLY: Record<string, string> = {
+  text: 'Text (single line)',
+  textarea: 'Text (multi-line)',
+  select: 'Dropdown',
+  number: 'Number',
+  currency: 'Currency',
+  date: 'Date',
+  time: 'Time',
+  boolean: 'Yes / No',
+  file: 'File upload',
+  contact: 'Contact',
+  url: 'Link',
+  slider: 'Slider',
+  // legacy aliases so a stored type still displays a friendly name
+  checkbox: 'Yes / No',
+  dropdown: 'Dropdown',
+};
+
+/** A venue can fill a field only when it's NOT TM-only and its type is one a
+ *  venue can answer on the public intake form. Mirrors buildIntakeFormSchema,
+ *  which excludes file + contact. */
+const NON_FILLABLE_TYPES = new Set(['file', 'contact']);
 
 interface SelectedField {
   id: string;
@@ -44,11 +67,10 @@ interface SelectedField {
   label: string;
   required: boolean;
   helpText?: string;
-  /** Design-surfaced now; wired to the builder PATCH path in a follow-up. */
   placeholder?: string;
   readOnly?: boolean;
-  /** Retained on the type for back-compat with the selection payload;
-   *  no longer shown in the panel. */
+  /** VIS-AB-03 — TM-only fields are hidden from the venue intake form. */
+  tmOnly?: boolean;
   defaultAssigneeId?: string | null;
   dueOffsetDays?: number | null;
 }
@@ -57,26 +79,6 @@ interface AdvanceFieldPropertiesPanelProps {
   selected: SelectedField | null;
   onChange?: (next: SelectedField) => void;
 }
-
-const TYPE_BUTTONS: {
-  value: FieldType;
-  label: string;
-  Icon: React.ComponentType<{ size?: number }>;
-}[] = [
-  { value: 'text', label: 'Text', Icon: Type },
-  { value: 'checkbox', label: 'Checkbox', Icon: CheckSquare },
-  { value: 'number', label: 'Number', Icon: Hash },
-  { value: 'dropdown', label: 'Dropdown', Icon: ChevronDown },
-  { value: 'file', label: 'File', Icon: Paperclip },
-];
-
-const TYPE_FRIENDLY: Record<FieldType, string> = {
-  text: 'Text (Single Line)',
-  checkbox: 'Checkbox',
-  number: 'Number',
-  dropdown: 'Dropdown',
-  file: 'File Upload',
-};
 
 export function AdvanceFieldPropertiesPanel({
   selected,
@@ -116,8 +118,8 @@ export function AdvanceFieldPropertiesPanel({
     if (onChange) onChange({ ...selected, [key]: value });
   };
 
-  const ActiveIcon =
-    TYPE_BUTTONS.find((b) => b.value === selected.type)?.Icon ?? Type;
+  const knownType = (TYPE_ORDER as readonly string[]).includes(selected.type);
+  const typeOptions = knownType ? [...TYPE_ORDER] : [selected.type, ...TYPE_ORDER];
 
   return (
     <aside
@@ -131,55 +133,29 @@ export function AdvanceFieldPropertiesPanel({
       <PanelHeader />
 
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto" style={{ padding: 16 }}>
-        {/* TYPE — friendly name display + switcher grid. */}
+        {/* TYPE — all 12 field types (VIS-AB-03) via a select. */}
         <Section title="Type">
-          <div
-            className="flex items-center gap-2"
-            style={{ marginBottom: 8, color: 'var(--lp-text)', fontSize: '13px' }}
+          <select
+            value={selected.type}
+            onChange={(e) => update('type', e.target.value)}
+            aria-label="Field type"
+            style={{
+              width: '100%',
+              padding: '7px 9px',
+              fontSize: '13px',
+              background: 'var(--lp-bg-deep)',
+              color: 'var(--lp-text)',
+              border: '1px solid var(--lp-border-strong)',
+              borderRadius: 4,
+              outline: 'none',
+            }}
           >
-            <span
-              className="flex items-center justify-center"
-              style={{
-                width: 24,
-                height: 24,
-                borderRadius: 4,
-                background: 'var(--lp-bg-deep)',
-                border: '1px solid var(--lp-border-subtle)',
-                color: 'var(--lp-text-secondary)',
-              }}
-            >
-              <ActiveIcon size={13} />
-            </span>
-            {TYPE_FRIENDLY[selected.type]}
-          </div>
-          <div className="grid grid-cols-5 gap-1.5">
-            {TYPE_BUTTONS.map(({ value, label, Icon }) => {
-              const active = selected.type === value;
-              return (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => update('type', value)}
-                  aria-pressed={active}
-                  aria-label={label}
-                  className="btn-transition flex items-center justify-center"
-                  style={{
-                    height: 40,
-                    background: active ? 'var(--lp-surface)' : 'var(--lp-bg-deep)',
-                    border: `1px solid ${active ? 'var(--color-lp-orange)' : 'var(--lp-border-strong)'}`,
-                    borderRadius: 4,
-                    color: active
-                      ? 'var(--color-lp-orange)'
-                      : 'var(--lp-text-secondary)',
-                    cursor: 'pointer',
-                  }}
-                  title={label}
-                >
-                  <Icon size={14} />
-                </button>
-              );
-            })}
-          </div>
+            {typeOptions.map((t) => (
+              <option key={t} value={t}>
+                {TYPE_FRIENDLY[t] ?? t}
+              </option>
+            ))}
+          </select>
         </Section>
 
         <PropInput
@@ -215,6 +191,33 @@ export function AdvanceFieldPropertiesPanel({
               checked={selected.readOnly ?? false}
               onChange={(v) => update('readOnly', v)}
             />
+          </div>
+        </Section>
+
+        {/* VIS-AB-03 — venue visibility: tm_only toggle + can-fill readout. */}
+        <Section title="Venue visibility">
+          <div className="flex flex-col gap-2.5">
+            <ToggleRow
+              label="TM-only (hidden from venue)"
+              checked={selected.tmOnly ?? false}
+              onChange={(v) => update('tmOnly', v)}
+            />
+            <div
+              style={{
+                fontSize: '12px',
+                lineHeight: 1.4,
+                color:
+                  !selected.tmOnly && !NON_FILLABLE_TYPES.has(selected.type)
+                    ? 'var(--color-lp-status-complete)'
+                    : 'var(--lp-text-tertiary)',
+              }}
+            >
+              {selected.tmOnly
+                ? 'Hidden from the venue intake form.'
+                : NON_FILLABLE_TYPES.has(selected.type)
+                  ? 'Not venue-fillable — file / contact fields are TM-entered.'
+                  : 'Venue can fill this field on the intake form.'}
+            </div>
           </div>
         </Section>
       </div>
