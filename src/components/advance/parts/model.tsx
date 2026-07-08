@@ -260,6 +260,10 @@ export function sortHospitalityFieldsFirst(fields: FieldDef[]): FieldDef[] {
   });
 }
 
+/** VIS-AB-02 drag-reorder fix — see ./uniquifyFieldIds (kept in a pure .ts so a
+ *  node type-strip test can import it; re-exported here for the builder). */
+export { uniquifyFieldIds } from './uniquifyFieldIds';
+
 export type ContactRow = {
   /** Stable id for list identity (persisted; generated client-side for new rows). */
   id?: string;

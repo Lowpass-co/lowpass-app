@@ -2,7 +2,7 @@
 
 /* Build surface (SetupMode + modals) — extracted from AdvanceSectionBuilder.tsx during P3 decomposition (B1). */
 
-import { useState, useEffect, useCallback, useRef, Fragment, createContext, useContext } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, Fragment, createContext, useContext } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
@@ -83,6 +83,7 @@ import {
 } from '../parts/model';
 import { useAutoSave } from '@/lib/forms/useAutoSave';
 import { buildStructurePayload } from '../parts/payloads';
+import { uniquifyFieldIds } from '../parts/uniquifyFieldIds';
 
 // ----- SETUP MODE (split-panel question-level builder) -----
 
@@ -110,7 +111,10 @@ function SetupMode({
   onCancel: () => void;
 }) {
   const [templates, setTemplates] = useState<ApiTemplate[]>([]);
-  const [sections, setSections] = useState<SectionDef[]>(currentSections);
+  // VIS-AB-02 — uniquify field ids on load so key={f.id} reconciles reorders
+  // (see uniquifyFieldIds). No-dup sections are returned unchanged, so the
+  // autosave baseline (JSON of the original) still matches → no spurious POST.
+  const [sections, setSections] = useState<SectionDef[]>(() => uniquifyFieldIds(currentSections));
   const [loadingTemplates, setLoadingTemplates] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveAsTemplateOpen, setSaveAsTemplateOpen] = useState(false);
@@ -169,7 +173,7 @@ function SetupMode({
         const list = (j.templates ?? []) as { id: string; name: string; sections: SectionDef[] }[];
         const t = list.find((x) => x.id === defaultAdvanceTemplateId);
         if (t?.sections?.length) {
-          const seeded = t.sections.map((s, i) => ({ ...s, order: i }));
+          const seeded = uniquifyFieldIds(t.sections.map((s, i) => ({ ...s, order: i })));
           setSections(seeded);
           // Sprint 8.5 §6c — update the autosave baseline so this
           // server-driven seed doesn't trigger a redundant POST.
@@ -237,6 +241,13 @@ function SetupMode({
     // sufficient to feed every setter (moveSectionOrder/addField/…) into save.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sections, tourId, routingId]);
+
+  // VIS-AB-02 — the canvas renders from this uniquified view so key={f.id} is
+  // always collision-free (belt-and-suspenders over the load-time uniquify:
+  // covers any mid-session dup, e.g. a custom field slugified to an existing
+  // id). Same order/indices as `sections`, so index-based reorder handlers stay
+  // correct; no-dup sections are returned by-ref (no extra render churn).
+  const renderSections = useMemo(() => uniquifyFieldIds(sections), [sections]);
 
   useEffect(() => {
     if (!lastAddedTemplateId) return;
@@ -478,18 +489,7 @@ function SetupMode({
   }, [addFieldFromLibrary]);
 
   const moveSectionOrder = useCallback((from: number, to: number) => {
-    // Sprint 8.6 §4 — diagnostic log so Adam can confirm the
-    // reorder fires + see from/to values. Static-trace can't
-    // tell whether the drop event is reaching this handler;
-    // the log surfaces the call-site for runtime DevTools.
-    console.log('[advance-builder] moveSectionOrder', { from, to, total: sections.length });
-    if (from === to || to < 0 || to > sections.length) {
-      console.warn('[advance-builder] moveSectionOrder bailed', {
-        from, to, total: sections.length,
-        reason: from === to ? 'same' : to < 0 ? 'negative' : 'out-of-bounds',
-      });
-      return;
-    }
+    if (from === to || to < 0 || to > sections.length) return;
     setSections((prev) => {
       const next = [...prev];
       const [item] = next.splice(from, 1);
@@ -501,47 +501,15 @@ function SetupMode({
   }, [sections.length]);
 
   const moveFieldOrder = useCallback((sectionIndex: number, from: number, to: number) => {
-    // Sprint 8.6.3 §A — moveFieldOrder instrumentation. Sprint
-    // 8.6 §4 added a log to moveSectionOrder but not here, so the
-    // autosave-200-but-no-reorder symptom couldn't be narrowed to
-    // (a) handler not running, (b) handler ran with bad args,
-    // (c) handler ran correctly but React mis-reconciled. The
-    // logs below resolve all three.
+    // VIS-AB-02 — field ids are uniquified on load + in renderSections, so the
+    // duplicate-key reconciliation failure this used to diagnose can't occur;
+    // the diagnostic logs (and the dup-detection console.error) are removed.
     setSections((prev) => {
       const sec = prev[sectionIndex];
-      if (!sec) {
-        console.warn('[advance-builder] moveFieldOrder bailed: section not found', { sectionIndex });
-        return prev;
-      }
-      if (from === to) {
-        console.warn('[advance-builder] moveFieldOrder bailed: from === to', { sectionIndex, from, to });
-        return prev;
-      }
-      const beforeIds = (sec.fields ?? []).map((f) => f.id);
-      // Sprint 8.6.3 §A — duplicate field IDs collide on the
-      // React key={f.id} render path → React reuses the wrong
-      // node and the visual order doesn't change even though the
-      // underlying array did. Surface this so it's diagnosable
-      // instead of silent.
-      const dupeIds = beforeIds.filter((id, i) => beforeIds.indexOf(id) !== i);
-      if (dupeIds.length > 0) {
-        console.error(
-          '[advance-builder] moveFieldOrder: DUPLICATE FIELD IDS in section — React key collisions will prevent visible reorder',
-          { sectionIndex, sectionLabel: sec.label, dupeIds },
-        );
-      }
+      if (!sec || from === to) return prev;
       const fields = [...(sec.fields ?? [])];
       const [item] = fields.splice(from, 1);
       fields.splice(to, 0, item);
-      const afterIds = fields.map((f) => f.id);
-      console.log('[advance-builder] moveFieldOrder', {
-        sectionIndex,
-        sectionLabel: sec.label,
-        from,
-        to,
-        beforeIds,
-        afterIds,
-      });
       return prev.map((s, i) => (i === sectionIndex ? { ...s, fields } : s));
     });
     setDragState(null);
@@ -586,7 +554,7 @@ function SetupMode({
   };
 
   const applyLayoutTemplate = (template: { id: string; name: string; sections: SectionDef[] }) => {
-    if (template.sections?.length) setSections(template.sections.map((s, i) => ({ ...s, order: i })));
+    if (template.sections?.length) setSections(uniquifyFieldIds(template.sections.map((s, i) => ({ ...s, order: i }))));
     setApplyTemplateOpen(false);
   };
 
@@ -965,12 +933,7 @@ function SetupMode({
                   dropTarget && !('fieldIndex' in dropTarget)
                     ? dropTarget.sectionIndex
                     : sections.length - 1;
-                console.log('[advance-builder] section drop on canvas', {
-                  from: data.sectionIndex,
-                  to: targetIdx,
-                  via: dropTarget && !('fieldIndex' in dropTarget) ? 'dropTarget' : 'append-fallback',
-                });
-                moveSectionOrder(data.sectionIndex, targetIdx);
+                                moveSectionOrder(data.sectionIndex, targetIdx);
               } else if (data.type === 'field' && typeof data.sectionIndex === 'number' && typeof data.fieldIndex === 'number') {
                 // Sprint 8.6.4 §1 — field drop bubbled to canvas
                 // because the section onDragOver no longer accepts
@@ -983,27 +946,14 @@ function SetupMode({
                 // visible instead of silent.
                 if (dropTarget && 'fieldIndex' in dropTarget) {
                   if (dropTarget.sectionIndex === data.sectionIndex) {
-                    console.log('[advance-builder] field drop on canvas — using field dropTarget', {
-                      sectionIndex: dropTarget.sectionIndex,
-                      from: data.fieldIndex,
-                      to: dropTarget.fieldIndex,
-                    });
-                    moveFieldOrder(dropTarget.sectionIndex, data.fieldIndex, dropTarget.fieldIndex);
+                                        moveFieldOrder(dropTarget.sectionIndex, data.fieldIndex, dropTarget.fieldIndex);
                   } else {
                     // Cross-section field drop. moveFieldOrder is
                     // within-section only; warn so we know if
                     // Adam's UX expects this (next sprint).
-                    console.warn('[advance-builder] cross-section field drop not yet supported (canvas)', {
-                      from: { sectionIndex: data.sectionIndex, fieldIndex: data.fieldIndex },
-                      to: dropTarget,
-                    });
-                  }
+                                      }
                 } else {
-                  console.warn('[advance-builder] field drop on canvas with no field dropTarget — drop in dead space, no-op', {
-                    data,
-                    dropTarget,
-                  });
-                }
+                                  }
               } else if (data.templateId && data.field) {
                 const t = templates.find((x) => x.id === data.templateId);
                 if (t) {
@@ -1022,8 +972,7 @@ function SetupMode({
               } else {
                 // Sprint 8.6.3 §B — surface unhandled drops on
                 // canvas so we don't silently swallow them again.
-                console.warn('[advance-builder] canvas onDrop: unhandled payload', { data });
-              }
+                              }
             } catch (err) {
               // Sprint 8.6.3 §B — un-silenced from `catch (_)`.
               console.error('[advance-builder] canvas drop parse failed', err, { raw });
@@ -1032,7 +981,7 @@ function SetupMode({
             setDropTarget(null);
           }}
         >
-          {sections.map((sec, secIdx) => {
+          {renderSections.map((sec, secIdx) => {
             const expanded = expandedRight.has(secIdx);
             const template = templates.find((t) => t.id === sec.template_id);
             const fields = sec.fields ?? [];
@@ -1085,8 +1034,7 @@ function SetupMode({
                   // §4's onDrop log was missing for sections,
                   // we needed to know whether dragstart even
                   // fired before chasing drop-side culprits.
-                  console.log('[advance-builder] section onDragStart', { sectionIndex: secIdx, label: sec.label });
-                  // Sprint 8.6.5 — marker MIME for the dragOver gate
+                                    // Sprint 8.6.5 — marker MIME for the dragOver gate
                   // on every drop target. dataTransfer.types is set
                   // synchronously at dragstart and visible in every
                   // subsequent dragover, unlike React state which
@@ -1131,8 +1079,7 @@ function SetupMode({
                   // "drag-reorder doesn't persist" — the silent
                   // catch may have been hiding a parse error.
                   if (!raw) {
-                    console.warn('[advance-builder] section drop missing application/json data', { secIdx });
-                    return;
+                                        return;
                   }
                   try {
                     const data = JSON.parse(raw);
@@ -1145,8 +1092,7 @@ function SetupMode({
                     if (data.type !== 'section' || typeof data.sectionIndex !== 'number') {
                       return;
                     }
-                    console.log('[advance-builder] section onDrop', { targetIdx: secIdx, data });
-                    moveSectionOrder(data.sectionIndex, secIdx);
+                                        moveSectionOrder(data.sectionIndex, secIdx);
                   } catch (err) {
                     console.error('[advance-builder] section drop parse failed', err, { raw });
                   }
@@ -1260,13 +1206,11 @@ function SetupMode({
                                 e.stopPropagation();
                                 const raw = e.dataTransfer.getData('application/json');
                                 if (!raw) {
-                                  console.warn('[advance-builder] field drop missing data');
-                                  return;
+                                                                    return;
                                 }
                                 try {
                                   const data = JSON.parse(raw);
-                                  console.log('[advance-builder] field onDrop', { targetSec: secIdx, targetField: fieldIdx, data });
-                                  if (data.type === 'field' && data.sectionIndex === secIdx && typeof data.fieldIndex === 'number') {
+                                                                    if (data.type === 'field' && data.sectionIndex === secIdx && typeof data.fieldIndex === 'number') {
                                     moveFieldOrder(secIdx, data.fieldIndex, fieldIdx);
                                   } else if (data.type === 'section' && typeof data.sectionIndex === 'number') {
                                     // Sprint 8.6.3 §B — section drag landing
@@ -1278,21 +1222,13 @@ function SetupMode({
                                     // section's index as the destination so
                                     // the user's intent (drop section on/in
                                     // section X) lands correctly.
-                                    console.log('[advance-builder] section drop intercepted by field row — delegating', {
-                                      from: data.sectionIndex,
-                                      to: secIdx,
-                                    });
-                                    moveSectionOrder(data.sectionIndex, secIdx);
+                                                                        moveSectionOrder(data.sectionIndex, secIdx);
                                   } else if (data.type === 'field' && data.sectionIndex !== secIdx) {
                                     // Sprint 8.6.3 §A — log the cross-section
                                     // field drop case (unsupported today) so
                                     // we know if Adam is doing this and the
                                     // silent-no-op explains "didn't reorder".
-                                    console.warn('[advance-builder] cross-section field drop not yet supported', {
-                                      fromSec: data.sectionIndex,
-                                      toSec: secIdx,
-                                    });
-                                  }
+                                                                      }
                                 } catch (err) {
                                   // Sprint 8.6 §4 — un-silenced from `catch (_)` so failures surface.
                                   console.error('[advance-builder] field drop parse failed', err, { raw });

@@ -2710,6 +2710,8 @@ function SectionCard({
             type="button"
             onClick={(e) => { e.stopPropagation(); setFlagDropdownOpen((o) => !o); }}
             className="flex items-center gap-1 rounded-lg border border-lp-border px-2.5 py-1.5 text-sm text-lp-text hover:bg-lp-surface-hover"
+            aria-label="Flag this field"
+            title="Flag a field as an issue, blocker or question — it surfaces in the section header and the review queue for you or an assignee to resolve."
           >
             <Flag size={14} />
             <ChevronDown size={14} className={cn('transition-transform', flagDropdownOpen && 'rotate-180')} />
