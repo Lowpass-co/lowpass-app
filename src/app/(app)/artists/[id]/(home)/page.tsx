@@ -27,6 +27,7 @@ import Link from 'next/link';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { getHomeData } from '@/server/home/getHomeData';
 import { ArtistHero } from '@/components/artists/ArtistHero';
+import { ArtistHeroTabs } from '@/components/artists/ArtistHeroTabs';
 import { TourPicker } from '@/components/artists/TourPicker';
 import { ArtistProductCards } from '@/components/artists/ArtistProductCards';
 import { ArtistHomeStagger } from '@/components/artists/ArtistHomeStagger';
@@ -170,6 +171,11 @@ export default async function ArtistHomePage({
           monthlyListeners={spotifyMeta?.followers ?? null}
           editArtist={editArtist}
         />
+
+        {/* VIS-AR-01 — hero tab row merged under the hero. Tours is the
+            active surface here; Production groups the artist-library
+            surfaces; Business is manager-locked. */}
+        <ArtistHeroTabs artistId={artist.id} active="tours" />
 
         {/* Sections below — page-edge padding mirrors the rest of
             the app. The banner above is full-width on purpose. */}
