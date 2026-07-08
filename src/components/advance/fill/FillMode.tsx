@@ -83,6 +83,7 @@ import {
 } from '../parts/model';
 import { useAutoSave } from '@/lib/forms/useAutoSave';
 import { buildFillPayload } from '../parts/payloads';
+import { ChangeReviewQueue, type ReviewRow } from '@/components/advance/ChangeReviewQueue';
 
 // ----- FILL MODE -----
 
@@ -500,11 +501,14 @@ function FillMode({
 // Salvage #6 — status dots use the --color-lp-status-* tokens (design-token
 // rule: no hardcoded Tailwind palette colours in component code). `dot` holds
 // the CSS var; the render site applies it as an inline background.
+// VIS-AA-04 — status dots are orange / green / gray only. not_started = gray,
+// in_progress = orange, complete = green; needs_review folds to orange
+// (attention shares the one accent, §2 hue budget) rather than a 4th hue.
 const STATUS_OPTIONS = [
-  { value: 'not_started', label: 'Not Started', dot: 'var(--color-lp-status-not-started)' },
-  { value: 'in_progress', label: 'In Progress', dot: 'var(--color-lp-status-in-progress)' },
+  { value: 'not_started', label: 'Not Started', dot: 'var(--lp-text-tertiary)' },
+  { value: 'in_progress', label: 'In Progress', dot: 'var(--color-lp-orange)' },
   { value: 'complete', label: 'Complete', dot: 'var(--color-lp-status-complete)' },
-  { value: 'needs_review', label: 'Needs Review', dot: 'var(--color-lp-status-needs-review)' },
+  { value: 'needs_review', label: 'Needs Review', dot: 'var(--color-lp-orange)' },
 ] as const;
 
 // ----- Key Contacts section (dynamic contact list) -----
@@ -1177,14 +1181,25 @@ function PersonnelMultiSelect({
 
 const DEAL_MEMO_DOC_TYPES = ['Deal Memo', 'Tech Rider', 'Flight Ticket', 'Hotel Confirmation', 'Other'] as const;
 
+const DEAL_FIELD_LABELS: Record<string, string> = {
+  guarantee: 'Guarantee',
+  guest_list: 'Guest list',
+  transport_from_promoter: 'Transport (promoter)',
+  backline_provisions: 'Backline provisions',
+  deal_notes: 'Deal notes',
+};
+
 function DealInfoUploadBlock({
   onFieldChange,
   tourId,
+  data,
 }: {
   onFieldChange: (fieldId: string, value: unknown) => void;
   /* Sprint 12 §SAFE — server validates the tour belongs to
      the user's workspace before billing the AI key. */
   tourId?: string;
+  /** Current Deal Info values, so the review queue shows old → new. */
+  data?: Record<string, unknown>;
 }) {
   const { showToast } = useToast();
   const [open, setOpen] = useState(false);
@@ -1237,13 +1252,25 @@ function DealInfoUploadBlock({
     }
   };
 
-  const onApply = () => {
-    Object.entries(review).forEach(([id, value]) => onFieldChange(id, value || undefined));
+  const onApply = (accepted: ReviewRow[]) => {
+    accepted.forEach((r) => onFieldChange(r.id, r.newValue || undefined));
     setOpen(false);
     setStep(1);
     setFiles([]);
     setReview({});
   };
+
+  // §7 review-grammar rows for the shared ChangeReviewQueue (old → new).
+  const reviewRows: ReviewRow[] = (
+    ['guarantee', 'guest_list', 'transport_from_promoter', 'backline_provisions', 'deal_notes'] as const
+  )
+    .filter((id) => (review[id] ?? '').trim() !== '')
+    .map((id) => ({
+      id,
+      label: DEAL_FIELD_LABELS[id] ?? id,
+      oldValue: data?.[id] != null ? String(data[id]) : null,
+      newValue: review[id] ?? '',
+    }));
 
   const onClose = () => {
     setOpen(false);
@@ -1306,26 +1333,26 @@ function DealInfoUploadBlock({
               </>
             )}
             {step === 2 && (
-              <>
-                <p className="mt-1 text-sm text-lp-text-secondary">Edit below and apply to fill the Deal Info section.</p>
-                <div className="mt-4 space-y-3">
-                  {(['guarantee', 'guest_list', 'transport_from_promoter', 'backline_provisions', 'deal_notes'] as const).map((id) => (
-                    <div key={id}>
-                      <label className="block text-xs font-medium text-lp-text-tertiary mb-1">{id.replace(/_/g, ' ')}</label>
-                      <textarea
-                        value={review[id] ?? ''}
-                        onChange={(e) => setReview((r) => ({ ...r, [id]: e.target.value }))}
-                        rows={id === 'deal_notes' ? 3 : 1}
-                        className="w-full rounded-xl border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:border-lp-orange focus:outline-none"
-                      />
+              <div className="mt-3">
+                {reviewRows.length === 0 ? (
+                  <>
+                    <p className="text-sm text-lp-text-secondary">No fields were extracted.</p>
+                    <div className="mt-4 flex justify-end">
+                      <button type="button" onClick={() => setStep(1)} className="rounded-xl border border-lp-border px-4 py-2 text-sm text-lp-text hover:bg-lp-surface-hover">Back</button>
                     </div>
-                  ))}
-                </div>
-                <div className="mt-4 flex justify-end gap-2">
-                  <button type="button" onClick={() => setStep(1)} className="rounded-xl border border-lp-border px-4 py-2 text-sm text-lp-text hover:bg-lp-surface-hover">Back</button>
-                  <button type="button" onClick={onApply} className="rounded-xl bg-lp-orange px-4 py-2 text-sm font-medium text-white hover:bg-lp-orange-hover">Apply to form</button>
-                </div>
-              </>
+                  </>
+                ) : (
+                  /* VIS-AA-02 — the SAME shared review grammar the venue-intake
+                     queue uses (one component, two callers). */
+                  <ChangeReviewQueue
+                    rows={reviewRows}
+                    sourceLabel={`AI extracted ${reviewRows.length} field${reviewRows.length === 1 ? '' : 's'}`}
+                    applyLabel="Apply"
+                    onApply={onApply}
+                    onCancel={() => setStep(1)}
+                  />
+                )}
+              </div>
             )}
           </div>
         </div>
@@ -2825,6 +2852,7 @@ function SectionCard({
                 <DealInfoUploadBlock
                   onFieldChange={(fieldId, value) => onFieldChange(fieldId, value)}
                   tourId={tourId}
+                  data={data}
                 />
               </div>
             )}
