@@ -240,8 +240,18 @@ export function TourFingerprint({
                 transform: isHover ? `translateY(-${spec.lift}px)` : 'none',
                 transition: 'transform var(--lp-dur-fast) var(--lp-ease-out)',
                 flexShrink: 0,
+                position: 'relative',
               }}
             >
+              {/* VIS-G-07 — forgiving hit target. The visible tick is only
+                  3–5px wide; this transparent overlay extends the hover/focus
+                  catch area ±6px without changing the dense strip layout
+                  (absolute → no flex impact), so the anchored popover opens
+                  reliably instead of only on a hair-thin target. */}
+              <span
+                aria-hidden
+                style={{ position: 'absolute', top: 0, bottom: 0, left: -6, right: -6 }}
+              />
               {/* Primary tick */}
               <span
                 aria-hidden
