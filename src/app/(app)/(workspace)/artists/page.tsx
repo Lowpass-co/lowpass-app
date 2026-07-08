@@ -24,7 +24,7 @@ import { createServerSupabaseClient } from '@/lib/supabase-server';
    layout). Page renders its own body content only. */
 import { PickUpCard } from '@/components/artists/PickUpCard';
 import { ArtistGridCard } from '@/components/artists/ArtistGridCard';
-import { WorkspaceActivityList } from '@/components/artists/WorkspaceActivityList';
+import { NeedsYouQueue } from '@/components/artists/NeedsYouQueue';
 import { ArtistHomeStagger } from '@/components/artists/ArtistHomeStagger';
 import { WorkspaceNewArtistButton } from '@/components/artists/WorkspaceNewArtistButton';
 import { getWorkspaceLandingData } from '@/server/workspace/getWorkspaceLandingData';
@@ -215,11 +215,10 @@ export default async function ArtistsLandingPage() {
             )}
           </section>
 
-          {/* Sprint 8.4 §4 — workspace activity feed.
-              Populated via UNION across tours / routing /
-              budget_line_items / advance_instances / deal_memos
-              in getWorkspaceLandingData. Empty state remains for
-              brand-new workspaces. */}
+          {/* Design pass §9 · VIS-WS-04 — the rule-generated "Needs you" queue
+              replaces the activity feed: derived calls to action (advances
+              untouched × days-to-rehearsal, ended-unsettled, unconfirmed crew ×
+              days-to-first-show), most-urgent first. */}
           <section>
             <div
               className="flex items-baseline justify-between"
@@ -227,37 +226,17 @@ export default async function ArtistsLandingPage() {
             >
               <h2
                 className="lp-label-caps"
-                style={{
-                  margin: 0,
-                  color: 'var(--lp-text-tertiary)',
-                }}
+                style={{ margin: 0, color: 'var(--lp-text-tertiary)' }}
               >
-                Activity
+                Needs you
               </h2>
-              <span
-                className="lp-label-caps"
-                style={{ color: 'var(--lp-text-tertiary)' }}
-              >
-                Last <span className="lp-mono">{data.activity.length}</span> changes
-              </span>
+              {data.needsYou.length > 0 ? (
+                <span className="lp-label-caps" style={{ color: 'var(--lp-text-tertiary)' }}>
+                  <span className="lp-mono">{data.needsYou.length}</span> to act on
+                </span>
+              ) : null}
             </div>
-            {data.activity.length === 0 ? (
-              <div
-                style={{
-                  padding: 'var(--lp-space-6)',
-                  textAlign: 'center',
-                  fontSize: 'var(--lp-text-sm)',
-                  color: 'var(--lp-text-tertiary)',
-                  background: 'var(--lp-panel)',
-                  border: '1px solid var(--lp-border-strong)',
-                  borderRadius: 'var(--lp-radius-lg)',
-                }}
-              >
-                No recent activity.
-              </div>
-            ) : (
-              <WorkspaceActivityList rows={data.activity} />
-            )}
+            <NeedsYouQueue items={data.needsYou} />
           </section>
         </div>
       </ArtistHomeStagger>

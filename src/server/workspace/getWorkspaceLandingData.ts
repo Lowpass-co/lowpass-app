@@ -26,6 +26,7 @@ import {
   getArtistGradient,
 } from '@/lib/artists/imageUrl';
 import { resolveVenue, type RoutingVenueSource } from '@/lib/venues/resolveVenue';
+import { computeNeedsYou, type NeedsYouItem } from './computeNeedsYou';
 
 /** A day tick for the card-scale <TourFingerprint> — date + free-text day_type.
  *  Venue is not carried at card scale (kept light + venue-guardrail-clean). */
@@ -92,6 +93,10 @@ export interface WorkspaceLandingData {
   };
   pickUp: WorkspaceLandingPickUp | null;
   artists: WorkspaceLandingArtist[];
+  /** Rule-generated "Needs you" queue (§9 · VIS-WS-04) — replaces the activity
+   *  feed in the UI. `activity` stays computed for now but is no longer
+   *  rendered; a follow-up removes it + its queries. */
+  needsYou: NeedsYouItem[];
   activity: WorkspaceLandingActivityRow[];
 }
 
@@ -490,8 +495,11 @@ export async function getWorkspaceLandingData(
     tourIdsInWorkspace.length > 0
       ? await Promise.all([
           supabase
+            // Venue guardrail — activity labels use city, never the raw
+            // venue_name column (this feed is retired from the UI; the label
+            // only needs a place, and venue is not read here).
             .from('routing')
-            .select('id, tour_id, date, venue_name, city, created_at')
+            .select('id, tour_id, date, city, created_at')
             .in('tour_id', tourIdsInWorkspace)
             .order('created_at', { ascending: false })
             .limit(ACTIVITY_PER_SOURCE),
@@ -517,7 +525,6 @@ export async function getWorkspaceLandingData(
     id: string;
     tour_id: string | null;
     date: string;
-    venue_name: string | null;
     city: string | null;
     created_at: string | null;
   };
@@ -643,7 +650,7 @@ export async function getWorkspaceLandingData(
   for (const r of actRouting) {
     if (!r.created_at) continue;
     const ctx = tourCtxLabel(r.tour_id);
-    const showLabel = r.venue_name?.trim() || r.city?.trim() || r.date;
+    const showLabel = r.city?.trim() || r.date;
     activityCandidates.push({
       id: `routing-${r.id}-${r.created_at}`,
       occurredAt: r.created_at,
@@ -691,6 +698,11 @@ export async function getWorkspaceLandingData(
   );
   const activity = activityCandidates.slice(0, 10);
 
+  // "Needs you" queue (§9 · VIS-WS-04) — rule-generated, replaces the activity
+  // feed in the UI. Self-contained (bounded fetches keyed by the tour ids).
+  const artistNameById = new Map<string, string>(artistRows.map((a) => [a.id, a.name]));
+  const needsYou = await computeNeedsYou(supabase, tourRows, artistNameById);
+
   return {
     workspaceId,
     workspaceName: workspaceRow?.name ?? 'Workspace',
@@ -704,6 +716,7 @@ export async function getWorkspaceLandingData(
     },
     pickUp,
     artists,
+    needsYou,
     activity,
   };
 }

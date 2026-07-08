@@ -1626,3 +1626,16 @@ textarea::selection,
   from { opacity: 0; transform: scale(0.85); }
   to   { opacity: 1; transform: scale(1); }
 }
+
+/* ============================================================
+   Design system 2026-07 (§6) — entrance stagger. Elements fade + rise into
+   place; the parent sets per-item animation-delay (40–70ms/element). Disabled
+   by the global prefers-reduced-motion kill-switch above.
+   ============================================================ */
+@keyframes lp-stagger-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.lp-stagger-item {
+  animation: lp-stagger-in var(--lp-dur-base) var(--lp-ease-out) both;
+}
