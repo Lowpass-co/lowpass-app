@@ -84,6 +84,54 @@ function lastActivity(t: HomeTourSummary): string | null {
   return `updated ${d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}`;
 }
 
+/** Relative day phrasing for the row status line (verb + time anchor, §8). */
+function fmtRelativeDay(iso: string): string {
+  const d = new Date(`${iso.slice(0, 10)}T12:00:00Z`);
+  if (Number.isNaN(d.getTime())) return '';
+  const now = new Date();
+  const dayMs = 86_400_000;
+  const startOfToday = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const target = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+  const diffDays = Math.round((target - startOfToday) / dayMs);
+  if (diffDays === 0) return 'today';
+  if (diffDays === 1) return 'tomorrow';
+  if (diffDays === -1) return 'yesterday';
+  if (diffDays > 1 && diffDays <= 30) return `in ${diffDays} days`;
+  if (diffDays < -1 && diffDays >= -30) return `${Math.abs(diffDays)} days ago`;
+  return fmtDate(iso) ?? '';
+}
+
+/** True when the tour has finished (end, or start when undated, is in the past). */
+function isPastTour(t: HomeTourSummary): boolean {
+  const today = new Date().toISOString().slice(0, 10);
+  const end = t.endDate?.slice(0, 10) ?? t.startDate?.slice(0, 10) ?? null;
+  return !!end && end < today;
+}
+
+/** One status line per row — verb + time anchor (§8), no mood words. */
+function tourStatusLine(t: HomeTourSummary): string {
+  const today = new Date().toISOString().slice(0, 10);
+  const start = t.startDate?.slice(0, 10) ?? null;
+  const end = t.endDate?.slice(0, 10) ?? null;
+  if (start && end && start <= today && today <= end) {
+    return `On the road · ends ${fmtRelativeDay(end)}`;
+  }
+  if (start && start > today) return `Starts ${fmtRelativeDay(start)}`;
+  if (end && end < today) return `Wrapped ${fmtRelativeDay(end)}`;
+  return lastActivity(t) ?? 'Not scheduled yet';
+}
+
+/** Next upcoming show/festival day for the fingerprint highlight tick. */
+function nextShowDate(t: HomeTourSummary): string | null {
+  const today = new Date().toISOString().slice(0, 10);
+  return (
+    t.fingerprint.find((d) => {
+      const first = d.dayType.split(',')[0]?.trim().toLowerCase();
+      return (first === 'show' || first === 'festival') && d.date >= today;
+    })?.date ?? null
+  );
+}
+
 export function TourPicker({ tours }: { tours: HomeTourSummary[] }) {
   const router = useRouter();
   const { openCreateTour } = useTourEditor();
@@ -169,81 +217,134 @@ export function TourPicker({ tours }: { tours: HomeTourSummary[] }) {
         one to unlock Operations, Budget and Advance in the bar above.
       </p>
 
-      <div
-        className="mt-4 grid gap-3"
-        style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(248px, 1fr))' }}
-      >
-        {tours.map((t) => (
-          <TourCard key={t.id} tour={t} onPick={() => openTour(t.id)} />
-        ))}
-      </div>
+      {(() => {
+        // VIS-AR-02 — non-past tours: equal weight, date-ordered (start asc).
+        // Past tours: collapse to one settled line each, most-recent first.
+        const cmpAsc = (a: HomeTourSummary, b: HomeTourSummary) => {
+          const av = a.startDate ?? a.endDate ?? '9999';
+          const bv = b.startDate ?? b.endDate ?? '9999';
+          return av < bv ? -1 : av > bv ? 1 : 0;
+        };
+        const cmpDesc = (a: HomeTourSummary, b: HomeTourSummary) => {
+          const av = a.endDate ?? a.startDate ?? '0000';
+          const bv = b.endDate ?? b.startDate ?? '0000';
+          return av > bv ? -1 : av < bv ? 1 : 0;
+        };
+        const upcoming = tours.filter((t) => !isPastTour(t)).sort(cmpAsc);
+        const past = tours.filter(isPastTour).sort(cmpDesc);
+        return (
+          <>
+            <div className="mt-4 flex flex-col">
+              {upcoming.length === 0 ? (
+                <p
+                  className="py-3"
+                  style={{ fontSize: 13, color: 'var(--lp-text-tertiary)' }}
+                >
+                  No current or upcoming tours — past tours are listed below.
+                </p>
+              ) : (
+                upcoming.map((t, i) => (
+                  <TourRow
+                    key={t.id}
+                    tour={t}
+                    first={i === 0}
+                    onPick={() => openTour(t.id)}
+                  />
+                ))
+              )}
+            </div>
+
+            {past.length > 0 ? (
+              <div className="mt-5">
+                <div
+                  className="lp-label-caps"
+                  style={{
+                    color: 'var(--lp-text-tertiary)',
+                    marginBottom: 'var(--lp-space-1)',
+                  }}
+                >
+                  Past
+                  <span
+                    aria-hidden
+                    style={{ margin: '0 var(--lp-space-2)', color: 'var(--lp-text-tertiary)' }}
+                  >
+                    ·
+                  </span>
+                  <span className="lp-mono">{past.length}</span>
+                </div>
+                <div className="flex flex-col">
+                  {past.map((t, i) => (
+                    <PastTourLine
+                      key={t.id}
+                      tour={t}
+                      first={i === 0}
+                      onPick={() => openTour(t.id)}
+                    />
+                  ))}
+                </div>
+              </div>
+            ) : null}
+          </>
+        );
+      })()}
     </section>
   );
 }
 
-function TourCard({
+/* VIS-AR-03 — tour ROW (replaces the card grid): name / dates /
+   <TourFingerprint size="row"> / one status line. No readiness chips.
+
+   Nav ruling (preserved): the row is a <div>, not a <button> — the
+   fingerprint's day ticks are <button>s and nesting buttons is invalid HTML.
+   An absolute-fill <button> is the click target (onPick → openTour →
+   setSelectedTourId + product-bar unlock); the fingerprint sits above it with
+   its own pointer events so day-clicks open their popover without selecting
+   the tour. */
+function TourRow({
   tour,
+  first,
   onPick,
 }: {
   tour: HomeTourSummary;
+  first: boolean;
   onPick: () => void;
 }) {
   const meta = statusMeta(tour.status);
-  const activity = lastActivity(tour);
-  // Design pass §7 · fingerprint mount #2 — highlight the next upcoming
-  // show/festival day so the tick reads at a glance.
-  const todayIso = new Date().toISOString().slice(0, 10);
-  const highlightDate =
-    tour.fingerprint.find((d) => {
-      const first = d.dayType.split(',')[0]?.trim().toLowerCase();
-      return (first === 'show' || first === 'festival') && d.date >= todayIso;
-    })?.date ?? null;
+  const highlightDate = nextShowDate(tour);
   return (
-    // Nav ruling — the card is a <div>, not a <button>: the fingerprint's day
-    // ticks are <button>s and nesting buttons is invalid HTML. An absolute-fill
-    // <button> is the click target (preserving onPick → openTour →
-    // setSelectedTourId + product-bar unlock); the fingerprint sits above it
-    // with its own pointer events so day-clicks don't trigger the card.
     <div
-      className="group btn-transition relative overflow-hidden rounded-lg border p-4"
-      style={{
-        borderColor: 'var(--lp-border-strong)',
-        background: 'var(--lp-bg-deep)',
-      }}
+      className="group btn-transition relative flex items-center gap-4 py-3.5 pl-2 pr-1"
+      style={{ borderTop: first ? 'none' : '1px solid var(--lp-border-subtle)' }}
     >
-      {/* absolute-fill click target — the whole card selects the tour */}
+      {/* absolute-fill click target — selects the tour in place */}
       <button
         type="button"
         onClick={onPick}
         aria-label={`Open ${tour.name}`}
-        className="absolute inset-0 z-0 cursor-pointer outline-none active:scale-[0.985] focus-visible:ring-2 focus-visible:ring-[var(--color-lp-orange)] focus-visible:ring-inset"
+        className="absolute inset-0 z-0 cursor-pointer rounded-md outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-lp-orange)] focus-visible:ring-inset"
         style={{ background: 'transparent', border: 0 }}
       />
-      {/* status accent stripe */}
+      {/* status accent tick */}
       <span
         aria-hidden
-        className="absolute left-0 top-0 z-[1] h-full"
-        style={{ width: 3, background: meta.color }}
+        className="relative z-[1] shrink-0 self-stretch"
+        style={{ width: 3, borderRadius: 2, background: meta.color }}
       />
-      {/* text content — pointer-events:none so clicks fall through to the
-          overlay button underneath */}
-      <div className="pointer-events-none relative z-[1]">
-        <div className="flex items-start justify-between gap-2 pl-1.5">
+      {/* identity — name + status + dates + one status line. pointer-events
+          off so clicks fall through to the overlay. */}
+      <div
+        className="pointer-events-none relative z-[1] min-w-0"
+        style={{ flex: '0 1 300px' }}
+      >
+        <div className="flex items-center gap-2">
           <span
             className="min-w-0 truncate"
             style={{ fontSize: 15, fontWeight: 600, color: 'var(--lp-text)' }}
           >
             {tour.name}
           </span>
-          <ChevronRight
-            size={16}
-            className="shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
-            style={{ color: 'var(--color-lp-orange)' }}
-          />
-        </div>
-        <div className="mt-1.5 flex items-center gap-2 pl-1.5">
           <span
-            className="inline-flex items-center rounded-full px-2 py-0.5"
+            className="inline-flex shrink-0 items-center rounded-full px-2 py-0.5"
             style={{
               fontSize: 10,
               fontWeight: 700,
@@ -255,33 +356,23 @@ function TourCard({
           >
             {meta.label}
           </span>
-          <span style={{ fontSize: 12, color: 'var(--lp-text-secondary)' }}>
-            {fmtRange(tour.startDate, tour.endDate)}
-          </span>
         </div>
         <div
-          className="mt-3 flex items-center gap-3 pl-1.5"
+          className="mt-1 truncate"
+          style={{ fontSize: 12, color: 'var(--lp-text-secondary)' }}
+        >
+          {fmtRange(tour.startDate, tour.endDate)}
+        </div>
+        <div
+          className="mt-0.5 truncate"
           style={{ fontSize: 11, color: 'var(--lp-text-tertiary)' }}
         >
-          <span>
-            <span className="lp-mono" style={{ color: 'var(--lp-text-secondary)' }}>
-              {tour.showCount}
-            </span>{' '}
-            {tour.showCount === 1 ? 'show' : 'shows'}
-          </span>
-          {activity ? (
-            <>
-              <span aria-hidden>·</span>
-              <span>{activity}</span>
-            </>
-          ) : null}
+          {tourStatusLine(tour)}
         </div>
       </div>
-      {/* row-scale tour fingerprint (mount #2) — its own pointer events sit
-          above the overlay so day-ticks open their popover without selecting
-          the tour. */}
-      {tour.fingerprint.length > 0 ? (
-        <div className="pointer-events-auto relative z-[2] mt-3 pl-1.5">
+      {/* fingerprint — its own pointer events sit above the overlay */}
+      <div className="pointer-events-auto relative z-[2] min-w-0 flex-1">
+        {tour.fingerprint.length > 0 ? (
           <TourFingerprint
             days={tour.fingerprint}
             size="row"
@@ -289,8 +380,62 @@ function TourCard({
             highlightDate={highlightDate}
             ariaLabel={`${tour.name} day strip`}
           />
-        </div>
-      ) : null}
+        ) : (
+          <span style={{ fontSize: 11, color: 'var(--lp-text-tertiary)' }}>
+            No dates yet
+          </span>
+        )}
+      </div>
+      <ChevronRight
+        size={16}
+        aria-hidden
+        className="pointer-events-none relative z-[1] shrink-0 opacity-0 transition-opacity group-hover:opacity-100"
+        style={{ color: 'var(--color-lp-orange)' }}
+      />
+    </div>
+  );
+}
+
+/* VIS-AR-02 — past tour collapsed to one settled line (de-emphasised,
+   still selectable to reopen). */
+function PastTourLine({
+  tour,
+  first,
+  onPick,
+}: {
+  tour: HomeTourSummary;
+  first: boolean;
+  onPick: () => void;
+}) {
+  return (
+    <div
+      className="group btn-transition relative flex items-center justify-between gap-3 py-2 pl-2 pr-1"
+      style={{ borderTop: first ? 'none' : '1px solid var(--lp-border-subtle)' }}
+    >
+      <button
+        type="button"
+        onClick={onPick}
+        aria-label={`Open ${tour.name}`}
+        className="absolute inset-0 z-0 cursor-pointer rounded-md outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-lp-orange)] focus-visible:ring-inset"
+        style={{ background: 'transparent', border: 0 }}
+      />
+      <span
+        className="pointer-events-none relative z-[1] min-w-0 truncate"
+        style={{ fontSize: 13, color: 'var(--lp-text-secondary)' }}
+      >
+        {tour.name}
+        <span style={{ color: 'var(--lp-text-tertiary)' }}>
+          {' · '}
+          {fmtRange(tour.startDate, tour.endDate)}
+        </span>
+      </span>
+      <span
+        className="pointer-events-none relative z-[1] shrink-0"
+        style={{ fontSize: 11, color: 'var(--lp-text-tertiary)' }}
+      >
+        <span className="lp-mono">{tour.showCount}</span>{' '}
+        {tour.showCount === 1 ? 'show' : 'shows'} · wrapped
+      </span>
     </div>
   );
 }
