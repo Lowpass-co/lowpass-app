@@ -118,8 +118,10 @@ export default async function OperationsTourLayout({
     {
       id: 'summary',
       label: 'Summary',
-      slug: '',
-      href: `/operations/${tourId}`,
+      // Design pass §9 · TR-01 — the summary surface moved off the tour root
+      // (now a redirect to Routing) to /operations/[tourId]/summary.
+      slug: 'summary',
+      href: `/operations/${tourId}/summary`,
       visible: true,
     },
     ...SUB_NAV.map((s) => ({

@@ -21,6 +21,12 @@ import { notFound, redirect } from 'next/navigation';
 import Link from 'next/link';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { RoutingEditor } from '@/components/routing/RoutingEditor';
+import { TourFingerprint, type FingerprintDay } from '@/components/tour/TourFingerprint';
+import { RoutingReadinessRail } from '@/components/operations/RoutingReadinessRail';
+import {
+  getOperationsReadiness,
+  type OperationsReadiness,
+} from '@/server/operations/getOperationsReadiness';
 import {
   getActiveMembership,
   fetchActiveGrants,
@@ -89,12 +95,34 @@ export default async function OperationsTourRoutingPage({
   // weren't audited so existing tours show no last-edit line
   // until first save under this version.
   let lastEdit: { actor_name: string | null; created_at: string } | null = null;
+  // Hero-scale <TourFingerprint> data — date + day_type only (no venue read),
+  // reusing this routing fetch. Highlight the next upcoming show.
+  let fingerprintDays: FingerprintDay[] = [];
+  let nextShowDate: string | null = null;
+  // TR-02 — readiness rail data (Shows / Crew / Conflicts / Pending), shared
+  // with the relocated /summary surface via getOperationsReadiness.
+  let readiness: OperationsReadiness | null = null;
   if (canRead) {
-    const { data: routingIds } = await supabase
+    readiness = await getOperationsReadiness(supabase, {
+      tourId,
+      workspaceId: membership.workspace_id,
+      tourStartDate: tourRow.start_date,
+      tourEndDate: tourRow.end_date,
+    });
+    const { data: routingRows } = await supabase
       .from('routing')
-      .select('id')
-      .eq('tour_id', tourId);
-    const ids = (routingIds ?? []).map((r: { id: string }) => r.id);
+      .select('id, date, day_type')
+      .eq('tour_id', tourId)
+      .order('date', { ascending: true });
+    const rows = (routingRows ?? []) as Array<{ id: string; date: string; day_type: string | null }>;
+    const ids = rows.map((r) => r.id);
+    fingerprintDays = rows.map((r) => ({ date: r.date, dayType: r.day_type ?? 'off', routingId: r.id }));
+    const todayIso = new Date().toISOString().slice(0, 10);
+    nextShowDate =
+      fingerprintDays.find((d) => {
+        const first = d.dayType.split(',')[0]?.trim().toLowerCase();
+        return (first === 'show' || first === 'festival') && d.date >= todayIso;
+      })?.date ?? null;
     if (ids.length > 0) {
       const { data: audit } = await supabase
         .from('audit_log')
@@ -160,6 +188,28 @@ export default async function OperationsTourRoutingPage({
             </span>
           ) : null}
         </header>
+
+        {/* TR-02 — de-boxed readiness rail (Shows · Crew · Conflicts · Pending),
+            one hairline strip replacing the old four summary cards. */}
+        {canRead && readiness ? (
+          <div style={{ marginBottom: 'var(--lp-space-4)' }}>
+            <RoutingReadinessRail tourId={tourId} readiness={readiness} />
+          </div>
+        ) : null}
+
+        {/* Hero-scale tour fingerprint (mount #3) — the tour at a glance above
+            the grid, with week-commencing markers. */}
+        {canRead && fingerprintDays.length > 0 ? (
+          <div style={{ marginBottom: 'var(--lp-space-4)' }}>
+            <TourFingerprint
+              days={fingerprintDays}
+              size="hero"
+              weekMarkers
+              highlightDate={nextShowDate}
+              ariaLabel={`${tourRow.name} day strip`}
+            />
+          </div>
+        ) : null}
 
         {!canRead ? (
           <NoAccessPanel resource="Routing" />
