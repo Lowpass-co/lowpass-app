@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import {
   DndContext,
   PointerSensor,
@@ -564,9 +564,33 @@ export default function ChannelListEditor({
               </div>
               <CellNavProvider colCount={inputColCount}>
                 <SortableContext items={inputRows.map((r) => r.id)} strategy={verticalListSortingStrategy}>
-                  {inputRows.map((row, idx) => (
+                  {inputRows.map((row, idx) => {
+                  /* VIS-CL-06 — group the input rows by STAGE BOX (Adam's call):
+                     render a boundary header whenever the stage_box changes from
+                     the previous row, so channel-number gaps read as box edges.
+                     The header is decorative (not a SortableContext item), so the
+                     sortable id list stays exactly inputRows.map(r => r.id). */
+                  const prevBoxId = idx > 0 ? inputRows[idx - 1].stage_box_id : undefined;
+                  const showGroupHeader =
+                    show.has('stage_box') && stageBoxes.length > 0 && row.stage_box_id !== prevBoxId;
+                  const groupBox = stageBoxes.find((s) => s.id === row.stage_box_id);
+                  return (
+                    <Fragment key={row.id}>
+                    {showGroupHeader && (
+                      <div className="flex items-center gap-2 border-b border-lp-border bg-lp-bg px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-lp-text-tertiary">
+                        <span
+                          aria-hidden
+                          className="h-2 w-2 shrink-0 rounded-sm"
+                          style={{
+                            backgroundColor: groupBox?.colour ?? 'transparent',
+                            filter: groupBox?.colour ? 'saturate(0.55)' : undefined,
+                            border: groupBox?.colour ? 'none' : '1px solid var(--lp-border)',
+                          }}
+                        />
+                        {groupBox?.label ?? 'Unassigned'}
+                      </div>
+                    )}
                     <ChannelBlock
-                      key={row.id}
                       row={row}
                       rows={inputRows}
                       inputRowIdx={idx}
@@ -594,12 +618,32 @@ export default function ChannelListEditor({
                       autoFocusName={row.id === newlyAddedRowId}
                       onAutoFocused={() => setNewlyAddedRowId(null)}
                     />
-                  ))}
+                    </Fragment>
+                  );
+                  })}
                 </SortableContext>
               </CellNavProvider>
             </div>
           </div>
         </DndContext>
+
+        {/* VIS-CL-02 — stage-box legend. Desaturated swatches match the left
+            row-stripes; heading reads "Stage box". */}
+        {stageBoxes.length > 0 && (
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-lp-border bg-lp-surface px-3 py-2 text-[10px] text-lp-text-tertiary">
+            <span className="font-bold uppercase tracking-wider text-lp-text-secondary">Stage box</span>
+            {stageBoxes.map((s) => (
+              <span key={s.id} className="inline-flex items-center gap-1">
+                <span
+                  aria-hidden
+                  className="h-2 w-2 shrink-0 rounded-sm"
+                  style={{ backgroundColor: s.colour, filter: 'saturate(0.55)' }}
+                />
+                {s.label}
+              </span>
+            ))}
+          </div>
+        )}
 
         <div className="flex flex-wrap items-center gap-2 border-t border-lp-border bg-lp-surface px-3 py-3">
           <button
@@ -806,8 +850,12 @@ function ChannelBlock({
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: row.id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.85 : 1 };
-  const sub = subSnakes.find((s) => s.id === row.sub_snake_id);
-  const stripe = sub?.colour;
+  /* VIS-CL-02 — the left row-stripe reflects the STAGE BOX (Adam's call:
+     re-pointed from sub_snake → stage_box, the distinct entity with its own
+     column + colour). Desaturated at render via filter: saturate() so the
+     stripes read as muted box-bands, matched by the footer legend below. */
+  const stageBox = stageBoxes.find((s) => s.id === row.stage_box_id);
+  const stripe = stageBox?.colour;
 
   const usedSubSnakePositions = useMemo(() => {
     const map: Record<string, Set<number>> = {};
@@ -941,7 +989,7 @@ function ChannelBlock({
       >
         <div
           className="h-full min-h-8 w-1 shrink-0"
-          style={{ backgroundColor: stripe ?? 'transparent' }}
+          style={{ backgroundColor: stripe ?? 'transparent', filter: stripe ? 'saturate(0.55)' : undefined }}
           aria-hidden
         />
         <div
