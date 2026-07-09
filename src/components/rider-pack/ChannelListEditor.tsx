@@ -1192,11 +1192,15 @@ function ChannelBlock({
                 queue({ provider: next });
                 void saveRow.flush();
               }}
+              /* VIS-CL-05 — ownership chips. The leading colour dot (rendered
+                 by BrandedSelect in both the trigger and the menu) reads the
+                 provider as an ownership category: band = owned (neutral),
+                 venue = venue-supplies (info blue), hire = rented (orange). */
               options={[
                 { value: '', label: '—' },
-                { value: 'band', label: 'Band' },
-                { value: 'venue', label: 'Venue' },
-                { value: 'hire', label: 'Hire' },
+                { value: 'band', label: 'Band (owned)', color: 'var(--lp-text-secondary)' },
+                { value: 'venue', label: 'Venue supplies', color: 'var(--color-lp-info)' },
+                { value: 'hire', label: 'Hire (rented)', color: 'var(--color-lp-orange)' },
               ]}
               ariaLabel="Provider"
               minWidth={0}
