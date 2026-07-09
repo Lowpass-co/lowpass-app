@@ -3,13 +3,15 @@
 /* ============================================
    LOWPASS — Rider/Pack editor shell
 
-   @deprecated (§RA12, 2026-06-03) — superseded by the Rider Architecture
-   Mirror shells. The live /rider-packs/[id] route now mounts
+   CURRENT editor for channel_list / rich_text / advance_summary / cover packs
+   and the inheritance-resolved surface. (Adam's call, 2026-07: the §RA12
+   PackEditor → RiderBuilderShell consolidation was only ever completed for
+   plain `fields` packs — RiderBuilderShellClient loads a RAW pack and does not
+   render channel_list / rich_text / advance_summary / cover sections, nor the
+   inheritance/override surface. So this stays the live editor for those roles;
+   the full consolidation is a backlog sprint, not an imminent deletion.)
    RiderBuilderShellClient (builder) + RiderShowReadView/RiderShowRightRail
-   (show) via src/app/(app)/rider-packs/[id]/page.tsx. PackEditor is no
-   longer reached by the default route; kept temporarily for back-compat /
-   reference. Slated for removal ~30 days after §RA12 ships once the new
-   surface is confirmed in production. Do NOT build new features on it.
+   (show) handle the plain `fields` path via src/app/(app)/rider-packs/[id]/page.tsx.
 
    Three-pane layout:
    - Left:   section list (add/remove/reorder/select)
@@ -24,6 +26,7 @@
    ============================================ */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import Link from 'next/link';
 import { MoreHorizontal } from 'lucide-react';
 import { BrandedSelect } from '@/components/ui/BrandedSelect';
 import type { Field, RiderSection, ResolvedPack, ResolvedSection } from '@/lib/rider-packs/types';
@@ -597,11 +600,35 @@ export function PackEditor({ packId }: Props) {
                 }`}
               >
                 <span className="truncate">{s.title}</span>
-                {s.inherited_from && (
-                  <span className="text-[10px] uppercase tracking-wide text-lp-text-tertiary">
-                    {s.inherited_from === 'artist' ? 'artist' : 'tour'}
-                  </span>
-                )}
+                {/* VIS-RB-02 — rail states: mono badge for an embedded channel
+                    list · neutral ↘ inherited + scope · overridden chip. */}
+                <span className="flex shrink-0 items-center gap-1">
+                  {s.section_type === 'channel_list' && (
+                    <span
+                      className="rounded border border-lp-border px-1 font-mono text-[9px] uppercase leading-4 text-lp-text-tertiary"
+                      title="Embedded channel list"
+                    >
+                      CH
+                    </span>
+                  )}
+                  {s.inherited_from && (
+                    <span
+                      className="inline-flex items-center gap-0.5 text-[10px] uppercase tracking-wide text-lp-text-tertiary"
+                      title={`Inherited from the ${s.inherited_from}-level rider`}
+                    >
+                      <span aria-hidden>↘</span>
+                      {s.inherited_from}
+                    </span>
+                  )}
+                  {s.overridden && (
+                    <span
+                      className="rounded bg-lp-text/10 px-1 text-[10px] uppercase tracking-wide text-lp-text-secondary"
+                      title="Overrides an inherited section — the master is untouched"
+                    >
+                      override
+                    </span>
+                  )}
+                </span>
               </button>
             </li>
           ))}
@@ -893,13 +920,25 @@ function SectionEditor({
           >
             ↓
           </button>
+          {/* VIS-RB-03 — per-section override in place. Inherited → Override
+              here (detach a local copy). Overridden → Revert (drop the local
+              copy, re-inherit the master). Local → Remove. */}
           {inherited ? (
             <button
               type="button"
               onClick={onOverride}
-              className="rounded bg-[var(--lp-orange)] px-2 py-1 text-white hover:opacity-90"
+              className="rounded bg-[var(--lp-orange)] px-2 py-1 font-medium text-white hover:opacity-90"
             >
-              Override
+              Override here
+            </button>
+          ) : section.overridden ? (
+            <button
+              type="button"
+              onClick={onRemove}
+              title="Drop this local override and re-inherit the master"
+              className="rounded border border-lp-border px-2 py-1 text-lp-text-secondary hover:bg-lp-surface-hover"
+            >
+              Revert
             </button>
           ) : (
             <button
@@ -913,9 +952,36 @@ function SectionEditor({
           )}
         </div>
       </div>
-      {inherited && (
-        <div className="border-b px-4 py-2 text-xs text-lp-text-secondary" style={{ borderColor: 'var(--lp-border)' }}>
-          Inherited from {section.inherited_from}. Override to edit here.
+      {/* VIS-RB-01/04 — inheritance banner with DYNAMIC parent labels by scope
+          chain + a neutral ↘ glyph. Inherited → offers Override + view original;
+          overridden → confirms the master is untouched + view original. */}
+      {(inherited || section.overridden) && (
+        <div
+          className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b px-4 py-2 text-xs text-lp-text-secondary"
+          style={{ borderColor: 'var(--lp-border)' }}
+        >
+          <span className="inline-flex items-center gap-1">
+            <span aria-hidden className="text-lp-text-tertiary">↘</span>
+            {inherited ? (
+              <>
+                Inherited from the{' '}
+                <span className="font-semibold text-lp-text">{section.inherited_from}</span>-level rider — override to edit here.
+              </>
+            ) : (
+              <>
+                Overrides the{' '}
+                <span className="font-semibold text-lp-text">{section.parent_scope}</span>-level rider. The master is untouched.
+              </>
+            )}
+          </span>
+          {section.parent_pack_id && (
+            <Link
+              href={`/rider-packs/${section.parent_pack_id}?mode=edit`}
+              className="font-semibold text-lp-text-secondary underline-offset-2 hover:text-lp-orange hover:underline"
+            >
+              View {inherited ? section.inherited_from : section.parent_scope} original
+            </Link>
+          )}
         </div>
       )}
 

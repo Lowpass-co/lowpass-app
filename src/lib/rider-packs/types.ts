@@ -276,6 +276,16 @@ export type ResolvedSection = RiderSection & {
   inherited_from: PackScope | null;
   /** Pack ID the section was sourced from (may differ from the requested pack). */
   source_pack_id: string;
+  /** VIS-RB-02/03 — true when this section is authored at the CURRENT scope but a
+   *  parent scope ALSO has the same key: a local override of an inherited section
+   *  (the parent master is untouched). */
+  overridden?: boolean;
+  /** The next scope up the chain that this section inherits from / overrides — the
+   *  "original" scope (e.g. a show-scope pack inherits from `tour`). null when the
+   *  section has no parent (a purely local section). */
+  parent_scope?: PackScope | null;
+  /** Pack ID of that parent/original section, for a "view original" link. */
+  parent_pack_id?: string | null;
   /** Set when `section_type === 'channel_list'` (from resolve). */
   subSnakes?: SubSnake[];
   /** Set when `section_type === 'channel_list'` (from resolve). */

@@ -135,6 +135,17 @@ export async function resolvePack(
     return ap - bp;
   });
 
+  // VIS-RB-02/03 — index EVERY candidate per key (most-specific first, same order
+  // as `sorted`) so the winner can name the parent it inherits from / overrides.
+  const candByKey = new Map<string, Array<{ pack_id: string; scope: PackScope }>>();
+  for (const row of sorted) {
+    const sc = scopeByPackId.get(row.pack_id);
+    if (sc === undefined) continue;
+    const arr = candByKey.get(row.section_key);
+    if (arr) arr.push({ pack_id: row.pack_id, scope: sc });
+    else candByKey.set(row.section_key, [{ pack_id: row.pack_id, scope: sc }]);
+  }
+
   const byKey = new Map<string, ResolvedSection>();
   for (const row of sorted) {
     if (byKey.has(row.section_key)) continue;
@@ -142,11 +153,20 @@ export async function resolvePack(
     if (srcScope === undefined) continue;
     const rest = row as RiderSection & { section_type?: SectionType };
     const st: SectionType = rest.section_type ?? 'fields';
+    const isCurrent = row.pack_id === pack.id;
+    // The shadowed parent (next candidate up the chain), if any.
+    const parent = (candByKey.get(row.section_key) ?? [])[1] ?? null;
     byKey.set(row.section_key, {
       ...rest,
       section_type: st,
-      inherited_from: row.pack_id === pack.id ? null : srcScope,
+      inherited_from: isCurrent ? null : srcScope,
       source_pack_id: row.pack_id,
+      // Authored here AND a parent has the same key → a local override.
+      overridden: isCurrent && parent != null,
+      // The "original" scope/pack: the shadowed parent for a local override, else
+      // the source itself for an inherited section.
+      parent_scope: isCurrent ? (parent?.scope ?? null) : srcScope,
+      parent_pack_id: isCurrent ? (parent?.pack_id ?? null) : row.pack_id,
     });
   }
 
