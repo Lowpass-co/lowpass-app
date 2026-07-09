@@ -94,13 +94,19 @@ export interface BudgetGridViewProps {
   versions?: BudgetVersionVm[];
   /** FX unify (Stage 2) — the tour's budget_fx_rates map for display conversion. */
   fxRates?: FxRateMap;
+  /** Stage-3 parity — duplicate-detection map (line id → duplicate line ids),
+   *  computed on the page (detectDuplicates). Display only; drives the banner. */
+  duplicateMap?: Record<string, string[]>;
 }
 
 export function BudgetGridView({
   lines, sections, tourCurrency, tourId,
   versionLocked = false, lockedVersionId = null, canApprove = false,
   viewedStatus = 'draft', draftVersionId = null, versions = [], fxRates = {},
+  duplicateMap = {},
 }: BudgetGridViewProps) {
+  // Stage-3 parity — count of lines flagged as possible duplicates.
+  const duplicateCount = Object.keys(duplicateMap).length;
   const router = useRouter();
   const { showToast } = useToast();
   const [lockModalOpen, setLockModalOpen] = useState(false);
@@ -417,6 +423,29 @@ export function BudgetGridView({
 
   return (
     <>
+      {/* Stage-3 parity — duplicate-detection banner (display only; the money
+          numbers are untouched — this just flags lines that look duplicated). */}
+      {duplicateCount > 0 ? (
+        <div
+          role="status"
+          className="flex items-center gap-2"
+          style={{
+            margin: '0 0 var(--lp-space-2)',
+            padding: 'var(--lp-space-2) var(--lp-space-3)',
+            borderRadius: 'var(--lp-radius-md)',
+            border: '1px solid color-mix(in srgb, var(--color-lp-warning) 40%, transparent)',
+            background: 'color-mix(in srgb, var(--color-lp-warning) 8%, transparent)',
+            fontSize: 'var(--lp-text-sm)',
+            color: 'var(--lp-text)',
+          }}
+        >
+          <span aria-hidden style={{ color: 'var(--color-lp-warning)', fontWeight: 'var(--lp-weight-bold)' }}>!</span>
+          <span>
+            <span className="lp-mono" style={{ fontWeight: 'var(--lp-weight-semibold)' }}>{duplicateCount}</span>{' '}
+            line{duplicateCount === 1 ? '' : 's'} look like possible duplicates — review before approving.
+          </span>
+        </div>
+      ) : null}
       <Grid
         // re-init when the line/section COUNT changes (add/delete via a refresh);
         // cell edits don't change counts, so the grid keeps its session state.

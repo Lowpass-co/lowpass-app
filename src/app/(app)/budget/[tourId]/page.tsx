@@ -464,6 +464,7 @@ export default async function BudgetTourPage({
                       draftVersionId={draftVersionId}
                       versions={versions}
                       fxRates={fxRates}
+                      duplicateMap={duplicatesToRecord(detectDuplicates(lines))}
                     />
                   }
                 />
