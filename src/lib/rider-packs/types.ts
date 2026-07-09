@@ -229,6 +229,8 @@ export type ChannelListRow = {
   mic: string;
   mic_substitute: string;
   di: string;
+  /** VIS-CL-06 — free-text gain ("+4", "unity", "-10dB"). Migration 238. */
+  gain: string | null;
   stand: string;
   phantom_power: boolean | null;
   provider: 'band' | 'venue' | 'hire' | null;

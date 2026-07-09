@@ -14,6 +14,7 @@ type RowPatch = Partial<
     | 'mic'
     | 'mic_substitute'
     | 'di'
+    | 'gain'
     | 'stand'
     | 'phantom_power'
     | 'provider'

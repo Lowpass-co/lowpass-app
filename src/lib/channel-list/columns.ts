@@ -27,6 +27,7 @@ export type ChannelListColumnKey =
   | 'sub_snake'
   | 'cable_length'
   | 'mic'
+  | 'gain'
   | 'stand'
   | 'phantom_power'
   | 'provider'
@@ -65,6 +66,9 @@ export const CHANNEL_LIST_COLUMNS: ChannelListColumnDef[] = [
   { key: 'sub_snake', label: 'Loom', track: 'minmax(4.5rem,0.7fr)', alwaysOn: false, permanent: false, focusable: true, controlsButton: 'manage-sub-snakes' },
   { key: 'cable_length', label: 'Cable', track: 'minmax(4rem,0.55fr)', alwaysOn: false, permanent: false, focusable: true, controlsButton: 'cables-inventory' },
   { key: 'mic', label: 'Mic / DI', track: 'minmax(6rem,1fr)', alwaysOn: false, permanent: false, focusable: true, controlsButton: 'manage-mic-library' },
+  // VIS-CL-06 — Gain column (channel_list_rows.gain, migration 238). Free text
+  // so it holds "+4", "unity", "-10dB", etc.
+  { key: 'gain', label: 'Gain', track: 'minmax(4rem,0.55fr)', alwaysOn: false, permanent: false, focusable: true },
   { key: 'stand', label: 'Stand', track: 'minmax(4rem,0.6fr)', alwaysOn: false, permanent: false, focusable: true },
   { key: 'phantom_power', label: '+48', track: '2.25rem', alwaysOn: false, permanent: false, focusable: true },
   { key: 'provider', label: 'Prov', track: 'minmax(4.5rem,0.55fr)', alwaysOn: false, permanent: false, focusable: true },
@@ -94,6 +98,8 @@ function columnHasData(key: ChannelListColumnKey, rows: ChannelListRow[]): boole
         return (r.cable_length ?? '').trim().length > 0;
       case 'mic':
         return (r.mic ?? '').trim().length > 0;
+      case 'gain':
+        return (r.gain ?? '').trim().length > 0;
       case 'stand':
         return (r.stand ?? '').trim().length > 0;
       case 'phantom_power':

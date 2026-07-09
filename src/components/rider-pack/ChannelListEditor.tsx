@@ -1079,6 +1079,23 @@ function ChannelBlock({
         </NavCell>
         )}
         {/* Stand — enum select (optional column). */}
+        {/* VIS-CL-06 — Gain (free text, migration 238). */}
+        {show.has('gain') && (
+          <NavCell row={inputRowIdx} col={navCol.gain!}>
+            <div className="min-w-0 self-center px-0.5">
+              <input
+                type="text"
+                value={local.gain ?? ''}
+                onChange={(e) => queue({ gain: e.target.value })}
+                onBlur={() => void saveRow.flush()}
+                className="w-full min-w-0 rounded border border-lp-border bg-lp-bg px-1.5 py-1.5 text-xs text-lp-text outline-none focus:border-lp-orange/40"
+                placeholder="…"
+                aria-label={`Gain for channel ${row.row_index}`}
+                title={local.gain ?? ''}
+              />
+            </div>
+          </NavCell>
+        )}
         {show.has('stand') && (
           <NavCell row={inputRowIdx} col={navCol.stand!}>
             <div className="min-w-0 self-center px-0.5">
