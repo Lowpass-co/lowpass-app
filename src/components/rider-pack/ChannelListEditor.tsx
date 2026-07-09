@@ -32,6 +32,7 @@ import { OutputBlock, OUTPUT_GRID, OUTPUT_COL_COUNT } from './channel-list-cells
 import { InventoryAggregates } from './channel-list-cells/InventoryAggregates';
 import { AddManyChannelsModal } from './channel-list-cells/AddManyChannelsModal';
 import { ChannelListSectionBand } from './channel-list-cells/ChannelListSectionBand';
+import { ChannelPatchBoard, type SocketPatch } from './ChannelPatchBoard';
 import { CellNavProvider, NavCell } from '@/lib/hooks/useCellNav';
 import {
   COLUMN_BY_KEY,
@@ -122,6 +123,8 @@ export default function ChannelListEditor({
   const [stageDialog, setStageDialog] = useState(false);
   const [multiAddOpen, setMultiAddOpen] = useState(false);
   const [columnPickerOpen, setColumnPickerOpen] = useState(false);
+  /* VIS-CL-07 — patch mode (dLive/LV1-style socket board). */
+  const [patchMode, setPatchMode] = useState(false);
   const [mics, setMics] = useState<MicLibraryEntry[]>([]);
   const [gearByName, setGearByName] = useState<
     Map<string, { id: string; ownership: 'owned' | 'sub_hired' | 'hired_to_client' }>
@@ -290,6 +293,21 @@ export default function ChannelListEditor({
     setSubSnakes(snakes);
   }, [section.id]);
 
+  /* VIS-CL-07 — patch-mode write. SURGICAL: one updateRow on the patched
+     channel writing ONLY the socket-family columns (stage_box_id/position or
+     sub_snake_id/position — never row_index, never output_*, never another
+     row). Optimistic local update; on failure, toast + refetch to reconcile. */
+  const patchChannel = useCallback(
+    (channelId: string, patch: SocketPatch) => {
+      setRows((prev) => prev.map((x) => (x.id === channelId ? { ...x, ...patch } : x)));
+      void ch.updateRow(createClient(), channelId, patch).catch((err) => {
+        showToast(err instanceof Error ? err.message : 'Patch failed', 'error');
+        void refetchLocal();
+      });
+    },
+    [refetchLocal, showToast],
+  );
+
   /* Structural-change notifier handed to the I/O dialogs + inventory patch.
      Does a local, non-navigating refetch, then still calls the parent hook
      (a no-op on the tour surface; the rider PackEditor keeps its own sync). */
@@ -421,6 +439,19 @@ export default function ChannelListEditor({
               onClose={() => setColumnPickerOpen(false)}
             />
           </div>
+          {/* VIS-CL-07 — Patch mode toggle. Opens the socket board. */}
+          <button
+            type="button"
+            onClick={() => setPatchMode((p) => !p)}
+            aria-pressed={patchMode}
+            className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-semibold uppercase tracking-wide"
+            style={{
+              color: patchMode ? 'var(--lp-text-inverse)' : 'var(--lp-text-secondary)',
+              background: patchMode ? 'var(--color-lp-orange)' : 'transparent',
+            }}
+          >
+            Patch
+          </button>
           <div className="flex shrink-0 items-center gap-1 text-xs">
             <button
               type="button"
@@ -506,6 +537,17 @@ export default function ChannelListEditor({
           ))}
         </div>
 
+        {patchMode ? (
+          /* VIS-CL-07 — patch board replaces the input grid; the outputs
+             sub-grid below stays rendered + untouched (VIS-CL-04). */
+          <ChannelPatchBoard
+            rows={inputRows}
+            stageBoxes={stageBoxes}
+            subSnakes={subSnakes}
+            onPatch={patchChannel}
+          />
+        ) : (
+          <>
         <ChannelListSectionBand label="Inputs" count={inputRows.length} />
 
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={(e) => void handleDragEnd(e)}>
@@ -664,6 +706,8 @@ export default function ChannelListEditor({
             Add many…
           </button>
         </div>
+          </>
+        )}
 
         {/* Sprint 12 §8b2 — output sub-grid. Renders below the
             input grid with its own header + nav island. Empty
