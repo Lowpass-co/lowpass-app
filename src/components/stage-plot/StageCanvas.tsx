@@ -19,7 +19,8 @@ import { ICON_BRAND_TINT_PCT } from '@/lib/stage-plot/icons/types';
 import { DEFAULT_VIEW, ft, fitView, snapToGrid, zoomAt, type ViewTransform } from '@/lib/stage-plot/geometry';
 import type { Channel, EditorItem } from '@/lib/stage-plot/editor-types';
 
-const DEFAULT_BRAND = '#FF4500';
+// VIS-SP-02 — neutral brand default (was #FF4500 orange). Orange = selection only.
+const DEFAULT_BRAND = '#6B7280';
 export type CanvasItem = EditorItem;
 
 export type LabelPosition = 'top' | 'bottom' | 'left' | 'right' | 'inside' | 'hidden';
@@ -412,14 +413,15 @@ export function StageCanvas({
             const isRiser = it.iconName.startsWith('infra-riser-');
             const linked = (it.channelRowIds ?? []).map((cid) => channels.find((c) => c.id === cid)).filter((c): c is NonNullable<typeof c> => Boolean(c));
             const ch = linked[0];
-            // §SP-FIX-6: linked → sub-snake colour; unlinked → muted brand
-            // tint (the default brand is orange, matching the locked
-            // "muted orange for unlinked" signal).
-            const unlinkedStroke = `color-mix(in srgb, ${brandColor} 55%, var(--lp-text-tertiary))`;
-            const stroke = ch?.color || unlinkedStroke;
+            // VIS-SP-02 — items are NEUTRAL. Stroke = the explicit per-item tint
+            // if set, else a neutral gray; the channel's colour no longer paints
+            // the whole item (it moves to the stripe-tick chip, VIS-SP-03). The
+            // fill is a faint neutral brand wash (brandColor now defaults neutral).
+            // Orange is reserved for selection only.
+            const stroke = it.colorTint ?? 'var(--lp-text-secondary)';
             const fill = icon.outline
               ? 'none'
-              : it.colorTint ?? `color-mix(in srgb, ${ch?.color ?? brandColor} ${ICON_BRAND_TINT_PCT}%, transparent)`;
+              : it.colorTint ?? `color-mix(in srgb, ${brandColor} ${ICON_BRAND_TINT_PCT}%, transparent)`;
             const style = { fill, stroke, '--lp-cat': stroke } as CSSProperties & Record<string, string>;
             const bx = cx + wpx / 2;
             const by = cy - hpx / 2;
@@ -458,11 +460,15 @@ export function StageCanvas({
                   ) : (
                     <svg x={cx - wpx / 2} y={cy - hpx / 2} width={wpx} height={hpx} viewBox={icon.viewBox ?? '0 0 100 100'} preserveAspectRatio="xMidYMid meet" className="lp-canvas-item" style={style} dangerouslySetInnerHTML={{ __html: icon.body }} />
                   )}
-                  {/* §SP-FIX-6: sub-snake letter badge only when the channel overlay is on. */}
-                  {showChannels && ch && !isPerson && (
+                  {/* VIS-SP-03 — linked-channel chip: NEUTRAL pill + a colour
+                      STRIPE tick (channel identity) + the channel number. Shown
+                      for every linked item (persons included) when the overlay is
+                      on. Orange stays selection-only — the chip carries no orange. */}
+                  {showChannels && ch && (
                     <g>
-                      <rect x={bx - 7} y={by - 7} width={16} height={12} rx={3} fill={ch.color || '#6b7280'} stroke="var(--lp-bg)" strokeWidth={0.75} />
-                      <text x={bx + 1} y={by - 1} fontSize={8} fill="#ffffff" textAnchor="middle" dominantBaseline="central" fontWeight={700}>
+                      <rect x={bx - 8} y={by - 7} width={20} height={12} rx={3} fill="var(--lp-surface)" stroke="var(--lp-border-strong)" strokeWidth={0.75} />
+                      <rect x={bx - 8} y={by - 7} width={3} height={12} rx={1.5} fill={ch.color || 'var(--lp-text-tertiary)'} />
+                      <text x={bx + 3} y={by - 1} fontSize={8} fill="var(--lp-text)" textAnchor="middle" dominantBaseline="central" fontWeight={700}>
                         {linked.length > 1 ? `×${linked.length}` : ch.snakeLabel || String(ch.number)}
                       </text>
                     </g>

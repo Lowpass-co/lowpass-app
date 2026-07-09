@@ -69,6 +69,13 @@ export function StagePlotEditor({ initialPlot, initialItems, channels: initialCh
     return id;
   }, []);
 
+  // VIS-SP-05 — edit a linked channel inline (e.g. its number). Updates the
+  // editor's channel projection; persistence back to the paired channel-list
+  // pack is a host concern (this editor's onChange carries only plot + items).
+  const updateChannel = useCallback((id: string, patch: Partial<Channel>) => {
+    setChannels((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
+  }, []);
+
   const selectItem = useCallback((id: string | null, additive?: boolean) => {
     setSelectedIds((prev) => {
       if (id == null) return [];
@@ -337,6 +344,7 @@ export function StagePlotEditor({ initialPlot, initialItems, channels: initialCh
           selectedCount={selectedIds.length}
           channels={channels}
           onAddChannel={addChannel}
+          onUpdateChannel={updateChannel}
           onUpdateItem={updateSelected}
           onDeleteItem={deleteSelected}
           onUpdatePlot={(patch) => setPlot((p) => ({ ...p, ...patch }))}

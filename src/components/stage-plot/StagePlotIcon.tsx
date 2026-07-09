@@ -31,9 +31,9 @@ import {
   type IconRenderMode,
 } from '@/lib/stage-plot/icons/types';
 
-/** --lp-orange. The brand-colour cascade resolves the real value
- *  upstream (§SP6); this is the workspace-default fallback. */
-const DEFAULT_BRAND = '#FF4500';
+/** VIS-SP-02 — neutral brand-colour fallback (was #FF4500 orange). The brand
+ *  cascade resolves the real value upstream (§SP6); orange is now selection-only. */
+const DEFAULT_BRAND = '#6B7280';
 
 export interface StagePlotIconProps {
   icon: IconDescriptor;
@@ -80,7 +80,9 @@ export function StagePlotIcon({
     style['--ico-fill'] = icon.outline
       ? 'none'
       : `color-mix(in srgb, ${brandColor} ${ICON_BRAND_TINT_PCT}%, transparent)`;
-    style['--ico-stroke'] = category.colorVar;
+    // VIS-SP-02 — canvas stroke is NEUTRAL (was the category hue). Category still
+    // drives the palette/library badge; on-canvas items read neutral.
+    style['--ico-stroke'] = 'var(--lp-text-secondary)';
   } else {
     style.color = selected ? 'var(--lp-text)' : 'var(--lp-text-secondary)';
   }

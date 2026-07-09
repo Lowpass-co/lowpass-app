@@ -128,6 +128,9 @@ export const DEFAULT_PLOT: EditorPlot = {
   showLateralMarkers: false,
   showChannels: false,
   snap: true,
-  brandColor: '#FF4500',
+  // VIS-SP-02 — default brand is NEUTRAL (was #FF4500 orange). Orange on the
+  // canvas is reserved for selection; brand only tints the faint fill wash /
+  // riser, so a neutral default keeps the canvas hue-free until a user opts in.
+  brandColor: '#6B7280',
   units: 'ft',
 };

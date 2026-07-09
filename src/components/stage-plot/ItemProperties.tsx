@@ -46,6 +46,8 @@ export interface ItemPropertiesProps {
   onUpdatePlot: (patch: Partial<EditorPlot>) => void;
   /** Create a new channel-list row and return its id (§SP4 / #8). */
   onAddChannel?: (label: string) => string;
+  /** VIS-SP-05 — edit a linked channel inline (e.g. its number). */
+  onUpdateChannel?: (id: string, patch: Partial<Channel>) => void;
   /** §SP-FIX-3 — split a composite drum kit into individual pieces. */
   onSplitKit?: () => void;
   /** §SP-FIX-3 — recombine a split kit piece's group into the composite. */
@@ -58,7 +60,7 @@ export interface ItemPropertiesProps {
   onExtractTitleBar?: () => void;
 }
 
-export function ItemProperties({ plot, item, selectedCount = 0, channels = [], onUpdateItem, onDeleteItem, onUpdatePlot, onAddChannel, onSplitKit, onCombineKit, onReorder, onRotate, onExtractTitleBar }: ItemPropertiesProps) {
+export function ItemProperties({ plot, item, selectedCount = 0, channels = [], onUpdateItem, onDeleteItem, onUpdatePlot, onAddChannel, onUpdateChannel, onSplitKit, onCombineKit, onReorder, onRotate, onExtractTitleBar }: ItemPropertiesProps) {
   const [newCh, setNewCh] = useState('');
   // Expert "custom dimensions" gate (§SP-FIX-2). Off by default → items
   // lock to footprint; on → editable W×D×H. Interim home is localStorage
@@ -231,8 +233,23 @@ export function ItemProperties({ plot, item, selectedCount = 0, channels = [], o
                     if (!c) return null;
                     return (
                       <div key={cid} style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                        <span style={{ width: 10, height: 10, borderRadius: 2, background: c.color || 'var(--lp-border-strong)', flexShrink: 0 }} />
-                        <span style={{ flex: 1, fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text)' }}>{c.number}. {c.label}</span>
+                        {/* VIS-SP-03 — colour STRIPE tick (channel identity). */}
+                        <span style={{ width: 4, height: 14, borderRadius: 2, background: c.color || 'var(--lp-border-strong)', flexShrink: 0 }} />
+                        {/* VIS-SP-05 — channel number editable inline (falls back to
+                            a static label when no channel-edit seam is provided). */}
+                        {onUpdateChannel ? (
+                          <input
+                            type="number"
+                            value={c.number}
+                            min={1}
+                            aria-label={`Channel number for ${c.label}`}
+                            onChange={(e) => { const n = parseInt(e.target.value, 10); if (!Number.isNaN(n)) onUpdateChannel(c.id, { number: n }); }}
+                            style={{ width: 40, fontSize: 'var(--lp-text-xs)', padding: '2px 4px', borderRadius: 4, border: '1px solid var(--lp-border)', background: 'var(--lp-surface)', color: 'var(--lp-text)', textAlign: 'right', flexShrink: 0 }}
+                          />
+                        ) : (
+                          <span style={{ fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text)', flexShrink: 0 }}>{c.number}.</span>
+                        )}
+                        <span style={{ flex: 1, minWidth: 0, fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.label}</span>
                         <button type="button" aria-label="Unlink" onClick={() => onUpdateItem({ channelRowIds: (item.channelRowIds ?? []).filter((x) => x !== cid) })} style={{ border: 'none', background: 'none', color: 'var(--lp-text-tertiary)', cursor: 'pointer', fontSize: 14, lineHeight: 1 }}>×</button>
                       </div>
                     );

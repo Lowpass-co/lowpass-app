@@ -12,7 +12,7 @@
    can't clobber each other.
    ============================================ */
 
-import { CATEGORY_HEX, getCategory, getIcon } from './icons';
+import { getIcon } from './icons';
 import { ICON_BRAND_TINT_PCT, type IconDescriptor } from './icons/types';
 import { ft } from './geometry';
 import type { EditorItem, EditorPlot } from './editor-types';
@@ -49,7 +49,10 @@ export function buildStagePlotSvg(plot: EditorPlot, items: EditorItem[], customI
       const cy = ft(it.yFt);
       const wpx = ft(wFt);
       const hpx = ft(dFt);
-      const cat = CATEGORY_HEX[getCategory(icon.category).key];
+      // VIS-SP-02/06 — NEUTRAL stroke (was the category hue) so the PDF export
+      // matches the canvas render 1:1 (canvas uses var(--lp-text-secondary) =
+      // #6B7280 in the print-light theme). Fill = faint neutral brand wash.
+      const cat = '#6B7280';
       const fill = icon.outline
         ? 'none'
         : it.colorTint ?? `color-mix(in srgb, ${plot.brandColor} ${ICON_BRAND_TINT_PCT}%, transparent)`;
