@@ -193,7 +193,23 @@ export function OverheadsCommissionsCard({ pnl }: { pnl: BudgetPnl }) {
       {rows.map((r) => (
         <li key={r.label} style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: 10, alignItems: 'baseline', padding: '4px 0', borderBottom: '1px solid var(--lp-border-subtle)', fontSize: 12 }}>
           <span style={{ color: 'var(--lp-text)' }}>{r.label}</span>
-          <span className="lp-mono" style={{ color: 'var(--lp-text-tertiary)' }}>{r.basePct != null ? `${Math.round(r.basePct * 100)}%` : '—'}</span>
+          {/* VIS-BG-03 — computed section: ƒ chip + the formula text (the % of
+              the P&L base). Orange italic ƒ marks it as engine-computed +
+              uneditable (this whole card is display-only). */}
+          <span
+            className="lp-mono"
+            style={{ color: 'var(--lp-text-tertiary)' }}
+            title={r.basePct != null ? 'Computed — percentage of the P&L base (edit in Settings)' : undefined}
+          >
+            {r.basePct != null ? (
+              <>
+                <span aria-hidden style={{ color: 'var(--lp-orange)', fontStyle: 'italic', fontWeight: 700, marginRight: 3 }}>ƒ</span>
+                {`${Math.round(r.basePct * 100)}%`}
+              </>
+            ) : (
+              '—'
+            )}
+          </span>
           <span className="lp-mono" style={{ color: 'var(--lp-text-secondary)', textAlign: 'right', minWidth: 70 }}>{money(r.amount, ccy)}</span>
         </li>
       ))}

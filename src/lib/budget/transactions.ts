@@ -251,6 +251,39 @@ export async function enrichLinesWithTransactionAggregates<
   });
 }
 
+/** VIS-BG-04 — bulk-aggregate a display-only vendor label per line item.
+ *  Vendor lives on the transaction, not the line; a line can have several.
+ *  Rule (Q8, Adam's call): show the vendor when the line's transactions agree
+ *  (or there's exactly one distinct vendor), "Multiple" when they differ,
+ *  blank when the line has no transactions with a vendor.
+ *
+ *  Pure READ helper, entirely separate from the actuals aggregate path
+ *  (fetchTransactionAggregates) — it touches no money field and no existing
+ *  return shape, so it cannot perturb any P&L number. One round-trip; RLS
+ *  scopes the query to the caller's workspace. Returns a map keyed on
+ *  line_item_id (absent key = blank). */
+export async function fetchLineVendors(
+  supabase: SupabaseClient,
+  lineItemIds: string[],
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  if (lineItemIds.length === 0) return out;
+  const { data } = await supabase
+    .from('budget_line_item_transactions')
+    .select('line_item_id, vendor_name')
+    .in('line_item_id', lineItemIds);
+  const distinctByLine = new Map<string, Set<string>>();
+  for (const row of (data ?? []) as Array<{ line_item_id: string; vendor_name: string | null }>) {
+    const v = (row.vendor_name ?? '').trim();
+    if (!v) continue;
+    (distinctByLine.get(row.line_item_id) ?? distinctByLine.set(row.line_item_id, new Set()).get(row.line_item_id)!).add(v);
+  }
+  for (const [lineId, vendors] of distinctByLine) {
+    out.set(lineId, vendors.size === 1 ? [...vendors][0] : 'Multiple');
+  }
+  return out;
+}
+
 /** Look up a line item by id, scoped to the user's workspace,
  *  and return its tour_id + workspace_id. Returns a NextResponse
  *  on failure for the caller to relay unchanged.

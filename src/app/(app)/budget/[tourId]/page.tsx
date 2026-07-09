@@ -42,7 +42,7 @@ import { ReceiptInbox } from '@/components/budget/ReceiptInbox';
 // body to render.
 import { resolveBudgetTab } from '@/components/budget/budget-tab-utils';
 import { BudgetDensityProvider } from '@/components/budget/BudgetDensityContext';
-import { enrichLinesWithTransactionAggregates } from '@/lib/budget/transactions';
+import { enrichLinesWithTransactionAggregates, fetchLineVendors } from '@/lib/budget/transactions';
 import { enrichLinesWithAttachmentCounts } from '@/lib/budget/attachments';
 import { loadTourIncome, toIncomeRows } from '@/lib/budget/income';
 import { BudgetSummaryDashboard } from '@/components/budget/summary-cards/BudgetSummaryDashboard';
@@ -257,6 +257,20 @@ export default async function BudgetTourPage({
     return txnEnriched.map((l) => ({ ...l, attachment_count: 0 }));
   });
 
+  /* VIS-BG-04 — display-only vendor label per line (single-else-"Multiple").
+     Separate READ from the money path; degrades to blank on failure. */
+  const vendorByLine: Record<string, string> = {};
+  {
+    const vmap = await fetchLineVendors(
+      supabase,
+      lines.map((l) => l.id),
+    ).catch((err) => {
+      logServerError('fetchLineVendors failed', err, { tourId });
+      return new Map<string, string>();
+    });
+    for (const [id, v] of vmap) vendorByLine[id] = v;
+  }
+
   /* Versioning (B1) — the proposed shown is the ACTIVE VERSION's snapshot, not
      the legacy budget_line_items.proposed_cost column (kept write-through one
      release as a fallback; never read). Actuals stay on the line. Overlay here so
@@ -470,6 +484,7 @@ export default async function BudgetTourPage({
                       fxRates={fxRates}
                       duplicateMap={duplicatesToRecord(detectDuplicates(lines))}
                       dayTypeByRouting={dayTypeByRouting}
+                      vendorByLine={vendorByLine}
                       trackPhases={trackPhases}
                     />
                   }

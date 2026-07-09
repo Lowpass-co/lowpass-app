@@ -107,6 +107,11 @@ export interface GridProps {
       (Expenses / demo / every existing consumer unchanged). Income — rows are
       routing-anchored, no sections/statuses — passes false. */
   allowAddRows?: boolean;
+  /** VIS-BG-06 — additionally render a PROMINENT "＋ Add line" chip in the top
+   *  toolbar (the per-section ghost button always stays). Opt-in: only Budget
+   *  Expenses passes it, so income (allowAddRows:false) + /grid-demo (omits it)
+   *  stay byte-identical. Adds the line to the last normal section. */
+  toolbarAddLine?: boolean;
   /* ---- WIDE MODE (additive, opt-in — budget never sets these) ---------- */
   /** Wide (people × many-day matrix) mode: sets data-wide (frozen-column CSS),
       and dropdown cells fill the whole cell with the optColor tint instead of a
@@ -231,6 +236,7 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
   onReorderSection,
   lineApi,
   allowAddRows = true,
+  toolbarAddLine = false,
   wide = false,
   frozenCols = 0,
   headerFor,
@@ -2252,6 +2258,23 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
             <span className="chip" onClick={addSection} role="button">
               ＋ Add section
             </span>
+            {/* VIS-BG-06 — prominent toolbar add-line (opt-in; budget only).
+                Targets the last normal section; the per-section ghost stays. */}
+            {toolbarAddLine ? (
+              <span
+                className="chip accent"
+                role="button"
+                onClick={() => {
+                  const d = data();
+                  let si = -1;
+                  for (let i = 0; i < d.length; i++) if (d[i].kind === 'normal') si = i;
+                  if (si >= 0) addLine(si);
+                }}
+                style={{ borderColor: 'var(--lp-orange)', color: 'var(--lp-orange)', fontWeight: 600 }}
+              >
+                ＋ Add line
+              </span>
+            ) : null}
           </>
         ) : null}
         <span className="chip" onClick={resetWidths} role="button">
