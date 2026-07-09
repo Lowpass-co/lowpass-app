@@ -1,6 +1,7 @@
 'use client';
 
 import type { LucideIcon } from 'lucide-react';
+import { getAdvanceBlock } from '@/components/advance/blocks/registry';
 
 type FieldDef = {
   id: string;
@@ -84,14 +85,32 @@ function FieldPlain({ field, value }: { field: FieldDef; value: unknown }) {
 export function MobileAdvanceSectionAccordion({
   section,
   data,
+  routingId,
 }: {
   section: SectionDef;
   data: Record<string, unknown>;
   icon?: LucideIcon;
+  /** Needed to render REGISTERED blocks (e.g. labor calls) on /m/today. */
+  routingId?: string;
 }) {
   const rows = section.fields
-    .map((field) =>
-      ['file'].includes(field.type) ? null : (
+    .map((field) => {
+      // P6 — REGISTERED blocks render their own read view (registry.tsx). Crew
+      // care about the labor call schedule, so it shows as its own block on
+      // /m/today rather than a JSON blob.
+      const block = getAdvanceBlock(field.type);
+      if (block && routingId) {
+        const ReadView = block.ReadView;
+        return (
+          <div key={field.id}>
+            <p className="text-[13px] font-semibold uppercase tracking-wide text-lp-text-tertiary">{field.label}</p>
+            <div className="mt-1">
+              <ReadView tourId="" routingId={routingId} />
+            </div>
+          </div>
+        );
+      }
+      return ['file'].includes(field.type) ? null : (
         !isBlank(data[field.id]) ? (
           <div key={field.id}>
             <p className="text-[13px] font-semibold uppercase tracking-wide text-lp-text-tertiary">{field.label}</p>
@@ -100,8 +119,8 @@ export function MobileAdvanceSectionAccordion({
             </div>
           </div>
         ) : null
-      )
-    )
+      );
+    })
     .filter(Boolean);
 
   if (rows.length === 0) return null;

@@ -148,6 +148,7 @@ export function MobileShowReader({ tourId, routingId }: { tourId: string; routin
                 key={section.template_id}
                 section={section}
                 data={bundle.advance.data?.[section.template_id] ?? {}}
+                routingId={routingId}
               />
             ) : null
           )}

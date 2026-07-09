@@ -177,6 +177,9 @@ export const FIELD_TYPE_OPTIONS: { id: string; label: string; description: strin
   { id: 'contact', label: 'Contact', description: 'Name, phone, email', Icon: User },
   { id: 'url', label: 'URL', description: 'URL with validation', Icon: LinkIcon },
   { id: 'slider', label: 'Slider', description: 'Range with min/max/step', Icon: Sliders },
+  // P6 — a REGISTERED block (components/advance/blocks/registry.tsx), not a plain
+  // field: its type keys the registry, which renders the LaborCallBlock editor.
+  { id: 'labor_call', label: 'Labor call', description: 'Per-day crew call schedule', Icon: User },
 ];
 
 export function slugify(s: string): string {

@@ -84,6 +84,7 @@ import {
 import { useAutoSave } from '@/lib/forms/useAutoSave';
 import { buildFillPayload } from '../parts/payloads';
 import { ChangeReviewQueue, type ReviewRow } from '@/components/advance/ChangeReviewQueue';
+import { getAdvanceBlock } from '@/components/advance/blocks/registry';
 
 // ----- FILL MODE -----
 
@@ -2871,7 +2872,18 @@ function SectionCard({
                 </div>
               </div>
             )}
-            {(section.label === 'Hospitality' ? sortHospitalityFieldsFirst(section.fields ?? []) : sortFieldsContactsFirst(section.fields ?? [])).map((field) =>
+            {(section.label === 'Hospitality' ? sortHospitalityFieldsFirst(section.fields ?? []) : sortFieldsContactsFirst(section.fields ?? [])).map((field) => {
+              // P6 — REGISTERED advance blocks dispatch through the block registry
+              // (components/advance/blocks/registry.tsx), NOT a hardcoded
+              // section.label + field.id match. Any field whose `type` is a
+              // registered block (e.g. 'labor_call') renders its Editor. Adding a
+              // block means one registry entry — zero edits here.
+              const registered = getAdvanceBlock((field as { type?: string }).type);
+              if (registered && tourId && routingId) {
+                const Editor = registered.Editor;
+                return <Editor key={field.id} tourId={tourId} routingId={routingId} />;
+              }
+              return (
               section.label === 'Hospitality' && field.id === 'meal_times' ? (
                 <MealTimesBlock
                   key={field.id}
@@ -2925,7 +2937,8 @@ function SectionCard({
                   hideRequiredIndicator={section.label === 'Schedule' || (section.label === 'Production' && field.id === 'production_contact')}
                 />
               )
-            )}
+              );
+            })}
             {section.label === 'Merch' && (data['merch_table_provided'] === true || data['merch_table_provided'] === 'Yes') && (
               <div>
                 <label className="mb-1 block text-sm font-medium text-lp-text">Table/Display Details</label>
