@@ -59,6 +59,18 @@ type ChannelListRow = {
   phantom_power: boolean | null;
   provider: string | null;
   notes: string;
+  // Clone-bug fix — output-row columns from migrations 098 + 115 that the clone
+  // previously dropped (so artist→artist copies lost every output row's data,
+  // and row_kind defaulted to 'input' → output rows silently became inputs).
+  row_kind: string | null;
+  output_item: string | null;
+  output_destination: string | null;
+  output_qty: number | null;
+  output_notes: string | null;
+  cable_length: string | null;
+  output_description: string | null;
+  output_is_stereo: boolean | null;
+  output_position: string | null;
 };
 
 export async function POST(request: Request) {
@@ -291,7 +303,7 @@ export async function POST(request: Request) {
   const { data: oldRows, error: rowQErr } = await supabase
     .from('channel_list_rows')
     .select(
-      'id, pack_id, section_id, row_index, channel_name, sub_snake_id, sub_snake_position, stage_box_id, stage_box_position, position, mic, mic_substitute, di, stand, phantom_power, provider, notes',
+      'id, pack_id, section_id, row_index, channel_name, sub_snake_id, sub_snake_position, stage_box_id, stage_box_position, position, mic, mic_substitute, di, stand, phantom_power, provider, notes, row_kind, output_item, output_destination, output_qty, output_notes, cable_length, output_description, output_is_stereo, output_position',
     )
     .eq('pack_id', sourcePackId);
 
@@ -325,6 +337,18 @@ export async function POST(request: Request) {
       phantom_power: r.phantom_power,
       provider: r.provider,
       notes: r.notes,
+      // Clone-bug fix — carry the output-row columns (098 + 115) so an
+      // artist→artist copy keeps its output rows, cable lengths, and stereo
+      // flags instead of dropping them / demoting outputs to inputs.
+      row_kind: r.row_kind ?? 'input',
+      output_item: r.output_item,
+      output_destination: r.output_destination,
+      output_qty: r.output_qty,
+      output_notes: r.output_notes,
+      cable_length: r.cable_length,
+      output_description: r.output_description,
+      output_is_stereo: r.output_is_stereo ?? false,
+      output_position: r.output_position,
     });
     if (rowIns) {
       if (/relation|does not exist|schema cache/i.test(rowIns.message)) {
