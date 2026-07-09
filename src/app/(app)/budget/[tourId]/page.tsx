@@ -29,8 +29,6 @@ import { BudgetTrackPhasesProvider } from '@/components/budget/BudgetTrackPhases
 import { BudgetBurnBar } from '@/components/budget/BudgetBurnBar';
 import { BudgetContextBand } from '@/components/budget/BudgetContextBand';
 import { resolveArtistLogoUrl } from '@/lib/artists/imageUrl';
-import { BudgetSpreadsheetView } from '@/components/budget/BudgetSpreadsheetView';
-import { BudgetGridToggle } from '@/components/budget/BudgetGridToggle';
 import { BudgetGridView } from '@/components/budget/BudgetGridView';
 import { BudgetIncomeGrid } from '@/components/budget/BudgetIncomeGrid';
 import { BudgetEmptyState } from '@/components/budget/BudgetEmptyState';
@@ -347,7 +345,6 @@ export default async function BudgetTourPage({
   // income grid's currency picker. Unversioned (a conversion assumption).
   const fxRates = await loadTourFxRates(supabase, tourId, workspaceId);
 
-  const routingDateById: Record<string, string> = {};
   // #24 — routing_id → show label (venue → city → date) for the per-show brick.
   const routingLabelById: Record<string, string> = {};
   // Stage-3 parity — routing_id → day_type, for the grid's day-type pill.
@@ -360,7 +357,6 @@ export default async function BudgetTourPage({
     day_type?: string | null;
   }>) {
     if (!r.id) continue;
-    if (r.date) routingDateById[r.id] = r.date.slice(0, 10);
     if (r.day_type) dayTypeByRouting[r.id] = r.day_type;
     const label =
       r.venue_name?.trim() ||
@@ -447,48 +443,28 @@ export default async function BudgetTourPage({
               <BudgetEmptyState tourId={tourId} />
             ) : (
               <>
-                {/* Phase 3 — the canonical <Grid> is mounted on the REAL
-                    budget data behind a "Grid (beta)" toggle; the classic
-                    BudgetSpreadsheetView stays the default safety net until
-                    the grid is live-verified, then this flips. */}
-                <BudgetGridToggle
-                  classic={
-                    <BudgetSpreadsheetView
-                      lines={lines}
-                      sections={sections}
-                      trackPhases={trackPhases}
-                      phases={phases}
-                      routingDateById={routingDateById}
-                      duplicateMap={duplicatesToRecord(detectDuplicates(lines))}
-                      tourCurrency={tourCurrency}
-                      tourId={tourId}
-                      fxRates={fxRates}
-                      income={incomeRows}
-                      commissions={commissionRows}
-                      settings={budgetSettings}
-                      receiptSlot={<ReceiptInbox tourId={tourId} tourCurrency={tourCurrency} lineItems={lines} />}
-                    />
-                  }
-                  grid={
-                    <BudgetGridView
-                      lines={lines}
-                      sections={sections}
-                      tourCurrency={tourCurrency}
-                      tourId={tourId}
-                      versionLocked={versionLocked}
-                      lockedVersionId={viewed?.id ?? null}
-                      canApprove={canApprove}
-                      viewedStatus={viewedStatus}
-                      draftVersionId={draftVersionId}
-                      versions={versions}
-                      fxRates={fxRates}
-                      duplicateMap={duplicatesToRecord(detectDuplicates(lines))}
-                      dayTypeByRouting={dayTypeByRouting}
-                      vendorByLine={vendorByLine}
-                      trackPhases={trackPhases}
-                    />
-                  }
+                {/* Classic (BudgetSpreadsheetView) + the Grid/Classic toggle
+                    are retired — the canonical <Grid> is now the only Budget
+                    view. The Receipt Inbox that lived in Classic's receiptSlot
+                    is ported here so it survives the retirement. */}
+                <BudgetGridView
+                  lines={lines}
+                  sections={sections}
+                  tourCurrency={tourCurrency}
+                  tourId={tourId}
+                  versionLocked={versionLocked}
+                  lockedVersionId={viewed?.id ?? null}
+                  canApprove={canApprove}
+                  viewedStatus={viewedStatus}
+                  draftVersionId={draftVersionId}
+                  versions={versions}
+                  fxRates={fxRates}
+                  duplicateMap={duplicatesToRecord(detectDuplicates(lines))}
+                  dayTypeByRouting={dayTypeByRouting}
+                  vendorByLine={vendorByLine}
+                  trackPhases={trackPhases}
                 />
+                <ReceiptInbox tourId={tourId} tourCurrency={tourCurrency} lineItems={lines} />
               </>
             )
           ) : null}

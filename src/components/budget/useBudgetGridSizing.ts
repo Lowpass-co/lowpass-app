@@ -1,7 +1,7 @@
 /* ============================================
    LOWPASS — Budget grid sizing hook (Phase C)
 
-   Per-column drag-to-resize for <BudgetSpreadsheetView>:
+   Per-column drag-to-resize (via useColumnWidths → SpreadsheetGrid / DataTable):
    - per-column widths (drag a header-edge handle), min-clamped
    - persisted per-tour in localStorage (`lp-budget-col-widths:`)
 
