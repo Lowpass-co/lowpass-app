@@ -11,7 +11,7 @@ import {
 } from '@dnd-kit/core';
 import { SortableContext, arrayMove, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { Check, GripVertical, ListPlus, Columns3, X } from 'lucide-react';
+import { GripVertical, ListPlus, Columns3, X } from 'lucide-react';
 import { useDebouncedSave } from '@/hooks/useDebouncedSave';
 import { useToast } from '@/components/ui/Toast';
 import { createClient } from '@/lib/supabase-client';
@@ -458,8 +458,30 @@ export default function ChannelListEditor({
         </div>
       </div>
       {inherited && (
-        <div className="border-b px-4 py-2 text-xs text-lp-text-secondary" style={{ borderColor: 'var(--lp-border)' }}>
-          Inherited from {section.inherited_from}. Override to edit here.
+        // VIS-CL-01 — inheritance banner spells out BOTH paths and the
+        // cross-show consequence, so the choice is explicit:
+        //  · Override here  → detaches a local copy for THIS show only.
+        //  · Edit original  → change the {scope}-level rider (the source),
+        //    which reflects across every show still inheriting it.
+        <div
+          className="border-b px-4 py-2 text-xs"
+          style={{ borderColor: 'var(--lp-border)', backgroundColor: '#FF45000d' }}
+        >
+          <div className="text-lp-text-secondary">
+            Inherited from the{' '}
+            <span className="font-semibold text-lp-text">{section.inherited_from}</span>-level rider.
+          </div>
+          <ul className="mt-1 space-y-0.5 text-lp-text-tertiary">
+            <li>
+              <span className="font-semibold text-lp-text-secondary">Override here</span> — detach a
+              local copy and edit it for this show only.
+            </li>
+            <li>
+              <span className="font-semibold text-lp-text-secondary">Edit original</span> — open the{' '}
+              {section.inherited_from}-level rider to change the source. That{' '}
+              <span className="font-semibold text-lp-orange">reflects across all inheriting shows</span>.
+            </li>
+          </ul>
         </div>
       )}
 
@@ -1126,24 +1148,33 @@ function ChannelBlock({
               }}
               className="flex h-7 w-7 items-center justify-center rounded border hover:bg-lp-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--color-lp-orange)]"
               style={{
-                background: local.phantom_power === true ? 'var(--color-lp-orange)' : 'var(--lp-bg)',
+                // VIS-CL-03 — +48V is a state toggle, not a category, so the dot
+                // stays NEUTRAL: filled disc = on, hollow ring = off. No hue. The
+                // orange only flashes transiently on the batch-apply pulse.
+                background: 'var(--lp-bg)',
                 borderColor: phantomFlash
                   ? 'var(--color-lp-orange)'
                   : local.phantom_power === true
-                    ? 'var(--color-lp-orange)'
+                    ? 'var(--lp-text-secondary)'
                     : 'var(--lp-border)',
                 boxShadow: phantomFlash
                   ? '0 0 0 3px color-mix(in srgb, var(--color-lp-orange) 25%, transparent)'
                   : 'none',
                 transition:
-                  'background-color 150ms ease-out, border-color 200ms ease-out, box-shadow 200ms ease-out',
+                  'border-color 200ms ease-out, box-shadow 200ms ease-out',
               }}
             >
-              {local.phantom_power === true ? (
-                <Check className="h-3.5 w-3.5" strokeWidth={2.5} style={{ color: 'var(--lp-text-inverse)' }} />
-              ) : (
-                <span className="text-lp-text-tertiary">·</span>
-              )}
+              {/* Filled neutral disc when on; hollow ring when off. */}
+              <span
+                aria-hidden
+                className="block rounded-full"
+                style={{
+                  width: '0.6rem',
+                  height: '0.6rem',
+                  background: local.phantom_power === true ? 'var(--lp-text-secondary)' : 'transparent',
+                  border: local.phantom_power === true ? 'none' : '1.5px solid var(--lp-text-tertiary)',
+                }}
+              />
             </button>
           </div>
         </NavCell>
