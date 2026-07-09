@@ -1361,53 +1361,6 @@ function DealInfoUploadBlock({
   );
 }
 
-// ----- Settlement (collapsible block with Deal Memo) -----
-
-function SettlementBlock({
-  section,
-  data,
-  instanceId,
-  currency = 'GBP',
-  onFieldChange,
-}: {
-  section: SectionDef;
-  data: Record<string, unknown>;
-  instanceId: string;
-  currency?: string;
-  onFieldChange: (fieldId: string, value: unknown) => void;
-}) {
-  const dealMemoFile = data.deal_memo_file as string | undefined;
-  const dealMemoText = (data.deal_memo_text as string) ?? '';
-  return (
-    <div className="space-y-4 rounded-xl border border-lp-border bg-lp-surface p-4">
-      <div>
-        <label className="mb-1 block text-sm font-medium text-lp-text">Deal Memo</label>
-        <p className="mb-2 text-xs text-lp-text-tertiary">Upload a file or paste text below.</p>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
-          <FileUploadField value={dealMemoFile ?? ''} onChange={(v) => onFieldChange('deal_memo_file', v)} instanceId={instanceId} fieldId="deal_memo_file" />
-          <div className="min-w-0 flex-1">
-            <textarea
-              value={dealMemoText}
-              onChange={(e) => onFieldChange('deal_memo_text', e.target.value)}
-              placeholder="Or paste deal memo text here..."
-              rows={4}
-              className="w-full rounded-xl border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:border-lp-orange focus:outline-none focus:ring-2 focus:ring-lp-orange/20"
-            />
-          </div>
-        </div>
-        {dealMemoFile && (
-          <p className="mt-2 text-sm text-lp-text-secondary">
-            File attached. <a href={dealMemoFile} target="_blank" rel="noopener noreferrer" className="text-lp-orange hover:underline">View file</a>
-          </p>
-        )}
-      </div>
-      {sortFieldsContactsFirst((section.fields ?? []).filter((f) => f.id !== 'deal_memo_file' && f.id !== 'deal_memo_text')).map((field) => (
-        <FieldRenderer key={field.id} field={field} value={data[field.id]} currency={currency} onChange={(v) => onFieldChange(field.id, v)} instanceId={instanceId} />
-      ))}
-    </div>
-  );
-}
-
 // ----- Parking & Access (under Transport in template) -----
 
 function ParkingAccessCard({
