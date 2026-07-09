@@ -27,6 +27,7 @@ import { cloneElement, forwardRef, useCallback, useEffect, useImperativeHandle, 
 import { createPortal } from 'react-dom';
 import type { Column, Density, GridFx, GridLineApi, GridStatusConfig, GroupBy, Row, Section, Sel, Snapshot } from './types';
 import { colourForDayType, labelForDayType } from '@/lib/routing/dayType';
+import { Lock } from 'lucide-react';
 import {
   ACCENTS,
   STATUSES,
@@ -1933,10 +1934,39 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
             <span className="ow">Open</span>
           </span>
         ) : null;
+      // VIS-BG-02 — derived rows (budget Payroll/Rooming/… lines) get a lock
+      // glyph + a neutral "↗ from <source>" chip with a tooltip naming the
+      // surface where the edit actually lives. Gated on row._derived, which ONLY
+      // the budget adapter sets → income + /grid-demo rows never render it.
+      const derivedChip =
+        id === 'item' && row._derived ? (
+          <span
+            className="derived-src"
+            title={`Derived from ${sec.source ?? 'Operations'} — edit it there`}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 3,
+              marginLeft: 6,
+              padding: '1px 6px',
+              borderRadius: 999,
+              fontSize: 10,
+              color: 'var(--lp-text-tertiary)',
+              background: 'var(--lp-bg-deep)',
+              border: '1px solid var(--lp-border-subtle)',
+              whiteSpace: 'nowrap',
+              verticalAlign: 'middle',
+            }}
+          >
+            <Lock size={9} aria-hidden />
+            ↗ from {sec.source ?? 'Operations'}
+          </span>
+        ) : null;
       return (
         <>
           {ic}
           {String(row[id] ?? '')}
+          {derivedChip}
           {op}
         </>
       );
