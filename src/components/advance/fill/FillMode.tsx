@@ -786,7 +786,10 @@ function RiderCard({
                   onClick={(e) => { e.stopPropagation(); setStatusDropdownOpen((o) => !o); }}
                   className={cn(
                     'flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium min-w-[140px] transition-colors',
-                    riderStatus === 'Confirmed' ? 'border-emerald-500/50 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' :
+                    // Recolor to the system: 'Confirmed' is a neutral filled chip
+                    // (was emerald) — status is not a hue. The label text still
+                    // reads "Confirmed"; the fill just emphasises the set state.
+                    riderStatus === 'Confirmed' ? 'border-lp-text/25 bg-lp-text/5 text-lp-text' :
                     riderStatus === 'Received' ? 'border-blue-500/50 bg-blue-500/10 text-blue-600 dark:text-blue-400' :
                     riderStatus === 'Sent' ? 'border-amber-500/50 bg-amber-500/10 text-amber-600 dark:text-amber-400' :
                     'border-lp-border bg-lp-surface text-lp-text hover:bg-lp-surface-hover'
