@@ -117,6 +117,11 @@ body {
 .lp-sec-head { font-size: 12px; font-weight: 800; color: var(--lp-text); margin: 16px 0 2px; }
 .lp-native { color: var(--lp-text-tertiary); font-size: 8.5px; }
 .lp-pos { color: #1f7a4d; } .lp-neg { color: #b4452f; }
+/* VIS-EX-01 — house day-type tick: a desaturated colour STRIPE + neutral label,
+   the export mirror of the on-screen day-type tick (§11). Shared so every body
+   renders day types identically. */
+.lp-daytype { display: inline-flex; align-items: center; gap: 5px; font-size: 8.5px; color: var(--lp-text-secondary); white-space: nowrap; }
+.lp-daytype-tick { display: inline-block; width: 3px; height: 11px; border-radius: 1px; flex: 0 0 3px; }
 .lp-page-break { page-break-before: always; }
 `;
 
@@ -295,3 +300,26 @@ export function renderDocument(doc: ShellDocument): string {
 
 /** Shared escape for surface bodies (so they don't each re-implement it). */
 export const escapeHtml = esc;
+
+/** House day-type tick colours (desaturated, print-light). Hex, because a
+ *  standalone Chromium doc has no app CSS vars. Same day-type identities the
+ *  routing/on-screen surfaces use. */
+const DAY_TYPE_TICK: Record<string, { label: string; hex: string }> = {
+  show: { label: 'Show', hex: '#b4452f' },
+  festival: { label: 'Festival', hex: '#1f7a4d' },
+  travel: { label: 'Travel', hex: '#2a5d9c' },
+  off: { label: 'Off', hex: '#6b6157' },
+  rehearsal: { label: 'Rehearsal', hex: '#6b3fa0' },
+  press: { label: 'Press', hex: '#9a6a14' },
+  radio: { label: 'Radio', hex: '#9a6a14' },
+  tv: { label: 'TV', hex: '#9a6a14' },
+};
+
+/** VIS-EX-01 — the shared house day-type tick (colour stripe + label). Every
+ *  export body renders day types through this so the treatment is identical. */
+export function dayTypeTickHtml(dayType: string | null | undefined): string {
+  const t = (dayType ?? '').trim().toLowerCase();
+  if (!t) return '<span class="lp-native">—</span>';
+  const d = DAY_TYPE_TICK[t] ?? { label: t.charAt(0).toUpperCase() + t.slice(1), hex: '#8a837b' };
+  return `<span class="lp-daytype"><span class="lp-daytype-tick" style="background:${d.hex}"></span>${esc(d.label)}</span>`;
+}

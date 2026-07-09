@@ -11,33 +11,13 @@
    shell's table primitives. Presentation only.
    ============================================ */
 
-import { escapeHtml as esc } from '@/lib/export/shell';
+import { escapeHtml as esc, dayTypeTickHtml } from '@/lib/export/shell';
 import type { RoutingExportData, RoutingDayRow } from '@/lib/export/routing-data';
 import type { TemplateConfig } from '@/lib/export/template-config';
 
-const DAY_TYPE_LABELS: Record<string, string> = {
-  show: 'Show', off: 'Off', travel: 'Travel', rehearsal: 'Rehearsal', press: 'Press', radio: 'Radio', tv: 'TV', festival: 'Festival',
-};
-/** Day-type chip colours (text, bg) — doc-local (a standalone PDF, hex is fine). */
-const DAY_TYPE_COLORS: Record<string, { fg: string; bg: string }> = {
-  show: { fg: '#b4452f', bg: '#fdeee9' },
-  festival: { fg: '#1f7a4d', bg: '#e8f5ee' },
-  travel: { fg: '#2a5d9c', bg: '#e9f0f9' },
-  off: { fg: '#6b6157', bg: '#f1ede8' },
-  rehearsal: { fg: '#6b3fa0', bg: '#efe9f7' },
-  press: { fg: '#9a6a14', bg: '#f8f0e2' },
-  radio: { fg: '#9a6a14', bg: '#f8f0e2' },
-  tv: { fg: '#9a6a14', bg: '#f8f0e2' },
-};
-function dayTypeLabel(t: string): string {
-  if (!t) return '—';
-  return DAY_TYPE_LABELS[t] ?? t.charAt(0).toUpperCase() + t.slice(1);
-}
-function dayChip(t: string): string {
-  if (!t) return '<span class="lp-native">—</span>';
-  const c = DAY_TYPE_COLORS[t] ?? { fg: '#46413c', bg: '#f1ede8' };
-  return `<span style="display:inline-block;padding:1px 7px;border-radius:9px;font-size:8px;font-weight:700;color:${c.fg};background:${c.bg};">${esc(dayTypeLabel(t))}</span>`;
-}
+// VIS-EX-01 — day types now render through the shared house tick (dayTypeTickHtml
+// from the export shell), replacing this surface's local colour-pill so every
+// export shows day types identically.
 function fmtDate(d: string): string {
   const parsed = new Date(`${d}T12:00:00`);
   if (Number.isNaN(parsed.getTime())) return esc(d);
@@ -88,7 +68,7 @@ function renderList(data: RoutingExportData, opts: RoutingViewOpts): string {
       const zebra = idx % 2 === 1 ? ' style="background:#faf8f5;"' : '';
       return `<tr${zebra}>
         <td>${fmtDate(d.date)}</td>
-        <td>${dayChip(d.dayType)}</td>
+        <td>${dayTypeTickHtml(d.dayType)}</td>
         <td>${esc(d.city ?? '—')}</td>
         ${cols.country ? `<td>${esc(d.country ?? '—')}</td>` : ''}
         <td>${venueCell}</td>
@@ -224,7 +204,7 @@ function renderCalendar(data: RoutingExportData, theme: 'light' | 'dark'): strin
       for (let day = 1; day <= daysInMonth; day++) {
         const dateStr = `${ym}-${String(day).padStart(2, '0')}`;
         const d = byDate.get(dateStr);
-        const chip = d && d.dayType ? `<div style="margin-top:2px;">${dayChip(d.dayType)}</div>` : '';
+        const chip = d && d.dayType ? `<div style="margin-top:2px;">${dayTypeTickHtml(d.dayType)}</div>` : '';
         const place = d && (d.city || d.venue)
           ? `<div style="font-size:8px;color:${ink};line-height:1.25;margin-top:2px;">${esc(d.city ?? '')}${d.venue ? `<div style="color:${muted};">${esc(d.venue)}</div>` : ''}</div>`
           : '';
