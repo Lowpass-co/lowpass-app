@@ -26,6 +26,7 @@ import './grid.css';
 import { cloneElement, forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { Column, Density, GridFx, GridLineApi, GridStatusConfig, GroupBy, Row, Section, Sel, Snapshot } from './types';
+import { colourForDayType, labelForDayType } from '@/lib/routing/dayType';
 import {
   ACCENTS,
   STATUSES,
@@ -185,6 +186,11 @@ export interface GridProps {
     /** tooltip on the edit input + ✎ marker (e.g. "Pre-withholding value"). */
     inputHint?: string;
   };
+  /** Stage-3 parity — the Group-by cycle. Default `['section','status']` (income
+   *  + /grid-demo unchanged: toggle still flips section↔status). Budget passes
+   *  `['section','status','phase']` to add phase grouping (rows carry `phase`).
+   *  Opt-in: absent → byte-identical behaviour for every existing consumer. */
+  groupModes?: GroupBy[];
 }
 
 /** Imperative handle (opt-in via ref). Lets a host patch specific cells by row
@@ -239,7 +245,14 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
   onFileDropToRow,
   columnPrefsKey,
   cellOverride,
+  groupModes,
 }: GridProps, ref) {
+  // Stage-3 parity — opt-in Group-by cycle. Absent → section↔status (unchanged).
+  const groupModesRef = useRef<GroupBy[]>(
+    groupModes && groupModes.length > 0 ? groupModes : ['section', 'status'],
+  );
+  groupModesRef.current =
+    groupModes && groupModes.length > 0 ? groupModes : ['section', 'status'];
   const onLockedEditRef = useRef(onLockedEdit);
   onLockedEditRef.current = onLockedEdit;
   // #28 — live ref so the keydown/right-click handlers read the latest override
@@ -1354,7 +1367,11 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
     render();
   };
   const toggleGroup = () => {
-    groupRef.current = groupRef.current === 'section' ? 'status' : 'section';
+    // Cycle through the (opt-in) group modes. Default ['section','status'] →
+    // identical section↔status flip for income + demo.
+    const modes = groupModesRef.current;
+    const i = modes.indexOf(groupRef.current);
+    groupRef.current = modes[(i + 1) % modes.length] ?? modes[0];
     selRef.current = { ar: 0, ac: 0, fr: 0, fc: 0 };
     render();
   };
@@ -1618,6 +1635,27 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
           }}
         >
           {n ? <span className="rcpt has">📄 {n}</span> : <span className="rcpt none">＋ memo</span>}
+        </div>
+      );
+    }
+    if (t === 'daytype') {
+      // Stage-3 parity — read-only day-type pill + 3px tick (hue desaturated
+      // ~50% toward the panel per §2). Value rides on row[col.id]. Only reached
+      // when a column declares type:'daytype' (budget only).
+      const dt = String(row[id] ?? '').trim();
+      if (!dt) return <div key={key} className="c" />;
+      const hue = colourForDayType(dt);
+      return (
+        <div key={key} className="c">
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+            <span
+              aria-hidden
+              style={{ width: 3, height: 14, borderRadius: 1, flexShrink: 0, background: `color-mix(in srgb, ${hue} 55%, var(--lp-panel))` }}
+            />
+            <span className="truncate" style={{ fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-secondary)' }}>
+              {labelForDayType(dt) || dt}
+            </span>
+          </span>
         </div>
       );
     }
@@ -1943,6 +1981,71 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
 
   /* ---- sections ---- */
   const renderSections = () => {
+    if (groupRef.current === 'phase') {
+      // Stage-3 parity — group rows by their `phase` (budget phase_tag). Only
+      // reachable when the consumer opted phase into `groupModes` (budget).
+      const PHASE_ORDER = ['pre_prod', 'rehearsals', 'show_days', 'wrap'];
+      const PHASE_LABEL: Record<string, string> = {
+        pre_prod: 'Pre-production',
+        rehearsals: 'Rehearsals',
+        show_days: 'Show days',
+        wrap: 'Wrap',
+      };
+      const present = new Set<string>();
+      let anyUntagged = false;
+      data().forEach((sec) =>
+        sec.rows.forEach((row) => {
+          if (isFormula(sec)) return;
+          const p = String(row.phase ?? '').trim();
+          if (p) present.add(p);
+          else anyUntagged = true;
+        }),
+      );
+      const ordered = [
+        ...PHASE_ORDER.filter((p) => present.has(p)),
+        ...[...present].filter((p) => !PHASE_ORDER.includes(p)),
+      ];
+      const universe = anyUntagged ? [...ordered, '__untagged__'] : ordered;
+      const out: React.ReactNode[] = [];
+      let f = 0;
+      universe.forEach((ph, si) => {
+        const rows: { row: Row; ri: number }[] = [];
+        data().forEach((sec) =>
+          sec.rows.forEach((row, ri) => {
+            if (isFormula(sec)) return;
+            const p = String(row.phase ?? '').trim();
+            const inBucket = ph === '__untagged__' ? !p : p === ph;
+            if (inBucket && rowMatches(row, queryRef.current, filterRef.current)) rows.push({ row, ri });
+          }),
+        );
+        if (!rows.length) return;
+        const title = ph === '__untagged__' ? 'Untagged' : PHASE_LABEL[ph] ?? ph;
+        out.push(
+          <div className="section" key={ph}>
+            <div className="sec-head" style={{ cursor: 'default' }}>
+              <div className="sh-name">
+                <span className="dot" style={{ color: ACCENTS[si % 5] }} />
+                <span className="sh-title">{title}</span>
+                <span className="sh-count">{rows.length}</span>
+              </div>
+            </div>
+            {rows.map(({ row, ri }) => {
+              const fi = f++;
+              return (
+                <div
+                  className={`row${fileDragUidRef.current === row._uid ? ' file-drop-target' : ''}`}
+                  key={row._uid ?? `${ph}-${ri}`}
+                  {...fileDropProps(row._uid ? String(row._uid) : undefined)}
+                >
+                  {vis.map((c) => wrapCell(renderCell({ kind: 'normal', _si: 0, name: '', rows: [] }, row, ri, c, fi, c.id), c.id))}
+                </div>
+              );
+            })}
+          </div>,
+        );
+      });
+      return out;
+    }
     if (groupRef.current === 'status') {
       const out: React.ReactNode[] = [];
       let f = 0;
@@ -2114,7 +2217,7 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
           <>
             <span className="chip" onClick={toggleGroup} role="button">
               <span className="muted">Group</span>
-              <span className="accent">{groupRef.current === 'section' ? 'Section' : 'Status'}</span>
+              <span className="accent">{groupRef.current === 'section' ? 'Section' : groupRef.current === 'phase' ? 'Phase' : 'Status'}</span>
             </span>
             <span className="chip" onClick={addSection} role="button">
               ＋ Add section

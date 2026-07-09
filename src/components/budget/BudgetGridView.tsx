@@ -67,6 +67,8 @@ function docTypeFromName(name: string, fileType?: string | null): string {
 const EXPENSE_COLS: Column[] = [
   { id: 'idx', label: '#', type: 'idx', w: 46, min: 40, resize: false },
   { id: 'item', label: 'Item', type: 'text', w: 320, min: 160, resize: true },
+  // Stage-3 parity — read-only day-type pill (blank for non-routing lines).
+  { id: 'dayType', label: 'Day', type: 'daytype', w: 120, min: 80, resize: true, ro: true },
   { id: 'est', label: 'Estimate', type: 'money', w: 120, min: 90, resize: true },
   { id: 'act', label: 'Actual', type: 'money', w: 120, min: 90, resize: true },
   { id: 'var', label: 'Variance', type: 'variance', w: 110, min: 90, resize: true },
@@ -97,13 +99,18 @@ export interface BudgetGridViewProps {
   /** Stage-3 parity — duplicate-detection map (line id → duplicate line ids),
    *  computed on the page (detectDuplicates). Display only; drives the banner. */
   duplicateMap?: Record<string, string[]>;
+  /** Stage-3 parity — routing_id → day_type, for the day-type pill (display). */
+  dayTypeByRouting?: Record<string, string>;
+  /** Stage-3 parity — when the tour tracks phases, enable phase grouping in the
+   *  Group-by cycle (opt-in; income/demo unaffected). */
+  trackPhases?: boolean;
 }
 
 export function BudgetGridView({
   lines, sections, tourCurrency, tourId,
   versionLocked = false, lockedVersionId = null, canApprove = false,
   viewedStatus = 'draft', draftVersionId = null, versions = [], fxRates = {},
-  duplicateMap = {},
+  duplicateMap = {}, dayTypeByRouting = {}, trackPhases = false,
 }: BudgetGridViewProps) {
   // Stage-3 parity — count of lines flagged as possible duplicates.
   const duplicateCount = Object.keys(duplicateMap).length;
@@ -155,7 +162,7 @@ export function BudgetGridView({
   // Seed grid rows with the NATIVE currency as the per-line fallback (display
   // conversion happens at render time via fx) so a DISPLAY flip never relabels
   // a currency-less line's source currency.
-  const data = budgetToGridSections(lines, sections, { tourCurrency: native, ungroupedName: 'Uncategorised' });
+  const data = budgetToGridSections(lines, sections, { tourCurrency: native, ungroupedName: 'Uncategorised', dayTypeByRouting });
 
   // Persist a single cell / slide edit. Optimistic — the grid already shows
   // the new value; a rejected write surfaces a toast + a refresh to true state.
@@ -468,6 +475,9 @@ export function BudgetGridView({
         onReorderSection={onReorderSection}
         onFileDropToRow={handleFileDropToRow}
         lineApi={lineApi}
+        // Stage-3 parity — add phase to the Group-by cycle only when the tour
+        // tracks phases (opt-in; income + /grid-demo pass nothing → unchanged).
+        groupModes={trackPhases ? ['section', 'status', 'phase'] : undefined}
       />
       <VersionLockModal
         open={lockModalOpen}

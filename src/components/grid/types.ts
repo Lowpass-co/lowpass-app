@@ -19,7 +19,11 @@ export type ColType =
   | 'calc'
   | 'receipts'
   | 'doc'
-  | 'deal';
+  | 'deal'
+  /** Stage-3 parity — day-type pill + tick (read-only display). Only rendered
+   *  when a column declares type:'daytype'; no existing surface uses it, so this
+   *  is inert for income + /grid-demo. */
+  | 'daytype';
 
 export type FormulaOp = '+' | '-' | '*';
 
@@ -130,7 +134,9 @@ export interface Sel {
 }
 
 export type Density = 'compact' | 'comfortable' | 'spacious';
-export type GroupBy = 'section' | 'status';
+/** 'phase' is opt-in — only reachable when a consumer passes `groupModes`
+ *  including it (budget). Default cycle stays section↔status for income + demo. */
+export type GroupBy = 'section' | 'status' | 'phase';
 
 /** Injected currency/FX so the grid isn't bound to the demo's static table.
  *  The demo passes `demoFx` (gridModel); the budget passes one built from

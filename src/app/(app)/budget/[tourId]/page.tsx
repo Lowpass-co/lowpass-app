@@ -151,7 +151,7 @@ export default async function BudgetTourPage({
         .order('order_index', { ascending: true }),
       // #24 — venue_name + city so the per-show income brick can label each show
       // with its real venue instead of "Show N".
-      supabase.from('routing').select('id, date, venue_name, city').eq('tour_id', tourId),
+      supabase.from('routing').select('id, date, venue_name, city, day_type').eq('tour_id', tourId),
       // Budget redesign — section backbone + per-tour phase toggle.
       supabase
         .from('budget_sections')
@@ -336,14 +336,18 @@ export default async function BudgetTourPage({
   const routingDateById: Record<string, string> = {};
   // #24 — routing_id → show label (venue → city → date) for the per-show brick.
   const routingLabelById: Record<string, string> = {};
+  // Stage-3 parity — routing_id → day_type, for the grid's day-type pill.
+  const dayTypeByRouting: Record<string, string> = {};
   for (const r of (routingRes.data ?? []) as Array<{
     id: string;
     date: string | null;
     venue_name?: string | null;
     city?: string | null;
+    day_type?: string | null;
   }>) {
     if (!r.id) continue;
     if (r.date) routingDateById[r.id] = r.date.slice(0, 10);
+    if (r.day_type) dayTypeByRouting[r.id] = r.day_type;
     const label =
       r.venue_name?.trim() ||
       r.city?.trim() ||
@@ -465,6 +469,8 @@ export default async function BudgetTourPage({
                       versions={versions}
                       fxRates={fxRates}
                       duplicateMap={duplicatesToRecord(detectDuplicates(lines))}
+                      dayTypeByRouting={dayTypeByRouting}
+                      trackPhases={trackPhases}
                     />
                   }
                 />

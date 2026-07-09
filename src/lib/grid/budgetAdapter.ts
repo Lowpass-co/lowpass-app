@@ -60,7 +60,11 @@ function effectiveActual(l: BudgetLineItem): number {
 
 /** One budget line → a grid Row. `cur` falls back to the tour currency so a
  *  same-currency line shows no conversion; a foreign one renders red + ≈. */
-export function lineToRow(l: BudgetLineItem, tourCurrency: string): Row {
+export function lineToRow(
+  l: BudgetLineItem,
+  tourCurrency: string,
+  dayTypeByRouting?: Record<string, string>,
+): Row {
   const derived = isDerivedLine(l);
   return {
     _uid: l.id,
@@ -70,6 +74,10 @@ export function lineToRow(l: BudgetLineItem, tourCurrency: string): Row {
     status: l.status ?? 'draft',
     cur: (l.currency || tourCurrency || 'USD').toUpperCase(),
     notes: l.notes ?? '',
+    // Stage-3 parity (display only): day-type pill value (the line's routing
+    // day-type) + phase grouping key (line's phase_tag). No calculation.
+    dayType: (l.routing_id && dayTypeByRouting?.[l.routing_id]) || '',
+    phase: l.phase_tag ?? '',
     // Step 5 — server-supplied counts for the 📎 receipts cell badge.
     txnCount: l.transaction_count ?? 0,
     docCount: l.attachment_count ?? 0,
@@ -86,6 +94,8 @@ export interface BudgetGridOptions {
   tourCurrency: string;
   /** label for the bucket holding lines with no section_id. */
   ungroupedName?: string;
+  /** Stage-3 parity — routing_id → day_type, for the day-type pill (display). */
+  dayTypeByRouting?: Record<string, string>;
 }
 
 /** Live budget rows → grid Section[]. Formula sections are dropped; derived
@@ -129,7 +139,7 @@ export function budgetToGridSections(
       name: s.name,
       kind: allDerived ? 'derived' : 'normal',
       source: allDerived ? derivedSourceLabel(secLines) : undefined,
-      rows: secLines.map((l) => lineToRow(l, tourCurrency)),
+      rows: secLines.map((l) => lineToRow(l, tourCurrency, opts.dayTypeByRouting)),
     });
   }
 
@@ -138,7 +148,7 @@ export function budgetToGridSections(
       _uid: 'ungrouped',
       name: ungroupedName,
       kind: 'normal',
-      rows: sortLines(ungrouped).map((l) => lineToRow(l, tourCurrency)),
+      rows: sortLines(ungrouped).map((l) => lineToRow(l, tourCurrency, opts.dayTypeByRouting)),
     });
   }
   return out;
