@@ -98,11 +98,27 @@ export function EditableFieldValue({
     border: 'none',
     background: 'transparent',
     outline: 'none',
+    // VIS-AA-03 — resting state stays borderless so the row still reads as
+    // the display view; the orange underline only appears on focus (added
+    // via onFocus below). A box-shadow underline avoids the layout shift a
+    // real border would cause.
+    boxShadow: 'none',
     padding: 0,
     fontSize: '14px',
     color: 'var(--lp-text)',
     fontFamily: mono ? 'var(--lp-mono-font)' : 'inherit',
     fontVariantNumeric: mono ? 'tabular-nums' : 'normal',
+    transition: 'box-shadow 120ms ease',
+  };
+
+  // VIS-AA-03 — shared focus-underline handlers. Orange on focus, gone on
+  // blur. Kept as helpers so input / textarea / select all share one look.
+  const FOCUS_RING = 'inset 0 -1.5px 0 var(--color-lp-orange)';
+  const showRing = (el: HTMLElement) => {
+    el.style.boxShadow = FOCUS_RING;
+  };
+  const hideRing = (el: HTMLElement) => {
+    el.style.boxShadow = 'none';
   };
 
   if (disabled) {
@@ -141,6 +157,8 @@ export function EditableFieldValue({
           setDraft(next);
           onChange(next || null);
         }}
+        onFocus={(e) => showRing(e.currentTarget)}
+        onBlur={(e) => hideRing(e.currentTarget)}
         className={cn('w-full bg-transparent outline-none')}
         style={{
           ...baseInputStyle,
@@ -166,7 +184,20 @@ export function EditableFieldValue({
       <textarea
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
-        onBlur={() => commitIfChanged(draft, value, onChange)}
+        onFocus={(e) => showRing(e.currentTarget)}
+        onBlur={(e) => {
+          hideRing(e.currentTarget);
+          commitIfChanged(draft, value, onChange);
+        }}
+        onKeyDown={(e) => {
+          // VIS-AA-03 — Esc reverts the draft and exits. Enter stays a
+          // newline in multi-line text (not a commit). Tab falls through to
+          // native focus advance; the blur above commits first.
+          if (e.key === 'Escape') {
+            setDraft(stringifyForInput(value));
+            e.currentTarget.blur();
+          }
+        }}
         rows={lines}
         placeholder={`Add ${field.label.toLowerCase()}…`}
         className={cn('w-full resize-none bg-transparent outline-none')}
@@ -197,16 +228,27 @@ export function EditableFieldValue({
       type={inputType}
       value={draft}
       onChange={(e) => setDraft(e.target.value)}
-      onBlur={() => commitIfChanged(draft, value, onChange, field.type)}
+      onFocus={(e) => showRing(e.currentTarget)}
+      onBlur={(e) => {
+        hideRing(e.currentTarget);
+        commitIfChanged(draft, value, onChange, field.type);
+      }}
       onKeyDown={(e) => {
-        if (e.key === 'Enter' && field.type !== 'textarea') {
+        // VIS-AA-03 — Enter commits + exits; Tab commits then lets the
+        // browser advance to the next field (blur fires first); Esc reverts
+        // to the last saved value and exits. Read-view-until-click is
+        // preserved — the field only shows its orange underline while focused.
+        if (e.key === 'Enter') {
           e.preventDefault();
           commitIfChanged(draft, value, onChange, field.type);
-          (e.currentTarget as HTMLInputElement).blur();
-        }
-        if (e.key === 'Escape') {
+          e.currentTarget.blur();
+        } else if (e.key === 'Tab') {
+          // Let default Tab move focus; commit synchronously first so the
+          // next field's value isn't racing the debounced blur commit.
+          commitIfChanged(draft, value, onChange, field.type);
+        } else if (e.key === 'Escape') {
           setDraft(stringifyForInput(value));
-          (e.currentTarget as HTMLInputElement).blur();
+          e.currentTarget.blur();
         }
       }}
       placeholder={`Add ${field.label.toLowerCase()}…`}
