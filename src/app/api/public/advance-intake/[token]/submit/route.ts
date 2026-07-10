@@ -52,6 +52,7 @@ export async function POST(
     data?: unknown;
     submitterName?: unknown;
     submitterEmail?: unknown;
+    prefill?: Record<string, Record<string, string>>;
   } = {};
   try {
     body = (await request.json()) as typeof body;
@@ -117,20 +118,27 @@ export async function POST(
 
   const nowIso = new Date().toISOString();
 
+  // Checkpoint B — an unedited confirmed proposal submits as source='prefill'
+  // (with its provenance); everything else is source='venue'.
+  const prefillMap = body.prefill && typeof body.prefill === 'object' ? body.prefill : {};
   if (pending.length > 0) {
-    const rows = pending.map((p) => ({
-      workspace_id: link.workspace_id,
-      advance_instance_id: instanceId,
-      link_id: link.id,
-      section_id: p.section_id,
-      field_id: p.field_id,
-      value: p.value,
-      source: 'venue',
-      provenance: null,
-      status: 'pending',
-      reviewed_at: null,
-      reviewed_by: null,
-    }));
+    const rows = pending.map((p) => {
+      const prov = prefillMap[p.section_id]?.[p.field_id];
+      const isPrefill = typeof prov === 'string' && prov.length > 0;
+      return {
+        workspace_id: link.workspace_id,
+        advance_instance_id: instanceId,
+        link_id: link.id,
+        section_id: p.section_id,
+        field_id: p.field_id,
+        value: p.value,
+        source: isPrefill ? 'prefill' : 'venue',
+        provenance: isPrefill ? prov : null,
+        status: 'pending',
+        reviewed_at: null,
+        reviewed_by: null,
+      };
+    });
     const { error: pErr } = await service
       .from('intake_pending_answers')
       .upsert(rows, { onConflict: 'advance_instance_id,section_id,field_id,source' });

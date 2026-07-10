@@ -20,6 +20,8 @@ import {
   type IntakeSection,
   type AdvanceData,
 } from '@/lib/advance/intake';
+import { buildPrefillProposals, proposalsToMap } from '@/lib/advance/intake-prefill';
+import { loadPrefillContext } from '@/lib/advance/intake-prefill-server';
 import { VenueIntakeForm } from '@/components/advance/VenueIntakeForm';
 
 export const dynamic = 'force-dynamic';
@@ -27,6 +29,7 @@ export const metadata = { title: 'Advance request — Lowpass' };
 
 interface LinkRow {
   id: string;
+  workspace_id: string;
   tour_id: string;
   routing_id: string;
   status: string;
@@ -91,7 +94,7 @@ export default async function AdvanceIntakePage({
   const { data: link } = await service
     .from('advance_intake_links')
     .select(
-      'id, tour_id, routing_id, status, expires_at, revoked_at, recipient_name, submitted_data',
+      'id, workspace_id, tour_id, routing_id, status, expires_at, revoked_at, recipient_name, submitted_data',
     )
     .eq('token', token)
     .maybeSingle<LinkRow>();
@@ -116,9 +119,9 @@ export default async function AdvanceIntakePage({
 
   const { data: instance } = await service
     .from('advance_instances')
-    .select('sections')
+    .select('sections, data')
     .eq('routing_id', link.routing_id)
-    .maybeSingle<{ sections: IntakeSection[] | null }>();
+    .maybeSingle<{ sections: IntakeSection[] | null; data: AdvanceData | null }>();
 
   const [{ data: routing }, { data: tour }] = await Promise.all([
     service
@@ -156,6 +159,17 @@ export default async function AdvanceIntakePage({
       )
     : null;
 
+  // Checkpoint B — prefill PROPOSALS (never the current advance's TM data). The
+  // instance.data is used ONLY server-side to skip already-answered fields; only
+  // the proposal VALUES (from the prior same-venue advance / canonical) reach the
+  // venue, tagged with provenance.
+  const prefill = await loadPrefillContext(service, {
+    workspaceId: link.workspace_id,
+    routingId: link.routing_id,
+  });
+  const prefillResult = buildPrefillProposals(schema, instance?.data ?? null, prefill.prior, prefill.canonical);
+  const proposals = proposalsToMap(prefillResult.proposals);
+
   return (
     <Shell>
       <VenueIntakeForm
@@ -170,6 +184,7 @@ export default async function AdvanceIntakePage({
         }}
         schema={schema}
         initialAnswers={link.submitted_data ?? {}}
+        proposals={proposals}
       />
     </Shell>
   );

@@ -31,6 +31,10 @@ interface VenueIntakeFormProps {
   show: ShowContext;
   schema: IntakeFormSchema;
   initialAnswers: AdvanceData;
+  /** P7 Checkpoint B — prefill proposals: { sectionId: { fieldId: { value,
+   *  provenance } } }. Rendered as confirm-or-correct suggestions; an unedited
+   *  confirmed proposal submits as source='prefill'. */
+  proposals?: Record<string, Record<string, { value: unknown; provenance: string }>>;
 }
 
 const cardStyle: React.CSSProperties = {
@@ -62,10 +66,18 @@ export function VenueIntakeForm({
   show,
   schema,
   initialAnswers,
+  proposals = {},
 }: VenueIntakeFormProps) {
-  const [answers, setAnswers] = useState<AdvanceData>(() =>
-    JSON.parse(JSON.stringify(initialAnswers ?? {})),
-  );
+  const [answers, setAnswers] = useState<AdvanceData>(() => {
+    const seeded: AdvanceData = JSON.parse(JSON.stringify(initialAnswers ?? {}));
+    // Seed prefill proposals where the venue hasn't already answered.
+    for (const [sid, fields] of Object.entries(proposals)) {
+      for (const [fid, prop] of Object.entries(fields)) {
+        if (isEmpty(seeded[sid]?.[fid])) (seeded[sid] ??= {})[fid] = prop.value;
+      }
+    }
+    return seeded;
+  });
   const [submitterName, setSubmitterName] = useState('');
   const [submitterEmail, setSubmitterEmail] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -105,6 +117,19 @@ export function VenueIntakeForm({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           data: answers,
+          // Confirmed-prefill: proposals still holding their suggested value
+          // (unedited) submit as source='prefill' with their provenance.
+          prefill: (() => {
+            const out: Record<string, Record<string, string>> = {};
+            for (const [sid, fields] of Object.entries(proposals)) {
+              for (const [fid, prop] of Object.entries(fields)) {
+                if (JSON.stringify(answers[sid]?.[fid]) === JSON.stringify(prop.value)) {
+                  (out[sid] ??= {})[fid] = prop.provenance;
+                }
+              }
+            }
+            return out;
+          })(),
           submitterName: submitterName || undefined,
           submitterEmail: submitterEmail || undefined,
         }),
@@ -240,6 +265,7 @@ export function VenueIntakeForm({
                 field={field}
                 value={answers[section.template_id]?.[field.id]}
                 onChange={(v) => setField(section.template_id, field.id, v)}
+                provenance={proposals[section.template_id]?.[field.id]?.provenance}
               />
             ))}
           </div>
@@ -349,10 +375,13 @@ function FieldInput({
   field,
   value,
   onChange,
+  provenance,
 }: {
   field: IntakeField;
   value: unknown;
   onChange: (v: unknown) => void;
+  /** P7 Checkpoint B — prefill provenance ("From your Mar 2026 show …"). */
+  provenance?: string;
 }) {
   const wide =
     field.type === 'textarea' ||
@@ -458,6 +487,11 @@ function FieldInput({
   return (
     <Labeled label={field.label} required={field.required} wide={wide}>
       {control}
+      {provenance ? (
+        <p style={{ marginTop: 4, fontSize: 11, color: 'var(--lp-orange)' }}>
+          {provenance} — confirm or correct
+        </p>
+      ) : null}
       {field.helpText ? (
         <p style={{ marginTop: 4, fontSize: 11, color: 'var(--lp-text-tertiary)' }}>
           {field.helpText}
