@@ -189,7 +189,9 @@ export function AdvanceSectionLibrary({
         background: 'var(--lp-panel)',
       }}
     >
-      {/* Search */}
+      {/* Header + Search — VIS-AB-02: the rail now names itself and the
+          search field carries an orange focus ring, matching the system's
+          input treatment (was a bare outline:none). */}
       <div
         className="shrink-0"
         style={{
@@ -197,6 +199,20 @@ export function AdvanceSectionLibrary({
           borderBottom: '1px solid var(--lp-border-subtle)',
         }}
       >
+        <div
+          className="flex items-baseline justify-between"
+          style={{ marginBottom: 10 }}
+        >
+          <span className="lp-label-caps" style={{ color: 'var(--lp-text-secondary)' }}>
+            Section library
+          </span>
+          <span
+            className="lp-mono"
+            style={{ fontSize: '11px', color: 'var(--lp-text-tertiary)' }}
+          >
+            {loading ? '—' : filtered.length}
+          </span>
+        </div>
         <div className="relative">
           <Search
             className="absolute left-2 top-1/2 -translate-y-1/2"
@@ -211,17 +227,27 @@ export function AdvanceSectionLibrary({
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
+            onFocus={(e) => {
+              e.currentTarget.style.borderColor = 'var(--color-lp-orange)';
+              e.currentTarget.style.boxShadow =
+                '0 0 0 3px color-mix(in srgb, var(--color-lp-orange) 18%, transparent)';
+            }}
+            onBlur={(e) => {
+              e.currentTarget.style.borderColor = 'var(--lp-border-strong)';
+              e.currentTarget.style.boxShadow = 'none';
+            }}
             placeholder="Filter sections…"
             aria-label="Filter sections"
             style={{
               width: '100%',
-              padding: '6px 8px 6px 26px',
+              padding: '7px 8px 7px 26px',
               fontSize: '13px',
               background: 'var(--lp-bg-deep)',
               color: 'var(--lp-text)',
               border: '1px solid var(--lp-border-strong)',
-              borderRadius: 2,
+              borderRadius: 4,
               outline: 'none',
+              transition: 'border-color 120ms ease, box-shadow 120ms ease',
             }}
           />
         </div>
