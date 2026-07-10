@@ -15,13 +15,25 @@
 
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
+import { LayoutTemplate } from 'lucide-react';
 
 export function AdvanceModeSwitcher({
   tourId,
   routingId,
+  showName = null,
+  dateLabel = null,
+  templateName = null,
 }: {
   tourId: string;
   routingId: string;
+  /** VIS-AB-01 — the show this advance is for (venue/city). Rendered as a
+   *  breadcrumb tail before the Build/Advance/Share tabs. */
+  showName?: string | null;
+  /** VIS-AB-01 — the show date, shown muted next to the show name. */
+  dateLabel?: string | null;
+  /** VIS-AB-01 — the active form template, rendered as a context chip on
+   *  the right of the switcher bar. */
+  templateName?: string | null;
 }) {
   const pathname = usePathname() ?? '';
   const mode = useSearchParams()?.get('mode') ?? null;
@@ -41,6 +53,8 @@ export function AdvanceModeSwitcher({
     { key: 'share', label: 'Share', href: `${base}/share`, active: isShare },
   ];
 
+  const showLabel = (showName ?? '').trim();
+
   return (
     <nav
       aria-label="Advance surfaces"
@@ -52,6 +66,44 @@ export function AdvanceModeSwitcher({
         background: 'var(--lp-panel)',
       }}
     >
+      {/* VIS-AB-01 — breadcrumb tail: which show this advance is for. Sits
+          before the tabs, muted, so the segmented control still reads as the
+          primary control. Hidden on narrow widths to protect the tabs. */}
+      {showLabel ? (
+        <div
+          className="hidden min-w-0 items-baseline md:flex"
+          style={{ gap: 'var(--lp-space-2)', marginRight: 'var(--lp-space-2)' }}
+        >
+          <span
+            className="truncate"
+            style={{
+              maxWidth: 220,
+              fontSize: 'var(--lp-text-sm)',
+              fontWeight: 'var(--lp-weight-semibold)',
+              color: 'var(--lp-text)',
+            }}
+            title={showLabel}
+          >
+            {showLabel}
+          </span>
+          {dateLabel ? (
+            <span
+              className="lp-mono shrink-0"
+              style={{ fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text-tertiary)' }}
+            >
+              {dateLabel}
+            </span>
+          ) : null}
+          <span
+            aria-hidden
+            className="shrink-0"
+            style={{ color: 'var(--lp-border-strong)', fontSize: 'var(--lp-text-sm)' }}
+          >
+            /
+          </span>
+        </div>
+      ) : null}
+
       {tabs.map((t) => (
         <Link
           key={t.key}
@@ -73,6 +125,28 @@ export function AdvanceModeSwitcher({
           {t.label}
         </Link>
       ))}
+
+      {/* VIS-AB-01 — template-context chip. Right-aligned so it reads as
+          metadata ("which form is this show on"), not a fourth tab. */}
+      {templateName && templateName.trim() ? (
+        <span
+          className="ml-auto hidden shrink-0 items-center sm:inline-flex"
+          style={{
+            gap: 'var(--lp-space-1)',
+            padding: '3px var(--lp-space-2)',
+            fontSize: 'var(--lp-text-xs)',
+            fontWeight: 'var(--lp-weight-medium)',
+            color: 'var(--lp-text-secondary)',
+            background: 'var(--lp-bg-deep)',
+            border: '1px solid var(--lp-border-subtle)',
+            borderRadius: 'var(--lp-radius-full)',
+          }}
+          title={`Template: ${templateName.trim()}`}
+        >
+          <LayoutTemplate size={12} aria-hidden style={{ color: 'var(--color-lp-orange)' }} />
+          <span className="max-w-[160px] truncate">{templateName.trim()}</span>
+        </span>
+      ) : null}
     </nav>
   );
 }
