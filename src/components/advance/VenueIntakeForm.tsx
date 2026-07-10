@@ -14,6 +14,7 @@
    ============================================ */
 
 import { useState } from 'react';
+import { TechPackUpload } from '@/components/advance/TechPackUpload';
 import { Send, CheckCircle2, MapPin, Calendar } from 'lucide-react';
 import type { IntakeFormSchema, IntakeField, AdvanceData } from '@/lib/advance/intake';
 
@@ -238,6 +239,9 @@ export function VenueIntakeForm({
           and submit again.
         </div>
       ) : null}
+
+      {/* P7 Checkpoint C — upload-your-tech-pack alternative to form-filling. */}
+      <TechPackUpload token={token} />
 
       {/* Sections */}
       {schema.sections.map((section) => (
