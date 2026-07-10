@@ -53,6 +53,9 @@ export async function POST(
     submitterName?: unknown;
     submitterEmail?: unknown;
     prefill?: Record<string, Record<string, string>>;
+    /** Per-field autosave (Checkpoint D): store pending WITHOUT marking the link
+     *  submitted / firing the TM notification. The final "Finish" sends draft=false. */
+    draft?: boolean;
   } = {};
   try {
     body = (await request.json()) as typeof body;
@@ -150,18 +153,19 @@ export async function POST(
     }
   }
 
-  await service
-    .from('advance_intake_links')
-    .update({
-      status: 'submitted',
-      submitted_at: nowIso,
-      submitted_data: clean,
-      submitted_by_name: submitterName,
-      submitted_by_email: submitterEmail,
-      // keep the link's stored target current if it was resolved by routing
-      advance_instance_id: instanceId,
-    })
-    .eq('id', link.id);
+  // Draft autosave keeps the snapshot current but never flips the link to
+  // 'submitted' (the TM-notification signal). The final Finish (draft=false) does.
+  const linkUpdate: Record<string, unknown> = {
+    submitted_data: clean,
+    advance_instance_id: instanceId,
+  };
+  if (!body.draft) {
+    linkUpdate.status = 'submitted';
+    linkUpdate.submitted_at = nowIso;
+    linkUpdate.submitted_by_name = submitterName;
+    linkUpdate.submitted_by_email = submitterEmail;
+  }
+  await service.from('advance_intake_links').update(linkUpdate).eq('id', link.id);
 
   return NextResponse.json({ ok: true });
 }

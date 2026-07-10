@@ -13,7 +13,7 @@
    IntakeForm (@/components/intake/IntakeForm).
    ============================================ */
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { TechPackUpload } from '@/components/advance/TechPackUpload';
 import { Send, CheckCircle2, MapPin, Calendar } from 'lucide-react';
 import type { IntakeFormSchema, IntakeField, AdvanceData } from '@/lib/advance/intake';
@@ -46,12 +46,13 @@ const cardStyle: React.CSSProperties = {
 
 const inputStyle: React.CSSProperties = {
   width: '100%',
-  padding: '9px 11px',
-  fontSize: 14,
+  // Checkpoint D — thumb-sized: taller tap target + 16px font (no iOS zoom).
+  padding: '12px 14px',
+  fontSize: 16,
   background: 'var(--lp-bg-deep)',
   color: 'var(--lp-text)',
   border: '1px solid var(--lp-border-strong)',
-  borderRadius: 8,
+  borderRadius: 10,
   outline: 'none',
 };
 
@@ -91,6 +92,40 @@ export function VenueIntakeForm({
       [sectionId]: { ...(prev[sectionId] ?? {}), [fieldId]: value },
     }));
   };
+
+  // Checkpoint D — per-field autosave (DRAFT): answers persist as PENDING as they
+  // type, without marking the link submitted (that's the final Finish). The
+  // "saved" state is surfaced in the sticky progress bar — no submit anxiety.
+  const [savedState, setSavedState] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const firstRender = useRef(true);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (firstRender.current) {
+      firstRender.current = false;
+      return;
+    }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSavedState('saving');
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => {
+      const prefill: Record<string, Record<string, string>> = {};
+      for (const [sid, fields] of Object.entries(proposals)) {
+        for (const [fid, prop] of Object.entries(fields)) {
+          if (JSON.stringify(answers[sid]?.[fid]) === JSON.stringify(prop.value)) (prefill[sid] ??= {})[fid] = prop.provenance;
+        }
+      }
+      void fetch(`/api/public/advance-intake/${token}/submit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ data: answers, prefill, draft: true }),
+      })
+        .then((r) => setSavedState(r.ok ? 'saved' : 'idle'))
+        .catch(() => setSavedState('idle'));
+    }, 800);
+    // proposals is a stable prop; re-running on `answers` is the intent.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [answers, token]);
 
   const missingRequired = (): string[] => {
     const missing: string[] = [];
@@ -172,8 +207,34 @@ export function VenueIntakeForm({
   const titleLine = show.venueName || show.tourName || 'Advance request';
   const subParts = [show.city, show.dateLabel].filter(Boolean).join(' · ');
 
+  // Checkpoint D — progress (answered / total fillable) for the sticky bar.
+  const fillable = schema.sections.flatMap((s) => s.fields.map((f) => [s.template_id, f.id] as const));
+  const answeredCount = fillable.filter(([sid, fid]) => !isEmpty(answers[sid]?.[fid])).length;
+  const totalCount = fillable.length;
+  const answeredInSection = (sid: string) => {
+    const sec = schema.sections.find((s) => s.template_id === sid);
+    return (sec?.fields ?? []).filter((f) => !isEmpty(answers[sid]?.[f.id])).length;
+  };
+
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-4">
+      {/* Checkpoint D — sticky progress + surfaced autosave state. */}
+      <div
+        className="sticky top-0 z-10 flex items-center justify-between gap-3 rounded-b-xl px-4 py-2"
+        style={{ background: 'var(--lp-bg-deep)', borderBottom: '1px solid var(--lp-border)' }}
+      >
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--lp-text)' }}>
+            {answeredCount} of {totalCount} answered
+          </div>
+          <div style={{ marginTop: 4, height: 4, borderRadius: 2, background: 'var(--lp-border)', overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: `${totalCount ? Math.round((answeredCount / totalCount) * 100) : 0}%`, background: 'var(--color-lp-orange)', transition: 'width 200ms ease' }} />
+          </div>
+        </div>
+        <div style={{ flexShrink: 0, fontSize: 12, color: savedState === 'saved' ? 'var(--color-lp-status-complete)' : 'var(--lp-text-tertiary)' }}>
+          {savedState === 'saving' ? 'Saving…' : savedState === 'saved' ? '✓ Saved' : ''}
+        </div>
+      </div>
       {/* Header */}
       <div className="relative overflow-hidden p-6" style={cardStyle}>
         <div
@@ -219,8 +280,8 @@ export function VenueIntakeForm({
           </p>
         ) : null}
         <p style={{ marginTop: 12, fontSize: 13, color: 'var(--lp-text-tertiary)' }}>
-          Please fill in the details below. Anything you don’t have yet can be
-          left blank and added later.
+          Your answers save automatically as you go — no submit button to worry
+          about. Anything you don’t have yet can be left blank and added later.
         </p>
       </div>
 
@@ -243,11 +304,11 @@ export function VenueIntakeForm({
       {/* P7 Checkpoint C — upload-your-tech-pack alternative to form-filling. */}
       <TechPackUpload token={token} />
 
-      {/* Sections */}
+      {/* Sections — accordion, single column, big touch inputs (Checkpoint D). */}
       {schema.sections.map((section) => (
-        <div key={section.template_id} style={cardStyle}>
-          <div
-            className="border-b px-5 py-3"
+        <details key={section.template_id} open style={cardStyle}>
+          <summary
+            className="flex cursor-pointer list-none items-center justify-between border-b px-5 py-3 [&::-webkit-details-marker]:hidden"
             style={{ borderColor: 'var(--lp-border-subtle)' }}
           >
             <h2
@@ -261,8 +322,11 @@ export function VenueIntakeForm({
             >
               {section.label}
             </h2>
-          </div>
-          <div className="grid grid-cols-1 gap-4 p-5 sm:grid-cols-2">
+            <span style={{ flexShrink: 0, fontSize: 12, color: 'var(--lp-text-tertiary)' }}>
+              {answeredInSection(section.template_id)}/{section.fields.length}
+            </span>
+          </summary>
+          <div className="flex flex-col gap-4 p-4">
             {section.fields.map((field) => (
               <FieldInput
                 key={field.id}
@@ -273,12 +337,12 @@ export function VenueIntakeForm({
               />
             ))}
           </div>
-        </div>
+        </details>
       ))}
 
       {/* Submitter identity */}
       <div style={cardStyle}>
-        <div className="grid grid-cols-1 gap-4 p-5 sm:grid-cols-2">
+        <div className="flex flex-col gap-4 p-4">
           <Labeled label="Your name (optional)">
             <input
               type="text"
@@ -336,7 +400,7 @@ export function VenueIntakeForm({
           }}
         >
           <Send size={15} />
-          {submitting ? 'Submitting…' : 'Submit response'}
+          {submitting ? 'Finishing…' : 'I’m done — notify my TM'}
         </button>
       </div>
     </div>
