@@ -34,6 +34,7 @@ import { AdvanceShowReadView } from '@/components/advance/AdvanceShowReadView';
 import { IntakeReviewPanel } from '@/components/advance/IntakeReviewPanel';
 import { AdvanceShowHeader } from '@/components/advance/AdvanceShowHeader';
 import { AdvanceUpcomingSidebar } from '@/components/advance/AdvanceUpcomingSidebar';
+import { AdvanceDateStrip } from '@/components/advance/AdvanceDateStrip';
 import {
   AdvanceShowRightRail,
   type SpecRow,
@@ -338,6 +339,9 @@ export default async function AdvanceShowPage({
                   tourId={tourId}
                   routingId={routingId}
                 />
+                {/* Day-strip navigator — jump between the tour's show days
+                    without the lg-only left sidebar. */}
+                <AdvanceDateStrip tourId={tourId} activeRoutingId={routingId} />
                 <AdvanceShowReadView tourId={tourId} routingId={routingId} />
               </div>
             </main>
