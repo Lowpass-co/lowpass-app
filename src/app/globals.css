@@ -664,6 +664,12 @@ td[data-density="cozy"] .lp-mono {
 }
 .advance-badge--needs .advance-badge__dot {
   background: var(--color-lp-status-needs-review);
+}
+/* VIS-AA-01 — the pulse is now opt-in via --pulse, applied to exactly ONE
+   section (the active in-progress one) so the surface has at most a single
+   looping animation (§6 motion budget). Every other needs-input dot is
+   static. */
+.advance-badge--pulse .advance-badge__dot {
   animation: advance-pulse 2.4s var(--lp-ease-standard, ease) infinite;
 }
 .advance-badge--complete {

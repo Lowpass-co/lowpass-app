@@ -668,6 +668,7 @@ function SectionCard({
   allowCopy,
   onCopied,
   onFieldChange,
+  pulse = false,
 }: {
   section: SectionDef;
   sectionData: Record<string, unknown>;
@@ -680,6 +681,10 @@ function SectionCard({
   fullData: Record<string, Record<string, unknown> | undefined>;
   allowCopy: boolean;
   onCopied: () => void;
+  /** VIS-AA-01 — when true, this section's "Needs Input" dot pulses. The
+   *  parent grants it to exactly ONE section (the active in-progress one)
+   *  so the surface never runs more than a single looping animation. */
+  pulse?: boolean;
   /** Hotfix v2 §A — when defined, regular field rows render as
    *  inline editable inputs. Undefined = display-only path used by
    *  the /share/advance/[token] public surface. */
@@ -806,6 +811,7 @@ function SectionCard({
               className={cn(
                 'advance-badge advance-read-no-print',
                 sectionComplete ? 'advance-badge--complete' : 'advance-badge--needs',
+                !sectionComplete && pulse && 'advance-badge--pulse',
               )}
             >
               <span className="advance-badge__dot" />
@@ -1429,6 +1435,15 @@ function AdvanceReadLoadedBody({
     .filter(shouldShowSectionInReadView)
     .sort((a, b) => a.order - b.order);
 
+  // VIS-AA-01 — the ONE section whose dot may pulse: the first section
+  // marked in_progress, in document order. Falls back to null when nothing
+  // is actively in progress. Exactly one section ever gets the pulse, so the
+  // read view runs at most a single looping animation (§6 motion budget).
+  const pulseSectionId =
+    visibleSections.find(
+      (s) => (sectionStatuses[s.template_id]?.status ?? 'not_started') === 'in_progress',
+    )?.template_id ?? null;
+
   // Hotel + key-contact digest moved to AdvanceShowRightRail
   // (Variant parity §B). The read view is just sections now.
 
@@ -1467,6 +1482,7 @@ function AdvanceReadLoadedBody({
           allowCopy={allowCopy}
           onCopied={onCopied}
           onFieldChange={onFieldChange}
+          pulse={section.template_id === pulseSectionId}
         />
       ))}
 
