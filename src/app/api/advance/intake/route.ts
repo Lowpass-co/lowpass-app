@@ -22,6 +22,7 @@ import {
   requireTourInWorkspace,
 } from '@/lib/auth/workspace-check';
 import { generateToken } from '@/lib/rider-packs/web-links';
+import { seedShowReminders } from '@/lib/intake/reminders-server';
 
 export const dynamic = 'force-dynamic';
 
@@ -125,6 +126,13 @@ export async function POST(request: Request): Promise<NextResponse> {
     .eq('routing_id', routingId)
     .maybeSingle<{ id: string }>();
 
+  // Show date drives the T-14/7/3 reminder schedule (seeded below).
+  const { data: routingRow } = await supabase
+    .from('routing')
+    .select('date')
+    .eq('id', routingId)
+    .maybeSingle<{ date: string | null }>();
+
   const token = generateToken();
   const expires_at = expiresInDays
     ? new Date(Date.now() + expiresInDays * 86_400_000).toISOString()
@@ -152,6 +160,14 @@ export async function POST(request: Request): Promise<NextResponse> {
       { status: 500 },
     );
   }
+
+  // Seed the T-14/7/3 venue reminders (future dates only). Best-effort —
+  // a seeding failure must not fail link creation.
+  await seedShowReminders(supabase, {
+    linkId: inserted.id,
+    workspaceId: auth.workspaceId,
+    showDate: routingRow?.date ?? null,
+  });
 
   return NextResponse.json({ link: inserted }, { status: 201 });
 }

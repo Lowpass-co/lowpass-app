@@ -26,6 +26,7 @@ import {
   type AdvanceData,
 } from '@/lib/advance/intake';
 import { flattenToPending } from '@/lib/advance/intake-pending';
+import { markVenueCompleted } from '@/lib/intake/reminders-server';
 
 export const dynamic = 'force-dynamic';
 
@@ -166,6 +167,16 @@ export async function POST(
     linkUpdate.submitted_by_email = submitterEmail;
   }
   await service.from('advance_intake_links').update(linkUpdate).eq('id', link.id);
+
+  // Final submit → queue the one "venue completed" note to the TM. The same
+  // cron + sent_at guard sends it once; a draft autosave never queues it.
+  if (!body.draft) {
+    await markVenueCompleted(service, {
+      linkId: link.id,
+      workspaceId: link.workspace_id,
+      nowIso,
+    });
+  }
 
   return NextResponse.json({ ok: true });
 }
