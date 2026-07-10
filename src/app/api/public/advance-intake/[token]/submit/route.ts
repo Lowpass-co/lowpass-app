@@ -22,15 +22,16 @@ import { createServiceSupabaseClient } from '@/lib/supabase-server';
 import {
   buildIntakeFormSchema,
   sanitizeSubmission,
-  mergeIntakeIntoAdvance,
   type IntakeSection,
   type AdvanceData,
 } from '@/lib/advance/intake';
+import { flattenToPending } from '@/lib/advance/intake-pending';
 
 export const dynamic = 'force-dynamic';
 
 interface LinkRow {
   id: string;
+  workspace_id: string;
   routing_id: string;
   advance_instance_id: string | null;
   status: string;
@@ -73,7 +74,7 @@ export async function POST(
   const service = createServiceSupabaseClient();
   const { data: link } = await service
     .from('advance_intake_links')
-    .select('id, routing_id, advance_instance_id, status, expires_at, revoked_at')
+    .select('id, workspace_id, routing_id, advance_instance_id, status, expires_at, revoked_at')
     .eq('token', token)
     .maybeSingle<LinkRow>();
 
@@ -107,22 +108,38 @@ export async function POST(
   }
   instanceId = instance.id;
 
-  // Sanitise against the live schema, then merge.
+  // Q7 STORE-PENDING: sanitise against the live schema, then store the answers as
+  // PENDING rows — do NOT merge into advance_instances.data here. The TM reviews
+  // them (ChangeReviewQueue) and mergeIntakeIntoAdvance runs at ACCEPT-time.
   const schema = buildIntakeFormSchema(instance.sections);
   const clean = sanitizeSubmission(schema, rawData);
-  const merged = mergeIntakeIntoAdvance(instance.data, clean);
+  const pending = flattenToPending(clean);
 
   const nowIso = new Date().toISOString();
 
-  const { error: writeErr } = await service
-    .from('advance_instances')
-    .update({ data: merged, last_updated_at: nowIso })
-    .eq('id', instanceId);
-  if (writeErr) {
-    return NextResponse.json(
-      { error: 'Could not save your answers. Please try again.' },
-      { status: 500 },
-    );
+  if (pending.length > 0) {
+    const rows = pending.map((p) => ({
+      workspace_id: link.workspace_id,
+      advance_instance_id: instanceId,
+      link_id: link.id,
+      section_id: p.section_id,
+      field_id: p.field_id,
+      value: p.value,
+      source: 'venue',
+      provenance: null,
+      status: 'pending',
+      reviewed_at: null,
+      reviewed_by: null,
+    }));
+    const { error: pErr } = await service
+      .from('intake_pending_answers')
+      .upsert(rows, { onConflict: 'advance_instance_id,section_id,field_id,source' });
+    if (pErr) {
+      return NextResponse.json(
+        { error: 'Could not save your answers. Please try again.' },
+        { status: 500 },
+      );
+    }
   }
 
   await service

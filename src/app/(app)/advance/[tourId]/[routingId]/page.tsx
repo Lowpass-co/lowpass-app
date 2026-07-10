@@ -31,6 +31,7 @@ import { notFound } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { resolveVenue, type RoutingVenueSource } from '@/lib/venues/resolveVenue';
 import { AdvanceShowReadView } from '@/components/advance/AdvanceShowReadView';
+import { IntakeReviewPanel } from '@/components/advance/IntakeReviewPanel';
 import { AdvanceShowHeader } from '@/components/advance/AdvanceShowHeader';
 import { AdvanceUpcomingSidebar } from '@/components/advance/AdvanceUpcomingSidebar';
 import {
@@ -300,6 +301,13 @@ export default async function AdvanceShowPage({
                 routingId={routingId}
               />
             </div>
+            {advance?.id ? (
+              <div className="px-4 pt-2">
+                {/* P7 Q7 — venue intake answers land PENDING; the TM reviews +
+                    accepts here (mergeIntakeIntoAdvance runs at accept). */}
+                <IntakeReviewPanel advanceInstanceId={advance.id} />
+              </div>
+            ) : null}
             <AdvanceBuilderShellClient
               tourId={tourId}
               routingId={routingId}

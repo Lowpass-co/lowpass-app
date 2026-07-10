@@ -401,6 +401,26 @@ function FieldInput({
         {checked ? 'Yes' : 'No'}
       </label>
     );
+  } else if (field.type === 'labor_call') {
+    // P7 — venue-fillable Labor call block. Rows land PENDING; the TM's review
+    // accept applies them additively to labor_calls (P6).
+    const rows = Array.isArray(value) ? (value as Array<Record<string, unknown>>) : [];
+    const setRow = (i: number, patch: Record<string, unknown>) =>
+      onChange(rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
+    control = (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {rows.map((r, i) => (
+          <div key={i} style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+            <input placeholder="Dept" value={String(r.department ?? '')} onChange={(e) => setRow(i, { department: e.target.value })} style={{ ...inputStyle, flex: 1, minWidth: 90 }} />
+            <input type="time" value={String(r.call_time ?? '')} onChange={(e) => setRow(i, { call_time: e.target.value || null })} style={{ ...inputStyle, width: 110 }} />
+            <input type="number" min={0} placeholder="Heads" value={r.headcount == null ? '' : String(r.headcount)} onChange={(e) => setRow(i, { headcount: e.target.value === '' ? null : Number(e.target.value) })} style={{ ...inputStyle, width: 80 }} />
+            <input placeholder="Company" value={String(r.company ?? '')} onChange={(e) => setRow(i, { company: e.target.value })} style={{ ...inputStyle, flex: 1, minWidth: 100 }} />
+            <button type="button" aria-label="Remove call" onClick={() => onChange(rows.filter((_, j) => j !== i))} style={{ border: '1px solid var(--lp-border)', borderRadius: 6, background: 'var(--lp-surface)', color: 'var(--lp-text-tertiary)', padding: '4px 8px', cursor: 'pointer' }}>×</button>
+          </div>
+        ))}
+        <button type="button" onClick={() => onChange([...rows, { department: '', call_time: null, headcount: null, company: '', contact_name: '', contact_phone: '' }])} style={{ alignSelf: 'flex-start', border: '1px solid var(--lp-border)', borderRadius: 6, background: 'var(--lp-surface)', color: 'var(--lp-text-secondary)', padding: '6px 10px', fontSize: 13, cursor: 'pointer' }}>+ Add crew call</button>
+      </div>
+    );
   } else {
     const inputType =
       field.type === 'number' || field.type === 'currency'
