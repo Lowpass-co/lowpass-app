@@ -22,6 +22,8 @@ import {
 } from '@/lib/advance/intake';
 import { buildPrefillProposals, proposalsToMap } from '@/lib/advance/intake-prefill';
 import { loadPrefillContext } from '@/lib/advance/intake-prefill-server';
+import { resolveAdvanceVenue, type AdvanceVenueSection } from '@/lib/advance/venue';
+import type { RoutingVenueSource } from '@/lib/venues/resolveVenue';
 import { VenueIntakeForm } from '@/components/advance/VenueIntakeForm';
 
 export const dynamic = 'force-dynamic';
@@ -126,20 +128,28 @@ export default async function AdvanceIntakePage({
   const [{ data: routing }, { data: tour }] = await Promise.all([
     service
       .from('routing')
-      .select('date, venue_name, city, address')
+      .select(
+        'date, venue_name, city, country, address, venue_website, venue_phone, venue_capacity, canonical_venue_id, venue_frozen_at, canonical:canonical_venues(id, name, address, city, country, capacity)',
+      )
       .eq('id', link.routing_id)
-      .maybeSingle<{
-        date: string | null;
-        venue_name: string | null;
-        city: string | null;
-        address: string | null;
-      }>(),
+      .maybeSingle<RoutingVenueSource & { date: string | null }>(),
     service
       .from('tours')
       .select('name')
       .eq('id', link.tour_id)
       .maybeSingle<{ name: string | null }>(),
   ]);
+
+  // Q1 — the venue block shows the advance's OWN edited Venue Info value when
+  // set, else resolveVenue(canonical). resolveVenue remains the only reader of
+  // the gated routing.venue_* columns (guardrail intact).
+  const venue = routing
+    ? resolveAdvanceVenue(
+        routing as RoutingVenueSource,
+        (instance?.sections as AdvanceVenueSection[] | null | undefined) ?? null,
+        (instance?.data as Record<string, Record<string, unknown>> | null | undefined) ?? null,
+      )
+    : null;
 
   const schema = buildIntakeFormSchema(instance?.sections);
 
@@ -176,9 +186,9 @@ export default async function AdvanceIntakePage({
         token={token}
         alreadySubmitted={link.status === 'submitted'}
         show={{
-          venueName: routing?.venue_name ?? null,
-          city: routing?.city ?? null,
-          address: routing?.address ?? null,
+          venueName: venue?.name ?? null,
+          city: venue?.city ?? null,
+          address: venue?.address ?? null,
           dateLabel,
           tourName: tour?.name ?? null,
         }}

@@ -8,6 +8,8 @@
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { distanceMiles } from '@/lib/utils';
+import { resolveAdvanceVenue, type AdvanceVenueSection } from '@/lib/advance/venue';
+import type { RoutingVenueSource } from '@/lib/venues/resolveVenue';
 
 async function ensureAuth() {
   const supabase = await createServerSupabaseClient();
@@ -42,7 +44,7 @@ export async function GET(
 
   const { data: routing, error: routingErr } = await supabase
     .from('routing')
-    .select('id, date, venue_name, city, day_type, address, venue_website, venue_phone, venue_capacity, latitude, longitude, canonical_venue_id')
+    .select('id, date, venue_name, city, country, day_type, address, venue_website, venue_phone, venue_capacity, latitude, longitude, canonical_venue_id, venue_frozen_at, canonical:canonical_venues(id, name, address, city, country, capacity)')
     .eq('id', routingId)
     .eq('tour_id', tourId)
     .single();
@@ -261,16 +263,25 @@ export async function GET(
     }
   }
 
+  // Q1 — venue block: the advance's OWN edited Venue Info value wins per-field,
+  // else resolveVenue(canonical). resolveVenue is the only reader of the gated
+  // routing.venue_* columns (guardrail intact); we pass the ORIGINAL persisted
+  // instance.data so a blank prefill never masks the canonical fallback.
+  const rv = resolveAdvanceVenue(
+    routing as RoutingVenueSource,
+    (advance?.sections as AdvanceVenueSection[] | undefined) ?? undefined,
+    (instance?.data as Record<string, Record<string, unknown>> | undefined) ?? null,
+  );
   const routingPayload = {
     id: routing.id,
     date: routing.date,
-    venue_name: routing.venue_name,
-    city: routing.city,
+    venue_name: rv.name,
+    city: rv.city ?? routing.city,
     day_type: routing.day_type,
-    address: (routing as { address?: string }).address,
-    venue_website: (routing as { venue_website?: string }).venue_website,
-    venue_phone: (routing as { venue_phone?: string }).venue_phone,
-    venue_capacity: (routing as { venue_capacity?: number | null }).venue_capacity,
+    address: rv.address,
+    venue_website: rv.website,
+    venue_phone: rv.phone,
+    venue_capacity: rv.capacity,
     latitude: (routing as { latitude?: number | null }).latitude,
     longitude: (routing as { longitude?: number | null }).longitude,
   };

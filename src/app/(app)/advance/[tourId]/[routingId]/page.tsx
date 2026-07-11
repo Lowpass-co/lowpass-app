@@ -29,7 +29,8 @@
 
 import { notFound } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
-import { resolveVenue, type RoutingVenueSource } from '@/lib/venues/resolveVenue';
+import { type RoutingVenueSource } from '@/lib/venues/resolveVenue';
+import { resolveAdvanceVenue, type AdvanceVenueSection } from '@/lib/advance/venue';
 import { AdvanceShowReadView } from '@/components/advance/AdvanceShowReadView';
 import { IntakeReviewPanel } from '@/components/advance/IntakeReviewPanel';
 import { AdvanceShowHeader } from '@/components/advance/AdvanceShowHeader';
@@ -121,9 +122,16 @@ export default async function AdvanceShowPage({
 
   // Venue SSOT — resolve the venue block (live→canonical, past/frozen→snapshot).
   const routingRaw = routingRes.data as (RoutingVenueSource & { date: string; day_type: string | null }) | null;
+  // Q1 — the advance's OWN edited Venue Info value wins per-field, else
+  // resolveVenue(canonical). resolveAdvanceVenue keeps resolveVenue as the
+  // canonical-fallback reader (guardrail intact).
+  const advForVenue = advanceRes.data as {
+    sections?: AdvanceVenueSection[] | null;
+    data?: Record<string, Record<string, unknown>> | null;
+  } | null;
   const routing = routingRaw
     ? (() => {
-        const v = resolveVenue(routingRaw);
+        const v = resolveAdvanceVenue(routingRaw, advForVenue?.sections, advForVenue?.data ?? null);
         return {
           date: routingRaw.date,
           day_type: routingRaw.day_type,
