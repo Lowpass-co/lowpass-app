@@ -6,7 +6,7 @@
    slot in this mode). Reworked to match Adam's Template Builder
    screenshot: a titled "Field Properties" panel with
 
-     - TYPE row (friendly name + 5-button type switcher)
+     - TYPE row (friendly name + all-12-field-types select, VIS-AB-03)
      - Field Label
      - Placeholder Text
      - Help Text (Optional)

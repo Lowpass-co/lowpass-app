@@ -876,6 +876,10 @@ function SectionEditor({
 }: SectionEditorBaseProps) {
   const [titleDraft, setTitleDraft] = useState(section.title);
   useEffect(() => {
+    // §5 hygiene — re-sync the local title draft when the canonical section.title
+    // changes externally (e.g. a save round-trip or an inherited-template update).
+    // Intentional prop→state sync; matches the SlideOver primitive's convention.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setTitleDraft(section.title);
   }, [section.title]);
 
