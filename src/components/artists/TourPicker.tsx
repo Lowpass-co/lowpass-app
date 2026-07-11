@@ -139,9 +139,12 @@ export function TourPicker({ tours }: { tours: HomeTourSummary[] }) {
   const selected = tours.find((t) => t.id === selectedTourId) ?? null;
 
   const openTour = (id: string) => {
-    setSelectedTourId(id);
-    // Nav & entry fixpack item 1 — open on the tour's last-used product
-    // (Operations fallback) instead of hardwiring Budget.
+    // Q4 — a row click NAVIGATES IN to the tour's last-used product (Operations
+    // fallback) rather than selecting it in place on the artist page. We do NOT
+    // setSelectedTourId here: ArtistTourContext derives selectedTourId from the
+    // destination path (/operations|/budget|/advance/[id]), so the breadcrumb +
+    // every product-route consumer still resolve — and calling the setter would
+    // only race the push (see ArtistTourSwitcher.handleTourClick).
     router.push(tourHref(id));
   };
 
