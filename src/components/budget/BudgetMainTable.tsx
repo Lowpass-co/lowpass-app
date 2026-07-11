@@ -31,7 +31,8 @@ import type {
   TourPhase,
   TourPhaseKey,
 } from '@/server/budget/computeTourPhases';
-import { cn } from '@/lib/utils';
+// §2 hygiene — the byte-identical local formatCurrency now lives in lib/utils.
+import { cn, formatCurrencyWhole as formatCurrency } from '@/lib/utils';
 
 const VALID_PHASES: ReadonlySet<TourPhaseKey> = new Set([
   'pre-prod',
@@ -70,18 +71,6 @@ const QUICK_ADD_TEMPLATES: Array<{
   { label: 'Local Crew', emoji: '👷', category: 'crew', defaultLabel: 'Local crew' },
 ];
 
-function formatCurrency(value: number, currency: string): string {
-  try {
-    return value.toLocaleString('en-GB', {
-      style: 'currency',
-      currency: currency.toUpperCase(),
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    });
-  } catch {
-    return `${currency} ${Math.round(value)}`;
-  }
-}
 
 function variance(line: BudgetLineItem): { pct: number | null; delta: number } {
   const proposed = Number(line.proposed_cost ?? 0);

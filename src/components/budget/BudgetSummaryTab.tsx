@@ -18,6 +18,8 @@ import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { ArrowDown, ArrowUp, History } from 'lucide-react';
+// §2 hygiene — the byte-identical local formatCurrency now lives in lib/utils.
+import { formatCurrencyWhole as formatCurrency } from '@/lib/utils';
 import { BudgetOverviewPanels } from '@/components/budget/BudgetOverviewPanels';
 import { DashboardCustomizer } from '@/components/budget/dashboard/DashboardCustomizer';
 import {
@@ -61,18 +63,6 @@ function labelFor(category: string): string {
   );
 }
 
-function formatCurrency(value: number, currency: string): string {
-  try {
-    return value.toLocaleString('en-GB', {
-      style: 'currency',
-      currency: currency.toUpperCase(),
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    });
-  } catch {
-    return `${currency} ${Math.round(value)}`;
-  }
-}
 
 function formatRelative(iso: string | null | undefined): string {
   if (!iso) return '—';

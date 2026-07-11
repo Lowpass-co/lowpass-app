@@ -128,6 +128,25 @@ export function formatCurrency(amount: number, currency: string = 'GBP'): string
 }
 
 /**
+ * Whole-pound currency via the Intl currency style (locale-aware symbol
+ * placement), no decimals. Distinct from formatCurrency (which uses a fixed
+ * symbol map + 2 decimals). Extracted verbatim from the byte-identical locals
+ * in BudgetSummaryTab + BudgetMainTable — same output, one home.
+ */
+export function formatCurrencyWhole(value: number, currency: string): string {
+  try {
+    return value.toLocaleString('en-GB', {
+      style: 'currency',
+      currency: currency.toUpperCase(),
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    });
+  } catch {
+    return `${currency} ${Math.round(value)}`;
+  }
+}
+
+/**
  * Generate a Lowpass Personnel ID.
  * Format: LP-00001, LP-00002, etc.
  */
