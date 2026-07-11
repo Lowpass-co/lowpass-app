@@ -20,8 +20,8 @@
    which is `h-screen overflow-hidden`. The <main> is the only
    scroll surface, so `position: sticky` inside the page body
    anchors against <main>'s viewport — not against the document.
-   This is the same fix CLAUDE.md notes the legacy TourBreadcrumb
-   ran into.
+   This is the same sticky-inside-a-scroll-container fix the retired
+   tour breadcrumb ran into.
    ============================================ */
 
 import { ProductHeader, type ProductName } from './ProductHeader';

@@ -1,7 +1,7 @@
 /* ============================================
    LOWPASS — Tour Phase Context strip (Phase A budget redesign)
 
-   Horizontal phase row pinned just below the TourBreadcrumb on the
+   Horizontal phase row pinned just below the product header on the
    budget page. Each segment shows phase name + auto-computed date
    range; the current phase is highlighted with a 2px brand-orange
    border and a 8% orange-tinted background.
@@ -46,7 +46,7 @@ export type TourPhaseContextStripProps = {
   activePhaseKey: TourPhaseKey | null;
   onPhaseChange: (key: TourPhaseKey | null) => void;
   /**
-   * When true, the strip pins itself below the TourBreadcrumb via
+   * When true, the strip pins itself below the product header via
    * `position: sticky; top: var(--lp-space-12)`. The default in the
    * budget page is true; in standalone preview / docs surfaces a
    * non-sticky render is the saner default.
@@ -67,7 +67,7 @@ export function TourPhaseContextStrip({
       className="lp-tour-phase-strip print:hidden"
       style={{
         position: sticky ? 'sticky' : 'static',
-        // 48px = the TourBreadcrumb's height; phase strip flushes
+        // 48px = the product header row height; phase strip flushes
         // immediately below it.
         top: sticky ? 'var(--lp-space-12, 48px)' : undefined,
         zIndex: sticky ? 'var(--lp-z-sticky)' : undefined,
