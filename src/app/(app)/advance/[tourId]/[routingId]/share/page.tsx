@@ -14,7 +14,11 @@ import {
   buildIntakeFormSchema,
   type IntakeSection,
 } from '@/lib/advance/intake';
-import { ShareSurface, type ShareSectionView } from '@/components/advance/ShareSurface';
+import {
+  ShareSurface,
+  type ShareSectionView,
+  type ShareActivityEvent,
+} from '@/components/advance/ShareSurface';
 
 export const dynamic = 'force-dynamic';
 
@@ -70,12 +74,42 @@ export default async function AdvanceSharePage({
     };
   });
 
+  // VIS-AS-05 — real activity from the intake link's persisted timestamps.
+  // opened = last_viewed_at, submitted = submitted_at. Downloads aren't tracked
+  // (no events table) so they're never fabricated here — ShareSurface flags them.
+  const { data: links } = await supabase
+    .from('advance_intake_links')
+    .select('last_viewed_at, submitted_at, submitted_by_name, status, revoked_at')
+    .eq('tour_id', tourId)
+    .eq('routing_id', routingId)
+    .order('created_at', { ascending: false });
+
+  const activity: ShareActivityEvent[] = [];
+  for (const l of (links ?? []) as {
+    last_viewed_at: string | null;
+    submitted_at: string | null;
+    submitted_by_name: string | null;
+    status: string | null;
+    revoked_at: string | null;
+  }[]) {
+    if (l.revoked_at) continue;
+    if (l.submitted_at) {
+      activity.push({ kind: 'submitted', at: l.submitted_at, who: l.submitted_by_name });
+    }
+    if (l.last_viewed_at) {
+      activity.push({ kind: 'opened', at: l.last_viewed_at });
+    }
+  }
+  // Newest first.
+  activity.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+
   return (
     <ShareSurface
       tourId={tourId}
       routingId={routingId}
       sections={sectionViews}
       fillableTotal={fillableTotal}
+      activity={activity}
     />
   );
 }

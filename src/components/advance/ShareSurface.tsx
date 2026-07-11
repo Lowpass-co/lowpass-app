@@ -16,7 +16,7 @@
    ============================================================ */
 
 import Link from 'next/link';
-import { Download, Eye, EyeOff, FileText, Send } from 'lucide-react';
+import { CheckCircle2, Download, Eye, EyeOff, FileText, MailOpen, Send } from 'lucide-react';
 import { SendPacketButton } from './SendPacketButton';
 
 export interface ShareSectionView {
@@ -27,18 +27,37 @@ export interface ShareSectionView {
   venueFillable: number;
 }
 
+/** VIS-AS-05 — a real activity event, sourced from the intake link's persisted
+ *  timestamps (opened = last_viewed_at, submitted = submitted_at). Downloads
+ *  are not tracked yet (no events table) — surfaced as a flagged note, never
+ *  fabricated. */
+export interface ShareActivityEvent {
+  kind: 'opened' | 'submitted';
+  at: string;
+  who?: string | null;
+}
+
 export function ShareSurface({
   tourId,
   routingId,
   sections,
   fillableTotal,
+  activity = [],
 }: {
   tourId: string;
   routingId: string;
   sections: ShareSectionView[];
   fillableTotal: number;
+  activity?: ShareActivityEvent[];
 }) {
   const tmOnlyCount = sections.filter((s) => s.tmOnly).length;
+  // VIS-AS-03 — honest gaps + counts, all derived from the sections already
+  // passed in (no new data). "Gaps" = venue-visible sections with nothing for
+  // the venue to fill in yet; "empty" = sections with no fields at all.
+  const venueSections = sections.filter((s) => !s.tmOnly);
+  const emptyForVenueCount = venueSections.filter((s) => s.venueFillable === 0).length;
+  const emptySectionCount = sections.filter((s) => s.totalFields === 0).length;
+  const totalFields = sections.reduce((n, s) => n + s.totalFields, 0);
 
   return (
     <div
@@ -76,7 +95,6 @@ export function ShareSurface({
       <Card>
         <CardTitle icon={<Send size={15} />} title="Venue intake link" />
         <p style={{ margin: 0, fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text-secondary)' }}>
-          Generate a link the venue fills in.{' '}
           <span className="lp-mono" style={{ color: 'var(--lp-text)' }}>{fillableTotal}</span>{' '}
           field{fillableTotal === 1 ? '' : 's'} are venue-fillable. Set an expiry
           (preset: the day before the show) and an optional passphrase in the
@@ -139,14 +157,46 @@ export function ShareSurface({
             ))
           )}
         </ul>
+        {/* VIS-AS-03 — honest gaps: name what the venue will see as blank so
+            it's not a surprise on their end. Silent when there's nothing to flag. */}
+        {emptyForVenueCount > 0 ? (
+          <p
+            className="lp-mono"
+            style={{
+              margin: 0,
+              fontSize: 'var(--lp-text-2xs)',
+              color: 'var(--lp-text-tertiary)',
+            }}
+          >
+            {emptyForVenueCount} venue-visible section
+            {emptyForVenueCount === 1 ? '' : 's'} have nothing to fill in yet
+            {emptySectionCount > 0 ? ` (${emptySectionCount} with no fields)` : ''}.
+          </p>
+        ) : null}
       </Card>
 
       {/* VIS-AS-03 — packet builder + custom attachments (link to existing) */}
       <Card>
-        <CardTitle icon={<FileText size={15} />} title="Advance packet" />
+        <CardTitle
+          icon={<FileText size={15} />}
+          title="Advance packet"
+          note={`${sections.length} section${sections.length === 1 ? '' : 's'} · ${totalFields} field${totalFields === 1 ? '' : 's'}`}
+        />
         <p style={{ margin: 0, fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text-secondary)' }}>
-          Assemble the packet (sections, attachments, page counts) and export one
-          show or the whole run.
+          Bundle this show&apos;s riders, channel lists and hire jobs into one PDF,
+          or export the whole run. Page counts are shown per document in the
+          builder.
+        </p>
+        <p
+          style={{
+            margin: 0,
+            fontSize: 'var(--lp-text-2xs)',
+            color: 'var(--lp-text-tertiary)',
+            fontStyle: 'italic',
+          }}
+        >
+          Custom attachments (logos, financials, ad-hoc hire lists) aren&apos;t
+          supported yet — only linked riders, channel lists and hire jobs bundle in.
         </p>
         <Link
           href={`/advance/${tourId}/${routingId}/packet`}
@@ -164,16 +214,62 @@ export function ShareSurface({
         </Link>
       </Card>
 
-      {/* VIS-AS-05 — activity log */}
+      {/* VIS-AS-05 — activity log (opened / submitted from the intake link;
+          downloads flagged as not-yet-tracked). */}
       <Card>
         <CardTitle title="Activity" />
-        <div style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text-tertiary)', fontStyle: 'italic' }}>
-          No activity yet — opens, submissions and downloads will appear here with
-          their timestamps.
-        </div>
+        {activity.length === 0 ? (
+          <div style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text-tertiary)', fontStyle: 'italic' }}>
+            No activity yet — when the venue opens or submits the intake link it
+            appears here with a timestamp.
+          </div>
+        ) : (
+          <ul style={{ listStyle: 'none', margin: 0, padding: 0 }} className="flex flex-col">
+            {activity.map((e, i) => (
+              <li
+                key={`${e.kind}-${e.at}-${i}`}
+                className="flex items-center gap-3"
+                style={{
+                  padding: 'var(--lp-space-2) 0',
+                  borderTop: i === 0 ? 'none' : '1px solid var(--lp-border-subtle)',
+                }}
+              >
+                <span aria-hidden style={{ color: e.kind === 'submitted' ? 'var(--color-lp-status-complete)' : 'var(--lp-text-tertiary)', flexShrink: 0 }}>
+                  {e.kind === 'submitted' ? <CheckCircle2 size={15} /> : <MailOpen size={15} />}
+                </span>
+                <span className="min-w-0 flex-1" style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text)' }}>
+                  {e.kind === 'submitted' ? 'Venue submitted' : 'Venue opened the link'}
+                  {e.who ? <span style={{ color: 'var(--lp-text-tertiary)' }}> · {e.who}</span> : null}
+                </span>
+                <time
+                  dateTime={e.at}
+                  className="shrink-0 lp-mono"
+                  style={{ fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-tertiary)' }}
+                >
+                  {formatActivityAt(e.at)}
+                </time>
+              </li>
+            ))}
+          </ul>
+        )}
+        <p style={{ margin: 0, fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-tertiary)', fontStyle: 'italic' }}>
+          Packet downloads aren&apos;t tracked yet.
+        </p>
       </Card>
     </div>
   );
+}
+
+function formatActivityAt(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
 function Card({ children }: { children: React.ReactNode }) {
