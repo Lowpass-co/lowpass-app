@@ -121,7 +121,7 @@ Source: `docs/handover/CC_INTAKE_UPGRADE.md`. IDs land with the build.
 
 Re-run these; they are pass/fail by exact number, not by eye. A moved number is a hard stop.
 
-- [ ] **Payroll harness 52/52** — exact: Richie 4610.63 · split 1606.62 · flat 2250 · rehearsal 500 · per-diem 90.
+- [ ] **Payroll harness 15/15** (`fees.test.ts`) — exact: Richie 4610.63 · split 1606.62 · flat 2250 · rehearsal 500 · per-diem 90. (The separate `reconcile.harness.ts` is the 52/52 legacy-reproduction gate.)
 - [ ] **Income provenance harness 18/18** — settlement never clobbers manual actuals.
 - [ ] **FX grep gates = 0** — no reintroduced hardcoded FX paths.
 - [ ] **resolveVenue harness 18/18** — `node --experimental-strip-types src/lib/venues/resolveVenue.harness.ts` (live→canonical, past→snapshot).

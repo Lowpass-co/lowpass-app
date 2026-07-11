@@ -132,8 +132,10 @@ Settings / Venues / Bugs use `ProductShell` with `active={null}`
   for anything new.
 
 **Shell-v1 (`src/components/shell/*`) is scoped to:** auth
-flows, public share / intake pages, a few unmigrated
-mobile / legacy surfaces. New code should not use it.
+flows, public share / intake pages, and a still-substantial
+tail of unmigrated surfaces — ~20 files still import
+`<PageShell>` / `listAppPageShell` (mobile + legacy tour-internal
+pages pending a Phase-4-style port). New code should not use it.
 
 See `docs/handover/IA_HIERARCHY.md` for the full reference.
 
@@ -141,7 +143,7 @@ See `docs/handover/IA_HIERARCHY.md` for the full reference.
 
 - **Lists** → `<DataTable>` (`docs/components/DATA_TABLE_CONTRACT.md`). No custom `<table>` HTML in pages.
 - **Spreadsheets** → `<SpreadsheetGrid>` (`docs/components/SPREADSHEET_GRID_CONTRACT.md`). Used for Budget, Payroll, Channel List, Routing.
-- **Detail panels** → `<SlideOver>` from `src/components/shell/SlideOver.tsx` (`docs/components/SLIDE_OVER_CONTRACT.md`). Context only — never the primary edit surface (admin tools like Bug Reports are the documented exception). **Do NOT roll your own backdrop/aside chrome.** All entity slide-overs (Flight/Person/Room/Gear/DealMemo/Show/Tour/Template/File/RiderPack) now wrap the `<SlideOver>` primitive — the UX13 sweep target is done.
+- **Detail panels** → `<SlideOver>` from `src/components/shell/SlideOver.tsx` (`docs/components/SLIDE_OVER_CONTRACT.md`). Context only — never the primary edit surface (admin tools like Bug Reports are the documented exception). **Do NOT roll your own backdrop/aside chrome.** The design pass + P8 hygiene converted ~24 of the ~26 real slide-overs onto the `<SlideOver>` primitive. Two known stragglers remain: `PersonnelDetailSlideOver` (bespoke 2161-line chrome — JSX-in-title + loader/flush bridge; conversion deferred on visual-parity risk) and `GridSlideOver` (the isolated `/grid-demo` `lp-gso` system, outside this contract's scope). New slide-overs must use the primitive.
 - **Inline entity references** → `<EntityChip kind={...} id={...} />` (UX08). Click opens the entity's slide-over via `useEntityRouting()`.
 
 ### Canonical entities
@@ -178,12 +180,11 @@ When introducing a new slide-over with a destructive path, opt for hybrid rather
 
 ### `_legacy/` directories — leaky on purpose
 
-Two `_legacy/` trees exist:
+One `_legacy/` tree remains (`src/components/_legacy/sidebar/` was deleted in P8 hygiene):
 
-- `src/components/_legacy/sidebar/` — clean. Pre-UX02 sidebar, retained as reference. Zero importers. Safe to delete.
-- `src/_legacy/budget/` — leaky. Pre-budget-redesign tab system. Active code in `src/components/budget/` and `src/lib/shell/rails/` still imports `BUDGET_TABS`, `pushRecentTourId`, and `BudgetDetailShell` from here. The general "do not import from `_legacy/`" rule is violated by load-bearing code. Phase 3 (`feat/product-split-phase3`) is expected to retire most of these imports; a follow-up pass should delete what survives.
+- `src/_legacy/budget/` — leaky. Pre-budget-redesign tab system. Active code in `src/components/budget/` and `src/lib/shell/rails/` still imports `BUDGET_TABS`, `pushRecentTourId`, and `BudgetDetailShell` from here, and `budget/[tourId]/settlement/page.tsx:18` imports `SettlementTab` from `@/_legacy/budget/SettlementTab`. The general "do not import from `_legacy/`" rule is violated by load-bearing code. A follow-up pass should retire these and delete what survives.
 
-Until that follow-up lands, the rule is: don't add NEW imports from `_legacy/`. The existing four are documented exceptions, not licence to add more.
+Until that follow-up lands, the rule is: don't add NEW imports from `_legacy/`. The existing four (`BUDGET_TABS`, `pushRecentTourId`, `BudgetDetailShell`, `SettlementTab`) are documented exceptions, not licence to add more.
 
 ### Auth + RLS
 
@@ -195,32 +196,30 @@ Until that follow-up lands, the rule is: don't add NEW imports from `_legacy/`. 
 Right: `'#FF45001a'` or `'color-mix(in srgb, var(--lp-orange) 5.1%, transparent)'`
 Wrong: `'var(--lp-orange)' + '1a'` (concatenation doesn't resolve the var)
 
-### Tour-internal navigation — ProductShell handles it; TourBreadcrumb is legacy
+### Tour-internal navigation — ProductShell handles it
 
-Pages wrapped in `<ProductShell>` (everything under `/operations/[tourId]/`, `/budget/[tourId]/`, `/advance/[tourId]/`) get product-aware navigation from `<ProductHeader>` (the two-bar nav) automatically. **No explicit `<TourBreadcrumb>` mount is needed** for those pages.
+Pages wrapped in `<ProductShell>` (everything under `/operations/[tourId]/`, `/budget/[tourId]/`, `/advance/[tourId]/`) get product-aware navigation from `<ProductHeader>` (the two-bar nav) automatically — no per-page breadcrumb mount is needed. The redirects in `next.config.ts` send every `/tours/[id]/*` URL to its product-prefixed equivalent, so the old `<TourBreadcrumb>` component was unreachable and has been **deleted** (P8 hygiene). Don't reintroduce it; if a tour-internal surface needs chrome, wrap it in `<ProductShell>`.
 
-The legacy `<TourBreadcrumb>` component (`src/components/tours/TourBreadcrumb.tsx`) is currently imported by zero pages. It exists for any old `<PageShell>`-wrapped tour-internal page that ever needs to be reached directly. Since the redirects in `next.config.ts` now send every `/tours/[id]/*` URL to its product-prefixed equivalent, those legacy pages are unreachable by users — the requirement is effectively moot.
+## Active project — pipeline complete
 
-If you ever DO add a new page directly under `src/app/(app)/tours/[id]/**` (which you almost certainly shouldn't — Phase 4 is porting the rest), mount `<TourBreadcrumb>` per-page (not in `tours/[id]/layout.tsx` — `PageShell`'s `<main overflow:auto>` scroll container breaks sticky mounts in the layout).
+The four-product split (Home / Operations / Budget / Advance) is the app's architecture, and the multi-stage build pipeline that hardened it is **done**: the **MASTER PASS** (rates convergence, FX unify, income-actuals provenance, salvage/nav fixpacks) and the **DESIGN PASS** (surface-by-surface visual redesign across all products) are both COMPLETE and merged to `main`. `main` is the single line of development post the 2026-07-03 consolidation (see `docs/handover/CONSOLIDATION_2026-07-03.md`). P7 (Intake Upgrade) and P8 (this hygiene pass) closed the pipeline.
 
-## Active project — Product Split
+Nav / IA as it now stands:
 
-The current architectural shift is the four-product split (Home / Operations / Budget / Advance). UX01–UX22 are merged. Product Split Phase 0–3 **and** the Advance visual redesign are now merged to `main` (verified via `git merge-base --is-ancestor`, 2026-07-03 consolidation). Phase 4 (Operations migration) hasn't been written yet. `main` is the single line of development after the 2026-07-03 consolidation (see `docs/handover/CONSOLIDATION_2026-07-03.md`).
+- `/artists/[id]` — Home (artist-scoped overview; the artist's touring surfaces are branded **Production**, route group `(home)/production` — not "Library").
+- `/operations/[tourId]/*` — Operations. **Routing is the tour landing** (`next.config.ts` redirects `/operations/[id]` → `/operations/[id]/routing`).
+- `/budget/[tourId]/*` — Budget (live).
+- `/advance/[tourId]/[routingId]` — Advance. One per-show surface with three modes via `<AdvanceModeSwitcher>`: **Build** (`?mode=edit`) / **Advance** (fill/read) / **Share** (packet + intake).
 
-Each product is URL-prefixed:
+**VENUE RESOLVER RULE:** never read the gated `routing.venue_*` columns (`venue_name` / `venue_phone` / `venue_website` / `venue_capacity`) directly for display — always go through `resolveVenue()` (`src/lib/venues/resolveVenue.ts`), the one live-vs-frozen read path. On the advance read surfaces the venue block prefers the advance's own edited Venue Info values, else `resolveVenue()` — via `resolveAdvanceVenue()` (`src/lib/advance/venue.ts`).
 
-- `/artists/[id]` — Home (artist-scoped overview)
-- `/operations/[tourId]/*` — Operations (placeholders pending Phase 4)
-- `/budget/[tourId]/*` — Budget (live)
-- `/advance/[tourId]/[routingId]` — Advance (live)
-
-Pre-overhaul UX01–UX22 prompts are in `docs/cursor-prompts/`. Active product-split + fix prompts are in `docs/handover/CC_*.md`. State-of-completion as of 2026-05-01 lives in `docs/handover/AUDIT_2026-05-01.md`.
+Doc locations: the roadmap + state-of-completion is `docs/handover/ROADMAP_2026-07*` and the pipeline queue is `docs/handover/CC_PROMPTS_QUEUE_2026-07.md`; per-stage specs are the `docs/handover/CC_*.md` files. Pre-overhaul UX01–UX22 prompts are in `docs/cursor-prompts/`.
 
 ## Things that have bitten agents before
 
 1. **Migration number collisions.** Seven real duplicates exist on `main` already (017, 018, 019, 024, 025, 026, 035). Pick the next sequential number after the highest on `main` AND across active feature branches before writing a new migration. See `database/migrations/README.md` and `docs/handover/CC_MIGRATION_RENUMBER.md`.
 2. **Migrations are hand-applied — see "Migrations — hand-applied, no runner" above.** The `db:migrate` runner exists but is NOT used; Adam pastes SQL by hand and `_lp_migrations` is not maintained. So SQL **must** be idempotent (DROP IF EXISTS / CREATE OR REPLACE / ADD COLUMN IF NOT EXISTS / guarded UPDATE / ON CONFLICT DO NOTHING) — there is no tracking table to stop a double-paste, so every migration must be a safe no-op on re-run. See `docs/handover/SQL_DRIFT_AUDIT_2026_04_30.md` for the historical drift this class of problem caused.
-3. **Direct-pasted tables that have no `CREATE TABLE` migration file.** `rental_inventory`, `rental_jobs`, `rental_job_items`, and `workspace_members` exist in production but are reproducible only by hand on a fresh clone. The rental triplet is targeted in `docs/handover/CC_RENTAL_DENORMALISE.md`. Don't pile more onto this list.
+3. **Phantom tables — now resolved (zero remain).** The tables that once existed in production without a `CREATE TABLE` migration have been captured: the `rental_*` triplet in `092_rental_tables_orphan_capture.sql` (+ `095_rental_workspace_denormalise_and_canonical_rls.sql`), and `workspace_members` in `078_permissions_foundation.sql`. A fresh clone now reproduces them from migrations. Don't reintroduce direct-pasted tables — every new table ships a migration.
 4. **Hex+alpha string concatenation** of CSS vars. Doesn't resolve. Use literal hex+alpha or `color-mix(...)`.
 5. **Glob patterns choking on `(app)` parens.** When searching the codebase, use individual paths or grep, not brace globs.
 6. **Turbopack ETIMEDOUT on Drive filesystem.** Build must run via `next build --webpack`. Never run build with the default Next 16 Turbopack.
