@@ -8,7 +8,8 @@
 
 import { useState, useRef, useEffect, Fragment } from 'react';
 import { createPortal } from 'react-dom';
-import { parseRoutingDate, distanceMiles, formatRoutingDateShort } from '@/lib/utils';
+import { parseRoutingDate, distanceMiles, formatRoutingDateShort, parseDayTypes } from '@/lib/utils';
+import { colourForDayType } from '@/lib/routing/dayType';
 import { DayTypeDropdown } from './DayTypeDropdown';
 import { VenueAutocomplete } from './VenueAutocomplete';
 import { Bus, Car, Plane, Trash2, ExternalLink, Eraser, Link2 } from 'lucide-react';
@@ -350,9 +351,25 @@ function RoutingRowWithMenu({
         className="border-b border-lp-border last:border-0 hover:bg-lp-surface-hover animate-fade-in transition-colors duration-150"
         style={{ animationDelay: `${rowIndex * 30}ms` }}
       >
-        {/* Date */}
+        {/* Date — VIS-TR-06: day-type colour tick(s). One tick per type, up to
+            two, so a two-type day (e.g. show,festival) stacks a second 3px tick. */}
         <td className={cn(cellPadX, cellPadY, 'whitespace-nowrap text-sm font-medium text-lp-text')}>
-          {formatRoutingDateShort(row.date)}
+          <div className="flex items-center gap-2">
+            {(() => {
+              const types = parseDayTypes(row.day_type ?? '').slice(0, 2);
+              return types.length > 0 ? (
+                <span className="flex shrink-0 items-center gap-[2px]" aria-hidden>
+                  {types.map((t, i) => (
+                    <span
+                      key={`${t}-${i}`}
+                      style={{ width: 3, height: 16, borderRadius: 1, background: colourForDayType(t) }}
+                    />
+                  ))}
+                </span>
+              ) : null;
+            })()}
+            {formatRoutingDateShort(row.date)}
+          </div>
         </td>
         {/* Venue — library-first autocomplete + linked marker */}
         <td className={cn(cellPadX, cellPadY)}>
