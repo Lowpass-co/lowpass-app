@@ -26,6 +26,12 @@ const CANONICAL_JOIN =
  *  their resolved SSOT value (live → canonical, past/frozen → snapshot) so every
  *  client of this endpoint sees the truth without reading venue_* columns. The
  *  joined `canonical` object is stripped from the response. */
+function stripCanonical(r: RoutingVenueSource): Record<string, unknown> {
+  const rest = { ...(r as Record<string, unknown>) };
+  delete rest.canonical;
+  return rest;
+}
+
 async function resolveRoutingVenues(
   supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
   rows: RoutingVenueSource[],
@@ -33,22 +39,33 @@ async function resolveRoutingVenues(
   // On-read freeze — first load after a show day passes snapshots canonical into
   // routing.venue_* and stamps venue_frozen_at (no cron). Best-effort; mutates
   // the frozen rows in place so the resolve pass below reflects the write.
-  await freezePassedVenues(supabase, rows);
+  // A1 — must NEVER blank the grid: a freeze write failure is logged, not thrown.
+  try {
+    await freezePassedVenues(supabase, rows);
+  } catch (e) {
+    console.error('[routing GET] freezePassedVenues failed (non-fatal):', e);
+  }
   return rows.map((r) => {
-    const v = resolveVenue(r);
-    const rest = { ...(r as Record<string, unknown>) };
-    delete rest.canonical;
-    return {
-      ...rest,
-      venue_name: v.name,
-      venue_phone: v.phone,
-      venue_website: v.website,
-      venue_capacity: v.capacity,
-      address: v.address,
-      city: v.city,
-      country: v.country,
-      venue_source: v.source,
-    };
+    // A1 — per-row guard: if a single row's venue can't resolve, return it RAW
+    // (venue_* columns as-is, canonical stripped) rather than throwing and
+    // taking the whole grid down. The grid still binds date/day_type/venue_name.
+    try {
+      const v = resolveVenue(r);
+      return {
+        ...stripCanonical(r),
+        venue_name: v.name,
+        venue_phone: v.phone,
+        venue_website: v.website,
+        venue_capacity: v.capacity,
+        address: v.address,
+        city: v.city,
+        country: v.country,
+        venue_source: v.source,
+      };
+    } catch (e) {
+      console.error('[routing GET] resolveVenue failed for row (returned raw):', r.id, e);
+      return stripCanonical(r);
+    }
   });
 }
 
@@ -113,14 +130,28 @@ export async function GET(
     return NextResponse.json({ routing: liteRows });
   }
 
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from('routing')
     .select(`*, ${CANONICAL_JOIN}`)
     .eq('tour_id', tourId)
     .order('date');
 
+  // A1 — the grid renders EMPTY when this GET fails, because the client reads a
+  // bare array and a non-array error body becomes []. The canonical embed is the
+  // one part that can fail at runtime (a missing/renamed FK relationship makes
+  // PostgREST reject the whole query). Never let that blank the grid: on embed
+  // error, retry with a plain select (no join) — resolveVenue then falls back to
+  // the routing.venue_* snapshot for every row, which is correct for display.
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error('[routing GET] canonical embed select failed, retrying without join:', error.message);
+    ({ data, error } = await supabase
+      .from('routing')
+      .select('*')
+      .eq('tour_id', tourId)
+      .order('date'));
+    if (error) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
   }
   const resolved = await resolveRoutingVenues(supabase, (data ?? []) as RoutingVenueSource[]);
   return NextResponse.json(resolved);

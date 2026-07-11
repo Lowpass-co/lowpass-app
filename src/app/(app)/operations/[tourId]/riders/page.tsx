@@ -50,6 +50,10 @@ export default async function OperationsTourRidersPage({ params }: { params: Pro
     `,
     )
     .eq('tour_id', tour.id)
+    // A6 — this is the RIDERS landing; stage_plot / channel_list packs live in
+    // their own surfaces. Without this filter they leaked into the rider list
+    // (e.g. "… Stage Plot" showing as a rider). Mirrors the artist riders page.
+    .eq('kind', 'rider')
     .order('updated_at', { ascending: false });
 
   const { data: artists } = await supabase.from('artists').select('id, name').eq('workspace_id', profile.workspace_id);

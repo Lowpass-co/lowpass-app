@@ -116,12 +116,6 @@ export function TourFilesClient({ initial }: { initial: FileVm[] }) {
         emptyState="No files for these filters yet."
       />
 
-      <p className="text-[11px] text-lp-text-tertiary">
-        Non-registry slide-over:{' '}
-        <code className="rounded bg-lp-bg-tertiary px-1">FileSlideOver</code> is rendered by this page locally (same pattern
-        other tour-scoped file hubs can reuse).
-      </p>
-
       {selected && (
         <FileSlideOver file={selected} onClose={() => setSelected(null)} />
       )}

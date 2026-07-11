@@ -234,10 +234,26 @@ export function RoutingEditor({
     return fetch(`/api/tours/${tourId}/routing`)
       .then((res) => res.json())
       .then((data) => {
-        const list = Array.isArray(data) ? data : [];
+        // A1 — the default GET returns a bare array; accept a `{ routing }` wrap
+        // too (the lite shape) so a future shape change can't silently blank the
+        // grid. If it's neither, log the payload rather than swallowing it — the
+        // empty-render regression went undiagnosed because this path failed quiet.
+        type ExistingRows = Parameters<typeof buildInitialRows>[2];
+        const wrapped = (data as { routing?: unknown } | null)?.routing;
+        const list: ExistingRows = Array.isArray(data)
+          ? (data as ExistingRows)
+          : Array.isArray(wrapped)
+            ? (wrapped as ExistingRows)
+            : [];
+        if (!Array.isArray(data) && !Array.isArray(wrapped)) {
+          console.error('[RoutingEditor] routing GET returned a non-array payload:', data);
+        }
         setRows(buildInitialRows(startDate, endDate, list));
       })
-      .catch(() => setRows(buildInitialRows(startDate, endDate, [])));
+      .catch((e) => {
+        console.error('[RoutingEditor] routing GET failed:', e);
+        setRows(buildInitialRows(startDate, endDate, []));
+      });
   }, [tourId, startDate, endDate]);
 
   useEffect(() => {
