@@ -198,13 +198,14 @@ export default async function OperationsTourRoutingPage({
           </div>
         ) : null}
 
-        {/* Hero-scale tour fingerprint (mount #3) — the tour at a glance above
-            the grid, with week-commencing markers. */}
+        {/* §C4 — full-width hero day-strip: the tour at a glance above the grid,
+            spanning the page width (fill) with week-commencing markers. */}
         {canRead && fingerprintDays.length > 0 ? (
           <div style={{ marginBottom: 'var(--lp-space-4)' }}>
             <TourFingerprint
               days={fingerprintDays}
               size="hero"
+              fill
               weekMarkers
               highlightDate={nextShowDate}
               ariaLabel={`${tourRow.name} day strip`}

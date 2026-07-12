@@ -144,11 +144,15 @@ function TravelBox({
     (primaryTransit === 'car' || primaryTransit === 'bus_van' || primaryTransit === 'bus_trailer');
 
   useEffect(() => {
+    // Legit fetch-then-setState effect: seed loading state, then resolve the
+    // async drive-time. The direct seeds are intentional, not a render loop.
+    /* eslint-disable react-hooks/set-state-in-effect */
     if (!useGoogleDrive) {
       setDriveHours(null);
       return;
     }
     setDriveLoading(true);
+    /* eslint-enable react-hooks/set-state-in-effect */
     const origin = `${row.latitude},${row.longitude}`;
     const dest = `${nextRow.latitude},${nextRow.longitude}`;
     fetch(`/api/directions?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(dest)}`)
@@ -192,7 +196,9 @@ function TravelBox({
       className="inline-flex items-center gap-2 rounded-lg border border-lp-border bg-lp-surface px-2 py-1 text-sm hover:bg-lp-surface-hover hover:border-lp-border-light transition-colors cursor-pointer"
       style={{ transitionTimingFunction: 'cubic-bezier(0.4, 0, 0.2, 1)' }}
     >
-      <Icon className="h-3.5 w-3.5 shrink-0" style={{ color: travelColor }} />
+      {/* §C4 — single NEUTRAL method icon; the drive time keeps the semantic
+          colour so the over-limit signal isn't lost. */}
+      <Icon className="h-3.5 w-3.5 shrink-0" style={{ color: 'var(--lp-text-tertiary)' }} />
       {showLoading ? (
         <span className="text-lp-text-tertiary">…</span>
       ) : (
@@ -251,7 +257,10 @@ export function RoutingGrid({
       <table className="w-full min-w-[640px] text-sm">
         <thead>
           <tr className="border-y border-lp-border bg-lp-bg-secondary">
-            {(['Date', 'Venue', 'City', 'Country', 'Address', 'Day', 'Notes', 'Transport'] as const).map((h) => (
+            {/* §C4 — DATE · DAY · VENUE · CITY · COUNTRY · ADDRESS · NOTES ·
+                TRANSIT. Day moves up beside the date (it sets the row's meaning);
+                Country is kept beside City. */}
+            {(['Date', 'Day', 'Venue', 'City', 'Country', 'Address', 'Notes', 'Transport'] as const).map((h) => (
               <th key={h} className={cn(cellPadX, cellPadY, 'text-left text-[10px] font-semibold uppercase tracking-widest lp-table-header-text')}>
                 {h}
               </th>
@@ -371,6 +380,14 @@ function RoutingRowWithMenu({
             {formatRoutingDateShort(row.date)}
           </div>
         </td>
+        {/* Day (type) — §C4: sits right after the date. */}
+        <td className={cn(cellPadX, cellPadY)}>
+          <DayTypeDropdown
+            value={row.day_type ?? ''}
+            onChange={(v) => updateRow(rowIndex, { day_type: v })}
+            customTypes={customDayTypes}
+          />
+        </td>
         {/* Venue — library-first autocomplete + linked marker */}
         <td className={cn(cellPadX, cellPadY)}>
           <div className="flex items-center gap-1.5">
@@ -448,14 +465,6 @@ function RoutingRowWithMenu({
             onChange={(e) => updateRow(rowIndex, { address: e.target.value })}
             placeholder="Address"
             className="w-full min-w-[100px] rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:border-lp-orange focus:outline-none focus:ring-2 focus:ring-lp-orange/20"
-          />
-        </td>
-        {/* Day (type) */}
-        <td className={cn(cellPadX, cellPadY)}>
-          <DayTypeDropdown
-            value={row.day_type ?? ''}
-            onChange={(v) => updateRow(rowIndex, { day_type: v })}
-            customTypes={customDayTypes}
           />
         </td>
         {/* Notes */}

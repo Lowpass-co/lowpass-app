@@ -306,13 +306,23 @@ export function TourFingerprint({
         })}
       </div>
 
-      {/* Week-commencing markers (hero / tour scale). */}
+      {/* Week-commencing markers (hero / tour scale). Spacers mirror the tick
+          sizing so labels stay aligned — including fill mode's flexed ticks. */}
       {showWeeks && weekLabels.length > 1 ? (
-        <div style={{ display: 'flex', gap: spec.gap, position: 'relative', height: 12 }}>
+        <div style={{ display: 'flex', gap: spec.gap, position: 'relative', height: 12, width: fill ? '100%' : undefined }}>
           {days.map((_, i) => {
             const mark = weekLabels.find((w) => w.index === i);
             return (
-              <span key={i} style={{ width: spec.width, flexShrink: 0, position: 'relative' }}>
+              <span
+                key={i}
+                style={{
+                  width: fill ? undefined : spec.width,
+                  flex: fill ? '1 1 0' : undefined,
+                  minWidth: fill ? 0 : undefined,
+                  flexShrink: fill ? 1 : 0,
+                  position: 'relative',
+                }}
+              >
                 {mark ? (
                   <span
                     className="lp-mono"
