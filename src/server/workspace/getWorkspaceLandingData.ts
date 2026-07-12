@@ -27,6 +27,7 @@ import {
 } from '@/lib/artists/imageUrl';
 import { resolveVenue, type RoutingVenueSource } from '@/lib/venues/resolveVenue';
 import { computeNeedsYou, type NeedsYouItem } from './computeNeedsYou';
+import { countInPlanning, countOnTourNow, type DeriveTour } from '@/lib/derive/tourStatus';
 
 /** A day tick for the card-scale <TourFingerprint> — date + free-text day_type.
  *  Venue is not carried at card scale (kept light + venue-guardrail-clean). */
@@ -439,9 +440,13 @@ export async function getWorkspaceLandingData(
     }
   }
 
-  // Stats.
-  const activeTourCount = tourRows.filter((t) => t.status === 'active').length;
-  const planningTourCount = tourRows.filter((t) => t.status === 'planning').length;
+  // Stats — A3: date-derived via the single tourStatus module, NOT the DB status
+  // string. Counting `status === 'planning'` counted ended tours that were never
+  // moved off 'planning' (the "9 IN PLANNING" bug). on-tour = today ∈ [start,end];
+  // in-planning = future/unlocked only (never ended).
+  const derivToday = new Date().toISOString().slice(0, 10);
+  const activeTourCount = countOnTourNow(tourRows as DeriveTour[], derivToday);
+  const planningTourCount = countInPlanning(tourRows as DeriveTour[], derivToday);
   const showsThisMonth = monthRoutingRes.count ?? 0;
   const budgetCommitted = budgetLines.reduce(
     (sum, l) => sum + (Number(l.proposed_cost) || 0),

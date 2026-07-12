@@ -18,6 +18,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { resolveVenue, type RoutingVenueSource } from '@/lib/venues/resolveVenue';
+import { nextShow as deriveNextShow, type DeriveRoutingDay } from '@/lib/derive/tourStatus';
 
 export interface ReadinessActivityRow {
   id: string;
@@ -263,7 +264,12 @@ export async function getOperationsReadiness(
       venue_name: r.venue_name,
       venue_capacity: r.venue_capacity,
     }));
-  const nextShowDate = upcomingShows[0]?.date ?? null;
+  // A3 — nextShow via the single derivation module (Show-Day filtered). The
+  // count/filter here is already correct; the "none upcoming with 11 shows" the
+  // audit saw is the A1 canonical-embed read fragility (routing came back empty),
+  // not this logic.
+  const nextShowDate =
+    deriveNextShow(routing as unknown as DeriveRoutingDay[], todayIso)?.date ?? null;
 
   const recentActivity = auditRows.map((a) => ({
     id: a.id,
