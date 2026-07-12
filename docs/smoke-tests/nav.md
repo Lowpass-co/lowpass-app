@@ -78,6 +78,72 @@ listAppPageShell) — the page no longer wraps itself in a second
 
 **Last verified**:
 
+## Stage B — grouped single-row nav
+
+> The two-bar nav (4-product filled-pill row + flat 8-tab Operations bar) is
+> replaced by one grouped row. NAV-08 is the chrome-hydration test in
+> `visual.md`; Stage-B nav IDs start at NAV-09.
+
+#### NAV-09 — Grouped top row on the tour tier
+
+**Do**: Open any tour surface (`/operations/{t}/routing`, `/budget/{t}`,
+`/advance/{t}/…`).
+
+**Expect**: ONE nav row reading `Routing | $ Budget · ⧉ Advance | Crew ·
+Production · Files` — hairline dividers between the three clusters, the `$`
+(DollarSign) and `⧉` (ClipboardList) icons ONLY on Budget and Advance, and the
+active group marked by an **orange underline** (never a filled orange pill). No
+second global tab bar. Settings gear sits at the far right.
+
+**Last verified**:
+
+#### NAV-10 — Active group derived from the pathname
+
+**Do**: Walk `/operations/{t}/payroll`, then `/operations/{t}/channel-list`,
+then `/budget/{t}`, then `/advance/{t}/{routingId}`.
+
+**Expect**: The underlined group tracks the URL — Crew on payroll, Production on
+channel-list, Budget on budget, Advance on advance. No page passes an `active`
+prop; the highlight follows `activeNavGroup(pathname)`.
+
+**Last verified**:
+
+#### NAV-11 — Group segmented control (Crew / Production only)
+
+**Do**: Visit a Crew page (Personnel / Payroll / Rooming), a Production page
+(Channel list / Stage plot / Riders), then Routing and Files.
+
+**Expect**: Crew shows a segmented control `[ Personnel · Payroll · Rooming ]`;
+Production shows `[ Channel list · Stage plot · Riders ]` (active segment tinted
+orange). Routing (the landing, which absorbs the old Summary) and Files show NO
+second bar — the top row is their only nav. Members the caller can't read are
+dropped; a group with <2 readable members shows no control.
+
+**Last verified**:
+
+#### NAV-12 — Artist tier has no product nav
+
+**Do**: Open `/artists/{id}` (artist home) and its library surfaces.
+
+**Expect**: No product nav row at all — chrome is the workspace/artist switcher
+pills + account menu, and the page's own Tours / Production / Business tabs are
+the only navigation. (The grouped row is tour-scoped: `selectedTourId` is
+URL-derived and null on artist/workspace URLs, so `TopProductNav` renders
+nothing.)
+
+**Last verified**:
+
+#### NAV-13 — Advance-day breadcrumb carries the show
+
+**Do**: Open a per-show Advance surface (`/advance/{t}/{routingId}`).
+
+**Expect**: The Build / Advance / Share switcher shows a breadcrumb tail with
+the show (venue/city) + date before the tabs, and the artist + tour read from
+the persistent header pills — together the full `Artist / Tour / Date · show`
+chain. Advance is the underlined group on the top row.
+
+**Last verified**:
+
 ## Known good (no code change — verified NO-OPs)
 
 - **/gear** — NOT deleted. `/gear` is the canonical Gear Library (`gear`

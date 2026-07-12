@@ -3,12 +3,13 @@
 
    /operations/[tourId]/routing — replaces the placeholder.
    Renders <RoutingEditor> wrapped in:
-     - <OperationsSubNav> (filtered by per-resource read access).
+     - the grouped top nav (Routing active) + Stage-B group sub-nav
+       from the operations layout (Routing is a single-page landing,
+       so no second bar shows here).
      - "Last edit" line from audit_log (Sprint 10's audit surface
        will replace this with a richer view).
      - 403 panel when the caller has no read access for
-       operations.routing — sub-nav stays visible so the user
-       can navigate sideways to surfaces they can access.
+       operations.routing.
 
    Permission gate is page-level (TS port of can_access). RLS at
    the DB layer is the second line of defense — even if this

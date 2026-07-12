@@ -22,11 +22,9 @@
 import type { ReactNode } from 'react';
 import { notFound } from 'next/navigation';
 import { ProductShell } from '@/components/shell-v2';
-import { TourIdentityChip } from '@/components/shell-v2/TourIdentityChip';
 import { TourVisitTracker } from '@/components/shell-v2/TourVisitTracker';
-import { OperationsSubNavClient } from '@/components/operations/OperationsSubNavClient';
+import { OperationsGroupSubNav } from '@/components/operations/OperationsGroupSubNav';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
-import { resolveArtistLogoUrl } from '@/lib/artists/imageUrl';
 import {
   canAccess,
   fetchActiveGrants,
@@ -82,57 +80,21 @@ export default async function OperationsTourLayout({
     artist_id: string | null;
   };
 
-  // Fix 3 — only the artist identity is needed now (for the context
-  // band's TourIdentityChip); the routing-count / crew stats fed the
-  // retired TourHeader.
-  const { data: artistData } = tourRow.artist_id
-    ? await supabase
-        .from('artists')
-        .select('id, name, branding, spotify_id, spotify_image_url')
-        .eq('id', tourRow.artist_id)
-        .maybeSingle()
-    : { data: null };
-
-  const artistRow = artistData as {
-    id: string;
-    name: string;
-    branding: unknown;
-    spotify_id: string | null;
-    spotify_image_url: string | null;
-  } | null;
-
-  const artistLogoUrl = artistRow
-    ? await resolveArtistLogoUrl(artistRow)
-    : null;
-
-  /* Sprint 9 §14.11 — build sub-nav links once at the layout
-     level. Summary entry leads, then each sub-page link gated
-     by per-resource read access. Layout fetches membership +
-     grants now (was per-page); the page-level constructions
-     can drop their own SUB_NAV mounts but leaving them in
-     place is harmless — the layout's instance is the
-     persistent one and renders identical chrome regardless. */
+  /* Stage B — the sub-nav is now a group-scoped segmented control (Crew /
+     Production only), so the layout no longer needs artist identity for a
+     context band; tour identity persists in the header's switcher pills.
+     Access-gate each ops sub-page by per-resource read access — the segmented
+     control drops any member the caller can't read. */
   const membership = user ? await getActiveMembership(supabase, user.id) : null;
   const grants = membership && user ? await fetchActiveGrants(supabase, membership, user.id) : [];
-  const subNavLinks = [
-    {
-      id: 'summary',
-      label: 'Summary',
-      // Design pass §9 · TR-01 — the summary surface moved off the tour root
-      // (now a redirect to Routing) to /operations/[tourId]/summary.
-      slug: 'summary',
-      href: `/operations/${tourId}/summary`,
-      visible: true,
-    },
-    ...SUB_NAV.map((s) => ({
-      id: s.id,
-      label: s.label,
-      slug: s.slug,
-      visible: membership
-        ? canAccess(membership, grants, 'page', s.resource_id, 'read')
-        : false,
-    })),
-  ];
+  const subNavLinks = SUB_NAV.map((s) => ({
+    id: s.id,
+    label: s.label,
+    slug: s.slug,
+    visible: membership
+      ? canAccess(membership, grants, 'page', s.resource_id, 'read')
+      : false,
+  }));
 
   return (
     <ProductShell
@@ -140,22 +102,8 @@ export default async function OperationsTourLayout({
       artistId={tourRow.artist_id}
       tourId={tourId}
       productName="Operations"
-      subNav={
-        <OperationsSubNavClient
-          tourId={tourId}
-          links={subNavLinks}
-          leftSlot={
-            <TourIdentityChip
-              artistName={artistRow?.name ?? null}
-              artistLogoUrl={artistLogoUrl}
-              tourName={tourRow.name}
-            />
-          }
-        />
-      }
+      subNav={<OperationsGroupSubNav tourId={tourId} links={subNavLinks} />}
     >
-      {/* Fix 3 — tour identity moved into the sub-nav band (one context
-          band), collapsing the separate TourHeader layer. */}
       <TourVisitTracker tourId={tourId} />
       {children}
     </ProductShell>

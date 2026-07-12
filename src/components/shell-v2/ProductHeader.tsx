@@ -69,7 +69,6 @@ type SwitcherArtistMin = {
 export async function ProductHeader({
   productName,
   active = null,
-  homeHref,
 }: ProductHeaderProps) {
   const supabase = await createServerSupabaseClient();
 
@@ -146,7 +145,7 @@ export async function ProductHeader({
             neutral surfaces (Settings / Venues / Bugs, active=null) the
             product name still shows so the header reads as the
             destination. */}
-        <TopProductNav active={active} homeHref={homeHref} />
+        <TopProductNav />
         {active === null ? (
           <span
             style={{
