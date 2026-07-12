@@ -59,7 +59,11 @@ export interface ReadinessPendingShow {
 
 export interface OperationsReadiness {
   shows: { count: number; nextShowDate: string | null };
+  /** §C4 — advances complete vs total show days (the routing landing rail). */
+  advances: { done: number; total: number };
   crew: { count: number; excludePersonIds: string[] };
+  /** §C4 — committed spend (sum of budget_line_items.proposed_cost) + currency. */
+  budget: { committed: number; currency: string };
   conflicts: { count: number };
   pending: {
     awaitingContract: ReadinessPendingPersonnel[];
@@ -309,9 +313,30 @@ export async function getOperationsReadiness(
 
   const excludePersonIds = Array.from(new Set(tourPersonnel.map((tp) => tp.person_id)));
 
+  // §C4 — readiness rail extras: Advances (complete vs total show days) + Budget
+  // (committed spend + display currency). Bounded queries keyed by this tour.
+  const showRoutingIds = showRows.map((r) => r.id);
+  const [advanceRes, budgetRes, workspaceRes] = await Promise.all([
+    showRoutingIds.length > 0
+      ? supabase.from('advance_instances').select('routing_id, status').in('routing_id', showRoutingIds)
+      : Promise.resolve({ data: [] as Array<{ routing_id: string; status: string | null }> }),
+    supabase.from('budget_line_items').select('proposed_cost').eq('tour_id', tourId),
+    supabase.from('workspaces').select('currency').eq('id', workspaceId).maybeSingle(),
+  ]);
+  const advancesDone = ((advanceRes.data ?? []) as Array<{ status: string | null }>).filter(
+    (a) => a.status === 'complete',
+  ).length;
+  const budgetCommitted = ((budgetRes.data ?? []) as Array<{ proposed_cost: number | null }>).reduce(
+    (sum, l) => sum + (Number(l.proposed_cost) || 0),
+    0,
+  );
+  const budgetCurrency = (workspaceRes.data as { currency?: string | null } | null)?.currency ?? 'GBP';
+
   return {
     shows: { count: showRows.length, nextShowDate },
+    advances: { done: advancesDone, total: showRows.length },
     crew: { count: tourPersonnel.length, excludePersonIds },
+    budget: { committed: budgetCommitted, currency: budgetCurrency },
     conflicts: { count: conflictCount },
     pending: { awaitingContract, tentative, showsWithoutVenue },
     recentActivity,

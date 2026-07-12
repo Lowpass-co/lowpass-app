@@ -16,7 +16,7 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { MapPin, Users, AlertTriangle, ListChecks } from 'lucide-react';
+import { Route, ClipboardCheck, Users, AlertTriangle, ListChecks, DollarSign } from 'lucide-react';
 import { parseRoutingDate } from '@/lib/utils';
 import { toTitleCase } from '@/lib/text/toTitleCase';
 import type { OperationsReadiness } from '@/server/operations/getOperationsReadiness';
@@ -27,14 +27,26 @@ function formatShowDate(iso: string | null): string {
   return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 }
 
+const CURRENCY_SYMBOL: Record<string, string> = { GBP: '£', USD: '$', EUR: '€', AUD: 'A$', CAD: 'C$' };
+function abbrevCommitted(value: number, currency: string): string {
+  const sym = CURRENCY_SYMBOL[currency.toUpperCase()] ?? `${currency} `;
+  const abs = Math.abs(value);
+  if (abs >= 1_000_000) return `${sym}${(value / 1_000_000).toFixed(1)}M`;
+  if (abs >= 1_000) return `${sym}${Math.round(value / 1_000)}K`;
+  return `${sym}${Math.round(value)}`;
+}
+
 export function RoutingReadinessRail({
   tourId,
   readiness,
 }: {
   tourId: string;
-  readiness: Pick<OperationsReadiness, 'shows' | 'crew' | 'conflicts' | 'pending'>;
+  readiness: Pick<
+    OperationsReadiness,
+    'shows' | 'advances' | 'crew' | 'budget' | 'conflicts' | 'pending'
+  >;
 }) {
-  const { shows, crew, conflicts, pending } = readiness;
+  const { shows, advances, crew, budget, conflicts, pending } = readiness;
   const [pendingOpen, setPendingOpen] = useState(false);
   const pendingCount =
     pending.awaitingContract.length +
@@ -50,18 +62,27 @@ export function RoutingReadinessRail({
         borderBottom: '1px solid var(--lp-border-subtle)',
       }}
     >
+      {/* §C4 — Routing · Advances · Crew · Budget (real counts). Conflicts stays
+          conditional (safety) and Pending keeps its inline review expander. */}
       <div className="flex flex-wrap items-stretch">
         <Metric
-          icon={<MapPin size={14} strokeWidth={2} />}
-          label="Shows"
+          icon={<Route size={14} strokeWidth={2} />}
+          label="Routing"
           value={String(shows.count)}
           sub={
             shows.nextShowDate
               ? `next ${formatShowDate(shows.nextShowDate)}`
-              : 'none upcoming'
+              : 'no shows yet'
           }
-          href={`/operations/${tourId}/summary`}
+          href={`/operations/${tourId}/routing`}
           first
+        />
+        <Metric
+          icon={<ClipboardCheck size={14} strokeWidth={2} />}
+          label="Advances"
+          value={`${advances.done}/${advances.total}`}
+          sub={advances.total === 0 ? 'no shows yet' : advances.done === advances.total ? 'all complete' : 'complete'}
+          href={`/advance/${tourId}`}
         />
         <Metric
           icon={<Users size={14} strokeWidth={2} />}
@@ -69,6 +90,13 @@ export function RoutingReadinessRail({
           value={String(crew.count)}
           sub="assigned"
           href={`/operations/${tourId}/personnel`}
+        />
+        <Metric
+          icon={<DollarSign size={14} strokeWidth={2} />}
+          label="Budget"
+          value={abbrevCommitted(budget.committed, budget.currency)}
+          sub="committed"
+          href={`/budget/${tourId}`}
         />
         {conflicts.count > 0 ? (
           <Metric
