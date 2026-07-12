@@ -26,6 +26,7 @@ import { cn, parseRoutingDate } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { isMonoFieldType } from './FieldTypeIcon';
 import { EditableFieldValue, isEditableFieldType } from './EditableFieldValue';
+import { StartAdvancePanel } from './StartAdvancePanel';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -1317,14 +1318,18 @@ export function AdvanceShowReadView({
   }, []);
 
   if (error && !loading) {
-    return (
-      <div
-        className="p-8 text-sm"
-        style={{ color: 'var(--color-lp-error)' }}
-      >
-        Failed to load: {error}
-      </div>
-    );
+    // A2 (ADV-40) — no raw "Failed to load: 404". A missing advance_instance is
+    // the common case (lazy creation): show the invitation to start it, which
+    // seeds from the tour's default template then reloads. The public read-only
+    // surface has no create rights, so it keeps a neutral message.
+    if (publicReadOnly) {
+      return (
+        <div className="p-8 text-sm" style={{ color: 'var(--lp-text-secondary)' }}>
+          This advance isn&apos;t available yet.
+        </div>
+      );
+    }
+    return <StartAdvancePanel tourId={tourId} routingId={routingId} onStarted={load} />;
   }
 
   return (

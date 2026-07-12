@@ -8,6 +8,7 @@
 
 import { useState, useEffect, useCallback, useRef, Fragment, createContext, useContext } from 'react';
 import Link from 'next/link';
+import { StartAdvancePanel } from './StartAdvancePanel';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ChevronDown,
@@ -176,12 +177,17 @@ export function AdvanceSectionBuilder({
     );
   }
   if (error || !data) {
+    // A2 (ADV-40) — no raw "Advance not found.". Advances are created lazily, so
+    // offer to start this one (seeds from the tour's default template) instead of
+    // dead-ending. A full reload re-mounts the builder against the new instance.
     return (
-      <div className="rounded-xl border border-lp-border bg-lp-surface p-8 text-center">
-        <p className="text-lp-text-secondary">Advance not found.</p>
-        <Link href={`/advance/${tourId}`} className="mt-4 inline-block text-sm text-lp-orange hover:text-lp-orange-hover">
-          Back to advance overview
-        </Link>
+      <div>
+        <StartAdvancePanel tourId={tourId} routingId={routingId} onStarted={() => window.location.reload()} />
+        <div className="text-center">
+          <Link href={`/advance/${tourId}`} className="inline-block text-sm text-lp-text-secondary hover:text-lp-text">
+            Back to advance overview
+          </Link>
+        </div>
       </div>
     );
   }
