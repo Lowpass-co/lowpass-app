@@ -27,7 +27,14 @@ import {
 } from '@/lib/artists/imageUrl';
 import { resolveVenue, type RoutingVenueSource } from '@/lib/venues/resolveVenue';
 import { computeNeedsYou, type NeedsYouItem } from './computeNeedsYou';
-import { countInPlanning, countOnTourNow, type DeriveTour } from '@/lib/derive/tourStatus';
+import {
+  countInPlanning,
+  countOnTourNow,
+  nextShow as deriveNextShow,
+  tourStatusLine,
+  type DeriveTour,
+  type DeriveRoutingDay,
+} from '@/lib/derive/tourStatus';
 
 /** A day tick for the card-scale <TourFingerprint> — date + free-text day_type.
  *  Venue is not carried at card scale (kept light + venue-guardrail-clean). */
@@ -50,6 +57,11 @@ export interface WorkspaceLandingArtist {
   /** Routing days of the artist's featured (nearest-upcoming) tour, for the
    *  card-scale fingerprint. Empty when the artist has no dated routing. */
   fingerprint: WorkspaceLandingFingerprintDay[];
+  /** Derived status line (verb + time anchor, §8): "Rehearsals in 65 days" /
+   *  "First show in N days" / "Tour running · day 3 of 21" / "Planning · dates
+   *  not locked". Derived through lib/derive/tourStatus so it agrees with the
+   *  Needs-you queue + header stats. Null when the artist has no featured tour. */
+  statusLine: string | null;
   /** Derived footer action (verb + href) — no mood words (§8). */
   action: { label: string; href: string };
 }
@@ -191,14 +203,17 @@ export async function getWorkspaceLandingData(
       .eq('workspace_id', workspaceId)
       .order('start_date', { ascending: false }),
     supabase
-      // UX-walk §A.2 — "Next show" must be the first SHOW DAY, not the first
-      // routing row (which may be a day off / travel / rehearsal).
+      // Stage C · ITEM 0 — fetch ALL upcoming dated routing rows (any day_type)
+      // and derive the next SHOW in JS via lib/derive/tourStatus. The prior
+      // `.in('day_type', ['show','festival'])` was an EXACT-string filter on a
+      // free-text, CSV-capable column: a real "show,festival" / "Show" / a
+      // composite day silently failed the match → nextShow null → the card read
+      // "Nothing booked" beside a Needs-you row that said "rehearsals in N days"
+      // (which tokenizes day_type). One predicate now: tourStatus.isShowDay.
       // Venue SSOT — join canonical + discriminators so nextShow.venue/city
-      // resolve live-vs-frozen (this loader is being rebuilt for the design pass,
-      // so the venue conversion is now in scope).
+      // resolve live-vs-frozen.
       .from('routing')
       .select('id, tour_id, date, day_type, city, country, address, venue_name, venue_phone, venue_website, venue_capacity, venue_frozen_at, canonical_venue_id, canonical:canonical_venues(id, name, address, city, country, capacity)')
-      .in('day_type', ['show', 'festival'])
       .gte('date', new Date().toISOString().slice(0, 10))
       .order('date', { ascending: true }),
     supabase
@@ -286,17 +301,20 @@ export async function getWorkspaceLandingData(
     const { data: plain } = await supabase
       .from('routing')
       .select('id, tour_id, date, day_type, city, country, address, venue_name, venue_phone, venue_website, venue_capacity, venue_frozen_at, canonical_venue_id')
-      .in('day_type', ['show', 'festival'])
       .gte('date', new Date().toISOString().slice(0, 10))
       .order('date', { ascending: true });
     // Plain rows lack the joined `canonical`; resolveVenue falls back to the
     // routing.venue_* snapshot, so the cast is safe.
     upcomingRoutingData = plain as typeof upcomingRoutingData;
   }
-  const upcomingRaw = (upcomingRoutingData ?? []) as Array<RoutingVenueSource & { tour_id: string; date: string }>;
+  const upcomingRaw = (upcomingRoutingData ?? []) as Array<
+    RoutingVenueSource & { tour_id: string; date: string; day_type: string | null }
+  >;
+  // ALL upcoming dated rows (any day_type) with resolved venue/city; the SHOW
+  // filter happens in JS via tourStatus so composite/case-variant day types count.
   const upcomingRouting = upcomingRaw.map((r) => {
     const v = resolveVenue(r);
-    return { tour_id: r.tour_id, date: r.date, city: v.city, venue: v.name };
+    return { tour_id: r.tour_id, date: r.date, dayType: r.day_type ?? 'off', city: v.city, venue: v.name };
   });
   const budgetLines = (budgetRes.data ?? []) as Array<{
     proposed_cost: number | null;
@@ -310,11 +328,27 @@ export async function getWorkspaceLandingData(
     list.push(t);
     toursByArtist.set(t.artist_id, list);
   }
+  const todayIso = new Date().toISOString().slice(0, 10);
   const upcomingByTour = new Map<string, typeof upcomingRouting>();
   for (const r of upcomingRouting) {
     const list = upcomingByTour.get(r.tour_id) ?? [];
     list.push(r);
     upcomingByTour.set(r.tour_id, list);
+  }
+
+  // Nearest upcoming SHOW per tour — derived via lib/derive/tourStatus (which
+  // tokenizes the CSV day_type), NOT a raw `[0]` of the upcoming rows (that would
+  // pick the first day off / travel / rehearsal). The row on that date carries
+  // the resolved city/venue for the footer.
+  const nextShowByTour = new Map<string, { date: string; city: string | null; venue: string | null }>();
+  for (const [tourId, rows] of upcomingByTour) {
+    const ns = deriveNextShow(
+      rows.map((r) => ({ date: r.date, day_type: r.dayType })) as DeriveRoutingDay[],
+      todayIso,
+    );
+    if (!ns) continue;
+    const row = rows.find((r) => r.date.slice(0, 10) === ns.date) ?? null;
+    nextShowByTour.set(tourId, { date: ns.date, city: row?.city ?? null, venue: row?.venue ?? null });
   }
 
   // Featured tour per artist = the tour of the nearest upcoming show; else the
@@ -325,8 +359,8 @@ export async function getWorkspaceLandingData(
     const artistTours = toursByArtist.get(a.id) ?? [];
     let best: { tourId: string; date: string } | null = null;
     for (const t of artistTours) {
-      const first = (upcomingByTour.get(t.id) ?? [])[0];
-      if (first && (!best || first.date < best.date)) best = { tourId: t.id, date: first.date };
+      const ns = nextShowByTour.get(t.id);
+      if (ns && (!best || ns.date < best.date)) best = { tourId: t.id, date: ns.date };
     }
     const featured = best?.tourId ?? artistTours.find((t) => t.status === 'active')?.id ?? artistTours[0]?.id;
     if (featured) featuredTourByArtist.set(a.id, featured);
@@ -373,19 +407,32 @@ export async function getWorkspaceLandingData(
       }
       monthsUpcoming = Math.max(0, Math.min(24, monthsUpcoming));
 
-      // Next show across all this artist's tours (city + resolved venue).
+      // Next show across all this artist's tours — the nearest per-tour show
+      // derived through tourStatus (nextShowByTour), NOT the first upcoming row.
       let nextShow: WorkspaceLandingArtist['nextShow'] = null;
       for (const t of artistTours) {
-        const list = upcomingByTour.get(t.id) ?? [];
-        if (list.length === 0) continue;
-        const first = list[0];
-        if (!nextShow || first.date < nextShow.date) {
-          nextShow = { date: first.date, city: first.city, venue: first.venue };
+        const ns = nextShowByTour.get(t.id);
+        if (!ns) continue;
+        if (!nextShow || ns.date < nextShow.date) {
+          nextShow = { date: ns.date, city: ns.city, venue: ns.venue };
         }
       }
 
       const featuredTourId = featuredTourByArtist.get(a.id) ?? null;
       const fingerprint = featuredTourId ? fingerprintByTour.get(featuredTourId) ?? [] : [];
+      // Derived status line (§8) via tourStatus — the featured tour + its full
+      // routing days. Agrees with the Needs-you queue + header stats because it
+      // shares the same day_type tokenizer. "Rehearsals in 65 days" / "First show
+      // in N days" / "Tour running · day X of Y" / "Planning · dates not locked".
+      const featuredTour = featuredTourId
+        ? artistTours.find((t) => t.id === featuredTourId) ?? null
+        : null;
+      const featuredDays: DeriveRoutingDay[] = (
+        featuredTourId ? fingerprintByTour.get(featuredTourId) ?? [] : []
+      ).map((d) => ({ date: d.date, day_type: d.dayType }));
+      const statusLine = featuredTour
+        ? tourStatusLine(featuredTour as DeriveTour, featuredDays, todayIso)
+        : null;
       // Derived footer action (§8 — verb + scope, no mood words).
       const action: WorkspaceLandingArtist['action'] =
         nextShow && featuredTourId
@@ -404,6 +451,7 @@ export async function getWorkspaceLandingData(
         monthsUpcoming,
         nextShow,
         fingerprint,
+        statusLine,
         action,
       };
     }),
@@ -460,9 +508,8 @@ export async function getWorkspaceLandingData(
   // string. Counting `status === 'planning'` counted ended tours that were never
   // moved off 'planning' (the "9 IN PLANNING" bug). on-tour = today ∈ [start,end];
   // in-planning = future/unlocked only (never ended).
-  const derivToday = new Date().toISOString().slice(0, 10);
-  const activeTourCount = countOnTourNow(tourRows as DeriveTour[], derivToday);
-  const planningTourCount = countInPlanning(tourRows as DeriveTour[], derivToday);
+  const activeTourCount = countOnTourNow(tourRows as DeriveTour[], todayIso);
+  const planningTourCount = countInPlanning(tourRows as DeriveTour[], todayIso);
   const showsThisMonth = monthRoutingRes.count ?? 0;
   const budgetCommitted = budgetLines.reduce(
     (sum, l) => sum + (Number(l.proposed_cost) || 0),

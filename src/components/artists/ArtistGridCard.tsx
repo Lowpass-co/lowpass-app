@@ -198,13 +198,30 @@ export function ArtistGridCard({
                 ariaLabel={`${artist.name} tour day strip`}
               />
             </div>
-          ) : (
+          ) : null}
+
+          {/* Derived status line (§8) — "Rehearsals in 65 days" / "First show in
+              N days" / "Tour running · day X of Y". Shares tourStatus with the
+              Needs-you queue, so it never disagrees with the footer. Falls back to
+              the active/months summary only when there's no featured tour. */}
+          {artist.statusLine ? (
+            <div
+              className="truncate"
+              style={{
+                fontSize: 'var(--lp-text-xs)',
+                fontWeight: 'var(--lp-weight-medium)',
+                color: 'var(--lp-text-secondary)',
+              }}
+            >
+              {artist.statusLine}
+            </div>
+          ) : artist.fingerprint.length === 0 ? (
             <div style={{ fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text-tertiary)' }}>
               <span className="lp-mono">{artist.activeTourCount}</span> active ·{' '}
               <span className="lp-mono">{artist.monthsUpcoming}</span>{' '}
               {artist.monthsUpcoming === 1 ? 'month' : 'months'} upcoming
             </div>
-          )}
+          ) : null}
 
           {/* Standardized footer (§8): left = Next: <date> · <city> (or Nothing
               booked), right = derived action verb — same shape on every card. */}
