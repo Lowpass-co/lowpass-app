@@ -91,17 +91,50 @@ export function NetPnlCard({ pnl }: { pnl: BudgetPnl }) {
   const ccy = pnl.currency;
   const net = pnl.net.actual;
   const delta = pnl.net.actual - pnl.net.projected;
-  const marginPct = pnl.grossIncome.actual > 0 ? (net / pnl.grossIncome.actual) * 100 : 0;
   const overheads = pnl.commissions.actual + pnl.insurance.actual + pnl.contingency.actual + pnl.accountancy.actual + pnl.cogs.actual;
   const income = Math.max(0, pnl.grossIncome.actual);
+  const incomeProjected = Math.max(0, pnl.grossIncome.projected);
   const base = Math.max(0, pnl.baseExpenses.actual);
   const oh = Math.max(0, overheads);
+
+  // §C5 planning-state neutrality — the wince. When NO income is booked or
+  // projected, a red "−£net" headline + a slammed orange bar reads as a loss;
+  // it's really a plan with costs entered before income. Render NEUTRAL: the
+  // committed spend as a plain figure, a muted grey bar (no green/orange slam),
+  // and an invitation to add income. No red, no 0%-margin denominator.
+  const hasIncome = income > 0 || incomeProjected > 0;
+
+  if (!hasIncome) {
+    const committed = base + oh;
+    const barTotal = committed || 1;
+    const neutralA = 'color-mix(in srgb, var(--lp-text) 26%, transparent)';
+    const neutralB = 'color-mix(in srgb, var(--lp-text) 14%, transparent)';
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
+          <span className="lp-mono" style={{ fontSize: 30, fontWeight: 600, lineHeight: 1, color: 'var(--lp-text)' }}>{money(committed, ccy)}</span>
+          <span style={{ fontSize: 13, color: 'var(--lp-text-tertiary)' }}>committed · planning</span>
+        </div>
+        <div style={{ display: 'flex', height: 8, borderRadius: 999, overflow: 'hidden', background: 'color-mix(in srgb, var(--lp-text) 6%, transparent)' }}>
+          <div title={`Expenses ${money(base, ccy)}`} style={{ width: `${(base / barTotal) * 100}%`, background: neutralA }} />
+          <div title={`Overheads ${money(oh, ccy)}`} style={{ width: `${(oh / barTotal) * 100}%`, background: neutralB }} />
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--lp-text-tertiary)' }}>
+          Add income to project your margin — expenses so far{' '}
+          <b className="lp-mono" style={{ color: 'var(--lp-text-secondary)' }}>{moneyAbbrev(base, ccy)}</b>
+          {oh > 0 ? <> · overheads <b className="lp-mono" style={{ color: 'var(--lp-text-secondary)' }}>{moneyAbbrev(oh, ccy)}</b></> : null}
+        </div>
+      </div>
+    );
+  }
+
+  const marginPct = income > 0 ? (net / income) * 100 : null;
   const barTotal = income + base + oh || 1;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap' }}>
         <span className="lp-mono" style={{ fontSize: 30, fontWeight: 600, lineHeight: 1, color: posNeg(net) }}>{money(net, ccy)}</span>
-        <span style={{ fontSize: 13, color: 'var(--lp-text-secondary)' }}>{Math.round(marginPct)}% margin</span>
+        <span style={{ fontSize: 13, color: 'var(--lp-text-secondary)' }}>{marginPct == null ? 'margin pending income' : `${Math.round(marginPct)}% margin`}</span>
         <span className="lp-mono" style={{ fontSize: 12, color: posNeg(delta) }}>{delta >= 0 ? '+' : ''}{moneyAbbrev(delta, ccy)} vs projected</span>
       </div>
       <div style={{ display: 'flex', height: 8, borderRadius: 999, overflow: 'hidden', background: 'color-mix(in srgb, var(--lp-text) 6%, transparent)' }}>
@@ -124,7 +157,7 @@ function Dot({ c }: { c: string }) {
 /* ---- 2. expenses-by-section ---- */
 export function ExpensesBySectionCard({ rows, currency }: { rows: SectionExpense[]; currency: string }) {
   const max = rows.reduce((m, r) => Math.max(m, Math.abs(r.actual)), 0) || 1;
-  if (rows.length === 0) return <Empty>No expenses yet.</Empty>;
+  if (rows.length === 0) return <Empty>No expenses yet — add a line to see the breakdown.</Empty>;
   return (
     <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column', gap: 6 }}>
       {rows.map((r) => (
@@ -142,7 +175,7 @@ export function ExpensesBySectionCard({ rows, currency }: { rows: SectionExpense
 
 /* ---- 3. per-show-pnl (income) ---- */
 export function PerShowPnlCard({ rows, currency }: { rows: ShowIncome[]; currency: string }) {
-  if (rows.length === 0) return <Empty>No show income yet.</Empty>;
+  if (rows.length === 0) return <Empty>No show income yet — add a guarantee or deal to project P&amp;L.</Empty>;
   const total = rows.reduce((a, r) => a + r.income, 0);
   const avg = rows.length ? total / rows.length : 0;
   return (
@@ -162,6 +195,16 @@ export function PerShowPnlCard({ rows, currency }: { rows: ShowIncome[]; currenc
 
 /* ---- 4. committed-burn ---- */
 export function CommittedBurnCard({ burn, currency }: { burn: BurnFigures; currency: string }) {
+  // §C5 sensible denominator — with no budget total, "% used" divides by zero and
+  // slams to 100%. Show the committed figure + an invitation instead.
+  if (!(burn.total > 0)) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <span className="lp-mono" style={{ fontSize: 20, fontWeight: 600, color: 'var(--lp-text)' }}>{money(burn.committed || burn.spent, currency)}</span>
+        <span style={{ fontSize: 11, color: 'var(--lp-text-tertiary)' }}>committed so far · set a budget in Settings to track burn</span>
+      </div>
+    );
+  }
   const pct = clampPct(burn.pctUsed);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -187,7 +230,7 @@ export function OverheadsCommissionsCard({ pnl }: { pnl: BudgetPnl }) {
     { label: 'Merch COGS', basePct: pnl.pct.merchCogs, amount: pnl.cogs.actual },
     ...pnl.commissionRows.map((c) => ({ label: c.label, basePct: c.pct, amount: c.actual })),
   ].filter((r) => r.amount !== 0 || (r.basePct ?? 0) !== 0);
-  if (rows.length === 0) return <Empty>No overheads or commissions.</Empty>;
+  if (rows.length === 0) return <Empty>No overheads or commissions — set rates in Settings.</Empty>;
   return (
     <ul style={{ listStyle: 'none', margin: 0, padding: 0, display: 'flex', flexDirection: 'column' }}>
       {rows.map((r) => (

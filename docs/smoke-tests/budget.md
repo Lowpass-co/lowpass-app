@@ -1839,3 +1839,28 @@ src/lib/budget/actualsProvenance.harness.ts` → "18 checks passed, 0 failed".
   NO manual actuals (source NULL) takes the settlement figures directly, no prompt;
   re-settling a settlement-sourced row re-writes with no prompt. Existing invariant
   preserved — settlement never null-stomps a figure it doesn't carry (INT-04).
+
+## Budget Summary — planning-state neutrality (Stage C · §C5)
+
+> Prefix `VIS-BS`. The Summary tab must not read as a loss before income exists.
+> Screenshot the Summary tab in BOTH states: a fresh tour with expenses but no
+> income (planning), and a tour with income + actuals (seeded).
+
+- **VIS-BS-01** (needs-live) Planning net is NEUTRAL: on a tour with expenses
+  entered but NO income (none booked, none projected), the Net P&L hero shows
+  the **committed** figure in neutral text (not a red −£net) with a "committed ·
+  planning" label — no red, no "0% margin".
+- **VIS-BS-02** (needs-live) No slammed orange bar without income: the hero bar in
+  planning is a muted grey expenses/overheads split — the green income segment and
+  the saturated orange are absent until income exists. Caption invites "Add income
+  to project your margin".
+- **VIS-BS-03** (needs-live) Sensible denominators: with income present the margin
+  reads "N% margin"; with none it reads "margin pending income" (never a divide-by-
+  zero 0%). Committed-burn with no budget total shows "set a budget … to track
+  burn", not a false 100% bar.
+- **VIS-BS-04** (needs-live) Invitation empty states: Expenses-by-section, Per-show
+  P&L and Overheads/commissions cards each show an inviting empty line ("add a line
+  … / add a guarantee or deal … / set rates in Settings") when their data is empty.
+- **VIS-BS-05** (needs-live) Seeded state unchanged: once income + actuals exist,
+  the hero returns to the full P&L view (green/orange/blue bar, red net legit when
+  genuinely negative) on the 12-col grid — no regression vs the prior dashboard.
