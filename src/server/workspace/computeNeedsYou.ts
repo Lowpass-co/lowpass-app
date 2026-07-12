@@ -181,6 +181,17 @@ export async function computeNeedsYou(
   }
 
   // Most urgent first: ended-unsettled (negative urgency) → soonest anchors.
-  items.sort((a, b) => a.urgency - b.urgency);
-  return items.slice(0, 8);
+  // Pre-flight — dedupe by id BEFORE slicing so the "N to act on" count can never
+  // exceed the rendered rows. NeedsYouQueue keys each row on item.id, so a
+  // duplicate id (e.g. the same tour appearing twice upstream) silently collapses
+  // to one DOM row while the raw length still counted both — the observed
+  // "8 to act on" over 4 rows. One source now: this deduped list.
+  const seen = new Set<string>();
+  const deduped = items.filter((it) => {
+    if (seen.has(it.id)) return false;
+    seen.add(it.id);
+    return true;
+  });
+  deduped.sort((a, b) => a.urgency - b.urgency);
+  return deduped.slice(0, 8);
 }
