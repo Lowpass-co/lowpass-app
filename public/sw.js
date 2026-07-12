@@ -1,12 +1,23 @@
-/* Lowpass — app shell cache + offline fallback. Version bump on shell changes. */
-const CACHE_NAME = 'lowpass-v1';
-const SHELL_URLS = ['/', '/dashboard', '/offline.html', '/manifest.webmanifest'];
+/* Lowpass — app shell cache + offline fallback. Version bump on shell changes.
+
+   P0 (alignment pass): the previous v1 handled NAVIGATIONS network-first and did
+   `await cache.put(req, res.clone())` before returning the response. For Next's
+   streaming RSC/HTML responses the clone's body only completes when the whole
+   stream (all Suspense) finishes, so awaiting the cache write held the navigation
+   response open — the document painted but never reached idle, site-wide, in
+   production only (the SW persists across deploys, which is why a clean deploy
+   didn't clear it). v2 no longer intercepts navigations at all: HTML/RSC always
+   goes straight to the network, untouched. Only hashed static assets are cached
+   (cache-first, fire-and-forget put — never awaited). CACHE_NAME bump forces the
+   new SW to activate + purge the old cache (including any cached navigations). */
+const CACHE_NAME = 'lowpass-v2';
+const PRECACHE_URLS = ['/offline.html', '/manifest.webmanifest'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) =>
       Promise.all(
-        SHELL_URLS.map((url) =>
+        PRECACHE_URLS.map((url) =>
           cache.add(url).catch(() => {
             /* Precache failures are ignored (e.g. auth redirects). */
           })
@@ -26,51 +37,30 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-/** Full document loads — cache HTML for offline revisit. */
-function isNavigationDocument(request, url) {
-  return (
-    url.origin === self.location.origin &&
-    !url.pathname.startsWith('/api/') &&
-    request.method === 'GET' &&
-    (request.mode === 'navigate' || request.destination === 'document')
-  );
-}
-
 self.addEventListener('fetch', (event) => {
   const req = event.request;
   const url = new URL(req.url);
 
-  if (url.pathname.startsWith('/api/')) {
+  // Never touch API calls or non-GET.
+  if (url.pathname.startsWith('/api/') || req.method !== 'GET') {
     return;
   }
 
-  if (req.method !== 'GET') {
+  // P0 — NEVER intercept navigations / documents. Next streams HTML+RSC; letting
+  // the SW proxy or cache that stream is what held the load open. Pass through to
+  // the network untouched. (Offline navigation fallback is dropped deliberately —
+  // a working online site outranks an offline shell.)
+  if (
+    req.mode === 'navigate' ||
+    req.destination === 'document' ||
+    url.pathname.startsWith('/_next/data/')
+  ) {
     return;
   }
 
-  /* HTML documents — network first, cache successes, offline fallback */
-  if (isNavigationDocument(req, url)) {
-    event.respondWith(
-      (async () => {
-        try {
-          const res = await fetch(req);
-          if (res.ok && res.url.startsWith(self.location.origin)) {
-            const cache = await caches.open(CACHE_NAME);
-            await cache.put(req, res.clone());
-          }
-          return res;
-        } catch {
-          const cachedDoc = await caches.match(req);
-          if (cachedDoc) return cachedDoc;
-          const offlinePage = await caches.match('/offline.html');
-          return offlinePage || new Response('', { status: 503 });
-        }
-      })()
-    );
-    return;
-  }
-
-  /* Static assets — cache-first, then populate cache */
+  // Same-origin static assets only — cache-first. Chunks are content-hashed, so a
+  // cached asset is never stale. The cache write is fire-and-forget (never awaited)
+  // so it can't delay the response.
   if (url.origin !== self.location.origin) {
     return;
   }
@@ -79,16 +69,14 @@ self.addEventListener('fetch', (event) => {
     (async () => {
       const cached = await caches.match(req);
       if (cached) return cached;
-
       try {
         const network = await fetch(req);
         if (network.ok) {
-          const cache = await caches.open(CACHE_NAME);
-          cache.put(req, network.clone()).catch(() => {});
+          caches.open(CACHE_NAME).then((cache) => cache.put(req, network.clone())).catch(() => {});
         }
         return network;
       } catch {
-        return caches.match(req);
+        return (await caches.match(req)) || Response.error();
       }
     })()
   );

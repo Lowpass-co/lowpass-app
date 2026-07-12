@@ -4,6 +4,14 @@ import { createContext, useContext, useState, useEffect, useLayoutEffect, useCal
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import type { Artist, Tour } from '@/types';
 
+/* This provider's entire job is to DERIVE React state from external sources —
+ * the URL (path + query), localStorage, and async /api fetches. Setting state
+ * inside effects is the correct pattern here (there's nothing to derive during
+ * render), so react-hooks/set-state-in-effect is disabled file-wide rather than
+ * peppering every sync/load effect with line-level disables (the file already
+ * carried these; §A4 formalises it). */
+/* eslint-disable react-hooks/set-state-in-effect */
+
 const STORAGE_ARTIST = 'lp-selected-artist';
 const STORAGE_TOUR = 'lp-selected-tour';
 // Post-merge fix-up §C — URL params are the canonical source of
@@ -276,18 +284,29 @@ export function ArtistTourProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!selectedArtistId || !artistsLoaded) return;
+    // A4 (NAV-08) — the URL PATH is authoritative. Never null a selection the
+    // path asserts (e.g. you're ON /artists/[id]) just because the artists list
+    // fetch is still loading or came back short — that's what emptied the pill
+    // ("Pick an artist…") while inside an artist page. Only stale, non-path
+    // selections (a leftover localStorage id on a page that doesn't name it) get
+    // reset.
+    if (pathname && extractArtistIdFromPath(pathname) === selectedArtistId) return;
     if (!artists.some((a) => a.id === selectedArtistId)) {
       setSelectedArtistId(null);
     }
-  }, [artists, artistsLoaded, selectedArtistId, setSelectedArtistId]);
+  }, [artists, artistsLoaded, selectedArtistId, setSelectedArtistId, pathname]);
 
   useEffect(() => {
     if (!selectedTourId || !selectedArtistId) return;
     if (isLoading) return;
+    // A4 (NAV-08) — same rule for the tour: a tour named by the path
+    // (/operations|/budget|/advance/[tourId]) stays selected regardless of the
+    // tours-list fetch, so the tour pill reflects the URL on every tour page.
+    if (pathname && extractTourIdFromPath(pathname) === selectedTourId) return;
     if (!tours.some((t) => t.id === selectedTourId)) {
       setSelectedTourId(null);
     }
-  }, [tours, selectedTourId, selectedArtistId, isLoading, setSelectedTourId]);
+  }, [tours, selectedTourId, selectedArtistId, isLoading, setSelectedTourId, pathname]);
 
   const value: ArtistTourContextType = {
     selectedArtistId,
