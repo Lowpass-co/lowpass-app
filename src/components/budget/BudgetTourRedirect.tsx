@@ -17,13 +17,13 @@ import { useArtistTourContext } from '@/contexts/ArtistTourContext';
 export function BudgetTourRedirect() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { selectedTourId } = useArtistTourContext();
+  const { resumeTourId } = useArtistTourContext();
   const tourIdFromUrl = searchParams.get('tour_id');
 
   useEffect(() => {
-    if (tourIdFromUrl || !selectedTourId) return;
-    router.replace(`/budget/${selectedTourId}`);
-  }, [tourIdFromUrl, selectedTourId, router]);
+    if (tourIdFromUrl || !resumeTourId) return;
+    router.replace(`/budget/${resumeTourId}`);
+  }, [tourIdFromUrl, resumeTourId, router]);
 
   return null;
 }

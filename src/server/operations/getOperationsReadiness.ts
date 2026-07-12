@@ -125,7 +125,27 @@ export async function getOperationsReadiness(
       .limit(5),
   ]);
 
-  const routing = ((routingRes.data ?? []) as RoutingVenueSource[]).map((r) => {
+  // A-closeout — A1-class embed resilience: if the canonical embed select fails
+  // at runtime (missing/renamed FK relationship makes PostgREST reject the whole
+  // query), routingRes.data is null → the readiness rail derives "SHOWS 0 · none
+  // upcoming" for a tour with real shows. Retry without the join; resolveVenue
+  // then reads the routing.venue_* snapshot per row (correct for display).
+  let routingData = routingRes.data;
+  if (routingRes.error) {
+    console.error('[getOperationsReadiness] canonical embed failed, retrying plain:', routingRes.error.message);
+    const { data: plain } = await supabase
+      .from('routing')
+      .select(
+        'id, date, day_type, city, country, address, venue_name, venue_phone, venue_website, venue_capacity, canonical_venue_id, venue_frozen_at',
+      )
+      .eq('tour_id', tourId)
+      .order('date');
+    // The plain rows lack the joined `canonical` — resolveVenue reads the
+    // routing.venue_* snapshot when it's absent, so the cast is safe.
+    routingData = plain as typeof routingData;
+  }
+
+  const routing = ((routingData ?? []) as RoutingVenueSource[]).map((r) => {
     const v = resolveVenue(r);
     return {
       id: r.id as string,

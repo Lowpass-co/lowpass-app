@@ -277,7 +277,23 @@ export async function getWorkspaceLandingData(
   const tourRows = (toursRes.data ?? []) as TourRow[];
   // Venue SSOT — resolve each upcoming row's venue/city (live→canonical,
   // past/frozen→snapshot) instead of reading the raw venue_name column.
-  const upcomingRaw = (routingRes.data ?? []) as Array<RoutingVenueSource & { tour_id: string; date: string }>;
+  // A-closeout — A1-class embed resilience: a runtime canonical-embed failure
+  // nulls routingRes.data → nextShow null → workspace cards read "NOTHING BOOKED"
+  // for tours that actually have upcoming shows. Retry without the join.
+  let upcomingRoutingData = routingRes.data;
+  if (routingRes.error) {
+    console.error('[getWorkspaceLandingData] canonical embed failed, retrying plain:', routingRes.error.message);
+    const { data: plain } = await supabase
+      .from('routing')
+      .select('id, tour_id, date, day_type, city, country, address, venue_name, venue_phone, venue_website, venue_capacity, venue_frozen_at, canonical_venue_id')
+      .in('day_type', ['show', 'festival'])
+      .gte('date', new Date().toISOString().slice(0, 10))
+      .order('date', { ascending: true });
+    // Plain rows lack the joined `canonical`; resolveVenue falls back to the
+    // routing.venue_* snapshot, so the cast is safe.
+    upcomingRoutingData = plain as typeof upcomingRoutingData;
+  }
+  const upcomingRaw = (upcomingRoutingData ?? []) as Array<RoutingVenueSource & { tour_id: string; date: string }>;
   const upcomingRouting = upcomingRaw.map((r) => {
     const v = resolveVenue(r);
     return { tour_id: r.tour_id, date: r.date, city: v.city, venue: v.name };

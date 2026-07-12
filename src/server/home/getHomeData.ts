@@ -16,6 +16,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { resolveVenue, type RoutingVenueSource } from '@/lib/venues/resolveVenue';
+import { countOnTourNow, type DeriveTour } from '@/lib/derive/tourStatus';
 
 export type HomeArtist = {
   id: string;
@@ -228,8 +229,10 @@ export async function getHomeData(
     }
   }
 
-  // Active tours = tours with status === 'active'
-  const activeTours = tours.filter((t) => t.status === 'active').length;
+  // A3 — "active" = running RIGHT NOW (today ∈ [start,end]), date-derived via the
+  // single tourStatus module, not the DB status string (which counted stale/ended
+  // tours left at status='active').
+  const activeTours = countOnTourNow(tours as DeriveTour[], new Date().toISOString().slice(0, 10));
 
   // Show count per tour from the same routing query bracketed to the
   // tour-window months — but for the per-tour summary we want *all*

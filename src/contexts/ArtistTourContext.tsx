@@ -35,6 +35,12 @@ interface ArtistTourContextType {
   selectedTour: Tour | null;
   setSelectedArtistId: (id: string | null) => void;
   setSelectedTourId: (id: string | null) => void;
+  /** A4 — the localStorage "last visited" artist/tour, kept SEPARATE from the
+   *  URL-derived selection above. Resume redirects (bare /budget → /budget/[id])
+   *  read these; the picker pills read selectedArtistId/selectedTourId, which are
+   *  URL-only so a workspace tab never shows a stale selection. */
+  resumeArtistId: string | null;
+  resumeTourId: string | null;
   artists: Artist[];
   tours: Tour[];
   isLoading: boolean;
@@ -92,6 +98,9 @@ export function ArtistTourProvider({ children }: { children: ReactNode }) {
 
   const [selectedArtistId, setSelectedArtistIdState] = useState<string | null>(null);
   const [selectedTourId, setSelectedTourIdState] = useState<string | null>(null);
+  // A4 — the localStorage-backed "resume" ids, kept out of the pill selection.
+  const [resumeArtistId, setResumeArtistId] = useState<string | null>(null);
+  const [resumeTourId, setResumeTourId] = useState<string | null>(null);
   const [artists, setArtists] = useState<Artist[]>([]);
   const [artistsLoaded, setArtistsLoaded] = useState(false);
   const [tours, setTours] = useState<Tour[]>([]);
@@ -117,18 +126,22 @@ export function ArtistTourProvider({ children }: { children: ReactNode }) {
     const lsTour = localStorage.getItem(STORAGE_TOUR);
     const pathArtist = pathname ? extractArtistIdFromPath(pathname) : null;
     const pathTour = pathname ? extractTourIdFromPath(pathname) : null;
-    // Resolution: URL query → path segment → localStorage → null.
-    // Path-segment wins over localStorage so stale stored values
-    // can never override the route the user is actually on.
-    const nextArtist = urlArtistId ?? pathArtist ?? lsArtist ?? null;
-    const nextTour = urlTourId ?? pathTour ?? lsTour ?? null;
+    // A4 — the PILL selection is URL ONLY (query → path → null). Dropping the
+    // localStorage fallback is what stops workspace tabs from silently showing a
+    // stale artist/tour. The localStorage value still lives on as the separate
+    // `resume*` ids (below) so bare-product resume redirects keep working.
+    const nextArtist = urlArtistId ?? pathArtist ?? null;
+    const nextTour = urlTourId ?? pathTour ?? null;
     setSelectedArtistIdState((prev) => (prev === nextArtist ? prev : nextArtist));
     setSelectedTourIdState((prev) => (prev === nextTour ? prev : nextTour));
     setHydrated(true);
-    // If the resolved values differ from localStorage, write the
-    // resolved values back. This prevents stale localStorage from
-    // re-asserting itself across navigations. Only write when there's
-    // a value to store (don't blow away an unset value).
+    // Resume ids track the last-known localStorage value, updated whenever the
+    // URL names a fresh selection (write-back below). Seed from localStorage on
+    // mount so the resume redirects have the previous session's tour immediately.
+    setResumeArtistId(nextArtist ?? lsArtist ?? null);
+    setResumeTourId(nextTour ?? lsTour ?? null);
+    // Write the URL-resolved values back to localStorage so "resume" always
+    // reflects the most recently visited artist/tour. Only write real values.
     if (nextArtist && nextArtist !== lsArtist) {
       localStorage.setItem(STORAGE_ARTIST, nextArtist);
     }
@@ -170,6 +183,8 @@ export function ArtistTourProvider({ children }: { children: ReactNode }) {
       // Picking a new artist clears the tour selection (a tour belongs
       // to one artist; switching the artist invalidates the tour).
       setSelectedTourIdState(null);
+      setResumeArtistId(id);
+      setResumeTourId(null);
       if (typeof window !== 'undefined') {
         if (id) localStorage.setItem(STORAGE_ARTIST, id);
         else localStorage.removeItem(STORAGE_ARTIST);
@@ -183,6 +198,7 @@ export function ArtistTourProvider({ children }: { children: ReactNode }) {
   const setSelectedTourId = useCallback(
     (id: string | null) => {
       setSelectedTourIdState(id);
+      if (id) setResumeTourId(id);
       if (typeof window !== 'undefined') {
         if (id) localStorage.setItem(STORAGE_TOUR, id);
         else localStorage.removeItem(STORAGE_TOUR);
@@ -315,6 +331,8 @@ export function ArtistTourProvider({ children }: { children: ReactNode }) {
     selectedTour,
     setSelectedArtistId,
     setSelectedTourId,
+    resumeArtistId,
+    resumeTourId,
     artists,
     tours,
     isLoading,

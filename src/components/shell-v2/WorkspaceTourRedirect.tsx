@@ -20,12 +20,12 @@ import { useArtistTourContext } from '@/contexts/ArtistTourContext';
 
 export function WorkspaceTourRedirect({ base }: { base: string }) {
   const router = useRouter();
-  const { selectedTourId } = useArtistTourContext();
+  const { resumeTourId } = useArtistTourContext();
 
   useEffect(() => {
-    if (!selectedTourId) return;
-    router.replace(`${base}/${selectedTourId}`);
-  }, [selectedTourId, base, router]);
+    if (!resumeTourId) return;
+    router.replace(`${base}/${resumeTourId}`);
+  }, [resumeTourId, base, router]);
 
   return null;
 }

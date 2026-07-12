@@ -77,7 +77,12 @@ export const config = {
      * Match page routes AND api routes — api is now included so the CSRF
      * check above covers state-changing API calls. Skip only Next internals
      * and static assets.
+     *
+     * A-closeout: sw.js / manifest.webmanifest / icons/* are PUBLIC PWA assets —
+     * they must never redirect to /login. An unauthenticated /sw.js redirect
+     * silently blocked service-worker updates for logged-out browsers, which is
+     * how the stale v1 SW survived deploys.
      */
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|woff2?)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|sw\\.js|manifest\\.webmanifest|icons/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico|woff2?)$).*)',
   ],
 };
