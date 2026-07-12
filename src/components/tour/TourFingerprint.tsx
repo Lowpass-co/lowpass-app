@@ -52,6 +52,11 @@ export interface FingerprintDay {
 export interface TourFingerprintProps {
   days: FingerprintDay[];
   size?: FingerprintSize;
+  /** Fill mode (§C3): the strip spans the full container width and each day's
+   *  tick flexes to an equal share instead of a fixed `spec.width`. Heights
+   *  still grade by day type. Used on the workspace artist cards so the
+   *  fingerprint reads as a full-width graded bar, not a short dense stub. */
+  fill?: boolean;
   /** Week-commencing markers under the strip. Defaults on at hero scale. */
   weekMarkers?: boolean;
   /** Outline the tick for this date (e.g. the next upcoming show). */
@@ -127,6 +132,7 @@ function weekStartIso(iso: string): string {
 export function TourFingerprint({
   days,
   size = 'card',
+  fill = false,
   weekMarkers,
   highlightDate,
   onDayClick,
@@ -187,7 +193,16 @@ export function TourFingerprint({
   const hovered = hover ? days[hover.index] : null;
 
   return (
-    <div className={className} style={{ display: 'inline-flex', flexDirection: 'column', gap: 4, maxWidth: '100%' }}>
+    <div
+      className={className}
+      style={{
+        display: fill ? 'flex' : 'inline-flex',
+        flexDirection: 'column',
+        gap: 4,
+        maxWidth: '100%',
+        width: fill ? '100%' : undefined,
+      }}
+    >
       <div
         ref={stripRef}
         role="list"
@@ -200,7 +215,10 @@ export function TourFingerprint({
           gap: spec.gap,
           height: spec.tick + spec.lift,
           paddingTop: spec.lift,
-          overflowX: 'auto',
+          // Fill mode divides the full width across ticks, so there's nothing to
+          // scroll; fixed-width mode keeps the dense scroll-on-overflow strip.
+          width: fill ? '100%' : undefined,
+          overflowX: fill ? 'hidden' : 'auto',
           overflowY: 'visible',
           scrollbarWidth: 'none',
         }}
@@ -231,7 +249,10 @@ export function TourFingerprint({
                 justifyContent: 'flex-end',
                 alignItems: 'stretch',
                 gap: 1,
-                width: spec.width,
+                // Fill mode: equal flex share + shrinkable; fixed mode: rigid tick.
+                width: fill ? undefined : spec.width,
+                flex: fill ? '1 1 0' : undefined,
+                minWidth: fill ? 0 : undefined,
                 height: spec.tick,
                 padding: 0,
                 border: 0,
@@ -239,7 +260,7 @@ export function TourFingerprint({
                 cursor: interactive ? 'pointer' : 'default',
                 transform: isHover ? `translateY(-${spec.lift}px)` : 'none',
                 transition: 'transform var(--lp-dur-fast) var(--lp-ease-out)',
-                flexShrink: 0,
+                flexShrink: fill ? 1 : 0,
                 position: 'relative',
               }}
             >

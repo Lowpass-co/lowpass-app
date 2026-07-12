@@ -194,6 +194,7 @@ export function ArtistGridCard({
               <TourFingerprint
                 days={artist.fingerprint}
                 size="card"
+                fill
                 highlightDate={artist.nextShow?.date ?? null}
                 ariaLabel={`${artist.name} tour day strip`}
               />
