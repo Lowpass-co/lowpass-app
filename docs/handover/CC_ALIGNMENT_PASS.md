@@ -52,3 +52,22 @@ New features (labor calls/intake/patch already shipped — don't rework), §B de
 
 ## REPORT format
 Per stage: root causes (one sentence each for Stage A), files+lines, screenshot references per surface, orange before/after counts (Stage D), smoke IDs landed, harness outputs (A & F). The Cowork session re-walks production after each banked stage — expect independent verification against the screenshots.
+
+---
+
+## Smoke-ID note (alignment pass F3)
+
+`ADV-40` in this document = the alignment test "opening any listed day never
+shows an error string" (Stage A / §A2). The two pre-existing right-rail visual
+checks that previously held ADV-40/41 in `docs/smoke-tests/advance.md` were
+renumbered to **ADV-50 / ADV-51** to end the collision.
+
+## Alignment pass — status (as of F3)
+
+Stages A–E complete + Cowork-verified; F0 (debug endpoint) + F1 (derivation
+regression fix) banked. F2 polish (native-select → StyledSelect ~60 sites,
+destructive→red audit, Files/Riders page treatments, empty-state invitation
+sweep, the four remaining hand-rolled titles) is the scoped continuation for
+after the green production walk — it is visual-heavy and gated on the six-page
+screenshot pass. Money invariants held all pass: fees 15/15 · reconcile 52/52 ·
+provenance 18/18 · FX greps 0 · tourStatus 14/14.

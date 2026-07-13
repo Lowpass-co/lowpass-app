@@ -18,3 +18,22 @@
 Adam-owned, order-independent: run the sprint's consolidated smoke list on the deploy · grade the rider field catalog (`COMPETITIVE_ADVANCEWITHME_2026-07.md` §6 — feeds design-pass rider stage) · clear the two dirty worktrees · pricing strategy vs AWM's $120 floor (pre-launch, not pre-build).
 
 Rules that persist across every item: single owner per session · bank-per-stage pushes · migrations hand-pasted by Adam (SQL posted, wait for "pasted") · `231.HOLD` applies only after its checklist is honestly green + a soak period · the Cowork design session writes specs BETWEEN CC sessions, never during.
+
+---
+
+## ALIGNMENT PASS (2026-07-08 → 07-13) — status
+
+The alignment pass made the shipped components read as one app, staged A→F,
+banked per stage to `origin/main`, single owner. Cowork walked production behind
+each stage and hit `/api/debug/derivations` (F0) for ground-truth query state.
+
+- **A** — closeout: SW-asset middleware exclude, embed-resilience seams, tourStatus consumer wiring, pill/resume split.
+- **B** — nav migration: two-bar nav → one grouped row (Routing | $ Budget · ⧉ Advance | Crew · Production · Files); flat Operations subnav retired → group segmented control; artist-tier product nav removed; old code deleted.
+- **C** — surface rebuilds: workspace-card status via tourStatus (day_type tokenize); artist Tours/Production trims; full-width fingerprints; routing landing (rail Routing·Advances·Crew·Budget); **Budget Summary planning-neutrality** (the wince — killed red-net/orange-slam-without-income).
+- **D** — hue-budget sweep: Equipment ~40→~4 orange (toggle/chips/📦), Advance Build library neutral, exports secondary, budget kebabs verified neutral.
+- **E** — typography: Barlow Condensed page-title system (`.lp-page-title` + `<PageTitle>`, adopted on 22 PageHeader pages + Routing/Rooming/Payroll/Stage-plot); advance mode switcher → segmented control.
+- **F0/F1** — observability endpoint + the derivation regression fix (canonical-venue embed taken off the card/rail critical path; rail retries on empty; tour-currency money; neutral "all clear").
+
+**Money invariants held every stage:** fees 15/15 · reconcile 52/52 (THE money gate) · provenance 18/18 · FX greps 0 · tourStatus 14/14.
+
+**Remaining (F2, post-walk continuation):** native `<select>` → StyledSelect (~60 sites, batch by behavior class); destructive→red audit; Files + Riders page treatments; empty-state invitation sweep; four remaining hand-rolled titles (Personnel / Channel list / Advance overview / Riders); residual mono. Visual-heavy — gated on the six-page screenshot pass. After that + a green walk, the app goes to Adam for the live grading session.

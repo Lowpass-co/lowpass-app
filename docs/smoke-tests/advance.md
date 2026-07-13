@@ -134,7 +134,12 @@ the two cells. Hover fills the entire row.
 
 ## Right rail (read mode)
 
-#### ADV-40 — Three rail cards stacked
+<!-- Alignment pass F3 — renumbered ADV-40/41 → ADV-50/51. The alignment pass
+     (CC_ALIGNMENT_PASS.md) claimed ADV-40 for the "opening any listed day never
+     shows an error string" test; these two right-rail visual checks moved up to
+     ADV-50/51 to end the collision. -->
+
+#### ADV-50 — Three rail cards stacked
 
 **Do**: Scan the right rail in read mode.
 
@@ -144,7 +149,7 @@ borders match the rest of the visual language.
 
 **Last verified**:
 
-#### ADV-41 — Venue specs render only for non-null fields
+#### ADV-51 — Venue specs render only for non-null fields
 
 **Do**: Open a show with `venue_capacity` populated and
 `venue_phone` null on the routing record.
