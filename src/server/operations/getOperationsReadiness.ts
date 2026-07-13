@@ -135,8 +135,15 @@ export async function getOperationsReadiness(
   // upcoming" for a tour with real shows. Retry without the join; resolveVenue
   // then reads the routing.venue_* snapshot per row (correct for display).
   let routingData = routingRes.data;
-  if (routingRes.error) {
-    console.error('[getOperationsReadiness] canonical embed failed, retrying plain:', routingRes.error.message);
+  // F1 — retry on EMPTY as well as error. On some production schemas PostgREST
+  // returns the embed query with rows:[] and error:null (rather than a hard
+  // error), so the error-only guard never fired → the rail read "0 shows" over a
+  // fully-rendered grid. An empty routing result for a tour is the signal to fall
+  // back to the plain (embed-free) read.
+  if (routingRes.error || !routingData || routingData.length === 0) {
+    if (routingRes.error) {
+      console.error('[getOperationsReadiness] canonical embed failed, retrying plain:', routingRes.error.message);
+    }
     const { data: plain } = await supabase
       .from('routing')
       .select(
@@ -146,7 +153,7 @@ export async function getOperationsReadiness(
       .order('date');
     // The plain rows lack the joined `canonical` — resolveVenue reads the
     // routing.venue_* snapshot when it's absent, so the cast is safe.
-    routingData = plain as typeof routingData;
+    if (plain && plain.length > 0) routingData = plain as typeof routingData;
   }
 
   const routing = ((routingData ?? []) as RoutingVenueSource[]).map((r) => {
@@ -316,12 +323,15 @@ export async function getOperationsReadiness(
   // §C4 — readiness rail extras: Advances (complete vs total show days) + Budget
   // (committed spend + display currency). Bounded queries keyed by this tour.
   const showRoutingIds = showRows.map((r) => r.id);
-  const [advanceRes, budgetRes, workspaceRes] = await Promise.all([
+  const [advanceRes, budgetRes, tourCcyRes] = await Promise.all([
     showRoutingIds.length > 0
       ? supabase.from('advance_instances').select('routing_id, status').in('routing_id', showRoutingIds)
       : Promise.resolve({ data: [] as Array<{ routing_id: string; status: string | null }> }),
     supabase.from('budget_line_items').select('proposed_cost').eq('tour_id', tourId),
-    supabase.from('workspaces').select('currency').eq('id', workspaceId).maybeSingle(),
+    // F1 — the committed figure is in the TOUR's currency, not the workspace's.
+    // Showing "£2K" on a USD tour was reading the wrong currency; fall back to the
+    // workspace currency only when the tour has none.
+    supabase.from('tours').select('currency').eq('id', tourId).maybeSingle(),
   ]);
   const advancesDone = ((advanceRes.data ?? []) as Array<{ status: string | null }>).filter(
     (a) => a.status === 'complete',
@@ -330,7 +340,11 @@ export async function getOperationsReadiness(
     (sum, l) => sum + (Number(l.proposed_cost) || 0),
     0,
   );
-  const budgetCurrency = (workspaceRes.data as { currency?: string | null } | null)?.currency ?? 'GBP';
+  let budgetCurrency = (tourCcyRes.data as { currency?: string | null } | null)?.currency ?? null;
+  if (!budgetCurrency) {
+    const { data: ws } = await supabase.from('workspaces').select('currency').eq('id', workspaceId).maybeSingle();
+    budgetCurrency = (ws as { currency?: string | null } | null)?.currency ?? 'GBP';
+  }
 
   return {
     shows: { count: showRows.length, nextShowDate },

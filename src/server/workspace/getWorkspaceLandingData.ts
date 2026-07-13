@@ -113,6 +113,12 @@ export interface WorkspaceLandingData {
   activity: WorkspaceLandingActivityRow[];
 }
 
+/** First-CSV-type show/festival check (mirrors tourStatus.isShowDay). */
+function isShowDayType(dayType: string | null | undefined): boolean {
+  const first = (dayType ?? '').split(',')[0]?.trim().toLowerCase();
+  return first === 'show' || first === 'festival';
+}
+
 function startOfMonthISO(): string {
   const d = new Date();
   d.setUTCDate(1);
@@ -383,46 +389,60 @@ export async function getWorkspaceLandingData(
     const featured = best?.tourId ?? artistTours.find((t) => t.status === 'active')?.id ?? artistTours[0]?.id;
     if (featured) featuredTourByArtist.set(a.id, featured);
   }
-  // Fingerprint days + the featured tour's next show — ONE bounded per-tour query
-  // (`.in('tour_id', …)`, ~tens of rows, never hits the 1000-row cap the
-  // workspace-wide upcoming query can). E-preflight #1 — the card's next show is
-  // now derived from THIS query (same source as the §8 status line), so the
-  // footer and the status line can never disagree; the prior derivation used the
-  // workspace-wide upcoming fetch, whose default limit truncated far-future shows
-  // on busy workspaces → "Nothing booked" beside "Rehearsals in N days". Venue is
-  // resolved through resolveVenue (the guarded read), so this stays SSOT-clean.
+  // F1 — the featured tours' routing for the fingerprint + §8 status line, from a
+  // LIGHTWEIGHT query (id, date, day_type) with NO canonical-venue embed. This is
+  // the Stage-D-proven read: E-preflight #1 added the canonical embed to THIS
+  // query to get the footer city, but that embed fails on some production schemas
+  // (PostgREST can't resolve the FK), returning empty → fingerprintByTour empty →
+  // "Off the road" + no fingerprint. The embed is now off this critical path.
   const featuredTourIds = Array.from(new Set(featuredTourByArtist.values()));
   const fingerprintByTour = new Map<string, WorkspaceLandingFingerprintDay[]>();
-  const featuredNextShowByTour = new Map<string, { date: string; city: string | null; venue: string | null }>();
+  // Per featured tour: the nearest upcoming show's date + its routing id, derived
+  // from the untruncated per-tour rows (no 1000-row workspace cap).
+  const featuredNextShowRaw = new Map<string, { date: string; routingId: string }>();
   if (featuredTourIds.length > 0) {
-    const fpSelect =
-      'id, tour_id, date, day_type, city, country, address, venue_name, venue_phone, venue_website, venue_capacity, venue_frozen_at, canonical_venue_id, canonical:canonical_venues(id, name, address, city, country, capacity)';
-    const fpRes = await supabase.from('routing').select(fpSelect).in('tour_id', featuredTourIds).order('date', { ascending: true });
-    let fpData = fpRes.data;
-    if (fpRes.error) {
-      const { data: plain } = await supabase
-        .from('routing')
-        .select('id, tour_id, date, day_type, city, country, address, venue_name, venue_phone, venue_website, venue_capacity, venue_frozen_at, canonical_venue_id')
-        .in('tour_id', featuredTourIds)
-        .order('date', { ascending: true });
-      fpData = plain as typeof fpData;
-    }
-    const venueRowsByTour = new Map<string, Array<{ date: string; dayType: string; city: string | null; venue: string | null }>>();
-    for (const r of (fpData ?? []) as Array<RoutingVenueSource & { tour_id: string; date: string; day_type: string | null }>) {
-      const dayType = r.day_type ?? 'off';
+    const { data: fpRows } = await supabase
+      .from('routing')
+      .select('id, tour_id, date, day_type')
+      .in('tour_id', featuredTourIds)
+      .order('date', { ascending: true });
+    const daysByTour = new Map<string, Array<{ id: string; date: string; day_type: string | null }>>();
+    for (const r of (fpRows ?? []) as Array<{ id: string; tour_id: string; date: string; day_type: string | null }>) {
       const list = fingerprintByTour.get(r.tour_id) ?? [];
-      list.push({ date: r.date, dayType });
+      list.push({ date: r.date, dayType: r.day_type ?? 'off' });
       fingerprintByTour.set(r.tour_id, list);
-      const v = resolveVenue(r);
-      const vl = venueRowsByTour.get(r.tour_id) ?? [];
-      vl.push({ date: r.date, dayType, city: v.city, venue: v.name });
-      venueRowsByTour.set(r.tour_id, vl);
+      const dl = daysByTour.get(r.tour_id) ?? [];
+      dl.push({ id: r.id, date: r.date, day_type: r.day_type });
+      daysByTour.set(r.tour_id, dl);
     }
-    for (const [tourId, rows] of venueRowsByTour) {
-      const ns = deriveNextShow(rows.map((r) => ({ date: r.date, day_type: r.dayType })) as DeriveRoutingDay[], todayIso);
+    for (const [tourId, rows] of daysByTour) {
+      const ns = deriveNextShow(
+        rows.map((r) => ({ date: r.date, day_type: r.day_type })) as DeriveRoutingDay[],
+        todayIso,
+      );
       if (!ns) continue;
-      const row = rows.find((r) => r.date.slice(0, 10) === ns.date) ?? null;
-      featuredNextShowByTour.set(tourId, { date: ns.date, city: row?.city ?? null, venue: row?.venue ?? null });
+      const row = rows.find((r) => r.date.slice(0, 10) === ns.date && isShowDayType(r.day_type)) ?? null;
+      if (row) featuredNextShowRaw.set(tourId, { date: ns.date, routingId: row.id });
+    }
+  }
+  // Resolve city/venue for JUST those next-show rows — a tiny PLAIN query (no
+  // embed) over a handful of ids, so venue display can't reintroduce the embed
+  // failure onto the card's critical path.
+  const featuredNextShowByTour = new Map<string, { date: string; city: string | null; venue: string | null }>();
+  const nextShowIds = Array.from(featuredNextShowRaw.values()).map((v) => v.routingId);
+  if (nextShowIds.length > 0) {
+    const { data: venueRows } = await supabase
+      .from('routing')
+      .select('id, city, country, address, venue_name, venue_phone, venue_website, venue_capacity, venue_frozen_at, canonical_venue_id')
+      .in('id', nextShowIds);
+    const venueById = new Map<string, { city: string | null; venue: string | null }>();
+    for (const r of (venueRows ?? []) as Array<RoutingVenueSource & { id: string }>) {
+      const v = resolveVenue(r);
+      venueById.set(r.id, { city: v.city, venue: v.name });
+    }
+    for (const [tourId, ns] of featuredNextShowRaw) {
+      const v = venueById.get(ns.routingId);
+      featuredNextShowByTour.set(tourId, { date: ns.date, city: v?.city ?? null, venue: v?.venue ?? null });
     }
   }
 

@@ -227,7 +227,14 @@ function PendingMetric({
       >
         {count}
       </span>
-      <span style={{ fontSize: 'var(--lp-text-2xs)', color: 'var(--color-lp-orange)' }}>
+      {/* F1 — "all clear" (count 0) is NEUTRAL; orange only when there's
+          something to review (attention rule). */}
+      <span
+        style={{
+          fontSize: 'var(--lp-text-2xs)',
+          color: count === 0 ? 'var(--lp-text-tertiary)' : 'var(--color-lp-orange)',
+        }}
+      >
         {count === 0 ? 'all clear' : open ? 'Hide' : 'Review'}
       </span>
     </button>
