@@ -24,6 +24,7 @@ import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { RoutingEditor } from '@/components/routing/RoutingEditor';
 import { TourFingerprint, type FingerprintDay } from '@/components/tour/TourFingerprint';
 import { RoutingReadinessRail } from '@/components/operations/RoutingReadinessRail';
+import { PageTitle } from '@/components/ui/PageHeader';
 import {
   getOperationsReadiness,
   type OperationsReadiness,
@@ -167,16 +168,7 @@ export default async function OperationsTourRoutingPage({
             marginBottom: 'var(--lp-space-3)',
           }}
         >
-          <h1
-            style={{
-              margin: 0,
-              fontSize: 'var(--lp-text-2xl)',
-              fontWeight: 'var(--lp-weight-bold)',
-              color: 'var(--lp-text)',
-            }}
-          >
-            Routing
-          </h1>
+          <PageTitle style={{ margin: 0 }}>Routing</PageTitle>
           {lastEdit ? (
             <span
               style={{

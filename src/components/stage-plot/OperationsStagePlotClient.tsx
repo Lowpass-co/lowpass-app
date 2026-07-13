@@ -13,6 +13,7 @@
 import { useState } from 'react';
 import { StagePlotEditorClient } from './StagePlotEditorClient';
 import type { StagePlotListRow } from './StagePlotLibraryList';
+import { PageTitle } from '@/components/ui/PageHeader';
 
 export interface OperationsStagePlotClientProps {
   tourId: string;
@@ -82,7 +83,7 @@ export function OperationsStagePlotClient({ tourId, artistId, rows }: Operations
   if (list.length === 0) {
     return (
       <div style={{ padding: 32, maxWidth: 560 }}>
-        <h1 style={{ fontSize: 'var(--lp-text-xl)', fontWeight: 700, color: 'var(--lp-text)', margin: '0 0 8px' }}>Stage plot</h1>
+        <PageTitle style={{ fontSize: 22, margin: '0 0 8px' }}>Stage plot</PageTitle>
         <p style={{ color: 'var(--lp-text-secondary)', fontSize: 'var(--lp-text-sm)', margin: '0 0 18px' }}>
           No stage plot for this tour yet. Create one to lay out the stage — instruments, amps, monitors, mics and power — and link it to the channel list.
         </p>
@@ -94,7 +95,7 @@ export function OperationsStagePlotClient({ tourId, artistId, rows }: Operations
   return (
     <div style={{ padding: 24 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
-        <h1 style={{ fontSize: 'var(--lp-text-xl)', fontWeight: 700, color: 'var(--lp-text)', margin: 0 }}>Stage plots</h1>
+        <PageTitle style={{ fontSize: 22, margin: 0 }}>Stage plots</PageTitle>
         {createBtn}
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>

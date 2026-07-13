@@ -25,7 +25,7 @@
    narrow widths.
    ============================================ */
 
-import type { ReactNode } from 'react';
+import type { ReactNode, CSSProperties } from 'react';
 import { cn } from '@/lib/utils';
 
 interface PageHeaderProps {
@@ -73,13 +73,19 @@ export function PageHeader({ title, subtitle, eyebrow, actions, className }: Pag
 export function PageTitle({
   children,
   className,
+  style,
   as: Tag = 'h1',
 }: {
   children: ReactNode;
   className?: string;
+  style?: CSSProperties;
   as?: 'h1' | 'h2';
 }) {
-  return <Tag className={cn('lp-page-title text-[28px] text-lp-text', className)}>{children}</Tag>;
+  return (
+    <Tag className={cn('lp-page-title text-[28px] text-lp-text', className)} style={style}>
+      {children}
+    </Tag>
+  );
 }
 
 interface ToolbarProps {

@@ -20,6 +20,7 @@ import { RoomingHotelSheet } from './RoomingHotelSheet';
 import { isNightAway } from './useRoomingGrid';
 import { AddPersonToTourButton } from '@/components/operations/personnel/AddPersonToTourButton';
 import { RoomingExportButton } from '@/components/rooming/RoomingExportButton';
+import { PageTitle } from '@/components/ui/PageHeader';
 
 export interface RosterPerson {
   person_id: string | null;
@@ -82,7 +83,7 @@ export function RoomingView({ tourId, tourName, currency, routingDates, hotels, 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 700, color: 'var(--lp-text)' }}>{tourName} — Rooming</h1>
+        <PageTitle style={{ fontSize: 22 }}>{tourName} — Rooming</PageTitle>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
         <RoomingExportButton tourId={tourId} />
         <AddPersonToTourButton

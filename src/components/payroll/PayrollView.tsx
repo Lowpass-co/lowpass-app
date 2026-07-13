@@ -27,6 +27,7 @@ import { buildAmountMap, type RateLineRecord } from './rateLinesClient';
 import { usePayrollGrid, type RoutingDay } from './usePayrollGrid';
 import { AddPersonToTourButton } from '@/components/operations/personnel/AddPersonToTourButton';
 import { PayrollExportButton } from '@/components/payroll/PayrollExportButton';
+import { PageTitle } from '@/components/ui/PageHeader';
 
 interface RateTypeRow { id: string; name: string; bucket: string; basis: string; day_statuses: string[] | null; order_index: number; }
 
@@ -114,7 +115,7 @@ export function PayrollView({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-        <h1 style={{ fontSize: 20, fontWeight: 700, color: 'var(--lp-text)' }}>{tourName} — Payroll</h1>
+        <PageTitle style={{ fontSize: 22 }}>{tourName} — Payroll</PageTitle>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <PayrollExportButton tourId={tourId} />
           <AddPersonToTourButton
