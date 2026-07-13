@@ -351,16 +351,34 @@ export async function getWorkspaceLandingData(
     nextShowByTour.set(tourId, { date: ns.date, city: row?.city ?? null, venue: row?.venue ?? null });
   }
 
-  // Featured tour per artist = the tour of the nearest upcoming show; else the
-  // active tour; else the most recent. Drives the card fingerprint + the derived
-  // footer action's href.
+  // Earliest upcoming DAY per tour (any day type) — a tour already in rehearsals
+  // reads as "upcoming" before its first SHOW lands, so the anchor is the first
+  // future routing day, not the first future show.
+  const earliestUpcomingByTour = new Map<string, string>();
+  for (const [tourId, rows] of upcomingByTour) {
+    let min: string | null = null;
+    for (const r of rows) {
+      const d = r.date.slice(0, 10);
+      if (!min || d < min) min = d;
+    }
+    if (min) earliestUpcomingByTour.set(tourId, min);
+  }
+
+  // D-preflight #1 — the featured tour (which drives the card fingerprint + the
+  // §8 status line) anchors on the EARLIEST UPCOMING tour: the tour whose next
+  // activity (routing day, else a future start date) is soonest. Picking by
+  // nearest-upcoming-SHOW surfaced the wrong tour (a later tour whose first show
+  // happened to precede this tour's show, ignoring imminent rehearsals). Falls
+  // back to the active tour, else the most recent.
   const featuredTourByArtist = new Map<string, string>();
   for (const a of artistRows) {
     const artistTours = toursByArtist.get(a.id) ?? [];
     let best: { tourId: string; date: string } | null = null;
     for (const t of artistTours) {
-      const ns = nextShowByTour.get(t.id);
-      if (ns && (!best || ns.date < best.date)) best = { tourId: t.id, date: ns.date };
+      const start = t.start_date ? t.start_date.slice(0, 10) : null;
+      const anchor =
+        earliestUpcomingByTour.get(t.id) ?? (start && start >= todayIso ? start : null);
+      if (anchor && (!best || anchor < best.date)) best = { tourId: t.id, date: anchor };
     }
     const featured = best?.tourId ?? artistTours.find((t) => t.status === 'active')?.id ?? artistTours[0]?.id;
     if (featured) featuredTourByArtist.set(a.id, featured);

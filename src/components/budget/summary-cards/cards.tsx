@@ -164,7 +164,10 @@ export function ExpensesBySectionCard({ rows, currency }: { rows: SectionExpense
         <li key={r.id} style={{ display: 'grid', gridTemplateColumns: 'minmax(90px,140px) 1fr auto', alignItems: 'center', gap: 10 }}>
           <span style={{ fontSize: 12, color: 'var(--lp-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.name}</span>
           <span style={{ height: 6, borderRadius: 999, background: 'color-mix(in srgb, var(--lp-text) 6%, transparent)' }}>
-            <span style={{ display: 'block', height: '100%', width: `${clampPct((Math.abs(r.actual) / max) * 100)}%`, borderRadius: 999, background: 'color-mix(in srgb, var(--lp-orange) 65%, transparent)' }} />
+            {/* §C5/D-preflight #4 — NEUTRAL magnitude fill. Orange/red is reserved
+                for a real over-budget signal; a section bar just shows relative
+                size, so it must not read as alarm. */}
+            <span style={{ display: 'block', height: '100%', width: `${clampPct((Math.abs(r.actual) / max) * 100)}%`, borderRadius: 999, background: 'color-mix(in srgb, var(--lp-text) 28%, transparent)' }} />
           </span>
           <span className="lp-mono" style={{ fontSize: 12, color: 'var(--lp-text-secondary)', textAlign: 'right' }}>{money(r.actual, currency)}</span>
         </li>

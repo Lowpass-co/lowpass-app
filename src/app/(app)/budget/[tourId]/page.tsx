@@ -405,7 +405,13 @@ export default async function BudgetTourPage({
           viewedVersionId={viewed?.id ?? null}
           canApprove={canApprove}
         />
-        <BudgetBurnBar lines={lines} tourCurrency={tourCurrency} fxRates={fxRates} />
+        {/* D-preflight #4 — the sticky burn bar (spent · remaining · committed)
+            duplicates the Summary dashboard's KPI cards, so it's hidden on the
+            Summary tab; the dashboard owns money display there. Other tabs keep
+            it as the always-visible spend meter. */}
+        {tab !== 'summary' ? (
+          <BudgetBurnBar lines={lines} tourCurrency={tourCurrency} fxRates={fxRates} />
+        ) : null}
         <FxMissingRateBanner
           missing={fxMissing}
           tourCurrency={tourCurrency}

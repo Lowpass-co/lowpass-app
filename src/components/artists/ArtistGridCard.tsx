@@ -28,15 +28,16 @@ import { ArtistDeleteConfirmationModal } from './ArtistDeleteConfirmationModal';
 import { TourFingerprint } from '@/components/tour/TourFingerprint';
 import type { WorkspaceLandingArtist } from '@/server/workspace/getWorkspaceLandingData';
 
-const MONTHS = [
-  'JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN',
-  'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC',
-];
-
 function formatNextDate(iso: string): string {
   const d = new Date(`${iso.slice(0, 10)}T12:00:00Z`);
   if (Number.isNaN(d.getTime())) return iso;
-  return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`;
+  // D-preflight #2 — "ddd d MMM" (e.g. "Tue 9 Sep"), title case, not SHOUTY caps.
+  return d.toLocaleDateString('en-GB', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    timeZone: 'UTC',
+  });
 }
 
 function shortenVenue(s: string): string {
@@ -190,13 +191,14 @@ export function ArtistGridCard({
           {/* Card-scale fingerprint of the featured tour. pointerEvents re-enabled
               (parent content is inert) + above the click target for hover. */}
           {artist.fingerprint.length > 0 ? (
-            <div style={{ pointerEvents: 'auto', position: 'relative', zIndex: 2 }}>
+            <div style={{ pointerEvents: 'auto', position: 'relative', zIndex: 2, width: '100%' }}>
               <TourFingerprint
                 days={artist.fingerprint}
                 size="card"
                 fill
                 highlightDate={artist.nextShow?.date ?? null}
                 ariaLabel={`${artist.name} tour day strip`}
+                className="w-full"
               />
             </div>
           ) : null}
@@ -231,11 +233,9 @@ export function ArtistGridCard({
             style={{ gap: 'var(--lp-space-2)', paddingTop: 'var(--lp-space-1)' }}
           >
             <span
-              className="min-w-0 truncate lp-label-caps"
+              className="min-w-0 truncate"
               style={{
                 fontSize: 'var(--lp-text-2xs)',
-                letterSpacing: 'var(--lp-tracking-caps)',
-                textTransform: 'uppercase',
                 color: 'var(--lp-text-tertiary)',
               }}
             >

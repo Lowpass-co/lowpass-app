@@ -123,9 +123,11 @@ export function BudgetSummaryDashboard({
         ) : null}
       </div>
 
-      {/* §C5 — 12-col grid. Full-width cards (net-pnl hero + expenses-by-section)
-          span all 12; the rest take a 6-col half. minmax(0,1fr) columns keep long
-          numbers from forcing overflow. */}
+      {/* §C5 / D-preflight #4 — 12-col grid. Full-width cards (net-pnl hero +
+          expenses-by-section) span all 12; the rest take a 4-col third, so the
+          three default money cards (Per-show income · Committed & burn · Overheads)
+          sit on ONE row and the right-side void closes. minmax(0,1fr) columns keep
+          long numbers from forcing overflow. */}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12, minmax(0, 1fr))', gap: 12, alignItems: 'start' }}>
         {shown.map((k) => (
           <div
@@ -134,7 +136,7 @@ export function BudgetSummaryDashboard({
             onDragStart={() => editMode && setDragId(k.id)}
             onDragOver={(e) => { if (editMode && dragId && dragId !== k.id) { e.preventDefault(); reorder(dragId, k.id); } }}
             onDragEnd={() => setDragId(null)}
-            style={{ gridColumn: FULL_WIDTH_CARDS.has(k.id) ? '1 / -1' : 'span 6', minWidth: 0, opacity: dragId === k.id ? 0.6 : 1 }}
+            style={{ gridColumn: FULL_WIDTH_CARDS.has(k.id) ? '1 / -1' : 'span 4', minWidth: 0, opacity: dragId === k.id ? 0.6 : 1 }}
           >
             <SummaryCard label={SUMMARY_CARD_LABELS[k.id]} editMode={editMode} onHide={() => hide(k.id)}>
               {renderBody(k.id)}

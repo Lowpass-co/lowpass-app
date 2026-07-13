@@ -124,19 +124,16 @@ export function tourStatusLine(
     return 'Planning · dates not locked';
   }
 
-  // upcoming — name the next milestone. A rehearsal (or other event) that lands
-  // before the first show reads as "Rehearsals in N days"; otherwise the anchor
-  // is the first show.
+  // upcoming — name the next milestone using the §8 vocabulary ONLY. Rehearsals
+  // are the single named pre-show phase ("Rehearsals in N days"); any other
+  // pre-show event (travel / press / radio / …) is NOT a §8 phrase, so it falls
+  // through to the first show rather than leaking "Travel in N days".
   const ns = nextShow(days, t);
   const ne = nextEvent(days, t);
-  if (ne && (!ns || ymd(ne.date) < ns.date) && !isShowDay(ne.day_type)) {
-    const label = firstType(ne.day_type);
-    // §8 phrases the pre-show milestone as a phase noun ("Rehearsals in N days").
-    const nice =
-      label === 'rehearsal'
-        ? 'Rehearsals'
-        : label.charAt(0).toUpperCase() + label.slice(1);
-    return `${nice} in ${daysBetween(t, ne.date)} days`;
+  const rehearsalBeforeShow =
+    ne && firstType(ne.day_type) === 'rehearsal' && (!ns || ymd(ne.date) < ns.date);
+  if (rehearsalBeforeShow) {
+    return `Rehearsals in ${daysBetween(t, ne.date)} days`;
   }
   if (ns) return `First show in ${ns.daysAway} days`;
   return 'Off the road';
