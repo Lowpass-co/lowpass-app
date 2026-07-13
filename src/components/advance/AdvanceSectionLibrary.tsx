@@ -411,9 +411,12 @@ function LibraryCard({
           cursor: 'grab',
         }}
       >
+        {/* §D hue-budget — the per-tile grip + icon are NEUTRAL. Orange is
+            reserved for the expanded/selected state (border below), not every
+            resting library tile. */}
         <GripVertical
           className="h-4 w-4 shrink-0"
-          style={{ color: 'var(--color-lp-orange)' }}
+          style={{ color: 'var(--lp-text-tertiary)' }}
           aria-hidden
         />
         <span
@@ -422,7 +425,7 @@ function LibraryCard({
             width: 28,
             height: 28,
             background: 'var(--lp-surface)',
-            color: 'var(--color-lp-orange)',
+            color: 'var(--lp-text-secondary)',
             borderRadius: 4,
           }}
         >

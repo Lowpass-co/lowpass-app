@@ -5,7 +5,7 @@
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
-import { ArrowLeft, Trash2, Plus, FileDown, Sun, Moon } from 'lucide-react';
+import { ArrowLeft, Trash2, Plus, FileDown, Sun, Moon, Package } from 'lucide-react';
 import { createClient } from '@/lib/supabase-client';
 import { useToast } from '@/components/ui/Toast';
 import { effectiveInventoryDayRate } from '@/lib/rental-pricing';
@@ -304,7 +304,7 @@ export function JobDetail({ job, workspaceId, inventory, artists, tours, onBack,
               </div>
             ) : jobItems.length === 0 ? (
               <div className="flex flex-col items-center gap-2 py-12">
-                <div className="text-2xl">📦</div>
+                <Package size={24} strokeWidth={1.5} aria-hidden style={{ color: 'var(--lp-text-tertiary)' }} />
                 <p className="text-sm" style={{ color: 'var(--lp-text-secondary)' }}>No items added yet</p>
               </div>
             ) : (
@@ -335,7 +335,7 @@ export function JobDetail({ job, workspaceId, inventory, artists, tours, onBack,
                             {inv?.image_url ? (
                               <img src={inv.image_url} alt="" className="h-9 w-9 rounded-lg object-cover" style={{ border: '1px solid var(--lp-border)' }} />
                             ) : (
-                              <div className="flex h-9 w-9 items-center justify-center rounded-lg text-base" style={{ backgroundColor: 'var(--lp-bg-secondary)', border: '1px solid var(--lp-border)' }}>📦</div>
+                              <div className="flex h-9 w-9 items-center justify-center rounded-lg" style={{ backgroundColor: 'var(--lp-bg-secondary)', border: '1px solid var(--lp-border)' }}><Package size={16} strokeWidth={1.75} aria-hidden style={{ color: 'var(--lp-text-tertiary)' }} /></div>
                             )}
                           </td>
                           <td className="px-4 py-2.5">
@@ -482,8 +482,10 @@ function PdfModeToggle({
             aria-pressed={active}
             className="flex items-center justify-center px-2.5 text-xs transition-colors disabled:opacity-50"
             style={{
-              backgroundColor: active ? '#FF4500' : 'transparent',
-              color: active ? '#FFFFFF' : 'var(--lp-text-secondary)',
+              backgroundColor: active
+                ? 'color-mix(in srgb, var(--color-lp-orange) 12%, var(--lp-panel))'
+                : 'transparent',
+              color: active ? 'var(--color-lp-orange)' : 'var(--lp-text-secondary)',
             }}
           >
             <Icon size={13} strokeWidth={2.5} />

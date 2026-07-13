@@ -5,7 +5,7 @@
 'use client';
 
 import { useState, useRef, useEffect } from 'react';
-import { Plus, Pencil, Trash2, Search, Upload, SquarePen, Check, X as XIcon, ImageIcon, Loader2, Briefcase, Printer } from 'lucide-react';
+import { Plus, Pencil, Trash2, Search, Upload, SquarePen, Check, X as XIcon, ImageIcon, Loader2, Briefcase, Printer, Package } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { createClient } from '@/lib/supabase-client';
 import { InventoryModal } from './InventoryModal';
@@ -762,7 +762,7 @@ export function InventoryTab({ userId, workspaceId, inventory, setInventory }: P
       >
         {filtered.length === 0 ? (
           <div className="flex flex-1 flex-col items-center justify-center gap-3 px-4 py-16">
-            <div className="text-3xl">📦</div>
+            <Package size={30} strokeWidth={1.5} aria-hidden style={{ color: 'var(--lp-text-tertiary)' }} />
             <p className="text-sm font-medium" style={{ color: 'var(--lp-text-secondary)' }}>
               {inventory.length === 0 ? 'No inventory yet' : 'No items match that search'}
             </p>
@@ -839,9 +839,9 @@ export function InventoryTab({ userId, workspaceId, inventory, setInventory }: P
                             onError={e => { e.currentTarget.style.display = 'none'; (e.currentTarget.nextElementSibling as HTMLElement)!.style.display = 'flex'; }}
                           />
                         ) : null}
-                        <div className="h-10 w-10 rounded-lg items-center justify-center text-base"
+                        <div className="h-10 w-10 rounded-lg items-center justify-center"
                           style={{ backgroundColor: 'var(--lp-bg-secondary)', display: item.image_url ? 'none' : 'flex', border: '1px solid var(--lp-border)' }}>
-                          📦
+                          <Package size={18} strokeWidth={1.75} aria-hidden style={{ color: 'var(--lp-text-tertiary)' }} />
                         </div>
                       </td>
 
@@ -881,7 +881,7 @@ export function InventoryTab({ userId, workspaceId, inventory, setInventory }: P
                           />
                         ) : (
                           item.category
-                            ? <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium" style={{ backgroundColor: 'rgba(255,69,0,0.08)', color: '#FF4500' }}>{item.category}</span>
+                            ? <span className="inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium" style={{ backgroundColor: 'var(--lp-bg-secondary)', border: '1px solid var(--lp-border-subtle)', color: 'var(--lp-text-secondary)' }}>{item.category}</span>
                             : <span style={{ color: 'var(--lp-text-tertiary)' }}>—</span>
                         )}
                       </td>

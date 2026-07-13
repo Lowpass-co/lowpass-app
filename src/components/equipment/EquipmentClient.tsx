@@ -90,13 +90,17 @@ function EquipmentClientBody({
             onClick={() => setActiveTab(id)}
             className={cn(
               'flex flex-1 min-w-0 items-center justify-center gap-2 rounded-md px-3 py-2 text-xs font-semibold uppercase tracking-wider transition-all',
-              activeTab === id
-                ? 'text-white shadow-sm'
-                : 'hover:opacity-80'
+              activeTab === id ? '' : 'hover:opacity-80'
             )}
+            /* §D hue-budget — active segment is a light-tint + orange text
+               (selected accent), not a filled orange slab. Token, not #FF4500. */
             style={
               activeTab === id
-                ? { backgroundColor: '#FF4500', color: 'white' }
+                ? {
+                    color: 'var(--color-lp-orange)',
+                    backgroundColor: 'color-mix(in srgb, var(--color-lp-orange) 10%, var(--lp-panel))',
+                    boxShadow: 'var(--lp-shadow-sm)',
+                  }
                 : { color: 'var(--lp-text-secondary)', backgroundColor: 'transparent' }
             }
           >
