@@ -36,10 +36,12 @@ export function ExportButton({
         type="button"
         onClick={() => setOpen(true)}
         className="btn-transition inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-sm"
+        /* §D hue-budget — Export is a SECONDARY action (neutral), not the page's
+           single primary. One primary per page; export never competes for it. */
         style={{
-          borderColor: 'var(--color-lp-orange)',
-          color: 'var(--color-lp-orange)',
-          background: 'color-mix(in srgb, var(--color-lp-orange) 4%, transparent)',
+          borderColor: 'var(--lp-border-strong)',
+          color: 'var(--lp-text-secondary)',
+          background: 'var(--lp-panel)',
           fontWeight: 'var(--lp-weight-medium)',
           cursor: 'pointer',
         }}

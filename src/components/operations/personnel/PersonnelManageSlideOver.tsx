@@ -313,6 +313,7 @@ function PersonnelManageEditor({
               {member.display_name}
             </div>
             <div
+              className="lp-mono"
               style={{
                 fontSize: 'var(--lp-text-sm)',
                 color: 'var(--lp-text-secondary)',
