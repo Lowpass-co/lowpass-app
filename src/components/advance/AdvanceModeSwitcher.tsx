@@ -104,27 +104,47 @@ export function AdvanceModeSwitcher({
         </div>
       ) : null}
 
-      {tabs.map((t) => (
-        <Link
-          key={t.key}
-          href={t.href}
-          aria-current={t.active ? 'page' : undefined}
-          className="btn-transition"
-          style={{
-            padding: '10px var(--lp-space-3)',
-            fontSize: 'var(--lp-text-sm)',
-            fontWeight: t.active
-              ? 'var(--lp-weight-semibold)'
-              : 'var(--lp-weight-medium)',
-            color: t.active ? 'var(--lp-text)' : 'var(--lp-text-tertiary)',
-            borderBottom: `2px solid ${t.active ? 'var(--color-lp-orange)' : 'transparent'}`,
-            marginBottom: '-1px',
-            textDecoration: 'none',
-          }}
-        >
-          {t.label}
-        </Link>
-      ))}
+      {/* Stage E · §7 — Build / Advance / Share as a SEGMENTED control (the
+          graded mockups), not underline text tabs. Container tint + active
+          segment fill; inactive segments read tertiary. */}
+      <div
+        role="tablist"
+        aria-label="Advance mode"
+        className="my-2 inline-flex items-center"
+        style={{
+          gap: 2,
+          padding: 2,
+          background: 'var(--lp-bg-deep)',
+          border: '1px solid var(--lp-border-subtle)',
+          borderRadius: 'var(--lp-radius-md)',
+        }}
+      >
+        {tabs.map((t) => (
+          <Link
+            key={t.key}
+            href={t.href}
+            role="tab"
+            aria-selected={t.active}
+            aria-current={t.active ? 'page' : undefined}
+            className="btn-transition whitespace-nowrap"
+            style={{
+              padding: '5px var(--lp-space-3)',
+              fontSize: 'var(--lp-text-sm)',
+              fontWeight: t.active
+                ? 'var(--lp-weight-semibold)'
+                : 'var(--lp-weight-medium)',
+              color: t.active ? 'var(--color-lp-orange)' : 'var(--lp-text-secondary)',
+              background: t.active
+                ? 'color-mix(in srgb, var(--color-lp-orange) 10%, var(--lp-panel))'
+                : 'transparent',
+              borderRadius: 'calc(var(--lp-radius-md) - 2px)',
+              textDecoration: 'none',
+            }}
+          >
+            {t.label}
+          </Link>
+        ))}
+      </div>
 
       {/* VIS-AB-01 — template-context chip. Right-aligned so it reads as
           metadata ("which form is this show on"), not a fourth tab. */}

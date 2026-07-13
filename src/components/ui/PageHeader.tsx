@@ -52,14 +52,10 @@ export function PageHeader({ title, subtitle, eyebrow, actions, className }: Pag
             {eyebrow}
           </p>
         ) : null}
-        {/* Canonical page-title scale: 24px / bold / display
-            font / tight tracking — matches the established
-            majority (Equipment, Venues, Bugs, workspace
-            dashboard) so adopting PageHeader doesn't resize
-            existing pages. */}
-        <h1 className="font-display text-2xl font-bold leading-tight tracking-tight text-lp-text">
-          {title}
-        </h1>
+        {/* Stage E · §3 — canonical page title: Barlow Condensed 600, uppercase,
+            tight leading (`.lp-page-title`), at the 28px display scale. Every
+            PageHeader adopter picks this up at once. */}
+        <h1 className="lp-page-title text-[28px] text-lp-text">{title}</h1>
         {subtitle ? (
           <p className="mt-1 text-sm text-lp-text-secondary">{subtitle}</p>
         ) : null}
@@ -69,6 +65,21 @@ export function PageHeader({ title, subtitle, eyebrow, actions, className }: Pag
       ) : null}
     </header>
   );
+}
+
+/* Stage E · §3 — the standalone page title, for surfaces that render a title
+   outside a full <PageHeader> (custom header layouts). Same `.lp-page-title`
+   treatment so titles read identically app-wide. */
+export function PageTitle({
+  children,
+  className,
+  as: Tag = 'h1',
+}: {
+  children: ReactNode;
+  className?: string;
+  as?: 'h1' | 'h2';
+}) {
+  return <Tag className={cn('lp-page-title text-[28px] text-lp-text', className)}>{children}</Tag>;
 }
 
 interface ToolbarProps {

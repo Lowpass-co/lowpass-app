@@ -6,7 +6,7 @@
    ============================================ */
 
 import type { Metadata } from 'next';
-import { Inter, Montserrat } from 'next/font/google';
+import { Inter, Montserrat, Barlow_Condensed } from 'next/font/google';
 import './globals.css';
 import '@/lib/entities';
 
@@ -18,6 +18,15 @@ const inter = Inter({
 
 const montserrat = Montserrat({
   variable: '--font-montserrat',
+  subsets: ['latin'],
+  display: 'swap',
+});
+
+// Stage E · §3 — the display face: Barlow Condensed 600 (uppercase page titles,
+// artist/tour/card names). Exposed as --font-condensed.
+const barlowCondensed = Barlow_Condensed({
+  variable: '--font-condensed',
+  weight: ['500', '600', '700'],
   subsets: ['latin'],
   display: 'swap',
 });
@@ -65,7 +74,7 @@ export default function RootLayout({
           }}
         />
       </head>
-      <body className={`${inter.variable} ${montserrat.variable} font-sans antialiased`}>
+      <body className={`${inter.variable} ${montserrat.variable} ${barlowCondensed.variable} font-sans antialiased`}>
         {children}
       </body>
     </html>
