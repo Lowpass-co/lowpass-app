@@ -273,10 +273,12 @@ export function AdvanceShowHeader({
         </div>
 
         <HeroStat value={sectionsComplete} label="Complete" tone="default" />
+        {/* E-preflight #3 — attention colour only when there's something pending;
+            "0 pending" reads neutral (same rule as Overdue below). */}
         <HeroStat
           value={pendingSectionsCount}
           label="Pending"
-          tone="pending"
+          tone={pendingSectionsCount > 0 ? 'pending' : 'muted'}
         />
         <HeroStat
           value={overdueSectionsCount}

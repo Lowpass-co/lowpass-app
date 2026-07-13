@@ -383,20 +383,46 @@ export async function getWorkspaceLandingData(
     const featured = best?.tourId ?? artistTours.find((t) => t.status === 'active')?.id ?? artistTours[0]?.id;
     if (featured) featuredTourByArtist.set(a.id, featured);
   }
-  // Fingerprint days (ALL day types) for the featured tours — one bounded query.
-  // date + day_type only: no venue read, so venue-guardrail-clean.
+  // Fingerprint days + the featured tour's next show — ONE bounded per-tour query
+  // (`.in('tour_id', …)`, ~tens of rows, never hits the 1000-row cap the
+  // workspace-wide upcoming query can). E-preflight #1 — the card's next show is
+  // now derived from THIS query (same source as the §8 status line), so the
+  // footer and the status line can never disagree; the prior derivation used the
+  // workspace-wide upcoming fetch, whose default limit truncated far-future shows
+  // on busy workspaces → "Nothing booked" beside "Rehearsals in N days". Venue is
+  // resolved through resolveVenue (the guarded read), so this stays SSOT-clean.
   const featuredTourIds = Array.from(new Set(featuredTourByArtist.values()));
   const fingerprintByTour = new Map<string, WorkspaceLandingFingerprintDay[]>();
+  const featuredNextShowByTour = new Map<string, { date: string; city: string | null; venue: string | null }>();
   if (featuredTourIds.length > 0) {
-    const { data: fpRows } = await supabase
-      .from('routing')
-      .select('tour_id, date, day_type')
-      .in('tour_id', featuredTourIds)
-      .order('date', { ascending: true });
-    for (const r of (fpRows ?? []) as Array<{ tour_id: string; date: string; day_type: string | null }>) {
+    const fpSelect =
+      'id, tour_id, date, day_type, city, country, address, venue_name, venue_phone, venue_website, venue_capacity, venue_frozen_at, canonical_venue_id, canonical:canonical_venues(id, name, address, city, country, capacity)';
+    const fpRes = await supabase.from('routing').select(fpSelect).in('tour_id', featuredTourIds).order('date', { ascending: true });
+    let fpData = fpRes.data;
+    if (fpRes.error) {
+      const { data: plain } = await supabase
+        .from('routing')
+        .select('id, tour_id, date, day_type, city, country, address, venue_name, venue_phone, venue_website, venue_capacity, venue_frozen_at, canonical_venue_id')
+        .in('tour_id', featuredTourIds)
+        .order('date', { ascending: true });
+      fpData = plain as typeof fpData;
+    }
+    const venueRowsByTour = new Map<string, Array<{ date: string; dayType: string; city: string | null; venue: string | null }>>();
+    for (const r of (fpData ?? []) as Array<RoutingVenueSource & { tour_id: string; date: string; day_type: string | null }>) {
+      const dayType = r.day_type ?? 'off';
       const list = fingerprintByTour.get(r.tour_id) ?? [];
-      list.push({ date: r.date, dayType: r.day_type ?? 'off' });
+      list.push({ date: r.date, dayType });
       fingerprintByTour.set(r.tour_id, list);
+      const v = resolveVenue(r);
+      const vl = venueRowsByTour.get(r.tour_id) ?? [];
+      vl.push({ date: r.date, dayType, city: v.city, venue: v.name });
+      venueRowsByTour.set(r.tour_id, vl);
+    }
+    for (const [tourId, rows] of venueRowsByTour) {
+      const ns = deriveNextShow(rows.map((r) => ({ date: r.date, day_type: r.dayType })) as DeriveRoutingDay[], todayIso);
+      if (!ns) continue;
+      const row = rows.find((r) => r.date.slice(0, 10) === ns.date) ?? null;
+      featuredNextShowByTour.set(tourId, { date: ns.date, city: row?.city ?? null, venue: row?.venue ?? null });
     }
   }
 
@@ -425,11 +451,13 @@ export async function getWorkspaceLandingData(
       }
       monthsUpcoming = Math.max(0, Math.min(24, monthsUpcoming));
 
-      // Next show across all this artist's tours — the nearest per-tour show
-      // derived through tourStatus (nextShowByTour), NOT the first upcoming row.
+      // Next show across all this artist's tours — earliest wins. The featured
+      // tour uses the untruncated per-tour derivation (featuredNextShowByTour);
+      // other tours fall back to the workspace-wide nextShowByTour. This is the
+      // SAME derivation feeding the status line, so footer + status agree.
       let nextShow: WorkspaceLandingArtist['nextShow'] = null;
       for (const t of artistTours) {
-        const ns = nextShowByTour.get(t.id);
+        const ns = featuredNextShowByTour.get(t.id) ?? nextShowByTour.get(t.id);
         if (!ns) continue;
         if (!nextShow || ns.date < nextShow.date) {
           nextShow = { date: ns.date, city: ns.city, venue: ns.venue };
