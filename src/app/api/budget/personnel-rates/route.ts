@@ -415,7 +415,13 @@ export async function PATCH(request: Request) {
   let card = data as Record<string, unknown>;
   const hasRateEdit = (['show_rate', 'off_rate', 'rehearsal_rate', 'per_diem', 'advance_fee'] as const)
     .some((k) => updates[k] !== undefined);
-  if (hasRateEdit) {
+  // CR-02 — a rate_type flip (day_rate ↔ split_rate) must also rebuild the SSOT
+  // lines: rate_type is already persisted above, and writeRates re-emits lines
+  // from the card's stored amounts under the new layout (and deletes the stale
+  // split lines for day_rate). Without this, the picker changed the column but
+  // never the totals — "rate-type not editable".
+  const rateTypeChanged = updates.rate_type !== undefined;
+  if (hasRateEdit || rateTypeChanged) {
     const wr = await writeRates(supabase, {
       workspaceId: profile.workspace_id,
       cardId: id,

@@ -240,6 +240,15 @@ the same helper). **Needs-live** (Adam).
 #### PAY-06 — Summary unchanged
 **Do**: Payroll → **Summary**. **Expect**: identical to before (kept as-is).
 
+#### PAY-07 — Rate-type edit rebuilds the SSOT lines (CR-02)
+**Do**: In the Rates grid, change a person's **Rate type** cell (day rate ↔ split
+rate). **Expect**: the change persists AND the totals/derived lines rebuild to the
+new layout — `day_rate` emits the single day-rate line and drops the stale
+split lines (show/off/rehearsal); `split_rate` restores them. Root cause was the
+PATCH route only calling `writeRates` on a rate-amount edit, so a rate-type-only
+flip changed the column but not the lines. **Code-verified**: `writeRates` fires
+when `updates.rate_type !== undefined`; `fees.test` (15 checks) green. **Needs-live** (Adam).
+
 > **Deferred follow-ups:** PAY-03 rate-card slide + **advance editing** (needs
 > memberId plumbing); `acl_per_diem` festival override (CC_PAYROLL_ACL); branded
 > payroll PDF (bucket + brand_color exist, unused — future).
