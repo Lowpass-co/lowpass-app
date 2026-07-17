@@ -114,7 +114,10 @@ export function VenueAutocomplete({
   }, [value]);
 
   useEffect(() => {
-    if (query.length < 2) {
+    // A#10 design standard — suggestions from ≥1 char (was ≥2), 250ms debounce.
+    // The library search is cheap (no Places billing), so type-ahead can start on
+    // the first character; results render first, "Create new" stays last.
+    if (query.length < 1) {
       setLibraryMatches([]);
       setSuggestions([]);
       if (!queryFromUserRef.current) setOpen(false);
@@ -400,7 +403,7 @@ export function VenueAutocomplete({
           // the address column.
         }}
         onFocus={() => {
-          if (query.length >= 2) {
+          if (query.length >= 1) {
             queryFromUserRef.current = true;
             if (totalItems > 0) {
               setOpen(true);

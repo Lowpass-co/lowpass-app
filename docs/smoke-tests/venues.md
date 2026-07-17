@@ -210,6 +210,13 @@ upcoming→canonical, case 2 past→snapshot).
   library-first (keystroke → the search API, no Places billing); the Google path is
   invoked ONLY from "Create new". Places session-token + `handleSelect` are byte-for-
   byte — the billing invariant is preserved (fewer Places calls than before).
+- **VEN-SEARCH-01 — search-as-you-type, results first, create last (A#10).** In
+  `<VenueAutocomplete>` the library search fires on the **first** character (≥1 char,
+  250ms debounce — was ≥2), no Enter needed. The dropdown lists matching library
+  venues first; the "Create '…' as a new venue" row is **last** (the only Google
+  entry point). Grade "searches only after Enter / leads with create" was already
+  addressed by the library-first refactor; this lands the ≥1-char design standard.
+  (Code-verified: `query.length < 1` guard; create row renders after the matches.)
 
 ## Venue library — address + capacity enrichment (feat/venue-lib-address)
 
