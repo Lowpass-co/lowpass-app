@@ -114,7 +114,13 @@ export function ChannelListTourEditor({
         onTitleCommit={(title) => void commitTitle(title)}
         onFieldBlur={() => setPill({ state: 'saved', error: null })}
         onRemove={() => {}}
-        onOverride={() => router.push(`/tours/${tourId}/rider-packs/${packId}`)}
+        /* A#8 — override opens the pack editor, which is kind-aware: for a
+           channel_list pack RiderPackEditorView mounts the ChannelListEditor
+           (RiderPackEditorView.tsx `kind === 'channel_list'` branch), NOT the
+           generic rider shell — so this is a channel-list editor, not a dead end.
+           Navigate to the canonical /operations URL directly (was the legacy
+           /tours/[id]/rider-packs path that only resolved via a 301 redirect). */
+        onOverride={() => router.push(`/operations/${tourId}/riders/${packId}`)}
         onMoveUp={() => {}}
         onMoveDown={() => {}}
         /* §CL-NORELOAD — the editor now reconciles structural changes locally

@@ -379,6 +379,20 @@ opens a count modal (default 8, clamp 1–64); submitting inserts that many
 blank input rows in ONE round-trip (`ch.appendRows` array insert),
 numbered sequentially after the current max input `row_index`.
 
+#### CHL-28 — Override opens the channel-list editor, not a dead page (A#8)
+
+**Do**: On an inherited / artist-scope channel list shown in the tour
+channel-list tab, click **Override**.
+
+**Expect**: navigates to `/operations/[tourId]/riders/[packId]`, which for a
+`kind === 'channel_list'` pack renders the channel-list editor (RiderPackEditorView
+mounts `PackEditor` → `ChannelListEditor`) — a working editable grid, NOT the
+generic rider shell with no channel-list section. **Note**: the grade's "dead end"
+premise was already obsolete (kind-aware routing lives in RiderPackEditorView); this
+just points the override at the canonical `/operations` URL directly instead of the
+legacy `/tours/[id]/rider-packs` path that only resolved via a 301 redirect.
+**Code-verified**; needs-live to confirm the destination grid.
+
 **Tracked in**: `CC_CHANNEL_LIST_REBUILD.md` §CL-FIX-4.
 
 ## Stage B — RE-SKIN ONLY (Option A) + arrow-key nav — 2026-06-10
