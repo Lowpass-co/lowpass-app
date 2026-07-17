@@ -129,6 +129,11 @@ function SetupMode({
   const [saving, setSaving] = useState(false);
   const [saveAsTemplateOpen, setSaveAsTemplateOpen] = useState(false);
   const [templateName, setTemplateName] = useState('');
+  // ADV-51 — "Set as tour default" ticks the save-as-template through the
+  // tours/advance route (which persists the pointer + fans out to every show).
+  // Pre-checked when the tour has no default yet, so the first template a TM
+  // builds naturally becomes the whole-tour default.
+  const [makeDefault, setMakeDefault] = useState(!defaultAdvanceTemplateId);
   const [applyTemplateOpen, setApplyTemplateOpen] = useState(false);
   const [layoutTemplates, setLayoutTemplates] = useState<{ id: string; name: string; sections: SectionDef[] }[]>([]);
   const [layoutTemplatesLoading, setLayoutTemplatesLoading] = useState(false);
@@ -542,6 +547,26 @@ function SetupMode({
 
   const saveAsTemplate = async () => {
     if (!templateName.trim()) return;
+    // Default path: post through the tours/advance route, which sets
+    // tours.default_advance_template_id and auto-assigns to all shows.
+    if (makeDefault) {
+      const res = await fetch(`/api/tours/${tourId}/advance`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          is_template: true,
+          template_label: templateName.trim(),
+          sections,
+          set_as_tour_default: true,
+        }),
+      });
+      if (res.ok) {
+        setSaveAsTemplateOpen(false);
+        setTemplateName('');
+        await onSaved();
+      }
+      return;
+    }
     const res = await fetch('/api/advance/layout-templates', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1368,6 +1393,10 @@ function SetupMode({
             <h3 className="text-lg font-semibold text-lp-text">Save as template</h3>
             <p className="mt-1 text-sm text-lp-text-secondary">Give this layout a name to reuse on other shows.</p>
             <input type="text" value={templateName} onChange={(e) => setTemplateName(e.target.value)} placeholder="e.g. Festival, Club, Headline" className="mt-4 w-full rounded-xl border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:border-lp-orange focus:outline-none focus:ring-2 focus:ring-lp-orange/20" />
+            <label className="mt-3 flex items-start gap-2 text-sm text-lp-text-secondary">
+              <input type="checkbox" checked={makeDefault} onChange={(e) => setMakeDefault(e.target.checked)} className="mt-0.5" style={{ accentColor: 'var(--lp-orange)' }} />
+              <span>Set as this tour&apos;s default — applies it to every show that doesn&apos;t have an advance yet.</span>
+            </label>
             <div className="mt-4 flex justify-end gap-2">
               <button type="button" onClick={() => setSaveAsTemplateOpen(false)} className="rounded-xl border border-lp-border px-4 py-2 text-sm text-lp-text hover:bg-lp-surface-hover">Cancel</button>
               <button type="button" onClick={saveAsTemplate} disabled={!templateName.trim()} className="rounded-xl bg-lp-orange px-4 py-2 text-sm font-medium text-white hover:bg-lp-orange-hover disabled:opacity-50">Save</button>

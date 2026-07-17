@@ -612,6 +612,30 @@ behaviour (drag does nothing? doesn't persist?).
   (world-readable facts); only the routing rows for THIS tour are read; nothing reads
   another workspace's advance data. The advance stays workspace-private.
 
+## Default template + any-day-type start (G1-A #4)
+
+> ADV-51 grade fix. Two gaps closed: (1) a tour with no default advance template
+> now gets a "Build one for the whole tour, or skip" prompt on the start surface;
+> the builder's Save-as-template modal has a "Set as tour default" tick that
+> persists `tours.default_advance_template_id` and fans the template out to every
+> show/festival routing without an advance yet (idempotent). (2) Advances open on
+> ANY day type — the show-only gates in AdvanceOverview (row menu, row-click,
+> status/city/progress cells) are removed. Readiness counts stay show-based.
+
+- **ADV-110 — no-default start prompt.** On a tour with `default_advance_template_id`
+  null, open a day with no advance → the start panel shows two actions: primary
+  "Build one for the whole tour" (→ `?mode=edit` build surface) and secondary
+  "Skip — start a blank advance for this day". When a default exists, the single
+  "Start this advance" button shows instead.
+- **ADV-111 — save-as-tour-default fans out.** In the builder, Save as template with
+  "Set as tour default" ticked → `tours.default_advance_template_id` is set and every
+  show/festival routing without a form config gets one seeded from the template.
+  Re-saving does not clobber days already customised (idempotent).
+- **ADV-112 — any day opens an advance.** In the advance overview, a day-off /
+  travel / rehearsal / radio row's kebab offers Open/Start advance + Copy; clicking
+  the row routes into `/advance/[tourId]/[routingId]`; status/city/sections cells
+  render for every row. "Edit note" stays available on non-show rows.
+
 ## Retired
 
 (None yet.)

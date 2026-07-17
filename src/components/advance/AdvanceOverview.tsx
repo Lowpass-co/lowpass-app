@@ -310,71 +310,73 @@ export function AdvanceOverview({
 
   const buildRowMenu = (row: RowVm): ContextMenuItem[] => {
     const items: ContextMenuItem[] = [];
-    if (row.isShow) {
+    // ADV-51 — advances open on ANY day type (day off / travel / rehearsal /
+    // radio), not just shows. Readiness counts stay show-based (see showCount),
+    // but the open/start/copy/status affordances are available on every row.
+    items.push({
+      label: row.advance ? 'Open advance' : 'Start advance',
+      icon: ExternalLink,
+      onClick: () => router.push(`/advance/${tourId}/${row.routing_id}`),
+    });
+    items.push({
+      label: 'Copy advance…',
+      icon: Copy,
+      onClick: () => {
+        setCopySourceRoutingId(row.routing_id);
+        setCopyModalOpen(true);
+      },
+    });
+    if (row.advance && row.advance.status !== 'complete') {
       items.push({
-        label: 'Open advance',
-        icon: ExternalLink,
-        onClick: () => router.push(`/advance/${tourId}/${row.routing_id}`),
-      });
-      items.push({
-        label: 'Copy advance…',
-        icon: Copy,
+        label: 'Mark as complete',
+        icon: CheckCircle2,
         onClick: () => {
-          setCopySourceRoutingId(row.routing_id);
-          setCopyModalOpen(true);
+          void fetch(`/api/tours/${tourId}/advance/${row.routing_id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: 'complete' }),
+          }).then((r) => {
+            if (r.ok) {
+              showToast('Marked as complete');
+              onPatched();
+              router.refresh();
+            }
+          });
         },
       });
-      if (row.advance && row.advance.status !== 'complete') {
-        items.push({
-          label: 'Mark as complete',
-          icon: CheckCircle2,
-          onClick: () => {
-            void fetch(`/api/tours/${tourId}/advance/${row.routing_id}`, {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ status: 'complete' }),
-            }).then((r) => {
-              if (r.ok) {
-                showToast('Marked as complete');
-                onPatched();
-                router.refresh();
-              }
-            });
-          },
-        });
-      }
-      if (row.advance && row.advance.status === 'complete') {
-        items.push({
-          label: 'Mark as in progress',
-          icon: ListOrdered,
-          onClick: () => {
-            void fetch(`/api/tours/${tourId}/advance/${row.routing_id}`, {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ status: 'in_progress' }),
-            }).then((r) => {
-              if (r.ok) {
-                showToast('Marked as in progress');
-                onPatched();
-                router.refresh();
-              }
-            });
-          },
-        });
-      }
-      if (row.advance) {
-        items.push({
-          label: 'Delete advance',
-          icon: Trash2,
-          variant: 'danger',
-          onClick: () => setBulkRow(row),
-        });
-      }
-    } else {
+    }
+    if (row.advance && row.advance.status === 'complete') {
+      items.push({
+        label: 'Mark as in progress',
+        icon: ListOrdered,
+        onClick: () => {
+          void fetch(`/api/tours/${tourId}/advance/${row.routing_id}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: 'in_progress' }),
+          }).then((r) => {
+            if (r.ok) {
+              showToast('Marked as in progress');
+              onPatched();
+              router.refresh();
+            }
+          });
+        },
+      });
+    }
+    if (!row.isShow) {
       items.push({
         label: 'Edit note',
         icon: ExternalLink,
         onClick: () => setDayOffNotesItem(row),
+      });
+    }
+    if (row.advance) {
+      items.push({
+        label: 'Delete advance',
+        icon: Trash2,
+        variant: 'danger',
+        onClick: () => setBulkRow(row),
       });
     }
     return items;
@@ -425,14 +427,16 @@ export function AdvanceOverview({
         header: 'City',
         accessor: (r) => r.city ?? '',
         sortable: true,
-        cell: (_v, r) => <span className="truncate text-sm text-lp-text-secondary">{r.isShow ? r.city || '—' : ''}</span>,
+        cell: (_v, r) => <span className="truncate text-sm text-lp-text-secondary">{r.city || '—'}</span>,
       },
       {
         id: 'status',
         header: 'Status',
         accessor: (r) => r.effectiveStatus,
         width: 132,
-        cell: (_v, r) => (r.isShow ? <StatusPill status={r.effectiveStatus} /> : null),
+        // ADV-51 — status/progress reflect the advance on any day type. Rows
+        // with no advance yet read "Not started" / 0-0, which is now actionable.
+        cell: (_v, r) => <StatusPill status={r.effectiveStatus} />,
       },
       {
         id: 'progress',
@@ -440,7 +444,7 @@ export function AdvanceOverview({
         accessor: (r) => r.progress.complete,
         sortable: true,
         width: 136,
-        cell: (_v, r) => (r.isShow ? <ProgressBar progress={r.progress} /> : null),
+        cell: (_v, r) => <ProgressBar progress={r.progress} />,
       },
       {
         id: 'actions',
@@ -459,11 +463,9 @@ export function AdvanceOverview({
   );
 
   const onRowClick = (row: RowVm) => {
-    if (row.isShow) {
-      router.push(`/advance/${tourId}/${row.routing_id}`);
-    } else {
-      setDayOffNotesItem(row);
-    }
+    // ADV-51 — every day opens its advance; the day-off note stays reachable
+    // from the row menu ("Edit note").
+    router.push(`/advance/${tourId}/${row.routing_id}`);
   };
 
   const overflowMenuItems: ContextMenuItem[] = [

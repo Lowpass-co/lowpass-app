@@ -158,7 +158,13 @@ export async function POST(
     return NextResponse.json({ error: 'Tour not found' }, { status: 404 });
   }
 
-  let body: { routing_id?: string; sections: AdvanceSection[]; is_template?: boolean; template_label?: string };
+  let body: {
+    routing_id?: string;
+    sections: AdvanceSection[];
+    is_template?: boolean;
+    template_label?: string;
+    set_as_tour_default?: boolean;
+  };
   try {
     body = await request.json();
   } catch {
@@ -198,12 +204,89 @@ export async function POST(
     if (insertErr) {
       return NextResponse.json({ error: insertErr.message }, { status: 500 });
     }
+
+    // ADV-51 — "save as tour default → auto-assign to all shows". When the
+    // builder ticks "Set as tour default", persist the pointer AND fan the
+    // template out to every show/festival routing that has no advance yet.
+    // Idempotent: days that already have a form config are left untouched, so
+    // a re-save never clobbers a day the TM has since customised.
+    let assignedCount = 0;
+    if (body.set_as_tour_default === true) {
+      await supabase
+        .from('tours')
+        .update({ default_advance_template_id: inserted.id })
+        .eq('id', tourId);
+
+      const templateSections =
+        (inserted.sections as AdvanceSection[] | null) ?? normalizedSections;
+      const { data: allRouting } = await supabase
+        .from('routing')
+        .select('id, day_type')
+        .eq('tour_id', tourId);
+      const showRoutingIds = (allRouting ?? [])
+        .filter((r) => {
+          const types = String(r.day_type ?? '')
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean);
+          return SHOW_DAY_TYPES.some((t) => types.includes(t));
+        })
+        .map((r) => r.id);
+
+      if (showRoutingIds.length > 0) {
+        const { data: existingConfigs } = await supabase
+          .from('advance_form_configs')
+          .select('routing_id')
+          .eq('tour_id', tourId)
+          .in('routing_id', showRoutingIds);
+        const haveConfig = new Set((existingConfigs ?? []).map((c) => c.routing_id));
+
+        for (const rid of showRoutingIds) {
+          if (haveConfig.has(rid)) continue;
+          const { data: cfg, error: cfgErr } = await supabase
+            .from('advance_form_configs')
+            .insert({
+              tour_id: tourId,
+              routing_id: rid,
+              name: 'Default Advance',
+              is_default: false,
+              sections: templateSections,
+              created_by_id: user.id,
+            })
+            .select('id')
+            .single();
+          if (cfgErr || !cfg) continue;
+
+          const { data: existingInst } = await supabase
+            .from('advance_instances')
+            .select('id')
+            .eq('routing_id', rid)
+            .maybeSingle();
+          if (existingInst) {
+            await supabase
+              .from('advance_instances')
+              .update({ form_config_id: cfg.id })
+              .eq('id', existingInst.id);
+          } else {
+            await supabase.from('advance_instances').insert({
+              routing_id: rid,
+              form_config_id: cfg.id,
+              status: 'not_started',
+            });
+          }
+          assignedCount++;
+        }
+      }
+    }
+
     return NextResponse.json({
       template: {
         id: inserted.id,
         name: inserted.template_label,
         sections: inserted.sections ?? [],
       },
+      set_as_default: body.set_as_tour_default === true,
+      assigned_count: assignedCount,
     });
   }
 
