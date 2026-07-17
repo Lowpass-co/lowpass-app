@@ -76,7 +76,12 @@ export function RiderPacksTourClient({
         accessor: (r) => r.title ?? '',
         sortable: true,
         frozen: true,
-        cell: (value) => <span className="font-medium text-lp-text">{String(value || 'Untitled')}</span>,
+        cell: (value, row) => (
+          <span className="inline-flex items-center gap-2">
+            <span className="font-medium text-lp-text">{String(value || 'Untitled')}</span>
+            <ScopePill scope={row.scope} />
+          </span>
+        ),
       },
       {
         id: 'status',
@@ -145,6 +150,14 @@ export function RiderPacksTourClient({
           </p>
           <h1 className="mt-1 text-2xl font-bold text-lp-text">Rider packs</h1>
           <p className="mt-1 text-sm text-lp-text-secondary">Open a pack to edit the full canvas.</p>
+          {/* A#9 — path from tour Production to the artist-level masters. */}
+          <Link
+            href={`/artists/${artistId}/riders`}
+            className="mt-2 inline-flex items-center gap-1 text-sm font-medium"
+            style={{ color: 'var(--lp-orange)' }}
+          >
+            View artist masters →
+          </Link>
         </div>
         <button
           type="button"
@@ -194,6 +207,25 @@ export function RiderPacksTourClient({
           })()
         : null}
     </div>
+  );
+}
+
+/** A#9 — scope chip: makes artist-vs-tour scope visible on every pack row.
+ *  'artist' → "Artist ↘" (inherited master); 'tour'/'show' → this tour's own. */
+function ScopePill({ scope }: { scope: string }) {
+  const isArtist = scope === 'artist';
+  return (
+    <span
+      className="inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide"
+      style={
+        isArtist
+          ? { backgroundColor: 'var(--lp-info-bg, rgba(59,130,246,0.12))', color: 'var(--lp-info, #3b82f6)' }
+          : { backgroundColor: 'var(--lp-surface-muted, #374151)', color: 'var(--lp-text-secondary)' }
+      }
+      title={isArtist ? 'Artist-level master (inherited across tours)' : 'Scoped to this tour'}
+    >
+      {isArtist ? 'Artist ↘' : scope === 'show' ? 'Show' : 'Tour'}
+    </span>
   );
 }
 

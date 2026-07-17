@@ -75,3 +75,15 @@ tour's artist (added to the page's tour select; `tours.artist_id` is NOT NULL).
 > Don't delete the editor body's other consumers: templates (assign-to-tour),
 > channel-list/stage-plot, and the `/rider-packs/[id]` route are unchanged
 > (shared body, same fetch).
+
+## RID-06 — Scope chips + artist-masters path (A#9)
+
+**Do**: Open `/operations/[tourId]/riders` (tour Production rider packs).
+
+**Expect**: every pack row shows a scope chip beside its name — "Artist ↘"
+(blue/info) for an inherited artist-level master, else "Tour"/"Show" (muted). A
+"View artist masters →" link sits under the "Rider packs" heading, pointing at
+`/artists/[artistId]/riders` (built from the existing `artistId` prop). This is
+the immediate unblock; surfacing inherited artist masters *inline* in the tour
+list is the G2 IA-clarity item (the tour query still filters to `tour_id`, so
+current rows read "Tour"/"Show"). **Code-verified**; needs-live.
