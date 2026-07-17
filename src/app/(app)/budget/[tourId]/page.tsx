@@ -63,6 +63,14 @@ import {
 } from '@/server/budget/detectDuplicates';
 import type { BudgetLineItem, BudgetSection } from '@/types';
 
+/* Force dynamic rendering. This page is auth-gated (reads cookies) AND its
+   client subtree (BudgetGridView) calls useSearchParams(). Under an engine
+   that statically prerenders it (Turbopack's dynamic auto-detection differs
+   from webpack's), the useSearchParams() bail streams the not-found boundary
+   at a 200 status — the exact regression seen live. Forcing dynamic, as the
+   Files pages already do, removes the prerender path entirely. */
+export const dynamic = 'force-dynamic';
+
 export async function generateMetadata({
   params,
 }: {
