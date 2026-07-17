@@ -636,6 +636,27 @@ behaviour (drag does nothing? doesn't persist?).
   the row routes into `/advance/[tourId]/[routingId]`; status/city/sections cells
   render for every row. "Edit note" stays available on non-show rows.
 
+## Venue-entry form — in-day edit path + intake reality (G1-A #5)
+
+> Grade A#5 ("the links work, the form doesn't"). Two findings: (1) the PUBLIC
+> venue intake form is NOT missing — `/advance-intake/[token]` renders a
+> schema-driven form (`buildIntakeFormSchema`) that keeps the seeded **Venue
+> Info** section (venue_name/address/capacity/website); it only shows "Nothing to
+> fill in yet" when the advance has zero fillable sections, i.e. the empty-advance
+> case that #4 fixes. INTK-02 is accurate, not false. (2) The real gap was in-day:
+> the rail VENUE SPECS card was read-only with no edit path — now it deep-links to
+> the editable Venue Info section on the read surface.
+
+- **ADV-113 — rail "Edit venue info" jumps to the section.** On the advance day,
+  the right-rail Venue Specs card shows an "Edit venue info" link (when the advance
+  has a Venue Info section). Clicking it scrolls to that section
+  (`#advance-<slug>`), where the venue fields are inline-editable (ADV-94).
+- **ADV-114 — public intake renders the venue form.** A venue intake link for a
+  show whose advance has sections shows the Venue Info fields as editable inputs
+  (name/address/capacity/website), autosaving to `intake_pending_answers`. An
+  advance with no sections shows "Nothing to fill in yet" — resolved once #4 seeds
+  a default template. (Contact-typed fields stay TM-curated by design.)
+
 ## Retired
 
 (None yet.)

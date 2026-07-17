@@ -19,7 +19,7 @@
    ============================================ */
 
 import type { KeyContactCard } from '@/lib/advance/key-info';
-import { Phone, Mail } from 'lucide-react';
+import { Phone, Mail, Pencil } from 'lucide-react';
 import { PreviouslyPlayedRailCard } from './PreviouslyPlayedRailCard';
 
 export type SpecRow = {
@@ -40,6 +40,9 @@ interface AdvanceShowRightRailProps {
   specs: SpecRow[];
   contacts: KeyContactCard[];
   currentSections: SectionDef[];
+  /** A#5 — in-page anchor of the editable Venue Info section (read surface).
+   *  null when the advance has no venue section; hides the edit link then. */
+  venueEditAnchor?: string | null;
 }
 
 export function AdvanceShowRightRail({
@@ -47,6 +50,7 @@ export function AdvanceShowRightRail({
   specs,
   contacts,
   currentSections,
+  venueEditAnchor,
 }: AdvanceShowRightRailProps) {
   return (
     <aside
@@ -109,6 +113,15 @@ export function AdvanceShowRightRail({
             ))}
           </dl>
         )}
+        {venueEditAnchor ? (
+          <a
+            href={`#${venueEditAnchor}`}
+            className="mt-3 inline-flex items-center gap-1.5 text-xs font-medium"
+            style={{ color: 'var(--lp-orange)' }}
+          >
+            <Pencil size={12} aria-hidden /> Edit venue info
+          </a>
+        ) : null}
       </RailCard>
 
       {/* ── KEY CONTACTS ─────────────────────────────────── */}

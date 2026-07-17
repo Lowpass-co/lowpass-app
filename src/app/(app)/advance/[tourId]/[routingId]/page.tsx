@@ -275,6 +275,22 @@ export default async function AdvanceShowPage({
     label: s.label,
   }));
 
+  // A#5 — the rail Venue Specs card (routing-sourced, read-only) previously had
+  // NO edit path. Deep-link it to the editable Venue Info section on the read
+  // surface, identified by the section that owns a `venue_name` field (same rule
+  // the venue overlay uses). Anchor slug mirrors AdvanceShowReadView's
+  // sectionAnchorId(label) so the in-page scroll resolves.
+  const venueSection = sectionsForExtract.find((s) =>
+    ((s as { fields?: { id?: string }[] }).fields ?? []).some((f) => f.id === 'venue_name'),
+  );
+  const venueEditAnchor = venueSection
+    ? `advance-${(venueSection.label ?? 'venue-info')
+        .toLowerCase()
+        .trim()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '')}`
+    : null;
+
   return (
     <div className="flex min-h-0 flex-1">
         <AdvanceUpcomingSidebar
@@ -361,6 +377,7 @@ export default async function AdvanceShowPage({
               specs={specs}
               contacts={keyContacts}
               currentSections={currentSectionsForRail}
+              venueEditAnchor={venueEditAnchor}
             />
           </>
         )}
