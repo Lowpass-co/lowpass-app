@@ -226,3 +226,20 @@ _(none yet.)_
   chosen stage-plot pack back to this list. Cross-workspace isolation: PATCHing
   `linked_rider_pack_id` to a pack in another workspace 404s (RLS SELECT gate);
   self-link 400s. (PATCH /api/rider-packs/[id]; `LinkedRiderPackControl`)
+
+## Channel assignment discoverable (SP-05 / A#11)
+
+> The channel-link control was fully built but hidden behind `channels.length > 0`
+> in ItemProperties, so with no channel list paired the whole Channels section was
+> absent on item select — the feature read as missing. Un-gated + a pairing prompt;
+> canvas channel numbers now default-on. (The number stays a derived read-only
+> ordinal — making it editable = reorder the source list, which is the G2
+> "stage-plot inspector overhaul", not this exposure fix.)
+
+- **SP-05a — Channels section always shows on item select.** Select any icon item:
+  the inspector shows a "Channels" section. With a channel list paired it shows the
+  linked channels + "+ Link existing channel…" select + unlink; with none paired it
+  shows a prompt pointing at the header "Linked channel list" control.
+- **SP-05b — channel numbers visible on the canvas by default.** `DEFAULT_PLOT.showChannels`
+  is now `true`; a linked item shows its channel number chip on the canvas without
+  hunting for the overlay toggle. Items with no channel link show no chip (clean).

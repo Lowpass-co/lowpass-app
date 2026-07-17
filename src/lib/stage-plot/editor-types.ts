@@ -126,7 +126,10 @@ export const DEFAULT_PLOT: EditorPlot = {
   showCenterLine: false,
   showDsCross: false,
   showLateralMarkers: false,
-  showChannels: false,
+  // SP-05 (A#11) — channel numbers on items are ON by default so a linked
+  // channel is discoverable on the canvas. The chip only renders for items that
+  // actually carry a channel link, so plots without channels stay clean.
+  showChannels: true,
   snap: true,
   // VIS-SP-02 — default brand is NEUTRAL (was #FF4500 orange). Orange on the
   // canvas is reserved for selection; brand only tints the faint fill wash /

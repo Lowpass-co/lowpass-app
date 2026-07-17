@@ -221,11 +221,20 @@ export function ItemProperties({ plot, item, selectedCount = 0, channels = [], o
                   style={{ accentColor: 'var(--lp-orange)' }}
                 />
               </Row>
-              {channels.length > 0 && (
-                <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--lp-border)' }}>
-                  <div style={{ fontSize: 'var(--lp-text-2xs)', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--lp-text-tertiary)', marginBottom: 6 }}>
-                    Channels {item.channelRowIds?.length ? `(${item.channelRowIds.length})` : ''}
+              {/* SP-05 (A#11) — the channel-link control is always visible on item
+                  select (was hidden entirely when no channel list was paired, which
+                  made the whole feature undiscoverable). When no list is paired yet,
+                  a prompt points at the header "Linked channel list" control. */}
+              <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--lp-border)' }}>
+                <div style={{ fontSize: 'var(--lp-text-2xs)', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--lp-text-tertiary)', marginBottom: 6 }}>
+                  Channels {item.channelRowIds?.length ? `(${item.channelRowIds.length})` : ''}
+                </div>
+                {channels.length === 0 ? (
+                  <div style={{ fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-tertiary)', lineHeight: 1.4 }}>
+                    No channel list linked yet. Pair one from <span style={{ color: 'var(--lp-text-secondary)' }}>Linked channel list</span> above the canvas, then link its channels to this item here.
                   </div>
+                ) : (
+                <>
                   {(item.channelRowIds ?? []).map((cid) => {
                     const c = channels.find((x) => x.id === cid);
                     if (!c) return null;
@@ -260,8 +269,9 @@ export function ItemProperties({ plot, item, selectedCount = 0, channels = [], o
                         style={{ fontSize: 'var(--lp-text-xs)', padding: '4px 8px', borderRadius: 5, border: '1px solid var(--lp-border)', background: 'var(--lp-surface)', color: 'var(--lp-text-secondary)', cursor: 'pointer' }}>Add</button>
                     </div>
                   )}
-                </div>
-              )}
+                </>
+                )}
+              </div>
             </>
           )}
 
