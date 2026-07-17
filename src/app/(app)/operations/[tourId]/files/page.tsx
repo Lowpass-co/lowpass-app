@@ -37,7 +37,11 @@ export default async function OperationsTourFilesPage({ params }: { params: Prom
 
   return (
     <div className="mx-auto w-full px-4 pt-6">
-      <TourFilesClient initial={files} />
+      <TourFilesClient
+        initial={files}
+        uploadScope={{ type: 'tour', id: tour.id }}
+        subtitle="Consolidated uploads for this tour. Drag files here or use Upload."
+      />
     </div>
   );
 }
