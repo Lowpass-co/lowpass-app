@@ -9,7 +9,7 @@
    (＋ Add day type). Portaled to <body> so it escapes the grid's overflow.
    ============================================ */
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 
 export interface MenuItem {
@@ -36,20 +36,35 @@ function norm(o: string | MenuItem): MenuItem {
 
 export function GridMenu({ config, onClose }: { config: MenuConfig; onClose: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
+  const { anchor, options, current, optColors, onPick, onDelete, footer } = config;
+
+  // G1-C keyboard contract — the menu is focus-managed: arrows rove options,
+  // Enter selects, Esc exits (returns to the grid), Tab closes and lets focus
+  // move to the next entry (never traps). activeIndex starts on the current value.
+  const total = options.length + (footer ? 1 : 0);
+  const currentIdx = Math.max(0, options.findIndex((o) => norm(o).value === current));
+  const [activeIndex, setActiveIndex] = useState(currentIdx);
 
   useEffect(() => {
-    // Defer so the opening pointerdown doesn't immediately close it.
+    // Focus the menu so it captures keys (the grid stops handling them while a
+    // menu is open). Deferred so the opening keystroke doesn't leak through.
+    const f = setTimeout(() => ref.current?.focus(), 0);
+    // Defer outside-close so the opening pointerdown doesn't immediately close it.
     const onDown = (e: PointerEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) onClose();
     };
     const t = setTimeout(() => document.addEventListener('pointerdown', onDown), 0);
     return () => {
+      clearTimeout(f);
       clearTimeout(t);
       document.removeEventListener('pointerdown', onDown);
     };
   }, [onClose]);
 
-  const { anchor, options, current, optColors, onPick, onDelete, footer } = config;
+  const fireIndex = (i: number) => {
+    if (i < options.length) onPick(norm(options[i]).value);
+    else if (footer) footer.onClick();
+  };
 
   return createPortal(
     <div
@@ -57,15 +72,38 @@ export function GridMenu({ config, onClose }: { config: MenuConfig; onClose: () 
       className="lp-grid-pop"
       style={{ left: anchor.left, top: anchor.bottom + 4 }}
       role="menu"
+      tabIndex={-1}
+      onKeyDown={(e) => {
+        if (e.key === 'ArrowDown') {
+          e.preventDefault();
+          setActiveIndex((i) => Math.min(i + 1, total - 1));
+        } else if (e.key === 'ArrowUp') {
+          e.preventDefault();
+          setActiveIndex((i) => Math.max(i - 1, 0));
+        } else if (e.key === 'Enter') {
+          e.preventDefault();
+          fireIndex(activeIndex);
+        } else if (e.key === 'Escape') {
+          e.preventDefault();
+          onClose();
+        } else if (e.key === 'Tab') {
+          // Never trap — close and let focus move to the next entry point.
+          onClose();
+        }
+      }}
     >
       {options.map((o, i) => {
         const it = norm(o);
         const on = it.value === current;
+        const active = i === activeIndex;
         return (
           <div
             key={`${it.value}-${i}`}
             className={`mi${on ? ' on' : ''}`}
             role="menuitem"
+            aria-selected={active}
+            onMouseEnter={() => setActiveIndex(i)}
+            style={active ? { background: 'var(--lp-surface-hover)' } : undefined}
             onClick={(e) => {
               if ((e.target as HTMLElement).dataset.del !== undefined) return;
               onPick(it.value);
@@ -110,7 +148,12 @@ export function GridMenu({ config, onClose }: { config: MenuConfig; onClose: () 
         <div
           className="mi"
           role="menuitem"
-          style={{ color: 'var(--lp-orange)' }}
+          aria-selected={activeIndex === options.length}
+          onMouseEnter={() => setActiveIndex(options.length)}
+          style={{
+            color: 'var(--lp-orange)',
+            ...(activeIndex === options.length ? { background: 'var(--lp-surface-hover)' } : {}),
+          }}
           onClick={footer.onClick}
         >
           {footer.label}

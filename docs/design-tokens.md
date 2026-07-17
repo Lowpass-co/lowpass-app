@@ -309,3 +309,29 @@ The rotation is exposed as `--lp-grid-accent-1..5` (orange · info · violet ·
 success · pink). Every colour inside `src/components/grid/grid.css` resolves
 to one of these `var(--lp-…)` tokens (or a `color-mix` / hex+alpha of one) —
 no literal hex in the grid.
+
+## 13. Keyboard interaction contract (G1-C — app-wide law)
+
+Adam's rule, now the standard every interactive component inherits. Applies to
+menus, dropdowns, grids, pickers, comboboxes, and any focus-managed widget.
+
+| Key | Behaviour | Never |
+|-----|-----------|-------|
+| **Tab / Shift-Tab** | Move to the **next / previous entry point** (the next focusable control in document order). | Trap focus inside a menu, grid, or popover. A widget must not `preventDefault()` on Tab to keep focus. |
+| **Arrow keys** | Navigate **within** a list / grid / menu (up/down through options, left/right across cells). | Move to a different widget or scroll the page when a widget is focused. |
+| **Enter** | **Select / commit** the highlighted option or cell edit. | — |
+| **Esc** | **Exit** — close the popover/menu (returning focus to its trigger) or cancel a cell edit (restoring the prior value). | Leave an open overlay with no keyboard way out. |
+
+Notes:
+- **Open dropdowns from the keyboard** with Enter / Space / ArrowDown on the
+  trigger; the trigger stays a real `<button>` so Tab reaches it.
+- **Type-to-search** in a long option list is allowed and does not consume Tab
+  (e.g. the day-type dropdown, TR-06). Printable keys filter; Tab still exits.
+- A widget that opens an overlay must restore focus to the trigger on Esc/close
+  so Tab resumes from the expected place.
+- The venue autocomplete (`VenueAutocomplete`) is the reference implementation:
+  ArrowUp/Down move the highlight, Enter picks, Esc closes, **Tab blurs normally**
+  (it does NOT commit the highlighted row — only Enter/click do).
+
+Smoke: KEY-01 (Tab never traps), KEY-02 (arrows navigate within), KEY-03 (Esc
+exits / Enter selects). See `docs/smoke-tests/ui.md`.

@@ -68,6 +68,8 @@ export function DayTypeCombobox({
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
+  // G1-C keyboard contract — arrow-key roving highlight over the option list.
+  const [activeIndex, setActiveIndex] = useState(0);
   const [dropdownRect, setDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -148,16 +150,33 @@ export function DayTypeCombobox({
 
   const handleFocus = () => {
     setOpen(true);
+    setActiveIndex(0);
     setQuery(displayValue); // Pre-fill so user can backspace to clear
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (!open) setOpen(true);
+      setActiveIndex((i) => Math.min(i + 1, Math.max(0, filtered.length - 1)));
+      return;
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setActiveIndex((i) => Math.max(i - 1, 0));
+      return;
+    }
     if (e.key === 'Enter') {
+      e.preventDefault();
+      // Prefer the arrow-highlighted option; else exact match; else add custom.
+      if (filtered.length > 0 && filtered[activeIndex]) {
+        handleSelect(filtered[activeIndex].value);
+        return;
+      }
       if (!query.trim()) {
         onChange('');
         setQuery('');
         setOpen(false);
-        e.preventDefault();
         return;
       }
       if (exactMatch) handleSelect(exactMatch.value);
@@ -167,7 +186,6 @@ export function DayTypeCombobox({
         setQuery('');
         setOpen(false);
       }
-      e.preventDefault();
     }
     if (e.key === 'Tab') {
       if (open) {
@@ -254,21 +272,22 @@ export function DayTypeCombobox({
                   {query.trim() ? 'Press Enter to add' : 'No options'}
                 </li>
               ) : (
-                filtered.map((opt) => {
+                filtered.map((opt, i) => {
                   const c = getDayTypeColor(opt.value);
                   return (
                     <li key={opt.value}>
                       <button
                         type="button"
+                        onMouseEnter={() => setActiveIndex(i)}
                         onMouseDown={(e) => {
                           e.preventDefault();
                           e.stopPropagation();
                           handleSelect(opt.value);
                         }}
                         className={cn(
-                          'w-full px-3 py-2 text-left text-sm transition-colors hover:bg-lp-surface-hover',
+                          'w-full px-3 py-2 text-left text-sm transition-colors',
                           c.text,
-                          value === opt.value && 'bg-lp-surface-hover'
+                          (value === opt.value || i === activeIndex) && 'bg-lp-surface-hover'
                         )}
                       >
                         {opt.label}

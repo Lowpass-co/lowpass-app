@@ -2569,10 +2569,20 @@ function PopShell({
     const onDown = (e: PointerEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) onClose();
     };
+    // G1-C keyboard contract — Esc exits the popover (Filter / Columns / Add
+    // column). Tab still moves natively through the form controls inside.
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        onClose();
+      }
+    };
     const t = setTimeout(() => document.addEventListener('pointerdown', onDown), 0);
+    document.addEventListener('keydown', onKey);
     return () => {
       clearTimeout(t);
       document.removeEventListener('pointerdown', onDown);
+      document.removeEventListener('keydown', onKey);
     };
   }, [onClose]);
   return createPortal(

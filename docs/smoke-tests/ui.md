@@ -77,6 +77,35 @@ figures.
 
 **Last verified**:
 
+## Keyboard interaction contract (G1-C)
+
+> The app-wide contract is written in `docs/design-tokens.md` §13: Tab always
+> moves to the next entry (never traps), arrows navigate within, Enter selects,
+> Esc exits. These IDs smoke the offenders that were fixed.
+
+#### KEY-01 — Tab never traps
+**Do**: Open a grid cell menu (routing/status/day-type), the Filter/Columns
+popover, a `StyledSelect`, the `DayTypeCombobox`, or the venue autocomplete. Press Tab.
+**Expect**: focus leaves the widget to the **next entry point**; the overlay
+closes (grid menus) or the control commits/blurs natively. No widget swallows Tab.
+
+#### KEY-02 — Arrows navigate within
+**Do**: With a grid menu / `StyledSelect` / `DayTypeCombobox` open, press ↑/↓.
+**Expect**: the highlight moves between options (roving), wrapping at the ends is
+not required but the highlight is always visible. Enter selects the highlighted option.
+
+#### KEY-03 — Esc exits, Enter selects
+**Do**: Open any of the above; press Esc. Then reopen, highlight an option, press Enter.
+**Expect**: Esc closes the overlay (grid menu / popover / select / combobox /
+venue dropdown) without changing the value; Enter commits the highlighted option.
+Venue autocomplete: Esc closes without committing; Tab blurs without committing
+(only Enter/click pick).
+
+**Remaining (follow-up, not a regression):** `ArtistTourSwitcher` complies on
+Tab-not-trapped + Esc + Tab-reachable option buttons, but lacks arrow-key roving;
+converging it (and `StyledSelect`) onto `BrandedSelect` (the compliant primitive)
+is a later cleanup.
+
 ## Known broken
 
 (None yet.)

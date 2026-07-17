@@ -30,7 +30,10 @@ export function StyledSelect<T extends string>({
   variant?: 'default' | 'plain';
 }) {
   const [open, setOpen] = useState(false);
+  // G1-C keyboard contract — roving highlight over the open option list.
+  const [activeIndex, setActiveIndex] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const selected = options.find((o) => o.value === value);
 
   useEffect(() => {
@@ -43,16 +46,30 @@ export function StyledSelect<T extends string>({
     return () => document.removeEventListener('mousedown', close);
   }, [open]);
 
+  // On open, focus the list so arrows work (DOM side-effect only — the highlight
+  // index is seeded in the open handlers to keep setState out of the effect).
+  useEffect(() => {
+    if (!open) return;
+    const t = setTimeout(() => listRef.current?.focus(), 0);
+    return () => clearTimeout(t);
+  }, [open]);
+
+  const openList = () => {
+    const idx = options.findIndex((o) => o.value === value);
+    setActiveIndex(idx >= 0 ? idx : 0);
+    setOpen(true);
+  };
+
   return (
     <div className={cn('relative', className)} ref={ref}>
       <button
         type="button"
-        onClick={() => !disabled && setOpen((o) => !o)}
+        onClick={() => !disabled && (open ? setOpen(false) : openList())}
         onKeyDown={(e) => {
           if (disabled) return;
           if (e.key === 'ArrowDown' || e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
-            setOpen(true);
+            openList();
           }
           if (e.key === 'Escape') {
             setOpen(false);
@@ -103,18 +120,41 @@ export function StyledSelect<T extends string>({
       </button>
       {open && (
         <div
+          ref={listRef}
           role="listbox"
+          tabIndex={-1}
+          onKeyDown={(e) => {
+            if (e.key === 'ArrowDown') {
+              e.preventDefault();
+              setActiveIndex((i) => Math.min(i + 1, options.length - 1));
+            } else if (e.key === 'ArrowUp') {
+              e.preventDefault();
+              setActiveIndex((i) => Math.max(i - 1, 0));
+            } else if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              const opt = options[activeIndex];
+              if (opt) {
+                onChange(opt.value);
+                setOpen(false);
+              }
+            } else if (e.key === 'Escape') {
+              e.preventDefault();
+              setOpen(false);
+            }
+            // Tab: not handled → native, moves to the next entry (never trapped).
+          }}
           className={cn(
-            'absolute left-0 right-0 top-full z-50 mt-1 max-h-56 overflow-y-auto border border-lp-border bg-lp-surface py-1 shadow-xl animate-scale-in',
+            'absolute left-0 right-0 top-full z-50 mt-1 max-h-56 overflow-y-auto border border-lp-border bg-lp-surface py-1 shadow-xl animate-scale-in outline-none',
             size === 'sm' ? 'rounded-lg' : 'rounded-xl'
           )}
         >
-          {options.map((opt) => (
+          {options.map((opt, i) => (
             <button
               key={opt.value}
               type="button"
               role="option"
               aria-selected={opt.value === value}
+              onMouseEnter={() => setActiveIndex(i)}
               onClick={() => {
                 onChange(opt.value);
                 setOpen(false);
@@ -122,7 +162,8 @@ export function StyledSelect<T extends string>({
               className={cn(
                 'flex w-full items-center justify-between gap-2 text-left text-sm transition-colors',
                 size === 'sm' ? 'px-3 py-2' : 'px-4 py-2.5',
-                opt.value === value ? 'bg-lp-orange/10 text-lp-text' : 'text-lp-text hover:bg-lp-surface-hover'
+                opt.value === value ? 'bg-lp-orange/10 text-lp-text' : 'text-lp-text',
+                i === activeIndex && opt.value !== value && 'bg-lp-surface-hover'
               )}
             >
               <span>{opt.label}</span>

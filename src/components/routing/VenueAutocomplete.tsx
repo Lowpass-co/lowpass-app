@@ -392,6 +392,13 @@ export function VenueAutocomplete({
             selectByIndex(highlightedIndex);
             return;
           }
+          if (e.key === 'Escape') {
+            // G1-C keyboard contract — Esc exits the dropdown (does NOT commit),
+            // keeping focus on the input so Tab resumes from the expected place.
+            e.preventDefault();
+            setOpen(false);
+            return;
+          }
           // Sprint 8.3 §2 — Tab no longer auto-picks the highlighted
           // suggestion. Adam's smoke against 8.2 §4d: editing the
           // location post-pick and tabbing away overwrote the address
