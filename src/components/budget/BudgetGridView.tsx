@@ -131,6 +131,14 @@ export function BudgetGridView({
     { lineId: string; txnId?: string; file?: File; resolve: (r: AddReceiptResult | null) => void } | null
   >(null);
 
+  // G1-A #1 — optimistic structural CRUD. "+ Add line" used to router.refresh()
+  // the whole server render on every click (via the mis-named `refreshOnFail`,
+  // which refreshed on SUCCESS too) → slow + the grid lost scroll position.
+  // These overlays let a new/removed line appear instantly with its real id (from
+  // the POST response), so no refresh is needed on the happy path.
+  const [pendingLines, setPendingLines] = useState<BudgetLineItem[]>([]);
+  const [pendingDeletes, setPendingDeletes] = useState<Set<string>>(new Set());
+
   // Receipts B1.5 — drag a receipt image/PDF straight onto a line-item row →
   // open the SAME AddReceiptPanel scrape flow, pre-targeted to that line + the
   // file already in the pipeline. Guard mirrors AddReceiptPanel's upload limits.
@@ -169,7 +177,15 @@ export function BudgetGridView({
   // Seed grid rows with the NATIVE currency as the per-line fallback (display
   // conversion happens at render time via fx) so a DISPLAY flip never relabels
   // a currency-less line's source currency.
-  const data = budgetToGridSections(lines, sections, { tourCurrency: native, ungroupedName: 'Uncategorised', dayTypeByRouting });
+  // Merge the optimistic overlays: append pending adds the server prop hasn't
+  // caught up on (dedup by id), drop pending deletes. Once a natural refresh
+  // brings the real rows into `lines`, the dedup/filter make the overlays no-ops.
+  const allLines = useMemo(() => {
+    const serverIds = new Set(lines.map((l) => l.id));
+    const merged = [...lines, ...pendingLines.filter((p) => !serverIds.has(p.id))];
+    return pendingDeletes.size > 0 ? merged.filter((l) => !pendingDeletes.has(l.id)) : merged;
+  }, [lines, pendingLines, pendingDeletes]);
+  const data = budgetToGridSections(allLines, sections, { tourCurrency: native, ungroupedName: 'Uncategorised', dayTypeByRouting });
 
   // VIS-BG-04 — attach the display-only vendor label per line (row._uid = line
   // item id, the same key vendorByLine uses). Non-line rows (section/formula)
@@ -232,13 +248,27 @@ export function BudgetGridView({
           currency: display,
         }),
       })
-        .then(refreshOnFail)
+        .then(async (res) => {
+          if (!res.ok) {
+            showToast('Could not add the line', 'error');
+            router.refresh();
+            return;
+          }
+          // No-reload: overlay the server-created row (with its real id) so the
+          // grid shows it instantly and edits target a real id. Fall back to a
+          // refresh only if the row can't be read from the response.
+          const json = (await res.json().catch(() => null)) as { line_items?: BudgetLineItem[] } | null;
+          const created = json?.line_items?.[0];
+          if (created) setPendingLines((prev) => [...prev, created]);
+          else router.refresh();
+        })
         .catch(() => {
           showToast('Could not add the line', 'error');
+          router.refresh();
         });
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [tourId, display],
+    [tourId, display, router],
   );
 
   const onAddSection = useCallback(() => {
@@ -264,13 +294,29 @@ export function BudgetGridView({
   }, []);
 
   const onDeleteRow = useCallback((rowUid: string) => {
+    // No-reload: hide the row optimistically; restore + refresh only on failure.
+    setPendingDeletes((prev) => new Set(prev).add(rowUid));
+    const revert = () =>
+      setPendingDeletes((prev) => {
+        const next = new Set(prev);
+        next.delete(rowUid);
+        return next;
+      });
     void fetch(`/api/budget/line-items?id=${encodeURIComponent(rowUid)}`, { method: 'DELETE' })
-      .then(refreshOnFail)
+      .then((res) => {
+        if (!res.ok) {
+          showToast('Could not delete the line', 'error');
+          revert();
+          router.refresh();
+        }
+      })
       .catch(() => {
         showToast('Could not delete the line', 'error');
+        revert();
+        router.refresh();
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [router]);
 
   // Reorder persistence (BUD-42). Optimistic — the grid already shows the new
   // order; PATCH each uid with its new index. On any failure, toast + refresh
