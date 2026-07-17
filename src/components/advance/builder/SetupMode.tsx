@@ -998,7 +998,13 @@ function SetupMode({
             const isDraggingSection = dragState?.type === 'section' && dragState.sectionIndex === secIdx;
             const isSectionDropTarget = dropTarget && !('fieldIndex' in dropTarget) && dropTarget.sectionIndex === secIdx;
             return (
-              <Fragment key={`${sec.template_id}-${secIdx}`}>
+              // G1-A #3 — key by the section's stable template_id ONLY (never the
+              // index): including secIdx meant a reordered section changed key →
+              // React tore down + rebuilt the row instead of moving it, so section
+              // drag glitched (fields already got this via VIS-AB-02). template_id
+              // is unique per section (addSection merges dups; customs get a
+              // synthetic id).
+              <Fragment key={sec.template_id}>
                 {isSectionDropTarget && (
                   <div
                     className="rounded-lg border-2 border-dashed border-lp-orange bg-lp-orange/10 min-h-[52px] flex items-center justify-center my-0.5 transition-all duration-200"
