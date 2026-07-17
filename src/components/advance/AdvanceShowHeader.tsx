@@ -37,6 +37,7 @@ import {
 } from 'lucide-react';
 import { CircularProgressRing } from './CircularProgressRing';
 import { SendPacketButton } from './SendPacketButton';
+import { AdvanceExportButton } from './AdvanceExportButton';
 
 interface AdvanceShowHeaderProps {
   showName: string;
@@ -233,6 +234,7 @@ export function AdvanceShowHeader({
               Edit Template
             </Link>
           ) : null}
+          <AdvanceExportButton tourId={tourId} routingId={routingId} />
           <SendPacketButton tourId={tourId} routingId={routingId} />
         </div>
       </div>

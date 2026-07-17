@@ -657,6 +657,22 @@ behaviour (drag does nothing? doesn't persist?).
   advance with no sections shows "Nothing to fill in yet" — resolved once #4 seeds
   a default template. (Contact-typed fields stay TM-curated by design.)
 
+## Export advance button (G1-A #6)
+
+> The main Advance surface header showed `[Edit Template] [Send Packet]` with no
+> export. Added `<AdvanceExportButton>` beside Send Packet with the app's
+> one-show/multi-show scope pattern. Full config-aware export-shell parity for the
+> advance PDF stays the G2 item; this is the visible-button unblock over the
+> existing packet route.
+
+- **ADV-115 — Export advance visible beside Send Packet.** On `/advance/[tourId]/[routingId]`
+  the header actions row reads `[Edit Template] [Export advance ▾] [Send Packet]`.
+  The Export button opens a menu with **This show** and **Whole tour**.
+- **ADV-116 — scope routes to the packet PDF.** "This show" opens
+  `/api/advance-packets/[tourId]/[routingId]/pdf`; "Whole tour" opens
+  `/api/advance-packets/[tourId]/all/pdf` (the `all` sentinel → empty routingId →
+  whole-tour "All shows" manifest). Both open in a new tab.
+
 ## Retired
 
 (None yet.)

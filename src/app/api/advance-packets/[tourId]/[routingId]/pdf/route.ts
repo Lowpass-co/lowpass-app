@@ -102,7 +102,10 @@ export async function GET(
   if ('error' in auth) return auth.error;
   const tourGate = await requireTourInWorkspace(supabase, tourId, auth.workspaceId);
   if (tourGate) return tourGate;
-  return renderBundle(supabase, tourId, routingId);
+  // A#6 — the `all` sentinel is the whole-tour (multi-show) export; getPacketManifest
+  // treats an empty routingId as no per-show filter (manifest label "All shows").
+  const effectiveRoutingId = routingId === 'all' ? '' : routingId;
+  return renderBundle(supabase, tourId, effectiveRoutingId);
 }
 
 /** Shared render path. Build manifest → fetch payloads →
