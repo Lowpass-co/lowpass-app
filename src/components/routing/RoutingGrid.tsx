@@ -392,7 +392,9 @@ function RoutingRowWithMenu({
         <td className={cn(cellPadX, cellPadY)}>
           <div className="flex items-center gap-1.5">
             {row.canonical_venue_id ? (
-              <Link2 className="h-3.5 w-3.5 shrink-0" style={{ color: 'var(--lp-orange)' }} aria-label="Linked to the venue library" />
+              <span title="Linked to the canonical venue — library edits propagate to this show until show day, then freeze." className="inline-flex shrink-0">
+                <Link2 className="h-3.5 w-3.5" style={{ color: 'var(--lp-orange)' }} aria-label="Linked to the venue library" />
+              </span>
             ) : null}
             <div className="min-w-0 flex-1">
               <VenueAutocomplete

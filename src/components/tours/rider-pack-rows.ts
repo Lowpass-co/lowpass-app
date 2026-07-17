@@ -82,7 +82,8 @@ export function riderPackRowsFromServer(
       recipientLabel,
       artistName,
       scope: p.scope,
-      lastSentRelative: lastSent ? formatRelative(lastSent) : '—',
+      // LT-02 (G1-B #18) — "never sent" reads clearer than a bare em-dash.
+      lastSentRelative: lastSent ? formatRelative(lastSent) : 'never sent',
       updatedRelative: formatRelative(p.updated_at),
       updatedIso: p.updated_at,
     };

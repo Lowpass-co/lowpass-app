@@ -16,7 +16,6 @@
 
 import { usePathname, useSearchParams } from 'next/navigation';
 import { ProductSubBar } from '@/components/shell-v2/ProductSubBar';
-import { TourIdentityChip } from '@/components/shell-v2/TourIdentityChip';
 import { BudgetExportControls } from '@/components/budget/BudgetExportControls';
 import { AppDensityToggle } from '@/lib/density/appDensity';
 import { resolveBudgetTab, type BudgetTab } from './budget-tab-utils';
@@ -25,9 +24,6 @@ import type { BudgetVersionVm } from './versioning/versionApi';
 import type { BudgetLineItem } from '@/types';
 
 interface BudgetContextBandProps {
-  artistName: string | null;
-  artistLogoUrl: string | null;
-  tourName: string;
   tourCurrency: string;
   lines: BudgetLineItem[];
   tourId: string;
@@ -37,9 +33,6 @@ interface BudgetContextBandProps {
 }
 
 export function BudgetContextBand({
-  artistName,
-  artistLogoUrl,
-  tourName,
   tourCurrency,
   tourId,
   versions,
@@ -62,13 +55,12 @@ export function BudgetContextBand({
       <ProductSubBar
         ariaLabel="Budget tabs"
         scroll={false}
+        /* G1-B #16 — the artist/tour identity is already shown by the persistent
+           header switcher pills (ProductHeader → ArtistTourSwitcher); the second
+           TourIdentityChip here was a duplicate picker. Removed — leftSlot keeps
+           only the version selector. */
         leftSlot={
           <div className="flex items-center gap-3">
-            <TourIdentityChip
-              artistName={artistName}
-              artistLogoUrl={artistLogoUrl}
-              tourName={tourName}
-            />
             <VersionSelector tourId={tourId} versions={versions} viewedVersionId={viewedVersionId} canApprove={canApprove} />
           </div>
         }

@@ -292,7 +292,10 @@
   border-right: 1px solid var(--gr-border-soft);
 }
 .lp-grid .c:last-child { border-right: 0; }
-.lp-grid .c.num { justify-content: flex-end; font-variant-numeric: tabular-nums; }
+/* G1-B #13 — money/number cells render in the numeric (mono) face, not the UI
+   font. Was tabular-nums only, which Adam flagged as "numbers aren't mono in the
+   budget". Aligns the grid with the app-wide --lp-font-numeric token. */
+.lp-grid .c.num { justify-content: flex-end; font-variant-numeric: tabular-nums; font-family: var(--lp-font-numeric); }
 .lp-grid .c.idx {
   color: var(--gr-text-3);
   font-variant-numeric: tabular-nums;

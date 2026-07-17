@@ -28,7 +28,6 @@ import { BudgetPhaseStripGate } from '@/components/budget/BudgetPhaseStripReveal
 import { BudgetTrackPhasesProvider } from '@/components/budget/BudgetTrackPhasesContext';
 import { BudgetBurnBar } from '@/components/budget/BudgetBurnBar';
 import { BudgetContextBand } from '@/components/budget/BudgetContextBand';
-import { resolveArtistLogoUrl } from '@/lib/artists/imageUrl';
 import { BudgetGridView } from '@/components/budget/BudgetGridView';
 import { BudgetIncomeGrid } from '@/components/budget/BudgetIncomeGrid';
 import { BudgetEmptyState } from '@/components/budget/BudgetEmptyState';
@@ -141,7 +140,6 @@ export default async function BudgetTourPage({
     routingRes,
     sectionsRes,
     settingsRes,
-    artistRes,
   ] =
     await Promise.all([
       computeTourPhases(supabase, tourId),
@@ -174,24 +172,7 @@ export default async function BudgetTourPage({
         .eq('tour_id', tourId)
         .eq('workspace_id', workspaceId)
         .maybeSingle(),
-      // Fix 3 — artist identity for the context band (avatar + name).
-      tour.artist_id
-        ? supabase
-            .from('artists')
-            .select('id, name, branding, spotify_id, spotify_image_url')
-            .eq('id', tour.artist_id)
-            .maybeSingle()
-        : Promise.resolve({ data: null }),
     ]);
-
-  const artistRow = artistRes.data as {
-    id: string;
-    name: string;
-    branding: unknown;
-    spotify_id: string | null;
-    spotify_image_url: string | null;
-  } | null;
-  const artistLogoUrl = artistRow ? await resolveArtistLogoUrl(artistRow) : null;
 
   const sections = (sectionsRes.data ?? []) as BudgetSection[];
   const budgetSettings = settingsRes.data as Record<string, unknown> | null;
@@ -403,9 +384,6 @@ export default async function BudgetTourPage({
             display-currency/Export/Reports/Settings in one row (sticky),
             collapsing the old separate sub-bar + tour-header layers. */}
         <BudgetContextBand
-          artistName={artistRow?.name ?? null}
-          artistLogoUrl={artistLogoUrl}
-          tourName={(tour.name as string | null) ?? 'Tour'}
           tourCurrency={tourCurrency}
           lines={lines}
           tourId={tourId}

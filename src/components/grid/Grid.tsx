@@ -27,7 +27,7 @@ import { cloneElement, forwardRef, useCallback, useEffect, useImperativeHandle, 
 import { createPortal } from 'react-dom';
 import type { Column, Density, GridFx, GridLineApi, GridStatusConfig, GroupBy, Row, Section, Sel, Snapshot } from './types';
 import { colourForDayType, labelForDayType } from '@/lib/routing/dayType';
-import { Lock } from 'lucide-react';
+import { Lock, Search, Trash2, Filter } from 'lucide-react';
 import {
   ACCENTS,
   STATUSES,
@@ -1948,7 +1948,7 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
         id === 'item' && row._derived ? (
           <span
             className="derived-src"
-            title={`Derived from ${sec.source ?? 'Operations'} — edit it there`}
+            title={`Derived from ${(row._derivedSource as string | undefined) ?? sec.source ?? 'its source'} — edit it there`}
             style={{
               display: 'inline-flex',
               alignItems: 'center',
@@ -1965,7 +1965,7 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
             }}
           >
             <Lock size={9} aria-hidden />
-            ↗ from {sec.source ?? 'Operations'}
+            ↗ from {(row._derivedSource as string | undefined) ?? sec.source ?? 'source'}
           </span>
         ) : null;
       return (
@@ -2239,7 +2239,7 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
       {/* toolbar */}
       <div className="gr-toolbar">
         <div className="gr-search">
-          🔍
+          <Search size={14} aria-hidden style={{ flexShrink: 0, opacity: 0.6 }} />
           <input
             placeholder="Search items, vendors…"
             defaultValue={queryRef.current}
@@ -2290,12 +2290,14 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
               if (o?.row._uid) onDeleteRow(o.row._uid);
             }}
           >
-            🗑 Delete line
+            <Trash2 size={13} aria-hidden style={{ display: 'inline', verticalAlign: '-2px', marginRight: 4 }} />
+            Delete line
           </span>
         ) : null}
         {statusUniverse(cols(), data()).length > 0 ? (
           <span className={`chip${popRef.current === 'filter' ? ' on' : ''}`} onClick={(e) => openPop('filter', e)} role="button">
-            ⚲ Filter
+            <Filter size={12} aria-hidden style={{ display: 'inline', verticalAlign: '-1px', marginRight: 4 }} />
+            Filter
           </span>
         ) : null}
         <span className={`chip${popRef.current === 'cols' || popRef.current === 'addcol' ? ' on' : ''}`} onClick={(e) => openPop('cols', e)} role="button">

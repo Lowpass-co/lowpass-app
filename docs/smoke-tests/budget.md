@@ -1864,3 +1864,27 @@ src/lib/budget/actualsProvenance.harness.ts` → "18 checks passed, 0 failed".
 - **VIS-BS-05** (needs-live) Seeded state unchanged: once income + actuals exist,
   the hero returns to the full P&L view (green/orange/blue bar, red net legit when
   genuinely negative) on the 12-col grid — no regression vs the prior dashboard.
+
+## G1-B polish sweep (items 12–18)
+
+- **POL-12 — Grid toolbar icons.** The shared `<Grid>` toolbar (budget + days-matrix)
+  renders lucide icons, not emoji: Search (was 🔍), Trash2 on "Delete line" (was 🗑),
+  Filter on the filter chip (was ⚲). (Code-verified.)
+- **POL-13 — Budget numbers are mono.** `.lp-grid .c.num` cells (est/act/var) use
+  `var(--lp-font-numeric)`, not the UI font. Payroll (SpreadsheetGrid) already applied
+  it. (Code-verified.)
+- **POL-14 — Derived chip labels by source.** A derived budget line's "↗ from …" chip
+  reads the real surface — **Payroll / Per Diem / Rooming / Travel / Gear** — from a
+  per-row `_derivedSource`, never the stale "from Operations". (budgetAdapter test: 7
+  checks.)
+- **POL-15 — Fingerprint popover flips.** On the routing hero strip, a tick near the
+  top opens its fingerprint popover BELOW the tick (tail flips up) instead of covering
+  the chrome above; it stays `pointer-events:none` so clicks reach the cell. (Code-verified.)
+- **POL-16 — One picker on Budget.** `/budget/[tourId]` shows a single artist/tour
+  identity — the persistent header switcher pills. The duplicate `TourIdentityChip` in
+  the budget context band is removed (and its now-dead artist fetch). (Code-verified.)
+- **POL-17 — Venue-link tooltip.** The routing-grid linked-venue Link2 marker explains
+  itself on hover: "Linked to the canonical venue — library edits propagate to this
+  show until show day, then freeze." (Code-verified.)
+- **POL-18 — "never sent".** Rider pack rows show "never sent" instead of "—" when a
+  pack has no export; scope chips land via A#9. (Code-verified.)

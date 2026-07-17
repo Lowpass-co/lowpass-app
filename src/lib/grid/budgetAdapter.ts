@@ -37,7 +37,22 @@ export function isDerivedLine(l: BudgetLineItem): boolean {
   return !!(l.hotel_id || l.room_id || l.flight_id || l.gear_id || l.tour_gear_id);
 }
 
-/** Which Operations module owns a derived section, for the grid's source pill. */
+/** G1-B #14 — the source SURFACE a single derived line came from, for the
+ *  grid's per-row provenance chip. "Operations" is retired (that menu no longer
+ *  exists); label by the real surface so the chip points the TM at the right
+ *  editor. Per-diem is split out from payroll here (payroll is Salary). */
+export function perLineSourceLabel(l: BudgetLineItem): string {
+  if (l.source_entity_type === 'payroll_per_diem') return 'Per Diem';
+  if (l.source_entity_type === 'payroll') return 'Payroll';
+  if (l.source_entity_type === 'hotel_booking' || l.hotel_id || l.room_id) return 'Rooming';
+  if (l.flight_id) return 'Travel';
+  if (l.gear_id || l.tour_gear_id) return 'Gear';
+  return 'Operations';
+}
+
+/** Which Operations module owns a derived section, for the section-level pill.
+ *  Uses the per-line labels; a payroll section that also carries per-diem lines
+ *  still reads "Payroll" (the dominant surface) at the section header. */
 export function derivedSourceLabel(lines: BudgetLineItem[]): string {
   for (const l of lines) {
     if (l.source_entity_type === 'payroll' || l.source_entity_type === 'payroll_per_diem') return 'Payroll';
@@ -84,6 +99,10 @@ export function lineToRow(
     // carried for the UI/persistence layer (not rendered as columns):
     _lineId: l.id,
     _derived: derived,
+    // #14 — per-row provenance surface (Payroll / Per Diem / Rooming / Travel /
+    // Gear), so the grid's derived chip labels each line by its real source even
+    // in a mixed section (where the section-level `source` is undefined).
+    _derivedSource: derived ? perLineSourceLabel(l) : undefined,
     _sectionId: l.section_id ?? null,
     _txnCount: l.transaction_count ?? 0,
     _actualOverride: !!l.actual_cost_override,

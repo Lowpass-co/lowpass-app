@@ -358,8 +358,14 @@ export function TourFingerprint({
 function FingerprintPopover({ rect, day }: { rect: DOMRect; day: FingerprintDay }) {
   const width = 200;
   const gap = 10;
+  const estHeight = 150; // typical popover height, for the flip decision
   const left = Math.max(8, Math.min(window.innerWidth - width - 8, rect.left + rect.width / 2 - width / 2));
-  const top = rect.top - gap;
+  // TR-03 (G1-B #15) — flip below the tick when there isn't room above (tick
+  // near the top of the viewport / the routing hero strip), so the popover never
+  // renders upward over the columns/chrome above the strip. It never covers the
+  // tick itself, and stays pointer-events:none so clicks reach the cell.
+  const placeBelow = rect.top < estHeight + gap;
+  const top = placeBelow ? rect.bottom + gap : rect.top - gap;
   const anchorX = rect.left + rect.width / 2 - left; // tail x within the popover
   return (
     <div
@@ -369,8 +375,8 @@ function FingerprintPopover({ rect, day }: { rect: DOMRect; day: FingerprintDay 
         left,
         top,
         width,
-        transform: 'translateY(-100%)',
-        transformOrigin: `${anchorX}px 100%`,
+        transform: placeBelow ? 'translateY(0)' : 'translateY(-100%)',
+        transformOrigin: placeBelow ? `${anchorX}px 0%` : `${anchorX}px 100%`,
         animation: 'lp-fp-pop var(--lp-dur-base) var(--lp-ease-out) both',
         zIndex: 'var(--lp-z-tooltip, 60)' as unknown as number,
         pointerEvents: 'none',
@@ -399,19 +405,20 @@ function FingerprintPopover({ rect, day }: { rect: DOMRect; day: FingerprintDay 
           </div>
         ) : null}
       </div>
-      {/* Tail — a rotated square poking down toward the tick. */}
+      {/* Tail — a rotated square poking toward the tick; direction flips with
+          placement (down when above the tick, up when flipped below it). */}
       <span
         aria-hidden
         style={{
           position: 'absolute',
           left: anchorX - 4,
-          bottom: -4,
           width: 8,
           height: 8,
           background: 'var(--lp-surface)',
-          borderRight: '1px solid var(--lp-border-strong)',
-          borderBottom: '1px solid var(--lp-border-strong)',
           transform: 'rotate(45deg)',
+          ...(placeBelow
+            ? { top: -4, borderLeft: '1px solid var(--lp-border-strong)', borderTop: '1px solid var(--lp-border-strong)' }
+            : { bottom: -4, borderRight: '1px solid var(--lp-border-strong)', borderBottom: '1px solid var(--lp-border-strong)' }),
         }}
       />
     </div>
