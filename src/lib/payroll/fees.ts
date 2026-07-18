@@ -50,12 +50,18 @@ export interface DayCounts {
   rehearsal: number;
   /** show + offTravel + rehearsal (every day the person is engaged). */
   active: number;
+  /** G2-1 — distinct Monday-start weeks among the active days, for `per_week`
+   *  (Weekly) rates. Optional so existing DayCounts literals still typecheck;
+   *  absent ⇒ 0 weeks (no per_week line can bill without it). */
+  weeks?: number;
 }
 
 /** The three day statuses a `per_day_status` line can bill. */
 export type DayStatus = 'show' | 'off_travel' | 'rehearsal';
 export type RateBucket = 'fee' | 'per_diem';
-export type RateBasis = 'per_day_status' | 'per_active_day' | 'flat_once';
+/** G2-1 adds `per_week` (Weekly rate). `flat_once` doubles as the Flat-tour fee.
+ *  Per-diem-only is just a per_diem bucket line with no fee lines — no new basis. */
+export type RateBasis = 'per_day_status' | 'per_active_day' | 'flat_once' | 'per_week';
 
 /** One priced line for a person on a tour (a personnel_rate_lines row +
  *  its rate_type's bucket/basis/day_statuses). */
@@ -74,20 +80,33 @@ export interface PayrollTotals {
 
 const num = (v: unknown): number => Number(v) || 0;
 
-/** Tally a payroll_entries.day_statuses map into per-type day counts.
- *  ('no_tour' and anything unknown are ignored.) */
+/** The Monday (ISO week start) of a 'YYYY-MM-DD' date, as a date string. Pure
+ *  (UTC math, no imports) so fees.ts stays server+client safe. */
+function mondayOf(date: string): string {
+  const d = new Date(`${date}T00:00:00Z`);
+  if (Number.isNaN(d.getTime())) return date;
+  const dow = d.getUTCDay(); // 0=Sun … 6=Sat
+  d.setUTCDate(d.getUTCDate() + (dow === 0 ? -6 : 1 - dow));
+  return d.toISOString().slice(0, 10);
+}
+
+/** Tally a payroll_entries.day_statuses map into per-type day counts + the
+ *  distinct active weeks. ('no_tour' and anything unknown are ignored.) */
 export function countDayStatuses(
   statuses: Record<string, string> | null | undefined,
 ): DayCounts {
   let show = 0;
   let offTravel = 0;
   let rehearsal = 0;
-  for (const v of Object.values(statuses ?? {})) {
-    if (v === 'show') show++;
-    else if (v === 'off_travel') offTravel++;
-    else if (v === 'rehearsal') rehearsal++;
+  const activeWeeks = new Set<string>();
+  for (const [date, v] of Object.entries(statuses ?? {})) {
+    let active = false;
+    if (v === 'show') { show++; active = true; }
+    else if (v === 'off_travel') { offTravel++; active = true; }
+    else if (v === 'rehearsal') { rehearsal++; active = true; }
+    if (active) activeWeeks.add(mondayOf(date));
   }
-  return { show, offTravel, rehearsal, active: show + offTravel + rehearsal };
+  return { show, offTravel, rehearsal, active: show + offTravel + rehearsal, weeks: activeWeeks.size };
 }
 
 /** Days a status covers, from the counts. */
@@ -111,6 +130,8 @@ export function computeLineAmount(line: RateLine, counts: DayCounts): number {
       return amount * counts.active;
     case 'flat_once':
       return amount * 1;
+    case 'per_week':
+      return amount * (counts.weeks ?? 0);
     default:
       return 0;
   }

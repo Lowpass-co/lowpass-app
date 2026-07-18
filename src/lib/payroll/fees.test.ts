@@ -62,7 +62,9 @@ checks++;
 
 // no_tour days pay nothing + earn no per diem; rehearsal counts for fee + PD (D3).
 const counts = countDayStatuses({ '2026-01-01': 'show', '2026-01-02': 'off_travel', '2026-01-03': 'rehearsal', '2026-01-04': 'no_tour' });
-assert.deepEqual(counts, { show: 1, offTravel: 1, rehearsal: 1, active: 3 });
+// G2-1 — countDayStatuses now also returns `weeks` (distinct active weeks); the
+// three active days here fall in one Mon-start week.
+assert.deepEqual(counts, { show: 1, offTravel: 1, rehearsal: 1, active: 3, weeks: 1 });
 checks++;
 assert.equal(
   computeTotalFee({ show_rate: 100, off_rate: 50, rehearsal_rate: 25, per_diem: 10 }, counts, 0),

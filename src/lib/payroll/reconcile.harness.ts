@@ -23,6 +23,7 @@ import {
   countDayStatuses,
   type RateLike,
   type DayCounts,
+  type RateLine,
 } from './fees.ts';
 // UI phase — the reader-switch gate: totals sourced via the rate_types +
 // personnel_rate_lines model (DEFAULT_RATE_TYPES catalog) must equal the
@@ -262,6 +263,48 @@ for (const [label, val, want] of [
 }
 console.log('-'.repeat(76));
 
+/* ── NEW RATE-TYPE GATE (G2-1) ───────────────────────────────────────
+   Flat tour / Weekly / Per-diem-only. ADDITIVE — the existing day_rate /
+   split math is UNMOVED (the 52 baseline stays green above). Weekly bills the
+   new per_week basis (weekly amount × distinct active weeks); Flat tour bills
+   flat_once (fixed, day-count-independent); Per-diem-only bills only the
+   per_diem bucket (no fee line). ────────────────────────────────────── */
+console.log('\nNew rate-type gate (G2-1) — Flat tour / Weekly / Per-diem-only\n');
+
+// Five active days across THREE distinct Mon-start weeks.
+const multiWeek = countDayStatuses({
+  '2026-03-02': 'show', '2026-03-04': 'show', // week of Mar 2
+  '2026-03-09': 'show', '2026-03-11': 'show', // week of Mar 9
+  '2026-03-16': 'show',                        // week of Mar 16
+});
+assert.equal(multiWeek.weeks, 3, `weeks ${multiWeek.weeks} !== 3`);
+assert.equal(multiWeek.active, 5, `active ${multiWeek.active} !== 5`);
+
+const weeklyLines: RateLine[] = [{ bucket: 'fee', basis: 'per_week', amount: 1000 }];
+const flatTourLines: RateLine[] = [{ bucket: 'fee', basis: 'flat_once', amount: 5000 }];
+const perDiemOnlyLines: RateLine[] = [{ bucket: 'per_diem', basis: 'per_active_day', amount: 40 }];
+
+const weekly = computeTotals(weeklyLines, multiWeek);
+const flatTour = computeTotals(flatTourLines, multiWeek);
+const perDiemOnly = computeTotals(perDiemOnlyLines, multiWeek);
+
+assert.equal(weekly.totalFee, 3000, `weekly fee ${weekly.totalFee} !== 3000`);        // 1000 × 3 weeks
+assert.equal(flatTour.totalFee, 5000, `flat-tour fee ${flatTour.totalFee} !== 5000`); // day-count-independent
+assert.equal(perDiemOnly.totalFee, 0, `per-diem-only fee ${perDiemOnly.totalFee} !== 0`);
+assert.equal(perDiemOnly.totalPerDiem, 200, `per-diem-only PD ${perDiemOnly.totalPerDiem} !== 200`); // 40 × 5 active
+checks += 6;
+
+console.log(['scenario'.padEnd(44), 'fee'.padStart(11), 'per diem'.padStart(10), 'ok'].join('  '));
+console.log('-'.repeat(72));
+for (const [label, fee, pd] of [
+  ['Weekly — 1000/wk × 3 active weeks', weekly.totalFee, weekly.totalPerDiem],
+  ['Flat tour — 5000 fixed (over 5 days)', flatTour.totalFee, flatTour.totalPerDiem],
+  ['Per-diem-only — 40/day × 5, no fee', perDiemOnly.totalFee, perDiemOnly.totalPerDiem],
+] as [string, number, number][]) {
+  console.log([label.padEnd(44), fee.toFixed(2).padStart(11), pd.toFixed(2).padStart(10), '✓'].join('  '));
+}
+console.log('-'.repeat(72));
+
 /* ── The fees.test.ts rounded assertions, via the engine ────────────── */
 const round = (n: number) => Math.round(n);
 assert.equal(round(computeTotalFee({ show_rate: 635.95, off_rate: 635.95, per_diem: 0 }, { show: 2, offTravel: 4, rehearsal: 0, active: 6 }, 794.93)), 4611);
@@ -271,7 +314,8 @@ checks += 3;
 
 // no_tour ignored; rehearsal counts for fee + PD.
 const counts = countDayStatuses({ '2026-01-01': 'show', '2026-01-02': 'off_travel', '2026-01-03': 'rehearsal', '2026-01-04': 'no_tour' });
-assert.deepEqual(counts, { show: 1, offTravel: 1, rehearsal: 1, active: 3 });
+// weeks: 2026-01-01..03 are Thu/Fri/Sat of the same Mon-start week ⇒ 1 week.
+assert.deepEqual(counts, { show: 1, offTravel: 1, rehearsal: 1, active: 3, weeks: 1 });
 assert.equal(computeTotalFee({ show_rate: 100, off_rate: 50, rehearsal_rate: 25, per_diem: 10 }, counts, 0), 175);
 assert.equal(computeTotalPerDiem({ per_diem: 10 }, counts), 30);
 checks += 3;
