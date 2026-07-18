@@ -137,5 +137,54 @@ export function usePayrollGrid(
     [routingByDate],
   );
 
-  return { statusOf, saveDayStatus, saveDayType, tourDayTypeOf, entries };
+  /** Was this person-day explicitly hand-set (this session or persisted), vs
+   *  merely inheriting the tour day type? Drives Fill-all's untouched-only. */
+  const isExplicit = useCallback(
+    (personnelId: string, date: string): boolean => {
+      if (overrides.has(`${personnelId}:${date}`)) return true;
+      const entry = entryByPersonWeek.get(`${personnelId}:${getWeekStart(date)}`);
+      return (entry?.day_statuses as Record<string, string> | undefined)?.[date] != null;
+    },
+    [overrides, entryByPersonWeek],
+  );
+
+  /** Batch-paint many (date → status) for one person in ONE request per week
+   *  (Fill-all). Merges over the existing week map; optimistic; best-effort. */
+  const fillDays = useCallback(
+    async (personnelId: string, pairs: { date: string; status: string }[]) => {
+      if (pairs.length === 0) return;
+      // Optimistic overrides for instant feedback.
+      setOverrides((o) => {
+        const next = new Map(o);
+        for (const { date, status } of pairs) next.set(`${personnelId}:${date}`, status);
+        return next;
+      });
+      // Group by week and POST each week once.
+      const byWeek = new Map<string, { date: string; status: string }[]>();
+      for (const p of pairs) {
+        const w = getWeekStart(p.date);
+        (byWeek.get(w) ?? byWeek.set(w, []).get(w)!).push(p);
+      }
+      for (const [weekStart, weekPairs] of byWeek) {
+        const entry = entryByPersonWeek.get(`${personnelId}:${weekStart}`);
+        const statuses = { ...((entry?.day_statuses as Record<string, string>) ?? {}) };
+        for (const { date, status } of weekPairs) statuses[date] = status;
+        try {
+          const res = await fetch('/api/budget/payroll', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ tour_id: tourId, personnel_id: personnelId, week_start: weekStart, day_statuses: statuses }),
+          });
+          if (!res.ok) throw new Error('Save failed');
+          const updated = await res.json();
+          setEntries((p) => [...p.filter((e) => !(e.personnel_id === personnelId && e.week_start === weekStart)), updated]);
+        } catch {
+          showToast('Could not fill some days', 'error');
+        }
+      }
+    },
+    [tourId, entryByPersonWeek, showToast],
+  );
+
+  return { statusOf, saveDayStatus, saveDayType, tourDayTypeOf, isExplicit, fillDays, entries };
 }

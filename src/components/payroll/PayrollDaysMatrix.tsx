@@ -98,6 +98,8 @@ export function PayrollDaysMatrix({
   saveDayStatus,
   saveDayType,
   tourDayTypeOf,
+  isExplicit,
+  fillDays,
   rateTypes,
   amountMap,
 }: {
@@ -109,6 +111,9 @@ export function PayrollDaysMatrix({
   /** G2-1 brush — paint a brush type (resolved to a status via the SSOT). */
   saveDayType: (personnelId: string, date: string, brush: BrushType) => void | Promise<void>;
   tourDayTypeOf: (date: string) => string | undefined;
+  /** Whether a person-day was hand-set (vs inheriting) — for Fill-all. */
+  isExplicit: (personnelId: string, date: string) => boolean;
+  fillDays: (personnelId: string, pairs: { date: string; status: string }[]) => void | Promise<void>;
   rateTypes: RateTypeMeta[];
   amountMap: LineAmountMap;
 }) {
@@ -153,6 +158,31 @@ export function PayrollDaysMatrix({
       else void saveDayType(personId, date, brush);
     },
     [brush, saveDayStatus, saveDayType],
+  );
+
+  // Fill-all (work-backwards): paint the active brush across everyone × every day.
+  const [fillOpen, setFillOpen] = useState(false);
+  const explicitCount = useMemo(() => {
+    if (!fillOpen) return 0;
+    let n = 0;
+    for (const p of people) for (const d of days) if (isExplicit(p.id, d.date)) n++;
+    return n;
+  }, [fillOpen, people, days, isExplicit]);
+
+  const runFill = useCallback(
+    (mode: 'untouched' | 'all') => {
+      for (const p of people) {
+        const pairs: { date: string; status: string }[] = [];
+        for (const d of days) {
+          if (mode === 'untouched' && isExplicit(p.id, d.date)) continue;
+          pairs.push({ date: d.date, status: brushTypeToStatus(brush, tourDayTypeOf(d.date)) });
+        }
+        for (const d of days) touched.current.add(`${p.id}:${d.date}`);
+        void fillDays(p.id, pairs);
+      }
+      setFillOpen(false);
+    },
+    [people, days, isExplicit, brush, tourDayTypeOf, fillDays],
   );
 
   // Live total per person from the row's own cells (same fees.ts engine).
@@ -238,6 +268,13 @@ export function PayrollDaysMatrix({
           })}
         </div>
         <span style={{ fontSize: 11, color: 'var(--lp-text-tertiary)' }}>click / drag to paint · Shift+click for a run · arrows + Enter</span>
+        <button
+          type="button"
+          onClick={() => setFillOpen(true)}
+          style={{ marginLeft: 'auto', border: '1px solid var(--lp-border-strong)', background: 'var(--lp-bg)', color: 'var(--lp-text)', borderRadius: 'var(--lp-radius-md)', padding: '5px 12px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}
+        >
+          Fill all…
+        </button>
       </div>
 
       {/* Matrix */}
@@ -297,6 +334,53 @@ export function PayrollDaysMatrix({
           </tbody>
         </table>
       </div>
+
+      {fillOpen ? (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="Fill all days"
+          onClick={() => setFillOpen(false)}
+          style={{ position: 'fixed', inset: 0, zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.5)', padding: 16 }}
+        >
+          <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 440, borderRadius: 'var(--lp-radius-lg)', border: '1px solid var(--lp-border-strong)', background: 'var(--lp-surface)', padding: 20, boxShadow: 'var(--lp-shadow-lg, 0 12px 32px rgba(0,0,0,0.35))' }}>
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: 'var(--lp-text)' }}>Fill all days</h3>
+            <p style={{ margin: '8px 0 0', fontSize: 13, color: 'var(--lp-text-secondary)', lineHeight: 1.45 }}>
+              Paints <strong style={{ color: 'var(--lp-text)' }}>{BRUSH_TYPES.find((b) => b.value === brush)?.label}</strong> for every person on every day.
+              {explicitCount > 0 ? (
+                <> <strong style={{ color: 'var(--lp-orange)' }}>{explicitCount}</strong> hand-edited {explicitCount === 1 ? 'cell' : 'cells'} would be overwritten.</>
+              ) : (
+                <> No cells have been hand-edited yet.</>
+              )}
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 16 }}>
+              <button
+                type="button"
+                onClick={() => runFill('untouched')}
+                style={{ border: 0, cursor: 'pointer', borderRadius: 'var(--lp-radius-md)', padding: '9px 14px', fontSize: 13, fontWeight: 600, background: 'var(--color-lp-orange)', color: 'var(--lp-text-inverse, #fff)', textAlign: 'left' }}
+              >
+                Fill only untouched cells
+                <span style={{ display: 'block', fontSize: 11, fontWeight: 400, opacity: 0.85 }}>Keeps your hand-edited days as they are (recommended)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => runFill('all')}
+                style={{ border: '1px solid var(--lp-border-strong)', cursor: 'pointer', borderRadius: 'var(--lp-radius-md)', padding: '9px 14px', fontSize: 13, fontWeight: 600, background: 'var(--lp-bg)', color: 'var(--lp-text)', textAlign: 'left' }}
+              >
+                Overwrite everything
+                <span style={{ display: 'block', fontSize: 11, fontWeight: 400, color: 'var(--lp-text-tertiary)' }}>Replaces every cell, including hand-edited days</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setFillOpen(false)}
+                style={{ border: 0, cursor: 'pointer', borderRadius: 'var(--lp-radius-md)', padding: '7px 14px', fontSize: 13, color: 'var(--lp-text-secondary)', background: 'transparent', alignSelf: 'flex-end' }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
