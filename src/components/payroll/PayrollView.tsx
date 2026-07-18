@@ -15,7 +15,7 @@
    throughout (reconciles to legacy — reconcile.harness.ts).
    ============================================ */
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import type { PersonnelRate } from '@/types';
 import type { RateBucket, RateBasis, DayStatus } from '@/lib/payroll/fees';
 import type { RateTypeMeta } from '@/lib/payroll/rateLines';
@@ -119,12 +119,12 @@ export function PayrollView({
         </div>
       </div>
 
-      {/* G2-1 — ONE page (Adam's graded design): rates grid, days matrix, and
-          summary stack together; the Rates/Days view toggle is retired. All
-          three read the same hub state, so an edit in one flows to the others. */}
-      <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-          <TwoGridHeading label="Rates" hint="editable · columns from your rate types" />
+      {/* G2-1b — the DAYS MATRIX is the work surface and dominates. Rates + Summary
+          collapse to disclosures (Rates is reference while painting; Summary is
+          read-only derived data), so opening Payroll shows the matrix ready to
+          work with rates/summary one click away. */}
+      <Disclosure label="Rates" hint={`${rates.length} ${rates.length === 1 ? 'person' : 'people'} · click to edit rates & types`}>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
           <RateTypeToolbar
             tourId={tourId}
             types={types}
@@ -145,10 +145,9 @@ export function PayrollView({
           amountMap={amountMap}
           onRateLineCommit={onRateLineCommit}
         />
-      </section>
+      </Disclosure>
 
-      <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <TwoGridHeading label="Days" hint="who works which day · paint to assign" />
+      <section style={{ display: 'flex', flexDirection: 'column', gap: 6, flex: 1, minHeight: 0 }}>
         <PayrollDaysMatrix
           routingDates={routingDates}
           personnelRates={rates}
@@ -164,8 +163,7 @@ export function PayrollView({
         />
       </section>
 
-      <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        <TwoGridHeading label="Summary" hint="totals · read-only" />
+      <Disclosure label="Summary" hint="totals · read-only">
         <PayrollSummary
           currency={currency}
           personnelRates={rates}
@@ -173,16 +171,28 @@ export function PayrollView({
           rateTypes={types}
           amountMap={amountMap}
         />
-      </section>
+      </Disclosure>
     </div>
   );
 }
 
-function TwoGridHeading({ label, hint }: { label: string; hint: string }) {
+/** Collapsed-by-default disclosure — the compact chrome for Rates / Summary so
+ *  the Days matrix dominates the page (G2-1b). Native <details> for the toggle. */
+function Disclosure({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-      <h2 style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--lp-text-secondary)' }}>{label}</h2>
-      <span style={{ fontSize: 11, color: 'var(--lp-text-tertiary)' }}>· {hint}</span>
-    </div>
+    <details style={{ border: '1px solid var(--lp-border)', borderRadius: 'var(--lp-radius-md)', background: 'var(--lp-panel)' }}>
+      <summary
+        style={{
+          cursor: 'pointer', padding: '8px 12px', display: 'flex', alignItems: 'baseline', gap: 8,
+          fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em',
+          color: 'var(--lp-text-secondary)',
+        }}
+      >
+        {label}
+        {hint ? <span style={{ fontSize: 11, fontWeight: 400, textTransform: 'none', letterSpacing: 0, color: 'var(--lp-text-tertiary)' }}>· {hint}</span> : null}
+      </summary>
+      <div style={{ padding: '4px 12px 12px' }}>{children}</div>
+    </details>
   );
 }
+

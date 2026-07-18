@@ -274,6 +274,15 @@ preview of the box while dragging; release commits. NOT a single diagonal line
 (that's the patch matrix's rule). Shift+click still extends a run across the row.
 **Code-verified** (rect commit on mouseup); **Needs-live** (Adam re-walks).
 
+#### PAY-11 — Matrix dominates; Rates/Summary collapse (G2-1b)
+**Do**: Open Payroll.
+**Expect**: the DAYS MATRIX is the primary surface — it fills the available height
+(sticky Person/Total/day header row while scrolling rows), 34px rows. **Rates**
+and **Summary** are collapsed disclosures (Rates: "N people · click to edit rates &
+types"; Summary: read-only) — one click to expand, not co-equal always-open tables.
+No repeated per-section heading chrome. Adam's "page is VERY busy / grid is VERY
+small" is resolved. **Needs-live**.
+
 > **Deferred follow-ups:** PAY-03 rate-card slide + **advance editing** (needs
 > memberId plumbing); `acl_per_diem` festival override (CC_PAYROLL_ACL); branded
 > payroll PDF (bucket + brand_color exist, unused — future).

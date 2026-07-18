@@ -308,15 +308,15 @@ export function PayrollDaysMatrix({
         ref={gridRef}
         tabIndex={0}
         onKeyDown={onKeyDown}
-        style={{ overflowX: 'auto', border: '1px solid var(--lp-border)', borderRadius: 'var(--lp-radius-md)', outline: 'none', userSelect: 'none' }}
+        style={{ overflow: 'auto', maxHeight: 'calc(100vh - 300px)', minHeight: 340, border: '1px solid var(--lp-border)', borderRadius: 'var(--lp-radius-md)', outline: 'none', userSelect: 'none' }}
       >
         <table style={{ borderCollapse: 'separate', borderSpacing: 0, fontSize: 12 }}>
           <thead>
             <tr>
-              <th style={{ position: 'sticky', left: 0, zIndex: 3, width: PERSON_W, minWidth: PERSON_W, background: 'var(--lp-panel)', textAlign: 'left', padding: '6px 10px', borderBottom: '1px solid var(--lp-border)', borderRight: '1px solid var(--lp-border)', fontSize: 11, color: 'var(--lp-text-tertiary)', fontWeight: 700 }}>Person</th>
-              <th style={{ position: 'sticky', left: PERSON_W, zIndex: 3, width: TOTAL_W, minWidth: TOTAL_W, background: 'var(--lp-panel)', textAlign: 'right', padding: '6px 10px', borderBottom: '1px solid var(--lp-border)', borderRight: '1px solid var(--lp-border-strong)', fontSize: 11, color: 'var(--lp-text-tertiary)', fontWeight: 700 }}>Total</th>
+              <th style={{ position: 'sticky', left: 0, top: 0, zIndex: 4, width: PERSON_W, minWidth: PERSON_W, background: 'var(--lp-panel)', textAlign: 'left', padding: '6px 10px', borderBottom: '1px solid var(--lp-border-strong)', borderRight: '1px solid var(--lp-border)', fontSize: 11, color: 'var(--lp-text-tertiary)', fontWeight: 700 }}>Person</th>
+              <th style={{ position: 'sticky', left: PERSON_W, top: 0, zIndex: 4, width: TOTAL_W, minWidth: TOTAL_W, background: 'var(--lp-panel)', textAlign: 'right', padding: '6px 10px', borderBottom: '1px solid var(--lp-border-strong)', borderRight: '1px solid var(--lp-border-strong)', fontSize: 11, color: 'var(--lp-text-tertiary)', fontWeight: 700 }}>Total</th>
               {days.map((d) => (
-                <th key={d.date} style={{ width: DAY_W, minWidth: DAY_W, background: 'var(--lp-panel)', borderBottom: '1px solid var(--lp-border)', padding: 0, verticalAlign: 'bottom' }}>
+                <th key={d.date} style={{ position: 'sticky', top: 0, zIndex: 1, width: DAY_W, minWidth: DAY_W, background: 'var(--lp-panel)', borderBottom: '1px solid var(--lp-border-strong)', padding: 0, verticalAlign: 'bottom' }}>
                   <DayHeader day={d} weekStart={weekStartDates.has(d.date)} />
                 </th>
               ))}
