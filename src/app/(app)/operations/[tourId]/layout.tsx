@@ -24,6 +24,9 @@ import { notFound } from 'next/navigation';
 import { ProductShell } from '@/components/shell-v2';
 import { TourVisitTracker } from '@/components/shell-v2/TourVisitTracker';
 import { OperationsGroupSubNav } from '@/components/operations/OperationsGroupSubNav';
+import { TourIdentityBand } from '@/components/operations/TourIdentityBand';
+import { resolveArtistLogoUrl } from '@/lib/artists/imageUrl';
+import { tourPhase } from '@/lib/derive/tourStatus';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import {
   canAccess,
@@ -68,7 +71,7 @@ export default async function OperationsTourLayout({
 
   const { data: tour } = await supabase
     .from('tours')
-    .select('id, name, artist_id')
+    .select('id, name, artist_id, start_date, end_date, status')
     .eq('id', tourId)
     .maybeSingle();
 
@@ -78,7 +81,26 @@ export default async function OperationsTourLayout({
     id: string;
     name: string;
     artist_id: string | null;
+    start_date: string | null;
+    end_date: string | null;
+    status: string | null;
   };
+
+  /* G2-1 — identity band (avatar · artist · tour · status) for the Crew group.
+     Fetch the artist for the avatar + name and derive the tour status; the band
+     self-hides on non-Crew ops pages until G2-4 rolls it out. */
+  const { data: artist } = tourRow.artist_id
+    ? await supabase
+        .from('artists')
+        .select('id, name, branding, spotify_id, spotify_image_url')
+        .eq('id', tourRow.artist_id)
+        .maybeSingle()
+    : { data: null };
+  const artistRow = artist as { id: string; name: string; branding: unknown; spotify_id: string | null; spotify_image_url: string | null } | null;
+  const avatarUrl = artistRow ? await resolveArtistLogoUrl(artistRow) : null;
+  const today = new Date().toISOString().slice(0, 10);
+  const phase = tourPhase({ start_date: tourRow.start_date, end_date: tourRow.end_date, status: tourRow.status }, today);
+  const STATUS_LABEL: Record<string, string> = { on_tour: 'On tour', upcoming: 'Upcoming', planning: 'Planning', ended: 'Ended' };
 
   /* Stage B — the sub-nav is now a group-scoped segmented control (Crew /
      Production only), so the layout no longer needs artist identity for a
@@ -102,7 +124,19 @@ export default async function OperationsTourLayout({
       artistId={tourRow.artist_id}
       tourId={tourId}
       productName="Operations"
-      subNav={<OperationsGroupSubNav tourId={tourId} links={subNavLinks} />}
+      subNav={
+        <>
+          <TourIdentityBand
+            tourId={tourId}
+            artistName={artistRow?.name ?? 'Artist'}
+            avatarUrl={avatarUrl}
+            tourName={tourRow.name}
+            statusLabel={STATUS_LABEL[phase] ?? ''}
+            statusKey={phase}
+          />
+          <OperationsGroupSubNav tourId={tourId} links={subNavLinks} />
+        </>
+      }
     >
       <TourVisitTracker tourId={tourId} />
       {children}
