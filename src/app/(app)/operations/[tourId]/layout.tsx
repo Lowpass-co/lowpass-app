@@ -25,7 +25,7 @@ import { ProductShell } from '@/components/shell-v2';
 import { TourVisitTracker } from '@/components/shell-v2/TourVisitTracker';
 import { OperationsGroupSubNav } from '@/components/operations/OperationsGroupSubNav';
 import { TourIdentityBand } from '@/components/operations/TourIdentityBand';
-import { resolveArtistLogoUrl } from '@/lib/artists/imageUrl';
+import { resolveArtistLogoUrlSync } from '@/lib/artists/imageUrl';
 import { tourPhase } from '@/lib/derive/tourStatus';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import {
@@ -97,7 +97,10 @@ export default async function OperationsTourLayout({
         .maybeSingle()
     : { data: null };
   const artistRow = artist as { id: string; name: string; branding: unknown; spotify_id: string | null; spotify_image_url: string | null } | null;
-  const avatarUrl = artistRow ? await resolveArtistLogoUrl(artistRow) : null;
+  // Sync (DB-only) resolver — NEVER a live Spotify fetch. This layout wraps every
+  // Operations page; a blocking external fetch here stalled the whole ops section
+  // (Personnel "Loading…" hang). The band shows the cached logo or initials.
+  const avatarUrl = artistRow ? resolveArtistLogoUrlSync(artistRow) : null;
   const today = new Date().toISOString().slice(0, 10);
   const phase = tourPhase({ start_date: tourRow.start_date, end_date: tourRow.end_date, status: tourRow.status }, today);
   const STATUS_LABEL: Record<string, string> = { on_tour: 'On tour', upcoming: 'Upcoming', planning: 'Planning', ended: 'Ended' };
