@@ -33,6 +33,9 @@ import {
   defaultLinesFromLegacy,
   type RateLineRow,
 } from './rateLines.ts';
+// G2-1, Ruling A — the day-type override drives pay via the SAME single path
+// (effective status → day_statuses → countDayStatuses). One SSOT for the mapping.
+import { brushTypeToStatus, type BrushType } from './effectiveDayType.ts';
 
 const num = (v: unknown): number => Number(v) || 0;
 
@@ -195,6 +198,69 @@ for (const d of DAY_CASES) {
   ].join('  '));
 }
 console.log('-'.repeat(102));
+
+/* ── OVERRIDE GATE (G2-1, Ruling A) ──────────────────────────────────
+   The day-type brush drives PAY. A person-day's effective status =
+   type_override ?? tour_day_type (brushTypeToStatus), painted into day_statuses
+   — the SAME single pay path, no separate table. Prove that overriding a day
+   MOVES the day's fee from the tour-day rate to the override rate (show-vs-
+   travel), that Promo/Radio bills the show rate (Dillon's radio-on-a-travel-day),
+   and that a day_rate person's flat is type-agnostic. Pre/post totals pinned.
+   ─────────────────────────────────────────────────────────────────── */
+console.log('\nOverride gate (G2-1 brush) — effective type ≠ tour day type drives pay\n');
+
+// Paint each tour day with a brush → the persisted day_statuses map.
+const paintDays = (tourTypes: string[], brushes: BrushType[]): Record<string, string> => {
+  const m: Record<string, string> = {};
+  tourTypes.forEach((tt, i) => {
+    m[`2026-03-${String(i + 1).padStart(2, '0')}`] = brushTypeToStatus(brushes[i], tt);
+  });
+  return m;
+};
+
+// Split-rate person: show 500 / off 300 (a1/a2 default lines).
+const splitRows: RateLineRow[] = [
+  { rate_type_id: DEFAULT_RATE_TYPES[0].id, amount: 500 }, // a1 show
+  { rate_type_id: DEFAULT_RATE_TYPES[1].id, amount: 300 }, // a2 off/travel
+  { rate_type_id: DEFAULT_RATE_TYPES[2].id, amount: 0 },
+  { rate_type_id: DEFAULT_RATE_TYPES[3].id, amount: 0 },
+  { rate_type_id: DEFAULT_RATE_TYPES[4].id, amount: 0 },
+];
+const splitLines = buildRateLines(splitRows, DEFAULT_RATE_TYPES);
+// day_rate person: a6 flat off 300 per ACTIVE day (type-agnostic).
+const drLines = buildRateLines(dayRateLines(300, 0, 0), DEFAULT_RATE_TYPES);
+const feeOf = (statuses: Record<string, string>, lines: typeof splitLines) =>
+  computeTotals(lines, countDayStatuses(statuses)).totalFee;
+
+const travelTour = ['travel', 'travel', 'travel', 'travel', 'travel'];
+const allDefault: BrushType[] = ['tour_default', 'tour_default', 'tour_default', 'tour_default', 'tour_default'];
+const base = paintDays(travelTour, allDefault);                                    // 5× off_travel
+const ovShow = paintDays(travelTour, ['show', ...allDefault.slice(1)]);            // day1 travel→SHOW
+const ovRadio = paintDays(travelTour, ['promo_radio', ...allDefault.slice(1)]);    // day1 Promo/Radio→show
+
+// Split: base 5×300 = 1500; override day1 to show → 500 + 4×300 = 1700 (+200 = show−off).
+assert.equal(feeOf(base, splitLines), 1500, `split base ${feeOf(base, splitLines)} !== 1500`);
+assert.equal(feeOf(ovShow, splitLines), 1700, `split override→show ${feeOf(ovShow, splitLines)} !== 1700`);
+// Promo/Radio on a travel day bills the SHOW rate (Adam's Dillon example).
+assert.equal(feeOf(ovRadio, splitLines), 1700, `split override→radio ${feeOf(ovRadio, splitLines)} !== 1700`);
+assert.equal(brushTypeToStatus('promo_radio', 'travel'), 'show', 'promo_radio must bill the show rate');
+// day_rate: flat per ACTIVE day; the override must NOT move it (5 × 300 = 1500 both).
+assert.equal(feeOf(base, drLines), 1500, `day-rate base ${feeOf(base, drLines)} !== 1500`);
+assert.equal(feeOf(ovShow, drLines), 1500, `day-rate override ${feeOf(ovShow, drLines)} !== 1500 (flat must be type-agnostic)`);
+checks += 6;
+
+console.log(['scenario'.padEnd(46), 'fee'.padStart(11), 'pinned'.padStart(9), 'ok'].join('  '));
+console.log('-'.repeat(76));
+for (const [label, val, want] of [
+  ['Split base — 5 travel days @ off 300', feeOf(base, splitLines), 1500],
+  ['Split override — day1 travel→SHOW @ 500', feeOf(ovShow, splitLines), 1700],
+  ['Split override — day1 Promo/Radio → show', feeOf(ovRadio, splitLines), 1700],
+  ['Day-rate base — 5 active @ 300 flat', feeOf(base, drLines), 1500],
+  ['Day-rate override — day1→show, flat holds', feeOf(ovShow, drLines), 1500],
+] as [string, number, number][]) {
+  console.log([label.padEnd(46), val.toFixed(2).padStart(11), String(want).padStart(9), val === want ? '✓' : '✗'].join('  '));
+}
+console.log('-'.repeat(76));
 
 /* ── The fees.test.ts rounded assertions, via the engine ────────────── */
 const round = (n: number) => Math.round(n);
