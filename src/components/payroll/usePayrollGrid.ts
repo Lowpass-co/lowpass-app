@@ -13,6 +13,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { getWeekStart } from './payroll-utils';
 import { useToast } from '@/components/ui/Toast';
+import { brushTypeToStatus, type BrushType } from '@/lib/payroll/effectiveDayType';
 
 export const DAY_OPTIONS = [
   { value: 'show', label: 'SHOW DAY' },
@@ -119,5 +120,22 @@ export function usePayrollGrid(
     [tourId, statusOf, entryByPersonWeek, showToast],
   );
 
-  return { statusOf, saveDayStatus, entries };
+  /** G2-1 brush — paint a person-day with a brush type. Resolves the brush to a
+   *  pay status via the SSOT (brushTypeToStatus, using the day's tour day type)
+   *  and persists through the ONE pay path (saveDayStatus → day_statuses). */
+  const saveDayType = useCallback(
+    (personnelId: string, date: string, brush: BrushType) => {
+      const tourDayType = routingByDate.get(date)?.day_type;
+      return saveDayStatus(personnelId, date, brushTypeToStatus(brush, tourDayType));
+    },
+    [routingByDate, saveDayStatus],
+  );
+
+  /** The tour day type for a date (for the brush's Tour-default resolution). */
+  const tourDayTypeOf = useCallback(
+    (date: string): string | undefined => routingByDate.get(date)?.day_type,
+    [routingByDate],
+  );
+
+  return { statusOf, saveDayStatus, saveDayType, tourDayTypeOf, entries };
 }

@@ -78,7 +78,7 @@ export function PayrollView({
     [rates],
   );
 
-  const { statusOf, saveDayStatus, entries } = usePayrollGrid(tourId, routingDates as RoutingDay[], payrollEntries);
+  const { statusOf, saveDayStatus, saveDayType, tourDayTypeOf, entries } = usePayrollGrid(tourId, routingDates as RoutingDay[], payrollEntries);
 
   // Persist one rate-line cell edit; optimistic, reverts on failure.
   const onRateLineCommit = useCallback(
@@ -155,6 +155,8 @@ export function PayrollView({
           currency={currency}
           statusOf={statusOf}
           saveDayStatus={saveDayStatus}
+          saveDayType={saveDayType}
+          tourDayTypeOf={tourDayTypeOf}
           rateTypes={types}
           amountMap={amountMap}
         />

@@ -1,36 +1,46 @@
 'use client';
 
 /* ============================================
-   LOWPASS — <PayrollDaysMatrix> (rebuilt ON the canonical <Grid>, wide mode)
+   LOWPASS — <PayrollDaysMatrix> (G2-1 brush rebuild)
 
-   people = rows (frozen person column), routing dates = day dropdown columns
-   (DAY_OPTIONS show/off_travel/no_tour, optColors → cell-fill tint). All
-   routing dates incl. no-tour. Week treatment: the week label + a divider on
-   each Monday's day-header (D1 light option — no column-group machinery).
-   Writes go through usePayrollGrid (saveDayStatus) → the budget Salary feed is
-   UNCHANGED (view layer only).
+   The graded days matrix: people = rows, routing days = columns, cell =
+   person-day. A day-type BRUSH (Tour default / Show / Rehearsal / Travel / Off /
+   Promo·Radio) drives what a click/drag paints; the resolved pay status lands in
+   day_statuses via the ONE pay path (saveDayType → brushTypeToStatus → the
+   money harness's proven mapping). Painting an override DRIVES PAY (Ruling A).
+
+   Interactions: click paints the brush (or erases if the cell already carries
+   it); mouse-drag paints/erases a run; Shift+click paints a run to the anchor;
+   arrows move a cursor and Enter toggles working (keyboard contract). The frozen
+   Total column recomputes live from the row's own cells via the same fees.ts
+   engine as Rates / Summary / the budget reconcile.
    ============================================ */
 
-import { useMemo } from 'react';
-import { Grid } from '@/components/grid/Grid';
-import type { Column, GridFx, Row, Section } from '@/components/grid/types';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { countDayStatuses } from '@/lib/payroll/fees';
+import { BRUSH_TYPES, brushTypeToStatus, type BrushType } from '@/lib/payroll/effectiveDayType';
 import { colourForDayType, labelForDayType } from '@/lib/routing/dayType';
 import { getWeekStart, formatWeekLabel } from '@/lib/routing/week';
-import { countDayStatuses } from '@/lib/payroll/fees';
 import type { RateTypeMeta } from '@/lib/payroll/rateLines';
 import { personTotals, type LineAmountMap } from './rateLinesClient';
-import { DAY_OPTIONS, type RoutingDay, type PayrollPerson } from './usePayrollGrid';
+import type { RoutingDay, PayrollPerson } from './usePayrollGrid';
 
-const DAY_CODES = DAY_OPTIONS.map((o) => o.value);
-const DAY_OPTCOLORS: Record<string, string> = {
+const STATUS_TINT: Record<string, string> = {
+  show: 'color-mix(in srgb, var(--color-lp-day-show) 26%, transparent)',
+  off_travel: 'color-mix(in srgb, var(--color-lp-warning) 24%, transparent)',
+  rehearsal: 'color-mix(in srgb, var(--lp-violet) 24%, transparent)',
+};
+const STATUS_FG: Record<string, string> = {
   show: 'var(--color-lp-day-show)',
   off_travel: 'var(--color-lp-warning)',
+  rehearsal: 'var(--lp-violet)',
 };
-const DAY_OPTLABELS: Record<string, string> = { show: 'Show', off_travel: 'Off / Travel', no_tour: '—' };
+const STATUS_ABBR: Record<string, string> = { show: 'S', off_travel: 'T', rehearsal: 'R', no_tour: '' };
 
-/** Build the person row from a personnel_rates row. Rate values are NOT read
- *  from the card columns — the frozen Total column computes from the SSOT
- *  amountMap (personTotals) — so only identity + non-gated fields are copied. */
+const PERSON_W = 176;
+const TOTAL_W = 92;
+const DAY_W = 62;
+
 function toPerson(pr: Record<string, unknown>): PayrollPerson {
   return {
     id: pr.id as string,
@@ -43,90 +53,35 @@ function toPerson(pr: Record<string, unknown>): PayrollPerson {
 
 function DayHeader({ day, weekStart }: { day: RoutingDay; weekStart: boolean }) {
   const dt = (day.day_type ?? '').trim();
-  const d = day.date ? day.date.slice(5) : '';
   return (
-    /* MTX-05 — the week label / date / city / day-type used to collide in the
-       narrow column (no whiteSpace:nowrap → city + type wrapped). Full-width
-       children + nowrap + ellipsis truncate cleanly; a bit more gap/padding
-       gives each row breathing room. */
     <div
       style={{
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        gap: 3,
-        lineHeight: 1.2,
-        padding: '4px 4px 3px',
+        gap: 2,
+        lineHeight: 1.15,
+        padding: '4px 2px 3px',
         width: '100%',
         minWidth: 0,
         boxSizing: 'border-box',
         borderLeft: weekStart ? '2px solid var(--lp-orange)' : undefined,
-        marginLeft: weekStart ? -1 : undefined,
       }}
     >
       {weekStart ? (
-        <span
-          style={{
-            fontSize: 8,
-            fontWeight: 700,
-            letterSpacing: '0.06em',
-            color: 'var(--lp-orange)',
-            maxWidth: '100%',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
-        >
+        <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.04em', color: 'var(--lp-orange)', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {formatWeekLabel(getWeekStart(day.date))}
         </span>
       ) : null}
-      <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--lp-text)', whiteSpace: 'nowrap' }}>{d}</span>
-      {/* G2-1 — venue + city on TWO lines (Adam: one line too compact). Venue
-          reads slightly stronger than city; both truncate with a full tooltip. */}
+      <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--lp-text)', whiteSpace: 'nowrap' }}>{day.date ? day.date.slice(5) : ''}</span>
       {day.venue_name ? (
-        <span
-          title={day.venue_name}
-          style={{
-            fontSize: 9,
-            fontWeight: 600,
-            color: 'var(--lp-text-secondary)',
-            maxWidth: '100%',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {day.venue_name}
-        </span>
+        <span title={day.venue_name} style={{ fontSize: 8.5, fontWeight: 600, color: 'var(--lp-text-secondary)', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{day.venue_name}</span>
       ) : null}
       {day.city ? (
-        <span
-          title={day.city}
-          style={{
-            fontSize: 9,
-            color: 'var(--lp-text-tertiary)',
-            maxWidth: '100%',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {day.city}
-        </span>
+        <span title={day.city} style={{ fontSize: 8.5, color: 'var(--lp-text-tertiary)', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{day.city}</span>
       ) : null}
       {dt ? (
-        <span
-          title={labelForDayType(dt) || dt}
-          style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 3,
-            maxWidth: '100%',
-            fontSize: 8,
-            fontWeight: 600,
-            color: colourForDayType(dt),
-          }}
-        >
+        <span title={labelForDayType(dt) || dt} style={{ display: 'inline-flex', alignItems: 'center', gap: 3, maxWidth: '100%', fontSize: 8, fontWeight: 600, color: colourForDayType(dt) }}>
           <span style={{ width: 5, height: 5, borderRadius: '50%', background: colourForDayType(dt), flexShrink: 0 }} />
           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{labelForDayType(dt) || dt}</span>
         </span>
@@ -141,120 +96,207 @@ export function PayrollDaysMatrix({
   currency,
   statusOf,
   saveDayStatus,
+  saveDayType,
+  tourDayTypeOf,
   rateTypes,
   amountMap,
 }: {
   routingDates: RoutingDay[];
   personnelRates: Record<string, unknown>[];
   currency: string;
-  /** Lifted from PayrollView's shared usePayrollGrid (PAY-01). */
   statusOf: (personnelId: string, date: string) => string;
   saveDayStatus: (personnelId: string, date: string, status: string) => void | Promise<void>;
-  /** b2 — the rate-lines source for the live Total column. */
+  /** G2-1 brush — paint a brush type (resolved to a status via the SSOT). */
+  saveDayType: (personnelId: string, date: string, brush: BrushType) => void | Promise<void>;
+  tourDayTypeOf: (date: string) => string | undefined;
   rateTypes: RateTypeMeta[];
   amountMap: LineAmountMap;
 }) {
   const people = useMemo(() => personnelRates.map(toPerson), [personnelRates]);
-  const ratesById = useMemo(() => new Map(people.map((p) => [p.id, p])), [people]);
-  const money = useMemo(
-    () =>
-      new Intl.NumberFormat('en-GB', {
-        style: 'currency',
-        currency: (currency || 'GBP').trim().toUpperCase(),
-        maximumFractionDigits: 0,
-      }),
-    [currency],
+  const days = useMemo(
+    () => [...routingDates].filter((r) => r.date).sort((a, b) => a.date.localeCompare(b.date)),
+    [routingDates],
   );
-  // MTX-06 live total — calc columns render via the Grid's fx; pass a minimal one
-  // so the Total formats in the tour currency (no conversion — rates are native).
-  const fx: GridFx = useMemo(
-    () => ({
-      displayCurrency: (currency || 'GBP').toUpperCase(),
-      currencies: [(currency || 'GBP').toUpperCase()],
-      toDisplay: (amount: number) => amount,
-      symbol: () => '',
-      formatDisplay: (amount: number) => money.format(Number(amount) || 0),
-    }),
-    [currency, money],
-  );
-
-  // Sort dates; mark each week-start (first date of its Monday week).
-  const days = useMemo(() => [...routingDates].filter((r) => r.date).sort((a, b) => a.date.localeCompare(b.date)), [routingDates]);
-  const weekStartIds = useMemo(() => {
+  const weekStartDates = useMemo(() => {
     const set = new Set<string>();
-    let prevWeek: string | null = null;
+    let prev: string | null = null;
     for (const d of days) {
       const w = getWeekStart(d.date);
-      if (w !== prevWeek) {
-        set.add(d.date);
-        prevWeek = w;
-      }
+      if (w !== prev) { set.add(d.date); prev = w; }
     }
     return set;
   }, [days]);
-  const dayByDate = useMemo(() => new Map(days.map((d) => [d.date, d])), [days]);
 
-  const columns: Column[] = useMemo(() => {
-    const dayIds = days.map((d) => d.date);
-    // MTX-06 LIVE total (#5) — computed from the row's OWN live day-status cells
-    // + the person's rate card (closure), via the SAME fees.ts computeTotalFee
-    // (+ rate-card advance) as Rates / Summary / the budget reconcile — so the
-    // live cell can't diverge from the persisted total (no PAY-04 redux). calc
-    // re-runs on every render, so a day edit ticks the Total instantly.
-    const totalCalc = (row: Row): number => {
-      const p = ratesById.get(String(row._uid));
-      if (!p) return 0;
-      const dayStatuses: Record<string, string> = {};
-      for (const id of dayIds) dayStatuses[id] = String(row[id] ?? '');
-      const counts = countDayStatuses(dayStatuses);
-      // b2 — fee from the person's rate lines (dynamic types), same engine as
-      // Rates / Summary / the budget reconcile, so the live cell can't diverge.
-      return personTotals(amountMap, p.id, rateTypes, counts).totalFee;
-    };
-    return [
-      // person + a frozen Total column (frozenCols=2). Fixed widths so the
-      // second frozen column's sticky-left offset is deterministic.
-      { id: 'person', label: 'Person', type: 'text', ro: true, w: 180, min: 180, resize: false },
-      { id: '__total', label: 'Total', type: 'calc', w: 104, min: 104, resize: false, calc: totalCalc },
-      ...days.map<Column>((d) => ({ id: d.date, label: d.date.slice(5), type: 'dropdown', options: DAY_CODES, optColors: DAY_OPTCOLORS, optLabels: DAY_OPTLABELS, w: 92, min: 76, resize: true })),
-    ];
-  }, [days, ratesById, rateTypes, amountMap]);
+  const money = useMemo(
+    () => new Intl.NumberFormat('en-GB', { style: 'currency', currency: (currency || 'GBP').trim().toUpperCase(), maximumFractionDigits: 0 }),
+    [currency],
+  );
 
-  const data: Section[] = useMemo(() => {
-    const rows: Row[] = people.map((p) => {
-      const row: Row = { _uid: p.id, person: p.person_name };
-      for (const d of days) row[d.date] = statusOf(p.id, d.date);
-      return row;
-    });
-    return [{ name: 'Personnel', kind: 'normal', _uid: 'payroll', rows }];
-  }, [people, days, statusOf]);
+  const [brush, setBrush] = useState<BrushType>('tour_default');
+  const [cursor, setCursor] = useState<{ r: number; c: number } | null>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
+  // Drag paint/erase: set at mousedown, applied on enter until mouseup.
+  const drag = useRef<{ active: boolean; mode: 'paint' | 'erase' } | null>(null);
+  // Cells the user has hand-edited — for the (next slice) Fill-all untouched-only.
+  const touched = useRef<Set<string>>(new Set());
+
+  useEffect(() => {
+    const up = () => { drag.current = null; };
+    document.addEventListener('mouseup', up);
+    return () => document.removeEventListener('mouseup', up);
+  }, []);
+
+  const paint = useCallback(
+    (personId: string, date: string, mode: 'paint' | 'erase') => {
+      touched.current.add(`${personId}:${date}`);
+      if (mode === 'erase') void saveDayStatus(personId, date, 'no_tour');
+      else void saveDayType(personId, date, brush);
+    },
+    [brush, saveDayStatus, saveDayType],
+  );
+
+  // Live total per person from the row's own cells (same fees.ts engine).
+  const totalFor = useCallback(
+    (personId: string): number => {
+      const statuses: Record<string, string> = {};
+      for (const d of days) statuses[d.date] = statusOf(personId, d.date);
+      return personTotals(amountMap, personId, rateTypes, countDayStatuses(statuses)).totalFee;
+    },
+    [days, statusOf, amountMap, rateTypes],
+  );
+
+  const onCellDown = (personId: string, date: string, r: number, c: number, shift: boolean) => {
+    setCursor({ r, c });
+    const target = brushTypeToStatus(brush, tourDayTypeOf(date));
+    const current = statusOf(personId, date);
+    const mode: 'paint' | 'erase' = current === target && target !== 'no_tour' ? 'erase' : 'paint';
+    if (shift && cursor) {
+      // Paint a run across the row from the anchor column to here.
+      const [lo, hi] = cursor.c <= c ? [cursor.c, c] : [c, cursor.c];
+      for (let cc = lo; cc <= hi; cc++) paint(personId, days[cc].date, 'paint');
+      return;
+    }
+    drag.current = { active: true, mode };
+    paint(personId, date, mode);
+  };
+
+  const onCellEnter = (personId: string, date: string) => {
+    if (drag.current?.active) paint(personId, date, drag.current.mode);
+  };
+
+  const onKeyDown = (e: React.KeyboardEvent) => {
+    if (!cursor) return;
+    const nRows = people.length, nCols = days.length;
+    if (e.key === 'ArrowDown') { e.preventDefault(); setCursor((p) => (p ? { ...p, r: Math.min(p.r + 1, nRows - 1) } : p)); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setCursor((p) => (p ? { ...p, r: Math.max(p.r - 1, 0) } : p)); }
+    else if (e.key === 'ArrowRight') { e.preventDefault(); setCursor((p) => (p ? { ...p, c: Math.min(p.c + 1, nCols - 1) } : p)); }
+    else if (e.key === 'ArrowLeft') { e.preventDefault(); setCursor((p) => (p ? { ...p, c: Math.max(p.c - 1, 0) } : p)); }
+    else if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      const p = people[cursor.r], d = days[cursor.c];
+      if (!p || !d) return;
+      // Enter toggles working: off if currently engaged, else paint the brush.
+      const current = statusOf(p.id, d.date);
+      if (current !== 'no_tour' && current !== '') paint(p.id, d.date, 'erase');
+      else paint(p.id, d.date, 'paint');
+    } else if (e.key === 'Escape') { setCursor(null); }
+  };
 
   if (people.length === 0) {
     return <div style={{ padding: 16, color: 'var(--lp-text-secondary)', fontSize: 13 }}>No personnel on this tour yet.</div>;
   }
 
   return (
-    <Grid
-      key={`payroll-days:${people.length}:${days.length}`}
-      initialColumns={columns}
-      initialData={data}
-      fx={fx}
-      wide
-      frozenCols={2}
-      allowAddRows={false}
-      fillHandle
-      clickTwiceToOpen
-      tabOpensMenu
-      onEdit={(personId, colId, value) => {
-        if (colId === 'person' || colId === '__total') return;
-        saveDayStatus(String(personId), colId, String(value));
-      }}
-      headerFor={(colId) => {
-        if (colId === 'person') return 'Person';
-        if (colId === '__total') return 'Total';
-        const d = dayByDate.get(colId);
-        return d ? <DayHeader day={d} weekStart={weekStartIds.has(colId)} /> : colId;
-      }}
-    />
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {/* Brush toolbar */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <span style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--lp-text-tertiary)' }}>Brush</span>
+        <div role="radiogroup" aria-label="Day-type brush" style={{ display: 'inline-flex', gap: 2, border: '1px solid var(--lp-border)', borderRadius: 'var(--lp-radius-full)', padding: 3, background: 'var(--lp-panel)' }}>
+          {BRUSH_TYPES.map((b) => {
+            const on = brush === b.value;
+            const st = brushTypeToStatus(b.value, 'show'); // representative colour
+            return (
+              <button
+                key={b.value}
+                type="button"
+                role="radio"
+                aria-checked={on}
+                onClick={() => setBrush(b.value)}
+                style={{
+                  border: 0, cursor: 'pointer', borderRadius: 'var(--lp-radius-full)', padding: '4px 12px', fontSize: 12, fontWeight: 600,
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  background: on ? 'var(--lp-orange)' : 'transparent',
+                  color: on ? 'var(--lp-text-inverse)' : 'var(--lp-text-secondary)',
+                }}
+              >
+                {b.value !== 'tour_default' ? (
+                  <span aria-hidden style={{ width: 7, height: 7, borderRadius: 2, background: STATUS_FG[st] ?? 'var(--lp-text-tertiary)', opacity: on ? 1 : 0.8 }} />
+                ) : null}
+                {b.label}
+              </button>
+            );
+          })}
+        </div>
+        <span style={{ fontSize: 11, color: 'var(--lp-text-tertiary)' }}>click / drag to paint · Shift+click for a run · arrows + Enter</span>
+      </div>
+
+      {/* Matrix */}
+      <div
+        ref={gridRef}
+        tabIndex={0}
+        onKeyDown={onKeyDown}
+        style={{ overflowX: 'auto', border: '1px solid var(--lp-border)', borderRadius: 'var(--lp-radius-md)', outline: 'none', userSelect: 'none' }}
+      >
+        <table style={{ borderCollapse: 'separate', borderSpacing: 0, fontSize: 12 }}>
+          <thead>
+            <tr>
+              <th style={{ position: 'sticky', left: 0, zIndex: 3, width: PERSON_W, minWidth: PERSON_W, background: 'var(--lp-panel)', textAlign: 'left', padding: '6px 10px', borderBottom: '1px solid var(--lp-border)', borderRight: '1px solid var(--lp-border)', fontSize: 11, color: 'var(--lp-text-tertiary)', fontWeight: 700 }}>Person</th>
+              <th style={{ position: 'sticky', left: PERSON_W, zIndex: 3, width: TOTAL_W, minWidth: TOTAL_W, background: 'var(--lp-panel)', textAlign: 'right', padding: '6px 10px', borderBottom: '1px solid var(--lp-border)', borderRight: '1px solid var(--lp-border-strong)', fontSize: 11, color: 'var(--lp-text-tertiary)', fontWeight: 700 }}>Total</th>
+              {days.map((d) => (
+                <th key={d.date} style={{ width: DAY_W, minWidth: DAY_W, background: 'var(--lp-panel)', borderBottom: '1px solid var(--lp-border)', padding: 0, verticalAlign: 'bottom' }}>
+                  <DayHeader day={d} weekStart={weekStartDates.has(d.date)} />
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {people.map((p, r) => (
+              <tr key={p.id}>
+                <td style={{ position: 'sticky', left: 0, zIndex: 2, width: PERSON_W, minWidth: PERSON_W, background: 'var(--lp-surface)', padding: '6px 10px', borderBottom: '1px solid var(--lp-border-subtle)', borderRight: '1px solid var(--lp-border)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  <span style={{ fontWeight: 600, color: 'var(--lp-text)' }}>{p.person_name || '—'}</span>
+                  {p.role ? <span style={{ marginLeft: 6, fontSize: 10, color: 'var(--lp-text-tertiary)' }}>{p.role}</span> : null}
+                </td>
+                <td style={{ position: 'sticky', left: PERSON_W, zIndex: 2, width: TOTAL_W, minWidth: TOTAL_W, background: 'var(--lp-surface)', padding: '6px 10px', textAlign: 'right', borderBottom: '1px solid var(--lp-border-subtle)', borderRight: '1px solid var(--lp-border-strong)', fontFamily: 'var(--lp-font-numeric)', color: 'var(--lp-text)' }}>
+                  {money.format(totalFor(p.id))}
+                </td>
+                {days.map((d, c) => {
+                  const status = statusOf(p.id, d.date);
+                  const isCursor = cursor?.r === r && cursor?.c === c;
+                  return (
+                    <td
+                      key={d.date}
+                      onMouseDown={(e) => onCellDown(p.id, d.date, r, c, e.shiftKey)}
+                      onMouseEnter={() => onCellEnter(p.id, d.date)}
+                      title={`${p.person_name} · ${d.date}`}
+                      style={{
+                        width: DAY_W, minWidth: DAY_W, height: 30, textAlign: 'center', cursor: 'pointer',
+                        borderBottom: '1px solid var(--lp-border-subtle)',
+                        borderLeft: weekStartDates.has(d.date) ? '2px solid color-mix(in srgb, var(--lp-orange) 40%, transparent)' : '1px solid var(--lp-border-subtle)',
+                        background: STATUS_TINT[status] ?? 'transparent',
+                        color: STATUS_FG[status] ?? 'var(--lp-text-tertiary)',
+                        fontSize: 10, fontWeight: 700,
+                        boxShadow: isCursor ? 'inset 0 0 0 2px var(--lp-orange)' : undefined,
+                      }}
+                    >
+                      {STATUS_ABBR[status] ?? ''}
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }
