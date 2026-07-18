@@ -140,16 +140,15 @@ export function PayrollDaysMatrix({
   const [brush, setBrush] = useState<BrushType>('tour_default');
   const [cursor, setCursor] = useState<{ r: number; c: number } | null>(null);
   const gridRef = useRef<HTMLDivElement>(null);
-  // Drag paint/erase: set at mousedown, applied on enter until mouseup.
-  const drag = useRef<{ active: boolean; mode: 'paint' | 'erase' } | null>(null);
-  // Cells the user has hand-edited — for the (next slice) Fill-all untouched-only.
+  // PAY-10 — press-drag-release fills the RECTANGLE between anchor and cursor
+  // (all rows × all cols in the box). Live preview while dragging; commit on
+  // mouseup. (Diagonal N→N is the PATCH matrix's rule, not the days matrix.)
+  type DragRect = { anchor: { r: number; c: number }; cursor: { r: number; c: number }; mode: 'paint' | 'erase' };
+  const [dragRect, setDragRect] = useState<DragRect | null>(null);
+  const dragRectRef = useRef<DragRect | null>(null);
+  useEffect(() => { dragRectRef.current = dragRect; }, [dragRect]);
+  // Cells the user has hand-edited — for Fill-all untouched-only.
   const touched = useRef<Set<string>>(new Set());
-
-  useEffect(() => {
-    const up = () => { drag.current = null; };
-    document.addEventListener('mouseup', up);
-    return () => document.removeEventListener('mouseup', up);
-  }, []);
 
   const paint = useCallback(
     (personId: string, date: string, mode: 'paint' | 'erase') => {
@@ -159,6 +158,31 @@ export function PayrollDaysMatrix({
     },
     [brush, saveDayStatus, saveDayType],
   );
+
+  // Commit the whole rectangle between anchor and cursor with the drag's mode.
+  const commitRect = useCallback(
+    (rect: DragRect) => {
+      const r0 = Math.min(rect.anchor.r, rect.cursor.r), r1 = Math.max(rect.anchor.r, rect.cursor.r);
+      const c0 = Math.min(rect.anchor.c, rect.cursor.c), c1 = Math.max(rect.anchor.c, rect.cursor.c);
+      for (let r = r0; r <= r1; r++) {
+        for (let c = c0; c <= c1; c++) {
+          const p = people[r], d = days[c];
+          if (p && d) paint(p.id, d.date, rect.mode);
+        }
+      }
+    },
+    [people, days, paint],
+  );
+
+  useEffect(() => {
+    const up = () => {
+      const rect = dragRectRef.current;
+      if (rect) commitRect(rect);
+      setDragRect(null);
+    };
+    document.addEventListener('mouseup', up);
+    return () => document.removeEventListener('mouseup', up);
+  }, [commitRect]);
 
   // Fill-all (work-backwards): paint the active brush across everyone × every day.
   const [fillOpen, setFillOpen] = useState(false);
@@ -196,22 +220,24 @@ export function PayrollDaysMatrix({
   );
 
   const onCellDown = (personId: string, date: string, r: number, c: number, shift: boolean) => {
+    if (shift && cursor) {
+      // Shift+click extends a run across the row from the last cell to here.
+      const [lo, hi] = cursor.c <= c ? [cursor.c, c] : [c, cursor.c];
+      for (let cc = lo; cc <= hi; cc++) paint(people[r].id, days[cc].date, 'paint');
+      setCursor({ r, c });
+      return;
+    }
     setCursor({ r, c });
+    // Paint/erase mode is decided from the anchor cell and held for the whole
+    // rectangle; commit happens on mouseup (see commitRect).
     const target = brushTypeToStatus(brush, tourDayTypeOf(date));
     const current = statusOf(personId, date);
     const mode: 'paint' | 'erase' = current === target && target !== 'no_tour' ? 'erase' : 'paint';
-    if (shift && cursor) {
-      // Paint a run across the row from the anchor column to here.
-      const [lo, hi] = cursor.c <= c ? [cursor.c, c] : [c, cursor.c];
-      for (let cc = lo; cc <= hi; cc++) paint(personId, days[cc].date, 'paint');
-      return;
-    }
-    drag.current = { active: true, mode };
-    paint(personId, date, mode);
+    setDragRect({ anchor: { r, c }, cursor: { r, c }, mode });
   };
 
-  const onCellEnter = (personId: string, date: string) => {
-    if (drag.current?.active) paint(personId, date, drag.current.mode);
+  const onCellEnter = (r: number, c: number) => {
+    setDragRect((rect) => (rect ? { ...rect, cursor: { r, c } } : null));
   };
 
   const onKeyDown = (e: React.KeyboardEvent) => {
@@ -309,17 +335,22 @@ export function PayrollDaysMatrix({
                 {days.map((d, c) => {
                   const status = statusOf(p.id, d.date);
                   const isCursor = cursor?.r === r && cursor?.c === c;
+                  const inPreview = !!dragRect
+                    && r >= Math.min(dragRect.anchor.r, dragRect.cursor.r) && r <= Math.max(dragRect.anchor.r, dragRect.cursor.r)
+                    && c >= Math.min(dragRect.anchor.c, dragRect.cursor.c) && c <= Math.max(dragRect.anchor.c, dragRect.cursor.c);
                   return (
                     <td
                       key={d.date}
                       onMouseDown={(e) => onCellDown(p.id, d.date, r, c, e.shiftKey)}
-                      onMouseEnter={() => onCellEnter(p.id, d.date)}
+                      onMouseEnter={() => onCellEnter(r, c)}
                       title={`${p.person_name} · ${d.date}`}
                       style={{
-                        width: DAY_W, minWidth: DAY_W, height: 30, textAlign: 'center', cursor: 'pointer',
+                        width: DAY_W, minWidth: DAY_W, height: 34, textAlign: 'center', cursor: 'pointer',
                         borderBottom: '1px solid var(--lp-border-subtle)',
                         borderLeft: weekStartDates.has(d.date) ? '2px solid color-mix(in srgb, var(--lp-orange) 40%, transparent)' : '1px solid var(--lp-border-subtle)',
-                        background: STATUS_TINT[status] ?? 'transparent',
+                        background: inPreview
+                          ? 'color-mix(in srgb, var(--lp-orange) 24%, transparent)'
+                          : (STATUS_TINT[status] ?? 'transparent'),
                         color: STATUS_FG[status] ?? 'var(--lp-text-tertiary)',
                         fontSize: 10, fontWeight: 700,
                         boxShadow: isCursor ? 'inset 0 0 0 2px var(--lp-orange)' : undefined,

@@ -249,6 +249,31 @@ PATCH route only calling `writeRates` on a rate-amount edit, so a rate-type-only
 flip changed the column but not the lines. **Code-verified**: `writeRates` fires
 when `updates.rate_type !== undefined`; `fees.test` (15 checks) green. **Needs-live** (Adam).
 
+#### PAY-08 — Days-matrix brush + Fill-all (G2-1)
+**Do**: On the one-page Payroll, pick a day-type **brush** (Tour default / Show /
+Rehearsal / Travel / Off / Promo·Radio) and paint person-day cells; open **Fill all…**.
+**Expect**: click paints the brush (or erases if the cell already carries it);
+status abbreviations + tints update; the live **Total** ticks. Promo/Radio bills
+the SHOW rate; the override drives pay through the ONE path (day_statuses). Fill-all
+warns with the hand-edited count and offers "Fill only untouched" (default) /
+"Overwrite everything". Money gate: reconcile.harness override gate green. **Needs-live**.
+
+#### PAY-09 — Personnel is a read-only rate mirror (G2-1)
+**Do**: Open `/operations/[tourId]/personnel`; click a **Rate** value.
+**Expect**: the page LOADS (no "Loading personnel…" hang — the ops layout no longer
+blocks on a live Spotify fetch); the Rate column is display-only; clicking a rate
+routes to `/operations/[tourId]/payroll?focus=<cardId>` (edit lives only in Payroll).
+No rate-edit form exists outside Payroll. **Needs-live**.
+
+#### PAY-10 — Days-matrix drag fills a RECTANGLE (G2-1b)
+**Do**: In the days matrix, press on a cell and drag to another cell (any direction),
+then release.
+**Expect**: the full **rectangle** between anchor and cursor — every person-row ×
+every day-column in the box — fills with the active brush, with a live orange
+preview of the box while dragging; release commits. NOT a single diagonal line
+(that's the patch matrix's rule). Shift+click still extends a run across the row.
+**Code-verified** (rect commit on mouseup); **Needs-live** (Adam re-walks).
+
 > **Deferred follow-ups:** PAY-03 rate-card slide + **advance editing** (needs
 > memberId plumbing); `acl_per_diem` festival override (CC_PAYROLL_ACL); branded
 > payroll PDF (bucket + brand_color exist, unused — future).
