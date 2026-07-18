@@ -245,8 +245,19 @@ export function TourPersonnelClient({
         accessor: (r) => (r.rate_type === 'day_rate' ? r.offRate : r.showRate) ?? 0,
         sortable: true,
         align: 'right',
-        cell: (_, r) =>
-          `${currency} ${Number((r.rate_type === 'day_rate' ? r.offRate : r.showRate) ?? 0).toLocaleString()}`,
+        // G2-1 — Personnel is a READ-ONLY mirror; there is ONE write surface for
+        // rates. Clicking a rate routes to Payroll with the person focused.
+        cell: (_, r) => (
+          <button
+            type="button"
+            title="Edit rates in Payroll"
+            onClick={(e) => { e.stopPropagation(); router.push(`/operations/${tourId}/payroll?focus=${r.id}`); }}
+            className="lp-mono"
+            style={{ border: 0, background: 'transparent', cursor: 'pointer', color: 'var(--lp-text)', font: 'inherit', textDecoration: 'underline', textDecorationColor: 'var(--lp-border-strong)', textUnderlineOffset: 3 }}
+          >
+            {`${currency} ${Number((r.rate_type === 'day_rate' ? r.offRate : r.showRate) ?? 0).toLocaleString()}`}
+          </button>
+        ),
       },
       {
         id: 'email',
@@ -296,7 +307,7 @@ export function TourPersonnelClient({
         ),
       },
     ],
-    [currency, roleOptions]
+    [currency, roleOptions, router, tourId]
   );
 
   return (
