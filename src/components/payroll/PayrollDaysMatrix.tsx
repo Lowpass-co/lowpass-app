@@ -81,6 +81,24 @@ function DayHeader({ day, weekStart }: { day: RoutingDay; weekStart: boolean }) 
         </span>
       ) : null}
       <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--lp-text)', whiteSpace: 'nowrap' }}>{d}</span>
+      {/* G2-1 — venue + city on TWO lines (Adam: one line too compact). Venue
+          reads slightly stronger than city; both truncate with a full tooltip. */}
+      {day.venue_name ? (
+        <span
+          title={day.venue_name}
+          style={{
+            fontSize: 9,
+            fontWeight: 600,
+            color: 'var(--lp-text-secondary)',
+            maxWidth: '100%',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {day.venue_name}
+        </span>
+      ) : null}
       {day.city ? (
         <span
           title={day.city}
