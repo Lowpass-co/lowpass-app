@@ -44,12 +44,6 @@ interface PayrollViewProps {
   rateLines?: RateLineRecord[];
 }
 
-type ViewId = 'rates' | 'days';
-const VIEWS: { id: ViewId; label: string }[] = [
-  { id: 'rates', label: 'Rates & Summary' },
-  { id: 'days', label: 'Days matrix' },
-];
-
 function toMeta(r: RateTypeRow): RateTypeMeta {
   return {
     id: r.id,
@@ -73,7 +67,6 @@ export function PayrollView({
   rateLines = [],
 }: PayrollViewProps) {
   const [rates, setRates] = useState<Record<string, unknown>[]>(personnelRates);
-  const [view, setView] = useState<ViewId>('rates');
 
   // b2 — the catalog + amounts are the hub's state, shared by all grids.
   const [types, setTypes] = useState<RateTypeMeta[]>(() => rateTypes.map(toMeta).sort(byOrder));
@@ -126,78 +119,57 @@ export function PayrollView({
         </div>
       </div>
 
-      <div
-        role="tablist"
-        aria-label="Payroll view"
-        style={{ display: 'inline-flex', alignSelf: 'flex-start', gap: 2, border: '1px solid var(--lp-border)', borderRadius: 'var(--lp-radius-full)', padding: 3, background: 'var(--lp-panel)' }}
-      >
-        {VIEWS.map((v) => {
-          const on = view === v.id;
-          return (
-            <button
-              key={v.id}
-              type="button"
-              role="tab"
-              aria-selected={on}
-              onClick={() => setView(v.id)}
-              style={{ border: 0, cursor: 'pointer', borderRadius: 'var(--lp-radius-full)', padding: '5px 16px', fontSize: 13, fontWeight: 600, background: on ? 'var(--lp-orange)' : 'transparent', color: on ? 'var(--lp-text-inverse)' : 'var(--lp-text-secondary)', transition: 'background 0.16s ease, color 0.16s ease' }}
-            >
-              {v.label}
-            </button>
-          );
-        })}
-      </div>
-
-      <div style={{ minHeight: 300 }}>
-        {view === 'rates' ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-            <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-                <TwoGridHeading label="Rates" hint="editable · columns from your rate types" />
-                <RateTypeToolbar
-                  tourId={tourId}
-                  types={types}
-                  onAdded={(t) => setTypes((prev) => [...prev, t].sort(byOrder))}
-                  onChanged={(t) => setTypes((prev) => prev.map((x) => (x.id === t.id ? t : x)).sort(byOrder))}
-                  onDeleted={(id) => {
-                    setTypes((prev) => prev.filter((x) => x.id !== id));
-                    setLines((prev) => prev.filter((l) => l.rate_type_id !== id));
-                  }}
-                />
-              </div>
-              <PayrollRatesSpreadsheet
-                currency={currency}
-                initialRates={rates as unknown as PersonnelRate[]}
-                payrollEntries={entries}
-                canSeeCommission={false}
-                rateTypes={types}
-                amountMap={amountMap}
-                onRateLineCommit={onRateLineCommit}
-              />
-            </section>
-            <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <TwoGridHeading label="Summary" hint="totals · read-only" />
-              <PayrollSummary
-                currency={currency}
-                personnelRates={rates}
-                payrollEntries={entries}
-                rateTypes={types}
-                amountMap={amountMap}
-              />
-            </section>
-          </div>
-        ) : (
-          <PayrollDaysMatrix
-            routingDates={routingDates}
-            personnelRates={rates}
-            currency={currency}
-            statusOf={statusOf}
-            saveDayStatus={saveDayStatus}
-            rateTypes={types}
-            amountMap={amountMap}
+      {/* G2-1 — ONE page (Adam's graded design): rates grid, days matrix, and
+          summary stack together; the Rates/Days view toggle is retired. All
+          three read the same hub state, so an edit in one flows to the others. */}
+      <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+          <TwoGridHeading label="Rates" hint="editable · columns from your rate types" />
+          <RateTypeToolbar
+            tourId={tourId}
+            types={types}
+            onAdded={(t) => setTypes((prev) => [...prev, t].sort(byOrder))}
+            onChanged={(t) => setTypes((prev) => prev.map((x) => (x.id === t.id ? t : x)).sort(byOrder))}
+            onDeleted={(id) => {
+              setTypes((prev) => prev.filter((x) => x.id !== id));
+              setLines((prev) => prev.filter((l) => l.rate_type_id !== id));
+            }}
           />
-        )}
-      </div>
+        </div>
+        <PayrollRatesSpreadsheet
+          currency={currency}
+          initialRates={rates as unknown as PersonnelRate[]}
+          payrollEntries={entries}
+          canSeeCommission={false}
+          rateTypes={types}
+          amountMap={amountMap}
+          onRateLineCommit={onRateLineCommit}
+        />
+      </section>
+
+      <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <TwoGridHeading label="Days" hint="who works which day · paint to assign" />
+        <PayrollDaysMatrix
+          routingDates={routingDates}
+          personnelRates={rates}
+          currency={currency}
+          statusOf={statusOf}
+          saveDayStatus={saveDayStatus}
+          rateTypes={types}
+          amountMap={amountMap}
+        />
+      </section>
+
+      <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <TwoGridHeading label="Summary" hint="totals · read-only" />
+        <PayrollSummary
+          currency={currency}
+          personnelRates={rates}
+          payrollEntries={entries}
+          rateTypes={types}
+          amountMap={amountMap}
+        />
+      </section>
     </div>
   );
 }
