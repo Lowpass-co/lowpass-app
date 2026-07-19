@@ -208,8 +208,13 @@ export function PatchMatrix({
     return new Set(diagPath(drag.anchor, drag.cursor).map((p) => `${p.r}:${p.c}`));
   }, [drag]);
 
-  const CH_W = 200;
-  const CELL = 26;
+  // Desk-style sizing: the channel column is fixed; socket columns have a floor
+  // but GROW to fill the (wide) surface — so the grid uses the space instead of
+  // sitting as a narrow strip. minWidth on the table lets it scroll once there
+  // are too many sockets to fit.
+  const CH_W = 220;
+  const CELL = 34;
+  const tableMinWidth = CH_W + sockets.length * CELL;
   const channelLabel = (c: ChannelListRow) => `${c.row_index}. ${c.channel_name || 'Untitled'}`;
 
   if (allStrips.length === 0) {
@@ -281,7 +286,11 @@ export function PatchMatrix({
         className="overflow-auto outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-lp-orange/40"
         style={{ maxHeight: 'min(70vh, 640px)', border: '1px solid var(--lp-border)', borderRadius: 'var(--lp-radius-md)', userSelect: 'none' }}
       >
-        <table style={{ borderCollapse: 'separate', borderSpacing: 0, fontSize: 11 }}>
+        <table style={{ borderCollapse: 'separate', borderSpacing: 0, fontSize: 11, width: '100%', minWidth: tableMinWidth, tableLayout: 'fixed' }}>
+          <colgroup>
+            <col style={{ width: CH_W }} />
+            {sockets.map((s) => <col key={s.col} style={{ width: CELL }} />)}
+          </colgroup>
           <thead>
             {/* Group header — box/snake label spanning its sockets. */}
             <tr>
