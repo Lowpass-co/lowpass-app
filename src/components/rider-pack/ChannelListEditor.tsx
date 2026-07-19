@@ -123,8 +123,10 @@ export default function ChannelListEditor({
   const [stageDialog, setStageDialog] = useState(false);
   const [multiAddOpen, setMultiAddOpen] = useState(false);
   const [columnPickerOpen, setColumnPickerOpen] = useState(false);
-  /* VIS-CL-07 — patch mode (dLive/LV1-style socket board). */
+  /* VIS-CL-07 / G2-2 — patch mode (the patch matrix). patchFocusBoxId pre-filters
+     the matrix to one box (set by a stage box's "Patch" button). */
   const [patchMode, setPatchMode] = useState(false);
+  const [patchFocusBoxId, setPatchFocusBoxId] = useState<string | null>(null);
   const [mics, setMics] = useState<MicLibraryEntry[]>([]);
   const [gearByName, setGearByName] = useState<
     Map<string, { id: string; ownership: 'owned' | 'sub_hired' | 'hired_to_client' }>
@@ -442,7 +444,7 @@ export default function ChannelListEditor({
           {/* VIS-CL-07 / G2-2 — Patch mode toggle. Opens the patch matrix. */}
           <button
             type="button"
-            onClick={() => setPatchMode((p) => !p)}
+            onClick={() => setPatchMode((p) => { if (p) setPatchFocusBoxId(null); return !p; })}
             aria-pressed={patchMode}
             className="inline-flex items-center gap-1 rounded px-2 py-1 text-xs font-semibold uppercase tracking-wide"
             style={{
@@ -542,9 +544,11 @@ export default function ChannelListEditor({
              sockets across). The outputs sub-grid below stays rendered +
              untouched (VIS-CL-04). */
           <PatchMatrix
+            key={patchFocusBoxId ?? 'all'}
             rows={inputRows}
             stageBoxes={stageBoxes}
             subSnakes={subSnakes}
+            focusBoxId={patchFocusBoxId}
             onPatch={patchChannel}
           />
         ) : (
@@ -805,7 +809,7 @@ export default function ChannelListEditor({
             rows={rows}
             stageBoxes={stageBoxes}
             subSnakes={subSnakes}
-            onStructureChange={notifyStructureChange}
+            onPatchBox={(boxId) => { setPatchFocusBoxId(boxId); setPatchMode(true); }}
           />
         </div>
       </div>

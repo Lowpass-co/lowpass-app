@@ -486,3 +486,21 @@ chip under **Boxes**.
 channels. Clear patch asks to confirm, then returns every channel to unpatched
 (numbers/names untouched). A Boxes chip hides/shows that box's socket columns.
 **Needs-live**.
+
+## Patch matrix — quality pass + single surface (G2-2b) — 2026-07-19
+
+#### PM-07 — Patch matrix quality pass
+**Do**: Open Patch mode on a wide screen. Inspect the grid.
+**Expect** (per CC_G2_BUILD.md §G2-2b F): equal-width socket columns (`table-layout:
+fixed` + `<colgroup>`), 40px sockets, hairline gridlines (`--lp-border-subtle`, not
+heavy borders), painted cells as inset TILES (3px radius) not flat blocks, empty
+cells a barely-lifted field, box/snake group headers TRUNCATE with a title tooltip,
+crosshair row/col tint on hover, sticky left channel column casts a right-edge shadow
+on horizontal scroll, 2px orange inset cursor ring, conflict = red tile. **Needs-live**.
+
+#### PM-08 — One patch surface (StageBoxPatchModal retired)
+**Do**: In the channel list's Inventory → Stage boxes, click a box's **Patch** button.
+**Expect**: it opens the MAIN patch matrix (patch mode) pre-filtered to that box via
+the Boxes filter (other boxes hidden but toggleable back on) — NOT the old socket-strip
+modal. The old `StageBoxPatchModal` is deleted; there is no second patch UI with old
+styling anywhere. Leaving patch mode clears the box focus. **Needs-live**.

@@ -50,6 +50,13 @@ type Cell = { r: number; c: number };
 /** Unpatch — nulls both socket families (static, so it's module-scoped). */
 const CLEAR_PATCH: SocketPatch = { stage_box_id: null, stage_box_position: null, sub_snake_id: null, sub_snake_position: null };
 
+// G2-2b quality pass — theme-aware mappings of the spec's dark literals.
+const HAIRLINE = 'var(--lp-border-subtle)';
+const EMPTY_CELL = 'color-mix(in srgb, var(--lp-surface) 45%, var(--lp-bg))';
+const STICKY_SHADOW = '8px 0 16px -8px rgba(0,0,0,0.5)';
+const STRIP_RULE = 'var(--lp-border-strong)'; // divider at each box/snake boundary
+const GROUP_H = 24; // group-header row height (position row sticks below it)
+
 /** The sequential diagonal path between two cells (down-right / any quadrant).
  *  A pure horizontal/vertical drag yields just the anchor — the gesture is
  *  diagonal by design. */
@@ -67,16 +74,26 @@ export function PatchMatrix({
   stageBoxes,
   subSnakes,
   onPatch,
+  focusBoxId,
 }: {
   /** Input rows only (row_kind='input'). Output rows never patch. */
   rows: ChannelListRow[];
   stageBoxes: StageBox[];
   subSnakes: SubSnake[];
   onPatch: (channelId: string, patch: SocketPatch) => void;
+  /** G2-2b — pre-filter the matrix to one box (from a stage box's "Patch"
+   *  button); all other strips start hidden but can be toggled back on. */
+  focusBoxId?: string | null;
 }) {
-  const [hidden, setHidden] = useState<Set<string>>(() => new Set());
+  // When focused on one box, start with every OTHER strip hidden (Boxes filter).
+  const [hidden, setHidden] = useState<Set<string>>(() => {
+    if (!focusBoxId) return new Set();
+    const all = [...stageBoxes.map((b) => b.id), ...subSnakes.map((s) => s.id)];
+    return new Set(all.filter((id) => id !== focusBoxId));
+  });
   const [cursor, setCursor] = useState<Cell>({ r: 0, c: 0 });
   const [hover, setHover] = useState<Cell | null>(null);
+  const [scrolledX, setScrolledX] = useState(false);
   const [drag, setDrag] = useState<{ anchor: Cell; cursor: Cell } | null>(null);
   const dragRef = useRef<{ anchor: Cell; cursor: Cell } | null>(null);
   useEffect(() => { dragRef.current = drag; }, [drag]);
@@ -212,8 +229,8 @@ export function PatchMatrix({
   // but GROW to fill the (wide) surface — so the grid uses the space instead of
   // sitting as a narrow strip. minWidth on the table lets it scroll once there
   // are too many sockets to fit.
-  const CH_W = 220;
-  const CELL = 34;
+  const CH_W = 240;
+  const CELL = 40;   // larger sockets (§G2-2b F)
   const tableMinWidth = CH_W + sockets.length * CELL;
   const channelLabel = (c: ChannelListRow) => `${c.row_index}. ${c.channel_name || 'Untitled'}`;
 
@@ -283,8 +300,9 @@ export function PatchMatrix({
         tabIndex={0}
         onKeyDown={onKeyDown}
         onMouseLeave={() => setHover(null)}
+        onScroll={(e) => { const x = e.currentTarget.scrollLeft > 0; setScrolledX((prev) => (prev === x ? prev : x)); }}
         className="overflow-auto outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-lp-orange/40"
-        style={{ maxHeight: 'min(70vh, 640px)', border: '1px solid var(--lp-border)', borderRadius: 'var(--lp-radius-md)', userSelect: 'none' }}
+        style={{ maxHeight: 'min(70vh, 640px)', border: `1px solid ${HAIRLINE}`, borderRadius: 'var(--lp-radius-md)', userSelect: 'none', background: EMPTY_CELL }}
       >
         <table style={{ borderCollapse: 'separate', borderSpacing: 0, fontSize: 11, width: '100%', minWidth: tableMinWidth, tableLayout: 'fixed' }}>
           <colgroup>
@@ -292,11 +310,11 @@ export function PatchMatrix({
             {sockets.map((s) => <col key={s.col} style={{ width: CELL }} />)}
           </colgroup>
           <thead>
-            {/* Group header — box/snake label spanning its sockets. */}
-            <tr>
+            {/* Group header — box/snake label spanning its sockets (truncates). */}
+            <tr style={{ height: GROUP_H }}>
               <th
                 rowSpan={2}
-                style={{ position: 'sticky', left: 0, top: 0, zIndex: 5, width: CH_W, minWidth: CH_W, background: 'var(--lp-panel)', textAlign: 'left', padding: '4px 10px', borderBottom: '1px solid var(--lp-border-strong)', borderRight: '1px solid var(--lp-border-strong)', fontSize: 10, fontWeight: 700, color: 'var(--lp-text-tertiary)' }}
+                style={{ position: 'sticky', left: 0, top: 0, zIndex: 5, background: 'var(--lp-panel)', textAlign: 'left', padding: '4px 12px', borderBottom: `1px solid ${HAIRLINE}`, borderRight: `1px solid ${HAIRLINE}`, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700, color: 'var(--lp-text-tertiary)', boxShadow: scrolledX ? STICKY_SHADOW : undefined }}
               >
                 Channel · socket
               </th>
@@ -304,11 +322,12 @@ export function PatchMatrix({
                 <th
                   key={`${strip.kind}:${strip.id}`}
                   colSpan={strip.capacity}
-                  style={{ position: 'sticky', top: 0, zIndex: 3, background: 'var(--lp-panel)', padding: '3px 6px', borderBottom: '1px solid var(--lp-border-subtle)', borderLeft: '2px solid var(--lp-border-strong)', textAlign: 'left', whiteSpace: 'nowrap' }}
+                  title={strip.label}
+                  style={{ position: 'sticky', top: 0, zIndex: 3, height: GROUP_H, background: 'var(--lp-panel)', padding: '3px 8px', borderBottom: `1px solid ${HAIRLINE}`, borderLeft: `1px solid ${STRIP_RULE}`, textAlign: 'left', overflow: 'hidden' }}
                 >
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--lp-text-secondary)' }}>
-                    <span aria-hidden style={{ width: 8, height: 8, borderRadius: 2, background: strip.colour, filter: 'saturate(0.55)' }} />
-                    {strip.label}
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--lp-text-secondary)', minWidth: 0 }}>
+                    <span aria-hidden style={{ width: 8, height: 8, borderRadius: 2, background: strip.colour, filter: 'saturate(0.55)', flexShrink: 0 }} />
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{strip.label}</span>
                   </span>
                 </th>
               ))}
@@ -320,7 +339,7 @@ export function PatchMatrix({
                 return (
                   <th
                     key={s.col}
-                    style={{ position: 'sticky', top: 22, zIndex: 2, width: CELL, minWidth: CELL, background: isCol ? 'color-mix(in srgb, var(--lp-orange) 10%, var(--lp-panel))' : 'var(--lp-panel)', padding: 0, borderBottom: '1px solid var(--lp-border-strong)', borderLeft: s.pos === 1 ? '2px solid var(--lp-border-strong)' : '1px solid var(--lp-border-subtle)', fontSize: 8.5, fontWeight: 600, color: 'var(--lp-text-tertiary)', textAlign: 'center', fontFamily: 'var(--lp-font-numeric)' }}
+                    style={{ position: 'sticky', top: GROUP_H, zIndex: 2, background: isCol ? 'color-mix(in srgb, var(--lp-orange) 10%, var(--lp-panel))' : 'var(--lp-panel)', padding: 0, height: 20, borderBottom: `1px solid ${HAIRLINE}`, borderLeft: s.pos === 1 ? `1px solid ${STRIP_RULE}` : `1px solid ${HAIRLINE}`, fontSize: 9.5, fontWeight: 600, color: 'var(--lp-text-tertiary)', textAlign: 'center', fontFamily: 'var(--lp-font-numeric)' }}
                     title={`${s.strip.label}${s.pos}`}
                   >
                     {s.pos}
@@ -335,11 +354,11 @@ export function PatchMatrix({
               return (
                 <tr key={ch.id}>
                   <td
-                    style={{ position: 'sticky', left: 0, zIndex: 1, width: CH_W, minWidth: CH_W, background: isRow ? 'color-mix(in srgb, var(--lp-orange) 8%, var(--lp-surface))' : 'var(--lp-surface)', padding: '2px 10px', borderBottom: '1px solid var(--lp-border-subtle)', borderRight: '1px solid var(--lp-border-strong)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: CH_W }}
+                    style={{ position: 'sticky', left: 0, zIndex: 1, height: CELL, background: isRow ? 'color-mix(in srgb, var(--lp-orange) 7%, var(--lp-surface))' : 'var(--lp-surface)', padding: '0 12px', borderBottom: `1px solid ${HAIRLINE}`, borderRight: `1px solid ${HAIRLINE}`, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', transition: 'background 120ms ease-out', boxShadow: scrolledX ? STICKY_SHADOW : undefined }}
                     title={channelLabel(ch)}
                   >
-                    <span style={{ fontFamily: 'var(--lp-font-numeric)', color: 'var(--lp-text-tertiary)' }}>{ch.row_index}</span>
-                    <span style={{ color: 'var(--lp-text)' }}>{`  ${ch.channel_name || 'Untitled'}`}</span>
+                    <span style={{ fontFamily: 'var(--lp-font-numeric)', fontSize: 12, color: 'var(--lp-text-tertiary)' }}>{ch.row_index}</span>
+                    <span style={{ fontSize: 12.5, color: 'var(--lp-text)' }}>{`  ${ch.channel_name || 'Untitled'}`}</span>
                   </td>
                   {sockets.map((s) => {
                     const c = s.col;
@@ -354,24 +373,29 @@ export function PatchMatrix({
                         onMouseDown={(e) => { e.preventDefault(); setCursor({ r, c }); setDrag({ anchor: { r, c }, cursor: { r, c } }); }}
                         onMouseEnter={() => { setHover({ r, c }); setDrag((d) => (d ? { ...d, cursor: { r, c } } : null)); }}
                         style={{
-                          width: CELL, minWidth: CELL, height: CELL, textAlign: 'center', cursor: 'pointer',
-                          borderBottom: '1px solid var(--lp-border-subtle)',
-                          borderLeft: s.pos === 1 ? '2px solid var(--lp-border-strong)' : '1px solid var(--lp-border-subtle)',
-                          background: inPreview
-                            ? 'color-mix(in srgb, var(--lp-orange) 30%, transparent)'
-                            : conflict
-                              ? 'color-mix(in srgb, var(--lp-error) 26%, transparent)'
-                              : patched
-                                ? 'color-mix(in srgb, var(--lp-orange) 22%, transparent)'
-                                : inCross
-                                  ? 'color-mix(in srgb, var(--lp-orange) 6%, transparent)'
-                                  : 'transparent',
+                          height: CELL, padding: 3, cursor: 'pointer',
+                          borderBottom: `1px solid ${HAIRLINE}`,
+                          borderLeft: s.pos === 1 ? `1px solid ${STRIP_RULE}` : `1px solid ${HAIRLINE}`,
+                          background: inCross ? 'color-mix(in srgb, var(--lp-orange) 5%, transparent)' : 'transparent',
                           boxShadow: isCursor ? 'inset 0 0 0 2px var(--lp-orange)' : undefined,
+                          transition: 'background 120ms ease-out',
                         }}
                         title={`${channelLabel(ch)} → ${s.strip.label}${s.pos}${conflict ? ' — CONFLICT' : ''}`}
                       >
-                        {patched ? (
-                          <span aria-hidden style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: conflict ? 'var(--lp-error)' : 'var(--lp-orange)' }} />
+                        {/* Patched / preview cells render as inset TILES (3px radius),
+                            not flat blocks. Conflict = red tile. */}
+                        {patched || inPreview ? (
+                          <div style={{
+                            width: '100%', height: '100%', borderRadius: 3,
+                            background: inPreview
+                              ? 'color-mix(in srgb, var(--lp-orange) 34%, transparent)'
+                              : conflict
+                                ? 'color-mix(in srgb, var(--lp-error) 32%, transparent)'
+                                : 'color-mix(in srgb, var(--lp-orange) 30%, transparent)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          }}>
+                            {patched ? <span aria-hidden style={{ width: 8, height: 8, borderRadius: '50%', background: conflict ? 'var(--lp-error)' : 'var(--lp-orange)' }} /> : null}
+                          </div>
                         ) : null}
                       </td>
                     );
