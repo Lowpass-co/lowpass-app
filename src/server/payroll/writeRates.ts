@@ -146,22 +146,57 @@ export async function writeRates(
   }
 
   // 3. Write the SSOT lines from the card's FINAL values, respecting rate_type.
+  //
+  //    The FEE universe = every rate type that carries a person's *fee* (not per
+  //    diem / advance, which are universal). A person's rate_type OWNS exactly one
+  //    slice of it; every other fee line MUST NOT exist for them or computeTotals
+  //    would double-count (a stale Flat-tour line on a now-Split person = phantom
+  //    lump sum). So we KEEP the owned slice and DELETE the rest of the universe.
+  //
+  //    writeRates can only *source* the legacy-column types (a1/a2/a3 = split,
+  //    a6 = day rate). Flat tour (a7) and Weekly (a8) are entered directly in the
+  //    dynamic Rates grid (→ personnel_rate_lines), so writeRates never upserts
+  //    their amount — it just refrains from deleting the owned one.
   const cid = card.id as string;
-  const isDayRate = String(card.rate_type ?? '') === 'day_rate';
-  const lineRows: Array<{ rate_type_id: string; amount: number }> = [];
-  if (isDayRate) {
-    lineRows.push({ rate_type_id: DEFAULT_RATE_TYPE_IDS.dayRate, amount: num(card.off_rate) });
-  } else {
-    lineRows.push(
-      { rate_type_id: DEFAULT_RATE_TYPE_IDS.show, amount: num(card.show_rate) },
-      { rate_type_id: DEFAULT_RATE_TYPE_IDS.offTravel, amount: num(card.off_rate) },
-      { rate_type_id: DEFAULT_RATE_TYPE_IDS.rehearsal, amount: num(card.rehearsal_rate) },
-    );
+  const rateType = String(card.rate_type ?? 'split_rate');
+  const RT = DEFAULT_RATE_TYPE_IDS;
+  const FEE_UNIVERSE = [RT.show, RT.offTravel, RT.rehearsal, RT.dayRate, RT.flatTour, RT.weekly];
+
+  // Fee lines writeRates itself sources from the legacy columns (empty for the
+  // grid-owned / per-diem-only types), and the owned slice to preserve.
+  let sourcedFeeLines: Array<{ rate_type_id: string; amount: number }> = [];
+  let keepFeeIds: string[] = [];
+  switch (rateType) {
+    case 'day_rate':
+      sourcedFeeLines = [{ rate_type_id: RT.dayRate, amount: num(card.off_rate) }];
+      keepFeeIds = [RT.dayRate];
+      break;
+    case 'flat_tour':
+      keepFeeIds = [RT.flatTour]; // amount is grid-owned; don't source, don't delete
+      break;
+    case 'weekly':
+      keepFeeIds = [RT.weekly];
+      break;
+    case 'per_diem_only':
+      keepFeeIds = []; // no fee line at all
+      break;
+    case 'split_rate':
+    default:
+      sourcedFeeLines = [
+        { rate_type_id: RT.show, amount: num(card.show_rate) },
+        { rate_type_id: RT.offTravel, amount: num(card.off_rate) },
+        { rate_type_id: RT.rehearsal, amount: num(card.rehearsal_rate) },
+      ];
+      keepFeeIds = [RT.show, RT.offTravel, RT.rehearsal];
+      break;
   }
-  lineRows.push(
-    { rate_type_id: DEFAULT_RATE_TYPE_IDS.perDiem, amount: num(card.per_diem) },
-    { rate_type_id: DEFAULT_RATE_TYPE_IDS.advance, amount: num(card.advance_fee) },
-  );
+
+  // Per diem (a4) + advance (a5) are universal — every rate type carries them.
+  const lineRows = [
+    ...sourcedFeeLines,
+    { rate_type_id: RT.perDiem, amount: num(card.per_diem) },
+    { rate_type_id: RT.advance, amount: num(card.advance_fee) },
+  ];
 
   const { error: lineErr } = await supabase.from('personnel_rate_lines').upsert(
     lineRows.map((l) => ({
@@ -175,17 +210,15 @@ export async function writeRates(
   );
   if (lineErr) return { card, error: `Rates saved but rate lines failed: ${lineErr.message}` };
 
-  // day_rate cards must not keep split lines (a1/a2/a3) — they'd double-count.
-  if (isDayRate) {
+  // Delete every fee line this person does NOT own (stale lines from a prior
+  // rate_type would double-count). Per diem / advance are never in this set.
+  const staleFeeIds = FEE_UNIVERSE.filter((id) => !keepFeeIds.includes(id));
+  if (staleFeeIds.length > 0) {
     await supabase
       .from('personnel_rate_lines')
       .delete()
       .eq('personnel_rate_id', cid)
-      .in('rate_type_id', [
-        DEFAULT_RATE_TYPE_IDS.show,
-        DEFAULT_RATE_TYPE_IDS.offTravel,
-        DEFAULT_RATE_TYPE_IDS.rehearsal,
-      ]);
+      .in('rate_type_id', staleFeeIds);
   }
 
   return { card };

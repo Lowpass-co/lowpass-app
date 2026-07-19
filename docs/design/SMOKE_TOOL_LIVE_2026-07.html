@@ -57,9 +57,8 @@ h1{font-family:'Barlow Condensed';font-weight:600;font-size:30px;letter-spacing:
 <div id="modal"><div class="in"><h2 style="font-family:'Barlow Condensed';font-size:20px;letter-spacing:.03em;text-transform:uppercase;margin-bottom:10px">Feedback export — paste to Claude</h2><textarea id="mdout" readonly></textarea><div class="acts"><button id="mcopy">Copy to clipboard</button><button id="mclose">Close</button></div></div></div>
 <script>
 var BASE="https://lowpass-tm-software.vercel.app";
-var TOUR="22abd07b-a648-4405-b8ec-aa6acc7078ca";
-var DAY="c8943e0c-b9aa-494f-a96b-3ecb020e40ad";
-var ART="0e2824cc-b826-4bb9-af74-fd2a9b1204fd";
+var TOUR="6889d072-20c8-467c-9fbc-4d2469f6cac0"; // Simple Plan Support | Fall'26 — live, 31 days / 5 crew / 48 budget lines / 4 advances started
+var ART="ROSTER"; // artist-tier links point at the workspace roster; click your artist (avoids stale-id 404s)
 // [id, text, prefill('' none,'pass','needs')]
 var S=[
 ["global","Global — check on every page you visit","/artists",[
@@ -78,7 +77,21 @@ var S=[
 ["VIS-WS-04","'Needs you' queue: count matches rows; every row is a real action ◆","pass"],
 ["VIS-WS-05","No aggregate money stat in the header ◆","pass"],
 ["DRV-04","'IN PLANNING' counts only future tours; 'Resume <product>' opens your last-used product",""]]],
-["artist","Artist — Tours / Production / Business","/artists/"+ART,[
+["g1","G1 — grade the fixes CC just shipped (banked to main)","/operations/"+TOUR+"/payroll",[
+["G1-A1","Budget + Add line: instant, no page reload, keeps your scroll",""],
+["G1-A2","Files page works: Upload + drag-drop + invitation empty state (paste migration 241 first)",""],
+["G1-A3","Advance section reorder: drag a section, it moves smoothly (no tear-down flash)",""],
+["G1-A4","Advance: no default template → prompted to build one → fans out to shows; any day type startable",""],
+["G1-A5","Advance day: Venue Info is editable in-day (rail deep-link)",""],
+["G1-A6","Advance: 'Export advance' button beside Send Packet (one show / whole tour)",""],
+["G1-A7","Payroll: rate TYPE is editable per row; changing it rebuilds the rate fields",""],
+["G1-A8","Channel list: Override opens the real editor (not a dead rider-builder page)",""],
+["G1-A9","Riders: scope chips (artist/tour) + 'View artist masters →' link present",""],
+["G1-A10","Venue search: results appear as you type (≥1 char), create-new is last not first",""],
+["G1-A11","Stage plot: assigning a channel to an item is discoverable",""],
+["G1-B","Polish: no emoji, budget numbers mono, 'from Operations' label gone, popovers flip clear of the row, one picker on budget, venue-link tooltip, riders 'never sent'",""],
+["G1-C","Keyboard: Tab always moves to next field (never traps), arrows navigate lists/menus, Enter selects, Esc exits",""]]],
+["artist","Artist — Tours / Production / Business","/artists",[
 ["VIS-AR-01","Hero header + Tours/Production/Business tabs; no product nav anywhere on this tier ◆","pass"],
 ["VIS-AR-02","Tours date-ordered, current+future equal weight, past collapsed to one line ◆","pass"],
 ["VIS-AR-03","Tour rows: fingerprint + one status line; readiness detail lives INSIDE the tour ◆","pass"],
@@ -135,9 +148,9 @@ var S=[
 ["LT-05","Every page's empty state invites with a verb — never bare text, never raw errors",""],
 ["VIS-EX-01","Exports (routing/payroll/budget/stage plot/rider/advance) share one shell: lockup, mono, ticks","needs"]]]
 ];
-var store=JSON.parse(localStorage.getItem("lp-smoke-live-v1")||"null");
+var store=JSON.parse(localStorage.getItem("lp-smoke-live-v2")||"null");
 if(!store){store={verdicts:{},pros:{},cons:{},notes:{}};S.forEach(function(s){s[3].forEach(function(k){if(k[2]==="pass")store.verdicts[k[0]]="pass";if(k[2]==="fail")store.verdicts[k[0]]="fail";if(k[2]==="change")store.verdicts[k[0]]="change";})});}
-function save(){localStorage.setItem("lp-smoke-live-v1",JSON.stringify(store))}
+function save(){localStorage.setItem("lp-smoke-live-v2",JSON.stringify(store))}
 var CYCLE=["—","pass","change","fail","n/a"];
 var root=document.getElementById("root");
 S.forEach(function(s){
@@ -170,7 +183,7 @@ document.getElementById("mdout").value=md;document.getElementById("modal").style
 });
 document.getElementById("mcopy").addEventListener("click",function(){document.getElementById("mdout").select();document.execCommand("copy");document.getElementById("mcopy").textContent="Copied ✓";setTimeout(function(){document.getElementById("mcopy").textContent="Copy to clipboard"},1500)});
 document.getElementById("mclose").addEventListener("click",function(){document.getElementById("modal").style.display="none"});
-document.getElementById("clr").addEventListener("click",function(){if(confirm("Wipe all verdicts and notes?")){localStorage.removeItem("lp-smoke-live-v1");location.reload()}});
+document.getElementById("clr").addEventListener("click",function(){if(confirm("Wipe all verdicts and notes?")){localStorage.removeItem("lp-smoke-live-v2");location.reload()}});
 paintAll();renderNotes();
 document.querySelector(".sec").classList.add("open");
 </script>

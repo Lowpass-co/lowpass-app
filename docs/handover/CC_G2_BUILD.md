@@ -15,7 +15,7 @@ Source: G2 design rounds (2026-07-17, live demos graded). Reference implementati
 **Days matrix** (graded pass with changes):
 - Columns = all routing days: header shows date on line 1, **VENUE and CITY abbrevs on TWO lines** (Adam: one line too compact), colored by tour day type.
 - Cell = person-day. Click toggles working; **Shift+drag paints a run; arrows move a cursor; Enter toggles** (the keyboard contract).
-- **Day-type brush (Adam's pin, new capability):** a small brush selector in the matrix toolbar (Tour default · Show · Rehearsal · Travel · Off · Promo/Radio). Painting drops the selected type as a PERSON-DAY OVERRIDE — Dillon can play a radio session on a tour travel day; someone can work a day off. Data: extend the person-day model with `type_override` (nullable = inherit tour day type). Pay math uses the person's EFFECTIVE day type. Extend the reconcile harness with override fixtures BEFORE wiring the math.
+- **Day-type brush (Adam's pin, new capability). RULING A (2026-07-17): THE OVERRIDE DRIVES PAY — it is NOT display-only.** A brush selector in the matrix toolbar (Tour default · Show · Rehearsal · Travel · Off · Promo/Radio). Painting drops the selected type as a PERSON-DAY OVERRIDE — Dillon plays a radio session on a tour travel day and is PAID HIS SHOW RATE for that day, not the travel rate. Data: `type_override` per person-day (nullable = inherit tour day type). **The pay engine (`fees.ts`, `day_statuses` → totals) MUST read the person's EFFECTIVE day type = `type_override ?? tour_day_type`.** There must be ONE pay path — do NOT create a display-only `type_overrides` table sitting beside the real day-status/pay path (that is the exact dual-system anti-pattern this whole project killed; if the earlier `fc244a7`/`de082d2` slices introduced a display-only override table, unify it into the pay path now). **HARNESS-FIRST, hard gate:** extend `reconcile.harness.ts` with override fixtures (a day-rate person whose effective type differs from the tour day type, proving the show-vs-travel rate difference flows through) and get them green BEFORE wiring the engine. Report the new fixtures + the pre/post totals for the override case verbatim. `231.HOLD` still untouched.
 - **Flat-rate rows still take day assignments** but the UI must show days don't move their fee: worked cells render in a neutral/dimmed treatment for flat people + row note "days don't change flat fee — per diem still counts"; their DAYS count marked (e.g. `18*`).
 - **"Fill all" button**: sets everyone working on every day (work-backwards flow). MUST warn before overwriting: modal lists how many hand-edited cells would change, with two options — "Fill only untouched cells" (default) and "Overwrite everything". Track touched-ness so untouched-only is real, not a guess.
 
@@ -36,5 +36,22 @@ Build per the demo: sockets across the top grouped by stage box/sub-snake (box h
 
 The band + section-tabs standard from G2-1 rolls to every grouped surface: Production (Channel list · Stage plot · Riders), Budget tabs, Advance (modes stay the segmented control in-page). Kill remaining per-page variants of the artist/tour lockup — ONE component, one size, one position (Adam: "changes on every single menu; 0 consistency" — this closes it). Smoke HDR-01: lockup identical on 8 sampled pages.
 
+## G2-1b — POST-GRADE FIXES (Adam walked production 2026-07-17; these come BEFORE the rate-type wiring slice)
+
+1. **Drag paints a RECTANGLE, not a diagonal (bug).** Observed: dragging top-left → bottom-right painted a single diagonal line of cells. The diagonal rule belongs to the PATCH matrix only (channel N → socket N). In the DAYS matrix, press-drag-release must fill the full rectangle between anchor cell and cursor cell — every person-row × every day-column inside the box — with the active brush. Live preview highlights the rectangle while dragging; release commits. Shift+click still extends a run from the last cell. Add smoke PAY-10.
+2. **Page is too busy / grid too small (structural).** The matrix is the work surface and must dominate. Rebuild the page's vertical economy:
+   - Days matrix gets the primary real estate: taller rows (min 34px), wider day columns, and it fills available height.
+   - RATES collapses to a compact summary strip by default (person · type · effective rate · total) with a "Rates" disclosure to expand the full editable table — it is reference while painting, not a co-equal table.
+   - SUMMARY collapses by default (it is read-only derived data — a disclosure, not a permanently-open third table).
+   - One header row, not three: the page already carries the identity band + title; drop the redundant per-section chrome where it repeats.
+   - Result to aim for: opening Payroll, the matrix is what you see and can work immediately; rates/summary are one click away. Adam's words: "page is VERY busy and the grid is VERY small."
+3. **Personnel page is broken.** `/operations/[tourId]/personnel` hangs on "Loading personnel…" (Cowork saw the same). Diagnose and fix; the read-only rate mirror + click-a-rate → redirect-to-Payroll (PAY-09) cannot be graded until the page loads. Root-cause in one sentence.
+4. Re-verify on production after deploy (see the push/deploy rule below) — Cowork walks, Adam re-grades PAY-01..10.
+
+## HARD PROCESS RULE (added 2026-07-17 after 19 unpushed commits sat undeployed for a day)
+"Banked" means PUSHED. Every report ends with the RAW OUTPUT of:
+`git rev-list --count origin/main..main` (must be `0`) and `git log --oneline -1 origin/main`.
+Prose claims of "banked to origin/main (0 ahead/0 behind)" are not acceptable evidence — that exact phrasing was reported while 19 commits sat unpushed. "Done" = pushed + Vercel build green + Cowork walked.
+
 ## Report
-Per stage: files+lines, harness output where money-adjacent (G2-1 extended fixtures), screenshots, smoke IDs. Cowork re-walks; Adam re-grades payroll + patch live on production with the same IDs.
+Per stage: files+lines, harness output where money-adjacent (G2-1 extended fixtures), screenshots, smoke IDs, plus the two git commands' raw output. Cowork re-walks; Adam re-grades payroll + patch live on production with the same IDs.
