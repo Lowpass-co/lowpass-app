@@ -11,6 +11,7 @@ import { notFound } from 'next/navigation';
 import { ChannelListTourEditor } from '@/components/channel-list/ChannelListTourEditor';
 import { ChannelListEmptyState } from '@/components/channel-list/ChannelListEmptyState';
 import { ExportButton } from '@/components/export/ExportButton';
+import { PageTitle } from '@/components/ui/PageHeader';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { formatResolveError, resolvePack } from '@/lib/rider-packs/resolve';
 import type { RiderPack, ResolvedSection } from '@/lib/rider-packs/types';
@@ -62,11 +63,12 @@ export default async function OperationsTourChannelListPage({
 
 
   return (
-    <div className="mx-auto flex w-full max-w-[1600px] flex-1 flex-col space-y-4 px-4 pb-16 pt-6 print:max-w-none print:pb-8">
+    <div className="flex w-full flex-1 flex-col space-y-4 px-4 pb-16 pt-6 print:pb-8">
       <header className="flex flex-wrap items-end justify-between gap-3 print:hidden">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight text-lp-text">Channel list</h1>
-          <p className="mt-0.5 text-sm text-lp-text-secondary">{tour.name ?? tourId}</p>
+          {/* F2 — canonical condensed-caps page title (matches Payroll etc.),
+              not the old hand-rolled sentence-case <h1>. */}
+          <PageTitle style={{ fontSize: 22 }}>{`${tour.name ?? tourId} — Channel list`}</PageTitle>
         </div>
         {resolvedSection ? <ExportButton surface="channel-list" tourId={tour.id} title="Export the channel / input list (PDF or Excel)" /> : null}
       </header>
