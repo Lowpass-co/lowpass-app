@@ -1,23 +1,25 @@
 /* ============================================
-   LOWPASS — Sprint 8.1 §2 — /advance/[tourId] layout
+   LOWPASS — /advance/[tourId] layout
 
-   Hoists <ProductShell> + <TourHeader> from each page.tsx into
-   one shared layout so the <ArtistTourSwitcher> wrapper persists
-   across [routingId] navigation and across [tourId] changes.
+   Hoists <ProductShell> + the shared identity band from each page.tsx so the
+   <ArtistTourSwitcher> wrapper persists across [routingId] navigation and across
+   [tourId] changes.
 
-   Sprint 8.2 §1 — the per-product currentTourKeyStat third
-   dot-segment was dropped from the switcher trigger. TourHeader
-   still renders advance completion + pending counts on its
-   own stats line beneath the tour name.
+   G2-4 — the per-page <TourHeader> variant (artist logo + tour + advance stats)
+   is retired here in favour of the ONE app-wide <IdentityLockup> (same band as
+   Operations + Budget). This also drops the ASYNC resolveArtistLogoUrl call that
+   ran on every advance page — loadTourIdentity uses the DB-only resolver, so the
+   layout never blocks on a live Spotify fetch. The advance modes stay the in-page
+   segmented control; per-show status lives in the advance day UI.
    ============================================ */
 
 import type { ReactNode } from 'react';
 import { notFound } from 'next/navigation';
 import { ProductShell } from '@/components/shell-v2';
-import { TourHeader } from '@/components/shell-v2/TourHeader';
+import { IdentityLockup } from '@/components/shell-v2/IdentityLockup';
 import { TourVisitTracker } from '@/components/shell-v2/TourVisitTracker';
+import { loadTourIdentity } from '@/lib/shell/tourIdentity';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
-import { resolveArtistLogoUrl } from '@/lib/artists/imageUrl';
 
 export default async function AdvanceTourLayout({
   children,
@@ -29,119 +31,25 @@ export default async function AdvanceTourLayout({
   const { tourId } = await params;
   const supabase = await createServerSupabaseClient();
 
-  const { data: tour } = await supabase
-    .from('tours')
-    .select('id, name, artist_id, start_date, end_date')
-    .eq('id', tourId)
-    .maybeSingle();
-
-  if (!tour) notFound();
-
-  const tourRow = tour as {
-    id: string;
-    name: string | null;
-    artist_id: string | null;
-    start_date: string | null;
-    end_date: string | null;
-  };
-
-  const [artistRes, routingRes] = await Promise.all([
-    tourRow.artist_id
-      ? supabase
-          .from('artists')
-          .select('id, name, branding, spotify_id, spotify_image_url')
-          .eq('id', tourRow.artist_id)
-          .maybeSingle()
-      : Promise.resolve({ data: null }),
-    supabase
-      .from('routing')
-      .select('id, date, day_type')
-      .eq('tour_id', tourId),
-  ]);
-
-  const artistRow = artistRes.data as {
-    id: string;
-    name: string;
-    branding: unknown;
-    spotify_id: string | null;
-    spotify_image_url: string | null;
-  } | null;
-
-  const artistLogoUrl = artistRow
-    ? await resolveArtistLogoUrl(artistRow)
-    : null;
-
-  // Tour-level advance stats — same shape the [tourId] root page
-  // computed before the hoist. The advance_instances table stores
-  // per-show status; we count complete vs total dated routing rows
-  // to derive the completion percent for the trigger + header.
-  const routingRows = (routingRes.data ?? []) as Array<{
-    id: string;
-    date: string | null;
-    day_type: string | null;
-  }>;
-  const datedRoutingIds = routingRows
-    .filter((r) => r.date)
-    .map((r) => r.id);
-  // UX-walk §A.3 — routing rows are DAYS, not shows. The header stat must
-  // count actual show/festival days as "shows" and dated rows as "days".
-  const showDayCount = routingRows.filter((r) => {
-    if (!r.date) return false;
-    const types = (r.day_type ?? '').split(',').map((s) => s.trim());
-    return types.includes('show') || types.includes('festival');
-  }).length;
-
-  const { data: advanceData } =
-    datedRoutingIds.length > 0
-      ? await supabase
-          .from('advance_instances')
-          .select('routing_id, status')
-          .in('routing_id', datedRoutingIds)
-      : { data: [] as Array<{ routing_id: string; status: string | null }> };
-
-  const advanceRows = (advanceData ?? []) as Array<{
-    routing_id: string;
-    status: string | null;
-  }>;
-  const completedCount = advanceRows.filter(
-    (a) => a.status === 'complete',
-  ).length;
-  const pendingCount = advanceRows.filter(
-    (a) =>
-      a.status === null ||
-      a.status === 'in_progress' ||
-      a.status === 'needs_review',
-  ).length;
-  const advanceCompletePercent =
-    datedRoutingIds.length > 0
-      ? (completedCount / datedRoutingIds.length) * 100
-      : null;
+  const identity = await loadTourIdentity(supabase, tourId);
+  if (!identity) notFound();
 
   return (
     <ProductShell
       active="advance"
-      artistId={tourRow.artist_id}
+      artistId={identity.artistId}
       tourId={tourId}
       productName="Advance"
-    >
-      {artistRow ? (
-        <TourHeader
-          artistId={artistRow.id}
-          artistName={artistRow.name}
-          artistLogoUrl={artistLogoUrl}
-          tourId={tourId}
-          tourName={tourRow.name ?? 'Tour'}
-          startDate={tourRow.start_date}
-          endDate={tourRow.end_date}
-          product="advance"
-          stats={{
-            showCount: showDayCount,
-            dayCount: datedRoutingIds.length,
-            advanceCompletePercent,
-            advancePendingCount: pendingCount,
-          }}
+      subNav={
+        <IdentityLockup
+          artistName={identity.artistName}
+          avatarUrl={identity.avatarUrl}
+          tourName={identity.tourName}
+          statusLabel={identity.statusLabel}
+          statusKey={identity.statusKey}
         />
-      ) : null}
+      }
+    >
       <TourVisitTracker tourId={tourId} />
       {children}
     </ProductShell>

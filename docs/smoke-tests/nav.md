@@ -164,3 +164,17 @@ chain. Advance is the underlined group on the top row.
 ## Known broken
 
 (None yet.)
+
+## Identity band — one lockup everywhere (G2-4) — 2026-07-19
+
+#### HDR-01 — the artist/tour lockup is identical on every grouped surface
+**Do**: Visit these tour surfaces and compare the identity band directly under the
+product header: Operations Personnel · Payroll · Rooming · Channel list · Stage
+plot · Riders; Budget (any tab); Advance (a show day).
+**Expect**: the SAME `<IdentityLockup>` on all of them — 26px avatar · artist ·
+condensed tour · status pill, same size + position, fed by one loader
+(`loadTourIdentity`). No per-page variants: the advance `TourHeader` (bigger
+artist-logo + stats block) is retired, ops uses `TourIdentityBand` → IdentityLockup,
+budget mounts the same component. Routing + Files keep their own chrome (not grouped).
+**Also**: advance no longer runs the async Spotify logo resolver on every page
+(loadTourIdentity is DB-only), removing that hang risk. **Needs-live**.
