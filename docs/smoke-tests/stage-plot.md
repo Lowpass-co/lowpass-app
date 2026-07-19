@@ -243,3 +243,17 @@ _(none yet.)_
 - **SP-05b — channel numbers visible on the canvas by default.** `DEFAULT_PLOT.showChannels`
   is now `true`; a linked item shows its channel number chip on the canvas without
   hunting for the overlay toggle. Items with no channel link show no chip (clean).
+- **SP-05c — read-only number + discoverable reorder jump (G2-3).** The channel
+  number stays read-only in the inspector (it's the derived row-order in the paired
+  list). When a channel list is linked, the Channels section header shows a
+  **"Reorder in list ↗"** link → `/rider-packs/[linkedId]?mode=edit`, so the way to
+  renumber (reorder the source list) is one click away. No cross-surface write added.
+  (Adam's ruling: keep read-only + jump link, not inline reorder.)
+
+## Inspector restyle to system (G2-3)
+
+- **SP-18 — inspector numeric values are mono.** Select an item: X/Y/W/D/H/rotation
+  inputs, the octant **Position** readout, the "to scale" size, the label-size px
+  readout, and linked channel numbers all render in `var(--lp-font-numeric)` (was a
+  raw `var(--font-mono, monospace)` on Position; the rest were body font). Numbers
+  read as data. No control added or removed.

@@ -40,9 +40,11 @@ export interface StagePlotEditorProps {
   onChange?: (plot: EditorPlot, items: EditorItem[]) => void;
   /** Optional header-right slot (export / share buttons). */
   actions?: React.ReactNode;
+  /** G2-3 — link to the paired channel-list editor (for the read-only-number jump). */
+  channelListHref?: string;
 }
 
-export function StagePlotEditor({ initialPlot, initialItems, channels: initialChannels = [], initialCustomIcons = [], onChange, actions }: StagePlotEditorProps) {
+export function StagePlotEditor({ initialPlot, initialItems, channels: initialChannels = [], initialCustomIcons = [], onChange, actions, channelListHref }: StagePlotEditorProps) {
   const [plot, setPlot] = useState<EditorPlot>(initialPlot ?? DEFAULT_PLOT);
   const [items, setItems] = useState<EditorItem[]>(initialItems ?? []);
   const [channels, setChannels] = useState<Channel[]>(initialChannels);
@@ -336,6 +338,7 @@ export function StagePlotEditor({ initialPlot, initialItems, channels: initialCh
           item={selected}
           selectedCount={selectedIds.length}
           channels={channels}
+          channelListHref={channelListHref}
           onAddChannel={addChannel}
           onUpdateItem={updateSelected}
           onDeleteItem={deleteSelected}

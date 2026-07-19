@@ -60,9 +60,13 @@ export interface ItemPropertiesProps {
   onRotate?: (deg: number) => void;
   /** §SP-FIX-7 — pull TM details out of text annotations into the title bar. */
   onExtractTitleBar?: () => void;
+  /** G2-3 — link to the paired channel-list editor. Channel NUMBERS are a derived
+   *  ordinal (row-order in that list), so they stay read-only here; this jump makes
+   *  reordering (the way to renumber) discoverable. */
+  channelListHref?: string;
 }
 
-export function ItemProperties({ plot, item, selectedCount = 0, channels = [], onUpdateItem, onDeleteItem, onUpdatePlot, onAddChannel, onSplitKit, onCombineKit, onReorder, onRotate, onExtractTitleBar }: ItemPropertiesProps) {
+export function ItemProperties({ plot, item, selectedCount = 0, channels = [], onUpdateItem, onDeleteItem, onUpdatePlot, onAddChannel, onSplitKit, onCombineKit, onReorder, onRotate, onExtractTitleBar, channelListHref }: ItemPropertiesProps) {
   const [newCh, setNewCh] = useState('');
   // Expert "custom dimensions" gate (§SP-FIX-2). Off by default → items
   // lock to footprint; on → editable W×D×H. Interim home is localStorage
@@ -230,8 +234,21 @@ export function ItemProperties({ plot, item, selectedCount = 0, channels = [], o
                   made the whole feature undiscoverable). When no list is paired yet,
                   a prompt points at the header "Linked channel list" control. */}
               <div style={{ marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--lp-border)' }}>
-                <div style={{ fontSize: 'var(--lp-text-2xs)', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--lp-text-tertiary)', marginBottom: 6 }}>
-                  Channels {item.channelRowIds?.length ? `(${item.channelRowIds.length})` : ''}
+                <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8, marginBottom: 6 }}>
+                  <span style={{ fontSize: 'var(--lp-text-2xs)', textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--lp-text-tertiary)' }}>
+                    Channels {item.channelRowIds?.length ? `(${item.channelRowIds.length})` : ''}
+                  </span>
+                  {/* G2-3 — the channel number is read-only here (it's the row-order in
+                      the paired list); this jump makes reordering discoverable. */}
+                  {channelListHref && channels.length > 0 && (
+                    <a
+                      href={channelListHref}
+                      title="Channel numbers follow the channel-list order — reorder there"
+                      style={{ fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-orange)', textDecoration: 'none', whiteSpace: 'nowrap', flexShrink: 0 }}
+                    >
+                      Reorder in list ↗
+                    </a>
+                  )}
                 </div>
                 {channels.length === 0 ? (
                   <div style={{ fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-tertiary)', lineHeight: 1.4 }}>

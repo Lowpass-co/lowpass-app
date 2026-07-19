@@ -90,6 +90,7 @@ export function StagePlotEditorClient({ plotId }: { plotId: string }) {
         initialItems={data.items}
         initialCustomIcons={data.customs}
         channels={data.channels}
+        channelListHref={linkedId ? `/rider-packs/${linkedId}?mode=edit` : undefined}
         onChange={persist}
         actions={
           <div style={{ display: 'inline-flex', alignItems: 'center', gap: 10 }}>
