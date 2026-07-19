@@ -29,9 +29,13 @@ const inputStyle: React.CSSProperties = {
   border: '1px solid var(--lp-border)', background: 'var(--lp-surface)', color: 'var(--lp-text)', textAlign: 'right',
 };
 
+/** Numeric fields render in the system numeric font so the inspector's values
+ *  read as data (mono per design system), not prose. */
+const numInputStyle: React.CSSProperties = { ...inputStyle, fontFamily: 'var(--lp-font-numeric)' };
+
 function Num({ value, onChange, step = 0.5, min }: { value: number; onChange: (n: number) => void; step?: number; min?: number }) {
   return (
-    <input type="number" value={value} step={step} min={min} style={inputStyle}
+    <input type="number" value={value} step={step} min={min} style={numInputStyle}
       onChange={(e) => { const n = parseFloat(e.target.value); if (!Number.isNaN(n)) onChange(n); }} />
   );
 }
@@ -146,8 +150,8 @@ export function ItemProperties({ plot, item, selectedCount = 0, channels = [], o
                 if (!expert && !isRiser) {
                   return (
                     <Row label="Size (ft)">
-                      <span style={{ fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text)' }}>
-                        {w} × {d} <span style={{ color: 'var(--lp-text-tertiary)' }}>· to scale</span>
+                      <span style={{ fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text)', fontFamily: 'var(--lp-font-numeric)' }}>
+                        {w} × {d} <span style={{ color: 'var(--lp-text-tertiary)', fontFamily: 'var(--font-sans)' }}>· to scale</span>
                       </span>
                     </Row>
                   );
@@ -188,11 +192,11 @@ export function ItemProperties({ plot, item, selectedCount = 0, channels = [], o
               <Row label="Label size">
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                   <input type="range" min={8} max={18} step={1} value={item.labelFontPx ?? 11} onChange={(e) => onUpdateItem({ labelFontPx: parseInt(e.target.value, 10) })} style={{ width: 90 }} />
-                  <span style={{ fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-tertiary)', width: 28, textAlign: 'right' }}>{item.labelFontPx ?? 11}px</span>
+                  <span style={{ fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-tertiary)', width: 28, textAlign: 'right', fontFamily: 'var(--lp-font-numeric)' }}>{item.labelFontPx ?? 11}px</span>
                 </div>
               </Row>
               <Row label="Position">
-                <span style={{ fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text)', fontFamily: 'var(--font-mono, monospace)' }}>
+                <span style={{ fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text)', fontFamily: 'var(--lp-font-numeric)' }}>
                   {octantLabel(item.xFt, item.yFt, plot.widthFt, plot.depthFt)}
                 </span>
               </Row>
@@ -248,7 +252,7 @@ export function ItemProperties({ plot, item, selectedCount = 0, channels = [], o
                             REORDERING the channel list (its source of truth) — a
                             cross-surface, multi-row operation that belongs to the
                             channel-list editor, not a surgical single-field write. */}
-                        <span style={{ fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text)', flexShrink: 0 }}>{c.number}.</span>
+                        <span style={{ fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text)', flexShrink: 0, fontFamily: 'var(--lp-font-numeric)' }}>{c.number}.</span>
                         <span style={{ flex: 1, minWidth: 0, fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.label}</span>
                         <button type="button" aria-label="Unlink" onClick={() => onUpdateItem({ channelRowIds: (item.channelRowIds ?? []).filter((x) => x !== cid) })} style={{ border: 'none', background: 'none', color: 'var(--lp-text-tertiary)', cursor: 'pointer', fontSize: 14, lineHeight: 1 }}>×</button>
                       </div>
