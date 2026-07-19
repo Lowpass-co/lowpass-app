@@ -59,10 +59,18 @@ const FLAT_NOTE: Record<string, string> = {
   per_diem_only: 'per diem only — no daily fee',
 };
 
-// The left block carries identity + numbers (name / role · type, day counts,
-// total) so the summary is always visible while painting — no separate table.
-const PERSON_W = 256;
-const DAY_W = 62;
+// G2-2b GRID QUALITY PASS — exact metrics from CC_G2_BUILD.md §G2-2b.
+// The left block carries identity + numbers; the matrix fills the page.
+const PERSON_W = 320;   // left block, fixed
+const DAY_W = 64;       // day column min-width (uniform, table-layout:fixed)
+const ROW_H = 52;       // every row, uniform
+const HEADER_H = 64;    // three-line day header with breathing room
+// Theme-aware mappings of the spec's dark-mode literals (the app is dual-theme):
+//   hairline  rgba(255,255,255,.04)  → --lp-border-subtle (the dense-table border token)
+//   empty cell #141416 (barely-lifted field, not pure black) → surface mixed toward bg
+const HAIRLINE = 'var(--lp-border-subtle)';
+const EMPTY_CELL = 'color-mix(in srgb, var(--lp-surface) 45%, var(--lp-bg))';
+const WEEK_RULE = 'color-mix(in srgb, var(--lp-orange) 22%, var(--lp-border-strong))';
 
 function toPerson(pr: Record<string, unknown>): PayrollPerson {
   return {
@@ -76,35 +84,30 @@ function toPerson(pr: Record<string, unknown>): PayrollPerson {
 
 function DayHeader({ day, weekStart }: { day: RoutingDay; weekStart: boolean }) {
   const dt = (day.day_type ?? '').trim();
+  // Text NEVER dictates column width — everything truncates with a title tooltip.
+  const ell: React.CSSProperties = { maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' };
   return (
     <div
       style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        gap: 2,
-        lineHeight: 1.15,
-        padding: '4px 2px 3px',
-        width: '100%',
-        minWidth: 0,
-        boxSizing: 'border-box',
-        borderLeft: weekStart ? '2px solid var(--lp-orange)' : undefined,
+        display: 'flex', flexDirection: 'column', alignItems: 'stretch', justifyContent: 'center',
+        gap: 2, lineHeight: 1.2, padding: '6px 8px', height: HEADER_H, width: '100%', minWidth: 0,
+        boxSizing: 'border-box', textAlign: 'center',
       }}
     >
       {weekStart ? (
-        <span style={{ fontSize: 8, fontWeight: 700, letterSpacing: '0.04em', color: 'var(--lp-orange)', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <span style={{ ...ell, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--lp-text-tertiary)' }}>
           {formatWeekLabel(getWeekStart(day.date))}
         </span>
       ) : null}
-      <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--lp-text)', whiteSpace: 'nowrap' }}>{day.date ? day.date.slice(5) : ''}</span>
+      <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--lp-text)', whiteSpace: 'nowrap', fontFamily: 'var(--lp-font-numeric)' }}>{day.date ? day.date.slice(5) : ''}</span>
       {day.venue_name ? (
-        <span title={day.venue_name} style={{ fontSize: 8.5, fontWeight: 600, color: 'var(--lp-text-secondary)', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{day.venue_name}</span>
+        <span title={day.venue_name} style={{ ...ell, fontSize: 11.5, fontWeight: 600, color: 'var(--lp-text-secondary)' }}>{day.venue_name}</span>
       ) : null}
       {day.city ? (
-        <span title={day.city} style={{ fontSize: 8.5, color: 'var(--lp-text-tertiary)', maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{day.city}</span>
+        <span title={day.city} style={{ ...ell, fontSize: 11, color: 'var(--lp-text-tertiary)' }}>{day.city}</span>
       ) : null}
       {dt ? (
-        <span title={labelForDayType(dt) || dt} style={{ display: 'inline-flex', alignItems: 'center', gap: 3, maxWidth: '100%', fontSize: 8, fontWeight: 600, color: colourForDayType(dt) }}>
+        <span title={labelForDayType(dt) || dt} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 4, maxWidth: '100%', fontSize: 10, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: colourForDayType(dt) }}>
           <span style={{ width: 5, height: 5, borderRadius: '50%', background: colourForDayType(dt), flexShrink: 0 }} />
           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{labelForDayType(dt) || dt}</span>
         </span>
@@ -167,6 +170,10 @@ export function PayrollDaysMatrix({
 
   const [brush, setBrush] = useState<BrushType>('tour_default');
   const [cursor, setCursor] = useState<{ r: number; c: number } | null>(null);
+  // G2-2b — hover (row tint + cell brighten) and horizontal-scroll (sticky-left
+  // shadow depth cue) are presentational state only.
+  const [hover, setHover] = useState<{ r: number; c: number } | null>(null);
+  const [scrolledX, setScrolledX] = useState(false);
   const gridRef = useRef<HTMLDivElement>(null);
   // PAY-10 — press-drag-release fills the RECTANGLE between anchor and cursor
   // (all rows × all cols in the box). Live preview while dragging; commit on
@@ -301,7 +308,7 @@ export function PayrollDaysMatrix({
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, height: '100%', minHeight: 0 }}>
       {/* Brush toolbar */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
         <span style={{ fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--lp-text-tertiary)' }}>Brush</span>
@@ -341,19 +348,27 @@ export function PayrollDaysMatrix({
         </button>
       </div>
 
-      {/* Matrix */}
+      {/* Matrix — fills remaining height, scrolls INTERNALLY (sticky header +
+          sticky left block). table-layout:fixed + colgroup → uniform day columns
+          (text never dictates width; venue/city truncate). */}
       <div
         ref={gridRef}
         tabIndex={0}
         onKeyDown={onKeyDown}
-        style={{ overflow: 'auto', maxHeight: 'calc(100vh - 300px)', minHeight: 340, border: '1px solid var(--lp-border)', borderRadius: 'var(--lp-radius-md)', outline: 'none', userSelect: 'none' }}
+        onMouseLeave={() => setHover(null)}
+        onScroll={(e) => { const x = e.currentTarget.scrollLeft > 0; setScrolledX((prev) => (prev === x ? prev : x)); }}
+        style={{ flex: 1, minHeight: 0, overflow: 'auto', border: `1px solid ${HAIRLINE}`, borderRadius: 'var(--lp-radius-md)', outline: 'none', userSelect: 'none', background: EMPTY_CELL }}
       >
-        <table style={{ borderCollapse: 'separate', borderSpacing: 0, fontSize: 12 }}>
+        <table style={{ borderCollapse: 'separate', borderSpacing: 0, width: '100%', minWidth: PERSON_W + days.length * DAY_W, tableLayout: 'fixed' }}>
+          <colgroup>
+            <col style={{ width: PERSON_W }} />
+            {days.map((d) => <col key={d.date} style={{ width: DAY_W }} />)}
+          </colgroup>
           <thead>
             <tr>
-              <th style={{ position: 'sticky', left: 0, top: 0, zIndex: 4, width: PERSON_W, minWidth: PERSON_W, background: 'var(--lp-panel)', textAlign: 'left', padding: '6px 10px', borderBottom: '1px solid var(--lp-border-strong)', borderRight: '1px solid var(--lp-border-strong)', fontSize: 11, color: 'var(--lp-text-tertiary)', fontWeight: 700 }}>Person · days · total</th>
+              <th style={{ position: 'sticky', left: 0, top: 0, zIndex: 4, height: HEADER_H, background: 'var(--lp-panel)', textAlign: 'left', padding: '0 12px', borderBottom: `1px solid ${HAIRLINE}`, borderRight: `1px solid ${HAIRLINE}`, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--lp-text-tertiary)', fontWeight: 700, boxShadow: scrolledX ? '8px 0 16px -8px rgba(0,0,0,0.5)' : undefined }}>Person · days · total</th>
               {days.map((d) => (
-                <th key={d.date} style={{ position: 'sticky', top: 0, zIndex: 1, width: DAY_W, minWidth: DAY_W, background: 'var(--lp-panel)', borderBottom: '1px solid var(--lp-border-strong)', padding: 0, verticalAlign: 'bottom' }}>
+                <th key={d.date} style={{ position: 'sticky', top: 0, zIndex: 1, height: HEADER_H, background: 'var(--lp-panel)', borderBottom: `1px solid ${HAIRLINE}`, borderLeft: weekStartDates.has(d.date) ? `1px solid ${WEEK_RULE}` : `1px solid ${HAIRLINE}`, padding: 0, verticalAlign: 'middle' }}>
                   <DayHeader day={d} weekStart={weekStartDates.has(d.date)} />
                 </th>
               ))}
@@ -362,9 +377,11 @@ export function PayrollDaysMatrix({
           <tbody>
             {people.map((p, r) => {
               const rowFlat = isFlatFee(rateTypeById.get(p.id) ?? 'day_rate');
+              const rowHover = hover?.r === r;
+              const leftBg = rowHover ? 'color-mix(in srgb, var(--lp-orange) 6%, var(--lp-surface))' : 'var(--lp-surface)';
               return (
               <tr key={p.id}>
-                <td style={{ position: 'sticky', left: 0, zIndex: 2, width: PERSON_W, minWidth: PERSON_W, background: 'var(--lp-surface)', padding: '5px 10px', borderBottom: '1px solid var(--lp-border-subtle)', borderRight: '1px solid var(--lp-border-strong)' }}>
+                <td style={{ position: 'sticky', left: 0, zIndex: 2, height: ROW_H, background: leftBg, padding: '0 12px', borderBottom: `1px solid ${HAIRLINE}`, borderRight: `1px solid ${HAIRLINE}`, transition: 'background 120ms ease-out', boxShadow: scrolledX ? '8px 0 16px -8px rgba(0,0,0,0.5)' : undefined }}>
                   {(() => {
                     const s = statsFor(p.id);
                     const rtKey = rateTypeById.get(p.id) ?? 'day_rate';
@@ -376,24 +393,21 @@ export function PayrollDaysMatrix({
                       s.counts.rehearsal ? `${s.counts.rehearsal} R` : null,
                     ].filter(Boolean).join(' · ');
                     return (
-                      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
                         <div style={{ minWidth: 0 }}>
-                          <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--lp-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          <div style={{ fontSize: 15, fontWeight: 500, color: 'var(--lp-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.25 }}>
                             {p.person_name || '—'}
-                            {p.role ? <span style={{ fontWeight: 400, color: 'var(--lp-text-tertiary)' }}>{` / ${p.role}`}</span> : null}
-                            <span style={{ fontWeight: 400, color: 'var(--lp-text-tertiary)' }}>{` · ${rt}`}</span>
                           </div>
-                          <div style={{ fontSize: 10.5, color: 'var(--lp-text-tertiary)', fontFamily: 'var(--lp-font-numeric)', whiteSpace: 'nowrap' }}>
+                          <div style={{ fontSize: 12, color: 'var(--lp-text-tertiary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.3 }}>
+                            {p.role ? p.role : ''}{p.role ? ' · ' : ''}{rt}
+                          </div>
+                          <div style={{ fontSize: 12, color: 'var(--lp-text-tertiary)', fontFamily: 'var(--lp-font-numeric)', whiteSpace: 'nowrap', lineHeight: 1.3 }}>
                             {countBits || '—'}
                             {flat && countBits ? <span style={{ color: 'var(--lp-orange)', fontWeight: 700 }} title={FLAT_NOTE[rtKey]}>{' *'}</span> : null}
+                            {flat ? <span style={{ fontStyle: 'italic', color: 'var(--lp-text-tertiary)', fontFamily: 'var(--font-sans)' }}>{`  — ${FLAT_NOTE[rtKey]}`}</span> : null}
                           </div>
-                          {flat ? (
-                            <div style={{ fontSize: 9.5, fontStyle: 'italic', color: 'var(--lp-text-tertiary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                              {FLAT_NOTE[rtKey]}
-                            </div>
-                          ) : null}
                         </div>
-                        <div style={{ fontFamily: 'var(--lp-font-numeric)', fontWeight: 700, fontSize: 12.5, color: 'var(--lp-text)', whiteSpace: 'nowrap' }}>
+                        <div style={{ fontFamily: 'var(--lp-font-numeric)', fontWeight: 700, fontSize: 18, color: 'var(--lp-text)', whiteSpace: 'nowrap', letterSpacing: '-0.01em' }}>
                           {money.format(s.fee + s.pd)}
                         </div>
                       </div>
@@ -403,34 +417,48 @@ export function PayrollDaysMatrix({
                 {days.map((d, c) => {
                   const status = statusOf(p.id, d.date);
                   const isCursor = cursor?.r === r && cursor?.c === c;
+                  const cellHover = hover?.r === r && hover?.c === c;
                   const inPreview = !!dragRect
                     && r >= Math.min(dragRect.anchor.r, dragRect.cursor.r) && r <= Math.max(dragRect.anchor.r, dragRect.cursor.r)
                     && c >= Math.min(dragRect.anchor.c, dragRect.cursor.c) && c <= Math.max(dragRect.anchor.c, dragRect.cursor.c);
+                  const painted = !!STATUS_ABBR[status];
+                  // Tile fill: preview > flat-dim > status tint. Empty cells show no
+                  // tile (the td's barely-lifted field reads through).
+                  const tileFill = inPreview
+                    ? 'color-mix(in srgb, var(--lp-orange) 30%, transparent)'
+                    : rowFlat
+                      ? (painted ? 'color-mix(in srgb, var(--lp-text-tertiary) 12%, transparent)' : 'transparent')
+                      : (STATUS_TINT[status] ?? 'transparent');
+                  const tileFg = rowFlat ? 'var(--lp-text-tertiary)' : (STATUS_FG[status] ?? 'var(--lp-text-tertiary)');
                   return (
                     <td
                       key={d.date}
                       onMouseDown={(e) => onCellDown(p.id, d.date, r, c, e.shiftKey)}
-                      onMouseEnter={() => onCellEnter(r, c)}
+                      onMouseEnter={() => { onCellEnter(r, c); setHover({ r, c }); }}
                       title={`${p.person_name} · ${d.date}`}
                       style={{
-                        width: DAY_W, minWidth: DAY_W, height: 34, textAlign: 'center', cursor: 'pointer',
-                        borderBottom: '1px solid var(--lp-border-subtle)',
-                        borderLeft: weekStartDates.has(d.date) ? '2px solid color-mix(in srgb, var(--lp-orange) 40%, transparent)' : '1px solid var(--lp-border-subtle)',
-                        background: inPreview
-                          ? 'color-mix(in srgb, var(--lp-orange) 24%, transparent)'
-                          // Flat-fee rows: worked cells render dimmed/neutral (days
-                          // don't scale the fee), so the matrix reads as "assigned
-                          // but not pay-driving". Per diem still counts.
-                          : rowFlat
-                            ? (STATUS_ABBR[status] ? 'color-mix(in srgb, var(--lp-text-tertiary) 10%, transparent)' : 'transparent')
-                            : (STATUS_TINT[status] ?? 'transparent'),
-                        color: rowFlat ? 'var(--lp-text-tertiary)' : (STATUS_FG[status] ?? 'var(--lp-text-tertiary)'),
-                        opacity: rowFlat && STATUS_ABBR[status] ? 0.7 : 1,
-                        fontSize: 10, fontWeight: 700,
+                        height: ROW_H, padding: 3, cursor: 'pointer',
+                        background: rowHover ? 'color-mix(in srgb, var(--lp-orange) 5%, transparent)' : (cellHover ? 'color-mix(in srgb, var(--lp-text) 3%, transparent)' : 'transparent'),
+                        borderBottom: `1px solid ${HAIRLINE}`,
+                        borderLeft: weekStartDates.has(d.date) ? `1px solid ${WEEK_RULE}` : `1px solid ${HAIRLINE}`,
                         boxShadow: isCursor ? 'inset 0 0 0 2px var(--lp-orange)' : undefined,
+                        transition: 'background 120ms ease-out',
                       }}
                     >
-                      {STATUS_ABBR[status] ?? ''}
+                      {/* Painted cells render as inset TILES (3px radius), not flat
+                          edge-to-edge blocks. Empty = no tile. */}
+                      {painted || inPreview ? (
+                        <div style={{
+                          width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          borderRadius: 3, background: tileFill, color: tileFg,
+                          fontFamily: 'var(--lp-font-numeric)', fontSize: 13, fontWeight: 600,
+                          opacity: rowFlat && painted ? 0.75 : 1,
+                          filter: cellHover ? 'brightness(1.15)' : undefined,
+                          transition: 'filter 120ms ease-out',
+                        }}>
+                          {STATUS_ABBR[status] ?? ''}
+                        </div>
+                      ) : null}
                     </td>
                   );
                 })}
@@ -442,11 +470,11 @@ export function PayrollDaysMatrix({
       </div>
 
       {/* Totals bar (Adam's DELTA) — fees · per diem · total, always under the matrix. */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 20, padding: '8px 12px', border: '1px solid var(--lp-border)', borderTop: 'none', borderRadius: '0 0 var(--lp-radius-md) var(--lp-radius-md)', marginTop: -8, background: 'var(--lp-panel)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 24, padding: '10px 16px', border: `1px solid ${HAIRLINE}`, borderTop: 'none', borderRadius: '0 0 var(--lp-radius-md) var(--lp-radius-md)', marginTop: -8, background: 'var(--lp-panel)' }}>
         {([['Fees', totals.fee], ['Per diem', totals.pd], ['Total', totals.total]] as [string, number][]).map(([label, val], i) => (
-          <div key={label} style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-            <span style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--lp-text-tertiary)' }}>{label}</span>
-            <span style={{ fontFamily: 'var(--lp-font-numeric)', fontWeight: i === 2 ? 800 : 600, fontSize: i === 2 ? 15 : 13, color: 'var(--lp-text)' }}>{money.format(val)}</span>
+          <div key={label} style={{ display: 'flex', alignItems: 'baseline', gap: 7 }}>
+            <span style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--lp-text-tertiary)' }}>{label}</span>
+            <span style={{ fontFamily: 'var(--lp-font-numeric)', fontWeight: i === 2 ? 800 : 600, fontSize: i === 2 ? 20 : 17, color: 'var(--lp-text)', letterSpacing: '-0.01em' }}>{money.format(val)}</span>
           </div>
         ))}
       </div>

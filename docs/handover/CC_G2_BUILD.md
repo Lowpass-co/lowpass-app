@@ -48,6 +48,32 @@ The band + section-tabs standard from G2-1 rolls to every grouped surface: Produ
 3. **Personnel page is broken.** `/operations/[tourId]/personnel` hangs on "Loading personnel…" (Cowork saw the same). Diagnose and fix; the read-only rate mirror + click-a-rate → redirect-to-Payroll (PAY-09) cannot be graded until the page loads. Root-cause in one sentence.
 4. Re-verify on production after deploy (see the push/deploy rule below) — Cowork walks, Adam re-grades PAY-01..10.
 
+## G2-2b — GRID QUALITY PASS (Adam graded 2026-07-18: "looks like a shitty old Excel sheet small on a big webpage"). Applies to BOTH the payroll days-matrix AND the patch matrix. Do this BEFORE G2-3.
+
+Adam's words: *"text size, grid size, number size are all contributing to this feeling pretty old school HTML and not beautiful and flowing… why doesn't it scale with the page, why is it all cramped and basic… ugly and formatted badly in places (columns diff sizes)."* This is a concrete metrics + polish problem, not a vibe. Build to these numbers.
+
+**A. Columns must be uniform — this is the top complaint.** Today day-columns size to content, so "Culture and Congress Center Jahrhunderthalle GmbH" renders ~4× wider than "Manchester". Fix: `table-layout: fixed` + `<colgroup>`; ALL day columns equal width, dividing the available space (`1fr` each) with `min-width: 64px`; horizontal scroll only when days × 64px exceeds the viewport. Venue/city text in headers TRUNCATES with ellipsis and shows the full string via `title`/tooltip — text never dictates column width. Same rule for the patch matrix's socket columns.
+
+**B. Fill the page.** The matrix is the work surface: container goes full-bleed on this surface (no narrow `max-w-*` wrapper; if a global max-width exists, opt this surface out), and the grid fills available height (`height: calc(100vh - chrome)`), scrolling INTERNALLY with a **sticky header row** and **sticky left block**. No large empty page below the grid (Adam's screenshot shows ~40% dead space).
+
+**C. Type scale — step everything up** (current values are ~11–13px on a 1900px screen):
+person name 15px/500 · role+rate-type meta 12px · row total 18px mono · days-count 12px mono · day header date 13px mono/500 · venue 11.5px · city 11px · day-type label 10px caps · cell letter 13px mono · totals bar 17px mono.
+
+**D. Cell + row metrics:** row height 52px (from ~45) · header block 64px (three lines with breathing room) · left block fixed 320px · day cell min-width 64px · consistent 8px internal padding. Uniform everywhere — no row taller than another.
+
+**E. Stop it looking like a table (the "old school HTML" fix).** Modern data-grid treatment:
+- Painted cells render as **tiles**: 3px inset radius, subtle fill, NOT edge-to-edge flat blocks butting against hard gridlines.
+- Gridlines become **hairlines** (`rgba(255,255,255,.04)`) — remove heavy 1px solid borders between every cell.
+- **Hover states**: cell hover brightens + 120ms ease-out transition; row hover tints the whole row including the left block.
+- **Sticky shadow**: when the grid scrolls horizontally, the sticky left block casts a subtle right-edge shadow (depth cue that the column is pinned).
+- Cursor/selection: 2px orange **inset ring**, not an outline that shifts layout.
+- Empty (unassigned) cells get a barely-there surface (`#141416`), not pure black — the grid reads as a continuous field.
+- Week markers (WC dates) become a subtle vertical rule + small caps label, not an orange line that dominates.
+
+**F. Same pass on the patch matrix** (`PatchMatrix.tsx`): equal-width socket columns, larger sockets (34px min already landed — take to 40px), same hairlines/tiles/hover/sticky treatment, truncating box headers.
+
+Acceptance: screenshots at 1440 AND 1920 widths showing the grid filling the page with uniform columns; PAY-14 + PM-07 smokes. This is presentational only — no money path, no data-write changes; harnesses must be untouched (re-run to prove: reconcile 64/64 · fees 15).
+
 ## HARD PROCESS RULE (added 2026-07-17 after 19 unpushed commits sat undeployed for a day)
 "Banked" means PUSHED. Every report ends with the RAW OUTPUT of:
 `git rev-list --count origin/main..main` (must be `0`) and `git log --oneline -1 origin/main`.

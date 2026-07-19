@@ -156,7 +156,10 @@ export default async function OperationsTourPayrollPage({ params }: { params: Pr
     );
 
   return (
-    <div className="mx-auto max-w-[1400px] space-y-4 px-4 pt-6 pb-12">
+    // G2-2b — the payroll matrix is the work surface: full-bleed (no narrow
+    // max-w wrapper) and full-height so the grid fills the page and scrolls
+    // internally instead of leaving dead space below.
+    <div className="flex h-full min-h-0 flex-col px-4 pt-4 pb-3">
       <PayrollView
         tourId={tour.id}
         tourName={tour.name}

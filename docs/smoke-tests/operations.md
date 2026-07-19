@@ -582,3 +582,25 @@ Split rate, Flat tour, Weekly, Per diem only. Then paint them days in the matrix
   switch). Migration **242** seeds a7 (Flat tour) / a8 (Weekly) + widens the
   rate_types.basis CHECK for `per_week`. Money gate: reconcile 64/64 · fees 15.
   **Needs-live** (needs migration 242 pasted first).
+
+#### PAY-14 — Payroll days-matrix quality pass (G2-2b)
+**Do**: Open Payroll on a wide screen (1440 + 1920). Look at the days matrix.
+**Expect** (exact metrics, CC_G2_BUILD.md §G2-2b):
+- **Uniform columns** — every day column is the SAME width (`table-layout:fixed` +
+  `<colgroup>`, 64px min, growing equally to fill). A long venue ("Culture and
+  Congress Center Jahrhunderthalle GmbH") truncates with ellipsis + title tooltip;
+  text never widens its column. Horizontal scroll only when days×64 exceeds width.
+- **Fills the page** — the matrix is full-bleed (no `max-w-[1400px]`), fills the
+  viewport height, and scrolls INTERNALLY with a sticky header row + sticky left
+  block. No ~40% dead space below.
+- **Type scale** — person 15px/500, role·type 12px, row total 18px mono, day-count
+  12px mono, day header date 13px mono, venue 11.5px, city 11px, day-type 10px caps,
+  cell letter 13px mono, totals bar 17px (total 20px) mono.
+- **Metrics** — 52px rows (uniform), 64px header block, 320px left block, 8px pad.
+- **Modern grid** — painted cells are inset TILES (3px radius), hairline gridlines
+  (`--lp-border-subtle`, not heavy borders), empty cells a barely-lifted field (not
+  pure black), row hover tints the whole row incl the left block (120ms), cell hover
+  brightens, sticky left block casts a right-edge shadow on horizontal scroll, cursor
+  is a 2px orange inset ring, week markers a subtle rule + small-caps label.
+- **Money untouched** — reconcile 64/64 · fees 15 (presentational only). **Needs-live**
+  (screenshots at 1440 + 1920).

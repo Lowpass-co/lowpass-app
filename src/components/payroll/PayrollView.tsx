@@ -105,7 +105,7 @@ export function PayrollView({
   );
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12, height: '100%', minHeight: 0 }}>
       <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
         <PageTitle style={{ fontSize: 22 }}>{tourName} — Payroll</PageTitle>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
