@@ -25,8 +25,7 @@ import { ProductShell } from '@/components/shell-v2';
 import { TourVisitTracker } from '@/components/shell-v2/TourVisitTracker';
 import { OperationsGroupSubNav } from '@/components/operations/OperationsGroupSubNav';
 import { TourIdentityBand } from '@/components/operations/TourIdentityBand';
-import { resolveArtistLogoUrlSync } from '@/lib/artists/imageUrl';
-import { tourPhase } from '@/lib/derive/tourStatus';
+import { loadTourIdentity } from '@/lib/shell/tourIdentity';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import {
   canAccess,
@@ -69,41 +68,11 @@ export default async function OperationsTourLayout({
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { data: tour } = await supabase
-    .from('tours')
-    .select('id, name, artist_id, start_date, end_date, status')
-    .eq('id', tourId)
-    .maybeSingle();
-
-  if (!tour) notFound();
-
-  const tourRow = tour as {
-    id: string;
-    name: string;
-    artist_id: string | null;
-    start_date: string | null;
-    end_date: string | null;
-    status: string | null;
-  };
-
-  /* G2-1 — identity band (avatar · artist · tour · status) for the Crew group.
-     Fetch the artist for the avatar + name and derive the tour status; the band
-     self-hides on non-Crew ops pages until G2-4 rolls it out. */
-  const { data: artist } = tourRow.artist_id
-    ? await supabase
-        .from('artists')
-        .select('id, name, branding, spotify_id, spotify_image_url')
-        .eq('id', tourRow.artist_id)
-        .maybeSingle()
-    : { data: null };
-  const artistRow = artist as { id: string; name: string; branding: unknown; spotify_id: string | null; spotify_image_url: string | null } | null;
-  // Sync (DB-only) resolver — NEVER a live Spotify fetch. This layout wraps every
-  // Operations page; a blocking external fetch here stalled the whole ops section
-  // (Personnel "Loading…" hang). The band shows the cached logo or initials.
-  const avatarUrl = artistRow ? resolveArtistLogoUrlSync(artistRow) : null;
-  const today = new Date().toISOString().slice(0, 10);
-  const phase = tourPhase({ start_date: tourRow.start_date, end_date: tourRow.end_date, status: tourRow.status }, today);
-  const STATUS_LABEL: Record<string, string> = { on_tour: 'On tour', upcoming: 'Upcoming', planning: 'Planning', ended: 'Ended' };
+  // G2-4 — the identity lockup fields come from the ONE shared loader (same band
+  // in Operations, Budget, Advance). loadTourIdentity uses the DB-only logo
+  // resolver, so this layout never blocks on a live Spotify fetch.
+  const identity = await loadTourIdentity(supabase, tourId);
+  if (!identity) notFound();
 
   /* Stage B — the sub-nav is now a group-scoped segmented control (Crew /
      Production only), so the layout no longer needs artist identity for a
@@ -124,18 +93,18 @@ export default async function OperationsTourLayout({
   return (
     <ProductShell
       active="operations"
-      artistId={tourRow.artist_id}
+      artistId={identity.artistId}
       tourId={tourId}
       productName="Operations"
       subNav={
         <>
           <TourIdentityBand
             tourId={tourId}
-            artistName={artistRow?.name ?? 'Artist'}
-            avatarUrl={avatarUrl}
-            tourName={tourRow.name}
-            statusLabel={STATUS_LABEL[phase] ?? ''}
-            statusKey={phase}
+            artistName={identity.artistName}
+            avatarUrl={identity.avatarUrl}
+            tourName={identity.tourName}
+            statusLabel={identity.statusLabel}
+            statusKey={identity.statusKey}
           />
           <OperationsGroupSubNav tourId={tourId} links={subNavLinks} />
         </>
