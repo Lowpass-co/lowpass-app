@@ -16,7 +16,7 @@
    engine as Rates / Summary / the budget reconcile.
    ============================================ */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { countDayStatuses } from '@/lib/payroll/fees';
 import { BRUSH_TYPES, brushTypeToStatus, type BrushType } from '@/lib/payroll/effectiveDayType';
 import { colourForDayType, labelForDayType } from '@/lib/routing/dayType';
@@ -348,9 +348,12 @@ export function PayrollDaysMatrix({
         </button>
       </div>
 
-      {/* Matrix — fills remaining height, scrolls INTERNALLY (sticky header +
-          sticky left block). table-layout:fixed + colgroup → uniform day columns
-          (text never dictates width; venue/city truncate). */}
+      {/* Matrix — CSS GRID (not a <table>): grid-template-columns pins the left
+          block at 320px and gives EVERY day column minmax(64px, 1fr) → identical
+          widths that fill the page and floor at 64px (scrolls when days×64 exceeds
+          the container). grid-auto-rows fixes every data row at 52px, header 64px.
+          Using grid (no td/th) also sidesteps the global [data-lp-density] td/th
+          padding/font rules that were collapsing the table. */}
       <div
         ref={gridRef}
         tabIndex={0}
@@ -359,61 +362,61 @@ export function PayrollDaysMatrix({
         onScroll={(e) => { const x = e.currentTarget.scrollLeft > 0; setScrolledX((prev) => (prev === x ? prev : x)); }}
         style={{ flex: 1, minHeight: 0, overflow: 'auto', border: `1px solid ${HAIRLINE}`, borderRadius: 'var(--lp-radius-md)', outline: 'none', userSelect: 'none', background: EMPTY_CELL }}
       >
-        <table style={{ borderCollapse: 'separate', borderSpacing: 0, width: '100%', minWidth: PERSON_W + days.length * DAY_W, tableLayout: 'fixed' }}>
-          <colgroup>
-            <col style={{ width: PERSON_W }} />
-            {days.map((d) => <col key={d.date} style={{ width: DAY_W }} />)}
-          </colgroup>
-          <thead>
-            <tr>
-              <th style={{ position: 'sticky', left: 0, top: 0, zIndex: 4, height: HEADER_H, background: 'var(--lp-panel)', textAlign: 'left', padding: '0 12px', borderBottom: `1px solid ${HAIRLINE}`, borderRight: `1px solid ${HAIRLINE}`, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--lp-text-tertiary)', fontWeight: 700, boxShadow: scrolledX ? '8px 0 16px -8px rgba(0,0,0,0.5)' : undefined }}>Person · days · total</th>
-              {days.map((d) => (
-                <th key={d.date} style={{ position: 'sticky', top: 0, zIndex: 1, height: HEADER_H, background: 'var(--lp-panel)', borderBottom: `1px solid ${HAIRLINE}`, borderLeft: weekStartDates.has(d.date) ? `1px solid ${WEEK_RULE}` : `1px solid ${HAIRLINE}`, padding: 0, verticalAlign: 'middle' }}>
-                  <DayHeader day={d} weekStart={weekStartDates.has(d.date)} />
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {people.map((p, r) => {
-              const rowFlat = isFlatFee(rateTypeById.get(p.id) ?? 'day_rate');
-              const rowHover = hover?.r === r;
-              const leftBg = rowHover ? 'color-mix(in srgb, var(--lp-orange) 6%, var(--lp-surface))' : 'var(--lp-surface)';
-              return (
-              <tr key={p.id}>
-                <td style={{ position: 'sticky', left: 0, zIndex: 2, height: ROW_H, background: leftBg, padding: '0 12px', borderBottom: `1px solid ${HAIRLINE}`, borderRight: `1px solid ${HAIRLINE}`, transition: 'background 120ms ease-out', boxShadow: scrolledX ? '8px 0 16px -8px rgba(0,0,0,0.5)' : undefined }}>
-                  {(() => {
-                    const s = statsFor(p.id);
-                    const rtKey = rateTypeById.get(p.id) ?? 'day_rate';
-                    const rt = RATE_TYPE_LABEL[rtKey] ?? 'Day rate';
-                    const flat = isFlatFee(rtKey);
-                    const countBits = [
-                      s.counts.show ? `${s.counts.show} S` : null,
-                      s.counts.offTravel ? `${s.counts.offTravel} O` : null,
-                      s.counts.rehearsal ? `${s.counts.rehearsal} R` : null,
-                    ].filter(Boolean).join(' · ');
-                    return (
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ fontSize: 15, fontWeight: 500, color: 'var(--lp-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.25 }}>
-                            {p.person_name || '—'}
-                          </div>
-                          <div style={{ fontSize: 12, color: 'var(--lp-text-tertiary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.3 }}>
-                            {p.role ? p.role : ''}{p.role ? ' · ' : ''}{rt}
-                          </div>
-                          <div style={{ fontSize: 12, color: 'var(--lp-text-tertiary)', fontFamily: 'var(--lp-font-numeric)', whiteSpace: 'nowrap', lineHeight: 1.3 }}>
-                            {countBits || '—'}
-                            {flat && countBits ? <span style={{ color: 'var(--lp-orange)', fontWeight: 700 }} title={FLAT_NOTE[rtKey]}>{' *'}</span> : null}
-                            {flat ? <span style={{ fontStyle: 'italic', color: 'var(--lp-text-tertiary)', fontFamily: 'var(--font-sans)' }}>{`  — ${FLAT_NOTE[rtKey]}`}</span> : null}
-                          </div>
-                        </div>
-                        <div style={{ fontFamily: 'var(--lp-font-numeric)', fontWeight: 700, fontSize: 18, color: 'var(--lp-text)', whiteSpace: 'nowrap', letterSpacing: '-0.01em' }}>
-                          {money.format(s.fee + s.pd)}
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </td>
+        <div
+          style={{
+            display: 'grid',
+            gridTemplateColumns: `${PERSON_W}px repeat(${days.length}, minmax(${DAY_W}px, 1fr))`,
+            gridTemplateRows: `${HEADER_H}px`,
+            gridAutoRows: `${ROW_H}px`,
+            minWidth: PERSON_W + days.length * DAY_W,
+          }}
+        >
+          {/* Header row — corner (sticky top+left) + day headers (sticky top). */}
+          <div style={{ position: 'sticky', top: 0, left: 0, zIndex: 6, display: 'flex', alignItems: 'flex-end', background: 'var(--lp-panel)', padding: '0 12px 8px', borderBottom: `1px solid ${HAIRLINE}`, borderRight: `1px solid ${HAIRLINE}`, fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.06em', color: 'var(--lp-text-tertiary)', fontWeight: 700, boxShadow: scrolledX ? '8px 0 16px -8px rgba(0,0,0,0.5)' : undefined }}>
+            Person · days · total
+          </div>
+          {days.map((d) => (
+            <div key={d.date} style={{ position: 'sticky', top: 0, zIndex: 4, background: 'var(--lp-panel)', borderBottom: `1px solid ${HAIRLINE}`, borderLeft: weekStartDates.has(d.date) ? `1px solid ${WEEK_RULE}` : `1px solid ${HAIRLINE}`, overflow: 'hidden', minWidth: 0 }}>
+              <DayHeader day={d} weekStart={weekStartDates.has(d.date)} />
+            </div>
+          ))}
+
+          {/* Data rows — each person is one left-block cell + N day cells. */}
+          {people.map((p, r) => {
+            const rowFlat = isFlatFee(rateTypeById.get(p.id) ?? 'day_rate');
+            const rowHover = hover?.r === r;
+            const leftBg = rowHover ? 'color-mix(in srgb, var(--lp-orange) 6%, var(--lp-surface))' : 'var(--lp-surface)';
+            const s = statsFor(p.id);
+            const rtKey = rateTypeById.get(p.id) ?? 'day_rate';
+            const rt = RATE_TYPE_LABEL[rtKey] ?? 'Day rate';
+            const flat = isFlatFee(rtKey);
+            const countBits = [
+              s.counts.show ? `${s.counts.show} S` : null,
+              s.counts.offTravel ? `${s.counts.offTravel} O` : null,
+              s.counts.rehearsal ? `${s.counts.rehearsal} R` : null,
+            ].filter(Boolean).join(' · ');
+            return (
+              <Fragment key={p.id}>
+                {/* Left block (sticky-left). */}
+                <div style={{ position: 'sticky', left: 0, zIndex: 3, minWidth: 0, background: leftBg, padding: '0 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, borderBottom: `1px solid ${HAIRLINE}`, borderRight: `1px solid ${HAIRLINE}`, transition: 'background 120ms ease-out', boxShadow: scrolledX ? '8px 0 16px -8px rgba(0,0,0,0.5)' : undefined }}>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: 15, fontWeight: 500, color: 'var(--lp-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.2 }}>
+                      {p.person_name || '—'}
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--lp-text-tertiary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.3 }}>
+                      {p.role ? p.role : ''}{p.role ? ' · ' : ''}{rt}
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--lp-text-tertiary)', fontFamily: 'var(--lp-font-numeric)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.3 }}>
+                      {countBits || '—'}
+                      {flat && countBits ? <span style={{ color: 'var(--lp-orange)', fontWeight: 700 }} title={FLAT_NOTE[rtKey]}>{' *'}</span> : null}
+                      {flat ? <span style={{ fontStyle: 'italic', color: 'var(--lp-text-tertiary)', fontFamily: 'var(--font-sans)' }}>{`  — ${FLAT_NOTE[rtKey]}`}</span> : null}
+                    </div>
+                  </div>
+                  <div style={{ fontFamily: 'var(--lp-font-numeric)', fontWeight: 700, fontSize: 18, color: 'var(--lp-text)', whiteSpace: 'nowrap', letterSpacing: '-0.01em' }}>
+                    {money.format(s.fee + s.pd)}
+                  </div>
+                </div>
+                {/* Day cells. */}
                 {days.map((d, c) => {
                   const status = statusOf(p.id, d.date);
                   const isCursor = cursor?.r === r && cursor?.c === c;
@@ -422,8 +425,6 @@ export function PayrollDaysMatrix({
                     && r >= Math.min(dragRect.anchor.r, dragRect.cursor.r) && r <= Math.max(dragRect.anchor.r, dragRect.cursor.r)
                     && c >= Math.min(dragRect.anchor.c, dragRect.cursor.c) && c <= Math.max(dragRect.anchor.c, dragRect.cursor.c);
                   const painted = !!STATUS_ABBR[status];
-                  // Tile fill: preview > flat-dim > status tint. Empty cells show no
-                  // tile (the td's barely-lifted field reads through).
                   const tileFill = inPreview
                     ? 'color-mix(in srgb, var(--lp-orange) 30%, transparent)'
                     : rowFlat
@@ -431,13 +432,13 @@ export function PayrollDaysMatrix({
                       : (STATUS_TINT[status] ?? 'transparent');
                   const tileFg = rowFlat ? 'var(--lp-text-tertiary)' : (STATUS_FG[status] ?? 'var(--lp-text-tertiary)');
                   return (
-                    <td
+                    <div
                       key={d.date}
                       onMouseDown={(e) => onCellDown(p.id, d.date, r, c, e.shiftKey)}
                       onMouseEnter={() => { onCellEnter(r, c); setHover({ r, c }); }}
                       title={`${p.person_name} · ${d.date}`}
                       style={{
-                        height: ROW_H, padding: 3, cursor: 'pointer',
+                        minWidth: 0, padding: 3, cursor: 'pointer', boxSizing: 'border-box',
                         background: rowHover ? 'color-mix(in srgb, var(--lp-orange) 5%, transparent)' : (cellHover ? 'color-mix(in srgb, var(--lp-text) 3%, transparent)' : 'transparent'),
                         borderBottom: `1px solid ${HAIRLINE}`,
                         borderLeft: weekStartDates.has(d.date) ? `1px solid ${WEEK_RULE}` : `1px solid ${HAIRLINE}`,
@@ -445,8 +446,7 @@ export function PayrollDaysMatrix({
                         transition: 'background 120ms ease-out',
                       }}
                     >
-                      {/* Painted cells render as inset TILES (3px radius), not flat
-                          edge-to-edge blocks. Empty = no tile. */}
+                      {/* Painted cells render as inset TILES (3px radius). Empty = none. */}
                       {painted || inPreview ? (
                         <div style={{
                           width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -459,14 +459,13 @@ export function PayrollDaysMatrix({
                           {STATUS_ABBR[status] ?? ''}
                         </div>
                       ) : null}
-                    </td>
+                    </div>
                   );
                 })}
-              </tr>
-              );
-            })}
-          </tbody>
-        </table>
+              </Fragment>
+            );
+          })}
+        </div>
       </div>
 
       {/* Totals bar (Adam's DELTA) — fees · per diem · total, always under the matrix. */}
