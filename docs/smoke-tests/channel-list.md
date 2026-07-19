@@ -440,3 +440,49 @@ currency-typed fields in Adam's workflow.
   seeded) and refreshes into the editable editor; the list also appears in the
   rider pack. If the tour has NO rider pack, the tab prompts to create one under
   Riders instead. (`ChannelListEmptyState` → POST /api/rider-packs/[id]/sections)
+
+## Patch matrix — G2-2 (graded design, replaces the strip board) — 2026-07-18
+
+The vertical socket-strip board (`ChannelPatchBoard`) is retired. Patch mode now
+opens `PatchMatrix`: channels DOWN the left, sockets ACROSS the top grouped by
+stage box / sub-snake (box-coloured group headers). Writes are unchanged — one
+`onPatch(channelId, SocketPatch)` per assignment, socket-family columns only,
+`row_index` NEVER touched.
+
+#### PM-01 — Matrix shape
+**Do**: With ≥1 stage box (or sub-snake) and some channels, click **Patch**.
+**Expect**: a matrix — channel rows (left, "N. name", frozen), socket columns
+(top, grouped under a coloured box/snake header, position labels A1…A16), a dot
+in each patched cell. Horizontal + vertical scroll; header + channel column stay
+put. **Needs-live**.
+
+#### PM-02 — Click assigns, CLICK AGAIN UNASSIGNS (toggle)
+**Do**: Click an empty cell (channel × socket). Click the same cell again.
+**Expect**: first click patches the channel to that socket (orange dot); second
+click unpatches it (empty). Assigning also clears the channel's previous socket
+(a channel is only ever in one place). **Needs-live**.
+
+#### PM-03 — Drag a diagonal patches a run
+**Do**: Press a cell and drag down-right across several rows/cols; release.
+**Expect**: a live orange preview along the diagonal while dragging; on release,
+a sequential run is patched (chan N→sock X, N+1→X+1, …). A pure horizontal or
+vertical drag patches only the anchor (the gesture is diagonal by design).
+**Needs-live**.
+
+#### PM-04 — Conflict shows red
+**Do**: Patch two different channels into the SAME socket column.
+**Expect**: both cells in that socket column render red (conflict), not orange.
+Resolving one (unpatch / move) clears the red. **Needs-live**.
+
+#### PM-05 — Crosshair + keyboard
+**Do**: Hover a cell; then focus the matrix and use arrows + Enter.
+**Expect**: hovering tints the whole row + column (crosshair). Arrows move a
+cursor cell (orange ring); Enter toggles the cursor's channel/socket. **Needs-live**.
+
+#### PM-06 — Toolbar: Patch in order · Clear patch · Boxes filter
+**Do**: Click **Patch in order**; then **Clear patch** (confirm); toggle a box
+chip under **Boxes**.
+**Expect**: Patch-in-order fills empty sockets sequentially from unpatched
+channels. Clear patch asks to confirm, then returns every channel to unpatched
+(numbers/names untouched). A Boxes chip hides/shows that box's socket columns.
+**Needs-live**.

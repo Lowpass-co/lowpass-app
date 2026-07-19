@@ -32,7 +32,7 @@ import { OutputBlock, OUTPUT_GRID, OUTPUT_COL_COUNT } from './channel-list-cells
 import { InventoryAggregates } from './channel-list-cells/InventoryAggregates';
 import { AddManyChannelsModal } from './channel-list-cells/AddManyChannelsModal';
 import { ChannelListSectionBand } from './channel-list-cells/ChannelListSectionBand';
-import { ChannelPatchBoard, type SocketPatch } from './ChannelPatchBoard';
+import { PatchMatrix, type SocketPatch } from './PatchMatrix';
 import { CellNavProvider, NavCell } from '@/lib/hooks/useCellNav';
 import {
   COLUMN_BY_KEY,
@@ -439,7 +439,7 @@ export default function ChannelListEditor({
               onClose={() => setColumnPickerOpen(false)}
             />
           </div>
-          {/* VIS-CL-07 — Patch mode toggle. Opens the socket board. */}
+          {/* VIS-CL-07 / G2-2 — Patch mode toggle. Opens the patch matrix. */}
           <button
             type="button"
             onClick={() => setPatchMode((p) => !p)}
@@ -538,9 +538,10 @@ export default function ChannelListEditor({
         </div>
 
         {patchMode ? (
-          /* VIS-CL-07 — patch board replaces the input grid; the outputs
-             sub-grid below stays rendered + untouched (VIS-CL-04). */
-          <ChannelPatchBoard
+          /* G2-2 — the patch MATRIX replaces the input grid (channels down,
+             sockets across). The outputs sub-grid below stays rendered +
+             untouched (VIS-CL-04). */
+          <PatchMatrix
             rows={inputRows}
             stageBoxes={stageBoxes}
             subSnakes={subSnakes}
