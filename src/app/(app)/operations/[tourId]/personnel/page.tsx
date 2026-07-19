@@ -31,14 +31,18 @@ export const dynamic = 'force-dynamic';
 
 interface OperationsPersonnelPageProps {
   params: Promise<{ tourId: string }>;
+  searchParams: Promise<{ filter?: string }>;
 }
 
 /* Sprint 9 §14.11 — SUB_NAV moved to layout. */
 
 export default async function OperationsTourPersonnelPage({
   params,
+  searchParams,
 }: OperationsPersonnelPageProps) {
   const { tourId } = await params;
+  const { filter } = await searchParams;
+  const conflictsOnly = filter === 'conflicts';
   const supabase = await createServerSupabaseClient();
   const {
     data: { user },
@@ -100,6 +104,7 @@ export default async function OperationsTourPersonnelPage({
             tourId={tourId}
             tourStartDate={tourRow.start_date}
             tourEndDate={tourRow.end_date}
+            conflictsOnly={conflictsOnly}
           />
         ) : canCrewView ? (
           <CrewMyScheduleClient tourId={tourId} />
@@ -115,10 +120,12 @@ function ManagerSurface({
   tourId,
   tourStartDate,
   tourEndDate,
+  conflictsOnly,
 }: {
   tourId: string;
   tourStartDate: string | null;
   tourEndDate: string | null;
+  conflictsOnly: boolean;
 }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--lp-space-3)' }}>
@@ -138,6 +145,7 @@ function ManagerSurface({
         tourId={tourId}
         tourStartDate={tourStartDate}
         tourEndDate={tourEndDate}
+        conflictsOnly={conflictsOnly}
       />
     </div>
   );

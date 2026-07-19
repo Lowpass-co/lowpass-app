@@ -19,7 +19,6 @@
    ============================================ */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'next/navigation';
 import { Loader2, Plus, RefreshCw } from 'lucide-react';
 import { useRealtimeRows } from '@/lib/realtime/useRealtimeRows';
 import { useToast } from '@/components/ui/Toast';
@@ -39,6 +38,11 @@ interface PersonnelManagerClientProps {
   tourId: string;
   tourStartDate: string | null;
   tourEndDate: string | null;
+  /** Whether the ?filter=conflicts query is set. Read on the SERVER and passed
+   *  down as a prop instead of via useSearchParams() — the latter (with no
+   *  Suspense boundary) is the one App-Router anomaly this client had, and the
+   *  page already knows the value. */
+  conflictsOnly: boolean;
 }
 
 type StatusFilter = 'all' | PersonnelStatus;
@@ -98,10 +102,9 @@ export function PersonnelManagerClient({
   tourId,
   tourStartDate,
   tourEndDate,
+  conflictsOnly,
 }: PersonnelManagerClientProps) {
   const { showToast } = useToast();
-  const searchParams = useSearchParams();
-  const conflictsOnly = searchParams?.get('filter') === 'conflicts';
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);

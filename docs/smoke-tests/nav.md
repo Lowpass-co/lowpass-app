@@ -178,3 +178,31 @@ artist-logo + stats block) is retired, ops uses `TourIdentityBand` → IdentityL
 budget mounts the same component. Routing + Files keep their own chrome (not grouped).
 **Also**: advance no longer runs the async Spotify logo resolver on every page
 (loadTourIdentity is DB-only), removing that hang risk. **Needs-live**.
+
+## ArtistTourContext hydration + personnel (P0) — 2026-07-19
+
+#### CTX-01 — picker shows the artist on a cold tour load
+**Do**: In a fresh session (no prior artist interaction), cold-load
+`/operations/[tourId]/personnel`.
+**Expect**: the top-bar picker shows the tour's artist (e.g. "Charlotte Sands"),
+NOT "Pick an artist…". Root cause was `extractArtistIdFromPath` only matching
+`/artists/[uuid]`; the tour layouts now feed the server-known artistId via
+`<HydrateTourArtist>` → `provideTourArtist`. **Needs-live**.
+
+#### CTX-02 — same on budget + advance
+**Do**: Cold-load `/budget/[tourId]` and `/advance/[tourId]/[routingId]`.
+**Expect**: picker shows the artist on both. **Needs-live**.
+
+#### CTX-03 — artist-gated controls work on cold load
+**Do**: On a cold tour page, check the "New tour" affordance / scope guard /
+dashboard artist gate.
+**Expect**: they behave as if an artist is selected (it is, now) — no "switch
+artist to enable" dead state. **Needs-live**.
+
+#### PAY-09 — Personnel read-only rate mirror + click→Payroll (unblocked)
+**Do**: Cold-load `/operations/[tourId]/personnel`.
+**Expect**: (a) personnel rows render; (b) at least one data request fires —
+`GET /api/tours/[tourId]/personnel`; (c) the read-only Rate cells route to Payroll
+(focus the person) on click. The `useSearchParams()` (no-Suspense) anomaly was
+removed — `conflictsOnly` is read on the server and passed as a prop. **CANDIDATE
+fix for the hang — needs a Cowork re-walk to confirm the loader now fires.**
