@@ -2,11 +2,16 @@
    LOWPASS — Spotify Artist Search
 
    GET ?q=... — Search Spotify for artists.
-   Returns id, name, image_url, banner_url (if 2nd image), plus
-   genres / followers / popularity (AB — the artist builder's result
-   rows + confirm stats read these directly off the search hit, so no
-   follow-up per-artist meta call is needed).
-   Requires SPOTIFY_CLIENT_ID + SPOTIFY_CLIENT_SECRET.
+   Returns id, name, image_url, banner_url (if 2nd image), plus a
+   best-effort genres / followers / popularity mapped off the hit.
+
+   NOTE (verified 2026-07): apps WITHOUT Spotify "extended access" get a
+   STRIPPED artist object from every catalog endpoint — only
+   external_urls/href/id/images/name/type/uri — so genres/followers/popularity
+   come back []/null/null for our current credentials. The mapping is kept so the
+   fields light up automatically once the Spotify app is granted extended access;
+   the builder UI degrades gracefully until then. Requires SPOTIFY_CLIENT_ID +
+   SPOTIFY_CLIENT_SECRET.
 
    Sprint 7 §2 — token helper + caching extracted to
    src/lib/spotify/server.ts. This route just imports.

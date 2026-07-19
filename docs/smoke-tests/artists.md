@@ -28,12 +28,22 @@ ONLY from the flow's local `selected !== null` — it does **not** read
 the reported bug: previously you had to switch the selected artist to enable
 progress.) **Code-verified** (`Next` `disabled={!selected}`); **Needs-live**.
 
-#### AB-03 — Confirm step renders real pulled artwork/genres/followers
+#### AB-03 — Confirm step renders artwork + name + available metadata
 **Do**: From AB-02, click Next to reach **Confirm**.
-**Expect**: large 132px artwork, name in the condensed display face, genre chips,
-and mono stats **FOLLOWERS · POPULARITY · SPOTIFY ID** (id truncated) — all pulled
-from the search hit (the search route returns `genres`/`followers`/`popularity`).
-A reassurance line notes artwork/genres/history sync automatically. **Needs-live**.
+**Expect**: large 132px artwork, name in the condensed display face, **SPOTIFY ID**
+(mono, truncated) confirming the link, and a reassurance line. Genre chips +
+FOLLOWERS/POPULARITY stats render **only when Spotify actually returns them** and
+are cleanly hidden otherwise (no empty "—" placeholders).
+
+> ⚠️ **Spotify app access dependency (verified 2026-07):** our current Spotify
+> credentials are NOT in extended-access mode, so every catalog endpoint
+> (`/v1/search`, `/v1/artists/{id}`, `/v1/artists?ids=`) returns a **stripped
+> artist object** — only `external_urls/href/id/images/name/type/uri`. `genres`,
+> `followers`, and `popularity` are **withheld at the source**, so they show empty
+> until the Spotify app is granted extended quota mode in the Spotify developer
+> dashboard. The route mapping + UI are already wired to light them up the moment
+> access is granted — this is an OPS action, not a code change. Artwork + name +
+> Spotify ID work today. **Needs-live** (full metadata blocked on Spotify access).
 
 #### AB-04 — Manual escape hatch → step 3 → null-Spotify-id artist
 **Do**: On Find, click "Not on Spotify? Add manually →" (or, after a no-match

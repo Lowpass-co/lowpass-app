@@ -606,14 +606,17 @@ function ConfirmStep({ artist, onSearchAgain }: { artist: SpotifyArtist; onSearc
         ) : null}
       </div>
 
+      {/* Stats degrade gracefully: Spotify only returns followers/popularity to
+          apps with extended access, so we render only the values we actually got
+          (Spotify ID always confirms the link). No empty "—" placeholders. */}
       <div className="flex items-center justify-center" style={{ gap: 'var(--lp-space-4)', flexWrap: 'wrap' }}>
-        <Stat label="Followers" value={artist.followers != null ? artist.followers.toLocaleString() : '—'} />
-        <Stat label="Popularity" value={artist.popularity != null ? String(artist.popularity) : '—'} />
+        {artist.followers != null ? <Stat label="Followers" value={artist.followers.toLocaleString()} /> : null}
+        {artist.popularity != null ? <Stat label="Popularity" value={String(artist.popularity)} /> : null}
         <Stat label="Spotify ID" value={`${artist.id.slice(0, 10)}…`} />
       </div>
 
       <p style={{ margin: 0, fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text-tertiary)', maxWidth: 340 }}>
-        Artwork, genres and release history sync automatically — all changeable later.
+        Artwork and release history sync automatically — all changeable later.
       </p>
 
       <button
