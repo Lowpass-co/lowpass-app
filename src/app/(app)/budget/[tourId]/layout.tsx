@@ -20,6 +20,7 @@ import type { ReactNode } from 'react';
 import { notFound } from 'next/navigation';
 import { ProductShell } from '@/components/shell-v2';
 import { IdentityLockup } from '@/components/shell-v2/IdentityLockup';
+import { HydrateTourArtist } from '@/components/shell-v2/HydrateTourArtist';
 import { TourVisitTracker } from '@/components/shell-v2/TourVisitTracker';
 import { loadTourIdentity } from '@/lib/shell/tourIdentity';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
@@ -76,6 +77,7 @@ export default async function BudgetTourLayout({
     >
       {/* Budget tabs live in the page's <BudgetContextBand>; the identity band is
           now the shared IdentityLockup above (G2-4). */}
+      <HydrateTourArtist tourId={tourId} artistId={identity?.artistId ?? tourRow.artist_id} />
       <TourVisitTracker tourId={tourId} />
       {children}
     </ProductShell>

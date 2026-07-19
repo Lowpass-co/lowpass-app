@@ -23,6 +23,7 @@ import type { ReactNode } from 'react';
 import { notFound } from 'next/navigation';
 import { ProductShell } from '@/components/shell-v2';
 import { TourVisitTracker } from '@/components/shell-v2/TourVisitTracker';
+import { HydrateTourArtist } from '@/components/shell-v2/HydrateTourArtist';
 import { OperationsGroupSubNav } from '@/components/operations/OperationsGroupSubNav';
 import { TourIdentityBand } from '@/components/operations/TourIdentityBand';
 import { loadTourIdentity } from '@/lib/shell/tourIdentity';
@@ -110,6 +111,7 @@ export default async function OperationsTourLayout({
         </>
       }
     >
+      <HydrateTourArtist tourId={tourId} artistId={identity.artistId} />
       <TourVisitTracker tourId={tourId} />
       {children}
     </ProductShell>

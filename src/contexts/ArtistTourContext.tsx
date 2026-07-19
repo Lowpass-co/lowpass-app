@@ -52,6 +52,11 @@ interface ArtistTourContextType {
   isRoutingLoading: boolean;
   /** Reload artists from the server (e.g. after creating one). */
   refetchArtists: () => Promise<void>;
+  /** P0 — a tour URL (/operations|budget|advance/[tourId]) does NOT carry the
+   *  artist id, so the picker sat empty on a cold load. Tour layouts know the
+   *  artist server-side and feed it here; the URL resolver then hydrates the
+   *  artist selection for that tour. */
+  provideTourArtist: (tourId: string, artistId: string | null) => void;
 }
 
 const ArtistTourContext = createContext<ArtistTourContextType | null>(null);
@@ -108,6 +113,12 @@ export function ArtistTourProvider({ children }: { children: ReactNode }) {
   const [hydrated, setHydrated] = useState(false);
   const [tourRouting, setTourRouting] = useState<TourRoutingLiteRow[]>([]);
   const [isRoutingLoading, setIsRoutingLoading] = useState(false);
+  // P0 — server-provided tourId → artistId map (tour URLs don't carry the artist).
+  const [tourArtistMap, setTourArtistMap] = useState<Record<string, string>>({});
+  const provideTourArtist = useCallback((tourId: string, artistId: string | null) => {
+    if (!tourId || !artistId) return;
+    setTourArtistMap((prev) => (prev[tourId] === artistId ? prev : { ...prev, [tourId]: artistId }));
+  }, []);
 
   // Post-merge fix-up §C + Hotfix 4 §1 — resolution order:
   //   1. ?artist_id / ?tour_id present in URL → use them
@@ -130,7 +141,9 @@ export function ArtistTourProvider({ children }: { children: ReactNode }) {
     // localStorage fallback is what stops workspace tabs from silently showing a
     // stale artist/tour. The localStorage value still lives on as the separate
     // `resume*` ids (below) so bare-product resume redirects keep working.
-    const nextArtist = urlArtistId ?? pathArtist ?? null;
+    // P0 — on a tour page the artist isn't in the URL; fall back to the
+    // server-provided tour→artist map so the picker hydrates on a cold load.
+    const nextArtist = urlArtistId ?? pathArtist ?? (pathTour ? tourArtistMap[pathTour] ?? null : null);
     const nextTour = urlTourId ?? pathTour ?? null;
     setSelectedArtistIdState((prev) => (prev === nextArtist ? prev : nextArtist));
     setSelectedTourIdState((prev) => (prev === nextTour ? prev : nextTour));
@@ -148,7 +161,7 @@ export function ArtistTourProvider({ children }: { children: ReactNode }) {
     if (nextTour && nextTour !== lsTour) {
       localStorage.setItem(STORAGE_TOUR, nextTour);
     }
-  }, [urlArtistId, urlTourId, pathname]);
+  }, [urlArtistId, urlTourId, pathname, tourArtistMap]);
 
   // Helper: write the current selection back to the URL via
   // router.replace, preserving everything else in the search string.
@@ -341,6 +354,7 @@ export function ArtistTourProvider({ children }: { children: ReactNode }) {
     tourRouting,
     isRoutingLoading,
     refetchArtists,
+    provideTourArtist,
   };
 
   return (
