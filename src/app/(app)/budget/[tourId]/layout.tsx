@@ -19,7 +19,9 @@
 import type { ReactNode } from 'react';
 import { notFound } from 'next/navigation';
 import { ProductShell } from '@/components/shell-v2';
+import { IdentityLockup } from '@/components/shell-v2/IdentityLockup';
 import { TourVisitTracker } from '@/components/shell-v2/TourVisitTracker';
+import { loadTourIdentity } from '@/lib/shell/tourIdentity';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 
 export default async function BudgetTourLayout({
@@ -52,16 +54,28 @@ export default async function BudgetTourLayout({
 
   if (!tourRow.workspace_id) notFound();
 
+  // G2-4 — the ONE identity lockup (same component as Operations/Advance), above
+  // the budget tab band, so the artist/tour band is identical across products.
+  const identity = await loadTourIdentity(supabase, tourId);
+
   return (
     <ProductShell
       active="budget"
       artistId={tourRow.artist_id}
       tourId={tourId}
       productName="Budget"
+      subNav={identity ? (
+        <IdentityLockup
+          artistName={identity.artistName}
+          avatarUrl={identity.avatarUrl}
+          tourName={identity.tourName}
+          statusLabel={identity.statusLabel}
+          statusKey={identity.statusKey}
+        />
+      ) : null}
     >
-      {/* Fix 3 — the tour identity + sub-tabs now live in the page's
-          <BudgetContextBand> (Band 2), so the separate TourHeader +
-          BudgetSubBar layers are gone. */}
+      {/* Budget tabs live in the page's <BudgetContextBand>; the identity band is
+          now the shared IdentityLockup above (G2-4). */}
       <TourVisitTracker tourId={tourId} />
       {children}
     </ProductShell>
