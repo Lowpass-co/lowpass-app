@@ -64,6 +64,13 @@ export type SpreadsheetGridProps<T> = {
   onCommitCell?: (rowId: string, columnId: string, value: unknown) => Promise<void>;
   onBulkEdit?: (rowIds: string[], columnId: string, value: unknown) => Promise<void>;
 
+  /** Per-cell read-only predicate, layered ON TOP of the column/row rules
+   *  (row.computed / kind:'computed'). Return true to lock this specific cell —
+   *  it becomes non-editable and Tab skips it. Used by Payroll to lock rate-type
+   *  columns that don't apply to a person's rate_type. Optional; default = no
+   *  extra locking (existing behaviour unchanged for every other grid). */
+  cellReadOnly?: (row: GridRow<T>, column: GridColumn<T>) => boolean;
+
   onRowOpen?: (row: T) => void;
   onRowDelete?: (rowId: string) => void;
   onRowDuplicate?: (rowId: string) => void;

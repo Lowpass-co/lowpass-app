@@ -562,3 +562,23 @@ visible while painting: "Name / Role · <Rate type>", the day counts ("21 S · 1
 diem · Total**. The standalone Summary table is gone — two sections remain
 (collapsed Rates + the dominant matrix that carries its own totals). Money gate:
 reconcile 64/64 · fees 15 (same fees.ts engine, no math change). **Needs-live**.
+
+#### PAY-13 — Rate-type wiring: Flat tour / Weekly / Per diem only (G2-1)
+**Do**: In the Rates disclosure, set a person's **Rate type** to each of Day rate,
+Split rate, Flat tour, Weekly, Per diem only. Then paint them days in the matrix.
+**Expect**:
+- **Rate-type-driven fields** — a row shows ONLY the currency columns its type uses;
+  irrelevant columns render **blank (not £0.00)** and are locked (click/Tab skips
+  them). Day rate → Day rate + Per diem; Split → Show/Off/Rehearsal + Per diem;
+  Flat tour → Flat tour + Per diem; Weekly → Weekly + Per diem; Per diem only →
+  Per diem only. (Fixes "every cell looks unimportant / £0.00 in five columns".)
+- **Flat treatment in the matrix** — Flat tour / Weekly / Per diem only rows render
+  worked cells **dimmed/neutral** (days don't scale the fee), their day count is
+  marked with `*`, and a row note explains ("days don't change the flat fee — per
+  diem still counts" / "days set the week count…" / "per diem only — no daily fee").
+- **Money** — Weekly fee = weekly amount × distinct active weeks; Flat tour = the
+  fixed amount once; Per diem only = £0 fee + per diem. writeRates keeps ONLY the
+  owned fee line and deletes the rest (no stale line can double-count on a type
+  switch). Migration **242** seeds a7 (Flat tour) / a8 (Weekly) + widens the
+  rate_types.basis CHECK for `per_week`. Money gate: reconcile 64/64 · fees 15.
+  **Needs-live** (needs migration 242 pasted first).

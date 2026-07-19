@@ -62,6 +62,7 @@ export function SpreadsheetGrid<T>(props: SpreadsheetGridProps<T>) {
     ariaLabel = 'Spreadsheet',
     entitySearchTourId,
     columnWidthsKey,
+    cellReadOnly,
   } = props;
 
   // Grid system Phase 1 — density comes from the one app-wide preference
@@ -149,13 +150,20 @@ export function SpreadsheetGrid<T>(props: SpreadsheetGridProps<T>) {
   // never escapes the grid. Predicate resolves the live row + column.
   const colById = useMemo(() => new Map(columns.map(c => [c.id, c])), [columns]);
   const rowById = useMemo(() => new Map(rows.map(r => [r.id, r])), [rows]);
+  // The read-only decision for a specific cell: the column/row rule (isReadOnly)
+  // OR the caller's per-cell predicate. One place, so styling, click-to-edit,
+  // keyboard entry, and Tab-skip all agree.
+  const roCell = useCallback(
+    (row: GridRow<T>, col: GridColumn<T>) => isReadOnly(row, col) || !!cellReadOnly?.(row, col),
+    [cellReadOnly]
+  );
   const isCellEditable = useCallback(
     (rowId: string, colId: string) => {
       const row = rowById.get(rowId);
       const col = colById.get(colId);
-      return !!row && !!col && !isReadOnly(row, col);
+      return !!row && !!col && !roCell(row, col);
     },
-    [rowById, colById]
+    [rowById, colById, roCell]
   );
 
   useEffect(() => {
@@ -206,7 +214,7 @@ export function SpreadsheetGrid<T>(props: SpreadsheetGridProps<T>) {
         edit.cancelEdit();
         return;
       }
-      if (isReadOnly(row, col)) {
+      if (roCell(row, col)) {
         edit.cancelEdit();
         return;
       }
@@ -254,7 +262,7 @@ export function SpreadsheetGrid<T>(props: SpreadsheetGridProps<T>) {
         if (n) sel.moveFocus(n);
       }
     },
-    [colIds, columns, commit, dataIdOrder, displayFlat, edit, isCellEditable, onBulkEdit, rows, sel]
+    [colIds, columns, commit, dataIdOrder, displayFlat, edit, isCellEditable, onBulkEdit, roCell, rows, sel]
   );
 
   const onKeyDown = useCallback(
@@ -296,7 +304,7 @@ export function SpreadsheetGrid<T>(props: SpreadsheetGridProps<T>) {
         e.preventDefault();
         const row = rows.find(r => r.id === sel.focus!.rowId);
         const col = columns.find(c => c.id === sel.focus!.columnId);
-        if (row && col && !isReadOnly(row, col)) {
+        if (row && col && !roCell(row, col)) {
           const v = getCellRaw(row, col);
           edit.enterEdit(valueToEditString(v, col.type), { bulk: false });
         }
@@ -306,7 +314,7 @@ export function SpreadsheetGrid<T>(props: SpreadsheetGridProps<T>) {
         e.preventDefault();
         const row = rows.find(r => r.id === sel.focus!.rowId);
         const col = columns.find(c => c.id === sel.focus!.columnId);
-        if (row && col && !isReadOnly(row, col)) {
+        if (row && col && !roCell(row, col)) {
           const v = getCellRaw(row, col);
           edit.enterEdit(valueToEditString(v, col.type), { bulk: false });
         }
@@ -331,7 +339,7 @@ export function SpreadsheetGrid<T>(props: SpreadsheetGridProps<T>) {
         }
         const row = rows.find(r => r.id === sel.focus?.rowId);
         const col = columns.find(c => c.id === sel.focus?.columnId);
-        if (row && col && !isReadOnly(row, col)) {
+        if (row && col && !roCell(row, col)) {
           const rids = getRowIdsInRange(
             displayFlat as import('./types').DisplayEntry<T>[],
             sel.range.startRowId,
@@ -354,7 +362,7 @@ export function SpreadsheetGrid<T>(props: SpreadsheetGridProps<T>) {
         }
       }
     },
-    [colIds, columns, dataIdOrder, displayFlat, edit, finishEdit, isCellEditable, onRowOpen, rows, sel]
+    [colIds, columns, dataIdOrder, displayFlat, edit, finishEdit, isCellEditable, onRowOpen, roCell, rows, sel]
   );
 
   const onCellDown = (rowId: string, colId: string, e: React.MouseEvent, sh: boolean) => {
@@ -517,7 +525,7 @@ export function SpreadsheetGrid<T>(props: SpreadsheetGridProps<T>) {
                   }}
                   onCellMouseDown={onCellDown}
                   onCellMouseEnter={onCellEnter}
-                  readOnly={(r, c) => isReadOnly(r, c)}
+                  readOnly={(r, c) => roCell(r, c)}
                   readOnlyHint={r => (r.computed ? 'Derived' : 'Read-only')}
                   error={(a, c) => cellErr[keyCell(a, c)]}
                   showBulkHint={showBulkHint}
@@ -568,7 +576,7 @@ export function SpreadsheetGrid<T>(props: SpreadsheetGridProps<T>) {
                     }}
                     onCellMouseDown={onCellDown}
                     onCellMouseEnter={onCellEnter}
-                    readOnly={(r, c) => isReadOnly(r, c)}
+                    readOnly={(r, c) => roCell(r, c)}
                     readOnlyHint={r => (r.computed ? 'Derived from source' : undefined)}
                     error={(a, c) => cellErr[keyCell(a, c)]}
                     showBulkHint={showBulkHint}
@@ -609,7 +617,7 @@ export function SpreadsheetGrid<T>(props: SpreadsheetGridProps<T>) {
                   onEditorKey={() => undefined}
                   onCellMouseDown={onCellDown}
                   onCellMouseEnter={onCellEnter}
-                  readOnly={(r, c) => isReadOnly(r, c)}
+                  readOnly={(r, c) => roCell(r, c)}
                   error={() => null}
                   showBulkHint={() => false}
                   entitySearchTourId={entitySearchTourId}

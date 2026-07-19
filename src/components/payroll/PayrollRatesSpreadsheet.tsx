@@ -9,11 +9,12 @@ import { useToast } from '@/components/ui/Toast';
 import type { PersonnelRate } from '@/types';
 import { cn } from '@/lib/utils';
 import { countDayStatuses } from '@/lib/payroll/fees';
-import type { RateTypeMeta } from '@/lib/payroll/rateLines';
+import { type RateTypeMeta, isTypeRelevant } from '@/lib/payroll/rateLines';
 import { amountOf, personTotals, type LineAmountMap } from './rateLinesClient';
 
-/** Per-person day counts, aggregated from payroll_entries. */
-type PersonTotals = { show: number; offTravel: number; rehearsal: number; active: number };
+/** Per-person day counts, aggregated from payroll_entries. `weeks` feeds the
+ *  per_week basis (Weekly rate type) — dropping it renders a weekly fee as 0. */
+type PersonTotals = { show: number; offTravel: number; rehearsal: number; active: number; weeks: number };
 
 const PT_OPTIONS = [
   { value: 'principal', label: 'Principal / Mgmt' },
@@ -24,7 +25,13 @@ const PT_OPTIONS = [
 const RT_OPTIONS = [
   { value: 'day_rate', label: 'Day rate' },
   { value: 'split_rate', label: 'Split rate' },
+  { value: 'flat_tour', label: 'Flat tour' },
+  { value: 'weekly', label: 'Weekly' },
+  { value: 'per_diem_only', label: 'Per diem only' },
 ];
+
+/** A person's rate_type, normalised (default = split). */
+const rateTypeOf = (r: PersonnelRate): string => String(r.rate_type ?? 'split_rate');
 
 const SECTION_ORDER = ['principal', 'band', 'crew', 'other'] as const;
 type GroupKey = (typeof SECTION_ORDER)[number];
@@ -72,7 +79,11 @@ function buildRateTypeColumns(rateTypes: RateTypeMeta[], amountMap: LineAmountMa
   return ordered.map((t) => ({
     id: rtColId(t.id),
     header: t.name,
-    accessor: (r: PersonnelRate) => amountOf(amountMap, r.id, t.id),
+    // Rate-type-driven rendering (G2-1): a cell whose type doesn't apply to the
+    // person's rate_type shows BLANK (null → '') instead of £0.00 noise, and is
+    // locked (see cellReadOnly below). A day-rate person shows only their Day
+    // rate + Per diem; a flat person only Flat tour + Per diem; etc.
+    accessor: (r: PersonnelRate) => (isTypeRelevant(rateTypeOf(r), t.id) ? amountOf(amountMap, r.id, t.id) : null),
     type: { kind: 'currency', currency: ccy, decimals: 2 },
     align: 'right',
     width: 112,
@@ -88,7 +99,7 @@ function buildTotalsColumns(
 ): GridColumn<PersonnelRate>[] {
   const ccy = currency.trim().toUpperCase() || 'GBP';
   const money = new Intl.NumberFormat('en-GB', { style: 'currency', currency: ccy, minimumFractionDigits: 0 });
-  const countsOf = (id: string): PersonTotals => countsByPerson.get(id) ?? { show: 0, offTravel: 0, rehearsal: 0, active: 0 };
+  const countsOf = (id: string): PersonTotals => countsByPerson.get(id) ?? { show: 0, offTravel: 0, rehearsal: 0, active: 0, weeks: 0 };
   return [
     { id: 'show_days', header: 'Show days', accessor: (r) => countsOf(r.id).show, align: 'right', width: 90, type: { kind: 'computed', render: (r) => String(countsOf((r as PersonnelRate).id).show || '—') } },
     { id: 'off_days', header: 'Off/Travel', accessor: (r) => countsOf(r.id).offTravel, align: 'right', width: 96, type: { kind: 'computed', render: (r) => String(countsOf((r as PersonnelRate).id).offTravel || '—') } },
@@ -129,8 +140,9 @@ export function PayrollRatesSpreadsheet({
     for (const e of payrollEntries ?? []) {
       const pid = e.personnel_id as string;
       const c = countDayStatuses((e.day_statuses as Record<string, string>) ?? {});
-      const acc = m.get(pid) ?? { show: 0, offTravel: 0, rehearsal: 0, active: 0 };
+      const acc = m.get(pid) ?? { show: 0, offTravel: 0, rehearsal: 0, active: 0, weeks: 0 };
       acc.show += c.show; acc.offTravel += c.offTravel; acc.rehearsal += c.rehearsal; acc.active += c.active;
+      acc.weeks += c.weeks ?? 0;
       m.set(pid, acc);
     }
     return m;
@@ -234,6 +246,10 @@ export function PayrollRatesSpreadsheet({
         sectionHeaders={sectionHeaders}
         onCommitCell={onCommitCell}
         onRowOpen={onRowOpen}
+        cellReadOnly={(row, col) => {
+          const typeId = rtColTypeId(col.id);
+          return typeId ? !isTypeRelevant(rateTypeOf(row.data), typeId) : false;
+        }}
         ariaLabel="Personnel rate cards"
         columnWidthsKey="lp-cols-payroll"
       />

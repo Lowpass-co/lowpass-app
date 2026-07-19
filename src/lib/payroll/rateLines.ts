@@ -60,6 +60,43 @@ export const DEFAULT_RATE_TYPES: RateTypeMeta[] = [
   { id: DEFAULT_RATE_TYPE_IDS.weekly, name: 'Weekly', bucket: 'fee', basis: 'per_week', dayStatuses: [], orderIndex: 7 },
 ];
 
+/** The FEE universe — the mutually-exclusive fee slices across every rate_type.
+ *  A person owns exactly one slice (see ownedFeeTypeIds); every OTHER slice must
+ *  not exist for them or computeTotals double-counts. Per diem (a4) + advance
+ *  (a5) are NOT here — they are universal (carried by every rate_type). */
+export const FEE_UNIVERSE_IDS: string[] = [
+  DEFAULT_RATE_TYPE_IDS.show,
+  DEFAULT_RATE_TYPE_IDS.offTravel,
+  DEFAULT_RATE_TYPE_IDS.rehearsal,
+  DEFAULT_RATE_TYPE_IDS.dayRate,
+  DEFAULT_RATE_TYPE_IDS.flatTour,
+  DEFAULT_RATE_TYPE_IDS.weekly,
+];
+
+/** The fee rate-type ids a person of this `rate_type` OWNS. THE single source of
+ *  truth for which fee fields a rate type carries — writeRates emits/keeps exactly
+ *  these, and the Rates grid shows/edits exactly these (blanks + locks the rest,
+ *  killing the "£0.00 in five irrelevant columns" noise). Flat tour / Weekly own
+ *  their grid-entered line (a7/a8); per-diem-only owns no fee. */
+export function ownedFeeTypeIds(rateType: string): string[] {
+  switch (rateType) {
+    case 'day_rate': return [DEFAULT_RATE_TYPE_IDS.dayRate];
+    case 'flat_tour': return [DEFAULT_RATE_TYPE_IDS.flatTour];
+    case 'weekly': return [DEFAULT_RATE_TYPE_IDS.weekly];
+    case 'per_diem_only': return [];
+    case 'split_rate':
+    default: return [DEFAULT_RATE_TYPE_IDS.show, DEFAULT_RATE_TYPE_IDS.offTravel, DEFAULT_RATE_TYPE_IDS.rehearsal];
+  }
+}
+
+/** Is rate type `typeId` relevant to a person on `rateType`? A fee-universe type
+ *  is relevant only if the person owns it; per diem / advance / custom types are
+ *  universal (always shown). Used by the Rates grid to hide/lock irrelevant cells. */
+export function isTypeRelevant(rateType: string, typeId: string): boolean {
+  if (!FEE_UNIVERSE_IDS.includes(typeId)) return true;
+  return ownedFeeTypeIds(rateType).includes(typeId);
+}
+
 /** One personnel_rate_lines row: which type + the amount. */
 export interface RateLineRow {
   rate_type_id: string;

@@ -20,7 +20,7 @@
    ============================================ */
 
 import type { SupabaseClient } from '@supabase/supabase-js';
-import { DEFAULT_RATE_TYPE_IDS } from '@/lib/payroll/rateLines';
+import { DEFAULT_RATE_TYPE_IDS, FEE_UNIVERSE_IDS, ownedFeeTypeIds } from '@/lib/payroll/rateLines';
 
 const num = (v: unknown): number => Number(v) || 0;
 
@@ -160,36 +160,21 @@ export async function writeRates(
   const cid = card.id as string;
   const rateType = String(card.rate_type ?? 'split_rate');
   const RT = DEFAULT_RATE_TYPE_IDS;
-  const FEE_UNIVERSE = [RT.show, RT.offTravel, RT.rehearsal, RT.dayRate, RT.flatTour, RT.weekly];
 
-  // Fee lines writeRates itself sources from the legacy columns (empty for the
-  // grid-owned / per-diem-only types), and the owned slice to preserve.
-  let sourcedFeeLines: Array<{ rate_type_id: string; amount: number }> = [];
-  let keepFeeIds: string[] = [];
-  switch (rateType) {
-    case 'day_rate':
-      sourcedFeeLines = [{ rate_type_id: RT.dayRate, amount: num(card.off_rate) }];
-      keepFeeIds = [RT.dayRate];
-      break;
-    case 'flat_tour':
-      keepFeeIds = [RT.flatTour]; // amount is grid-owned; don't source, don't delete
-      break;
-    case 'weekly':
-      keepFeeIds = [RT.weekly];
-      break;
-    case 'per_diem_only':
-      keepFeeIds = []; // no fee line at all
-      break;
-    case 'split_rate':
-    default:
-      sourcedFeeLines = [
-        { rate_type_id: RT.show, amount: num(card.show_rate) },
-        { rate_type_id: RT.offTravel, amount: num(card.off_rate) },
-        { rate_type_id: RT.rehearsal, amount: num(card.rehearsal_rate) },
-      ];
-      keepFeeIds = [RT.show, RT.offTravel, RT.rehearsal];
-      break;
-  }
+  // The owned fee slice (SSOT: rateLines.ownedFeeTypeIds — shared with the Rates
+  // grid). writeRates can only SOURCE the legacy-column slices (a1/a2/a3 = split,
+  // a6 = day rate from off_rate); Flat tour (a7) / Weekly (a8) are grid-entered,
+  // so they're kept but never fabricated here.
+  const keepFeeIds = ownedFeeTypeIds(rateType);
+  const LEGACY_SOURCE: Partial<Record<string, number>> = {
+    [RT.show]: num(card.show_rate),
+    [RT.offTravel]: num(card.off_rate),
+    [RT.rehearsal]: num(card.rehearsal_rate),
+    [RT.dayRate]: num(card.off_rate),
+  };
+  const sourcedFeeLines = keepFeeIds
+    .filter((id) => LEGACY_SOURCE[id] !== undefined)
+    .map((id) => ({ rate_type_id: id, amount: LEGACY_SOURCE[id]! }));
 
   // Per diem (a4) + advance (a5) are universal — every rate type carries them.
   const lineRows = [
@@ -212,7 +197,7 @@ export async function writeRates(
 
   // Delete every fee line this person does NOT own (stale lines from a prior
   // rate_type would double-count). Per diem / advance are never in this set.
-  const staleFeeIds = FEE_UNIVERSE.filter((id) => !keepFeeIds.includes(id));
+  const staleFeeIds = FEE_UNIVERSE_IDS.filter((id) => !keepFeeIds.includes(id));
   if (staleFeeIds.length > 0) {
     await supabase
       .from('personnel_rate_lines')

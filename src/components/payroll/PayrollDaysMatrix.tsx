@@ -47,6 +47,18 @@ const RATE_TYPE_LABEL: Record<string, string> = {
   per_diem_only: 'Per diem only',
 };
 
+/** Rate types whose FEE moves with painted days (split by day-status, or flat per
+ *  active day). For everything else — Flat tour (fixed), Weekly (per week), Per
+ *  diem only (no fee) — painting days does NOT scale the fee, so worked cells
+ *  render dimmed, the day count is marked (18*), and a row note explains why. */
+const FEE_MOVES_WITH_DAYS = new Set(['split_rate', 'day_rate']);
+const isFlatFee = (rateType: string) => !FEE_MOVES_WITH_DAYS.has(rateType);
+const FLAT_NOTE: Record<string, string> = {
+  flat_tour: 'days don’t change the flat fee — per diem still counts',
+  weekly: 'days set the week count — per diem still counts',
+  per_diem_only: 'per diem only — no daily fee',
+};
+
 // The left block carries identity + numbers (name / role · type, day counts,
 // total) so the summary is always visible while painting — no separate table.
 const PERSON_W = 256;
@@ -348,12 +360,16 @@ export function PayrollDaysMatrix({
             </tr>
           </thead>
           <tbody>
-            {people.map((p, r) => (
+            {people.map((p, r) => {
+              const rowFlat = isFlatFee(rateTypeById.get(p.id) ?? 'day_rate');
+              return (
               <tr key={p.id}>
                 <td style={{ position: 'sticky', left: 0, zIndex: 2, width: PERSON_W, minWidth: PERSON_W, background: 'var(--lp-surface)', padding: '5px 10px', borderBottom: '1px solid var(--lp-border-subtle)', borderRight: '1px solid var(--lp-border-strong)' }}>
                   {(() => {
                     const s = statsFor(p.id);
-                    const rt = RATE_TYPE_LABEL[rateTypeById.get(p.id) ?? 'day_rate'] ?? 'Day rate';
+                    const rtKey = rateTypeById.get(p.id) ?? 'day_rate';
+                    const rt = RATE_TYPE_LABEL[rtKey] ?? 'Day rate';
+                    const flat = isFlatFee(rtKey);
                     const countBits = [
                       s.counts.show ? `${s.counts.show} S` : null,
                       s.counts.offTravel ? `${s.counts.offTravel} O` : null,
@@ -369,7 +385,13 @@ export function PayrollDaysMatrix({
                           </div>
                           <div style={{ fontSize: 10.5, color: 'var(--lp-text-tertiary)', fontFamily: 'var(--lp-font-numeric)', whiteSpace: 'nowrap' }}>
                             {countBits || '—'}
+                            {flat && countBits ? <span style={{ color: 'var(--lp-orange)', fontWeight: 700 }} title={FLAT_NOTE[rtKey]}>{' *'}</span> : null}
                           </div>
+                          {flat ? (
+                            <div style={{ fontSize: 9.5, fontStyle: 'italic', color: 'var(--lp-text-tertiary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {FLAT_NOTE[rtKey]}
+                            </div>
+                          ) : null}
                         </div>
                         <div style={{ fontFamily: 'var(--lp-font-numeric)', fontWeight: 700, fontSize: 12.5, color: 'var(--lp-text)', whiteSpace: 'nowrap' }}>
                           {money.format(s.fee + s.pd)}
@@ -396,8 +418,14 @@ export function PayrollDaysMatrix({
                         borderLeft: weekStartDates.has(d.date) ? '2px solid color-mix(in srgb, var(--lp-orange) 40%, transparent)' : '1px solid var(--lp-border-subtle)',
                         background: inPreview
                           ? 'color-mix(in srgb, var(--lp-orange) 24%, transparent)'
-                          : (STATUS_TINT[status] ?? 'transparent'),
-                        color: STATUS_FG[status] ?? 'var(--lp-text-tertiary)',
+                          // Flat-fee rows: worked cells render dimmed/neutral (days
+                          // don't scale the fee), so the matrix reads as "assigned
+                          // but not pay-driving". Per diem still counts.
+                          : rowFlat
+                            ? (STATUS_ABBR[status] ? 'color-mix(in srgb, var(--lp-text-tertiary) 10%, transparent)' : 'transparent')
+                            : (STATUS_TINT[status] ?? 'transparent'),
+                        color: rowFlat ? 'var(--lp-text-tertiary)' : (STATUS_FG[status] ?? 'var(--lp-text-tertiary)'),
+                        opacity: rowFlat && STATUS_ABBR[status] ? 0.7 : 1,
                         fontSize: 10, fontWeight: 700,
                         boxShadow: isCursor ? 'inset 0 0 0 2px var(--lp-orange)' : undefined,
                       }}
@@ -407,7 +435,8 @@ export function PayrollDaysMatrix({
                   );
                 })}
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
