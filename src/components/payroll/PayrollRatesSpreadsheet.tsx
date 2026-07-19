@@ -119,6 +119,7 @@ export function PayrollRatesSpreadsheet({
   rateTypes,
   amountMap,
   onRateLineCommit,
+  highlightRowId,
 }: {
   currency: string;
   initialRates: PersonnelRate[];
@@ -128,6 +129,8 @@ export function PayrollRatesSpreadsheet({
   amountMap: LineAmountMap;
   /** Persist one cell edit (person × type). Returns after the PATCH resolves. */
   onRateLineCommit: (personnelRateId: string, rateTypeId: string, amount: number) => Promise<void>;
+  /** PAY-09 deep-link — the rate card to flash on landing (Personnel → ?focus). */
+  highlightRowId?: string | null;
 }) {
   const { showToast } = useToast();
   const [rates, setRates] = useState<PersonnelRate[]>(initialRates);
@@ -252,6 +255,7 @@ export function PayrollRatesSpreadsheet({
         }}
         ariaLabel="Personnel rate cards"
         columnWidthsKey="lp-cols-payroll"
+        highlightRowId={highlightRowId}
       />
       {personOpen ? <PersonSlideOver id={personOpen} onClose={() => setPersonOpen(null)} /> : null}
     </div>

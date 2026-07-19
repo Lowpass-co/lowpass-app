@@ -63,6 +63,7 @@ export function SpreadsheetGrid<T>(props: SpreadsheetGridProps<T>) {
     entitySearchTourId,
     columnWidthsKey,
     cellReadOnly,
+    highlightRowId,
   } = props;
 
   // Grid system Phase 1 — density comes from the one app-wide preference
@@ -414,6 +415,18 @@ export function SpreadsheetGrid<T>(props: SpreadsheetGridProps<T>) {
     announce(sel.range);
   }, [sel.range]);
 
+  // Deep-link focus (PAY-09) — when the caller sets highlightRowId, scroll that
+  // row into view. The orange ring itself is CSS (.lp-grid-row-focus). Guarded:
+  // no-op when unset, and if the row isn't mounted (virtualised out) the query
+  // simply misses and nothing scrolls.
+  useEffect(() => {
+    if (!highlightRowId) return;
+    const root = scrollRef.current;
+    if (!root) return;
+    const el = root.querySelector(`[data-grid-row-id="${CSS.escape(highlightRowId)}"]`);
+    el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+  }, [highlightRowId, scrollRef]);
+
   return (
     <div
       className="relative mx-auto flex min-h-0 w-full flex-1 flex-col overflow-hidden rounded-xl"
@@ -509,6 +522,7 @@ export function SpreadsheetGrid<T>(props: SpreadsheetGridProps<T>) {
                 <GridDataRow
                   key={tr.id}
                   row={tr}
+                  highlighted={!!highlightRowId && tr.id === highlightRowId}
                   rowIndex1={1}
                   columns={columns}
                   columnWidths={columnWidths}
@@ -560,6 +574,7 @@ export function SpreadsheetGrid<T>(props: SpreadsheetGridProps<T>) {
                   <GridDataRow
                     key={en.row.id}
                     row={en.row}
+                    highlighted={!!highlightRowId && en.row.id === highlightRowId}
                     rowIndex1={rIdx + 1 + top.length}
                     columns={columns}
                     columnWidths={columnWidths}
@@ -603,6 +618,7 @@ export function SpreadsheetGrid<T>(props: SpreadsheetGridProps<T>) {
                 <GridDataRow
                   key={tr.id}
                   row={tr}
+                  highlighted={!!highlightRowId && tr.id === highlightRowId}
                   rowIndex1={displayFlat.length + top.length + 1}
                   columns={columns}
                   columnWidths={columnWidths}

@@ -1659,3 +1659,30 @@ textarea::selection,
 .lp-stagger-item {
   animation: lp-stagger-in var(--lp-dur-base) var(--lp-ease-out) both;
 }
+
+/* ============================================================
+   Deep-link row focus (PAY-09) — a <SpreadsheetGrid> row whose id matches the
+   caller's highlightRowId gets a 2px orange inset ring, matching the days-matrix
+   cursor treatment. Painted per-cell via box-shadow so it survives the frozen
+   column's own opaque background; the caller clears the class after ~2s and the
+   transition fades it out. Ring edges: every cell gets top+bottom; the first
+   and last cells add the left / right edge to close the box.
+   ============================================================ */
+.lp-grid-row-focus > td {
+  box-shadow:
+    inset 0 2px 0 0 var(--color-lp-orange),
+    inset 0 -2px 0 0 var(--color-lp-orange);
+  transition: box-shadow var(--lp-dur-base, 200ms) var(--lp-ease-out, ease-out);
+}
+.lp-grid-row-focus > td:first-child {
+  box-shadow:
+    inset 0 2px 0 0 var(--color-lp-orange),
+    inset 0 -2px 0 0 var(--color-lp-orange),
+    inset 2px 0 0 0 var(--color-lp-orange);
+}
+.lp-grid-row-focus > td:last-child {
+  box-shadow:
+    inset 0 2px 0 0 var(--color-lp-orange),
+    inset 0 -2px 0 0 var(--color-lp-orange),
+    inset -2px 0 0 0 var(--color-lp-orange);
+}

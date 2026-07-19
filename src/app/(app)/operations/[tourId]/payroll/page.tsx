@@ -12,8 +12,16 @@ import { PayrollView } from '@/components/payroll/PayrollView';
 
 export const dynamic = 'force-dynamic';
 
-export default async function OperationsTourPayrollPage({ params }: { params: Promise<{ tourId: string }> }) {
+export default async function OperationsTourPayrollPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ tourId: string }>;
+  searchParams: Promise<{ focus?: string }>;
+}) {
   const { tourId } = await params;
+  // PAY-09 — deep-link focus (Personnel rate click → ?focus=<personnel_rates.id>).
+  const { focus: focusRateId } = await searchParams;
   const supabase = await createServerSupabaseClient();
 
   const { data: tour, error: tourError } = await supabase
@@ -169,6 +177,7 @@ export default async function OperationsTourPayrollPage({ params }: { params: Pr
         payrollEntries={payrollEntries}
         rateTypes={rateTypeRows ?? []}
         rateLines={rateLineRows ?? []}
+        focusRateId={focusRateId ?? null}
       />
     </div>
   );

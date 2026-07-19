@@ -15,7 +15,7 @@
    throughout (reconciles to legacy — reconcile.harness.ts).
    ============================================ */
 
-import { useCallback, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import type { PersonnelRate } from '@/types';
 import type { RateBucket, RateBasis, DayStatus } from '@/lib/payroll/fees';
 import type { RateTypeMeta } from '@/lib/payroll/rateLines';
@@ -41,6 +41,9 @@ interface PayrollViewProps {
   rateTypes?: RateTypeRow[];
   /** b2 — every person's rate line amounts for this tour. */
   rateLines?: RateLineRecord[];
+  /** PAY-09 deep-link — personnel_rates.id to focus on landing (Personnel rate
+   *  click → ?focus=). Expands Rates, flashes the row + matrix row, then fades. */
+  focusRateId?: string | null;
 }
 
 function toMeta(r: RateTypeRow): RateTypeMeta {
@@ -64,8 +67,21 @@ export function PayrollView({
   payrollEntries,
   rateTypes = [],
   rateLines = [],
+  focusRateId = null,
 }: PayrollViewProps) {
   const [rates, setRates] = useState<Record<string, unknown>[]>(personnelRates);
+
+  // PAY-09 deep-link — land on Payroll with a person focused (Personnel rate
+  // click). The Rates disclosure opens and both the rate row and the matrix row
+  // flash the orange ring; seeded from the server prop at mount (the page
+  // remounts per navigation), then the effect fades the ring after ~2s.
+  const [ratesOpen, setRatesOpen] = useState<boolean>(!!focusRateId);
+  const [flashKey, setFlashKey] = useState<string | null>(focusRateId);
+  useEffect(() => {
+    if (!focusRateId) return;
+    const t = setTimeout(() => setFlashKey(null), 2200);
+    return () => clearTimeout(t);
+  }, [focusRateId]);
 
   // b2 — the catalog + amounts are the hub's state, shared by all grids.
   const [types, setTypes] = useState<RateTypeMeta[]>(() => rateTypes.map(toMeta).sort(byOrder));
@@ -122,7 +138,12 @@ export function PayrollView({
           collapse to disclosures (Rates is reference while painting; Summary is
           read-only derived data), so opening Payroll shows the matrix ready to
           work with rates/summary one click away. */}
-      <Disclosure label="Rates" hint={`${rates.length} ${rates.length === 1 ? 'person' : 'people'} · click to edit rates & types`}>
+      <Disclosure
+        label="Rates"
+        hint={`${rates.length} ${rates.length === 1 ? 'person' : 'people'} · click to edit rates & types`}
+        open={ratesOpen}
+        onToggle={setRatesOpen}
+      >
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 8 }}>
           <RateTypeToolbar
             tourId={tourId}
@@ -143,6 +164,7 @@ export function PayrollView({
           rateTypes={types}
           amountMap={amountMap}
           onRateLineCommit={onRateLineCommit}
+          highlightRowId={flashKey}
         />
       </Disclosure>
 
@@ -159,6 +181,7 @@ export function PayrollView({
           fillDays={fillDays}
           rateTypes={types}
           amountMap={amountMap}
+          focusRowId={flashKey}
         />
       </section>
 
@@ -168,9 +191,13 @@ export function PayrollView({
 
 /** Collapsed-by-default disclosure — the compact chrome for Rates / Summary so
  *  the Days matrix dominates the page (G2-1b). Native <details> for the toggle. */
-function Disclosure({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
+function Disclosure({ label, hint, children, open, onToggle }: { label: string; hint?: string; children: ReactNode; open?: boolean; onToggle?: (open: boolean) => void }) {
   return (
-    <details style={{ border: '1px solid var(--lp-border)', borderRadius: 'var(--lp-radius-md)', background: 'var(--lp-panel)' }}>
+    <details
+      open={open}
+      onToggle={onToggle ? (e) => onToggle((e.currentTarget as HTMLDetailsElement).open) : undefined}
+      style={{ border: '1px solid var(--lp-border)', borderRadius: 'var(--lp-radius-md)', background: 'var(--lp-panel)' }}
+    >
       <summary
         style={{
           cursor: 'pointer', padding: '8px 12px', display: 'flex', alignItems: 'baseline', gap: 8,

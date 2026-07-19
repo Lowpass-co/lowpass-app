@@ -8,6 +8,9 @@ const DEF_W = 160;
 
 type GridDataRowProps<T> = {
   row: GridRow<T>;
+  /** Transient deep-link focus — draws the orange inset ring (see globals.css
+   *  `.lp-grid-row-focus`). Owned by the caller's fade timer. */
+  highlighted?: boolean;
   rowIndex1: number;
   columns: GridColumn<T>[];
   columnWidths: Record<string, number>;
@@ -34,6 +37,7 @@ type GridDataRowProps<T> = {
 export function GridDataRow<T>(props: GridDataRowProps<T>) {
   const {
     row,
+    highlighted,
     rowIndex1,
     columns,
     columnWidths,
@@ -58,7 +62,8 @@ export function GridDataRow<T>(props: GridDataRowProps<T>) {
   } = props;
   return (
     <tr
-      className={cn('group border-b', rowClassName, row.className)}
+      className={cn('group border-b', highlighted && 'lp-grid-row-focus', rowClassName, row.className)}
+      data-grid-row-id={row.id}
       style={{
         height: `var(--lp-row-${density})`,
         borderColor: 'var(--lp-border-light)',

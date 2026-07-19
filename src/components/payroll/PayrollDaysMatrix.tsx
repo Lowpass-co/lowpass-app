@@ -128,6 +128,7 @@ export function PayrollDaysMatrix({
   fillDays,
   rateTypes,
   amountMap,
+  focusRowId,
 }: {
   routingDates: RoutingDay[];
   personnelRates: Record<string, unknown>[];
@@ -142,6 +143,9 @@ export function PayrollDaysMatrix({
   fillDays: (personnelId: string, pairs: { date: string; status: string }[]) => void | Promise<void>;
   rateTypes: RateTypeMeta[];
   amountMap: LineAmountMap;
+  /** PAY-09 deep-link — the person row (personnel_rates.id) to flash + scroll to
+   *  on landing. Null clears the ring; the caller owns the fade timer. */
+  focusRowId?: string | null;
 }) {
   const people = useMemo(() => personnelRates.map(toPerson), [personnelRates]);
   // Per-person rate_type (for the left-block "· Day rate" label).
@@ -184,6 +188,17 @@ export function PayrollDaysMatrix({
   useEffect(() => { dragRectRef.current = dragRect; }, [dragRect]);
   // Cells the user has hand-edited — for Fill-all untouched-only.
   const touched = useRef<Set<string>>(new Set());
+
+  // PAY-09 deep-link — scroll the focused person's row into view on landing.
+  // The orange ring is inline on that row's cells (isFocusRow below). No-op when
+  // unset or when the row isn't in the DOM.
+  useEffect(() => {
+    if (!focusRowId) return;
+    const root = gridRef.current;
+    if (!root) return;
+    const el = root.querySelector(`[data-matrix-row-id="${CSS.escape(focusRowId)}"]`);
+    el?.scrollIntoView({ block: 'nearest', inline: 'nearest', behavior: 'smooth' });
+  }, [focusRowId]);
 
   const paint = useCallback(
     (personId: string, date: string, mode: 'paint' | 'erase') => {
@@ -385,6 +400,7 @@ export function PayrollDaysMatrix({
           {people.map((p, r) => {
             const rowFlat = isFlatFee(rateTypeById.get(p.id) ?? 'day_rate');
             const rowHover = hover?.r === r;
+            const isFocusRow = !!focusRowId && p.id === focusRowId;
             const leftBg = rowHover ? 'color-mix(in srgb, var(--lp-orange) 6%, var(--lp-surface))' : 'var(--lp-surface)';
             const s = statsFor(p.id);
             const rtKey = rateTypeById.get(p.id) ?? 'day_rate';
@@ -398,7 +414,7 @@ export function PayrollDaysMatrix({
             return (
               <Fragment key={p.id}>
                 {/* Left block (sticky-left). */}
-                <div style={{ position: 'sticky', left: 0, zIndex: 3, minWidth: 0, background: leftBg, padding: '0 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, borderBottom: `1px solid ${HAIRLINE}`, borderRight: `1px solid ${HAIRLINE}`, transition: 'background 120ms ease-out', boxShadow: scrolledX ? '8px 0 16px -8px rgba(0,0,0,0.5)' : undefined }}>
+                <div data-matrix-row-id={p.id} style={{ position: 'sticky', left: 0, zIndex: 3, minWidth: 0, background: leftBg, padding: '0 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, borderBottom: `1px solid ${HAIRLINE}`, borderRight: `1px solid ${HAIRLINE}`, transition: 'background 120ms ease-out, box-shadow 200ms ease-out', boxShadow: [isFocusRow ? 'inset 0 2px 0 0 var(--lp-orange), inset 0 -2px 0 0 var(--lp-orange), inset 2px 0 0 0 var(--lp-orange)' : '', scrolledX ? '8px 0 16px -8px rgba(0,0,0,0.5)' : ''].filter(Boolean).join(', ') || undefined }}>
                   <div style={{ minWidth: 0 }}>
                     <div style={{ fontSize: 15, fontWeight: 500, color: 'var(--lp-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.2 }}>
                       {p.person_name || '—'}
@@ -442,8 +458,12 @@ export function PayrollDaysMatrix({
                         background: rowHover ? 'color-mix(in srgb, var(--lp-orange) 5%, transparent)' : (cellHover ? 'color-mix(in srgb, var(--lp-text) 3%, transparent)' : 'transparent'),
                         borderBottom: `1px solid ${HAIRLINE}`,
                         borderLeft: weekStartDates.has(d.date) ? `1px solid ${WEEK_RULE}` : `1px solid ${HAIRLINE}`,
-                        boxShadow: isCursor ? 'inset 0 0 0 2px var(--lp-orange)' : undefined,
-                        transition: 'background 120ms ease-out',
+                        boxShadow: [
+                          isCursor ? 'inset 0 0 0 2px var(--lp-orange)' : '',
+                          isFocusRow ? 'inset 0 2px 0 0 var(--lp-orange), inset 0 -2px 0 0 var(--lp-orange)' : '',
+                          isFocusRow && c === days.length - 1 ? 'inset -2px 0 0 0 var(--lp-orange)' : '',
+                        ].filter(Boolean).join(', ') || undefined,
+                        transition: 'background 120ms ease-out, box-shadow 200ms ease-out',
                       }}
                     >
                       {/* Painted cells render as inset TILES (3px radius). Empty = none. */}

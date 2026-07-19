@@ -269,6 +269,16 @@ inputs anywhere. Every rate/per-diem value is a link: clicking routes to
 Payroll). Rate/type/per-diem read the rates SSOT (personnel_rate_lines), not the
 legacy `tour_personnel` columns. **Needs-live**.
 
+#### PAY-09b — Payroll consumes ?focus= (deep-link landing)
+**Do**: From Personnel, click a rate value (or open
+`/operations/[tourId]/payroll?focus=<personnel_rates.id>` directly).
+**Expect**: on landing, the **Rates** disclosure is already expanded (not
+collapsed); the focused person's **rate row** scrolls into view with a **2px
+orange inset ring** (the same ring as the days-matrix cursor), and the **matrix
+row** for the same person also carries the ring + scrolls into view. The ring
+holds ~2s then fades. With no `?focus=` (or an id not on this tour) nothing
+flashes and Rates stays collapsed as normal. **Needs-live**.
+
 #### PAY-10 — Days-matrix drag fills a RECTANGLE (G2-1b)
 **Do**: In the days matrix, press on a cell and drag to another cell (any direction),
 then release.

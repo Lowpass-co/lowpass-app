@@ -83,6 +83,10 @@ export type SpreadsheetGridProps<T> = {
   /** localStorage key to persist per-column widths (e.g. per-tour). When
    *  omitted, column resizing is ephemeral (resets on remount). */
   columnWidthsKey?: string | null;
+  /** Transient focus highlight — the row whose id matches gets an orange inset
+   *  ring (deep-link landing, e.g. Payroll ?focus=). Null clears it. The caller
+   *  owns the fade timer (pass null after the flash window). */
+  highlightRowId?: string | null;
 };
 
 export type CellCoord = { rowId: string; columnId: string };
