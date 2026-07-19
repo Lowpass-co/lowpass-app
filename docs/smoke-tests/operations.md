@@ -258,12 +258,16 @@ the SHOW rate; the override drives pay through the ONE path (day_statuses). Fill
 warns with the hand-edited count and offers "Fill only untouched" (default) /
 "Overwrite everything". Money gate: reconcile.harness override gate green. **Needs-live**.
 
-#### PAY-09 — Personnel is a read-only rate mirror (G2-1)
-**Do**: Open `/operations/[tourId]/personnel`; click a **Rate** value.
-**Expect**: the page LOADS (no "Loading personnel…" hang — the ops layout no longer
-blocks on a live Spotify fetch); the Rate column is display-only; clicking a rate
-routes to `/operations/[tourId]/payroll?focus=<cardId>` (edit lives only in Payroll).
-No rate-edit form exists outside Payroll. **Needs-live**.
+#### PAY-09 — Personnel is a read-only rate mirror (G2-1 → PAY-09 slice)
+**Do**: Open `/operations/[tourId]/personnel` as a manager; find the **Rates**
+section below the roster list; click any **Rate** or **Per diem** value.
+**Expect**: the page LOADS (no "Loading personnel…" hang). A read-only **Rates**
+grid mirrors the Payroll rates summary grammar — columns **Name · Role · Type ·
+Rate · Per diem**, values in mono, labelled "Read-only · edit in Payroll ↗". No
+inputs anywhere. Every rate/per-diem value is a link: clicking routes to
+`/operations/[tourId]/payroll?focus=<personnel_rates.id>` (edit lives ONLY in
+Payroll). Rate/type/per-diem read the rates SSOT (personnel_rate_lines), not the
+legacy `tour_personnel` columns. **Needs-live**.
 
 #### PAY-10 — Days-matrix drag fills a RECTANGLE (G2-1b)
 **Do**: In the days matrix, press on a cell and drag to another cell (any direction),

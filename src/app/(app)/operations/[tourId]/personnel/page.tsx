@@ -22,6 +22,12 @@ import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { PersonnelManagerClient } from '@/components/operations/personnel/PersonnelManagerClient';
 import { CrewMyScheduleClient } from '@/components/operations/personnel/CrewMyScheduleClient';
 import {
+  PersonnelRatesMirror,
+  type RateMirrorRow,
+} from '@/components/operations/personnel/PersonnelRatesMirror';
+import { loadTourRateContext, rateAmountsFor } from '@/lib/payroll/loadRateLines';
+import type { PersonnelRate } from '@/types';
+import {
   getActiveMembership,
   fetchActiveGrants,
   canAccess,
@@ -77,16 +83,53 @@ export default async function OperationsTourPersonnelPage({
 
   const { data: tour } = await supabase
     .from('tours')
-    .select('id, name, start_date, end_date')
+    .select('id, name, currency, start_date, end_date')
     .eq('id', tourId)
     .maybeSingle();
   if (!tour) notFound();
   const tourRow = tour as {
     id: string;
     name: string;
+    currency: string | null;
     start_date: string | null;
     end_date: string | null;
   };
+
+  // PAY-09 — read-only rates mirror (name/role/type/rate/per-diem). Sourced
+  // from the rates SSOT (personnel_rate_lines via rateAmountsFor), loaded here
+  // only for the manager surface so the crew / no-access branches don't pay for
+  // the query. Every value links back to Payroll — the one write surface.
+  let rateMirror: RateMirrorRow[] = [];
+  if (canManagerView) {
+    const { data: rateRows } = await supabase
+      .from('personnel_rates')
+      .select('id, person_name, role, rate_type, order_index')
+      .eq('tour_id', tourId)
+      .eq('workspace_id', membership.workspace_id)
+      .order('order_index', { ascending: true });
+    if (rateRows && rateRows.length > 0) {
+      const rateCtx = await loadTourRateContext(
+        supabase,
+        tourId,
+        membership.workspace_id,
+      );
+      rateMirror = (rateRows as Array<
+        Pick<PersonnelRate, 'id' | 'person_name' | 'role' | 'rate_type'>
+      >).map((r) => {
+        const a = rateAmountsFor(rateCtx, r.id);
+        return {
+          id: r.id,
+          person_name: r.person_name,
+          role: r.role,
+          rate_type: r.rate_type,
+          // Primary daily fee: day-rate card → its flat day amount (off), else
+          // the split Show rate — mirrors TourPersonnelClient's Rate column.
+          rate: r.rate_type === 'day_rate' ? a.offRate : a.showRate,
+          perDiem: a.perDiem,
+        };
+      });
+    }
+  }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minHeight: 0 }}>
@@ -105,6 +148,8 @@ export default async function OperationsTourPersonnelPage({
             tourStartDate={tourRow.start_date}
             tourEndDate={tourRow.end_date}
             conflictsOnly={conflictsOnly}
+            currency={tourRow.currency ?? 'GBP'}
+            rateMirror={rateMirror}
           />
         ) : canCrewView ? (
           <CrewMyScheduleClient tourId={tourId} />
@@ -121,11 +166,15 @@ function ManagerSurface({
   tourStartDate,
   tourEndDate,
   conflictsOnly,
+  currency,
+  rateMirror,
 }: {
   tourId: string;
   tourStartDate: string | null;
   tourEndDate: string | null;
   conflictsOnly: boolean;
+  currency: string;
+  rateMirror: RateMirrorRow[];
 }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--lp-space-3)' }}>
@@ -147,6 +196,8 @@ function ManagerSurface({
         tourEndDate={tourEndDate}
         conflictsOnly={conflictsOnly}
       />
+      {/* PAY-09 — read-only rates mirror; the ONE write surface is Payroll. */}
+      <PersonnelRatesMirror tourId={tourId} currency={currency} rows={rateMirror} />
     </div>
   );
 }
