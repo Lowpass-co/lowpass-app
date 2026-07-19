@@ -10,6 +10,7 @@
 import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useToast } from '@/components/ui/Toast';
+import { focusAdjacentCell } from '@/lib/keyboard/cellNav';
 
 export interface VenuePlaceResult {
   /** Google Place ID — the cross-tenant canonical-venue dedupe key. */
@@ -69,6 +70,7 @@ export function VenueAutocomplete({
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLUListElement>(null);
   const abortRef = useRef<AbortController | null>(null);
   // Sprint 8.5 §3 — set true while a click-pick is in flight so
@@ -93,7 +95,9 @@ export function VenueAutocomplete({
   // 'library' mode renders [libraryMatches…, "Create new"]; 'places' mode renders
   // the Google suggestions. totalItems drives highlight bounds + open-gating.
   const totalItems = mode === 'library' ? libraryMatches.length + 1 : suggestions.length;
-  const hasDropdown = open && totalItems > 0;
+  // Show the popup while a search is in flight too, so a quiet "Searching…" row
+  // renders instead of jumping straight to "create new" (CC_ROUTING_KEYBOARD).
+  const hasDropdown = open && query.trim().length >= 1 && (loading || totalItems > 0);
 
   useEffect(() => {
     setHighlightedIndex((i) => (totalItems ? Math.min(i, totalItems - 1) : 0));
@@ -127,6 +131,9 @@ export function VenueAutocomplete({
     debounceRef.current = setTimeout(() => {
       setLoading(true);
       const fromUser = queryFromUserRef.current;
+      // Open immediately so the "Searching…" row shows while results load — the
+      // create-new row must never lead before results have a chance to return.
+      if (fromUser) setOpen(true);
       // Library-first: type-to-search the venue library (cheap, NO Places billing).
       // The Google Places path is invoked ONLY from the "Create new" row below.
       fetch(`/api/venues/canonical/search?q=${encodeURIComponent(query)}`)
@@ -349,6 +356,7 @@ export function VenueAutocomplete({
   return (
     <div ref={containerRef} className={`relative ${className ?? ''}`}>
       <input
+        ref={inputRef}
         type="text"
         value={query}
         onChange={(e) => {
@@ -376,6 +384,31 @@ export function VenueAutocomplete({
           }
         }}
         onKeyDown={(e) => {
+          // CC_ROUTING_KEYBOARD — TAB must ALWAYS exit the cell and move on.
+          // If a real result is highlighted, commit it (sets the canonical FK);
+          // otherwise commit the raw typed text as a free-text venue (FK null,
+          // supported per CC_VENUE_SSOT). Never trap focus here.
+          if (e.key === 'Tab') {
+            const dir: 1 | -1 = e.shiftKey ? -1 : 1;
+            if (open && mode === 'library' && libraryMatches.length > 0 && highlightedIndex < libraryMatches.length) {
+              e.preventDefault();
+              handleLibrarySelect(libraryMatches[highlightedIndex]);
+              focusAdjacentCell(inputRef.current, dir);
+              return;
+            }
+            if (open && mode === 'places' && suggestions[highlightedIndex]) {
+              e.preventDefault();
+              const s = suggestions[highlightedIndex];
+              void handleSelect(s.placeId, s.text);
+              focusAdjacentCell(inputRef.current, dir);
+              return;
+            }
+            // Nothing real highlighted (create-new row, or no results): commit the
+            // free text and let native Tab move to the next cell.
+            if (query !== value) onChange(query);
+            setOpen(false);
+            return;
+          }
           if (!open || totalItems === 0) return;
           if (e.key === 'ArrowDown') {
             e.preventDefault();
@@ -393,21 +426,12 @@ export function VenueAutocomplete({
             return;
           }
           if (e.key === 'Escape') {
-            // G1-C keyboard contract — Esc exits the dropdown (does NOT commit),
-            // keeping focus on the input so Tab resumes from the expected place.
+            // Esc reverts the cell to its previous value + keeps focus.
             e.preventDefault();
+            setQuery(value);
             setOpen(false);
             return;
           }
-          // Sprint 8.3 §2 — Tab no longer auto-picks the highlighted
-          // suggestion. Adam's smoke against 8.2 §4d: editing the
-          // location post-pick and tabbing away overwrote the address
-          // because Tab was interpreted as "confirm the highlighted
-          // suggestion" (highlightedIndex defaults to 0 — the first
-          // result). Common autocomplete UX: only Enter or click
-          // commits a pick. Tab now blurs normally; the onBlur sync
-          // (8.2 §4d) writes the typed venue_name without touching
-          // the address column.
         }}
         onFocus={() => {
           if (query.length >= 1) {
@@ -442,6 +466,7 @@ export function VenueAutocomplete({
         createPortal(
           <ul
             ref={listRefCallback}
+            data-lp-dropdown
             role="listbox"
             className="lp-dropdown-layer fixed max-h-52 overflow-y-auto rounded-xl border border-lp-border bg-lp-surface py-1 shadow-lg"
             style={{ top: dropdownRect.top, left: dropdownRect.left, width: dropdownRect.width, minWidth: 240 }}
@@ -467,20 +492,28 @@ export function VenueAutocomplete({
                     </li>
                   );
                 })}
-                {/* Create-new — the ONLY entry into the Google Places path. */}
-                <li role="option" aria-selected={highlightedIndex === libraryMatches.length}>
-                  <button
-                    type="button"
-                    onMouseDown={(e) => e.preventDefault()}
-                    onClick={handleCreateNew}
-                    onMouseEnter={() => setHighlightedIndex(libraryMatches.length)}
-                    className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-lp-text-secondary hover:bg-lp-surface-hover ${highlightedIndex === libraryMatches.length ? 'bg-lp-surface-hover' : ''}`}
-                    style={{ borderTop: libraryMatches.length ? '1px solid var(--lp-border)' : undefined }}
-                  >
-                    <span aria-hidden>＋</span>
-                    <span>Create <span className="font-medium text-lp-text">“{query.trim()}”</span> as a new venue</span>
-                  </button>
-                </li>
+                {/* While the search is in flight, a quiet "Searching…" row holds
+                    the last slot so create-new never leads before results land. */}
+                {loading ? (
+                  <li className="flex items-center gap-2 px-3 py-2 text-sm text-lp-text-tertiary" style={{ borderTop: libraryMatches.length ? '1px solid var(--lp-border)' : undefined }}>
+                    Searching…
+                  </li>
+                ) : (
+                  /* Create-new — the ONLY entry into the Google Places path; always LAST. */
+                  <li role="option" aria-selected={highlightedIndex === libraryMatches.length}>
+                    <button
+                      type="button"
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={handleCreateNew}
+                      onMouseEnter={() => setHighlightedIndex(libraryMatches.length)}
+                      className={`flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-lp-text-secondary hover:bg-lp-surface-hover ${highlightedIndex === libraryMatches.length ? 'bg-lp-surface-hover' : ''}`}
+                      style={{ borderTop: libraryMatches.length ? '1px solid var(--lp-border)' : undefined }}
+                    >
+                      <span aria-hidden>＋</span>
+                      <span>Create <span className="font-medium text-lp-text">“{query.trim()}”</span> as a new venue</span>
+                    </button>
+                  </li>
+                )}
               </>
             ) : (
               suggestions.map((s, i) => (

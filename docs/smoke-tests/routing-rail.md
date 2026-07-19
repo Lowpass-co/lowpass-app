@@ -114,3 +114,40 @@ advances on every save. It is now an id-preserving reconcile, so autosave is saf
   is the guard; item 4 landed no code change.
 - **INT-02** (needs-live, UNBLOCKED) Routing→Advance: edit routing → Open Advance
   from the row menu → the edit is saved (flush-before-nav).
+
+## Routing grid keyboard + venue search (CC_ROUTING_KEYBOARD) — 2026-07-19
+
+Adam's no-mouse flow: click a row → ARROWS change day type → TAB → type venue →
+results filter as you type → TAB commits the highlighted result and moves on.
+Root cause of the 3× report: the day-type popup auto-focused its search box (in a
+portal) so TAB cycled the portal's option buttons and never left the cell. Fix:
+day-type ↑/↓ cycle the type IN PLACE (no popup); a shared `focusAdjacentCell`
+(`src/lib/keyboard/cellNav.ts`) guarantees TAB exits from any popup-focused state
+(portals marked `data-lp-dropdown` are skipped as Tab targets).
+
+Verified with a headless keyboard smoke walking the exact sequence (assertions
+pasted in the bank report). All green:
+
+#### KEY-04 — day type ↑/↓ change in place, no popup
+Focus the day-type cell, ArrowDown ×2 → value cycles `'' → show → off` IN PLACE,
+popup stays closed. (measured: value `off`, popupClosed `true`)
+
+#### KEY-05 — TAB leaves the day-type cell
+The next focusable cell after the day-type trigger is the venue input — TAB is
+never consumed by the day-type control. (measured: nextAfterDayType `venue`)
+
+#### KEY-06 — venue: results FIRST, create-new LAST, TAB commits the highlight
+Type "man" → after the debounce the FIRST list item is a venue result
+("Manchester Arena"), the LAST item is "Create new". TAB commits the highlighted
+result (canonical FK set) AND moves to the next cell. (measured: first item
+`result`, last `create-new`, committed FK `v1`, focus → `city`)
+
+#### KEY-07 — venue: free text on TAB (FK null) still moves on
+Type "zzzq" (no library match) → list shows only create-new. TAB commits the raw
+text as a free-text venue (FK null, per CC_VENUE_SSOT) and moves to the next cell.
+(measured: committed name `zzzq`, FK `null`, focus → `city`)
+
+**Shared-behaviour check**: payroll days matrix (arrows + Enter only, no popup),
+channel-list select cells (`MicDiSelectCell` — no Tab handler / focus trap), and
+`SpreadsheetGrid` (Tab = intentional next-editable-cell nav) do NOT swallow Tab.
+Routing was the only offender.

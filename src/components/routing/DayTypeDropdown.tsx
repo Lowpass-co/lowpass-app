@@ -6,6 +6,7 @@ import { ChevronDown } from 'lucide-react';
 import { getDayTypeLabel, getDayTypeColor, parseDayTypes } from '@/lib/utils';
 import type { DayType } from '@/types';
 import { cn } from '@/lib/utils';
+import { focusAdjacentCell } from '@/lib/keyboard/cellNav';
 
 const PRESET_DAY_TYPES: DayType[] = [
   'show',
@@ -41,10 +42,23 @@ export function DayTypeDropdown({
     { top: number; left: number; width: number; flipUp: boolean } | null
   >(null);
   const ref = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
   const selected = parseDayTypes(value);
   const allTypes = [...PRESET_DAY_TYPES, ...customTypes.filter((c) => !PRESET_DAY_TYPES.includes(c as DayType))];
+
+  // CC_ROUTING_KEYBOARD — ↑/↓ on the CLOSED cell change the day type IN PLACE
+  // (cycling the type list, replacing the value with a single type) WITHOUT
+  // opening a popup. This is Adam's core flow: click a row → arrows change the
+  // day type → Tab to the venue. Multi-type stays available via the popup.
+  const cyclePrimary = (dir: 1 | -1) => {
+    if (allTypes.length === 0) return;
+    const primary = selected[0];
+    const at = primary ? allTypes.indexOf(primary) : (dir === 1 ? -1 : 0);
+    const idx = ((at + dir) % allTypes.length + allTypes.length) % allTypes.length;
+    onChange(allTypes[idx]);
+  };
 
   // VIS-TR-06 — type-searchable: filter the type list by label or value.
   const q = query.trim().toLowerCase();
@@ -124,12 +138,22 @@ export function DayTypeDropdown({
   return (
     <div className="relative min-w-[140px]" ref={ref}>
       <button
+        ref={triggerRef}
         type="button"
         onClick={() => setMenu(!open)}
         onKeyDown={(e) => {
-          // VIS-TR-06 — type-ahead: start typing while the (tabbable) cell is
-          // focused to open + seed the search. Enter/Space still open natively.
-          if (!open && e.key.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey) {
+          if (open) return; // arrows/typing handled by the search box while open
+          // ↑/↓ change the day type in place (no popup). Alt+↓ opens the full list.
+          if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+            e.preventDefault();
+            if (e.altKey && e.key === 'ArrowDown') { setMenu(true); return; }
+            cyclePrimary(e.key === 'ArrowDown' ? 1 : -1);
+            return;
+          }
+          // Tab is NEVER swallowed — native Tab moves to the next cell (venue).
+          if (e.key === 'Tab') return;
+          // VIS-TR-06 — type-ahead: start typing to open + seed the search.
+          if (e.key.length === 1 && !e.metaKey && !e.ctrlKey && !e.altKey) {
             e.preventDefault();
             setMenu(true, e.key);
           }
@@ -151,6 +175,7 @@ export function DayTypeDropdown({
         createPortal(
           <div
             ref={dropdownRef}
+            data-lp-dropdown
             // Sprint 8.2 §4 — dropped the inline `z-[70]` Tailwind
             // class. It overrode `lp-dropdown-layer`'s z-index
             // (now 1300) and forced the dropdown behind any
@@ -191,6 +216,16 @@ export function DayTypeDropdown({
                   } else if (e.key === 'Escape') {
                     e.preventDefault();
                     setMenu(false);
+                    triggerRef.current?.focus();
+                  } else if (e.key === 'Tab') {
+                    // Never trap Tab inside the portal: commit the highlighted
+                    // type (if type-searching), close, and move to the adjacent
+                    // cell relative to the trigger (not the portal).
+                    e.preventDefault();
+                    const t = filtered[activeIndex];
+                    if (t && query.trim()) toggle(t);
+                    setMenu(false);
+                    focusAdjacentCell(triggerRef.current, e.shiftKey ? -1 : 1);
                   }
                 }}
                 placeholder="Type to filter…"
