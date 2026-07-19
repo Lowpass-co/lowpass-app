@@ -12,7 +12,11 @@
 
 import { usePathname } from 'next/navigation';
 
-const CREW_SLUGS = ['personnel', 'payroll', 'rooming'];
+// G2-4 — the identity band is the app-wide standard on grouped surfaces. In
+// Operations it shows across BOTH grouped sub-nav clusters: Crew (personnel ·
+// payroll · rooming) and Production (channel-list · stage-plot · riders). Routing
+// (the tour landing) and Files keep their own chrome for now.
+const GROUP_SLUGS = ['personnel', 'payroll', 'rooming', 'channel-list', 'stage-plot', 'riders'];
 
 const STATUS_TONE: Record<string, { fg: string; bg: string }> = {
   on_tour: { fg: 'var(--color-lp-day-show)', bg: 'color-mix(in srgb, var(--color-lp-day-show) 14%, transparent)' },
@@ -43,7 +47,7 @@ export function TourIdentityBand({
     const rest = pathname.slice(prefix.length);
     if (rest.startsWith('/')) slug = rest.slice(1).split('/')[0] ?? '';
   }
-  if (!CREW_SLUGS.includes(slug)) return null; // scoped to the Crew group for now.
+  if (!GROUP_SLUGS.includes(slug)) return null; // Crew + Production grouped surfaces.
 
   const tone = STATUS_TONE[statusKey] ?? STATUS_TONE.planning;
   const initials = (artistName || '?').trim().slice(0, 1).toUpperCase();
