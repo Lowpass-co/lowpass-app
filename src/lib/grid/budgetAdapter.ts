@@ -99,6 +99,12 @@ export function lineToRow(
     // carried for the UI/persistence layer (not rendered as columns):
     _lineId: l.id,
     _derived: derived,
+    // M1-A — provenance chips. Auto = derived (payroll/gear/rooming/… sync);
+    // Manual = hand-entered (source_entity_type NULL). FX-lock where the line
+    // carries a rate frozen at settlement (migration 234). _derivedSource below
+    // feeds the Auto chip's "Synced from …" tooltip.
+    _provenance: derived ? 'auto' : 'manual',
+    _fxLocked: l.locked_fx_rate != null,
     // #14 — per-row provenance surface (Payroll / Per Diem / Rooming / Travel /
     // Gear), so the grid's derived chip labels each line by its real source even
     // in a mixed section (where the section-level `source` is undefined).

@@ -616,6 +616,11 @@ export function BudgetIncomeGrid({
             // read-only derived: sell-through string + the formula-overage reference
             // (recomputed in place on edit via updateRowCells).
             sellpct: actualSellPctStr(r), fovref: formulaOverageRef(r, projCfg),
+            // M1-A — actuals provenance chip: 'settlement' → Auto, 'manual' → Manual,
+            // null → no chip. FX-lock chip when the row's rate froze at settlement.
+            _provenance: r.actuals_source === 'settlement' ? 'auto' : r.actuals_source === 'manual' ? 'manual' : undefined,
+            _provenanceSource: r.actuals_source === 'settlement' ? 'Settlement' : undefined,
+            _fxLocked: r.locked_fx_rate != null,
           };
     });
     return [{ name: 'Shows', kind: 'normal', _uid: 'income', rows: gridRows }];
@@ -793,6 +798,7 @@ export function BudgetIncomeGrid({
             fx={fx}
             onEdit={onEdit}
             headerFor={headerFor}
+            chipCol="venue"
             referenceCols={['idx', 'date', 'daytype', 'venue', 'city']}
             columnPrefsKey={`income-cols:${tourId}`}
             cellOverride={

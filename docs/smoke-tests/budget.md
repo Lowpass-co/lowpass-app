@@ -1888,3 +1888,15 @@ src/lib/budget/actualsProvenance.harness.ts` → "18 checks passed, 0 failed".
   show until show day, then freeze." (Code-verified.)
 - **POL-18 — "never sent".** Rider pack rows show "never sent" instead of "—" when a
   pack has no export; scope chips land via A#9. (Code-verified.)
+
+## M1-A — Money legibility (provenance chips + data-health)
+
+- **MON-01 — Provenance chips (Auto / Manual / FX-lock).** Every row in the Budget
+  **Expenses** grid carries a right-aligned neutral chip (10px caps, NOT orange):
+  `Auto` on derived lines (payroll/gear/rooming sync — `source_entity_type` set),
+  `Manual` on hand-entered lines. Hovering `Auto` names the source ("Synced from
+  Payroll"). A row with a rate frozen at settlement (`locked_fx_rate`) also shows an
+  `FX` lock chip. The **Income** grid (Actual view) shows the same: `Auto` when
+  `actuals_source='settlement'` (tooltip "Synced from Settlement"), `Manual` when
+  hand-entered, plus the `FX` chip on locked rows. `/grid-demo` renders no chips
+  (sets neither `_provenance` nor `_fxLocked`). **Code-verified**; **Needs-live**.

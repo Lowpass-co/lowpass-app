@@ -23,7 +23,7 @@
    ============================================ */
 
 import './grid.css';
-import { cloneElement, forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useReducer, useRef, useState } from 'react';
+import { cloneElement, forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useReducer, useRef, useState, type CSSProperties } from 'react';
 import { createPortal } from 'react-dom';
 import type { Column, Density, GridFx, GridLineApi, GridStatusConfig, GroupBy, Row, Section, Sel, Snapshot } from './types';
 import { colourForDayType, labelForDayType } from '@/lib/routing/dayType';
@@ -75,6 +75,11 @@ interface OverlayHandle {
 export interface GridProps {
   initialData: Section[];
   initialColumns: Column[];
+  /** M1-A — the text column that hosts the per-row provenance chips
+   *  (Auto / Manual / FX-lock). Default 'item' (Budget Expenses); Income passes
+   *  'venue' (its label column). Chips only render when a row carries
+   *  `_provenance` / `_fxLocked`, so /grid-demo (which sets neither) is untouched. */
+  chipCol?: string;
   /** Phase 2 wires the slide-over here; Phase 1 leaves it undefined. */
   onOpenRow?: (si: number, ri: number) => void;
   /** Persistence hook — fires after a cell commit / status / dropdown / check
@@ -245,6 +250,7 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
   clickTwiceToOpen = false,
   tabOpensMenu = false,
   plainEditableMoney = false,
+  chipCol = 'item',
   versionLocked = false,
   versionLockedCols,
   onLockedEdit,
@@ -1940,39 +1946,64 @@ export const Grid = forwardRef<GridHandle, GridProps>(function Grid({
             <span className="ow">Open</span>
           </span>
         ) : null;
-      // VIS-BG-02 — derived rows (budget Payroll/Rooming/… lines) get a lock
-      // glyph + a neutral "↗ from <source>" chip with a tooltip naming the
-      // surface where the edit actually lives. Gated on row._derived, which ONLY
-      // the budget adapter sets → income + /grid-demo rows never render it.
-      const derivedChip =
-        id === 'item' && row._derived ? (
-          <span
-            className="derived-src"
-            title={`Derived from ${(row._derivedSource as string | undefined) ?? sec.source ?? 'its source'} — edit it there`}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 3,
-              marginLeft: 6,
-              padding: '1px 6px',
-              borderRadius: 999,
-              fontSize: 10,
-              color: 'var(--lp-text-tertiary)',
-              background: 'var(--lp-bg-deep)',
-              border: '1px solid var(--lp-border-subtle)',
-              whiteSpace: 'nowrap',
-              verticalAlign: 'middle',
-            }}
-          >
-            <Lock size={9} aria-hidden />
-            ↗ from {(row._derivedSource as string | undefined) ?? sec.source ?? 'source'}
+      // M1-A — per-row provenance chips (Auto / Manual / FX-lock), neutral (10px
+      // caps, NOT orange — orange is act/selected). Rendered on the chip-anchor
+      // column (chipCol; 'item' for Expenses, 'venue' for Income). Gated on
+      // row._provenance / row._fxLocked, which ONLY the budget/income adapters
+      // set → /grid-demo rows (neither) stay untouched. `Auto` keeps the lock
+      // glyph (derived lines still lock their cells via derivedLockPolicy).
+      const CHIP_BASE: CSSProperties = {
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 3,
+        padding: '1px 6px',
+        borderRadius: 999,
+        fontSize: 10,
+        letterSpacing: '0.04em',
+        textTransform: 'uppercase',
+        fontWeight: 600,
+        whiteSpace: 'nowrap',
+        verticalAlign: 'middle',
+        border: '1px solid var(--lp-border-subtle)',
+      };
+      const autoSource =
+        (row._provenanceSource as string | undefined) ??
+        (row._derivedSource as string | undefined) ??
+        sec.source ??
+        'its source';
+      const provenanceChips =
+        id === chipCol && (row._provenance || row._fxLocked) ? (
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, marginLeft: 6, verticalAlign: 'middle' }}>
+            {row._provenance === 'auto' ? (
+              <span
+                title={`Synced from ${autoSource}`}
+                style={{ ...CHIP_BASE, color: 'var(--lp-text-tertiary)', background: 'var(--lp-bg-deep)' }}
+              >
+                <Lock size={9} aria-hidden /> Auto
+              </span>
+            ) : row._provenance === 'manual' ? (
+              <span
+                title="Hand-entered"
+                style={{ ...CHIP_BASE, color: 'var(--lp-text-tertiary)', background: 'transparent' }}
+              >
+                Manual
+              </span>
+            ) : null}
+            {row._fxLocked ? (
+              <span
+                title="FX rate locked at settlement"
+                style={{ ...CHIP_BASE, color: 'var(--lp-text-tertiary)', background: 'var(--lp-bg-deep)' }}
+              >
+                <Lock size={9} aria-hidden /> FX
+              </span>
+            ) : null}
           </span>
         ) : null;
       return (
         <>
           {ic}
           {String(row[id] ?? '')}
-          {derivedChip}
+          {provenanceChips}
           {op}
         </>
       );
