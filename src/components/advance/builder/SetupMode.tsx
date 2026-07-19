@@ -1063,9 +1063,13 @@ function SetupMode({
                 )}
               <div
                 data-active={fields.some((f) => f.id === selectedFieldId)}
+                // No `transition-all` / `scale` here: transitioning a transform on a
+                // native-draggable card makes the grabbed card JUMP on grab and the
+                // dragged-over card SHAKE as dropTarget toggles. Feedback is a static
+                // shadow + dim (no transform, no transition) while dragging.
                 className={cn(
-                  'advance-builder-section rounded-xl border border-lp-border overflow-hidden relative transition-all duration-200 ease-out',
-                  isDraggingSection && 'scale-[1.02] shadow-lg opacity-90 z-20'
+                  'advance-builder-section rounded-xl border border-lp-border overflow-hidden relative',
+                  isDraggingSection ? 'shadow-lg opacity-60 z-20' : 'transition-shadow duration-150'
                 )}
                 draggable
                 onDragStart={(e) => {
@@ -1109,7 +1113,14 @@ function SetupMode({
                     setDropTarget({ sectionIndex: secIdx });
                   }
                 }}
-                onDragLeave={() => setDropTarget((t) => (t && !('fieldIndex' in t) && t.sectionIndex === secIdx ? null : t))}
+                onDragLeave={(e) => {
+                  // Only clear when the cursor truly leaves the section — moving over
+                  // a CHILD fires dragleave on the section too, which (with the
+                  // re-added dropTarget on the next dragover) made the indicator
+                  // flicker and the card "shake". relatedTarget-containment fixes it.
+                  if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+                  setDropTarget((t) => (t && !('fieldIndex' in t) && t.sectionIndex === secIdx ? null : t));
+                }}
                 onDrop={(e) => {
                   e.preventDefault();
                   e.stopPropagation();
