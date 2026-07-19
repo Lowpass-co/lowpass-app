@@ -19,7 +19,6 @@ import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import type { PersonnelRate } from '@/types';
 import type { RateBucket, RateBasis, DayStatus } from '@/lib/payroll/fees';
 import type { RateTypeMeta } from '@/lib/payroll/rateLines';
-import { PayrollSummary } from './PayrollSummary';
 import { PayrollRatesSpreadsheet } from './PayrollRatesSpreadsheet';
 import { PayrollDaysMatrix } from './PayrollDaysMatrix';
 import { RateTypeToolbar } from './RateTypeToolbar';
@@ -163,15 +162,6 @@ export function PayrollView({
         />
       </section>
 
-      <Disclosure label="Summary" hint="totals · read-only">
-        <PayrollSummary
-          currency={currency}
-          personnelRates={rates}
-          payrollEntries={entries}
-          rateTypes={types}
-          amountMap={amountMap}
-        />
-      </Disclosure>
     </div>
   );
 }

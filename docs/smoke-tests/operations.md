@@ -553,3 +553,12 @@ Adam live-test script (on preview, a tour with an existing routing grid):
   entered by type-then-Tab persist on refresh. A split_rate person's Show /
   Off-Travel / Rehearsal cells each accept + persist distinct values. Confirm no
   regression in Channel List / Budget grids (same SpreadsheetGrid primitive).
+
+#### PAY-12 — Summary numbers live in the matrix left block (G2-1b DELTA)
+**Do**: Open Payroll (no separate Summary section).
+**Expect**: each matrix row's frozen LEFT BLOCK shows the person's numbers, always
+visible while painting: "Name / Role · <Rate type>", the day counts ("21 S · 10 O ·
+2 R"), and their total. A single totals bar under the matrix shows **Fees · Per
+diem · Total**. The standalone Summary table is gone — two sections remain
+(collapsed Rates + the dominant matrix that carries its own totals). Money gate:
+reconcile 64/64 · fees 15 (same fees.ts engine, no math change). **Needs-live**.

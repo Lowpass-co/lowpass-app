@@ -37,8 +37,19 @@ const STATUS_FG: Record<string, string> = {
 };
 const STATUS_ABBR: Record<string, string> = { show: 'S', off_travel: 'T', rehearsal: 'R', no_tour: '' };
 
-const PERSON_W = 176;
-const TOTAL_W = 92;
+/** Per-row rate-type label for the left block (Adam's DELTA — carried beside the
+ *  name so the person's type is visible while painting). */
+const RATE_TYPE_LABEL: Record<string, string> = {
+  day_rate: 'Day rate',
+  split_rate: 'Split',
+  flat_tour: 'Flat tour',
+  weekly: 'Weekly',
+  per_diem_only: 'Per diem only',
+};
+
+// The left block carries identity + numbers (name / role · type, day counts,
+// total) so the summary is always visible while painting — no separate table.
+const PERSON_W = 256;
 const DAY_W = 62;
 
 function toPerson(pr: Record<string, unknown>): PayrollPerson {
@@ -118,6 +129,11 @@ export function PayrollDaysMatrix({
   amountMap: LineAmountMap;
 }) {
   const people = useMemo(() => personnelRates.map(toPerson), [personnelRates]);
+  // Per-person rate_type (for the left-block "· Day rate" label).
+  const rateTypeById = useMemo(
+    () => new Map(personnelRates.map((pr) => [pr.id as string, (pr.rate_type as string) ?? 'day_rate'])),
+    [personnelRates],
+  );
   const days = useMemo(
     () => [...routingDates].filter((r) => r.date).sort((a, b) => a.date.localeCompare(b.date)),
     [routingDates],
@@ -209,15 +225,25 @@ export function PayrollDaysMatrix({
     [people, days, isExplicit, brush, tourDayTypeOf, fillDays],
   );
 
-  // Live total per person from the row's own cells (same fees.ts engine).
-  const totalFor = useCallback(
-    (personId: string): number => {
+  // Live per-person stats from the row's own cells (same fees.ts engine as
+  // Rates / the budget reconcile) — day counts + fee + per-diem for the left block.
+  const statsFor = useCallback(
+    (personId: string) => {
       const statuses: Record<string, string> = {};
       for (const d of days) statuses[d.date] = statusOf(personId, d.date);
-      return personTotals(amountMap, personId, rateTypes, countDayStatuses(statuses)).totalFee;
+      const counts = countDayStatuses(statuses);
+      const t = personTotals(amountMap, personId, rateTypes, counts);
+      return { counts, fee: t.totalFee, pd: t.totalPerDiem };
     },
     [days, statusOf, amountMap, rateTypes],
   );
+
+  // Aggregate totals bar (fees · per diem · total) across everyone.
+  const totals = useMemo(() => {
+    let fee = 0, pd = 0;
+    for (const p of people) { const s = statsFor(p.id); fee += s.fee; pd += s.pd; }
+    return { fee, pd, total: fee + pd };
+  }, [people, statsFor]);
 
   const onCellDown = (personId: string, date: string, r: number, c: number, shift: boolean) => {
     if (shift && cursor) {
@@ -313,8 +339,7 @@ export function PayrollDaysMatrix({
         <table style={{ borderCollapse: 'separate', borderSpacing: 0, fontSize: 12 }}>
           <thead>
             <tr>
-              <th style={{ position: 'sticky', left: 0, top: 0, zIndex: 4, width: PERSON_W, minWidth: PERSON_W, background: 'var(--lp-panel)', textAlign: 'left', padding: '6px 10px', borderBottom: '1px solid var(--lp-border-strong)', borderRight: '1px solid var(--lp-border)', fontSize: 11, color: 'var(--lp-text-tertiary)', fontWeight: 700 }}>Person</th>
-              <th style={{ position: 'sticky', left: PERSON_W, top: 0, zIndex: 4, width: TOTAL_W, minWidth: TOTAL_W, background: 'var(--lp-panel)', textAlign: 'right', padding: '6px 10px', borderBottom: '1px solid var(--lp-border-strong)', borderRight: '1px solid var(--lp-border-strong)', fontSize: 11, color: 'var(--lp-text-tertiary)', fontWeight: 700 }}>Total</th>
+              <th style={{ position: 'sticky', left: 0, top: 0, zIndex: 4, width: PERSON_W, minWidth: PERSON_W, background: 'var(--lp-panel)', textAlign: 'left', padding: '6px 10px', borderBottom: '1px solid var(--lp-border-strong)', borderRight: '1px solid var(--lp-border-strong)', fontSize: 11, color: 'var(--lp-text-tertiary)', fontWeight: 700 }}>Person · days · total</th>
               {days.map((d) => (
                 <th key={d.date} style={{ position: 'sticky', top: 0, zIndex: 1, width: DAY_W, minWidth: DAY_W, background: 'var(--lp-panel)', borderBottom: '1px solid var(--lp-border-strong)', padding: 0, verticalAlign: 'bottom' }}>
                   <DayHeader day={d} weekStart={weekStartDates.has(d.date)} />
@@ -325,12 +350,33 @@ export function PayrollDaysMatrix({
           <tbody>
             {people.map((p, r) => (
               <tr key={p.id}>
-                <td style={{ position: 'sticky', left: 0, zIndex: 2, width: PERSON_W, minWidth: PERSON_W, background: 'var(--lp-surface)', padding: '6px 10px', borderBottom: '1px solid var(--lp-border-subtle)', borderRight: '1px solid var(--lp-border)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  <span style={{ fontWeight: 600, color: 'var(--lp-text)' }}>{p.person_name || '—'}</span>
-                  {p.role ? <span style={{ marginLeft: 6, fontSize: 10, color: 'var(--lp-text-tertiary)' }}>{p.role}</span> : null}
-                </td>
-                <td style={{ position: 'sticky', left: PERSON_W, zIndex: 2, width: TOTAL_W, minWidth: TOTAL_W, background: 'var(--lp-surface)', padding: '6px 10px', textAlign: 'right', borderBottom: '1px solid var(--lp-border-subtle)', borderRight: '1px solid var(--lp-border-strong)', fontFamily: 'var(--lp-font-numeric)', color: 'var(--lp-text)' }}>
-                  {money.format(totalFor(p.id))}
+                <td style={{ position: 'sticky', left: 0, zIndex: 2, width: PERSON_W, minWidth: PERSON_W, background: 'var(--lp-surface)', padding: '5px 10px', borderBottom: '1px solid var(--lp-border-subtle)', borderRight: '1px solid var(--lp-border-strong)' }}>
+                  {(() => {
+                    const s = statsFor(p.id);
+                    const rt = RATE_TYPE_LABEL[rateTypeById.get(p.id) ?? 'day_rate'] ?? 'Day rate';
+                    const countBits = [
+                      s.counts.show ? `${s.counts.show} S` : null,
+                      s.counts.offTravel ? `${s.counts.offTravel} O` : null,
+                      s.counts.rehearsal ? `${s.counts.rehearsal} R` : null,
+                    ].filter(Boolean).join(' · ');
+                    return (
+                      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 8 }}>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--lp-text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {p.person_name || '—'}
+                            {p.role ? <span style={{ fontWeight: 400, color: 'var(--lp-text-tertiary)' }}>{` / ${p.role}`}</span> : null}
+                            <span style={{ fontWeight: 400, color: 'var(--lp-text-tertiary)' }}>{` · ${rt}`}</span>
+                          </div>
+                          <div style={{ fontSize: 10.5, color: 'var(--lp-text-tertiary)', fontFamily: 'var(--lp-font-numeric)', whiteSpace: 'nowrap' }}>
+                            {countBits || '—'}
+                          </div>
+                        </div>
+                        <div style={{ fontFamily: 'var(--lp-font-numeric)', fontWeight: 700, fontSize: 12.5, color: 'var(--lp-text)', whiteSpace: 'nowrap' }}>
+                          {money.format(s.fee + s.pd)}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </td>
                 {days.map((d, c) => {
                   const status = statusOf(p.id, d.date);
@@ -364,6 +410,16 @@ export function PayrollDaysMatrix({
             ))}
           </tbody>
         </table>
+      </div>
+
+      {/* Totals bar (Adam's DELTA) — fees · per diem · total, always under the matrix. */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 20, padding: '8px 12px', border: '1px solid var(--lp-border)', borderTop: 'none', borderRadius: '0 0 var(--lp-radius-md) var(--lp-radius-md)', marginTop: -8, background: 'var(--lp-panel)' }}>
+        {([['Fees', totals.fee], ['Per diem', totals.pd], ['Total', totals.total]] as [string, number][]).map(([label, val], i) => (
+          <div key={label} style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
+            <span style={{ fontSize: 10.5, textTransform: 'uppercase', letterSpacing: '0.05em', color: 'var(--lp-text-tertiary)' }}>{label}</span>
+            <span style={{ fontFamily: 'var(--lp-font-numeric)', fontWeight: i === 2 ? 800 : 600, fontSize: i === 2 ? 15 : 13, color: 'var(--lp-text)' }}>{money.format(val)}</span>
+          </div>
+        ))}
       </div>
 
       {fillOpen ? (
