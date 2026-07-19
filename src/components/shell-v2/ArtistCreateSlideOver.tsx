@@ -1,53 +1,50 @@
 /* ============================================
-   LOWPASS — Sprint 8 §5 — <ArtistCreateSlideOver>
+   LOWPASS — <ArtistCreateSlideOver> (AB — Artist Builder rebuild)
 
-   Quick-create flow for a new artist, opened from the
-   "+ Create new artist" CTA at the bottom of the artists pane
-   in <ArtistTourSwitcher>. Posts to the existing
-   POST /api/artists route (no new API surface needed —
-   pre-Sprint-8 audit confirmed the route already accepts
-   spotify_id / spotify_image_url / spotify_banner_url + a
-   branding JSONB into which we tuck `genre`).
+   The canonical create-artist flow, opened from the workspace /artists page,
+   the artist/tour switcher's "+ Create new artist" CTA, and the dashboard
+   pick-artist gate. A three-step wizard inside the <SlideOver> primitive:
 
-   Form layout:
-     NAME *                                              (autofocus)
-     LINK ON SPOTIFY  (search input · debounce 300ms)
-       → search results dropdown when query.length >= 2
-       → selected card with [×] to clear
-     GENRE  (auto-fills from Spotify result's genres[0])
+     Step 1 · Find    — Spotify search-as-you-type (debounced). Pick a result.
+     Step 2 · Confirm — proves the right artist before committing.
+     Step 3 · Details — Display name + default currency (both optional).
 
-   On success:
-     - close slide-over
-     - toast "Artist created"
-     - onCreated(artist) — wrapper appends to switcher's
-       artists state + navigates to /artists/[new-id]
+   THE DECOUPLING (Adam's reported bug): the Step-1 Next button enables from
+   ONLY this flow's local `selected !== null`. It never reads ArtistTourContext,
+   the selected-artist pill, or any ambient/global selection. See smoke AB-02.
 
-   The full-page legacy artist-create flow at /artists/[id]/edit
-   stays for any deep-link bookmarks; this slide-over is the
-   canonical creation UX going forward.
+   Wiring: POST /api/artists (existing route — accepts name, spotify_*, and a
+   branding JSONB into which we tuck `genre` + `default_currency`, since the
+   artists table has no currency column). Spotify search runs server-side via
+   /api/spotify/search (no client credential path). Manual-path artists save
+   with a null spotify id and degrade gracefully everywhere.
    ============================================ */
 
 'use client';
 
-import {
-  useCallback,
-  useEffect,
-  useId,
-  useRef,
-  useState,
-} from 'react';
-import { Search, X as XIcon } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Search, Check, ArrowLeft } from 'lucide-react';
 import { SlideOver } from '@/components/shell/SlideOver';
 import { useToast } from '@/components/ui/Toast';
+import { StyledSelect } from '@/components/ui/StyledSelect';
+import { TOUR_CURRENCIES, DEFAULT_TOUR_CURRENCY } from '@/lib/currencies';
+
+interface SpotifyArtist {
+  id: string;
+  name: string;
+  image_url: string | null;
+  banner_url: string | null;
+  genres: string[];
+  followers: number | null;
+  popularity: number | null;
+}
 
 interface ArtistCreateSlideOverProps {
   open: boolean;
   onClose: () => void;
-  /** Sprint 8 §5 — fired with the freshly-created artist's
-   *  lean projection so the wrapper can optimistically prepend
-   *  it to the switcher's artists list AND navigate to
-   *  /artists/[new-id]. Mirrors TourCreateSlideOver's
-   *  onCreated callback shape. */
+  /** Fired with the freshly-created artist's lean projection so the wrapper can
+   *  optimistically prepend it to the switcher list AND navigate to
+   *  /artists/[new-id]. Mirrors TourCreateSlideOver's onCreated shape. */
   onCreated?: (artist: {
     id: string;
     name: string;
@@ -57,161 +54,142 @@ interface ArtistCreateSlideOverProps {
   }) => void;
 }
 
-interface SpotifySearchResult {
-  id: string;
-  name: string;
-  image_url: string | null;
-  banner_url: string | null;
-}
-
-interface SelectedSpotify {
-  id: string;
-  name: string;
-  image_url: string | null;
-  banner_url: string | null;
-  /** Captured at select-time so genre auto-fill is available
-   *  without a follow-up API call. The /api/spotify/search
-   *  endpoint doesn't return genres today; if we later add it,
-   *  this becomes non-empty. */
-  primaryGenre: string | null;
-}
+const SEARCH_DEBOUNCE_MS = 265; // within the spec's 250–280ms band
 
 export function ArtistCreateSlideOver({
   open,
   onClose,
   onCreated,
 }: ArtistCreateSlideOverProps) {
-  const { showToast } = useToast();
-  const formId = useId();
-
-  /* -------- form state -------- */
-  // Re-mount inner on `open` flip (key trick) so per-open state
-  // resets without a useEffect setState (matches
-  // TourCreateSlideOver's pattern from Sprint 5).
+  // Re-mount the inner on `open` flip so per-open state resets without a
+  // useEffect setState (same key trick as TourCreateSlideOver).
   return (
     <ArtistCreateSlideOverInner
       key={open ? 'open' : 'closed'}
       open={open}
       onClose={onClose}
-      formId={formId}
-      showToast={showToast}
       onCreated={onCreated}
     />
   );
 }
 
-interface InnerProps {
-  open: boolean;
-  onClose: () => void;
-  formId: string;
-  showToast: ReturnType<typeof useToast>['showToast'];
-  onCreated?: ArtistCreateSlideOverProps['onCreated'];
-}
+type Step = 1 | 2 | 3;
 
 function ArtistCreateSlideOverInner({
   open,
   onClose,
-  formId,
-  showToast,
   onCreated,
-}: InnerProps) {
-  // Sprint 8.1 §3 (8b) — name and Spotify search merged into one
-  // input. The single source of truth is `name`; typing debounces
-  // a search, results render in a dropdown below the input. Picking
-  // a result locks the name to the picked artist + sets `selected`
-  // (Spotify-linked mode). Editing while linked auto-unlinks.
-  const [name, setName] = useState('');
-  const [genre, setGenre] = useState('');
-  const [searchResults, setSearchResults] = useState<
-    SpotifySearchResult[]
-  >([]);
+}: ArtistCreateSlideOverProps) {
+  const { showToast } = useToast();
+
+  const [step, setStep] = useState<Step>(1);
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<SpotifyArtist[]>([]);
   const [searching, setSearching] = useState(false);
-  const [selected, setSelected] = useState<SelectedSpotify | null>(
-    null,
-  );
+  const [lastSearched, setLastSearched] = useState<string | null>(null);
+  // THE local selection — the Step-1 Next button derives ONLY from this.
+  const [selected, setSelected] = useState<SpotifyArtist | null>(null);
+  const [manual, setManual] = useState(false);
+
+  const [displayName, setDisplayName] = useState('');
+  const [currency, setCurrency] = useState<string>(DEFAULT_TOUR_CURRENCY);
+
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
-  async function runSearch(q: string) {
-    try {
-      const res = await fetch(
-        `/api/spotify/search?q=${encodeURIComponent(q)}`,
-      );
-      if (!res.ok) {
-        setSearchResults([]);
-        setSearching(false);
-        return;
-      }
-      const data = (await res.json()) as SpotifySearchResult[];
-      setSearchResults(Array.isArray(data) ? data.slice(0, 5) : []);
-      setSearching(false);
-    } catch {
-      setSearchResults([]);
-      setSearching(false);
-    }
-  }
+  // Autofocus the search input when the Find step mounts.
+  useEffect(() => {
+    if (step === 1) inputRef.current?.focus();
+  }, [step]);
 
-  function onNameChange(next: string) {
-    setName(next);
-    // Editing while linked auto-unlinks (the user is overriding
-    // the picked name, so the Spotify link is no longer valid).
-    if (selected && next !== selected.name) {
-      setSelected(null);
-    }
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (next.trim().length < 2 || selected) {
-      // Don't search while linked (user has already picked an
-      // artist) or when query too short.
-      setSearchResults([]);
-      setSearching(false);
-      return;
-    }
-    setSearching(true);
-    debounceRef.current = setTimeout(() => {
-      runSearch(next.trim());
-    }, 300);
-  }
-
-  const onSelectSpotify = useCallback((r: SpotifySearchResult) => {
-    setSelected({
-      id: r.id,
-      name: r.name,
-      image_url: r.image_url,
-      banner_url: r.banner_url,
-      primaryGenre: null,
-    });
-    // Lock name to the picked artist's name.
-    setName(r.name);
-    setSearchResults([]);
-    setSearching(false);
-  }, []);
-
-  const clearSpotify = useCallback(() => {
-    setSelected(null);
-  }, []);
-
-  // Cleanup debounce timer on unmount.
   useEffect(() => {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
   }, []);
 
-  const trimmedName = name.trim();
-  const canSubmit = !!trimmedName && !submitting;
+  const runSearch = useCallback(async (q: string) => {
+    try {
+      const res = await fetch(`/api/spotify/search?q=${encodeURIComponent(q)}`);
+      if (!res.ok) {
+        setResults([]);
+        setLastSearched(q);
+        setSearching(false);
+        return;
+      }
+      const data = (await res.json()) as SpotifyArtist[];
+      setResults(Array.isArray(data) ? data : []);
+      setLastSearched(q);
+      setSearching(false);
+    } catch {
+      setResults([]);
+      setLastSearched(q);
+      setSearching(false);
+    }
+  }, []);
 
-  /* -------- submit -------- */
-  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    if (!canSubmit) return;
+  const onQueryChange = useCallback(
+    (next: string) => {
+      setQuery(next);
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      const trimmed = next.trim();
+      if (trimmed.length < 1) {
+        setResults([]);
+        setSearching(false);
+        setLastSearched(null);
+        return;
+      }
+      // Search-as-you-type: any non-empty query, debounced. The "Searching…"
+      // affordance shows immediately so we never flash "add manually" before
+      // results have had their chance (same rule as the venue autocomplete).
+      setSearching(true);
+      debounceRef.current = setTimeout(() => runSearch(trimmed), SEARCH_DEBOUNCE_MS);
+    },
+    [runSearch],
+  );
+
+  const pick = useCallback((a: SpotifyArtist) => {
+    setSelected(a);
+  }, []);
+
+  const goManual = useCallback(() => {
+    setManual(true);
+    setSelected(null);
+    setDisplayName(query.trim());
+    setStep(3);
+  }, [query]);
+
+  const toConfirm = useCallback(() => {
+    if (!selected) return;
+    setStep(2);
+  }, [selected]);
+
+  const toDetails = useCallback(() => {
+    setDisplayName((prev) => prev || selected?.name || query.trim());
+    setStep(3);
+  }, [selected, query]);
+
+  const searchAgain = useCallback(() => {
+    setSelected(null);
+    setManual(false);
+    setStep(1);
+    // Focus is restored by the step-1 effect.
+  }, []);
+
+  const trimmedName = displayName.trim();
+  const canCreate = !!trimmedName && !submitting;
+
+  const create = useCallback(async () => {
+    if (!canCreate) return;
     setSubmitting(true);
     setError(null);
     try {
-      // Sprint 8 §5 sign-off — genre tucked into branding JSONB
-      // (no schema column for genre).
-      const branding: Record<string, unknown> = {};
-      if (genre.trim()) branding.genre = genre.trim();
+      const branding: Record<string, unknown> = { default_currency: currency };
+      const primaryGenre = selected?.genres?.[0];
+      if (primaryGenre) branding.genre = primaryGenre;
 
       const payload: Record<string, unknown> = {
         name: trimmedName,
@@ -250,8 +228,7 @@ function ArtistCreateSlideOverInner({
           name: body?.name ?? trimmedName,
           branding: body?.branding ?? branding,
           spotify_id: body?.spotify_id ?? selected?.id ?? null,
-          spotify_image_url:
-            body?.spotify_image_url ?? selected?.image_url ?? null,
+          spotify_image_url: body?.spotify_image_url ?? selected?.image_url ?? null,
         });
       }
       showToast('Artist created');
@@ -260,70 +237,48 @@ function ArtistCreateSlideOverInner({
       setError(err instanceof Error ? err.message : 'Network error');
       setSubmitting(false);
     }
-  }
+  }, [canCreate, currency, selected, trimmedName, onCreated, showToast, onClose]);
+
+  /* -------- footer per step -------- */
+  const footer = (
+    <div className="flex items-center justify-between" style={{ gap: 'var(--lp-space-3)' }}>
+      <div>
+        {step > 1 ? (
+          <FooterButton
+            onClick={() => setStep(selected && !manual ? (step === 3 ? 2 : 1) : 1)}
+            variant="ghost"
+            icon={<ArrowLeft size={14} strokeWidth={2.4} />}
+          >
+            Back
+          </FooterButton>
+        ) : null}
+      </div>
+      <div className="flex items-center" style={{ gap: 'var(--lp-space-2)' }}>
+        <FooterButton onClick={onClose} variant="ghost">
+          Cancel
+        </FooterButton>
+        {step === 1 ? (
+          <FooterButton onClick={toConfirm} variant="primary" disabled={!selected}>
+            Next
+          </FooterButton>
+        ) : step === 2 ? (
+          <FooterButton onClick={toDetails} variant="primary">
+            Next
+          </FooterButton>
+        ) : (
+          <FooterButton onClick={() => void create()} variant="primary" disabled={!canCreate}>
+            {submitting ? 'Creating…' : 'Create artist'}
+          </FooterButton>
+        )}
+      </div>
+    </div>
+  );
 
   return (
-    <SlideOver
-      open={open}
-      onClose={onClose}
-      title="New artist"
-      footer={
-        <div
-          className="flex items-center justify-end"
-          style={{ gap: 'var(--lp-space-3)' }}
-        >
-          <button
-            type="button"
-            onClick={onClose}
-            className="btn-transition"
-            style={{
-              padding: 'var(--lp-space-2) var(--lp-space-4)',
-              fontSize: 'var(--lp-text-sm)',
-              fontWeight: 'var(--lp-weight-medium)',
-              color: 'var(--lp-text-secondary)',
-              background: 'transparent',
-              border: '1px solid var(--lp-border-strong)',
-              borderRadius: 'var(--lp-radius-md)',
-              cursor: 'pointer',
-            }}
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            form={formId}
-            disabled={!canSubmit}
-            className="btn-transition"
-            style={{
-              padding: 'var(--lp-space-2) var(--lp-space-4)',
-              fontSize: 'var(--lp-text-sm)',
-              fontWeight: 'var(--lp-weight-semibold)',
-              color: canSubmit
-                ? 'var(--lp-text-inverse)'
-                : 'var(--lp-text-tertiary)',
-              background: canSubmit
-                ? 'var(--color-lp-orange)'
-                : 'var(--lp-surface-hover)',
-              border: '1px solid transparent',
-              borderRadius: 'var(--lp-radius-md)',
-              cursor: canSubmit ? 'pointer' : 'not-allowed',
-              opacity: canSubmit ? 1 : 0.7,
-            }}
-          >
-            {submitting ? 'Creating…' : 'Create artist'}
-          </button>
-        </div>
-      }
-    >
-      <form
-        id={formId}
-        onSubmit={onSubmit}
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 'var(--lp-space-4)',
-        }}
-      >
+    <SlideOver open={open} onClose={onClose} title="New artist" footer={footer}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--lp-space-4)', padding: 'var(--lp-space-4)' }}>
+        <StepTabs step={step} hasSelected={!!selected && !manual} />
+
         {error ? (
           <div
             role="alert"
@@ -331,10 +286,8 @@ function ArtistCreateSlideOverInner({
               padding: 'var(--lp-space-3)',
               fontSize: 'var(--lp-text-sm)',
               color: 'var(--color-lp-error)',
-              background:
-                'color-mix(in srgb, var(--color-lp-error) 10%, transparent)',
-              border:
-                '1px solid color-mix(in srgb, var(--color-lp-error) 30%, transparent)',
+              background: 'color-mix(in srgb, var(--color-lp-error) 8%, transparent)',
+              border: '1px solid color-mix(in srgb, var(--color-lp-error) 25%, transparent)',
               borderRadius: 'var(--lp-radius-md)',
             }}
           >
@@ -342,285 +295,524 @@ function ArtistCreateSlideOverInner({
           </div>
         ) : null}
 
-        {/* Sprint 8.1 §3 (8b) — name and Spotify search merged
-            into one input. Typing debounces a Spotify search;
-            results render in a dropdown below the input. Picking
-            a result locks the input to the picked artist's name
-            and sets `selected`. Editing while linked auto-unlinks
-            (handled in onNameChange). */}
-        <Field
-          label="Artist name / Search Spotify"
-          htmlFor={`${formId}-name`}
-          required
-        >
-          <div style={{ position: 'relative' }}>
-            <input
-              id={`${formId}-name`}
-              type="text"
-              value={name}
-              onChange={(e) => onNameChange(e.target.value)}
-              placeholder="e.g. Good Neighbours"
-              autoFocus
-              data-autofocus
-              required
-              autoComplete="off"
-              style={{
-                ...inputStyle(),
-                paddingRight: 36,
-              }}
-            />
-            <Search
-              aria-hidden
-              size={16}
-              strokeWidth={2}
-              style={{
-                position: 'absolute',
-                right: 'var(--lp-space-3)',
-                top: '50%',
-                transform: 'translateY(-50%)',
-                color: 'var(--lp-text-tertiary)',
-                pointerEvents: 'none',
-              }}
-            />
-          </div>
-
-          {/* Linked-state indicator: subtle line under the input
-              with image thumb + checkmark + Unlink button. */}
-          {selected ? (
-            <div
-              className="flex items-center"
-              style={{
-                gap: 'var(--lp-space-2)',
-                padding: 'var(--lp-space-2) var(--lp-space-3)',
-                fontSize: 'var(--lp-text-xs)',
-                color: 'var(--lp-text-secondary)',
-                background: 'var(--lp-panel)',
-                border: '1px solid var(--lp-border-strong)',
-                borderRadius: 'var(--lp-radius-sm)',
-              }}
-            >
-              {selected.image_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={selected.image_url}
-                  alt=""
-                  width={20}
-                  height={20}
-                  style={{
-                    width: 20,
-                    height: 20,
-                    borderRadius: 'var(--lp-radius-full)',
-                    objectFit: 'cover',
-                    flexShrink: 0,
-                  }}
-                />
-              ) : null}
-              <span style={{ color: 'var(--color-lp-orange)' }}>✓</span>
-              <span className="min-w-0 flex-1 truncate">
-                Linked to Spotify
-              </span>
-              <button
-                type="button"
-                onClick={clearSpotify}
-                className="btn-transition inline-flex items-center"
-                style={{
-                  gap: 4,
-                  padding: '2px 6px',
-                  fontSize: 'var(--lp-text-xs)',
-                  color: 'var(--lp-text-tertiary)',
-                  background: 'transparent',
-                  border: 'none',
-                  cursor: 'pointer',
-                }}
-                onMouseEnter={(e) => {
-                  e.currentTarget.style.color = 'var(--lp-text)';
-                }}
-                onMouseLeave={(e) => {
-                  e.currentTarget.style.color = 'var(--lp-text-tertiary)';
-                }}
-              >
-                <XIcon size={12} strokeWidth={2} />
-                Unlink
-              </button>
-            </div>
-          ) : null}
-
-          {/* Free-text search results dropdown — only when not
-              linked + query is long enough + we have results. */}
-          {!selected && searching && name.trim().length >= 2 ? (
-            <div
-              style={{
-                fontSize: 'var(--lp-text-xs)',
-                color: 'var(--lp-text-tertiary)',
-              }}
-            >
-              Searching Spotify…
-            </div>
-          ) : null}
-          {!selected &&
-          !searching &&
-          searchResults.length > 0 &&
-          name.trim().length >= 2 ? (
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                gap: 2,
-                background: 'var(--lp-panel)',
-                border: '1px solid var(--lp-border-strong)',
-                borderRadius: 'var(--lp-radius-md)',
-                overflow: 'hidden',
-              }}
-            >
-              {searchResults.map((r) => (
-                <button
-                  key={r.id}
-                  type="button"
-                  onClick={() => onSelectSpotify(r)}
-                  className="btn-transition"
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 'var(--lp-space-2)',
-                    padding: 'var(--lp-space-2) var(--lp-space-3)',
-                    background: 'transparent',
-                    border: 'none',
-                    textAlign: 'left',
-                    cursor: 'pointer',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background =
-                      'var(--lp-panel-hover)';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = 'transparent';
-                  }}
-                >
-                  {r.image_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img
-                      src={r.image_url}
-                      alt=""
-                      width={32}
-                      height={32}
-                      style={{
-                        width: 32,
-                        height: 32,
-                        borderRadius: 'var(--lp-radius-full)',
-                        objectFit: 'cover',
-                        flexShrink: 0,
-                        background: 'var(--lp-bg-deep)',
-                      }}
-                    />
-                  ) : (
-                    <span
-                      aria-hidden
-                      style={{
-                        width: 32,
-                        height: 32,
-                        borderRadius: 'var(--lp-radius-full)',
-                        background:
-                          'color-mix(in srgb, var(--color-lp-orange) 25%, transparent)',
-                        flexShrink: 0,
-                      }}
-                    />
-                  )}
-                  <span
-                    className="min-w-0 flex-1 truncate"
-                    style={{
-                      fontSize: 'var(--lp-text-sm)',
-                      color: 'var(--lp-text)',
-                    }}
-                  >
-                    {r.name}
-                  </span>
-                </button>
-              ))}
-            </div>
-          ) : null}
-          {!selected &&
-          !searching &&
-          name.trim().length >= 2 &&
-          searchResults.length === 0 ? (
-            <div
-              style={{
-                fontSize: 'var(--lp-text-xs)',
-                color: 'var(--lp-text-tertiary)',
-              }}
-            >
-              No Spotify matches for &ldquo;{name}&rdquo;. Submit
-              anyway to create as free-text.
-            </div>
-          ) : null}
-        </Field>
-
-        <Field label="Genre" htmlFor={`${formId}-genre`}>
-          <input
-            id={`${formId}-genre`}
-            type="text"
-            value={genre}
-            onChange={(e) => setGenre(e.target.value)}
-            placeholder="e.g. indie folk (optional)"
-            style={inputStyle()}
+        {step === 1 ? (
+          <FindStep
+            query={query}
+            onQueryChange={onQueryChange}
+            results={results}
+            searching={searching}
+            lastSearched={lastSearched}
+            selected={selected}
+            onPick={pick}
+            onManual={goManual}
+            inputRef={inputRef}
           />
-        </Field>
-      </form>
+        ) : step === 2 && selected ? (
+          <ConfirmStep artist={selected} onSearchAgain={searchAgain} />
+        ) : (
+          <DetailsStep
+            selected={manual ? null : selected}
+            displayName={displayName}
+            onDisplayName={setDisplayName}
+            currency={currency}
+            onCurrency={setCurrency}
+          />
+        )}
+      </div>
     </SlideOver>
   );
 }
 
-/* ----- shared field + input helpers (mirror TourCreateSlideOver) ----- */
-function Field({
-  label,
-  htmlFor,
-  required,
-  children,
+/* ============================================================
+   Step chrome
+   ============================================================ */
+
+const STEP_LABELS: { n: Step; label: string }[] = [
+  { n: 1, label: 'Find' },
+  { n: 2, label: 'Confirm' },
+  { n: 3, label: 'Details' },
+];
+
+function StepTabs({ step, hasSelected }: { step: Step; hasSelected: boolean }) {
+  return (
+    <div className="flex items-center justify-between" style={{ gap: 'var(--lp-space-2)' }}>
+      <div className="flex items-center" style={{ gap: 'var(--lp-space-3)' }}>
+        {STEP_LABELS.map(({ n, label }) => {
+          const active = n === step;
+          const done = n < step && (n !== 2 || hasSelected);
+          return (
+            <span
+              key={n}
+              className="lp-label-caps"
+              style={{
+                fontSize: 'var(--lp-text-2xs)',
+                fontWeight: active ? 'var(--lp-weight-semibold)' : 'var(--lp-weight-medium)',
+                color: active
+                  ? 'var(--color-lp-orange)'
+                  : done
+                    ? 'var(--lp-text-secondary)'
+                    : 'var(--lp-text-tertiary)',
+                borderBottom: active ? '2px solid var(--color-lp-orange)' : '2px solid transparent',
+                paddingBottom: 2,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 4,
+              }}
+            >
+              {done ? <Check size={11} strokeWidth={3} /> : null}
+              {label}
+            </span>
+          );
+        })}
+      </div>
+      <span
+        className="lp-mono"
+        style={{ fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-tertiary)', letterSpacing: '0.06em' }}
+      >
+        STEP {step} OF 3
+      </span>
+    </div>
+  );
+}
+
+/* ============================================================
+   Step 1 · Find
+   ============================================================ */
+
+function FindStep({
+  query,
+  onQueryChange,
+  results,
+  searching,
+  lastSearched,
+  selected,
+  onPick,
+  onManual,
+  inputRef,
 }: {
-  label: string;
-  htmlFor: string;
-  required?: boolean;
-  children: React.ReactNode;
+  query: string;
+  onQueryChange: (v: string) => void;
+  results: SpotifyArtist[];
+  searching: boolean;
+  lastSearched: string | null;
+  selected: SpotifyArtist | null;
+  onPick: (a: SpotifyArtist) => void;
+  onManual: () => void;
+  inputRef: React.RefObject<HTMLInputElement | null>;
+}) {
+  const trimmed = query.trim();
+  const noMatches = !searching && trimmed.length >= 1 && results.length === 0 && lastSearched === trimmed;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--lp-space-3)' }}>
+      <p style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text-secondary)', margin: 0 }}>
+        Search Spotify to link artwork, genres and release history automatically.
+        <br />
+        <button
+          type="button"
+          onClick={onManual}
+          className="btn-transition"
+          style={{
+            marginTop: 4,
+            padding: 0,
+            fontSize: 'var(--lp-text-sm)',
+            fontWeight: 'var(--lp-weight-medium)',
+            color: 'var(--color-lp-orange)',
+            background: 'transparent',
+            border: 0,
+            cursor: 'pointer',
+          }}
+        >
+          Not on Spotify? Add manually →
+        </button>
+      </p>
+
+      {/* Search input */}
+      <div
+        className="flex items-center"
+        style={{
+          gap: 'var(--lp-space-2)',
+          padding: '0 var(--lp-space-3)',
+          height: 42,
+          background: 'var(--lp-surface)',
+          border: '1px solid var(--lp-border-strong)',
+          borderRadius: 'var(--lp-radius-md)',
+        }}
+      >
+        <Search size={16} strokeWidth={2.2} style={{ color: 'var(--lp-text-tertiary)', flexShrink: 0 }} />
+        <input
+          ref={inputRef}
+          value={query}
+          onChange={(e) => onQueryChange(e.target.value)}
+          placeholder="Search for an artist…"
+          autoComplete="off"
+          spellCheck={false}
+          style={{
+            flex: 1,
+            minWidth: 0,
+            height: '100%',
+            border: 0,
+            outline: 'none',
+            background: 'transparent',
+            color: 'var(--lp-text)',
+            fontSize: 'var(--lp-text-base)',
+          }}
+        />
+      </div>
+
+      {/* Results / states */}
+      {searching ? (
+        <div style={{ padding: 'var(--lp-space-3)', fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text-tertiary)' }}>
+          Searching…
+        </div>
+      ) : results.length > 0 ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {results.map((a) => (
+            <ResultRow key={a.id} artist={a} selected={selected?.id === a.id} onClick={() => onPick(a)} />
+          ))}
+        </div>
+      ) : noMatches ? (
+        <button
+          type="button"
+          onClick={onManual}
+          className="btn-transition"
+          style={{
+            textAlign: 'left',
+            padding: 'var(--lp-space-3)',
+            background: 'var(--lp-surface)',
+            border: '1px dashed var(--lp-border-strong)',
+            borderRadius: 'var(--lp-radius-md)',
+            cursor: 'pointer',
+          }}
+        >
+          <span style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text)' }}>
+            No Spotify matches. Add{' '}
+            <strong style={{ fontWeight: 'var(--lp-weight-semibold)' }}>“{trimmed}”</strong> manually →
+          </span>
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function ResultRow({
+  artist,
+  selected,
+  onClick,
+}: {
+  artist: SpotifyArtist;
+  selected: boolean;
+  onClick: () => void;
 }) {
   return (
-    <label
-      htmlFor={htmlFor}
+    <button
+      type="button"
+      onClick={onClick}
+      className="btn-transition flex w-full items-center"
       style={{
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 'var(--lp-space-1)',
+        gap: 'var(--lp-space-3)',
+        padding: '8px var(--lp-space-3)',
+        textAlign: 'left',
+        background: selected ? 'color-mix(in srgb, var(--color-lp-orange) 8%, transparent)' : 'var(--lp-surface)',
+        border: `1px solid ${selected ? 'var(--color-lp-orange)' : 'var(--lp-border-subtle)'}`,
+        borderRadius: 'var(--lp-radius-md)',
+        cursor: 'pointer',
       }}
     >
-      <span
-        className="lp-label-caps"
-        style={{ color: 'var(--lp-text-secondary)' }}
-      >
-        {label}
-        {required ? (
+      <Artwork url={artist.image_url} name={artist.name} size={46} radius={6} />
+      <span style={{ flex: 1, minWidth: 0 }}>
+        <span
+          style={{
+            display: 'block',
+            fontSize: 14.5,
+            fontWeight: 'var(--lp-weight-medium)',
+            color: 'var(--lp-text)',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {artist.name}
+        </span>
+        {artist.genres.length > 0 ? (
           <span
-            aria-hidden
             style={{
-              marginLeft: 'var(--lp-space-1)',
-              color: 'var(--color-lp-orange)',
+              display: 'block',
+              fontSize: 11.5,
+              color: 'var(--lp-text-tertiary)',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
             }}
           >
-            *
+            {artist.genres.slice(0, 2).join(' · ')}
           </span>
         ) : null}
+      </span>
+      {artist.followers != null ? (
+        <span
+          className="lp-mono"
+          style={{ flexShrink: 0, fontSize: 11.5, color: 'var(--lp-text-tertiary)', fontVariantNumeric: 'tabular-nums' }}
+        >
+          {artist.followers.toLocaleString()}
+        </span>
+      ) : null}
+      {selected ? (
+        <Check size={16} strokeWidth={2.6} style={{ flexShrink: 0, color: 'var(--color-lp-orange)' }} />
+      ) : null}
+    </button>
+  );
+}
+
+/* ============================================================
+   Step 2 · Confirm
+   ============================================================ */
+
+function ConfirmStep({ artist, onSearchAgain }: { artist: SpotifyArtist; onSearchAgain: () => void }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--lp-space-4)', alignItems: 'center', textAlign: 'center' }}>
+      <Artwork url={artist.image_url} name={artist.name} size={132} radius={12} />
+      <div>
+        <h2
+          style={{
+            margin: 0,
+            fontFamily: 'var(--lp-font-condensed)',
+            fontSize: 26,
+            fontWeight: 'var(--lp-weight-bold)',
+            letterSpacing: '0.01em',
+            color: 'var(--lp-text)',
+          }}
+        >
+          {artist.name}
+        </h2>
+        {artist.genres.length > 0 ? (
+          <div className="flex flex-wrap items-center justify-center" style={{ gap: 6, marginTop: 8 }}>
+            {artist.genres.slice(0, 4).map((g) => (
+              <span
+                key={g}
+                style={{
+                  padding: '2px 8px',
+                  fontSize: 'var(--lp-text-2xs)',
+                  color: 'var(--lp-text-secondary)',
+                  background: 'var(--lp-surface-hover)',
+                  border: '1px solid var(--lp-border-subtle)',
+                  borderRadius: 999,
+                }}
+              >
+                {g}
+              </span>
+            ))}
+          </div>
+        ) : null}
+      </div>
+
+      <div className="flex items-center justify-center" style={{ gap: 'var(--lp-space-4)', flexWrap: 'wrap' }}>
+        <Stat label="Followers" value={artist.followers != null ? artist.followers.toLocaleString() : '—'} />
+        <Stat label="Popularity" value={artist.popularity != null ? String(artist.popularity) : '—'} />
+        <Stat label="Spotify ID" value={`${artist.id.slice(0, 10)}…`} />
+      </div>
+
+      <p style={{ margin: 0, fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text-tertiary)', maxWidth: 340 }}>
+        Artwork, genres and release history sync automatically — all changeable later.
+      </p>
+
+      <button
+        type="button"
+        onClick={onSearchAgain}
+        className="btn-transition"
+        style={{
+          padding: 0,
+          fontSize: 'var(--lp-text-sm)',
+          fontWeight: 'var(--lp-weight-medium)',
+          color: 'var(--color-lp-orange)',
+          background: 'transparent',
+          border: 0,
+          cursor: 'pointer',
+        }}
+      >
+        Wrong artist? Search again →
+      </button>
+    </div>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+      <span className="lp-label-caps" style={{ fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-tertiary)' }}>
+        {label}
+      </span>
+      <span className="lp-mono" style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text)', fontVariantNumeric: 'tabular-nums' }}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
+/* ============================================================
+   Step 3 · Details
+   ============================================================ */
+
+function DetailsStep({
+  selected,
+  displayName,
+  onDisplayName,
+  currency,
+  onCurrency,
+}: {
+  selected: SpotifyArtist | null;
+  displayName: string;
+  onDisplayName: (v: string) => void;
+  currency: string;
+  onCurrency: (v: string) => void;
+}) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--lp-space-4)' }}>
+      {selected ? (
+        <div className="flex items-center" style={{ gap: 'var(--lp-space-3)' }}>
+          <Artwork url={selected.image_url} name={selected.name} size={44} radius={8} />
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 'var(--lp-text-base)', fontWeight: 'var(--lp-weight-semibold)', color: 'var(--lp-text)' }}>
+              {selected.name}
+            </div>
+            <div className="lp-label-caps" style={{ fontSize: 'var(--lp-text-2xs)', color: 'var(--color-lp-orange)' }}>
+              Linked on Spotify
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      <Field label="Display name">
+        <input
+          value={displayName}
+          onChange={(e) => onDisplayName(e.target.value)}
+          placeholder="Artist name"
+          autoComplete="off"
+          style={{
+            width: '100%',
+            height: 40,
+            padding: '0 var(--lp-space-3)',
+            background: 'var(--lp-surface)',
+            border: '1px solid var(--lp-border-strong)',
+            borderRadius: 'var(--lp-radius-md)',
+            color: 'var(--lp-text)',
+            fontSize: 'var(--lp-text-base)',
+            outline: 'none',
+          }}
+        />
+      </Field>
+
+      <Field label="Default currency">
+        <StyledSelect
+          value={currency}
+          onChange={onCurrency}
+          options={TOUR_CURRENCIES.map((c) => ({ value: c.value, label: c.label }))}
+        />
+      </Field>
+
+      <p style={{ margin: 0, fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text-tertiary)' }}>
+        Everything here is optional — you can start a tour right away and fill this in later.
+      </p>
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <span className="lp-label-caps" style={{ fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-secondary)' }}>
+        {label}
       </span>
       {children}
     </label>
   );
 }
 
-function inputStyle(): React.CSSProperties {
-  return {
-    width: '100%',
-    padding: 'var(--lp-space-2) var(--lp-space-3)',
-    fontSize: 'var(--lp-text-base)',
-    color: 'var(--lp-text)',
-    background: 'var(--lp-bg)',
-    border: '1px solid var(--lp-border-strong)',
-    borderRadius: 'var(--lp-radius-md)',
-    outline: 'none',
-  };
+/* ============================================================
+   Shared bits
+   ============================================================ */
+
+function Artwork({ url, name, size, radius }: { url: string | null; name: string; size: number; radius: number }) {
+  if (url) {
+    return (
+      // eslint-disable-next-line @next/next/no-img-element -- remote Spotify artwork; next/image domain config not wired for api.spotify.com
+      <img
+        src={url}
+        alt={name}
+        width={size}
+        height={size}
+        style={{ width: size, height: size, borderRadius: radius, objectFit: 'cover', flexShrink: 0, background: 'var(--lp-surface-hover)' }}
+      />
+    );
+  }
+  const initials = name.trim().slice(0, 2).toUpperCase() || '?';
+  return (
+    <div
+      aria-hidden
+      style={{
+        width: size,
+        height: size,
+        borderRadius: radius,
+        flexShrink: 0,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'var(--lp-surface-hover)',
+        color: 'var(--lp-text-tertiary)',
+        fontFamily: 'var(--lp-font-condensed)',
+        fontSize: Math.round(size * 0.36),
+        fontWeight: 700,
+      }}
+    >
+      {initials}
+    </div>
+  );
+}
+
+function FooterButton({
+  children,
+  onClick,
+  variant,
+  disabled,
+  icon,
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  variant: 'primary' | 'ghost';
+  disabled?: boolean;
+  icon?: React.ReactNode;
+}) {
+  const primary = variant === 'primary';
+  const enabled = !disabled;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="btn-transition inline-flex items-center"
+      style={{
+        gap: 4,
+        padding: 'var(--lp-space-2) var(--lp-space-4)',
+        fontSize: 'var(--lp-text-sm)',
+        fontWeight: primary ? 'var(--lp-weight-semibold)' : 'var(--lp-weight-medium)',
+        color: primary
+          ? enabled
+            ? 'var(--lp-text-inverse)'
+            : 'var(--lp-text-tertiary)'
+          : 'var(--lp-text-secondary)',
+        background: primary
+          ? enabled
+            ? 'var(--color-lp-orange)'
+            : 'var(--lp-surface-hover)'
+          : 'transparent',
+        border: primary ? '1px solid transparent' : '1px solid var(--lp-border-strong)',
+        borderRadius: 'var(--lp-radius-md)',
+        cursor: enabled ? 'pointer' : 'not-allowed',
+        opacity: primary && !enabled ? 0.7 : 1,
+      }}
+    >
+      {icon}
+      {children}
+    </button>
+  );
 }

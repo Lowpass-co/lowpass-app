@@ -1,12 +1,11 @@
 'use client';
 
-import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import { ArrowLeft, Plus } from 'lucide-react';
 import { useArtistTourContext } from '@/contexts/ArtistTourContext';
 import { useTourEditor } from '@/contexts/TourEditorContext';
-import { NewArtistSlideOver } from '@/components/artists/NewArtistSlideOver';
+import { ArtistCreateSlideOver } from '@/components/shell-v2/ArtistCreateSlideOver';
 import type { Tour } from '@/types';
 import { cn } from '@/lib/utils';
 
@@ -70,12 +69,15 @@ export function DashboardArtistGate({
   const [isNavigatingToTour, setIsNavigatingToTour] = useState(false);
 
   useEffect(() => {
+    // Sync the create-artist slide-over shut when we leave pick-artist mode.
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- syncing UI to an external (route-derived) mode change
     if (!pickArtistMode) setNewArtistOpen(false);
   }, [pickArtistMode]);
 
   useEffect(() => {
     // Once we leave dashboard, clear the in-flight tour navigation guard.
     if (!pathname?.startsWith('/dashboard')) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- resetting a nav guard on external route change
       setIsNavigatingToTour(false);
     }
   }, [pathname]);
@@ -123,11 +125,14 @@ export function DashboardArtistGate({
           }}
           onAddNew={() => setNewArtistOpen(true)}
         />
-        <NewArtistSlideOver
+        <ArtistCreateSlideOver
           open={newArtistOpen}
           onClose={() => setNewArtistOpen(false)}
-          onCreated={async () => {
+          onCreated={async (artist) => {
             await refetchArtists();
+            // Creating from the pick-artist gate selects the new artist.
+            setSelectedArtistId(artist.id);
+            router.replace('/dashboard');
           }}
         />
       </>
@@ -240,7 +245,7 @@ function DashboardChooseTour({
       </button>
       <h1 className="text-2xl font-bold text-lp-text">{artistName}</h1>
       <p className="mt-1 text-sm text-lp-text-secondary">
-        Select individual tour to manage, or 'All Tours' for an artist overview.
+        Select individual tour to manage, or &apos;All Tours&apos; for an artist overview.
       </p>
 
       <div className="mt-8 space-y-2">

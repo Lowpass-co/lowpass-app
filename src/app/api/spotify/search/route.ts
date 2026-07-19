@@ -2,7 +2,10 @@
    LOWPASS — Spotify Artist Search
 
    GET ?q=... — Search Spotify for artists.
-   Returns id, name, image_url, banner_url (if 2nd image).
+   Returns id, name, image_url, banner_url (if 2nd image), plus
+   genres / followers / popularity (AB — the artist builder's result
+   rows + confirm stats read these directly off the search hit, so no
+   follow-up per-artist meta call is needed).
    Requires SPOTIFY_CLIENT_ID + SPOTIFY_CLIENT_SECRET.
 
    Sprint 7 §2 — token helper + caching extracted to
@@ -21,9 +24,11 @@ export async function GET(request: Request) {
   }
 
   const { searchParams } = new URL(request.url);
+  // AB — the builder searches from the first character (search-as-you-type),
+  // so accept any non-empty query; Spotify itself tolerates 1-char queries.
   const q = searchParams.get('q')?.trim();
-  if (!q || q.length < 2) {
-    return NextResponse.json({ error: 'Query required (min 2 chars)' }, { status: 400 });
+  if (!q) {
+    return NextResponse.json({ error: 'Query required' }, { status: 400 });
   }
 
   const token = await getSpotifyToken();
@@ -53,17 +58,29 @@ export async function GET(request: Request) {
   }
 
   const data = await searchRes.json();
-  const artists = (data.artists?.items ?? []).map((a: { id: string; name: string; images?: { url: string }[] }) => {
-    const images = a.images ?? [];
-    const imageUrl = images[0]?.url ?? null;
-    const bannerUrl = images[1]?.url ?? images[0]?.url ?? null;
-    return {
-      id: a.id,
-      name: a.name,
-      image_url: imageUrl,
-      banner_url: bannerUrl,
-    };
-  });
+  const artists = (data.artists?.items ?? []).map(
+    (a: {
+      id: string;
+      name: string;
+      images?: { url: string }[];
+      genres?: string[];
+      followers?: { total?: number | null } | null;
+      popularity?: number | null;
+    }) => {
+      const images = a.images ?? [];
+      const imageUrl = images[0]?.url ?? null;
+      const bannerUrl = images[1]?.url ?? images[0]?.url ?? null;
+      return {
+        id: a.id,
+        name: a.name,
+        image_url: imageUrl,
+        banner_url: bannerUrl,
+        genres: Array.isArray(a.genres) ? a.genres : [],
+        followers: a.followers?.total ?? null,
+        popularity: typeof a.popularity === 'number' ? a.popularity : null,
+      };
+    },
+  );
 
   return NextResponse.json(artists);
 }
