@@ -1,6 +1,7 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { ChevronDown } from 'lucide-react';
 import { SpreadsheetGrid } from '@/components/spreadsheet-grid/SpreadsheetGrid';
 import type { GridColumn, GridRow } from '@/components/spreadsheet-grid/types';
 import type { BudgetSectionKind } from '@/lib/budget/budgetUx14Kinds';
@@ -111,6 +112,19 @@ export function BudgetSection({
         })})`
       : '';
 
+  // Collapsible sections (Adam) — the Σ total stays visible when collapsed so the
+  // number is readable without expanding. Persisted per section kind.
+  const storageKey = `lp-budget-collapsed-${kind}`;
+  const [collapsed, setCollapsed] = useState(false);
+  // localStorage is client-only; read after mount to avoid an SSR/hydration mismatch.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { if (typeof window !== 'undefined' && localStorage.getItem(storageKey) === '1') setCollapsed(true); }, [storageKey]);
+  const toggleCollapsed = () => setCollapsed((c) => {
+    const next = !c;
+    try { localStorage.setItem(storageKey, next ? '1' : '0'); } catch { /* ignore */ }
+    return next;
+  });
+
   const gridRows = useMemo<GridRow<BudgetLineItem>[]>(
     () => [
       ...rows.map((row) => ({
@@ -127,7 +141,20 @@ export function BudgetSection({
   return (
     <section id={kind} data-budget-section={kind} className="scroll-mt-28">
       <div className="mb-4 flex flex-wrap items-baseline gap-3">
-        <h2 className="text-xl font-semibold tracking-tight text-lp-text">{label ?? SECTION_LABELS[kind]}</h2>
+        <button
+          type="button"
+          onClick={toggleCollapsed}
+          aria-expanded={!collapsed}
+          className="group flex items-center gap-2 text-left"
+          title={collapsed ? 'Expand section' : 'Collapse section'}
+        >
+          <ChevronDown
+            size={18}
+            className={cn('shrink-0 text-lp-text-tertiary transition-transform duration-200 group-hover:text-lp-text-secondary', collapsed && '-rotate-90')}
+            aria-hidden
+          />
+          <h2 className="text-xl font-semibold tracking-tight text-lp-text">{label ?? SECTION_LABELS[kind]}</h2>
+        </button>
         <span
           className={cn(
             'inline-flex rounded-full border border-lp-border px-4 py-1 text-[11px] font-semibold uppercase tracking-wide lp-table-header-text',
@@ -139,14 +166,16 @@ export function BudgetSection({
           {fxLabel}
         </span>
       </div>
-      <SpreadsheetGrid<BudgetLineItem>
-        columns={columns}
-        rows={gridRows}
-        onCommitCell={onCommitCell}
-        onRowOpen={onRowOpen}
-        entitySearchTourId={entitySearchTourId}
-        ariaLabel={`Budget ${kind} grid`}
-      />
+      {!collapsed && (
+        <SpreadsheetGrid<BudgetLineItem>
+          columns={columns}
+          rows={gridRows}
+          onCommitCell={onCommitCell}
+          onRowOpen={onRowOpen}
+          entitySearchTourId={entitySearchTourId}
+          ariaLabel={`Budget ${kind} grid`}
+        />
+      )}
     </section>
   );
 }
