@@ -43,6 +43,8 @@ import { enrichLinesWithTransactionAggregates, fetchLineVendors } from '@/lib/bu
 import { enrichLinesWithAttachmentCounts } from '@/lib/budget/attachments';
 import { loadTourIncome, toIncomeRows } from '@/lib/budget/income';
 import { BudgetSummaryDashboard } from '@/components/budget/summary-cards/BudgetSummaryDashboard';
+import { DataHealthBanner } from '@/components/budget/DataHealthBanner';
+import { computeDataHealth } from '@/server/budget/dataHealth';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { computeTourPhases } from '@/server/budget/computeTourPhases';
 import { getBudgetPanelData } from '@/server/budget/getBudgetPanelData';
@@ -373,6 +375,13 @@ export default async function BudgetTourPage({
   }
   const fxMissing = [...fxUsed].filter((c) => c && c !== fxTour && fxRates[c] == null).sort();
 
+  // M1-A — data-health banner (Summary tab only, so other tabs don't pay for the
+  // queries). Derivable checks, computed server-side; no new tables.
+  const dataHealth =
+    tab === 'summary'
+      ? await computeDataHealth(supabase, tourId, workspaceId, tourCurrency)
+      : null;
+
   return (
     /* §B4 — BudgetDensityProvider wraps the whole budget page
        so the tab nav's density toggle + the grid + slide-over
@@ -413,6 +422,9 @@ export default async function BudgetTourPage({
         {/* Phase 0 — content top matches the section rhythm so the grid isn't
             jammed under the sticky band/burn/phase stack. */}
         <div className="space-y-6 px-4 pt-6">
+          {tab === 'summary' && dataHealth ? (
+            <DataHealthBanner items={dataHealth.items} total={dataHealth.total} />
+          ) : null}
           {tab === 'summary' ? (
             /* #29 — the Summary tab is now the customizable card dashboard.
                Presentation-only over computeBudgetPnl (same figures as before). */

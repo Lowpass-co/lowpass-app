@@ -1900,3 +1900,12 @@ src/lib/budget/actualsProvenance.harness.ts` → "18 checks passed, 0 failed".
   `actuals_source='settlement'` (tooltip "Synced from Settlement"), `Manual` when
   hand-entered, plus the `FX` chip on locked rows. `/grid-demo` renders no chips
   (sets neither `_provenance` nor `_fxLocked`). **Code-verified**; **Needs-live**.
+
+- **MON-02 — Data-health banner deep-links.** On the Budget **Summary** tab, when
+  the tour has derivable issues, an amber (NOT red) "N items to review" banner shows
+  above the dashboard. Expanding lists each check — past shows not settled · income
+  lines with no FX rate (foreign ccy) · assigned people with no rate · possible
+  duplicate lines — with a "Fix →" deep-link to the right surface (settlement /
+  income tab / payroll / expenses tab). Healthy tour ⇒ no banner. The unsettled-show
+  slice is the SAME derivation the M1-B catch-up queue consumes (computeDataHealth).
+  **Code-verified**; **Needs-live**.
