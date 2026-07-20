@@ -1,22 +1,18 @@
 'use client';
 
 /* ============================================================
-   LOWPASS — <RoutingReadinessRail> (Design pass §9 · TR-02)
+   LOWPASS — <RoutingStatLine> (routing redesign R1 · R4)
 
-   The readiness "rail" on the Routing tour-landing. Replaces the old four
-   boxed summary cards with ONE de-boxed, hairline-divided strip
-   (Shows · Crew · Conflicts · Pending) — "one strip, not four cards" ("looks
-   too AI"). Pending expands inline to the awaiting-contract / tentative /
-   shows-missing-venue detail (ported from the summary's PendingTasksPanel).
-
-   Read-only readiness only. The heavier summary surface (quick actions,
-   activity feed, upcoming-shows list, Edit-tour / Add-personnel slide-overs)
-   lives on the relocated /operations/[tourId]/summary tab — nothing dropped.
+   The Routing tour-landing's header readiness. The routing redesign collapsed the
+   old boxed KPI strip (<RoutingReadinessRail> + its Metric / PendingMetric cards)
+   into ONE mono stat line — days · shows · advanced · committed · pending⚠ — each
+   stat deep-linking where its box did, pending keeping the warning colour + the
+   inline review expander. R4 deleted the now-unreferenced boxed component; only
+   the stat line + its shared PendingDetail expander remain.
    ============================================================ */
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { Route, ClipboardCheck, Users, AlertTriangle, ListChecks, DollarSign } from 'lucide-react';
 import { parseRoutingDate } from '@/lib/utils';
 import { toTitleCase } from '@/lib/text/toTitleCase';
 import type { OperationsReadiness } from '@/server/operations/getOperationsReadiness';
@@ -34,92 +30,6 @@ function abbrevCommitted(value: number, currency: string): string {
   if (abs >= 1_000_000) return `${sym}${(value / 1_000_000).toFixed(1)}M`;
   if (abs >= 1_000) return `${sym}${Math.round(value / 1_000)}K`;
   return `${sym}${Math.round(value)}`;
-}
-
-export function RoutingReadinessRail({
-  tourId,
-  readiness,
-}: {
-  tourId: string;
-  readiness: Pick<
-    OperationsReadiness,
-    'shows' | 'advances' | 'crew' | 'budget' | 'conflicts' | 'pending'
-  >;
-}) {
-  const { shows, advances, crew, budget, conflicts, pending } = readiness;
-  const [pendingOpen, setPendingOpen] = useState(false);
-  const pendingCount =
-    pending.awaitingContract.length +
-    pending.tentative.length +
-    pending.showsWithoutVenue.length;
-
-  return (
-    <section
-      className="lp-view-tier"
-      aria-label="Tour readiness"
-      style={{
-        borderTop: '1px solid var(--lp-border-subtle)',
-        borderBottom: '1px solid var(--lp-border-subtle)',
-      }}
-    >
-      {/* §C4 — Routing · Advances · Crew · Budget (real counts). Conflicts stays
-          conditional (safety) and Pending keeps its inline review expander. */}
-      <div className="flex flex-wrap items-stretch">
-        <Metric
-          icon={<Route size={14} strokeWidth={2} />}
-          label="Routing"
-          value={String(shows.count)}
-          sub={
-            shows.nextShowDate
-              ? `next ${formatShowDate(shows.nextShowDate)}`
-              : 'no shows yet'
-          }
-          href={`/operations/${tourId}/routing`}
-          first
-        />
-        <Metric
-          icon={<ClipboardCheck size={14} strokeWidth={2} />}
-          label="Advances"
-          value={`${advances.done}/${advances.total}`}
-          sub={advances.total === 0 ? 'no shows yet' : advances.done === advances.total ? 'all complete' : 'complete'}
-          href={`/advance/${tourId}`}
-        />
-        <Metric
-          icon={<Users size={14} strokeWidth={2} />}
-          label="Crew"
-          value={String(crew.count)}
-          sub="assigned"
-          href={`/operations/${tourId}/personnel`}
-        />
-        <Metric
-          icon={<DollarSign size={14} strokeWidth={2} />}
-          label="Budget"
-          value={abbrevCommitted(budget.committed, budget.currency)}
-          sub="committed"
-          href={`/budget/${tourId}`}
-        />
-        {conflicts.count > 0 ? (
-          <Metric
-            icon={<AlertTriangle size={14} strokeWidth={2} />}
-            label="Conflicts"
-            value={String(conflicts.count)}
-            sub="cross-tour overlap"
-            href={`/operations/${tourId}/personnel?filter=conflicts`}
-            tone="warning"
-          />
-        ) : null}
-        <PendingMetric
-          count={pendingCount}
-          open={pendingOpen}
-          onToggle={() => setPendingOpen((o) => !o)}
-        />
-      </div>
-
-      {pendingOpen ? (
-        <PendingDetail tourId={tourId} pending={pending} />
-      ) : null}
-    </section>
-  );
 }
 
 /* Routing redesign R1 — the five KPI boxes collapse into ONE mono stat line
@@ -168,125 +78,6 @@ export function RoutingStatLine({
       </div>
       {pendingOpen ? <PendingDetail tourId={tourId} pending={pending} /> : null}
     </>
-  );
-}
-
-function Metric({
-  icon,
-  label,
-  value,
-  sub,
-  href,
-  tone = 'neutral',
-  first = false,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  sub: string;
-  href: string;
-  tone?: 'neutral' | 'warning';
-  first?: boolean;
-}) {
-  const accent =
-    tone === 'warning' ? 'var(--color-lp-orange)' : 'var(--lp-text-tertiary)';
-  return (
-    <Link
-      href={href}
-      className="btn-transition flex flex-col justify-center"
-      style={{
-        gap: 2,
-        padding: 'var(--lp-space-3) var(--lp-space-4)',
-        minWidth: 128,
-        textDecoration: 'none',
-        color: 'var(--lp-text)',
-        borderLeft: first ? 'none' : '1px solid var(--lp-border-subtle)',
-      }}
-    >
-      <span className="flex items-center" style={{ gap: 6, color: accent }}>
-        {icon}
-        <span
-          className="lp-label-caps"
-          style={{ fontSize: 'var(--lp-text-2xs)', color: accent }}
-        >
-          {label}
-        </span>
-      </span>
-      <span
-        className="lp-mono"
-        style={{
-          fontSize: 'var(--lp-text-xl)',
-          fontWeight: 'var(--lp-weight-bold)',
-          color: 'var(--lp-text)',
-          lineHeight: 1.1,
-        }}
-      >
-        {value}
-      </span>
-      <span style={{ fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-secondary)' }}>
-        {sub}
-      </span>
-    </Link>
-  );
-}
-
-function PendingMetric({
-  count,
-  open,
-  onToggle,
-}: {
-  count: number;
-  open: boolean;
-  onToggle: () => void;
-}) {
-  const accent = count > 0 ? 'var(--color-lp-orange)' : 'var(--lp-text-tertiary)';
-  return (
-    <button
-      type="button"
-      onClick={onToggle}
-      aria-expanded={open}
-      className="btn-transition flex flex-col justify-center text-left"
-      style={{
-        gap: 2,
-        padding: 'var(--lp-space-3) var(--lp-space-4)',
-        minWidth: 128,
-        cursor: 'pointer',
-        background: 'transparent',
-        border: 'none',
-        borderLeft: '1px solid var(--lp-border-subtle)',
-      }}
-    >
-      <span className="flex items-center" style={{ gap: 6, color: accent }}>
-        <ListChecks size={14} strokeWidth={2} />
-        <span
-          className="lp-label-caps"
-          style={{ fontSize: 'var(--lp-text-2xs)', color: accent }}
-        >
-          Pending
-        </span>
-      </span>
-      <span
-        className="lp-mono"
-        style={{
-          fontSize: 'var(--lp-text-xl)',
-          fontWeight: 'var(--lp-weight-bold)',
-          color: 'var(--lp-text)',
-          lineHeight: 1.1,
-        }}
-      >
-        {count}
-      </span>
-      {/* F1 — "all clear" (count 0) is NEUTRAL; orange only when there's
-          something to review (attention rule). */}
-      <span
-        style={{
-          fontSize: 'var(--lp-text-2xs)',
-          color: count === 0 ? 'var(--lp-text-tertiary)' : 'var(--color-lp-orange)',
-        }}
-      >
-        {count === 0 ? 'all clear' : open ? 'Hide' : 'Review'}
-      </span>
-    </button>
   );
 }
 
