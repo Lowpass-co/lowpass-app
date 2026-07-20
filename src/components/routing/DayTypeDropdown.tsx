@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown } from 'lucide-react';
 import { getDayTypeLabel, getDayTypeColor, parseDayTypes } from '@/lib/utils';
+import { colourForDayType } from '@/lib/routing/dayType';
 import type { DayType } from '@/types';
 import { cn } from '@/lib/utils';
 import { focusAdjacentCell } from '@/lib/keyboard/cellNav';
@@ -30,10 +31,17 @@ export function DayTypeDropdown({
   value,
   onChange,
   customTypes = [],
+  variant = 'boxed',
 }: {
   value: string;
   onChange: (value: string) => void;
   customTypes?: string[];
+  /** R2 ledger — 'ledger' renders the closed trigger as borderless text (colour
+   *  dot + label, mock `.dt`) that only shows the orange focus ring on focus.
+   *  The button, its handlers and DOM position are IDENTICAL to 'boxed', so the
+   *  keyboard contract (KEY-04..07 native Tab-order + arrows-in-place) is
+   *  unchanged — this is a pure visual variant. */
+  variant?: 'boxed' | 'ledger';
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
@@ -135,8 +143,11 @@ export function DayTypeDropdown({
         ? selected.map((t) => getDayTypeLabel(t)).join(', ')
         : `${selected.length} types`;
 
+  const isLedger = variant === 'ledger';
+  const primaryColour = selected[0] ? colourForDayType(selected[0]) : null;
+
   return (
-    <div className="relative min-w-[140px]" ref={ref}>
+    <div className={cn('relative', isLedger ? 'w-full' : 'min-w-[140px]')} ref={ref}>
       <button
         ref={triggerRef}
         type="button"
@@ -158,16 +169,43 @@ export function DayTypeDropdown({
             setMenu(true, e.key);
           }
         }}
-        className={cn(
-          'flex h-9 w-full items-center justify-between gap-2 rounded-xl border bg-lp-surface px-3 py-2 text-left text-sm transition-all duration-150',
-          open && 'ring-2 ring-lp-orange/20',
-          'border-lp-border focus:border-lp-orange focus:outline-none focus:ring-2 focus:ring-lp-orange/20'
-        )}
+        className={
+          isLedger
+            ? cn(
+                // Ledger: borderless text-until-touched. Orange inset ring only on
+                // focus (G2-2b cursor treatment); hover/open hints a faint surface.
+                'flex w-full items-center gap-1.5 rounded-md border border-transparent bg-transparent px-1.5 py-1 text-left text-xs transition-all duration-150',
+                'focus:outline-none focus-visible:ring-2 focus-visible:ring-lp-orange/60 focus-visible:border-lp-orange',
+                open && 'ring-2 ring-lp-orange/40 border-lp-orange',
+              )
+            : cn(
+                'flex h-9 w-full items-center justify-between gap-2 rounded-xl border bg-lp-surface px-3 py-2 text-left text-sm transition-all duration-150',
+                open && 'ring-2 ring-lp-orange/20',
+                'border-lp-border focus:border-lp-orange focus:outline-none focus:ring-2 focus:ring-lp-orange/20',
+              )
+        }
       >
-        <span className={cn('truncate', selected.length === 0 && 'text-lp-text-tertiary')}>
-          {summary}
-        </span>
-        <ChevronDown size={14} className={cn('shrink-0 text-lp-text-tertiary transition-transform duration-150', open && 'rotate-180')} />
+        {isLedger ? (
+          <>
+            {primaryColour ? (
+              <span
+                aria-hidden
+                className="inline-block shrink-0 rounded-full"
+                style={{ width: 7, height: 7, background: primaryColour }}
+              />
+            ) : null}
+            <span className={cn('truncate', selected.length === 0 && 'text-lp-text-tertiary')}>
+              {selected.length === 0 ? '—' : summary}
+            </span>
+          </>
+        ) : (
+          <>
+            <span className={cn('truncate', selected.length === 0 && 'text-lp-text-tertiary')}>
+              {summary}
+            </span>
+            <ChevronDown size={14} className={cn('shrink-0 text-lp-text-tertiary transition-transform duration-150', open && 'rotate-180')} />
+          </>
+        )}
       </button>
       {open &&
         dropdownRect &&

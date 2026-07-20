@@ -46,6 +46,8 @@ export function VenueAutocomplete({
   onLibrarySelect,
   placeholder = 'Venue',
   className,
+  variant = 'boxed',
+  ghost = false,
 }: {
   value: string;
   onChange: (venueName: string) => void;
@@ -56,6 +58,13 @@ export function VenueAutocomplete({
   onLibrarySelect?: (match: LibraryVenueMatch) => void;
   placeholder?: string;
   className?: string;
+  /** R2 ledger — 'ledger' renders the input as borderless 14px/500 text
+   *  (mock `.ven`) with an orange inset ring only on focus. The <input> node,
+   *  its ref and every handler are IDENTICAL to 'boxed', so KEY-06/07 (Tab
+   *  commits FK / free text) are unchanged — pure visual variant. */
+  variant?: 'boxed' | 'ledger';
+  /** Ledger only — ghost a travel-day venue (dimmer, weight 400) per the mock. */
+  ghost?: boolean;
 }) {
   const { showToast } = useToast();
   const [query, setQuery] = useState(value);
@@ -455,7 +464,13 @@ export function VenueAutocomplete({
           }
         }}
         placeholder={placeholder}
-        className="w-full min-w-[120px] rounded-xl border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:border-lp-orange focus:outline-none focus:ring-2 focus:ring-lp-orange/20"
+        className={
+          variant === 'ledger'
+            ? // Ledger — borderless 14px/500 text-until-touched; orange inset ring
+              // only on focus. Travel-day venues ghost (dim, weight 400).
+              `w-full rounded-md border border-transparent bg-transparent px-1.5 py-1 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:outline-none focus:border-lp-orange focus:ring-2 focus:ring-lp-orange/40 focus:bg-lp-surface ${ghost ? 'font-normal text-lp-text-tertiary' : 'font-medium'}`
+            : 'w-full min-w-[120px] rounded-xl border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text placeholder:text-lp-text-tertiary focus:border-lp-orange focus:outline-none focus:ring-2 focus:ring-lp-orange/20'
+        }
       />
       {loading && (
         <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-lp-text-tertiary">

@@ -14,10 +14,12 @@ import { useRouter } from 'next/navigation';
 import { LayoutGrid, Calendar, MapPin, Download, Copy, Check, X, ClipboardCheck, Calculator, LayoutDashboard } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
 import { StyledSelect } from '@/components/ui/StyledSelect';
-import { RoutingGrid, type RoutingRow } from './RoutingGrid';
+import { type RoutingRow } from './RoutingGrid';
+import { RoutingLedger } from './RoutingLedger';
 import { RoutingCalendar } from './RoutingCalendar';
 import { RoutingExportButton } from './RoutingExportButton';
 import type { PrimaryTransit } from './RoutingMap';
+import type { RoutingStatusByDate } from '@/server/operations/getRoutingDayStatus';
 import { useRealtimeRows } from '@/lib/realtime/useRealtimeRows';
 
 const RoutingMap = dynamic(() => import('./RoutingMap').then((m) => m.RoutingMap), { ssr: false });
@@ -130,6 +132,7 @@ export function RoutingEditor({
   endDate,
   initialCustomDayTypes = [],
   readOnly = false,
+  statusByDate = {},
 }: {
   tourId: string;
   startDate: string;
@@ -141,6 +144,9 @@ export function RoutingEditor({
    *  write permission for operations.routing. Realtime sync +
    *  view toggle still work. */
   readOnly?: boolean;
+  /** R2 — per-date status dots (advance · hotel · crew), derived once in the
+   *  page loader (getRoutingDayStatus). Keyed by YYYY-MM-DD. */
+  statusByDate?: RoutingStatusByDate;
 }) {
   const [rows, setRows] = useState<RoutingRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -571,19 +577,18 @@ export function RoutingEditor({
             />
           </div>
           <div ref={gridWrapperRef}>
-            <RoutingGrid
+            {/* R2 — the ledger replaces the input-grid for the routing surface.
+                <RoutingGrid> stays live for the tour-create slide-over's compact
+                variant; this view uses the text-until-touched ledger. */}
+            <RoutingLedger
               rows={rows}
-              onChange={(next) => {
-                hasUserEditedRef.current = true;
-                setRows(next);
-                scheduleAutosaveRef.current?.();
-              }}
               updateRow={updateRow}
               primaryTransit={primaryTransit}
               customDayTypes={customDayTypes}
-              onAddCustomDayType={handleAddCustomDayType}
               tourId={tourId}
               advanceByDate={advanceByDate}
+              statusByDate={statusByDate}
+              readOnly={readOnly}
               // Part 2 — flush a pending autosave before leaving for Advance so the
               // edit can't be discarded by the (soft) navigation.
               onOpenAdvance={(routingId) => {

@@ -30,6 +30,10 @@ import {
   type OperationsReadiness,
 } from '@/server/operations/getOperationsReadiness';
 import {
+  getRoutingDayStatus,
+  type RoutingStatusByDate,
+} from '@/server/operations/getRoutingDayStatus';
+import {
   getActiveMembership,
   fetchActiveGrants,
   canAccess,
@@ -107,13 +111,19 @@ export default async function OperationsTourRoutingPage({
   // TR-02 — readiness rail data (Shows / Crew / Conflicts / Pending), shared
   // with the relocated /summary surface via getOperationsReadiness.
   let readiness: OperationsReadiness | null = null;
+  // R2 — per-date status dots (advance · hotel · crew), derived once here (one
+  // batch, no per-cell queries) and handed to the ledger.
+  let statusByDate: RoutingStatusByDate = {};
   if (canRead) {
-    readiness = await getOperationsReadiness(supabase, {
-      tourId,
-      workspaceId: membership.workspace_id,
-      tourStartDate: tourRow.start_date,
-      tourEndDate: tourRow.end_date,
-    });
+    [readiness, statusByDate] = await Promise.all([
+      getOperationsReadiness(supabase, {
+        tourId,
+        workspaceId: membership.workspace_id,
+        tourStartDate: tourRow.start_date,
+        tourEndDate: tourRow.end_date,
+      }),
+      getRoutingDayStatus(supabase, { tourId }),
+    ]);
     const { data: routingRows } = await supabase
       .from('routing')
       .select('id, date, day_type')
@@ -216,6 +226,7 @@ export default async function OperationsTourRoutingPage({
             endDate={tourRow.end_date ?? ''}
             initialCustomDayTypes={tourRow.custom_day_types ?? []}
             readOnly={!canWrite}
+            statusByDate={statusByDate}
           />
         )}
       </div>

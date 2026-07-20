@@ -122,17 +122,29 @@ function TransportPills({
   );
 }
 
-/** Compact travel distance/time box for the dedicated row between date rows. */
-function TravelBox({
+/** Compact "2h15" (no space, zero-padded minutes) for the ledger transit column. */
+function formatHoursCompact(hours: number): string {
+  const h = Math.floor(hours);
+  const m = Math.round((hours - h) * 60);
+  return `${h}h${String(m).padStart(2, '0')}`;
+}
+
+/** Compact travel distance/time box for the dedicated row between date rows.
+ *  R2 — `variant="inline"` renders the ledger transit COLUMN value
+ *  (mono "2h15 · 155mi", drive-time in the travel hue) reusing the exact same
+ *  drive-time computation, so the interleaved rows can be deleted. */
+export function TravelBox({
   row,
   nextRow,
   primaryTransit,
   transportToNext,
+  variant = 'box',
 }: {
   row: RoutingRow;
   nextRow: RoutingRow;
   primaryTransit: PrimaryTransit;
   transportToNext: TransportToNext;
+  variant?: 'box' | 'inline';
 }) {
   const [driveHours, setDriveHours] = useState<number | null>(null);
   const [driveLoading, setDriveLoading] = useState(false);
@@ -166,7 +178,7 @@ function TravelBox({
   }, [useGoogleDrive, row.latitude, row.longitude, nextRow.latitude, nextRow.longitude]);
 
   if (!hasCoords) {
-    return (
+    return variant === 'inline' ? null : (
       <span className="inline-flex items-center gap-1 text-lp-text-tertiary text-sm">—</span>
     );
   }
@@ -189,6 +201,25 @@ function TravelBox({
   const travelColor = travelColorVar(hours, miles);
   const Icon = transportToNext === 'fly' || primaryTransit === 'flight' ? Plane : primaryTransit === 'car' ? Car : Bus;
   const showLoading = useGoogleDrive && driveLoading;
+
+  // R2 ledger transit column — flat mono text, no button chrome. Drive time keeps
+  // the semantic hue; distance stays muted. Loading collapses to an ellipsis.
+  if (variant === 'inline') {
+    if (showLoading) {
+      return (
+        <span className="lp-mono" style={{ fontSize: '12.5px', color: 'var(--lp-text-tertiary)' }}>
+          …
+        </span>
+      );
+    }
+    return (
+      <span className="lp-mono" style={{ fontSize: '12.5px', color: 'var(--lp-text-tertiary)' }}>
+        <span style={{ color: travelColor }}>{formatHoursCompact(hours)}</span>
+        {' · '}
+        {Math.round(miles)}mi
+      </span>
+    );
+  }
 
   return (
     <button

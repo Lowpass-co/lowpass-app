@@ -372,6 +372,12 @@
   --lp-cell-indicator-size-cozy: 16px;
 }
 
+/* Routing redesign (R2) — ledger row hover. The main row raises a faint
+   surface tint on hover; the expansion panel keeps its own background. */
+.lp-ledger-row:hover {
+  background: var(--lp-surface-hover);
+}
+
 /* Phase B §B4 — density-aware overrides for monospace numeric
    cells in the budget grid. Td applies data-density; the rule
    below bumps .lp-mono children to the larger numeric size
