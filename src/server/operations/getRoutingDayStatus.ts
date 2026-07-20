@@ -20,9 +20,14 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 export type DotState = 'off' | 'done' | 'warn';
 
 export interface RoutingDayStatus {
+  /** The routing row's id — carried so the ledger can deep-link Advance / day
+   *  without the client rows (which are date-keyed) having to hold the id. */
+  routingId: string;
   advance: DotState;
   hotel: DotState;
   crew: DotState;
+  /** Labor-call count for the day — powers the "Schedule [n]" badge (R3). */
+  crewCount: number;
 }
 
 export type RoutingStatusByDate = Record<string, RoutingDayStatus>;
@@ -65,7 +70,7 @@ export async function getRoutingDayStatus(
   const byDate: RoutingStatusByDate = {};
   for (const r of rows) {
     const d = isoDate(r.date);
-    if (d) byDate[d] = { advance: 'off', hotel: 'off', crew: 'off' };
+    if (d) byDate[d] = { routingId: r.id, advance: 'off', hotel: 'off', crew: 'off', crewCount: 0 };
   }
 
   const [advanceRes, hotelsRes, laborRes] = await Promise.all([
@@ -109,10 +114,13 @@ export async function getRoutingDayStatus(
     }
   }
 
-  // crew — green for any day that has at least one labor call.
+  // crew — green + count for any day that has at least one labor call.
   for (const l of (laborRes.data ?? []) as Array<{ routing_id: string }>) {
     const d = dateById.get(l.routing_id);
-    if (d && byDate[d]) byDate[d].crew = 'done';
+    if (d && byDate[d]) {
+      byDate[d].crew = 'done';
+      byDate[d].crewCount += 1;
+    }
   }
 
   return byDate;

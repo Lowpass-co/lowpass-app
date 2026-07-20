@@ -27,12 +27,24 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { createPortal } from 'react-dom';
 import { parseRoutingDate } from '@/lib/utils';
 import { colourForDayType } from '@/lib/routing/dayType';
 import { ContextMenu } from '@/components/ui/ContextMenu';
 import { DeleteConfirmationModal } from '@/components/ui/DeleteConfirmationModal';
-import { Eraser, ExternalLink, Trash2, Link2, ChevronDown } from 'lucide-react';
+import {
+  Eraser,
+  ExternalLink,
+  Trash2,
+  Link2,
+  ChevronDown,
+  FileText,
+  ClipboardCheck,
+  CalendarClock,
+  Calculator,
+  BedDouble,
+} from 'lucide-react';
 import type { PrimaryTransit } from './RoutingMap';
 import { DayTypeDropdown } from './DayTypeDropdown';
 import { VenueAutocomplete } from './VenueAutocomplete';
@@ -55,7 +67,7 @@ function dateParts(dateStr: string): { lead: string; tail: string } {
 }
 
 function StatusDots({ status }: { status: RoutingDayStatus | undefined }) {
-  const dots: { key: keyof RoutingDayStatus; label: string }[] = [
+  const dots: { key: 'advance' | 'hotel' | 'crew'; label: string }[] = [
     { key: 'advance', label: 'Advance' },
     { key: 'hotel', label: 'Hotel' },
     { key: 'crew', label: 'Crew' },
@@ -357,6 +369,11 @@ function LedgerRow({
               {row.venue_capacity != null ? row.venue_capacity.toLocaleString('en-GB') : '—'}
             </div>
           </ExpansionField>
+          <ExpansionField label="Transport">
+            <div className="text-sm" style={{ color: 'var(--lp-text-secondary)', paddingTop: 6 }}>
+              {transportSummary(row, status?.hotel === 'done')}
+            </div>
+          </ExpansionField>
           <div style={{ gridColumn: '1 / 3' }}>
             <ExpansionField label="Notes">
               <input
@@ -369,9 +386,54 @@ function LedgerRow({
               />
             </ExpansionField>
           </div>
-          {/* Context menu (Clear / Open advance / Delete) lives in the expansion. */}
-          <div className="flex items-end justify-end">
-            <ContextMenu items={menuItems} align="right" />
+
+          {/* Graded cross-link button row — the day's spokes. Open day sheet is
+              primary; Advance flushes autosave then soft-navs; Schedule shows the
+              call count and preselects the date; Day budget is a product jump;
+              Rooming only appears when a hotel is attached. Clear / Delete stay in
+              the trailing context menu. */}
+          <div className="flex flex-wrap items-center gap-[10px]" style={{ gridColumn: '1 / -1', marginTop: 2 }}>
+            {tourId ? (
+              <CrossLink
+                primary
+                icon={FileText}
+                label="Open day sheet"
+                // Single-day sheet when we hold the routing id; else the day-timeline
+                // deep-linked by date (a brand-new unsaved row has no id yet).
+                href={
+                  status?.routingId
+                    ? `/operations/${tourId}/day/${status.routingId}`
+                    : `/operations/${tourId}/day?date=${encodeURIComponent(row.date.slice(0, 10))}`
+                }
+              />
+            ) : null}
+            {tourId && status?.routingId ? (
+              <CrossLink
+                icon={ClipboardCheck}
+                label="Advance this show"
+                onClick={() => {
+                  if (onOpenAdvance) onOpenAdvance(status.routingId);
+                  else window.location.assign(`/advance/${tourId}/${status.routingId}`);
+                }}
+              />
+            ) : null}
+            {tourId ? (
+              <CrossLink
+                icon={CalendarClock}
+                label="Schedule"
+                count={status?.crewCount ?? 0}
+                href={`/operations/${tourId}/labor?date=${encodeURIComponent(row.date.slice(0, 10))}`}
+              />
+            ) : null}
+            {tourId ? (
+              <CrossLink icon={Calculator} label="Day budget" href={`/budget?tour_id=${tourId}`} />
+            ) : null}
+            {tourId && status?.hotel === 'done' ? (
+              <CrossLink icon={BedDouble} label="Rooming" href={`/operations/${tourId}/rooming`} />
+            ) : null}
+            <span className="ml-auto">
+              <ContextMenu items={menuItems} align="right" />
+            </span>
           </div>
         </div>
       ) : null}
@@ -391,6 +453,74 @@ function LedgerRow({
           document.body,
         )}
     </div>
+  );
+}
+
+/** One-line transport summary for the expansion (mock: "Bus · hotel after show"). */
+function transportSummary(row: RoutingRow, hotelAttached: boolean): string {
+  const mode =
+    row.transport_to_next === 'fly' ? 'Fly' : row.transport_to_next === 'drive' ? 'Drive' : 'Default';
+  return hotelAttached ? `${mode} · hotel attached` : mode;
+}
+
+/** Graded cross-link button (mock `.ex .links a`). `primary` → orange fill. */
+function CrossLink({
+  href,
+  onClick,
+  icon: Icon,
+  label,
+  count,
+  primary = false,
+}: {
+  href?: string;
+  onClick?: () => void;
+  icon: typeof FileText;
+  label: string;
+  count?: number;
+  primary?: boolean;
+}) {
+  const inner = (
+    <>
+      <Icon className="h-3.5 w-3.5 shrink-0" style={{ opacity: 0.85 }} />
+      <span>{label}</span>
+      {count != null ? (
+        <span
+          className="lp-mono"
+          style={{
+            fontSize: '10.5px',
+            color: primary ? '#fff' : 'var(--lp-text-tertiary)',
+            background: primary ? 'rgba(255,255,255,.15)' : 'var(--lp-bg-secondary)',
+            borderRadius: 4,
+            padding: '1px 6px',
+            marginLeft: 2,
+          }}
+        >
+          {count}
+        </span>
+      ) : null}
+    </>
+  );
+  const className = `lp-cross-link inline-flex items-center gap-[7px] rounded-lg text-[12.5px] font-medium transition-colors ${
+    primary ? 'lp-cross-link--primary' : ''
+  }`;
+  const style: React.CSSProperties = {
+    padding: '8px 14px',
+    textDecoration: 'none',
+    color: primary ? '#fff' : 'var(--lp-text)',
+    background: primary ? 'var(--lp-orange)' : 'var(--lp-surface)',
+    border: `1px solid ${primary ? 'var(--lp-orange)' : 'var(--lp-border)'}`,
+  };
+  if (href) {
+    return (
+      <Link href={href} className={className} style={style}>
+        {inner}
+      </Link>
+    );
+  }
+  return (
+    <button type="button" onClick={onClick} className={className} style={style}>
+      {inner}
+    </button>
   );
 }
 

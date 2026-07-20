@@ -8,8 +8,9 @@
 
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import type { LaborCall } from '@/lib/labor-calls/types';
 
 interface Day {
@@ -28,6 +29,11 @@ function fmtDate(d: string | null): string {
 
 export function LaborTourView({ tourId, days }: { tourId: string; days: Day[] }) {
   const [calls, setCalls] = useState<LaborCall[] | null>(null);
+  // R3 — the routing ledger's "Schedule" cross-link deep-links with ?date=YYYY-MM-DD.
+  // Scroll that day's card into view + briefly ring it once the calls have loaded.
+  const searchParams = useSearchParams();
+  const focusDate = searchParams.get('date');
+  const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetch(`/api/labor-calls?tour_id=${tourId}`)
@@ -35,6 +41,19 @@ export function LaborTourView({ tourId, days }: { tourId: string; days: Day[] })
       .then((j) => setCalls((j.calls ?? []) as LaborCall[]))
       .catch(() => setCalls([]));
   }, [tourId]);
+
+  useEffect(() => {
+    if (!focusDate || calls == null || !listRef.current) return;
+    const el = listRef.current.querySelector<HTMLElement>(`[data-labor-date="${focusDate}"]`);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    el.style.transition = 'box-shadow .2s ease';
+    el.style.boxShadow = '0 0 0 2px var(--lp-orange)';
+    const t = setTimeout(() => {
+      el.style.boxShadow = '';
+    }, 1600);
+    return () => clearTimeout(t);
+  }, [focusDate, calls]);
 
   const byRouting = useMemo(() => {
     const m = new Map<string, LaborCall[]>();
@@ -50,7 +69,7 @@ export function LaborTourView({ tourId, days }: { tourId: string; days: Day[] })
   const daysWithCalls = days.filter((d) => byRouting.has(d.id));
 
   return (
-    <div className="flex flex-col gap-3">
+    <div ref={listRef} className="flex flex-col gap-3">
       <p className="text-xs text-lp-text-tertiary">
         Read-only. Edit a day&apos;s calls on its advance page — the day is the editing home.
       </p>
@@ -62,7 +81,7 @@ export function LaborTourView({ tourId, days }: { tourId: string; days: Day[] })
       {daysWithCalls.map((d) => {
         const dc = byRouting.get(d.id) ?? [];
         return (
-          <div key={d.id} className="rounded-lg border border-lp-border bg-lp-surface p-3">
+          <div key={d.id} data-labor-date={d.date ?? undefined} className="rounded-lg border border-lp-border bg-lp-surface p-3">
             <div className="mb-2 flex items-center justify-between gap-2">
               <div className="text-sm font-semibold text-lp-text">
                 {fmtDate(d.date)}

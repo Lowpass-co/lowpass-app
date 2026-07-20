@@ -378,6 +378,17 @@
   background: var(--lp-surface-hover);
 }
 
+/* Routing redesign (R3) — expansion cross-link buttons. Secondary hovers to an
+   orange edge + faint orange wash (mock `.ex .links a:hover`); primary darkens. */
+.lp-cross-link:hover {
+  border-color: var(--lp-orange) !important;
+  background: color-mix(in srgb, var(--lp-orange) 5%, transparent) !important;
+}
+.lp-cross-link--primary:hover {
+  background: var(--lp-orange-hover) !important;
+  border-color: var(--lp-orange-hover) !important;
+}
+
 /* Phase B §B4 — density-aware overrides for monospace numeric
    cells in the budget grid. Td applies data-density; the rule
    below bumps .lp-mono children to the larger numeric size
