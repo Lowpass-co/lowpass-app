@@ -154,6 +154,12 @@ export async function POST(request: Request) {
     // actuals_source is 'manual' (set via the settlement UI's per-row conflict
     // "overwrite" confirm). Absent/false = respect the manual provenance.
     overwrite_manual_actuals?: boolean;
+    // M1-B — Walk fields on the settlement grain (migration 243). deposit_received
+    // reduces Balance due; full_and_final marks the show settled-paid (clears the
+    // catch-up queue). The itemized deductions Σ is pushed here as reconciled_
+    // deductions so the existing income cascade carries it unchanged.
+    deposit_received?: number | null;
+    full_and_final?: boolean;
   };
   try {
     body = await request.json();
@@ -237,6 +243,9 @@ export async function POST(request: Request) {
   if (body.reconciled_tickets_sold !== undefined) payload.reconciled_tickets_sold = body.reconciled_tickets_sold;
   if (body.day_of_gross !== undefined) payload.day_of_gross = body.day_of_gross;
   if (body.reconciled_gross !== undefined) payload.reconciled_gross = body.reconciled_gross;
+  // M1-B — Walk grain fields.
+  if (body.deposit_received !== undefined) payload.deposit_received = body.deposit_received;
+  if (body.full_and_final !== undefined) payload.full_and_final = body.full_and_final;
 
   if (status === 'reconciled') {
     payload.reconciled_at = now;
