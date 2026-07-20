@@ -26,7 +26,7 @@ export default async function OperationsTourPayrollPage({
 
   const { data: tour, error: tourError } = await supabase
     .from('tours')
-    .select('id, name, currency, workspace_id')
+    .select('id, name, currency, workspace_id, payroll_finalized_at')
     .eq('id', tourId)
     .single();
 
@@ -178,6 +178,7 @@ export default async function OperationsTourPayrollPage({
         rateTypes={rateTypeRows ?? []}
         rateLines={rateLineRows ?? []}
         focusRateId={focusRateId ?? null}
+        finalizedAt={(tour as { payroll_finalized_at?: string | null }).payroll_finalized_at ?? null}
       />
     </div>
   );

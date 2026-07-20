@@ -16,6 +16,8 @@
    ============================================ */
 
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useRouter } from 'next/navigation';
+import { Lock, Unlock } from 'lucide-react';
 import type { PersonnelRate } from '@/types';
 import type { RateBucket, RateBasis, DayStatus } from '@/lib/payroll/fees';
 import type { RateTypeMeta } from '@/lib/payroll/rateLines';
@@ -44,6 +46,9 @@ interface PayrollViewProps {
   /** PAY-09 deep-link — personnel_rates.id to focus on landing (Personnel rate
    *  click → ?focus=). Expands Rates, flashes the row + matrix row, then fades. */
   focusRateId?: string | null;
+  /** M1-C — the tour's payroll_finalized_at (null = editable). When set, the grids
+   *  go read-only and the finalize bar shows; the server rejects writes regardless. */
+  finalizedAt?: string | null;
 }
 
 function toMeta(r: RateTypeRow): RateTypeMeta {
@@ -68,7 +73,9 @@ export function PayrollView({
   rateTypes = [],
   rateLines = [],
   focusRateId = null,
+  finalizedAt = null,
 }: PayrollViewProps) {
+  const finalized = !!finalizedAt;
   const [rates, setRates] = useState<Record<string, unknown>[]>(personnelRates);
 
   // PAY-09 deep-link — land on Payroll with a person focused (Personnel rate
@@ -134,6 +141,8 @@ export function PayrollView({
         </div>
       </div>
 
+      <FinalizeBar tourId={tourId} finalizedAt={finalizedAt} />
+
       {/* G2-1b — the DAYS MATRIX is the work surface and dominates. Rates + Summary
           collapse to disclosures (Rates is reference while painting; Summary is
           read-only derived data), so opening Payroll shows the matrix ready to
@@ -165,6 +174,7 @@ export function PayrollView({
           amountMap={amountMap}
           onRateLineCommit={onRateLineCommit}
           highlightRowId={flashKey}
+          finalized={finalized}
         />
       </Disclosure>
 
@@ -182,9 +192,62 @@ export function PayrollView({
           rateTypes={types}
           amountMap={amountMap}
           focusRowId={flashKey}
+          finalized={finalized}
         />
       </section>
 
+    </div>
+  );
+}
+
+/** M1-C — the finalize lock bar. When finalized: an amber banner + admin Unlock.
+ *  When editable: a subtle "Finalize payroll" action. The server enforces the lock
+ *  regardless (src/lib/payroll/finalize.ts); this is the affordance + the cue. */
+function FinalizeBar({ tourId, finalizedAt }: { tourId: string; finalizedAt: string | null }) {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const finalized = !!finalizedAt;
+
+  async function act(method: 'POST' | 'DELETE') {
+    setBusy(true);
+    try {
+      const res = await fetch(`/api/tours/${tourId}/payroll/finalize`, { method });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        alert(typeof j.error === 'string' ? j.error : 'Action failed');
+        return;
+      }
+      router.refresh();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (finalized) {
+    const when = finalizedAt ? new Date(finalizedAt).toLocaleDateString() : '';
+    return (
+      <div
+        className="flex flex-wrap items-center justify-between"
+        style={{
+          gap: 8, padding: '8px 12px', borderRadius: 'var(--lp-radius-md)',
+          background: 'color-mix(in srgb, var(--color-lp-warning) 8%, transparent)',
+          border: '1px solid color-mix(in srgb, var(--color-lp-warning) 40%, transparent)',
+        }}
+      >
+        <span className="flex items-center" style={{ gap: 6, fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text)' }}>
+          <Lock size={14} /> Finalized {when} — rates &amp; days are read-only.
+        </span>
+        <button type="button" disabled={busy} onClick={() => void act('DELETE')} className="btn-transition inline-flex items-center" style={{ gap: 4, padding: '4px 10px', fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text-secondary)', background: 'transparent', border: '1px solid var(--lp-border-strong)', borderRadius: 'var(--lp-radius-md)', cursor: 'pointer' }}>
+          <Unlock size={13} /> Unlock to edit
+        </button>
+      </div>
+    );
+  }
+  return (
+    <div className="flex justify-end">
+      <button type="button" disabled={busy} onClick={() => void act('POST')} className="btn-transition inline-flex items-center" style={{ gap: 4, padding: '4px 10px', fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text-tertiary)', background: 'transparent', border: '1px solid var(--lp-border-subtle)', borderRadius: 'var(--lp-radius-md)', cursor: 'pointer' }} title="Lock rates + days so they can't be edited">
+        <Lock size={12} /> Finalize payroll
+      </button>
     </div>
   );
 }

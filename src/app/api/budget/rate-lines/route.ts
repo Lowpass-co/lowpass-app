@@ -12,6 +12,7 @@
 
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { isPayrollFinalized, PAYROLL_FINALIZED_ERROR } from '@/lib/payroll/finalize';
 
 export async function PATCH(request: Request) {
   const supabase = await createServerSupabaseClient();
@@ -41,6 +42,11 @@ export async function PATCH(request: Request) {
     .eq('workspace_id', wid)
     .maybeSingle<{ id: string; tour_id: string; workspace_id: string }>();
   if (!pr) return NextResponse.json({ error: 'Rate card not found' }, { status: 404 });
+
+  // M1-C — reject rate edits when the tour's payroll is finalized (locked).
+  if (await isPayrollFinalized(supabase, pr.tour_id)) {
+    return NextResponse.json({ error: PAYROLL_FINALIZED_ERROR }, { status: 409 });
+  }
 
   // Confirm the type is visible to this workspace (global default or ours).
   const { data: rt } = await supabase

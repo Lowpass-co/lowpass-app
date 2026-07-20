@@ -618,3 +618,25 @@ Split rate, Flat tour, Weekly, Per diem only. Then paint them days in the matrix
   is a 2px orange inset ring, week markers a subtle rule + small-caps label.
 - **Money untouched** — reconcile 64/64 · fees 15 (presentational only). **Needs-live**
   (screenshots at 1440 + 1920).
+
+## M1-C — Inline rate + payroll finalize lock
+
+#### PAY-15 — Inline effective rate in the matrix left block
+**Do**: Open Payroll days matrix. Read the left block under each person's name·role.
+**Expect**: the person's effective rate shows in mono (e.g. `£300/day`, `£4,500 flat`,
+`£1,000/wk`, `£40/day PD`), read from the rates SSOT (`amountOf` on the amountMap) —
+so the matrix answers "what is this cell worth" without opening the Rates disclosure.
+Day-rate/split → `/day`; flat_tour → ` flat`; weekly → `/wk`; per_diem_only → `/day PD`.
+Zero-rate people show no rate. Folded into the role line to hold the 52px row height.
+**Code-verified**; **Needs-live**.
+
+#### PAY-16 — Finalize locks payroll SERVER-SIDE; admin unlock restores
+**Do**: Click **Finalize payroll**. Try to paint a day cell / edit a rate. Then (as
+admin) **Unlock to edit**.
+**Expect**: after finalize, an amber "Finalized <date> — read-only" bar shows; the
+matrix paint/fill and the rates grid are read-only in the UI. Critically the LOCK IS
+SERVER-SIDE — `POST /api/budget/payroll` and `PATCH /api/budget/rate-lines` both
+return **409** ("Payroll is finalized…") while `tours.payroll_finalized_at` is set,
+regardless of the UI. **Unlock is admin-only** (`DELETE /api/tours/[id]/payroll/finalize`)
+— a non-admin gets 403; unlock clears the timestamp and writes flow again.
+**Code-verified** (server guards in src/lib/payroll/finalize.ts); **Needs-live**.

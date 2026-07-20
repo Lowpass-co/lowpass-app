@@ -21,8 +21,8 @@ import { countDayStatuses } from '@/lib/payroll/fees';
 import { BRUSH_TYPES, brushTypeToStatus, type BrushType } from '@/lib/payroll/effectiveDayType';
 import { colourForDayType, labelForDayType } from '@/lib/routing/dayType';
 import { getWeekStart, formatWeekLabel } from '@/lib/routing/week';
-import type { RateTypeMeta } from '@/lib/payroll/rateLines';
-import { personTotals, type LineAmountMap } from './rateLinesClient';
+import { DEFAULT_RATE_TYPE_IDS, type RateTypeMeta } from '@/lib/payroll/rateLines';
+import { amountOf, personTotals, type LineAmountMap } from './rateLinesClient';
 import type { RoutingDay, PayrollPerson } from './usePayrollGrid';
 
 const STATUS_TINT: Record<string, string> = {
@@ -46,6 +46,27 @@ const RATE_TYPE_LABEL: Record<string, string> = {
   weekly: 'Weekly',
   per_diem_only: 'Per diem only',
 };
+
+/* M1-C — inline effective rate in the left block. The matrix answers "what is this
+   cell worth" without opening the Rates disclosure. Reads the rates SSOT amountMap. */
+function effectiveRate(rateType: string, map: LineAmountMap, personnelRateId: string): number {
+  const id = DEFAULT_RATE_TYPE_IDS;
+  switch (rateType) {
+    case 'day_rate': return amountOf(map, personnelRateId, id.dayRate);
+    case 'flat_tour': return amountOf(map, personnelRateId, id.flatTour);
+    case 'weekly': return amountOf(map, personnelRateId, id.weekly);
+    case 'per_diem_only': return amountOf(map, personnelRateId, id.perDiem);
+    default: return amountOf(map, personnelRateId, id.show); // split_rate + fallback
+  }
+}
+function rateUnit(rateType: string): string {
+  switch (rateType) {
+    case 'flat_tour': return ' flat';
+    case 'weekly': return '/wk';
+    case 'per_diem_only': return '/day PD';
+    default: return '/day';
+  }
+}
 
 /** Rate types whose FEE moves with painted days (split by day-status, or flat per
  *  active day). For everything else — Flat tour (fixed), Weekly (per week), Per
@@ -129,6 +150,7 @@ export function PayrollDaysMatrix({
   rateTypes,
   amountMap,
   focusRowId,
+  finalized = false,
 }: {
   routingDates: RoutingDay[];
   personnelRates: Record<string, unknown>[];
@@ -146,6 +168,8 @@ export function PayrollDaysMatrix({
   /** PAY-09 deep-link — the person row (personnel_rates.id) to flash + scroll to
    *  on landing. Null clears the ring; the caller owns the fade timer. */
   focusRowId?: string | null;
+  /** M1-C — payroll finalized: painting/fill are no-ops (the server also rejects). */
+  finalized?: boolean;
 }) {
   const people = useMemo(() => personnelRates.map(toPerson), [personnelRates]);
   // Per-person rate_type (for the left-block "· Day rate" label).
@@ -202,11 +226,12 @@ export function PayrollDaysMatrix({
 
   const paint = useCallback(
     (personId: string, date: string, mode: 'paint' | 'erase') => {
+      if (finalized) return; // M1-C — locked; the server rejects too.
       touched.current.add(`${personId}:${date}`);
       if (mode === 'erase') void saveDayStatus(personId, date, 'no_tour');
       else void saveDayType(personId, date, brush);
     },
-    [brush, saveDayStatus, saveDayType],
+    [brush, saveDayStatus, saveDayType, finalized],
   );
 
   // Commit the whole rectangle between anchor and cursor with the drag's mode.
@@ -245,6 +270,7 @@ export function PayrollDaysMatrix({
 
   const runFill = useCallback(
     (mode: 'untouched' | 'all') => {
+      if (finalized) { setFillOpen(false); return; } // M1-C — locked.
       for (const p of people) {
         const pairs: { date: string; status: string }[] = [];
         for (const d of days) {
@@ -256,7 +282,7 @@ export function PayrollDaysMatrix({
       }
       setFillOpen(false);
     },
-    [people, days, isExplicit, brush, tourDayTypeOf, fillDays],
+    [people, days, isExplicit, brush, tourDayTypeOf, fillDays, finalized],
   );
 
   // Live per-person stats from the row's own cells (same fees.ts engine as
@@ -406,6 +432,8 @@ export function PayrollDaysMatrix({
             const rtKey = rateTypeById.get(p.id) ?? 'day_rate';
             const rt = RATE_TYPE_LABEL[rtKey] ?? 'Day rate';
             const flat = isFlatFee(rtKey);
+            const effRate = effectiveRate(rtKey, amountMap, p.id);
+            const effRateLabel = effRate > 0 ? `${money.format(effRate)}${rateUnit(rtKey)}` : null;
             const countBits = [
               s.counts.show ? `${s.counts.show} S` : null,
               s.counts.offTravel ? `${s.counts.offTravel} O` : null,
@@ -421,6 +449,14 @@ export function PayrollDaysMatrix({
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--lp-text-tertiary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.3 }}>
                       {p.role ? p.role : ''}{p.role ? ' · ' : ''}{rt}
+                      {/* M1-C — effective rate (mono), so the matrix answers "what
+                          is this worth" without opening the Rates disclosure. Folded
+                          into this line to keep the 52px row height (G2-2b metric). */}
+                      {effRateLabel ? (
+                        <span style={{ fontFamily: 'var(--lp-font-numeric)', fontWeight: 600, color: 'var(--lp-text-secondary)' }}>
+                          {' · '}{effRateLabel}
+                        </span>
+                      ) : null}
                     </div>
                     <div style={{ fontSize: 12, color: 'var(--lp-text-tertiary)', fontFamily: 'var(--lp-font-numeric)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.3 }}>
                       {countBits || '—'}

@@ -11,6 +11,7 @@ import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { countDayStatuses, computeTotals } from '@/lib/payroll/fees';
 import { loadTourRateContext, rateLinesFor } from '@/lib/payroll/loadRateLines';
+import { isPayrollFinalized, PAYROLL_FINALIZED_ERROR } from '@/lib/payroll/finalize';
 
 type DayStatus = 'show' | 'off_travel' | 'rehearsal' | 'no_tour';
 
@@ -137,6 +138,11 @@ export async function POST(request: Request) {
 
   if (!tour) {
     return NextResponse.json({ error: 'Tour not found' }, { status: 404 });
+  }
+
+  // M1-C — reject day-status writes when the tour's payroll is finalized (locked).
+  if (await isPayrollFinalized(supabase, tour_id)) {
+    return NextResponse.json({ error: PAYROLL_FINALIZED_ERROR }, { status: 409 });
   }
 
   const { data: personnel, error: personnelError } = await supabase

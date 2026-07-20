@@ -120,6 +120,7 @@ export function PayrollRatesSpreadsheet({
   amountMap,
   onRateLineCommit,
   highlightRowId,
+  finalized = false,
 }: {
   currency: string;
   initialRates: PersonnelRate[];
@@ -131,6 +132,8 @@ export function PayrollRatesSpreadsheet({
   onRateLineCommit: (personnelRateId: string, rateTypeId: string, amount: number) => Promise<void>;
   /** PAY-09 deep-link — the rate card to flash on landing (Personnel → ?focus). */
   highlightRowId?: string | null;
+  /** M1-C — payroll finalized: every cell read-only (the server also rejects). */
+  finalized?: boolean;
 }) {
   const { showToast } = useToast();
   const [rates, setRates] = useState<PersonnelRate[]>(initialRates);
@@ -250,6 +253,7 @@ export function PayrollRatesSpreadsheet({
         onCommitCell={onCommitCell}
         onRowOpen={onRowOpen}
         cellReadOnly={(row, col) => {
+          if (finalized) return true; // M1-C — whole grid read-only when finalized.
           const typeId = rtColTypeId(col.id);
           return typeId ? !isTypeRelevant(rateTypeOf(row.data), typeId) : false;
         }}
