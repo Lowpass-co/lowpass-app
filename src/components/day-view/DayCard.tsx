@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import Link from 'next/link';
 import { ChevronDown } from 'lucide-react';
 import { formatDayCardDate, formatCurrency } from '@/lib/utils';
 import { DayAdvancePanel } from './DayAdvancePanel';
@@ -92,6 +93,17 @@ export function DayCard({ tour, routingDate, isExpanded, onToggle }: DayCardProp
           )}
         />
       </button>
+
+      {isExpanded && (
+        <div className="mt-4 flex justify-end">
+          <Link
+            href={`/operations/${tour.id}/day/${routingDate.id}`}
+            className="text-sm font-semibold text-[var(--color-lp-orange)] hover:underline"
+          >
+            Open day sheet →
+          </Link>
+        </div>
+      )}
 
       {isExpanded && (
         <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
