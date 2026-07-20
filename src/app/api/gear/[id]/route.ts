@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { syncDerivedBudgetRowForTour } from '@/lib/gear/deriveBudget';
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -21,78 +22,6 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   return NextResponse.json(data);
 }
 
-async function syncDerivedBudgetRowForTour(
-  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
-  workspaceId: string,
-  gearId: string,
-  tourId: string
-) {
-  const { data: gearRow } = await supabase
-    .from('gear')
-    .select('id, name, ownership, hire_cost_amount')
-    .eq('id', gearId)
-    .single();
-  const { data: tg } = await supabase
-    .from('tour_gear')
-    .select('id, quantity, tour_ownership, tour_hire_cost_amount')
-    .eq('tour_id', tourId)
-    .eq('gear_id', gearId)
-    .maybeSingle();
-  const effectiveOwnership = (tg?.tour_ownership ?? gearRow?.ownership ?? 'owned') as string;
-  const unitCost = Number(tg?.tour_hire_cost_amount ?? gearRow?.hire_cost_amount ?? 0);
-  const qty = Math.max(1, Number(tg?.quantity ?? 1));
-  const total = unitCost * qty;
-
-  const { data: existingLine } = await supabase
-    .from('budget_line_items')
-    .select('id')
-    .eq('workspace_id', workspaceId)
-    .eq('tour_id', tourId)
-    .eq('category', 'prod_equipment')
-    .eq('gear_id', gearId)
-    .maybeSingle();
-
-  if (effectiveOwnership === 'hired_to_client') {
-    if (existingLine?.id) {
-      await supabase
-        .from('budget_line_items')
-        .update({
-          label: String(gearRow?.name ?? 'Gear hire'),
-          proposed_cost: total,
-          actual_cost: total,
-          quantity: qty,
-          gear_id: gearId,
-          tour_gear_id: tg?.id ?? null,
-          source_entity_type: 'gear',
-          source_entity_id: gearId,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', existingLine.id);
-    } else {
-      await supabase
-        .from('budget_line_items')
-        .insert({
-          workspace_id: workspaceId,
-          tour_id: tourId,
-          category: 'prod_equipment',
-          label: String(gearRow?.name ?? 'Gear hire'),
-          quantity: qty,
-          proposed_cost: total,
-          actual_cost: total,
-          source_entity_type: 'gear',
-          source_entity_id: gearId,
-          gear_id: gearId,
-          tour_gear_id: tg?.id ?? null,
-        });
-    }
-  } else if (existingLine?.id) {
-    await supabase
-      .from('budget_line_items')
-      .delete()
-      .eq('id', existingLine.id)
-      .eq('workspace_id', workspaceId);
-  }
-}
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -123,6 +52,20 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (body.image_url !== undefined) payload.image_url = body.image_url;
   // UX21 — link / unlink to a rental_inventory row.
   if (body.rental_inventory_id !== undefined) payload.rental_inventory_id = body.rental_inventory_id;
+  // S1 — placement (space/container) + physical/carnet fields (moved up from rental_inventory).
+  if (body.space_id !== undefined) payload.space_id = body.space_id;
+  if (body.container_id !== undefined) payload.container_id = body.container_id;
+  if (body.status !== undefined) payload.status = body.status;
+  if (body.day_rate !== undefined) payload.day_rate = body.day_rate;
+  if (body.day_rate_manual !== undefined) payload.day_rate_manual = body.day_rate_manual;
+  if (body.purchase_cost !== undefined) payload.purchase_cost = body.purchase_cost;
+  if (body.weight_kg !== undefined) payload.weight_kg = body.weight_kg;
+  if (body.value_amount !== undefined) payload.value_amount = body.value_amount;
+  if (body.value_currency !== undefined) payload.value_currency = body.value_currency;
+  if (body.dimensions_cm !== undefined) payload.dimensions_cm = body.dimensions_cm;
+  if (body.country_of_origin !== undefined) payload.country_of_origin = body.country_of_origin;
+  if (body.customs_hs_code !== undefined) payload.customs_hs_code = body.customs_hs_code;
+  if (body.qr_token !== undefined) payload.qr_token = body.qr_token;
 
   if (Object.keys(payload).length > 0) {
     const { error: updateErr } = await supabase.from('gear').update(payload).eq('id', id);

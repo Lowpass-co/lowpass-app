@@ -75,6 +75,19 @@ export async function POST(request: Request) {
       hire_cost_period: body.hire_cost_period ?? null,
       notes: body.notes ?? null,
       image_url: body.image_url ?? null,
+      // S1 — placement + physical/carnet fields.
+      space_id: body.space_id ?? null,
+      container_id: body.container_id ?? null,
+      status: body.status ?? 'available',
+      day_rate: body.day_rate ?? null,
+      day_rate_manual: body.day_rate_manual ?? false,
+      purchase_cost: body.purchase_cost ?? null,
+      weight_kg: body.weight_kg ?? null,
+      value_amount: body.value_amount ?? null,
+      value_currency: body.value_currency ?? 'GBP',
+      dimensions_cm: body.dimensions_cm ?? {},
+      country_of_origin: body.country_of_origin ?? null,
+      customs_hs_code: body.customs_hs_code ?? null,
     })
     .select('*')
     .single();
