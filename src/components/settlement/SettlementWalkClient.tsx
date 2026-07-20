@@ -200,6 +200,8 @@ function WalkPanel({
         <div className="flex items-center" style={{ gap: 'var(--lp-space-3)' }}>
           <button
             type="button"
+            data-testid="settlement-export-pdf"
+            data-routing-id={show.routingId}
             onClick={() => void exportPdf(show.routingId, show.city || show.venue_name || 'Show')}
             className="btn-transition"
             style={{ padding: '4px 10px', fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text-secondary)', background: 'transparent', border: '1px solid var(--lp-border-strong)', borderRadius: 'var(--lp-radius-md)', cursor: 'pointer' }}

@@ -15,7 +15,6 @@
 import { notFound } from 'next/navigation';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
-import { SettlementTab } from '@/_legacy/budget/SettlementTab';
 import { SettlementWalkClient } from '@/components/settlement/SettlementWalkClient';
 import { loadTourSettlementWalks } from '@/lib/settlement/loadWalk';
 
@@ -55,17 +54,6 @@ export default async function BudgetSettlementPage({
         className="mb-4"
       />
       <SettlementWalkClient tourId={tourId} currency={currency} shows={shows} />
-
-      {/* Legacy day-of / reconciled entry + files + deal memo — kept below the Walk
-          (retire once the Walk surface is verified live). */}
-      <details style={{ marginTop: 'var(--lp-space-6)', border: '1px solid var(--lp-border-subtle)', borderRadius: 'var(--lp-radius-md)' }}>
-        <summary style={{ cursor: 'pointer', padding: '8px 12px', fontSize: 'var(--lp-text-sm)', fontWeight: 'var(--lp-weight-semibold)', color: 'var(--lp-text-secondary)' }}>
-          Day-of / reconciled details &amp; files
-        </summary>
-        <div style={{ padding: '4px 12px 12px' }}>
-          <SettlementTab tourId={tourId} currency={currency} />
-        </div>
-      </details>
     </div>
   );
 }
