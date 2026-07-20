@@ -9,6 +9,8 @@
 import { notFound } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { getActiveMembership } from '@/lib/permissions/server';
+import { DetailPanelProvider } from '@/contexts/DetailPanelContext';
+import { TourDetailPanelWrapper } from '@/components/detail-panel/TourDetailPanelWrapper';
 import { DayViewTimeline } from '@/components/day-view/DayViewTimeline';
 import { TourRolesPanel } from '@/components/day/TourRolesPanel';
 import type { Tour, RoutingDate } from '@/types';
@@ -43,10 +45,17 @@ export default async function OperationsTourDayViewPage({ params }: { params: Pr
 
   const routing = (routingDates ?? []) as RoutingDate[];
 
+  // DayCard's expanded panels (DayBudgetPanel) call useDetailPanel — the ported
+  // /tours/[id]/day timeline relied on the tours layout's provider, which the
+  // operations layout doesn't mount. Wrap the index in the same provider + host
+  // (matches (app)/tours/[id]/layout.tsx). The per-day route needs neither.
   return (
-    <div className="mx-auto max-w-5xl space-y-4 px-4 pt-6 pb-12">
-      {canManageRoles ? <TourRolesPanel tourId={tourId} /> : null}
-      <DayViewTimeline tour={tour as Tour} routingDates={routing} />
-    </div>
+    <DetailPanelProvider>
+      <div className="mx-auto max-w-5xl space-y-4 px-4 pt-6 pb-12">
+        {canManageRoles ? <TourRolesPanel tourId={tourId} /> : null}
+        <DayViewTimeline tour={tour as Tour} routingDates={routing} />
+      </div>
+      <TourDetailPanelWrapper tourId={tourId} />
+    </DetailPanelProvider>
   );
 }
