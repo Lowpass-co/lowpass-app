@@ -10,6 +10,8 @@
 
 import { notFound, redirect } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { resolveArtistLogoUrlSync } from '@/lib/artists/imageUrl';
+import { resolveVenue, type RoutingVenueSource } from '@/lib/venues/resolveVenue';
 import {
   buildIntakeFormSchema,
   type IntakeSection,
@@ -18,6 +20,7 @@ import {
   ShareSurface,
   type ShareSectionView,
   type ShareActivityEvent,
+  type PacketArtifact,
 } from '@/components/advance/ShareSurface';
 
 export const dynamic = 'force-dynamic';
@@ -103,10 +106,74 @@ export default async function AdvanceSharePage({
   // Newest first.
   activity.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
 
+  // ── Header identity: artist (+ artwork) + this show's date / venue ──────────
+  const { data: tour } = await supabase
+    .from('tours')
+    .select('name, artist_id, artists(name, branding, spotify_id, spotify_image_url)')
+    .eq('id', tourId)
+    .maybeSingle();
+  const artistRow = (Array.isArray(tour?.artists) ? tour?.artists[0] : tour?.artists) as
+    | { name?: string | null; branding?: unknown; spotify_id?: string | null; spotify_image_url?: string | null }
+    | null;
+  const artist = {
+    name: artistRow?.name ?? null,
+    imageUrl: artistRow ? resolveArtistLogoUrlSync(artistRow) : null,
+  };
+
+  const { data: routingRow } = await supabase
+    .from('routing')
+    .select('date, city, country, address, venue_name, venue_capacity, venue_website, venue_phone, venue_frozen_at, canonical_venue_id, canonical:canonical_venues(id, name, address, city, country, capacity)')
+    .eq('id', routingId)
+    .eq('tour_id', tourId)
+    .maybeSingle();
+  const resolvedVenue = routingRow ? resolveVenue(routingRow as RoutingVenueSource) : null;
+  const show = {
+    date: (routingRow?.date as string | null) ?? null,
+    venue: resolvedVenue?.name ?? null,
+    city: resolvedVenue?.city ?? (routingRow?.city as string | null) ?? null,
+  };
+
+  // ── Packet artifacts: one downloadable PDF per thing the venue needs. Riders
+  //    (production + hospitality, by title) + stage plots are per-pack; channel
+  //    list is one tour-keyed export; the day sheet is this show's. All lead to
+  //    existing branded PDF routes — assembly, not new builders. ───────────────
+  const { data: packs } = await supabase
+    .from('rider_packs')
+    .select('id, title, kind, scope')
+    .eq('tour_id', tourId)
+    .order('scope', { ascending: true })
+    .order('title', { ascending: true });
+
+  const artifacts: PacketArtifact[] = [];
+  let hasChannelList = false;
+  for (const p of (packs ?? []) as Array<{ id: string; title: string | null; kind: string }>) {
+    const title = p.title?.trim() || '';
+    if (p.kind === 'rider') {
+      artifacts.push({ key: `rider-${p.id}`, kind: 'rider', title: title || 'Rider', href: `/api/rider-packs/${p.id}/pdf`, method: 'GET' });
+    } else if (p.kind === 'stage_plot') {
+      artifacts.push({ key: `plot-${p.id}`, kind: 'stage_plot', title: title || 'Stage plot', href: `/api/stage-plots/${p.id}/export/pdf`, method: 'POST' });
+    } else if (p.kind === 'channel_list') {
+      hasChannelList = true;
+    }
+  }
+  if (hasChannelList) {
+    artifacts.push({ key: 'channel-list', kind: 'channel_list', title: 'Channel list', href: `/api/channel-list/${tourId}/export/pdf`, method: 'POST' });
+  }
+  // The day sheet always applies (we're on a routing row).
+  artifacts.push({ key: 'daysheet', kind: 'daysheet', title: 'Day sheet', href: `/api/day/${routingId}/export/pdf`, method: 'POST' });
+
+  // Riders first (production/hospitality), then stage plot, channel list, day sheet.
+  const order: Record<PacketArtifact['kind'], number> = { rider: 0, stage_plot: 1, channel_list: 2, daysheet: 3 };
+  artifacts.sort((a, b) => order[a.kind] - order[b.kind]);
+
   return (
     <ShareSurface
       tourId={tourId}
       routingId={routingId}
+      artist={artist}
+      tourName={(tour?.name as string | null) ?? null}
+      show={show}
+      artifacts={artifacts}
       sections={sectionViews}
       fillableTotal={fillableTotal}
       activity={activity}
