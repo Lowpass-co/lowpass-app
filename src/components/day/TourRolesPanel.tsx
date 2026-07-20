@@ -13,6 +13,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { ALL_ROLES, ROLE_LABELS, type TourRole } from '@/lib/roles/slices';
+import { StyledSelect } from '@/components/ui/StyledSelect';
 
 interface RoleRow { id: string; person_id: string; role: TourRole; person_name: string | null }
 interface Candidate { personId: string; name: string }
@@ -100,16 +101,27 @@ export function TourRolesPanel({ tourId }: { tourId: string }) {
     <section style={{ border: '1px solid var(--lp-border)', borderRadius: 'var(--lp-radius-lg)', background: 'var(--lp-panel)', padding: 'var(--lp-space-4)', marginBottom: 'var(--lp-space-4)' }}>
       <h2 className="lp-label-caps" style={{ margin: '0 0 12px', fontSize: 11, color: 'var(--lp-text-tertiary)', letterSpacing: 'var(--lp-tracking-caps)' }}>Roles & day links</h2>
 
-      {/* Assign */}
+      {/* Assign — Assign stays disabled until a person is chosen (ROLE-04: an
+          empty selection must be inert, never crash). */}
       <div className="flex flex-wrap items-center" style={{ gap: 8, marginBottom: 12 }}>
-        <select value={personId} onChange={(e) => setPersonId(e.target.value)} data-testid="role-person" style={selStyle} aria-label="Person">
-          <option value="">Choose person…</option>
-          {candidates.map((c) => <option key={c.personId} value={c.personId}>{c.name}</option>)}
-        </select>
-        <select value={role} onChange={(e) => setRole(e.target.value as TourRole)} data-testid="role-role" style={selStyle} aria-label="Role">
-          {ALL_ROLES.map((r) => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
-        </select>
-        <button type="button" onClick={() => void assign()} disabled={busy} data-testid="role-assign" className="btn-transition" style={btnPrimary}>Assign</button>
+        <div data-testid="role-person" style={{ minWidth: 180 }}>
+          <StyledSelect
+            value={personId}
+            onChange={setPersonId}
+            options={candidates.map((c) => ({ value: c.personId, label: c.name }))}
+            placeholder="Choose person…"
+            size="sm"
+          />
+        </div>
+        <div data-testid="role-role" style={{ minWidth: 150 }}>
+          <StyledSelect<TourRole>
+            value={role}
+            onChange={setRole}
+            options={ALL_ROLES.map((r) => ({ value: r, label: ROLE_LABELS[r] }))}
+            size="sm"
+          />
+        </div>
+        <button type="button" onClick={() => void assign()} disabled={busy || !personId} data-testid="role-assign" className="btn-transition" style={{ ...btnPrimary, opacity: busy || !personId ? 0.5 : 1, cursor: busy || !personId ? 'not-allowed' : 'pointer' }}>Assign</button>
       </div>
 
       {error ? <div role="alert" style={{ fontSize: 'var(--lp-text-xs)', color: 'var(--color-lp-error)', marginBottom: 8 }}>{error}</div> : null}
@@ -146,7 +158,6 @@ export function TourRolesPanel({ tourId }: { tourId: string }) {
   );
 }
 
-const selStyle: React.CSSProperties = { fontSize: 'var(--lp-text-sm)', padding: '4px 8px', border: '1px solid var(--lp-border-strong)', borderRadius: 'var(--lp-radius-md)', background: 'var(--lp-surface)', color: 'var(--lp-text)' };
 const btnPrimary: React.CSSProperties = { padding: '5px 12px', fontSize: 'var(--lp-text-sm)', fontWeight: 'var(--lp-weight-semibold)', color: 'var(--lp-text-inverse)', background: 'var(--color-lp-orange)', border: 0, borderRadius: 'var(--lp-radius-md)', cursor: 'pointer' };
 const btnGhost: React.CSSProperties = { padding: '4px 10px', fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text-secondary)', background: 'transparent', border: '1px solid var(--lp-border-strong)', borderRadius: 'var(--lp-radius-md)', cursor: 'pointer' };
 const btnGhostDanger: React.CSSProperties = { ...btnGhost, color: 'var(--color-lp-error)' };
