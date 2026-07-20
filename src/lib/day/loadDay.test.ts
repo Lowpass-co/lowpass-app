@@ -12,7 +12,7 @@
 
 import assert from 'node:assert/strict';
 import { loadDay } from '@/lib/day/loadDay';
-import { sliceFor, roleAllowsMoney, canSeeBlock } from '@/lib/roles/slices';
+import { sliceFor, roleAllowsMoney, canSeeBlock, resolveEffectiveRole } from '@/lib/roles/slices';
 
 let checks = 0;
 
@@ -164,6 +164,21 @@ async function main() {
   assert.equal(canSeeBlock('production', 'pnl'), false, 'slice: production no money');
   assert.deepEqual([...sliceFor('nonsense').blocks], [...sliceFor('crew').blocks], 'slice: unknown role fails closed to crew');
   checks += 6;
+
+  // (7) View-as (D1-5 · ROLE-02) — server-checked override, then loadDay matches
+  //     the token view exactly. Admin viewing-as-driver == the driver's own load.
+  {
+    const tmViewingDriver = resolveEffectiveRole('tm', 'driver', true);
+    assert.equal(tmViewingDriver.role, 'driver', 'view-as: admin may become driver');
+    const viewed = await loadDay(makeSupabase(FULL), { ...base, role: tmViewingDriver.role });
+    const asDriver = await loadDay(makeSupabase(FULL), { ...base, role: 'driver' });
+    assert.deepEqual(Object.keys(viewed as object).sort(), Object.keys(asDriver as object).sort(), 'view-as driver === driver load (same blocks)');
+    assert.ok(!('pnl' in (viewed as object)) && !('notes' in (viewed as object)), 'view-as driver: money + notes absent');
+    // A non-privileged viewer cannot escalate via ?viewAs.
+    assert.equal(resolveEffectiveRole('crew', 'tm', false).role, 'crew', 'view-as: non-admin override ignored');
+    assert.equal(resolveEffectiveRole('tm', 'bogus', true).role, 'tm', 'view-as: invalid role ignored');
+    checks += 5;
+  }
 
   console.log(`the day: ${checks} checks passed — crew slice omits money + notes (absent, not hidden)`);
 }

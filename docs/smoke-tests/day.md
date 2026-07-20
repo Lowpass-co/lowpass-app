@@ -64,8 +64,19 @@ carries **no money and no internal note** (assert absent, not `display:none`).
 `/m/today` routes the authenticated viewer into `/operations/[tourId]/day/[routingId]`
 (role-resolved server-side) for today/next/last.
 
-#### ROLE-02 — View-as · *pending D1-5*
-View-as Driver matches the driver token view exactly (same server slice filters).
+#### ROLE-02 — View-as ✅ **automated core**
+Covered by the DAY-01 harness (`npx tsx src/lib/day/loadDay.test.ts`, now 30
+checks): `resolveEffectiveRole('tm','driver',true)` → driver, and loadDay through
+that role yields the **same block keys** as the driver's own load (money + notes
+absent). A non-admin `?viewAs` override is **ignored** (no escalation); an invalid
+role is ignored.
+
+**Live** (Cowork walks production): on the Day surface, the bottom-right View-as
+FAB (`viewas-fab`, admin/manager only) lists the 7 roles; picking **Driver**
+(`viewas-driver`) sets `?viewAs=driver` and the SERVER re-renders through the
+driver slice — byte-for-byte the driver token view (money/notes absent from the
+HTML). The orange **Viewing as Driver** banner + **Exit** (`viewas-exit`) clear it.
+It is server-checked: `?viewAs` is honoured only for admin/manager.
 
 > Verification note: the slice is proven at the **loader** level (money + notes
 > are absent object keys), which is the enforcement layer — not the render. A

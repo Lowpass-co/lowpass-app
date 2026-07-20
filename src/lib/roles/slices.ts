@@ -138,3 +138,19 @@ export function roleAllowsMoney(role: TourRole | string | null | undefined): boo
 export function canSeeProduct(role: TourRole | string | null | undefined, product: ProductKey): boolean {
   return sliceFor(role).products.has(product);
 }
+
+/**
+ * D1-5 — the effective role a surface renders through, honouring View-as. A
+ * `viewAs` override is applied ONLY when the caller may view-as (admin/manager,
+ * server-checked); otherwise it is ignored and the real role stands. This is the
+ * one place the override is validated — View-as is never a client flag: the
+ * server calls this, then loadDay() filters by the returned role's slice.
+ */
+export function resolveEffectiveRole(
+  realRole: TourRole,
+  viewAs: unknown,
+  canViewAs: boolean,
+): { role: TourRole; viewingAs: TourRole | null } {
+  if (canViewAs && isTourRole(viewAs)) return { role: viewAs, viewingAs: viewAs };
+  return { role: realRole, viewingAs: null };
+}
