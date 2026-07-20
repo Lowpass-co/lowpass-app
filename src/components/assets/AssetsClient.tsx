@@ -85,7 +85,8 @@ export function AssetsClient({ initial, tours }: { initial: AssetsData; tours: {
     <div className="mx-auto w-full" style={{ maxWidth: 1200, padding: 'var(--lp-space-6)', display: 'flex', flexDirection: 'column', gap: 'var(--lp-space-4)' }}>
       <header className="flex flex-wrap items-baseline justify-between gap-2">
         <h1 className="lp-page-title" style={{ margin: 0, fontSize: 'var(--lp-text-2xl)', color: 'var(--lp-text)' }}>Assets</h1>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          <a href="/equipment" data-testid="assets-jobs-link" className="rounded-md border px-3 py-1.5 text-sm" style={{ borderColor: 'var(--lp-border-strong)', color: 'var(--lp-text-secondary)', background: 'transparent', textDecoration: 'none' }}>Rental jobs →</a>
           <CreateButton label="New space" onCreate={(name, kind) => fetch('/api/spaces', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, kind }) }).then(refresh)} kinds={['warehouse', 'vehicle', 'locker', 'venue', 'other']} testid="assets-new-space" />
           <CreateButton label="New container" onCreate={(name, kind) => fetch('/api/containers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, kind }) }).then(refresh)} kinds={['case', 'cart', 'box', 'bag', 'other']} testid="assets-new-container" />
         </div>
