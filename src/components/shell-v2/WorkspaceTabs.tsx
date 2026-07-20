@@ -33,12 +33,14 @@ interface Tab {
 const TABS: ReadonlyArray<Tab> = [
   { id: 'artists', label: 'Artists', href: '/artists' },
   { id: 'personnel', label: 'Personnel', href: '/personnel' },
-  { id: 'equipment', label: 'Equipment', href: '/equipment' },
+  // S1 — "Equipment" → "Assets" (unified Spaces → Containers → Items). The old
+  // /equipment (Jobs) folds into Assets + is retired in Stage C3.
+  { id: 'equipment', label: 'Assets', href: '/assets' },
 ];
 
 function activeFor(pathname: string): Tab['id'] {
   if (pathname.startsWith('/personnel')) return 'personnel';
-  if (pathname.startsWith('/equipment')) return 'equipment';
+  if (pathname.startsWith('/equipment') || pathname.startsWith('/assets')) return 'equipment';
   return 'artists';
 }
 
