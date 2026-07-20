@@ -33,7 +33,7 @@ const DAY: DayObject = {
   ],
   hotels: [{ name: 'Hotel Indigo', address: '683 Peachtree', city: 'Atlanta', phone: null, confirmationNumber: 'ABC', checkInAt: '2026-09-10T15:00:00Z', checkOutAt: '2026-09-11T11:00:00Z', notes: null }],
   flights: [{ who: 'Band', airline: 'Delta', flightNumber: 'DL1', pnr: 'XYZ', from: 'JFK', to: 'ATL', departAt: '2026-09-10T08:00:00Z', arriveAt: '2026-09-10T11:00:00Z', notes: null }],
-  contacts: [{ name: 'Pat Promoter', role: 'Promoter', phone: '555', email: null, source: 'venue' }],
+  contacts: [{ name: 'Pat Promoter', role: 'Promoter', phone: '555', email: null, source: 'advance' }],
   notes: 'INTERNAL: promoter owes deposit.',
   pnl: { currency: 'GBP', guarantee: 25000, showNet: 20000 },
 };

@@ -33,6 +33,14 @@ block is titled "Flights" (there is no ground-transport model, so the block is
 scoped by name, not incomplete). The Notes block shows the internal routing note
 for tm/production/accountant only.
 
+#### DAY-05 — Contacts = the show's people, not the roster ✅ **automated**
+Covered by the DAY-01 harness (`npx tsx src/lib/day/loadDay.test.ts`, 35 checks):
+the Day's contacts come from the **advance** venue contacts + the show's
+**deal-memo promoter** — the tour roster (`tour_personnel`) is present in the
+fixture but **never** appears on the Day. Empty state on the live surface invites
+"…they land here from the advance →" linking to that show's advance (per-day view
+only; the crew token view shows no link).
+
 #### DAY-03 — Day Sheet PDF composer ✅ **automated**
 **Run**: `npx tsx src/lib/export/daysheet-pdf.test.ts` → `day sheet: 22 checks passed`.
 Asserts the audience-template presets + body builder: **Standard** prints every

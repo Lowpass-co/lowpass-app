@@ -166,22 +166,32 @@ function FlightsBlock({ flights }: { flights: DayObject['flights'] }) {
   );
 }
 
-function ContactsBlock({ contacts }: { contacts: DayObject['contacts'] }) {
+function ContactsBlock({ contacts, advanceHref }: { contacts: DayObject['contacts']; advanceHref?: string }) {
   if (contacts === undefined) return null;
   return (
     <section style={cardStyle}>
       <SectionHeader>Day-of contacts</SectionHeader>
       {!contacts || contacts.length === 0 ? (
-        <Empty>No contacts listed.</Empty>
+        // Contacts are the venue's people from the advance / deal memo — invite,
+        // don't show a dead box.
+        advanceHref ? (
+          <p style={{ margin: 0, fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text-tertiary)' }}>
+            No day-of contacts yet — they land here from the advance{' '}
+            <a href={advanceHref} style={{ color: 'var(--color-lp-orange)' }}>→</a>
+          </p>
+        ) : (
+          <Empty>No day-of contacts yet.</Empty>
+        )
       ) : (
-        <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'grid', gap: 6 }}>
+        <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'grid', gap: 8 }}>
           {contacts.map((c: DayContact, i) => (
-            <li key={i} style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 10, alignItems: 'baseline' }}>
+            <li key={i} style={{ display: 'grid', gap: 2 }}>
               <span style={{ fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text)' }}>
                 {c.name} <span style={{ color: 'var(--lp-text-tertiary)' }}>· {c.role}</span>
               </span>
-              <span style={{ fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text-secondary)' }}>
-                {c.phone ? <a href={`tel:${c.phone}`} style={{ color: 'inherit' }}>{c.phone}</a> : c.email ?? ''}
+              <span style={{ display: 'flex', gap: 12, fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text-secondary)' }}>
+                {c.phone ? <a href={`tel:${c.phone}`} style={{ color: 'inherit' }}>{c.phone}</a> : null}
+                {c.email ? <a href={`mailto:${c.email}`} style={{ color: 'inherit' }}>{c.email}</a> : null}
               </span>
             </li>
           ))}
@@ -231,7 +241,7 @@ function PnlChip({ pnl }: { pnl: DayObject['pnl']; tourId: string }) {
   );
 }
 
-export function DaySheet({ day, actions }: { day: DayObject; actions?: React.ReactNode }) {
+export function DaySheet({ day, actions, advanceHref }: { day: DayObject; actions?: React.ReactNode; advanceHref?: string }) {
   return (
     <div style={{ display: 'grid', gap: 'var(--lp-space-4)' }}>
       <header style={{ display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'baseline', justifyContent: 'space-between' }}>
@@ -255,7 +265,7 @@ export function DaySheet({ day, actions }: { day: DayObject; actions?: React.Rea
         <ScheduleBlock schedule={day.schedule} />
         <HotelBlock hotels={day.hotels} />
         <FlightsBlock flights={day.flights} />
-        <ContactsBlock contacts={day.contacts} />
+        <ContactsBlock contacts={day.contacts} advanceHref={advanceHref} />
         <NotesBlock notes={day.notes} />
       </div>
     </div>

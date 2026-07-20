@@ -89,6 +89,44 @@ export function extractHotelKeyInfo(
   return out;
 }
 
+/**
+ * ALL day-of venue contacts from an advance instance — every contact-type field
+ * row with a name (promoter rep, venue production, hospitality, runner, …), not
+ * just the promoter/venue/production/TM subset extractKeyContacts filters to.
+ * The Day surface wants the full venue-side people for the show; role falls back
+ * to the field label. Deduped on name|email|phone.
+ */
+export function extractDayContacts(
+  sections: SectionDef[],
+  data: Record<string, Record<string, unknown>>,
+): KeyContactCard[] {
+  const pool = sectionsForKeyInfoExtraction(sections);
+  const out: KeyContactCard[] = [];
+  const seen = new Set<string>();
+  for (const section of pool) {
+    const secData = data[section.template_id] ?? {};
+    for (const field of section.fields) {
+      if (field.type !== 'contact') continue;
+      const rows = normalizeContactRows(secData[field.id]);
+      for (const c of rows) {
+        if (!c || (!c.first_name && !c.last_name)) continue;
+        const name = [c.first_name, c.last_name].filter(Boolean).join(' ').trim();
+        if (!name) continue;
+        const key = `${name.toLowerCase()}|${(c.email ?? '').toLowerCase()}|${(c.phone ?? '').trim()}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push({
+          name,
+          role: (c.role ?? '').trim() || (field.label ?? '').trim() || 'Contact',
+          phone: c.phone?.trim() || undefined,
+          email: c.email?.trim() || undefined,
+        });
+      }
+    }
+  }
+  return out;
+}
+
 function contactMatchPriority(roleLower: string): number {
   if (roleLower.includes('promoter')) return 0;
   if (roleLower.includes('venue') || roleLower.includes('production')) return 1;

@@ -97,7 +97,11 @@ const FULL: Store = {
     list: [{ airline: 'Delta', flight_number: 'DL123', pnr: 'XYZ', origin_airport: 'JFK', destination_airport: 'ATL', depart_at: '2026-09-10T08:00:00Z', arrive_at: '2026-09-10T11:00:00Z', person_name: 'Band', notes: null }],
   },
   tour_personnel: {
+    // Present in the store but NOT a contacts source — the roster lives in Crew.
     list: [{ role: 'Tour Manager', role_tag: 'tm', persons: { full_name: 'Alex Manager', preferred_name: null, email: 'a@x.com', phone: '555-1' } }],
+  },
+  deal_memos: {
+    list: [{ promoter_name: 'Dana Dealmemo', promoter_email: 'dana@promoter.com', promoter_phone: '555-9' }],
   },
 };
 
@@ -122,6 +126,19 @@ async function main() {
   assert.match(tm!.notes ?? '', /INTERNAL/, 'tm: internal note present');
   assert.ok('pnl' in (tm as object), 'tm: money chip in slice');
   checks += 6;
+
+  // DAY-05 — contacts are the SHOW's people (advance venue + deal-memo promoter),
+  // NOT the tour roster.
+  {
+    const names = (tm!.contacts ?? []).map((c) => c.name);
+    assert.ok(names.includes('Pat Promoter'), 'DAY-05: advance venue contact present');
+    assert.ok(names.includes('Dana Dealmemo'), 'DAY-05: deal-memo promoter present');
+    assert.ok(!names.includes('Alex Manager'), 'DAY-05: tour roster is NOT on the Day');
+    const dm = (tm!.contacts ?? []).find((c) => c.name === 'Dana Dealmemo');
+    assert.equal(dm?.source, 'deal_memo', 'DAY-05: promoter tagged deal_memo');
+    assert.equal(dm?.role, 'Promoter', 'DAY-05: promoter role');
+    checks += 5;
+  }
 
   // (2) crew — THE HEADLINE: money AND notes are ABSENT keys, not hidden.
   const crew = await loadDay(makeSupabase(FULL), { ...base, role: 'crew' });

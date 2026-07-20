@@ -64,7 +64,7 @@ export default async function OperationsDayPage({ params, searchParams }: DayPag
 
   return (
     <div className="mx-auto max-w-5xl px-4 pt-6 pb-12">
-      <DaySheet day={day} actions={<DaySheetActions routingId={routingId} />} />
+      <DaySheet day={day} actions={<DaySheetActions routingId={routingId} />} advanceHref={`/advance/${tourId}/${routingId}`} />
       {canViewAs ? <ViewAsBar viewingAs={viewingAs} /> : null}
     </div>
   );

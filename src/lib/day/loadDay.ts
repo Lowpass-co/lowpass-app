@@ -19,7 +19,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { resolveVenue, type ResolvedVenue, type RoutingVenueSource } from '@/lib/venues/resolveVenue';
 import { loadTourSettlementWalks } from '@/lib/settlement/loadWalk';
 import {
-  extractKeyContacts,
+  extractDayContacts,
   type SectionDef,
   type KeyContactCard,
 } from '@/lib/advance/key-info';
@@ -64,8 +64,10 @@ export interface DayContact {
   role: string;
   phone: string | null;
   email: string | null;
-  /** 'crew' = from the tour roster, 'venue' = from the advance key-contacts. */
-  source: 'crew' | 'venue';
+  /** Day-of contacts are the SHOW's people, not the tour roster: 'advance' = a
+   *  venue contact captured in the advance; 'deal_memo' = the promoter on the
+   *  show's deal memo. The roster lives in Crew, never on the Day. */
+  source: 'advance' | 'deal_memo';
 }
 
 /** Compact money chip — gated to slices with `pnl` (tm / accountant / management).
@@ -279,43 +281,28 @@ export async function loadDay(
       : null;
   }
 
-  // Day-of contacts — tour roster (crew) + advance venue key-contacts. Rate
-  // columns are deliberately NOT selected, so money never enters this block.
+  // Day-of contacts = the SHOW's people (venue side), NOT the tour roster: every
+  // contact captured in the advance for this show + the deal memo's promoter.
+  // No roster query, no money columns.
   if (has('contacts')) {
     const contacts: DayContact[] = [];
-    const { data: roster } = await supabase
-      .from('tour_personnel')
-      .select('role, role_tag, persons(full_name, preferred_name, email, phone)')
-      .eq('tour_id', tourId)
-      .eq('workspace_id', workspaceId);
-    for (const r of roster ?? []) {
-      const p = (Array.isArray(r.persons) ? r.persons[0] : r.persons) as
-        | { full_name?: string | null; preferred_name?: string | null; email?: string | null; phone?: string | null }
-        | null;
-      const name = str(p?.preferred_name) ?? str(p?.full_name);
-      if (!name) continue;
-      contacts.push({
-        name,
-        role: str(r.role) ?? 'Crew',
-        phone: str(p?.phone),
-        email: str(p?.email),
-        source: 'crew',
-      });
-    }
-    // Venue-side contacts from the advance (promoter / venue / production / TM).
-    const { data: adv } = await supabase
-      .from('advance_instances')
-      .select('sections, data')
-      .eq('routing_id', routingId)
-      .maybeSingle();
+    const [{ data: adv }, { data: memos }] = await Promise.all([
+      supabase.from('advance_instances').select('sections, data').eq('routing_id', routingId).maybeSingle(),
+      supabase.from('deal_memos').select('promoter_name, promoter_email, promoter_phone').eq('show_id', routingId).eq('workspace_id', workspaceId),
+    ]);
     if (adv) {
-      const venueContacts: KeyContactCard[] = extractKeyContacts(
+      const venueContacts: KeyContactCard[] = extractDayContacts(
         (adv.sections as SectionDef[] | null) ?? [],
         (adv.data as Record<string, Record<string, unknown>> | null) ?? {},
       );
       for (const c of venueContacts) {
-        contacts.push({ name: c.name, role: c.role, phone: c.phone ?? null, email: c.email ?? null, source: 'venue' });
+        contacts.push({ name: c.name, role: c.role, phone: c.phone ?? null, email: c.email ?? null, source: 'advance' });
       }
+    }
+    for (const m of memos ?? []) {
+      const name = str(m.promoter_name);
+      if (!name) continue;
+      contacts.push({ name, role: 'Promoter', phone: str(m.promoter_phone), email: str(m.promoter_email), source: 'deal_memo' });
     }
     day.contacts = contacts.length ? contacts : null;
   }
