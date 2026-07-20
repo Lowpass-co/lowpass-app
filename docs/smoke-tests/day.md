@@ -46,10 +46,26 @@ prints** on any template (no currency, no P&L in the body).
 re-renders, **Download PDF** (`daysheet-download-pdf`) streams the branded sheet
 through the shared export shell (`/api/day/[routingId]/export/{preview,pdf}`).
 
-#### ROLE-02 / ROLE-03 / DAY-04 — tokenized links + View-as · *pending D1-4/D1-5*
-- **ROLE-02** — View-as Driver matches the driver token view exactly.
-- **ROLE-03** — a revoked token 404s.
-- **DAY-04** — `/m/today` renders the viewer's role slice on a mobile viewport.
+#### ROLE-01 (token) / ROLE-03 / DAY-04 — tokenized links + /m/today ✅ **automated core**
+**Run**: `npx tsx src/lib/roles/token.test.ts` → `role token: 12 checks passed`.
+Asserts the token grammar: a valid link resolves to `{role, tourId, workspaceId}`
+(which drives loadDay's slice — a **crew** token → money/notes absent per the
+DAY-01 harness); **revoked / expired / missing** tokens resolve to a reason so the
+public page 404s (**ROLE-03**); an unknown role value fails closed to crew; and
+the today/next/last day-picker.
+
+**Live** (Cowork walks production): on the day index (`/operations/[tourId]/day`),
+the **Roles & day links** panel (admin/manager only) assigns a roster person a role
+(`role-person`/`role-role`/`role-assign`), then **Generate link** (`role-mint-link`)
+→ **Copy link** (`role-copy-link`) yields `/m/day/[token]`. Open it (logged out /
+incognito) → the role-scoped mobile Day; **ROLE-01** = a crew link's served HTML
+carries **no money and no internal note** (assert absent, not `display:none`).
+**Revoke** (`role-revoke-link`) → the link 404s (**ROLE-03**). **DAY-04**:
+`/m/today` routes the authenticated viewer into `/operations/[tourId]/day/[routingId]`
+(role-resolved server-side) for today/next/last.
+
+#### ROLE-02 — View-as · *pending D1-5*
+View-as Driver matches the driver token view exactly (same server slice filters).
 
 > Verification note: the slice is proven at the **loader** level (money + notes
 > are absent object keys), which is the enforcement layer — not the render. A

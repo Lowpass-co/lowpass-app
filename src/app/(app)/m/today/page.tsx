@@ -39,21 +39,21 @@ export default function MobileTodayLandingPage() {
         const byKey = [...dates].sort((a, b) => a.date.localeCompare(b.date));
         const todayRow = byKey.find((row) => row.date === todayKey);
         if (todayRow) {
-          router.replace(`/m/show/${todayRow.routing_id}`);
+          router.replace(`/operations/${selectedTourId}/day/${todayRow.routing_id}`);
           return;
         }
         const next = byKey.find((row) => row.date > todayKey);
         if (next) {
-          router.replace(`/m/show/${next.routing_id}`);
+          router.replace(`/operations/${selectedTourId}/day/${next.routing_id}`);
           return;
         }
         const last = byKey.filter((row) => row.date < todayKey).pop();
         if (last) {
-          router.replace(`/m/show/${last.routing_id}`);
+          router.replace(`/operations/${selectedTourId}/day/${last.routing_id}`);
           return;
         }
         const fromCtx = tourRouting[0]?.id;
-        if (fromCtx) router.replace(`/m/show/${fromCtx}`);
+        if (fromCtx) router.replace(`/operations/${selectedTourId}/day/${fromCtx}`);
         else queueMicrotask(() => setMessage('No routing days found for this tour.'));
       })
       .catch(() => {
