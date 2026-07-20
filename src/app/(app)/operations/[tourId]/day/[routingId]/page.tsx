@@ -19,7 +19,7 @@ import { notFound } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { getActiveMembership } from '@/lib/permissions/server';
 import { loadDay } from '@/lib/day/loadDay';
-import { isTourRole, type TourRole } from '@/lib/roles/slices';
+import { resolveViewerTourRole } from '@/lib/roles/server';
 import { DaySheet } from '@/components/day/DaySheet';
 import { DaySheetActions } from '@/components/day/DaySheetActions';
 
@@ -42,18 +42,9 @@ export default async function OperationsDayPage({ params }: DayPageProps) {
   if (!membership?.workspace_id) notFound();
   const workspaceId = membership.workspace_id;
 
-  // Resolve the viewer's tour role. Admin/manager = full operator (tm). A
-  // readonly member is scoped to their tour_roles slice; no row → fail-closed crew.
-  let role: TourRole = 'tm';
-  if (membership.role === 'readonly') {
-    const { data: tr } = await supabase
-      .from('tour_roles')
-      .select('role')
-      .eq('tour_id', tourId)
-      .eq('user_id', user.id)
-      .maybeSingle();
-    role = isTourRole(tr?.role) ? tr.role : 'crew';
-  }
+  // Resolve the viewer's tour role server-side (admin/manager=tm, readonly=their
+  // tour_roles slice, fail-closed crew) — never a client flag.
+  const role = await resolveViewerTourRole(supabase, membership.role, tourId, user.id);
 
   const day = await loadDay(supabase, { tourId, routingId, workspaceId, role });
   if (!day) notFound();
