@@ -49,6 +49,7 @@ import {
 } from './FieldEditors';
 import type { PackContext } from './AssetPicker';
 import { RiderTemplateSuggestions } from './RiderTemplateSuggestions';
+import { RiderPdfImport } from './RiderPdfImport';
 import { useDebouncedSave } from '@/hooks/useDebouncedSave';
 import NewSectionDialog from './NewSectionDialog';
 import { formatRelativeTime } from '@/lib/format-relative';
@@ -540,7 +541,12 @@ export function PackEditor({ packId }: Props) {
         </div>
         {exportError && <div className="mb-2 text-sm text-lp-error">{exportError}</div>}
         {showTemplates && (
-          <div className="mb-0 border-t border-lp-border pt-3">
+          <div className="mb-0 flex flex-col gap-3 border-t border-lp-border pt-3">
+            <RiderPdfImport
+              packId={packId}
+              sections={data.sections}
+              onApplied={() => refresh()}
+            />
             <RiderTemplateSuggestions
               packId={packId}
               sections={data.sections}
