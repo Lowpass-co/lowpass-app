@@ -17,6 +17,7 @@
 import { useCallback, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { ExportButton } from '@/components/export/ExportButton';
+import { WorkbookImportModal } from '@/components/budget/WorkbookImportModal';
 
 /** X1-A — the six-sheet Tour Accounting Workbook (.xlsx an accountant can edit). */
 function WorkbookButton({ tourId, versionId }: { tourId: string; versionId: string | null }) {
@@ -82,6 +83,7 @@ export function BudgetExportControls({ tourCurrency, tourId }: BudgetExportContr
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const [importOpen, setImportOpen] = useState(false);
 
   const display = (searchParams.get('display') ?? tourCurrency).toUpperCase();
   // The viewed version (if the user is on a historical `?version=` view) — the
@@ -127,9 +129,20 @@ export function BudgetExportControls({ tourCurrency, tourId }: BudgetExportContr
       </select>
 
       <div className="ml-auto flex items-center gap-2">
+        <button
+          type="button"
+          data-testid="budget-import-workbook"
+          onClick={() => setImportOpen(true)}
+          className="btn-transition rounded-md border px-3 py-1.5 text-sm"
+          style={{ borderColor: 'var(--lp-border-strong)', color: 'var(--lp-text-secondary)', background: 'transparent', cursor: 'pointer' }}
+          title="Import an edited workbook (review-queued — nothing writes until you accept)"
+        >
+          Import workbook…
+        </button>
         <WorkbookButton tourId={tourId} versionId={viewedVersionId} />
         <ExportButton surface="budget" tourId={tourId} versionId={viewedVersionId} title="Export the budget (PDF or Excel)" />
       </div>
+      {importOpen ? <WorkbookImportModal tourId={tourId} onClose={() => setImportOpen(false)} /> : null}
     </div>
   );
 }

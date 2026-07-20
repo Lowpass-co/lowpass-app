@@ -27,7 +27,22 @@ is finalized, the Payroll total row says "TOTAL (finalized)".
 > Net-new vs the old per-surface `/api/export/xlsx`: real formulas + negative-red
 > formats + the Income/Per-Diem sheets. Distinct route, distinct builder.
 
-#### XLS-02..05 — Import (review-queued) — **X1-B (pending)**
-XLS-02 export→edit-a-cell→reimport proposes exactly one change · XLS-03 duplicate row
-flags + default-skips · XLS-04 foreign-layout reaches the mapping preview · XLS-05
-reject leaves zero rows. Settlement/payroll sheets are read-only on import.
+#### XLS-02..05 — Import (review-queued) ✅ **automated core**
+**Run**: `npx tsx src/lib/import/import.test.ts` → `workbook import: 23 checks passed`.
+Covers the parse + dedupe engine that drives every smoke:
+- **XLS-02** — export → edit a cell → re-parse: exactly **one** `value_change` (the
+  edited row); the unchanged rows are exact duplicates.
+- **XLS-03** — a duplicate row is flagged (**Possible duplicate**) and **default-skips**
+  (`defaultAccept: false`); genuinely new lines default-accept.
+- **XLS-04** — a foreign layout returns `layout: 'foreign'` + a column-mapping preview
+  (Description→name, Cost→amount guessed); confirming the map yields proposals.
+- **XLS-05** — accepting nothing writes zero rows.
+- Settlement/Payroll sheets are **rejected** on import with a read-only message.
+- Round-trip: X1-A export re-parses as our layout (subtotal/grand-total rows skipped).
+
+**Live**: on Budget, **Import workbook…** (`[data-testid="budget-import-workbook"]`)
+→ upload → review list (New / Possible duplicate / Changed; dups off by default) →
+**Import N accepted**. Accepted rows write through the **existing** `POST
+/api/budget/line-items` path (internal call, forwarded session — no parallel insert),
+via the `import_pending_lines` proposal table (migration 244). Nothing writes until
+you accept — Adam's drafts-you-approve rule.
