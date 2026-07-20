@@ -16,7 +16,7 @@
    here later with no rework.
    ============================================ */
 
-export type ExportSurface = 'budget' | 'rooming' | 'payroll' | 'routing' | 'channel-list' | 'stage-plot' | 'settlement';
+export type ExportSurface = 'budget' | 'rooming' | 'payroll' | 'routing' | 'channel-list' | 'stage-plot' | 'settlement' | 'daysheet';
 export type PageSize = 'A4' | 'Letter';
 /** Output format — a styled print PDF, or a flat machine-readable Excel grid. */
 export type ExportFormat = 'pdf' | 'excel';
@@ -126,6 +126,16 @@ export interface PayrollOptions {
   advance: boolean; // statement: the advance-fee line
 }
 
+/** D1-2 — Day Sheet audience templates. A template is a preset of section
+ *  toggles + type scale, NOT a security slice (the TM building it has full data;
+ *  the live-Day/token slices are the security layer). Driver/Big = larger type. */
+export type DaySheetTemplate = 'standard' | 'crew' | 'driver' | 'band' | 'compact';
+export interface DaySheetOptions {
+  template: DaySheetTemplate;
+  /** Larger body type for at-a-glance reading (driver default). */
+  bigType: boolean;
+}
+
 export interface TemplateConfig {
   /** Schema version (forward-compat). */
   v: 1;
@@ -151,6 +161,8 @@ export interface TemplateConfig {
   payroll: PayrollOptions;
   /** Part F — routing-surface options (only meaningful for surface 'routing'). */
   routing: RoutingOptions;
+  /** D1-2 — day-sheet options (only meaningful for surface 'daysheet'). */
+  daysheet?: DaySheetOptions;
 }
 
 /** The section ids each surface's body builder owns (coarse, P1). Additive — new
@@ -161,6 +173,7 @@ export const PAYROLL_SECTION_IDS = ['run-sheet', 'statements'] as const;
 export const ROUTING_SECTION_IDS = ['days', 'advance-summary'] as const;
 export const CHANNEL_LIST_SECTION_IDS = ['inputs', 'outputs'] as const;
 export const STAGE_PLOT_SECTION_IDS = ['stage-diagram', 'input-list'] as const;
+export const DAYSHEET_SECTION_IDS = ['schedule', 'venue', 'hotel', 'flights', 'contacts', 'notes'] as const;
 
 /** Human labels for the editor's section list. */
 export const SECTION_LABELS: Record<string, string> = {
@@ -176,6 +189,12 @@ export const SECTION_LABELS: Record<string, string> = {
   outputs: 'Outputs (IEM / mix)',
   'stage-diagram': 'Stage diagram',
   'input-list': 'Input list (combined)',
+  schedule: 'Schedule',
+  venue: 'Venue + address',
+  hotel: 'Hotel',
+  flights: 'Flights',
+  contacts: 'Day-of contacts',
+  notes: 'General notes',
 };
 
 export const HEADER_ELEMENT_LABELS: Record<HeaderElementId, string> = {
@@ -344,6 +363,54 @@ export const DEFAULT_SETTLEMENT_CONFIG: TemplateConfig = {
   routing: DEFAULT_ROUTING_OPTIONS,
 };
 
+export const DEFAULT_DAYSHEET_OPTIONS: DaySheetOptions = { template: 'standard', bigType: false };
+
+/** Audience preset → which sections show + type scale. Templates are section
+ *  presets, not slices; the notes section is off for crew/driver/band/compact
+ *  (it's the internal note) and on only for Standard. */
+export const DAYSHEET_PRESETS: Record<DaySheetTemplate, { show: Record<string, boolean>; bigType: boolean }> = {
+  standard: { show: { schedule: true, venue: true, hotel: true, flights: true, contacts: true, notes: true }, bigType: false },
+  crew: { show: { schedule: true, venue: true, hotel: true, flights: true, contacts: true, notes: false }, bigType: false },
+  driver: { show: { schedule: true, venue: true, hotel: true, flights: true, contacts: false, notes: false }, bigType: true },
+  band: { show: { schedule: true, venue: true, hotel: true, flights: true, contacts: true, notes: false }, bigType: false },
+  compact: { show: { schedule: true, venue: true, hotel: false, flights: false, contacts: true, notes: false }, bigType: false },
+};
+
+export const DAYSHEET_TEMPLATE_LABELS: Record<DaySheetTemplate, string> = {
+  standard: 'Standard',
+  crew: 'Crew',
+  driver: 'Driver (big type)',
+  band: 'Band',
+  compact: 'Compact 1-pager',
+};
+
+export const DEFAULT_DAYSHEET_CONFIG: TemplateConfig = {
+  v: 1,
+  surface: 'daysheet',
+  format: 'pdf',
+  pageSize: 'A4',
+  logo: true,
+  sections: DAYSHEET_SECTION_IDS.map((id) => ({ id, show: DAYSHEET_PRESETS.standard.show[id] !== false })),
+  general: DEFAULT_GENERAL,
+  header: DEFAULT_HEADER,
+  footer: DEFAULT_FOOTER,
+  dateRange: DEFAULT_DATE_RANGE,
+  payroll: DEFAULT_PAYROLL_OPTIONS,
+  routing: DEFAULT_ROUTING_OPTIONS,
+  daysheet: DEFAULT_DAYSHEET_OPTIONS,
+};
+
+/** Apply an audience template preset to a config — sets section visibility (in
+ *  canonical order) + type scale + the template marker. Returns a new config. */
+export function applyDaySheetTemplate(config: TemplateConfig, template: DaySheetTemplate): TemplateConfig {
+  const preset = DAYSHEET_PRESETS[template];
+  return {
+    ...config,
+    sections: DAYSHEET_SECTION_IDS.map((id) => ({ id, show: preset.show[id] !== false })),
+    daysheet: { template, bigType: preset.bigType },
+  };
+}
+
 export function defaultConfig(surface: ExportSurface): TemplateConfig {
   if (surface === 'budget') return structuredClone(DEFAULT_BUDGET_CONFIG);
   if (surface === 'payroll') return structuredClone(DEFAULT_PAYROLL_CONFIG);
@@ -351,6 +418,7 @@ export function defaultConfig(surface: ExportSurface): TemplateConfig {
   if (surface === 'channel-list') return structuredClone(DEFAULT_CHANNEL_LIST_CONFIG);
   if (surface === 'stage-plot') return structuredClone(DEFAULT_STAGE_PLOT_CONFIG);
   if (surface === 'settlement') return structuredClone(DEFAULT_SETTLEMENT_CONFIG);
+  if (surface === 'daysheet') return structuredClone(DEFAULT_DAYSHEET_CONFIG);
   return structuredClone(DEFAULT_ROOMING_CONFIG);
 }
 
@@ -535,5 +603,16 @@ export function normalizeConfig(surface: ExportSurface, input: unknown): Templat
   base.dateRange = normalizeDateRange(c.dateRange);
   if (surface === 'payroll') base.payroll = normalizePayroll(c.payroll);
   if (surface === 'routing') base.routing = normalizeRouting(c.routing);
+  if (surface === 'daysheet') base.daysheet = normalizeDaySheet(c.daysheet);
+  return base;
+}
+
+const DAYSHEET_TEMPLATES: DaySheetTemplate[] = ['standard', 'crew', 'driver', 'band', 'compact'];
+function normalizeDaySheet(input: unknown): DaySheetOptions {
+  const base = { ...DEFAULT_DAYSHEET_OPTIONS };
+  if (!input || typeof input !== 'object') return base;
+  const d = input as Partial<DaySheetOptions>;
+  if (d.template && DAYSHEET_TEMPLATES.includes(d.template)) base.template = d.template;
+  base.bigType = bool(d.bigType, base.bigType);
   return base;
 }

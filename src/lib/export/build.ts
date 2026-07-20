@@ -27,6 +27,8 @@ import { fetchLogoDataUri, fetchExportAssetDataUri } from '@/lib/export/logo';
 import type { FooterStyle, TemplateConfig } from '@/lib/export/template-config';
 import { loadSettlementWalk } from '@/lib/settlement/loadWalk';
 import { buildSettlementBodyHtml } from '@/lib/export/settlement-pdf';
+import { loadDay } from '@/lib/day/loadDay';
+import { buildDaySheetBodyHtml } from '@/lib/export/daysheet-pdf';
 
 export interface ExportBuild {
   html: string;
@@ -163,6 +165,56 @@ export async function buildSettlementExport(
 
   const footerNote = `${artistName ? `${artistName} — ` : ''}${tour.name} · Settlement · ${showLabel}`;
   const filename = `${sanitize(artistName ?? '', '')} — ${sanitize(showLabel, 'Show')} — Settlement.pdf`.replace(/^ — /, '');
+  return { html, footerNote, filename, footer: config.footer, runningHeader: config.header.show ? footerNote : null };
+}
+
+/** D1-2 · DAY-03 — one routing row's Day Sheet PDF through the shared shell. The
+ *  day is loaded with the full (tm) slice; the audience TEMPLATE (config.sections
+ *  + daysheet.bigType) decides which sections print. Money never prints. */
+export async function buildDaySheetExport(
+  supabase: SupabaseClient,
+  tour: BudgetTourMeta,
+  workspaceId: string,
+  config: TemplateConfig,
+  routingId: string,
+): Promise<ExportBuild> {
+  const day = await loadDay(supabase, {
+    tourId: tour.id,
+    routingId,
+    workspaceId,
+    role: 'tm',
+    tourCurrency: tour.currency,
+  });
+  if (!day) throw new Error('Day not found');
+
+  const logoDataUri = config.logo ? await resolveLogo(supabase, workspaceId, config, null) : null;
+  const bgDataUri = await fetchExportAssetDataUri(supabase, workspaceId, config.header.bgAssetPath);
+
+  const showLabel = [day.city, day.venue?.name].filter(Boolean).join(' · ') || 'Day';
+  const templateLabel = config.daysheet?.template && config.daysheet.template !== 'standard'
+    ? config.daysheet.template.charAt(0).toUpperCase() + config.daysheet.template.slice(1)
+    : null;
+
+  const html = renderDocument({
+    letterhead: {
+      artistName: day.artistName,
+      tourName: day.tourName ?? tour.name,
+      tourDates: tourDateRange(tour.start_date, tour.end_date),
+      logoDataUri,
+      showLogo: config.logo,
+      generatedOn: nowStamp(),
+    },
+    pageSize: config.pageSize,
+    title: 'Day Sheet',
+    subtitle: [fmtDate(day.date), showLabel, templateLabel].filter(Boolean).join(' · '),
+    general: config.general,
+    header: config.header,
+    bgDataUri,
+    bodyHtml: buildDaySheetBodyHtml(day, config),
+  });
+
+  const footerNote = `${day.artistName ? `${day.artistName} — ` : ''}${day.tourName ?? tour.name} · Day Sheet · ${showLabel}`;
+  const filename = `${sanitize(day.artistName ?? '', '')} — ${sanitize(showLabel, 'Day')} — Day Sheet.pdf`.replace(/^ — /, '');
   return { html, footerNote, filename, footer: config.footer, runningHeader: config.header.show ? footerNote : null };
 }
 

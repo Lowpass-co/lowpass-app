@@ -33,8 +33,18 @@ block is titled "Flights" (there is no ground-transport model, so the block is
 scoped by name, not incomplete). The Notes block shows the internal routing note
 for tm/production/accountant only.
 
-#### DAY-03 — Day Sheet PDF composer · *pending D1-2*
-Standard / Crew / Driver / Band / Compact templates through the shared export shell.
+#### DAY-03 — Day Sheet PDF composer ✅ **automated**
+**Run**: `npx tsx src/lib/export/daysheet-pdf.test.ts` → `day sheet: 22 checks passed`.
+Asserts the audience-template presets + body builder: **Standard** prints every
+section incl. Notes; **Crew** drops the internal note; **Driver** uses big type +
+drops the contacts card; **Compact** drops hotel/flights; and **money NEVER
+prints** on any template (no currency, no P&L in the body).
+
+**Live** (Cowork walks production): on the Day surface, **Day sheet…**
+(`[data-testid="daysheet-open-composer"]`) opens a modal — pick a template
+(`daysheet-template-*`), toggle sections (`daysheet-section-*`), the preview
+re-renders, **Download PDF** (`daysheet-download-pdf`) streams the branded sheet
+through the shared export shell (`/api/day/[routingId]/export/{preview,pdf}`).
 
 #### ROLE-02 / ROLE-03 / DAY-04 — tokenized links + View-as · *pending D1-4/D1-5*
 - **ROLE-02** — View-as Driver matches the driver token view exactly.
