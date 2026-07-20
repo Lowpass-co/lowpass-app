@@ -45,6 +45,8 @@ export interface DayHotel {
   checkInAt: string | null;
   checkOutAt: string | null;
   notes: string | null;
+  /** Who's rooming here (from room assignments) — occupant chips. */
+  occupants: string[];
 }
 
 export interface DayFlight {
@@ -241,20 +243,32 @@ export async function loadDay(
   if (has('hotel')) {
     const { data: hotels } = await supabase
       .from('hotels')
-      .select('name, address, city, phone, confirmation_number, check_in_at, check_out_at, notes')
+      .select('name, address, city, phone, confirmation_number, check_in_at, check_out_at, notes, rooms(room_assignments(persons(full_name, preferred_name)))')
       .eq('show_id', routingId)
       .order('check_in_at', { ascending: true });
     day.hotels = (hotels ?? []).length
-      ? (hotels ?? []).map((h) => ({
-          name: (h.name as string) ?? 'Hotel',
-          address: str(h.address),
-          city: str(h.city),
-          phone: str(h.phone),
-          confirmationNumber: str(h.confirmation_number),
-          checkInAt: str(h.check_in_at),
-          checkOutAt: str(h.check_out_at),
-          notes: str(h.notes),
-        }))
+      ? (hotels ?? []).map((h) => {
+          // Flatten hotel → rooms → assignments → persons into occupant names.
+          const occ: string[] = [];
+          for (const room of (h.rooms as Array<Record<string, unknown>> | null) ?? []) {
+            for (const a of (room.room_assignments as Array<Record<string, unknown>> | null) ?? []) {
+              const p = (Array.isArray(a.persons) ? a.persons[0] : a.persons) as { full_name?: string | null; preferred_name?: string | null } | null;
+              const name = str(p?.preferred_name) ?? str(p?.full_name);
+              if (name && !occ.includes(name)) occ.push(name);
+            }
+          }
+          return {
+            name: (h.name as string) ?? 'Hotel',
+            address: str(h.address),
+            city: str(h.city),
+            phone: str(h.phone),
+            confirmationNumber: str(h.confirmation_number),
+            checkInAt: str(h.check_in_at),
+            checkOutAt: str(h.check_out_at),
+            notes: str(h.notes),
+            occupants: occ,
+          };
+        })
       : null;
   }
 

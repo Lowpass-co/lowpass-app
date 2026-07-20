@@ -91,7 +91,7 @@ const FULL: Store = {
     },
   },
   hotels: {
-    list: [{ name: 'Hotel Indigo', address: '683 Peachtree', city: 'Atlanta', phone: null, confirmation_number: 'ABC123', check_in_at: '2026-09-10T15:00:00Z', check_out_at: '2026-09-11T11:00:00Z', notes: null }],
+    list: [{ name: 'Hotel Indigo', address: '683 Peachtree', city: 'Atlanta', phone: null, confirmation_number: 'ABC123', check_in_at: '2026-09-10T15:00:00Z', check_out_at: '2026-09-11T11:00:00Z', notes: null, rooms: [{ room_assignments: [{ persons: { full_name: 'Ivy Occupant', preferred_name: 'Ivy' } }] }] }],
   },
   flights: {
     list: [{ airline: 'Delta', flight_number: 'DL123', pnr: 'XYZ', origin_airport: 'JFK', destination_airport: 'ATL', depart_at: '2026-09-10T08:00:00Z', arrive_at: '2026-09-10T11:00:00Z', person_name: 'Band', notes: null }],
@@ -139,6 +139,10 @@ async function main() {
     assert.equal(dm?.role, 'Promoter', 'DAY-05: promoter role');
     checks += 5;
   }
+
+  // Occupant chips (D1-6 C) — hotel → rooms → assignments → persons flattened.
+  assert.deepEqual(tm!.hotels?.[0]?.occupants, ['Ivy'], 'lodging: occupant chip from room assignment');
+  checks++;
 
   // (2) crew — THE HEADLINE: money AND notes are ABSENT keys, not hidden.
   const crew = await loadDay(makeSupabase(FULL), { ...base, role: 'crew' });

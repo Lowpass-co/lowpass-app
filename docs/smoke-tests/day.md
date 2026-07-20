@@ -7,7 +7,8 @@ the viewer's slice, so out-of-slice data (money, internal notes) is **absent
 from the served object**, not CSS-hidden.
 
 Route: `/operations/[tourId]/day/[routingId]`. Loader: `src/lib/day/loadDay.ts`.
-Slice contract: `src/lib/roles/slices.ts`. Schema: migration 245.
+Slice contract: `src/lib/roles/slices.ts`. Layout: `src/components/day/DayLayout.tsx`
+(three-zone; shared by the per-day route + the /m/day token view). Schema: migration 245.
 
 Format: see [README.md](README.md).
 
@@ -32,6 +33,17 @@ A workspace admin/manager sees all blocks incl. the Day P&L chip; the Flights
 block is titled "Flights" (there is no ground-transport model, so the block is
 scoped by name, not incomplete). The Notes block shows the internal routing note
 for tm/production/accountant only.
+
+#### DAY-06 — three-zone layout · *screenshot walk*
+The Day renders as **left date rail** (day-type color bar, day-type · venue ·
+city, search `[data-testid="day-rail-search"]`, Today pinned, active day
+`day-rail-active`, Day/Routing toggle) · **center Schedule** (dominant, 15px type,
+approx `~`, source tag, Edit for TM) · **right stacked cards** (Day Type &
+Locations · Lodging with check-in/out side-by-side + occupant chips · Notes ·
+Contacts). Blocks render only with content or an invitation — no dead boxes. The
+`/m/day/[token]` view is the **same** `DayLayout`, slice-filtered (crew: no
+Notes/P&L cards). Screenshot acceptance at **1440 + 1920**. Occupant flattening
+(hotel → rooms → assignments → persons) is covered in the DAY-01 harness.
 
 #### DAY-05 — Contacts = the show's people, not the roster ✅ **automated**
 Covered by the DAY-01 harness (`npx tsx src/lib/day/loadDay.test.ts`, 35 checks):

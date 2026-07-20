@@ -14,7 +14,7 @@ import { notFound } from 'next/navigation';
 import { createServiceSupabaseClient } from '@/lib/supabase-server';
 import { resolveDayToken, pickDayRouting } from '@/lib/roles/token';
 import { loadDay } from '@/lib/day/loadDay';
-import { DaySheet } from '@/components/day/DaySheet';
+import { DayLayout, type RailDay } from '@/components/day/DayLayout';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,10 +37,10 @@ export default async function TokenDayPage({ params, searchParams }: TokenDayPag
   // Which show? explicit ?d= (validated against the tour's routing), else today/next/last.
   const { data: routingRows } = await service
     .from('routing')
-    .select('id, date')
+    .select('id, date, day_type, city, venue_name')
     .eq('tour_id', tourId)
     .order('date', { ascending: true });
-  const rows = (routingRows ?? []) as Array<{ id: string; date: string | null }>;
+  const rows = (routingRows ?? []) as Array<{ id: string; date: string | null; day_type: string | null; city: string | null; venue_name: string | null }>;
   let routingId: string | null = null;
   if (d) routingId = rows.find((r) => (r.date ?? '').slice(0, 10) === d)?.id ?? null;
   if (!routingId) routingId = pickDayRouting(rows, today);
@@ -52,9 +52,20 @@ export default async function TokenDayPage({ params, searchParams }: TokenDayPag
   const day = await loadDay(service, { tourId, routingId, workspaceId, role, today });
   if (!day) notFound();
 
+  // Rail: same tour days, switching via ?d= on the same token (no editHref /
+  // routingHref / advanceHref — the crew/token view is read-only, no app links).
+  const railDays: RailDay[] = rows.map((r) => ({
+    routingId: r.id,
+    date: r.date,
+    dayType: r.day_type,
+    city: r.city,
+    venue: r.venue_name,
+    href: `/m/day/${token}?d=${(r.date ?? '').slice(0, 10)}`,
+  }));
+
   return (
-    <div style={{ maxWidth: 640, margin: '0 auto', padding: '20px 16px 48px' }}>
-      <DaySheet day={day} />
+    <div style={{ maxWidth: 1200, margin: '0 auto', padding: '20px 16px 48px' }}>
+      <DayLayout day={day} railDays={railDays} today={today} />
       <p style={{ marginTop: 24, fontSize: 11, color: 'var(--lp-text-tertiary, #999)', textAlign: 'center' }}>
         Lowpass · shared day sheet · read-only
       </p>

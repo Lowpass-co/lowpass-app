@@ -26,7 +26,7 @@ import { getActiveMembership } from '@/lib/permissions/server';
 import { loadDay } from '@/lib/day/loadDay';
 import { resolveViewerTourRole } from '@/lib/roles/server';
 import { resolveEffectiveRole } from '@/lib/roles/slices';
-import { DaySheet } from '@/components/day/DaySheet';
+import { DayLayout, type RailDay } from '@/components/day/DayLayout';
 import { DaySheetActions } from '@/components/day/DaySheetActions';
 import { ViewAsBar } from '@/components/day/ViewAsBar';
 
@@ -62,9 +62,35 @@ export default async function OperationsDayPage({ params, searchParams }: DayPag
   const day = await loadDay(supabase, { tourId, routingId, workspaceId, role });
   if (!day) notFound();
 
+  // Left-rail data — every tour day. Preserve ?viewAs on rail links so the
+  // debugger stays engaged when switching days.
+  const { data: railRows } = await supabase
+    .from('routing')
+    .select('id, date, day_type, city, venue_name')
+    .eq('tour_id', tourId)
+    .order('date', { ascending: true });
+  const vaq = viewingAs ? `?viewAs=${viewingAs}` : '';
+  const railDays: RailDay[] = (railRows ?? []).map((r) => ({
+    routingId: r.id as string,
+    date: (r.date as string | null) ?? null,
+    dayType: (r.day_type as string | null) ?? null,
+    city: (r.city as string | null) ?? null,
+    venue: (r.venue_name as string | null) ?? null,
+    href: `/operations/${tourId}/day/${r.id}${vaq}`,
+  }));
+  const today = new Date().toISOString().slice(0, 10);
+
   return (
-    <div className="mx-auto max-w-5xl px-4 pt-6 pb-12">
-      <DaySheet day={day} actions={<DaySheetActions routingId={routingId} />} advanceHref={`/advance/${tourId}/${routingId}`} />
+    <div className="mx-auto max-w-7xl px-4 pt-6 pb-12">
+      <DayLayout
+        day={day}
+        railDays={railDays}
+        today={today}
+        actions={<DaySheetActions routingId={routingId} />}
+        advanceHref={`/advance/${tourId}/${routingId}`}
+        editHref={`/operations/${tourId}/labor`}
+        routingHref={`/operations/${tourId}/routing`}
+      />
       {canViewAs ? <ViewAsBar viewingAs={viewingAs} /> : null}
     </div>
   );
