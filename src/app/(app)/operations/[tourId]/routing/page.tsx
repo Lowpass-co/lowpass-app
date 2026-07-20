@@ -23,7 +23,7 @@ import Link from 'next/link';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { RoutingEditor } from '@/components/routing/RoutingEditor';
 import { TourFingerprint, type FingerprintDay } from '@/components/tour/TourFingerprint';
-import { RoutingReadinessRail } from '@/components/operations/RoutingReadinessRail';
+import { RoutingStatLine } from '@/components/operations/RoutingReadinessRail';
 import { PageTitle } from '@/components/ui/PageHeader';
 import {
   getOperationsReadiness,
@@ -101,6 +101,9 @@ export default async function OperationsTourRoutingPage({
   // reusing this routing fetch. Highlight the next upcoming show.
   let fingerprintDays: FingerprintDay[] = [];
   let nextShowDate: string | null = null;
+  // R1 — the fingerprint outlines the CURRENT day (today) when it's a tour day,
+  // else falls back to the next upcoming show.
+  let highlightDate: string | null = null;
   // TR-02 — readiness rail data (Shows / Crew / Conflicts / Pending), shared
   // with the relocated /summary surface via getOperationsReadiness.
   let readiness: OperationsReadiness | null = null;
@@ -125,6 +128,7 @@ export default async function OperationsTourRoutingPage({
         const first = d.dayType.split(',')[0]?.trim().toLowerCase();
         return (first === 'show' || first === 'festival') && d.date >= todayIso;
       })?.date ?? null;
+    highlightDate = fingerprintDays.some((d) => d.date.slice(0, 10) === todayIso) ? todayIso : nextShowDate;
     if (ids.length > 0) {
       const { data: audit } = await supabase
         .from('audit_log')
@@ -169,9 +173,15 @@ export default async function OperationsTourRoutingPage({
           }}
         >
           <PageTitle style={{ margin: 0 }}>Routing</PageTitle>
+          {/* R1 — the five KPI boxes collapse into ONE mono stat line, inline
+              with the condensed title (mock header row). */}
+          {canRead && readiness ? (
+            <RoutingStatLine tourId={tourId} dayCount={fingerprintDays.length} readiness={readiness} />
+          ) : null}
           {lastEdit ? (
             <span
               style={{
+                marginLeft: 'auto',
                 fontSize: 'var(--lp-text-xs)',
                 color: 'var(--lp-text-tertiary)',
               }}
@@ -182,14 +192,6 @@ export default async function OperationsTourRoutingPage({
           ) : null}
         </header>
 
-        {/* TR-02 — de-boxed readiness rail (Shows · Crew · Conflicts · Pending),
-            one hairline strip replacing the old four summary cards. */}
-        {canRead && readiness ? (
-          <div style={{ marginBottom: 'var(--lp-space-4)' }}>
-            <RoutingReadinessRail tourId={tourId} readiness={readiness} />
-          </div>
-        ) : null}
-
         {/* §C4 — full-width hero day-strip: the tour at a glance above the grid,
             spanning the page width (fill) with week-commencing markers. */}
         {canRead && fingerprintDays.length > 0 ? (
@@ -199,7 +201,7 @@ export default async function OperationsTourRoutingPage({
               size="hero"
               fill
               weekMarkers
-              highlightDate={nextShowDate}
+              highlightDate={highlightDate}
               ariaLabel={`${tourRow.name} day strip`}
             />
           </div>

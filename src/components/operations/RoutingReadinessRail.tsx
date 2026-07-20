@@ -122,6 +122,55 @@ export function RoutingReadinessRail({
   );
 }
 
+/* Routing redesign R1 — the five KPI boxes collapse into ONE mono stat line
+   (days · shows · advanced · committed · pending⚠). Same numbers, 90% less
+   chrome; each stat deep-links where its box did, and pending keeps the warning
+   colour + the inline review expander. Crew moves to the Crew nav tab (per the
+   mock). */
+export function RoutingStatLine({
+  tourId,
+  dayCount,
+  readiness,
+}: {
+  tourId: string;
+  dayCount: number;
+  readiness: Pick<OperationsReadiness, 'shows' | 'advances' | 'budget' | 'pending'>;
+}) {
+  const { shows, advances, budget, pending } = readiness;
+  const [pendingOpen, setPendingOpen] = useState(false);
+  const pendingCount =
+    pending.awaitingContract.length + pending.tentative.length + pending.showsWithoutVenue.length;
+
+  const linkStyle: React.CSSProperties = { color: 'inherit', textDecoration: 'none' };
+  const num: React.CSSProperties = { color: 'var(--lp-text)', fontWeight: 500 };
+
+  return (
+    <>
+      <div
+        className="lp-mono"
+        style={{ display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'baseline', fontSize: '12.5px', color: 'var(--lp-text-secondary)' }}
+      >
+        <span><b style={num}>{dayCount}</b> days</span>
+        <Link href={`/operations/${tourId}/routing`} style={linkStyle}><b style={num}>{shows.count}</b> shows</Link>
+        <Link href={`/advance/${tourId}`} style={linkStyle}><b style={num}>{advances.done}/{advances.total}</b> advanced</Link>
+        <Link href={`/budget/${tourId}`} style={linkStyle}><b style={num}>{abbrevCommitted(budget.committed, budget.currency)}</b> committed</Link>
+        {pendingCount > 0 ? (
+          <button
+            type="button"
+            onClick={() => setPendingOpen((o) => !o)}
+            aria-expanded={pendingOpen}
+            data-testid="routing-pending-stat"
+            style={{ border: 0, background: 'transparent', padding: 0, cursor: 'pointer', color: 'var(--color-lp-orange)', fontFamily: 'inherit', fontSize: 'inherit' }}
+          >
+            <b style={{ color: 'var(--color-lp-orange)', fontWeight: 500 }}>{pendingCount}</b> pending ⚠
+          </button>
+        ) : null}
+      </div>
+      {pendingOpen ? <PendingDetail tourId={tourId} pending={pending} /> : null}
+    </>
+  );
+}
+
 function Metric({
   icon,
   label,
