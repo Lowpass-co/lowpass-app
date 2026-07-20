@@ -14,9 +14,55 @@
 
 'use client';
 
-import { useCallback } from 'react';
+import { useCallback, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { ExportButton } from '@/components/export/ExportButton';
+
+/** X1-A — the six-sheet Tour Accounting Workbook (.xlsx an accountant can edit). */
+function WorkbookButton({ tourId, versionId }: { tourId: string; versionId: string | null }) {
+  const [busy, setBusy] = useState(false);
+  async function download() {
+    setBusy(true);
+    try {
+      const res = await fetch('/api/export/workbook', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tourId, versionId }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        alert(typeof j.error === 'string' ? j.error : 'Workbook export failed');
+        return;
+      }
+      const cd = res.headers.get('Content-Disposition') ?? '';
+      const name = /filename="?([^"]+)"?/.exec(cd)?.[1] ?? 'Tour Accounting Workbook.xlsx';
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = name;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <button
+      type="button"
+      data-testid="budget-export-workbook"
+      onClick={() => void download()}
+      disabled={busy}
+      className="btn-transition rounded-md border px-3 py-1.5 text-sm"
+      style={{ borderColor: 'var(--lp-border-strong)', color: 'var(--lp-text-secondary)', background: 'transparent', cursor: 'pointer' }}
+      title="Export the whole tour as a six-sheet accounting workbook (.xlsx)"
+    >
+      {busy ? 'Building…' : 'Export workbook…'}
+    </button>
+  );
+}
 
 const DISPLAY_OPTIONS: ReadonlyArray<{ code: string; label: string }> = [
   { code: 'GBP', label: '£ GBP' },
@@ -80,7 +126,8 @@ export function BudgetExportControls({ tourCurrency, tourId }: BudgetExportContr
         ))}
       </select>
 
-      <div className="ml-auto">
+      <div className="ml-auto flex items-center gap-2">
+        <WorkbookButton tourId={tourId} versionId={viewedVersionId} />
         <ExportButton surface="budget" tourId={tourId} versionId={viewedVersionId} title="Export the budget (PDF or Excel)" />
       </div>
     </div>
