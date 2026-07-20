@@ -14,6 +14,7 @@ import { loadPayrollExportData } from '@/lib/export/payroll-data';
 import { loadTourSettlementWalks } from '@/lib/settlement/loadWalk';
 import { payrollFinalizedAt } from '@/lib/payroll/finalize';
 import { buildTourWorkbookBuffer, type TourWorkbookInput } from '@/lib/export/workbook';
+import { contentDisposition } from '@/lib/export/render';
 
 export const dynamic = 'force-dynamic';
 export const maxDuration = 60;
@@ -81,13 +82,15 @@ export async function POST(request: Request): Promise<NextResponse | Response> {
     };
 
     const buffer = await buildTourWorkbookBuffer(input);
-    const safe = (budget.artist?.name ? `${budget.artist.name} — ` : '') + tourMeta.name;
-    const filename = `${safe.replace(/[^\w\s—-]/g, '').trim() || 'Tour'} — Accounting Workbook.xlsx`;
+    const prefix = (budget.artist?.name ? `${budget.artist.name} — ` : '') + tourMeta.name;
+    // The Unicode filename may hold em-dashes / accents; contentDisposition() emits
+    // an ASCII fallback + RFC 5987 filename* so the header stays Latin-1-safe.
+    const filename = `${prefix.trim() || 'Tour'} — Accounting Workbook.xlsx`;
     return new Response(new Uint8Array(buffer), {
       status: 200,
       headers: {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        'Content-Disposition': `attachment; filename="${filename}"`,
+        'Content-Disposition': contentDisposition(filename),
         'Cache-Control': 'no-store',
       },
     });

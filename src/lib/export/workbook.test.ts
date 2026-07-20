@@ -14,8 +14,19 @@ import assert from 'node:assert/strict';
 import * as XLSX from 'xlsx';
 import { buildTourWorkbookBuffer, type TourWorkbookInput } from '@/lib/export/workbook';
 import { computeWalk } from '@/lib/settlement/walk';
+import { contentDisposition } from '@/lib/export/render';
 
 let checks = 0;
+
+// (0) HTTP header seam — the route's filename holds an em-dash (U+2014); the
+// Content-Disposition value MUST be Latin-1-safe (every code point ≤ 255) or the
+// route 500s ("Cannot convert argument to a ByteString ... value of 8212").
+{
+  const cd = contentDisposition('Charlotte Sands — Dandelion ’26 — Accounting Workbook.xlsx');
+  assert.ok([...cd].every((c) => c.charCodeAt(0) <= 255), 'Content-Disposition is Latin-1 safe (em-dash encoded)');
+  assert.match(cd, /filename\*=UTF-8''/, 'RFC 5987 filename* present for the Unicode name');
+  checks += 2;
+}
 
 // Atlanta: 25,000 gtee − 3,000 ded → 22,000 adj − 2,000 exp → 20,000 net
 //          + 4,000 overage + 1,200 merch → 25,200 artist − 5,000 deposit
