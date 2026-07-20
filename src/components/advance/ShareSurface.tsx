@@ -42,6 +42,8 @@ export interface PacketArtifact {
   title: string;
   href: string;
   method: 'GET' | 'POST';
+  /** V1-3 — link to the ONE canonical rider_packs record (rider / stage plot). */
+  editHref?: string;
 }
 
 const KIND_ICON: Record<PacketArtifact['kind'], React.ReactNode> = {
@@ -276,13 +278,10 @@ function PdfCard({ artifact }: { artifact: PacketArtifact }) {
   }
 
   return (
-    <button
-      type="button"
-      onClick={() => void download()}
-      disabled={busy}
-      data-testid={`packet-pdf-${artifact.kind}`}
-      className="btn-transition group flex items-center gap-3 rounded-lg border p-3 text-left"
-      style={{ borderColor: 'var(--lp-border-strong)', background: 'var(--lp-panel)', cursor: busy ? 'wait' : 'pointer' }}
+    // A div (not a button) so the optional Edit link isn't nested inside a button.
+    <div
+      className="flex items-center gap-3 rounded-lg border p-3"
+      style={{ borderColor: 'var(--lp-border-strong)', background: 'var(--lp-panel)' }}
     >
       <span
         aria-hidden
@@ -291,16 +290,43 @@ function PdfCard({ artifact }: { artifact: PacketArtifact }) {
       >
         {KIND_ICON[artifact.kind]}
       </span>
-      <span className="min-w-0 flex-1">
+      <button
+        type="button"
+        onClick={() => void download()}
+        disabled={busy}
+        data-testid={`packet-pdf-${artifact.kind}`}
+        className="btn-transition min-w-0 flex-1 text-left"
+        style={{ border: 0, background: 'transparent', cursor: busy ? 'wait' : 'pointer', padding: 0 }}
+      >
         <span className="block truncate" style={{ fontSize: 'var(--lp-text-sm)', fontWeight: 'var(--lp-weight-semibold)', color: 'var(--lp-text)' }}>
           {artifact.title}
         </span>
         <span className="lp-label-caps" style={{ fontSize: 9, color: 'var(--lp-text-tertiary)' }}>
           {busy ? 'Building…' : `PDF · ${KIND_LABEL[artifact.kind]}`}
         </span>
-      </span>
-      <Download size={16} style={{ color: 'var(--lp-text-tertiary)', flexShrink: 0 }} />
-    </button>
+      </button>
+      {artifact.editHref ? (
+        <a
+          href={artifact.editHref}
+          data-testid={`packet-edit-${artifact.kind}`}
+          className="lp-label-caps shrink-0"
+          style={{ fontSize: 9, color: 'var(--lp-text-tertiary)', textDecoration: 'none' }}
+          title="Edit the source (one canonical record)"
+        >
+          Edit
+        </a>
+      ) : null}
+      <button
+        type="button"
+        onClick={() => void download()}
+        disabled={busy}
+        aria-label={`Download ${artifact.title}`}
+        className="shrink-0"
+        style={{ border: 0, background: 'transparent', cursor: busy ? 'wait' : 'pointer', color: 'var(--lp-text-tertiary)', padding: 0 }}
+      >
+        <Download size={16} />
+      </button>
+    </div>
   );
 }
 

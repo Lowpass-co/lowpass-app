@@ -149,9 +149,11 @@ export default async function AdvanceSharePage({
   for (const p of (packs ?? []) as Array<{ id: string; title: string | null; kind: string }>) {
     const title = p.title?.trim() || '';
     if (p.kind === 'rider') {
-      artifacts.push({ key: `rider-${p.id}`, kind: 'rider', title: title || 'Rider', href: `/api/rider-packs/${p.id}/pdf`, method: 'GET' });
+      // editHref → the ONE canonical rider_packs record (V1-3): same row the
+      // artist tier + packet builder edit; no duplication.
+      artifacts.push({ key: `rider-${p.id}`, kind: 'rider', title: title || 'Rider', href: `/api/rider-packs/${p.id}/pdf`, method: 'GET', editHref: `/rider-packs/${p.id}` });
     } else if (p.kind === 'stage_plot') {
-      artifacts.push({ key: `plot-${p.id}`, kind: 'stage_plot', title: title || 'Stage plot', href: `/api/stage-plots/${p.id}/export/pdf`, method: 'POST' });
+      artifacts.push({ key: `plot-${p.id}`, kind: 'stage_plot', title: title || 'Stage plot', href: `/api/stage-plots/${p.id}/export/pdf`, method: 'POST', editHref: `/rider-packs/${p.id}` });
     } else if (p.kind === 'channel_list') {
       hasChannelList = true;
     }
