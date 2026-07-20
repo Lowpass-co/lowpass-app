@@ -24,6 +24,9 @@
 BEGIN;
 
 -- 1. LINKED — merge onto the existing gear row, fill-only-where-NULL. ---------
+-- The WHERE guard limits the UPDATE to rows that still have a fillable gap, so a
+-- double-paste after the gaps are filled matches ZERO rows — a true no-op (no
+-- updated_at churn).
 UPDATE public.gear g SET
   country_of_origin = COALESCE(g.country_of_origin, ri.country_of_origin),
   customs_hs_code   = COALESCE(g.customs_hs_code,   ri.customs_hs_code),
@@ -36,12 +39,29 @@ UPDATE public.gear g SET
   last_used_at      = COALESCE(g.last_used_at,      ri.last_used_at),
   -- rate mapping (fill-only): gear.hire_cost_amount stays if already set.
   hire_cost_amount  = COALESCE(g.hire_cost_amount,  ri.day_rate),
+  -- ...and give the merged amount a unit: when hire_cost_amount is filled from
+  -- day_rate, set the period to 'day' (never clobber an existing period).
+  hire_cost_period  = CASE WHEN g.hire_cost_amount IS NULL AND ri.day_rate IS NOT NULL THEN COALESCE(g.hire_cost_period,'day') ELSE g.hire_cost_period END,
   -- dimensions / status: adopt from rental where gear still holds the default.
   dimensions_cm     = CASE WHEN g.dimensions_cm = '{}'::jsonb THEN COALESCE(ri.dimensions_cm, '{}'::jsonb) ELSE g.dimensions_cm END,
   status            = CASE WHEN g.status = 'available' AND ri.status IN ('available','in_use','maintenance','retired') THEN ri.status ELSE g.status END,
   updated_at        = now()
 FROM public.rental_inventory ri
-WHERE g.rental_inventory_id = ri.id;
+WHERE g.rental_inventory_id = ri.id
+  AND (
+       (g.hire_cost_amount  IS NULL AND ri.day_rate          IS NOT NULL)
+    OR (g.hire_cost_period  IS NULL AND ri.day_rate          IS NOT NULL)
+    OR (g.country_of_origin IS NULL AND ri.country_of_origin IS NOT NULL)
+    OR (g.customs_hs_code   IS NULL AND ri.customs_hs_code   IS NOT NULL)
+    OR (g.purchase_cost     IS NULL AND ri.purchase_cost     IS NOT NULL)
+    OR (g.day_rate          IS NULL AND ri.day_rate          IS NOT NULL)
+    OR (g.weight_kg         IS NULL AND ri.weight_kg         IS NOT NULL)
+    OR (g.value_amount      IS NULL AND ri.value_amount      IS NOT NULL)
+    OR (g.qr_token          IS NULL AND ri.qr_token          IS NOT NULL)
+    OR (g.last_used_at      IS NULL AND ri.last_used_at      IS NOT NULL)
+    OR (g.dimensions_cm = '{}'::jsonb AND ri.dimensions_cm IS NOT NULL AND ri.dimensions_cm <> '{}'::jsonb)
+    OR (g.status = 'available' AND ri.status IN ('in_use','maintenance','retired'))
+  );
 
 -- 2. UNLINKED — insert as new gear (idempotent via NOT EXISTS). ---------------
 INSERT INTO public.gear (
