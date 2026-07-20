@@ -42,6 +42,12 @@ payment shows a method chip (Wire/Check/Cash/ACH) + date. **Code-verified**;
 played, not settled" count (the M1-A data-health banner + this list read the SAME
 `dataHealth.unsettledShows` derivation). **Code-verified**; **Needs-live**.
 
-#### SET-05 — Settlement PDF renders the Walk — **PENDING**
-The settlement PDF through the shared export shell (the walk, itemized deductions,
-payments, Full & Final) is not yet built — tracked as the remaining M1-B item.
+#### SET-05 — Settlement PDF renders the Walk
+**Do**: On a show's Walk, click **Export PDF**.
+**Expect**: a branded one-show PDF downloads through the shared export shell
+(letterhead + `renderDocument`): the full Walk (Guarantee → Adjusted gross → Show net
+→ Artist total → Balance due → Outstanding), itemized deductions/expenses/payments,
+and the **Full & Final / Open** state chip. One show per document; money is the same
+`computeWalk` as the on-screen Walk (WYSIWYG — the `/export/preview` route returns the
+identical body HTML). `buildSettlementExport` in the shared `build.ts`, surface added
+to `template-config` (`'settlement'`). **Code-verified**; **Needs-live**.

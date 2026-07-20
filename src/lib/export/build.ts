@@ -25,6 +25,8 @@ import { buildStagePlotBodyHtml } from '@/lib/export/stageplot-pdf';
 import { renderDocument } from '@/lib/export/shell';
 import { fetchLogoDataUri, fetchExportAssetDataUri } from '@/lib/export/logo';
 import type { FooterStyle, TemplateConfig } from '@/lib/export/template-config';
+import { loadSettlementWalk } from '@/lib/settlement/loadWalk';
+import { buildSettlementBodyHtml } from '@/lib/export/settlement-pdf';
 
 export interface ExportBuild {
   html: string;
@@ -114,6 +116,53 @@ export async function buildBudgetExport(
 
   const footerNote = `${data.artist?.name ? `${data.artist.name} — ` : ''}${data.tour.name} · Budget`;
   const filename = `${sanitize(data.artist?.name ?? '', '')} — ${sanitize(data.tour.name, 'Budget')} — Budget.pdf`.replace(/^ — /, '');
+  return { html, footerNote, filename, footer: config.footer, runningHeader: config.header.show ? footerNote : null };
+}
+
+/** M1-B · SET-05 — one show's settlement Walk PDF through the shared shell. */
+export async function buildSettlementExport(
+  supabase: SupabaseClient,
+  tour: BudgetTourMeta,
+  workspaceId: string,
+  config: TemplateConfig,
+  routingId: string,
+): Promise<ExportBuild> {
+  const currency = tour.currency ?? 'GBP';
+  const [{ data: artist }, { data: routing }, walk] = await Promise.all([
+    tour.artist_id
+      ? supabase.from('artists').select('name').eq('id', tour.artist_id).maybeSingle()
+      : Promise.resolve({ data: null as { name?: string } | null }),
+    supabase.from('routing').select('date, city, venue_name').eq('id', routingId).maybeSingle(),
+    loadSettlementWalk(supabase, routingId, workspaceId, currency),
+  ]);
+
+  const showLabel = (routing?.city as string) || (routing?.venue_name as string) || 'Show';
+  const showDate = (routing?.date as string | null) ?? null;
+  const artistName = (artist?.name as string | undefined) ?? null;
+
+  const logoDataUri = config.logo ? await resolveLogo(supabase, workspaceId, config, null) : null;
+  const bgDataUri = await fetchExportAssetDataUri(supabase, workspaceId, config.header.bgAssetPath);
+
+  const html = renderDocument({
+    letterhead: {
+      artistName,
+      tourName: tour.name,
+      tourDates: tourDateRange(tour.start_date, tour.end_date),
+      logoDataUri,
+      showLogo: config.logo,
+      generatedOn: nowStamp(),
+    },
+    pageSize: config.pageSize,
+    title: 'Settlement',
+    subtitle: [showLabel, showDate].filter(Boolean).join(' · '),
+    general: config.general,
+    header: config.header,
+    bgDataUri,
+    bodyHtml: buildSettlementBodyHtml(walk, { showLabel, date: showDate }, config),
+  });
+
+  const footerNote = `${artistName ? `${artistName} — ` : ''}${tour.name} · Settlement · ${showLabel}`;
+  const filename = `${sanitize(artistName ?? '', '')} — ${sanitize(showLabel, 'Show')} — Settlement.pdf`.replace(/^ — /, '');
   return { html, footerNote, filename, footer: config.footer, runningHeader: config.header.show ? footerNote : null };
 }
 

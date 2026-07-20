@@ -197,10 +197,21 @@ function WalkPanel({
           </div>
           <div className="lp-mono" style={{ fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-tertiary)' }}>{show.date ?? '—'}</div>
         </div>
-        <label className="flex items-center" style={{ gap: 6, fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text)', cursor: 'pointer' }}>
-          <input type="checkbox" checked={show.fullAndFinal} disabled={busy} onChange={(e) => onSaveGrain({ full_and_final: e.target.checked, status: 'reconciled' })} />
-          Full &amp; Final
-        </label>
+        <div className="flex items-center" style={{ gap: 'var(--lp-space-3)' }}>
+          <button
+            type="button"
+            onClick={() => void exportPdf(show.routingId, show.city || show.venue_name || 'Show')}
+            className="btn-transition"
+            style={{ padding: '4px 10px', fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text-secondary)', background: 'transparent', border: '1px solid var(--lp-border-strong)', borderRadius: 'var(--lp-radius-md)', cursor: 'pointer' }}
+            title="Download this show's settlement as a PDF"
+          >
+            Export PDF
+          </button>
+          <label className="flex items-center" style={{ gap: 6, fontSize: 'var(--lp-text-sm)', color: 'var(--lp-text)', cursor: 'pointer' }}>
+            <input type="checkbox" checked={show.fullAndFinal} disabled={busy} onChange={(e) => onSaveGrain({ full_and_final: e.target.checked, status: 'reconciled' })} />
+            Full &amp; Final
+          </label>
+        </div>
       </header>
 
       {/* Guarantee */}
@@ -386,6 +397,24 @@ function PaymentAdder({ busy, onAdd }: { busy: boolean; onAdd: (f: Record<string
       <button type="button" style={{ ...addBtnStyle, color: 'var(--lp-text-tertiary)' }} onClick={() => setOpen(false)}>Cancel</button>
     </div>
   );
+}
+
+async function exportPdf(routingId: string, label: string) {
+  const res = await fetch('/api/budget/settlement/export/pdf', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ routing_id: routingId }),
+  });
+  if (!res.ok) { alert('Export failed'); return; }
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `${label} — Settlement.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 function kindLabel(k: string): string {
