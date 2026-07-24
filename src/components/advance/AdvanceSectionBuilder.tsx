@@ -73,7 +73,7 @@ import {
   Sliders,
   Lock,
 } from 'lucide-react';
-import { parseRoutingDate, getDayTypeColor, getAdvanceStatusInfo, firstDayType, dayTypesInclude, cn } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 import { SlidingToggle } from '@/components/ui/SlidingToggle';
 import { useToast } from '@/components/ui/Toast';
 import { detectAiCap, aiCapMessage } from '@/lib/ai/client';
@@ -84,7 +84,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { AddPlatformFieldModal } from './AddPlatformFieldModal';
 
 import {
-  relativeTime, STATUS_ORDER, ICON_MAP, CUSTOM_SECTION_ICONS, SectionIcon, FIELD_TYPE_ICONS, FIELD_TYPE_OPTIONS, slugify, FieldTypeIcon, setDragGhost, FieldDef, SectionDef, sortFieldsContactsFirst, sortHospitalityFieldsFirst, ContactRow, AdvanceDocument, KEY_CONTACTS_LABEL, IMPORTANT_DOCUMENTS_KEY, RIDER_LABEL, FLIGHTS_LABEL, SETTLEMENT_LABEL, PARKING_ACCESS_LABEL, SECTION_CONTACT_ROLES, DEFAULT_CONTACT_ROLES, getContactRolesForSection, CONTACT_ROLES, ApiTemplate, AdvanceData, SectionStatuses, AdvanceFlag, AdvanceDateItem, PageData, AdvanceComment, AdvanceDropdownZContext, AdvanceDropdownZProvider,
+  relativeTime, STATUS_ORDER, ICON_MAP, CUSTOM_SECTION_ICONS, SectionIcon, FIELD_TYPE_ICONS, FIELD_TYPE_OPTIONS, slugify, FieldTypeIcon, setDragGhost, FieldDef, SectionDef, sortFieldsContactsFirst, sortHospitalityFieldsFirst, ContactRow, AdvanceDocument, KEY_CONTACTS_LABEL, IMPORTANT_DOCUMENTS_KEY, RIDER_LABEL, FLIGHTS_LABEL, SETTLEMENT_LABEL, PARKING_ACCESS_LABEL, SECTION_CONTACT_ROLES, DEFAULT_CONTACT_ROLES, getContactRolesForSection, CONTACT_ROLES, ApiTemplate, AdvanceData, SectionStatuses, AdvanceFlag, PageData, AdvanceComment, AdvanceDropdownZContext, AdvanceDropdownZProvider,
 } from './parts/model';
 import { SetupMode } from './builder/SetupMode';
 import { FillMode } from './fill/FillMode';
@@ -114,7 +114,6 @@ export function AdvanceSectionBuilder({
   const isBuilderMode = searchParams?.get('mode') === 'edit';
   const { user } = useAuth();
   const [data, setData] = useState<PageData | null>(null);
-  const [allDates, setAllDates] = useState<AdvanceDateItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [setupMode, setSetupMode] = useState(false);
@@ -142,14 +141,10 @@ export function AdvanceSectionBuilder({
     return () => { cancelled = true; };
   }, [tourId, routingId]);
 
-  useEffect(() => {
-    let cancelled = false;
-    fetch(`/api/tours/${tourId}/advance?all=true`)
-      .then((r) => (r.ok ? r.json() : { dates: [] }))
-      .then((j) => { if (!cancelled) setAllDates(j.dates ?? []); })
-      .catch(() => { if (!cancelled) setAllDates([]); });
-    return () => { cancelled = true; };
-  }, [tourId]);
+  /* R5-1 — the `?all=true` tour-wide fetch that fed the private day strip is
+     gone with it. It ran on every builder mount to populate a branch that could
+     never render, so this is a dead request removed, not just dead markup. The
+     canonical day list is fetched once by AdvanceUpcomingSidebar → <RoutingRail>. */
 
   const hasSections = data?.advance?.sections?.length ? true : false;
   // Post-merge fix-up: ?mode=edit forces SetupMode regardless of
@@ -291,54 +286,12 @@ export function AdvanceSectionBuilder({
 
   return (
     <div className={cn('transition-opacity duration-300', contentVisible ? 'opacity-100' : 'opacity-0')}>
-      {/* Hotfix 4 §2 — suppress the in-canvas AdvanceDateStrip when
-          wrappedInShell. The three-pane shell already renders
-          AdvanceUpcomingSidebar as the canonical day picker; without
-          this gate the user sees two day columns side-by-side. */}
-      {allDates.length > 0 && !wrappedInShell ? (
-        <div className="flex gap-4">
-          <AdvanceDateStrip tourId={tourId} routingId={routingId} dates={allDates} />
-          <div className="flex-1 min-w-0 space-y-6">{mainContent}</div>
-        </div>
-      ) : (
-        <div className="space-y-6">{mainContent}</div>
-      )}
-    </div>
-  );
-}
-
-function AdvanceDateStrip({ tourId, routingId, dates }: { tourId: string; routingId: string; dates: AdvanceDateItem[] }) {
-  const router = useRouter();
-  const cityAbbrev = (city: string) => (city ? (city.length > 4 ? city.slice(0, 4) : city) : '');
-  return (
-    <div className="hidden md:flex shrink-0 w-16 flex-col rounded-xl border border-lp-border bg-lp-surface overflow-hidden">
-      <div className="border-b border-lp-border px-1.5 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-lp-text-tertiary text-center">Dates</div>
-      <div className="min-h-0 flex-1 overflow-y-auto p-1.5 space-y-0.5">
-        {dates.map((item) => {
-          const isCurrent = item.routing_id === routingId;
-          const primaryType = firstDayType(item.day_type ?? '');
-          const colors = primaryType ? getDayTypeColor(primaryType) : null;
-          const dateLabel = parseRoutingDate(item.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
-          const abbrev = cityAbbrev(item.city ?? '');
-          return (
-            <button
-              key={item.routing_id}
-              type="button"
-              onClick={() => router.push(`/advance/${tourId}/${item.routing_id}`)}
-              className={cn(
-                'w-full rounded-md px-1.5 py-1.5 text-left text-[11px] transition-colors',
-                isCurrent
-                  ? 'bg-lp-orange text-white font-medium'
-                  : 'text-lp-text hover:bg-lp-surface-hover',
-                colors && !isCurrent && [colors.bg, colors.text].join(' ')
-              )}
-            >
-              <div className="font-medium leading-tight">{dateLabel}</div>
-              {abbrev && <div className={cn('truncate mt-0.5 leading-tight', isCurrent ? 'text-white/90' : 'text-lp-text-tertiary')}>{abbrev}</div>}
-            </button>
-          );
-        })}
-      </div>
+      {/* R5-1 — the in-canvas day strip is GONE. It was a private fourth rail
+          implementation gated behind `!wrappedInShell`, and the only mount chain
+          (AdvanceBuilderShellClient → AdvanceSectionBuilderDynamic → here) always
+          passes wrappedInShell, so the branch was unreachable. <RoutingRail> via
+          AdvanceUpcomingSidebar is the canonical day picker on this surface. */}
+      <div className="space-y-6">{mainContent}</div>
     </div>
   );
 }
