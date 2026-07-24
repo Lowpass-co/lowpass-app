@@ -76,6 +76,10 @@ export function VenueAutocomplete({
   const [mode, setMode] = useState<'library' | 'places'>('library');
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  // R4b defect 4 — in the ledger the placeholder must only show while EDITING;
+  // an unfocused empty cell reads as an en-dash, not the word "Venue" (which
+  // scanned as data).
+  const [focused, setFocused] = useState(false);
   const [highlightedIndex, setHighlightedIndex] = useState(0);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -387,6 +391,7 @@ export function VenueAutocomplete({
           // [value] effect) clobber any pick result that arrives
           // moments later. isPickingRef releases in handleSelect's
           // finally block — including aborted/failed paths.
+          setFocused(false);
           if (isPickingRef.current) return;
           if (query !== value) {
             onChange(query);
@@ -435,14 +440,33 @@ export function VenueAutocomplete({
             return;
           }
           if (e.key === 'Escape') {
-            // Esc reverts the cell to its previous value + keeps focus.
+            // Esc reverts the cell to its previous value + keeps focus, and closes
+            // the list in the SAME keypress.
+            //
+            // R4b defect 2 — it used to take two Escapes. setQuery(value) re-runs
+            // the [query] debounce effect, and because queryFromUserRef was still
+            // true from typing, that effect called setOpen(true) 250ms later and
+            // re-opened the list we had just closed. Cancel the pending debounce
+            // and clear the from-user flag so nothing re-opens it.
             e.preventDefault();
+            if (debounceRef.current) {
+              clearTimeout(debounceRef.current);
+              debounceRef.current = null;
+            }
+            queryFromUserRef.current = false;
             setQuery(value);
             setOpen(false);
             return;
           }
         }}
-        onFocus={() => {
+        onFocus={(e) => {
+          // R4b defect 1 — select the existing text on cell entry so typing
+          // REPLACES it. Without this the caret landed at the end and type-to-search
+          // appended ("O2 Apollo Manchester" + "man"), which broke the venue search
+          // on every already-occupied cell. Standard grid-cell behaviour; Tab-in
+          // (KEY-05/06) and click-in both get it.
+          e.currentTarget.select();
+          setFocused(true);
           if (query.length >= 1) {
             queryFromUserRef.current = true;
             if (totalItems > 0) {
@@ -463,7 +487,10 @@ export function VenueAutocomplete({
             }
           }
         }}
-        placeholder={placeholder}
+        // R4b defect 4 — ledger cells are text-until-touched, so an UNFOCUSED empty
+        // cell shows an en-dash (reads as "no value"); the real placeholder word
+        // only appears once you're editing. Boxed variant is unchanged.
+        placeholder={variant === 'ledger' && !focused ? '—' : placeholder}
         className={
           variant === 'ledger'
             ? // Ledger — borderless 14px/500 text-until-touched; orange inset ring

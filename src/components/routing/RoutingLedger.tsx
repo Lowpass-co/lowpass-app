@@ -133,6 +133,7 @@ function LedgerRow({
 }) {
   const [expanded, setExpanded] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [cityFocused, setCityFocused] = useState(false);
   const { lead, tail } = dateParts(row.date);
   const tickColour = colourForDayType(row.day_type ?? '');
   const firstType = (row.day_type ?? '').split(',')[0]?.trim().toLowerCase() ?? '';
@@ -288,7 +289,16 @@ function LedgerRow({
               type="text"
               value={row.city ?? ''}
               onChange={(e) => updateRow(rowIndex, { city: e.target.value })}
-              placeholder="City"
+              // R4b defect 1 (consistency) — select on cell entry so typing replaces,
+              // matching the venue cell. R4b defect 4 — the placeholder word only
+              // shows while editing; an unfocused empty cell reads as an en-dash
+              // instead of the literal word "City", which scanned as real data.
+              onFocus={(e) => {
+                e.currentTarget.select();
+                setCityFocused(true);
+              }}
+              onBlur={() => setCityFocused(false)}
+              placeholder={cityFocused ? 'City' : '—'}
               className="w-full rounded-md border border-transparent bg-transparent px-1.5 py-1 placeholder:text-lp-text-tertiary focus:outline-none focus:border-lp-orange focus:ring-2 focus:ring-lp-orange/40 focus:bg-lp-surface"
               style={{ fontSize: 13, color: 'var(--lp-text-secondary)' }}
             />

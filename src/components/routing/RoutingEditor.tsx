@@ -13,9 +13,9 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { LayoutGrid, Calendar, MapPin, Download, Copy, Check, X, ClipboardCheck, Calculator, LayoutDashboard } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
-import { StyledSelect } from '@/components/ui/StyledSelect';
 import { type RoutingRow } from './RoutingGrid';
 import { RoutingLedger } from './RoutingLedger';
+import { RoutingSettingsMenu } from './RoutingSettingsMenu';
 import { RoutingCalendar } from './RoutingCalendar';
 import { RoutingExportButton } from './RoutingExportButton';
 import type { PrimaryTransit } from './RoutingMap';
@@ -399,31 +399,39 @@ export function RoutingEditor({
           onClose={() => setAfterSaveMenuOpen(false)}
         />
       )}
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="flex rounded-lg border border-lp-border p-1">
-            {[
-              { mode: 'grid' as ViewMode, label: 'Grid', icon: LayoutGrid },
-              { mode: 'calendar' as ViewMode, label: 'Calendar', icon: Calendar },
-              { mode: 'map' as ViewMode, label: 'Map', icon: MapPin },
-            ].map(({ mode, label, icon: Icon }) => (
-              <button
-                key={mode}
-                type="button"
-                onClick={() => setView(mode)}
-                className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                  view === mode
-                    ? 'bg-lp-orange text-white'
-                    : 'text-lp-text-secondary hover:text-lp-text hover:bg-lp-surface-hover'
-                }`}
-              >
-                <Icon size={16} />
-                {label}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
+      {/* R4b defect 3 — ONE right-aligned row of quiet chips (mock `.hd .acts`:
+          Calendar · Map · Export…). The boxed segmented control and the full-width
+          "Primary mode of transit" row are gone; the view toggle joins the action
+          chips and the transit selector moved into <RoutingSettingsMenu>. */}
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        {[
+          { mode: 'grid' as ViewMode, label: 'Ledger', icon: LayoutGrid },
+          { mode: 'calendar' as ViewMode, label: 'Calendar', icon: Calendar },
+          { mode: 'map' as ViewMode, label: 'Map', icon: MapPin },
+        ].map(({ mode, label, icon: Icon }) => {
+          const active = view === mode;
+          return (
+            <button
+              key={mode}
+              type="button"
+              onClick={() => setView(mode)}
+              aria-pressed={active}
+              className="flex items-center gap-2 rounded-lg border px-3 py-1.5 text-[12.5px] transition-colors"
+              style={{
+                borderColor: active ? 'var(--lp-orange)' : 'var(--lp-border)',
+                background: active ? 'color-mix(in srgb, var(--lp-orange) 8%, transparent)' : 'transparent',
+                color: active ? 'var(--lp-text)' : 'var(--lp-text-secondary)',
+              }}
+            >
+              <Icon size={14} />
+              {label}
+            </button>
+          );
+        })}
+        <span className="flex items-center gap-2">
+          {view !== 'calendar' ? (
+            <RoutingSettingsMenu primaryTransit={primaryTransit} onPrimaryTransitChange={setPrimaryTransit} />
+          ) : null}
           <RoutingExportButton tourId={tourId} />
           <button
             type="button"
@@ -495,7 +503,7 @@ export function RoutingEditor({
               Read-only
             </span>
           ) : null}
-        </div>
+        </span>
       </div>
 
       {icalModalOpen && (
@@ -561,21 +569,9 @@ export function RoutingEditor({
 
       {view === 'grid' && (
         <>
-          <div className="flex flex-wrap items-center gap-4">
-            <span className="text-sm font-medium text-lp-text-secondary">Primary mode of transit</span>
-            <StyledSelect<PrimaryTransit>
-              value={primaryTransit}
-              onChange={(v) => setPrimaryTransit(v)}
-              options={[
-                { value: 'bus_van', label: 'Bus (0.8× drive time)' },
-                { value: 'van', label: 'Van (0.9× drive time)' },
-                { value: 'bus_trailer', label: 'Bus + Trailer (0.85× drive time)' },
-                { value: 'car', label: 'Car (Google drive time)' },
-                { value: 'flight', label: 'Flight (est. time)' },
-              ]}
-              placeholder="Select transit"
-            />
-          </div>
+          {/* R4b defect 3 — the full-width "Primary mode of transit" row is gone;
+              the selector now lives in <RoutingSettingsMenu> in the action row, so
+              the ledger starts directly under the chips. */}
           <div ref={gridWrapperRef}>
             {/* R2 — the ledger replaces the input-grid for the routing surface.
                 <RoutingGrid> stays live for the tour-create slide-over's compact
