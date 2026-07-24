@@ -18,18 +18,15 @@
    invitation (no dead boxes).
    ============================================================ */
 
-import { useMemo, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import Link from 'next/link';
 import type { DayObject, ScheduleItem, DayHotel, DayContact } from '@/lib/day/loadDay';
+import { DayRail, type RailDay } from './DayRail';
 
-export interface RailDay {
-  routingId: string;
-  date: string | null;
-  dayType: string | null;
-  city: string | null;
-  venue: string | null;
-  href: string;
-}
+/* R5-2 — RailDay + the rail itself now live in <DayRail>, which wraps the
+   canonical <RoutingRail>. Re-exported here so the two page mounts
+   (operations/day/[routingId] and m/day/[token]) keep their existing import. */
+export type { RailDay };
 
 function dayTypeColor(t: string | null): string {
   if (t === 'show' || t === 'festival') return 'var(--lp-day-show)';
@@ -40,15 +37,6 @@ function fmtLong(iso: string | null): string {
   if (!iso) return 'Date TBC';
   const d = new Date(`${iso}T00:00:00Z`);
   return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
-}
-function fmtRailDate(iso: string | null): { dow: string; dm: string } {
-  if (!iso) return { dow: '—', dm: '' };
-  const d = new Date(`${iso}T00:00:00Z`);
-  if (Number.isNaN(d.getTime())) return { dow: iso, dm: '' };
-  return {
-    dow: d.toLocaleDateString('en-GB', { weekday: 'short', timeZone: 'UTC' }),
-    dm: d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', timeZone: 'UTC' }),
-  };
 }
 function fmtClock(iso: string | null): string {
   if (!iso) return '';
@@ -67,68 +55,6 @@ const DAY_TYPE_LABEL: Record<string, string> = {
 const card: React.CSSProperties = { border: '1px solid var(--lp-border)', borderRadius: 'var(--lp-radius-lg)', background: 'var(--lp-panel)', padding: 'var(--lp-space-4)' };
 function CardTitle({ children }: { children: ReactNode }) {
   return <h3 className="lp-label-caps" style={{ margin: '0 0 8px', fontSize: 10, letterSpacing: 'var(--lp-tracking-caps)', color: 'var(--lp-text-tertiary)' }}>{children}</h3>;
-}
-
-/* ---- left rail ------------------------------------------------------------ */
-function DateRail({ days, activeId, today, routingHref }: { days: RailDay[]; activeId: string; today: string; routingHref?: string }) {
-  const [q, setQ] = useState('');
-  const filtered = useMemo(() => {
-    const s = q.trim().toLowerCase();
-    if (!s) return days;
-    return days.filter((d) => [d.city, d.venue, d.date, DAY_TYPE_LABEL[d.dayType ?? '']].filter(Boolean).some((x) => String(x).toLowerCase().includes(s)));
-  }, [days, q]);
-
-  return (
-    <aside style={{ borderRight: '1px solid var(--lp-border)', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-      <div style={{ padding: '10px 10px 8px' }}>
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Search city, venue, date…"
-          data-testid="day-rail-search"
-          style={{ width: '100%', fontSize: 'var(--lp-text-sm)', padding: '6px 10px', borderRadius: 'var(--lp-radius-md)', border: '1px solid var(--lp-border-strong)', background: 'var(--lp-surface)', color: 'var(--lp-text)' }}
-        />
-      </div>
-      <div style={{ overflowY: 'auto', flex: 1, minHeight: 0 }}>
-        {filtered.map((d) => {
-          const active = d.routingId === activeId;
-          const isToday = (d.date ?? '').slice(0, 10) === today;
-          const { dow, dm } = fmtRailDate(d.date);
-          return (
-            <Link
-              key={d.routingId}
-              href={d.href}
-              data-testid={active ? 'day-rail-active' : undefined}
-              style={{ display: 'grid', gridTemplateColumns: '3px 46px 1fr', gap: 8, alignItems: 'center', padding: '8px 10px', textDecoration: 'none', background: active ? 'color-mix(in srgb, var(--color-lp-orange) 8%, transparent)' : 'transparent', borderBottom: '1px solid var(--lp-border-subtle)' }}
-            >
-              <span style={{ alignSelf: 'stretch', borderRadius: 2, background: dayTypeColor(d.dayType) }} aria-hidden />
-              <span style={{ textAlign: 'center' }}>
-                <span style={{ display: 'block', fontSize: 10, textTransform: 'uppercase', color: 'var(--lp-text-tertiary)' }}>{dow}</span>
-                <span className="lp-mono" style={{ display: 'block', fontSize: 12, color: active ? 'var(--lp-text)' : 'var(--lp-text-secondary)', fontWeight: active ? 700 : 400 }}>{dm}</span>
-              </span>
-              <span style={{ minWidth: 0 }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span className="lp-label-caps" style={{ fontSize: 8, color: dayTypeColor(d.dayType) }}>{DAY_TYPE_LABEL[d.dayType ?? ''] ?? (d.dayType ?? '—')}</span>
-                  {isToday ? <span className="lp-label-caps" style={{ fontSize: 8, color: 'var(--color-lp-orange)' }}>· Today</span> : null}
-                </span>
-                <span style={{ display: 'block', fontSize: 'var(--lp-text-sm)', color: active ? 'var(--lp-text)' : 'var(--lp-text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {[d.venue, d.city].filter(Boolean).join(', ') || '—'}
-                </span>
-              </span>
-            </Link>
-          );
-        })}
-        {filtered.length === 0 ? <p style={{ padding: 12, fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text-tertiary)' }}>No days match.</p> : null}
-      </div>
-      {/* view toggle */}
-      <div style={{ display: 'flex', gap: 4, padding: 8, borderTop: '1px solid var(--lp-border)' }}>
-        <span data-testid="day-view-day" style={{ flex: 1, textAlign: 'center', fontSize: 'var(--lp-text-xs)', fontWeight: 'var(--lp-weight-semibold)', padding: '5px 0', borderRadius: 'var(--lp-radius-md)', background: 'color-mix(in srgb, var(--color-lp-orange) 12%, transparent)', color: 'var(--lp-text)' }}>Day</span>
-        {routingHref ? (
-          <Link href={routingHref} style={{ flex: 1, textAlign: 'center', fontSize: 'var(--lp-text-xs)', padding: '5px 0', borderRadius: 'var(--lp-radius-md)', color: 'var(--lp-text-secondary)', textDecoration: 'none' }}>Routing</Link>
-        ) : null}
-      </div>
-    </aside>
-  );
 }
 
 /* ---- center schedule ------------------------------------------------------ */
@@ -304,7 +230,7 @@ export interface DayLayoutProps {
 export function DayLayout({ day, railDays, today, actions, advanceHref, editHref, routingHref }: DayLayoutProps) {
   return (
     <div className="lp-day-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 260px) minmax(0, 1fr) minmax(260px, 320px)', gap: 'var(--lp-space-4)', alignItems: 'start' }}>
-      <DateRail days={railDays} activeId={day.routingId} today={today} routingHref={routingHref} />
+      <DayRail days={railDays} activeId={day.routingId} today={today} routingHref={routingHref} />
 
       {/* center */}
       <div style={{ display: 'grid', gap: 'var(--lp-space-4)', minWidth: 0 }}>

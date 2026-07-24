@@ -10,19 +10,22 @@
    wrapper around the existing CopyAdvanceModal — selecting a source
    show pops the same modal AdvanceOverview opens via ?copy=…
 
-   Reads /api/tours/[tourId]/advance?all=true (the same endpoint
-   AdvanceOverview already uses). RLS-gated; renders an empty state
-   if the tour has no shows yet.
+   R5-2: renders the canonical <RoutingRail> (presentational, props-only) and
+   keeps its own chrome — search, copy-from, and the per-entry progress/overdue
+   accessory via the rail's renderMeta slot. Data comes from the shared
+   useAdvanceRailEntries hook, which the below-lg AdvanceDateStrip also reads.
+   RLS-gated; renders an empty state if the tour has no shows yet.
    ============================================ */
 
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ChevronDown, Loader2, Search } from 'lucide-react';
 import { CopyAdvanceModal, type AdvanceDateItem } from '@/components/advance/CopyAdvanceModal';
 import { RoutingRail, type RailEntry } from '@/components/routing/RoutingRail';
 import { parseRoutingDate } from '@/lib/utils';
+import { useAdvanceRailEntries } from '@/components/advance/useAdvanceRailEntries';
 
 interface AdvanceUpcomingSidebarProps {
   tourId: string;
@@ -77,71 +80,24 @@ export function AdvanceUpcomingSidebar({
   activeRoutingId,
 }: AdvanceUpcomingSidebarProps) {
   const router = useRouter();
-  const [items, setItems] = useState<AdvanceDateItem[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [copySource, setCopySource] = useState<string | null>(null);
   const [copyOpen, setCopyOpen] = useState(false);
 
-  useEffect(() => {
-    let alive = true;
-    fetch(`/api/tours/${tourId}/advance?all=true`)
-      .then((res) => {
-        if (!res.ok) throw new Error(`Failed (${res.status})`);
-        return res.json() as Promise<{
-          dates?: AdvanceDateItem[];
-          items?: AdvanceDateItem[];
-        }>;
-      })
-      .then((data) => {
-        if (!alive) return;
-        // Endpoint shape is { dates }; accept { items } too in case
-        // it's swapped later — both forms map to the same fields.
-        const all = data.dates ?? data.items ?? [];
-        setItems(all);
-      })
-      .catch((e: Error) => {
-        if (alive) setError(e.message);
-      });
-    return () => {
-      alive = false;
-    };
-  }, [tourId]);
+  // R5-2 — ONE advance-side data path. The fetch, the show-day filter, the sort
+  // and the RailEntry mapping live in useAdvanceRailEntries, shared with the
+  // horizontal AdvanceDateStrip (which renders below lg). The hook de-dupes the
+  // in-flight request, so mounting both rails costs one `?all=true` call.
+  const { items, entries: allEntries, itemById, error } = useAdvanceRailEntries(tourId);
 
-  const showRows = useMemo(() => {
-    const all = items ?? [];
-    const filtered = search.trim()
-      ? all.filter((d) => {
-          const q = search.trim().toLowerCase();
-          return [d.venue_name, d.city, d.day_type, d.date]
-            .filter(Boolean)
-            .some((s) => (s ?? '').toLowerCase().includes(q));
-        })
-      : all;
-    // Show & festival days only — off / travel / rehearsal aren't
-    // "advance shows" so they'd clutter the rail.
-    return filtered.filter((d) => isShowDay(d.day_type));
-  }, [items, search]);
-
-  // Map show rows → shared rail entries (id = routing_id). Advance keeps its
-  // own per-entry meta (progress bar + overdue) via renderMeta, and stays
-  // pill-less / show-days-only (showDayTypePill={false}).
-  const railEntries = useMemo<RailEntry[]>(
-    () =>
-      showRows.map((d) => ({
-        id: d.routing_id,
-        date: d.date,
-        city: d.city,
-        venueName: d.venue_name,
-        dayType: d.day_type,
-      })),
-    [showRows],
-  );
-  const itemById = useMemo(() => {
-    const m = new Map<string, AdvanceDateItem>();
-    for (const d of showRows) m.set(d.routing_id, d);
-    return m;
-  }, [showRows]);
+  // Search stays caller-owned — the rail is presentational, props-only.
+  const railEntries = useMemo<RailEntry[]>(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return allEntries;
+    return allEntries.filter((e) =>
+      [e.venueName, e.city, e.dayType, e.date].filter(Boolean).some((s) => String(s).toLowerCase().includes(q)),
+    );
+  }, [allEntries, search]);
 
   // Source list for the "Copy advance from…" dropdown — every show
   // that already has an advance instance to copy from.
@@ -286,7 +242,7 @@ export function AdvanceUpcomingSidebar({
           >
             Couldn’t load shows: {error}
           </div>
-        ) : showRows.length === 0 ? (
+        ) : railEntries.length === 0 ? (
           <div
             className="px-3 py-4"
             style={{ fontSize: '12px', color: 'var(--lp-text-tertiary)' }}

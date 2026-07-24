@@ -7,23 +7,21 @@
    accent + a mono completion %. The active show is orange-ringed and
    auto-scrolled into view.
 
-   Data: the same GET /api/tours/[tourId]/advance?all=true the upcoming
-   sidebar reads (RLS-gated). Read-only navigation — no writes, so none of
-   the advance autosave / review / intake paths are touched.
+   R5-2: this is the BELOW-lg day nav only (lg:hidden). The 280px vertical
+   <RoutingRail> in AdvanceUpcomingSidebar owns lg and up, so the surface never
+   shows two day-nav axes at once. Data comes from the shared
+   useAdvanceRailEntries hook — no private fetch, no private show-day filter.
+   Read-only navigation; no advance autosave / review / intake path is touched.
    ============================================ */
 
 'use client';
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { type AdvanceDateItem } from '@/components/advance/CopyAdvanceModal';
 import { colourForDayType } from '@/lib/routing/dayType';
 import { parseRoutingDate } from '@/lib/utils';
-
-function isShowDay(dayType: string | null | undefined): boolean {
-  const t = (dayType ?? '').toLowerCase();
-  return t.includes('show') || t.includes('festival');
-}
+import { useAdvanceRailEntries } from '@/components/advance/useAdvanceRailEntries';
 
 function completionPercent(d: AdvanceDateItem): number {
   const sections = d.advance?.sections ?? [];
@@ -43,32 +41,12 @@ interface AdvanceDateStripProps {
 }
 
 export function AdvanceDateStrip({ tourId, activeRoutingId }: AdvanceDateStripProps) {
-  const [items, setItems] = useState<AdvanceDateItem[] | null>(null);
   const activeRef = useRef<HTMLAnchorElement | null>(null);
-
-  useEffect(() => {
-    let alive = true;
-    fetch(`/api/tours/${tourId}/advance?all=true`)
-      .then((res) => (res.ok ? res.json() : Promise.reject(res.status)))
-      .then((data: { dates?: AdvanceDateItem[]; items?: AdvanceDateItem[] }) => {
-        if (!alive) return;
-        setItems(data.dates ?? data.items ?? []);
-      })
-      .catch(() => {
-        if (alive) setItems([]);
-      });
-    return () => {
-      alive = false;
-    };
-  }, [tourId]);
-
-  const days = useMemo(
-    () =>
-      (items ?? [])
-        .filter((d) => isShowDay(d.day_type))
-        .sort((a, b) => parseRoutingDate(a.date).getTime() - parseRoutingDate(b.date).getTime()),
-    [items],
-  );
+  // R5-2 — B no longer owns a private data path. The show-day filter, the sort
+  // and the RailEntry mapping all come from the shared advance hook, which the
+  // vertical rail (AdvanceUpcomingSidebar) reads too and which de-dupes the
+  // in-flight request so the page issues ONE `?all=true` call, not two.
+  const { items, showDays: days } = useAdvanceRailEntries(tourId);
 
   // Centre the active chip once the list resolves.
   useEffect(() => {
@@ -81,7 +59,7 @@ export function AdvanceDateStrip({ tourId, activeRoutingId }: AdvanceDateStripPr
   return (
     <nav
       aria-label="Tour days"
-      className="advance-read-no-print flex gap-2 overflow-x-auto rounded-md border p-2"
+      className="advance-read-no-print flex gap-2 overflow-x-auto rounded-md border p-2 lg:hidden"
       style={{
         borderColor: 'var(--lp-border-subtle)',
         background: 'var(--lp-panel)',

@@ -37,7 +37,7 @@ for tm/production/accountant only.
 #### DAY-06 — three-zone layout · *screenshot walk*
 The Day renders as **left date rail** (day-type color bar, day-type · venue ·
 city, search `[data-testid="day-rail-search"]`, Today pinned, active day
-`day-rail-active`, Day/Routing toggle) · **center Schedule** (dominant, 15px type,
+`[aria-current="true"]` (R5-2: the rail marks the active day semantically; the old `day-rail-active` testid retired with DateRail), Day/Routing toggle) · **center Schedule** (dominant, 15px type,
 approx `~`, source tag, Edit for TM) · **right stacked cards** (Day Type &
 Locations · Lodging with check-in/out side-by-side + occupant chips · Notes ·
 Contacts). Blocks render only with content or an invitation — no dead boxes. The
