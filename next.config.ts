@@ -1,6 +1,18 @@
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
+  /* R5-3 — View Transitions for the routing spine (ledger → rail collapse).
+     Verified BEFORE enabling: needs-experimental-react.js gates the experimental
+     React channel on `taint` / `transitionIndicator` ONLY, so this flag does NOT
+     ship experimental React to production — it stays on the stable runtime, which
+     already contains startViewTransition.
+     Cowork instrumented a real client nav with the flag OFF and counted ZERO
+     startViewTransition calls, so Next 16.1.6 does not wrap client navigation by
+     default. Whether this flag changes that is measured after deploy. If the count
+     is still zero we stop here — we do NOT collapse routes into one client surface
+     to force a morph, because that would trade deep-linkable URLs and the
+     server-sliced crew view for an animation, and the spine already works. */
+  experimental: { viewTransition: true },
   images: {
     remotePatterns: [
       // Supabase storage — avatars and any other workspace-uploaded assets.

@@ -583,6 +583,13 @@ export function RoutingLedger({
         borderRadius: 'var(--lp-radius-lg)',
         overflow: 'hidden',
         background: 'var(--lp-surface)',
+        // R5-3 — the spine's "before" snapshot. Its pair is the destination
+        // rail's <nav> (Advance sidebar / Day rail), which carries the SAME name,
+        // so the ledger morphs into the rail instead of hard-cutting. ONE name on
+        // the container, deliberately not 21 per-row names: 21 simultaneous morphs
+        // on 46px rows is the likeliest source of jank, and "the ledger collapses
+        // left" is the effect R5 actually describes.
+        viewTransitionName: 'lp-routing-spine',
       }}
     >
       {/* Header band. */}

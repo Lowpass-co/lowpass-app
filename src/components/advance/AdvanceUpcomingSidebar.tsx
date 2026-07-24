@@ -256,6 +256,7 @@ export function AdvanceUpcomingSidebar({
             onSelect={() => {}}
             grouping="night"
             showDayTypePill={false}
+            viewTransitionName="lp-routing-spine"
             ariaLabel="Upcoming shows"
             hrefForEntry={(e) => `/advance/${tourId}/${e.id}`}
             renderMeta={(e) => {

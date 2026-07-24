@@ -127,6 +127,7 @@ export function DayRail({
             ) : null
           }
           ariaLabel="Tour days"
+          viewTransitionName="lp-routing-spine"
         />
         {entries.length === 0 ? (
           <p style={{ padding: 12, fontSize: 'var(--lp-text-xs)', color: 'var(--lp-text-tertiary)' }}>

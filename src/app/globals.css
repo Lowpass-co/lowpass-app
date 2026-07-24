@@ -372,6 +372,24 @@
   --lp-cell-indicator-size-cozy: 16px;
 }
 
+/* Routing redesign (R5-3) — the spine morph. `lp-routing-spine` is on the routing
+   ledger's container and on the destination rail's <nav> (Advance sidebar / Day
+   rail), so a client nav between them morphs the ledger into the rail instead of
+   hard-cutting. ≤250ms, ease-out, per §R5.
+   If the browser or framework never starts a view transition these rules are
+   simply never applied — inert, never broken. */
+::view-transition-group(lp-routing-spine) {
+  animation-duration: 220ms;
+  animation-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
+}
+
 /* Routing redesign (R2) — ledger row hover. The main row raises a faint
    surface tint on hover; the expansion panel keeps its own background. */
 .lp-ledger-row:hover {

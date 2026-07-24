@@ -60,6 +60,12 @@ export interface RoutingRailProps {
   /** Show the date · city/venue · day-type PILL. Default true; Advance passes false. */
   showDayTypePill?: boolean;
   ariaLabel?: string;
+  /** R5-3 — opt-in `view-transition-name` for the spine morph (ledger → rail).
+   *  OPT-IN on purpose: a view-transition-name must be UNIQUE in the document, so
+   *  a surface that could ever mount two rails at once must not set it. Only the
+   *  spine destinations (Advance sidebar, Day rail) pass it, matching the name the
+   *  routing ledger puts on its own container. */
+  viewTransitionName?: string;
 }
 
 function dateLabel(date: string): string {
@@ -152,6 +158,7 @@ export function RoutingRail({
   renderMeta,
   showDayTypePill = true,
   ariaLabel = 'Tour days',
+  viewTransitionName,
 }: RoutingRailProps) {
   const renderEntry = (entry: RailEntry) => {
     const active = entry.id === selected;
@@ -205,7 +212,7 @@ export function RoutingRail({
       else groups.push({ week: ws, items: [e] });
     }
     return (
-      <nav aria-label={ariaLabel}>
+      <nav aria-label={ariaLabel} style={viewTransitionName ? { viewTransitionName } : undefined}>
         {groups.map((g) => (
           <div key={g.week}>
             <div
@@ -232,7 +239,7 @@ export function RoutingRail({
   }
 
   return (
-    <nav aria-label={ariaLabel}>
+    <nav aria-label={ariaLabel} style={viewTransitionName ? { viewTransitionName } : undefined}>
       <ul className="space-y-px">{entries.map(renderEntry)}</ul>
     </nav>
   );
