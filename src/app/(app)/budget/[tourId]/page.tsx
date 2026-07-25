@@ -33,6 +33,7 @@ import { BudgetIncomeGrid } from '@/components/budget/BudgetIncomeGrid';
 import { BudgetEmptyState } from '@/components/budget/BudgetEmptyState';
 import { BudgetSettingsTab } from '@/components/budget/BudgetSettingsTab';
 import { ReceiptInbox } from '@/components/budget/ReceiptInbox';
+import { ReceiptDropPanel } from '@/components/budget/receipts/ReceiptDropPanel';
 // Fix 3 — Budget's sub-tabs (Summary/Expenses/Income + corner
 // Reports/Settings) render in <BudgetContextBand> (Band 2). The page
 // only needs the server-safe resolveBudgetTab helper to pick which tab
@@ -468,6 +469,10 @@ export default async function BudgetTourPage({
                   vendorByLine={vendorByLine}
                   trackPhases={trackPhases}
                 />
+                {/* RC-1 — the obvious drop zone sits ABOVE the existing inbox:
+                    drag receipts in, they save, then they're read. The inbox
+                    below stays the per-receipt confirm surface it already is. */}
+                <ReceiptDropPanel tourId={tourId} tourCurrency={tourCurrency} />
                 <ReceiptInbox tourId={tourId} tourCurrency={tourCurrency} lineItems={lines} />
               </>
             )
