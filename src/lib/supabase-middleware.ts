@@ -7,6 +7,7 @@
 
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
+import { isAuthPath, isPublicPath } from '@/lib/auth/publicRoutes';
 
 export async function updateSession(request: NextRequest) {
   let supabaseResponse = NextResponse.next({ request });
@@ -37,32 +38,19 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // If no user and trying to access protected routes, redirect to login.
-  const isAuthRoute = request.nextUrl.pathname.startsWith('/login') ||
-    request.nextUrl.pathname.startsWith('/signup') ||
-    request.nextUrl.pathname.startsWith('/auth');
-  /* Sprint 10 Phase 2.1 §5.4 — public-by-token routes that
-     legitimately render to unauth visitors:
-       /r/             rider-pack public share links
-       /invite/accept  workspace-invite landing (Sprint 9 §3 +
-                       §14.3 — InviteAcceptUnauth panel offers
-                       sign-in / sign-up with the token preserved
-                       via `next`)
-       /intake/        personnel intake forms (Sprint 10 §2.4 —
-                       token-gated public form)
-     Without these, the middleware redirected unauth visitors
-     to /login, dropping them on a login page with no path back
-     to the InviteAcceptUnauth panel. Per Adam's smoke 5.4. */
-  const isPublicRoute =
-    request.nextUrl.pathname.startsWith('/r/') ||
-    request.nextUrl.pathname.startsWith('/invite/accept') ||
-    request.nextUrl.pathname.startsWith('/intake/') ||
-    /* Dev-only: the Stage Plot icon catalog (§SP1a) renders with
-       no data and is gated to non-production by the page itself.
-       Allowlisted here so it can be browsed without a session
-       while building the icon library. Never public in prod. */
-    (process.env.NODE_ENV !== 'production' &&
-      request.nextUrl.pathname.startsWith('/stage-plot-'));
+  /* P0 — the unauthenticated allow-list now lives in one PURE, TESTABLE module:
+     src/lib/auth/publicRoutes.ts. It used to be an inline chain here, which is
+     exactly why four public token routes (/advance-intake/, /m/day/, /a/,
+     /share/advance/) could sit gated in production for weeks — nothing could
+     unit-test a decision buried in edge middleware. publicRoutes.test.tsx now
+     asserts every public path opens and every authed path stays shut, so a new
+     public route that ships without an entry fails a test instead of failing
+     silently in a venue's inbox. */
+  const isAuthRoute = isAuthPath(request.nextUrl.pathname);
+  const isPublicRoute = isPublicPath(
+    request.nextUrl.pathname,
+    process.env.NODE_ENV === 'production',
+  );
 
   if (!user && !isAuthRoute && !isPublicRoute) {
     const url = request.nextUrl.clone();
