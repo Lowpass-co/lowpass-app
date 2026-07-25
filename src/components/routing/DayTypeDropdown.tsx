@@ -153,14 +153,26 @@ export function DayTypeDropdown({
         type="button"
         onClick={() => setMenu(!open)}
         onKeyDown={(e) => {
-          if (open) return; // arrows/typing handled by the search box while open
-          // ↑/↓ change the day type in place (no popup). Alt+↓ opens the full list.
+          // F-1 — ↑/↓ cycle the day type IN PLACE, committing as they go. This is
+          // checked FIRST and is NOT gated on `open`.
+          //
+          // The third regression of this contract lived in that gate. The handler
+          // used to start with `if (open) return`, on the assumption that an open
+          // menu means focus is in the portal's search box. But CLICKING the cell
+          // (what a user actually does — Cowork's live walk) toggles `open` to true
+          // while focus stays on THIS button, so every subsequent arrow hit the
+          // guard and returned: arrows inert. Focusing via Tab left `open` false,
+          // which is why the earlier focus-then-arrow checks passed and the bug
+          // still shipped. RoutingLedger.keyboard.test.tsx now pins BOTH paths.
           if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
             e.preventDefault();
             if (e.altKey && e.key === 'ArrowDown') { setMenu(true); return; }
+            // Cycling is an in-place commit, so any open menu is now stale chrome.
+            if (open) setMenu(false);
             cyclePrimary(e.key === 'ArrowDown' ? 1 : -1);
             return;
           }
+          if (open) return; // typing/Enter are the search box's while the menu is open
           // Tab is NEVER swallowed — native Tab moves to the next cell (venue).
           if (e.key === 'Tab') return;
           // VIS-TR-06 — type-ahead: start typing to open + seed the search.
