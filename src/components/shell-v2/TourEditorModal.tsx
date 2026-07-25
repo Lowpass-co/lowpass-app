@@ -119,7 +119,20 @@ function TourEditorModalInner({
 
   // Artist — create uses Existing/New; edit is locked to the tour's artist.
   const [artistMode, setArtistMode] = useState<'existing' | 'new'>('existing');
-  const [pickedArtistId, setPickedArtistId] = useState<string>(() => initialArtistId ?? artists[0]?.id ?? '');
+  // F-2 — DERIVED, not stored. This used to be a one-shot lazy init:
+  //   useState(() => initialArtistId ?? artists[0]?.id ?? '')
+  // `artists` is a prop that defaults to [] and arrives asynchronously, and there
+  // was no effect re-seeding it. Open the modal before artists resolve and the
+  // value stuck at '' → effectiveArtistId null → canSave false, with Save dead
+  // until you nudged the dropdown. Same class as the P0 context-hydration bug:
+  // state that snapshots a prop once and then lies.
+  //
+  // Now only the USER'S CHOICE is stored (null = hasn't chosen); the effective
+  // value is derived from the current props every render, so it self-corrects the
+  // moment the list arrives. The outer `key` remount still clears the override on
+  // open / mode / tour switch, so a stale pick can't survive into a new session.
+  const [artistPick, setArtistPick] = useState<string | null>(initialArtistId ?? null);
+  const pickedArtistId = artistPick ?? artists[0]?.id ?? '';
   const [newArtistName, setNewArtistName] = useState('');
 
   const [name, setName] = useState(editInitial?.name ?? '');
@@ -302,7 +315,7 @@ function TourEditorModalInner({
                 })}
               </div>
               {artistMode === 'existing' ? (
-                <select value={pickedArtistId} onChange={(e) => setPickedArtistId(e.target.value)} disabled={artists.length === 0} style={inputStyle}>
+                <select value={pickedArtistId} onChange={(e) => setArtistPick(e.target.value)} disabled={artists.length === 0} style={inputStyle}>
                   {artists.length === 0 ? <option value="">No artists yet — create one</option> : artists.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
                 </select>
               ) : (
