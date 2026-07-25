@@ -57,7 +57,14 @@ export default async function OperationsTourPersonnelPage({
     redirect(`/login?next=/operations/${tourId}/personnel`);
   }
 
-  const membership = await getActiveMembership(supabase, user.id);
+  /* F-3(b) — the permission chain and the tour row were four SEQUENTIAL awaits
+     (getUser → membership → grants → tour). Only the permission chain is ordered;
+     the tour row depends on none of it (RLS scopes it regardless), so it was
+     paying for two round-trips for nothing. Run it alongside. */
+  const [membership, tourRes] = await Promise.all([
+    getActiveMembership(supabase, user.id),
+    supabase.from('tours').select('id, name, currency, start_date, end_date').eq('id', tourId).maybeSingle(),
+  ]);
   if (!membership) {
     return <NoWorkspacePanel />;
   }
@@ -81,11 +88,7 @@ export default async function OperationsTourPersonnelPage({
     'read',
   );
 
-  const { data: tour } = await supabase
-    .from('tours')
-    .select('id, name, currency, start_date, end_date')
-    .eq('id', tourId)
-    .maybeSingle();
+  const { data: tour } = tourRes;
   if (!tour) notFound();
   const tourRow = tour as {
     id: string;
@@ -101,18 +104,22 @@ export default async function OperationsTourPersonnelPage({
   // the query. Every value links back to Payroll — the one write surface.
   let rateMirror: RateMirrorRow[] = [];
   if (canManagerView) {
-    const { data: rateRows } = await supabase
-      .from('personnel_rates')
-      .select('id, person_name, role, rate_type, order_index')
-      .eq('tour_id', tourId)
-      .eq('workspace_id', membership.workspace_id)
-      .order('order_index', { ascending: true });
+    /* F-3(b) — these two were sequential, but loadTourRateContext takes only
+       (tourId, workspaceId) — it never reads rateRows. Fetch both at once. The
+       only cost is one wasted context query on a tour with zero rate rows; the
+       common case saves a full round-trip on the rates mirror, which is the block
+       that has to paint for this page to feel loaded. */
+    const [rateRowsRes, rateCtx] = await Promise.all([
+      supabase
+        .from('personnel_rates')
+        .select('id, person_name, role, rate_type, order_index')
+        .eq('tour_id', tourId)
+        .eq('workspace_id', membership.workspace_id)
+        .order('order_index', { ascending: true }),
+      loadTourRateContext(supabase, tourId, membership.workspace_id),
+    ]);
+    const { data: rateRows } = rateRowsRes;
     if (rateRows && rateRows.length > 0) {
-      const rateCtx = await loadTourRateContext(
-        supabase,
-        tourId,
-        membership.workspace_id,
-      );
       rateMirror = (rateRows as Array<
         Pick<PersonnelRate, 'id' | 'person_name' | 'role' | 'rate_type'>
       >).map((r) => {
