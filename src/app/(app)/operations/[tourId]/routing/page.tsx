@@ -114,6 +114,9 @@ export default async function OperationsTourRoutingPage({
   // R2 — per-date status dots (advance · hotel · crew), derived once here (one
   // batch, no per-cell queries) and handed to the ledger.
   let statusByDate: RoutingStatusByDate = {};
+  // F-3(b) — the ledger's first-paint payload, from the same query as above.
+  type LedgerSeedRows = React.ComponentProps<typeof RoutingEditor>['initialRows'];
+  let ledgerRows: LedgerSeedRows = undefined;
   if (canRead) {
     [readiness, statusByDate] = await Promise.all([
       getOperationsReadiness(supabase, {
@@ -124,12 +127,19 @@ export default async function OperationsTourRoutingPage({
       }),
       getRoutingDayStatus(supabase, { tourId }),
     ]);
+    // F-3(b) — ONE server query now serves three consumers: the fingerprint, the
+    // ledger's first paint, and the last-edit lookup. It used to select only
+    // `id, date, day_type` for the fingerprint, and RoutingEditor then refetched
+    // the SAME rows over the API before it could render — the cold-load hang.
     const { data: routingRows } = await supabase
       .from('routing')
-      .select('id, date, day_type')
+      .select(
+        'id, date, day_type, city, country, address, venue_name, venue_website, venue_phone, venue_capacity, notes, latitude, longitude, transport_to_next, canonical_venue_id',
+      )
       .eq('tour_id', tourId)
       .order('date', { ascending: true });
     const rows = (routingRows ?? []) as Array<{ id: string; date: string; day_type: string | null }>;
+    ledgerRows = (routingRows ?? []) as LedgerSeedRows;
     const ids = rows.map((r) => r.id);
     fingerprintDays = rows.map((r) => ({ date: r.date, dayType: r.day_type ?? 'off', routingId: r.id }));
     const todayIso = new Date().toISOString().slice(0, 10);
@@ -227,6 +237,7 @@ export default async function OperationsTourRoutingPage({
             initialCustomDayTypes={tourRow.custom_day_types ?? []}
             readOnly={!canWrite}
             statusByDate={statusByDate}
+            initialRows={ledgerRows}
           />
         )}
       </div>

@@ -65,23 +65,34 @@ export default async function OperationsTourLayout({
   const { tourId } = await params;
   const supabase = await createServerSupabaseClient();
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  /* F-3(b) — these were four SEQUENTIAL awaits on every tour-scoped page load:
+     getUser → loadTourIdentity → getActiveMembership → fetchActiveGrants. Only
+     the permission chain is genuinely ordered (membership needs the user, grants
+     need the membership); the tour identity depends on neither, so it was paying
+     for the other three round-trips for no reason. Run identity ALONGSIDE the
+     permission chain — one round-trip saved on every operations page, and the
+     saving is largest exactly where it hurt: a cold lambda.
 
-  // G2-4 — the identity lockup fields come from the ONE shared loader (same band
-  // in Operations, Budget, Advance). loadTourIdentity uses the DB-only logo
-  // resolver, so this layout never blocks on a live Spotify fetch.
-  const identity = await loadTourIdentity(supabase, tourId);
+     G2-4 — identity comes from the ONE shared loader (same band in Operations,
+     Budget, Advance) and uses the DB-only logo resolver, so this never blocks on
+     a live Spotify fetch. */
+  const [identity, auth] = await Promise.all([
+    loadTourIdentity(supabase, tourId),
+    (async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      const membership = user ? await getActiveMembership(supabase, user.id) : null;
+      const grants = membership && user ? await fetchActiveGrants(supabase, membership, user.id) : [];
+      return { user, membership, grants };
+    })(),
+  ]);
   if (!identity) notFound();
+  const { membership, grants } = auth;
 
-  /* Stage B — the sub-nav is now a group-scoped segmented control (Crew /
-     Production only), so the layout no longer needs artist identity for a
-     context band; tour identity persists in the header's switcher pills.
-     Access-gate each ops sub-page by per-resource read access — the segmented
+  /* Stage B — the sub-nav is a group-scoped segmented control (Crew / Production
+     only). Access-gate each ops sub-page by per-resource read access — the
      control drops any member the caller can't read. */
-  const membership = user ? await getActiveMembership(supabase, user.id) : null;
-  const grants = membership && user ? await fetchActiveGrants(supabase, membership, user.id) : [];
   const subNavLinks = SUB_NAV.map((s) => ({
     id: s.id,
     label: s.label,

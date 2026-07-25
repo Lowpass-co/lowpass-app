@@ -133,6 +133,7 @@ export function RoutingEditor({
   initialCustomDayTypes = [],
   readOnly = false,
   statusByDate = {},
+  initialRows,
 }: {
   tourId: string;
   startDate: string;
@@ -147,9 +148,24 @@ export function RoutingEditor({
   /** R2 — per-date status dots (advance · hotel · crew), derived once in the
    *  page loader (getRoutingDayStatus). Keyed by YYYY-MM-DD. */
   statusByDate?: RoutingStatusByDate;
+  /** F-3(b) — the routing payload, ALREADY loaded by the server component.
+   *
+   *  The cold-load hang was here: the page queried `routing` server-side (for the
+   *  fingerprint + status dots), then this editor threw that away and refetched
+   *  the same rows over `/api/tours/[id]/routing` before it could paint — so the
+   *  ledger sat behind a client round-trip on a cold lambda ("Loading routing…"
+   *  for 28-70s). Seeding from the server render is the D1-6 rates-mirror pattern:
+   *  paint immediately from what the server already had, and let anything genuinely
+   *  client-side settle afterwards. */
+  initialRows?: Parameters<typeof buildInitialRows>[2];
 }) {
-  const [rows, setRows] = useState<RoutingRow[]>([]);
-  const [loading, setLoading] = useState(true);
+  // F-3(b) — first paint comes from the server payload when we have it. `loading`
+  // starts false in that case, so the ledger renders on the server-rendered HTML's
+  // first client pass instead of waiting on a fetch.
+  const [rows, setRows] = useState<RoutingRow[]>(() =>
+    initialRows ? buildInitialRows(startDate, endDate, initialRows) : [],
+  );
+  const [loading, setLoading] = useState(!initialRows);
   const [saving, setSaving] = useState(false);
   const [view, setView] = useState<ViewMode>('grid');
   const [primaryTransit, setPrimaryTransit] = useState<PrimaryTransit>('bus_van');
@@ -262,8 +278,17 @@ export function RoutingEditor({
       });
   }, [tourId, startDate, endDate]);
 
+  // F-3(b) — when the server already seeded us, DON'T refetch on mount. The
+  // realtime subscription below still picks up a collaborator's edits, and any
+  // local edit round-trips through the autosave POST, so the only thing an extra
+  // mount fetch bought was latency. Without a seed (legacy mounts) behave as before.
+  const seededRef = useRef(!!initialRows);
   useEffect(() => {
     hasUserEditedRef.current = false;
+    if (seededRef.current) {
+      seededRef.current = false; // a later tourId change must refetch
+      return;
+    }
     void refetchRouting().finally(() => setLoading(false));
   }, [refetchRouting]);
 
