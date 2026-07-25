@@ -1,4 +1,5 @@
 'use client';
+import { BudgetGridSkeleton } from '@/components/ui/SurfaceSkeletons';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { GridTable } from './GridTable';
@@ -230,7 +231,7 @@ export function CommissionsGrid({ tourId }: { tourId: string; currency?: string 
     [commissions]
   );
 
-  if (loading) return <div className="text-sm text-lp-text-secondary py-4">Loading…</div>;
+  if (loading) return <BudgetGridSkeleton />;
   if (error) return <div className="text-sm text-lp-error py-4">{error}</div>;
 
   return (

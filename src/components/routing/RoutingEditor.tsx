@@ -21,6 +21,7 @@ import { RoutingExportButton } from './RoutingExportButton';
 import type { PrimaryTransit } from './RoutingMap';
 import type { RoutingStatusByDate } from '@/server/operations/getRoutingDayStatus';
 import { useRealtimeRows } from '@/lib/realtime/useRealtimeRows';
+import { RoutingLedgerSkeleton } from '@/components/ui/SurfaceSkeletons';
 
 const RoutingMap = dynamic(() => import('./RoutingMap').then((m) => m.RoutingMap), { ssr: false });
 
@@ -397,11 +398,10 @@ export function RoutingEditor({
   }, [saving]);
 
   if (loading) {
-    return (
-      <div className="rounded-xl border border-lp-border bg-lp-surface p-8 text-center text-lp-text-secondary">
-        Loading routing…
-      </div>
-    );
+    // F-3a — the skeleton IS the frame (bordered, real 46px rows), so the old
+    // boxed "Loading routing…" wrapper would double the border and centre-align
+    // the rows. Render it bare.
+    return <RoutingLedgerSkeleton />;
   }
 
   return (

@@ -1,4 +1,5 @@
 'use client';
+import { AdvanceSkeleton } from '@/components/ui/SurfaceSkeletons';
 
 /* ============================================
    LOWPASS — Advance Overview (UX22 phase 1)
@@ -791,7 +792,7 @@ function DayOffNotesModal({
           {item.city ? ` · ${item.city}` : ''}
         </p>
         {loading ? (
-          <p className="mt-4 text-sm text-lp-text-tertiary">Loading…</p>
+          <div className="mt-4"><AdvanceSkeleton sections={3} /></div>
         ) : (
           <>
             <textarea

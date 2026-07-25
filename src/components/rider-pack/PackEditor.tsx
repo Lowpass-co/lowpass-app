@@ -1,4 +1,5 @@
 'use client';
+import { AssetsSkeleton } from '@/components/ui/SurfaceSkeletons';
 
 /* ============================================
    LOWPASS — Rider/Pack editor shell
@@ -393,7 +394,7 @@ export function PackEditor({ packId }: Props) {
 
   // ----- Render -----
 
-  if (loading) return <div className="p-6 text-sm text-lp-text-secondary">Loading...</div>;
+  if (loading) return <div className="p-6"><AssetsSkeleton cards={4} /></div>;
   if (error) return <div className="p-6 text-sm text-lp-error">{error}</div>;
   if (!data) return null;
 

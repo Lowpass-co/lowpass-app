@@ -1,4 +1,5 @@
 'use client';
+import { RoomingSkeleton } from '@/components/ui/SurfaceSkeletons';
 
 /* ============================================
    LOWPASS — <RoomingMatrix> (rebuilt ON the canonical <Grid>, wide mode)
@@ -83,7 +84,7 @@ export function RoomingMatrix({
 
   const estTotal = assumedRate * roomNights;
 
-  if (loading) return <div style={{ padding: 16, color: 'var(--lp-text-secondary)', fontSize: 13 }}>Loading…</div>;
+  if (loading) return <RoomingSkeleton />;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>

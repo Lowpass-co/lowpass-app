@@ -12,6 +12,7 @@
 import { useState } from 'react';
 import { X } from 'lucide-react';
 import { RoutingRail, type RailEntry } from '@/components/routing/RoutingRail';
+import { RoomingSkeleton } from '@/components/ui/SurfaceSkeletons';
 import { roomCodeTint, ROOM_CODE_HUE, useRoomingGrid, type RoutingNight, type RosterPerson } from './useRoomingGrid';
 
 const ASSIGNABLE = ['SGL', 'DBL (A)', 'DBL (B)', 'DBL (C)', 'DBL (D)'];
@@ -81,7 +82,7 @@ export function RoomingCards({
       {/* the night's rooms + pool */}
       <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 16 }}>
         {loading ? (
-          <div style={{ padding: 16, color: 'var(--lp-text-secondary)', fontSize: 13 }}>Loading…</div>
+          <RoomingSkeleton />
         ) : !night ? (
           <div style={{ padding: 16, color: 'var(--lp-text-secondary)', fontSize: 13 }}>Pick a night.</div>
         ) : (

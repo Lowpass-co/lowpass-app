@@ -1,4 +1,5 @@
 'use client';
+import { BudgetGridSkeleton } from '@/components/ui/SurfaceSkeletons';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Check, Loader2, Pencil, Plus, Trash2, X } from 'lucide-react';
@@ -345,7 +346,7 @@ export function HotelsGrid({ tourId, currency }: { tourId: string; currency: str
     [editingId]
   );
 
-  if (loading) return <div className="text-sm text-lp-text-secondary py-4">Loading…</div>;
+  if (loading) return <BudgetGridSkeleton />;
   if (error) return <div className="text-sm text-lp-error py-4">{error}</div>;
 
   const checkInSortValue =
