@@ -45,6 +45,17 @@ export interface ReceiptRow {
   created_at: string | null;
   state: ReceiptState;
   missing: string[];
+  /* Has a scan ever RUN on this receipt? Not "did it succeed" — whether the
+     attempt happened at all.
+
+     RQ-5 FINAL cost two rounds of diagnosis because nothing surfaced this. A
+     receipt that was never scanned (the upload path silently skipped it) looked
+     identical to one that was scanned and read nothing. Those want opposite
+     actions — Re-scan versus type it in — and the bank could not tell you which.
+
+     Derived from raw_ocr_json's PRESENCE. The payload itself is financial/PII and
+     deliberately does NOT cross to the client; only this boolean does. */
+  scanned: boolean;
 }
 
 interface RawReceipt {
@@ -60,6 +71,7 @@ interface RawReceipt {
   page_from: number | null;
   page_to: number | null;
   created_at: string | null;
+  raw_ocr_json: unknown;
 }
 
 /**
@@ -76,7 +88,7 @@ export async function loadTourReceipts(
   const { data: receipts, error } = await supabase
     .from('expense_receipts')
     .select(
-      'id, receipt_number, vendor, date, category, description, cost_tour_currency, receipt_file_url, linked_line_item_id, page_from, page_to, created_at',
+      'id, receipt_number, vendor, date, category, description, cost_tour_currency, receipt_file_url, linked_line_item_id, page_from, page_to, created_at, raw_ocr_json',
     )
     .eq('tour_id', tourId)
     .order('created_at', { ascending: false, nullsFirst: false });
@@ -122,6 +134,7 @@ export async function loadTourReceipts(
       created_at: r.created_at,
       state: deriveReceiptState(input),
       missing: missingFields(input),
+      scanned: r.raw_ocr_json != null,
     };
   });
 }

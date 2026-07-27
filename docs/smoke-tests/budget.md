@@ -2060,6 +2060,14 @@ src/lib/budget/actualsProvenance.harness.ts` → "18 checks passed, 0 failed".
 > in this suite had missed, because every fixture was a generated TEXT pdf.
 > **No migration.**
 
+- **RCP-29 — a Needs-details row says WHY.** Under the missing-fields line it
+  reads either **"Not scanned yet"** (no scan ever ran) or **"Scanned — nothing
+  readable"** (one ran and found nothing). These want opposite actions —
+  Re-scan versus typing it in — and looked identical until now, which is why
+  RQ-5 took two rounds to diagnose: a silently-skipped scan was
+  indistinguishable from a failed read. Derived from `raw_ocr_json`'s presence;
+  the payload itself is financial/PII and does not cross to the client.
+  **Test-pinned.**
 - **RCP-28 — a dropped receipt is SCANNED, whatever the browser calls it.** Drop
   a PDF whose `type` the browser reports as empty or `application/octet-stream`
   (routine for files dragged from Finder, and for Adam's `26:07:2026 | … |

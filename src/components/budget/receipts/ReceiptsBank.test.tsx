@@ -65,6 +65,7 @@ const FAILED: ReceiptRow = {
   file_path: 'w/t/r1.pdf', linked_line_item_id: null,
   page_from: null, page_to: null, created_at: '2026-07-21T10:00:00Z',
   state: 'needs_details', missing: ['vendor', 'date', 'amount'],
+  scanned: false, // never scanned — the upload path skipped it (RQ-5 FINAL)
 };
 
 const FILED: ReceiptRow = {
@@ -197,6 +198,25 @@ describe('RCP-20 — filing goes through the transaction path', () => {
 
     await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/Add an amount/));
     expect(calls.some((c) => c.fn === 'createTransaction')).toBe(false);
+  });
+});
+
+describe('why is it missing? — scanned vs never scanned', () => {
+  /* RQ-5 FINAL took two rounds to diagnose because these looked identical, and
+     they want opposite actions: Re-scan versus type it in. */
+  it('a receipt the scan never ran on says so', () => {
+    renderBank([FAILED]);
+    expect(screen.getByTestId('receipt-scan-state').textContent).toBe('Not scanned yet');
+  });
+
+  it('a receipt that WAS scanned and read nothing says THAT', () => {
+    renderBank([{ ...FAILED, scanned: true }]);
+    expect(screen.getByTestId('receipt-scan-state').textContent).toBe('Scanned — nothing readable');
+  });
+
+  it('a complete receipt says neither — there is nothing to explain', () => {
+    renderBank([{ ...READY, scanned: true }]);
+    expect(screen.queryByTestId('receipt-scan-state')).toBeNull();
   });
 });
 

@@ -434,6 +434,17 @@ export function ReceiptsBank({ tourId, tourCurrency, receipts, lines }: Receipts
                       Missing {r.missing.join(', ')}
                     </span>
                   ) : null}
+                  {/* WHY it's missing — the distinction that cost two rounds of
+                      diagnosis on RQ-5. "Never scanned" wants Re-scan; "scanned,
+                      read nothing" wants typing. They looked identical before. */}
+                  {r.missing.length > 0 ? (
+                    <span
+                      data-testid="receipt-scan-state"
+                      style={{ fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-tertiary)' }}
+                    >
+                      {r.scanned ? 'Scanned — nothing readable' : 'Not scanned yet'}
+                    </span>
+                  ) : null}
                   {pages ? (
                     <span style={{ fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-tertiary)' }}>
                       {pages} of a shared file
