@@ -2,11 +2,34 @@
    LOWPASS — Receipt OCR (Claude Vision)
 
    POST: Accept image/PDF upload, extract receipt data via Claude, return JSON.
+
+   RC-5 — PDFs GO WHOLE, and one PDF may hold several receipts.
+
+   RC-4 rendered page 1 to a PNG and sent that. Right for a till receipt, where
+   page 1 IS the document. WRONG for what actually arrives as a PDF — hotel
+   folios, bus invoices, freight bills — where the total sits on the LAST page
+   and detail spans several. Page 1 of a 4-page folio yields a confident,
+   plausible, wrong number, which on a money path is worse than reading nothing.
+
+   The API reads PDFs natively via a `document` content block: every page is
+   converted to an image AND its text extracted, so a stamped total on page 4 is
+   read, not guessed. All active models support it, Haiku 4.5 included — so the
+   rasteriser (headless Chromium + pdf.js), its outputFileTracingIncludes entry
+   and the pdfjs-dist dependency are all DELETED. Fewer moving parts and one
+   fewer runtime-resolved native path for the bundler to miss.
+
+   The extraction returns an ARRAY of documents. A folio is one element spanning
+   pages 1–4; a stack of receipts scanned into one file is N elements with a page
+   range each. Per-document fields are unchanged, so the proposal engine loops
+   instead of being rewritten.
+
+   The store-and-flag fallback is untouched: any failure still 400s with a
+   manual-entry message AFTER the receipt row and upload exist.
    ============================================ */
 
 import { NextResponse } from 'next/server';
-import { isPdf, renderPdfFirstPageToPng } from '@/lib/budget/pdfFirstPage';
 import { APIError } from '@anthropic-ai/sdk';
+import { normaliseDocuments } from '@/lib/budget/receiptDocuments';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { withAiUsage, aiCapExceededResponse } from '@/lib/ai/usage';
 import {
@@ -58,6 +81,45 @@ function looksLikeAnthropicCreditError(err: unknown): boolean {
 }
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'] as const;
+const PDF_TYPE = 'application/pdf';
+
+/* RC-5 — page-count guard. The API allows 600 pages (100 under a 1M context),
+   but a receipt is not a book: anything past ~50 pages is a misdrop or a whole
+   scanned ledger, and letting it through would spend a big slice of one batch's
+   budget on a file nobody meant to send. Rejected CLEANLY — the caller keeps the
+   stored file and fills the details by hand. */
+const MAX_PDF_PAGES = 50;
+
+/** True when the upload is a PDF, which now goes to Claude whole. */
+function isPdfUpload(mediaType: string | null | undefined): boolean {
+  return (mediaType ?? '').toLowerCase() === PDF_TYPE;
+}
+
+/**
+ * Page count for the guard, via pdf-parse — ALREADY a dependency (the deal-memo,
+ * rider and tech-pack extractors use it), so this costs no new package and no
+ * native binary. Returns null when the file won't parse at all, which the caller
+ * treats as "let Claude try": a PDF pdf-parse chokes on may still be readable,
+ * and the API's own limits are the real backstop.
+ */
+async function pdfPageCount(buffer: Buffer): Promise<number | null> {
+  try {
+    const mod = await import('pdf-parse');
+    const PDFParse = (mod as { PDFParse: new (opts: { data: Uint8Array }) => {
+      getInfo: () => Promise<{ total?: number }>;
+      destroy?: () => Promise<void>;
+    } }).PDFParse;
+    const parser = new PDFParse({ data: buffer });
+    try {
+      const info = await parser.getInfo();
+      return typeof info?.total === 'number' ? info.total : null;
+    } finally {
+      if (typeof parser.destroy === 'function') await parser.destroy();
+    }
+  } catch {
+    return null;
+  }
+}
 
 /** Flat, searchable text from the Vision extraction — vendor + description +
  *  line-item descriptions + category, deduped + length-capped. NEVER logged. */
@@ -119,39 +181,51 @@ export async function POST(request: Request) {
   const tourCurrency = (formData.get('currency') as string) || 'GBP';
   const mediaType = file.type as string;
 
-  /* RC-4 — PDFs are now RENDERED, not rejected.
-     Vision is images-only, so a PDF used to 400 here and land as store-and-flag.
-     But hotel folios, bus invoices and production bills are overwhelmingly PDFs,
-     which left the feature working on the minority of real receipts. Page 1 is
-     rasterised server-side (headless Chromium + pdf.js — the same browser the
-     rider-pack/advance-packet PDFs already use) and the PNG goes down the
-     EXISTING Vision path untouched.
+  /* RC-5 — a PDF goes to Claude WHOLE as a `document` block; an image goes as an
+     `image` block exactly as before. No rasterising, no page dropped.
 
-     The fallback is preserved deliberately: if rendering fails for any reason we
-     still 400, and the caller keeps the receipt stored and flagged for manual
-     entry. A PDF we cannot read must never be a PDF we lose. */
+     The fallback is preserved deliberately: every rejection below happens AFTER
+     the caller has already created the receipt row and uploaded the file, so the
+     receipt survives and lands in manual entry. A PDF we cannot read must never
+     be a PDF we lose. */
   const uploadBuffer = Buffer.from(await file.arrayBuffer());
-  let visionMediaType = mediaType;
-  let base64: string;
+  const pdf = isPdfUpload(mediaType);
 
-  if (isPdf(mediaType)) {
-    const rendered = await renderPdfFirstPageToPng(uploadBuffer);
-    if (!rendered) {
-      return NextResponse.json(
-        { error: 'Could not read this PDF — enter the details manually.' },
-        { status: 400 },
-      );
-    }
-    base64 = rendered;
-    visionMediaType = 'image/png';
-  } else if (!ALLOWED_TYPES.includes(mediaType as (typeof ALLOWED_TYPES)[number])) {
+  if (!pdf && !ALLOWED_TYPES.includes(mediaType as (typeof ALLOWED_TYPES)[number])) {
     return NextResponse.json(
       { error: 'File must be an image (JPEG, PNG, WebP, GIF) or a PDF.' },
       { status: 400 }
     );
-  } else {
-    base64 = uploadBuffer.toString('base64');
   }
+
+  let pageCount: number | null = null;
+  if (pdf) {
+    pageCount = await pdfPageCount(uploadBuffer);
+    if (pageCount !== null && pageCount > MAX_PDF_PAGES) {
+      // Cleanly refused, never silently truncated — reading the first N pages of
+      // a 200-page file is exactly the confident-wrong-number failure RC-5 exists
+      // to remove.
+      return NextResponse.json(
+        {
+          error: `That PDF is ${pageCount} pages — too long to scan (limit ${MAX_PDF_PAGES}). It's saved; enter the details manually.`,
+          code: 'PDF_TOO_LONG',
+        },
+        { status: 400 },
+      );
+    }
+  }
+
+  const base64 = uploadBuffer.toString('base64');
+  const sourceBlock = pdf
+    ? ({ type: 'document', source: { type: 'base64', media_type: PDF_TYPE, data: base64 } } as const)
+    : ({
+        type: 'image',
+        source: {
+          type: 'base64',
+          media_type: mediaType as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif',
+          data: base64,
+        },
+      } as const);
 
   try {
     const { result: response, blocked, blockReason } = await withAiUsage(
@@ -168,33 +242,41 @@ export async function POST(request: Request) {
              cheaper than Sonnet. Receipt OCR is bounded extraction,
              not reasoning — Haiku handles it. */
           model: 'claude-haiku-4-5-20251001',
-          max_tokens: 1024,
+          /* RC-5 — a multi-document PDF returns an array, so the old 1024 ceiling
+             would truncate the JSON mid-array on a stack of receipts. */
+          max_tokens: 4096,
           messages: [
             {
               role: 'user',
               content: [
-                {
-                  type: 'image',
-                  source: {
-                    type: 'base64',
-                    media_type: visionMediaType as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif',
-                    data: base64,
-                  },
-                },
+                sourceBlock,
                 {
                   type: 'text',
-                  text: `Extract receipt data from this image. Return ONLY valid JSON with these fields:
+                  text: `Extract receipt data from this file. It may contain ONE document spanning several pages (a hotel folio, an invoice), or SEVERAL separate receipts scanned into one file.
+
+Decide which, and return ONLY valid JSON in this shape:
 {
-  "vendor": "string - business name",
-  "date": "string - YYYY-MM-DD format",
-  "total_amount": number,
-  "currency": "string - 3-letter code e.g. GBP, USD, EUR",
-  "category": "string - one of: hotel, transport, production, catering, misc",
-  "description": "string - brief description of what was purchased",
-  "payment_method": "string - one of: card, cash, bank_transfer",
-  "line_items": [{"description": "string", "amount": number}]
+  "documents": [
+    {
+      "pages": [1, 2],
+      "vendor": "string - business name",
+      "date": "string - YYYY-MM-DD format",
+      "total_amount": number,
+      "currency": "string - 3-letter code e.g. GBP, USD, EUR",
+      "category": "string - one of: hotel, transport, production, catering, misc",
+      "description": "string - brief description of what was purchased",
+      "payment_method": "string - one of: card, cash, bank_transfer",
+      "line_items": [{"description": "string", "amount": number}]
+    }
+  ]
 }
-If any field is unclear, use null. Tour currency is ${tourCurrency}.`,
+
+Rules that matter:
+- ONE logical document = ONE array element, however many pages it covers. Do NOT split a multi-page invoice into one element per page.
+- "pages" lists the 1-based page numbers that document occupies. For a single image, use [1].
+- "total_amount" is the FINAL amount payable for that document. On a multi-page folio or invoice this is usually on the LAST page — a running subtotal on an earlier page is NOT the total. Read the whole document before deciding.
+- If several distinct receipts appear (different vendors, dates, or separate totals), return one element each.
+- If any field is unclear, use null. Tour currency is ${tourCurrency}.`,
                 },
               ],
             },
@@ -213,7 +295,11 @@ If any field is unclear, use null. Tour currency is ${tourCurrency}.`,
       return NextResponse.json({ error: 'Could not parse receipt' }, { status: 422 });
     }
 
-    const receiptData = JSON.parse(jsonMatch[0]);
+    const parsed = JSON.parse(jsonMatch[0]);
+    const documents = normaliseDocuments(parsed, pageCount);
+    if (documents.length === 0) {
+      return NextResponse.json({ error: 'Could not parse receipt' }, { status: 422 });
+    }
     /* Stamp the rate limit only after success so a 5xx/422
        doesn't lock the operator out of retrying. */
     markRateLimit(lastCallByUser, user.id);
@@ -222,12 +308,21 @@ If any field is unclear, use null. Tour currency is ${tourCurrency}.`,
        ⌘K search can match it. extracted_text is a flat, searchable concat of the
        scrape. Workspace-scoped UPDATE (RLS + explicit filter). Best-effort: a
        persist failure must NOT fail the scan response. We deliberately log NO raw
-       OCR text (financial/PII) — only the receipt id on error. */
+       OCR text (financial/PII) — only the receipt id on error.
+
+       RC-5 — the receipt this scan was called for takes the FIRST document; when
+       the file held several, the caller creates the sibling rows and patches each
+       with its own document (see useReceiptDropQueue). */
     if (receiptId) {
-      const extractedText = buildExtractedText(receiptData);
+      const first = documents[0];
       const { error: persistError } = await supabase
         .from('expense_receipts')
-        .update({ raw_ocr_json: receiptData, extracted_text: extractedText })
+        .update({
+          raw_ocr_json: first,
+          extracted_text: buildExtractedText(first),
+          page_from: first.pages?.[0] ?? null,
+          page_to: first.pages?.[first.pages.length - 1] ?? null,
+        })
         .eq('id', receiptId)
         .eq('workspace_id', workspaceId);
       if (persistError) {
@@ -235,7 +330,10 @@ If any field is unclear, use null. Tour currency is ${tourCurrency}.`,
       }
     }
 
-    return NextResponse.json(receiptData);
+    /* Response carries BOTH shapes: `documents` for the multi-receipt path, and
+       the first document spread at top level so the older single-receipt callers
+       (AddReceiptPanel, the ⌘K open) keep reading exactly the fields they did. */
+    return NextResponse.json({ ...documents[0], documents, page_count: pageCount });
   } catch (err) {
     console.error('Receipt OCR error:', err);
     if (looksLikeAnthropicCreditError(err)) {

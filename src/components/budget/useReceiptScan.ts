@@ -28,6 +28,9 @@
    ============================================ */
 
 import { useMemo } from 'react';
+import type { ReceiptDocument } from '@/lib/budget/receiptDocuments';
+
+export type { ReceiptDocument };
 
 export const OCR_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 export const OCR_PDF_TYPE = 'application/pdf';
@@ -67,6 +70,9 @@ export interface ReceiptRow {
 }
 
 export interface ReceiptFields {
+  /** RC-5 — page range within a shared uploaded file. Both or neither (252 CHECK). */
+  page_from?: number | null;
+  page_to?: number | null;
   vendor?: string | null;
   date?: string | null;
   category?: string | null;
@@ -80,7 +86,11 @@ export interface ReceiptFields {
 }
 
 export interface OcrOutcome {
+  /** The FIRST document — what single-receipt surfaces have always consumed. */
   data: ReceiptOcr | null;
+  /** RC-5 — every document found in the file. One folio → 1; a scanned stack → N.
+   *  `data` is `documents[0]`; a caller that can split reads this instead. */
+  documents: ReceiptDocument[];
   /** A user-facing message when the scan couldn't run (AI cap, rate limit, non-image). */
   error: string | null;
 }
@@ -111,7 +121,8 @@ export function useReceiptScan(tourId: string, tourCurrency: string): UseReceipt
     return {
       async ocr(file, receiptId) {
         if (!isScannable(file)) {
-          return { data: null, error: null }; // unscannable type → manual entry, no scan
+          // unscannable type → manual entry, no scan
+          return { data: null, documents: [], error: null };
         }
         try {
           const fd = new FormData();
@@ -123,25 +134,39 @@ export function useReceiptScan(tourId: string, tourCurrency: string): UseReceipt
           const res = await fetch('/api/budget/receipts/ocr', { method: 'POST', body: fd });
           if (!res.ok) {
             const body = (await res.json().catch(() => ({}))) as { error?: string };
-            return { data: null, error: body.error ?? 'Could not scan the receipt — enter the details manually.' };
+            return {
+              data: null,
+              documents: [],
+              error: body.error ?? 'Could not scan the receipt — enter the details manually.',
+            };
           }
-          const raw = (await res.json()) as Record<string, unknown>;
-          const numOrNull = (v: unknown): number | null => (v == null || v === '' ? null : Number(v) || 0);
-          const strOrNull = (v: unknown): string | null => (typeof v === 'string' && v.trim() ? v : null);
+          /* RC-5 — the route already normalised the model's JSON into documents[]
+             (src/lib/budget/receiptDocuments.ts), so there is nothing to re-parse
+             here. `data` stays documents[0] for the single-receipt surfaces. */
+          const raw = (await res.json()) as { documents?: ReceiptDocument[] };
+          const documents = Array.isArray(raw.documents) ? raw.documents : [];
+          const first = documents[0] ?? null;
           return {
-            data: {
-              vendor: strOrNull(raw.vendor),
-              date: strOrNull(raw.date),
-              total_amount: numOrNull(raw.total_amount),
-              currency: strOrNull(raw.currency),
-              category: strOrNull(raw.category),
-              description: strOrNull(raw.description),
-              payment_method: strOrNull(raw.payment_method),
-            },
+            data: first
+              ? {
+                  vendor: first.vendor,
+                  date: first.date,
+                  total_amount: first.total_amount,
+                  currency: first.currency,
+                  category: first.category,
+                  description: first.description,
+                  payment_method: first.payment_method,
+                }
+              : null,
+            documents,
             error: null,
           };
         } catch {
-          return { data: null, error: 'Could not reach the scanner — enter the details manually.' };
+          return {
+            data: null,
+            documents: [],
+            error: 'Could not reach the scanner — enter the details manually.',
+          };
         }
       },
 

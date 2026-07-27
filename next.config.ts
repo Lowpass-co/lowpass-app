@@ -14,22 +14,12 @@ const nextConfig: NextConfig = {
      server-sliced crew view for an animation, and the spine already works. */
   experimental: { viewTransition: true },
 
-  /* RC-4 — pdfjs-dist is read off disk at runtime (readFile of a resolved path,
-     in src/lib/budget/pdfFirstPage.ts), NOT imported. Next's file tracer only
-     follows imports and literal require()s, so it traced ZERO pdfjs-dist files
-     into this route — puppeteer and @sparticuz/chromium came along because they
-     ARE imported. Deployed without this block, resolve() throws in the lambda,
-     the helper returns null, and every PDF receipt silently falls back to
-     store-and-flag: green in every local gate, dead in production. Verified by
-     grepping .next/server/app/api/budget/receipts/ocr/route.js.nft.json. */
-  outputFileTracingIncludes: {
-    // Exactly the two files pdfFirstPage.ts resolves — not the whole build dir,
-    // which would drag sourcemaps and the sandbox bundle into the lambda.
-    '/api/budget/receipts/ocr': [
-      './node_modules/pdfjs-dist/legacy/build/pdf.min.mjs',
-      './node_modules/pdfjs-dist/legacy/build/pdf.worker.min.mjs',
-    ],
-  },
+  /* RC-5 removed the outputFileTracingIncludes block that lived here. It existed
+     because pdfFirstPage.ts read pdfjs-dist off disk at runtime — a path the file
+     tracer cannot see, so the lambda shipped without it. The rasteriser is gone
+     (the API reads PDFs natively now), so the workaround goes with it. Kept as a
+     note because the failure mode is worth remembering: a runtime-resolved
+     dependency is invisible to tracing and fails ONLY in production. */
 
   images: {
     remotePatterns: [

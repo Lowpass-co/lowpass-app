@@ -1940,15 +1940,52 @@ src/lib/budget/actualsProvenance.harness.ts` → "18 checks passed, 0 failed".
   **Test-pinned.**
 - **RCP-06 — reject writes nothing.** Rejecting every proposal disables Approve, so
   no request is even possible. **Test-pinned.**
-- **RCP-07 — a PDF is SCANNED, not skipped (RC-4).** Drop a real PDF receipt (hotel
-  folio, bus invoice) → status reaches **Read** with vendor/date/amount prefilled.
-  Page 1 is rasterised server-side (headless Chromium + pdf.js, the same browser the
-  rider-pack PDFs use) and the PNG goes down the existing Vision path.
-  **Test-pinned** at the gate; the rasteriser itself is **Needs-live** — it cannot
-  run in jsdom.
+- **RCP-07 — a PDF is SCANNED, not skipped.** Drop a real PDF receipt → status
+  reaches **Read** with vendor/date/amount prefilled. **Test-pinned** at the gate;
+  the extraction itself is **Needs-live**.
 - **RCP-08 — a PDF that won't rasterise is still SAVED.** Drop a corrupt or
   image-free PDF → the row lands **Needs details** with "Could not read this PDF —
   enter the details manually", *after* the receipt row and upload exist. The render
   failure costs the scan, never the file. **Test-pinned.**
-- **RCP-09 — an unscannable type never reaches the scanner.** A `.csv` or similar
-  saves and flags without burning an AI call. **Test-pinned.**
+- **RCP-09 — a file that isn't a receipt is refused at the door.** A `.csv`, or
+  anything over 10 MB, is rejected with a visible reason and is NOT uploaded and
+  NOT scanned. (Changed in RQ-2: it used to be saved and flagged. Save-first
+  exists so a RECEIPT is never lost; a spreadsheet dropped by mistake is not a
+  receipt, and saving it filled the table with rows nobody would review.)
+  **Test-pinned.**
+
+## RC-5 — multi-page PDFs, and one file holding several receipts
+
+> **Supersedes RC-4's "render page 1".** Page 1 is the whole document for a till
+> receipt, but NOT for a hotel folio or freight invoice, where the total is
+> usually on the LAST page. Reading page 1 of a 4-page folio produced a
+> confident, plausible, WRONG number — worse than reading nothing on a money
+> path. The API now reads the PDF natively as a `document` block (every page as
+> text AND image), so the rasteriser, its `outputFileTracingIncludes` entry and
+> the `pdfjs-dist` dependency are all deleted. Migration **252**
+> (`expense_receipts.page_from` / `page_to` + range CHECK + shared-file index).
+
+- **RCP-10 — the total comes off the LAST page.** Scan a multi-page hotel folio
+  where page 1 shows a running subtotal and the final page shows the amount
+  payable → the proposal carries the FINAL figure, not the subtotal.
+  **Needs-live** — this is a property of the model reading a real document; no
+  jsdom substitute exists.
+- **RCP-11 — one PDF, several receipts.** Scan a PDF holding three separate
+  receipts → **three** proposals, three `expense_receipts` rows, all pointing at
+  the ONE uploaded file with distinct page ranges (`page_from`/`page_to`), and
+  exactly one upload. Each proposal opens the file a reviewer can check.
+  **Test-pinned** (split + page ranges + one upload); the model's decision to
+  split is **Needs-live**.
+- **RCP-12 — a single document still yields exactly one.** A 1-page PDF, or a
+  4-page folio, yields ONE proposal — the multi-document path must not duplicate
+  the ordinary case. A single-page file that the model tries to split anyway is
+  collapsed back to one. **Test-pinned.**
+- **RCP-13 — a corrupt/encrypted PDF stores and flags.** RCP-08's guarantee is
+  unchanged by RC-5: the receipt row and the file exist first, so an unreadable
+  PDF costs the scan, never the file. **Test-pinned.**
+- **RCP-14 — an over-long PDF is refused, not truncated.** A PDF over 50 pages is
+  rejected with its page count named ("That PDF is 214 pages — too long to
+  scan"), and the file is still stored for manual entry. Reading the first N
+  pages of a long document is the same confident-wrong-number failure RC-5
+  exists to remove, so it is never done. **Needs-live** (the guard runs
+  server-side against a real page count).

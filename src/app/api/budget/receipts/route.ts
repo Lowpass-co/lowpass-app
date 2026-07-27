@@ -128,6 +128,10 @@ export async function POST(request: Request) {
     in_budget?: boolean;
     linked_line_item_id?: string | null;
     notes?: string | null;
+    /* RC-5 — which pages of receipt_file_url this receipt covers, when one
+       uploaded PDF held several receipts. NULL/absent = the whole file. */
+    page_from?: number | null;
+    page_to?: number | null;
   };
   try {
     body = await request.json();
@@ -174,6 +178,9 @@ export async function POST(request: Request) {
     in_budget: inBudget,
     linked_line_item_id: linkedLineItemId,
     notes: body.notes ?? null,
+    // RC-5 — page range within a shared file; the 252 CHECK enforces both-or-neither.
+    page_from: Number.isFinite(Number(body.page_from)) ? Number(body.page_from) : null,
+    page_to: Number.isFinite(Number(body.page_to)) ? Number(body.page_to) : null,
   };
 
   let created: Record<string, unknown> | null = null;
