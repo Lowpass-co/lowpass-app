@@ -1909,3 +1909,46 @@ src/lib/budget/actualsProvenance.harness.ts` → "18 checks passed, 0 failed".
   income tab / payroll / expenses tab). Healthy tour ⇒ no banner. The unsettled-show
   slice is the SAME derivation the M1-B catch-up queue consumes (computeDataHealth).
   **Code-verified**; **Needs-live**.
+
+## Receipts last mile — RC-1..RC-4 (drop zone → proposals → review → PDFs)
+
+> Migration **251** (`import_pending_lines` gains `receipt_id`; `target` CHECK widened
+> to `receipt_txn` / `receipt_line` + a receipt/target consistency CHECK; idempotent,
+> down-block). **Applied.** RCP-01/04/05/06/07/08 are pinned by vitest component tests
+> (`ReceiptDropPanel.test.tsx`, `ReceiptProposalQueue.test.tsx`,
+> `ReceiptPdfScan.test.tsx`) — the live rows below are what a walk adds on top.
+>
+> **The invariant, unchanged across all four stages:** amounts land as
+> **transactions**, never direct `actual_cost` writes. The transactions route inserts
+> then calls `syncActualCostIfNoOverride`, so a direct write would bypass both the
+> reconcile and the override guard. Money gates green at 64 / 21 / 15.
+
+- **RCP-01 — a multi-file drop saves EVERY file.** Drop 3+ receipts on the Budget
+  receipts panel → one row each, all three reach a terminal status. Nothing is
+  dropped on the floor when one of them fails. **Test-pinned.**
+- **RCP-02 — save happens BEFORE scan.** `createReceipt` + `uploadFile` precede the
+  first `ocr` call, so a scanner failure costs the reading, never the receipt.
+  **Test-pinned** (call-order assertion).
+- **RCP-03 — over the per-drop scan cap.** Past the batch OCR cap, the remaining
+  files still save and land in `needs_manual` with the cap named. **Needs-live.**
+- **RCP-04 — edit then approve writes the EDITED value.** Change an amount or
+  re-target a proposal in the review queue, approve → the ledger gets what's on
+  screen, not the OCR guess. **Test-pinned.**
+- **RCP-05 — duplicates arrive pre-skipped.** A receipt matching an existing
+  transaction (vendor ≥0.85 + amount + date window) is flagged, excluded from the
+  accept list by default, and says why. Opting it back in is one click.
+  **Test-pinned.**
+- **RCP-06 — reject writes nothing.** Rejecting every proposal disables Approve, so
+  no request is even possible. **Test-pinned.**
+- **RCP-07 — a PDF is SCANNED, not skipped (RC-4).** Drop a real PDF receipt (hotel
+  folio, bus invoice) → status reaches **Read** with vendor/date/amount prefilled.
+  Page 1 is rasterised server-side (headless Chromium + pdf.js, the same browser the
+  rider-pack PDFs use) and the PNG goes down the existing Vision path.
+  **Test-pinned** at the gate; the rasteriser itself is **Needs-live** — it cannot
+  run in jsdom.
+- **RCP-08 — a PDF that won't rasterise is still SAVED.** Drop a corrupt or
+  image-free PDF → the row lands **Needs details** with "Could not read this PDF —
+  enter the details manually", *after* the receipt row and upload exist. The render
+  failure costs the scan, never the file. **Test-pinned.**
+- **RCP-09 — an unscannable type never reaches the scanner.** A `.csv` or similar
+  saves and flags without burning an AI call. **Test-pinned.**

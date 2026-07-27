@@ -19,13 +19,25 @@
 
    D-SCRAPE: OCR is a SUGGESTION the user confirms; the amount only ever lands as
    a transaction (which sums into actual_cost via the existing reconcile) — never
-   a direct actual_cost write. PDF = store-but-don't-scan (Vision is images-only).
+   a direct actual_cost write.
+
+   RC-4: PDFs ARE scanned now. Vision is still images-only, but the route renders
+   page 1 to a PNG server-side first (src/lib/budget/pdfFirstPage.ts) and feeds
+   that to Vision. If the render fails the route 400s with a manual-entry message,
+   so store-and-flag survives as the fallback — a receipt is never lost.
    ============================================ */
 
 import { useMemo } from 'react';
 
 export const OCR_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+export const OCR_PDF_TYPE = 'application/pdf';
 export const isOcrableImage = (file: File): boolean => OCR_IMAGE_TYPES.includes(file.type);
+/**
+ * What we'll send to the scanner. Images go straight to Vision; PDFs are
+ * rasterized server-side first (RC-4). Anything else is store-and-flag.
+ */
+export const isScannable = (file: File): boolean =>
+  isOcrableImage(file) || file.type === OCR_PDF_TYPE;
 
 /** The OCR route's JSON shape (Claude Vision). All fields may be null. */
 export interface ReceiptOcr {
@@ -98,8 +110,8 @@ export function useReceiptScan(tourId: string, tourCurrency: string): UseReceipt
     const native = (tourCurrency || 'GBP').toUpperCase();
     return {
       async ocr(file, receiptId) {
-        if (!isOcrableImage(file)) {
-          return { data: null, error: null }; // PDF / non-image → manual entry, no scan
+        if (!isScannable(file)) {
+          return { data: null, error: null }; // unscannable type → manual entry, no scan
         }
         try {
           const fd = new FormData();

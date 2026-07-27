@@ -27,7 +27,7 @@
 'use client';
 
 import { useCallback, useRef, useState } from 'react';
-import { useReceiptScan, isOcrableImage, type ReceiptOcr } from '@/components/budget/useReceiptScan';
+import { useReceiptScan, isScannable, type ReceiptOcr } from '@/components/budget/useReceiptScan';
 
 /** Max files OCR'd per drop. Extras are saved and flagged for manual entry. */
 export const BATCH_OCR_CAP = 20;
@@ -99,12 +99,12 @@ export function useReceiptDropQueue(tourId: string, tourCurrency: string) {
         });
         return;
       }
-      if (!isOcrableImage(file)) {
-        // PDFs land here today. RC-2 renders page 1 server-side (spec decision 1);
-        // until then a PDF is stored and flagged, never lost.
+      if (!isScannable(file)) {
+        // RC-4 put PDFs back on the scan path (page 1 is rendered server-side), so
+        // only genuinely unreadable types land here — stored and flagged, never lost.
         patch(item.key, {
           status: 'needs_manual',
-          note: 'Saved. PDFs aren’t scanned yet — fill the details manually.',
+          note: 'Saved. This file type can’t be scanned — fill the details manually.',
         });
         return;
       }

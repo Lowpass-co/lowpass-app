@@ -19,7 +19,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { FileText, Loader2, Upload, X } from 'lucide-react';
 import {
   useReceiptScan,
-  isOcrableImage,
+  isScannable,
   receiptChipLabel,
   type ReceiptRow,
 } from '@/components/budget/useReceiptScan';
@@ -96,8 +96,10 @@ export function AddReceiptPanel({
         setThumbUrl(url);
 
         const o = ocrOutcome.data;
+        // RC-4: PDFs are scanned too (page 1 rendered server-side). A PDF we can't
+        // rasterize comes back as an outcome.error, so that branch covers it now.
         if (ocrOutcome.error) setScanNote(ocrOutcome.error);
-        else if (!isOcrableImage(file)) setScanNote('PDF stored — scan is image-only; enter the details below.');
+        else if (!isScannable(file)) setScanNote('File stored — it can’t be scanned; enter the details below.');
         setForm({
           vendor: o?.vendor ?? '',
           date: o?.date ?? '',

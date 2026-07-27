@@ -13,6 +13,24 @@ const nextConfig: NextConfig = {
      to force a morph, because that would trade deep-linkable URLs and the
      server-sliced crew view for an animation, and the spine already works. */
   experimental: { viewTransition: true },
+
+  /* RC-4 — pdfjs-dist is read off disk at runtime (readFile of a resolved path,
+     in src/lib/budget/pdfFirstPage.ts), NOT imported. Next's file tracer only
+     follows imports and literal require()s, so it traced ZERO pdfjs-dist files
+     into this route — puppeteer and @sparticuz/chromium came along because they
+     ARE imported. Deployed without this block, resolve() throws in the lambda,
+     the helper returns null, and every PDF receipt silently falls back to
+     store-and-flag: green in every local gate, dead in production. Verified by
+     grepping .next/server/app/api/budget/receipts/ocr/route.js.nft.json. */
+  outputFileTracingIncludes: {
+    // Exactly the two files pdfFirstPage.ts resolves — not the whole build dir,
+    // which would drag sourcemaps and the sandbox bundle into the lambda.
+    '/api/budget/receipts/ocr': [
+      './node_modules/pdfjs-dist/legacy/build/pdf.min.mjs',
+      './node_modules/pdfjs-dist/legacy/build/pdf.worker.min.mjs',
+    ],
+  },
+
   images: {
     remotePatterns: [
       // Supabase storage — avatars and any other workspace-uploaded assets.

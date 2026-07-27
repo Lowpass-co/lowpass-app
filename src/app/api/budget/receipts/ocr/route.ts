@@ -5,6 +5,7 @@
    ============================================ */
 
 import { NextResponse } from 'next/server';
+import { isPdf, renderPdfFirstPageToPng } from '@/lib/budget/pdfFirstPage';
 import { APIError } from '@anthropic-ai/sdk';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { withAiUsage, aiCapExceededResponse } from '@/lib/ai/usage';
@@ -118,15 +119,39 @@ export async function POST(request: Request) {
   const tourCurrency = (formData.get('currency') as string) || 'GBP';
   const mediaType = file.type as string;
 
-  if (!ALLOWED_TYPES.includes(mediaType as (typeof ALLOWED_TYPES)[number])) {
+  /* RC-4 — PDFs are now RENDERED, not rejected.
+     Vision is images-only, so a PDF used to 400 here and land as store-and-flag.
+     But hotel folios, bus invoices and production bills are overwhelmingly PDFs,
+     which left the feature working on the minority of real receipts. Page 1 is
+     rasterised server-side (headless Chromium + pdf.js — the same browser the
+     rider-pack/advance-packet PDFs already use) and the PNG goes down the
+     EXISTING Vision path untouched.
+
+     The fallback is preserved deliberately: if rendering fails for any reason we
+     still 400, and the caller keeps the receipt stored and flagged for manual
+     entry. A PDF we cannot read must never be a PDF we lose. */
+  const uploadBuffer = Buffer.from(await file.arrayBuffer());
+  let visionMediaType = mediaType;
+  let base64: string;
+
+  if (isPdf(mediaType)) {
+    const rendered = await renderPdfFirstPageToPng(uploadBuffer);
+    if (!rendered) {
+      return NextResponse.json(
+        { error: 'Could not read this PDF — enter the details manually.' },
+        { status: 400 },
+      );
+    }
+    base64 = rendered;
+    visionMediaType = 'image/png';
+  } else if (!ALLOWED_TYPES.includes(mediaType as (typeof ALLOWED_TYPES)[number])) {
     return NextResponse.json(
-      { error: 'File must be an image (JPEG, PNG, WebP, GIF). PDF is not supported for vision.' },
+      { error: 'File must be an image (JPEG, PNG, WebP, GIF) or a PDF.' },
       { status: 400 }
     );
+  } else {
+    base64 = uploadBuffer.toString('base64');
   }
-
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const base64 = buffer.toString('base64');
 
   try {
     const { result: response, blocked, blockReason } = await withAiUsage(
@@ -152,7 +177,7 @@ export async function POST(request: Request) {
                   type: 'image',
                   source: {
                     type: 'base64',
-                    media_type: mediaType as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif',
+                    media_type: visionMediaType as 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif',
                     data: base64,
                   },
                 },

@@ -20,7 +20,9 @@
    second OCR path). Each receipt prefills an editable confirm row
    from the scrape; on confirm the amount lands as a reconciled
    transaction (never a direct actual_cost write — same invariant as
-   B1, in_budget:false). PDFs store-but-don't-scan. Per-receipt
+   B1, in_budget:false). RC-4 put PDFs on the scan path too (page 1
+   rendered server-side); one that won't rasterize is still stored
+   and flagged for manual entry, never lost. Per-receipt
    status (scanning / needs review / linked) makes a 20-file drop
    triageable.
    ============================================ */
@@ -31,7 +33,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { ExternalLink, FileText, Loader2, Paperclip, Upload, X } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
-import { useReceiptScan, isOcrableImage } from '@/components/budget/useReceiptScan';
+import { useReceiptScan } from '@/components/budget/useReceiptScan';
 import type { BudgetLineItem } from '@/types';
 
 const ALLOWED_EXT = ['pdf', 'jpg', 'jpeg', 'png', 'gif', 'webp'];
@@ -42,7 +44,6 @@ export type InboxReceipt = {
   id: string;
   filename: string;
   sizeBytes: number;
-  isImage: boolean;
   status: 'uploading' | 'scanning' | 'needs_review' | 'linking' | 'linked' | 'error';
   /** Set once /api/budget/receipts has created the receipt row. */
   receiptId?: string;
@@ -134,10 +135,9 @@ export function ReceiptInbox({ tourId, tourCurrency, lineItems }: ReceiptInboxPr
           continue;
         }
         const localId = `local-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-        const isImage = isOcrableImage(file);
         setReceipts((prev) => [
           ...prev,
-          { id: localId, filename: file.name, sizeBytes: file.size, isImage, status: 'uploading', vendor: '', amount: '', date: '' },
+          { id: localId, filename: file.name, sizeBytes: file.size, status: 'uploading', vendor: '', amount: '', date: '' },
         ]);
         try {
           // 1) Create the receipt row (in_budget:false — the amount lands as a
@@ -150,16 +150,13 @@ export function ReceiptInbox({ tourId, tourCurrency, lineItems }: ReceiptInboxPr
           const { path } = await scan.uploadFile(draft.id, file);
           await scan.patchReceipt(draft.id, { receipt_file_url: path });
 
-          // 3) Scrape (images only) — pass the receiptId so the route persists the
-          //    extraction for ⌘K search. PDFs skip the scan (store-but-don't-scan).
+          // 3) Scrape — pass the receiptId so the route persists the extraction for
+          //    ⌘K search. RC-4: PDFs scan too (page 1 rendered server-side); a PDF
+          //    that won't rasterize returns outcome.error and stays store-and-flag.
           patch(localId, { status: 'scanning' });
           const outcome = await scan.ocr(file, draft.id);
           const o = outcome.data;
-          const note = outcome.error
-            ? outcome.error
-            : !isImage
-              ? 'PDF stored — scan is image-only; enter the details below.'
-              : undefined;
+          const note = outcome.error ?? undefined;
           patch(localId, {
             status: 'needs_review',
             vendor: o?.vendor ?? '',
