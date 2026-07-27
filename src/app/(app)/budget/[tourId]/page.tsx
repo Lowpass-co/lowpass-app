@@ -32,7 +32,6 @@ import { BudgetGridView } from '@/components/budget/BudgetGridView';
 import { BudgetIncomeGrid } from '@/components/budget/BudgetIncomeGrid';
 import { BudgetEmptyState } from '@/components/budget/BudgetEmptyState';
 import { BudgetSettingsTab } from '@/components/budget/BudgetSettingsTab';
-import { ReceiptInbox } from '@/components/budget/ReceiptInbox';
 import { ReceiptDropPanel } from '@/components/budget/receipts/ReceiptDropPanel';
 import { ReceiptsBank } from '@/components/budget/receipts/ReceiptsBank';
 import { loadTourReceipts } from '@/lib/budget/loadReceipts';
@@ -42,7 +41,7 @@ import { loadTourReceipts } from '@/lib/budget/loadReceipts';
 // body to render.
 import { resolveBudgetTab } from '@/components/budget/budget-tab-utils';
 import { BudgetDensityProvider } from '@/components/budget/BudgetDensityContext';
-import { enrichLinesWithTransactionAggregates, fetchLineVendors } from '@/lib/budget/transactions';
+import { enrichLinesWithTransactionAggregates, fetchLineVendorFacts, type LineVendorFacts } from '@/lib/budget/transactions';
 import { enrichLinesWithAttachmentCounts } from '@/lib/budget/attachments';
 import { loadTourIncome, toIncomeRows } from '@/lib/budget/income';
 import { BudgetSummaryDashboard } from '@/components/budget/summary-cards/BudgetSummaryDashboard';
@@ -252,15 +251,23 @@ export default async function BudgetTourPage({
   /* VIS-BG-04 — display-only vendor label per line (single-else-"Multiple").
      Separate READ from the money path; degrades to blank on failure. */
   const vendorByLine: Record<string, string> = {};
+  /* RQ-8 — the transaction behind each line, so a misread vendor can be fixed in
+     the grid, and so a receipt-backed line can say Auto with the receipt named. */
+  const vendorTxnByLine: Record<string, string> = {};
+  const receiptSourceByLine: Record<string, string> = {};
   {
-    const vmap = await fetchLineVendors(
+    const vmap = await fetchLineVendorFacts(
       supabase,
       lines.map((l) => l.id),
-    ).catch((err) => {
-      logServerError('fetchLineVendors failed', err, { tourId });
-      return new Map<string, string>();
+    ).catch((err: unknown) => {
+      logServerError('fetchLineVendorFacts failed', err, { tourId });
+      return new Map<string, LineVendorFacts>();
     });
-    for (const [id, v] of vmap) vendorByLine[id] = v;
+    for (const [id, f] of vmap) {
+      if (f.vendor) vendorByLine[id] = f.vendor;
+      if (f.editableTransactionId) vendorTxnByLine[id] = f.editableTransactionId;
+      if (f.receiptLabel) receiptSourceByLine[id] = f.receiptLabel;
+    }
   }
 
   /* RQ-6 — the tour's receipts, read SERVER-SIDE and seeded into the payload.
@@ -483,11 +490,15 @@ export default async function BudgetTourPage({
                   duplicateMap={duplicatesToRecord(detectDuplicates(lines))}
                   dayTypeByRouting={dayTypeByRouting}
                   vendorByLine={vendorByLine}
+                  vendorTxnByLine={vendorTxnByLine}
+                  receiptSourceByLine={receiptSourceByLine}
                   trackPhases={trackPhases}
                 />
-                {/* RC-1 — the obvious drop zone sits ABOVE the existing inbox:
-                    drag receipts in, they save, then they're read. The inbox
-                    below stays the per-receipt confirm surface it already is. */}
+                {/* RQ-2 — the ONE drop zone. The modal "Receipt Inbox" that used
+                    to sit below is retired: two surfaces with different upload
+                    limits (10 MB there, none here) meant the same file was
+                    accepted by one and refused by the other. Everything it did
+                    now lives on ?tab=receipts, including the ⌘K deep link. */}
                 <ReceiptDropPanel
                   tourId={tourId}
                   tourCurrency={tourCurrency}
@@ -497,7 +508,6 @@ export default async function BudgetTourPage({
                     section: (l as { section?: string | null }).section ?? null,
                   }))}
                 />
-                <ReceiptInbox tourId={tourId} tourCurrency={tourCurrency} lineItems={lines} />
               </>
             )
           ) : null}

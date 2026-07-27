@@ -19,8 +19,12 @@ import type { ReceiptRow } from '@/lib/budget/loadReceipts';
 
 const calls: Array<{ fn: string; args: unknown[] }> = [];
 
+/** RQ-2 — the bank now reads ?receipt= (the ⌘K landing ported off the retired
+ *  modal inbox), so the router mock has to provide search params too. */
+let searchParams = new URLSearchParams();
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+  useSearchParams: () => searchParams,
 }));
 
 vi.mock('@/components/budget/useReceiptScan', async () => {
@@ -88,6 +92,7 @@ function renderBank(receipts: ReceiptRow[]) {
 
 beforeEach(() => {
   calls.length = 0;
+  searchParams = new URLSearchParams();
   vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, status: 204, blob: async () => new Blob(['x']) })));
   vi.stubGlobal('confirm', () => true);
 });
@@ -192,6 +197,30 @@ describe('RCP-20 — filing goes through the transaction path', () => {
 
     await waitFor(() => expect(screen.getByRole('alert').textContent).toMatch(/Add an amount/));
     expect(calls.some((c) => c.fn === 'createTransaction')).toBe(false);
+  });
+});
+
+describe('RQ-2 — the ⌘K deep link lands here', () => {
+  /* This was the ONE capability the retired modal inbox had that the bank
+     didn't, so it moved rather than being dropped — a deep link into a deleted
+     surface is a worse outcome than keeping two drop zones. */
+  it('a deep-linked receipt is shown whatever state it is in', () => {
+    searchParams = new URLSearchParams('receipt=r2'); // r2 is FILED
+    renderBank([FAILED, FILED]);
+    // Without the deep link the bank would open on Needs details and hide r2.
+    expect(screen.getAllByTestId('receipt-row').length).toBe(2);
+  });
+
+  it('marks the receipt that was asked for', () => {
+    searchParams = new URLSearchParams('receipt=r2');
+    renderBank([FAILED, FILED]);
+    const focused = document.querySelectorAll('[data-focused="true"]');
+    expect(focused.length).toBe(1);
+  });
+
+  it('no deep link → the normal work-first default', () => {
+    renderBank([FAILED, FILED]);
+    expect(screen.getAllByTestId('receipt-row').length).toBe(1);
   });
 });
 

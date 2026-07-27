@@ -72,7 +72,12 @@ const EXPENSE_COLS: Column[] = [
   // Stage-3 parity — read-only day-type pill (blank for non-routing lines).
   { id: 'dayType', label: 'Day', type: 'daytype', w: 120, min: 80, resize: true, ro: true },
   // VIS-BG-04 — read-only vendor (aggregate of the line's transaction vendors).
-  { id: 'vendor', label: 'Vendor', type: 'text', w: 150, min: 100, resize: true, ro: true },
+  /* RQ-8 — vendor is EDITABLE now. It's still derived from the line's
+     transactions, but a scan that misreads "ROCKET 6546" as "ROOKET" left the
+     slide-over as the only repair. The write goes through the existing
+     transaction PATCH — no new money path — and only fires where exactly one
+     transaction makes the target unambiguous (see rowVendorReadOnly). */
+  { id: 'vendor', label: 'Vendor', type: 'text', w: 150, min: 100, resize: true },
   { id: 'est', label: 'Estimate', type: 'money', w: 120, min: 90, resize: true },
   { id: 'act', label: 'Actual', type: 'money', w: 120, min: 90, resize: true },
   { id: 'var', label: 'Variance', type: 'variance', w: 110, min: 90, resize: true },
@@ -108,6 +113,13 @@ export interface BudgetGridViewProps {
   /** VIS-BG-04 — line_item_id → display vendor label (single-else-"Multiple").
    *  Display only; never persisted. */
   vendorByLine?: Record<string, string>;
+  /** RQ-8 — line id → the ONE transaction to PATCH when vendor is edited.
+   *  Absent when the line has zero or several transactions, in which case the
+   *  cell stays read-only: "Multiple" has no single row an edit could mean. */
+  vendorTxnByLine?: Record<string, string>;
+  /** RQ-8 — line id → "From receipt R-006 — BNA Airport Parking". Drives the
+   *  Auto chip and its tooltip on receipt-backed lines. */
+  receiptSourceByLine?: Record<string, string>;
   /** Stage-3 parity — when the tour tracks phases, enable phase grouping in the
    *  Group-by cycle (opt-in; income/demo unaffected). */
   trackPhases?: boolean;
@@ -117,7 +129,8 @@ export function BudgetGridView({
   lines, sections, tourCurrency, tourId,
   versionLocked = false, lockedVersionId = null, canApprove = false,
   viewedStatus = 'draft', draftVersionId = null, versions = [], fxRates = {},
-  duplicateMap = {}, dayTypeByRouting = {}, vendorByLine = {}, trackPhases = false,
+  duplicateMap = {}, dayTypeByRouting = {}, vendorByLine = {},
+  vendorTxnByLine = {}, receiptSourceByLine = {}, trackPhases = false,
 }: BudgetGridViewProps) {
   // Stage-3 parity — count of lines flagged as possible duplicates.
   const duplicateCount = Object.keys(duplicateMap).length;
@@ -194,6 +207,17 @@ export function BudgetGridView({
     for (const row of sec.rows) {
       const v = row._uid ? vendorByLine[row._uid] : undefined;
       if (v) row.vendor = v;
+      /* RQ-8 — a line backed by a receipt reads AUTO, with the receipt named.
+         Set AFTER the adapter so it overrides 'manual' without touching
+         isDerivedLine, which means "reconcile-owned, regenerated every sync" —
+         a receipt line is not that, and marking it so would put it under the
+         regeneration contract. Provenance and derived-ness are different facts. */
+      const src = row._uid ? receiptSourceByLine[row._uid] : undefined;
+      if (src) {
+        row._provenance = 'auto';
+        row._provenanceSource = src;
+      }
+
     }
   }
 
@@ -201,8 +225,45 @@ export function BudgetGridView({
   // the new value; a rejected write surfaces a toast + a refresh to true state.
   const onEdit = useCallback(
     (rowUid: string, field: string, value: unknown) => {
+      /* RQ-8 — vendor doesn't live on the line; it's the transaction's. Route it
+         to the existing transaction PATCH rather than inventing a second path. */
+      if (field === 'vendor') {
+        const txnId = vendorTxnByLine[rowUid];
+        if (!txnId) {
+          /* Several transactions (or none): "Vendor" is an aggregate and there is
+             no single row the edit could mean. The Grid has no per-cell read-only
+             predicate, so the cell accepts the keystroke — say why and put the
+             true value back rather than leaving an edit that looks saved. */
+          showToast('This line has several transactions — open it to edit each vendor', 'error');
+          router.refresh();
+          return;
+        }
+        const name = String(value ?? '').trim();
+        if (!name) {
+          showToast('Vendor can’t be empty', 'error');
+          router.refresh();
+          return;
+        }
+        void fetch(`/api/budget/transactions/${txnId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ vendor_name: name }),
+        })
+          .then((res) => {
+            if (!res.ok) {
+              showToast('Could not save the vendor', 'error');
+              router.refresh();
+            }
+          })
+          .catch(() => {
+            showToast('Could not save the vendor', 'error');
+            router.refresh();
+          });
+        return;
+      }
+
       const patch = gridEditToPatch(field, value);
-      if (!patch) return; // non-persisting field (idx/variance/receipts/vendor)
+      if (!patch) return; // non-persisting field (idx/variance/receipts)
       void fetch('/api/budget/line-items', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
@@ -223,7 +284,7 @@ export function BudgetGridView({
           router.refresh();
         });
     },
-    [router, showToast],
+    [router, showToast, vendorTxnByLine],
   );
 
   // Structural CRUD: POST/DELETE then refresh (the new row needs a real id;

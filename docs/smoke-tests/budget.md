@@ -2082,3 +2082,39 @@ src/lib/budget/actualsProvenance.harness.ts` → "18 checks passed, 0 failed".
   day-first, and guessing US order would silently swap day and month for the
   first twelve days of every month. Amounts need a currency symbol or two
   decimal places, so "Jul24-26" is never read as money.
+
+## RQ-8 + RQ-2 — vendor editable, provenance honest, ONE receipt surface
+
+> Adam: *"They say manual, but I can't edit things like the vendor without
+> opening the slide out."* Two faults with one cause — the grid knew the vendor's
+> VALUE but not which transaction it came from. **No migration.**
+
+- **RCP-23 — a receipt-backed line reads AUTO.** A line whose actual came from a
+  scanned receipt shows the `Auto` chip with the source named ("From receipt
+  R-006 — BNA Airport Parking"), not `Manual`. Derived-ness is untouched:
+  `isDerivedLine` means *reconcile-owned, regenerated every sync*, which a
+  receipt line is not — marking it so would put it under the regeneration
+  contract and make the behaviour wrong while the chip looked right.
+  **Test-pinned**; the live chip is **Needs-live**.
+- **RCP-24 — the vendor cell is editable, through the transaction.** Fix a
+  misread vendor inline on the Expenses grid → PATCHes
+  `/api/budget/transactions/{id}`, the path that already existed. No new money
+  path, and nothing on the line item is touched. **Test-pinned.**
+- **RCP-25 — an un-targetable vendor edit refuses VISIBLY.** A line with several
+  transactions shows "Multiple", so there is no single row an edit could mean:
+  the grid says *"This line has several transactions — open it to edit each
+  vendor"* and restores the true value. (The Grid primitive has no per-cell
+  read-only predicate, so the cell accepts the keystroke; leaving it there would
+  look saved when it wasn't.) An empty vendor is refused before it reaches the
+  route that rejects it. **Test-pinned.**
+- **RCP-26 — ONE receipt surface (RQ-2).** The modal "Receipt Inbox" is deleted.
+  It and the inline drop zone disagreed on upload limits (10 MB vs none), so the
+  same file was accepted by one and refused by the other. Everything it did now
+  lives on `?tab=receipts` — including the ⌘K deep link, which was the only
+  capability it had that the bank didn't and which moved rather than being
+  dropped. `grep -rn ReceiptInbox src/` → no matches. **Test-pinned** (deep
+  link); the deletion is **Code-verified**.
+- **RCP-27 — ⌘K "open receipt" lands on the bank.** Searching a vendor and
+  opening a receipt goes to `?tab=receipts&receipt=<id>`, which shows that
+  receipt whatever state it is in (not just Needs details) and outlines it.
+  **Test-pinned.**

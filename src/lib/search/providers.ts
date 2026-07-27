@@ -268,7 +268,7 @@ async function searchReceipts(query: string): Promise<SearchResult[]> {
       // an extracted-text-only hit visible even when the label doesn't fuzzy-match.
       score: scored?.score ?? 1,
       ranges: scored?.ranges ?? [],
-      action: { type: 'navigate', href: `/budget/${r.tour_id}?tab=budget&receipt=${r.id}` },
+      action: { type: 'navigate', href: `/budget/${r.tour_id}?tab=receipts&receipt=${r.id}` },
     });
   }
   return results;

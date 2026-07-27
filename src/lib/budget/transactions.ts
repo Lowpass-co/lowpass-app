@@ -284,6 +284,87 @@ export async function fetchLineVendors(
   return out;
 }
 
+/* ============================================
+   RQ-8 — vendor is EDITABLE, and receipt-backed lines say so.
+
+   Two complaints, one read. Adam: "They say manual, but I can't edit things like
+   the vendor without opening the slide out."
+
+   1. The provenance chip called every receipt-created line MANUAL. A line whose
+      actual came off a scanned document is not hand-typed, and a chip that says
+      otherwise is worse than no chip.
+   2. Vendor is derived from the line's transactions, so the grid rendered it
+      read-only and a misread vendor could only be fixed in the slide-over.
+
+   Both need the same fact: WHICH transaction is behind this line. Editing is
+   only offered when there is exactly ONE — with several, "Vendor" is an
+   aggregate ("Multiple") and there is no single row an edit could mean.
+   ============================================ */
+
+export interface LineVendorFacts {
+  /** Display label: the single vendor, or "Multiple". */
+  vendor: string;
+  /** The transaction to PATCH when the vendor is edited — null unless exactly one. */
+  editableTransactionId: string | null;
+  /** How many transactions the line has. */
+  transactionCount: number;
+  /** Set when a receipt backs this line — drives the AUTO chip and its tooltip. */
+  receiptLabel: string | null;
+}
+
+/**
+ * Per-line vendor facts, in one query.
+ *
+ * Supersedes fetchLineVendors (kept as a thin wrapper for existing callers).
+ * The receipt join is what makes provenance HONEST: a line reads Auto because a
+ * receipt genuinely backs it, not because a flag was set and remembered.
+ */
+export async function fetchLineVendorFacts(
+  supabase: SupabaseClient,
+  lineItemIds: string[],
+): Promise<Map<string, LineVendorFacts>> {
+  const out = new Map<string, LineVendorFacts>();
+  if (lineItemIds.length === 0) return out;
+
+  const { data } = await supabase
+    .from('budget_line_item_transactions')
+    .select('id, line_item_id, vendor_name, receipt_id, expense_receipts(receipt_number, vendor)')
+    .in('line_item_id', lineItemIds);
+
+  type Row = {
+    id: string;
+    line_item_id: string;
+    vendor_name: string | null;
+    receipt_id: string | null;
+    expense_receipts: { receipt_number: string | null; vendor: string | null } | null;
+  };
+
+  const byLine = new Map<string, Row[]>();
+  for (const row of (data ?? []) as unknown as Row[]) {
+    const list = byLine.get(row.line_item_id) ?? [];
+    list.push(row);
+    byLine.set(row.line_item_id, list);
+  }
+
+  for (const [lineId, rows] of byLine) {
+    const vendors = new Set(
+      rows.map((r) => (r.vendor_name ?? '').trim()).filter(Boolean),
+    );
+    const withReceipt = rows.find((r) => r.receipt_id && r.expense_receipts);
+    const rec = withReceipt?.expense_receipts ?? null;
+    out.set(lineId, {
+      vendor: vendors.size === 1 ? [...vendors][0] : vendors.size > 1 ? 'Multiple' : '',
+      // Exactly one transaction → one unambiguous target for an inline edit.
+      editableTransactionId: rows.length === 1 ? rows[0].id : null,
+      transactionCount: rows.length,
+      receiptLabel: rec
+        ? `From receipt ${rec.receipt_number ?? '(unnumbered)'}${rec.vendor ? ` — ${rec.vendor}` : ''}`
+        : null,
+    });
+  }
+  return out;
+}
+
 /** Look up a line item by id, scoped to the user's workspace,
  *  and return its tour_id + workspace_id. Returns a NextResponse
  *  on failure for the caller to relay unchanged.

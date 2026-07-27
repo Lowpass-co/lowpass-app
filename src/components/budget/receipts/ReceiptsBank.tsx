@@ -27,7 +27,7 @@
    ============================================ */
 
 import { useCallback, useMemo, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { FileText, Loader2, RefreshCw, Trash2, ExternalLink, Check } from 'lucide-react';
 import { useReceiptScan } from '@/components/budget/useReceiptScan';
 import { RECEIPT_STATE_LABEL, type ReceiptState } from '@/lib/budget/receiptState';
@@ -64,6 +64,11 @@ export interface ReceiptsBankProps {
 export function ReceiptsBank({ tourId, tourCurrency, receipts, lines }: ReceiptsBankProps) {
   const router = useRouter();
   const scan = useReceiptScan(tourId, tourCurrency);
+  /* RQ-2 — ⌘K "open receipt" lands here now. This was the ONE thing the retired
+     modal inbox did that the bank didn't, so it moved rather than being dropped:
+     a deep link that 404s into a deleted surface is a worse outcome than keeping
+     two drop zones. */
+  const focusedId = useSearchParams()?.get('receipt') ?? null;
 
   const counts = useMemo(() => {
     const c: Record<string, number> = { all: receipts.length };
@@ -73,7 +78,8 @@ export function ReceiptsBank({ tourId, tourCurrency, receipts, lines }: Receipts
 
   // Open on the work when there is any; otherwise show everything.
   const [filter, setFilter] = useState<ReceiptState | 'all'>(
-    (counts.needs_details ?? 0) > 0 ? 'needs_details' : 'all',
+    // A deep-linked receipt might be in any state, so show everything.
+    focusedId ? 'all' : (counts.needs_details ?? 0) > 0 ? 'needs_details' : 'all',
   );
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const [busy, setBusy] = useState<Record<string, string>>({});
@@ -311,8 +317,9 @@ export function ReceiptsBank({ tourId, tourCurrency, receipts, lines }: Receipts
               <li
                 key={r.id}
                 data-testid="receipt-row"
+                data-focused={r.id === focusedId ? 'true' : undefined}
                 style={{
-                  border: '1px solid var(--lp-border)',
+                  border: `1px solid ${r.id === focusedId ? 'var(--lp-orange)' : 'var(--lp-border)'}`,
                   borderRadius: 'var(--lp-radius-lg)',
                   background: 'var(--lp-surface)',
                   padding: 'var(--lp-space-3)',
