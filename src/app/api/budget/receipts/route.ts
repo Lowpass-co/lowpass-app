@@ -13,6 +13,14 @@ import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { syncActualCostIfNoOverride } from '@/lib/budget/transactions';
 
+/** RC-5 page range as a spreadable fragment — `{}` when there isn't one. */
+function pageRange(from: unknown, to: unknown): Record<string, number> {
+  const f = Number(from);
+  const t = Number(to);
+  if (!Number.isFinite(f) || !Number.isFinite(t) || f < 1 || t < f) return {};
+  return { page_from: f, page_to: t };
+}
+
 function parseReceiptNumber(receiptNumber: string): number {
   const match = (receiptNumber ?? '').match(/^R-?(\d+)$/i);
   return match ? parseInt(match[1], 10) : 0;
@@ -179,9 +187,13 @@ export async function POST(request: Request) {
     in_budget: inBudget,
     linked_line_item_id: linkedLineItemId,
     notes: body.notes ?? null,
-    // RC-5 — page range within a shared file; the 252 CHECK enforces both-or-neither.
-    page_from: Number.isFinite(Number(body.page_from)) ? Number(body.page_from) : null,
-    page_to: Number.isFinite(Number(body.page_to)) ? Number(body.page_to) : null,
+    /* RC-5 — page range within a shared file; the 252 CHECK enforces
+       both-or-neither. OMITTED entirely when there is no range, rather than
+       written as null: an ordinary single-file receipt then inserts fine on a
+       database where 252 has not been applied yet, so the deploy and the
+       migration are independent. Only the multi-document split needs the
+       columns, and that is the only path that sends them. */
+    ...pageRange(body.page_from, body.page_to),
   };
 
   let created: Record<string, unknown> | null = null;

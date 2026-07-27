@@ -320,8 +320,12 @@ Rules that matter:
         .update({
           raw_ocr_json: first,
           extracted_text: buildExtractedText(first),
-          page_from: first.pages?.[0] ?? null,
-          page_to: first.pages?.[first.pages.length - 1] ?? null,
+          /* Page columns only when there IS a range — writing them as null would
+             fail the whole UPDATE (taking raw_ocr_json and the ⌘K searchable
+             text with it) on a database where migration 252 is not applied. */
+          ...(first.pages?.length
+            ? { page_from: first.pages[0], page_to: first.pages[first.pages.length - 1] }
+            : {}),
         })
         .eq('id', receiptId)
         .eq('workspace_id', workspaceId);
