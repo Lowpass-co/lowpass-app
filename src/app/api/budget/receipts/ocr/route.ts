@@ -30,6 +30,10 @@
 import { NextResponse } from 'next/server';
 import { APIError } from '@anthropic-ai/sdk';
 import { normaliseDocuments } from '@/lib/budget/receiptDocuments';
+/* RQ-5 — the PDF guard lives in its own module so it can be tested against a
+   real image-only fixture. It used to be inline here, where nothing could reach
+   it without a session and an API key. */
+import { isPdfUpload, pdfPageCount, pdfGate } from '@/lib/budget/pdfProbe';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { withAiUsage, aiCapExceededResponse } from '@/lib/ai/usage';
 import {
@@ -82,44 +86,6 @@ function looksLikeAnthropicCreditError(err: unknown): boolean {
 
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'] as const;
 const PDF_TYPE = 'application/pdf';
-
-/* RC-5 — page-count guard. The API allows 600 pages (100 under a 1M context),
-   but a receipt is not a book: anything past ~50 pages is a misdrop or a whole
-   scanned ledger, and letting it through would spend a big slice of one batch's
-   budget on a file nobody meant to send. Rejected CLEANLY — the caller keeps the
-   stored file and fills the details by hand. */
-const MAX_PDF_PAGES = 50;
-
-/** True when the upload is a PDF, which now goes to Claude whole. */
-function isPdfUpload(mediaType: string | null | undefined): boolean {
-  return (mediaType ?? '').toLowerCase() === PDF_TYPE;
-}
-
-/**
- * Page count for the guard, via pdf-parse — ALREADY a dependency (the deal-memo,
- * rider and tech-pack extractors use it), so this costs no new package and no
- * native binary. Returns null when the file won't parse at all, which the caller
- * treats as "let Claude try": a PDF pdf-parse chokes on may still be readable,
- * and the API's own limits are the real backstop.
- */
-async function pdfPageCount(buffer: Buffer): Promise<number | null> {
-  try {
-    const mod = await import('pdf-parse');
-    const PDFParse = (mod as { PDFParse: new (opts: { data: Uint8Array }) => {
-      getInfo: () => Promise<{ total?: number }>;
-      destroy?: () => Promise<void>;
-    } }).PDFParse;
-    const parser = new PDFParse({ data: buffer });
-    try {
-      const info = await parser.getInfo();
-      return typeof info?.total === 'number' ? info.total : null;
-    } finally {
-      if (typeof parser.destroy === 'function') await parser.destroy();
-    }
-  } catch {
-    return null;
-  }
-}
 
 /** Flat, searchable text from the Vision extraction — vendor + description +
  *  line-item descriptions + category, deduped + length-capped. NEVER logged. */
@@ -201,17 +167,12 @@ export async function POST(request: Request) {
   let pageCount: number | null = null;
   if (pdf) {
     pageCount = await pdfPageCount(uploadBuffer);
-    if (pageCount !== null && pageCount > MAX_PDF_PAGES) {
+    const gate = pdfGate(pageCount);
+    if (!gate.ok) {
       // Cleanly refused, never silently truncated — reading the first N pages of
       // a 200-page file is exactly the confident-wrong-number failure RC-5 exists
       // to remove.
-      return NextResponse.json(
-        {
-          error: `That PDF is ${pageCount} pages — too long to scan (limit ${MAX_PDF_PAGES}). It's saved; enter the details manually.`,
-          code: 'PDF_TOO_LONG',
-        },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: gate.message, code: 'PDF_TOO_LONG' }, { status: 400 });
     }
   }
 

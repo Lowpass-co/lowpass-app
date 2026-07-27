@@ -29,6 +29,7 @@
 import { useCallback, useRef, useState } from 'react';
 import { useReceiptScan, isScannable, type ReceiptOcr } from '@/components/budget/useReceiptScan';
 import { pageRangeLabel, type ReceiptDocument } from '@/lib/budget/receiptDocuments';
+import { parseReceiptFilename, filenameNote } from '@/lib/budget/receiptFilename';
 
 /** Max files OCR'd per drop. Extras are saved and flagged for manual entry. */
 export const BATCH_OCR_CAP = 20;
@@ -63,6 +64,8 @@ export interface DropItem {
   ocr: ReceiptOcr | null;
   /** RC-5 — which pages of the uploaded file this receipt covers. Null = all. */
   pages?: number[] | null;
+  /** RQ-5 — the fields came from the FILENAME, not from a read. Never hide this. */
+  fromFilename?: boolean;
   /** Why it needs manual entry / what failed. User-facing. */
   note: string | null;
 }
@@ -124,6 +127,29 @@ export function useReceiptDropQueue(tourId: string, tourCurrency: string) {
       patch(item.key, { status: 'reading' });
       const outcome = await scan.ocr(file, receiptId);
       if (!outcome.data) {
+        /* RQ-5 — the scan failed, but the FILENAME may already carry what it was
+           looking for: Adam names files "date | vendor | description | $amount".
+           Retyping what he already typed is a worse outcome than a labelled
+           guess. Everything filled here is marked as coming from the filename,
+           and the note says so — a guess must never look like a reading. */
+        const fromName = parseReceiptFilename(file.name);
+        if (fromName.fields.length > 0) {
+          patch(item.key, {
+            status: 'needs_manual',
+            fromFilename: true,
+            ocr: {
+              vendor: fromName.vendor,
+              date: fromName.date,
+              total_amount: fromName.amount,
+              currency: null,
+              category: null,
+              description: fromName.description,
+              payment_method: null,
+            },
+            note: filenameNote(fromName),
+          });
+          return;
+        }
         patch(item.key, {
           status: 'needs_manual',
           note: outcome.error ?? 'Couldn’t read this one — fill the details manually.',

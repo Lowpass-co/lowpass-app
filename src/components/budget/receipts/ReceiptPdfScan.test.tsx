@@ -216,6 +216,45 @@ describe('RCP-08 — a PDF the server can’t read is still saved', () => {
   });
 });
 
+describe('RQ-5 — the filename fallback, clearly labelled', () => {
+  /* Adam names files "date | vendor | description | $amount" before they ever
+     reach the app. When the scan comes back empty, showing him a blank form asks
+     him to retype what he already typed. */
+  it('fills from the filename when the scan reads nothing', async () => {
+    ocrOutcome = { data: null, documents: [], error: 'Could not read this PDF — enter the details manually.' };
+
+    render(<ReceiptDropPanel tourId="t1" tourCurrency="GBP" />);
+    drop([fileOfType('26:07:2026 | BNA Airport Parking | Nashville parking | $72.00.pdf', 'application/pdf')]);
+
+    await waitFor(() => expect(screen.getByText(/from the filename/)).toBeTruthy());
+    // And it says which fields it guessed, and asks for confirmation.
+    expect(screen.getByText(/vendor, date, amount/)).toBeTruthy();
+    expect(screen.getByText(/confirm/i)).toBeTruthy();
+  });
+
+  it('a filename-filled receipt stays NEEDS DETAILS — a guess is not a reading', async () => {
+    ocrOutcome = { data: null, documents: [], error: 'Could not read this PDF.' };
+
+    render(<ReceiptDropPanel tourId="t1" tourCurrency="GBP" />);
+    drop([fileOfType('26:07:2026 | BNA Airport Parking | x | $72.00.pdf', 'application/pdf')]);
+
+    await waitFor(() => expect(screen.getByText('Needs details')).toBeTruthy());
+    // NOT "Read" — it must not present as scanned, and must not flow into a
+    // proposal until a human has confirmed it.
+    expect(screen.queryByText('Read')).toBeNull();
+  });
+
+  it('an uninformative filename falls back to the plain error', async () => {
+    ocrOutcome = { data: null, documents: [], error: 'Could not read this PDF — enter the details manually.' };
+
+    render(<ReceiptDropPanel tourId="t1" tourCurrency="GBP" />);
+    drop([fileOfType('IMG_4821.pdf', 'application/pdf')]);
+
+    await waitFor(() => expect(screen.getByText(/Could not read this PDF/)).toBeTruthy());
+    expect(screen.queryByText(/from the filename/)).toBeNull();
+  });
+});
+
 describe('RCP-09 — unscannable types never reach the scanner', () => {
   /* CHANGED IN RQ-2. This used to assert a CSV was SAVED and flagged. It is now
      refused at the door instead, because save-first exists to stop a RECEIPT

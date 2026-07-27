@@ -2050,3 +2050,35 @@ src/lib/budget/actualsProvenance.harness.ts` → "18 checks passed, 0 failed".
 - **RCP-16c — the section is on the card and editable.** New-line proposals show
   the Section field; typing over it sends the edited name. Link proposals don't
   show it — they inherit the target line's section. **Test-pinned.**
+
+## RQ-5 — image-only PDFs (the common case) + the filename fallback
+
+> Adam dropped two real receipts and both were rejected. Cowork analysed the
+> files: **1 page · /Image TRUE · /Font FALSE · ~500–600 KB · producer "iOS
+> Version 26.6"** — iPhone photos of receipts saved as PDF, with no text layer.
+> That is how most road receipts arrive, and it is the exact class every fixture
+> in this suite had missed, because every fixture was a generated TEXT pdf.
+> **No migration.**
+
+- **RCP-15 — an image-only PDF is not refused.** The PDF guard is exercised
+  against a generated fixture with that precise shape (image XObject, no font
+  resources, ~615 KB, deterministic). `pdf-parse` reads its page count as 1 and
+  the guard passes. **Test-pinned.** Whether Claude *reads* the photo is the
+  API's job — **Needs-live**, and the thing to walk with a real iPhone receipt.
+- **RCP-15b — an unparseable PDF PASSES the guard.** A file whose structure we
+  can't read returns an unknown page count, and unknown must never mean reject:
+  refusing what we can't parse would refuse exactly the image-only receipts the
+  feature exists to read. Garbage bytes and an empty buffer both survive without
+  throwing. **Test-pinned.**
+- **RCP-15c — the filename fallback, clearly labelled.** Adam names files
+  `26:07:2026 | BNA Airport Parking | Nashville parking | $72.00.pdf`. When the
+  scan reads nothing, those fields pre-fill and the row says *"Couldn't read the
+  file — filled vendor, date, amount from the filename. Please confirm."* The
+  row stays **Needs details**, never "Read", and does not flow into a proposal
+  until a human confirms — a guess must never look like a reading. An
+  uninformative name (`IMG_4821.pdf`) falls back to the plain error and claims
+  no vendor. **Test-pinned.**
+- Dates are **day-first** when ambiguous (`05/06/2026` = 5 June): Adam writes
+  day-first, and guessing US order would silently swap day and month for the
+  first twelve days of every month. Amounts need a currency symbol or two
+  decimal places, so "Jul24-26" is never read as money.
