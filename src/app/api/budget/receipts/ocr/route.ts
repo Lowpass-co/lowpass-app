@@ -29,7 +29,7 @@
 
 import { NextResponse } from 'next/server';
 import { APIError } from '@anthropic-ai/sdk';
-import { normaliseDocuments } from '@/lib/budget/receiptDocuments';
+import { normaliseDocuments, receiptFieldsFromDocument } from '@/lib/budget/receiptDocuments';
 /* RQ-5 — the PDF guard lives in its own module so it can be tested against a
    real image-only fixture. It used to be inline here, where nothing could reach
    it without a session and an API key. */
@@ -281,6 +281,20 @@ Rules that matter:
         .update({
           raw_ocr_json: first,
           extracted_text: buildExtractedText(first),
+          /* RQ-5 FOLLOW-UP — the extracted FIELDS, not just the raw blob. This
+             update wrote raw_ocr_json + the page range and nothing else, so the
+             Receipts bank — which reads vendor/date/cost_tour_currency — showed
+             "Missing vendor, date, amount" on every receipt whether the scan had
+             worked or not. An image-only PDF looked like a PDF bug when the
+             answer was simply written where nothing displays.
+
+             Only non-null values are written (see receiptFieldsFromDocument), so
+             a re-scan that reads less than a human already typed cannot erase it.
+
+             NOT a money write: cost_tour_currency lives on expense_receipts and
+             carries nothing into the ledger. actual_cost still moves only when a
+             transaction is written — RQ-4 made that structural. */
+          ...receiptFieldsFromDocument(first),
           /* Page columns only when there IS a range — writing them as null would
              fail the whole UPDATE (taking raw_ocr_json and the ⌘K searchable
              text with it) on a database where migration 252 is not applied. */

@@ -61,6 +61,28 @@ describe('the receipts CRUD route never writes actual_cost', () => {
   });
 });
 
+describe('the scan writes its result where the bank can see it (RQ-5 follow-up)', () => {
+  /* The reported bug was "image-only PDFs return nulls". A live check proved the
+     document block reads them fine. The real fault: the OCR route persisted
+     raw_ocr_json and the page range and nothing else, while the Receipts bank
+     reads vendor / date / cost_tour_currency — so a perfect scan was displayed
+     as "Missing vendor, date, amount", identical to a failure.
+
+     Structural, like the money guard above and for the same reason: the route is
+     all queries, so the behavioural version needs a live Supabase. This is the
+     check that would have caught it. */
+  const src = code(join(process.cwd(), 'src/app/api/budget/receipts/ocr/route.ts'));
+
+  it('spreads the extracted fields into the receipt UPDATE', () => {
+    expect(src).toContain('receiptFieldsFromDocument(first)');
+  });
+
+  it('still persists the raw extraction for ⌘K search', () => {
+    expect(src).toContain('raw_ocr_json');
+    expect(src).toContain('extracted_text');
+  });
+});
+
 describe('the apply route is the money writer, and only via transactions', () => {
   const src = code(APPLY);
 

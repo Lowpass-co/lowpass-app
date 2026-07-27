@@ -33,8 +33,23 @@ import { parseReceiptFilename, filenameNote } from '@/lib/budget/receiptFilename
 
 /** Max files OCR'd per drop. Extras are saved and flagged for manual entry. */
 export const BATCH_OCR_CAP = 20;
-/** How many scans run at once — the route is metered; don't stampede it. */
-export const OCR_CONCURRENCY = 3;
+/* RQ-5 FOLLOW-UP — scans run ONE AT A TIME, and a 429 is retried.
+
+   This was 3-at-once, which fought the route's own limiter: the OCR endpoint
+   allows one call per user per 3s (RATE_LIMIT_MS), so firing three in parallel
+   meant two came straight back 429 "Slow down — try again in 2s" and their
+   receipts landed in needs_manual for no reason but our own pacing.
+
+   Deliberately NOT a fixed 3.3s gap between every file: a scan already takes a
+   second or two, so a blanket wait would add a minute to a 20-file drop to solve
+   a problem that mostly isn't there. Concurrency 1 stops the stampede; the retry
+   handles the cases where sequential still isn't slow enough. The SERVER stays
+   the authority on pace — the client just stops arguing with it. */
+export const OCR_CONCURRENCY = 1;
+/** How long to back off after a 429 — wider than the route's 3s window. */
+export const OCR_BACKOFF_MS = 3_300;
+/** A 429 is transient; retry a bounded number of times before giving up. */
+export const OCR_RETRIES = 2;
 /* RQ-2 — the single upload size limit. Two receipt surfaces used to disagree:
    the modal inbox enforced 10 MB, this queue enforced nothing, so the same file
    was accepted by one and refused by the other. The inbox is retired and its
@@ -72,6 +87,13 @@ export interface DropItem {
 
 let keySeq = 0;
 const nextKey = () => `drop-${++keySeq}`;
+
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+/** True when the scan came back refused for pace rather than for content. */
+function isRateLimited(error: string | null): boolean {
+  return !!error && /slow down|rate limit|try again in/i.test(error);
+}
 
 export function useReceiptDropQueue(tourId: string, tourCurrency: string) {
   const scan = useReceiptScan(tourId, tourCurrency);
@@ -125,7 +147,15 @@ export function useReceiptDropQueue(tourId: string, tourCurrency: string) {
       }
 
       patch(item.key, { status: 'reading' });
-      const outcome = await scan.ocr(file, receiptId);
+      /* Retry a rate-limit refusal rather than burning the receipt on it. The
+         message the route sends is user-facing ("Slow down — try again in Ns"),
+         so match on the status word rather than parsing it. */
+      let outcome = await scan.ocr(file, receiptId);
+      for (let attempt = 0; attempt < OCR_RETRIES && !outcome.data && isRateLimited(outcome.error); attempt++) {
+        patch(item.key, { note: 'Waiting for the scanner…' });
+        await sleep(OCR_BACKOFF_MS);
+        outcome = await scan.ocr(file, receiptId);
+      }
       if (!outcome.data) {
         /* RQ-5 — the scan failed, but the FILENAME may already carry what it was
            looking for: Adam names files "date | vendor | description | $amount".

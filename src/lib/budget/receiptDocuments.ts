@@ -142,3 +142,81 @@ export function pageRangeLabel(pages: number[] | null | undefined): string {
   const last = pages[pages.length - 1];
   return first === last ? `p. ${first}` : `pp. ${first}–${last}`;
 }
+
+/* ============================================
+   RQ-5 FOLLOW-UP — the extraction has to reach the RECEIPT ROW.
+
+   The scan worked and nobody could see it. The OCR route persisted
+   raw_ocr_json, extracted_text and the page range — but never vendor, date or
+   cost_tour_currency, which are the columns the Receipts bank reads. So EVERY
+   receipt read "Missing vendor, date, amount" whether the scan succeeded or
+   failed, and an image-only PDF looked like a PDF bug when the real fault was
+   that the answer was written somewhere nothing displays.
+   ============================================ */
+
+/**
+ * Normalise a model-supplied date to ISO, or null.
+ *
+ * The prompt asks for YYYY-MM-DD and the model usually complies, so this only
+ * has to rescue the cases where it doesn't. AMBIGUOUS dates return NULL rather
+ * than a guess: "05/06/2026" is 5 June to a British receipt and 6 May to an
+ * American one, and there is nothing in a scanned total to tell them apart. A
+ * missing date asks the user one question; a wrong one is never noticed.
+ */
+export function normaliseOcrDate(raw: string | null | undefined): string | null {
+  const s = (raw ?? '').trim();
+  if (!s) return null;
+
+  const iso = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  if (iso) return validDate(+iso[1], +iso[2], +iso[3]);
+
+  const parts = /^(\d{1,2})[/.\-](\d{1,2})[/.\-](\d{2,4})$/.exec(s);
+  if (parts) {
+    const a = Number(parts[1]);
+    const b = Number(parts[2]);
+    let year = Number(parts[3]);
+    if (year < 100) year += 2000;
+    // Exactly one of the two can be a month → unambiguous, whichever order.
+    if (a > 12 && b <= 12) return validDate(year, b, a); // d/m/y
+    if (b > 12 && a <= 12) return validDate(year, a, b); // m/d/y
+    return null; // both ≤ 12: genuinely ambiguous, so don't pretend
+  }
+  return null;
+}
+
+function validDate(y: number, m: number, d: number): string | null {
+  if (m < 1 || m > 12 || d < 1 || d > 31) return null;
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  if (dt.getUTCMonth() !== m - 1 || dt.getUTCDate() !== d) return null;
+  return dt.toISOString().slice(0, 10);
+}
+
+/** The columns a scan writes onto expense_receipts. */
+export interface ReceiptFieldUpdate {
+  vendor?: string;
+  date?: string;
+  cost_tour_currency?: number;
+  category?: string;
+  description?: string;
+}
+
+/**
+ * What an extracted document should write onto its receipt row.
+ *
+ * ONLY NON-NULL VALUES. A key it cannot fill is omitted, never set to null —
+ * a re-scan that reads less than the first pass (or than a human typed into the
+ * bank afterwards) must not erase what is already there. "Re-scan" is offered as
+ * a repair, and a repair that deletes your corrections isn't one.
+ */
+export function receiptFieldsFromDocument(doc: ReceiptDocument): ReceiptFieldUpdate {
+  const out: ReceiptFieldUpdate = {};
+  if (doc.vendor) out.vendor = doc.vendor;
+  const date = normaliseOcrDate(doc.date);
+  if (date) out.date = date;
+  if (doc.total_amount != null && Number.isFinite(doc.total_amount)) {
+    out.cost_tour_currency = doc.total_amount;
+  }
+  if (doc.category) out.category = doc.category;
+  if (doc.description) out.description = doc.description;
+  return out;
+}

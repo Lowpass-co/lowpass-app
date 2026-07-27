@@ -130,3 +130,71 @@ describe('pageRangeLabel', () => {
     expect(pageRangeLabel([])).toBe('');
   });
 });
+
+/* ============================================
+   RQ-5 FOLLOW-UP — the extraction must reach the columns the bank reads.
+
+   The reported symptom was "image-only PDFs return nulls". They don't: a live
+   check confirmed the document block reads an image-only PDF exactly as well as
+   the same content as a JPEG. What actually happened is that the OCR route wrote
+   raw_ocr_json and the page range and NOTHING ELSE, while the Receipts bank
+   reads vendor / date / cost_tour_currency — so a perfect scan displayed as
+   "Missing vendor, date, amount", indistinguishable from a failed one.
+   ============================================ */
+
+import { receiptFieldsFromDocument, normaliseOcrDate } from './receiptDocuments';
+
+const doc = (over: Partial<import('./receiptDocuments').ReceiptDocument> = {}) => ({
+  pages: [1], vendor: 'ROCKET 6546', date: '2026-07-26', total_amount: 22.57,
+  currency: 'USD', category: 'Fuel', description: null, payment_method: null,
+  line_items: null, ...over,
+});
+
+describe('what a scan writes onto the receipt row', () => {
+  it('writes the fields the bank actually reads', () => {
+    const u = receiptFieldsFromDocument(doc());
+    expect(u.vendor).toBe('ROCKET 6546');
+    expect(u.date).toBe('2026-07-26');
+    expect(u.cost_tour_currency).toBe(22.57);
+    expect(u.category).toBe('Fuel');
+  });
+
+  it('OMITS keys it cannot fill — a re-scan must not erase a human’s correction', () => {
+    const u = receiptFieldsFromDocument(doc({ vendor: null, date: null, total_amount: null }));
+    expect('vendor' in u).toBe(false);
+    expect('date' in u).toBe(false);
+    expect('cost_tour_currency' in u).toBe(false);
+  });
+
+  it('a genuine zero is still written', () => {
+    expect(receiptFieldsFromDocument(doc({ total_amount: 0 })).cost_tour_currency).toBe(0);
+  });
+});
+
+describe('OCR dates — unambiguous or nothing', () => {
+  it('passes ISO through', () => {
+    expect(normaliseOcrDate('2026-07-26')).toBe('2026-07-26');
+  });
+
+  it('resolves an unambiguous US date off a real receipt', () => {
+    // "07/26/2026" — 26 can't be a month, so the order is knowable.
+    expect(normaliseOcrDate('07/26/2026')).toBe('2026-07-26');
+  });
+
+  it('resolves an unambiguous day-first date too', () => {
+    expect(normaliseOcrDate('26/07/2026')).toBe('2026-07-26');
+  });
+
+  it('AMBIGUOUS returns null rather than guessing', () => {
+    /* 05/06/2026 is 5 June on a British receipt and 6 May on an American one,
+       and a scanned total says nothing about which. A missing date asks one
+       question; a wrong date is never noticed. */
+    expect(normaliseOcrDate('05/06/2026')).toBeNull();
+  });
+
+  it('rejects impossible dates instead of rolling over', () => {
+    expect(normaliseOcrDate('2026-02-31')).toBeNull();
+    expect(normaliseOcrDate('')).toBeNull();
+    expect(normaliseOcrDate(null)).toBeNull();
+  });
+});

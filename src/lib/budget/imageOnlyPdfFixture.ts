@@ -24,6 +24,44 @@
 
 import { deflateSync } from 'node:zlib';
 
+/* A GENUINE baseline JPEG (94x120), inline as base64.
+
+   The first version of this fixture used raw RGB under FlateDecode. That is
+   image-only, but it is NOT what a phone produces — Adam's files carry a
+   DCTDecode JPEG. "Our synthetic fixture passes" was precisely why the real
+   class went unreproduced, so the fixture now embeds real JPEG bytes and
+   declares /DCTDecode, matching the profile Cowork measured instead of
+   approximating it.
+
+   Small on purpose: the JPEG only has to be REAL, not big. The file's bulk
+   comes from the incompressible padding stream, which is what makes it
+   phone-sized. */
+const REAL_JPEG_B64 =
+  '/9j/4AAQSkZJRgABAQAASABIAAD/4QBMRXhpZgAATU0AKgAAAAgAAYdpAAQAAAABAAAAGgAAAAAAA6ABAAMAAAABAAEAAKAC' +
+  'AAQAAAABAAAAXqADAAQAAAABAAAAeAAAAAD/wAARCAB4AF4DASIAAhEBAxEB/8QAHwAAAQUBAQEBAQEAAAAAAAAAAAECAwQF' +
+  'BgcICQoL/8QAtRAAAgEDAwIEAwUFBAQAAAF9AQIDAAQRBRIhMUEGE1FhByJxFDKBkaEII0KxwRVS0fAkM2JyggkKFhcYGRol' +
+  'JicoKSo0NTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqDhIWGh4iJipKTlJWWl5iZmqKjpKWmp6ipqrKz' +
+  'tLW2t7i5usLDxMXGx8jJytLT1NXW19jZ2uHi4+Tl5ufo6erx8vP09fb3+Pn6/8QAHwEAAwEBAQEBAQEBAQAAAAAAAAECAwQF' +
+  'BgcICQoL/8QAtREAAgECBAQDBAcFBAQAAQJ3AAECAxEEBSExBhJBUQdhcRMiMoEIFEKRobHBCSMzUvAVYnLRChYkNOEl8RcY' +
+  'GRomJygpKjU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6goOEhYaHiImKkpOUlZaXmJmaoqOkpaanqKmq' +
+  'srO0tba3uLm6wsPExcbHyMnK0tPU1dbX2Nna4uPk5ebn6Onq8vP09fb3+Pn6/9sAQwAJCQkJCQkQCQkQFhAQEBYeFhYWFh4m' +
+  'Hh4eHh4mLiYmJiYmJi4uLi4uLi4uNzc3Nzc3QEBAQEBISEhISEhISEhI/9sAQwELDAwSERIfEREfSzMqM0tLS0tLS0tLS0tL' +
+  'S0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tL/90ABAAG/9oADAMBAAIRAxEAPwD25pEQgOwGemT6U3z4' +
+  'P769Aeo6HpWTrGk2GptEbyQoY9wTBA+9gHr1rKPhnSDGP9Ibap4OU4LLtPbuOg6DtigDq0mhkyI3VscnBBoWaFvuup+hHesm' +
+  '107TreCVI5ARJGEdgRnaoIzkfWs1PDGl7Vh8+Q/dwAwBOzoeBz1/CgDq1ZXG5SCD3FOqnYWcen2kdnEzMsYwC3Jq5QAUUUUA' +
+  'FFFFABRRRQB//9D1zVJrKNUS9jaQNkgAZ6Y9xWbDPogTyI7dgkjAkFTjPTJye36V09JQBifZ9JtpPISH/XgKSOQQ34+1V47r' +
+  'SIZiY4nDw5AOCemenPPeujpaAIYJ0uIhMgIB9Rg8cVNRRQAUUUUAFFFFABRRRQB//9H2a5tTcOjCR0CZyFOAc+v0qD7BL5hk' +
+  '+0ScjBHbt/hUl7ffYgp8qSXd/wA8xnGPWqz6uFOBBM3uF9gf6/pQA6HTZYpFc3MrbWzgng+30q3c27XChVkaPGeV68ii1uft' +
+  'UZk2MmDjDCmS3oid0McjFACNq53ZzwKACO1dJ/OaVmH909Ku1nf2gPKaXynwpAxjnn2qzbXAuYhIFZP9lhgigCxRRRQAUUUU' +
+  'AFFFFAH/0vZbsXxK/Y2QY+9vBOenTH41XX+1s/N5fT9eP/r1dmube3KrPIqFvuhiBnHpmkhu7W4JEEqSEddrA9PpQBFaG/yw' +
+  'vAn+zsJ/XNOuvtmF+ybe+7d9OP1pn9p6dnH2iLOcY3jrnHr68VZinhnG6F1ceqkH+VAFJ/7UL/u/LC5HXP41pVVe9s4mKyTI' +
+  'pHUFhxjmh72ziIEkyKSARlh0PQ/jQBaooooAKKKKACiiigD/0/ZLvT7S+x9pTcVBUHJBG7GcY6HjrUFno9jYSCS1VkIzxuJH' +
+  'zYzwT7VNeXF1Bt+zQGctnOGC4/Omx3V20Jke2YMCAFBGTnqecdKAIzo+nmUz7DvPfcf72/19aksdMs9OBWzUopx8u4kcexNN' +
+  '+23eP+POT/vpP/iqPtl3/wA+kn/fSe/+1QBFJolhLLJMwcNKSWw7AZIx0B9KnbS7N5BK6klRgZJ6DtUUl9equUs3J9Cy/wBM' +
+  '1ctZZ5og88flMf4c5oAs0UUUAFFFFABRRRQB/9T2W6hu5Sv2abygPvfKCT9M1TFpqyn/AI+ww90FXbq8hswGmyAe4GcflVa2' +
+  '1ixvHaOBmLKpYjaRwPrQASW+ptbLGlwqyg8vtzkfTtSC21QZ3XAb/gIHrU9tqFtduY4SdwGSCCOKvUAJS0UUAFFFFABRRRQA' +
+  'UUUUAf/V9wowKWigBMCloooAKKKKACiiigAooooAKKKKAP/W9xooooAKKKKACiiigAooooAKKKKACiiigD//2Q==';
+
 export interface ImageOnlyPdfOptions {
   /** Image pixel width. Default lands ~600 KB, the size of Adam's real files. */
   width?: number;
@@ -55,10 +93,15 @@ export function buildImageOnlyPdf(opts: ImageOnlyPdfOptions = {}): Buffer {
   const height = opts.height ?? 500;
   const pages = Math.max(1, opts.pages ?? 1);
 
-  // RGB pixel data. Seeded noise over a light background, so it reads as a
-  // photograph to a compressor rather than as a solid fill.
-  const raw = noise(0xc0ffee, width * height * 3);
-  const image = deflateSync(raw, { level: 6 });
+  /* The page image is a REAL JPEG (DCTDecode), like a phone's. Its own pixel
+     dimensions are small; the PDF scales it to the page box, exactly what an
+     iOS "Save as PDF" does with a photo. */
+  const image = Buffer.from(REAL_JPEG_B64, 'base64');
+  /* Padding to phone-photo size. A 1.7 KB fixture would not exercise anything
+     about real uploads, and Adam's were ~500-600 KB. Incompressible by design
+     (seeded noise), parked in an unreferenced stream so it changes the FILE
+     without changing what renders. */
+  const padding = deflateSync(noise(0xc0ffee, width * height * 3), { level: 6 });
 
   const objects: string[] = [];
   const binary: Array<Buffer | null> = [];
@@ -75,9 +118,12 @@ export function buildImageOnlyPdf(opts: ImageOnlyPdfOptions = {}): Buffer {
 
   const imgNum = push(
     `<< /Type /XObject /Subtype /Image /Width ${width} /Height ${height} ` +
-      `/ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode /Length ${image.length} >>`,
+      `/ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${image.length} >>`,
     image,
   );
+
+  // Unreferenced ballast — see `padding` above.
+  push(`<< /Length ${padding.length} >>`, padding);
 
   const kids: number[] = [];
   for (let i = 0; i < pages; i++) {
@@ -128,6 +174,8 @@ export function describePdf(buf: Buffer): {
   hasFont: boolean;
   encrypted: boolean;
   declaredPageCount: number | null;
+  /** The image filter — /DCTDecode is what a phone camera roll produces. */
+  imageFilter: string | null;
 } {
   const head = buf.toString('latin1');
   const count = /\/Count\s+(\d+)/.exec(head);
@@ -137,5 +185,6 @@ export function describePdf(buf: Buffer): {
     hasFont: /\/Type\s*\/Font|\/BaseFont/.test(head),
     encrypted: head.includes('/Encrypt'),
     declaredPageCount: count ? Number(count[1]) : null,
+    imageFilter: head.includes('/DCTDecode') ? 'DCTDecode' : head.includes('/FlateDecode') ? 'FlateDecode' : null,
   };
 }

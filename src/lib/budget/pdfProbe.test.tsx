@@ -31,6 +31,13 @@ describe('the fixture really is the class that failed', () => {
     expect(facts.hasFont).toBe(false);
   });
 
+  it('carries a GENUINE DCTDecode JPEG, like a phone does', () => {
+    /* The first version of this fixture used FlateDecode raw RGB — image-only,
+       but not what iOS produces, and "the synthetic fixture passes" is exactly
+       why the real class went unreproduced. Adam's files are DCTDecode. */
+    expect(facts.imageFilter).toBe('DCTDecode');
+  });
+
   it('is one page, unencrypted — matching the real files', () => {
     expect(facts.declaredPageCount).toBe(1);
     expect(facts.encrypted).toBe(false);
