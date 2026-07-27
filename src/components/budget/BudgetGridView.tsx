@@ -13,6 +13,7 @@
    src/lib/budget/fx.ts; formula sections live on the Summary tab (excluded).
    ============================================ */
 
+import { isScannableFile } from '@/lib/budget/mediaType';
 import { useCallback, useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Grid } from '@/components/grid/Grid';
@@ -40,7 +41,9 @@ const CUR_SYMBOL: Record<string, string> = { GBP: '£', USD: '$', EUR: '€', CA
 const CURRENCIES = ['GBP', 'USD', 'EUR', 'CAD', 'AUD', 'JPY'];
 
 // Receipts B1.5 — drop-onto-grid guard (mirrors the upload route's ALLOWED + 10MB).
-const RECEIPT_ALLOWED_TYPES = ['application/pdf', 'image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+/* RQ-5 FINAL — the same guard the drop zone uses, for the same reason: a browser
+   reports an empty or generic type routinely, and refusing on `file.type` alone
+   silently turned away real receipts. Resolved from the filename too. */
 const RECEIPT_MAX_SIZE = 10 * 1024 * 1024;
 
 /** BUD-01 — receipt chip label: the receipt's own number, plus the vendor when
@@ -157,7 +160,7 @@ export function BudgetGridView({
   // file already in the pipeline. Guard mirrors AddReceiptPanel's upload limits.
   const handleFileDropToRow = useCallback(
     (lineId: string, file: File) => {
-      if (!RECEIPT_ALLOWED_TYPES.includes(file.type)) {
+      if (!isScannableFile(file.name, file.type)) {
         showToast('Drop a receipt image (JPG/PNG/WebP) or PDF.', 'error');
         return;
       }

@@ -216,6 +216,50 @@ describe('RCP-08 — a PDF the server can’t read is still saved', () => {
   });
 });
 
+describe('RQ-5 FINAL — the UPLOAD path must scan what Re-scan can', () => {
+  /* THE BUG, stated as a test. Both of Adam's files were dropped through the
+     real zone and both landed "Missing vendor, date, amount". Re-scanning one
+     fixed it instantly — same file, same route, same receipt.
+
+     The difference is the gate: Re-scan calls ocr() on a File rebuilt from the
+     STORED blob (whose type Supabase reports), while the upload path gates on
+     `file.type` as the browser reported it at drag time. A browser that hands
+     over an empty or generic type — which is routine for files dragged from
+     Finder, and for anything with an unusual name — silently skips the scan.
+
+     "Silently" is the real fault: the receipt saves, no scan is attempted, and
+     nothing distinguishes that from a scan that ran and read nothing. */
+
+  it('a PDF whose browser type is EMPTY is still scanned', async () => {
+    render(<ReceiptDropPanel tourId="t1" tourCurrency="GBP" />);
+    drop([fileOfType('26:07:2026 | BNA Airport Parking | $72.00.pdf', '')]);
+
+    await waitFor(() => expect(calls).toContain('ocr'));
+  });
+
+  it('a PDF typed application/octet-stream is still scanned', async () => {
+    render(<ReceiptDropPanel tourId="t1" tourCurrency="GBP" />);
+    drop([fileOfType('folio.pdf', 'application/octet-stream')]);
+
+    await waitFor(() => expect(calls).toContain('ocr'));
+  });
+
+  it('an image whose type the browser omitted is still scanned', async () => {
+    render(<ReceiptDropPanel tourId="t1" tourCurrency="GBP" />);
+    drop([fileOfType('IMG_4821.JPG', '')]);
+
+    await waitFor(() => expect(calls).toContain('ocr'));
+  });
+
+  it('and it still refuses a file that genuinely is not a receipt', async () => {
+    render(<ReceiptDropPanel tourId="t1" tourCurrency="GBP" />);
+    drop([fileOfType('ledger.csv', '')]);
+
+    await waitFor(() => expect(screen.getByText(/Not a receipt file/)).toBeTruthy());
+    expect(calls).not.toContain('ocr');
+  });
+});
+
 describe('RQ-5 — the filename fallback, clearly labelled', () => {
   /* Adam names files "date | vendor | description | $amount" before they ever
      reach the app. When the scan comes back empty, showing him a blank form asks

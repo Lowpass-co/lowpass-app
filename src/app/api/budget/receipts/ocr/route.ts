@@ -34,6 +34,7 @@ import { normaliseDocuments, receiptFieldsFromDocument } from '@/lib/budget/rece
    real image-only fixture. It used to be inline here, where nothing could reach
    it without a session and an API key. */
 import { isPdfUpload, pdfPageCount, pdfGate } from '@/lib/budget/pdfProbe';
+import { effectiveMediaType } from '@/lib/budget/mediaType';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { withAiUsage, aiCapExceededResponse } from '@/lib/ai/usage';
 import {
@@ -145,7 +146,20 @@ export async function POST(request: Request) {
   }
 
   const tourCurrency = (formData.get('currency') as string) || 'GBP';
-  const mediaType = file.type as string;
+
+  /* RQ-5 FINAL — do NOT trust `file.type`.
+
+     A browser reports an empty or generic type routinely (files dragged from
+     Finder, odd filenames, share sheets) and FormData carries that straight
+     through. Refusing on it meant Adam's two receipts were never scanned at all
+     — saved, blank, and only rescued by a Re-scan button nobody would press.
+
+     Resolved from the filename AND the reported type, by the same function the
+     client uses. `media_type` is accepted as a hint but re-derived here, so a
+     caller that gets it wrong (or omits it) still behaves. */
+  const hinted = (formData.get('media_type') as string | null) ?? null;
+  const mediaType =
+    effectiveMediaType(file.name, file.type) ?? effectiveMediaType(file.name, hinted) ?? '';
 
   /* RC-5 — a PDF goes to Claude WHOLE as a `document` block; an image goes as an
      `image` block exactly as before. No rasterising, no page dropped.

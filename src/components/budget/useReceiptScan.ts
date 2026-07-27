@@ -28,19 +28,32 @@
    ============================================ */
 
 import { useMemo } from 'react';
+import {
+  effectiveMediaType,
+  isScannableFile,
+  IMAGE_TYPES,
+  PDF_TYPE,
+} from '@/lib/budget/mediaType';
 import type { ReceiptDocument } from '@/lib/budget/receiptDocuments';
 
 export type { ReceiptDocument };
 
-export const OCR_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
-export const OCR_PDF_TYPE = 'application/pdf';
-export const isOcrableImage = (file: File): boolean => OCR_IMAGE_TYPES.includes(file.type);
+export const OCR_IMAGE_TYPES = IMAGE_TYPES as readonly string[];
+export const OCR_PDF_TYPE = PDF_TYPE;
+/** True when the file IS an image (not merely scannable) — thumbnails, previews. */
+export const isOcrableImage = (file: File): boolean =>
+  (effectiveMediaType(file.name, file.type) ?? '').startsWith('image/');
+
 /**
- * What we'll send to the scanner. Images go straight to Vision; PDFs are
- * rasterized server-side first (RC-4). Anything else is store-and-flag.
+ * What we'll send to the scanner. Images go to Vision; PDFs go whole as a
+ * document block (RC-5).
+ *
+ * RQ-5 FINAL — decided by name AND reported type, not by `file.type` alone.
+ * Trusting the browser's type is what silently skipped the scan on Adam's two
+ * receipts: an empty or generic type made this false, no scan was attempted, and
+ * the receipt looked unreadable when nothing had tried to read it.
  */
-export const isScannable = (file: File): boolean =>
-  isOcrableImage(file) || file.type === OCR_PDF_TYPE;
+export const isScannable = (file: File): boolean => isScannableFile(file.name, file.type);
 
 /** The OCR route's JSON shape (Claude Vision). All fields may be null. */
 export interface ReceiptOcr {
@@ -128,6 +141,13 @@ export function useReceiptScan(tourId: string, tourCurrency: string): UseReceipt
           const fd = new FormData();
           fd.set('file', file);
           fd.set('tour_id', tourId);
+          /* Tell the route what this file actually is. The browser's own type can
+             be empty or generic, and FormData carries that straight through — so
+             without this the route would refuse the very files the client just
+             agreed to scan. The route re-derives it anyway; this is a hint, not
+             a trust boundary. */
+          const resolved = effectiveMediaType(file.name, file.type);
+          if (resolved) fd.set('media_type', resolved);
           fd.set('currency', native);
           // B2 — when supplied, the route persists the extraction onto this receipt.
           if (receiptId) fd.set('receipt_id', receiptId);

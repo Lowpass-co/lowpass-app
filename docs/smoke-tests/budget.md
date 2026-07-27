@@ -2060,6 +2060,23 @@ src/lib/budget/actualsProvenance.harness.ts` → "18 checks passed, 0 failed".
 > in this suite had missed, because every fixture was a generated TEXT pdf.
 > **No migration.**
 
+- **RCP-28 — a dropped receipt is SCANNED, whatever the browser calls it.** Drop
+  a PDF whose `type` the browser reports as empty or `application/octet-stream`
+  (routine for files dragged from Finder, and for Adam's `26:07:2026 | … |
+  $72.00.pdf`) → the scan runs and the fields persist. **This was the bug**: the
+  upload path gated on `file.type` while Re-scan gated on nothing, so the same
+  file was skipped on drop and read on retry. Every receipt dropped normally
+  looked unreadable, rescued only by a button nobody would press.
+  **Test-pinned** — the test drives the UPLOAD path end-to-end and fails against
+  the old gate.
+- **RCP-28b — the same rule everywhere a receipt enters.** Drag onto a budget row
+  (`BudgetGridView`) and the Add-Receipt panel resolve type identically; the OCR
+  route re-derives it server-side rather than trusting the client's
+  `media_type` hint. One rule, `src/lib/budget/mediaType.ts`. **Test-pinned.**
+- **RCP-28c — it still refuses what isn't a receipt.** `.csv`, `.zip`, and
+  `invoice.pdf.zip` (reported `application/zip`) are all refused — a reported
+  type we don't support is a real answer, not noise, so the extension does not
+  override it. **Test-pinned.**
 - **RCP-15 — an image-only PDF is not refused.** The PDF guard is exercised
   against a generated fixture with that precise shape (image XObject, no font
   resources, ~615 KB, deterministic). `pdf-parse` reads its page count as 1 and

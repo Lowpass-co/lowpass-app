@@ -17,6 +17,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FileText, Loader2, Upload, X } from 'lucide-react';
+import { effectiveMediaType } from '@/lib/budget/mediaType';
 import {
   useReceiptScan,
   isScannable,
@@ -82,7 +83,8 @@ export function AddReceiptPanel({
       setError(null);
       setScanNote(null);
       setPhase('scanning');
-      setIsPdf(file.type === 'application/pdf');
+      // RQ-5 FINAL — by name too; the browser's type is often empty or generic.
+      setIsPdf(effectiveMediaType(file.name, file.type) === 'application/pdf');
       try {
         // OCR (image only) in parallel with creating the draft row.
         const [ocrOutcome, draft] = await Promise.all([
