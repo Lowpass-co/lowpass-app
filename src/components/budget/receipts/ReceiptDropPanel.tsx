@@ -19,9 +19,15 @@
 
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { Upload, FileWarning, Check, Loader2, ScanLine } from 'lucide-react';
 import { useReceiptDropQueue, BATCH_OCR_CAP, type DropItem } from './useReceiptDropQueue';
+import {
+  ReceiptProposalQueue,
+  type QueueLineOption,
+  type QueueProposal,
+} from './ReceiptProposalQueue';
 
 const STATUS_LABEL: Record<DropItem['status'], string> = {
   queued: 'Queued',
@@ -45,13 +51,57 @@ function StatusIcon({ status }: { status: DropItem['status'] }) {
 export function ReceiptDropPanel({
   tourId,
   tourCurrency,
+  lineItems = [],
 }: {
   tourId: string;
   tourCurrency: string;
+  /** Budget lines the proposal queue offers as link targets. */
+  lineItems?: QueueLineOption[];
 }) {
   const { items, counts, busy, addFiles, clear } = useReceiptDropQueue(tourId, tourCurrency);
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const router = useRouter();
+
+  /* RC-3 — once a drop finishes scanning, stage PROPOSALS. This is the only
+     bridge between RC-1's pipeline and RC-2's engine, and it still writes no
+     money: the proposals route only stages rows for review. */
+  const [batchId, setBatchId] = useState<string | null>(null);
+  const [proposals, setProposals] = useState<QueueProposal[]>([]);
+  const [proposing, setProposing] = useState(false);
+
+  const scanned = items.filter((i) => i.status === 'proposed' && i.receiptId && i.ocr);
+  const readyToPropose = !busy && scanned.length > 0 && batchId === null;
+
+  const previewByReceiptId = useMemo(() => {
+    const m: Record<string, string> = {};
+    for (const i of items) if (i.receiptId && i.previewUrl) m[i.receiptId] = i.previewUrl;
+    return m;
+  }, [items]);
+
+  const propose = useCallback(async () => {
+    setProposing(true);
+    try {
+      const res = await fetch('/api/budget/receipts/proposals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          tourId,
+          receipts: scanned.map((i) => ({ receiptId: i.receiptId, ocr: i.ocr })),
+        }),
+      });
+      const j = (await res.json().catch(() => ({}))) as {
+        batchId?: string;
+        proposals?: QueueProposal[];
+      };
+      if (res.ok && j.batchId) {
+        setBatchId(j.batchId);
+        setProposals(j.proposals ?? []);
+      }
+    } finally {
+      setProposing(false);
+    }
+  }, [tourId, scanned]);
 
   /* Page-level drag awareness — dragging a file ANYWHERE over the budget lights
      the zone. dragenter/leave fire per-element, so count depth rather than
@@ -249,6 +299,45 @@ export function ReceiptDropPanel({
             </li>
           ))}
         </ul>
+      ) : null}
+
+      {readyToPropose ? (
+        <button
+          type="button"
+          data-testid="receipt-propose"
+          onClick={() => void propose()}
+          disabled={proposing}
+          className="btn-transition"
+          style={{
+            marginTop: 'var(--lp-space-3)',
+            padding: '8px 16px',
+            borderRadius: 'var(--lp-radius-md)',
+            border: '1px solid var(--lp-orange)',
+            background: 'var(--lp-orange)',
+            color: '#fff',
+            fontSize: 'var(--lp-text-sm)',
+            fontWeight: 'var(--lp-weight-semibold)',
+            cursor: proposing ? 'wait' : 'pointer',
+          }}
+        >
+          {proposing ? 'Reading the budget…' : `Propose ${scanned.length} receipt${scanned.length === 1 ? '' : 's'}`}
+        </button>
+      ) : null}
+
+      {batchId ? (
+        <ReceiptProposalQueue
+          batchId={batchId}
+          proposals={proposals}
+          lines={lineItems}
+          previewByReceiptId={previewByReceiptId}
+          onApplied={() => {
+            // The grid reads server state; a refresh shows the moved actuals.
+            setBatchId(null);
+            setProposals([]);
+            clear();
+            router.refresh();
+          }}
+        />
       ) : null}
 
       <p style={{ marginTop: 'var(--lp-space-2)', fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-tertiary)' }}>

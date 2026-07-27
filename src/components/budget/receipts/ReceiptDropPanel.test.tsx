@@ -17,6 +17,12 @@ import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 
 const calls: string[] = [];
 
+// RC-3 added router.refresh() to the panel (so the grid shows moved actuals after
+// a batch applies), which needs Next's app-router context. Not under test here.
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+}));
+
 vi.mock('@/components/budget/useReceiptScan', async () => {
   const actual = await vi.importActual<typeof import('@/components/budget/useReceiptScan')>(
     '@/components/budget/useReceiptScan',

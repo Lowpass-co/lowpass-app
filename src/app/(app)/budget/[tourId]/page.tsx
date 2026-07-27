@@ -472,7 +472,15 @@ export default async function BudgetTourPage({
                 {/* RC-1 — the obvious drop zone sits ABOVE the existing inbox:
                     drag receipts in, they save, then they're read. The inbox
                     below stays the per-receipt confirm surface it already is. */}
-                <ReceiptDropPanel tourId={tourId} tourCurrency={tourCurrency} />
+                <ReceiptDropPanel
+                  tourId={tourId}
+                  tourCurrency={tourCurrency}
+                  lineItems={lines.map((l) => ({
+                    id: l.id,
+                    label: l.label ?? '',
+                    section: (l as { section?: string | null }).section ?? null,
+                  }))}
+                />
                 <ReceiptInbox tourId={tourId} tourCurrency={tourCurrency} lineItems={lines} />
               </>
             )
