@@ -34,6 +34,8 @@ import { BudgetEmptyState } from '@/components/budget/BudgetEmptyState';
 import { BudgetSettingsTab } from '@/components/budget/BudgetSettingsTab';
 import { ReceiptInbox } from '@/components/budget/ReceiptInbox';
 import { ReceiptDropPanel } from '@/components/budget/receipts/ReceiptDropPanel';
+import { ReceiptsBank } from '@/components/budget/receipts/ReceiptsBank';
+import { loadTourReceipts } from '@/lib/budget/loadReceipts';
 // Fix 3 — Budget's sub-tabs (Summary/Expenses/Income + corner
 // Reports/Settings) render in <BudgetContextBand> (Band 2). The page
 // only needs the server-safe resolveBudgetTab helper to pick which tab
@@ -261,6 +263,19 @@ export default async function BudgetTourPage({
     for (const [id, v] of vmap) vendorByLine[id] = v;
   }
 
+  /* RQ-6 — the tour's receipts, read SERVER-SIDE and seeded into the payload.
+     The bank is the answer to "where did my receipt go?", so it must not depend
+     on a client fetch that can fail silently. Degrades to [] on error — the tab
+     still renders, it just says there is nothing to show. */
+  const receipts = await loadTourReceipts(supabase, tourId, tourCurrency).catch((err) => {
+    logServerError('loadTourReceipts failed', err, { tourId });
+    return [];
+  });
+  /* Count the state the LOADER derived — re-deriving here from a partial input
+     (no proposal statuses) would count every proposed receipt as needing
+     details, and the badge would cry wolf on work already queued. */
+  const receiptsNeedingDetails = receipts.filter((r) => r.state === 'needs_details').length;
+
   /* Versioning (B1) — the proposed shown is the ACTIVE VERSION's snapshot, not
      the legacy budget_line_items.proposed_cost column (kept write-through one
      release as a fallback; never read). Actuals stay on the line. Overlay here so
@@ -400,6 +415,7 @@ export default async function BudgetTourPage({
           versions={versions}
           viewedVersionId={viewed?.id ?? null}
           canApprove={canApprove}
+          needsDetailsCount={receiptsNeedingDetails}
         />
         {/* D-preflight #4 — the sticky burn bar (spent · remaining · committed)
             duplicates the Summary dashboard's KPI cards, so it's hidden on the
@@ -484,6 +500,19 @@ export default async function BudgetTourPage({
                 <ReceiptInbox tourId={tourId} tourCurrency={tourCurrency} lineItems={lines} />
               </>
             )
+          ) : null}
+
+          {tab === 'receipts' ? (
+            <ReceiptsBank
+              tourId={tourId}
+              tourCurrency={tourCurrency}
+              receipts={receipts}
+              lines={lines.map((l) => ({
+                id: l.id,
+                label: l.label ?? '',
+                section: (l as { section?: string | null }).section ?? null,
+              }))}
+            />
           ) : null}
 
           {/* Stage 3 Phase 2 — per-show income (feeds the Summary P&L).

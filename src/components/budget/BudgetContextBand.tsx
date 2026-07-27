@@ -30,6 +30,8 @@ interface BudgetContextBandProps {
   versions: BudgetVersionVm[];
   viewedVersionId: string | null;
   canApprove: boolean;
+  /** RQ-6 — receipts still needing fields; drives the Receipts tab badge. */
+  needsDetailsCount?: number;
 }
 
 export function BudgetContextBand({
@@ -38,6 +40,7 @@ export function BudgetContextBand({
   versions,
   viewedVersionId,
   canApprove,
+  needsDetailsCount = 0,
 }: BudgetContextBandProps) {
   const pathname = usePathname() ?? '';
   const searchParams = useSearchParams();
@@ -71,6 +74,15 @@ export function BudgetContextBand({
           { key: 'summary', label: 'Summary', href: hrefFor('summary'), active: active === 'summary' },
           { key: 'budget', label: 'Expenses', href: hrefFor('budget'), active: active === 'budget' },
           { key: 'income', label: 'Income', href: hrefFor('income'), active: active === 'income' },
+          /* RQ-6 — the badge counts ONLY needs-details receipts: work the user
+             has to do. Proposed is queued and Filed is done, so badging those
+             would make the number meaningless. */
+          {
+            key: 'receipts',
+            label: needsDetailsCount > 0 ? `Receipts (${needsDetailsCount})` : 'Receipts',
+            href: hrefFor('receipts'),
+            active: active === 'receipts',
+          },
           { key: 'settings', label: 'Settings', href: hrefFor('settings'), active: active === 'settings' },
         ]}
         rightSlot={

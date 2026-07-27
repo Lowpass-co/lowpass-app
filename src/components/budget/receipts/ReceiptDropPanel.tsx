@@ -167,6 +167,16 @@ export function ReceiptDropPanel({
         <h2 className="lp-label-caps" style={{ margin: 0, fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-tertiary)' }}>
           Receipts
         </h2>
+        {/* RQ-6 — the way OUT of this panel. A receipt that fails to scan used to
+            vanish from the user's view; now every one of them is one click away,
+            named, on a tab that also says how many need attention. */}
+        <a
+          data-testid="receipt-bank-link"
+          href={`/budget/${tourId}?tab=receipts`}
+          style={{ fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-secondary)', textDecoration: 'underline' }}
+        >
+          See all receipts
+        </a>
         {counts.total > 0 ? (
           <span className="lp-mono" style={{ fontSize: '12.5px', color: 'var(--lp-text-secondary)' }}>
             {counts.saved}/{counts.total} saved

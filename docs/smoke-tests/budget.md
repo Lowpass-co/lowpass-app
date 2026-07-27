@@ -1989,3 +1989,39 @@ src/lib/budget/actualsProvenance.harness.ts` → "18 checks passed, 0 failed".
   pages of a long document is the same confident-wrong-number failure RC-5
   exists to remove, so it is never done. **Needs-live** (the guard runs
   server-side against a real page count).
+
+## RQ-6 — the Receipts bank (`?tab=receipts`)
+
+> Adam, after two real receipts failed to scan: *"now I don't know where they've
+> gone."* They HAD been saved — RCP-08 proves it — but nothing listed them, so
+> save-first was a promise the app kept privately. The bank is every receipt on
+> the tour, whatever happened to it. **No migration.** State is DERIVED
+> (`src/lib/budget/receiptState.ts`), never stored — a status column would drift
+> the moment a proposal applied or a line was deleted elsewhere.
+
+- **RCP-17 — a failed receipt is findable.** Drop a receipt that can't be read →
+  it appears under **Needs details** with its receipt number, empty-but-editable
+  fields, and a line saying what's missing ("Missing vendor, date, amount").
+  **Test-pinned.**
+- **RCP-18 — the bank opens on the work.** With any needs-details receipts the
+  tab lands on that filter, not on a wall of Filed ones; with none it shows All.
+  Every filter chip carries its count. **Test-pinned.**
+- **RCP-19 — editing writes to the RECEIPT, never to money.** Fix a vendor or
+  amount inline → one PATCH to the receipt, zero transactions, zero `actual_cost`
+  writes. A non-numeric amount is refused client-side before it reaches the
+  server. **Test-pinned.**
+- **RCP-20 — filing goes through the transaction path.** "File against a line"
+  creates a TRANSACTION first, then links the receipt — never a direct actual
+  write — and refuses a receipt with no amount rather than filing a zero.
+  **Test-pinned.**
+- **RCP-21 — re-scan reuses the one seam.** "Re-scan" re-signs the stored file
+  and hands it back to the same `ocr()` used by the drop zone. A second failure
+  reports it and leaves the receipt in place. **Test-pinned** at the seam; the
+  scan result itself is **Needs-live**.
+- **RCP-22 — the tab badge counts only Needs details.** `Receipts (2)` on the
+  budget bar counts work the user has to do; Proposed is queued and Filed is
+  done, so neither is badged. Counted from the state the LOADER derived, not
+  re-derived from partial data. **Code-verified**; **Needs-live**.
+- **RQ-1 — the entry point.** The Expenses drop panel carries a "See all
+  receipts" link to the tab, so the panel is no longer a dead end ~3000px down
+  the page. **Code-verified**; **Needs-live**.
