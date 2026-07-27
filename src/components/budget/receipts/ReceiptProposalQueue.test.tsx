@@ -114,6 +114,49 @@ describe('RCP-04 — edit then approve writes the EDITED value', () => {
   });
 });
 
+describe('RCP-16 — the section is visible and editable on a new-line proposal', () => {
+  const NEW_LINE: QueueProposal = {
+    id: 'p3',
+    target: 'receipt_line',
+    receipt_id: 'r3',
+    source_ref: 'R-003',
+    dup_of: null,
+    dup_reason: null,
+    status: 'pending',
+    value: {
+      vendor: 'Pret', date: '2026-10-03', amount: 14.8, currency: 'GBP',
+      label: 'Pret', lineItemId: null,
+      sectionName: 'Catering', createSection: true,
+      sectionReason: 'No section matches “catering” — proposing a new Catering section',
+    },
+  };
+
+  it('shows the resolved section and says why', () => {
+    renderQueue([NEW_LINE]);
+    expect((screen.getByTestId('proposal-section') as HTMLInputElement).value).toBe('Catering');
+    expect(screen.getByText(/proposing a new Catering section/)).toBeTruthy();
+  });
+
+  it('the section is NOT “Uncategorised” — that was the bug', () => {
+    renderQueue([NEW_LINE]);
+    expect((screen.getByTestId('proposal-section') as HTMLInputElement).value).not.toBe('Uncategorised');
+  });
+
+  it('typing over it sends the edited section', async () => {
+    renderQueue([NEW_LINE]);
+    fireEvent.change(screen.getByTestId('proposal-section'), { target: { value: 'Hospitality' } });
+    fireEvent.click(screen.getByTestId('receipt-apply'));
+    await waitFor(() => expect(fetch).toHaveBeenCalled());
+    const edits = lastBody?.edits as Record<string, { sectionName?: string }>;
+    expect(edits.p3.sectionName).toBe('Hospitality');
+  });
+
+  it('a LINK proposal has no section field — it inherits the line’s', () => {
+    renderQueue([CLEAN]);
+    expect(screen.queryByTestId('proposal-section')).toBeNull();
+  });
+});
+
 describe('RCP-06 — reject writes nothing', () => {
   it('rejecting everything disables Approve, so no request is possible', () => {
     renderQueue([CLEAN]);

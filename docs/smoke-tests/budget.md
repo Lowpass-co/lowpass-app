@@ -2025,3 +2025,28 @@ src/lib/budget/actualsProvenance.harness.ts` → "18 checks passed, 0 failed".
 - **RQ-1 — the entry point.** The Expenses drop panel carries a "See all
   receipts" link to the tab, so the panel is no longer a dead end ~3000px down
   the page. **Code-verified**; **Needs-live**.
+
+## RQ-7 — the receipt's category reaches a real section
+
+> Cowork's walk: OCR returned `category: "catering"`, the proposal came back
+> `sectionId: null, sectionName: "catering"`, and the line was created in
+> **Uncategorised** — the signal existed and was discarded at the mapping step.
+> The old code compared the category to section names by EXACT normalised
+> equality, so "catering" hit a section literally named "Catering" and nothing
+> else. **No migration.**
+
+- **RCP-16 — a fuel receipt proposes a fuel/transport section, not
+  Uncategorised.** Scan a fuel or parking receipt → the review card's **Section**
+  field shows the resolved section with the reason ("“parking” is Transport —
+  filed under Transport"), and it is editable. Four passes, most-certain first:
+  exact name · whole-word containment ("catering" → "Catering & Hospitality") ·
+  alias table (gas/petrol→Fuel, lodging→Hotels, cartage→Freight) · fuzzy via the
+  SAME `nameSimilarity` the de-duper uses. **Test-pinned.**
+- **RCP-16b — nothing matches ⇒ it PROPOSES a section, never dumps.** A category
+  no pass resolves shows "＋ No section matches “x” — proposing a new X section",
+  and Approve creates that section before the line. Uncategorised is reachable
+  only when the scan read **no category at all**. **Test-pinned** at the resolver
+  and the card; the create-on-apply is **Needs-live**.
+- **RCP-16c — the section is on the card and editable.** New-line proposals show
+  the Section field; typing over it sends the edited name. Link proposals don't
+  show it — they inherit the target line's section. **Test-pinned.**

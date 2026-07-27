@@ -53,6 +53,8 @@ export interface ReceiptFacts {
   description: string | null;
 }
 
+import { resolveSection, type SectionOption } from './receiptSection';
+
 /** A budget line as the matcher needs it. */
 export interface BudgetLineFacts {
   id: string;
@@ -101,6 +103,10 @@ export interface ReceiptProposal {
     label?: string;
     sectionId?: string | null;
     sectionName?: string | null;
+    /** RQ-7 — the named section doesn't exist yet; apply should create it. */
+    createSection?: boolean;
+    /** RQ-7 — how the section was chosen, shown on the card. */
+    sectionReason?: string;
   };
 }
 
@@ -203,7 +209,15 @@ export function proposeForReceipt(
   receipt: ReceiptFacts,
   lines: BudgetLineFacts[],
   transactions: TransactionFacts[],
-  opts: { tourStart?: string | null; tourEnd?: string | null; fallbackSectionName?: string | null } = {},
+  opts: {
+    tourStart?: string | null;
+    tourEnd?: string | null;
+    fallbackSectionName?: string | null;
+    /* RQ-7 — the tour's real sections, so the receipt's category can be resolved
+       to one instead of being dropped in Uncategorised. Defaults to the sections
+       implied by `lines` when not supplied, so existing callers keep working. */
+    sections?: SectionOption[];
+  } = {},
 ): ReceiptProposal {
   const { tourStart = null, tourEnd = null, fallbackSectionName = 'Uncategorised' } = opts;
 
@@ -246,10 +260,18 @@ export function proposeForReceipt(
 
   // (b) nothing matched → propose a new line, in the receipt's category section
   // when we can name one, else the catch-all.
-  const sectionFromCategory =
-    receipt.category
-      ? lines.find((l) => l.sectionName && norm(l.sectionName) === norm(receipt.category))?.sectionName ?? null
-      : null;
+  /* RQ-7 — resolve the category to a REAL section (exact → containment → alias →
+     fuzzy), and propose creating one when nothing fits. The old code did a single
+     exact-name comparison, so "catering" missed "Catering & Hospitality" and the
+     line landed in Uncategorised with the signal still sitting in the payload. */
+  const sectionPool: SectionOption[] =
+    opts.sections ??
+    [...new Map(
+      lines
+        .filter((l) => l.sectionName?.trim())
+        .map((l) => [l.sectionName as string, { id: l.sectionId, name: l.sectionName as string }]),
+    ).values()];
+  const section = resolveSection(receipt.category, sectionPool, fallbackSectionName ?? 'Uncategorised');
   const label = [receipt.vendor, receipt.description].filter(Boolean).join(' — ') || 'Receipt';
 
   return {
@@ -265,8 +287,10 @@ export function proposeForReceipt(
     value: {
       ...baseValue,
       label,
-      sectionId: null,
-      sectionName: sectionFromCategory ?? receipt.category ?? fallbackSectionName,
+      sectionId: section.sectionId,
+      sectionName: section.sectionName,
+      createSection: section.createSection,
+      sectionReason: section.reason,
     },
   };
 }

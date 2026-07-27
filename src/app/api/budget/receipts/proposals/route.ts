@@ -138,10 +138,23 @@ export async function POST(request: Request): Promise<NextResponse> {
       (receiptRows ?? []).map((r) => [r.id as string, (r.receipt_number as string | null) ?? null]),
     );
 
+    /* RQ-7 — the tour's REAL sections. Previously the matcher only saw the
+       sections implied by existing lines, so a tour section with no lines in it
+       yet was invisible and the receipt's category couldn't resolve to it. */
+    const { data: sectionRows } = await supabase
+      .from('budget_sections')
+      .select('id, name')
+      .eq('tour_id', tourId);
+    const sections = (sectionRows ?? []).map((s) => ({
+      id: s.id as string,
+      name: (s.name as string | null) ?? '',
+    }));
+
     const pending = incoming.map((r) => {
       const p = proposeForReceipt(r.ocr, lines, transactions, {
         tourStart: tour.start_date as string | null,
         tourEnd: tour.end_date as string | null,
+        sections,
       });
       return {
         workspace_id: workspaceId,

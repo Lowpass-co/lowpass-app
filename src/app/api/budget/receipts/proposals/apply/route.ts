@@ -34,6 +34,9 @@ interface ProposalValue {
   currency: string | null;
   label?: string;
   sectionName?: string | null;
+  /** RQ-7 — the named section doesn't exist yet; create it before the line. */
+  createSection?: boolean;
+  sectionReason?: string;
   lineItemId?: string | null;
   reason?: string;
 }
@@ -116,6 +119,19 @@ export async function POST(request: Request): Promise<NextResponse> {
       }
 
       let lineItemId = v.lineItemId ?? null;
+
+      /* RQ-7 — the proposal may ask for a SECTION that doesn't exist yet, rather
+         than having quietly resolved to Uncategorised. Create it first, through
+         the existing sections route, so the new line has somewhere real to live.
+         Best-effort: if the section can't be created we still make the line, and
+         it lands under the proposed name the way it would have before. */
+      if (row.target === 'receipt_line' && v.createSection && v.sectionName) {
+        await fetch(`${origin}/api/budget/sections`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', cookie },
+          body: JSON.stringify({ tour_id: batch.tour_id, name: v.sectionName }),
+        }).catch(() => {});
+      }
 
       // (b) create the line first — at actual_cost 0. The TRANSACTION moves the
       // actual, via the reconcile. Never a direct actual_cost write.

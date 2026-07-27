@@ -53,6 +53,9 @@ export interface QueueProposal {
     currency: string | null;
     label?: string;
     sectionName?: string | null;
+    /** RQ-7 — the section doesn't exist yet and apply will create it. */
+    createSection?: boolean;
+    sectionReason?: string;
     lineItemId?: string | null;
     reason?: string;
   };
@@ -282,6 +285,35 @@ export function ReceiptProposalQueue({
                     ))}
                   </select>
                 </label>
+
+                {/* RQ-7 — for a NEW line, the section is shown and editable. The
+                    category the scan read used to be resolved silently (or not at
+                    all, landing in Uncategorised); now the choice is on the card
+                    with the reason it was made, and typing over it is the fix. */}
+                {!isLink ? (
+                  <label style={{ display: 'grid', gap: 2 }}>
+                    <Cap>Section</Cap>
+                    <input
+                      data-testid="proposal-section"
+                      style={fieldStyle}
+                      value={p.value.sectionName ?? ''}
+                      placeholder="Section"
+                      onChange={(e) =>
+                        patch(p.id, {
+                          sectionName: e.target.value,
+                          /* Typing a name we don't have an id for means it may need
+                             creating; apply is idempotent about an existing name. */
+                          createSection: true,
+                        })
+                      }
+                    />
+                    {p.value.sectionReason ? (
+                      <span style={{ fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-tertiary)' }}>
+                        {p.value.createSection ? '＋ ' : ''}{p.value.sectionReason}
+                      </span>
+                    ) : null}
+                  </label>
+                ) : null}
               </div>
 
               <div className="flex items-start" style={{ gap: 4 }}>
