@@ -11,6 +11,7 @@
 
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { syncActualCostIfNoOverride } from '@/lib/budget/transactions';
 
 function parseReceiptNumber(receiptNumber: string): number {
   const match = (receiptNumber ?? '').match(/^R-?(\d+)$/i);
@@ -221,22 +222,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Could not allocate a receipt number' }, { status: 500 });
   }
 
-  if (inBudget && linkedLineItemId && costTour !== 0) {
-    const { data: lineItem } = await supabase
-      .from('budget_line_items')
-      .select('id, actual_cost')
-      .eq('id', linkedLineItemId)
-      .eq('workspace_id', profile.workspace_id)
-      .single();
-    if (lineItem) {
-      const newActual = (Number(lineItem.actual_cost) || 0) + costTour;
-      await supabase
-        .from('budget_line_items')
-        .update({ actual_cost: newActual, updated_at: new Date().toISOString() })
-        .eq('id', linkedLineItemId)
-        .eq('workspace_id', profile.workspace_id);
-    }
-  }
+  /* RQ-4 — was: actual_cost += costTour, a direct write. Creating a receipt row
+     records a DOCUMENT; it does not spend money. The amount becomes money when a
+     transaction is written (POST /line-items/{id}/transactions), and actual_cost
+     follows from the transaction sum. Adding here double-counted the moment a
+     transaction was also created, and bypassed the override guard either way. */
 
   return NextResponse.json(created);
 }
@@ -294,45 +284,22 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: 'Receipt not found' }, { status: 404 });
   }
 
-  const prevInBudget = !!existing.in_budget;
   const prevLinkedId = existing.linked_line_item_id as string | null;
-  const prevCost = Number(existing.cost_tour_currency) || 0;
-  const newInBudget = updates.in_budget !== undefined ? !!updates.in_budget : prevInBudget;
   const newLinkedId = updates.linked_line_item_id !== undefined ? updates.linked_line_item_id : prevLinkedId;
-  const newCost = updates.cost_tour_currency !== undefined ? Number(updates.cost_tour_currency) : prevCost;
 
-  if (prevInBudget && prevLinkedId && prevCost !== 0) {
-    const { data: lineItem } = await supabase
-      .from('budget_line_items')
-      .select('id, actual_cost')
-      .eq('id', prevLinkedId)
-      .eq('workspace_id', profile.workspace_id)
-      .single();
-    if (lineItem) {
-      const newActual = Math.max(0, (Number(lineItem.actual_cost) || 0) - prevCost);
-      await supabase
-        .from('budget_line_items')
-        .update({ actual_cost: newActual, updated_at: new Date().toISOString() })
-        .eq('id', prevLinkedId)
-        .eq('workspace_id', profile.workspace_id);
-    }
-  }
-  if (newInBudget && newLinkedId && newCost !== 0) {
-    const { data: lineItem } = await supabase
-      .from('budget_line_items')
-      .select('id, actual_cost')
-      .eq('id', newLinkedId)
-      .eq('workspace_id', profile.workspace_id)
-      .single();
-    if (lineItem) {
-      const newActual = (Number(lineItem.actual_cost) || 0) + newCost;
-      await supabase
-        .from('budget_line_items')
-        .update({ actual_cost: newActual, updated_at: new Date().toISOString() })
-        .eq('id', newLinkedId)
-        .eq('workspace_id', profile.workspace_id);
-    }
-  }
+  /* RQ-4 — was: subtract prevCost from the old line, add newCost to the new one,
+     both as direct actual_cost writes. Two bugs in one block.
+
+     It double-counted. The apply path already writes a TRANSACTION for the
+     receipt's amount, and actual_cost is the sum of transactions — so editing any
+     field on a filed receipt (which is exactly what the Receipts bank does) added
+     the amount a second time. Toggling in_budget off and on again could add it
+     repeatedly. And both writes bypassed actual_cost_override.
+
+     Receipts carry no money of their own. The only money write in this feature is
+     POST /line-items/{id}/transactions; actual_cost follows from it. Below we
+     re-sync any line this receipt joined or left, so their stored actuals are
+     provably the sum of the transactions that remain. */
 
   const payload: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (updates.date !== undefined) payload.date = updates.date;
@@ -358,6 +325,14 @@ export async function PATCH(request: Request) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  /* Re-sync every line this receipt touched — the one it left and the one it
+     joined. Numerically a no-op when things were already consistent; a repair
+     when they weren't. Best-effort: never fail an edit over a recompute. */
+  for (const lineId of new Set([prevLinkedId, newLinkedId].filter(Boolean) as string[])) {
+    await syncActualCostIfNoOverride(supabase, lineId, 1).catch(() => {});
+  }
+
   return NextResponse.json(data);
 }
 
@@ -396,25 +371,7 @@ export async function DELETE(request: Request) {
     .eq('workspace_id', profile.workspace_id)
     .single();
 
-  if (existing?.in_budget && existing?.linked_line_item_id) {
-    const cost = Number(existing.cost_tour_currency) || 0;
-    if (cost !== 0) {
-      const { data: lineItem } = await supabase
-        .from('budget_line_items')
-        .select('id, actual_cost')
-        .eq('id', existing.linked_line_item_id)
-        .eq('workspace_id', profile.workspace_id)
-        .single();
-      if (lineItem) {
-        const newActual = Math.max(0, (Number(lineItem.actual_cost) || 0) - cost);
-        await supabase
-          .from('budget_line_items')
-          .update({ actual_cost: newActual, updated_at: new Date().toISOString() })
-          .eq('id', existing.linked_line_item_id)
-          .eq('workspace_id', profile.workspace_id);
-      }
-    }
-  }
+  const linkedLineId = existing?.linked_line_item_id ?? null;
 
   const { error } = await supabase
     .from('expense_receipts')
@@ -425,5 +382,32 @@ export async function DELETE(request: Request) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
+
+  /* RQ-4 — this block used to hand-write actual_cost:
+       actual_cost = max(0, actual_cost - receipt.cost_tour_currency)
+     which broke the invariant twice over.
+
+     1. It was a DIRECT actual_cost write, bypassing the reconcile and the
+        actual_cost_override guard — the exact thing the receipt path exists to
+        avoid everywhere else.
+     2. It was WRONG. budget_line_item_transactions.receipt_id is
+        ON DELETE SET NULL (migration 104), so deleting a receipt does NOT delete
+        its transaction — the money stays spent and still counts toward the sum.
+        Subtracting the receipt's cost on top of that understated the line, and
+        the error healed unpredictably the next time anything re-synced.
+
+     The correct behaviour: deleting a receipt deletes the EVIDENCE, not the
+     spend. The transaction survives, so the number should not move. We call the
+     one sanctioned sync so the stored actual is provably the sum of the
+     transactions that remain — a no-op when things were already consistent, and
+     a repair when they weren't. Deleting the transaction is a separate,
+     explicit action on the transactions route. */
+  if (linkedLineId) {
+    await syncActualCostIfNoOverride(supabase, linkedLineId, 1).catch(() => {
+      /* best-effort: the receipt is already gone, and the next transaction
+         write re-syncs. Never fail the delete over a recompute. */
+    });
+  }
+
   return new Response(null, { status: 204 });
 }
