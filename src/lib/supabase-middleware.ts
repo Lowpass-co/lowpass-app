@@ -10,7 +10,20 @@ import { NextResponse, type NextRequest } from 'next/server';
 import { isAuthPath, isPublicPath } from '@/lib/auth/publicRoutes';
 
 export async function updateSession(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({ request });
+  /* S-1 — publish the pathname to server components.
+     Layouts have no usePathname, and the canonical shell derives scope, mode and
+     the active rail item FROM THE URL rather than from ambient client state —
+     that IS the deep-link requirement. Forwarding a request header is the
+     supported way to get the URL into a server render.
+
+     Done here rather than in proxy.ts because this function owns the response
+     object the cookie refresh writes to; reconstructing the request upstream
+     would put the auth cookie flow at risk to move a string. */
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set('x-pathname', request.nextUrl.pathname);
+  requestHeaders.set('x-search', request.nextUrl.search);
+
+  let supabaseResponse = NextResponse.next({ request: { headers: requestHeaders } });
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -24,7 +37,7 @@ export async function updateSession(request: NextRequest) {
           cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value)
           );
-          supabaseResponse = NextResponse.next({ request });
+          supabaseResponse = NextResponse.next({ request: { headers: requestHeaders } });
           cookiesToSet.forEach(({ name, value, options }) =>
             supabaseResponse.cookies.set(name, value, options)
           );

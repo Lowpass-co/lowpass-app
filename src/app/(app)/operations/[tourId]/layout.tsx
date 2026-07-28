@@ -21,6 +21,8 @@
 
 import type { ReactNode } from 'react';
 import { notFound } from 'next/navigation';
+import { headers } from 'next/headers';
+import { ShellV3Mount } from '@/components/shell-v3/ShellV3Mount';
 import { ProductShell } from '@/components/shell-v2';
 import { TourVisitTracker } from '@/components/shell-v2/TourVisitTracker';
 import { HydrateTourArtist } from '@/components/shell-v2/HydrateTourArtist';
@@ -65,6 +67,20 @@ export default async function OperationsTourLayout({
   const { tourId } = await params;
   const supabase = await createServerSupabaseClient();
 
+  /* S-1 — the canonical shell is proven on ROUTING ALONE.
+     Everything else under /operations keeps ProductShell + the two-bar nav +
+     OperationsGroupSubNav until S-2 migrates it deliberately. A half-migrated
+     app is the failure mode this staging exists to avoid, so the branch is
+     explicit and narrow rather than a feature flag nobody can see.
+
+     The pathname comes from the request headers because layouts are server
+     components and there is no usePathname here — and because the shell must
+     derive scope from the URL, not from anything ambient. */
+  const h = await headers();
+  const pathname = h.get('x-pathname') ?? `/operations/${tourId}/routing`;
+  const search = h.get('x-search') ?? '';
+  const isRouting = /^\/operations\/[^/]+\/routing\/?$/.test(pathname);
+
   /* F-3(b) — these were four SEQUENTIAL awaits on every tour-scoped page load:
      getUser → loadTourIdentity → getActiveMembership → fetchActiveGrants. Only
      the permission chain is genuinely ordered (membership needs the user, grants
@@ -101,6 +117,25 @@ export default async function OperationsTourLayout({
       ? canAccess(membership, grants, 'page', s.resource_id, 'read')
       : false,
   }));
+
+  if (isRouting) {
+    return (
+      <ShellV3Mount
+        pathname={pathname}
+        search={search}
+        artistId={identity.artistId}
+        /* The routing page carries the R5 day rail. Two full-width rails at 1440
+           leaves too little for the ledger, so the APP rail starts collapsed and
+           the DAY rail keeps its width — see the note in AppShellV3. The user's
+           own collapse preference still wins once they set one. */
+        denseRail
+      >
+        <HydrateTourArtist tourId={tourId} artistId={identity.artistId} />
+        <TourVisitTracker tourId={tourId} />
+        {children}
+      </ShellV3Mount>
+    );
+  }
 
   return (
     <ProductShell
