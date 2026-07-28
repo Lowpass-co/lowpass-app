@@ -49,6 +49,31 @@ everywhere else.
   which reads as a top-level `/day` route. **There isn't one** — the per-day page
   is nested at `/operations/[tourId]/day/[routingId]`. Noted in `ia.ts`.
 
+### S-1 FIX — Routing 500'd on the first deploy · `<commit>`
+
+**What broke:** `<AppShellV3>` is a server component and passed `railFor()`'s
+output straight to `<NavRail>`, a client component. Those entries carry `href`
+and `match` as **functions**, and a function cannot cross an RSC boundary —
+React threw during the server render. Routing showed "Something went wrong";
+every unmigrated page was fine, which is what localised it.
+
+**Why nothing caught it:** tsc, eslint and `next build` never see the boundary,
+and the jsdom tests render the server component as a plain function call, so
+there is no boundary there either. Confirmed: tsc still passes when the broken
+shape is reinstated.
+
+**Fix:** `resolveRailView()` in ia.ts does all the function work on the server —
+builds hrefs, runs matchers, reads badges — and returns plain data.
+`<NavRail>` now consumes `RailView` and imports only a *type* from ia.ts.
+
+**Guard:** `railViewIsSerialisable()` + 6 tests asserting the property rather
+than the render — the resolved view survives a JSON round-trip, the raw config
+does not. Checkable without an RSC boundary, which is the point.
+
+**Lesson for S-2 onward:** anything handed from a layout to a client shell
+component must be plain data. The config module keeps its functions; they stop
+at the server.
+
 **Still on old chrome:** everything except Routing. See the S-2 entries below as
 they land.
 

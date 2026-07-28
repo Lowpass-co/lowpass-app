@@ -23,14 +23,7 @@
    anyone who disagrees can expand it and it stays expanded.
    ============================================ */
 
-import {
-  resolveScope,
-  activeItemFor,
-  railFor,
-  upFrom,
-  SCOPE_LABEL,
-  MODE_LABEL,
-} from '@/lib/nav/ia';
+import { resolveScope, resolveRailView, upFrom, SCOPE_LABEL, MODE_LABEL } from '@/lib/nav/ia';
 import { NavRail } from './NavRail';
 import { TopBarV3 } from './TopBarV3';
 
@@ -66,8 +59,12 @@ export function AppShellV3({
   /* Derived, in this order, from the URL and nothing else. */
   const base = resolveScope(pathname, search);
   const ctx = { ...base, artistId: base.artistId ?? artistId ?? null };
-  const activeId = activeItemFor(pathname, search);
-  const entries = railFor(ctx.scope, ctx.mode);
+  /* Resolved HERE, on the server: hrefs built, matchers run, badges read. What
+     crosses to <NavRail> is plain data. The config's hrefs and matchers are
+     FUNCTIONS, and a function cannot cross an RSC boundary — passing the raw
+     entries is what threw "An error occurred in the Server Components render"
+     on the first S-1 deploy, with every local gate green. */
+  const entries = resolveRailView(ctx, pathname, search, badges ?? {});
   const up = upFrom(ctx);
 
   /* At tour scope the rail head names the MODE ("TOUR" / "MONEY" /
@@ -87,11 +84,8 @@ export function AppShellV3({
       <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
         <NavRail
           entries={entries}
-          ctx={ctx}
-          activeId={activeId}
           scopeLabel={scopeLabel}
           up={up}
-          badges={badges}
           defaultCollapsed={denseRail}
         />
         <main style={{ flex: 1, minWidth: 0, minHeight: 0, overflow: 'auto' }}>{children}</main>

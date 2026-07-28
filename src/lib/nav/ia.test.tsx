@@ -276,3 +276,71 @@ describe('isUnshelledPath — what the shell must NOT wrap', () => {
     expect(isUnshelledPath(`/advance/${T}`)).toBe(false);
   });
 });
+
+/* ============================================
+   THE RSC BOUNDARY (S-1 fix)
+
+   S-1 shipped a server component passing `railFor()`'s output — whose hrefs and
+   matchers are FUNCTIONS — to a client component, and React threw during the
+   server render. Production showed "Something went wrong"; tsc, eslint, the
+   build and every jsdom test passed, because none of them has an RSC boundary.
+
+   These assert the PROPERTY instead of the render: whatever crosses to the
+   client must survive a JSON round-trip. That is checkable without a boundary,
+   which is exactly why it's the right guard for a fault no local gate can see.
+   ============================================ */
+
+import { resolveRailView, railViewIsSerialisable } from './ia';
+
+describe('what crosses to the client is plain data', () => {
+  const CTX = { scope: 'tour', artistId: A, tourId: T, mode: 'money' } as const;
+
+  it('the resolved view is serialisable', () => {
+    const view = resolveRailView(CTX, `/budget/${T}/settlement`);
+    expect(railViewIsSerialisable(view)).toBe(true);
+  });
+
+  it('the RAW config is NOT — which is why it must never be passed', () => {
+    // railFor() is right for a config module and fatal at a boundary.
+    const raw = railFor('tour', 'money') as unknown as Parameters<typeof railViewIsSerialisable>[0];
+    expect(railViewIsSerialisable(raw)).toBe(false);
+  });
+
+  it('every scope and mode resolves to something serialisable', () => {
+    for (const [scope, mode] of [
+      ['tour', 'tour'], ['tour', 'money'], ['tour', 'production'],
+      ['artist', null], ['workspace', null], ['you', null],
+    ] as const) {
+      const view = resolveRailView(
+        { scope, artistId: A, tourId: T, mode },
+        scope === 'tour' ? `/operations/${T}/routing` : '/artists',
+      );
+      expect(railViewIsSerialisable(view)).toBe(true);
+      expect(view.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('hrefs arrive as strings, or null for unbuilt pages', () => {
+    const view = resolveRailView({ scope: 'tour', artistId: A, tourId: T, mode: 'tour' }, `/operations/${T}/routing`);
+    const items = view.filter((e) => e.kind === 'item');
+    for (const i of items) {
+      if (i.kind !== 'item') continue;
+      expect(i.href === null || typeof i.href === 'string').toBe(true);
+    }
+    const travel = items.find((i) => i.kind === 'item' && i.id === 'travel');
+    expect(travel && travel.kind === 'item' ? travel.href : 'x').toBeNull();
+  });
+
+  it('the active flag is resolved server-side, not left to the client', () => {
+    const view = resolveRailView(CTX, `/budget/${T}/settlement`);
+    const active = view.filter((e) => e.kind === 'item' && e.active);
+    expect(active.length).toBe(1);
+    expect(active[0].kind === 'item' && active[0].id).toBe('settlements');
+  });
+
+  it('badges arrive as strings', () => {
+    const view = resolveRailView(CTX, `/budget/${T}`, '?tab=budget', { lines: 48 });
+    const expenses = view.find((e) => e.kind === 'item' && e.id === 'expenses');
+    expect(expenses && expenses.kind === 'item' ? expenses.badge : null).toBe('48');
+  });
+});

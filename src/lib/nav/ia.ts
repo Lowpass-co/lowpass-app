@@ -375,3 +375,76 @@ export function upFrom(ctx: NavContext): { label: string; href: string } | null 
   if (ctx.scope === 'artist') return { label: 'Workspace', href: '/artists' };
   return null;
 }
+
+/* ============================================
+   THE SERIALISATION BOUNDARY (S-1 fix)
+
+   `railFor()` returns config objects whose `href` and `match` are FUNCTIONS.
+   That is right for a config module and fatal at an RSC boundary: a server
+   component cannot pass a function to a client component, and React throws
+   during the server render — "Functions cannot be passed directly to Client
+   Components".
+
+   S-1 shipped exactly that and took the Routing page down. Nothing caught it:
+   tsc, eslint and the build never see the boundary, and the jsdom tests render
+   the server component as a plain function call, so no boundary exists there
+   either.
+
+   So the boundary is now explicit. `resolveRailView()` does ALL the function
+   work on the server — calling hrefs, running matchers, reading badges — and
+   returns plain data. Client components consume RailView, never RailEntry, and
+   `railViewIsSerialisable()` lets a test assert that in a form that would have
+   failed against the broken build.
+   ============================================ */
+
+/** A rail entry with everything resolved — plain data, safe across RSC. */
+export type RailView =
+  | { kind: 'group'; label: string }
+  | {
+      kind: 'item';
+      id: string;
+      label: string;
+      icon: string;
+      /** Already built. Null = no page yet, render disabled. */
+      href: string | null;
+      badge: string | null;
+      active: boolean;
+    };
+
+/**
+ * The rail, resolved for a URL — the ONLY shape that crosses to the client.
+ */
+export function resolveRailView(
+  ctx: NavContext,
+  pathname: string,
+  search = '',
+  badges: Record<string, string | number | null | undefined> = {},
+): RailView[] {
+  const activeId = activeItemFor(pathname, search);
+  return railFor(ctx.scope, ctx.mode).map((entry) => {
+    if (entry.kind === 'group') return { kind: 'group', label: entry.label };
+    const badge = entry.badge ? badges[entry.badge] : null;
+    return {
+      kind: 'item',
+      id: entry.id,
+      label: entry.label,
+      icon: entry.icon,
+      href: entry.href ? entry.href(ctx) : null,
+      badge: badge == null || badge === '' ? null : String(badge),
+      active: entry.id === activeId,
+    };
+  });
+}
+
+/**
+ * True when every value in the view can cross an RSC boundary.
+ * Exists so a test can assert the property that broke production.
+ */
+export function railViewIsSerialisable(view: RailView[]): boolean {
+  try {
+    return JSON.parse(JSON.stringify(view)).length === view.length
+      && !view.some((e) => Object.values(e).some((v) => typeof v === 'function'));
+  } catch {
+    return false;
+  }
+}

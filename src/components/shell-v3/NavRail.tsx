@@ -22,21 +22,21 @@ import { useCallback, useState } from 'react';
 import Link from 'next/link';
 import * as Icons from 'lucide-react';
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
-import type { NavContext, RailEntry } from '@/lib/nav/ia';
+import type { RailView } from '@/lib/nav/ia';
 
 const STORAGE_KEY = 'lowpass:navrail:collapsed';
 
 export interface NavRailProps {
-  entries: RailEntry[];
-  ctx: NavContext;
-  /** id from activeItemFor() — server-derived, never guessed on the client. */
-  activeId: string | null;
+  /* PLAIN DATA ONLY. This crosses an RSC boundary, so it must contain no
+     functions — see "THE SERIALISATION BOUNDARY" in ia.ts. Passing the raw
+     config (whose hrefs and matchers ARE functions) is what took Routing down
+     in the first S-1 push. Hrefs, badges and the active flag are all resolved
+     on the server by resolveRailView(). */
+  entries: RailView[];
   /** Scope label for the rail head ("TOUR", "ARTIST", …). */
   scopeLabel: string;
-  /** The ↑ link — "Artist" / "Workspace". */
+  /** The ↑ link — "Artist" / "Workspace". Plain strings. */
   up: { label: string; href: string } | null;
-  /** Counts by badge key, supplied by the page's server data. */
-  badges?: Record<string, string | number | null | undefined>;
   /** Start collapsed — set when a day rail is present (see the header note). */
   defaultCollapsed?: boolean;
 }
@@ -47,7 +47,7 @@ function Icon({ name, className }: { name: string; className?: string }) {
 }
 
 export function NavRail({
-  entries, ctx, activeId, scopeLabel, up, badges = {}, defaultCollapsed = false,
+  entries, scopeLabel, up, defaultCollapsed = false,
 }: NavRailProps) {
   /* Server-renders at the default, then reconciles from localStorage.
      Reading storage during render would be a hydration mismatch; a lazy
@@ -148,9 +148,7 @@ export function NavRail({
             )
           ) : (
             (() => {
-              const active = entry.id === activeId;
-              const href = entry.href?.(ctx) ?? null;
-              const badge = entry.badge ? badges[entry.badge] : null;
+              const { active, href, badge } = entry;
               const body = (
                 <>
                   <Icon name={entry.icon} className="h-3.5 w-3.5" />
