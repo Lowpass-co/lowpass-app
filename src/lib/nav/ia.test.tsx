@@ -410,9 +410,26 @@ describe('isShelledPath — what is on the canonical shell after S-2c', () => {
     }
   });
 
-  it.each(['/artists', `/artists/${A}`, '/settings', '/venues', '/personnel'])(
-    '%s is not tour scope → still old chrome until S-3',
+  it.each([
+    // S-3a — artist scope.
+    `/artists/${A}`,
+    `/artists/${A}/edit`,
+    `/artists/${A}/production`,
+    `/artists/${A}/riders`,
+    `/artists/${A}/channel-lists`,
+    `/artists/${A}/stage-plots`,
+    `/artists/${A}/stage-plots/p1`,
+    `/artists/${A}/files`,
+    `/artists/${A}/financials`,
+  ])('%s is artist scope → shelled', (p) => {
+    expect(isShelledPath(p)).toBe(true);
+  });
+
+  it.each(['/artists', '/personnel', '/assets', '/venues', '/settings', '/profile', '/bugs'])(
+    '%s is workspace or You → still old chrome until S-3b',
     (p) => {
+      /* These are what keeps ProductShell alive. When they cross, the two-bar
+         nav can finally go. */
       expect(isShelledPath(p)).toBe(false);
     },
   );
@@ -566,5 +583,59 @@ describe('the disabled items are exactly the unbuilt ones', () => {
       if (!item.href) continue;
       expect(item.href(ctx).startsWith('/')).toBe(true);
     }
+  });
+});
+
+/* ============================================
+   S-3a — the artist rail against the routes that actually exist
+
+   IA_CANONICAL was transcribed in S-1 from the document, before any of these
+   routes had been checked against the filesystem. Two items did not survive
+   the check.
+   ============================================ */
+
+describe('S-3a — the artist rail describes real pages', () => {
+  const ctx = { scope: 'artist' as const, artistId: A, tourId: null, mode: null };
+
+  it('TOURS is not a second item — the landing IS the tour list', () => {
+    /* IA_CANONICAL lists Overview and Tours separately. There is one page:
+       /artists/[id] renders the hero + the tours list, with Production and a
+       locked Business as hero tabs. Two rail items on one URL means one can
+       never light — the Patch mistake in another costume. */
+    expect(itemsFor('artist', null).some((i) => i.id === 'tours')).toBe(false);
+    expect(activeItemFor(`/artists/${A}`)).toBe('overview');
+  });
+
+  it('every artist item points at a route that exists', () => {
+    // Checked by hand against src/app/(app)/artists/[id]/ on this commit.
+    const real = new Set([
+      `/artists/${A}`,
+      `/artists/${A}/riders`,
+      `/artists/${A}/files`,
+    ]);
+    for (const item of itemsFor('artist', null)) {
+      if (!item.href) continue;
+      expect(real.has(item.href(ctx).split('?')[0])).toBe(true);
+    }
+  });
+
+  it.each([
+    [`/artists/${A}/edit`, 'overview'],
+    [`/artists/${A}/production`, 'overview'],
+    [`/artists/${A}/financials`, 'overview'],
+    [`/artists/${A}/riders`, 'riders-specs'],
+    [`/artists/${A}/channel-lists`, 'riders-specs'],
+    [`/artists/${A}/stage-plots/p1`, 'riders-specs'],
+    [`/artists/${A}/files`, 'documents'],
+  ])('%s lights %s — nothing in the subtree leaves the rail blank', (p, expected) => {
+    expect(activeItemFor(p)).toBe(expected);
+  });
+
+  it('the mode pill stays away — Money and Production are properties of a TOUR', () => {
+    expect(resolveScope(`/artists/${A}/riders`).mode).toBeNull();
+  });
+
+  it('the way up from an artist is the workspace', () => {
+    expect(upFrom(ctx)?.href).toBe('/artists');
   });
 });

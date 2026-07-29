@@ -193,9 +193,18 @@ const ARTIST_RAIL: RailEntry[] = [
   {
     kind: 'item', id: 'overview', label: 'Overview', icon: 'LayoutDashboard',
     href: (c) => `/artists/${c.artistId}`,
-    match: (p) => /^\/artists\/[^/]+\/?$/.test(p) || /^\/artists\/[^/]+\/(edit|production)$/.test(p),
+    /* Also claims Edit, the Production hub and the Financials stub. None has a
+       rail item of its own; all three are reached from the landing, and a rail
+       showing nothing lit reads as broken. Same call as labor → Day sheets. */
+    match: (p) =>
+      /^\/artists\/[^/]+\/?$/.test(p) ||
+      /^\/artists\/[^/]+\/(edit|production|financials)(\/|$)/.test(p),
   },
-  { kind: 'item', id: 'tours', label: 'Tours', icon: 'Route', badge: 'tours', href: (c) => `/artists/${c.artistId}?tab=tours` },
+  /* S-3a — IA_CANONICAL lists TOURS as a second item here. There is no second
+     page: /artists/[id] IS the tour list (hero + tours, with Production and a
+     locked Business as hero tabs). Two rail items on one URL means one of them
+     can never light, which is the Patch mistake in another costume. Dropped;
+     Overview is the landing, and the landing is the tours list. */
   g('Across tours'),
   { kind: 'item', id: 'year-budget', label: 'Year budget', icon: 'CircleDollarSign', href: null },
   { kind: 'item', id: 'people', label: 'People', icon: 'Users', href: null },
@@ -395,8 +404,9 @@ export function modeLandingHref(mode: TourMode, tourId: string): string {
  *  S-2d removes them. Artist is S-3a, workspace and You S-3b. */
 const SHELLED_TOUR_MODES = new Set<TourMode>(['tour', 'money', 'production']);
 
-/** Non-tour scopes on the canonical shell. Artist is S-3a, workspace/You S-3b. */
-const SHELLED_SCOPES = new Set<Scope>();
+/** Non-tour scopes on the canonical shell. S-3a: artist. Workspace and You are
+ *  S-3b — and they are what still keeps ProductShell alive. */
+const SHELLED_SCOPES = new Set<Scope>(['artist']);
 
 /** True when this URL should render inside <AppShellV3> rather than old chrome. */
 export function isShelledPath(pathname: string, search = ''): boolean {

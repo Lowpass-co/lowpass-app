@@ -71,6 +71,10 @@ export async function ShellV3Mount({
   const user = userData?.user ?? null;
   const initialArtists = (artistsRes ?? []) as SwitcherArtistMin[];
 
+  const knownArtistId = artistId ?? scope.artistId ?? null;
+  const resolvedArtistName =
+    initialArtists.find((a) => a.id === knownArtistId)?.name ?? null;
+
   let isSiteAdmin = false;
   let avatarUrl: string | null = null;
   let displayName = '';
@@ -102,8 +106,11 @@ export async function ShellV3Mount({
         <ArtistTourSwitcherClientWrapper
           initialArtists={initialArtists}
           initialTours={null}
-          initialArtistId={artistId ?? null}
-          fallbackArtistName={artistName ?? null}
+          initialArtistId={artistId ?? scope.artistId ?? null}
+          /* S-3a — at artist scope the id IS in the path, and the artist list
+             was already fetched for the picker, so the name is here for free.
+             No layout needs to query for it, and none does. */
+          fallbackArtistName={artistName ?? resolvedArtistName}
           fallbackTourName={tourName ?? null}
         />
       }

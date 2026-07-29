@@ -339,13 +339,23 @@ URLs were always reachable by typing them. And the loss landed in **S-2a**, when
 the shelled branch stopped rendering the sub-nav — S-2d only removes the dead
 code that made it look like the filter still existed.
 
-**Not fixed here, deliberately.** Doing it properly means a serialisable
-allow-list resolved server-side in `ShellV3Mount` (so the rail is filtered
-identically on Budget and Advance, which never had a sub-nav to inherit from),
-plus a `resource` field on the eight rail items that have one, plus a
-membership+grants fetch on every shelled surface — a cost F-3(b) deliberately
-drove down. That is a permissions bank with its own verification, not a rider on
-a deletion.
+**Not fixed here, deliberately.** Accepted and scheduled by Adam as **P-1, to
+run after S-4**:
+
+- A serialisable allow-list resolved server-side in `ShellV3Mount`, a `resource`
+  field on the rail items that have one, and a membership+grants fetch on every
+  shelled surface — a cost F-3(b) deliberately drove down, so the fetch shape
+  matters.
+- **Covers the Money and Production rails too**, not only the eight ex-sub-nav
+  items. The sub-nav never reached Budget or Advance, so "restore parity" is the
+  floor, not the target.
+- **Acceptance is a real second account**: a readonly member with no Payroll
+  grant, logged in, seeing no Payroll item. Not a unit test — a unit test proves
+  the allow-list matches itself, and the thing actually at issue is whether it
+  matches what the server enforces.
+- The report must state plainly that **six of the eight URLs were always
+  reachable by typing**, so P-1 closes DISCOVERABILITY and not access. Access is
+  a separate audit and does not get to hide behind this one.
 
 ### Patch is not a surface
 
@@ -372,6 +382,57 @@ that's what you saw, say so and I'll chase it; if the rows were named with empty
 night cells, nothing is wrong.
 
 **Smoke:** SHELL-29 … SHELL-31.
+
+---
+
+## S-3a — artist scope · `<commit>`
+
+**Migrated:** the artist landing, the Production hub, Edit, and every library
+surface — riders, channel-lists, stage-plots, files, financials.
+
+**Three chrome wrappers became one.** `(home)/layout.tsx`,
+`(library)/layout.tsx` and a per-page `<ProductShell>` inside `edit/page.tsx`
+are replaced by a single `artists/[id]/layout.tsx`. There were three because a
+route-group layout can only wrap its own group, so Edit — which sits outside
+both groups — had to carry its own copy and could drift from the other two.
+Sitting above the groups removes that by construction, and it still does what
+the `(home)` layout was written for: the picker survives /artists/A →
+/artists/B.
+
+**It fetches nothing.** The artist id is in the path, and ShellV3Mount was
+already loading the artist list for the picker — so the top bar's artist name
+comes out of data it was fetching anyway. No new query on any artist page.
+
+### Two rail items did not survive contact with the routes
+
+IA_CANONICAL was transcribed in S-1 from the document, before these routes had
+been checked against the filesystem.
+
+**TOURS is not a second page.** `/artists/[id]` **is** the tour list — hero plus
+tours, with Production and a locked Business as hero tabs. IA_CANONICAL lists
+Overview and Tours as separate rail items; two items on one URL means one of
+them can never light, which is the Patch mistake wearing a different hat.
+Dropped. Overview is the landing, and the landing is the tours list.
+
+**Three sub-routes had no item at all** — Edit, the Production hub, and the
+Financials stub. Overview claims all three, same call as labor → Day sheets: a
+rail showing nothing lit reads as broken, and all three are reached from the
+landing anyway.
+
+### Found
+
+- **The artist library had no way in from outside its own tree.** Nothing in the
+  app linked to `/artists/[id]/riders`, `/channel-lists`, `/stage-plots`,
+  `/files` or `/financials` — they were reachable only from within the artist
+  pages. The rail is now the front door, which is a real gain from this bank
+  rather than a like-for-like port.
+- **`/artists/[id]/financials` is a stub** — "no model yet", by Adam's earlier
+  call, existing so the URL space is complete. Nothing links to it and it has no
+  rail item. A candidate for the S-4 deletion list; not touched here.
+- **Production is not a rail item**, per IA_CANONICAL, so it stays reachable
+  from the hero tab only. Worth a look at S-3b whether the hub earns a slot.
+
+**Smoke:** SHELL-32 … SHELL-37.
 
 **Parked for Adam**
 - **Screenshots** at 1440/1920 of all four scopes — the app is auth-gated and I

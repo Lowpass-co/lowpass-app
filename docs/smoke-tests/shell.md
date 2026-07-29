@@ -2,9 +2,12 @@
 
 Format per `docs/smoke-tests/README.md`. IDs are stable; add new ones as banks land.
 
-**As of S-2c, TOUR SCOPE IS COMPLETE** — every URL under `/operations/…`,
-`/budget/…` and `/advance/…` renders the canonical shell. Artist, workspace and
-You scope are still on old chrome; that is S-3a and S-3b.
+**As of S-3a: tour scope and ARTIST scope are on the canonical shell** — every
+URL under `/operations/…`, `/budget/…`, `/advance/…` and `/artists/[id]/…`.
+Workspace and You (`/artists` the list, `/personnel`, `/assets`, `/venues`,
+`/settings`, `/profile`, `/bugs`, and the three tourless product landings) are
+still on old chrome. They are what keeps `ProductShell` alive; when they cross
+in S-3b, the two-bar nav can go.
 
 The authoritative answer is `isShelledPath()` in `src/lib/nav/ia.ts`; the list
 above is a description of it, not a second source of truth.
@@ -189,6 +192,45 @@ Grab a tour id from any tour URL you already have open and substitute it for
   `/operations/[tourId]/channel-list` and hit the **PATCH** toggle — the patch
   matrix still opens.
   *It was never a page; greying it claimed working software was missing.*
+
+---
+
+## Still to do — S-3a (artist scope)
+
+- [ ] **SHELL-32 — Every artist surface renders, with the right item lit.**
+  `/artists/[id]` (Overview) · `/artists/[id]/production` (Overview) ·
+  `/artists/[id]/edit` (Overview) · `/artists/[id]/riders` (Riders & specs) ·
+  `/artists/[id]/channel-lists` (Riders & specs) · `/artists/[id]/stage-plots`
+  (Riders & specs) · `/artists/[id]/files` (Documents) ·
+  `/artists/[id]/financials` (Overview).
+  *Three separate chrome wrappers collapsed into one layout here, and Edit had
+  its own — this is the "did they all land in the same place" check.*
+
+- [ ] **SHELL-33 — NO mode pill at artist scope.** Money and Production are
+  properties of a tour. The top bar shows workspace · picker · avatar, and the
+  rail head reads **ARTIST**. The ↑ link goes to **Workspace**.
+
+- [ ] **SHELL-34 — The library is reachable from the rail.** Before this bank
+  nothing outside the artist tree linked to riders / channel-lists /
+  stage-plots / files at all — they were reached only from inside. Click each
+  from the rail and confirm it lands.
+
+- [ ] **SHELL-35 — Tours is gone from the rail, and nothing was lost.** The
+  artist rail has **Overview**, not Overview *and* Tours. `/artists/[id]` still
+  shows the hero + tour list, and the hero's own Tours / Production / Business
+  tabs still work.
+  *They were one page all along; a second rail item on the same URL could never
+  light.*
+
+- [ ] **SHELL-36 — The picker knows the artist immediately.** Hard-reload
+  `/artists/[id]/riders`. The artist name is in the top bar on first paint.
+  *No layout queries for it — it comes out of the artist list the picker was
+  already fetching.*
+
+- [ ] **SHELL-37 — Workspace and You are untouched.** `/artists` (the list) ·
+  `/personnel` · `/assets` · `/venues` · `/settings` · `/settings/members` ·
+  `/profile` · `/bugs` · `/operations` and `/budget` with no tour id. All still
+  two-bar chrome, all still render. That is the S-3b line.
 
 ---
 

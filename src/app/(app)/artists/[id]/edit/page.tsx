@@ -5,15 +5,15 @@
    route to the artist Home (overview), so the edit form moves here.
    Inbound links from ArtistsList + ArtistPageHeader were updated.
 
-   Nav & entry fixpack item 4 — moved off shell-v1 (listAppPageShell)
-   to <ProductShell active="home">. The <ArtistEditSlideOver> (mounted
-   from ArtistHero) covers the artist-detail edit, but this page uniquely
-   hosts <ArtistBudgetSummaryDynamic>, so it's kept as a page (wrapped in
-   product chrome) rather than retired.
+   S-3a — the per-page <ProductShell> is gone; chrome comes from
+   /artists/[id]/layout.tsx like every other artist surface. This page had to
+   carry its own because it sits outside the (home) and (library) route groups,
+   which is exactly the drift the shared layout removes. The
+   <ArtistEditSlideOver> (mounted from ArtistHero) covers artist-detail edits,
+   but this page uniquely hosts <ArtistBudgetSummaryDynamic>, so it stays.
    ============================================ */
 
 import { notFound } from 'next/navigation';
-import { ProductShell } from '@/components/shell-v2';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { ArtistEditForm } from '@/components/artists/ArtistEditForm';
 import { ArtistPageHeader } from '@/components/artists/ArtistPageHeader';
@@ -40,12 +40,7 @@ export default async function ArtistEditPage({
   const a = artist as Artist;
 
   return (
-    <ProductShell
-      active="home"
-      artistId={a.id}
-      productName="Home"
-      homeHref={`/artists/${a.id}`}
-    >
+    <>
       <div className="mx-auto max-w-4xl space-y-6 p-6">
         <ArtistPageHeader artistId={a.id} artistName={a.name ?? 'Artist'} />
 
@@ -60,6 +55,6 @@ export default async function ArtistEditPage({
           <ArtistEditForm artist={a} />
         </div>
       </div>
-    </ProductShell>
+    </>
   );
 }
