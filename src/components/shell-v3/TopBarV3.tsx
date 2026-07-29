@@ -24,6 +24,7 @@
 
 import Link from 'next/link';
 import { DollarSign, Route, Package } from 'lucide-react';
+import { PendingSwap, PendingTint, PendingLive } from './PendingNav';
 import { modeLandingHref, MODE_LABEL, TOUR_MODES, type NavContext, type TourMode } from '@/lib/nav/ia';
 
 const MODE_ICON: Record<TourMode, React.ComponentType<{ className?: string }>> = {
@@ -68,8 +69,13 @@ export function TopBarV3({ ctx, workspaceName, switcher, right }: TopBarV3Props)
           textDecoration: 'none', whiteSpace: 'nowrap',
         }}
       >
-        <span style={{ width: 8, height: 8, borderRadius: 2, background: 'var(--lp-orange)' }} aria-hidden />
+        {/* The mark is the spinner slot — same 8px either way, so the name
+            doesn't shuffle sideways the moment you click it. */}
+        <PendingSwap className="h-2 w-2">
+          <span style={{ width: 8, height: 8, borderRadius: 2, background: 'var(--lp-orange)' }} aria-hidden />
+        </PendingSwap>
         {workspaceName}
+        <PendingLive label={workspaceName} />
       </Link>
 
       {showPicker ? (
@@ -105,6 +111,7 @@ export function TopBarV3({ ctx, workspaceName, switcher, right }: TopBarV3Props)
                 className="btn-transition"
                 style={{
                   display: 'inline-flex', alignItems: 'center', gap: 7,
+                  position: 'relative', // anchors the pending overlay
                   padding: '6px 18px', borderRadius: 'var(--lp-radius-pill)',
                   fontSize: 'var(--lp-text-xs)', fontWeight: 'var(--lp-weight-semibold)',
                   letterSpacing: '.06em', textTransform: 'uppercase',
@@ -113,8 +120,20 @@ export function TopBarV3({ ctx, workspaceName, switcher, right }: TopBarV3Props)
                   color: on ? '#fff' : 'var(--lp-text-secondary)',
                 }}
               >
-                <MIcon className="h-3 w-3" />
+                {/* Translucent, not the full orange the selected pill wears —
+                    an opaque overlay would paint over the label. This says
+                    "arming", the swapped icon says "working". */}
+                <PendingTint
+                  style={{
+                    inset: 0, borderRadius: 'var(--lp-radius-pill)',
+                    background: 'color-mix(in srgb, var(--lp-orange) 32%, transparent)',
+                  }}
+                />
+                <PendingSwap className="h-3 w-3">
+                  <MIcon className="h-3 w-3" />
+                </PendingSwap>
                 {MODE_LABEL[m]}
+                <PendingLive label={MODE_LABEL[m]} />
               </Link>
             );
           })}

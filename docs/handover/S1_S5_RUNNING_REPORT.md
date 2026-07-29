@@ -101,6 +101,42 @@ things stay where they were.
 layout one asserts the *slot height* matches across states, which is the thing
 that has to be equal — the appearance is meant to differ.
 
+### S-1 FIXPACK 2 — clicking a nav item said nothing · `<commit>`
+
+Adam, second walk: *"there's no interaction when you click a menu item, it just
+loads silently then the new screen appears."* Correct, and worse than cosmetic —
+for the second a cold lambda takes, an app that heard the click is
+indistinguishable from one that ignored it, so people click again.
+
+`useLinkStatus()` (Next 15.3+) reports the pending state of the nearest parent
+`<Link>`, which is why the three helpers in `PendingNav.tsx` are components
+rendered *inside* a Link rather than a prop computed outside one — the hook
+reads context the Link provides.
+
+Two signals, deliberately:
+- **Optimistic active.** The clicked row takes the destination's look at once —
+  orange marker and tint. Drawn as an overlay because the style it must match
+  lives on a parent the hook can't reach; `left:-2` reaches back over the row's
+  own transparent 2px border so the marker lands exactly where the real one
+  does, not 2px inside it.
+- **Icon → spinner, swapped not appended.** The row keeps its geometry, so
+  nothing shifts under the cursor mid-click, and it works in the 52px collapsed
+  rail where there is nowhere to append. Same trick on the mode pill's icon, the
+  ↑ arrow and the workspace mark: each is already a fixed-width slot.
+
+The mode pill tints translucently rather than filling orange — an opaque overlay
+would paint over its label.
+
+Nothing fires on a prefetched navigation: `pending` never flips if the payload
+is cached, so feedback appears exactly when there's a wait worth acknowledging.
+
+**Guarded:** 15 tests in `PendingNav.test.tsx`, which replaces `useLinkStatus`
+and holds every link in one state at a time — jsdom has no router. Revert-check
+done: with the swap disabled, 6 of them fail. Also pinned: a dead item (Travel)
+never shows a spinner, because it isn't a Link at all.
+
+**Smoke:** SHELL-13.
+
 **Still on old chrome:** everything except Routing. See the S-2 entries below as
 they land.
 

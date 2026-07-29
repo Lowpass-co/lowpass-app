@@ -47,6 +47,17 @@ Grab a tour id from any tour URL you already have open and substitute it for
   `/operations/[tourId]/day` · `/operations/[tourId]/rooming` ·
   `/advance/[tourId]` · `/artists` · `/venues` · `/settings`
 
+- [ ] **SHELL-13 — A click is acknowledged before the page arrives.** On Routing,
+  click **Crew** in the rail. *Immediately* — before the new page paints — the row
+  takes the orange active marker and its icon becomes a spinner. Same for the
+  **Money** pill (it tints and its icon spins) and for **↑ Artist**.
+  *Why it matters: a route change can take a second on a cold lambda, and for
+  that second an app that heard the click looks exactly like one that didn't —
+  so people click again.*
+  *Note: on a warm, prefetched route the page can arrive in well under a frame,
+  so you may see nothing. That's correct. To see it, hard-reload first, or click
+  a mode you haven't visited this session.*
+
 - [ ] **SHELL-12 — Screenshots** at **1440** and **1920**, for the record:
   Routing with the shell, expanded rail; Routing with the rail collapsed.
   *(The other three scopes aren't migrated yet — their screenshots belong to

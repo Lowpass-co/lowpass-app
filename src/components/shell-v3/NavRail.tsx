@@ -22,6 +22,7 @@ import { useCallback, useRef, useState } from 'react';
 import Link from 'next/link';
 import * as Icons from 'lucide-react';
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { PendingSwap, PendingTint, PendingLive } from './PendingNav';
 import type { RailView } from '@/lib/nav/ia';
 
 const STORAGE_KEY = 'lowpass:navrail:collapsed';
@@ -139,9 +140,15 @@ export function NavRail({
                 style={{
                   marginLeft: 'auto', color: 'var(--lp-text-secondary)',
                   fontSize: 11, whiteSpace: 'nowrap', textDecoration: 'none',
+                  display: 'inline-flex', alignItems: 'center', gap: 4,
                 }}
               >
-                ↑ {up.label}
+                {/* The arrow doubles as the spinner slot — same width either
+                    way, so the label doesn't jump when the load starts. */}
+                <PendingSwap className="h-3 w-3">
+                  <span aria-hidden>↑</span>
+                </PendingSwap>
+                {up.label}
               </Link>
             ) : null}
           </>
@@ -180,9 +187,13 @@ export function NavRail({
           ) : (
             (() => {
               const { active, href, badge } = entry;
+              /* Inside a Link, <PendingSwap> turns this icon into a spinner
+                 while that route loads; outside one (a dead item) it is a
+                 plain icon and the hook never runs. */
+              const icon = <Icon name={entry.icon} className="h-3.5 w-3.5" />;
               const body = (
                 <>
-                  <Icon name={entry.icon} className="h-3.5 w-3.5" />
+                  {href ? <PendingSwap>{icon}</PendingSwap> : icon}
                   {!collapsed ? (
                     <>
                       <span style={{ flex: 1, minWidth: 0 }}>{entry.label}</span>
@@ -197,6 +208,7 @@ export function NavRail({
               );
               const style: React.CSSProperties = {
                 display: 'flex', alignItems: 'center', gap: 9,
+                position: 'relative', // anchors the pending overlay
                 padding: collapsed ? '9px 0' : '7px 8px',
                 justifyContent: collapsed ? 'center' : undefined,
                 borderRadius: 'var(--lp-radius-md)',
@@ -230,7 +242,22 @@ export function NavRail({
                   data-active={active ? 'true' : undefined}
                   aria-current={active ? 'page' : undefined}
                 >
+                  {/* Optimistic active: the row takes the destination's look the
+                      instant it's clicked, so the click is acknowledged even
+                      when the page behind it takes a second to arrive.
+                      left:-2 reaches back over the row's own transparent 2px
+                      border, so the marker lands exactly where the real active
+                      one does rather than 2px inside it. */}
+                  <PendingTint
+                    style={{
+                      top: 0, bottom: 0, left: -2, right: 0,
+                      borderLeft: '2px solid var(--lp-orange)',
+                      borderRadius: 'var(--lp-radius-md)',
+                      background: 'color-mix(in srgb, var(--lp-orange) 12%, transparent)',
+                    }}
+                  />
                   {body}
+                  <PendingLive label={entry.label} />
                 </Link>
               ) : (
                 <span
