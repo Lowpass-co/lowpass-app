@@ -528,3 +528,43 @@ describe('badges count work, so zero is not a badge', () => {
     }
   });
 });
+
+/* ============================================
+   S-2d — GREYED MEANS ONE THING
+
+   A disabled rail item is a promise: "this doesn't exist yet." Patch broke that
+   promise — it is built and shipped as a MODE of Channel list (the PATCH toggle
+   swaps in <PatchMatrix>), with no route of its own and none planned. Greying
+   it told the user working software was missing.
+
+   This pins the whole set rather than the one case, so adding a grey item is a
+   deliberate act with a test to update, not a shrug.
+   ============================================ */
+
+describe('the disabled items are exactly the unbuilt ones', () => {
+  const greyed = (scope: Parameters<typeof itemsFor>[0], mode: Parameters<typeof itemsFor>[1]) =>
+    itemsFor(scope, mode).filter((i) => !i.href).map((i) => i.id).sort();
+
+  it('Patch is NOT in the rail — it is a mode of Channel list', () => {
+    expect(itemsFor('tour', 'production').some((i) => i.id === 'patch')).toBe(false);
+  });
+
+  it.each([
+    ['tour', 'tour', ['travel']],
+    ['tour', 'money', ['per-diems']],
+    ['tour', 'production', ['manifests', 'movements', 'spaces', 'templates']],
+    ['artist', null, ['brand', 'contacts', 'people', 'year-budget']],
+    ['workspace', null, []],
+    ['you', null, ['billing']],
+  ] as const)('%s/%s greys exactly %j', (scope, mode, expected) => {
+    expect(greyed(scope, mode)).toEqual([...expected]);
+  });
+
+  it('every OTHER item resolves to a real href', () => {
+    const ctx = { scope: 'tour' as const, artistId: A, tourId: T, mode: 'production' as const };
+    for (const item of itemsFor('tour', 'production')) {
+      if (!item.href) continue;
+      expect(item.href(ctx).startsWith('/')).toBe(true);
+    }
+  });
+});

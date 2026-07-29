@@ -168,6 +168,30 @@ Grab a tour id from any tour URL you already have open and substitute it for
 
 ---
 
+## Still to do — S-2d (retire the old tour chrome)
+
+- [ ] **SHELL-29 — The tour still works with the old chrome deleted.** Walk one
+  surface per mode and confirm no error boundary:
+  `/operations/[tourId]/routing` · `/operations/[tourId]/payroll` ·
+  `/budget/[tourId]` · `/advance/[tourId]` · `/operations/[tourId]/channel-list`.
+  *Three layouts lost a whole branch; this is the "did anything depend on it"
+  check.*
+
+- [ ] **SHELL-30 — The ARTIST and workspace tiers are untouched.**
+  `/artists/[id]` · `/artists/[id]/riders` · `/artists/[id]/edit` · `/settings` ·
+  `/settings/members` · `/venues` · `/bugs` · `/operations` (no tour id) ·
+  `/budget` (no tour id). All still on the two-bar chrome, all still render.
+  *These share `ProductShell` with the tour layouts, so this is the test that
+  says the deletion stopped where it should have.*
+
+- [ ] **SHELL-31 — Patch is gone from the rail, and still works.** The
+  Production rail no longer lists **Patch**. Open
+  `/operations/[tourId]/channel-list` and hit the **PATCH** toggle — the patch
+  matrix still opens.
+  *It was never a page; greying it claimed working software was missing.*
+
+---
+
 ## Already verified on `431f316` (Cowork, no need to repeat)
 
 - **SHELL-01 — The shell renders on Routing.** Top bar: workspace · artist/tour

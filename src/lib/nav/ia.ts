@@ -169,8 +169,12 @@ const PRODUCTION_RAIL: RailEntry[] = [
   { kind: 'item', id: 'spaces', label: 'Spaces & cases', icon: 'Boxes', href: null },
   { kind: 'item', id: 'movements', label: 'Movements', icon: 'ArrowLeftRight', href: null },
   g('The show'),
+  /* PATCH IS NOT A SURFACE. IA_CANONICAL lists it as a rail item, but it is
+     built and shipped as a MODE of Channel list — the PATCH toggle swaps
+     <PatchMatrix> in for the input grid. There is no /patch route and never
+     was, so a greyed "Patch — no page yet" was a lie about working software.
+     Dropped so that greyed means one thing only: not built yet. */
   { kind: 'item', id: 'channel-list', label: 'Channel list', icon: 'ListOrdered', href: (c) => `/operations/${c.tourId}/channel-list` },
-  { kind: 'item', id: 'patch', label: 'Patch', icon: 'Grid3x3', href: null },
   { kind: 'item', id: 'stage-plot', label: 'Stage plot', icon: 'Shapes', href: (c) => `/operations/${c.tourId}/stage-plot` },
   {
     kind: 'item', id: 'riders', label: 'Riders', icon: 'FileText',

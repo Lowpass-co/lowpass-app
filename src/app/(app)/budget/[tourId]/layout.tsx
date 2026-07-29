@@ -1,28 +1,22 @@
 /* ============================================
-   LOWPASS — Sprint 8.1 §2 — /budget/[tourId] layout
+   LOWPASS — /budget/[tourId] layout
 
-   Hoists <ProductShell> + <TourHeader> from each page.tsx into
-   one shared layout so the <ArtistTourSwitcher> wrapper persists
-   across budget sub-route navigation (root → settlement) and
-   across [tourId] changes (A → B).
+   Chrome for Budget and Settlement, mounted here so the picker and the rail
+   survive sub-route and [tourId] navigation.
 
-   This layout nests inside the existing /budget/layout.tsx
-   (BudgetDetailPanelLayout). Order: BudgetDetailPanelLayout →
-   ProductShell → TourHeader → page body.
+   Nests inside /budget/layout.tsx (BudgetDetailPanelLayout). Order:
+   BudgetDetailPanelLayout → ShellV3Mount → page body.
 
-   Sprint 8.2 §1 — the per-product currentTourKeyStat third
-   dot-segment was dropped from the switcher trigger. TourHeader
-   still renders the spent % on its stats line beneath the
-   tour name.
+   S-2d — the <ProductShell> branch and the identity band are gone; the top bar
+   carries artist and tour. The budget TABS went in S-2b, to the Money rail —
+   BudgetContextBand keeps the version selector, density toggle and Export.
    ============================================ */
 
 import type { ReactNode } from 'react';
 import { notFound } from 'next/navigation';
 import { headers } from 'next/headers';
 import { ShellV3Mount } from '@/components/shell-v3/ShellV3Mount';
-import { isShelledPath, hasOwnRail } from '@/lib/nav/ia';
-import { ProductShell } from '@/components/shell-v2';
-import { IdentityLockup } from '@/components/shell-v2/IdentityLockup';
+import { hasOwnRail } from '@/lib/nav/ia';
 import { HydrateTourArtist } from '@/components/shell-v2/HydrateTourArtist';
 import { TourVisitTracker } from '@/components/shell-v2/TourVisitTracker';
 import { loadTourIdentity } from '@/lib/shell/tourIdentity';
@@ -62,52 +56,22 @@ export default async function BudgetTourLayout({
   // the budget tab band, so the artist/tour band is identical across products.
   const identity = await loadTourIdentity(supabase, tourId);
 
-  /* S-2b — Budget is Money mode, so it crosses with Settlement and Payroll.
-     The identity band goes with the old chrome, same as it did on Routing: the
-     top bar already names the artist and the tour, and saying it twice is what
-     the canonical shell exists to stop. */
   const h = await headers();
   const pathname = h.get('x-pathname') ?? `/budget/${tourId}`;
   const search = h.get('x-search') ?? '';
 
-  if (isShelledPath(pathname, search)) {
-    return (
-      <ShellV3Mount
-        pathname={pathname}
-        search={search}
-        artistId={identity?.artistId ?? tourRow.artist_id}
-        artistName={identity?.artistName ?? null}
-        tourName={identity?.tourName ?? null}
-        denseRail={hasOwnRail(pathname)}
-      >
-        <HydrateTourArtist tourId={tourId} artistId={identity?.artistId ?? tourRow.artist_id} />
-        <TourVisitTracker tourId={tourId} />
-        {children}
-      </ShellV3Mount>
-    );
-  }
-
   return (
-    <ProductShell
-      active="budget"
-      artistId={tourRow.artist_id}
-      tourId={tourId}
-      productName="Budget"
-      subNav={identity ? (
-        <IdentityLockup
-          artistName={identity.artistName}
-          avatarUrl={identity.avatarUrl}
-          tourName={identity.tourName}
-          statusLabel={identity.statusLabel}
-          statusKey={identity.statusKey}
-        />
-      ) : null}
+    <ShellV3Mount
+      pathname={pathname}
+      search={search}
+      artistId={identity?.artistId ?? tourRow.artist_id}
+      artistName={identity?.artistName ?? null}
+      tourName={identity?.tourName ?? null}
+      denseRail={hasOwnRail(pathname)}
     >
-      {/* Budget tabs live in the page's <BudgetContextBand>; the identity band is
-          now the shared IdentityLockup above (G2-4). */}
       <HydrateTourArtist tourId={tourId} artistId={identity?.artistId ?? tourRow.artist_id} />
       <TourVisitTracker tourId={tourId} />
       {children}
-    </ProductShell>
+    </ShellV3Mount>
   );
 }

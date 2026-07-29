@@ -294,6 +294,85 @@ wasn't verified. A test asserts the completeness that lets S-2d start.
 **Smoke:** SHELL-24 … SHELL-28. SHELL-19 retires — there is no boundary left
 inside the tour to check.
 
+---
+
+## S-2d — retire the old tour chrome · `<commit>`
+
+**Deleted:** the `<ProductShell>` branch in all three tour layouts, plus three
+components whose last caller went with them —
+`OperationsGroupSubNav.tsx`, `TourIdentityBand.tsx`, `IdentityLockup.tsx`.
+Grep after: **0 references** to any of the three anywhere in `src`.
+
+**NOT deleted — and this is the answer to your "if they share a component"
+check:** `ProductShell` and `ProductHeader` **survive**. They are still the
+chrome for fifteen surfaces that are nobody's tour:
+
+- **Artist scope (S-3a)** — `artists/[id]/(home)/layout.tsx`,
+  `artists/[id]/(library)/layout.tsx`, `artists/[id]/edit/page.tsx`
+- **Workspace / You (S-3b)** — `settings`, `settings/members`,
+  `settings/ai-limits`, `venues`, `bugs`, and the three product LANDINGS
+  (`/operations`, `/budget`, `/advance` with no tour id, which resolve to
+  workspace scope, not tour)
+- `RiderPackEditorView` uses it for its standalone mode
+
+So the two-bar nav dies with S-3b, not here. Deleting it now would have taken
+the artist tier down, which is exactly the trap you asked me to check for.
+
+**The layouts no longer branch at all.** I dropped the `isShelledPath()` guard
+rather than keeping it as a runtime assertion: it would re-check something the
+tests already pin, and its failure mode — a 404, or a page rendering with no
+navigation — is worse than what it guards against. The boundary lives in ia.ts
+and in the test that reads it; the layout just mounts.
+
+### FOUND — the rail does not filter by resource access
+
+Deleting the sub-nav is what surfaced this, so it is worth being exact about.
+
+`OperationsGroupSubNav` filtered its eight links by
+`canAccess(membership, grants, 'page', 'operations.<x>', 'read')`. The rail has
+no equivalent, so a readonly member with no Payroll grant now **sees** Payroll
+in the rail where they previously didn't.
+
+**This is discoverability, not access, and it is not new.** Only `personnel` and
+`routing` gate themselves server-side; the other six pages never did, so those
+URLs were always reachable by typing them. And the loss landed in **S-2a**, when
+the shelled branch stopped rendering the sub-nav — S-2d only removes the dead
+code that made it look like the filter still existed.
+
+**Not fixed here, deliberately.** Doing it properly means a serialisable
+allow-list resolved server-side in `ShellV3Mount` (so the rail is filtered
+identically on Budget and Advance, which never had a sub-nav to inherit from),
+plus a `resource` field on the eight rail items that have one, plus a
+membership+grants fetch on every shelled surface — a cost F-3(b) deliberately
+drove down. That is a permissions bank with its own verification, not a rider on
+a deletion.
+
+### Patch is not a surface
+
+Your note, and you were right. Patch is **built** — it ships as a mode of
+Channel list, where the PATCH toggle swaps `<PatchMatrix>` in for the input
+grid. There is no `/patch` route and none planned, so greying it in the rail
+told the user that working software was missing. Dropped, so greyed means one
+thing only.
+
+Pinned by a test that asserts the **whole greyed set per rail**, not just this
+case — adding a disabled item is now a deliberate act with a test to update.
+
+### Rooming matrix — looked, and it is the empty state
+
+Rows come from `tour_personnel`: one per roster member, whether or not they hold
+a room. Cells are empty until something is assigned, which is what makes it an
+entry grid rather than a report — so an unassigned tour correctly shows a grid
+of blanks.
+
+The failure worth looking for instead is a row labelled **"Unknown"**. The page
+falls back `person name → role → "Unknown"`, so that label means a roster entry
+with no linked person AND no role — a data problem, not a rendering one. If
+that's what you saw, say so and I'll chase it; if the rows were named with empty
+night cells, nothing is wrong.
+
+**Smoke:** SHELL-29 … SHELL-31.
+
 **Parked for Adam**
 - **Screenshots** at 1440/1920 of all four scopes — the app is auth-gated and I
   have no session, so I can't produce them. The mock is verified against the
