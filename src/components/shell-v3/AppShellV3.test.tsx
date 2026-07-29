@@ -83,11 +83,12 @@ describe('each scope renders its own rail', () => {
 });
 
 describe('pages that don’t exist yet are visible but not clickable', () => {
-  it('Travel renders disabled, with a reason', () => {
+  it('Travel renders disabled and is not a link', () => {
+    /* The REASON used to live in a `title` attribute. The smoke found nothing on
+       hover (SHELL-07), so it's a real tooltip now — asserted below. */
     mount(`/operations/${T}/routing`);
     const travel = screen.getByTestId('nav-item-travel');
     expect(travel.getAttribute('aria-disabled')).toBe('true');
-    expect(travel.getAttribute('title')).toMatch(/no page yet/);
     expect(travel.tagName).toBe('SPAN'); // not a link
   });
 });
@@ -113,5 +114,95 @@ describe('the way up', () => {
   it('workspace scope offers nothing above it', () => {
     mount('/artists');
     expect(screen.queryByTestId('nav-rail-up')).toBeNull();
+  });
+});
+
+/* ============================================
+   S-1 FIXPACK — what the smoke walk caught (SHELL-06, SHELL-07)
+
+   Both failures were the native `title` attribute: the rail sets
+   overflow:hidden for its width transition, which clips anything beside an
+   icon, and a native tooltip needs a second of stillness before it appears at
+   all. "Nothing on hover", twice.
+
+   Plus a layout bug hiding inside SHELL-06: group headings collapsed from 30px
+   to a 17px hairline, so every icon below slid up 13px per group — "hard to
+   trace which is which". Muscle memory only works if things stay put.
+   ============================================ */
+
+import { fireEvent } from '@testing-library/react';
+
+describe('SHELL-07 — a dead item explains itself', () => {
+  it('hovering Travel says why it does nothing', () => {
+    mount(`/operations/${T}/routing`);
+    fireEvent.mouseEnter(screen.getByTestId('nav-item-travel'));
+    expect(screen.getByTestId('nav-tooltip').textContent).toBe('Travel — no page yet');
+  });
+
+  it('and it explains itself EXPANDED too, not only collapsed', () => {
+    // The rail is expanded here — the label is visible but the deadness isn't.
+    mount(`/operations/${T}/routing`);
+    expect(screen.getByTestId('nav-rail').getAttribute('data-collapsed')).toBe('false');
+    fireEvent.mouseEnter(screen.getByTestId('nav-item-travel'));
+    expect(screen.getByTestId('nav-tooltip')).toBeTruthy();
+  });
+
+  it('keyboard focus gets the same explanation as the mouse', () => {
+    mount(`/operations/${T}/routing`);
+    fireEvent.focus(screen.getByTestId('nav-item-travel'));
+    expect(screen.getByTestId('nav-tooltip').textContent).toMatch(/no page yet/);
+  });
+
+  it('a LIVE item expanded needs no tooltip — its label is right there', () => {
+    mount(`/operations/${T}/routing`);
+    fireEvent.mouseEnter(screen.getByTestId('nav-item-crew'));
+    expect(screen.queryByTestId('nav-tooltip')).toBeNull();
+  });
+});
+
+describe('SHELL-06 — collapsed icons are identifiable', () => {
+  it('a collapsed icon names itself on hover', () => {
+    mount(`/operations/${T}/routing`, '', { denseRail: true });
+    expect(screen.getByTestId('nav-rail').getAttribute('data-collapsed')).toBe('true');
+    fireEvent.mouseEnter(screen.getByTestId('nav-item-crew'));
+    expect(screen.getByTestId('nav-tooltip').textContent).toBe('Crew');
+  });
+
+  it('the tooltip clears when the pointer leaves', () => {
+    mount(`/operations/${T}/routing`, '', { denseRail: true });
+    const rail = screen.getByTestId('nav-rail');
+    fireEvent.mouseEnter(screen.getByTestId('nav-item-crew'));
+    expect(screen.getByTestId('nav-tooltip')).toBeTruthy();
+    fireEvent.mouseLeave(rail);
+    expect(screen.queryByTestId('nav-tooltip')).toBeNull();
+  });
+
+  it('every rail item can name itself when collapsed', () => {
+    mount(`/operations/${T}/routing`, '', { denseRail: true });
+    for (const id of ['routing', 'day-sheets', 'advance', 'crew', 'rooming', 'travel', 'files']) {
+      fireEvent.mouseEnter(screen.getByTestId(`nav-item-${id}`));
+      expect(screen.getByTestId('nav-tooltip').textContent).toBeTruthy();
+    }
+  });
+});
+
+describe('SHELL-06 — icons do not move when the rail folds', () => {
+  it('a group slot is the same height collapsed as expanded', () => {
+    /* The bug: 30px heading → 17px hairline meant everything below shifted up by
+       13px per group. Asserting the SLOT height is what pins it, because that is
+       the thing that has to match — not the appearance, which is meant to
+       differ. */
+    const read = (dense: boolean) => {
+      const { container, unmount } = mount(`/operations/${T}/routing`, '', { denseRail: dense });
+      const rail = container.querySelector('[data-testid="nav-rail"]') as HTMLElement;
+      const slots = [...rail.querySelectorAll('div')].filter(
+        (d) => (d as HTMLElement).style.height === '30px',
+      ).length;
+      unmount();
+      return slots;
+    };
+    // Tour mode has two groups; both must reserve a slot in both states.
+    expect(read(false)).toBe(2);
+    expect(read(true)).toBe(2);
   });
 });

@@ -74,6 +74,33 @@ does not. Checkable without an RSC boundary, which is the point.
 component must be plain data. The config module keeps its functions; they stop
 at the server.
 
+### S-1 FIXPACK — SHELL-06 + SHELL-07 from Adam's walk · `<commit>`
+
+Smoke result: 6 pass, 2 fail, 1 skipped (screenshots).
+
+**SHELL-07 — "Nothing on hover"** and **SHELL-06 — "No tooltips"**: same cause,
+mine. I used the native `title` attribute, and the rail sets `overflow:hidden`
+for its width transition — which clips anything that would sit beside an icon.
+Native tooltips also need a second of stillness before appearing, which is no
+use to someone scanning a 52px icon strip. Replaced with a real tooltip:
+fixed-positioned so it escapes the rail's clipping box, instant on hover, and
+**on keyboard focus too**, which `title` never gave us.
+
+A dead item now explains itself **expanded as well as collapsed** — "Travel — no
+page yet". That's the half of SHELL-07 that mattered: expanded, the label is
+visible but the deadness isn't.
+
+**SHELL-06, second half — "icons move a handful of pixels when they fold away,
+hard to trace which is which".** A separate real bug: a group heading is 30px
+expanded and collapsed to a 17px hairline, so every icon below slid up 13px per
+group. Group slots are now a fixed 30px in **both** states — the grouping changes
+appearance when the rail folds, never position. Muscle memory only works if
+things stay where they were.
+
+**Guarded:** 8 tests. The tooltip ones assert content on hover and on focus; the
+layout one asserts the *slot height* matches across states, which is the thing
+that has to be equal — the appearance is meant to differ.
+
 **Still on old chrome:** everything except Routing. See the S-2 entries below as
 they land.
 

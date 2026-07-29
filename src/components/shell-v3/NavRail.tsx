@@ -18,13 +18,16 @@
    in, and the one you work in should not be the one that shrinks.
    ============================================ */
 
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import Link from 'next/link';
 import * as Icons from 'lucide-react';
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import type { RailView } from '@/lib/nav/ia';
 
 const STORAGE_KEY = 'lowpass:navrail:collapsed';
+/* One height for a group slot in BOTH states, so nothing below it moves when
+   the rail folds. See the note at the group render. */
+const GROUP_H = 30;
 
 export interface NavRailProps {
   /* PLAIN DATA ONLY. This crosses an RSC boundary, so it must contain no
@@ -64,6 +67,24 @@ export function NavRail({
     }
   });
 
+  /* A REAL tooltip, not the native `title`.
+
+     S-1 shipped `title` and the smoke found nothing on hover, twice. Two reasons:
+     the rail sets overflow:hidden for its width transition (which clips anything
+     that would sit beside an icon), and a native tooltip needs a second of
+     stillness to appear at all — no use to someone scanning a 52px icon strip.
+
+     So: fixed-positioned, rendered outside the rail's clipping context, shown
+     instantly on hover AND on keyboard focus. */
+  const [tip, setTip] = useState<{ label: string; top: number; left: number } | null>(null);
+  const railRef = useRef<HTMLElement | null>(null);
+
+  const showTip = useCallback((el: HTMLElement, label: string | null) => {
+    if (!label) return setTip(null);
+    const r = el.getBoundingClientRect();
+    setTip({ label, top: r.top + r.height / 2, left: r.right + 8 });
+  }, []);
+
   const toggle = useCallback(() => {
     setCollapsed((prev) => {
       const next = !prev;
@@ -76,6 +97,8 @@ export function NavRail({
 
   return (
     <nav
+      ref={railRef}
+      onMouseLeave={() => setTip(null)}
       aria-label={`${scopeLabel} navigation`}
       data-testid="nav-rail"
       data-collapsed={collapsed ? 'true' : 'false'}
@@ -128,24 +151,32 @@ export function NavRail({
       <div style={{ flex: 1, overflowY: 'auto', padding: '8px 8px 4px' }}>
         {entries.map((entry, i) =>
           entry.kind === 'group' ? (
-            collapsed ? (
-              // Collapsed: a hairline stands in for the heading, so the grouping
-              // survives without the words.
-              i === 0 ? null : (
-                <div key={`g${i}`} style={{ height: 1, background: 'var(--lp-border)', margin: '8px 6px' }} />
-              )
-            ) : (
-              <div
-                key={`g${i}`}
-                className="lp-label-caps"
-                style={{
-                  fontSize: 'var(--lp-text-2xs)', color: 'var(--lp-text-tertiary)',
-                  padding: '12px 8px 5px', letterSpacing: '.1em',
-                }}
-              >
-                {entry.label}
-              </div>
-            )
+            /* SAME HEIGHT in both states. The first version let a 30px heading
+               collapse to a 17px hairline, so every icon below it slid upward by
+               13px per group — the smoke's "icons move a handful of pixels when
+               they fold away, hard to trace which is which". Muscle memory only
+               works if a thing stays where it was, so the grouping changes
+               APPEARANCE on collapse, never position. */
+            <div
+              key={`g${i}`}
+              className={collapsed ? undefined : 'lp-label-caps'}
+              aria-hidden={collapsed ? true : undefined}
+              style={{
+                height: GROUP_H,
+                display: 'flex',
+                alignItems: collapsed ? 'center' : 'flex-end',
+                padding: collapsed ? '0 6px' : '0 8px 5px',
+                fontSize: 'var(--lp-text-2xs)',
+                color: 'var(--lp-text-tertiary)',
+                letterSpacing: '.1em',
+              }}
+            >
+              {collapsed ? (
+                i === 0 ? null : <span style={{ flex: 1, height: 1, background: 'var(--lp-border)' }} />
+              ) : (
+                entry.label
+              )}
+            </div>
           ) : (
             (() => {
               const { active, href, badge } = entry;
@@ -178,15 +209,23 @@ export function NavRail({
                 opacity: href ? 1 : 0.45,
                 marginBottom: 1,
               };
-              // Tooltip carries the label when collapsed, and explains a
-              // disabled item either way.
-              const title = href
-                ? collapsed ? entry.label : undefined
-                : `${entry.label} — no page yet`;
+              /* What the tooltip says: the label when collapsed (the icon alone
+                 isn't enough), and why an item is dead when it has no page —
+                 that one matters expanded too, which is what SHELL-07 caught. */
+              const tipText = !href
+                ? `${entry.label} — no page yet`
+                : collapsed
+                  ? entry.label
+                  : null;
+              const hover = {
+                onMouseEnter: (e: React.MouseEvent<HTMLElement>) => showTip(e.currentTarget, tipText),
+                onFocus: (e: React.FocusEvent<HTMLElement>) => showTip(e.currentTarget, tipText),
+                onBlur: () => setTip(null),
+              };
 
               return href ? (
                 <Link
-                  key={entry.id} href={href} style={style} title={title}
+                  key={entry.id} href={href} style={style} {...hover}
                   data-testid={`nav-item-${entry.id}`}
                   data-active={active ? 'true' : undefined}
                   aria-current={active ? 'page' : undefined}
@@ -195,7 +234,7 @@ export function NavRail({
                 </Link>
               ) : (
                 <span
-                  key={entry.id} style={style} title={title}
+                  key={entry.id} style={style} {...hover} tabIndex={0}
                   data-testid={`nav-item-${entry.id}`} aria-disabled="true"
                 >
                   {body}
@@ -205,6 +244,33 @@ export function NavRail({
           ),
         )}
       </div>
+
+      {/* Rendered LAST and fixed-positioned: the rail clips its own overflow, so
+          anything beside an icon has to escape that box to be seen at all. */}
+      {tip ? (
+        <div
+          role="tooltip"
+          data-testid="nav-tooltip"
+          style={{
+            position: 'fixed',
+            top: tip.top,
+            left: tip.left,
+            transform: 'translateY(-50%)',
+            zIndex: 60,
+            pointerEvents: 'none',
+            whiteSpace: 'nowrap',
+            background: 'var(--lp-surface)',
+            border: '1px solid var(--lp-border-strong)',
+            borderRadius: 'var(--lp-radius-md)',
+            padding: '5px 9px',
+            fontSize: 'var(--lp-text-xs)',
+            color: 'var(--lp-text)',
+            boxShadow: '0 6px 20px rgba(0,0,0,.45)',
+          }}
+        >
+          {tip.label}
+        </div>
+      ) : null}
 
       <div style={{ borderTop: '1px solid var(--lp-hairline, rgba(255,255,255,.05))', padding: 8 }}>
         <button
