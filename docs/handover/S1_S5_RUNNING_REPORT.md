@@ -238,6 +238,62 @@ as one deliberate pass rather than smuggled into a chrome bank.
 
 **Smoke:** SHELL-20 … SHELL-23.
 
+### S-2b FIXPACK — the day-rail predicate, twice wrong · `<commit>`
+
+Adam, second walk: *"hasDayRail() is still slightly wrong, same class as
+denseRail. Rooming only shows the RoutingRail in its CARDS view."*
+
+Correct, and worse than reported. Rooming's view is component state defaulting
+to **Matrix**, so the collapsed rail wasn't wrong on two views out of three —
+it was wrong on **every arrival**. You only saw the good case by clicking into
+Cards.
+
+**Rooming is out, per-path granularity accepted.** The alternative — a
+view-aware shell — was the wrong trade twice over. Chrome that waits for a
+client component to report which view is showing puts chrome back on ambient
+state, which is the exact dependency S-1 exists to remove; and moving the view
+into the query would keep the rule but cost a server round-trip on every toggle
+of an instant segmented control. So Rooming stays expanded, and in Cards the
+collapse control is one click and persists.
+
+**A third page turned up while checking properly:** the rider pack editor
+renders a 280px `RiderPackSidebar` — unconditionally, on `/riders/[id]` but not
+on the pack list. So the predicate is now **`hasOwnRail`**, not `hasDayRail`:
+not every competing rail is a day rail, and a name that says otherwise is how
+the next person guesses instead of checking. Each of the three is asserted with
+the word *unconditionally*, because "only in one view" is precisely what went
+wrong here.
+
+**Labor calls lights Day sheets.** Adam: *"if the rail highlights NOTHING at all
+it reads as broken."* It has no item of its own by design — IA_CANONICAL reaches
+it from Day sheets → Schedule — but "no item" and "nothing highlighted" look
+very different to someone using the thing. It lights its parent, which is where
+you came from and where you'd go back to.
+
+**"Reports & workbook" wins**, Adam's call. The `?tab=settings` VALUE stays, so
+no bookmark breaks over a rename.
+
+---
+
+## S-2c — tour scope · Production mode — TOUR SCOPE COMPLETE · `<commit>`
+
+**Migrated:** Assets (hire), Channel list, Stage plot, Riders and rider packs.
+
+**One entry in `SHELLED_TOUR_MODES`.** No layout changed, no new branch, no new
+regex — which is exactly the return on doing the boundary properly in S-2a. The
+only real work was checking, not writing: confirming the four Production pages
+carry no chrome of their own that would now double, and finding the rider
+editor's sidebar before it shipped as a third wrong guess.
+
+**Every tour-scoped URL is now shelled**, which means the `ProductShell` branches
+in the three tour layouts are unreachable. They stay this bank and go in S-2d,
+along with the two-bar nav and OperationsGroupSubNav — one bank, one thing, and
+a dead branch is a safer thing to have on `main` overnight than a deletion that
+wasn't verified. A test asserts the completeness that lets S-2d start.
+
+**Smoke:** SHELL-24 … SHELL-28. SHELL-19 retires — there is no boundary left
+inside the tour to check.
+
 **Parked for Adam**
 - **Screenshots** at 1440/1920 of all four scopes — the app is auth-gated and I
   have no session, so I can't produce them. The mock is verified against the

@@ -23,7 +23,7 @@ import {
   upFrom,
   isUnshelledPath,
   isShelledPath,
-  hasDayRail,
+  hasOwnRail,
   TOUR_MODES,
 } from './ia';
 
@@ -360,7 +360,7 @@ describe('what crosses to the client is plain data', () => {
    SHELLED_TOUR_MODES and these say precisely what came back with it.
    ============================================ */
 
-describe('isShelledPath — what is on the canonical shell after S-2b', () => {
+describe('isShelledPath — what is on the canonical shell after S-2c', () => {
   it.each([
     // S-2a — Tour mode.
     `/operations/${T}/routing`,
@@ -388,13 +388,26 @@ describe('isShelledPath — what is on the canonical shell after S-2b', () => {
   });
 
   it.each([
-    // Production — S-2c.
+    // S-2c — Production, which completes tour scope.
     `/operations/${T}/hire`,
     `/operations/${T}/channel-list`,
     `/operations/${T}/stage-plot`,
     `/operations/${T}/riders`,
-  ])('%s is Production → still old chrome', (p) => {
-    expect(isShelledPath(p)).toBe(false);
+    `/operations/${T}/riders/pack-1`,
+  ])('%s is Production → shelled', (p) => {
+    expect(isShelledPath(p)).toBe(true);
+  });
+
+  it('TOUR SCOPE IS COMPLETE — no tour URL is left on old chrome', () => {
+    /* The check that says S-2d can start: if any of these went false, the
+       ProductShell branches the next bank deletes would still be load-bearing. */
+    for (const mode of TOUR_MODES) {
+      expect(isShelledPath(modeLandingHref(mode, T).split('?')[0])).toBe(true);
+    }
+    // And the odd corners that belong to no rail item.
+    for (const p of [`/operations/${T}`, `/operations/${T}/summary`, `/operations/${T}/edit`, `/operations/${T}/labor`]) {
+      expect(isShelledPath(p)).toBe(true);
+    }
   });
 
   it.each(['/artists', `/artists/${A}`, '/settings', '/venues', '/personnel'])(
@@ -418,31 +431,60 @@ describe('isShelledPath — what is on the canonical shell after S-2b', () => {
   });
 });
 
-describe('hasDayRail — where the app rail should start collapsed', () => {
+describe('hasOwnRail — where the app rail should start collapsed', () => {
   it('ROUTING DOES NOT HAVE ONE', () => {
     /* S-1 collapsed the rail on Routing on the assumption that the routing page
-       owned the day rail. It doesn't — <RoutingRail> is rendered by Rooming,
-       the per-day page and the per-show Advance surface. Adam caught it on the
-       first walk; this is the assertion that stops it coming back. */
-    expect(hasDayRail(`/operations/${T}/routing`)).toBe(false);
+       owned the day rail. It doesn't. Caught on the first walk; this is the
+       assertion that stops it coming back. */
+    expect(hasOwnRail(`/operations/${T}/routing`)).toBe(false);
+  });
+
+  it('NOR DOES ROOMING — same mistake, one bank later', () => {
+    /* Rooming has three views and only Cards renders a day rail. The view is
+       component state defaulting to MATRIX, so collapsing here was wrong on
+       every arrival, not on two views out of three.
+
+       The fix is per-path granularity rather than a view-aware shell: chrome
+       that waits for a client component to say which view is showing is chrome
+       back on ambient state, which is the dependency S-1 removed. */
+    expect(hasOwnRail(`/operations/${T}/rooming`)).toBe(false);
   });
 
   it.each([
-    `/operations/${T}/rooming`,
-    `/operations/${T}/day/r-1`,
-    `/advance/${T}/r-1`,
-  ])('%s carries one', (p) => {
-    expect(hasDayRail(p)).toBe(true);
+    `/operations/${T}/day/r-1`,     // DayLayout → DayRail
+    `/advance/${T}/r-1`,            // AdvanceUpcomingSidebar
+    `/operations/${T}/riders/p-1`,  // RiderPackEditorView → RiderPackSidebar, 280px
+  ])('%s carries one, unconditionally — no view can turn it off', (p) => {
+    expect(hasOwnRail(p)).toBe(true);
   });
 
   it.each([
     `/operations/${T}/day`,      // the day INDEX has no rail — the per-day page does
     `/advance/${T}`,             // tour-level advance overview, no rail
+    `/operations/${T}/riders`,   // the pack LIST, likewise
     `/operations/${T}/personnel`,
     `/operations/${T}/files`,
+    `/operations/${T}/channel-list`,
+    `/operations/${T}/stage-plot`,
+    `/operations/${T}/hire`,
     `/budget/${T}`,
   ])('%s does not', (p) => {
-    expect(hasDayRail(p)).toBe(false);
+    expect(hasOwnRail(p)).toBe(false);
+  });
+});
+
+describe('a rail with nothing lit reads as broken', () => {
+  it('Labor calls lights Day sheets, its parent', () => {
+    /* It has no rail item by design — IA_CANONICAL reaches it from Day sheets →
+       Schedule. But "no item of its own" and "nothing highlighted at all" look
+       very different to someone using the thing. */
+    expect(activeItemFor(`/operations/${T}/labor`)).toBe('day-sheets');
+    expect(activeItemFor(`/operations/${T}/labor/call-1`)).toBe('day-sheets');
+  });
+
+  it('and Day sheets itself is unaffected', () => {
+    expect(activeItemFor(`/operations/${T}/day`)).toBe('day-sheets');
+    expect(activeItemFor(`/operations/${T}/day/r-1`)).toBe('day-sheets');
   });
 });
 

@@ -41,7 +41,7 @@ export interface ShellV3MountProps {
   tourName?: string | null;
   badges?: Record<string, string | number | null | undefined>;
   /** Start the nav rail collapsed (pages that carry a day rail). Prefer
-   *  `hasDayRail(pathname)` from ia.ts over hand-picking this per layout. */
+   *  `hasOwnRail(pathname)` from ia.ts over hand-picking this per layout. */
   denseRail?: boolean;
   children: React.ReactNode;
 }

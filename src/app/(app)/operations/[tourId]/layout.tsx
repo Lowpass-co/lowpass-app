@@ -29,7 +29,7 @@ import { HydrateTourArtist } from '@/components/shell-v2/HydrateTourArtist';
 import { OperationsGroupSubNav } from '@/components/operations/OperationsGroupSubNav';
 import { TourIdentityBand } from '@/components/operations/TourIdentityBand';
 import { loadTourIdentity } from '@/lib/shell/tourIdentity';
-import { isShelledPath, hasDayRail } from '@/lib/nav/ia';
+import { isShelledPath, hasOwnRail } from '@/lib/nav/ia';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import {
   canAccess,
@@ -68,11 +68,12 @@ export default async function OperationsTourLayout({
   const { tourId } = await params;
   const supabase = await createServerSupabaseClient();
 
-  /* S-2a — which URLs are on the canonical shell is answered by ia.ts, not by a
-     regex that grows here every bank. Right now that means Tour mode (routing,
-     day sheets, crew, rooming, files); Production keeps ProductShell + the
-     two-bar nav + OperationsGroupSubNav until S-2c, and Payroll — which is
-     Money mode even though it lives under /operations — until S-2b.
+  /* Which URLs are on the canonical shell is answered by ia.ts, not by a regex
+     that grows here every bank. As of S-2c that is every tour-scoped URL, so
+     the ProductShell branch below is now unreachable — S-2d deletes it, along
+     with the two-bar nav and OperationsGroupSubNav, once nothing renders them.
+     It stays until then rather than being removed on the same push that made it
+     dead: one bank, one thing.
 
      The pathname comes from the request headers because layouts are server
      components and there is no usePathname here — and because the shell must
@@ -127,11 +128,11 @@ export default async function OperationsTourLayout({
         artistId={identity.artistId}
         artistName={identity.artistName}
         tourName={identity.tourName}
-        /* Rooming and the per-day page carry the R5 day rail; Routing does NOT
-           — S-1 collapsed the rail there on my wrong assumption and Adam caught
-           it. hasDayRail() names the three surfaces that actually have one, so
-           the app rail only shrinks where something is competing for the width. */
-        denseRail={hasDayRail(pathname)}
+        /* Collapse only where the PAGE already has a left rail of its own — see
+           hasOwnRail(), which names the three and explains why Routing and
+           Rooming are not among them. Both were my guesses, and both were
+           wrong; the list is checked against the components now. */
+        denseRail={hasOwnRail(pathname)}
       >
         <HydrateTourArtist tourId={tourId} artistId={identity.artistId} />
         <TourVisitTracker tourId={tourId} />

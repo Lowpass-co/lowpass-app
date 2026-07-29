@@ -93,7 +93,11 @@ export function BudgetContextBand({
             href: hrefFor('receipts'),
             active: active === 'receipts',
           },
-          { key: 'settings', label: 'Settings', href: hrefFor('settings'), active: active === 'settings' },
+          /* S-2c — "Reports & workbook", not "Settings": Adam's call, and the
+             right one — the old name described where the code lived, not what
+             was behind the link. The ?tab= VALUE stays `settings` so nobody's
+             bookmark breaks over a rename. */
+          { key: 'settings', label: 'Reports & workbook', href: hrefFor('settings'), active: active === 'settings' },
         ]}
         rightSlot={
           <div className="flex items-center gap-2">

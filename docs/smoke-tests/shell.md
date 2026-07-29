@@ -2,10 +2,9 @@
 
 Format per `docs/smoke-tests/README.md`. IDs are stable; add new ones as banks land.
 
-**As of S-2b, the shell is mounted on TOUR mode and MONEY mode:** Routing, Day
-sheets, Crew, Rooming, Files, both Advance surfaces, Budget (all tabs),
-Settlement and Payroll. Production (Assets, Channel list, Stage plot, Riders) is
-still on old chrome — that is S-2c, and it is correct until then.
+**As of S-2c, TOUR SCOPE IS COMPLETE** — every URL under `/operations/…`,
+`/budget/…` and `/advance/…` renders the canonical shell. Artist, workspace and
+You scope are still on old chrome; that is S-3a and S-3b.
 
 The authoritative answer is `isShelledPath()` in `src/lib/nav/ia.ts`; the list
 above is a description of it, not a second source of truth.
@@ -105,12 +104,9 @@ Grab a tour id from any tour URL you already have open and substitute it for
   card for that tour. It should return you to Operations, not Budget.
   *ProductShell used to record this; the new shell has to keep doing it.*
 
-- [ ] **SHELL-19 — Production is untouched.** `/operations/[tourId]/hire` ·
-  `/operations/[tourId]/channel-list` · `/operations/[tourId]/stage-plot` ·
-  `/operations/[tourId]/riders` still render their OLD chrome with no error.
-  Half-migrated is the plan; half-broken is not.
-  *(S-2a asked the same of Budget and Payroll — they've since crossed, see
-  SHELL-20.)*
+- [ ] ~~**SHELL-19 — Production is untouched.**~~ **Retired at S-2c** — nothing
+  tour-scoped is on old chrome any more, so there is no boundary left inside the
+  tour to check. The boundary is now tour-vs-artist, covered by SHELL-27.
 
 ---
 
@@ -139,6 +135,36 @@ Grab a tour id from any tour URL you already have open and substitute it for
   grid, burn bar and totals read the same as before the chrome changed, and that
   `/budget/[tourId]/settlement` still opens and totals.
   *Chrome-only bank — if a number moved, that's the finding.*
+
+---
+
+## Still to do — the S-2b fixpack + S-2c (Production)
+
+- [ ] **SHELL-24 — Rooming keeps its rail expanded.** Load
+  `/operations/[tourId]/rooming`. The app rail is **expanded** on arrival, in
+  all three views (Matrix / Cards / Nights).
+  *Your finding: only Cards renders a day rail, and the view defaults to Matrix,
+  so collapsing here was wrong on every arrival. In Cards you now get two rails
+  — collapse it once and the choice persists.*
+
+- [ ] **SHELL-25 — Labor calls lights Day sheets.** Open a labor call
+  (`/operations/[tourId]/labor`). The rail highlights **Day sheets**, its
+  parent. Nothing lit at all reads as broken.
+
+- [ ] **SHELL-26 — Production mode renders.** `/operations/[tourId]/hire`
+  (Assets) · `/channel-list` · `/stage-plot` · `/riders` · a rider pack
+  (`/riders/[id]`). Shell present, **PRODUCTION** pill lit, right rail item
+  active, no old two-bar nav.
+  On the **rider pack** specifically: it has its own 280px sidebar, so the app
+  rail should start **collapsed** there — and only there, not on the pack list.
+
+- [ ] **SHELL-27 — The boundary moved up a level.** `/artists` ·
+  `/artists/[id]` · `/venues` · `/settings` still render their OLD chrome with
+  no error. That's the S-3 line now; nothing tour-scoped is left behind it.
+
+- [ ] **SHELL-28 — "Reports & workbook", not "Settings".** The Money rail's last
+  Plan-side item reads **Reports & workbook** and lands on the same page the old
+  Settings tab did. The URL is still `?tab=settings` — bookmarks intact.
 
 ---
 

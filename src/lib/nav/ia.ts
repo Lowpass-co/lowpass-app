@@ -93,8 +93,14 @@ const TOUR_RAIL: RailEntry[] = [
     /* IA_CANONICAL writes this as "/operations/[tourId]/day · /day/[routingId]",
        which reads as a top-level /day route. There isn't one — the per-day page
        is /operations/[tourId]/day/[routingId], nested. Worth knowing before S-2
-       plans around a path that does not exist. */
-    match: (p) => /^\/operations\/[^/]+\/day(\/|$)/.test(p),
+       plans around a path that does not exist.
+
+       LABOR CALLS LIGHTS THIS TOO. It has no rail item by design — IA_CANONICAL
+       reaches it from Day sheets → Schedule — but "no rail item" and "nothing
+       highlighted" are different things to look at. A rail with nothing lit
+       reads as broken, so it lights its PARENT, which is where you came from
+       and where you'd go back to. */
+    match: (p) => /^\/operations\/[^/]+\/(day|labor)(\/|$)/.test(p),
   },
   {
     kind: 'item', id: 'advance', label: 'Advance', icon: 'Send', badge: 'advanced',
@@ -380,8 +386,10 @@ export function modeLandingHref(mode: TourMode, tourId: string): string {
    ============================================ */
 
 /** Tour-scope modes on the canonical shell. S-2a: Tour. S-2b: Money.
- *  Production is S-2c — one more entry in this set. */
-const SHELLED_TOUR_MODES = new Set<TourMode>(['tour', 'money']);
+ *  S-2c: Production — which completes tour scope. Every tour-scoped URL is now
+ *  shelled, so the ProductShell branches in the three tour layouts are dead;
+ *  S-2d removes them. Artist is S-3a, workspace and You S-3b. */
+const SHELLED_TOUR_MODES = new Set<TourMode>(['tour', 'money', 'production']);
 
 /** Non-tour scopes on the canonical shell. Artist is S-3a, workspace/You S-3b. */
 const SHELLED_SCOPES = new Set<Scope>();
@@ -395,20 +403,42 @@ export function isShelledPath(pathname: string, search = ''): boolean {
 }
 
 /**
- * Pages that carry a <RoutingRail> — the DAY rail, which navigates days inside
- * one tour and is a working surface, not a glance. Where one is present the app
- * rail starts collapsed so the day rail keeps its width.
+ * Pages that render a LEFT RAIL OF THEIR OWN, and so shouldn't have to share
+ * the width with a full-width app rail. Where one is present the app rail
+ * starts collapsed: the app rail is a glance ("where am I"), the page's rail is
+ * a surface you work in, and the one you work in shouldn't be the one that
+ * shrinks.
  *
- * ROUTING IS NOT ONE OF THEM. S-1 shipped `denseRail` on Routing on my
- * assumption that the routing page owned the day rail; it doesn't — RoutingRail
- * is rendered by Rooming, the per-day page and the per-show Advance surface.
- * Adam caught it on the first walk. Naming the actual three here means the next
- * mount can't inherit the same guess.
+ * Three, and each renders its rail UNCONDITIONALLY — that qualifier is the
+ * whole lesson of this function:
+ *   · the per-day page              → DayLayout → DayRail
+ *   · the per-show Advance surface  → AdvanceUpcomingSidebar
+ *   · the rider pack editor         → RiderPackSidebar (280px)
+ *
+ * NOT ROUTING. S-1 collapsed it there on my assumption that the routing page
+ * owned the day rail; it doesn't.
+ *
+ * NOT ROOMING EITHER — the same mistake one bank later. Rooming has three views
+ * and only **Cards** renders a rail. The view is component state defaulting to
+ * **Matrix**, so every arrival was an icon-only rail beside nothing at all:
+ * wrong on 100% of cold loads, not on two views out of three.
+ *
+ * Rooming is also why this takes a pathname and nothing else. Making the shell
+ * wait for a client component to report which view is showing would put chrome
+ * back on ambient state — the exact dependency S-1 exists to remove. Moving the
+ * view into the query would keep that rule but cost a server round-trip on
+ * every toggle, which is a bad trade for an instant segmented control. So
+ * Rooming stays expanded, and in Cards the collapse control is one click and
+ * persists.
+ *
+ * It was called `hasOwnRail` until the rider editor joined: not every competing
+ * rail is a day rail, and a name that says otherwise is how the next person
+ * guesses instead of checking.
  */
-export function hasDayRail(pathname: string): boolean {
+export function hasOwnRail(pathname: string): boolean {
   return (
-    /^\/operations\/[^/]+\/rooming(\/|$)/.test(pathname) ||
     /^\/operations\/[^/]+\/day\/[^/]+/.test(pathname) ||
+    /^\/operations\/[^/]+\/riders\/[^/]+/.test(pathname) ||
     /^\/advance\/[^/]+\/[^/]+/.test(pathname)
   );
 }
