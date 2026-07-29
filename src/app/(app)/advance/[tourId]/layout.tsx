@@ -15,6 +15,9 @@
 
 import type { ReactNode } from 'react';
 import { notFound } from 'next/navigation';
+import { headers } from 'next/headers';
+import { ShellV3Mount } from '@/components/shell-v3/ShellV3Mount';
+import { isShelledPath, hasDayRail } from '@/lib/nav/ia';
 import { ProductShell } from '@/components/shell-v2';
 import { IdentityLockup } from '@/components/shell-v2/IdentityLockup';
 import { HydrateTourArtist } from '@/components/shell-v2/HydrateTourArtist';
@@ -34,6 +37,31 @@ export default async function AdvanceTourLayout({
 
   const identity = await loadTourIdentity(supabase, tourId);
   if (!identity) notFound();
+
+  /* S-2a — Advance is Tour mode, so it crosses to the canonical shell with the
+     rest of Tour mode. The per-show surface (/advance/[tourId]/[routingId])
+     carries the upcoming-shows day rail, so the app rail starts collapsed
+     there; the tour-level overview has no day rail and keeps its width. */
+  const h = await headers();
+  const pathname = h.get('x-pathname') ?? `/advance/${tourId}`;
+  const search = h.get('x-search') ?? '';
+
+  if (isShelledPath(pathname, search)) {
+    return (
+      <ShellV3Mount
+        pathname={pathname}
+        search={search}
+        artistId={identity.artistId}
+        artistName={identity.artistName}
+        tourName={identity.tourName}
+        denseRail={hasDayRail(pathname)}
+      >
+        <HydrateTourArtist tourId={tourId} artistId={identity.artistId} />
+        <TourVisitTracker tourId={tourId} />
+        {children}
+      </ShellV3Mount>
+    );
+  }
 
   return (
     <ProductShell

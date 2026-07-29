@@ -37,3 +37,22 @@ each stage and hit `/api/debug/derivations` (F0) for ground-truth query state.
 **Money invariants held every stage:** fees 15/15 · reconcile 52/52 (THE money gate) · provenance 18/18 · FX greps 0 · tourStatus 14/14.
 
 **Remaining (F2, post-walk continuation):** native `<select>` → StyledSelect (~60 sites, batch by behavior class); destructive→red audit; Files + Riders page treatments; empty-state invitation sweep; four remaining hand-rolled titles (Personnel / Channel list / Advance overview / Riders); residual mono. Visual-heavy — gated on the six-page screenshot pass. After that + a green walk, the app goes to Adam for the live grading session.
+
+---
+
+## COMPETITIVE PHASE (2026-07-19 →) — beat ATOM before release
+
+Master doc: `docs/design/COMPETITIVE_GAMEPLAN_ATOM_2026-07-19.md` (arena verdicts + Adam's rulings). STRICT ORDER, same rules as ever (single owner, bank-per-stage, migrations hand-pasted, harnesses green):
+
+| # | Item | Spec | Status |
+|---|---|---|---|
+| C0 | Context hydration P0 (personnel hang / empty pickers / static Where·Who·What header) | `CC_CONTEXT_HYDRATION_P0.md` | queued |
+| C1 | Artist builder rebuild | `CC_ARTIST_BUILDER.md` | queued |
+| C2 | **M1** Money legibility + settlement | `CC_M1_MONEY_LEGIBILITY.md` | ✅ COMPLETE — chips, banner, Walk + itemized deductions (mig 243), catch-up queue, settlement PDF, inline rates, server-side Finalize. Settlement harness 21. Walked 8/9 → SET-05 fixed after walk |
+| C3 | **X1** XLSX workbook export + review-queued import | `CC_X1_XLSX_WORKBOOK.md` | ✅ COMPLETE — six-sheet export (mig 244 proposals), dedupe import. Em-dash header 500 caught on walk, fixed |
+| C4 | **D1** The Day + tour roles (Daysheets replacement) | `CC_DAY_AND_ROLES.md` | ✅ COMPLETE — Day object, PDF composer, tour_roles (mig 245), tokenized /m/day, View-as. ROLE smokes verified byte-level (money absent from crew HTML). §D1-6 quality stage: three-zone layout, contacts=venue people |
+| C5 | **V1** Venue packet reshape | gameplan §V1 | ✅ COMPLETE — PDF-per-artifact Share, rider AI import (propose-only), one canonical rider. VP-01 screenshot walk pending Adam grade |
+| C6 | **S1** Spaces / assets unification | `CC_SPACES.md` | ◐ Stages A–C COMPLETE (migs 246–250, 248 amended; unified gear; Assets surface live; zero rental_inventory writers). REMAINING: 251 finish (job_items DROP NOT NULL + Jobs picker → gear_id) + Stage D (storage→budget line, carnet/manifest exports, AI bulk import, QR scan→move) |
+| — | F2 coherence slices threaded between items | above | ongoing |
+
+Adam-owned decisions still open: confirm C2→C3→C4 order (or pull D1 forward); grade the venue-cleanup SQL run; two-tenant isolation test.

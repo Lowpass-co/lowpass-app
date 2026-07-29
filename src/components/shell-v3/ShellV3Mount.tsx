@@ -33,14 +33,19 @@ export interface ShellV3MountProps {
   search?: string;
   /** Known from server data at tour scope; the path carries only the tour id. */
   artistId?: string | null;
+  /** S-2a — names the layout already loaded, so the picker never renders
+   *  "Pick an artist…" on a URL where the server knew the answer. */
+  artistName?: string | null;
+  tourName?: string | null;
   badges?: Record<string, string | number | null | undefined>;
-  /** Start the nav rail collapsed (pages that carry a day rail). */
+  /** Start the nav rail collapsed (pages that carry a day rail). Prefer
+   *  `hasDayRail(pathname)` from ia.ts over hand-picking this per layout. */
   denseRail?: boolean;
   children: React.ReactNode;
 }
 
 export async function ShellV3Mount({
-  pathname, search, artistId, badges, denseRail, children,
+  pathname, search, artistId, artistName, tourName, badges, denseRail, children,
 }: ShellV3MountProps) {
   const supabase = await createServerSupabaseClient();
 
@@ -81,6 +86,8 @@ export async function ShellV3Mount({
           initialArtists={initialArtists}
           initialTours={null}
           initialArtistId={artistId ?? null}
+          fallbackArtistName={artistName ?? null}
+          fallbackTourName={tourName ?? null}
         />
       }
       headerRight={

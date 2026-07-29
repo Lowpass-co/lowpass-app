@@ -56,12 +56,18 @@ interface ArtistTourSwitcherClientWrapperProps {
    *  for. When the live selectedArtistId in context differs, we
    *  refetch via /api/artists/[id]/tours. */
   initialArtistId: string | null;
+  /** S-2a — server-known names for THIS url, so the trigger doesn't sit on
+   *  "Pick an artist…" while the context hydrates. Passed straight through. */
+  fallbackArtistName?: string | null;
+  fallbackTourName?: string | null;
 }
 
 export function ArtistTourSwitcherClientWrapper({
   initialArtists,
   initialTours,
   initialArtistId,
+  fallbackArtistName = null,
+  fallbackTourName = null,
 }: ArtistTourSwitcherClientWrapperProps) {
   const { selectedArtistId } = useArtistTourContext();
   const { openCreateTour } = useTourEditor();
@@ -274,6 +280,8 @@ export function ArtistTourSwitcherClientWrapper({
         onCreateArtist={() => setIsCreateArtistOpen(true)}
         onDeleteTour={(tour) => setTourToDelete(tour)}
         onDeleteArtist={(artist) => setArtistToDelete(artist)}
+        fallbackArtistName={fallbackArtistName}
+        fallbackTourName={fallbackTourName}
       />
       <ArtistCreateSlideOver
         open={isCreateArtistOpen}

@@ -2,8 +2,13 @@
 
 Format per `docs/smoke-tests/README.md`. IDs are stable; add new ones as banks land.
 
-**As of `431f316`, the shell is mounted on ONE page: `/operations/[tourId]/routing`.**
-Everything else is still on old chrome, and that is correct until S-2.
+**As of S-2a, the shell is mounted on all of TOUR MODE:** Routing, Day sheets,
+Crew (personnel), Rooming, Files, and both Advance surfaces. Money (Budget,
+Settlement, Payroll) and Production (Assets, Channel list, Stage plot, Riders)
+are still on old chrome — that is S-2b and S-2c, and it is correct until then.
+
+The authoritative answer is `isShelledPath()` in `src/lib/nav/ia.ts`; the list
+above is a description of it, not a second source of truth.
 
 Grab a tour id from any tour URL you already have open and substitute it for
 `[tourId]` below.
@@ -62,6 +67,48 @@ Grab a tour id from any tour URL you already have open and substitute it for
   Routing with the shell, expanded rail; Routing with the rail collapsed.
   *(The other three scopes aren't migrated yet — their screenshots belong to
   S-3a/S-3b.)*
+
+---
+
+## Still to do — S-2a (Tour mode)
+
+- [ ] **SHELL-14 — Every Tour-mode surface renders with the new shell.** Load
+  each and confirm the page body appears with the top bar + left rail, no error
+  boundary, and the RIGHT rail item lit:
+  `/operations/[tourId]/routing` (Routing) · `/operations/[tourId]/day` (Day
+  sheets) · `/operations/[tourId]/personnel` (Crew) ·
+  `/operations/[tourId]/rooming` (Rooming) · `/operations/[tourId]/files`
+  (Files) · `/advance/[tourId]` (Advance).
+  *This is the bank. If one of these 500s it's the same RSC class as S-1 —
+  see "If something is broken" below.*
+
+- [ ] **SHELL-15 — The old chrome is GONE on those pages, not doubled.** No
+  two-bar product nav, no Operations sub-nav strip, no artist/tour identity
+  band above the content. One nav, not two.
+
+- [ ] **SHELL-16 — The day rail and the app rail coexist.** On
+  `/operations/[tourId]/rooming` and on a day page
+  (`/operations/[tourId]/day/[routingId]`), the app rail starts **collapsed**
+  and the day rail keeps its full width. On **Routing**, the app rail starts
+  **expanded** — Routing has no day rail.
+  *This is the correction from your first walk: S-1 collapsed it on Routing,
+  which was my mistake.*
+
+- [ ] **SHELL-17 — The picker no longer flashes.** Hard-reload
+  `/operations/[tourId]/rooming`. The artist and tour names are in the top bar
+  **in the first paint** — no "Pick an artist…" beat.
+  *The layout knew the artist server-side all along; it was waiting for a client
+  effect to tell it.*
+
+- [ ] **SHELL-18 — Resume still knows where you were.** Open
+  `/operations/[tourId]/rooming`, go to `/artists`, and use the Resume / pick-up
+  card for that tour. It should return you to Operations, not Budget.
+  *ProductShell used to record this; the new shell has to keep doing it.*
+
+- [ ] **SHELL-19 — Money and Production are untouched.** `/budget/[tourId]` ·
+  `/operations/[tourId]/payroll` · `/operations/[tourId]/hire` ·
+  `/operations/[tourId]/channel-list` still render their OLD chrome with no
+  error. Half-migrated is the plan; half-broken is not.
 
 ---
 

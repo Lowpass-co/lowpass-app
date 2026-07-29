@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Lowpass — canonical shell</title>
+<style>
+:root{--bg:#0d0d0f;--panel:#111113;--card:#151517;--line:#26262a;--hair:rgba(255,255,255,.05);--txt:#e9e9e9;--mut:#8a8a8a;--dim:#5a5a5e;--orange:#FF4500;--show:#10B981;--reh:#8B5CF6;--trav:#3B82F6;--mono:'JetBrains Mono',ui-monospace,monospace;--cond:'Barlow Condensed','Arial Narrow',sans-serif;--rail:236px}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--txt);font:14px/1.45 -apple-system,'Inter',sans-serif;height:100vh;overflow:hidden}
+.app{display:flex;flex-direction:column;height:100vh}
+
+/* ── TOP BAR ─────────────────────────────── */
+.top{display:flex;align-items:center;gap:10px;padding:0 14px;height:52px;border-bottom:1px solid var(--line);background:var(--panel);flex:0 0 auto}
+.mark{width:9px;height:9px;border-radius:2px;background:var(--orange);flex:0 0 auto}
+.ws{font-size:12.5px;color:var(--mut);cursor:pointer;padding:5px 8px;border-radius:6px;white-space:nowrap}
+.ws:hover{color:var(--txt);background:#ffffff08}
+.sep{color:#333;font-size:12px}
+.pick{display:flex;align-items:center;gap:7px;background:#17171a;border:1px solid var(--line);border-radius:8px;padding:5px 10px;cursor:pointer;white-space:nowrap}
+.pick:hover{border-color:#3a3a40}
+.pick img{width:19px;height:19px;border-radius:50%}
+.pick b{font-size:13px;font-weight:600}
+.pick span{font-size:12.5px;color:var(--mut)}
+.pick i{color:var(--dim);font-style:normal;font-size:10px}
+.pick.artist b{color:var(--txt)}
+
+/* the three-mode slider */
+.modes{position:relative;display:flex;background:#141417;border:1px solid var(--line);border-radius:999px;padding:3px;margin:0 auto;gap:2px}
+.modes .glide{position:absolute;top:3px;bottom:3px;border-radius:999px;background:var(--orange);transition:left .22s cubic-bezier(.4,0,.2,1),width .22s cubic-bezier(.4,0,.2,1)}
+.modes button{position:relative;z-index:1;background:none;border:0;color:var(--mut);font:600 12.5px/1 -apple-system,'Inter',sans-serif;letter-spacing:.06em;text-transform:uppercase;padding:8px 20px;border-radius:999px;cursor:pointer;transition:color .18s;display:flex;align-items:center;gap:7px}
+.modes button .ic{font-size:12px;opacity:.9}
+.modes button.on{color:#fff}
+.modes button:not(.on):hover{color:var(--txt)}
+.right{margin-left:auto;display:flex;align-items:center;gap:10px}
+.live{font-size:11px;color:var(--show);border:1px solid #10B98144;border-radius:999px;padding:3px 9px}
+.av{width:26px;height:26px;border-radius:50%;background:var(--orange);color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;cursor:pointer}
+
+/* ── BODY ────────────────────────────────── */
+.body{display:flex;flex:1;min-height:0}
+.rail{width:var(--rail);flex:0 0 auto;border-right:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;transition:width .2s ease;overflow:hidden}
+.rail.col{width:52px}
+.rail .scope{padding:12px 14px 9px;border-bottom:1px solid var(--hair);display:flex;align-items:center;gap:8px;min-height:44px}
+.rail .scope .lab{font:600 10px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--dim);white-space:nowrap}
+.rail .scope .up{margin-left:auto;color:var(--mut);font-size:11px;cursor:pointer;white-space:nowrap}
+.rail .scope .up:hover{color:var(--orange)}
+.nav{padding:8px 8px 4px;flex:1;overflow-y:auto}
+.grp{font:600 9.5px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--dim);padding:12px 10px 6px;white-space:nowrap}
+.it{display:flex;align-items:center;gap:11px;padding:8px 10px;border-radius:7px;color:var(--mut);cursor:pointer;font-size:13.5px;white-space:nowrap;position:relative}
+.it .ic{width:16px;text-align:center;font-size:13px;flex:0 0 auto;opacity:.85}
+.it:hover{background:#ffffff08;color:var(--txt)}
+.it.on{background:#FF450014;color:var(--txt);font-weight:500}
+.it.on:before{content:'';position:absolute;left:0;top:7px;bottom:7px;width:2.5px;border-radius:2px;background:var(--orange)}
+.it .n{margin-left:auto;font:500 10.5px/1 var(--mono);color:var(--dim);background:#0f0f11;border-radius:4px;padding:2px 5px}
+.rail.col .txt,.rail.col .grp,.rail.col .n,.rail.col .lab,.rail.col .up{display:none}
+.rail.col .it{justify-content:center;padding:9px 0}
+.rail .foot{border-top:1px solid var(--hair);padding:8px}
+.tog{display:flex;align-items:center;gap:11px;padding:7px 10px;border-radius:7px;color:var(--dim);cursor:pointer;font-size:12.5px}
+.tog:hover{background:#ffffff08;color:var(--txt)}
+
+/* ── CONTENT ─────────────────────────────── */
+.main{flex:1;min-width:0;overflow-y:auto;padding:20px 24px}
+.crumb{font:500 10.5px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--dim);margin-bottom:7px}
+h1{font-family:var(--cond);font-size:30px;letter-spacing:.04em;font-weight:700;text-transform:uppercase}
+.stat{font:12.5px var(--mono);color:var(--mut);display:flex;gap:15px;margin-top:8px;flex-wrap:wrap}
+.stat b{color:var(--txt);font-weight:500}
+.stat .w{color:var(--orange)}
+.ph{margin-top:20px;border:1px dashed #2c2c30;border-radius:12px;height:230px;display:flex;align-items:center;justify-content:center;color:var(--dim);font-size:13px;text-align:center;padding:20px;line-height:1.7}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(215px,1fr));gap:12px;margin-top:18px}
+.c{background:var(--card);border:1px solid var(--line);border-radius:11px;padding:13px 15px}
+.c .k{font:600 9.5px/1 var(--mono);letter-spacing:.13em;text-transform:uppercase;color:var(--dim)}
+.c .v{font-family:var(--mono);font-size:19px;margin-top:7px}
+.c .s{font-size:11.5px;color:var(--mut);margin-top:3px}
+.note{margin-top:26px;border-left:2px solid var(--orange);background:#FF45000a;border-radius:0 9px 9px 0;padding:13px 16px;font-size:12.5px;color:var(--mut);max-width:760px}
+.note b{color:var(--txt)}
+kbd{font:11px var(--mono);background:#1a1a1e;border:1px solid var(--line);border-radius:4px;padding:1px 5px;color:var(--mut)}
+</style></head><body>
+<div class="app">
+
+<div class="top">
+  <div class="mark"></div>
+  <div class="ws" onclick="go('ws')">Adam's Workspace</div>
+  <div class="sep">/</div>
+  <div class="pick artist" onclick="go('artist')" title="Click = artist home (year budgets, riders, brand, docs)">
+    <img src="https://i.scdn.co/image/ab6761610000e5eb972e644ce18cbb0fbe135924"><b>Charlotte Sands</b><i>▾</i>
+  </div>
+  <div class="pick" id="tourPick" onclick="go('tour')"><span>Simple Plan Support | Fall'26</span><i>▾</i></div>
+
+  <div class="modes" id="modes">
+    <div class="glide" id="glide"></div>
+    <button data-m="tour" onclick="setMode('tour')"><span class="ic">⛬</span>Tour</button>
+    <button data-m="money" onclick="setMode('money')"><span class="ic">$</span>Money</button>
+    <button data-m="prod" onclick="setMode('prod')"><span class="ic">⚙</span>Production</button>
+  </div>
+
+  <div class="right">
+    <span class="live">● Live</span>
+    <div class="av" onclick="go('user')" title="You — account, preferences, team">AD</div>
+  </div>
+</div>
+
+<div class="body">
+  <div class="rail" id="rail">
+    <div class="scope">
+      <span class="lab" id="scopeLab">TOUR</span>
+      <span class="up" id="upLink" onclick="go('artist')">↑ Artist</span>
+    </div>
+    <div class="nav" id="nav"></div>
+    <div class="foot">
+      <div class="tog" onclick="toggleRail()"><span class="ic" style="width:16px;text-align:center">⇤</span><span class="txt">Collapse</span></div>
+    </div>
+  </div>
+
+  <div class="main" id="main"></div>
+</div>
+</div>
+
+<script>
+const NAV={
+ tour:[{g:'THE RUN'},{i:'▤',t:'Routing',n:'31',on:1},{i:'◷',t:'Day sheets'},{i:'⧉',t:'Advance',n:'0/21'},
+   {g:'PEOPLE & LOGISTICS'},{i:'☰',t:'Crew'},{i:'⌂',t:'Rooming'},{i:'✈',t:'Travel'},{i:'▣',t:'Files'}],
+ money:[{g:'PLAN'},{i:'▤',t:'Summary',on:1},{i:'▦',t:'Expenses',n:'48'},{i:'↗',t:'Income'},
+   {g:'SETTLE & PAY'},{i:'⚖',t:'Settlements',n:'8'},{i:'☰',t:'Payroll'},{i:'◷',t:'Per diems'},{i:'⛁',t:'Receipts',n:'3'},
+   {g:'OUT'},{i:'▣',t:'Reports & workbook'}],
+ prod:[{g:'INVENTORY'},{i:'⛁',t:'Assets',n:'33',on:1},{i:'▭',t:'Spaces & cases'},{i:'⇄',t:'Movements'},
+   {g:'THE SHOW'},{i:'☰',t:'Channel list'},{i:'▦',t:'Patch'},{i:'◈',t:'Stage plot'},{i:'▤',t:'Riders'},
+   {g:'PAPER'},{i:'▣',t:'Manifests & carnet'},{i:'◷',t:'Templates'}],
+ artist:[{g:'ARTIST'},{i:'▤',t:'Overview',on:1},{i:'⛬',t:'Tours',n:'4'},
+   {g:'ACROSS TOURS'},{i:'$',t:'Year budget'},{i:'☰',t:'People'},
+   {g:'LIBRARY'},{i:'▤',t:'Riders & specs'},{i:'◈',t:'Brand & logos'},{i:'▣',t:'Documents'},{i:'☎',t:'Contacts'}],
+ ws:[{g:'WORKSPACE'},{i:'♫',t:'Artists',n:'3',on:1},{i:'☰',t:'Personnel pool'},{i:'⛁',t:'Equipment & rentals'},{i:'⌂',t:'Venues'}],
+ user:[{g:'YOU'},{i:'◉',t:'Account',on:1},{i:'⚙',t:'Preferences'},{i:'☰',t:'Team & roles'},{i:'▣',t:'Billing'},{i:'⚑',t:'Report a bug'}]
+};
+const PAGE={
+ tour:{c:'CHARLOTTE SANDS / SIMPLE PLAN SUPPORT | FALL\'26 / TOUR',h:'ROUTING',s:'<b>31</b> days · <b>21</b> shows · <b>0/21</b> advanced · <span class="w">2 pending ⚠</span>',
+  p:'The routing ledger — the spine.<br>Clicking a day here collapses this into the left rail and opens that day\'s detail.'},
+ money:{c:'CHARLOTTE SANDS / SIMPLE PLAN SUPPORT | FALL\'26 / MONEY',h:'BUDGET SUMMARY',s:'<b>£40K</b> committed · <b>£38K</b> remaining · <span class="w">5 to review</span>',
+  k:[['NET P&L','−£41,654','margin pending income'],['COMMITTED','£100','0% of £39,830'],['UNSETTLED','8 shows','£63,075 contracted'],['RECEIPTS','3','awaiting review']]},
+ prod:{c:'CHARLOTTE SANDS / SIMPLE PLAN SUPPORT | FALL\'26 / PRODUCTION',h:'ASSETS',s:'<b>33</b> items · <b>85.7 kg</b> total · <b>0</b> spaces · <span class="w">33 unassigned</span>',
+  k:[['SPACES','0','vehicles, storage, venues'],['CONTAINERS','0','cases, carts, boxes'],['ITEMS','33','gear, instruments'],['TOTAL WEIGHT','85.7 kg','all spaces combined']]},
+ artist:{c:'ADAM\'S WORKSPACE / CHARLOTTE SANDS',h:'CHARLOTTE SANDS',s:'<b>4</b> tours · <b>2</b> in planning · next <b>Fri 2 Oct</b>',
+  p:'Artist home — everything that outlives a single tour.<br>Year budget across all four tours, the master rider, brand assets, contracts, W9s, insurance.'},
+ ws:{c:'ADAM\'S WORKSPACE',h:"ADAM'S WORKSPACE",s:'<b>3</b> artists · <b>2</b> in planning · <b>0</b> shows this month',
+  p:'Workspace level — pick an artist, or work the pools that span all of them:<br>personnel, the rental-house inventory, venues.'},
+ user:{c:'YOU',h:'ACCOUNT',s:'adamgrowley@gmail.com · owner',
+  p:'Your things, not the tour\'s: profile, preferences, the team you\'ve invited and what each role can see, billing.'}
+};
+let scope='tour',mode='tour',collapsed=false;
+function glide(){const m=document.getElementById('modes'),g=document.getElementById('glide');
+ const b=m.querySelector('button[data-m="'+mode+'"]');if(!b)return;
+ g.style.left=(b.offsetLeft)+'px';g.style.width=b.offsetWidth+'px';
+ m.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x.dataset.m===mode));}
+function setMode(m){mode=m;scope=m;draw()}
+function go(s){scope=s;if(s==='tour')mode='tour';draw()}
+function toggleRail(){collapsed=!collapsed;document.getElementById('rail').classList.toggle('col',collapsed);
+ document.querySelector('.tog .ic').textContent=collapsed?'⇥':'⇤';document.querySelector('.tog .txt').textContent='Collapse'}
+function draw(){
+ const isTour=['tour','money','prod'].includes(scope);
+ document.getElementById('modes').style.visibility=isTour?'visible':'hidden';
+ document.getElementById('tourPick').style.display=isTour?'flex':'none';
+ document.querySelector('.pick.artist').style.display=(scope==='ws'||scope==='user')?'none':'flex';
+ const lab={tour:'TOUR',money:'MONEY',prod:'PRODUCTION',artist:'ARTIST',ws:'WORKSPACE',user:'YOU'}[scope];
+ document.getElementById('scopeLab').textContent=lab;
+ const up=document.getElementById('upLink');
+ if(isTour){up.textContent='↑ Artist';up.onclick=()=>go('artist');up.style.display='block'}
+ else if(scope==='artist'){up.textContent='↑ Workspace';up.onclick=()=>go('ws');up.style.display='block'}
+ else up.style.display='none';
+ document.getElementById('nav').innerHTML=NAV[scope].map(x=>x.g?'<div class="grp">'+x.g+'</div>'
+  :'<div class="it'+(x.on?' on':'')+'" onclick="pick(this)"><span class="ic">'+x.i+'</span><span class="txt">'+x.t+'</span>'+(x.n?'<span class="n">'+x.n+'</span>':'')+'</div>').join('');
+ const p=PAGE[scope];
+ document.getElementById('main').innerHTML='<div class="crumb">'+p.c+'</div><h1>'+p.h+'</h1><div class="stat">'+p.s+'</div>'
+  +(p.k?'<div class="cards">'+p.k.map(k=>'<div class="c"><div class="k">'+k[0]+'</div><div class="v">'+k[1]+'</div><div class="s">'+k[2]+'</div></div>').join('')+'</div>':'')
+  +(p.p?'<div class="ph">'+p.p+'</div>':'')
+  +'<div class="note"><b>Try it:</b> the three-mode slider only exists at tour scope. Click <b>Charlotte Sands</b> to go up to artist level (year budgets across tours, master rider, brand) — the pill disappears because those things aren\'t tour-scoped. Click <b>Adam\'s Workspace</b> for the pools, or the <b>AD</b> avatar for your own account. <kbd>Collapse</kbd> at the bottom of the rail shrinks it to icons on every page.</div>';
+ glide();
+}
+function pick(el){document.querySelectorAll('.it').forEach(i=>i.classList.remove('on'));el.classList.add('on');
+ const t=el.querySelector('.txt').textContent;document.querySelector('h1').textContent=t.toUpperCase();}
+draw();window.addEventListener('resize',glide);
+</script></body></html>

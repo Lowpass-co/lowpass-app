@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Lowpass — Plane Smoke · 21 Jul 2026</title>
+<style>
+:root{--bg:#0d0d0f;--card:#141416;--line:#2a2a2e;--txt:#e8e8e8;--mut:#8a8a8a;--dim:#5a5a5e;--orange:#FF4500;--green:#10B981;--amber:#F59E0B;--red:#EF4444;--mono:'JetBrains Mono',ui-monospace,monospace}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--txt);font:14px/1.5 -apple-system,'Inter',sans-serif;padding:28px 20px 130px}
+.w{max-width:940px;margin:0 auto}
+h1{font-size:24px;letter-spacing:.04em;text-transform:uppercase}h1 span{color:var(--orange)}
+.sub{color:var(--mut);font-size:13px;margin:6px 0 18px}
+.legend{display:flex;gap:16px;font-size:12px;color:var(--mut);margin-bottom:18px;flex-wrap:wrap}
+.legend b{color:var(--txt);font-weight:500}
+.sec{margin-top:30px}
+.sec>h2{font-size:12.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--orange);border-bottom:1px solid var(--line);padding-bottom:7px}
+.sec>.n{color:var(--mut);font-size:12.5px;margin:9px 0 2px}
+.i{background:var(--card);border:1px solid var(--line);border-left-width:3px;border-left-color:var(--line);border-radius:9px;padding:13px 15px;margin:9px 0}
+.i.p{border-left-color:var(--green)}.i.m{border-left-color:var(--amber)}.i.f{border-left-color:var(--red)}
+.r{display:flex;gap:11px;align-items:flex-start}
+.id{font-family:var(--mono);font-size:10.5px;color:var(--dim);min-width:58px;padding-top:3px}
+.t{font-weight:600;font-size:14px}.t .w2{font-size:10px;color:var(--amber);border:1px solid #F59E0B44;border-radius:4px;padding:0 5px;margin-left:7px;vertical-align:2px}
+.d{color:var(--mut);font-size:12.5px;margin-top:3px}.d b{color:#c5c5c5}
+a.go{margin-left:auto;color:var(--orange);text-decoration:none;font-size:12px;white-space:nowrap}
+.c{display:flex;gap:7px;margin-top:9px;align-items:center;flex-wrap:wrap}
+.b{border:1px solid var(--line);background:none;color:var(--mut);border-radius:6px;padding:4px 11px;font-size:12px;cursor:pointer}
+.b:hover{color:var(--txt)}.b.p{background:#10B98122;border-color:var(--green);color:var(--green)}
+.b.m{background:#F59E0B22;border-color:var(--amber);color:var(--amber)}.b.f{background:#EF444422;border-color:var(--red);color:var(--red)}
+.cm{flex:1;min-width:220px;background:#0f0f11;border:1px solid var(--line);border-radius:6px;color:var(--txt);padding:5px 9px;font-size:12.5px}
+.cm::placeholder{color:#4a4a4e}
+textarea.cm{min-height:60px;font-family:inherit;resize:vertical;width:100%}
+.opt{display:flex;gap:7px;flex-wrap:wrap;margin-top:8px}
+.opt button{border:1px solid var(--line);background:none;color:var(--mut);border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer;text-align:left}
+.opt button.on{background:#FF450022;border-color:var(--orange);color:var(--orange)}
+.bar{position:fixed;left:0;right:0;bottom:0;background:#0f0f11f2;border-top:1px solid var(--line);padding:12px 20px;display:flex;gap:10px;align-items:center;backdrop-filter:blur(8px)}
+.bar .s{flex:1;font-family:var(--mono);font-size:11.5px;color:var(--mut)}
+.btn{background:var(--orange);color:#fff;border:none;border-radius:7px;padding:8px 16px;font-weight:600;font-size:12.5px;cursor:pointer}
+.btn.g{background:none;border:1px solid var(--line);color:var(--txt)}
+.box{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:15px 17px;margin:16px 0}
+.box h3{font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);margin-bottom:9px}
+.box li{margin:6px 0 6px 16px;font-size:13px}
+.box b{color:var(--orange)}
+.bug{border-left:3px solid var(--red)}
+code{font-family:var(--mono);font-size:11.5px;background:#0f0f11;padding:1px 5px;border-radius:4px}
+</style></head>
+<body><div class="w">
+<h1>Lowpass <span>·</span> Plane Smoke</h1>
+<div class="sub">Everything shipped since your last grade: M1 money · X1 workbook · D1 the Day + roles · V1 venue packet · S1 Spaces · the routing redesign + spine. Autosaves offline. Export at the end.</div>
+<div class="legend"><span><b>⚡</b> needs wifi (the live app)</span><span><b>○</b> works offline — judgement calls, no app needed</span><span><b>Tip:</b> if there's no wifi, jump straight to §9 — it's the useful half.</span></div>
+
+<div class="box bug">
+<h3>Answering your question first — the two bugs are NOT fixed</h3>
+<ul>
+<li><b>Day-type selector — still broken, now differently.</b> I tested it live: clicking the pill <i>does</i> focus it (button focuses, no popup), and <b>Tab correctly moves on to the venue</b>. But <b>↑↓ do nothing at all</b> — the value never changes. Spec says arrows cycle the type in place. So your flow dies at step 2. Earlier in the redesign arrows opened a filter popup; now they're inert. Either way it's not the contract.</li>
+<li><b>Tour builder — still broken, confirmed in code.</b> <code>TourEditorModal.tsx:122</code> still one-shot-initialises <code>pickedArtistId</code> and there's no effect re-seeding it when the artists list arrives. So Save stays disabled until you nudge the dropdown — exactly what you reported. CC dropped a task chip for it but it never landed.</li>
+<li><b>New, and bigger than both: the routing page took 28–70 seconds to load</b> on a cold visit, twice in a row, before the ledger appeared. Personnel does the same at 15–20s. The page a TM lives in taking half a minute is a worse defect than anything visual on this list. I'd make it the next thing CC touches.</li>
+</ul>
+</div>
+
+<div id="app"></div>
+</div>
+<div class="bar"><div class="s" id="s"></div>
+<button class="btn g" onclick="wipe()">Reset</button>
+<button class="btn g" onclick="cp()">Copy</button>
+<button class="btn" onclick="dl()">Export .md</button></div>
+<script>
+const T='https://lowpass-tm-software.vercel.app',TOUR='6889d072-20c8-467c-9fbc-4d2469f6cac0',ELLA='2bd32ef7-a886-4327-be54-cbeea7799d7a',DAY='94fdb617-dc05-4610-80b7-c616b3498536';
+const S=[
+{n:'0 ⚡ · RECEIPTS — do this one first',note:'The last thing standing between receipts and done. R-006 is the untouched pre-fix specimen — do NOT re-scan or delete it, it is the only clean reproduction on production.',items:[
+{id:'RCP-A',t:'Drag a real PDF onto the drop zone — do NOT press Re-scan',d:'Budget → Expenses → drag the BNA parking PDF (an actual mouse drag, not the file picker). Wait ~20s → Receipts tab. The new row reads one of three things: <b>(a) vendor/date/amount populated</b> = fixed, receipts is closed · <b>(b) "Not scanned yet"</b> = the upload gate is still eating it · <b>(c) "Scanned — nothing readable"</b> = different bug, extraction-side. Record WHICH.',u:T+'/budget/'+TOUR+'?tab=expenses'},
+{id:'RCP-B',t:'AUTO chip on a receipt-created line',d:'Expenses grid: a line created from a receipt should read <b>AUTO</b>, with a tooltip naming the source receipt — not MANUAL.',u:T+'/budget/'+TOUR+'?tab=expenses'},
+{id:'RCP-C',t:'Inline vendor correction sticks',d:'Type over a vendor in the grid on a single-transaction line, reload, confirm it held. On a multi-transaction line it should say "open it to edit each vendor" rather than silently dropping the keystroke.',u:''},
+{id:'RCP-D',t:'The bank tells you what went wrong',d:'Receipts tab → Needs details. Every row should say why: "Not scanned yet" vs "Scanned — nothing readable". Are the filters (Needs details / Proposed / Filed / Rejected) and Re-scan / Open / File-against all doing what you expect?',u:T+'/budget/'+TOUR+'?tab=receipts'},
+{id:'RCP-E',t:'Category lands somewhere real',d:'A fuel or parking receipt should propose a Transport-ish section with a reason shown ("parking is Transport"), not dump into Uncategorised.',u:''}]},
+{n:'0b ⚡ · THE NEW SHELL — built overnight, grade it hard',note:'Tour · Money · Production, collapsible rail, four scopes. Compare against SHELL_CANONICAL_MOCK_2026-07-21.html if you saved it locally. Some pages may still be on old chrome — note which.',items:[
+{id:'SHL-A',t:'Cold deep-link resolves correctly',d:'Paste this settlement URL fresh (not clicked-through): does it open in <b>Money</b> mode with <b>Settlements</b> active, artist and tour populated, no "Pick an artist…"? Clicking through hides resolver bugs; a cold load exposes them.',u:T+'/budget/'+ELLA+'/settlement'},
+{id:'SHL-B',t:'The three modes',d:'On a tour: Tour → Money → Production. Right rail each time? Payroll now under Money? Does the slider feel good?',u:T+'/operations/'+TOUR+'/routing'},
+{id:'SHL-C',t:'Scope changes',d:'Click the artist name → artist scope, mode pill gone, artist rail (Year budget, Riders, Brand, Documents). Workspace name → workspace. Avatar → You. Back button walks it all correctly?',u:''},
+{id:'SHL-D',t:'Collapse persists',d:'Collapse the rail, reload — still collapsed. Expand, reload — still expanded. Icons legible with tooltips when collapsed?',u:''},
+{id:'SHL-E',t:'Two rails at once',d:'THE design decision left in this build. Open a day or an advance so the day rail appears alongside the nav rail. At laptop width does it feel cramped? Say so now — much cheaper to change before more pages migrate.',u:T+'/operations/'+TOUR+'/day'},
+{id:'SHL-F',t:'New features have visible homes',d:'Travel, Per diems, Spaces, Movements, Year budget, Contacts should appear in the rails as visible-but-empty slots. Does that read as "coming" or as "broken"?',u:''},
+{id:'SHL-G',t:'Anything still on old chrome',d:'Roam. Any page still showing the two-bar nav or the old identity band? Name them.',u:''}]},
+{n:'1 ⚡ · The routing ledger (redesigned — grade vs the mock)',note:'Compare against ROUTING_REDESIGN_MOCK_2026-07-20.html if you have it saved locally.',items:[
+{id:'LED-01',t:'First impression at full width',d:'Stat line instead of five KPI boxes, ledger starts high, hairlines, day-type ticks. Does it read premium — or still busy?',u:T+'/operations/'+TOUR+'/routing'},
+{id:'LED-02',t:'Transit column + red long drives',d:'Mono <b>2h15 · 155mi</b> in its own column; 7h18 Berlin flags red. Better than the old interleaved rows?',u:''},
+{id:'LED-03',t:'Empty cells + travel days',d:'Empty city = <b>—</b> not the word "City" (fixed). Travel days ghosted lighter than shows. Right call?',u:''},
+{id:'LED-04',t:'Row expansion + button row',d:'Chevron → address/country/capacity/notes + Open day sheet · Advance this show · Schedule · Day budget (· Rooming when a hotel exists). Buttons look right?',u:''},
+{id:'LED-05',t:'Keyboard flow end-to-end',d:'Click a day-type pill → ↑↓ (KNOWN BROKEN) → Tab → type venue letters → results first, create-new last → Tab commits → City. Grade what works; the arrow break is already logged.',u:''}]},
+{n:'2 ⚡ · The spine (your "everything hangs off routing" ruling)',items:[
+{id:'SPN-01',t:'Ledger → Advance keeps the day rail',d:'Expand a row → Advance this show. The left rail is the tour\'s days with completion %, search, copy-from. Does it feel like one surface rather than a page jump?',u:T+'/operations/'+TOUR+'/routing'},
+{id:'SPN-02',t:'Switch days inside the rail',d:'Click other days in the left rail — detail swaps in place, URL updates, back button walks back. Fast enough?',u:''},
+{id:'SPN-03',t:'The morph',d:'Does the ledger→rail transition animate, or does it just cut? (View Transitions shipped; may be inert — either is acceptable, I need to know which.)',u:''},
+{id:'SPN-04',t:'Same rail on Day + Rooming',d:'Open day sheet, then Rooming — same rail component everywhere. Consistent?',u:T+'/operations/'+TOUR+'/day/'+DAY}]},
+{n:'3 ⚡ · The Day + crew views (D1)',items:[
+{id:'DAY-01',t:'Three-zone Day (seed a schedule first if empty)',d:'Date rail · schedule centre · venue/lodging/notes/contacts cards. Grade vs Daysheets.',u:T+'/operations/'+TOUR+'/day/'+DAY},
+{id:'DAY-02',t:'Day-of contacts are VENUE people',d:'Advance/deal-memo contacts, not your tour roster (fixed). Empty state invites you to the advance.',u:''},
+{id:'DAY-03',t:'Day Sheet PDF — Crew template',d:'Day sheet… → Crew → toggle sections → download. Would you send this to the band tomorrow?',u:''},
+{id:'DAY-04',t:'Crew link on your phone',d:'Day index → Roles → assign Crew → Generate link → open on phone. Schedule+venue, zero money. (I verified byte-level it leaks nothing — grade whether it\'s USEFUL.)',u:T+'/operations/'+TOUR+'/day'},
+{id:'DAY-05',t:'View-as',d:'◉ FAB → Crew / Driver / Band. Instant, no leftovers?',u:''}]},
+{n:'4 ⚡ · Settlement + money legibility (M1)',note:'Ella Langley / Atlanta is the worked example: 10,000 − 1,500 withholding − 2,000 wire = 6,500 outstanding.',items:[
+{id:'SET-01',t:'The Walk',d:'Guarantee → deductions → adjusted gross → show net → artist total → balance due → outstanding. Is this the page you\'d want open at the venue office?',u:T+'/budget/'+ELLA+'/settlement'},
+{id:'SET-02',t:'Catch-up queue + Full & Final',d:'"Played, not settled" list with Due/Settled. Actionable?',u:''},
+{id:'SET-03',t:'Settlement PDF',d:'Export PDF → would you hand it to a promoter?',u:''},
+{id:'SET-04',t:'Provenance chips + health banner',d:'Budget → Expenses: AUTO/MANUAL chips. Summary: amber "N items to review" with Fix links. Useful or noise?',u:T+'/budget/'+TOUR},
+{id:'SET-05',t:'Payroll: inline rates + Finalize',d:'Rates under each name in the matrix; Finalize locks it (server-enforced). Trustworthy?',u:T+'/operations/'+TOUR+'/payroll'}]},
+{n:'5 ⚡ · Workbook, packet, assets (X1 · V1 · S1)',items:[
+{id:'XLS-01',t:'Export the accounting workbook',d:'Budget → Export → workbook. Six sheets, real =SUM(), provenance column. Would your business manager accept it?',u:T+'/budget/'+TOUR},
+{id:'XLS-02',t:'Edit a cell → reimport',d:'Change one estimate → Import workbook → dupe review proposes exactly your change. Nothing writes unapproved.',u:''},
+{id:'VP-01',t:'Venue packet as the venue sees it',d:'Advance → Share: a PDF card per artifact + intake link, portal demoted. Your ruling, delivered?',u:T+'/advance/'+TOUR},
+{id:'VP-02',t:'Rider PDF import',d:'Rider builder → Import from PDF → extract → review → apply. Propose-then-approve.',u:''},
+{id:'SPC-01',t:'Assets: spaces, containers, weight',d:'33 rental items merged into one inventory. Create a space, move items in.',u:T+'/assets'},
+{id:'SPC-02',t:'Locker → tour move',d:'Select items → move to a tour. The flow you asked for — one motion?',u:''}]},
+{n:'6 ⚡ · Security gate (do before any beta invite)',note:'Needs a second account in an incognito window.',items:[
+{id:'SEC-01',t:'Second account sees an empty workspace',d:'No Charlotte, no tours, no personnel. Any leak = stop everything and tell me exactly what you saw.',u:T+'/artists'},
+{id:'SEC-02',t:'Non-admin cannot unlock payroll',d:'In the second account\'s console: <code>fetch("'+T+'/api/tours/'+TOUR+'/payroll/finalize",{method:"DELETE"}).then(r=>console.log(r.status))</code> → expect 403/404, never 200.',u:''},
+{id:'SEC-03',t:'Revoked crew link dies',d:'Revoke → refresh the phone → clean 404, not an error dump.',u:''}]},
+{n:'7 ⚡ · Artist builder + coherence',items:[
+{id:'AB-01',t:'Create a real artist',d:'New artist → Spotify search → select (Next enables instantly) → confirm → £ GBP → Create.',u:T+'/artists'},
+{id:'COH-01',t:'Header always populated',d:'Hop Routing→Budget→Advance→Crew→Day: Where·Who·What never says "Pick an artist…" on a cold load.',u:''},
+{id:'COH-02',t:'Cold-load speed everywhere',d:'Time the first paint on routing, personnel, budget. Anything over ~5s, note the page.',u:''},
+{id:'COH-03',t:'The three ugliest things left',d:'Free roam. Name three. They become the finish list.',u:''}]},
+{n:'9 ○ · Offline decisions — the useful half if there\'s no wifi',note:'These are rulings only you can make. Pick an option or write your own; every answer turns into a spec.',items:[
+{id:'DEC-01',t:'What does CC do next?',d:'My vote: cold-load performance. 28–70s on routing is the worst thing in the app right now.',o:['Perf first — kill the 20-70s cold loads','The two nav bugs (day-type arrows + tour builder)','S1 Stage D — storage costs, carnet export, QR scan','F2 coherence sweep — the visual finish list','Something else (write it)']},
+{id:'DEC-02',t:'Day notes — build the real thing?',d:'Today the Day shows one plain routing note. ATOM/Daysheets have authored, timestamped, multiple notes per day with Read-more. That\'s a new table + migration.',o:['Yes — build authored multi-notes','No — one note is fine for beta','Later, after beta feedback']},
+{id:'DEC-03',t:'S1 Stage D scope — pick what actually ships',d:'Storage cost → budget line · ATA carnet + gear manifest PDF · AI bulk import (CSV/photo → proposed items) · QR scan → move dialog.',o:['All four','Carnet + manifest only (EU touring closer)','Storage→budget only (money wiring)','AI bulk import only','Park the whole thing']},
+{id:'DEC-04',t:'Beta invites — who and when?',d:'The crew-link flow is the demo that beats both competitors. Security gate (§6) must pass first.',o:['2-3 trusted TMs as soon as §6 passes','Wait for the finish list + perf fix','Wait for a full tour cycle of my own use','Not yet — name the blocker in the comment']},
+{id:'DEC-05',t:'Pricing stance vs AdvanceWithMe ($120 floor)',d:'They anchor low. We hold the money-correctness + permissions story.',o:['Price above them — premium/business tool','Match them, win on features','Per-tour pricing, not per-seat','Free tier for crew views, paid for TM/accounting','Undecided — flag for later']},
+{id:'DEC-06',t:'Is the positioning sentence right?',d:'"ATOM is the tour\'s group chat with tools; Lowpass is the tour\'s back office. When real money moves, you want the one that proves its math."',o:['Ship it as-is','Right idea, wrong words (rewrite in comment)','Too aggressive about them','Wrong angle entirely (say what)']},
+{id:'DEC-07',t:'Anything from ATOM you now want that we skipped?',d:'Skipped deliberately: merch module, driver/HOS, month view, community/social, tour dictionary, Split View, per-country withholding panel.',o:['Nothing — the skips were right','Withholding panel (needs real tax data)','Merch counts → settlement','Month calendar view','Other (write it)']},
+{id:'DEC-08',t:'Free space — what\'s actually bugging you?',d:'The thing you keep meaning to say and haven\'t. Longest comment box on the page.',big:1}]}
+];
+const K='lp-plane-2026-07-21';let st=JSON.parse(localStorage.getItem(K)||'{}');
+const sv=()=>{localStorage.setItem(K,JSON.stringify(st));pr()};
+function V(i,v){st[i]=st[i]||{};st[i].v=st[i].v===v?null:v;sv();dr()}
+function C(i,c){st[i]=st[i]||{};st[i].c=c;localStorage.setItem(K,JSON.stringify(st));pr()}
+function O(i,o){st[i]=st[i]||{};st[i].o=st[i].o===o?null:o;sv();dr()}
+function pr(){const a=S.flatMap(s=>s.items),g=a.filter(i=>st[i.id]&&(st[i.id].v||st[i.id].o||st[i.id].c)).length;document.getElementById('s').textContent=g+'/'+a.length+' answered · saved locally'}
+function dr(){const A=document.getElementById('app');A.innerHTML='';S.forEach(s=>{const d=document.createElement('div');d.className='sec';d.innerHTML='<h2>'+s.n+'</h2>'+(s.note?'<div class="n">'+s.note+'</div>':'');s.items.forEach(it=>{const q=st[it.id]||{},e=document.createElement('div');e.className='i '+(q.v||'');
+let ctl=it.o?'<div class="opt">'+it.o.map(o=>'<button class="'+(q.o===o?'on':'')+'" onclick="O(\''+it.id+'\',\''+o.replace(/'/g,"\\'")+'\')">'+o+'</button>').join('')+'</div><div class="c"><input class="cm" placeholder="or write your own…" value="'+(q.c||'').replace(/"/g,'&quot;')+'" onchange="C(\''+it.id+'\',this.value)"></div>'
+:'<div class="c"><button class="b '+(q.v==='p'?'p':'')+'" onclick="V(\''+it.id+'\',\'p\')">Pass</button><button class="b '+(q.v==='m'?'m':'')+'" onclick="V(\''+it.id+'\',\'m\')">Meh</button><button class="b '+(q.v==='f'?'f':'')+'" onclick="V(\''+it.id+'\',\'f\')">Fail</button><input class="cm" placeholder="why / what you\'d change…" value="'+(q.c||'').replace(/"/g,'&quot;')+'" onchange="C(\''+it.id+'\',this.value)"></div>';
+if(it.big)ctl='<div class="c"><textarea class="cm" placeholder="say it here…" onchange="C(\''+it.id+'\',this.value)">'+(q.c||'')+'</textarea></div>';
+e.innerHTML='<div class="r"><div class="id">'+it.id+'</div><div style="flex:1"><div class="t">'+it.t+'</div><div class="d">'+it.d+'</div></div>'+(it.u?'<a class="go" href="'+it.u+'" target="_blank">open ↗</a>':'')+'</div>'+ctl;d.appendChild(e)});A.appendChild(d)});pr()}
+function md(){let o='# Lowpass plane smoke — '+new Date().toISOString().slice(0,10)+'\n';S.forEach(s=>{o+='\n## '+s.n+'\n';s.items.forEach(i=>{const q=st[i.id]||{};if(!q.v&&!q.o&&!q.c)return;const v=q.v==='p'?'PASS':q.v==='m'?'MEH':q.v==='f'?'FAIL':(q.o||'');o+='- **'+i.id+'** '+i.t+(v?' · **'+v+'**':'')+(q.c?' — '+q.c:'')+'\n'})});return o}
+function cp(){navigator.clipboard.writeText(md());document.getElementById('s').textContent='Copied — paste to Cowork'}
+function dl(){const b=new Blob([md()],{type:'text/markdown'}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='lowpass-plane-smoke.md';a.click()}
+function wipe(){if(confirm('Wipe everything?')){st={};sv();dr()}}
+dr();
+</script></body></html>

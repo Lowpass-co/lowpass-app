@@ -23,7 +23,8 @@
    anyone who disagrees can expand it and it stays expanded.
    ============================================ */
 
-import { resolveScope, resolveRailView, upFrom, SCOPE_LABEL, MODE_LABEL } from '@/lib/nav/ia';
+import { resolveScope, resolveRailView, upFrom, productForPath, SCOPE_LABEL, MODE_LABEL } from '@/lib/nav/ia';
+import { RememberTourProduct } from '@/components/shell-v2/RememberTourProduct';
 import { NavRail } from './NavRail';
 import { TopBarV3 } from './TopBarV3';
 
@@ -73,8 +74,25 @@ export function AppShellV3({
   const scopeLabel =
     ctx.scope === 'tour' && ctx.mode ? MODE_LABEL[ctx.mode].toUpperCase() : SCOPE_LABEL[ctx.scope].toUpperCase();
 
+  /* S-2a — "open this tour where I left it" is a ProductShell behaviour that
+     would have gone quiet the moment a surface migrated: the workspace Resume
+     card would keep offering the last product you visited on OLD chrome. It
+     costs one zero-render island to keep, so it stays. */
+  const product = ctx.scope === 'tour' && ctx.tourId ? productForPath(pathname) : null;
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', minHeight: 0 }}>
+    <div
+      style={{
+        display: 'flex', flexDirection: 'column', height: '100dvh', minHeight: 0,
+        /* Same frame the old shell painted: h-screen, overflow hidden, <main>
+           the only scroll surface — so sticky headers inside a page body still
+           anchor to <main> and not to the document. */
+        overflow: 'hidden',
+        background: 'var(--lp-bg)',
+        color: 'var(--lp-text)',
+      }}
+    >
+      {product && ctx.tourId ? <RememberTourProduct tourId={ctx.tourId} product={product} /> : null}
       <TopBarV3
         ctx={ctx}
         workspaceName={workspaceName}
@@ -88,7 +106,9 @@ export function AppShellV3({
           up={up}
           defaultCollapsed={denseRail}
         />
-        <main style={{ flex: 1, minWidth: 0, minHeight: 0, overflow: 'auto' }}>{children}</main>
+        <main style={{ flex: 1, minWidth: 0, minHeight: 0, overflow: 'auto', background: 'var(--lp-bg)' }}>
+          {children}
+        </main>
       </div>
     </div>
   );

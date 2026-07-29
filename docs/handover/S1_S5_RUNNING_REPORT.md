@@ -140,6 +140,59 @@ never shows a spinner, because it isn't a Link at all.
 **Still on old chrome:** everything except Routing. See the S-2 entries below as
 they land.
 
+---
+
+## S-2a — tour scope · Tour mode · `<commit>`
+
+**Migrated:** Routing, Day sheets, Crew (personnel), Rooming, Files, and both
+Advance surfaces. That is all of Tour mode, and nothing else.
+
+**The boundary is now data, not a regex.** `isShelledPath()` in ia.ts answers
+"is this URL on the canonical shell", and the layouts ask it instead of each
+carrying their own pattern. A bank is one entry added to `SHELLED_TOUR_MODES`;
+a revert is that entry removed. 23 tests assert exactly which surfaces have
+crossed and which haven't — including that Payroll, which lives under
+`/operations`, is Money and therefore has NOT.
+
+That matters because "a half-migrated app" is the stated failure mode. It stays
+survivable only while someone can say which half, in one place, without reading
+three layouts.
+
+**Both corrections from your walk, fixed:**
+
+- **`denseRail` was on the wrong page.** S-1 collapsed the app rail on Routing
+  on my assumption that the routing page owned the R5 day rail. It doesn't —
+  `<RoutingRail>` is rendered by Rooming, the per-day page and the per-show
+  Advance surface. `hasDayRail()` now names those three, so the app rail only
+  shrinks where something is genuinely competing for the width, and Routing
+  gets its full rail back. Test: *"ROUTING DOES NOT HAVE ONE"*.
+- **The picker flashed "Pick an artist…".** A tour URL carries only the tour id,
+  so the context had nothing until `<HydrateTourArtist>` ran in an effect — on
+  a tour page, where the server knew the answer before it rendered a byte.
+  `fallbackArtistName` / `fallbackTourName` thread the loaded names through
+  ShellV3Mount → wrapper → switcher as the LAST fallback in the chain, so
+  anything the context or the fetched lists know still wins and they can't go
+  stale.
+
+**Kept, and easy to have lost:** `<RememberTourProduct>` was a ProductShell
+behaviour. Had it not moved across, the workspace Resume card would have gone
+on offering whichever product you last opened on OLD chrome — quietly wrong,
+and invisible until someone noticed Resume had stopped tracking. It's one
+zero-render island in AppShellV3 now, keyed off `productForPath()`.
+
+**Frame parity:** the shell root now sets `overflow:hidden` + `--lp-bg` /
+`--lp-text` exactly as ProductShell did, so `<main>` stays the only scroll
+surface — that's what sticky headers inside a page body anchor to.
+
+**Found, not fixed:** `/operations/[tourId]/labor`, `/summary` and `/edit`
+resolve to Tour mode and are now shelled, but no rail item claims them, so the
+rail highlights nothing. That's ia.ts's documented honest failure rather than a
+guess. `/summary` is scheduled for deletion in S-4; Labor calls is reached from
+Day sheets → Schedule by design (IA_CANONICAL), so it has no rail item on
+purpose.
+
+**Smoke:** SHELL-14 … SHELL-19.
+
 **Parked for Adam**
 - **Screenshots** at 1440/1920 of all four scopes — the app is auth-gated and I
   have no session, so I can't produce them. The mock is verified against the

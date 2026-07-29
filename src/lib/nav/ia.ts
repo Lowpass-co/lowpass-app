@@ -365,6 +365,68 @@ export function modeLandingHref(mode: TourMode, tourId: string): string {
   return first?.href ? first.href(ctx) : `/operations/${tourId}/routing`;
 }
 
+/* ============================================
+   THE MIGRATION BOUNDARY (S-2)
+
+   S-1 was proven on Routing alone; S-2..S-5 move the rest of the app across one
+   bank at a time. Which surfaces have crossed is a FACT ABOUT THE APP, so it
+   lives here as data rather than as a regex growing inside each layout. Three
+   things follow from that: a bank is a one-line edit, a bank is revertible by
+   the same one line, and "what is migrated" is testable without rendering
+   anything.
+
+   The failure mode this guards against is a half-migrated app where nobody can
+   say which half.
+   ============================================ */
+
+/** Tour-scope modes on the canonical shell. S-2a: Tour. Money is S-2b,
+ *  Production S-2c — each one adds a single entry to this set. */
+const SHELLED_TOUR_MODES = new Set<TourMode>(['tour']);
+
+/** Non-tour scopes on the canonical shell. Artist is S-3a, workspace/You S-3b. */
+const SHELLED_SCOPES = new Set<Scope>();
+
+/** True when this URL should render inside <AppShellV3> rather than old chrome. */
+export function isShelledPath(pathname: string, search = ''): boolean {
+  if (isUnshelledPath(pathname)) return false;
+  const ctx = resolveScope(pathname, search);
+  if (ctx.scope === 'tour') return !!ctx.mode && SHELLED_TOUR_MODES.has(ctx.mode);
+  return SHELLED_SCOPES.has(ctx.scope);
+}
+
+/**
+ * Pages that carry a <RoutingRail> — the DAY rail, which navigates days inside
+ * one tour and is a working surface, not a glance. Where one is present the app
+ * rail starts collapsed so the day rail keeps its width.
+ *
+ * ROUTING IS NOT ONE OF THEM. S-1 shipped `denseRail` on Routing on my
+ * assumption that the routing page owned the day rail; it doesn't — RoutingRail
+ * is rendered by Rooming, the per-day page and the per-show Advance surface.
+ * Adam caught it on the first walk. Naming the actual three here means the next
+ * mount can't inherit the same guess.
+ */
+export function hasDayRail(pathname: string): boolean {
+  return (
+    /^\/operations\/[^/]+\/rooming(\/|$)/.test(pathname) ||
+    /^\/operations\/[^/]+\/day\/[^/]+/.test(pathname) ||
+    /^\/advance\/[^/]+\/[^/]+/.test(pathname)
+  );
+}
+
+/**
+ * Which of the three product route trees a tour URL sits in.
+ *
+ * Not the same question as `modeForPath` — Payroll is Money mode but lives in
+ * the Operations tree, and the "open this tour where I left it" memory keys on
+ * the TREE, because that's what a URL is made of. Null when not tour-scoped.
+ */
+export function productForPath(pathname: string): 'operations' | 'budget' | 'advance' | null {
+  if (pathname.startsWith('/budget/')) return 'budget';
+  if (pathname.startsWith('/advance/')) return 'advance';
+  if (pathname.startsWith('/operations/')) return 'operations';
+  return null;
+}
+
 /** The "up a level" target, mirroring the mock's ↑ link. */
 export function upFrom(ctx: NavContext): { label: string; href: string } | null {
   if (ctx.scope === 'tour') {

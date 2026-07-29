@@ -29,6 +29,7 @@ import { HydrateTourArtist } from '@/components/shell-v2/HydrateTourArtist';
 import { OperationsGroupSubNav } from '@/components/operations/OperationsGroupSubNav';
 import { TourIdentityBand } from '@/components/operations/TourIdentityBand';
 import { loadTourIdentity } from '@/lib/shell/tourIdentity';
+import { isShelledPath, hasDayRail } from '@/lib/nav/ia';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import {
   canAccess,
@@ -67,11 +68,11 @@ export default async function OperationsTourLayout({
   const { tourId } = await params;
   const supabase = await createServerSupabaseClient();
 
-  /* S-1 — the canonical shell is proven on ROUTING ALONE.
-     Everything else under /operations keeps ProductShell + the two-bar nav +
-     OperationsGroupSubNav until S-2 migrates it deliberately. A half-migrated
-     app is the failure mode this staging exists to avoid, so the branch is
-     explicit and narrow rather than a feature flag nobody can see.
+  /* S-2a — which URLs are on the canonical shell is answered by ia.ts, not by a
+     regex that grows here every bank. Right now that means Tour mode (routing,
+     day sheets, crew, rooming, files); Production keeps ProductShell + the
+     two-bar nav + OperationsGroupSubNav until S-2c, and Payroll — which is
+     Money mode even though it lives under /operations — until S-2b.
 
      The pathname comes from the request headers because layouts are server
      components and there is no usePathname here — and because the shell must
@@ -79,7 +80,7 @@ export default async function OperationsTourLayout({
   const h = await headers();
   const pathname = h.get('x-pathname') ?? `/operations/${tourId}/routing`;
   const search = h.get('x-search') ?? '';
-  const isRouting = /^\/operations\/[^/]+\/routing\/?$/.test(pathname);
+  const shelled = isShelledPath(pathname, search);
 
   /* F-3(b) — these were four SEQUENTIAL awaits on every tour-scoped page load:
      getUser → loadTourIdentity → getActiveMembership → fetchActiveGrants. Only
@@ -118,17 +119,19 @@ export default async function OperationsTourLayout({
       : false,
   }));
 
-  if (isRouting) {
+  if (shelled) {
     return (
       <ShellV3Mount
         pathname={pathname}
         search={search}
         artistId={identity.artistId}
-        /* The routing page carries the R5 day rail. Two full-width rails at 1440
-           leaves too little for the ledger, so the APP rail starts collapsed and
-           the DAY rail keeps its width — see the note in AppShellV3. The user's
-           own collapse preference still wins once they set one. */
-        denseRail
+        artistName={identity.artistName}
+        tourName={identity.tourName}
+        /* Rooming and the per-day page carry the R5 day rail; Routing does NOT
+           — S-1 collapsed the rail there on my wrong assumption and Adam caught
+           it. hasDayRail() names the three surfaces that actually have one, so
+           the app rail only shrinks where something is competing for the width. */
+        denseRail={hasDayRail(pathname)}
       >
         <HydrateTourArtist tourId={tourId} artistId={identity.artistId} />
         <TourVisitTracker tourId={tourId} />

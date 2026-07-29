@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Lowpass — Competitive Phase Grading · 2026-07-20</title>
+<style>
+:root{--bg:#0d0d0f;--card:#141416;--line:#2e2e2e;--txt:#e8e8e8;--mut:#8a8a8a;--orange:#FF4500;--green:#10B981;--amber:#F59E0B;--red:#EF4444;--mono:'JetBrains Mono',ui-monospace,monospace}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--txt);font:14px/1.5 -apple-system,'Inter',sans-serif;padding:32px 24px 120px}
+.wrap{max-width:980px;margin:0 auto}
+h1{font-size:26px;letter-spacing:.04em;text-transform:uppercase;font-weight:700}
+h1 span{color:var(--orange)}
+.sub{color:var(--mut);margin:6px 0 10px}
+.prog{font-family:var(--mono);font-size:12px;color:var(--mut);margin-bottom:24px}
+.sec{margin:34px 0 0}
+.sec>h2{font-size:13px;letter-spacing:.12em;text-transform:uppercase;color:var(--orange);border-bottom:1px solid var(--line);padding-bottom:8px;margin-bottom:4px}
+.sec>.note{color:var(--mut);font-size:12.5px;margin:8px 0 4px}
+.item{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin:10px 0;transition:border-color .12s}
+.item.p{border-left:3px solid var(--green)}.item.m{border-left:3px solid var(--amber)}.item.f{border-left:3px solid var(--red)}
+.row{display:flex;gap:12px;align-items:flex-start}
+.id{font-family:var(--mono);font-size:11px;color:var(--mut);min-width:64px;padding-top:2px}
+.tit{font-weight:600;font-size:14.5px}
+.desc{color:var(--mut);font-size:12.5px;margin-top:3px}
+.desc b{color:#c9c9c9}
+a.go{color:var(--orange);text-decoration:none;font-size:12.5px;white-space:nowrap;margin-left:auto}
+a.go:hover{text-decoration:underline}
+.ctl{display:flex;gap:8px;margin-top:10px;align-items:center}
+.vb{border:1px solid var(--line);background:none;color:var(--mut);border-radius:6px;padding:4px 12px;font-size:12px;cursor:pointer}
+.vb:hover{color:var(--txt)}
+.vb.on-p{background:#10B98122;border-color:var(--green);color:var(--green)}
+.vb.on-m{background:#F59E0B22;border-color:var(--amber);color:var(--amber)}
+.vb.on-f{background:#EF444422;border-color:var(--red);color:var(--red)}
+.cm{flex:1;background:#0f0f11;border:1px solid var(--line);border-radius:6px;color:var(--txt);padding:5px 10px;font-size:12.5px}
+.cm::placeholder{color:#555}
+.bar{position:fixed;bottom:0;left:0;right:0;background:#0f0f11ee;border-top:1px solid var(--line);padding:14px 24px;display:flex;gap:12px;align-items:center;backdrop-filter:blur(8px)}
+.bar .st{font-family:var(--mono);font-size:12px;color:var(--mut);flex:1}
+.btn{background:var(--orange);color:#fff;border:none;border-radius:8px;padding:9px 18px;font-weight:600;font-size:13px;cursor:pointer}
+.btn.sec2{background:none;border:1px solid var(--line);color:var(--txt)}
+.steps{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:18px 20px;margin:18px 0}
+.steps h3{font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut);margin-bottom:10px}
+.steps ol{margin-left:18px}
+.steps li{margin:7px 0;font-size:13.5px}
+.steps li b{color:var(--orange)}
+.steps code{font-family:var(--mono);font-size:12px;background:#0f0f11;padding:1px 6px;border-radius:4px}
+</style>
+</head>
+<body><div class="wrap">
+<h1>Lowpass <span>·</span> Competitive-Phase Grading</h1>
+<div class="sub">M1 · X1 · D1 · V1 · S1 — everything shipped since the ATOM gameplan. Grade with your gut; comments matter more than verdicts. Autosaves locally. Export when done.</div>
+<div class="prog" id="prog"></div>
+
+<div class="steps">
+<h3>Before you grade — 10 minutes of setup (makes every surface honest)</h3>
+<ol>
+<li><b>Seed a day:</b> open <a class="go" style="margin:0" href="https://lowpass-tm-software.vercel.app/operations/6889d072-20c8-467c-9fbc-4d2469f6cac0/routing" target="_blank">Routing ↗</a> → Oct 3 (OVO Wembley) → add 3–4 labor calls / schedule times. An empty schedule flatters nothing.</li>
+<li><b>Seed a space:</b> Workspace → Assets → New space ("Storage Locker") → New container ("Mic Case") → select a few items → move them in.</li>
+<li><b>Second account:</b> open an incognito window → sign up with a different email. Keep both windows open side by side.</li>
+<li><b>Crew link:</b> main window → Operations → Day index → Roles panel → assign someone Crew → Generate link → <b>open it on your phone</b>.</li>
+<li>Then walk the sections below top-to-bottom. Each title links straight to the surface.</li>
+</ol>
+</div>
+
+<div id="app"></div>
+</div>
+<div class="bar">
+<div class="st" id="st"></div>
+<button class="btn sec2" onclick="clearAll()">Reset</button>
+<button class="btn sec2" onclick="copyMd()">Copy summary</button>
+<button class="btn" onclick="dlMd()">Export markdown</button>
+</div>
+<script>
+const T='https://lowpass-tm-software.vercel.app';
+const TOUR='6889d072-20c8-467c-9fbc-4d2469f6cac0';   // Charlotte Sands Fall'26
+const ETOUR='2bd32ef7-a886-4327-be54-cbeea7799d7a';  // Ella Langley Dandelion (ended — settlement data)
+const DAY='94fdb617-dc05-4610-80b7-c616b3498536';    // Oct 3 OVO Wembley
+const S=[
+{n:'1 · Security & multi-user (the beta gate)',note:'Do these with the incognito second account from setup. If any fail, beta waits.',items:[
+ {id:'SEC-01',t:'Second account sees an EMPTY workspace',d:'In incognito: no Charlotte Sands, no tours, no personnel, no budget data. Any leakage = instant fail + tell me exactly what you saw.',u:T+'/artists'},
+ {id:'SEC-02',t:'Non-admin unlock returns 403',d:'Incognito account is not your workspace admin. In its devtools console paste: <b>fetch("'+T+'/api/tours/'+TOUR+'/payroll/finalize",{method:"DELETE"}).then(r=>console.log(r.status))</b> — expect 403/404, never 200.',u:''},
+ {id:'SEC-03',t:'Crew link on your phone shows the crew slice only',d:'The /m/day link from setup: schedule + venue + hotel, NO money, NO internal notes. Grade it as a crew member would — is this useful enough to replace the daysheet text thread?',u:''},
+ {id:'SEC-04',t:'Revoked link dies',d:'Revoke the link in the Roles panel → refresh on the phone → clean 404/expired page (not an error dump).',u:''}]},
+{n:'2 · The Day (D1 — the Daysheets replacement)',note:'Grade against the Daysheets/ATOM bar you set. This is the arena we entered because of you.',items:[
+ {id:'DAY-A',t:'Three-zone layout, seeded day',d:'Date rail (color bars, search) · dominant schedule · right cards. Does it read premium at full width? Is the rail scannable like Daysheets?',u:T+'/operations/'+TOUR+'/day/'+DAY},
+ {id:'DAY-B',t:'Day-of contacts = venue people',d:'Contacts card shows advance/deal-memo people (or the invitation linking to the advance) — NOT the tour roster.',u:T+'/operations/'+TOUR+'/day/'+DAY},
+ {id:'DAY-C',t:'Day Sheet PDF composer',d:'Day sheet… button → pick Crew template → toggle sections → Download. Open the PDF: would you send this to a band tomorrow?',u:T+'/operations/'+TOUR+'/day/'+DAY},
+ {id:'DAY-D',t:'View-as FAB',d:'◉ button → Crew: money chip + notes vanish. → Driver. Exit pill returns you. Any flicker or leftovers?',u:T+'/operations/'+TOUR+'/day/'+DAY},
+ {id:'DAY-E',t:'Day index + rail navigation',d:'Tour day list: expand cards, Open day sheet links, day-type colors correct, Roles panel usable.',u:T+'/operations/'+TOUR+'/day'}]},
+{n:'3 · Settlement + money legibility (M1)',note:'Ella Langley’s ended tour has the worked example (Atlanta: 10k − 1.5k withholding − 2k wire = 6.5k outstanding).',items:[
+ {id:'SET-A',t:'The Walk reads like settlement night',d:'Atlanta: Guarantee → deductions → Adjusted gross → Show net → Artist total → Balance due → Outstanding. Negatives red, totals mono. Is this the page you’d have open at the venue office?',u:T+'/budget/'+ETOUR+'/settlement'},
+ {id:'SET-B',t:'Catch-up queue',d:'"Shows played, not settled" list — Due/Settled states, Atlanta shows Settled. Does the backlog feel actionable?',u:T+'/budget/'+ETOUR+'/settlement'},
+ {id:'SET-C',t:'Settlement PDF',d:'Export PDF on a show → open it. Letterhead, walk, itemized rows. Would you hand this to a promoter?',u:T+'/budget/'+ETOUR+'/settlement'},
+ {id:'SET-D',t:'Provenance chips on budget lines',d:'Charlotte’s Budget → Expenses: AUTO on synced lines, MANUAL on hand-entered, hover names the source. Neutral, not noisy?',u:T+'/budget/'+TOUR},
+ {id:'SET-E',t:'Data-health banner',d:'Budget → Summary: amber "N items to review", each with a working Fix → link. Helpful or nagging?',u:T+'/budget/'+TOUR+'?tab=summary'}]},
+{n:'4 · Payroll (M1-C)',items:[
+ {id:'PAY-A',t:'Inline rates in the matrix',d:'Left block shows £300/day etc. under each name. Does the grid now answer "what is this cell worth" at a glance?',u:T+'/operations/'+TOUR+'/payroll'},
+ {id:'PAY-B',t:'Finalize → locked → unlock',d:'Finalize payroll → amber read-only bar, painting dead → Unlock. Does the lock state feel trustworthy?',u:T+'/operations/'+TOUR+'/payroll'}]},
+{n:'5 · Accounting workbook (X1)',items:[
+ {id:'XLS-A',t:'Export & open in Excel/Numbers',d:'Budget → Export → Export workbook…. Six sheets, frozen headers, real =SUM() formulas, provenance column. Would your business manager accept this file?',u:T+'/budget/'+TOUR},
+ {id:'XLS-B',t:'Edit a cell → reimport',d:'Change one estimate in the file → Import workbook… → mapping/dupe review → exactly your one change proposed → accept. Nothing writes without you.',u:T+'/budget/'+TOUR}]},
+{n:'6 · Venue packet (V1 — your PDF ruling)',items:[
+ {id:'VP-A',t:'Share surface as the venue sees it',d:'Advance → Share mode: PDF card per artifact + intake link up front, portal demoted. Is this the business card you want venues to receive?',u:T+'/advance/'+TOUR},
+ {id:'VP-B',t:'Every PDF card downloads branded',d:'Click each card — rider, stage plot, channel list, day sheet. Consistent letterhead across all of them?',u:''},
+ {id:'VP-C',t:'Rider PDF import',d:'Rider builder → Import from PDF → drop any old rider → Extract → review proposals → apply. Propose-then-approve only.',u:''},
+ {id:'VP-D',t:'One canonical rider',d:'Edit link on a Share rider card and the artist-tier Production rider land on the same record.',u:''}]},
+{n:'7 · Assets / Spaces (S1)',items:[
+ {id:'SPC-A',t:'Assets surface + your seeded space',d:'KPIs (items, total weight), tree, Unassigned bucket. 33 rental items merged in. Does it read like the ATOM assets page you admired?',u:T+'/assets'},
+ {id:'SPC-B',t:'The locker→tour move',d:'Select items in your space → move to Charlotte’s tour → they appear in tour gear. The flow you asked for — does it feel one-motion?',u:T+'/assets'},
+ {id:'SPC-C',t:'Rental jobs intact',d:'Rental jobs → open a job → items still attached, billing untouched.',u:T+'/equipment'}]},
+{n:'8 · Artist builder + overall coherence',items:[
+ {id:'AB-A',t:'Create a real artist end-to-end',d:'Workspace → New artist → search → select (Next enables instantly) → confirm → details (£ GBP StyledSelect) → Create. First-run feel?',u:T+'/artists'},
+ {id:'COH-A',t:'The static header everywhere',d:'Hop Routing→Budget→Advance→Crew→Day: Where·Who·What always populated, never "Pick an artist…" on a cold load.',u:T+'/operations/'+TOUR+'/routing'},
+ {id:'COH-B',t:'Does it still look half-baked anywhere?',d:'Free roam 5 minutes. Name the three ugliest things you find — they seed the F2 finish list.',u:T+'/artists'}]}
+];
+const KEY='lp-grade-2026-07-20';
+let st=JSON.parse(localStorage.getItem(KEY)||'{}');
+function save(){localStorage.setItem(KEY,JSON.stringify(st));paint()}
+function setV(id,v){st[id]=st[id]||{};st[id].v=st[id].v===v?null:v;save()}
+function setC(id,c){st[id]=st[id]||{};st[id].c=c;localStorage.setItem(KEY,JSON.stringify(st));paintProg()}
+function paintProg(){const all=S.flatMap(s=>s.items);const g=all.filter(i=>st[i.id]&&st[i.id].v).length;const f=all.filter(i=>st[i.id]&&st[i.id].v==='f').length;document.getElementById('prog').textContent=`${g}/${all.length} graded · ${f} fails`;document.getElementById('st').textContent=`${g}/${all.length} graded`}
+function paint(){const app=document.getElementById('app');app.innerHTML='';S.forEach(sec=>{const d=document.createElement('div');d.className='sec';d.innerHTML=`<h2>${sec.n}</h2>`+(sec.note?`<div class="note">${sec.note}</div>`:'');sec.items.forEach(it=>{const s=st[it.id]||{};const e=document.createElement('div');e.className='item '+(s.v||'');e.innerHTML=`<div class="row"><div class="id">${it.id}</div><div style="flex:1"><div class="tit">${it.t}</div><div class="desc">${it.d}</div></div>${it.u?`<a class="go" href="${it.u}" target="_blank">open ↗</a>`:''}</div>
+<div class="ctl"><button class="vb ${s.v==='p'?'on-p':''}" onclick="setV('${it.id}','p')">Pass</button><button class="vb ${s.v==='m'?'on-m':''}" onclick="setV('${it.id}','m')">Meh</button><button class="vb ${s.v==='f'?'on-f':''}" onclick="setV('${it.id}','f')">Fail</button><input class="cm" placeholder="why / what you'd change…" value="${(s.c||'').replace(/"/g,'&quot;')}" onchange="setC('${it.id}',this.value)"></div>`;d.appendChild(e)});app.appendChild(d)});paintProg()}
+function md(){let o=`# Lowpass grading — competitive phase — ${new Date().toISOString().slice(0,10)}\n`;S.forEach(sec=>{o+=`\n## ${sec.n}\n`;sec.items.forEach(it=>{const s=st[it.id]||{};const v=s.v==='p'?'PASS':s.v==='m'?'MEH':s.v==='f'?'FAIL':'—';o+=`- **${it.id}** ${it.t} · **${v}**${s.c?` — ${s.c}`:''}\n`})});return o}
+function copyMd(){navigator.clipboard.writeText(md());document.getElementById('st').textContent='Copied — paste it to Cowork'}
+function dlMd(){const b=new Blob([md()],{type:'text/markdown'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='lowpass-grading-'+new Date().toISOString().slice(0,10)+'.md';a.click()}
+function clearAll(){if(confirm('Wipe all verdicts + comments?')){st={};save()}}
+paint();
+</script>
+</body></html>

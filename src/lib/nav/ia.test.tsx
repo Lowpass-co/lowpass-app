@@ -22,6 +22,8 @@ import {
   modeLandingHref,
   upFrom,
   isUnshelledPath,
+  isShelledPath,
+  hasDayRail,
   TOUR_MODES,
 } from './ia';
 
@@ -342,5 +344,95 @@ describe('what crosses to the client is plain data', () => {
     const view = resolveRailView(CTX, `/budget/${T}`, '?tab=budget', { lines: 48 });
     const expenses = view.find((e) => e.kind === 'item' && e.id === 'expenses');
     expect(expenses && expenses.kind === 'item' ? expenses.badge : null).toBe('48');
+  });
+});
+
+/* ============================================
+   S-2a — THE MIGRATION BOUNDARY
+
+   The stated failure mode for this whole staging is "a half-migrated app", and
+   the thing that makes that survivable is being able to say exactly which half.
+   These tests are that statement: every assertion below is a claim about which
+   surfaces render the canonical shell TODAY, and each bank flips a handful of
+   them deliberately rather than by accident.
+
+   They are also the revert test. If a bank goes red, one entry comes out of
+   SHELLED_TOUR_MODES and these say precisely what came back with it.
+   ============================================ */
+
+describe('isShelledPath — what is on the canonical shell after S-2a', () => {
+  it.each([
+    `/operations/${T}/routing`,
+    `/operations/${T}/day`,
+    `/operations/${T}/day/r-1`,
+    `/operations/${T}/personnel`,
+    `/operations/${T}/rooming`,
+    `/operations/${T}/files`,
+    `/advance/${T}`,
+    `/advance/${T}/r-1`,
+  ])('%s is Tour mode → shelled', (p) => {
+    expect(isShelledPath(p)).toBe(true);
+  });
+
+  it.each([
+    // Money — S-2b. Payroll lives under /operations but is Money, so it waits.
+    [`/budget/${T}`, 'money'],
+    [`/budget/${T}/settlement`, 'money'],
+    [`/operations/${T}/payroll`, 'money'],
+    // Production — S-2c.
+    [`/operations/${T}/hire`, 'production'],
+    [`/operations/${T}/channel-list`, 'production'],
+    [`/operations/${T}/stage-plot`, 'production'],
+    [`/operations/${T}/riders`, 'production'],
+  ])('%s is %s mode → still old chrome', (p) => {
+    expect(isShelledPath(p)).toBe(false);
+  });
+
+  it.each(['/artists', `/artists/${A}`, '/settings', '/venues', '/personnel'])(
+    '%s is not tour scope → still old chrome until S-3',
+    (p) => {
+      expect(isShelledPath(p)).toBe(false);
+    },
+  );
+
+  it('never claims a public or auth route, whatever its shape', () => {
+    // These have their own chrome by design; wrapping one would be a real bug.
+    for (const p of ['/login', '/m/today', '/share/abc', '/intake/xyz', '/grid-demo']) {
+      expect(isShelledPath(p)).toBe(false);
+    }
+  });
+
+  it('the budget ?tab= shapes agree with the plain path — the tab is not a scope', () => {
+    for (const tab of ['summary', 'budget', 'income', 'receipts', 'settings']) {
+      expect(isShelledPath(`/budget/${T}`, `?tab=${tab}`)).toBe(isShelledPath(`/budget/${T}`));
+    }
+  });
+});
+
+describe('hasDayRail — where the app rail should start collapsed', () => {
+  it('ROUTING DOES NOT HAVE ONE', () => {
+    /* S-1 collapsed the rail on Routing on the assumption that the routing page
+       owned the day rail. It doesn't — <RoutingRail> is rendered by Rooming,
+       the per-day page and the per-show Advance surface. Adam caught it on the
+       first walk; this is the assertion that stops it coming back. */
+    expect(hasDayRail(`/operations/${T}/routing`)).toBe(false);
+  });
+
+  it.each([
+    `/operations/${T}/rooming`,
+    `/operations/${T}/day/r-1`,
+    `/advance/${T}/r-1`,
+  ])('%s carries one', (p) => {
+    expect(hasDayRail(p)).toBe(true);
+  });
+
+  it.each([
+    `/operations/${T}/day`,      // the day INDEX has no rail — the per-day page does
+    `/advance/${T}`,             // tour-level advance overview, no rail
+    `/operations/${T}/personnel`,
+    `/operations/${T}/files`,
+    `/budget/${T}`,
+  ])('%s does not', (p) => {
+    expect(hasDayRail(p)).toBe(false);
   });
 });

@@ -106,6 +106,15 @@ interface ArtistTourSwitcherProps {
    *  from the per-row ⋮ menu in the artists pane. The wrapper
    *  opens <ArtistDeleteConfirmationModal>. */
   onDeleteArtist?: (artist: { id: string; name: string }) => void;
+  /** S-2a — the names the SERVER already knew for this URL.
+   *
+   *  A tour URL carries only the tour id, so on a cold load the context has no
+   *  artist until <HydrateTourArtist> runs in an effect, and the trigger sat on
+   *  "Pick an artist…" for a frame — on a tour page, of all places, where the
+   *  answer was never in doubt. These are last-resort fallbacks: anything the
+   *  context or the fetched lists know still wins, so they can't go stale. */
+  fallbackArtistName?: string | null;
+  fallbackTourName?: string | null;
 }
 
 /** Sprint 6.1 §3 — animations are now driven by the Web
@@ -267,6 +276,8 @@ export function ArtistTourSwitcher({
   onCreateArtist,
   onDeleteTour,
   onDeleteArtist,
+  fallbackArtistName = null,
+  fallbackTourName = null,
 }: ArtistTourSwitcherProps) {
   const {
     selectedArtistId,
@@ -300,13 +311,19 @@ export function ArtistTourSwitcher({
   // selected artist/tour yet, look them up in the prefetched lists
   // so the trigger button never flashes "Pick an artist…" between
   // renders.
+  //
+  // S-2a — the server-supplied names are the LAST fallback, after the context
+  // and the prefetched lists. On a tour URL those two have nothing to say until
+  // hydration, which is exactly the frame the flash lived in.
   const displayArtistName =
     selectedArtist?.name ??
     artists.find((a) => a.id === selectedArtistId)?.name ??
+    fallbackArtistName ??
     null;
   const displayTourName =
     selectedTour?.name ??
     tours.find((t) => t.id === selectedTourId)?.name ??
+    fallbackTourName ??
     null;
 
   /* -------- dropdown state machine --------
