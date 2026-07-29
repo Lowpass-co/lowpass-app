@@ -2,10 +2,10 @@
 
 Format per `docs/smoke-tests/README.md`. IDs are stable; add new ones as banks land.
 
-**As of S-2a, the shell is mounted on all of TOUR MODE:** Routing, Day sheets,
-Crew (personnel), Rooming, Files, and both Advance surfaces. Money (Budget,
-Settlement, Payroll) and Production (Assets, Channel list, Stage plot, Riders)
-are still on old chrome — that is S-2b and S-2c, and it is correct until then.
+**As of S-2b, the shell is mounted on TOUR mode and MONEY mode:** Routing, Day
+sheets, Crew, Rooming, Files, both Advance surfaces, Budget (all tabs),
+Settlement and Payroll. Production (Assets, Channel list, Stage plot, Riders) is
+still on old chrome — that is S-2c, and it is correct until then.
 
 The authoritative answer is `isShelledPath()` in `src/lib/nav/ia.ts`; the list
 above is a description of it, not a second source of truth.
@@ -105,10 +105,40 @@ Grab a tour id from any tour URL you already have open and substitute it for
   card for that tour. It should return you to Operations, not Budget.
   *ProductShell used to record this; the new shell has to keep doing it.*
 
-- [ ] **SHELL-19 — Money and Production are untouched.** `/budget/[tourId]` ·
-  `/operations/[tourId]/payroll` · `/operations/[tourId]/hire` ·
-  `/operations/[tourId]/channel-list` still render their OLD chrome with no
-  error. Half-migrated is the plan; half-broken is not.
+- [ ] **SHELL-19 — Production is untouched.** `/operations/[tourId]/hire` ·
+  `/operations/[tourId]/channel-list` · `/operations/[tourId]/stage-plot` ·
+  `/operations/[tourId]/riders` still render their OLD chrome with no error.
+  Half-migrated is the plan; half-broken is not.
+  *(S-2a asked the same of Budget and Payroll — they've since crossed, see
+  SHELL-20.)*
+
+---
+
+## Still to do — S-2b (Money mode)
+
+- [ ] **SHELL-20 — Money mode renders, and the pill agrees.** Load
+  `/budget/[tourId]?tab=summary` · `?tab=budget` · `?tab=income` ·
+  `?tab=receipts` · `?tab=settings`, then `/budget/[tourId]/settlement` and
+  `/operations/[tourId]/payroll`. Each shows the shell with the **MONEY** pill
+  lit and the matching rail item active — including Payroll, which lives at an
+  `/operations/…` URL but belongs to Money.
+
+- [ ] **SHELL-21 — The budget tabs are in ONE place now.** On any budget tab,
+  the old Summary/Expenses/Income/Receipts/Settings strip is **gone** from the
+  band; the rail carries them. The band keeps the **version selector**, the
+  **density toggle** and **Export** — check all three are still there and still
+  work.
+
+- [ ] **SHELL-22 — The Receipts count survived the move.** With at least one
+  receipt missing fields, the rail's **Receipts** item shows the count. Fix the
+  last one and the number **disappears entirely** — it should not sit at "0".
+  *That badge used to live on the tab band. It's the one number on that bar
+  anyone acts on, so it had to move rather than quietly vanish.*
+
+- [ ] **SHELL-23 — Money still adds up.** On `/budget/[tourId]` confirm the
+  grid, burn bar and totals read the same as before the chrome changed, and that
+  `/budget/[tourId]/settlement` still opens and totals.
+  *Chrome-only bank — if a number moved, that's the finding.*
 
 ---
 

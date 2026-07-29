@@ -193,6 +193,51 @@ purpose.
 
 **Smoke:** SHELL-14 … SHELL-19.
 
+---
+
+## S-2b — tour scope · Money mode · `<commit>`
+
+**Migrated:** Budget (every tab), Settlement, and **Payroll** — which lives at
+an `/operations/…` URL and crossed with Money, not with the Operations folder,
+because the rail is organised by what a thing is. One entry added to
+`SHELLED_TOUR_MODES`; the layouts needed no new logic, which was the point of
+S-2a doing the boundary properly.
+
+**The budget tabs now exist once.** The rail carries Summary / Expenses /
+Income / Receipts / Reports, so `<BudgetContextBand>` drops its tab strip and
+keeps only what nothing else offers: the version selector, the density toggle
+and Export. Same reasoning that retired the identity band on Routing — two navs
+saying the same thing is the condition this shell exists to end. The band asks
+`isShelledPath()` itself rather than taking a prop, so it can't drift from what
+is actually mounted.
+
+**The Receipts count had to move, not vanish.** It was rendered on the tab
+strip — the one number on that bar anybody acts on. `countReceiptsNeedingDetails()`
+now feeds the rail badge on **every** Money surface, not just Budget, because
+the rail is on Settlement and Payroll too. It's a lean two-query read that
+deliberately does NOT pull `raw_ocr_json` (large, and financial/PII), and it
+shares `deriveReceiptState` with the bank loader — two definitions of "needs
+details" would drift, and a badge disagreeing with the list it points at is
+worse than no badge. It rides the existing `Promise.all`, so no extra
+round-trip depth on a cold lambda.
+
+**A zero is not a badge.** Every badge in this rail counts work — days, lines,
+unsettled shows, receipts. `resolveRailView` now drops `0`, so clearing the last
+receipt removes the number instead of parking a "0" beside an item that wants no
+attention. Put in the resolver rather than the caller so it holds for every
+badge; 5 tests, and the old code returned `'0'`.
+
+**Not done, deliberately:** the other badge keys (`days`, `lines`, `unsettled`,
+`tours`, `artists`, `gear`, `advanced`) are still unfed — they never existed in
+the old chrome, so nothing regressed, and each needs its own query. Worth doing
+as one deliberate pass rather than smuggled into a chrome bank.
+
+**Label divergence to settle:** the rail says "Reports & workbook"
+(IA_CANONICAL); the tab it points at was labelled "Settings". Same destination,
+`?tab=settings`. Adam's call which name is right.
+
+**Smoke:** SHELL-20 … SHELL-23.
+
 **Parked for Adam**
 - **Screenshots** at 1440/1920 of all four scopes — the app is auth-gated and I
   have no session, so I can't produce them. The mock is verified against the

@@ -18,6 +18,9 @@
 
 import type { ReactNode } from 'react';
 import { notFound } from 'next/navigation';
+import { headers } from 'next/headers';
+import { ShellV3Mount } from '@/components/shell-v3/ShellV3Mount';
+import { isShelledPath, hasDayRail } from '@/lib/nav/ia';
 import { ProductShell } from '@/components/shell-v2';
 import { IdentityLockup } from '@/components/shell-v2/IdentityLockup';
 import { HydrateTourArtist } from '@/components/shell-v2/HydrateTourArtist';
@@ -58,6 +61,31 @@ export default async function BudgetTourLayout({
   // G2-4 — the ONE identity lockup (same component as Operations/Advance), above
   // the budget tab band, so the artist/tour band is identical across products.
   const identity = await loadTourIdentity(supabase, tourId);
+
+  /* S-2b — Budget is Money mode, so it crosses with Settlement and Payroll.
+     The identity band goes with the old chrome, same as it did on Routing: the
+     top bar already names the artist and the tour, and saying it twice is what
+     the canonical shell exists to stop. */
+  const h = await headers();
+  const pathname = h.get('x-pathname') ?? `/budget/${tourId}`;
+  const search = h.get('x-search') ?? '';
+
+  if (isShelledPath(pathname, search)) {
+    return (
+      <ShellV3Mount
+        pathname={pathname}
+        search={search}
+        artistId={identity?.artistId ?? tourRow.artist_id}
+        artistName={identity?.artistName ?? null}
+        tourName={identity?.tourName ?? null}
+        denseRail={hasDayRail(pathname)}
+      >
+        <HydrateTourArtist tourId={tourId} artistId={identity?.artistId ?? tourRow.artist_id} />
+        <TourVisitTracker tourId={tourId} />
+        {children}
+      </ShellV3Mount>
+    );
+  }
 
   return (
     <ProductShell

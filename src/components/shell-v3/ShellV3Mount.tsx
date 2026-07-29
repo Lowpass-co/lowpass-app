@@ -18,6 +18,8 @@
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { ArtistTourSwitcherClientWrapper } from '@/components/shell-v2/ArtistTourSwitcherClientWrapper';
 import { ProductHeaderAvatarMenu } from '@/components/shell-v2/ProductHeaderAvatarMenu';
+import { countReceiptsNeedingDetails } from '@/lib/budget/loadReceipts';
+import { resolveScope } from '@/lib/nav/ia';
 import { AppShellV3 } from './AppShellV3';
 
 type SwitcherArtistMin = {
@@ -49,9 +51,22 @@ export async function ShellV3Mount({
 }: ShellV3MountProps) {
   const supabase = await createServerSupabaseClient();
 
-  const [{ data: userData }, { data: artistsRes }] = await Promise.all([
+  /* S-2b — the Receipts badge. It existed in the budget tab band, and the band's
+     tabs are retired on Money surfaces now that the rail carries them, so the
+     count has to move rather than disappear: it's work-still-to-do, which is
+     the one number on that bar anybody acts on.
+
+     Resolved here rather than in each layout so every Money surface shows the
+     same figure — the rail is on Payroll and Settlement too, not just Budget.
+     It rides the same Promise.all as the artist list, so it costs no extra
+     round-trip depth on a cold lambda. */
+  const scope = resolveScope(pathname, search ?? '');
+  const wantsReceiptBadge = scope.scope === 'tour' && scope.mode === 'money' && !!scope.tourId;
+
+  const [{ data: userData }, { data: artistsRes }, needsDetails] = await Promise.all([
     supabase.auth.getUser(),
     supabase.from('artists').select('id, name, branding, spotify_image_url').order('name', { ascending: true }),
+    wantsReceiptBadge ? countReceiptsNeedingDetails(supabase, scope.tourId as string) : Promise.resolve(0),
   ]);
   const user = userData?.user ?? null;
   const initialArtists = (artistsRes ?? []) as SwitcherArtistMin[];
@@ -78,7 +93,9 @@ export async function ShellV3Mount({
       pathname={pathname}
       search={search}
       artistId={artistId}
-      badges={badges}
+      /* Caller-supplied badges win; a zero is dropped downstream by
+         resolveRailView, which is where the rule belongs. */
+      badges={{ receiptsNeedingDetails: needsDetails, ...(badges ?? {}) }}
       denseRail={denseRail}
       workspaceName="Workspace"
       switcher={

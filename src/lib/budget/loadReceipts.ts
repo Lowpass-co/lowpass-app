@@ -75,6 +75,68 @@ interface RawReceipt {
 }
 
 /**
+ * How many receipts still need fields — the Receipts badge (RQ-6).
+ *
+ * S-2b — the count used to be computed by the budget page and rendered in the
+ * budget tab band. Money mode's rail shows it on every Money surface now, so it
+ * needs a reader that doesn't load the whole bank: same two queries, but lean
+ * projections and NO raw_ocr_json, which is the large column and is financial
+ * /PII besides.
+ *
+ * It shares `deriveReceiptState` with loadTourReceipts deliberately. Two
+ * definitions of "needs details" would drift, and the badge disagreeing with
+ * the list it points at is worse than no badge.
+ *
+ * Never throws; 0 on any failure. A badge is not worth taking a page down for.
+ */
+export async function countReceiptsNeedingDetails(
+  supabase: SupabaseClient,
+  tourId: string,
+): Promise<number> {
+  if (!tourId) return 0;
+  try {
+    const { data: receipts, error } = await supabase
+      .from('expense_receipts')
+      .select('id, vendor, date, cost_tour_currency, linked_line_item_id')
+      .eq('tour_id', tourId);
+    if (error || !receipts?.length) return 0;
+
+    const rows = receipts as Array<{
+      id: string;
+      vendor: string | null;
+      date: string | null;
+      cost_tour_currency: number | null;
+      linked_line_item_id: string | null;
+    }>;
+
+    const statusesByReceipt = new Map<string, ProposalStatus[]>();
+    const { data: proposals } = await supabase
+      .from('import_pending_lines')
+      .select('receipt_id, status')
+      .in('receipt_id', rows.map((r) => r.id));
+    for (const p of (proposals ?? []) as Array<{ receipt_id: string | null; status: string }>) {
+      if (!p.receipt_id) continue;
+      const list = statusesByReceipt.get(p.receipt_id) ?? [];
+      list.push(p.status as ProposalStatus);
+      statusesByReceipt.set(p.receipt_id, list);
+    }
+
+    return rows.filter(
+      (r) =>
+        deriveReceiptState({
+          linked_line_item_id: r.linked_line_item_id,
+          vendor: r.vendor,
+          date: r.date,
+          cost_tour_currency: r.cost_tour_currency,
+          proposalStatuses: statusesByReceipt.get(r.id) ?? [],
+        }) === 'needs_details',
+    ).length;
+  } catch {
+    return 0;
+  }
+}
+
+/**
  * Every receipt on the tour, newest first, with its derived state.
  * Never throws — an empty list is a legitimate answer, an exception is not.
  */

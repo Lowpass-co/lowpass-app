@@ -15,6 +15,7 @@
    ============================================ */
 
 import { usePathname, useSearchParams } from 'next/navigation';
+import { isShelledPath } from '@/lib/nav/ia';
 import { ProductSubBar } from '@/components/shell-v2/ProductSubBar';
 import { BudgetExportControls } from '@/components/budget/BudgetExportControls';
 import { AppDensityToggle } from '@/lib/density/appDensity';
@@ -46,6 +47,15 @@ export function BudgetContextBand({
   const searchParams = useSearchParams();
   const active = resolveBudgetTab(searchParams.get('tab') ?? undefined);
 
+  /* S-2b — on the canonical shell the Money RAIL carries Summary / Expenses /
+     Income / Receipts / Reports, so these tabs would be a second nav saying the
+     same thing. The band keeps its actions — version selector, density, export
+     — because nothing else offers those; only the duplicated navigation goes.
+
+     Asked of ia.ts rather than passed down as a prop, so the band can't get out
+     of step with what is actually mounted. */
+  const shelled = isShelledPath(pathname, `?${searchParams.toString()}`);
+
   const hrefFor = (tab: BudgetTab): string => {
     const params = new URLSearchParams(searchParams);
     params.set('tab', tab);
@@ -70,7 +80,7 @@ export function BudgetContextBand({
         /* Phase 0 — SUMMARY | EXPENSES | INCOME | SETTINGS as four equal tabs.
            Reports retired (export lives in rightSlot); Settings moved out of the
            corner into the main row, plain (no icon) to match the content tabs. */
-        items={[
+        items={shelled ? [] : [
           { key: 'summary', label: 'Summary', href: hrefFor('summary'), active: active === 'summary' },
           { key: 'budget', label: 'Expenses', href: hrefFor('budget'), active: active === 'budget' },
           { key: 'income', label: 'Income', href: hrefFor('income'), active: active === 'income' },

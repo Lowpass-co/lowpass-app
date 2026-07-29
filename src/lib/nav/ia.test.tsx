@@ -360,8 +360,9 @@ describe('what crosses to the client is plain data', () => {
    SHELLED_TOUR_MODES and these say precisely what came back with it.
    ============================================ */
 
-describe('isShelledPath — what is on the canonical shell after S-2a', () => {
+describe('isShelledPath — what is on the canonical shell after S-2b', () => {
   it.each([
+    // S-2a — Tour mode.
     `/operations/${T}/routing`,
     `/operations/${T}/day`,
     `/operations/${T}/day/r-1`,
@@ -370,21 +371,29 @@ describe('isShelledPath — what is on the canonical shell after S-2a', () => {
     `/operations/${T}/files`,
     `/advance/${T}`,
     `/advance/${T}/r-1`,
-  ])('%s is Tour mode → shelled', (p) => {
+    // S-2b — Money mode.
+    `/budget/${T}`,
+    `/budget/${T}/settlement`,
+  ])('%s is shelled', (p) => {
     expect(isShelledPath(p)).toBe(true);
   });
 
+  it('PAYROLL crossed with Money, not with Operations', () => {
+    /* It sits in the /operations route tree but it is pay, so it moved rails in
+       S-2b — the bank that took Money, not the one that took the Operations
+       folder. If this ever reads true a bank early, the rail and the URL have
+       stopped agreeing about what Payroll is. */
+    expect(isShelledPath(`/operations/${T}/payroll`)).toBe(true);
+    expect(modeForPath(`/operations/${T}/payroll`)).toBe('money');
+  });
+
   it.each([
-    // Money — S-2b. Payroll lives under /operations but is Money, so it waits.
-    [`/budget/${T}`, 'money'],
-    [`/budget/${T}/settlement`, 'money'],
-    [`/operations/${T}/payroll`, 'money'],
     // Production — S-2c.
-    [`/operations/${T}/hire`, 'production'],
-    [`/operations/${T}/channel-list`, 'production'],
-    [`/operations/${T}/stage-plot`, 'production'],
-    [`/operations/${T}/riders`, 'production'],
-  ])('%s is %s mode → still old chrome', (p) => {
+    `/operations/${T}/hire`,
+    `/operations/${T}/channel-list`,
+    `/operations/${T}/stage-plot`,
+    `/operations/${T}/riders`,
+  ])('%s is Production → still old chrome', (p) => {
     expect(isShelledPath(p)).toBe(false);
   });
 
@@ -434,5 +443,46 @@ describe('hasDayRail — where the app rail should start collapsed', () => {
     `/budget/${T}`,
   ])('%s does not', (p) => {
     expect(hasDayRail(p)).toBe(false);
+  });
+});
+
+/* ============================================
+   S-2b — the Receipts badge survives the move
+
+   The count of receipts still needing fields lived on the budget tab band. The
+   band's tabs stand down on the canonical shell (the rail carries them), so the
+   number had to move rather than quietly stop existing — it is the one figure
+   on that bar anybody acts on.
+   ============================================ */
+
+describe('badges count work, so zero is not a badge', () => {
+  const money = { scope: 'tour' as const, artistId: null, tourId: T, mode: 'money' as const };
+  const receiptsBadge = (badges: Record<string, string | number | null | undefined>) => {
+    const view = resolveRailView(money, `/budget/${T}`, '?tab=budget', badges);
+    const r = view.find((e) => e.kind === 'item' && e.id === 'receipts');
+    return r && r.kind === 'item' ? r.badge : undefined;
+  };
+
+  it('a real count shows', () => {
+    expect(receiptsBadge({ receiptsNeedingDetails: 3 })).toBe('3');
+  });
+
+  it('zero shows NOTHING — an item with no work wants no number beside it', () => {
+    expect(receiptsBadge({ receiptsNeedingDetails: 0 })).toBeNull();
+    expect(receiptsBadge({ receiptsNeedingDetails: '0' })).toBeNull();
+  });
+
+  it('absent, null and empty are all no badge', () => {
+    expect(receiptsBadge({})).toBeNull();
+    expect(receiptsBadge({ receiptsNeedingDetails: null })).toBeNull();
+    expect(receiptsBadge({ receiptsNeedingDetails: '' })).toBeNull();
+  });
+
+  it('the rule is general, not a receipts special case', () => {
+    const view = resolveRailView(money, `/budget/${T}`, '?tab=budget', { lines: 0, unsettled: 0 });
+    for (const id of ['expenses', 'settlements']) {
+      const item = view.find((e) => e.kind === 'item' && e.id === id);
+      expect(item && item.kind === 'item' ? item.badge : 'x').toBeNull();
+    }
   });
 });

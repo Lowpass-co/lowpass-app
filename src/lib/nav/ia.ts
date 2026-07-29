@@ -379,9 +379,9 @@ export function modeLandingHref(mode: TourMode, tourId: string): string {
    say which half.
    ============================================ */
 
-/** Tour-scope modes on the canonical shell. S-2a: Tour. Money is S-2b,
- *  Production S-2c — each one adds a single entry to this set. */
-const SHELLED_TOUR_MODES = new Set<TourMode>(['tour']);
+/** Tour-scope modes on the canonical shell. S-2a: Tour. S-2b: Money.
+ *  Production is S-2c — one more entry in this set. */
+const SHELLED_TOUR_MODES = new Set<TourMode>(['tour', 'money']);
 
 /** Non-tour scopes on the canonical shell. Artist is S-3a, workspace/You S-3b. */
 const SHELLED_SCOPES = new Set<Scope>();
@@ -485,7 +485,12 @@ export function resolveRailView(
   const activeId = activeItemFor(pathname, search);
   return railFor(ctx.scope, ctx.mode).map((entry) => {
     if (entry.kind === 'group') return { kind: 'group', label: entry.label };
-    const badge = entry.badge ? badges[entry.badge] : null;
+    /* A ZERO IS NOT A BADGE. Every badge in this rail counts work — days,
+       lines, unsettled shows, receipts needing fields — and "0" of any of them
+       means there is nothing to look at. Rendering it puts a number next to an
+       item that wants no attention, which is how a nav starts crying wolf. */
+    const raw = entry.badge ? badges[entry.badge] : null;
+    const badge = raw === 0 || raw === '0' ? null : raw;
     return {
       kind: 'item',
       id: entry.id,
