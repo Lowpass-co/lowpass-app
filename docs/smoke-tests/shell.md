@@ -253,6 +253,29 @@ Grab a tour id from any tour URL you already have open and substitute it for
 
 ---
 
+## Still to do — S-4b (orphans and ex-stubs)
+
+- [ ] **SHELL-40 — The four ex-stubs still redirect, AND their tails now work.**
+  Bare: `/rooming` · `/calendar` · `/rider-packs` → **/artists**.
+  `/account/rental` → **/equipment**.
+  Tails (these 404'd before): `/rooming/x` · `/calendar/x` →
+  **/artists**; `/account/rental/some-id` → **/equipment**.
+
+- [ ] **SHELL-41 — The rider pack editor still opens. THIS IS THE ONE THAT
+  MATTERS.** From `/advance/[tourId]/[routingId]/share`, click a rider or stage
+  plot's **edit** link → `/rider-packs/[id]` opens the editor. Also from
+  `/artists/[id]/riders`, click a row.
+  *`/rider-packs` is an exact-match redirect for this reason. If it had been a
+  tail glob, every one of these would land on /artists instead.*
+
+- [ ] **SHELL-42 — The deleted routes are gone, and nothing links to them.**
+  `/gear` and `/artists/[id]/financials` should 404. Then walk
+  `/artists/[id]` and `/operations/[tourId]/hire` and confirm nothing offers a
+  link to either — the gear LIBRARY still renders inside Assets/hire, which is
+  the component, not the deleted page.
+
+---
+
 ## Already verified on `431f316` (Cowork, no need to repeat)
 
 - **SHELL-01 — The shell renders on Routing.** Top bar: workspace · artist/tour

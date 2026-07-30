@@ -502,6 +502,69 @@ opposite of S-4c's "keep the redirects" rule. Plan: move them into
 `next.config.ts` first, then delete the pages — files gone, bookmarks intact.
 Will confirm before doing it.
 
+---
+
+## S-4b — orphans and ex-stubs · `<commit>`
+
+**Deleted, 9 files.** Lint dropped 450 → 447 problems with them, which is the
+only kind of lint movement worth having.
+
+### The four redirect stubs → `next.config.ts`, then the pages
+
+Your call, and it paid for itself immediately: a config redirect handles
+**tails**, which a bare `redirect()` page demonstrably cannot. `/rooming/x`,
+`/calendar/x` and `/account/rental/<id>` all 404'd before this bank — the stub
+only ever matched the bare path. `:rest*` matches zero or more segments, so
+both forms land now.
+
+**`/rider-packs` is the exception, and it's the trap in this bank.** It is an
+EXACT match, not `:rest*`, because `/rider-packs/[id]` is the live pack editor —
+the Advance **share** surface links into it as `editHref`, and so does the
+artist riders library. A `:rest*` there would have swallowed every one of those
+links and sent them to `/artists`. Caught by grepping the id route before
+writing the rule, not after.
+
+### Deleted with zero references
+
+| file | evidence |
+|---|---|
+| `RoomingTourRedirect.tsx` | 0 refs — the S-4a finding |
+| `BudgetTourSelector.tsx` | 0 refs — the S-4a finding |
+| `budget/rooming-recent.ts` | 0 refs **after** the above; it existed only to serve them |
+| `(app)/gear/page.tsx` | 0 inbound route links |
+| `artists/[id]/(library)/financials/page.tsx` | 0 inbound links |
+
+`GearLibraryClient` is **kept** — 6 refs, mounted by both `hire` pages. Only
+the standalone `/gear` route was orphaned, not the component behind it.
+
+Deleting the financials route also meant scrubbing it from `ia.ts`: Overview's
+matcher claimed `/financials` (S-3a, so the rail wouldn't sit unlit on it) and
+two tests asserted that. A matcher for a page that no longer exists is dead
+config that reads as intent.
+
+### SKIPPED — `/operations/[tourId]/summary` has a live caller
+
+Not an orphan. `operations/[tourId]/page.tsx:61` **redirects to it**:
+
+```
+redirect(canReadRouting ? `/operations/${tourId}/routing`
+                        : `/operations/${tourId}/summary`);
+```
+
+It is the landing for a member who can read `operations.personnel` but **not**
+`operations.routing`. Deleting it would 404 exactly those users — the ones least
+able to work out why. Stopped and reported rather than rewriting the caller in
+a deletion bank, per the rule.
+
+Worth noting where this lands: the surface I was asked to delete as dead is a
+**permissions fallback**, and it's the second time this pass that resource
+access has turned out to be load-bearing in a way the map didn't show. That is
+P-1's territory. My recommendation is that S-4 does not delete it at all and
+P-1 decides whether a permission-scoped landing is still the right answer now
+the rail exists.
+
+**Smoke:** SHELL-40 … SHELL-42.
+
 **Parked for Adam**
 - **Screenshots** at 1440/1920 of all four scopes — the app is auth-gated and I
   have no session, so I can't produce them. The mock is verified against the

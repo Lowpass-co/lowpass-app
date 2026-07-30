@@ -272,6 +272,42 @@ const nextConfig: NextConfig = {
         destination: '/',
         permanent: true,
       },
+
+      /* ===== Workspace-level surfaces that moved into tour scope (S-4b) =====
+
+         These four were one-line `redirect()` PAGES. The page WAS the redirect,
+         so deleting the file would have turned four working redirects into four
+         404s for anyone holding a stale bookmark — the opposite of the rule
+         that keeps the /tours/* redirects alive.
+
+         Moved here first, then the pages deleted. Same behaviour, less code,
+         and one thing a redirect() page could not do: **handle tails**.
+         /account/rental/<id> 404s today because the stub only ever matched the
+         bare path. `:rest*` matches zero or more segments, so both land. */
+      {
+        source: '/rooming/:rest*',
+        destination: '/artists',
+        permanent: true,
+      },
+      {
+        source: '/calendar/:rest*',
+        destination: '/artists',
+        permanent: true,
+      },
+      {
+        /* EXACT MATCH, deliberately. /rider-packs/[id] is the live pack editor —
+           the Advance share surface and the artist riders library both link
+           straight into it. A `:rest*` here would swallow every one of those. */
+        source: '/rider-packs',
+        destination: '/artists',
+        permanent: true,
+      },
+      {
+        // Rental scoped back to the workspace in Sprint 12 (migration 095).
+        source: '/account/rental/:rest*',
+        destination: '/equipment',
+        permanent: true,
+      },
     ];
   },
 };

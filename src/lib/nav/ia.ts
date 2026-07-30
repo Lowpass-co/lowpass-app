@@ -193,12 +193,16 @@ const ARTIST_RAIL: RailEntry[] = [
   {
     kind: 'item', id: 'overview', label: 'Overview', icon: 'LayoutDashboard',
     href: (c) => `/artists/${c.artistId}`,
-    /* Also claims Edit, the Production hub and the Financials stub. None has a
-       rail item of its own; all three are reached from the landing, and a rail
-       showing nothing lit reads as broken. Same call as labor → Day sheets. */
+    /* Also claims Edit and the Production hub. Neither has a rail item of its
+       own; both are reached from the landing, and a rail showing nothing lit
+       reads as broken. Same call as labor → Day sheets.
+
+       S-4b dropped `financials` from this list along with the route — it was an
+       unlinked stub with no model behind it. A matcher for a page that no
+       longer exists is dead config that reads as intent. */
     match: (p) =>
       /^\/artists\/[^/]+\/?$/.test(p) ||
-      /^\/artists\/[^/]+\/(edit|production|financials)(\/|$)/.test(p),
+      /^\/artists\/[^/]+\/(edit|production)(\/|$)/.test(p),
   },
   /* S-3a — IA_CANONICAL lists TOURS as a second item here. There is no second
      page: /artists/[id] IS the tour list (hero + tours, with Production and a

@@ -420,7 +420,6 @@ describe('isShelledPath — what is on the canonical shell after S-2c', () => {
     `/artists/${A}/stage-plots`,
     `/artists/${A}/stage-plots/p1`,
     `/artists/${A}/files`,
-    `/artists/${A}/financials`,
   ])('%s is artist scope → shelled', (p) => {
     expect(isShelledPath(p)).toBe(true);
   });
@@ -622,7 +621,6 @@ describe('S-3a — the artist rail describes real pages', () => {
   it.each([
     [`/artists/${A}/edit`, 'overview'],
     [`/artists/${A}/production`, 'overview'],
-    [`/artists/${A}/financials`, 'overview'],
     [`/artists/${A}/riders`, 'riders-specs'],
     [`/artists/${A}/channel-lists`, 'riders-specs'],
     [`/artists/${A}/stage-plots/p1`, 'riders-specs'],
