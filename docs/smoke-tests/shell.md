@@ -234,6 +234,25 @@ Grab a tour id from any tour URL you already have open and substitute it for
 
 ---
 
+## Still to do — S-4a (live bugs)
+
+- [ ] **SHELL-38 — Stale `/library/*` links land somewhere, not on an error.**
+  Paste each into the address bar:
+  `/library/deal-memos/anything` · `/library/templates/anything` ·
+  `/library/rider-packs/anything` → all three should land on **home**, via the
+  existing catch-all. `/library/gear` → **/equipment**. `/library/venues` →
+  **/venues**.
+  *Before: the first four 404'd. A redirect into a 404 is worse than no
+  redirect — you can't tell whether the page died or the redirect lied.*
+
+- [ ] **SHELL-39 — The Business tab still can't be clicked.** On `/artists/[id]`,
+  the hero's **Business** tab shows a lock, does nothing on click, and explains
+  itself on hover. Tours and Production still switch.
+  *No code changed here — this is confirming the thing I claimed was already
+  safe actually is.*
+
+---
+
 ## Already verified on `431f316` (Cowork, no need to repeat)
 
 - **SHELL-01 — The shell renders on Routing.** Top bar: workspace · artist/tour

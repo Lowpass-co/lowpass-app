@@ -434,6 +434,74 @@ landing anyway.
 
 **Smoke:** SHELL-32 … SHELL-37.
 
+---
+
+## S-4a — the live bugs · `<commit>`
+
+Three items briefed. **One was real, one was already fixed, and one was
+misdiagnosed** — so this bank is five lines of `next.config.ts` and nothing
+else. Writing that down rather than finding work to justify the bank.
+
+### 1. The two `/rooming?tour_id=` components are DEAD, not broken
+
+`RoomingTourRedirect.tsx` and `BudgetTourSelector.tsx` do push at a URL that
+now dead-ends — but **nothing imports either of them**. Zero call sites, whole
+repo. They cannot fire.
+
+So the fix is not to repoint them. Repointing dead code costs the same review
+attention as live code and leaves the tree looking like it has a feature it
+doesn't. They move to **S-4b as orphan deletions**, which is what they are.
+
+*(That is the inverse of the "stop if a deletion has a live caller" rule — here
+a REPOINT turned out to have no caller. Same principle: check before editing.)*
+
+### 2. The Business tab is already safe
+
+`ArtistHeroTabs` renders Business as a `<span>` with `aria-disabled="true"`,
+`cursor: default`, no `href` and no `onClick`, plus a lock icon and a "Visible
+to managers only" tooltip. **It cannot navigate**, so `/artists/[id]/business`
+is never reachable from it. Confirmed by reading the render path, not assumed
+from the comment above it. Nothing to do.
+
+### 3. The redirects — one of the three named was fine, two others weren't
+
+I audited **every** `/library/*` redirect against the filesystem, which is the
+check nobody did when they were written. Result:
+
+| redirect | verdict |
+|---|---|
+| `/library/gear/:rest*` → `/account/rental/:rest*` | **NOT broken** — `/account/rental` exists and redirects on to `/equipment`. Two hops, but it works. |
+| `/library/deal-memos/:rest*` → `/budget/deal-memos/:rest*` | **404** — never built. Deal memos live on artist Production + Financials, and `/m/deal-memos`. |
+| `/library/templates/:rest*` → `/templates/:rest*` | **404** — never built. The template editor is a component launched from export buttons, not a page. |
+| `/library/rider-packs/:rest*` → `/operations/:rest*` | **404, not briefed** — feeds a PACK id into a TOUR id slot. |
+| `/library/venues/:rest*` → `/venues/:rest*` | **404 on subpaths, not briefed** — `/venues/[id]` doesn't exist, only the list. |
+
+**Fix: delete the three whose destinations were never built.** A redirect into
+a 404 is worse than no redirect — the user lands on an error page and the URL
+bar blames a route that doesn't exist, so nobody can tell whether the page died
+or the redirect lied. There is already a `/library/:rest*` → `/` catch-all
+sitting *after* them, so deleting the specific entries makes those URLs land on
+home. No invented destinations, and the fix is a removal.
+
+The two with real destinations were corrected rather than deleted:
+`/library/gear/*` now goes **straight to `/equipment`** — one hop instead of
+two, and it no longer depends on `/account/rental`, which S-4b deletes.
+`/library/venues/*` drops its tail and goes to `/venues`.
+
+**I checked my own destinations before claiming the fix** — `/equipment` and
+`/venues` both resolve to real `page.tsx` files. That is the entire mistake
+being repaired here; making it again in the repair would be unforgivable.
+
+**Smoke:** SHELL-38.
+
+**Flagged for S-4b:** `/rooming`, `/calendar`, `/rider-packs` and
+`/account/rental` are not inert stubs — each is a one-line `redirect()` page,
+and that page **is** the redirect. Deleting the files turns four working
+redirects into four 404s for anyone with a stale bookmark, which is the
+opposite of S-4c's "keep the redirects" rule. Plan: move them into
+`next.config.ts` first, then delete the pages — files gone, bookmarks intact.
+Will confirm before doing it.
+
 **Parked for Adam**
 - **Screenshots** at 1440/1920 of all four scopes — the app is auth-gated and I
   have no session, so I can't produce them. The mock is verified against the

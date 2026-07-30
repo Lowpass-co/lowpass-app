@@ -52,7 +52,35 @@ This is why the integration is worth doing, and no competitor has it. ATOM has a
 - **Weights flow up.** Rackline already computes per-rack weight totals. Feed them into Assets' space/container rollups and the truck-weight number stops being hand-entered.
 - **Manifests and carnet.** Rack contents → gear manifest → ATA carnet (the S1 Stage D export). A drawn rack produces customs paperwork.
 - **Advance packet.** Rack elevation PDFs join the venue packet alongside stage plot and channel list — Rackline already exports vector PDF.
-- **Channel list / patch.** Rackline's ports and cables and Lowpass's channel list + patch matrix are the same domain seen twice. Worth a later study; do NOT try to unify them in Phase 1.
+- **Channel list / patch — see the dedicated section below.** They are NOT the same object and must not be unified.
+
+## Racks ↔ channel list: optional linkage through the stage box (Adam's ruling, 2026-07-22)
+
+**Correction to an earlier draft of this plan, which called racks and the channel list "the same domain seen twice."** They are not. They are two independent tools that *may* meet at one shared object — the **stage box** — and each must remain fully usable when the other doesn't exist.
+
+**The two independence requirements, both hard:**
+1. **Patch the channel list without ever building a rack.** This is the common case today and must not acquire a rack dependency. The patch matrix keeps working exactly as it does now with zero rack data present.
+2. **Build racks without a channel list.** Rackline ships standalone and as a desktop app where no channel list exists at all. Rack projects must never require one.
+
+**Where they meet.** A stage box is a real physical thing that legitimately appears in both views: in the channel list it's where channels *arrive*; in a rack it's a *device occupying U space*. That single object is the only sanctioned join, and binding is **opt-in from either direction**:
+
+- **From the rack:** adding an endpoint in Rackline offers "bind to a stage box from this tour's channel list" alongside the existing free-text external endpoint. Bound → the endpoint carries the Lowpass stage-box id. Unbound → it behaves exactly as Rackline does today.
+- **From the channel list:** a stage box can optionally point at a rack placement ("IONIC 16 (A) lives in Rack 2, U14"). Unset → the channel list is unchanged.
+
+Rackline's model already has the hook: `ExternalEndpoint` / `endpoints[]` exists precisely for "something outside this rack." A bound endpoint is that, plus an id. No schema fork — an added optional field, version-gated like every other Rackline change.
+
+**What the link buys when it exists** (and only then):
+- The cable schedule gets real destinations instead of free text — "Rack 2 patch panel U14 port 3 → IONIC 16 (A) socket 7".
+- The patch matrix can show where a socket physically lives.
+- A rack elevation can show which channels land in that box.
+- Both drawings stay internally consistent because the stage box has one identity, not two.
+
+**Design rules for whoever builds it:**
+- **Neither side may hard-require the other.** No non-null FK. The binding is a nullable reference, and every read path renders correctly when it's absent.
+- **The stage box is the only join.** Do not attempt to map Rackline ports to channel-list channels one-to-one — a rack has ports the channel list will never know about (power, network, internal patch) and the channel list has channels that never touch a rack.
+- **No silent auto-binding.** Name-matching a rack device to a stage box is a *suggestion for review*, never an automatic link — same propose-then-approve grammar as receipts and intake.
+- **Unbinding is safe.** Removing a link must leave both sides intact and functional, never orphan or delete the other side's data.
+- This is **Phase 2 work at the earliest.** Phase 1 ships racks with zero channel-list awareness.
 
 ## Open questions for Adam
 1. **Does the Tauri desktop app stay alive?** If yes → iframe, decided. If it's dead and Rackline exists only inside Lowpass, a native port becomes worth costing (bigger job, better seams, one React version).

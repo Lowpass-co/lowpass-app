@@ -217,31 +217,39 @@ const nextConfig: NextConfig = {
         permanent: true,
       },
 
-      // ===== Library dropdown contents → new homes =====
-      // Per decision #4: Library retires; subpaths migrate.
+      /* ===== Library dropdown contents → new homes =====
+         Library retired (decision #4) and its subpaths were pointed at the
+         surfaces that replaced them. S-4a audited every destination against the
+         filesystem, which is the check nobody did when these were written:
+
+         DELETED, because their destinations were never built. A redirect into a
+         404 is worse than no redirect — the user lands on an error page and the
+         URL bar blames a route that doesn't exist, so nobody can tell whether
+         the page died or the redirect lied. All three now fall through to the
+         `/library/:rest*` catch-all below and land on home, which is the honest
+         answer for a retired section:
+           · /library/rider-packs/:rest*  → /operations/:rest*
+             (fed a PACK id into a TOUR id slot — notFound, every time)
+           · /library/deal-memos/:rest*   → /budget/deal-memos/:rest*
+             (no such route; deal memos live on the artist Production and
+              Financials surfaces, and on /m/deal-memos)
+           · /library/templates/:rest*    → /templates/:rest*
+             (no such route; the template editor is a component launched from
+              the export buttons, not a page)
+
+         KEPT but corrected — these had real destinations and only the `:rest*`
+         tail was wrong, so they get a specific target rather than the catch-all. */
       {
-        source: '/library/rider-packs/:rest*',
-        destination: '/operations/:rest*',
-        permanent: true,
-      },
-      {
-        source: '/library/deal-memos/:rest*',
-        destination: '/budget/deal-memos/:rest*',
-        permanent: true,
-      },
-      {
+        // Was → /account/rental/:rest*, which redirects again to /equipment.
+        // One hop instead of two, and it survives /account/rental being deleted.
         source: '/library/gear/:rest*',
-        destination: '/account/rental/:rest*',
+        destination: '/equipment',
         permanent: true,
       },
       {
-        source: '/library/templates/:rest*',
-        destination: '/templates/:rest*',
-        permanent: true,
-      },
-      {
+        // /venues/[id] does not exist — only the list does.
         source: '/library/venues/:rest*',
-        destination: '/venues/:rest*',
+        destination: '/venues',
         permanent: true,
       },
       // /library/performance retires entirely (decision #5).
