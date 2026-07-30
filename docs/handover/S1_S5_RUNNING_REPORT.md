@@ -565,6 +565,77 @@ the rail exists.
 
 **Smoke:** SHELL-40 … SHELL-42.
 
+---
+
+## S-4c — the legacy `/tours/[id]/*` tree · `<commit>`
+
+**Deleted 17 route files + 7 orphaned components. Every redirect kept, and one
+added.**
+
+### The tail gap was real, and deleting the pages is what would have exposed it
+
+Every `/tours/*` rule matched an **exact** sub-path. Nothing covered anything
+deeper — `/tours/<id>/routing/x`, `/tours/<id>/budget/<anything-but-settlement>`,
+or any sub-path a bookmark picked up before the product split. Those fell
+straight through to a 404.
+
+It was masked because some of those URLs still hit the legacy PAGES. Removing
+the pages is precisely the change that turns a masked gap into a live one — the
+same failure mode S-4a and S-4b each found, third time in a row.
+
+So this bank adds a **tail backstop**: `/tours/:id/:rest*` → `/operations/:id`,
+placed after every specific rule so it only catches what they miss. Bare paths
+keep their precise destinations; anything deeper lands on the operations
+landing, which forwards to Routing.
+
+### Deleted, with evidence
+
+**17 files under `src/app/(app)/tours/`** — 14 pages, one layout, two co-located
+components (`TourAdvanceSummary`, `TourDetailToasts`, both 0 external refs).
+
+No page here was reachable anyway: Next matches redirects **before** routes, so
+these files had already stopped answering. The one exception was
+`/tours/<non-uuid>` — the bare rule is UUID-constrained, so `/tours/create` and
+friends fell through to the legacy page. They 404 now instead, which is what
+they did in effect before.
+
+**7 components orphaned by the deletion**, each 0 refs afterwards:
+`TourOverviewClient` (the `components/tours/` one), `ToursListWithFilters`,
+`SetupStatusStrip`, `TourSwitchDropdown`, `TourPrimaryCTACard`,
+`TourSecondaryCard`, `ToursPagination` (that last one was already at 0 before
+this bank).
+
+### KEPT — five components the legacy tree shared with live surfaces
+
+| component | still used by |
+|---|---|
+| `TourEditForm` | `/operations/[tourId]/edit` |
+| `TourFilesClient` | operations files **and** the artist library files |
+| `RiderPacksTourClient` (+ `rider-pack-rows`) | `/operations/[tourId]/riders` |
+| `TourCard` | `DashboardTourCard`, `DashboardTourList` |
+| `TourPhaseContextStrip` | two budget components |
+
+This is the check that mattered. Four of the five look like tour-tree code by
+name and location, and deleting `src/components/tours/` wholesale — which is
+what "delete the legacy tree" invites — would have taken out Operations Edit,
+Files, Riders and two budget panels.
+
+### In-app links into `/tours/…` still exist, and still work
+
+`TourCard`, `TourSlideOver`, `SetupStatusStrip` and others push at
+`/tours/<id>`, `/tours/<id>/overview`, `/tours/<id>/personnel`. Redirects
+resolve them, including on client-side navigation. They cost an extra hop per
+click and should be repointed eventually — logged, not fixed here, because
+rewriting live callers inside a deletion bank is the thing we don't do.
+
+**Found, not fixed:** `src/components/tour-overview/TourOverviewClient.tsx` is a
+**pre-existing** orphan — 0 refs, unrelated to this tree, name-collides with the
+one deleted here. Left alone to keep the revert surgical. Same for the
+`components/dashboard/*` cluster, whose only route (`/dashboard`) redirects to
+`/` — worth its own look.
+
+**Smoke:** SHELL-43 (twelve URLs, six of them sub-paths).
+
 **Parked for Adam**
 - **Screenshots** at 1440/1920 of all four scopes — the app is auth-gated and I
   have no session, so I can't produce them. The mock is verified against the

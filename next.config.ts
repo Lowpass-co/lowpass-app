@@ -198,6 +198,23 @@ const nextConfig: NextConfig = {
         permanent: true,
       },
       {
+        /* TAIL BACKSTOP (S-4c). Every rule above matches an EXACT sub-path, so
+           anything deeper fell through to a 404 — /tours/<id>/routing/x,
+           /tours/<id>/budget/<anything-not-settlement>, and any sub-path a
+           bookmark picked up before the product split.
+
+           That gap is the failure mode this whole S-4 pass keeps finding: a
+           redirect that covers the bare path and not the tail. It was masked
+           here because the legacy PAGES still answered some of those URLs;
+           deleting them is exactly what would have exposed it.
+
+           Placed after every specific rule so it only catches what they miss,
+           and lands on the operations landing, which forwards to Routing. */
+        source: '/tours/:id/:rest*',
+        destination: '/operations/:id',
+        permanent: true,
+      },
+      {
         // Constrain :id to a UUID so a STATIC segment (e.g. /tours/create) is not
         // mis-301'd to /operations/<segment> → 404. This bare rule was the create
         // blocker: /tours/create matched :id='create' and redirected to a page that

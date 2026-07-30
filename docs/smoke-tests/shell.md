@@ -276,6 +276,43 @@ Grab a tour id from any tour URL you already have open and substitute it for
 
 ---
 
+## Still to do — S-4c (the legacy /tours tree)
+
+- [ ] **SHELL-43 — Every `/tours/…` URL still lands. Test in an INCOGNITO
+  window** — 301s cache hard, so a stale browser will lie to you about this.
+
+  Substitute a real tour id. Bare paths (these worked before — confirming
+  nothing regressed):
+
+  | paste this | should land on |
+  |---|---|
+  | `/tours` | `/artists` |
+  | `/tours/<id>` | `/operations/<id>/routing` |
+  | `/tours/<id>/routing` | `/operations/<id>/routing` |
+  | `/tours/<id>/personnel` | `/operations/<id>/personnel` |
+  | `/tours/<id>/budget` | `/budget/<id>` |
+  | `/tours/<id>/budget/settlement` | `/budget/<id>/settlement` |
+
+  **Sub-paths — these 404'd before this bank:**
+
+  | paste this | should land on |
+  |---|---|
+  | `/tours/<id>/routing/anything` | `/operations/<id>/routing` |
+  | `/tours/<id>/budget/anything-else` | `/operations/<id>/routing` |
+  | `/tours/<id>/personnel/anything` | `/operations/<id>/routing` |
+  | `/tours/<id>/day/some-routing-id` | `/operations/<id>/routing` |
+  | `/tours/<id>/rider-packs/<packId>` | `/operations/<id>/riders/<packId>` |
+  | `/tours/<id>/tour-wide` | `/operations/<id>/routing` |
+
+- [ ] **SHELL-44 — The five shared components survived.** Load
+  `/operations/[tourId]/edit` (TourEditForm) · `/operations/[tourId]/files` and
+  `/artists/[id]/files` (TourFilesClient) · `/operations/[tourId]/riders`
+  (RiderPacksTourClient) · `/budget/[tourId]?tab=summary` (TourPhaseContextStrip).
+  *These live in `src/components/tours/`. Deleting that folder wholesale — which
+  "delete the legacy tree" invites — would have taken all five down.*
+
+---
+
 ## Already verified on `431f316` (Cowork, no need to repeat)
 
 - **SHELL-01 — The shell renders on Routing.** Top bar: workspace · artist/tour
