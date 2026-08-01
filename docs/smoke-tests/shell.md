@@ -337,6 +337,51 @@ Grab a tour id from any tour URL you already have open and substitute it for
 
 ---
 
+## Still to do — P-1 (the rail's access filter)
+
+> **SHELL-49 CANNOT BE RUN AS AN ADMIN.** `canAccess` returns true
+> unconditionally for admin and manager, so the filter is a no-op by
+> construction in an admin session. Every previous walk in this pass was run as
+> an admin, which is exactly why two permission-scoped surfaces looked like dead
+> code. This needs a **second, readonly account**.
+
+- [ ] **SHELL-49 — A restricted member sees a shorter rail.**
+  **Setup:** in `/settings/members`, add or pick a member with role
+  **readonly**. Grant them read on `operations.routing` and
+  `operations.personnel` and nothing else. Sign in as them (separate browser
+  profile / private window).
+
+  1. Open `/operations/[tourId]/routing`. The Tour rail should show **Routing**
+     and **Crew** — and **not** Rooming or Files. Day sheets, Travel and Advance
+     may still show; Day sheets has no catalogue entry, so it is ungated by
+     design.
+  2. Switch to **Money**. **Payroll must NOT be listed.** This is the acceptance
+     test — it is the item the retired sub-nav used to hide, and the reason P-1
+     exists.
+  3. Switch to **Production**. Channel list, Stage plot and Riders should all be
+     absent; Assets may remain (no catalogue entry).
+  4. **No empty headings.** If a group's items are all hidden, the heading goes
+     too — you should never see a lone "Settle & pay" with nothing under it.
+  5. Now grant that member `operations.rooming`, reload: **Rooming appears.**
+     Revoke it, reload: it goes. That round-trip is what proves the allow-list
+     tracks the real grants rather than a cached guess.
+
+- [ ] **SHELL-50 — Nothing changed for you.** Back in your own admin session,
+  walk one surface per mode (`/routing`, `/budget/[tourId]`,
+  `/operations/[tourId]/channel-list`). Every rail item still present.
+  *Admin/manager skip the grants query entirely, so this should be identical to
+  S-3a — including load time.*
+
+- [ ] **SHELL-51 — The permission-fallback landing still works.** As the
+  restricted member from SHELL-49, **revoke `operations.routing`** (leaving
+  personnel), then open `/operations/[tourId]` bare. You should land on
+  `/summary` and see a page, not a 404.
+  *This is the surface S-4b refused to delete. Whether /summary is the RIGHT
+  landing is the open question — report what it actually feels like to be that
+  user, because nobody ever has been.*
+
+---
+
 ## Already verified on `431f316` (Cowork, no need to repeat)
 
 - **SHELL-01 — The shell renders on Routing.** Top bar: workspace · artist/tour

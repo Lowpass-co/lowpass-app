@@ -58,6 +58,21 @@ export interface RailItem {
   badge?: string;
   /** Extra pathname prefixes that should light this item up. */
   match?: (pathname: string, search: string) => boolean;
+  /**
+   * The permission resource this item's page is gated by (P-1).
+   *
+   * An id from RESOURCE_CATALOG — NOT a free invention. A resource id that
+   * isn't in the catalogue can never be granted through the members UI, so an
+   * item gated on one would be invisible to every readonly member forever, with
+   * nothing anyone could do about it. A test cross-checks every id here against
+   * the catalogue for exactly that reason.
+   *
+   * ABSENT MEANS UNGATED, deliberately. The catalogue has no entry for Day
+   * sheets, Income, Settlements, Assets or most of the artist library, and
+   * inventing ids to close that gap would be inventing a permission model. An
+   * item with no resource shows to everyone, which is what happens today.
+   */
+  resource?: string;
 }
 
 export interface RailGroup {
@@ -84,7 +99,7 @@ const g = (label: string): RailGroup => ({ kind: 'group', label });
 const TOUR_RAIL: RailEntry[] = [
   g('The run'),
   {
-    kind: 'item', id: 'routing', label: 'Routing', icon: 'Rows3', badge: 'days',
+    kind: 'item', id: 'routing', label: 'Routing', icon: 'Rows3', badge: 'days', resource: 'operations.routing',
     href: (c) => `/operations/${c.tourId}/routing`,
   },
   {
@@ -103,18 +118,18 @@ const TOUR_RAIL: RailEntry[] = [
     match: (p) => /^\/operations\/[^/]+\/(day|labor)(\/|$)/.test(p),
   },
   {
-    kind: 'item', id: 'advance', label: 'Advance', icon: 'Send', badge: 'advanced',
+    kind: 'item', id: 'advance', label: 'Advance', icon: 'Send', badge: 'advanced', resource: 'advance',
     href: (c) => `/advance/${c.tourId}`,
     match: (p) => p.startsWith('/advance/'),
   },
   g('People & logistics'),
-  { kind: 'item', id: 'crew', label: 'Crew', icon: 'Users', href: (c) => `/operations/${c.tourId}/personnel` },
-  { kind: 'item', id: 'rooming', label: 'Rooming', icon: 'BedDouble', href: (c) => `/operations/${c.tourId}/rooming` },
+  { kind: 'item', id: 'crew', label: 'Crew', icon: 'Users', resource: 'operations.personnel', href: (c) => `/operations/${c.tourId}/personnel` },
+  { kind: 'item', id: 'rooming', label: 'Rooming', icon: 'BedDouble', resource: 'operations.rooming', href: (c) => `/operations/${c.tourId}/rooming` },
   /* Travel has no page yet — IA_CANONICAL S-5 calls it out as a missing PAGE,
      not missing nav. A null href renders it disabled rather than hiding it, so
      the gap is visible instead of forgotten. */
   { kind: 'item', id: 'travel', label: 'Travel', icon: 'Plane', href: null },
-  { kind: 'item', id: 'files', label: 'Files', icon: 'FolderOpen', href: (c) => `/operations/${c.tourId}/files` },
+  { kind: 'item', id: 'files', label: 'Files', icon: 'FolderOpen', resource: 'operations.files', href: (c) => `/operations/${c.tourId}/files` },
 ];
 
 /* ── MONEY scope ──────────────────────────────────────────────────────────── */
@@ -129,11 +144,11 @@ const budgetTab = (tab: string) => (p: string, s: string) => {
 const MONEY_RAIL: RailEntry[] = [
   g('Plan'),
   {
-    kind: 'item', id: 'summary', label: 'Summary', icon: 'LayoutDashboard',
+    kind: 'item', id: 'summary', label: 'Summary', icon: 'LayoutDashboard', resource: 'budget.summary',
     href: (c) => `/budget/${c.tourId}?tab=summary`, match: budgetTab('summary'),
   },
   {
-    kind: 'item', id: 'expenses', label: 'Expenses', icon: 'Table2', badge: 'lines',
+    kind: 'item', id: 'expenses', label: 'Expenses', icon: 'Table2', badge: 'lines', resource: 'budget.line_items',
     // 'budget' is the stored tab id for Expenses (budget-tab-utils).
     href: (c) => `/budget/${c.tourId}?tab=budget`, match: budgetTab('budget'),
   },
@@ -148,10 +163,10 @@ const MONEY_RAIL: RailEntry[] = [
   },
   /* Payroll MOVES here from Operations — it's pay, not ops (IA_CANONICAL). The
      route still lives under /operations; the rail is what changed, not the URL. */
-  { kind: 'item', id: 'payroll', label: 'Payroll', icon: 'Users', href: (c) => `/operations/${c.tourId}/payroll` },
+  { kind: 'item', id: 'payroll', label: 'Payroll', icon: 'Users', resource: 'operations.payroll', href: (c) => `/operations/${c.tourId}/payroll` },
   { kind: 'item', id: 'per-diems', label: 'Per diems', icon: 'Coins', href: null },
   {
-    kind: 'item', id: 'receipts', label: 'Receipts', icon: 'ReceiptText', badge: 'receiptsNeedingDetails',
+    kind: 'item', id: 'receipts', label: 'Receipts', icon: 'ReceiptText', badge: 'receiptsNeedingDetails', resource: 'budget.receipts',
     href: (c) => `/budget/${c.tourId}?tab=receipts`, match: budgetTab('receipts'),
   },
   g('Out'),
@@ -174,10 +189,10 @@ const PRODUCTION_RAIL: RailEntry[] = [
      <PatchMatrix> in for the input grid. There is no /patch route and never
      was, so a greyed "Patch — no page yet" was a lie about working software.
      Dropped so that greyed means one thing only: not built yet. */
-  { kind: 'item', id: 'channel-list', label: 'Channel list', icon: 'ListOrdered', href: (c) => `/operations/${c.tourId}/channel-list` },
-  { kind: 'item', id: 'stage-plot', label: 'Stage plot', icon: 'Shapes', href: (c) => `/operations/${c.tourId}/stage-plot` },
+  { kind: 'item', id: 'channel-list', label: 'Channel list', icon: 'ListOrdered', resource: 'operations.channel_list', href: (c) => `/operations/${c.tourId}/channel-list` },
+  { kind: 'item', id: 'stage-plot', label: 'Stage plot', icon: 'Shapes', resource: 'operations.stage_plot', href: (c) => `/operations/${c.tourId}/stage-plot` },
   {
-    kind: 'item', id: 'riders', label: 'Riders', icon: 'FileText',
+    kind: 'item', id: 'riders', label: 'Riders', icon: 'FileText', resource: 'operations.riders',
     href: (c) => `/operations/${c.tourId}/riders`,
     match: (p) => /^\/operations\/[^/]+\/riders(\/|$)/.test(p),
   },
@@ -191,7 +206,7 @@ const PRODUCTION_RAIL: RailEntry[] = [
 const ARTIST_RAIL: RailEntry[] = [
   g('Artist'),
   {
-    kind: 'item', id: 'overview', label: 'Overview', icon: 'LayoutDashboard',
+    kind: 'item', id: 'overview', label: 'Overview', icon: 'LayoutDashboard', resource: 'artist.home',
     href: (c) => `/artists/${c.artistId}`,
     /* Also claims Edit and the Production hub. Neither has a rail item of its
        own; both are reached from the landing, and a rail showing nothing lit
@@ -529,9 +544,40 @@ export function resolveRailView(
   pathname: string,
   search = '',
   badges: Record<string, string | number | null | undefined> = {},
+  /**
+   * P-1 — the resource ids this caller may READ, resolved server-side.
+   *
+   * `null` means "not supplied", and everything shows. That is the honest
+   * default for a caller that hasn't done the permission work, and it keeps the
+   * pre-P-1 behaviour rather than silently hiding the whole rail from anyone
+   * whose layout forgets to pass it. Fail-open on a NAV is right; the pages and
+   * RLS are what actually enforce access.
+   */
+  visibleResources: readonly string[] | null = null,
 ): RailView[] {
   const activeId = activeItemFor(pathname, search);
-  return railFor(ctx.scope, ctx.mode).map((entry) => {
+  const allowed = visibleResources === null ? null : new Set(visibleResources);
+
+  const permitted = railFor(ctx.scope, ctx.mode).filter((entry) => {
+    if (entry.kind === 'group') return true;
+    // No resource → ungated → always visible. See RailItem.resource.
+    if (!allowed || !entry.resource) return true;
+    return allowed.has(entry.resource);
+  });
+
+  /* Drop headings the filter emptied. "Settle & pay" with nothing under it is a
+     label for an absence — it tells a restricted member there is a section they
+     can't see, which is the opposite of what hiding the items was for. */
+  const kept = permitted.filter((entry, i) => {
+    if (entry.kind !== 'group') return true;
+    for (let j = i + 1; j < permitted.length; j++) {
+      if (permitted[j].kind === 'group') break;
+      return true; // at least one item follows before the next heading
+    }
+    return false;
+  });
+
+  return kept.map((entry) => {
     if (entry.kind === 'group') return { kind: 'group', label: entry.label };
     /* A ZERO IS NOT A BADGE. Every badge in this rail counts work — days,
        lines, unsettled shows, receipts needing fields — and "0" of any of them
@@ -549,6 +595,23 @@ export function resolveRailView(
       active: entry.id === activeId,
     };
   });
+}
+
+/**
+ * Every resource id the rails reference, deduped — what a caller needs to run
+ * `canAccess` over to build the allow-list. Derived from the config so a new
+ * gated item is covered the moment it's added, with nothing to remember.
+ */
+export function allRailResources(): string[] {
+  const out = new Set<string>();
+  const rails: Array<[Scope, TourMode | null]> = [
+    ['tour', 'tour'], ['tour', 'money'], ['tour', 'production'],
+    ['artist', null], ['workspace', null], ['you', null],
+  ];
+  for (const [scope, mode] of rails) {
+    for (const item of itemsFor(scope, mode)) if (item.resource) out.add(item.resource);
+  }
+  return [...out];
 }
 
 /**

@@ -637,3 +637,91 @@ describe('S-3a — the artist rail describes real pages', () => {
     expect(upFrom(ctx)?.href).toBe('/artists');
   });
 });
+
+/* ============================================
+   P-1 — THE RAIL'S ACCESS FILTER
+
+   These prove the resolver agrees with the config. They do NOT prove the
+   allow-list matches what the server enforces — only a real restricted account
+   can do that, which is why P-1's acceptance test is a live walk and not this
+   file. Adam's point, and it's the right one: a unit test here would only ever
+   prove the allow-list agrees with itself.
+
+   What they DO cover is the class of mistake a live walk is bad at catching:
+   a gated item whose resource id isn't in the catalogue would be invisible to
+   every readonly member forever, and would look on a walk exactly like a
+   permission that simply hadn't been granted.
+   ============================================ */
+
+import { allRailResources } from './ia';
+import { RESOURCE_CATALOG } from '@/lib/permissions/resources';
+
+describe('P-1 — every gated rail item names a REAL resource', () => {
+  it('no rail item invents a resource id', () => {
+    const catalogue = new Set(RESOURCE_CATALOG.map((r) => r.id));
+    const unknown = allRailResources().filter((id) => !catalogue.has(id));
+    expect(unknown).toEqual([]);
+  });
+
+  it('the resource set is non-empty and covers all three tour modes', () => {
+    // A silently-empty set would make the filter a no-op and look like it works.
+    for (const mode of TOUR_MODES) {
+      expect(itemsFor('tour', mode).some((i) => i.resource)).toBe(true);
+    }
+  });
+
+  it('no DISABLED item is gated — hiding a thing that does nothing is noise', () => {
+    for (const mode of TOUR_MODES) {
+      for (const item of itemsFor('tour', mode)) {
+        if (!item.href) expect(item.resource).toBeUndefined();
+      }
+    }
+  });
+});
+
+describe('P-1 — resolveRailView filters by the allow-list', () => {
+  const money = { scope: 'tour' as const, artistId: null, tourId: T, mode: 'money' as const };
+  const ids = (view: ReturnType<typeof resolveRailView>) =>
+    view.filter((e) => e.kind === 'item').map((e) => (e.kind === 'item' ? e.id : ''));
+
+  it('omitting the list shows everything — the pre-P-1 behaviour', () => {
+    expect(ids(resolveRailView(money, `/budget/${T}`))).toContain('payroll');
+  });
+
+  it('THE ACCEPTANCE SHAPE: no operations.payroll grant → no Payroll item', () => {
+    const allowed = allRailResources().filter((r) => r !== 'operations.payroll');
+    expect(ids(resolveRailView(money, `/budget/${T}`, '', {}, allowed))).not.toContain('payroll');
+  });
+
+  it('and the rest of Money survives that removal', () => {
+    const allowed = allRailResources().filter((r) => r !== 'operations.payroll');
+    const shown = ids(resolveRailView(money, `/budget/${T}`, '', {}, allowed));
+    expect(shown).toEqual(expect.arrayContaining(['summary', 'expenses', 'settlements']));
+  });
+
+  it('ungated items survive an EMPTY allow-list — absent means ungated', () => {
+    /* Settlements, Income and Per diems have no catalogue entry. If an empty
+       list hid them, the filter would be denying by default, which is a
+       different and much worse policy than the one intended. */
+    const shown = ids(resolveRailView(money, `/budget/${T}`, '', {}, []));
+    expect(shown).toEqual(expect.arrayContaining(['income', 'settlements', 'per-diems']));
+    expect(shown).not.toContain('payroll');
+  });
+
+  it('a heading left with no items under it is dropped', () => {
+    /* "Plan" holds Summary / Expenses / Income. Income is ungated so the group
+       survives here; the PRODUCTION rail's "Paper" group is the empty-able one
+       once its two disabled items are the only members. Asserted structurally:
+       no view may end with a group, and no two groups may be adjacent. */
+    const view = resolveRailView(money, `/budget/${T}`, '', {}, []);
+    expect(view[view.length - 1].kind).toBe('item');
+    for (let i = 0; i < view.length - 1; i++) {
+      if (view[i].kind === 'group') expect(view[i + 1].kind).toBe('item');
+    }
+  });
+
+  it('the filtered view still survives an RSC boundary', () => {
+    const allowed = allRailResources().filter((r) => r !== 'operations.payroll');
+    expect(railViewIsSerialisable(resolveRailView(money, `/budget/${T}`, '', {}, allowed))).toBe(true);
+  });
+});

@@ -700,6 +700,87 @@ Three things, none of them S-4:
 
 **Smoke:** SHELL-45.
 
+---
+
+## P-1 — the rail's access filter · `<commit>`
+
+**What shipped:** `resource` on 13 rail items, `resolveVisibleResources()`
+resolving an allow-list server-side, `resolveRailView()` filtering on it, and 9
+tests. Money and Production covered, not just the eight ex-sub-nav items.
+
+### It closes discoverability, NOT access
+
+Six of the eight pages the sub-nav filtered never gated themselves — only
+`personnel` and `routing` do. Those URLs were always reachable by typing them,
+before this pass and after it. **P-1 does not change that and must not be
+recorded as if it did.** Access is a separate audit.
+
+### The catalogue is the constraint, and it's incomplete
+
+Every `resource` is an id from `RESOURCE_CATALOG`. A test cross-checks all 13,
+because a resource id that isn't in the catalogue **can never be granted**
+through the members UI — an item gated on one would be invisible to every
+readonly member forever, and on a walk it would look exactly like a permission
+someone forgot to grant. That is the one failure mode a live walk is bad at
+catching, so it's the one the unit tests are for.
+
+The catalogue has **no entry** for Day sheets, Income, Settlements, Reports,
+Assets, or most of the artist library. Those items are **ungated** — absent
+resource means visible. Inventing ids to close the gap would be inventing a
+permission model in a nav bank. Listed below for whoever owns the catalogue.
+
+### Decisions taken
+
+- **Fail open, everywhere.** No allow-list supplied, no membership, or a thrown
+  query → `null` → nothing filtered. A nav that vanishes because a permissions
+  read failed is worse than one showing too much: the user can't work and
+  nothing says why. The pages and RLS do the enforcing.
+- **Payroll gates on `operations.payroll`**, matching the sub-nav it restores.
+  `budget.payroll` also exists and is marked *sensitive*. Two ids for one
+  surface is a catalogue question, flagged not resolved.
+- **Empty headings are dropped.** "Settle & pay" with nothing under it is a
+  label for an absence — it tells a restricted member there's a section they
+  can't see, which is the opposite of the point.
+- **Disabled items are never gated** — hiding something that already does
+  nothing is noise. Asserted.
+
+### Cost
+
+`getActiveMembership` (profiles + workspace_members) per shelled surface, and
+for **readonly only**, one grants query. Admin and manager short-circuit on role
+inside `canAccess`, and `fetchActiveGrants` returns `[]` without querying — so
+the path most requests take adds one round-trip, not three.
+
+### `/operations/[tourId]/summary` — KEEP, and here's the reasoning
+
+It is the landing for a member who can read `operations.personnel` but not
+`operations.routing`. Deleting it 404s exactly those users.
+
+Now that the rail filters, the obvious alternative is to send them to the first
+item they *can* see. I did not do it: it's a behaviour change for a population
+of users nobody has ever observed, and the walk below is what produces the
+evidence to choose. Landing them on a surface that renders is the conservative
+answer until someone has actually been that user.
+
+### THE ACCEPTANCE TEST IS NOT IN THIS REPO
+
+A unit test proves the allow-list agrees with itself. Only a **real restricted
+account** proves it agrees with what the server enforces. SHELL-49 is that walk,
+and P-1 is not done until it's run — the code is green, the claim is not yet
+verified.
+
+**The reason this class kept hiding:** every verification so far has been run
+from an admin session, where `canAccess` returns true unconditionally and this
+filter is a no-op by construction. An admin session **cannot** see this class of
+bug. That's why two "dead code" findings in S-4 turned out to be permission-
+scoped.
+
+**For the catalogue owner — rail items with no grantable resource:**
+Day sheets · Income · Settlements · Reports & workbook · Assets · Riders & specs
+(artist) · Documents (artist) · every workspace and You item.
+
+**Smoke:** SHELL-49 (restricted account), SHELL-50 (admin unchanged).
+
 **Parked for Adam**
 - **Screenshots** at 1440/1920 of all four scopes — the app is auth-gated and I
   have no session, so I can't produce them. The mock is verified against the

@@ -20,6 +20,7 @@ import { ArtistTourSwitcherClientWrapper } from '@/components/shell-v2/ArtistTou
 import { ProductHeaderAvatarMenu } from '@/components/shell-v2/ProductHeaderAvatarMenu';
 import { countReceiptsNeedingDetails } from '@/lib/budget/loadReceipts';
 import { resolveScope } from '@/lib/nav/ia';
+import { resolveVisibleResources } from '@/lib/nav/visibleResources';
 import { AppShellV3 } from './AppShellV3';
 
 type SwitcherArtistMin = {
@@ -92,8 +93,18 @@ export async function ShellV3Mount({
     displayName = (p?.full_name ?? '').trim();
   }
 
+  /* P-1 — the rail's own access filter. Resolved HERE so every shelled surface
+     gets the same answer: the sub-nav this replaces only ever covered eight
+     Operations pages, and Money and Production had no equivalent to inherit.
+
+     Sequenced after the profile read rather than beside it because it needs the
+     user id, and it costs nothing extra for admin/manager — canAccess
+     short-circuits on role, so no grants query runs. */
+  const visibleResources = await resolveVisibleResources(supabase, user?.id ?? null);
+
   return (
     <AppShellV3
+      visibleResources={visibleResources}
       pathname={pathname}
       search={search}
       artistId={artistId}

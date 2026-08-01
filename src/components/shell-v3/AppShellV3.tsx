@@ -39,6 +39,8 @@ export interface AppShellV3Props {
   /** Known at tour scope from server data — the path doesn't carry it. */
   artistId?: string | null;
   badges?: Record<string, string | number | null | undefined>;
+  /** P-1 — resource ids this caller may read. `null`/absent = don't filter. */
+  visibleResources?: readonly string[] | null;
   /** Collapse the nav rail by default (pages with a day rail). */
   denseRail?: boolean;
   /** Avatar / actions, far right of the top bar. */
@@ -53,6 +55,7 @@ export function AppShellV3({
   switcher,
   artistId,
   badges,
+  visibleResources = null,
   denseRail = false,
   headerRight,
   children,
@@ -65,7 +68,7 @@ export function AppShellV3({
      FUNCTIONS, and a function cannot cross an RSC boundary — passing the raw
      entries is what threw "An error occurred in the Server Components render"
      on the first S-1 deploy, with every local gate green. */
-  const entries = resolveRailView(ctx, pathname, search, badges ?? {});
+  const entries = resolveRailView(ctx, pathname, search, badges ?? {}, visibleResources);
   const up = upFrom(ctx);
 
   /* At tour scope the rail head names the MODE ("TOUR" / "MONEY" /
