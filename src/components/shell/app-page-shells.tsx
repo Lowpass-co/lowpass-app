@@ -1,9 +1,24 @@
+/* ============================================
+   LOWPASS — shell-v1 page shells (UX02/UX03)
+
+   SUPERSEDED, NOT RETIRED. The canonical shell is <ShellV3Mount> (shell-v3),
+   and new surfaces use that. These stay because real pages still mount them:
+
+     · listAppPageShell       → /budget (no tour id), /profile, two /admin pages
+     · builderAppPageShell    → <RiderPackEditorView>, the LIVE rider pack editor
+     · topBarOnlyAppPageShell → three /admin playgrounds
+
+   S-4d deleted the four archetypes nothing mounted — dashboard, docDays,
+   documentSections, spreadsheet — plus <DocDaysLeftRailClient>, whose only
+   caller was docDays. The three above have real callers, so retiring them
+   belongs to S-3b (workspace + You) and a separate decision about /admin.
+   ============================================ */
+
 import type { ReactNode } from 'react';
 import { PageShell, type PageShellArchetype } from '@/components/shell/PageShell';
 import { LeftRail, type LeftRailVariant } from '@/components/shell/LeftRail';
 import { ShellTopBarClient } from '@/components/shell/ShellTopBarClient';
 import { getShellData } from '@/lib/shell/getShellData';
-import { DocDaysLeftRailClient } from '@/components/shell/DocDaysLeftRailClient';
 
 async function withShell(
   children: ReactNode,
@@ -28,50 +43,6 @@ export async function listAppPageShell(children: ReactNode) {
     children,
     'list',
     <LeftRail variant={{ kind: 'list', filters: [] }} />
-  );
-}
-
-export async function dashboardAppPageShell(
-  children: ReactNode,
-  rail: LeftRailVariant
-) {
-  return withShell(
-    children,
-    'dashboard',
-    <LeftRail variant={rail} />
-  );
-}
-
-export async function docDaysAppPageShell(
-  children: ReactNode,
-  base: Extract<LeftRailVariant, { kind: 'docDays' }>
-) {
-  return withShell(
-    children,
-    'document',
-    <DocDaysLeftRailClient base={base} />
-  );
-}
-
-export async function documentSectionsAppPageShell(
-  children: ReactNode,
-  rail: Extract<LeftRailVariant, { kind: 'docSections' }>
-) {
-  return withShell(
-    children,
-    'document',
-    <LeftRail variant={rail} />
-  );
-}
-
-export async function spreadsheetAppPageShell(
-  children: ReactNode,
-  rail: Extract<LeftRailVariant, { kind: 'spreadsheet' }>
-) {
-  return withShell(
-    children,
-    'spreadsheet',
-    <LeftRail variant={rail} />
   );
 }
 

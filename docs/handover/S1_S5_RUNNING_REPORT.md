@@ -636,6 +636,70 @@ one deleted here. Left alone to keep the revert surgical. Same for the
 
 **Smoke:** SHELL-43 (twelve URLs, six of them sub-paths).
 
+---
+
+## S-4d — shell-v1: what died, and what is holding it up · `<commit>`
+
+**Shell-v1 cannot be retired.** Not "not yet, pending S-3b" — it is load-bearing
+for things that have nothing to do with legacy chrome, including the CURRENT
+shell. The honest deliverable here is the map.
+
+### Deleted — 8 files / 4 exports, zero callers each
+
+| gone | evidence |
+|---|---|
+| `dashboardAppPageShell` | 0 callers |
+| `docDaysAppPageShell` | 0 callers |
+| `documentSectionsAppPageShell` | 0 callers |
+| `spreadsheetAppPageShell` | 0 callers |
+| `DocDaysLeftRailClient.tsx` | only caller was `docDaysAppPageShell` |
+| `lib/shell/rails/` — all **6** modules | 0 consumers each, **already orphaned before this bank** |
+
+Deleting `rails/budgetSheetSections.ts` also removes one of the four documented
+`_legacy/budget` leaks in CLAUDE.md. Five importers of `_legacy/budget` remain,
+down from six.
+
+### KEPT, with reasons — this is the part that matters
+
+**`SlideOver` — 25 importers.** It lives in `src/components/shell/`, so it looks
+like shell-v1, and CLAUDE.md names it the canonical detail-panel primitive.
+"Retire shell-v1" read literally deletes the slide-over every entity, every
+settings panel and every budget line detail depends on. It is not going
+anywhere, and the fact that it sits in the v1 folder is the real problem — a
+follow-up should move it somewhere its name doesn't lie.
+
+**`AccountAvatar` — used by the NEW shell.** `shell-v2/ProductHeaderAvatarMenu`
+imports it, and that is what `ShellV3Mount` renders in the top bar. Shell-v1 is
+literally inside shell-v3 right now.
+
+**`builderAppPageShell` → `RiderPackEditorView`.** The live rider pack editor —
+the one S-4b's exact-match redirect existed to protect. Two banks in a row have
+now turned on that component not being disturbed.
+
+**`listAppPageShell`** → `/budget` (no tour id), `/profile`, `/admin/ai-usage`,
+`/admin/layout`. **`topBarOnlyAppPageShell`** → three `/admin` playgrounds.
+**`PageShell` / `LeftRail` / `TopBar`** → `/admin/shell-playground` only.
+
+### /admin — left alone, deliberately
+
+Every remaining shell-v1 mount outside `/budget` and `/profile` is `/admin`.
+Per instruction, and I agree: a working admin on old chrome beats a broken one
+on new, and `/admin/shell-playground` is a *harness for shell-v1 itself* —
+porting it to shell-v3 would delete the thing it exists to demonstrate.
+
+### What would actually retire shell-v1
+
+Three things, none of them S-4:
+1. **S-3b** takes `/budget` (tourless), `/profile`, and the workspace/You tier
+   off `listAppPageShell`.
+2. **A decision on `/admin`** — port it, or accept shell-v1 as the admin chrome
+   permanently and stop calling it retired.
+3. **Move `SlideOver` and `AccountAvatar` out of `src/components/shell/`** so
+   the folder's name matches its contents. Until then "is shell-v1 dead?" has no
+   answer anyone can grep.
+
+**Smoke:** SHELL-45.
+
 **Parked for Adam**
 - **Screenshots** at 1440/1920 of all four scopes — the app is auth-gated and I
   have no session, so I can't produce them. The mock is verified against the

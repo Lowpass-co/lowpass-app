@@ -313,6 +313,30 @@ Grab a tour id from any tour URL you already have open and substitute it for
 
 ---
 
+## Still to do — S-4d (shell-v1)
+
+- [ ] **SHELL-45 — Everything still standing on shell-v1 still stands.**
+  `/budget` (NO tour id) · `/profile` · `/admin` · `/admin/ai-usage` ·
+  `/admin/design-tokens` · `/admin/shell-playground` ·
+  `/admin/data-table-playground` · `/admin/spreadsheet-playground`.
+  All render, none 500.
+
+- [ ] **SHELL-46 — A slide-over still opens.** Any one will do — a budget line,
+  a person, a venue. Open it, edit something, close it.
+  *`SlideOver` lives in `src/components/shell/`, so it looks like shell-v1. It
+  has 25 importers and is the canonical primitive. This test exists because
+  "retire shell-v1" read literally would delete it.*
+
+- [ ] **SHELL-47 — The avatar menu still works.** Top right of the NEW shell, on
+  any tour page. Open it, check the entries, sign-out link present.
+  *`AccountAvatar` is a shell-v1 component rendered inside shell-v3.*
+
+- [ ] **SHELL-48 — The rider pack editor still opens.** `/rider-packs/[id]`, via
+  the Advance share surface. *It mounts `builderAppPageShell` — shell-v1. Second
+  bank running where this component is the thing at risk.*
+
+---
+
 ## Already verified on `431f316` (Cowork, no need to repeat)
 
 - **SHELL-01 — The shell renders on Routing.** Top bar: workspace · artist/tour
