@@ -406,6 +406,38 @@ Grab a tour id from any tour URL you already have open and substitute it for
 
 ---
 
+## Still to do — P0-A (write authorization)
+
+> **This is the bank the beta is blocked on.** The acceptance test is a real
+> readonly session refused **by the API**. A hidden button proves nothing — the
+> endpoint is what was open.
+
+- [ ] **P0-01 — The readonly account cannot edit a global venue.** Signed in as
+  the readonly member (the same account that created an artist):
+  1. Open `/venues`, pick any venue, change its name, save.
+  2. **Expect a 403** and an error, not a save.
+  3. **Then check it in the network tab**, not just the UI — the request must
+     come back `403 Forbidden — your role cannot make this change.` If the UI
+     shows an error but the PATCH returned 200, the write landed and the toast
+     is lying.
+  4. Reload as admin and confirm the venue name is **unchanged**.
+
+- [ ] **P0-02 — Admin and manager can still edit a venue.** Same flow as admin:
+  save succeeds, name changes, and a routing row referencing that venue shows
+  the corrected name.
+  *The guard must refuse the right people and only them — a fix that breaks
+  venue correction for admins is not a fix.*
+
+- [ ] **P0-03 — Venue search and read are untouched.** As readonly: `/venues`
+  lists, the venue autocomplete on a routing row still returns hits, and the
+  venue slide-over still opens. Reads were never the finding.
+
+**Still open after this bank** — `POST /api/artists` and ~165 other mutating
+handlers are unchanged. P0-A closed the cross-tenant one. **Do not read a green
+P0-01 as "readonly is now safe."**
+
+---
+
 ## Already verified on `431f316` (Cowork, no need to repeat)
 
 - **SHELL-01 — The shell renders on Routing.** Top bar: workspace · artist/tour

@@ -860,6 +860,65 @@ components named so nobody goes looking for them in the old folder.
 
 ---
 
+## P0-A — the cross-workspace write · `<commit>`
+
+`PATCH /api/venues/canonical/[id]` authenticated, checked no role, and wrote
+`canonical_venues` — a shared cross-workspace directory — with a **service-role
+client**, which bypasses RLS entirely. Authentication was doing the job
+authorization should have been.
+
+**Fixed:** role-gated to admin/manager, as the first statement in the handler,
+before anything else runs.
+
+### The guard, built here because P0-C needs it anyway
+
+`requireWrite(supabase, { resource?, adminOnly? })` in
+`src/lib/auth/workspace-check.ts`. Writing a throwaway inline check for one
+route and then replacing it two banks later would have cost the same review
+attention twice.
+
+It delegates to **`canAccess`**, not a new predicate. That function already
+means exactly this: admin/manager short-circuit true, readonly needs an explicit
+grant, and `write` is strictly stronger than `read`. Inventing a second model is
+what produced the `can_access` / `is_workspace_admin` split P0-D exists to
+reconcile — adding a third would make that worse.
+
+**No resource named = admin/manager only.** Most tables have no catalogue entry,
+and for a WRITE the safe reading of "no declared resource" is that only the
+privileged roles may do it. That is deliberately the **opposite** of the
+read-side default in the nav rail, which fails open: a nav showing too much is a
+nuisance, a write failing open is this P0.
+
+### What this does NOT close, and it is Adam's call
+
+Any workspace's **admin or manager can still edit any venue** in the shared
+directory. I did not scope it to "venues my workspace books", because the edit
+surface is the **global `/venues` library**, not a routing row — I checked the
+callers. Scoping it there would delete a feature rather than close a hole. The
+hole was that ROLE went unchecked; the sharing is the design.
+
+**The service-role client stays**, because `canonical_venues` is
+client-write-denied by RLS (mig 214) and removing it needs a migration granting
+a role-predicated write policy — paste-gated, and the durable fix. Until then
+this guard is the only thing between a caller and that table, which is why it is
+the first line of the handler.
+
+### Tests — 12, and they pin the decision, not the plumbing
+
+The one that matters most: **a read grant must not buy a write.** If that ever
+inverts, every view-only grant in the workspace silently becomes an edit grant.
+Also pinned: the guard precedes the service-role client in source order, and GET
+is untouched — narrowing reads was never the finding and would break venue
+search.
+
+**These are not the acceptance test.** A unit test proves the predicate is
+right. Only the readonly session that created an artist, refused **by the API**,
+proves the app is.
+
+**Smoke:** P0-01, P0-02.
+
+---
+
 ## Queued, not started
 
 In order. Nothing proceeds until **SHELL-49** (the readonly-account walk)

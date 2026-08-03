@@ -14,6 +14,7 @@
 
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient, createServiceSupabaseClient } from '@/lib/supabase-server';
+import { requireWrite } from '@/lib/auth/workspace-check';
 
 const VENUE_COLS = 'id, name, address, city, country, capacity';
 
@@ -70,10 +71,17 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
   const supabase = await createServerSupabaseClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  /* P0-A — this handler authenticated and then wrote a SHARED CROSS-WORKSPACE
+     table with a SERVICE-ROLE client, which bypasses RLS entirely. Any
+     authenticated user of any workspace could rewrite any global venue by id.
+     Authentication was doing the work authorization should have been.
+
+     Role-gated to admin/manager. There is no `venues` entry in
+     RESOURCE_CATALOG, so there is no grant to check — and inventing one here
+     would create a permission nobody can actually grant. */
+  const auth = await requireWrite(supabase);
+  if ('error' in auth) return auth.error;
 
   const { id } = await params;
 
@@ -107,7 +115,18 @@ export async function PATCH(
     return NextResponse.json({ error: 'Nothing to update' }, { status: 400 });
   }
 
-  // Service client — canonical_venues is client-write-denied by RLS (mig 214).
+  /* Service client retained: canonical_venues is client-write-denied by RLS
+     (mig 214), so dropping it needs a migration granting a role-predicated
+     write policy — paste-gated on Adam, and tracked as the durable fix. Until
+     then the guard above is the ONLY thing between a caller and this table,
+     which is exactly why it is the first line of the handler.
+
+     STILL TRUE AFTER THIS FIX, and Adam's call: any workspace's admin/manager
+     can still correct any venue in the shared directory. That is the venue
+     library working as designed — the edit surface is the global /venues list,
+     not a routing row — so scoping it to "venues my workspace books" would
+     remove a feature rather than close a hole. The hole was that ROLE was
+     unchecked; the sharing is deliberate. */
   const svc = createServiceSupabaseClient();
   const { data, error } = await svc
     .from('canonical_venues')
