@@ -858,6 +858,42 @@ components named so nobody goes looking for them in the old folder.
 
 **Smoke:** SHELL-52 … SHELL-54.
 
+---
+
+## Queued, not started
+
+In order. Nothing proceeds until **SHELL-49** (the readonly-account walk)
+reports — P-1 is code-green but unverified.
+
+1. **SHELL-49 — P-1's acceptance test.** With Adam. A readonly member granted
+   `operations.routing` + `operations.personnel` only, checking that Money mode
+   shows **no Payroll item**, plus the grant/revoke round-trip on Rooming.
+   *Cannot be run from an admin session — `canAccess` returns true
+   unconditionally, so the filter is a no-op by construction.*
+
+2. **The 32-site `/tours` repoint.** Own bank, own walk. They all work today via
+   redirect at one hop; repointing touches the ⌘K search providers and the
+   mobile redirect map, which is real regression surface and does not belong
+   inside a cleanup.
+
+3. **RESOURCE_CATALOG gaps + the payroll duplicate.** Adam's permission-model
+   calls, not nav work: no catalogue entry exists for Day sheets, Income,
+   Settlements, Reports, Assets or most of the artist library, and
+   `budget.payroll` / `operations.payroll` both exist for one surface. The
+   question behind all of it is what a crew member should see.
+
+4. **Personnel roster load — observed 2026-08, not investigated.**
+   `/operations/[tourId]/personnel` shows "Loading personnel…" for **15–20s**
+   while the **server-rendered rates mirror paints instantly beside it**. That
+   side-by-side is the finding: same page, same data era, one path fast and one
+   slow, so it isn't the network or the tour size.
+
+   F-3(b) fixed the *server* chain; the roster is still a client fetch. Two
+   candidates, and they are not exclusive: F-3(a)'s skeleton work (so the wait
+   is legible), and moving the roster to the server load that the mirror
+   already proves works. Worth measuring before choosing — a skeleton on a 20s
+   wait is lipstick if the fetch didn't need to be client-side at all.
+
 **Parked for Adam**
 - **Screenshots** at 1440/1920 of all four scopes — the app is auth-gated and I
   have no session, so I can't produce them. The mock is verified against the

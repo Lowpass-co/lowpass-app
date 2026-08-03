@@ -164,6 +164,14 @@ component name will hit `DashboardTourCard` when you searched
 for `TourCard`, which is how `TourCard` survived S-4c as a false
 positive.
 
+**A reference count of ONE deserves following, not counting.**
+Mutual orphans read as live: `DashboardTourList` and
+`DashboardTourCard` were each other's only importer, so both
+looked referenced until someone asked *who the referrer was*.
+The same applies to any count you didn't read — a grep's first
+screen said three `/tours` links when there were 32. **Read the
+referrers, don't tally them.**
+
 See `docs/handover/IA_HIERARCHY.md` for the full reference.
 
 ### Component primitives
