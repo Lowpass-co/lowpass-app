@@ -20,7 +20,7 @@ src/
     api/        ← REST routes (server)
     m/          ← mobile PWA routes (pending UX18+)
   components/
-    shell/      ← TopBar, LeftRail, PageShell, SlideOver (UX02/UX03 — shell-v1)
+    shell/      ← TopBar, LeftRail, PageShell (shell-v1 — ADMIN ONLY, see below)
     shell-v2/   ← ProductHeader (two-bar: TopProductNav + ProductSubBar), ProductShell (current). ProductRail retired (two-bar nav)
     data-table/ ← <DataTable> (UX05)
     spreadsheet-grid/ ← <SpreadsheetGrid> (UX06)
@@ -131,11 +131,38 @@ Settings / Venues / Bugs use `ProductShell` with `active={null}`
 - Don't add to shell-v1 (`<PageShell>` / `listAppPageShell`)
   for anything new.
 
-**Shell-v1 (`src/components/shell/*`) is scoped to:** auth
-flows, public share / intake pages, and a still-substantial
-tail of unmigrated surfaces — ~20 files still import
-`<PageShell>` / `listAppPageShell` (mobile + legacy tour-internal
-pages pending a Phase-4-style port). New code should not use it.
+### Shell-v1 is SCOPED TO ADMIN — not pending retirement
+
+`src/components/shell/*` (`PageShell`, `LeftRail`, `TopBar`,
+`ShellTopBarClient`, `app-page-shells`) is **the admin chrome**,
+plus two surfaces S-3b will move (`/budget` with no tour id,
+`/profile`) and the rider pack editor's
+`builderAppPageShell`.
+
+**The retirement idea is CLOSED.** `/admin/shell-playground`
+exists to demonstrate shell-v1 — porting it would delete the
+thing it documents — and a working admin on old chrome beats a
+broken one on new. An open ticket that can never complete is
+worse than an honest boundary. Don't reopen it; scope it.
+
+New product code uses `<ShellV3Mount>`. Nothing new goes here.
+
+**The folder does not contain what its name suggests, and this
+has nearly caused a catastrophic delete twice.** Two components
+were moved OUT for exactly that reason:
+
+- `<SlideOver>` → `@/components/ui/SlideOver` — the app-wide
+  detail-panel primitive, 26 callers.
+- `<AccountAvatar>` → `@/components/ui/AccountAvatar` — rendered
+  by shell-v2's avatar menu, which **shell-v3** mounts.
+
+Same shape as `src/components/tours/`, where four of five
+survivors looked like legacy code by name and location. **Before
+deleting anything from a folder whose name implies it is dead,
+grep each file's exact import path** — a substring match on a
+component name will hit `DashboardTourCard` when you searched
+for `TourCard`, which is how `TourCard` survived S-4c as a false
+positive.
 
 See `docs/handover/IA_HIERARCHY.md` for the full reference.
 
@@ -143,7 +170,7 @@ See `docs/handover/IA_HIERARCHY.md` for the full reference.
 
 - **Lists** → `<DataTable>` (`docs/components/DATA_TABLE_CONTRACT.md`). No custom `<table>` HTML in pages.
 - **Spreadsheets** → `<SpreadsheetGrid>` (`docs/components/SPREADSHEET_GRID_CONTRACT.md`). Used for Budget, Payroll, Channel List, Routing.
-- **Detail panels** → `<SlideOver>` from `src/components/shell/SlideOver.tsx` (`docs/components/SLIDE_OVER_CONTRACT.md`). Context only — never the primary edit surface (admin tools like Bug Reports are the documented exception). **Do NOT roll your own backdrop/aside chrome.** The design pass + P8 hygiene converted ~24 of the ~26 real slide-overs onto the `<SlideOver>` primitive. Two known stragglers remain: `PersonnelDetailSlideOver` (bespoke 2161-line chrome — JSX-in-title + loader/flush bridge; conversion deferred on visual-parity risk) and `GridSlideOver` (the isolated `/grid-demo` `lp-gso` system, outside this contract's scope). New slide-overs must use the primitive.
+- **Detail panels** → `<SlideOver>` from `src/components/ui/SlideOver.tsx` (`docs/components/SLIDE_OVER_CONTRACT.md`). Context only — never the primary edit surface (admin tools like Bug Reports are the documented exception). **Do NOT roll your own backdrop/aside chrome.** The design pass + P8 hygiene converted ~24 of the ~26 real slide-overs onto the `<SlideOver>` primitive. Two known stragglers remain: `PersonnelDetailSlideOver` (bespoke 2161-line chrome — JSX-in-title + loader/flush bridge; conversion deferred on visual-parity risk) and `GridSlideOver` (the isolated `/grid-demo` `lp-gso` system, outside this contract's scope). New slide-overs must use the primitive.
 - **Inline entity references** → `<EntityChip kind={...} id={...} />` (UX08). Click opens the entity's slide-over via `useEntityRouting()`.
 
 ### Canonical entities

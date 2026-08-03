@@ -25,7 +25,7 @@
 import { useMemo, useState } from 'react';
 import { useToast } from '@/components/ui/Toast';
 import { AlertTriangle, Loader2, X } from 'lucide-react';
-import { SlideOver } from '@/components/shell/SlideOver';
+import { SlideOver } from '@/components/ui/SlideOver';
 import { TagEditor } from './TagEditor';
 import { PermissionMatrix } from './PermissionMatrix';
 import { RESOURCE_BY_ID } from '@/lib/permissions/resources';

@@ -32,7 +32,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ExternalLink, Loader2, Plus, Search, UserPlus } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
-import { SlideOver } from '@/components/shell/SlideOver';
+import { SlideOver } from '@/components/ui/SlideOver';
 import { BrandedSelect } from '@/components/ui/BrandedSelect';
 import { ROLE_TAG_OPTIONS, type RoleTag } from '@/lib/personnel/role-tags';
 import type {

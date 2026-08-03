@@ -53,7 +53,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
-import { SlideOver } from '@/components/shell/SlideOver';
+import { SlideOver } from '@/components/ui/SlideOver';
 import { useAutoSave } from '@/lib/forms/useAutoSave';
 import { SaveStatus } from '@/components/forms/SaveStatus';
 

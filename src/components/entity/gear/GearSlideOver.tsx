@@ -12,7 +12,7 @@ import {
 } from '@/lib/api/gear';
 import type { Gear, TourGear } from '@/lib/types/gear';
 import type { RentalInventory } from '@/lib/types/rental';
-import { SlideOver } from '@/components/shell/SlideOver';
+import { SlideOver } from '@/components/ui/SlideOver';
 
 type GearWithTours = Gear & { tourGear?: TourGear[] };
 

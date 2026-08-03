@@ -15,7 +15,7 @@ import {
   SunMoon,
   Users,
 } from 'lucide-react';
-import { AccountAvatar } from '@/components/shell/AccountAvatar';
+import { AccountAvatar } from '@/components/ui/AccountAvatar';
 import { DarkModeToggle } from '@/components/layout/DarkModeToggle';
 import { WorkspaceSwitcher } from '@/components/shell-v2/WorkspaceSwitcher';
 

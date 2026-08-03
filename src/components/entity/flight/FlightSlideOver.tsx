@@ -6,7 +6,7 @@ import { Loader2 } from 'lucide-react';
 import { getFlightById, updateFlight } from '@/lib/api/flights';
 import type { Flight } from '@/lib/types/flight';
 import { cn } from '@/lib/utils';
-import { SlideOver } from '@/components/shell/SlideOver';
+import { SlideOver } from '@/components/ui/SlideOver';
 
 const IC =
   'w-full rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text outline-none focus:border-lp-orange';

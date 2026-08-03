@@ -21,7 +21,7 @@
 
 ## Standard body sections
 
-Inside `children`, prefer this order (see `src/components/shell/SlideOver.tsx` for header/footer slots only):
+Inside `children`, prefer this order (see `src/components/ui/SlideOver.tsx` for header/footer slots only):
 
 1. **Notes** — rich text or plain markdown editor
 2. **Attachments** — file list + upload
@@ -59,4 +59,4 @@ type SlideOverProps = {
 - Don’t put save actions for fields that are edited on the main page in the slide-over; keep editing on-page.
 - Don’t mount two `SlideOver` instances at once.
 - Don’t use `SlideOver` for left-side panels (it is right-side on desktop, bottom sheet on small screens).
-- Don’t reimplement a slide-over inline; use `src/components/shell/SlideOver.tsx`.
+- Don’t reimplement a slide-over inline; use `src/components/ui/SlideOver.tsx`.

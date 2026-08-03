@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Loader2, Plus } from 'lucide-react';
 import { getRoomById, updateRoom } from '@/lib/api/rooms';
 import type { Room } from '@/lib/types/room';
-import { SlideOver } from '@/components/shell/SlideOver';
+import { SlideOver } from '@/components/ui/SlideOver';
 
 type AssignmentRow = {
   id: string;

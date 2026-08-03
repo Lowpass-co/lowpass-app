@@ -24,7 +24,7 @@ import {
   SunMoon,
   Users,
 } from 'lucide-react';
-import { AccountAvatar } from '@/components/shell/AccountAvatar';
+import { AccountAvatar } from '@/components/ui/AccountAvatar';
 import { DarkModeToggle } from '@/components/layout/DarkModeToggle';
 import { createClient as createBrowserSupabase } from '@/lib/supabase-client';
 import { toTitleCase } from '@/lib/text/toTitleCase';

@@ -24,7 +24,7 @@
 import { useMemo, useState } from 'react';
 import { AlertTriangle, Check, FileText } from 'lucide-react';
 import { FieldTypeIcon } from './FieldTypeIcon';
-import { SlideOver } from '@/components/shell/SlideOver';
+import { SlideOver } from '@/components/ui/SlideOver';
 import { cn, parseRoutingDate } from '@/lib/utils';
 
 export type AdvanceSection = {

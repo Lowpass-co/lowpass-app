@@ -6,7 +6,7 @@ import { DocumentCanvas } from '@/components/document/DocumentCanvas';
 import { LeftRail, type LeftRailVariant, type ListFilterDef } from '@/components/shell/LeftRail';
 import { PageShell, type PageShellArchetype } from '@/components/shell/PageShell';
 import { TopBar } from '@/components/shell/TopBar';
-import { SlideOver } from '@/components/shell/SlideOver';
+import { SlideOver } from '@/components/ui/SlideOver';
 import { TimelineDashboard } from '@/components/timeline';
 import type { TimelineRow } from '@/components/timeline/types';
 import { EntityChip, useEntityRouting } from '@/components/entity';

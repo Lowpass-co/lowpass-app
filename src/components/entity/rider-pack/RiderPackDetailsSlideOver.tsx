@@ -16,7 +16,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { Trash2, Pencil, ExternalLink, Check, X } from 'lucide-react';
-import { SlideOver } from '@/components/shell/SlideOver';
+import { SlideOver } from '@/components/ui/SlideOver';
 import { useToast } from '@/components/ui/Toast';
 
 export type RiderPackDetails = {

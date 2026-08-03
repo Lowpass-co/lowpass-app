@@ -11,7 +11,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Check, ChevronDown, ChevronRight, Copy, Loader2 } from 'lucide-react';
 import { useToast } from '@/components/ui/Toast';
-import { SlideOver } from '@/components/shell/SlideOver';
+import { SlideOver } from '@/components/ui/SlideOver';
 import { TagEditor } from './TagEditor';
 import { PermissionMatrix } from './PermissionMatrix';
 import { RESOURCE_BY_ID } from '@/lib/permissions/resources';

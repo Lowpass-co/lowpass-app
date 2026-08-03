@@ -24,7 +24,7 @@
 
 import { useEffect, useState } from 'react';
 import { useToast } from '@/components/ui/Toast';
-import { SlideOver } from '@/components/shell/SlideOver';
+import { SlideOver } from '@/components/ui/SlideOver';
 import { DeleteConfirmationModal } from '@/components/ui/DeleteConfirmationModal';
 import { SwapPersonnelModal } from './SwapPersonnelModal';
 import { useAutoSave } from '@/lib/forms/useAutoSave';

@@ -781,6 +781,83 @@ Day sheets · Income · Settlements · Reports & workbook · Assets · Riders & 
 
 **Smoke:** SHELL-49 (restricted account), SHELL-50 (admin unchanged).
 
+---
+
+## F-1 — hygiene: the folder that lies · `<commit>`
+
+Lint 447 → **442** problems. Nine files deleted, two moved, 28 imports rewritten.
+
+### 1. `src/components/shell/` now contains only shell-v1 (the priority)
+
+`SlideOver` → `@/components/ui/SlideOver` (26 callers). `AccountAvatar` →
+`@/components/ui/AccountAvatar` (rendered by shell-v2's avatar menu, which
+**shell-v3** mounts).
+
+**Not re-exported from the old barrel.** An alias would have made the move
+invisible and preserved the exact ambiguity it exists to remove. 28 imports
+rewritten instead; `grep components/shell/SlideOver` returns 0.
+
+What's left in the folder is genuinely shell-v1: `PageShell`, `LeftRail`,
+`TopBar`, `ShellTopBarClient`, `app-page-shells`. **"Is shell-v1 dead?" is now a
+grep-able question** — which it wasn't when the answer included the app's
+detail-panel primitive and the current shell's avatar.
+
+### 2. I GOT S-4c WRONG — `TourCard` was a false positive
+
+S-4c kept five components in `src/components/tours/` on evidence that
+`TourCard` had importers. It doesn't, and never did. My grep matched
+**`DashboardTourCard`** — a substring hit on a different component's name.
+
+Exactly the trap that nearly took `SlideOver` out, and the same one that produced
+two `TourOverviewClient` files. So the check is now written down in CLAUDE.md:
+**grep the exact import path, not the component name.** Re-ran all five that
+way; the other four are genuinely live.
+
+Deleting `TourCard` also removed 3 `/tours` links for free.
+
+### 3. Orphans deleted — 7 files, each 0 refs by exact-path grep
+
+`tour-overview/TourOverviewClient` · `tours/TourCard` ·
+`dashboard/{TourList, TourCard, AdvanceNeeds, Highlights, Upcoming}`.
+
+`DashboardTourList` and `DashboardTourCard` were a **mutual-orphan pair** —
+each other's only importer, which reads as "1 reference" until you follow it.
+
+**KEPT: `DashboardArtistGate`.** Its importer chain is
+`ShellTopBarClient` → `app-page-shells` → every shell-v1 surface. Live, and the
+only dashboard component that is.
+
+### 4. `/tours` link hops — 2 of 3 named files, and the real count is 32
+
+`SetupStatusStrip` **was already deleted in S-4c**. `TourCard` is deleted here.
+`TourSlideOver`'s three links are repointed: `/tours/[id]` and
+`/tours/[id]/overview` → `/operations/[id]/routing`, `/tours/[id]/personnel` →
+`/operations/[id]/personnel`.
+
+**The remaining count is 32 sites, not the three I logged.** My S-4c note came
+from the head of a grep and undercounted badly. They span ⌘K search providers,
+the mobile redirect map, `ArtistTourScopeGuard`, `AppTopBarBreadcrumb`,
+`ManageTourSegmentNav`, budget, personnel, artists and `_legacy/budget`.
+
+All 32 **work** — the redirects catch them, at one hop per click. Repointing
+them touches mobile redirects and ⌘K navigation, which is behaviour with real
+regression surface, so it wants its own bank and its own walk. Not smuggled in
+here.
+
+**Checked, not changed:** `TourSlideOver` also links `/budget?tour_id=…`. That
+one is **not** a dead end — `/budget/page.tsx` reads `tour_id` and redirects to
+`/budget/[id]`. Verified before touching it; the S-4a lesson was that half the
+"broken" links weren't.
+
+### 5. CLAUDE.md — shell-v1 is SCOPED TO ADMIN
+
+Retirement recorded as **closed**, not pending, with the reason:
+`/admin/shell-playground` exists to demonstrate shell-v1, so porting it deletes
+the thing it documents. Plus the exact-import-path rule, and both moved
+components named so nobody goes looking for them in the old folder.
+
+**Smoke:** SHELL-52 … SHELL-54.
+
 **Parked for Adam**
 - **Screenshots** at 1440/1920 of all four scopes — the app is auth-gated and I
   have no session, so I can't produce them. The mock is verified against the

@@ -36,7 +36,7 @@ import {
 } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search, Trash2, X as XIcon } from 'lucide-react';
-import { SlideOver } from '@/components/shell/SlideOver';
+import { SlideOver } from '@/components/ui/SlideOver';
 import { useToast } from '@/components/ui/Toast';
 import { ArtistImageUploader } from './ArtistImageUploader';
 import { ArtistDeleteConfirmationModal } from './ArtistDeleteConfirmationModal';

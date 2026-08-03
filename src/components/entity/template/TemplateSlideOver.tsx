@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import type { ReactNode } from 'react';
 import { ExternalLink } from 'lucide-react';
 import type { TemplateVm } from '@/lib/types/template-vm';
-import { SlideOver } from '@/components/shell/SlideOver';
+import { SlideOver } from '@/components/ui/SlideOver';
 import { cn } from '@/lib/utils';
 
 function Section({ title, children }: { title: string; children: ReactNode }) {

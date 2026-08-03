@@ -24,7 +24,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import { BrandedSelect } from '@/components/ui/BrandedSelect';
-import { SlideOver } from '@/components/shell/SlideOver';
+import { SlideOver } from '@/components/ui/SlideOver';
 import {
   buildBundle,
   exportBundleToFolder,

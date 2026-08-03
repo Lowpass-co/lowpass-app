@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { SlideOver } from '@/components/shell/SlideOver';
+import { SlideOver } from '@/components/ui/SlideOver';
 
 type TourApiRow = {
   id: string;
@@ -66,7 +66,7 @@ export default function TourSlideOver({ id, onClose }: { id: string; onClose: ()
       subtitle={<span className="text-sm text-lp-text-secondary">{tour?.artist?.name ?? 'Artist'}</span>}
       headerActions={
         <Link
-          href={`/tours/${id}`}
+          href={`/operations/${id}/routing`}
           className="rounded border border-lp-border px-2 py-1 text-xs text-lp-text hover:bg-lp-bg-tertiary"
           onClick={onClose}
         >
@@ -105,13 +105,13 @@ export default function TourSlideOver({ id, onClose }: { id: string; onClose: ()
           <section className="space-y-1">
             <h4 className="text-xs uppercase tracking-wider text-lp-text-secondary">Quick actions</h4>
             <div className="flex flex-wrap gap-3">
-              <Link href={`/tours/${tour.id}/overview`} className="text-lp-orange hover:underline" onClick={onClose}>
+              <Link href={`/operations/${tour.id}/routing`} className="text-lp-orange hover:underline" onClick={onClose}>
                 Overview
               </Link>
               <Link href={`/advance/${tour.id}`} className="text-lp-orange hover:underline" onClick={onClose}>
                 Advance
               </Link>
-              <Link href={`/tours/${tour.id}/personnel`} className="text-lp-orange hover:underline" onClick={onClose}>
+              <Link href={`/operations/${tour.id}/personnel`} className="text-lp-orange hover:underline" onClick={onClose}>
                 Personnel
               </Link>
             </div>

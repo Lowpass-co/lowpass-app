@@ -18,7 +18,7 @@
 
 import { useMemo, useState } from 'react';
 import { CheckCircle2, Circle, Loader2 } from 'lucide-react';
-import { SlideOver } from '@/components/shell/SlideOver';
+import { SlideOver } from '@/components/ui/SlideOver';
 import { cn, parseRoutingDate, dayTypesInclude, getAdvanceStatusInfo } from '@/lib/utils';
 import type { AdvanceDateItem } from './ApplyAdvanceTemplateSlideOver';
 

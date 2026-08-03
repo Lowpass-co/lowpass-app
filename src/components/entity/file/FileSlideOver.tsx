@@ -3,7 +3,7 @@
 import type { ReactNode } from 'react';
 import Image from 'next/image';
 import { Download, FileQuestion } from 'lucide-react';
-import { SlideOver } from '@/components/shell/SlideOver';
+import { SlideOver } from '@/components/ui/SlideOver';
 import type { FileVm } from '@/lib/tour-files/types';
 
 /** Non-registry pattern: rendered by list pages directly (files are not in the canonical entity routing map). */

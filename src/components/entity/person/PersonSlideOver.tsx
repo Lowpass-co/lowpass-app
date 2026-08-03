@@ -6,7 +6,7 @@ import { Loader2 } from 'lucide-react';
 import { deleteTourPersonnel, getPersonById, updatePerson, updateTourPersonnel, type TourPersonnelPatch } from '@/lib/api/persons';
 import type { Person, TourPerson } from '@/lib/types/person';
 import { cn } from '@/lib/utils';
-import { SlideOver } from '@/components/shell/SlideOver';
+import { SlideOver } from '@/components/ui/SlideOver';
 
 const IC =
   'w-full rounded-lg border border-lp-border bg-lp-surface px-3 py-2 text-sm text-lp-text outline-none focus:border-lp-orange';

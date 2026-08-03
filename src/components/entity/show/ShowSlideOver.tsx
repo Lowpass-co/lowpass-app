@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Loader2 } from 'lucide-react';
-import { SlideOver } from '@/components/shell/SlideOver';
+import { SlideOver } from '@/components/ui/SlideOver';
 import { getEntityDescriptor } from '@/lib/entities/registry';
 import type { ShowEntity } from '@/lib/entities/show';
 

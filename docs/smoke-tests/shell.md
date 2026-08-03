@@ -382,6 +382,30 @@ Grab a tour id from any tour URL you already have open and substitute it for
 
 ---
 
+## Still to do — F-1 (hygiene)
+
+- [ ] **SHELL-52 — Slide-overs still work, everywhere.** The primitive moved
+  file, so this is the blast-radius check for 26 callers. Open and close one of
+  each: a **budget line** detail · a **person** (Crew) · a **venue** · a
+  **gear** item · the **tour edit** slide-over (with its date-window warning) ·
+  a **rider pack** panel.
+  *Nothing about the component changed — only its path. A miss here would be an
+  import that didn't get rewritten, and it would show as a blank panel or a
+  build-time error, not a subtle one.*
+
+- [ ] **SHELL-53 — The avatar menu renders on BOTH shells.** Top-right on
+  `/operations/[tourId]/routing` (shell-v3) **and** on `/admin` (shell-v1).
+  Open it, check the entries, sign-out link present.
+  *AccountAvatar moved too, and it's the one component both shells share.*
+
+- [ ] **SHELL-54 — Tour slide-over links land in one hop.** Open a tour
+  slide-over (⌘K → a tour, or an entity chip). **Open tour** → Routing.
+  **Overview** → Routing. **Personnel** → operations personnel. **Open budget**
+  → that tour's budget.
+  *These went through a 301 before. Watch for a visible double-navigation.*
+
+---
+
 ## Already verified on `431f316` (Cowork, no need to repeat)
 
 - **SHELL-01 — The shell renders on Routing.** Top bar: workspace · artist/tour

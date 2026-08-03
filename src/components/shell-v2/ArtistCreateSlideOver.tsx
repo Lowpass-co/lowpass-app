@@ -24,7 +24,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Search, Check, ArrowLeft } from 'lucide-react';
-import { SlideOver } from '@/components/shell/SlideOver';
+import { SlideOver } from '@/components/ui/SlideOver';
 import { useToast } from '@/components/ui/Toast';
 import { StyledSelect } from '@/components/ui/StyledSelect';
 import { TOUR_CURRENCIES, DEFAULT_TOUR_CURRENCY } from '@/lib/currencies';

@@ -5,7 +5,7 @@ import type { ReactNode } from 'react';
 import { Download, Loader2, Trash2 } from 'lucide-react';
 import { getDealMemoById, updateDealMemo, deleteDealMemo, getSignedDealMemoDocumentUrl } from '@/lib/api/deal-memos';
 import type { DealMemoInput, DealMemoListRow, DealMemoStatus } from '@/lib/types/deal-memo';
-import { SlideOver } from '@/components/shell/SlideOver';
+import { SlideOver } from '@/components/ui/SlideOver';
 import { cn } from '@/lib/utils';
 
 const IC =
