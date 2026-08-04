@@ -919,6 +919,90 @@ proves the app is.
 
 ---
 
+## Equipment quote — items 1–5 · `<commit>`
+
+### 1. Day rate 3% — banked (Cowork's, was uncommitted)
+
+Verified the diff, then corrected one stale comment: it pointed at *"the
+backfill that resolves this"*, but Adam's audit found all 33 rows carry
+`day_rate_manual = false`, so there is no backfill. It now records that the
+inference branch is dead code for real data, kept as the safety net for a
+NULL-flag row arriving by direct SQL or a future import — and that the cost of
+the next rate change is a property of the DATA, so re-run the audit first.
+
+### 2. Currency switcher — reuses the FX path, freezes on commit
+
+`fmtUSD` is **gone**, replaced by `fmtMoney(amount, currency)` with **no default
+currency**. That is the whole point: `fmtUSD` had one implicitly, so every call
+site that forgot to think about currency still rendered — and rendered wrong. A
+required argument turns a euro quote printed with a dollar sign into a compile
+error. All 14 sites converted in one pass; a mixed pair was the stated hazard.
+
+**The job carries the currency**, not the line — migration **253**, paste-gated.
+A quote is denominated once; per-line currency would let one page carry two,
+which is not a pricing model.
+
+**Reused `GET /api/budget/exchange-rate?from=&to=`** as instructed — no second FX
+path. It needs no tour id, so it dropped straight in.
+
+**Live while drafting, frozen on commit.** There is **no 'sent' status** in this
+model — the lifecycle is `draft → confirmed → invoiced → completed`. So the
+freeze fires on the first transition **out of draft**, which is the point that
+actually means "no longer a working draft". Never re-stamped: a later status
+change leaves the original rate alone.
+
+**A bug I introduced and caught mid-bank:** converting the formatter made every
+figure print the new symbol over an **unconverted USD number**. Fixed in both
+places — the UI and, separately, `exportJobPdf`, which does its own arithmetic.
+The PDF uses the **frozen rate only and never fetches**: a document whose numbers
+change each time you re-export it is worse than one that prints its source
+figures.
+
+**No silent 1:1.** A missing rate shows *"No FX rate available — figures shown
+are USD, unconverted"* rather than quietly pretending parity.
+
+**The rate and its date are on the quote**, marked `live` or `frozen` — a
+converted price with no visible rate is unauditable, and this document goes to
+clients.
+
+### 3 + 4. Search and multi-select — landed on the picker
+
+Reported separately: **`InventoryTab` does not exist** (S1 moved inventory to
+`/assets`), and there is **no manufacturer/model column**. Search matches name,
+category, serial.
+
+### 5. Grid port — ASSESSED, NOT BUILT. Split verdict.
+
+**The line table ports cleanly. The drag-in does not.**
+
+*Ports, no primitive change needed:* `GridRow<T>` is generic, so a quote line
+maps to a view-model directly. Every column has a native cell type — quantity is
+`number`, rate is **`currency`, which already takes a currency string** and so
+takes item 2's job currency for free, line total is `computed`. Better still,
+`entityRef` supports **`'gear'`**, and S1 unified rental inventory into gear
+(migration 249 added `rental_job_items.gear_id`), so the inventory reference can
+be an entity cell with search built in.
+
+*Does NOT port:* **there is no external-drop capability.** No `onDrop`, no
+`dataTransfer`, no drop-target rendering anywhere in
+`src/components/spreadsheet-grid/`. The only drag code in the tree is
+`src/components/grid/Grid.tsx` — a **different** component, the `/grid-demo`
+playbox, explicitly outside this contract.
+
+So "drag things in" means **adding a capability to the shared primitive** that
+Budget, Channel list, Routing and Payroll all mount. **Stopping here, as
+instructed.** That is Adam's trade, not a port.
+
+**Worth weighing before he takes it:** drag is the interaction, not the goal. The
+goal is getting many items onto a quote quickly — which items 3+4 now do, with
+search, shift-ranges and one batched insert. The grid port would buy
+spreadsheet-grade *editing* of lines already on the quote, which is a real and
+separable win, and it needs no primitive change.
+
+**Smoke:** EQ-01 … EQ-05.
+
+---
+
 ## Queued, not started
 
 In order. Nothing proceeds until **SHELL-49** (the readonly-account walk)

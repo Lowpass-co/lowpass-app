@@ -438,6 +438,50 @@ P0-01 as "readonly is now safe."**
 
 ---
 
+## Still to do — Equipment quote (items 1–4)
+
+> **Migration 253 is PASTE-GATED.** Until Adam pastes it, `display_currency`,
+> `fx_rate` and `fx_rate_at` do not exist and the switcher cannot persist. The
+> code treats a missing currency as USD, so the page still works — it just
+> can't change currency. Paste first, then run EQ-02 onward.
+
+- [ ] **EQ-01 — Every auto-priced day rate tripled.** Open `/equipment` → a job
+  → the picker. An item with a purchase cost shows **3% of it** per day, not 1%.
+  Items with no purchase cost are unchanged — correct, though it may look
+  inconsistent beside the others.
+  *Adam's audit says all 33 rows re-derive. Any open quote that should keep old
+  pricing needs `day_rate_override` pinned BEFORE this is used in anger.*
+
+- [ ] **EQ-02 — The quote denominates once.** On a **draft** job, set Currency to
+  **GBP**. Every figure — line rates, line totals, subtotal, discount, total —
+  moves together. No dollar sign survives anywhere on the page.
+  *A mixed pair is the failure this item exists to prevent; one stale `$` is a
+  fail, not a nitpick.*
+
+- [ ] **EQ-03 — The rate is visible and dated.** Under the currency selector:
+  `1 USD = x.xxxx GBP · <date> · live`. Export the PDF — the same figures, same
+  currency, converted.
+  *A converted price with no visible rate is unauditable and this goes to
+  clients.*
+
+- [ ] **EQ-04 — The rate FREEZES on commit.** With the job in GBP, change status
+  **draft → confirmed**. The rate line now reads **frozen**, and the currency
+  selector is **disabled**. Re-open tomorrow: the same numbers, not the day's
+  rate.
+  *A client who accepted Tuesday's number must not open Friday's.*
+
+- [ ] **EQ-05 — Search + multi-select.** Type in the picker's search (name,
+  category, serial). Shift-click a range. Set "Qty each", Add. Then **re-add an
+  item already on the quote** — its quantity should go UP, not produce a second
+  identical line.
+
+**Not built: the drag-in grid (item 5).** Assessed and stopped — see the running
+report. The line table would port with no primitive change; drag-from-list does
+not exist on `SpreadsheetGrid` and adding it changes a primitive Budget, Channel
+list, Routing and Payroll all mount. Adam's trade.
+
+---
+
 ## Already verified on `431f316` (Cowork, no need to repeat)
 
 - **SHELL-01 — The shell renders on Routing.** Top bar: workspace · artist/tour

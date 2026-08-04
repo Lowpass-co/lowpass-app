@@ -11,7 +11,7 @@ import { useToast } from '@/components/ui/Toast';
 import { effectiveInventoryDayRate } from '@/lib/rental-pricing';
 import { StyledSelect, type StyledSelectOption } from '@/components/ui/StyledSelect';
 import {
-  STATUS_OPTIONS, calcDays, fmtUSD, fmtDate,
+  STATUS_OPTIONS, QUOTE_CURRENCIES, calcDays, fmtMoney, jobCurrency, fmtDate,
   type EquipmentArtistOption,
   type EquipmentTourOption,
   type RentalJob, type RentalInventoryItem, type RentalJobItem,
@@ -44,6 +44,64 @@ export function JobDetail({ job, workspaceId, inventory, artists, tours, onBack,
   const [search,   setSearch]   = useState('');
   const [selIds,   setSelIds]   = useState<Set<string>>(new Set());
   const lastIdxRef = useRef<number | null>(null);
+
+  /* ── Item 2: the quote's currency ──
+     The job carries it, not the line: a quote is denominated once. Items keep
+     their own value_currency as the SOURCE unit; conversion happens at render.
+
+     LIVE WHILE DRAFTING, FROZEN ON COMMIT. job.fx_rate is null for a draft, so
+     the rate is re-fetched and the numbers move with the market — right while
+     you are still quoting. The moment the job leaves 'draft' the rate it last
+     showed is stamped onto the row, because a client who accepted Tuesday's
+     number must not open the same quote on Friday and find a different one.
+     Same live-until-committed rule as tour FX. */
+  const cur = jobCurrency(job);
+  const isDraft = job.status === 'draft';
+  const [liveRate, setLiveRate] = useState<number | null>(null);
+  const [rateAt, setRateAt] = useState<string | null>(null);
+  const [rateMissing, setRateMissing] = useState(false);
+
+  /** Rate in force: the frozen one once committed, else the live one. */
+  const fxRate = !isDraft && job.fx_rate != null ? Number(job.fx_rate) : liveRate;
+  const fxRateAt = !isDraft && job.fx_rate_at ? job.fx_rate_at : rateAt;
+
+  useEffect(() => {
+    /* USD source → USD quote needs no rate, and a frozen job must never
+       re-fetch: that would silently re-price a signed document. */
+    if (!isDraft || cur === 'USD') { setLiveRate(cur === 'USD' ? 1 : null); setRateMissing(false); return; }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/budget/exchange-rate?from=USD&to=${encodeURIComponent(cur)}`);
+        const body = (await res.json()) as { rate?: number; fetched_at?: string };
+        if (cancelled) return;
+        if (typeof body.rate === 'number') {
+          setLiveRate(body.rate);
+          setRateAt(body.fetched_at ?? new Date().toISOString());
+          setRateMissing(false);
+        } else {
+          /* Surface it rather than converting 1:1 — a silent identity rate
+             prints a euro quote at dollar numbers. */
+          setLiveRate(null);
+          setRateMissing(true);
+        }
+      } catch {
+        if (!cancelled) { setLiveRate(null); setRateMissing(true); }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [cur, isDraft]);
+
+  /** USD-denominated figure → the quote's currency. */
+  const conv = useCallback((usd: number) => (fxRate == null ? usd : usd * fxRate), [fxRate]);
+
+  async function handleCurrencyChange(next: string) {
+    const patch = { display_currency: next };
+    const { error } = await supabase.from('rental_jobs').update(patch).eq('id', job.id);
+    if (error) { showToast('Failed to set currency: ' + error.message, 'error'); return; }
+    onJobUpdated({ ...job, ...patch });
+  }
+
   const [qty,      setQty]      = useState('1');
   const [rateOvr,  setRateOvr]  = useState('');
   const [adding,   setAdding]   = useState(false);
@@ -237,10 +295,24 @@ export function JobDetail({ job, workspaceId, inventory, artists, tours, onBack,
   }
 
   /* ── Status save ── */
+  /** Freeze the FX rate the first time this job leaves 'draft'.
+   *
+   *  Live rates are right while quoting and wrong afterwards. Stamping happens
+   *  HERE, on the transition, rather than on send-a-PDF, because the status is
+   *  the thing that actually means "this is no longer a working draft" — and
+   *  there is no 'sent' status in this model to hang it on. Never re-stamped:
+   *  once frozen, a later status change leaves the original rate alone. */
   async function handleStatusChange(val: string) {
     setStatus(val as RentalJob['status']);
-    await supabase.from('rental_jobs').update({ status: val }).eq('id', job.id);
-    onJobUpdated({ ...job, status: val as RentalJob['status'] });
+    const patch: Record<string, unknown> = { status: val };
+    const leavingDraft = job.status === 'draft' && val !== 'draft';
+    const alreadyFrozen = job.fx_rate != null;
+    if (leavingDraft && !alreadyFrozen && cur !== 'USD' && fxRate != null) {
+      patch.fx_rate = fxRate;
+      patch.fx_rate_at = fxRateAt ?? new Date().toISOString();
+    }
+    await supabase.from('rental_jobs').update(patch).eq('id', job.id);
+    onJobUpdated({ ...job, ...patch, status: val as RentalJob['status'] });
   }
 
   return (
@@ -389,7 +461,7 @@ export function JobDetail({ job, workspaceId, inventory, artists, tours, onBack,
                         ) : null}
                       </span>
                       <span className="lp-mono shrink-0 text-xs" style={{ color: 'var(--lp-text-secondary)' }}>
-                        {fmtUSD(effectiveInventoryDayRate(i))}/day
+                        {fmtMoney(conv(effectiveInventoryDayRate(i) ?? 0), cur)}/day
                       </span>
                     </label>
                   );
@@ -501,12 +573,12 @@ export function JobDetail({ job, workspaceId, inventory, artists, tours, onBack,
                           <td className="px-4 py-2.5 text-sm" style={{ color: 'var(--lp-text-secondary)' }}>{it.quantity}</td>
                           <td className="px-4 py-2.5 text-sm" style={{ color: 'var(--lp-text-secondary)' }}>{days}</td>
                           <td className="px-4 py-2.5">
-                            <div className="text-sm" style={{ color: 'var(--lp-text-secondary)' }}>{fmtUSD(rate)}/day</div>
+                            <div className="text-sm" style={{ color: 'var(--lp-text-secondary)' }}>{fmtMoney(conv(rate), cur)}/day</div>
                             {it.day_rate_override != null && (
                               <div className="text-xs font-medium" style={{ color: '#F59E0B' }}>override</div>
                             )}
                           </td>
-                          <td className="px-4 py-2.5 font-semibold" style={{ color: 'var(--lp-text)' }}>{fmtUSD(lineAmt)}</td>
+                          <td className="px-4 py-2.5 font-semibold" style={{ color: 'var(--lp-text)' }}>{fmtMoney(conv(lineAmt), cur)}</td>
                           <td className="px-4 py-2.5 text-right">
                             <button
                               onClick={() => handleRemove(it.id)}
@@ -537,21 +609,57 @@ export function JobDetail({ job, workspaceId, inventory, artists, tours, onBack,
 
           <div className="space-y-1.5">
             <div className="flex justify-between text-sm" style={{ color: 'var(--lp-text-secondary)' }}>
-              <span>Items subtotal</span><span>{fmtUSD(subtotal)}</span>
+              {/* Currency + rate provenance. A converted price with no visible
+                  rate and date is unauditable, and this document goes to a
+                  client. Frozen quotes say so; drafts say the rate is live. */}
+              <div className="mb-3 space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--lp-text-secondary)' }}>
+                    Currency
+                  </span>
+                  <select
+                    value={cur}
+                    onChange={(e) => void handleCurrencyChange(e.target.value)}
+                    disabled={!isDraft}
+                    aria-label="Quote currency"
+                    title={isDraft ? undefined : 'Locked — the rate froze when this left draft'}
+                    className="ml-auto rounded-lg border px-2 py-1 text-xs disabled:opacity-50"
+                    style={{ borderColor: 'var(--lp-border)', backgroundColor: 'var(--lp-surface)', color: 'var(--lp-text)' }}
+                  >
+                    {QUOTE_CURRENCIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+
+                {cur !== 'USD' ? (
+                  rateMissing ? (
+                    <p className="lp-mono text-[10px] leading-snug" style={{ color: 'var(--lp-warning, #F0553D)' }}>
+                      No FX rate available — figures shown are USD, unconverted.
+                    </p>
+                  ) : fxRate != null ? (
+                    <p className="lp-mono text-[10px] leading-snug" style={{ color: 'var(--lp-text-tertiary)' }}>
+                      1 USD = {fxRate.toFixed(4)} {cur}
+                      {fxRateAt ? ` · ${fmtDate(fxRateAt.slice(0, 10))}` : ''}
+                      {isDraft ? ' · live' : ' · frozen'}
+                    </p>
+                  ) : null
+                ) : null}
+              </div>
+
+              <span>Items subtotal</span><span>{fmtMoney(conv(subtotal), cur)}</span>
             </div>
             {discAmt > 0 && (
               <div className="flex justify-between text-sm font-medium" style={{ color: '#F59E0B' }}>
                 <span>
                   {dp > 0 && df > 0 ? `${dp}% + fixed` : dp > 0 ? `${dp}% discount` : 'Fixed discount'}
                 </span>
-                <span>−{fmtUSD(discAmt)}</span>
+                <span>−{fmtMoney(conv(discAmt), cur)}</span>
               </div>
             )}
             <div
               className="flex justify-between pt-2 text-base font-bold"
               style={{ borderTop: '1px solid var(--lp-border)', color: 'var(--lp-text)' }}
             >
-              <span>Total</span><span>{fmtUSD(total)}</span>
+              <span>Total</span><span>{fmtMoney(conv(total), cur)}</span>
             </div>
           </div>
 

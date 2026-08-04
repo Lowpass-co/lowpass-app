@@ -82,6 +82,12 @@ export interface RentalJob {
   billing_email?: string | null;
   billing_phone?: string | null;
   billing_tax_id?: string | null;
+  /** Item 2 — the quote is denominated ONCE, here. NULL = USD (migration 253). */
+  display_currency?: string | null;
+  /** Frozen 1 <item currency> = fx_rate <display_currency>. NULL while draft. */
+  fx_rate?: number | null;
+  /** When fx_rate was captured — printed on the quote for auditability. */
+  fx_rate_at?: string | null;
   /** Populated when listing with Supabase embed `artist:artists(...)` */
   artist?: { id: string; name: string } | null;
   /** Populated when listing with Supabase embed `tour:tours(...)` */
@@ -142,10 +148,40 @@ export function calcDays(start: string | null, end: string | null): number {
   return calcRentalBillableDays(start, end);
 }
 
-export function fmtUSD(n: number | null | undefined): string {
+/**
+ * Money, in the currency you name. Replaces fmtUSD, which hardcoded '$'.
+ *
+ * There is deliberately NO default currency. fmtUSD had one implicitly and that
+ * is exactly how a euro quote gets printed with a dollar sign: every call site
+ * that forgot to think about currency still rendered, and rendered wrong. A
+ * required argument turns that into a compile error instead of a document a
+ * client receives.
+ *
+ * Falls back to a plain code prefix for currencies Intl doesn't symbolise,
+ * which is right — "SEK 1,200.00" is unambiguous, an invented glyph is not.
+ */
+export function fmtMoney(n: number | null | undefined, currency: string): string {
   if (n == null) return '—';
-  return '$' + Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const code = (currency || 'USD').toUpperCase();
+  try {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: code,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(Number(n));
+  } catch {
+    return `${code} ${Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  }
 }
+
+/** The quote's currency. NULL display_currency = USD, the pre-switcher default. */
+export function jobCurrency(job: { display_currency?: string | null }): string {
+  return (job.display_currency || 'USD').toUpperCase();
+}
+
+/** Currencies offered by the quote switcher. */
+export const QUOTE_CURRENCIES = ['USD', 'GBP', 'EUR', 'CAD', 'AUD', 'JPY', 'SEK', 'CHF'] as const;
 
 export function fmtDate(d: string | null): string {
   if (!d) return '—';

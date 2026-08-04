@@ -8,7 +8,7 @@
 
 import { jsPDF } from 'jspdf';
 import { effectiveInventoryDayRate } from '@/lib/rental-pricing';
-import { calcDays, fmtUSD, fmtDate, type RentalJob, type RentalInventoryItem, type RentalJobItem } from './types';
+import { calcDays, fmtMoney, jobCurrency, fmtDate, type RentalJob, type RentalInventoryItem, type RentalJobItem } from './types';
 
 /* ── Theme tokens ─────────────────────────────────────────────────
    Mirrors the app's `--lp-*` CSS variables in `globals.css`. We can't
@@ -174,6 +174,16 @@ export async function exportJobPdf(opts: ExportOptions): Promise<void> {
   const { job, jobItems, inventory, artistLabel, tourLabel, discPct, discFixed } = opts;
   const mode: PdfMode = opts.mode ?? 'light';
   const T = getPdfTokens(mode);
+  /* The quote is denominated once, on the job. Every money figure below goes
+     through fmtMoney(_, cur) — there is no second currency on this page. */
+  const cur = jobCurrency(job);
+  /* THE EXPORTED QUOTE IS THE DOCUMENT THE CLIENT KEEPS, so it must never carry
+     a converted symbol over an unconverted number. The PDF uses the job's
+     FROZEN rate only — it does not fetch. A draft exported before the rate
+     froze prints its source figures, which is honest; the alternative is a PDF
+     whose numbers change every time you re-export it. */
+  const fxRate = job.fx_rate != null ? Number(job.fx_rate) : null;
+  const conv = (usd: number) => (fxRate == null ? usd : usd * fxRate);
 
   /** Paint the current page with the mode's background colour. jsPDF
    *  pages default to a transparent fill — without this, dark mode
@@ -409,9 +419,9 @@ export async function exportJobPdf(opts: ExportOptions): Promise<void> {
     const midY = y + 5;
     doc.text(String(it.quantity ?? 1), colQty, midY, { align: 'center' });
     doc.text(String(days),             colDays, midY, { align: 'center' });
-    doc.text(fmtUSD(rate),             colRate, midY, { align: 'right' });
+    doc.text(fmtMoney(conv(rate), cur),             colRate, midY, { align: 'right' });
     doc.setFont(BODY, 'bold');
-    doc.text(fmtUSD(lineAmt),          colSub - 2, midY, { align: 'right' });
+    doc.text(fmtMoney(conv(lineAmt), cur),          colSub - 2, midY, { align: 'right' });
 
     // Hairline separator
     y += rowH;
@@ -446,7 +456,7 @@ export async function exportJobPdf(opts: ExportOptions): Promise<void> {
   doc.text('Subtotal', totalsX + 2, y + 5);
   doc.setTextColor(...T.ink);
   doc.setFont(BODY, 'bold');
-  doc.text(fmtUSD(subtotal), totalsX + totalsW - 2, y + 5, { align: 'right' });
+  doc.text(fmtMoney(conv(subtotal), cur), totalsX + totalsW - 2, y + 5, { align: 'right' });
   y += 7;
 
   if (discAmt > 0) {
@@ -459,7 +469,7 @@ export async function exportJobPdf(opts: ExportOptions): Promise<void> {
     doc.text(discLabel, totalsX + 2, y + 5);
     doc.setTextColor(...ORANGE);
     doc.setFont(BODY, 'bold');
-    doc.text(`-${fmtUSD(discAmt)}`, totalsX + totalsW - 2, y + 5, { align: 'right' });
+    doc.text(`-${fmtMoney(conv(discAmt), cur)}`, totalsX + totalsW - 2, y + 5, { align: 'right' });
     y += 7;
   }
 
@@ -475,7 +485,7 @@ export async function exportJobPdf(opts: ExportOptions): Promise<void> {
   doc.text('TOTAL DUE', totalsX + 2, y + 4);
   doc.setFontSize(15);
   doc.setTextColor(...ORANGE);
-  doc.text(fmtUSD(total), totalsX + totalsW - 2, y + 4, { align: 'right' });
+  doc.text(fmtMoney(conv(total), cur), totalsX + totalsW - 2, y + 4, { align: 'right' });
   y += 12;
 
   // ── NOTES ──────────────────────────────────────────────────────
