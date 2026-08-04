@@ -9,7 +9,7 @@
 
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
-import { requireUserAndWorkspace } from '@/lib/auth/workspace-check';
+import { requireUserAndWorkspace, requireWrite } from '@/lib/auth/workspace-check';
 import { loadStagePlot, loadPlotChannels, saveStagePlot } from '@/lib/stage-plot/server';
 import type { EditorItem, EditorPlot } from '@/lib/stage-plot/editor-types';
 
@@ -53,7 +53,7 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createServerSupabaseClient();
-  const auth = await requireUserAndWorkspace(supabase);
+  const auth = await requireWrite(supabase);
   if ('error' in auth) return auth.error;
   const body = await request.json().catch(() => null);
   const plot = (body as { plot?: EditorPlot } | null)?.plot;
@@ -66,7 +66,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createServerSupabaseClient();
-  const auth = await requireUserAndWorkspace(supabase);
+  const auth = await requireWrite(supabase);
   if ('error' in auth) return auth.error;
   const { data: plotRow } = await supabase.from('stage_plots').select('rider_pack_id').eq('id', id).single();
   if (plotRow?.rider_pack_id) {

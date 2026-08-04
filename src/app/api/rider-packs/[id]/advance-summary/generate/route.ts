@@ -29,6 +29,7 @@
    ============================================ */
 
 import { NextResponse } from 'next/server';
+import { requireWrite } from '@/lib/auth/workspace-check';
 import { withAiUsage, aiCapExceededResponse, type BlockReason } from '@/lib/ai/usage';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import type { RiderPack, RiderSection, FieldText, Field } from '@/lib/rider-packs/types';
@@ -72,6 +73,8 @@ export async function POST(
   }
 
   const supabase = await createServerSupabaseClient();
+  const auth = await requireWrite(supabase);
+  if ('error' in auth) return auth.error;
   const {
     data: { user },
   } = await supabase.auth.getUser();

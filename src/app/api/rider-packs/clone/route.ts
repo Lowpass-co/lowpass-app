@@ -7,6 +7,7 @@
    ============================================ */
 
 import { NextResponse } from 'next/server';
+import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { appendHistory } from '@/lib/rider-packs/history';
 import { isRiderFoldersMissingError, RIDER_FOLDERS_SETUP_MESSAGE } from '@/lib/rider-packs/schema-errors';
@@ -75,6 +76,8 @@ type ChannelListRow = {
 
 export async function POST(request: Request) {
   const supabase = await createServerSupabaseClient();
+  const auth = await requireWrite(supabase);
+  if ('error' in auth) return auth.error;
   const {
     data: { user },
   } = await supabase.auth.getUser();

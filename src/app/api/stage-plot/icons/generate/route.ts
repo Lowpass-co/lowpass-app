@@ -12,6 +12,7 @@
    ============================================================ */
 
 import { NextResponse } from 'next/server';
+import { requireWrite } from '@/lib/auth/workspace-check';
 import Anthropic from '@anthropic-ai/sdk';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { GENERATOR_MODEL, SYSTEM_PROMPT, sanitizeSvgBody, isValidViewBox, isValidDim } from '@/lib/stage-plot/icon-generator';
@@ -34,6 +35,8 @@ export async function POST(request: Request) {
   }
 
   const supabase = await createServerSupabaseClient();
+  const auth = await requireWrite(supabase);
+  if ('error' in auth) return auth.error;
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

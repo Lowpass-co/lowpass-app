@@ -138,26 +138,9 @@ const UNGUARDED: Record<string, string> = {
   '/channel-list/[tourId]/export/pdf': /* POST */ 'PERMANENT — read-only POST. Writes nothing; renders a channel-list PDF from a config body. READ CHECK: authenticated user, then the tour is loaded .eq(workspace_id, profile.workspace_id) and the channel rows hang off rider_packs.workspace_id, so a foreign tour 404s.',
   '/channel-list/[tourId]/export/preview': /* POST */ 'PERMANENT — read-only POST. Writes nothing; renders a preview from a config body. READ CHECK: same tenancy-scoped tour load as the pdf sibling.',
 
-  /* ── P0-C4 — 19 routes ── */
-  '/rider-assets': /* POST */ 'PENDING P0-C4 — production/rider/stage-plot write.',
-  '/rider-assets/[id]': /* DELETE,PATCH */ 'PENDING P0-C4 — production/rider/stage-plot write.',
-  '/rider-packs': /* POST */ 'PENDING P0-C4 — production/rider/stage-plot write.',
-  '/rider-packs/[id]': /* DELETE,PATCH */ 'PENDING P0-C4 — production/rider/stage-plot write.',
-  '/rider-packs/[id]/advance-summary/generate': /* POST */ 'PENDING P0-C4 — production/rider/stage-plot write.',
-  '/rider-packs/[id]/assign-to-tour': /* POST */ 'PENDING P0-C4 — production/rider/stage-plot write.',
-  '/rider-packs/[id]/export/google-doc': /* POST */ 'PENDING P0-C4 — production/rider/stage-plot write.',
-  '/rider-packs/[id]/extract-rider': /* POST */ 'PENDING P0-C4 — production/rider/stage-plot write.',
-  '/rider-packs/[id]/reassign': /* POST */ 'PENDING P0-C4 — production/rider/stage-plot write.',
-  '/rider-packs/[id]/sections': /* POST */ 'PENDING P0-C4 — production/rider/stage-plot write.',
-  '/rider-packs/[id]/sections/[sectionId]': /* DELETE,PATCH */ 'PENDING P0-C4 — production/rider/stage-plot write.',
-  '/rider-packs/[id]/web-links': /* POST */ 'PENDING P0-C4 — production/rider/stage-plot write.',
-  '/rider-packs/clone': /* POST */ 'PENDING P0-C4 — production/rider/stage-plot write.',
-  '/rider-web-links/[id]': /* DELETE */ 'PENDING P0-C4 — production/rider/stage-plot write.',
-  '/stage-plot/icons/generate': /* POST */ 'PENDING P0-C4 — production/rider/stage-plot write.',
-  '/stage-plots': /* POST */ 'PENDING P0-C4 — production/rider/stage-plot write.',
-  '/stage-plots/[id]': /* DELETE,PUT */ 'PENDING P0-C4 — production/rider/stage-plot write.',
-  '/stage-plots/[id]/export/pdf': /* POST */ 'PENDING P0-C4 — production/rider/stage-plot write.',
-  '/stage-plots/[id]/export/preview': /* POST */ 'PENDING P0-C4 — production/rider/stage-plot write.',
+  /* ── P0-C4 — 2 remaining, both fourth-category (17 converted) ── */
+  '/stage-plots/[id]/export/pdf': /* POST */ 'PERMANENT — read-only POST. Writes nothing; renders a stage-plot PDF from a config body. READ CHECK: requireUserAndWorkspace, then the plot is loaded with auth.workspaceId, and stage_plots carries a workspace-scoped SELECT policy (migration 109).',
+  '/stage-plots/[id]/export/preview': /* POST */ 'PERMANENT — read-only POST. Writes nothing; renders a preview from a config body. READ CHECK: same workspace-scoped load as the pdf sibling.',
 
   /* ── P0-C5 — 29 routes ── */
   '/contacts': /* DELETE,PATCH,POST */ 'PENDING P0-C5 — operations/personnel/logistics write.',

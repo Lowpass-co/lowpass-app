@@ -8,14 +8,14 @@
 
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
-import { requireUserAndWorkspace } from '@/lib/auth/workspace-check';
+import { requireWrite } from '@/lib/auth/workspace-check';
 import { createStagePlot } from '@/lib/stage-plot/server';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
   const supabase = await createServerSupabaseClient();
-  const auth = await requireUserAndWorkspace(supabase);
+  const auth = await requireWrite(supabase);
   if ('error' in auth) return auth.error;
 
   const body = await request.json().catch(() => ({}));

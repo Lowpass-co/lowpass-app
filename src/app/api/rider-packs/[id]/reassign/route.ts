@@ -1,6 +1,7 @@
 /* POST /api/rider-packs/[id]/reassign  { artist_id } — move pack (and folder) to another act in the workspace. */
 
 import { NextResponse } from 'next/server';
+import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 
 export async function POST(
@@ -8,6 +9,8 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const supabase = await createServerSupabaseClient();
+  const auth = await requireWrite(supabase);
+  if ('error' in auth) return auth.error;
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
