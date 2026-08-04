@@ -25,6 +25,7 @@
    ============================================ */
 
 import { NextResponse } from 'next/server';
+import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { getActiveMembership } from '@/lib/permissions/server';
 import { writeRates } from '@/server/payroll/writeRates';
@@ -125,6 +126,8 @@ export async function PUT(
 ): Promise<NextResponse> {
   const { id: tourId, memberId } = await params;
   const supabase = await createServerSupabaseClient();
+  const auth = await requireWrite(supabase);
+  if ('error' in auth) return auth.error;
   const r = await resolve(supabase, tourId, memberId);
   if (!r.ok) return r.response;
 

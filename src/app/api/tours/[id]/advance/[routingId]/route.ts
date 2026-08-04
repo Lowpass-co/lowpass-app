@@ -6,6 +6,7 @@
    ============================================ */
 
 import { NextResponse } from 'next/server';
+import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { distanceMiles } from '@/lib/utils';
 import { resolveAdvanceVenue, type AdvanceVenueSection } from '@/lib/advance/venue';
@@ -312,6 +313,8 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string; routingId: string }> }
 ) {
   const { supabase, user } = await ensureAuth();
+  const auth = await requireWrite(supabase);
+  if ('error' in auth) return auth.error;
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
@@ -466,6 +469,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string; routingId: string }> }
 ) {
   const { supabase, user } = await ensureAuth();
+  const auth = await requireWrite(supabase);
+  if ('error' in auth) return auth.error;
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }

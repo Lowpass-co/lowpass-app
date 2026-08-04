@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { isRoleTag } from '@/lib/personnel/role-tags';
 
@@ -9,6 +10,8 @@ const RATE_PERIODS = new Set(['day', 'week', 'flat', 'hour']);
 
 export async function PATCH(request: Request, { params }: Params) {
   const supabase = await createServerSupabaseClient();
+  const auth = await requireWrite(supabase);
+  if ('error' in auth) return auth.error;
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -130,6 +133,8 @@ export async function PATCH(request: Request, { params }: Params) {
 
 export async function DELETE(_: Request, { params }: Params) {
   const supabase = await createServerSupabaseClient();
+  const auth = await requireWrite(supabase);
+  if ('error' in auth) return auth.error;
   const {
     data: { user },
   } = await supabase.auth.getUser();

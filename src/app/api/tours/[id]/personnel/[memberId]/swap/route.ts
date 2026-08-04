@@ -18,6 +18,7 @@
    ============================================ */
 
 import { NextResponse } from 'next/server';
+import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import {
   getActiveMembership,
@@ -32,6 +33,8 @@ export async function POST(
   { params }: { params: Promise<{ id: string; memberId: string }> },
 ) {
   const supabase = await createServerSupabaseClient();
+  const auth = await requireWrite(supabase);
+  if ('error' in auth) return auth.error;
   const {
     data: { user },
   } = await supabase.auth.getUser();

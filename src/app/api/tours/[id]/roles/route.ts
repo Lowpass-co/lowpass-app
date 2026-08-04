@@ -11,6 +11,7 @@
    ============================================ */
 
 import { NextResponse } from 'next/server';
+import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { getActiveMembership } from '@/lib/permissions/server';
 import { listTourRoles, assignTourRole, removeTourRole } from '@/lib/roles/server';
@@ -53,6 +54,8 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id: tourId } = await params;
   const supabase = await createServerSupabaseClient();
+  const auth = await requireWrite(supabase);
+  if ('error' in auth) return auth.error;
   const g = await guard(supabase, tourId);
   if ('error' in g) return NextResponse.json({ error: g.error }, { status: g.status });
 
@@ -70,6 +73,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id: tourId } = await params;
   const supabase = await createServerSupabaseClient();
+  const auth = await requireWrite(supabase);
+  if ('error' in auth) return auth.error;
   const g = await guard(supabase, tourId);
   if ('error' in g) return NextResponse.json({ error: g.error }, { status: g.status });
 

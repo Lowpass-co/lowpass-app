@@ -5,6 +5,7 @@
    ============================================ */
 
 import { NextResponse } from 'next/server';
+import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 
 async function ensureAuth() {
@@ -64,6 +65,8 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { supabase, user } = await ensureAuth();
+  const auth = await requireWrite(supabase);
+  if ('error' in auth) return auth.error;
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
