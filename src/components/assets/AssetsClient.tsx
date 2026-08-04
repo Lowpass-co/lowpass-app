@@ -130,6 +130,13 @@ export function AssetsClient({ initial, tours }: { initial: AssetsData; tours: {
             searchPlaceholder="Search items…"
             searchable
             selectable
+            /* Assets is a scanning surface, not a spreadsheet — you read down a
+               list of physical things and pick some out. The app-wide default
+               (compact) packs 33 rows into a wall of 13px text. `cozy` is the
+               roomiest density the system defines (14px padding / 15px type),
+               and it is set HERE rather than by changing the app preference so
+               no other table moves. */
+            density="cozy"
             selectedIds={selectedIds}
             onSelectionChange={setSelectedIds}
             selectionActions={

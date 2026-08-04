@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, type RefObject, type ReactNode } from 'react';
-import { Search } from 'lucide-react';
+import { Check, Search } from 'lucide-react';
 import type { ColumnDef, ColumnFilter, FilterValue } from './types';
 import { DataTableFilterChip } from './DataTableFilterChip';
 import { defaultFilterValue } from './utils';
@@ -88,10 +88,15 @@ function FilterForm({
               key={o.value}
               className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm"
             >
+              {/* Styled to match the table's boxes — see DataTableRow. */}
+              <span className="relative inline-flex h-4 w-4 shrink-0 items-center justify-center">
               <input
                 type="checkbox"
-                className="h-3.5 w-3.5 rounded border"
-                style={{ borderColor: 'var(--lp-border)', accentColor: 'var(--lp-orange)' }}
+                className="peer h-4 w-4 cursor-pointer appearance-none rounded-[4px] border transition-colors"
+                style={{
+                  borderColor: on ? 'var(--lp-orange)' : 'var(--lp-border-strong)',
+                  backgroundColor: on ? 'var(--lp-orange)' : 'transparent',
+                }}
                 checked={on}
                 onChange={() => {
                   const set = new Set(value.values);
@@ -100,6 +105,8 @@ function FilterForm({
                   onChange({ kind: 'multiSelect', values: [...set] });
                 }}
               />
+              <Check size={11} strokeWidth={3} aria-hidden className="pointer-events-none absolute opacity-0 peer-checked:opacity-100" style={{ color: '#fff' }} />
+              </span>
               {o.label}
             </label>
           );

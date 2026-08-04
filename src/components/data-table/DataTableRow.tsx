@@ -1,6 +1,7 @@
 'use client';
 
 import type { RefObject, KeyboardEvent, MouseEvent } from 'react';
+import { Check } from 'lucide-react';
 import type { ColumnDef } from './types';
 import { getCellValue, resolveWidthStyle } from './utils';
 import { cn } from '@/lib/utils';
@@ -30,7 +31,14 @@ const cellPad = (d: 'comfortable' | 'compact' | 'cozy') => ({
   fontSize: `var(--lp-cell-font-size-${d})`,
 });
 
-const selectedBg = 'color-mix(in srgb, var(--lp-orange) 5.1%, transparent)';
+/* Selection has to be legible at a glance. 5.1% was almost invisible on the
+   dark surface — you could not tell a selected row from a hover. This is the
+   G2-2b grammar the quote picker uses: a 12% tint plus an inset orange bar,
+   drawn with box-shadow so the row's box never changes and nothing below it
+   shifts when you select. */
+const selectedBg = 'color-mix(in srgb, var(--lp-orange) 12%, transparent)';
+const selectedBar = 'inset 2px 0 0 0 var(--lp-orange)';
+const focusRing = 'inset 0 0 0 1px var(--lp-orange)';
 
 export function DataTableRow<T>({
   row,
@@ -61,7 +69,13 @@ export function DataTableRow<T>({
         height: `var(--lp-row-${density})`,
         borderColor: 'var(--lp-border-light)',
         backgroundColor: selected ? selectedBg : undefined,
-        boxShadow: focused ? 'inset 0 0 0 1px var(--lp-orange)' : undefined,
+        /* Focus ring and selection bar are both inset shadows, so they compose
+           into one value rather than one overwriting the other. A row can be
+           focused AND selected, and before this the ring silently won. */
+        boxShadow:
+          [focused ? focusRing : null, selected ? selectedBar : null]
+            .filter(Boolean)
+            .join(', ') || undefined,
         color: 'var(--lp-text)',
         ...(onRowClick
           ? { cursor: 'pointer' as const }
@@ -104,15 +118,34 @@ export function DataTableRow<T>({
             verticalAlign: 'middle',
           }}
         >
+          {/* A NATIVE checkbox paints its own white box on dark surfaces —
+              the "weird white tick box". `accentColor` only colours the CHECKED
+              fill, so the unchecked state stayed a bright square in a dark
+              table. appearance-none hands us the box; the tick is drawn, and
+              the input keeps its real semantics for screen readers and
+              keyboards. */}
           <div className="flex justify-center">
-            <input
-              type="checkbox"
-              className="h-4 w-4 rounded border"
-              style={{ borderColor: 'var(--lp-border)', accentColor: 'var(--lp-orange)' }}
-              checked={selected}
-              onClick={onCheckbox}
-              onChange={() => undefined}
-            />
+            <span className="relative inline-flex h-[18px] w-[18px] items-center justify-center">
+              <input
+                type="checkbox"
+                aria-label="Select row"
+                className="peer h-[18px] w-[18px] cursor-pointer appearance-none rounded-[5px] border transition-colors"
+                style={{
+                  borderColor: selected ? 'var(--lp-orange)' : 'var(--lp-border-strong)',
+                  backgroundColor: selected ? 'var(--lp-orange)' : 'transparent',
+                }}
+                checked={selected}
+                onClick={onCheckbox}
+                onChange={() => undefined}
+              />
+              <Check
+                size={12}
+                strokeWidth={3}
+                aria-hidden
+                className="pointer-events-none absolute opacity-0 peer-checked:opacity-100"
+                style={{ color: '#fff' }}
+              />
+            </span>
           </div>
         </td>
       )}

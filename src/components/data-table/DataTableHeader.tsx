@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { ChevronDown, ChevronUp, ChevronsUpDown } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, ChevronsUpDown, Minus } from 'lucide-react';
 import type { ColumnDef } from './types';
 import { resolveWidthStyle } from './utils';
 import { cn } from '@/lib/utils';
@@ -83,14 +83,38 @@ export function DataTableHeader<T>({
           >
             {headerCheckbox && (
               <div className="flex justify-center" onClick={e => e.stopPropagation()}>
-                <input
-                  ref={headerRef}
-                  type="checkbox"
-                  className="h-4 w-4 rounded border"
-                  style={{ borderColor: 'var(--lp-border)', accentColor: 'var(--lp-orange)' }}
-                  checked={headerCheckbox.checked}
-                  onChange={headerCheckbox.onChange}
-                />
+                {/* Same styled box as the rows (see DataTableRow) — a native
+                    checkbox paints white on the dark header. The half-state is
+                    driven by `indeterminate` on the DOM node via headerRef, so
+                    it is read here with the peer-indeterminate variant rather
+                    than threaded through as another prop. */}
+                <span className="relative inline-flex h-[18px] w-[18px] items-center justify-center">
+                  <input
+                    ref={headerRef}
+                    type="checkbox"
+                    className="peer h-[18px] w-[18px] cursor-pointer appearance-none rounded-[5px] border transition-colors indeterminate:border-[var(--lp-orange)] indeterminate:bg-[var(--lp-orange)]"
+                    style={{
+                      borderColor: headerCheckbox.checked ? 'var(--lp-orange)' : 'var(--lp-border-strong)',
+                      backgroundColor: headerCheckbox.checked ? 'var(--lp-orange)' : 'transparent',
+                    }}
+                    checked={headerCheckbox.checked}
+                    onChange={headerCheckbox.onChange}
+                  />
+                  <Check
+                    size={12}
+                    strokeWidth={3}
+                    aria-hidden
+                    className="pointer-events-none absolute opacity-0 peer-checked:opacity-100 peer-indeterminate:opacity-0"
+                    style={{ color: '#fff' }}
+                  />
+                  <Minus
+                    size={12}
+                    strokeWidth={3}
+                    aria-hidden
+                    className="pointer-events-none absolute opacity-0 peer-indeterminate:opacity-100"
+                    style={{ color: '#fff' }}
+                  />
+                </span>
               </div>
             )}
           </th>

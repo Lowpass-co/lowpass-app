@@ -113,3 +113,24 @@ is a later cleanup.
 ## Retired
 
 (None yet.)
+
+## DataTable selection chrome (Assets cleanup)
+
+The selection checkbox was a NATIVE `<input type="checkbox">`. `accentColor`
+only colours the CHECKED fill, so on every dark surface the unchecked box
+rendered as a bright white square — the thing Adam called "this weird white
+tick box". All three call sites (row, header select-all, toolbar multi-select
+filter) are now `appearance-none` boxes with a drawn tick, and selection reads
+at 12% orange + an inset bar instead of a 5.1% tint you could not see.
+
+| ID | Surface | Test | Expect |
+|----|---------|------|--------|
+| UI-DT-01 | /assets | Look at an unselected row's checkbox | An empty box outlined in `--lp-border-strong`. NO white fill. |
+| UI-DT-02 | /assets | Tick one row | Box fills orange with a white tick; the row takes a 12% orange tint and a 2px orange bar down its left edge. |
+| UI-DT-03 | /assets | Tick one row of many | Header checkbox shows a white DASH (half-state), not a tick and not empty. |
+| UI-DT-04 | /assets | Tick every row | Header checkbox shows a tick. |
+| UI-DT-05 | /assets | Keyboard-focus a row that is also selected | BOTH the focus ring and the selection bar are visible — they compose. (Before, the ring overwrote the bar.) |
+| UI-DT-06 | /assets | Click a row's body, not its box | Opens the item slide-over and does NOT change the selection. |
+| UI-DT-07 | /assets | Compare row height to Budget/Personnel tables | Assets rows are taller (`cozy`: 14px pad / 15px type). Other tables are unchanged — density is set on Assets only, not on the app preference. |
+| UI-DT-08 | /assets | Open a toolbar multi-select filter | Its checkboxes match the table's, not white squares. |
+| UI-DT-09 | Budget grid, Gear library, Tour personnel | Select rows | Same new box + tint. These share the primitive; only their looks changed, not their behaviour or density. |
