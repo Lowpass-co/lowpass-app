@@ -528,6 +528,28 @@ list, Routing and Payroll all mount. Adam's trade.
 
 ---
 
+## Still to do — the line-table grid port
+
+- [ ] **EQ-R2-07 — The line table is a grid and still adds up.** Open a job with
+  lines. The table is now a spreadsheet grid: thumbnail, Item, Category, Qty,
+  Day rate, Line total. Totals in the PRICING card match what they were before.
+
+- [ ] **EQ-R2-08 — Editing in place saves and re-derives.** Click a **Qty** cell,
+  type 3, Enter. The line total and the pricing card update. Reload — it stuck.
+  Same for **Day rate**.
+  *Watch the rate especially in a GBP quote: type a GBP figure, reload, and it
+  must come back as the SAME GBP figure. If it drifts, the USD round-trip is
+  wrong.*
+
+- [ ] **EQ-R2-09 — Row delete still works** via the grid's row menu, and the
+  totals drop accordingly.
+
+*Known and deliberate: the **Item** cell is read-only. It cannot be an
+`entityRef: 'gear'` cell until the picker writes `gear_id` — see the running
+report. To change what an item is, delete the line and re-add it.*
+
+---
+
 ## Already verified on `431f316` (Cowork, no need to repeat)
 
 - **SHELL-01 — The shell renders on Routing.** Top bar: workspace · artist/tour

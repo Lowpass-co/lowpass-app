@@ -5,11 +5,13 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { ArrowLeft, Trash2, Plus, FileDown, Sun, Moon, Package, Search, X, ChevronDown, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Plus, FileDown, Sun, Moon, Package, Search, X, ChevronDown, ChevronRight } from 'lucide-react';
 import { createClient } from '@/lib/supabase-client';
 import { useToast } from '@/components/ui/Toast';
 import { effectiveInventoryDayRate } from '@/lib/rental-pricing';
 import { StyledSelect, type StyledSelectOption } from '@/components/ui/StyledSelect';
+import { SpreadsheetGrid } from '@/components/spreadsheet-grid/SpreadsheetGrid';
+import type { GridColumn, GridRow } from '@/components/spreadsheet-grid/types';
 import {
   STATUS_OPTIONS, QUOTE_CURRENCIES, calcDays, fmtMoney, jobCurrency, fmtDate,
   type EquipmentArtistOption,
@@ -305,6 +307,109 @@ export function JobDetail({ job, workspaceId, inventory, artists, tours, onBack,
        make the retry a re-pick. */
     setSel(new Map());
     lastIdxRef.current = null;
+  }
+
+  /* ── The line table, as grid data (EQ-R2 port) ──────────────────────────
+     A quote line is `rental_job_items` joined to its inventory row for the
+     name and derived rate, flattened into one view-model. GridRow<T> is
+     generic, so this needed NO change to the shared primitive.
+
+     THE ITEM CELL IS NOT entityRef:'gear', and that is a finding, not a
+     shortcut. migration 249 added rental_job_items.gear_id and backfilled it,
+     but its own header says the picker starts WRITING gear_id after Stage C —
+     and this path never did: the app reads and writes inventory_id only. An
+     entityRef:'gear' cell would therefore render EMPTY for every line added
+     from today onward, since new rows carry gear_id NULL. Wiring the picker to
+     gear_id is a data-path change, separable and small; until it lands, the
+     item is a read-only computed cell showing the name. A cell that renders
+     blank for new rows is worse than one that cannot be edited.
+
+     Rate uses the `currency` cell type, which takes the job currency straight
+     from item 2 — the reason this column needed nothing bespoke. */
+  type QuoteLineVm = {
+    id: string;
+    name: string;
+    imageUrl: string | null;
+    category: string | null;
+    quantity: number;
+    rate: number;
+    lineTotal: number;
+  };
+
+  const lineRows: GridRow<QuoteLineVm>[] = jobItems.map((it) => {
+    const inv = inventory.find((i) => i.id === it.inventory_id);
+    const rateUsd = it.day_rate_override ?? (inv ? effectiveInventoryDayRate(inv) ?? 0 : 0);
+    return {
+      id: it.id,
+      data: {
+        id: it.id,
+        name: inv?.name ?? 'Unknown item',
+        imageUrl: inv?.image_url ?? null,
+        category: inv?.category ?? null,
+        quantity: it.quantity || 1,
+        /* Displayed in the job's currency, like every other figure here. */
+        rate: conv(rateUsd),
+        lineTotal: conv((it.quantity || 1) * days * rateUsd),
+      },
+    };
+  });
+
+  const lineColumns: GridColumn<QuoteLineVm>[] = [
+    {
+      /* The old table showed a 36px item thumbnail; the port would have dropped
+         it silently. `computed` is a native cell type, so it comes back with no
+         change to the primitive. */
+      id: 'thumb', header: '', accessor: 'imageUrl', width: 56, align: 'center',
+      type: {
+        kind: 'computed',
+        render: (row) => {
+          const r = row as QuoteLineVm;
+          return r.imageUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={r.imageUrl} alt="" className="h-7 w-7 rounded object-cover"
+              style={{ border: '1px solid var(--lp-border)' }} />
+          ) : (
+            <span className="flex h-7 w-7 items-center justify-center rounded"
+              style={{ backgroundColor: 'var(--lp-bg-secondary)', border: '1px solid var(--lp-border)' }}>
+              <Package size={13} strokeWidth={1.75} aria-hidden style={{ color: 'var(--lp-text-tertiary)' }} />
+            </span>
+          );
+        },
+      },
+    },
+    { id: 'name', header: 'Item', accessor: 'name', type: { kind: 'text' }, flex: true, minWidth: 200 },
+    { id: 'category', header: 'Category', accessor: 'category', type: { kind: 'text' }, width: 140 },
+    { id: 'quantity', header: 'Qty', accessor: 'quantity', type: { kind: 'number', min: 1, decimals: 0 }, width: 80, align: 'right' },
+    { id: 'rate', header: 'Day rate', accessor: 'rate', type: { kind: 'currency', currency: cur }, width: 120, align: 'right' },
+    {
+      id: 'lineTotal', header: 'Line total', accessor: 'lineTotal',
+      type: { kind: 'currency', currency: cur }, width: 130, align: 'right',
+    },
+  ];
+
+  /** Only qty and rate are writable; name/category/total are derived.
+   *  Rate arrives in the JOB's currency and must be stored in USD — the source
+   *  unit — or a GBP quote would persist GBP numbers into a USD column and the
+   *  next currency switch would convert them a second time. */
+  async function commitLineCell(rowId: string, columnId: string, value: unknown) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return;
+    if (columnId === 'quantity') {
+      const q = Math.max(1, Math.round(n));
+      const { error } = await supabase.from('rental_job_items').update({ quantity: q }).eq('id', rowId);
+      if (error) { showToast('Failed to save quantity: ' + error.message, 'error'); return; }
+      setJobItems((prev) => prev.map((r) => (r.id === rowId ? { ...r, quantity: q } : r)));
+      return;
+    }
+    if (columnId === 'rate') {
+      const usd = fxRate && fxRate !== 0 ? n / fxRate : n;
+      const { error } = await supabase
+        .from('rental_job_items')
+        .update({ day_rate_override: usd })
+        .eq('id', rowId);
+      if (error) { showToast('Failed to save rate: ' + error.message, 'error'); return; }
+      setJobItems((prev) => prev.map((r) => (r.id === rowId ? { ...r, day_rate_override: usd } : r)));
+    }
   }
 
   /* ── Remove item ── */
@@ -604,82 +709,29 @@ export function JobDetail({ job, workspaceId, inventory, artists, tours, onBack,
             ) : null}
           </div>
 
-          {/* Items table */}
+          {/* Line table — ported to <SpreadsheetGrid> (EQ-R2). Same primitive
+              Budget, Channel list, Routing and Payroll mount; NO change to it.
+              Qty and rate are editable in place; line total is computed. */}
           <div
             className="overflow-hidden rounded-xl border"
             style={{ borderColor: 'var(--lp-border)', backgroundColor: 'var(--lp-surface)' }}
           >
             {loading ? (
-              <div className="flex items-center justify-center gap-2 py-12 text-sm" style={{ color: 'var(--lp-text-tertiary)' }}>
-                Loading…
-              </div>
-            ) : jobItems.length === 0 ? (
-              <div className="flex flex-col items-center gap-2 py-12">
-                <Package size={24} strokeWidth={1.5} aria-hidden style={{ color: 'var(--lp-text-tertiary)' }} />
-                <p className="text-sm" style={{ color: 'var(--lp-text-secondary)' }}>No items added yet</p>
-              </div>
+              <p className="px-4 py-6 text-sm" style={{ color: 'var(--lp-text-tertiary)' }}>Loading items…</p>
+            ) : lineRows.length === 0 ? (
+              <p className="px-4 py-6 text-sm" style={{ color: 'var(--lp-text-tertiary)' }}>
+                No items yet — add some above.
+              </p>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr style={{ borderBottom: '1px solid var(--lp-border)', backgroundColor: 'var(--lp-bg-secondary)' }}>
-                      {['', 'Item', 'Qty', 'Billable days', 'Day Rate', 'Subtotal', ''].map((h, i) => (
-                        <th
-                          key={i}
-                          className="px-4 py-3 text-left text-xs font-extrabold uppercase tracking-wider"
-                          style={{ color: 'var(--lp-text-tertiary)' }}
-                        >{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {jobItems.map((it, idx) => {
-                      const inv     = inventory.find(i => i.id === it.inventory_id);
-                      const rate    = it.day_rate_override ?? (inv ? effectiveInventoryDayRate(inv) ?? 0 : 0);
-                      const lineAmt = (it.quantity || 1) * days * rate;
-                      return (
-                        <tr
-                          key={it.id}
-                          style={{ borderBottom: idx < jobItems.length - 1 ? '1px solid var(--lp-border-light)' : 'none' }}
-                        >
-                          <td className="px-4 py-2.5">
-                            {inv?.image_url ? (
-                              <img src={inv.image_url} alt="" className="h-9 w-9 rounded-lg object-cover" style={{ border: '1px solid var(--lp-border)' }} />
-                            ) : (
-                              <div className="flex h-9 w-9 items-center justify-center rounded-lg" style={{ backgroundColor: 'var(--lp-bg-secondary)', border: '1px solid var(--lp-border)' }}><Package size={16} strokeWidth={1.75} aria-hidden style={{ color: 'var(--lp-text-tertiary)' }} /></div>
-                            )}
-                          </td>
-                          <td className="px-4 py-2.5">
-                            <div className="font-medium" style={{ color: 'var(--lp-text)' }}>{inv?.name ?? 'Unknown'}</div>
-                            {inv?.category && <div className="text-xs" style={{ color: 'var(--lp-text-tertiary)' }}>{inv.category}</div>}
-                            {inv?.weight_kg && <div className="text-xs" style={{ color: 'var(--lp-text-tertiary)' }}>{inv.weight_kg} kg</div>}
-                          </td>
-                          <td className="px-4 py-2.5 text-sm" style={{ color: 'var(--lp-text-secondary)' }}>{it.quantity}</td>
-                          <td className="px-4 py-2.5 text-sm" style={{ color: 'var(--lp-text-secondary)' }}>{days}</td>
-                          <td className="px-4 py-2.5">
-                            <div className="text-sm" style={{ color: 'var(--lp-text-secondary)' }}>{fmtMoney(conv(rate), cur)}/day</div>
-                            {it.day_rate_override != null && (
-                              <div className="text-xs font-medium" style={{ color: '#F59E0B' }}>override</div>
-                            )}
-                          </td>
-                          <td className="px-4 py-2.5 font-semibold" style={{ color: 'var(--lp-text)' }}>{fmtMoney(conv(lineAmt), cur)}</td>
-                          <td className="px-4 py-2.5 text-right">
-                            <button
-                              onClick={() => handleRemove(it.id)}
-                              className="rounded-md p-1.5 transition-colors"
-                              style={{ color: 'var(--lp-text-tertiary)' }}
-                              onMouseOver={e => (e.currentTarget.style.color = '#EF4444')}
-                              onMouseOut={e => (e.currentTarget.style.color = 'var(--lp-text-tertiary)')}
-                            >
-                              <Trash2 size={14} />
-                            </button>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
+              <SpreadsheetGrid<QuoteLineVm>
+                columns={lineColumns}
+                rows={lineRows}
+                ariaLabel="Quote line items"
+                columnWidthsKey={`lp-cols-quote:${job.id}`}
+                onCommitCell={commitLineCell}
+                onRowDelete={(rowId) => void handleRemove(rowId)}
+                density="compact"
+              />
             )}
           </div>
         </div>

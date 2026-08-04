@@ -1097,6 +1097,52 @@ which is the behaviour the grid has to reproduce.
 
 ---
 
+## Equipment quote — the line-table port to SpreadsheetGrid · `<commit>`
+
+**Ported, with NO change to the shared primitive** — the same
+`<SpreadsheetGrid>` Budget, Channel list, Routing and Payroll mount is
+untouched. The assessment held: `GridRow<T>` is generic, so a quote line is
+just a view-model.
+
+**What the columns became:** thumbnail (`computed`), Item and Category (`text`,
+read-only), Qty (`number`), Day rate and Line total (**`currency`**, taking the
+job currency from item 2 — the reason that column needed nothing bespoke).
+Qty and rate are editable in place; row delete goes through the grid's own
+`onRowDelete` into the existing handler.
+
+### The item cell is NOT entityRef:'gear' — that is a finding, not a shortcut
+
+Migration 249 added `rental_job_items.gear_id` **and backfilled it**, so on
+today's data an entity cell would look fine. But 249's own header says the
+picker starts *writing* `gear_id` after Stage C, and **this path never did** —
+the app reads and writes `inventory_id` only, including the insert I wrote last
+bank.
+
+So an `entityRef: 'gear'` cell would render **empty for every line added from
+now on**, while looking correct for old ones. That is the worst kind of wrong:
+right on the data you test with, blank on the data you create. The item is a
+read-only `computed`/text cell until the picker writes `gear_id` — a small,
+separable data-path change, and the real prerequisite for the entity cell.
+
+### Two things the port would have dropped, caught and kept
+
+- **The item thumbnail.** The old table rendered a 36px `image_url` with a
+  Package fallback. `computed` is a native cell type, so it came back with no
+  primitive change. I only noticed because an `<img>` lint warning *disappeared*
+  — a lint count going DOWN after a refactor is worth reading, not celebrating.
+- **Rate is stored in USD, not the display currency.** The grid hands back what
+  the user typed, which is in the JOB's currency. Writing that straight to
+  `day_rate_override` would persist GBP into a USD column, and the next currency
+  switch would convert it a second time. It divides by the rate in force before
+  saving.
+
+**Not in scope, per Adam:** drag-from-the-list. Still absent from the primitive,
+still the trade he declined.
+
+**Smoke:** EQ-R2-07 … EQ-R2-09.
+
+---
+
 ## Queued, not started
 
 In order. Nothing proceeds until **SHELL-49** (the readonly-account walk)
