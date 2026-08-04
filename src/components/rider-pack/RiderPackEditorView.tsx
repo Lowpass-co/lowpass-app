@@ -5,20 +5,25 @@
    and /operations/[tourId]/riders/[id] render it identically (Riders fix D1).
 
    `standalone`:
-     true  (/rider-packs/[id])              → wraps in its own shell
-            (ProductShell active=null, or builderAppPageShell for channel_list).
+     true  (/rider-packs/[id])              → wraps in the canonical shell
+            (<ShellV3Mount>, ARTIST scope — S-3b folded the standalone editor
+            into the artist library; the rail lights "Riders & specs"). The
+            pack's artist id comes from rider_packs.artist_id, or the tour's
+            artist for tour-scoped packs. A pack with NO resolvable artist
+            (edge: tour row gone) renders inner-only rather than a shell whose
+            rail hrefs would be built on null.
      false (/operations/[tourId]/riders/[id]) → returns INNER content only; the
             Operations layout (/operations/[tourId]/layout.tsx) supplies the
-            ProductShell + TourHeader — so the editor keeps the SAME shell as the
-            riders LIST it was opened from (D2).
+            canonical shell — so the editor keeps the SAME shell as the riders
+            LIST it was opened from (D2).
    ============================================ */
 
 import Link from 'next/link';
 import { redirect, notFound } from 'next/navigation';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
-import { builderAppPageShell } from '@/components/shell/app-page-shells';
 import { PackEditor } from '@/components/rider-pack/PackEditor';
-import { ProductShell } from '@/components/shell-v2';
+import { ShellV3Mount } from '@/components/shell-v3/ShellV3Mount';
+import { hasOwnRail } from '@/lib/nav/ia';
 import { RiderPackHeader } from '@/components/rider-pack/RiderPackHeader';
 import { RiderPackSidebar } from '@/components/rider-pack/RiderPackSidebar';
 import { RiderBuilderShellClient } from '@/components/rider-pack/RiderBuilderShellClient';
@@ -67,6 +72,36 @@ export async function RiderPackEditorView({
     .maybeSingle();
   if (!pack) notFound();
 
+  /* S-3b — the artist the standalone shell hangs on. Artist-scoped packs carry
+     it directly; tour-scoped packs resolve it through the tour. Only fetched
+     when standalone (the tour-scoped route's layout owns its own chrome). */
+  let shellArtistId: string | null = pack.artist_id ?? null;
+  if (standalone && !shellArtistId && pack.tour_id) {
+    const { data: t } = await supabase
+      .from('tours')
+      .select('artist_id')
+      .eq('id', pack.tour_id)
+      .maybeSingle<{ artist_id: string | null }>();
+    shellArtistId = t?.artist_id ?? null;
+  }
+
+  const wrapStandalone = (inner: React.ReactNode) => {
+    if (!standalone) return inner;
+    /* No resolvable artist → no rail worth building (its hrefs would be
+       /artists/null/…). Honest fallback: body only, breadcrumb still works. */
+    if (!shellArtistId) return inner;
+    return (
+      <ShellV3Mount
+        pathname={`/rider-packs/${id}`}
+        search={isEdit ? '?mode=edit' : ''}
+        artistId={shellArtistId}
+        denseRail={hasOwnRail(`/rider-packs/${id}`)}
+      >
+        {inner}
+      </ShellV3Mount>
+    );
+  };
+
   // Channel-list packs keep the legacy PackEditor (it mounts ChannelListEditor
   // for channel_list sections, which the rider shells intentionally don't edit).
   if (pack.kind === 'channel_list') {
@@ -82,12 +117,9 @@ export async function RiderPackEditorView({
         <PackEditor packId={id} />
       </div>
     );
-    if (!standalone) return inner;
-    return builderAppPageShell(inner, {
-      kind: 'docSections',
-      activeId: 'doc',
-      sections: [{ id: 'doc', label: 'Document', href: `/rider-packs/${id}` }],
-    });
+    /* S-3b — was builderAppPageShell (shell-v1) with a one-entry "Document"
+       rail; now the canonical shell, same as every other standalone pack. */
+    return wrapStandalone(inner);
   }
 
   const scope = pack.scope as PackScope;
@@ -172,10 +204,5 @@ export async function RiderPackEditorView({
     </div>
   );
 
-  if (!standalone) return inner;
-  return (
-    <ProductShell active={null} artistId={pack.artist_id} tourId={pack.tour_id ?? undefined} productName="Rider">
-      {inner}
-    </ProductShell>
-  );
+  return wrapStandalone(inner);
 }

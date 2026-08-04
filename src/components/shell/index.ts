@@ -12,6 +12,5 @@ export { ShellTopBarClient, type ShellTopBarClientProps } from './ShellTopBarCli
    documentSections, spreadsheet) are gone. These three have live callers. */
 export {
   listAppPageShell,
-  builderAppPageShell,
   topBarOnlyAppPageShell,
 } from './app-page-shells';

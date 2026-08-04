@@ -18,9 +18,11 @@
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { ArtistTourSwitcherClientWrapper } from '@/components/shell-v2/ArtistTourSwitcherClientWrapper';
 import { ProductHeaderAvatarMenu } from '@/components/shell-v2/ProductHeaderAvatarMenu';
+import { WorkspaceSwitcher } from '@/components/shell-v2/WorkspaceSwitcher';
 import { countReceiptsNeedingDetails } from '@/lib/budget/loadReceipts';
 import { resolveScope } from '@/lib/nav/ia';
 import { resolveVisibleResources } from '@/lib/nav/visibleResources';
+import { toTitleCase } from '@/lib/text/toTitleCase';
 import { AppShellV3 } from './AppShellV3';
 
 type SwitcherArtistMin = {
@@ -44,11 +46,13 @@ export interface ShellV3MountProps {
   /** Start the nav rail collapsed (pages that carry a day rail). Prefer
    *  `hasOwnRail(pathname)` from ia.ts over hand-picking this per layout. */
   denseRail?: boolean;
+  /** S-3b — tourless product landing (greyed top bar, workspace rail). */
+  landing?: boolean;
   children: React.ReactNode;
 }
 
 export async function ShellV3Mount({
-  pathname, search, artistId, artistName, tourName, badges, denseRail, children,
+  pathname, search, artistId, artistName, tourName, badges, denseRail, landing, children,
 }: ShellV3MountProps) {
   const supabase = await createServerSupabaseClient();
 
@@ -79,18 +83,34 @@ export async function ShellV3Mount({
   let isSiteAdmin = false;
   let avatarUrl: string | null = null;
   let displayName = '';
+  let workspaceName: string | null = null;
   if (user) {
     const { data: profile } = await supabase
       .from('profiles')
-      .select('full_name, avatar_url, is_site_admin')
+      .select('full_name, avatar_url, is_site_admin, workspace_id')
       .eq('id', user.id)
       .maybeSingle();
     const p = (profile ?? null) as {
       full_name?: string | null; avatar_url?: string | null; is_site_admin?: boolean | null;
+      workspace_id?: string | null;
     } | null;
     isSiteAdmin = !!p?.is_site_admin;
     avatarUrl = p?.avatar_url ?? null;
     displayName = (p?.full_name ?? '').trim();
+
+    /* S-3b — the REAL workspace name, everywhere. shell-v2's WorkspaceTopBar
+       showed it at the workspace tier and the v3 bar hardcoded "Workspace" at
+       every tier; with the workspace tier migrating onto this mount, the name
+       has to come along. One indexed single-row read, sequenced after the
+       profile because it needs workspace_id. */
+    if (p?.workspace_id) {
+      const { data: ws } = await supabase
+        .from('workspaces')
+        .select('name')
+        .eq('id', p.workspace_id)
+        .maybeSingle<{ name: string | null }>();
+      workspaceName = ws?.name ?? null;
+    }
   }
 
   /* P-1 — the rail's own access filter. Resolved HERE so every shelled surface
@@ -112,7 +132,8 @@ export async function ShellV3Mount({
          resolveRailView, which is where the rule belongs. */
       badges={{ receiptsNeedingDetails: needsDetails, ...(badges ?? {}) }}
       denseRail={denseRail}
-      workspaceName="Workspace"
+      landing={landing}
+      workspaceName={workspaceName ? toTitleCase(workspaceName) : 'Workspace'}
       switcher={
         <ArtistTourSwitcherClientWrapper
           initialArtists={initialArtists}
@@ -126,10 +147,17 @@ export async function ShellV3Mount({
         />
       }
       headerRight={
-        <ProductHeaderAvatarMenu
-          user={{ name: displayName, email: user?.email ?? '', avatarUrl }}
-          isSiteAdmin={isSiteAdmin}
-        />
+        <>
+          {/* S-3b — the wrong-workspace recovery control, on EVERY tier now.
+              shell-v1's TopBar and shell-v2's ProductHeader both mounted it;
+              the v3 bar didn't, which silently regressed recovery on every
+              migrated surface. Single-workspace users see a plain label. */}
+          <WorkspaceSwitcher />
+          <ProductHeaderAvatarMenu
+            user={{ name: displayName, email: user?.email ?? '', avatarUrl }}
+            isSiteAdmin={isSiteAdmin}
+          />
+        </>
       }
     >
       {children}

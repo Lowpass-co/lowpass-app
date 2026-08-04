@@ -21,7 +21,8 @@ src/
     m/          ← mobile PWA routes (pending UX18+)
   components/
     shell/      ← TopBar, LeftRail, PageShell (shell-v1 — ADMIN ONLY, see below)
-    shell-v2/   ← ProductHeader (two-bar: TopProductNav + ProductSubBar), ProductShell (current). ProductRail retired (two-bar nav)
+    shell-v2/   ← SURVIVORS ONLY (S-3b): switcher + avatar menu + helpers that shell-v3 mounts. ProductShell/ProductHeader/two-bar nav/WorkspaceTopBar/WorkspaceTabs DELETED
+    shell-v3/   ← THE canonical shell: AppShellV3 + TopBarV3 + NavRail, mounted via <ShellV3Mount>. IA lives in src/lib/nav/ia.ts
     data-table/ ← <DataTable> (UX05)
     spreadsheet-grid/ ← <SpreadsheetGrid> (UX06)
     timeline/   ← <TimelineDashboard> (UX07)
@@ -102,42 +103,53 @@ Tier 3 — Tour (one tour, multiple shows)
   /advance/[tourId]/[routingId]
 ```
 
-The three workspace tabs share chrome via the `(workspace)`
-route group at `src/app/(app)/(workspace)/`. Layout
-(`(workspace)/layout.tsx`) mounts `WorkspaceTopBar` +
-`WorkspaceTabs`. NO `ProductRail` on the workspace tier.
+**S-3b (2026-08-04): ONE SHELL, EVERYWHERE.** Every authenticated
+surface outside `/admin` and `/m` renders `<AppShellV3>` (top bar +
+IA-driven left rail), mounted via `<ShellV3Mount>` from a layout.
+The IA — every scope, rail item, href, matcher and permission gate —
+is DATA in `src/lib/nav/ia.ts`; components render it and know no URLs.
 
-Artist + tour tiers use `<ProductShell>` (shell-v2). The nav
-is now **two horizontal bars** (see `CC_NAV_IA_TWO_BAR.md`),
-both inside `<ProductHeader>`: Bar 1 = `TopProductNav`
-(Home/Operations/Budget/Advance + switchers), Bar 2 =
-`ProductSubBar` (the active product's sub-tabs). The old left
-`ProductRail` component is **retired** (only the
-`ProductRailActive` type name lingers). Bar 1 also exposes a
-hover/click dropdown per product as a one-load cross-product
-jump shortcut — not a replacement for the persistent Bar 2.
-Settings / Venues / Bugs use `ProductShell` with `active={null}`
-(no product highlighted).
+Where the mounts live:
+- `(workspace)/layout.tsx` → /artists, /personnel, /assets,
+  /equipment, /venues (workspace scope; the rail REPLACED the old
+  WorkspaceTabs — the "no rail at workspace tier" rule is reversed,
+  Adam's call 2026-08-04).
+- `(you)/layout.tsx` → /settings, /settings/members,
+  /settings/ai-limits, /profile, /bugs (You scope).
+- The three tour layouts + `artists/[id]/layout.tsx` (unchanged).
+- The tourless landings /operations, /budget, /advance mount
+  `<ShellV3Mount landing>` in their pages: workspace rail visible,
+  top bar GREYED (disabled mode pill + live picker) until a tour is
+  picked.
+- The standalone rider editor /rider-packs/[id] is ARTIST scope —
+  `RiderPackEditorView` wraps itself in `<ShellV3Mount>` with the
+  pack's artist id; the rail lights "Riders & specs".
 
-**Adding a new surface:**
-- **Workspace tab** (sibling of Artists / Personnel /
-  Equipment): create `src/app/(app)/(workspace)/<name>/page.tsx`
-  and add the tab entry to `WorkspaceTabs.tsx`. Chrome
-  inherits.
-- **Tour-scoped product page**: mount under `/operations/`,
-  `/budget/`, or `/advance/` with `<ProductShell active="…">`.
-- **Neutral surface** (settings-adjacent / admin /
-  low-traffic): `<ProductShell active={null} productName="…">`.
-- Don't add to shell-v1 (`<PageShell>` / `listAppPageShell`)
-  for anything new.
+**Adding a new surface:** add/extend a rail item in
+`src/lib/nav/ia.ts` (that is the ONLY place nav strings live), put
+the page under the layout for its scope, done — chrome inherits. If
+the page carries a left rail of its own, add its path to
+`hasOwnRail()`. Never mount per-page chrome, never add to shell-v1
+(`<PageShell>` / `listAppPageShell`) for anything new.
+
+Deleted in S-3b (do not resurrect): `ProductShell`, `ProductHeader`,
+`TopProductNav`, `WorkspaceTopBar`, `WorkspaceTabs`,
+`PhaseScaffoldPlaceholder`, `NewTourButton`, `productNav.ts`,
+`builderAppPageShell`, the shell-v2 barrel `index.ts`. Still ALIVE in
+`shell-v2/` (shell-v3 mounts them): `ArtistTourSwitcher*`,
+`WorkspaceSwitcher`, `ProductHeaderAvatarMenu`, `ProductSubBar`
+(budget's tab strip), `TourEditorModal`, `TourVisitTracker`,
+`HydrateTourArtist`, `RememberTourProduct`, `SelectTourPrompt`,
+`WorkspaceTourRedirect`, `TourIdentityChip`, `TourDeleteConfirmationModal`,
+`ArtistCreateSlideOver`.
 
 ### Shell-v1 is SCOPED TO ADMIN — not pending retirement
 
 `src/components/shell/*` (`PageShell`, `LeftRail`, `TopBar`,
-`ShellTopBarClient`, `app-page-shells`) is **the admin chrome**,
-plus two surfaces S-3b will move (`/budget` with no tour id,
-`/profile`) and the rider pack editor's
-`builderAppPageShell`.
+`ShellTopBarClient`, `app-page-shells`) is **the admin chrome** —
+and since S-3b, ONLY the admin chrome: `/budget` (tourless),
+`/profile` and the rider pack editor all moved to `<ShellV3Mount>`,
+and `builderAppPageShell` was deleted with its last caller.
 
 **The retirement idea is CLOSED.** `/admin/shell-playground`
 exists to demonstrate shell-v1 — porting it would delete the
@@ -262,9 +274,9 @@ Until that follow-up lands, the rule is: don't add NEW imports from `_legacy/`. 
 Right: `'#FF45001a'` or `'color-mix(in srgb, var(--lp-orange) 5.1%, transparent)'`
 Wrong: `'var(--lp-orange)' + '1a'` (concatenation doesn't resolve the var)
 
-### Tour-internal navigation — ProductShell handles it
+### Tour-internal navigation — the shell layouts handle it
 
-Pages wrapped in `<ProductShell>` (everything under `/operations/[tourId]/`, `/budget/[tourId]/`, `/advance/[tourId]/`) get product-aware navigation from `<ProductHeader>` (the two-bar nav) automatically — no per-page breadcrumb mount is needed. The redirects in `next.config.ts` send every `/tours/[id]/*` URL to its product-prefixed equivalent, so the old `<TourBreadcrumb>` component was unreachable and has been **deleted** (P8 hygiene). Don't reintroduce it; if a tour-internal surface needs chrome, wrap it in `<ProductShell>`.
+Everything under `/operations/[tourId]/`, `/budget/[tourId]/`, `/advance/[tourId]/` gets its navigation from the layout's `<ShellV3Mount>` (mode pill + rail from ia.ts) — no per-page breadcrumb or chrome mount is needed. The redirects in `next.config.ts` send every `/tours/[id]/*` URL to its product-prefixed equivalent, so the old `<TourBreadcrumb>` component was unreachable and has been **deleted** (P8 hygiene). Don't reintroduce it; a tour-internal surface that needs chrome just lives under the right layout.
 
 ## Active project — pipeline complete
 

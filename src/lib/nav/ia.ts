@@ -232,7 +232,15 @@ const ARTIST_RAIL: RailEntry[] = [
     kind: 'item', id: 'riders-specs', label: 'Riders & specs', icon: 'FileText',
     href: (c) => `/artists/${c.artistId}/riders`,
     // Channel lists and stage plots are grouped under this item (IA_CANONICAL).
-    match: (p) => /^\/artists\/[^/]+\/(riders|channel-lists|stage-plots)(\/|$)/.test(p),
+    /* S-3b — /rider-packs/[id] lights this too. The standalone rider editor is
+       reached FROM the artist library riders list, and Adam's call was that it
+       belongs to the artist library, not to a workspace no-man's-land. The URL
+       carries no artist id; the pack's own artist_id is supplied server-side by
+       the mounting view (same pattern as tour scope, where the artist comes
+       from data, not the path). */
+    match: (p) =>
+      /^\/artists\/[^/]+\/(riders|channel-lists|stage-plots)(\/|$)/.test(p) ||
+      /^\/rider-packs(\/|$)/.test(p),
   },
   { kind: 'item', id: 'brand', label: 'Brand & logos', icon: 'Shapes', href: null },
   { kind: 'item', id: 'documents', label: 'Documents', icon: 'FolderOpen', href: (c) => `/artists/${c.artistId}/files` },
@@ -310,6 +318,15 @@ export function resolveScope(pathname: string, search = ''): NavContext {
   const artist = /^\/artists\/([^/?#]+)/.exec(p);
   if (artist) {
     return { scope: 'artist', artistId: artist[1], tourId: null, mode: null };
+  }
+
+  /* S-3b — the standalone rider editor is ARTIST scope with the id supplied by
+     server data (rider_packs.artist_id, or the tour's artist for tour-scoped
+     packs), exactly as tour URLs carry no artist id either. artistId stays null
+     here because a pure-URL resolver cannot know it; AppShellV3 merges the
+     caller-supplied id before building hrefs. */
+  if (p === '/rider-packs' || p.startsWith('/rider-packs/')) {
+    return { scope: 'artist', artistId: null, tourId: null, mode: null };
   }
 
   if (YOU_PATHS.some((y) => p === y || p.startsWith(`${y}/`))) {
@@ -423,9 +440,11 @@ export function modeLandingHref(mode: TourMode, tourId: string): string {
  *  S-2d removes them. Artist is S-3a, workspace and You S-3b. */
 const SHELLED_TOUR_MODES = new Set<TourMode>(['tour', 'money', 'production']);
 
-/** Non-tour scopes on the canonical shell. S-3a: artist. Workspace and You are
- *  S-3b — and they are what still keeps ProductShell alive. */
-const SHELLED_SCOPES = new Set<Scope>(['artist']);
+/** Non-tour scopes on the canonical shell. S-3a: artist. S-3b: workspace and
+ *  You — which completes the migration. Every authenticated URL that is not
+ *  deliberately UNSHELLED (admin, mobile, share/intake, dev harnesses) now
+ *  renders <AppShellV3>. This is what let shell-v2's chrome be deleted. */
+const SHELLED_SCOPES = new Set<Scope>(['artist', 'workspace', 'you']);
 
 /** True when this URL should render inside <AppShellV3> rather than old chrome. */
 export function isShelledPath(pathname: string, search = ''): boolean {
@@ -472,7 +491,11 @@ export function hasOwnRail(pathname: string): boolean {
   return (
     /^\/operations\/[^/]+\/day\/[^/]+/.test(pathname) ||
     /^\/operations\/[^/]+\/riders\/[^/]+/.test(pathname) ||
-    /^\/advance\/[^/]+\/[^/]+/.test(pathname)
+    /^\/advance\/[^/]+\/[^/]+/.test(pathname) ||
+    /* S-3b — the STANDALONE rider editor renders the same RiderPackSidebar the
+       tour-scoped one does (280px, unconditional whenever the pack has a
+       context id). Same component, same collapse rule. */
+    /^\/rider-packs\/[^/]+/.test(pathname)
   );
 }
 

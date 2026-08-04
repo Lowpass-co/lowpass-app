@@ -9,7 +9,6 @@
    ============================================ */
 
 import { redirect } from 'next/navigation';
-import { ProductShell } from '@/components/shell-v2';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { VenueLibraryClient, type VenueLibraryRow } from '@/components/venues/VenueLibraryClient';
@@ -72,16 +71,16 @@ export default async function VenuesPage() {
   const venues = Array.from(byId.values()).sort((a, b) => a.name.localeCompare(b.name));
 
   return (
-    <ProductShell active={null} artistId={null} productName="Venues">
-      <div className="mx-auto max-w-5xl p-6">
-        <PageHeader
-          title="Venues"
-          subtitle="Your routing's venue library. Edits to a venue flow through to upcoming shows; past shows keep their snapshot."
-        />
-        <div className="mt-6">
-          <VenueLibraryClient venues={venues} />
-        </div>
+    /* S-3b — chrome comes from the (workspace) layout's <ShellV3Mount>; this
+       page moved into the route group and renders body only. */
+    <div className="mx-auto max-w-5xl p-6">
+      <PageHeader
+        title="Venues"
+        subtitle="Your routing's venue library. Edits to a venue flow through to upcoming shows; past shows keep their snapshot."
+      />
+      <div className="mt-6">
+        <VenueLibraryClient venues={venues} />
       </div>
-    </ProductShell>
+    </div>
   );
 }

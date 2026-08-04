@@ -43,11 +43,21 @@ export interface TopBarV3Props {
   switcher?: React.ReactNode;
   /** Rendered at the far right — the avatar menu the app already has. */
   right?: React.ReactNode;
+  /** S-3b — the tourless product landings (/operations, /budget, /advance).
+   *  Adam's call: the top bar reads GREYED OUT there — the tour chrome is
+   *  present but inactive until a tour is picked — while the rail stays fully
+   *  visible, because the workspace tier now carries real information. So:
+   *  the mode pill renders disabled (grey, non-navigable, explains itself on
+   *  hover) instead of absent, and the picker shows so the way forward is on
+   *  the bar itself, not just in the prompt below. */
+  landing?: boolean;
 }
 
-export function TopBarV3({ ctx, workspaceName, switcher, right }: TopBarV3Props) {
-  const showPicker = ctx.scope === 'tour' || ctx.scope === 'artist';
+export function TopBarV3({ ctx, workspaceName, switcher, right, landing = false }: TopBarV3Props) {
+  const showPicker = ctx.scope === 'tour' || ctx.scope === 'artist' || landing;
   const showModes = ctx.scope === 'tour' && !!ctx.tourId;
+  /* Landing: the pill exists but nothing is armed — no tour, no hrefs. */
+  const showDisabledModes = landing && !showModes;
 
   return (
     <header
@@ -138,11 +148,46 @@ export function TopBarV3({ ctx, workspaceName, switcher, right }: TopBarV3Props)
             );
           })}
         </div>
+      ) : showDisabledModes ? (
+        /* The greyed pill. Same geometry as the live one so the bar doesn't
+           reflow when a tour is picked — but plain spans, no hrefs, tertiary
+           text, and a title that says what would wake it up. */
+        <div
+          data-testid="mode-pill-disabled"
+          aria-disabled="true"
+          title="Select a tour to open these"
+          style={{
+            margin: '0 auto', display: 'flex', gap: 2, padding: 3,
+            background: 'var(--lp-surface)', border: '1px solid var(--lp-border)',
+            borderRadius: 'var(--lp-radius-pill)',
+            opacity: 0.55, cursor: 'default',
+          }}
+        >
+          {TOUR_MODES.map((m) => {
+            const MIcon = MODE_ICON[m];
+            return (
+              <span
+                key={m}
+                data-testid={`mode-${m}-disabled`}
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 7,
+                  padding: '6px 18px', borderRadius: 'var(--lp-radius-pill)',
+                  fontSize: 'var(--lp-text-xs)', fontWeight: 'var(--lp-weight-semibold)',
+                  letterSpacing: '.06em', textTransform: 'uppercase',
+                  color: 'var(--lp-text-tertiary)',
+                }}
+              >
+                <MIcon className="h-3 w-3" />
+                {MODE_LABEL[m]}
+              </span>
+            );
+          })}
+        </div>
       ) : (
         <span style={{ marginLeft: 'auto' }} />
       )}
 
-      <div style={{ marginLeft: showModes ? 0 : 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ marginLeft: showModes || showDisabledModes ? 0 : 'auto', display: 'flex', alignItems: 'center', gap: 8 }}>
         {right}
       </div>
     </header>

@@ -86,6 +86,18 @@ describe('resolveScope — the other three scopes', () => {
     },
   );
 
+  it('S-3b — /rider-packs/[id] is ARTIST scope with the id supplied by data', () => {
+    /* The standalone rider editor joined the artist library (Adam's call,
+       2026-08-04). The URL carries no artist id, so the resolver returns null
+       and the mounting view passes the pack's artist — same contract as tour
+       URLs, where the artist comes from server data too. */
+    const ctx = resolveScope('/rider-packs/pack-1');
+    expect(ctx.scope).toBe('artist');
+    expect(ctx.artistId).toBeNull();
+    expect(ctx.mode).toBeNull();
+    expect(resolveScope('/rider-packs').scope).toBe('artist');
+  });
+
   it('the mode pill exists ONLY at tour scope', () => {
     for (const p of ['/artists', `/artists/${A}`, '/settings', '/venues']) {
       expect(resolveScope(p).mode).toBeNull();
@@ -425,13 +437,26 @@ describe('isShelledPath — what is on the canonical shell after S-2c', () => {
   });
 
   it.each(['/artists', '/personnel', '/assets', '/venues', '/settings', '/profile', '/bugs'])(
-    '%s is workspace or You → still old chrome until S-3b',
+    '%s is workspace or You → shelled (S-3b — the migration is COMPLETE)',
     (p) => {
-      /* These are what keeps ProductShell alive. When they cross, the two-bar
-         nav can finally go. */
-      expect(isShelledPath(p)).toBe(false);
+      /* S-3b flipped these. This is what let ProductShell, ProductHeader, the
+         two-bar nav, WorkspaceTopBar and WorkspaceTabs be deleted — if any of
+         these reads false again, that chrome is gone and the surface would
+         render with NO navigation at all. */
+      expect(isShelledPath(p)).toBe(true);
     },
   );
+
+  it('S-3b — the tourless product landings are shelled (greyed bar + workspace rail)', () => {
+    for (const p of ['/operations', '/budget', '/advance']) {
+      expect(isShelledPath(p)).toBe(true);
+      expect(resolveScope(p).scope).toBe('workspace');
+    }
+  });
+
+  it('S-3b — the standalone rider editor is shelled at artist scope', () => {
+    expect(isShelledPath('/rider-packs/pack-1')).toBe(true);
+  });
 
   it('never claims a public or auth route, whatever its shape', () => {
     // These have their own chrome by design; wrapping one would be a real bug.
@@ -470,6 +495,7 @@ describe('hasOwnRail — where the app rail should start collapsed', () => {
     `/operations/${T}/day/r-1`,     // DayLayout → DayRail
     `/advance/${T}/r-1`,            // AdvanceUpcomingSidebar
     `/operations/${T}/riders/p-1`,  // RiderPackEditorView → RiderPackSidebar, 280px
+    '/rider-packs/p-1',             // S-3b — the STANDALONE editor, same sidebar
   ])('%s carries one, unconditionally — no view can turn it off', (p) => {
     expect(hasOwnRail(p)).toBe(true);
   });
@@ -624,6 +650,7 @@ describe('S-3a — the artist rail describes real pages', () => {
     [`/artists/${A}/riders`, 'riders-specs'],
     [`/artists/${A}/channel-lists`, 'riders-specs'],
     [`/artists/${A}/stage-plots/p1`, 'riders-specs'],
+    ['/rider-packs/p-1', 'riders-specs'], // S-3b — the standalone editor too
     [`/artists/${A}/files`, 'documents'],
   ])('%s lights %s — nothing in the subtree leaves the rail blank', (p, expected) => {
     expect(activeItemFor(p)).toBe(expected);

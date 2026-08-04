@@ -27,9 +27,9 @@ export function SelectTourPrompt({ product }: { product: string }) {
             lineHeight: 1.5,
           }}
         >
-          Pick a tour from the artist&apos;s Home page. Once one is
-          selected, the {product} icon in the left rail jumps straight to
-          that tour.
+          Pick an artist and tour from the picker in the top bar — the
+          greyed controls up there come alive the moment a tour is
+          selected — or start from your artists.
         </p>
         <Link
           href="/artists"

@@ -13,7 +13,6 @@
    ============================================ */
 
 import Link from 'next/link';
-import { ProductShell } from '@/components/shell-v2';
 import { SettingsSubNav } from '@/components/settings/SettingsSubNav';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
@@ -121,7 +120,7 @@ export default async function AiLimitsPage() {
   }
 
   return (
-    <ProductShell active={null} artistId={null} productName="Settings">
+    <>{/* S-3b — chrome from the (you) layout's ShellV3Mount */}
       <SettingsSubNav pathname="/settings/ai-limits" />
       <div className="mx-auto w-full max-w-3xl" style={{ padding: 'var(--lp-space-4)' }}>
         <PageHeader
@@ -161,6 +160,6 @@ export default async function AiLimitsPage() {
           />
         )}
       </div>
-    </ProductShell>
+    </>
   );
 }

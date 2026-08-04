@@ -1183,3 +1183,77 @@ reports — P-1 is code-green but unverified.
   spec and the cold-URL contract is test-pinned; the visual pass needs Cowork.
 - `/assets` vs `/equipment` — **not decided**. Both resolve to the same rail item
   under the new shell; the rename is Adam's call.
+
+---
+
+## S-3b — workspace + You cross; the migration COMPLETES · 2026-08-04 (Cowork)
+
+**Migrated:** the workspace tier (`/artists`, `/personnel`, `/assets`,
+`/equipment`, and `/venues`, which moved into the `(workspace)` route group),
+the You scope (`/settings`, `/settings/members`, `/settings/ai-limits`,
+`/profile`, `/bugs` — moved into a new `(you)` route group with one layout),
+the three tourless product landings (`/operations`, `/budget`, `/advance`),
+and the standalone rider editor (`/rider-packs/[id]`).
+
+**Two entries in the Sets** (`SHELLED_SCOPES` += `workspace`, `you`) plus three
+decisions Adam made on 2026-08-04:
+
+1. **Landings: grey the bar, keep the rail.** The tourless landings render the
+   workspace rail fully visible ("there's a lot of info at the workspace/user
+   level now") and the top bar's tour chrome GREYED — a disabled mode pill that
+   explains itself on hover, plus a LIVE picker, via `landing` on
+   `<ShellV3Mount>` → `<TopBarV3>`. The funnel prompt survives beneath.
+2. **`/rider-packs/[id]` is artist library.** `resolveScope` puts it at ARTIST
+   scope with the id supplied by data (`rider_packs.artist_id`, or the tour's
+   artist for tour-scoped packs — same contract as tour URLs). The rail lights
+   "Riders & specs"; `hasOwnRail` collapses the app rail for the pack sidebar.
+   A pack with no resolvable artist renders inner-only rather than a rail whose
+   hrefs would be built on null.
+3. **The workspace tier gets the rail.** The old "NO rail at workspace tier"
+   rule is reversed; `WorkspaceTabs` is not replaced by nothing — its three
+   destinations are WORKSPACE_RAIL items.
+
+**Deleted, grep-verified zero importers first:** `ProductShell`,
+`ProductHeader`, `TopProductNav`, `WorkspaceTopBar`, `WorkspaceTabs`,
+`PhaseScaffoldPlaceholder`, `NewTourButton`, `productNav.ts`, the shell-v2
+barrel `index.ts`, and `builderAppPageShell` (+ its entry in the shell-v1
+barrel). `ProductSubBar` SURVIVES — budget's tab band imports it directly.
+`TourIdentityChip` survives via `BudgetContextBand`. shell-v1 is now
+admin-only in fact, not just in intent; its header comment says so.
+
+**Two regressions closed on the way, both found by reading the old bars before
+deleting them:**
+
+- **The workspace switcher was missing from every migrated surface.** shell-v1's
+  TopBar and shell-v2's ProductHeader both mounted `<WorkspaceSwitcher>` (the
+  wrong-workspace recovery control); the v3 bar mounted only the avatar. It now
+  renders in `<ShellV3Mount>`'s headerRight on every tier.
+- **The real workspace name.** The v3 bar hardcoded "Workspace"; the mount now
+  resolves the caller's workspace name (profiles.workspace_id → workspaces.name,
+  one indexed read after the profile query it already ran) and title-cases it,
+  as WorkspaceTopBar did.
+
+**NOT done, deliberately:**
+
+- `/admin` stays on shell-v1 (decision recorded in CLAUDE.md, still closed).
+- `SettingsSubNav` survives inside the settings pages — the YOU rail's
+  Preferences item covers `/settings` and `/settings/ai-limits` without
+  distinguishing them, so the sub-nav still does real work. Fold it into the
+  rail only if ai-limits earns its own item.
+- The dead ⌘K decoration: WorkspaceTopBar rendered a Search button with **no
+  onClick** (server component, no handler). Not ported. The global ⌘K
+  shortcut in AppShell is the real trigger and still mounts.
+- `/assets` vs `/equipment` — still Adam's call; both light one rail item.
+
+**Verification:** `tsc --noEmit` clean · 484 vitest (26 files) green, 5 new
+assertions pin the S-3b boundary (landings shelled, rider-packs artist scope +
+hasOwnRail + active item, workspace/You shelled) · `next build --webpack`
+compiles and prerenders all 119 pages.
+
+**Merged mid-bank:** `659890a` (empty-workspace landing suggestion) landed on
+`(workspace)/layout.tsx` while this bank was in flight. The banner + 
+`getLandingSuggestion` call were carried into the new shelled layout — it now
+renders inside the shell's `<main>`, above the page body. Every other file in
+the bank was drift-checked by hash against the working base: clean.
+
+**Smoke:** SHELL-60 … SHELL-68 (new, unwalked — need a session).

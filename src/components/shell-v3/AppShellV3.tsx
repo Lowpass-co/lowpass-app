@@ -45,6 +45,9 @@ export interface AppShellV3Props {
   denseRail?: boolean;
   /** Avatar / actions, far right of the top bar. */
   headerRight?: React.ReactNode;
+  /** S-3b — tourless product landing: greyed (disabled) mode pill + picker in
+   *  the top bar, workspace rail fully visible. See TopBarV3. */
+  landing?: boolean;
   children: React.ReactNode;
 }
 
@@ -58,6 +61,7 @@ export function AppShellV3({
   visibleResources = null,
   denseRail = false,
   headerRight,
+  landing = false,
   children,
 }: AppShellV3Props) {
   /* Derived, in this order, from the URL and nothing else. */
@@ -101,6 +105,7 @@ export function AppShellV3({
         workspaceName={workspaceName}
         switcher={switcher}
         right={headerRight}
+        landing={landing}
       />
       <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
         <NavRail

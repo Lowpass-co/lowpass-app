@@ -1,22 +1,23 @@
 /* ============================================
    LOWPASS — shell-v1 page shells (UX02/UX03)
 
-   SUPERSEDED, NOT RETIRED. The canonical shell is <ShellV3Mount> (shell-v3),
-   and new surfaces use that. These stay because real pages still mount them:
+   SUPERSEDED, NOT RETIRED — and since S-3b, ADMIN-ONLY. The canonical shell
+   is <ShellV3Mount> (shell-v3); every non-admin surface is on it. What still
+   mounts these:
 
-     · listAppPageShell       → /budget (no tour id), /profile, two /admin pages
-     · builderAppPageShell    → <RiderPackEditorView>, the LIVE rider pack editor
+     · listAppPageShell       → two /admin pages
      · topBarOnlyAppPageShell → three /admin playgrounds
 
-   S-4d deleted the four archetypes nothing mounted — dashboard, docDays,
-   documentSections, spreadsheet — plus <DocDaysLeftRailClient>, whose only
-   caller was docDays. The three above have real callers, so retiring them
-   belongs to S-3b (workspace + You) and a separate decision about /admin.
+   S-3b took /budget (tourless), /profile and the rider pack editor off this
+   file and deleted builderAppPageShell with its last caller (the standalone
+   <RiderPackEditorView>, now on ShellV3Mount at artist scope). S-4d had
+   already deleted the four archetypes nothing mounted. What remains is the
+   admin chrome — see CLAUDE.md "Shell-v1 is SCOPED TO ADMIN".
    ============================================ */
 
 import type { ReactNode } from 'react';
 import { PageShell, type PageShellArchetype } from '@/components/shell/PageShell';
-import { LeftRail, type LeftRailVariant } from '@/components/shell/LeftRail';
+import { LeftRail } from '@/components/shell/LeftRail';
 import { ShellTopBarClient } from '@/components/shell/ShellTopBarClient';
 import { getShellData } from '@/lib/shell/getShellData';
 
@@ -43,17 +44,6 @@ export async function listAppPageShell(children: ReactNode) {
     children,
     'list',
     <LeftRail variant={{ kind: 'list', filters: [] }} />
-  );
-}
-
-export async function builderAppPageShell(
-  children: ReactNode,
-  rail: Extract<LeftRailVariant, { kind: 'docSections' }>
-) {
-  return withShell(
-    children,
-    'builder',
-    <LeftRail variant={rail} />
   );
 }
 

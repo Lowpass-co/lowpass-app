@@ -18,8 +18,7 @@
 
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
-/* IA Cleanup §I4.1 — ProductShell with active=null. */
-import { ProductShell } from '@/components/shell-v2';
+/* S-3b — chrome from the (you) layout; page renders body only. */
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { MembersListClient } from '@/components/settings/members/MembersListClient';
 import { SettingsSubNav } from '@/components/settings/SettingsSubNav';
@@ -67,7 +66,7 @@ export default async function SettingsMembersPage() {
   }
 
   return (
-    <ProductShell active={null} artistId={null} productName="Settings">
+    <>{/* S-3b — chrome from the (you) layout's ShellV3Mount */}
       <SettingsSubNav pathname="/settings/members" />
       <div
         className="mx-auto w-full"
@@ -126,6 +125,6 @@ export default async function SettingsMembersPage() {
         <MembersListClient currentUserId={user.id} />
       )}
       </div>
-    </ProductShell>
+    </>
   );
 }

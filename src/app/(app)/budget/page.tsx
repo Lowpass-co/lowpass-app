@@ -1,5 +1,5 @@
 /* ============================================
-   LOWPASS — Budget · workspace-level router
+   LOWPASS — Budget · workspace-level router (S-3b)
 
    Budget is tour-scoped. This tourless landing is a clean selection
    funnel (never the legacy 8-tab surface in src/_legacy/budget/, which
@@ -10,13 +10,14 @@
                                         to /budget/{tourId}
    - no tour anywhere                → "Select a tour to open Budget" prompt
 
-   Nav & entry fixpack item 4 — moved off shell-v1 (listAppPageShell) to
-   <ProductShell active="budget">, matching the /operations + /advance
-   landings so all three product funnels share chrome.
+   S-3b — chrome is <ShellV3Mount landing>: the workspace rail stays fully
+   visible and the top bar renders its tour chrome GREYED — disabled mode
+   pill, live artist/tour picker — until a tour is picked. Adam's call,
+   2026-08-04.
    ============================================ */
 
 import { redirect } from 'next/navigation';
-import { ProductShell } from '@/components/shell-v2';
+import { ShellV3Mount } from '@/components/shell-v3/ShellV3Mount';
 import { WorkspaceTourRedirect } from '@/components/shell-v2/WorkspaceTourRedirect';
 import { SelectTourPrompt } from '@/components/shell-v2/SelectTourPrompt';
 
@@ -34,9 +35,9 @@ export default async function BudgetPage({
   }
 
   return (
-    <ProductShell active="budget" artistId={null} productName="Budget">
+    <ShellV3Mount pathname="/budget" landing>
       <WorkspaceTourRedirect base="/budget" />
       <SelectTourPrompt product="Budget" />
-    </ProductShell>
+    </ShellV3Mount>
   );
 }

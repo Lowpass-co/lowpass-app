@@ -1,16 +1,14 @@
 /* ============================================
-   LOWPASS — /settings (IA Cleanup §I4.1)
+   LOWPASS — /settings (S-3b)
 
-   Workspace settings root. Migrated from shell-v1 PageShell
-   to ProductShell with active=null per the two-tier IA — no
-   product is the destination, but ProductRail stays visible
-   so users get one-click jump-back. Reachable from:
-     - WorkspaceTopBar avatar dropdown
-     - ProductRail bottom gear icon (artist + tour tiers)
+   Workspace settings root. Chrome comes from the (you) layout's
+   <ShellV3Mount> (YOU_RAIL, "Preferences" active); the page renders body only.
+   SettingsSubNav stays: the rail's Preferences item covers /settings and
+   /settings/ai-limits without distinguishing them, so the sub-nav still does
+   real work inside the section.
    ============================================ */
 
 import { getUserAndAdminStatus } from '@/lib/site-admin';
-import { ProductShell } from '@/components/shell-v2';
 import { SiteAdminsCard } from '@/components/settings/SiteAdminsCard';
 import { SettingsSubNav } from '@/components/settings/SettingsSubNav';
 import { MyAiUsage } from '@/components/settings/MyAiUsage';
@@ -20,7 +18,7 @@ export default async function SettingsPage() {
   const { user, isAdmin } = await getUserAndAdminStatus();
 
   return (
-    <ProductShell active={null} artistId={null} productName="Settings">
+    <>
       <SettingsSubNav pathname="/settings" />
       <div
         className="mx-auto w-full max-w-3xl"
@@ -40,6 +38,6 @@ export default async function SettingsPage() {
           {isAdmin && user && <SiteAdminsCard currentUserId={user.id} />}
         </div>
       </div>
-    </ProductShell>
+    </>
   );
 }

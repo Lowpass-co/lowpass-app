@@ -1,29 +1,27 @@
 /* ============================================
-   LOWPASS — Operations · workspace-level router (IA tour-flow fix §2)
+   LOWPASS — Operations · workspace-level router (S-3b)
 
-   Operations is tour-scoped. Landing on /operations with no tour
-   selected used to drop the user on a Phase-4 placeholder that went
-   nowhere. Now it mirrors the Budget pattern:
+   Operations is tour-scoped; /operations with no tour is a selection funnel:
 
    - context has a selected tour → WorkspaceTourRedirect hard-replaces
      to /operations/{tourId}
-   - no tour anywhere → "Select a tour to open Operations" prompt with a
-     link to the artist picker
+   - no tour anywhere → "Select a tour to open Operations" prompt
 
-   The cross-tour Operations dashboard (Phase 4) can mount on this route
-   when built; until then this is a clean tour-selection funnel rather
-   than a dead placeholder.
+   S-3b — chrome is <ShellV3Mount landing>: the workspace rail stays fully
+   visible (the workspace tier carries real information now) and the top bar
+   renders its tour chrome GREYED — disabled mode pill, live artist/tour picker
+   — until a tour is picked. Adam's call, 2026-08-04.
    ============================================ */
 
-import { ProductShell } from '@/components/shell-v2';
+import { ShellV3Mount } from '@/components/shell-v3/ShellV3Mount';
 import { WorkspaceTourRedirect } from '@/components/shell-v2/WorkspaceTourRedirect';
 import { SelectTourPrompt } from '@/components/shell-v2/SelectTourPrompt';
 
 export default function OperationsDashboardPage() {
   return (
-    <ProductShell active="operations" artistId={null} productName="Operations">
+    <ShellV3Mount pathname="/operations" landing>
       <WorkspaceTourRedirect base="/operations" />
       <SelectTourPrompt product="Operations" />
-    </ProductShell>
+    </ShellV3Mount>
   );
 }

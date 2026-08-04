@@ -1,33 +1,30 @@
 /* ============================================
-   LOWPASS — (workspace) layout (IA Cleanup §I2)
+   LOWPASS — (workspace) layout (S-3b)
 
-   Shared chrome for the three workspace dashboard tabs:
-   /artists, /personnel, /equipment. Renders the
-   WorkspaceTopBar (workspace name + avatar + gear) above
-   the WorkspaceTabs (Artists / Personnel / Equipment), then
-   the active tab's page below.
+   Shared chrome for the workspace tier: /artists, /personnel, /assets (and the
+   retiring /equipment), plus /venues, which moved into this group in S-3b so
+   every WORKSPACE_RAIL destination inherits one layout.
 
-   IMPORTANT: NO ProductRail here. The workspace tier is
-   the only place in the authenticated app that doesn't
-   render the rail — the rail is tour/artist scoped. The
-   absence of ProductShell here is what enforces that.
+   S-3b — WorkspaceTopBar + WorkspaceTabs are gone; this tier now mounts the
+   same <ShellV3Mount> as every other scope. The tabs' three destinations are
+   the rail's items (ia.ts WORKSPACE_RAIL), so the horizontal tab strip is not
+   replaced by nothing — it is replaced by the same control every other tier
+   uses. The old "NO rail at the workspace tier" rule is REVERSED, deliberately:
+   Adam's call (2026-08-04) — the workspace/user level carries real information
+   now, so it gets the real rail.
 
-   Route group is "transparent" — URLs stay clean:
-   /artists → src/app/(app)/(workspace)/artists/page.tsx
-   /personnel → (workspace)/personnel/page.tsx (in §I3)
-   /equipment → (workspace)/equipment/page.tsx (in §I3)
+   Route group stays transparent — URLs stay clean:
+   /artists → (workspace)/artists/page.tsx, etc.
 
-   Artist detail pages at /artists/[id]/* live OUTSIDE this
-   group (src/app/(app)/artists/[id]/...) — they use the
-   ProductShell layout because they're artist-scoped, not
-   workspace-scoped.
+   Artist detail pages at /artists/[id]/* live OUTSIDE this group and mount the
+   shell from their own layout (artist scope).
    ============================================ */
 
 import { redirect } from 'next/navigation';
+import { headers } from 'next/headers';
 import type { ReactNode } from 'react';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
-import { WorkspaceTopBar } from '@/components/shell-v2/WorkspaceTopBar';
-import { WorkspaceTabs } from '@/components/shell-v2/WorkspaceTabs';
+import { ShellV3Mount } from '@/components/shell-v3/ShellV3Mount';
 import { getWorkspaceName } from '@/server/workspace/getWorkspaceName';
 import { getLandingSuggestion } from '@/server/workspace/landingPreference';
 import { EmptyWorkspacePrompt } from '@/components/shell-v2/EmptyWorkspacePrompt';
@@ -38,26 +35,26 @@ export default async function WorkspaceLayout({
   children: ReactNode;
 }) {
   const supabase = await createServerSupabaseClient();
+  /* Unauthenticated / no workspace → /login. Same gate the pre-S-3b layout
+     enforced; the shell itself renders for whoever gets past it. */
   const workspaceName = await getWorkspaceName(supabase);
-  /* Unauthenticated / no workspace → /login. Matches the
-     pre-§I2 redirect at the top of /artists/page.tsx. */
   if (workspaceName == null) redirect('/login');
 
-  /* Landing preference — the workspace tier is where a stranded member arrives,
-     so the offer belongs here and nowhere deeper. Suggestion only: it never
-     redirects and never writes. See server/workspace/landingPreference.ts. */
+  /* Landing preference (659890a, merged into S-3b) — the workspace tier is
+     where a stranded member arrives, so the offer belongs here and nowhere
+     deeper. Suggestion only: it never redirects and never writes. It renders
+     inside the shell's <main>, above the page body. */
   const { data: { user } } = await supabase.auth.getUser();
   const suggestion = user ? await getLandingSuggestion(supabase, user.id) : null;
 
+  const h = await headers();
+  const pathname = h.get('x-pathname') ?? '/artists';
+  const search = h.get('x-search') ?? '';
+
   return (
-    <div
-      className="lp-view-tier flex min-h-screen flex-col"
-      style={{ background: 'var(--lp-bg)' }}
-    >
-      <WorkspaceTopBar workspaceName={workspaceName} />
-      <WorkspaceTabs />
+    <ShellV3Mount pathname={pathname} search={search}>
       {suggestion ? <EmptyWorkspacePrompt {...suggestion} /> : null}
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">{children}</div>
-    </div>
+      {children}
+    </ShellV3Mount>
   );
 }

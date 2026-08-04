@@ -2,12 +2,9 @@
 
 Format per `docs/smoke-tests/README.md`. IDs are stable; add new ones as banks land.
 
-**As of S-3a: tour scope and ARTIST scope are on the canonical shell** — every
-URL under `/operations/…`, `/budget/…`, `/advance/…` and `/artists/[id]/…`.
-Workspace and You (`/artists` the list, `/personnel`, `/assets`, `/venues`,
-`/settings`, `/profile`, `/bugs`, and the three tourless product landings) are
-still on old chrome. They are what keeps `ProductShell` alive; when they cross
-in S-3b, the two-bar nav can go.
+**As of S-3b: EVERY scope is on the canonical shell.** Tour, artist, workspace
+and You — every authenticated URL outside `/admin` and `/m`. The two-bar nav,
+`ProductShell`, `WorkspaceTopBar` and `WorkspaceTabs` are deleted.
 
 The authoritative answer is `isShelledPath()` in `src/lib/nav/ia.ts`; the list
 above is a description of it, not a second source of truth.
@@ -588,3 +585,54 @@ wrong" from the error boundary, with the page never rendering. If you see that:
 3. The usual cause is a **function** being passed from a server component to a
    client component. `tsc`, `eslint`, `next build` and the jsdom tests all pass
    on that mistake, so the live page is the only thing that catches it.
+
+
+---
+
+## S-3b — workspace + You cross; the migration completes (2026-08-04)
+
+- [ ] **SHELL-60 — The workspace tier has the rail now.** Open `/artists`.
+  Left rail: WORKSPACE head, then Artists / Personnel pool / Equipment &
+  rentals / Venues. Top bar shows the REAL workspace name (not "Workspace").
+  The old horizontal tab strip is gone; nothing renders twice.
+  *The "no rail at workspace tier" rule was reversed deliberately — Adam's
+  call, 2026-08-04.*
+
+- [ ] **SHELL-61 — Each workspace item lights on its own page.** /artists →
+  Artists active; /personnel → Personnel pool; /assets → Equipment & rentals;
+  /venues → Venues. /equipment (legacy) also lights Equipment & rentals.
+
+- [ ] **SHELL-62 — You scope is shelled.** /settings, /settings/members,
+  /settings/ai-limits, /profile, /bugs each render the YOU rail (Account /
+  Preferences / Team & roles / Billing / Report a bug) with the right item
+  active. Billing is dimmed — no page yet, and it says so on hover.
+
+- [ ] **SHELL-63 — /profile is off shell-v1.** No shell-v1 list rail on the
+  left; the YOU rail with Account active instead. The profile form still
+  saves.
+
+- [ ] **SHELL-64 — The tourless landings grey the bar, not the rail.** Open
+  /operations (also /budget, /advance) with NO tour remembered. The workspace
+  rail is fully visible and interactive; the top bar shows the mode pill
+  GREYED (not absent, not clickable, tooltip explains) and a live artist/tour
+  picker; the "Select a tour" prompt shows beneath. Picking a tour navigates
+  and the pill comes alive.
+
+- [ ] **SHELL-65 — A remembered tour still skips the landing.** With a tour in
+  context, /operations hard-replaces to /operations/[tourId] as before.
+
+- [ ] **SHELL-66 — The standalone rider editor joined the artist library.**
+  Open a pack at /rider-packs/[id]. ARTIST-scope rail, "Riders & specs" lit,
+  rail starts COLLAPSED (the pack sidebar keeps its width). The ↑ goes to
+  Workspace. Editing (?mode=edit) keeps the same chrome.
+
+- [ ] **SHELL-67 — The workspace switcher is on every tier now.** Top-right
+  (left of the avatar) on a tour page, an artist page, /artists and /settings.
+  Single-workspace users see a plain label, multi-workspace users a control.
+  *shell-v2's ProductHeader mounted this and the v3 bar didn't — S-3b closed
+  the regression.*
+
+- [ ] **SHELL-68 — Nothing double-renders anywhere.** Walk /artists →
+  /artists/[id] → a tour → /budget/[tourId] → /settings → /rider-packs/[id]:
+  exactly ONE top bar and ONE app rail on every page, and the ⌘K palette,
+  bug-report button and toasts still mount once.
