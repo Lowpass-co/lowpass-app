@@ -8,7 +8,7 @@
 
 import { jsPDF } from 'jspdf';
 import { effectiveInventoryDayRate } from '@/lib/rental-pricing';
-import { calcDays, fmtMoney, jobCurrency, fmtDate, type RentalJob, type RentalInventoryItem, type RentalJobItem } from './types';
+import { calcDays, fmtMoney, jobCurrency, fmtDate, resolveQuoteDisplay, type RentalJob, type RentalInventoryItem, type RentalJobItem } from './types';
 
 /* ── Theme tokens ─────────────────────────────────────────────────
    Mirrors the app's `--lp-*` CSS variables in `globals.css`. We can't
@@ -184,6 +184,10 @@ export async function exportJobPdf(opts: ExportOptions): Promise<void> {
      whose numbers change every time you re-export it. */
   const fxRate = job.fx_rate != null ? Number(job.fx_rate) : null;
   const conv = (usd: number) => (fxRate == null ? usd : usd * fxRate);
+  /* R2-6 — the PDF had the same split as the screen: conv() no-ops without a
+     rate while `cur` prints the foreign symbol anyway. A quote PDF is the
+     artifact a client signs, so this one mattered most. */
+  const { dispCur } = resolveQuoteDisplay(cur, fxRate);
 
   /** Paint the current page with the mode's background colour. jsPDF
    *  pages default to a transparent fill — without this, dark mode
@@ -419,9 +423,9 @@ export async function exportJobPdf(opts: ExportOptions): Promise<void> {
     const midY = y + 5;
     doc.text(String(it.quantity ?? 1), colQty, midY, { align: 'center' });
     doc.text(String(days),             colDays, midY, { align: 'center' });
-    doc.text(fmtMoney(conv(rate), cur),             colRate, midY, { align: 'right' });
+    doc.text(fmtMoney(conv(rate), dispCur),             colRate, midY, { align: 'right' });
     doc.setFont(BODY, 'bold');
-    doc.text(fmtMoney(conv(lineAmt), cur),          colSub - 2, midY, { align: 'right' });
+    doc.text(fmtMoney(conv(lineAmt), dispCur),          colSub - 2, midY, { align: 'right' });
 
     // Hairline separator
     y += rowH;
@@ -456,7 +460,7 @@ export async function exportJobPdf(opts: ExportOptions): Promise<void> {
   doc.text('Subtotal', totalsX + 2, y + 5);
   doc.setTextColor(...T.ink);
   doc.setFont(BODY, 'bold');
-  doc.text(fmtMoney(conv(subtotal), cur), totalsX + totalsW - 2, y + 5, { align: 'right' });
+  doc.text(fmtMoney(conv(subtotal), dispCur), totalsX + totalsW - 2, y + 5, { align: 'right' });
   y += 7;
 
   if (discAmt > 0) {
@@ -469,7 +473,7 @@ export async function exportJobPdf(opts: ExportOptions): Promise<void> {
     doc.text(discLabel, totalsX + 2, y + 5);
     doc.setTextColor(...ORANGE);
     doc.setFont(BODY, 'bold');
-    doc.text(`-${fmtMoney(conv(discAmt), cur)}`, totalsX + totalsW - 2, y + 5, { align: 'right' });
+    doc.text(`-${fmtMoney(conv(discAmt), dispCur)}`, totalsX + totalsW - 2, y + 5, { align: 'right' });
     y += 7;
   }
 
@@ -485,7 +489,7 @@ export async function exportJobPdf(opts: ExportOptions): Promise<void> {
   doc.text('TOTAL DUE', totalsX + 2, y + 4);
   doc.setFontSize(15);
   doc.setTextColor(...ORANGE);
-  doc.text(fmtMoney(conv(total), cur), totalsX + totalsW - 2, y + 4, { align: 'right' });
+  doc.text(fmtMoney(conv(total), dispCur), totalsX + totalsW - 2, y + 4, { align: 'right' });
   y += 12;
 
   // ── NOTES ──────────────────────────────────────────────────────

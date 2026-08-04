@@ -14,6 +14,7 @@ import { SpreadsheetGrid } from '@/components/spreadsheet-grid/SpreadsheetGrid';
 import type { GridColumn, GridRow } from '@/components/spreadsheet-grid/types';
 import {
   STATUS_OPTIONS, QUOTE_CURRENCIES, calcDays, fmtMoney, jobCurrency, fmtDate,
+  resolveQuoteDisplay,
   type EquipmentArtistOption,
   type EquipmentTourOption,
   type RentalJob, type RentalInventoryItem, type RentalJobItem,
@@ -104,6 +105,12 @@ export function JobDetail({ job, workspaceId, inventory, artists, tours, onBack,
 
   /** USD-denominated figure → the quote's currency. */
   const conv = useCallback((usd: number) => (fxRate == null ? usd : usd * fxRate), [fxRate]);
+
+  /* R2-6 — every money render below labels itself with dispCur, NOT cur. When
+     there is no rate, conv() is the identity function and the figures are
+     still dollars; printing `cur` over them is how £270 appeared for a $270
+     item. See resolveQuoteDisplay. */
+  const { dispCur, converted } = resolveQuoteDisplay(cur, fxRate);
 
   async function handleCurrencyChange(next: string) {
     const patch = { display_currency: next };
@@ -380,10 +387,10 @@ export function JobDetail({ job, workspaceId, inventory, artists, tours, onBack,
     { id: 'name', header: 'Item', accessor: 'name', type: { kind: 'text' }, flex: true, minWidth: 200 },
     { id: 'category', header: 'Category', accessor: 'category', type: { kind: 'text' }, width: 140 },
     { id: 'quantity', header: 'Qty', accessor: 'quantity', type: { kind: 'number', min: 1, decimals: 0 }, width: 80, align: 'right' },
-    { id: 'rate', header: 'Day rate', accessor: 'rate', type: { kind: 'currency', currency: cur }, width: 120, align: 'right' },
+    { id: 'rate', header: 'Day rate', accessor: 'rate', type: { kind: 'currency', currency: dispCur }, width: 120, align: 'right' },
     {
       id: 'lineTotal', header: 'Line total', accessor: 'lineTotal',
-      type: { kind: 'currency', currency: cur }, width: 130, align: 'right',
+      type: { kind: 'currency', currency: dispCur }, width: 130, align: 'right',
     },
   ];
 
@@ -671,7 +678,7 @@ export function JobDetail({ job, workspaceId, inventory, artists, tours, onBack,
                             </span>
                           ) : (
                             <span className="lp-mono shrink-0 text-xs" style={{ color: 'var(--lp-text-secondary)' }}>
-                              {fmtMoney(conv(effectiveInventoryDayRate(i) ?? 0), cur)}/day
+                              {fmtMoney(conv(effectiveInventoryDayRate(i) ?? 0), dispCur)}/day
                             </span>
                           )}
                         </div>
@@ -767,17 +774,23 @@ export function JobDetail({ job, workspaceId, inventory, artists, tours, onBack,
                 </div>
 
                 {cur !== 'USD' ? (
-                  rateMissing ? (
+                  !converted ? (
+                    /* Keyed off `converted`, not `rateMissing`. rateMissing is
+                       only ever set by the FETCH, so a non-draft job that never
+                       froze a rate fell through to the old `: null` branch and
+                       rendered NOTHING — a GBP quote showing dollar figures
+                       with no warning at all. That silent state is what shipped
+                       in R2-6. */
                     <p className="lp-mono text-[10px] leading-snug" style={{ color: 'var(--lp-warning, #F0553D)' }}>
-                      No FX rate available — figures shown are USD, unconverted.
+                      No {cur} rate available{rateMissing ? '' : ' for this quote'} — figures shown in USD.
                     </p>
-                  ) : fxRate != null ? (
+                  ) : (
                     <p className="lp-mono text-[10px] leading-snug" style={{ color: 'var(--lp-text-tertiary)' }}>
-                      1 USD = {fxRate.toFixed(4)} {cur}
+                      1 USD = {fxRate!.toFixed(4)} {cur}
                       {fxRateAt ? ` · ${fmtDate(fxRateAt.slice(0, 10))}` : ''}
                       {isDraft ? ' · live' : ' · frozen'}
                     </p>
-                  ) : null
+                  )
                 ) : null}
               </div>
 
@@ -788,14 +801,14 @@ export function JobDetail({ job, workspaceId, inventory, artists, tours, onBack,
                   inside a flex child, shrink-0 + tabular-nums keeps the figures
                   on one line and on a shared right edge. */}
               <span className="min-w-0 truncate">Items subtotal</span>
-              <span className="lp-mono shrink-0 tabular-nums">{fmtMoney(conv(subtotal), cur)}</span>
+              <span className="lp-mono shrink-0 tabular-nums">{fmtMoney(conv(subtotal), dispCur)}</span>
             </div>
             {discAmt > 0 && (
               <div className="flex items-baseline justify-between gap-3 text-sm font-medium" style={{ color: '#F59E0B' }}>
                 <span className="min-w-0 truncate">
                   {dp > 0 && df > 0 ? `${dp}% + fixed` : dp > 0 ? `${dp}% discount` : 'Fixed discount'}
                 </span>
-                <span className="lp-mono shrink-0 tabular-nums">−{fmtMoney(conv(discAmt), cur)}</span>
+                <span className="lp-mono shrink-0 tabular-nums">−{fmtMoney(conv(discAmt), dispCur)}</span>
               </div>
             )}
             <div
@@ -803,7 +816,7 @@ export function JobDetail({ job, workspaceId, inventory, artists, tours, onBack,
               style={{ borderTop: '1px solid var(--lp-border)', color: 'var(--lp-text)' }}
             >
               <span className="min-w-0 truncate">Total</span>
-              <span className="lp-mono shrink-0 tabular-nums">{fmtMoney(conv(total), cur)}</span>
+              <span className="lp-mono shrink-0 tabular-nums">{fmtMoney(conv(total), dispCur)}</span>
             </div>
           </div>
 

@@ -187,3 +187,37 @@ export function fmtDate(d: string | null): string {
   if (!d) return '—';
   return new Date(d + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 }
+
+/* ============================================
+   R2-6 — THE SYMBOL AND THE NUMBER MUST AGREE
+
+   Switching a quote to GBP re-rendered $17,189.10 as £17,189.10. Identical
+   figure, new symbol. A UK client would have been quoted £270/day for a
+   $270/day item.
+
+   The conversion code was right; it just never ran. `conv()` is the identity
+   function when the FX rate is null, while `cur` changed regardless — so the
+   two halves of a price were sourced independently and could disagree. Three
+   ways to reach a null rate, all of which shipped:
+
+     · both FX vendors failing (they were — see the exchange-rate route),
+     · a NON-DRAFT job that never froze a rate, which skips the fetch entirely,
+     · the fetch simply not having resolved yet on first paint.
+
+   Rather than patch each, derive the symbol from the same fact that decides
+   the number. If there is no rate, the figures ARE dollars, so they are
+   labelled dollars and the UI says why. A mixed pair is now unrepresentable.
+   ============================================ */
+
+export type QuoteDisplay = {
+  /** Currency the FIGURES are actually in — never a symbol we cannot back. */
+  dispCur: string;
+  /** False when the quote wanted a foreign currency and we had no rate. */
+  converted: boolean;
+};
+
+export function resolveQuoteDisplay(cur: string, fxRate: number | null): QuoteDisplay {
+  if (cur === 'USD') return { dispCur: 'USD', converted: true };
+  if (fxRate == null) return { dispCur: 'USD', converted: false };
+  return { dispCur: cur, converted: true };
+}

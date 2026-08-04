@@ -40,8 +40,17 @@ async function fetchLiveRate(from: string, to: string): Promise<number | null> {
       { next: { revalidate: CACHE_MAX_AGE } }
     );
     if (res.ok) {
-      const data = (await res.json()) as { conversion_rates?: Record<string, number> };
-      const rate = data?.conversion_rates?.[to];
+      /* `conversion_rates` is the PAID v6 shape. The free open.er-api.com
+         endpoint this URL actually hits returns `rates`. Reading only the paid
+         key meant vendor 2 silently returned null for every pair — and since
+         vendor 1 (api.exchangerate.host) went key-gated and now answers 200
+         with {success:false} and no `rates`, BOTH legs failed and this route
+         502'd for every currency. Read both shapes. */
+      const data = (await res.json()) as {
+        rates?: Record<string, number>;
+        conversion_rates?: Record<string, number>;
+      };
+      const rate = data?.rates?.[to] ?? data?.conversion_rates?.[to];
       if (typeof rate === 'number') return rate;
     }
   } catch {
