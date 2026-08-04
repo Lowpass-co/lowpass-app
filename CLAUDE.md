@@ -172,6 +172,37 @@ The same applies to any count you didn't read — a grep's first
 screen said three `/tours` links when there were 32. **Read the
 referrers, don't tally them.**
 
+**A reference count of ZERO deserves following too — and for the
+opposite reason.** One means "who is the referrer?"; zero means
+"then nothing is checking this." Unexercised code can be wrong
+indefinitely with no signal, because every signal we have —
+errors, tests, user reports — requires something to run it.
+
+The worked example is `/api/budget/exchange-rate`, and it is the
+good one precisely because the code was *fine*: two vendors with
+an ordered fallback, a documented admin-refresh POST seam, clean
+error mapping. It also 502'd for every currency pair for every
+caller, for months, because leg two parsed the PAID vendor shape
+(`conversion_rates`) against the FREE endpoint (`rates`). It went
+unnoticed because the GET had no caller until an equipment
+feature added one, and the POST seam has **zero** callers to this
+day. **Code quality is not evidence when nothing runs it.**
+
+**Corollary: when a failure mode is SILENT, prevention beats
+detection.** Both vendor legs signalled failure by returning
+`null` rather than throwing, so there was no exception, no log
+line, no 500 — nothing to detect. You cannot alert on an absence
+nobody emits. So the defences that work are the ones that make
+the bad state unrepresentable or unaddable in the first place:
+the middleware allow-list, the P0-C route-guard ratchet
+(`src/lib/auth/route-guard-coverage.test.tsx`), and
+`resolveQuoteDisplay()` deriving a currency symbol from the same
+fact that decides the number, so a £ can never sit over a $
+figure. Where prevention genuinely isn't available, buy a
+positive assertion instead — something must claim a NUMBER comes
+back for a known pair. "Returns 200" would have passed that route
+throughout; the 200 was never the problem.
+
 See `docs/handover/IA_HIERARCHY.md` for the full reference.
 
 ### Component primitives
