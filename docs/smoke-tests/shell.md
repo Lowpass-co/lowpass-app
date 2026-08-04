@@ -482,6 +482,52 @@ list, Routing and Payroll all mount. Adam's trade.
 
 ---
 
+## Still to do — Equipment quote R2
+
+- [ ] **EQ-R2-01 — The picker selects by row, with per-row values.** Open a job
+  → **Add items**. Click a row: it takes the orange treatment and reveals its
+  **own Qty and Rate**. Click a second row — it gets its own pair. Set **3** on
+  one and **1** on the other, Add: two lines land with the right quantities.
+  *One global "qty each" across a mixed selection was the thing being replaced;
+  if you can still find one field governing everything, that's a fail.*
+  Also: shift-click still ranges, no checkboxes anywhere, and typing in a Qty
+  box must not deselect the row.
+
+- [ ] **EQ-R2-02 — The add panel folds.** On a quote **with lines** the panel
+  starts **collapsed**; on an empty one it starts **open**. Toggle it, reload —
+  your choice persists. Select two rows, collapse: the header still says
+  "2 selected".
+
+- [ ] **EQ-R2-03 — The title clears the bar. NEEDS BOTH WIDTHS.** `/equipment`
+  at **~1500** and **~1900**: **RENTAL JOBS** is fully visible, tops of the
+  letters not shaved.
+  *I could not reproduce this — no browser at your widths. I fixed the mechanism
+  I can prove (a tight line-height clipped inside an overflow-hidden shell). If
+  it is actually OVERLAP with the tab bar, this will not fix it — say so and it
+  becomes a different finding.*
+
+- [ ] **EQ-R2-04 — Pricing rows sit on one line each.** In PRICING:
+  **Items subtotal**, the discount row and **Total** each keep label and figure
+  on one line, figures in mono on a shared right edge. Narrow the window until
+  the labels truncate — the figures must never wrap or collide.
+
+- [ ] **EQ-R2-05 — Edit opens, and dates save.** On a job, click **Edit**.
+  *The dialog should appear at all* — it never did.
+  Change the start and end dates, save. Then confirm the derived numbers moved:
+  **billable days** changes, and **every line subtotal and the total** change
+  with it.
+  *That last half has never been exercised, because nothing ever saved.*
+
+- [ ] **EQ-R2-06 — Currency actually converts. NEEDS MIGRATION 253 PASTED.**
+  Switch a **draft** quote USD → GBP and check the **numbers**, not the symbol:
+  each line's day rate, each line total, items subtotal, discount, total.
+  Rate and date visible. Then **confirm the job** and re-export the PDF — it
+  must use the **frozen** rate.
+  *The failure to hunt is the one I already caught once: new symbol over an
+  unconverted number.*
+
+---
+
 ## Already verified on `431f316` (Cowork, no need to repeat)
 
 - **SHELL-01 — The shell renders on Routing.** Top bar: workspace · artist/tour

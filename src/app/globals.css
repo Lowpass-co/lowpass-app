@@ -1239,6 +1239,18 @@ textarea::selection,
   text-transform: uppercase;
   line-height: 1.02;
   letter-spacing: 0.005em;
+  /* R2-3 — the title was clipped along its top edge. line-height 1.02 makes the
+     line box almost exactly the text height, and Barlow Condensed's caps reach
+     past it, so any ancestor with overflow:hidden shaves the tops off. The
+     shells above these pages DO clip (h-screen + overflow-hidden, so <main> is
+     the only scroll surface).
+
+     Headroom rather than a bigger line-height: raising the leading would loosen
+     every page title in the app to fix one clipped edge. padding + a negative
+     margin of the same size gives the glyph box room to breathe while leaving
+     the title's position and rhythm exactly where they were. */
+  padding-block-start: 0.09em;
+  margin-block-start: -0.09em;
 }
 
 /* ============================================

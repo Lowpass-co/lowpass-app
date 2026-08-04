@@ -1003,6 +1003,100 @@ separable win, and it needs no primitive change.
 
 ---
 
+## Equipment quote — EQ-R2 · `<commit>`
+
+### R2-5 — the diagnosis is none of the three options
+
+**The Edit button never opened anything.** `<JobModal>` is rendered at the
+bottom of `JobsTab`, but `if (activeJob) return <JobDetail…>` fires above it —
+and inside a job is the *only* place the Edit button exists. So clicking Edit
+set `modalOpen = true` and then returned past the JSX that reads it.
+
+Not "field absent", not "not persisting", not "not re-rendering": the dialog
+never mounted. The date fields are present and correct, and the save path
+(update → select with embeds → `onSaved` → `setJobs` → `activeJob` recomputes)
+is sound — it was simply never reached.
+
+So **"edit doesn't work for dates" is really "Edit doesn't open"**, and nothing
+in that dialog worked from that screen. Fixed by rendering the modal in both
+branches, as **one shared block** rather than duplicated markup — so the next
+person cannot fix one copy and miss the other.
+
+Because it never saved, there is no date-derivation bug to chase: `days` is
+computed at render from `job.start_date/end_date` via `calcRentalBillableDays`,
+and every line subtotal reads that `days`. A real save re-derives everything.
+That is now testable for the first time (EQ-R2-05).
+
+### R2-1 — per-row qty and rate, row-click selection
+
+Adam's objection was exact: one global QTY EACH across a mixed selection is
+wrong the moment you want 3 of one thing and 1 of another — the normal case.
+
+Selection is a **Map**, not a Set: each selected row carries its own `{qty,
+rate}`, defaulting to 1 and the item's effective day rate. Clicking the row
+selects it (**no checkbox**), shift-click still ranges, and the selected row
+reveals its own inline inputs. Add still inserts the whole batch in **one**
+call, each row with its own values.
+
+The global fields are **deleted**, not hidden — including their state, which
+lint then confirmed was dead.
+
+Two details worth stating: the selected row uses **inset ring + tint, not a
+border** (G2-2b), because a border changes the box and shifts every row below
+it on select. And the inline inputs `stopPropagation`, or typing in them would
+toggle the row out from under the cursor.
+
+**Rate override is stored only when it DIFFERS from the derived rate.** An
+override equal to the auto rate is not an override, and persisting it would
+silently pin that line against future rate changes — exactly what the 1%→3%
+change just moved.
+
+### R2-2 — the add panel collapses
+
+Open while the quote is empty, collapsed once it has lines, user's choice wins
+after that, persisted per user like the nav rail. Collapsed header still shows
+the selection count, so a pending selection can't hide behind a fold.
+
+### R2-4 — the pricing rows
+
+`flex justify-between` lets **both** children wrap, which is why the label
+collided with its figure. The fix is asymmetric on purpose: the label may shrink
+and ellipsis (`min-w-0 truncate`), the money may not (`shrink-0`, mono,
+`tabular-nums`). All three rows share one right edge and a `gap-3` floor.
+
+### R2-3 — the clipped title
+
+`.lp-page-title` sets `line-height: 1.02`, so the line box is almost exactly the
+text height and Barlow Condensed's caps reach past it — any ancestor with
+`overflow:hidden` shaves the tops, and these shells do clip (`h-screen` +
+`overflow-hidden`, `<main>` the only scroll surface).
+
+Fixed with **headroom, not leading**: `padding-block-start: 0.09em` plus an
+equal negative margin. Raising the line-height would loosen every page title in
+the app to fix one clipped edge; this leaves position and rhythm identical.
+
+**I could not reproduce it visually** — no session, no browser at Adam's widths.
+The mechanism is certain and the fix is app-wide, but **EQ-R2-03 needs his eyes
+at ~1500 and ~1900**. If it is overlap with the tab bar rather than glyph
+clipping, this will not fix it and the finding is a different one.
+
+### NOT DONE — the line-table port to SpreadsheetGrid
+
+Deliberately deferred, not forgotten. The R2 items above are five behavioural
+changes to the same file, and the port is a rebuild of the line table on top of
+them. Landing both in one bank would mean a revert takes the bug fixes with it —
+and Adam's five annotations are the things he is waiting on.
+
+The assessment from last bank still holds and nothing here changed it: it ports
+with **no primitive change**, using the `currency` cell for the job currency and
+`entityRef: 'gear'` for the item cell. It is the next bank, and it is now a
+better one — the R2-1 rework settled how a line's qty and rate are entered,
+which is the behaviour the grid has to reproduce.
+
+**Smoke:** EQ-R2-01 … EQ-R2-05.
+
+---
+
 ## Queued, not started
 
 In order. Nothing proceeds until **SHELL-49** (the readonly-account walk)

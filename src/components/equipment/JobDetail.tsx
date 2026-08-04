@@ -5,7 +5,7 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { ArrowLeft, Trash2, Plus, FileDown, Sun, Moon, Package, Search, X } from 'lucide-react';
+import { ArrowLeft, Trash2, Plus, FileDown, Sun, Moon, Package, Search, X, ChevronDown, ChevronRight } from 'lucide-react';
 import { createClient } from '@/lib/supabase-client';
 import { useToast } from '@/components/ui/Toast';
 import { effectiveInventoryDayRate } from '@/lib/rental-pricing';
@@ -42,8 +42,16 @@ export function JobDetail({ job, workspaceId, inventory, artists, tours, onBack,
      six things to a quote was six round trips through a dropdown. Now: a search
      box, a checkbox list, shift-click ranges, and ONE insert for the batch. */
   const [search,   setSearch]   = useState('');
-  const [selIds,   setSelIds]   = useState<Set<string>>(new Set());
+  /* R2-1 — selection is a MAP, not a Set: each selected row carries its OWN qty
+     and rate. The previous design applied one global "QTY EACH" across the whole
+     selection, which is wrong the moment you want 3 of one thing and 1 of
+     another — the normal case, and Adam's actual objection. */
+  const [sel, setSel] = useState<Map<string, { qty: string; rate: string }>>(new Map());
   const lastIdxRef = useRef<number | null>(null);
+  /* R2-2 — the add panel is a BUILDING tool, not an editing one: open while the
+     quote is empty, collapsed once it has lines, and the user's own choice wins
+     from then on. Persisted like the nav rail's collapse. */
+  const [panelOpen, setPanelOpen] = useState<boolean | null>(null);
 
   /* ── Item 2: the quote's currency ──
      The job carries it, not the line: a quote is denominated once. Items keep
@@ -102,8 +110,6 @@ export function JobDetail({ job, workspaceId, inventory, artists, tours, onBack,
     onJobUpdated({ ...job, ...patch });
   }
 
-  const [qty,      setQty]      = useState('1');
-  const [rateOvr,  setRateOvr]  = useState('');
   const [adding,   setAdding]   = useState(false);
 
   // Discount / status (local, debounce-saved)
@@ -136,26 +142,43 @@ export function JobDetail({ job, workspaceId, inventory, artists, tours, onBack,
     );
   }, [inventory, search]);
 
-  /** Item 4 — click toggles; shift-click extends from the last click, over the
-   *  FILTERED order, which is the order on screen. Ranging over the unfiltered
-   *  list would select rows the user cannot see. */
+  /** Defaults for a newly selected row: one of it, at its own effective day
+   *  rate. Per row, so a mixed selection is expressible. */
+  function draftFor(it: RentalInventoryItem) {
+    return { qty: '1', rate: String(effectiveInventoryDayRate(it) ?? 0) };
+  }
+
+  /** R2-1 — CLICK THE ROW to select; no checkbox. Shift-click still extends
+   *  from the last click over the FILTERED order, which is the order on screen —
+   *  ranging over the unfiltered list would select rows you cannot see. */
   function toggleAt(idx: number, shiftKey: boolean) {
     const item = filteredInventory[idx];
     if (!item) return;
-    setSelIds((prev) => {
-      const next = new Set(prev);
+    setSel((prev) => {
+      const next = new Map(prev);
       const from = shiftKey && lastIdxRef.current != null ? lastIdxRef.current : idx;
       const [lo, hi] = from <= idx ? [from, idx] : [idx, from];
       const turningOn = !prev.has(item.id);
       for (let i = lo; i <= hi; i++) {
-        const id = filteredInventory[i]?.id;
-        if (!id) continue;
-        if (turningOn) next.add(id);
-        else next.delete(id);
+        const row = filteredInventory[i];
+        if (!row) continue;
+        if (turningOn) { if (!next.has(row.id)) next.set(row.id, draftFor(row)); }
+        else next.delete(row.id);
       }
       return next;
     });
     lastIdxRef.current = idx;
+  }
+
+  /** Edit one selected row without disturbing the others. */
+  function setDraft(id: string, patch: Partial<{ qty: string; rate: string }>) {
+    setSel((prev) => {
+      const cur0 = prev.get(id);
+      if (!cur0) return prev;
+      const next = new Map(prev);
+      next.set(id, { ...cur0, ...patch });
+      return next;
+    });
   }
 
   const statusSelectOptions: StyledSelectOption<RentalJob['status']>[] = STATUS_OPTIONS.map((s) => ({
@@ -175,6 +198,23 @@ export function JobDetail({ job, workspaceId, inventory, artists, tours, onBack,
   }, [job.id]);
 
   useEffect(() => { fetchItems(); }, [fetchItems]);
+
+  /* R2-2 — default OPEN while the quote is empty, COLLAPSED once it has lines;
+     the user's own choice overrides both and persists. Read lazily so there is
+     no hydration mismatch and no set-state-in-effect. */
+  const PANEL_KEY = 'lowpass:quote:addpanel:open';
+  useEffect(() => {
+    if (panelOpen !== null) return;
+    try {
+      const stored = window.localStorage.getItem(PANEL_KEY);
+      if (stored !== null) { setPanelOpen(stored === '1'); return; }
+    } catch { /* private mode */ }
+  }, [panelOpen]);
+  const addOpen = panelOpen ?? jobItems.length === 0;
+  function setPanelOpenPersisted(next: boolean) {
+    setPanelOpen(next);
+    try { window.localStorage.setItem(PANEL_KEY, next ? '1' : '0'); } catch { /* nicety */ }
+  }
 
   /* ── Pricing ── */
   let subtotal = 0;
@@ -203,27 +243,39 @@ export function JobDetail({ job, workspaceId, inventory, artists, tours, onBack,
      uncommon path (re-adding what you already added) and it is bounded by the
      selection size. The common path, adding new items, is one call. */
   async function handleAddSelected() {
-    if (selIds.size === 0) return;
+    if (sel.size === 0) return;
     setAdding(true);
 
-    const addQty = Math.max(1, parseInt(qty) || 1);
-    const override = rateOvr ? parseFloat(rateOvr) : null;
+    const onJobBy = new Map(jobItems.map((it) => [it.inventory_id, it] as const));
+    const fresh: Array<{ id: string; qty: number; rate: number }> = [];
+    const bump: Array<{ row: RentalJobItem; qty: number }> = [];
 
-    const existing = jobItems.filter((it) => selIds.has(it.inventory_id));
-    const existingIds = new Set(existing.map((it) => it.inventory_id));
-    const freshIds = [...selIds].filter((id) => !existingIds.has(id));
+    for (const [invId, d] of sel) {
+      const q = Math.max(1, parseInt(d.qty) || 1);
+      const r = parseFloat(d.rate);
+      const existing = onJobBy.get(invId);
+      if (existing) bump.push({ row: existing, qty: q });
+      else fresh.push({ id: invId, qty: q, rate: Number.isFinite(r) ? r : 0 });
+    }
 
     let failed = false;
 
-    if (freshIds.length > 0) {
-      /* Sprint 12 §1 — workspace_id required by the canonical RLS WITH CHECK
+    if (fresh.length > 0) {
+      /* ONE insert for the batch, each row carrying ITS OWN qty and rate.
+         Sprint 12 §1 — workspace_id required by the canonical RLS WITH CHECK
          clause from migration 095. */
-      const rows = freshIds.map((inventory_id) => {
+      const rows = fresh.map(({ id, qty: q, rate: r }) => {
         const row: Record<string, unknown> = {
           job_id: job.id,
-          inventory_id,
-          quantity: addQty,
-          day_rate_override: override,
+          inventory_id: id,
+          quantity: q,
+          /* Store the rate only when it DIFFERS from what the item derives —
+             an override equal to the auto rate is not an override, and pinning
+             it would silently freeze the line against future rate changes. */
+          day_rate_override:
+            Math.abs(r - (effectiveInventoryDayRate(
+              inventory.find((i) => i.id === id) ?? { day_rate: null, purchase_cost: null },
+            ) ?? 0)) < 0.005 ? null : r,
         };
         if (workspaceId) row.workspace_id = workspaceId;
         return row;
@@ -233,25 +285,26 @@ export function JobDetail({ job, workspaceId, inventory, artists, tours, onBack,
       else setJobItems((prev) => [...prev, ...((data ?? []) as RentalJobItem[])]);
     }
 
-    for (const it of existing) {
-      const nextQty = (it.quantity || 1) + addQty;
+    /* Already-on-the-quote items increment instead of duplicating. Per-row
+       UPDATEs — Supabase has no bulk add-to-value — but this is the uncommon
+       path and it is bounded by the selection. */
+    for (const { row, qty: q } of bump) {
+      const nextQty = (row.quantity || 1) + q;
       const { error } = await supabase
         .from('rental_job_items')
         .update({ quantity: nextQty })
-        .eq('id', it.id);
+        .eq('id', row.id);
       if (error) { showToast('Failed to update quantity: ' + error.message, 'error'); failed = true; continue; }
-      setJobItems((prev) => prev.map((r) => (r.id === it.id ? { ...r, quantity: nextQty } : r)));
+      setJobItems((prev) => prev.map((r) => (r.id === row.id ? { ...r, quantity: nextQty } : r)));
     }
 
     setAdding(false);
     if (failed) return;
 
-    /* Selection clears only on success — a failed add that also wiped the
-       selection would make the retry a re-pick. */
-    setSelIds(new Set());
+    /* Clears only on SUCCESS — a failed add that also wiped the selection would
+       make the retry a re-pick. */
+    setSel(new Map());
     lastIdxRef.current = null;
-    setQty('1');
-    setRateOvr('');
   }
 
   /* ── Remove item ── */
@@ -389,135 +442,166 @@ export function JobDetail({ job, workspaceId, inventory, artists, tours, onBack,
         {/* ── Left: line items ── */}
         <div className="space-y-4">
 
-          {/* Add items — search, multi-select, one batched add (items 3+4) */}
+          {/* Add items — row-click selection with per-row qty/rate (R2-1),
+              collapsible (R2-2) */}
           <div
-            className="rounded-xl border p-4 space-y-3"
+            className="rounded-xl border"
             style={{ borderColor: 'var(--lp-border)', backgroundColor: 'var(--lp-bg-secondary)' }}
           >
-            {/* Search */}
-            <div className="relative">
-              <Search
-                size={14}
-                className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
-                style={{ color: 'var(--lp-text-tertiary)' }}
-              />
-              <input
-                type="search"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search inventory — name, category, serial"
-                aria-label="Search inventory"
-                className="w-full rounded-lg border pl-9 pr-8 py-2 text-sm"
-                style={{ borderColor: 'var(--lp-border)', backgroundColor: 'var(--lp-surface)', color: 'var(--lp-text)' }}
-              />
-              {search ? (
-                <button
-                  type="button"
-                  onClick={() => setSearch('')}
-                  aria-label="Clear search"
-                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1"
-                  style={{ color: 'var(--lp-text-tertiary)' }}
-                >
-                  <X size={13} />
-                </button>
-              ) : null}
-            </div>
-
-            {/* Checkbox list. Shift-click extends from the last row you clicked. */}
-            <div
-              className="max-h-56 overflow-y-auto rounded-lg border"
-              style={{ borderColor: 'var(--lp-border)', backgroundColor: 'var(--lp-surface)' }}
+            <button
+              type="button"
+              onClick={() => setPanelOpenPersisted(!addOpen)}
+              aria-expanded={addOpen}
+              className="flex w-full items-center gap-2 px-4 py-3 text-left"
             >
-              {filteredInventory.length === 0 ? (
-                <p className="px-3 py-4 text-sm" style={{ color: 'var(--lp-text-tertiary)' }}>
-                  {inventory.length === 0 ? 'No inventory in this workspace.' : `Nothing matches “${search}”.`}
-                </p>
-              ) : (
-                filteredInventory.map((i, idx) => {
-                  const checked = selIds.has(i.id);
-                  const onJob = jobItems.some((it) => it.inventory_id === i.id);
-                  return (
-                    <label
-                      key={i.id}
-                      className="flex cursor-pointer items-center gap-3 px-3 py-2 text-sm"
-                      style={{ backgroundColor: checked ? 'color-mix(in srgb, var(--lp-orange) 10%, transparent)' : undefined }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={checked}
-                        onChange={() => { /* click handled below so shift is available */ }}
-                        onClick={(e) => toggleAt(idx, (e as unknown as { shiftKey: boolean }).shiftKey)}
-                        className="h-4 w-4 shrink-0 accent-[#FF4500]"
-                      />
-                      <span className="min-w-0 flex-1 truncate" style={{ color: 'var(--lp-text)' }}>
-                        {i.name}
-                        {i.category ? (
-                          <span style={{ color: 'var(--lp-text-tertiary)' }}> · {i.category}</span>
-                        ) : null}
-                        {onJob ? (
-                          <span className="lp-mono ml-2 text-[10px] uppercase" style={{ color: 'var(--lp-text-tertiary)' }}>
-                            on quote
-                          </span>
-                        ) : null}
-                      </span>
-                      <span className="lp-mono shrink-0 text-xs" style={{ color: 'var(--lp-text-secondary)' }}>
-                        {fmtMoney(conv(effectiveInventoryDayRate(i) ?? 0), cur)}/day
-                      </span>
-                    </label>
-                  );
-                })
-              )}
-            </div>
+              {addOpen ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+              <span className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--lp-text-secondary)' }}>
+                Add items
+              </span>
+              {!addOpen && sel.size > 0 ? (
+                <span className="lp-mono text-[10px]" style={{ color: 'var(--lp-orange)' }}>
+                  {sel.size} selected
+                </span>
+              ) : null}
+              <span className="ml-auto lp-mono text-[10px]" style={{ color: 'var(--lp-text-tertiary)' }}>
+                {inventory.length} in inventory
+              </span>
+            </button>
 
-            <div className="flex flex-wrap items-end gap-3">
-              <div className="w-20 space-y-1">
-                <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--lp-text-secondary)' }}>Qty each</label>
-                <input
-                  type="number" value={qty} onChange={e => setQty(e.target.value)}
-                  min="1"
-                  className="w-full rounded-lg border px-3 py-2 text-sm text-center"
-                  style={{ borderColor: 'var(--lp-border)', backgroundColor: 'var(--lp-surface)', color: 'var(--lp-text)' }}
-                />
-              </div>
-              <div className="w-32 space-y-1">
-                <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--lp-text-secondary)' }}>Rate Override</label>
+            {addOpen ? (
+              <div className="space-y-3 px-4 pb-4">
+                {/* Search */}
                 <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs" style={{ color: 'var(--lp-text-tertiary)' }}>$</span>
+                  <Search
+                    size={14}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+                    style={{ color: 'var(--lp-text-tertiary)' }}
+                  />
                   <input
-                    type="number" value={rateOvr} onChange={e => setRateOvr(e.target.value)}
-                    placeholder="Default" min="0" step="0.01"
-                    className="w-full rounded-lg border pl-5 pr-3 py-2 text-sm"
+                    type="search"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Search inventory — name, category, serial"
+                    aria-label="Search inventory"
+                    className="w-full rounded-lg border pl-9 pr-8 py-2 text-sm"
                     style={{ borderColor: 'var(--lp-border)', backgroundColor: 'var(--lp-surface)', color: 'var(--lp-text)' }}
                   />
+                  {search ? (
+                    <button
+                      type="button"
+                      onClick={() => setSearch('')}
+                      aria-label="Clear search"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1"
+                      style={{ color: 'var(--lp-text-tertiary)' }}
+                    >
+                      <X size={13} />
+                    </button>
+                  ) : null}
+                </div>
+
+                {/* Rows. CLICK to select; shift-click extends. A selected row
+                    reveals its OWN qty and rate — no global "qty each". */}
+                <div
+                  className="max-h-64 overflow-y-auto rounded-lg border"
+                  style={{ borderColor: 'var(--lp-border)', backgroundColor: 'var(--lp-surface)' }}
+                >
+                  {filteredInventory.length === 0 ? (
+                    <p className="px-3 py-4 text-sm" style={{ color: 'var(--lp-text-tertiary)' }}>
+                      {inventory.length === 0 ? 'No inventory in this workspace.' : `Nothing matches “${search}”.`}
+                    </p>
+                  ) : (
+                    filteredInventory.map((i, idx) => {
+                      const draft = sel.get(i.id);
+                      const selected = !!draft;
+                      const onJob = jobItems.some((it) => it.inventory_id === i.id);
+                      return (
+                        <div
+                          key={i.id}
+                          role="option"
+                          aria-selected={selected}
+                          tabIndex={0}
+                          onClick={(e) => toggleAt(idx, e.shiftKey)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleAt(idx, e.shiftKey); }
+                          }}
+                          className="flex cursor-pointer select-none items-center gap-3 px-3 py-2 text-sm"
+                          style={{
+                            /* G2-2b selected-row grammar: inset ring + tint, NOT
+                               a border — a border changes the box and shifts every
+                               row below it on select. */
+                            backgroundColor: selected ? 'color-mix(in srgb, var(--lp-orange) 12%, transparent)' : undefined,
+                            boxShadow: selected ? 'inset 2px 0 0 var(--lp-orange)' : undefined,
+                          }}
+                        >
+                          <span className="min-w-0 flex-1 truncate" style={{ color: 'var(--lp-text)' }}>
+                            {i.name}
+                            {i.category ? <span style={{ color: 'var(--lp-text-tertiary)' }}> · {i.category}</span> : null}
+                            {onJob ? (
+                              <span className="lp-mono ml-2 text-[10px] uppercase" style={{ color: 'var(--lp-text-tertiary)' }}>
+                                on quote
+                              </span>
+                            ) : null}
+                          </span>
+
+                          {selected ? (
+                            /* stopPropagation so typing in these doesn't toggle
+                               the row out from under the cursor. */
+                            <span className="flex shrink-0 items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                              <label className="lp-mono text-[10px] uppercase" style={{ color: 'var(--lp-text-tertiary)' }}>Qty</label>
+                              <input
+                                type="number" min="1" value={draft.qty}
+                                onChange={(e) => setDraft(i.id, { qty: e.target.value })}
+                                aria-label={`Quantity for ${i.name}`}
+                                className="w-14 rounded border px-2 py-1 text-center text-xs"
+                                style={{ borderColor: 'var(--lp-border)', backgroundColor: 'var(--lp-surface)', color: 'var(--lp-text)' }}
+                              />
+                              <label className="lp-mono text-[10px] uppercase" style={{ color: 'var(--lp-text-tertiary)' }}>Rate</label>
+                              <input
+                                type="number" min="0" step="0.01" value={draft.rate}
+                                onChange={(e) => setDraft(i.id, { rate: e.target.value })}
+                                aria-label={`Day rate for ${i.name}`}
+                                className="w-20 rounded border px-2 py-1 text-right text-xs"
+                                style={{ borderColor: 'var(--lp-border)', backgroundColor: 'var(--lp-surface)', color: 'var(--lp-text)' }}
+                              />
+                            </span>
+                          ) : (
+                            <span className="lp-mono shrink-0 text-xs" style={{ color: 'var(--lp-text-secondary)' }}>
+                              {fmtMoney(conv(effectiveInventoryDayRate(i) ?? 0), cur)}/day
+                            </span>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3">
+                  <span className="flex-1 text-xs" style={{ color: 'var(--lp-text-tertiary)' }}>
+                    {sel.size > 0
+                      ? `${sel.size} selected · each row carries its own qty and rate`
+                      : 'Click a row to select. Shift-click for a range.'}
+                  </span>
+                  {sel.size > 0 ? (
+                    <button
+                      onClick={() => { setSel(new Map()); lastIdxRef.current = null; }}
+                      className="rounded-lg px-3 py-2 text-xs font-semibold uppercase tracking-wider"
+                      style={{ color: 'var(--lp-text-secondary)' }}
+                    >
+                      Clear
+                    </button>
+                  ) : null}
+                  <button
+                    onClick={handleAddSelected}
+                    disabled={sel.size === 0 || adding}
+                    className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold uppercase tracking-wider text-white disabled:opacity-40 transition-colors"
+                    style={{ backgroundColor: '#FF4500' }}
+                  >
+                    <Plus size={13} strokeWidth={2.5} />
+                    {adding ? 'Adding…' : sel.size > 1 ? `Add ${sel.size}` : 'Add'}
+                  </button>
                 </div>
               </div>
-
-              <span className="flex-1 text-xs" style={{ color: 'var(--lp-text-tertiary)' }}>
-                {selIds.size > 0
-                  ? `${selIds.size} selected · qty and rate apply to each`
-                  : 'Select items to add. Shift-click for a range.'}
-              </span>
-
-              {selIds.size > 0 ? (
-                <button
-                  onClick={() => { setSelIds(new Set()); lastIdxRef.current = null; }}
-                  className="rounded-lg px-3 py-2 text-xs font-semibold uppercase tracking-wider"
-                  style={{ color: 'var(--lp-text-secondary)' }}
-                >
-                  Clear
-                </button>
-              ) : null}
-
-              <button
-                onClick={handleAddSelected}
-                disabled={selIds.size === 0 || adding}
-                className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold uppercase tracking-wider text-white disabled:opacity-40 transition-colors"
-                style={{ backgroundColor: '#FF4500' }}
-              >
-                <Plus size={13} strokeWidth={2.5} />
-                {adding ? 'Adding…' : selIds.size > 1 ? `Add ${selIds.size}` : 'Add'}
-              </button>
-            </div>
+            ) : null}
           </div>
 
           {/* Items table */}
@@ -608,7 +692,7 @@ export function JobDetail({ job, workspaceId, inventory, artists, tours, onBack,
           <h3 className="text-xs font-extrabold uppercase tracking-wider" style={{ color: 'var(--lp-text-tertiary)' }}>Pricing</h3>
 
           <div className="space-y-1.5">
-            <div className="flex justify-between text-sm" style={{ color: 'var(--lp-text-secondary)' }}>
+            <div className="flex items-baseline justify-between gap-3 text-sm" style={{ color: 'var(--lp-text-secondary)' }}>
               {/* Currency + rate provenance. A converted price with no visible
                   rate and date is unauditable, and this document goes to a
                   client. Frozen quotes say so; drafts say the rate is live. */}
@@ -645,21 +729,29 @@ export function JobDetail({ job, workspaceId, inventory, artists, tours, onBack,
                 ) : null}
               </div>
 
-              <span>Items subtotal</span><span>{fmtMoney(conv(subtotal), cur)}</span>
+              {/* R2-4 — the label wrapped onto two lines and collided with the
+                  figure. `flex justify-between` alone lets BOTH children wrap;
+                  the fix is asymmetric on purpose: the label may shrink and
+                  ellipsis, the money may not. min-w-0 makes truncate work
+                  inside a flex child, shrink-0 + tabular-nums keeps the figures
+                  on one line and on a shared right edge. */}
+              <span className="min-w-0 truncate">Items subtotal</span>
+              <span className="lp-mono shrink-0 tabular-nums">{fmtMoney(conv(subtotal), cur)}</span>
             </div>
             {discAmt > 0 && (
-              <div className="flex justify-between text-sm font-medium" style={{ color: '#F59E0B' }}>
-                <span>
+              <div className="flex items-baseline justify-between gap-3 text-sm font-medium" style={{ color: '#F59E0B' }}>
+                <span className="min-w-0 truncate">
                   {dp > 0 && df > 0 ? `${dp}% + fixed` : dp > 0 ? `${dp}% discount` : 'Fixed discount'}
                 </span>
-                <span>−{fmtMoney(conv(discAmt), cur)}</span>
+                <span className="lp-mono shrink-0 tabular-nums">−{fmtMoney(conv(discAmt), cur)}</span>
               </div>
             )}
             <div
-              className="flex justify-between pt-2 text-base font-bold"
+              className="flex items-baseline justify-between gap-3 pt-2 text-base font-bold"
               style={{ borderTop: '1px solid var(--lp-border)', color: 'var(--lp-text)' }}
             >
-              <span>Total</span><span>{fmtMoney(conv(total), cur)}</span>
+              <span className="min-w-0 truncate">Total</span>
+              <span className="lp-mono shrink-0 tabular-nums">{fmtMoney(conv(total), cur)}</span>
             </div>
           </div>
 

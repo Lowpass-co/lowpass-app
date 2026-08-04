@@ -55,6 +55,35 @@ Adam: *"eventually it'll look like the advance grids where you drag things in. i
 
 **Report feasibility before building.** The relevant precedents are `<SpreadsheetGrid>` (`docs/components/SPREADSHEET_GRID_CONTRACT.md`) and the drag/paint work from G2. Questions to answer first: does the quote's line model (inventory ref + quantity + rate override) fit the grid's row contract, or would it need a bespoke cell type? Does the grid support drag-from-an-external-list, or only in-grid drag? If it's a fit, port it; **if it needs the grid primitive changed, stop and say so** — changing a shared primitive used by Budget, Channel list and Routing to serve the quote builder is not "easy", and that trade needs Adam.
 
+## EQ-R2 — Adam's annotated walk, 2026-07-23. Format fixes + the picker interaction, banked WITH the line-table port.
+
+### R2-1 — The picker: kill the checkboxes, select the row (his main ask)
+Adam, verbatim: *"ugly boxes, lets do highlight row. Then qty appears in line. At the minute it doesn't make sense to select a global qty for all selected items."*
+
+The current design has checkboxes plus a **single** `QTY EACH` and `RATE OVERRIDE` applied to the whole selection — which is wrong the moment you select two different items, because 3× of one and 1× of another is the normal case.
+
+Replace with:
+- **Click the row to select it.** No checkbox. Selected row takes the orange treatment (the G2-2b selected-row grammar — inset ring / tint, not a border that shifts layout). Shift-click still extends a range.
+- **On selection the row reveals inline `qty` and `rate` inputs**, right-aligned in that row, defaulting to 1 and the item's effective day rate. Each selected row carries its own values.
+- **Add** then inserts every selected row with its own qty/rate in one batched call (keep the existing single-call insert).
+- The global `QTY EACH` / `RATE OVERRIDE` fields are deleted, not hidden — they're the thing being replaced.
+- Selection clears after add.
+
+### R2-2 — The add panel collapses
+The whole search + picker + add block should be collapsible, defaulting open when the quote has no lines and collapsed once it does — the line table is the working surface once you're editing rather than building. Persist the state per user like the nav rail does.
+
+### R2-3 — The page title is clipped
+`RENTAL JOBS` is cut off at the top by the bar above it. Fix the sticky/overflow interaction so the title clears the workspace tab bar at every width Adam uses (he's on ~1500 and ~1900). Check the same page at both.
+
+### R2-4 — Pricing panel: "Items subtotal" wraps onto two lines
+In the PRICING card, the `Items subtotal` label and its value collide and wrap. Fix the label/value layout so label and figure sit on one line each at panel width, with the number right-aligned and mono (money grammar). Check the other rows in that card at the same time — discount and Total should align to the same right edge.
+
+### R2-5 — Edit doesn't work for dates
+Adam: *"edit doesnt work for dates etc."* The **Edit** button on a job doesn't let dates be changed. Diagnose before fixing — is the field absent from the edit form, present but not persisting, or persisting but not re-rendering? Report which. Note that `billable days` is derived from start/end via `calcRentalBillableDays`, so a date change must re-derive it and every line's subtotal.
+
+### R2-6 — Verify currency actually converts
+Adam: *"making sure currency change changes pricing correctly."* This is the acceptance test for item 2, and it needs migration 253 pasted first. Switch USD → GBP and confirm: every line's day rate AND subtotal convert (not just the symbol), the items subtotal / discount / total all convert, the rate and its date are visible, and re-exporting the PDF uses the frozen rate. **The failure mode to hunt is the one you already caught once: new symbol over an unconverted number.**
+
 ## Order
 1 is done pending Adam's backfill choice · then 3 + 4 (self-contained, immediately useful) · then 2 (needs a migration + the freeze decision) · then 5 (assess, then decide).
 

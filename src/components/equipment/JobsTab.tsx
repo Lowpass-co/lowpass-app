@@ -135,9 +135,32 @@ export function JobsTab({
     if (t) setTours(t as EquipmentTourOption[]);
   }, [workspaceId, setArtists, setTours]);
 
+  const jobModal = modalOpen ? (
+    <JobModal
+      userId={userId}
+      workspaceId={workspaceId}
+      editing={editingJob}
+      artists={artists}
+      tours={tours}
+      onListsUpdated={refreshWorkspaceLists}
+      onSave={onJobSaved}
+      onClose={() => setModal(false)}
+    />
+  ) : null;
+
+  /* R2-5 — THE EDIT BUTTON NEVER OPENED ANYTHING.
+     <JobModal> is rendered at the bottom of the OTHER branch, and this early
+     return fires whenever a job is open — which is the only place the Edit
+     button exists. So clicking Edit set modalOpen = true and then returned past
+     the JSX that reads it. Not a date bug at all: nothing in that dialog worked
+     from this screen, because there was no dialog.
+
+     The modal is rendered in BOTH branches now. Kept as one shared block below
+     rather than duplicated markup, so the next person cannot fix one copy. */
   if (activeJob) {
     return (
       <div className="w-full min-w-0">
+        {jobModal}
         <JobDetail
           job={activeJob}
           workspaceId={workspaceId}
@@ -344,18 +367,7 @@ export function JobsTab({
         )}
       </div>
 
-      {modalOpen && (
-        <JobModal
-          userId={userId}
-          workspaceId={workspaceId}
-          editing={editingJob}
-          artists={artists}
-          tours={tours}
-          onListsUpdated={refreshWorkspaceLists}
-          onSave={onJobSaved}
-          onClose={() => setModal(false)}
-        />
-      )}
+      {jobModal}
     </div>
   );
 }
