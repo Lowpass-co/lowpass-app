@@ -19,6 +19,7 @@
    ============================================ */
 
 import { NextResponse } from 'next/server';
+import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient, createServiceSupabaseClient } from '@/lib/supabase-server';
 import { guardGoogleCall, logGoogleCall } from '@/lib/external/googleUsage';
 import { findOrCreateCanonicalVenue } from '@/lib/venues/canonical';
@@ -70,6 +71,8 @@ async function placesAutocomplete(input: string, key: string): Promise<PlacesSug
 
 export async function POST() {
   const supabase = await createServerSupabaseClient();
+  const auth = await requireWrite(supabase);
+  if ('error' in auth) return auth.error;
   const {
     data: { user },
   } = await supabase.auth.getUser();

@@ -16,6 +16,7 @@
    ============================================ */
 
 import { NextResponse } from 'next/server';
+import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient, createServiceSupabaseClient } from '@/lib/supabase-server';
 import { guardGoogleCall, logGoogleCall } from '@/lib/external/googleUsage';
 import { refreshCanonicalVenueCityCountry } from '@/lib/venues/canonical';
@@ -25,6 +26,8 @@ const MAX_VENUES_PER_RUN = 200;
 
 export async function POST() {
   const supabase = await createServerSupabaseClient();
+  const auth = await requireWrite(supabase);
+  if ('error' in auth) return auth.error;
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 

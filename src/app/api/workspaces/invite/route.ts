@@ -14,6 +14,7 @@
    ============================================ */
 
 import { NextResponse } from 'next/server';
+import { requireWrite } from '@/lib/auth/workspace-check';
 import { randomBytes } from 'node:crypto';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { validateGrant, type GrantInput } from '@/lib/permissions/resources';
@@ -43,6 +44,8 @@ function getOrigin(request: Request): string {
 
 export async function POST(request: Request) {
   const supabase = await createServerSupabaseClient();
+  const auth = await requireWrite(supabase);
+  if ('error' in auth) return auth.error;
   const {
     data: { user },
   } = await supabase.auth.getUser();

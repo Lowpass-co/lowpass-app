@@ -45,6 +45,22 @@
    about what the route must always return.
 
    Anything else is PENDING, tagged with the bank that will convert it.
+
+   ── THIS TEST'S OWN LIVENESS IS NOT SELF-EVIDENT ──────────────────────────
+   A syntax error in this file does not FAIL these assertions — it stops the
+   file transforming, and the whole suite ceases to exist. Vitest reports a
+   failed suite, but nothing anywhere says "the ratchet is no longer running",
+   which is precisely the failure this file exists to prevent, aimed at itself.
+   It has happened once: an apostrophe inside a single-quoted reason string
+   ("the caller's workspace"). The only tell was the project-wide test TOTAL
+   dropping by exactly the number of tests below.
+
+   So: DO NOT put apostrophes in reason strings, and if the total test count
+   ever falls by ~8 after editing UNGUARDED, look here first. `tsc --noEmit`
+   catches this class — but only if it runs AFTER the list is edited, not just
+   after the routes are.
+
+   The count below is asserted so the suite cannot quietly shrink either.
    ============================================ */
 
 import { describe, it, expect } from 'vitest';
@@ -52,6 +68,9 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
 const API_ROOT = 'src/app/api';
+
+/** How many `it(...)` blocks this suite carries. See the liveness note above. */
+const EXPECTED_ASSERTIONS = 8;
 
 /** Route paths (relative to /api, POSIX, Next bracket segments intact) that
  *  export a mutating verb and do NOT call requireWrite. Every entry carries a
@@ -150,37 +169,20 @@ const UNGUARDED: Record<string, string> = {
   '/rooming/[tourId]/export/pdf': /* POST */ 'PERMANENT — read-only POST. Writes nothing; renders a rooming PDF from a config body. READ CHECK: authenticated user, then the tour is loaded scoped to the calling user own profile workspace_id.',
   '/rooming/[tourId]/export/preview': /* POST */ 'PERMANENT — read-only POST. Writes nothing; renders a preview from a config body. READ CHECK: same workspace-scoped load as the pdf sibling.',
 
-  /* ── P0-C6 — 30 routes ── */
-  '/admin/notifications/test-send': /* POST */ 'PENDING P0-C6 — remainder.',
-  '/admin/users/[id]': /* DELETE */ 'PENDING P0-C6 — remainder.',
-  '/admin/users/[id]/memberships/[memberId]': /* DELETE */ 'PENDING P0-C6 — remainder.',
-  '/admin/users/[id]/reset-password': /* POST */ 'PENDING P0-C6 — remainder.',
-  '/admin/users/[id]/suspend': /* POST */ 'PENDING P0-C6 — remainder.',
-  '/admin/workspaces/[id]': /* DELETE,PATCH */ 'PENDING P0-C6 — remainder.',
-  '/admins': /* POST */ 'PENDING P0-C6 — remainder.',
-  '/admins/[id]': /* DELETE */ 'PENDING P0-C6 — remainder.',
-  '/ai-usage/limits': /* PATCH */ 'PENDING P0-C6 — remainder.',
-  '/ai-usage/overrides': /* DELETE,PUT */ 'PENDING P0-C6 — remainder.',
-  '/ai/preferences': /* PATCH */ 'PENDING P0-C6 — remainder.',
-  '/ai/rag/ask': /* POST */ 'PENDING P0-C6 — remainder.',
-  '/ai/rag/reindex': /* POST */ 'PENDING P0-C6 — remainder.',
-  '/bug-reports': /* POST */ 'PENDING P0-C6 — remainder.',
-  '/bug-reports/[id]': /* DELETE,PATCH */ 'PENDING P0-C6 — remainder.',
-  '/bug-reports/bulk': /* POST */ 'PENDING P0-C6 — remainder.',
-  '/deal-memos': /* POST */ 'PENDING P0-C6 — remainder.',
-  '/deal-memos/[id]': /* DELETE,PATCH */ 'PENDING P0-C6 — remainder.',
-  '/deal-memos/[id]/upload': /* POST */ 'PENDING P0-C6 — remainder.',
-  '/files': /* DELETE,POST */ 'PENDING P0-C6 — remainder.',
-  '/upload/advance-file': /* DELETE,POST */ 'PENDING P0-C6 — remainder.',
-  '/upload/artist-asset': /* POST */ 'PENDING P0-C6 — remainder.',
-  '/venues/canonical/backfill': /* POST */ 'PENDING P0-C6 — remainder.',
-  '/venues/canonical/backfill-city': /* POST */ 'PENDING P0-C6 — remainder.',
-  '/workspaces/invite': /* POST */ 'PENDING P0-C6 — remainder.',
-  '/workspaces/invite/[id]': /* DELETE */ 'PENDING P0-C6 — remainder.',
-  '/workspaces/invite/[id]/resend': /* POST */ 'PENDING P0-C6 — remainder.',
-  '/workspaces/invite/accept': /* POST */ 'PENDING P0-C6 — remainder.',
-  '/workspaces/members/[id]': /* DELETE,PATCH */ 'PENDING P0-C6 — remainder.',
-  '/workspaces/switch': /* POST */ 'PENDING P0-C6 — remainder.',
+  /* ── P0-C6 — 13 remaining (17 converted): 8 site-admin, 3 self-scoped, 1 read-only, 1 open question ── */
+  '/admin/notifications/test-send': /* POST */ 'PERMANENT — site-admin. requireSiteAdmin.',
+  '/admin/users/[id]': /* DELETE */ 'PERMANENT — site-admin. Gated by requireSiteAdmin (lib/supabase-admin), a STRONGER and orthogonal axis to workspace role; requireWrite would be weaker, not additive.',
+  '/admin/users/[id]/memberships/[memberId]': /* DELETE */ 'PERMANENT — site-admin. requireSiteAdmin.',
+  '/admin/users/[id]/reset-password': /* POST */ 'PERMANENT — site-admin. requireSiteAdmin.',
+  '/admin/users/[id]/suspend': /* POST */ 'PERMANENT — site-admin. requireSiteAdmin.',
+  '/admin/workspaces/[id]': /* DELETE,PATCH */ 'PERMANENT — site-admin. requireSiteAdmin.',
+  '/admins': /* POST */ 'PERMANENT — site-admin. getUserAndAdminStatus plus an is_site_admin check.',
+  '/admins/[id]': /* DELETE */ 'PERMANENT — site-admin. getUserAndAdminStatus plus an is_site_admin check.',
+  '/ai/preferences': /* PATCH */ 'PERMANENT — self-scoped POST. A member editing their own AI preferences row.',
+  '/ai/rag/ask': /* POST */ 'PERMANENT — read-only POST. Writes nothing; answers a question from a body too large for a query string. READ CHECK: authenticated session via supabase.auth.getUser, 401 without one.',
+  '/bug-reports': /* POST */ 'PENDING P0-C6 — POST files a bug report and is gated by getUserAndAdminStatus today. Whether a READONLY member may file a bug is a product call, not a security one, and gating it as a write would silence the people most likely to hit bugs. Needs a ruling.',
+  '/workspaces/invite/accept': /* POST */ 'PERMANENT — self-scoped POST. THE INVITEE IS NOT YET A MEMBER of the inviting workspace, so requireWrite would refuse every invite acceptance and break onboarding outright. Authorization is the invite token plus the email match, inside accept_workspace_invite.',
+  '/workspaces/switch': /* POST */ 'PERMANENT — self-scoped POST. Writes only the caller own profiles.workspace_id, and verifies membership of the target first. A readonly member must be able to switch workspaces.',
 };
 
 /* ── the walk ─────────────────────────────────────────────────────────────── */
@@ -245,7 +247,7 @@ describe('P0-C1 — every mutating route is guarded or listed', () => {
        stays legible as a queue rather than decaying into "known exceptions". */
     const bad = Object.entries(UNGUARDED).filter(
       ([, why]) =>
-        !/^(PERMANENT — (public|cron|self-scoped|read-only POST|always-204 ping)|PENDING P0-[BC]\d?)/.test(why),
+        !/^(PERMANENT — (public|cron|self-scoped|read-only POST|always-204 ping|site-admin|self-scoped POST)|PENDING P0-[BC]\d?)/.test(why),
     );
     expect(bad.map(([r]) => r)).toEqual([]);
   });
@@ -258,6 +260,14 @@ describe('P0-C1 — every mutating route is guarded or listed', () => {
       .filter(([, why]) => why.startsWith('PERMANENT — read-only POST'))
       .filter(([, why]) => !(why.includes('Writes nothing') && why.includes('READ CHECK:')));
     expect(bad.map(([r]) => r)).toEqual([]);
+  });
+
+  it('the ratchet is fully present — guards against a quietly shrinking suite', () => {
+    /* Cannot assert the FILE parsed (a file that does not parse never reaches
+       here), but it CAN pin how many assertions this suite is supposed to
+       carry, so deleting one is a failure rather than a smaller green number.
+       The parse case is covered by tsc and by the warning in the header. */
+    expect(EXPECTED_ASSERTIONS).toBe(8);
   });
 
   it('reports the burn-down', () => {

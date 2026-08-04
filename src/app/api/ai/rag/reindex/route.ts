@@ -11,6 +11,7 @@
    ============================================ */
 
 import { NextResponse } from 'next/server';
+import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { guardGoogleCall } from '@/lib/external/googleUsage';
 import { reindexWorkspace } from '@/lib/ai/rag/reindex';
@@ -18,6 +19,8 @@ import { RAG_SOURCE_KINDS, type RagSourceKind } from '@/lib/ai/rag/sources';
 
 export async function POST(request: Request) {
   const supabase = await createServerSupabaseClient();
+  const auth = await requireWrite(supabase);
+  if ('error' in auth) return auth.error;
   const {
     data: { user },
   } = await supabase.auth.getUser();
