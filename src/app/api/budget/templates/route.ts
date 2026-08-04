@@ -14,6 +14,7 @@
    ============================================ */
 
 import { NextResponse } from 'next/server';
+import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 
 async function resolveWorkspace() {
@@ -113,6 +114,8 @@ export async function POST(request: Request) {
   const ctx = await resolveWorkspace();
   if (ctx.error) return ctx.error;
   const { supabase, workspaceId } = ctx;
+  const auth = await requireWrite(supabase);
+  if ('error' in auth) return auth.error;
 
   let body: {
     name?: string;

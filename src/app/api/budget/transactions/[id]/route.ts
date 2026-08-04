@@ -15,7 +15,7 @@
 
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
-import { requireUserAndWorkspace } from '@/lib/auth/workspace-check';
+import { requireWrite } from '@/lib/auth/workspace-check';
 import {
   resolveTransactionLineItem,
   syncActualCostIfNoOverride,
@@ -31,7 +31,7 @@ export async function PATCH(
 ): Promise<NextResponse> {
   const { id } = await params;
   const supabase = await createServerSupabaseClient();
-  const auth = await requireUserAndWorkspace(supabase);
+  const auth = await requireWrite(supabase);
   if ('error' in auth) return auth.error;
   const ctx = await resolveTransactionLineItem(supabase, id, auth.workspaceId);
   if (!ctx.ok) return ctx.response;
@@ -123,7 +123,7 @@ export async function DELETE(
 ): Promise<NextResponse> {
   const { id } = await params;
   const supabase = await createServerSupabaseClient();
-  const auth = await requireUserAndWorkspace(supabase);
+  const auth = await requireWrite(supabase);
   if ('error' in auth) return auth.error;
   const ctx = await resolveTransactionLineItem(supabase, id, auth.workspaceId);
   if (!ctx.ok) return ctx.response;

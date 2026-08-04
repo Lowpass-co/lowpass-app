@@ -8,6 +8,7 @@
    ============================================ */
 
 import { NextResponse } from 'next/server';
+import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { reconcileDerivedBudgetLines } from '@/server/budget/reconcileDerivedLines';
 import { resolveLockState, writeProposedToActiveDraft } from '@/server/budget/versions';
@@ -186,6 +187,8 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   const supabase = await createServerSupabaseClient();
+  const auth = await requireWrite(supabase);
+  if ('error' in auth) return auth.error;
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -334,6 +337,8 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   const supabase = await createServerSupabaseClient();
+  const auth = await requireWrite(supabase);
+  if ('error' in auth) return auth.error;
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -577,6 +582,8 @@ export async function PATCH(request: Request) {
 
 export async function DELETE(request: Request) {
   const supabase = await createServerSupabaseClient();
+  const auth = await requireWrite(supabase);
+  if ('error' in auth) return auth.error;
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

@@ -10,6 +10,7 @@
    ============================================ */
 
 import { NextResponse } from 'next/server';
+import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 
 type RouteCtx = { params: Promise<{ id: string }> };
@@ -53,6 +54,8 @@ export async function POST(request: Request, ctx: RouteCtx) {
   const guard = await guardTemplate(templateId);
   if (guard.error) return guard.error;
   const { supabase, workspaceId } = guard;
+  const auth = await requireWrite(supabase);
+  if ('error' in auth) return auth.error;
 
   let body: { name?: string; sort_order?: number };
   try {

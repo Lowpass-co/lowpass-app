@@ -16,6 +16,7 @@
    ============================================ */
 
 import { NextResponse } from 'next/server';
+import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { normalizeConfig, type ExportSurface } from '@/lib/export/template-config';
 
@@ -66,6 +67,8 @@ export async function GET(request: Request): Promise<NextResponse> {
 export async function POST(request: Request): Promise<NextResponse> {
   const c = await ctx();
   if (!c.ok) return c.response;
+  const auth = await requireWrite(c.supabase);
+  if ('error' in auth) return auth.error;
   const body = (await request.json().catch(() => ({}))) as { surface?: unknown; name?: unknown; config?: unknown };
   if (!isSurface(body.surface)) return NextResponse.json({ error: 'Invalid surface' }, { status: 400 });
   const name = typeof body.name === 'string' ? body.name.trim().slice(0, 80) : '';

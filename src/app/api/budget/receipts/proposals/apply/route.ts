@@ -22,6 +22,7 @@
    ============================================ */
 
 import { NextResponse } from 'next/server';
+import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 
 export const dynamic = 'force-dynamic';
@@ -54,6 +55,8 @@ export async function POST(request: Request): Promise<NextResponse> {
     if (!batchId) return NextResponse.json({ error: 'batchId is required' }, { status: 400 });
 
     const supabase = await createServerSupabaseClient();
+  const auth = await requireWrite(supabase);
+  if ('error' in auth) return auth.error;
     const {
       data: { user },
     } = await supabase.auth.getUser();

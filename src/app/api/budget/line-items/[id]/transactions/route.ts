@@ -18,10 +18,7 @@
 
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
-import {
-  requireUserAndWorkspace,
-  requireTourInWorkspace,
-} from '@/lib/auth/workspace-check';
+import { requireUserAndWorkspace, requireTourInWorkspace, requireWrite } from '@/lib/auth/workspace-check';
 import {
   resolveLineItemContext,
   syncActualCostIfNoOverride,
@@ -76,7 +73,7 @@ export async function POST(
 ): Promise<NextResponse> {
   const { id: lineItemId } = await params;
   const supabase = await createServerSupabaseClient();
-  const auth = await requireUserAndWorkspace(supabase);
+  const auth = await requireWrite(supabase);
   if ('error' in auth) return auth.error;
 
   const ctx = await resolveLineItemContext(supabase, lineItemId, auth.workspaceId);

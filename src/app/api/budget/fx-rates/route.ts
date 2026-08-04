@@ -10,6 +10,7 @@
    ============================================ */
 
 import { NextResponse } from 'next/server';
+import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 
 async function ws(supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>) {
@@ -38,6 +39,8 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   const supabase = await createServerSupabaseClient();
+  const auth = await requireWrite(supabase);
+  if ('error' in auth) return auth.error;
   const w = await ws(supabase);
   if ('error' in w) return NextResponse.json({ error: w.error }, { status: w.status });
   let body: { tour_id?: string; currency?: string; rate?: number };
@@ -66,6 +69,8 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   const supabase = await createServerSupabaseClient();
+  const auth = await requireWrite(supabase);
+  if ('error' in auth) return auth.error;
   const w = await ws(supabase);
   if ('error' in w) return NextResponse.json({ error: w.error }, { status: w.status });
   let body: { tour_id?: string; currency?: string };

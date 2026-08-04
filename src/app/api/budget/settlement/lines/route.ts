@@ -17,6 +17,7 @@
    ============================================ */
 
 import { NextResponse } from 'next/server';
+import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 
 type LineType = 'deduction' | 'expense' | 'payment';
@@ -73,6 +74,8 @@ async function workspaceId(supabase: Awaited<ReturnType<typeof createServerSupab
 
 export async function POST(request: Request) {
   const supabase = await createServerSupabaseClient();
+  const auth = await requireWrite(supabase);
+  if ('error' in auth) return auth.error;
   const ws = await workspaceId(supabase);
   if (!ws) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -109,6 +112,8 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   const supabase = await createServerSupabaseClient();
+  const auth = await requireWrite(supabase);
+  if ('error' in auth) return auth.error;
   const ws = await workspaceId(supabase);
   if (!ws) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
@@ -134,6 +139,8 @@ export async function PATCH(request: Request) {
 
 export async function DELETE(request: Request) {
   const supabase = await createServerSupabaseClient();
+  const auth = await requireWrite(supabase);
+  if ('error' in auth) return auth.error;
   const ws = await workspaceId(supabase);
   if (!ws) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 

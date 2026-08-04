@@ -16,6 +16,7 @@
    ============================================ */
 
 import { NextResponse } from 'next/server';
+import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 
 const BUCKETS = new Set(['fee', 'per_diem']);
@@ -46,6 +47,8 @@ export async function GET() {
 
 export async function POST(request: Request) {
   const supabase = await createServerSupabaseClient();
+  const auth = await requireWrite(supabase);
+  if ('error' in auth) return auth.error;
   const ctx = await workspace(supabase);
   if ('error' in ctx) return ctx.error;
 
@@ -112,6 +115,8 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   const supabase = await createServerSupabaseClient();
+  const auth = await requireWrite(supabase);
+  if ('error' in auth) return auth.error;
   const ctx = await workspace(supabase);
   if ('error' in ctx) return ctx.error;
 
@@ -147,6 +152,8 @@ export async function PATCH(request: Request) {
 
 export async function DELETE(request: Request) {
   const supabase = await createServerSupabaseClient();
+  const auth = await requireWrite(supabase);
+  if ('error' in auth) return auth.error;
   const ctx = await workspace(supabase);
   if ('error' in ctx) return ctx.error;
 
