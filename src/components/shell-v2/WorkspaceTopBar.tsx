@@ -16,6 +16,7 @@ import { Search } from 'lucide-react';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { ProductHeaderAvatarMenu } from './ProductHeaderAvatarMenu';
 import { ArtistTourSwitcherClientWrapper } from './ArtistTourSwitcherClientWrapper';
+import { WorkspaceSwitcher } from './WorkspaceSwitcher';
 import { toTitleCase } from '@/lib/text/toTitleCase';
 
 type SwitcherArtistMin = {
@@ -145,6 +146,15 @@ export async function WorkspaceTopBar({
 
       {/* Right-side actions */}
       <div className="ml-auto flex items-center" style={{ gap: 'var(--lp-space-2)' }}>
+        {/* The workspace tier was the ONE tier without this. ProductHeader and
+            shell-v1's TopBar both mount it, but /artists, /personnel and
+            /equipment did not — and the workspace tier is exactly where a
+            member who landed in the wrong workspace arrives. The switcher
+            existed and was unreachable from the only screen they could see, so
+            the recovery path was a console call. With one workspace it renders
+            a plain non-interactive label, not a control, so nothing changes for
+            a single-workspace user. */}
+        <WorkspaceSwitcher />
         <button
           type="button"
           className="btn-transition flex h-8 w-8 items-center justify-center"
