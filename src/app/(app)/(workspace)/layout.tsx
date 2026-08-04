@@ -29,6 +29,8 @@ import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { WorkspaceTopBar } from '@/components/shell-v2/WorkspaceTopBar';
 import { WorkspaceTabs } from '@/components/shell-v2/WorkspaceTabs';
 import { getWorkspaceName } from '@/server/workspace/getWorkspaceName';
+import { getLandingSuggestion } from '@/server/workspace/landingPreference';
+import { EmptyWorkspacePrompt } from '@/components/shell-v2/EmptyWorkspacePrompt';
 
 export default async function WorkspaceLayout({
   children,
@@ -41,6 +43,12 @@ export default async function WorkspaceLayout({
      pre-§I2 redirect at the top of /artists/page.tsx. */
   if (workspaceName == null) redirect('/login');
 
+  /* Landing preference — the workspace tier is where a stranded member arrives,
+     so the offer belongs here and nowhere deeper. Suggestion only: it never
+     redirects and never writes. See server/workspace/landingPreference.ts. */
+  const { data: { user } } = await supabase.auth.getUser();
+  const suggestion = user ? await getLandingSuggestion(supabase, user.id) : null;
+
   return (
     <div
       className="lp-view-tier flex min-h-screen flex-col"
@@ -48,6 +56,7 @@ export default async function WorkspaceLayout({
     >
       <WorkspaceTopBar workspaceName={workspaceName} />
       <WorkspaceTabs />
+      {suggestion ? <EmptyWorkspacePrompt {...suggestion} /> : null}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">{children}</div>
     </div>
   );
