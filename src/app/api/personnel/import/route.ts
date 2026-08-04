@@ -5,6 +5,7 @@
    ============================================ */
 
 import { NextResponse } from 'next/server';
+import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import type { PersonnelImportPerson } from '@/lib/personnel-import';
 
@@ -157,6 +158,8 @@ function buildRow(raw: PersonnelImportPerson, lp_id: string, workspace_id: strin
 
 export async function POST(request: Request) {
   const supabase = await createServerSupabaseClient();
+  const auth = await requireWrite(supabase);
+  if ('error' in auth) return auth.error;
   const {
     data: { user },
   } = await supabase.auth.getUser();

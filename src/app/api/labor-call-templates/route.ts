@@ -10,6 +10,7 @@
    ============================================ */
 
 import { NextResponse } from 'next/server';
+import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import type { LaborCallRow } from '@/lib/labor-calls/types';
 
@@ -55,6 +56,8 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const c = await ctx();
   if ('error' in c) return c.error;
+  const auth = await requireWrite(c.supabase);
+  if ('error' in auth) return auth.error;
   let body: { tour_id?: string | null; artist_id?: string | null; name?: string; rows?: LaborCallRow[] };
   try {
     body = await request.json();

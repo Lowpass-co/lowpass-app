@@ -11,6 +11,7 @@
    ============================================ */
 
 import { NextResponse } from 'next/server';
+import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import {
   listLaborCallsForRouting,
@@ -61,6 +62,8 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const c = await ctx();
   if ('error' in c) return c.error;
+  const auth = await requireWrite(c.supabase);
+  if ('error' in auth) return auth.error;
   let body: { tour_id?: string | null; routing_id?: string; row?: Partial<LaborCallRow> };
   try {
     body = await request.json();
@@ -80,6 +83,8 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
   const c = await ctx();
   if ('error' in c) return c.error;
+  const auth = await requireWrite(c.supabase);
+  if ('error' in auth) return auth.error;
   let body: Record<string, unknown>;
   try {
     body = await request.json();
@@ -104,6 +109,8 @@ export async function PATCH(request: Request) {
 export async function DELETE(request: Request) {
   const c = await ctx();
   if ('error' in c) return c.error;
+  const auth = await requireWrite(c.supabase);
+  if ('error' in auth) return auth.error;
   let body: { id?: string };
   try {
     body = await request.json();

@@ -3,6 +3,7 @@
    ============================================ */
 
 import { NextResponse } from 'next/server';
+import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 
 export const dynamic = 'force-dynamic';
@@ -18,6 +19,8 @@ async function ws(supabase: Awaited<ReturnType<typeof createServerSupabaseClient
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createServerSupabaseClient();
+  const auth = await requireWrite(supabase);
+  if ('error' in auth) return auth.error;
   const g = await ws(supabase);
   if ('error' in g) return g.error;
   const body = (await request.json().catch(() => ({}))) as Record<string, unknown>;
@@ -35,6 +38,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = await createServerSupabaseClient();
+  const auth = await requireWrite(supabase);
+  if ('error' in auth) return auth.error;
   const g = await ws(supabase);
   if ('error' in g) return g.error;
   // Items in the container fall back to Unassigned (FK ON DELETE SET NULL).

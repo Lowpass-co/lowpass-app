@@ -7,6 +7,7 @@
    ============================================ */
 
 import { NextResponse } from 'next/server';
+import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import type { PersonnelDocumentsBlock, PersonnelStoredDocument } from '@/lib/personnel-extended-profile';
 
@@ -52,6 +53,8 @@ function parseDocuments(raw: unknown): PersonnelDocumentsBlock {
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id: personnelId } = await params;
   const supabase = await createServerSupabaseClient();
+  const auth = await requireWrite(supabase);
+  if ('error' in auth) return auth.error;
   const {
     data: { user },
   } = await supabase.auth.getUser();
@@ -178,6 +181,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id: personnelId } = await params;
   const supabase = await createServerSupabaseClient();
+  const auth = await requireWrite(supabase);
+  if ('error' in auth) return auth.error;
   const {
     data: { user },
   } = await supabase.auth.getUser();
