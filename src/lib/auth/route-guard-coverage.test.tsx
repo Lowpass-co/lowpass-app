@@ -32,6 +32,17 @@
      · SELF-SCOPED WRITES — a member editing their own profile / avatar /
        preferences. Gating these on admin/manager would break readonly members
        for no security gain; the row is already keyed to auth.uid().
+     · READ-ONLY POST — a route that WRITES NOTHING and uses POST only because
+       the request carries a body (render config, a query too big for a query
+       string). requireWrite would refuse a readonly member a READ. Ruled by
+       Adam on 2026-08-04 with a condition attached: exemption from requireWrite
+       is NOT exemption from authorization, so every entry must state both that
+       it writes nothing AND which read check it carries. An entry that cannot
+       name one is a finding, not a line — asserted below, not trusted.
+
+   One route sits outside all four and carries its own justification inline —
+   see /tours/[id]/touch. Its reason is not "this is a read"; it is a contract
+   about what the route must always return.
 
    Anything else is PENDING, tagged with the bank that will convert it.
    ============================================ */
@@ -117,31 +128,15 @@ const UNGUARDED: Record<string, string> = {
   '/payroll/[tourId]/export/zip': /* POST */ 'PENDING P0-B — money path — P0-B owns these; P0-C must not re-touch them.',
 
   /* ── P0-C2 — 5 remaining (19 converted; see the P0-C2 bank) ── */
-  '/routing/[tourId]/export/pdf': /* POST */ 'PENDING P0-C2 — READ expressed as POST (body carries render config). Gating as a write would stop readonly members exporting. Needs a ruling from Adam, not a guard.',
-  '/routing/[tourId]/export/preview': /* POST */ 'PENDING P0-C2 — READ expressed as POST, same as the pdf sibling above.',
+  '/routing/[tourId]/export/pdf': /* POST */ 'PERMANENT — read-only POST. Writes nothing; renders a PDF from a config body. READ CHECK: authenticated user, then the tour is loaded .eq(workspace_id, profile.workspace_id), so a tour outside the caller workspace 404s.',
+  '/routing/[tourId]/export/preview': /* POST */ 'PERMANENT — read-only POST. Writes nothing; renders a preview from a config body. READ CHECK: same tenancy-scoped tour load as the pdf sibling.',
   '/tours/[id]/payroll/finalize': /* DELETE,POST */ 'PENDING P0-B — money path; ALREADY role-checked by hand (POST admin+manager, DELETE admin-only). P0-B converts it to requireWrite.',
-  '/tours/[id]/personnel/conflicts': /* POST */ 'PENDING P0-C2 — READ expressed as POST; it computes conflicts and writes nothing. Already membership-checked.',
-  '/tours/[id]/touch': /* POST */ 'PENDING P0-C2 — self-scoped liveness ping fired on EVERY tour page load; contract is it ALWAYS returns 204. A 403 here breaks readonly navigation.',
+  '/tours/[id]/personnel/conflicts': /* POST */ 'PERMANENT — read-only POST. Writes nothing; computes roster conflicts from a body of candidate dates. READ CHECK: getActiveMembership, 403 without one.',
+  '/tours/[id]/touch': /* POST */ 'PERMANENT — always-204 ping. NOT a read exemption. Best-effort liveness write fired on EVERY tour-scoped page load, whose contract is that it ALWAYS returns 204; it already skips the write when unauthenticated. A 403 here breaks readonly navigation on an otherwise-fine page rather than protecting anything.',
 
-  /* ── P0-C3 — 18 routes ── */
-  '/advance-packet-links/[id]': /* DELETE,PATCH */ 'PENDING P0-C3 — advance write.',
-  '/advance/[instanceId]/comments': /* POST */ 'PENDING P0-C3 — advance write.',
-  '/advance/extract-deal-memo': /* POST */ 'PENDING P0-C3 — advance write.',
-  '/advance/intake': /* POST */ 'PENDING P0-C3 — advance write.',
-  '/advance/intake/[id]': /* PATCH */ 'PENDING P0-C3 — advance write.',
-  '/advance/intake/pending': /* POST */ 'PENDING P0-C3 — advance write.',
-  '/advance/layout-templates': /* POST */ 'PENDING P0-C3 — advance write.',
-  '/advance/layout-templates/[id]': /* DELETE */ 'PENDING P0-C3 — advance write.',
-  '/advance/options': /* POST */ 'PENDING P0-C3 — advance write.',
-  '/advance/options/[id]': /* DELETE */ 'PENDING P0-C3 — advance write.',
-  '/advance/previously-played/import': /* POST */ 'PENDING P0-C3 — advance write.',
-  '/advance/schedule-templates': /* POST */ 'PENDING P0-C3 — advance write.',
-  '/advance/templates': /* POST */ 'PENDING P0-C3 — advance write.',
-  '/advance/templates/[id]': /* DELETE,PATCH */ 'PENDING P0-C3 — advance write.',
-  '/advance/templates/[id]/fork-add-field': /* POST */ 'PENDING P0-C3 — advance write.',
-  '/advance/templates/reorder': /* POST */ 'PENDING P0-C3 — advance write.',
-  '/channel-list/[tourId]/export/pdf': /* POST */ 'PENDING P0-C3 — advance write.',
-  '/channel-list/[tourId]/export/preview': /* POST */ 'PENDING P0-C3 — advance write.',
+  /* ── P0-C3 — 2 remaining, both fourth-category (16 converted) ── */
+  '/channel-list/[tourId]/export/pdf': /* POST */ 'PERMANENT — read-only POST. Writes nothing; renders a channel-list PDF from a config body. READ CHECK: authenticated user, then the tour is loaded .eq(workspace_id, profile.workspace_id) and the channel rows hang off rider_packs.workspace_id, so a foreign tour 404s.',
+  '/channel-list/[tourId]/export/preview': /* POST */ 'PERMANENT — read-only POST. Writes nothing; renders a preview from a config body. READ CHECK: same tenancy-scoped tour load as the pdf sibling.',
 
   /* ── P0-C4 — 19 routes ── */
   '/rider-assets': /* POST */ 'PENDING P0-C4 — production/rider/stage-plot write.',
@@ -289,8 +284,19 @@ describe('P0-C1 — every mutating route is guarded or listed', () => {
     /* Everything else must name the bank that will convert it, so the backlog
        stays legible as a queue rather than decaying into "known exceptions". */
     const bad = Object.entries(UNGUARDED).filter(
-      ([, why]) => !/^(PERMANENT — (public|cron|self-scoped)|PENDING P0-[BC]\d?)/.test(why),
+      ([, why]) =>
+        !/^(PERMANENT — (public|cron|self-scoped|read-only POST|always-204 ping)|PENDING P0-[BC]\d?)/.test(why),
     );
+    expect(bad.map(([r]) => r)).toEqual([]);
+  });
+
+  it('every read-only POST names what it writes AND what it checks', () => {
+    /* The condition attached to the fourth category, enforced rather than
+       trusted. Exemption from requireWrite is not exemption from
+       authorization: an entry that cannot name its read check is a finding. */
+    const bad = Object.entries(UNGUARDED)
+      .filter(([, why]) => why.startsWith('PERMANENT — read-only POST'))
+      .filter(([, why]) => !(why.includes('Writes nothing') && why.includes('READ CHECK:')));
     expect(bad.map(([r]) => r)).toEqual([]);
   });
 

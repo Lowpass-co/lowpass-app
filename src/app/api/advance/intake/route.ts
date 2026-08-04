@@ -19,8 +19,7 @@ import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import {
   requireUserAndWorkspace,
-  requireTourInWorkspace,
-} from '@/lib/auth/workspace-check';
+  requireTourInWorkspace, requireWrite } from '@/lib/auth/workspace-check';
 import { generateToken } from '@/lib/rider-packs/web-links';
 import { seedShowReminders } from '@/lib/intake/reminders-server';
 
@@ -112,7 +111,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       : null;
 
   const supabase = await createServerSupabaseClient();
-  const auth = await requireUserAndWorkspace(supabase);
+  const auth = await requireWrite(supabase);
   if ('error' in auth) return auth.error;
   const tourGate = await requireTourInWorkspace(supabase, tourId, auth.workspaceId);
   if (tourGate) return tourGate;

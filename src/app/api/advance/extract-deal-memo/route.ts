@@ -11,9 +11,7 @@ import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { withAiUsage, aiCapExceededResponse } from '@/lib/ai/usage';
 import {
-  requireUserAndWorkspace,
-  requireTourInWorkspace,
-} from '@/lib/auth/workspace-check';
+  requireTourInWorkspace, requireWrite } from '@/lib/auth/workspace-check';
 import { checkRateLimit, markRateLimit } from '@/lib/rate-limit';
 
 /* Sprint 12 §SAFE — 3s per-user window. Document uploads are
@@ -57,7 +55,7 @@ export async function POST(request: Request) {
      accepted any signed-in user without validating the
      embedded tour_id, so a hostile workspace member could feed
      in another workspace's tour id and burn its AI budget. */
-  const auth = await requireUserAndWorkspace(supabase);
+  const auth = await requireWrite(supabase);
   if ('error' in auth) return auth.error;
   const { user, workspaceId } = auth;
 

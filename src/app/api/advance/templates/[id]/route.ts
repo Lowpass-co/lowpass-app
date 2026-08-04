@@ -6,6 +6,7 @@
    ============================================ */
 
 import { NextResponse } from 'next/server';
+import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 
 async function getWorkspaceId(supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>) {
@@ -20,6 +21,8 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const supabase = await createServerSupabaseClient();
+  const auth = await requireWrite(supabase);
+  if ('error' in auth) return auth.error;
   const workspaceId = await getWorkspaceId(supabase);
   if (!workspaceId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -60,6 +63,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const supabase = await createServerSupabaseClient();
+  const auth = await requireWrite(supabase);
+  if ('error' in auth) return auth.error;
   const workspaceId = await getWorkspaceId(supabase);
   if (!workspaceId) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });

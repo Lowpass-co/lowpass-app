@@ -12,6 +12,7 @@
    ============================================ */
 
 import { NextResponse } from 'next/server';
+import { requireWrite } from '@/lib/auth/workspace-check';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { buildIntakeFormSchema, mergeIntakeIntoAdvance, type IntakeSection, type AdvanceData } from '@/lib/advance/intake';
 import { pendingToAdvanceData, LABOR_CALL_FIELD_TYPE } from '@/lib/advance/intake-pending';
@@ -96,6 +97,8 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const c = await ctx();
   if ('error' in c) return c.error;
+  const auth = await requireWrite(c.supabase);
+  if ('error' in auth) return auth.error;
   let body: { advance_instance_id?: string; accept?: string[]; reject?: string[] };
   try {
     body = await request.json();
