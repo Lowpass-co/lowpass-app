@@ -4,8 +4,8 @@
 
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { ArrowLeft, Trash2, Plus, FileDown, Sun, Moon, Package } from 'lucide-react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { ArrowLeft, Trash2, Plus, FileDown, Sun, Moon, Package, Search, X } from 'lucide-react';
 import { createClient } from '@/lib/supabase-client';
 import { useToast } from '@/components/ui/Toast';
 import { effectiveInventoryDayRate } from '@/lib/rental-pricing';
@@ -38,7 +38,12 @@ export function JobDetail({ job, workspaceId, inventory, artists, tours, onBack,
   const [loading, setLoading]   = useState(true);
 
   // Add-item form
-  const [selInv,   setSelInv]   = useState('');
+  /* Items 3+4 — the picker was a single <select> over all inventory, so adding
+     six things to a quote was six round trips through a dropdown. Now: a search
+     box, a checkbox list, shift-click ranges, and ONE insert for the batch. */
+  const [search,   setSearch]   = useState('');
+  const [selIds,   setSelIds]   = useState<Set<string>>(new Set());
+  const lastIdxRef = useRef<number | null>(null);
   const [qty,      setQty]      = useState('1');
   const [rateOvr,  setRateOvr]  = useState('');
   const [adding,   setAdding]   = useState(false);
@@ -60,13 +65,40 @@ export function JobDetail({ job, workspaceId, inventory, artists, tours, onBack,
   const supabase = createClient();
   const days = calcDays(job.start_date, job.end_date);
 
-  const invSelectOptions: StyledSelectOption<string>[] = [
-    { value: '', label: '— select from inventory —' },
-    ...inventory.map((i) => ({
-      value: i.id,
-      label: `${i.name}${i.category ? ` (${i.category})` : ''} — ${fmtUSD(effectiveInventoryDayRate(i))}/day`,
-    })),
-  ];
+  /* Item 3 — search. Client-side is right here: Adam's audit put the inventory
+     at 33 rows, so a filter is instant and a server round-trip would be slower
+     than typing. Fields are the ones that EXIST — name, category, serial. The
+     spec also asked for manufacturer/model; rental_inventory has no such
+     column, so there is nothing to match on. */
+  const filteredInventory = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return inventory;
+    return inventory.filter((i) =>
+      [i.name, i.category, i.serial_number].some((f) => (f ?? '').toLowerCase().includes(q)),
+    );
+  }, [inventory, search]);
+
+  /** Item 4 — click toggles; shift-click extends from the last click, over the
+   *  FILTERED order, which is the order on screen. Ranging over the unfiltered
+   *  list would select rows the user cannot see. */
+  function toggleAt(idx: number, shiftKey: boolean) {
+    const item = filteredInventory[idx];
+    if (!item) return;
+    setSelIds((prev) => {
+      const next = new Set(prev);
+      const from = shiftKey && lastIdxRef.current != null ? lastIdxRef.current : idx;
+      const [lo, hi] = from <= idx ? [from, idx] : [idx, from];
+      const turningOn = !prev.has(item.id);
+      for (let i = lo; i <= hi; i++) {
+        const id = filteredInventory[i]?.id;
+        if (!id) continue;
+        if (turningOn) next.add(id);
+        else next.delete(id);
+      }
+      return next;
+    });
+    lastIdxRef.current = idx;
+  }
 
   const statusSelectOptions: StyledSelectOption<RentalJob['status']>[] = STATUS_OPTIONS.map((s) => ({
     value: s,
@@ -98,29 +130,70 @@ export function JobDetail({ job, workspaceId, inventory, artists, tours, onBack,
   const discAmt  = subtotal * (dp / 100) + df;
   const total    = Math.max(0, subtotal - discAmt);
 
-  /* ── Add item ── */
-  async function handleAdd() {
-    if (!selInv) return;
+  /* ── Add selected items ──
+     Two behaviours the old single-add did not have:
+
+     1. ONE INSERT for the whole batch, not N. Six selected items used to mean
+        six sequential round trips; now it is one call with six rows.
+     2. AN ITEM ALREADY ON THE JOB INCREMENTS ITS QUANTITY. The old path always
+        inserted, so adding the same item twice produced two identical lines and
+        a quote that read as if you were renting two separate consoles. Confirmed
+        as the pre-existing behaviour before changing it.
+
+     Increments are per-row UPDATEs — Supabase has no "add to existing value"
+     bulk verb — so a batch that is all increments is still N calls. That is the
+     uncommon path (re-adding what you already added) and it is bounded by the
+     selection size. The common path, adding new items, is one call. */
+  async function handleAddSelected() {
+    if (selIds.size === 0) return;
     setAdding(true);
-    /* Sprint 12 §1 — workspace_id required by the canonical RLS
-       WITH CHECK clause from migration 095. */
-    const insertPayload: Record<string, unknown> = {
-      job_id: job.id,
-      inventory_id: selInv,
-      quantity: parseInt(qty) || 1,
-      day_rate_override: rateOvr ? parseFloat(rateOvr) : null,
-    };
-    if (workspaceId) {
-      insertPayload.workspace_id = workspaceId;
+
+    const addQty = Math.max(1, parseInt(qty) || 1);
+    const override = rateOvr ? parseFloat(rateOvr) : null;
+
+    const existing = jobItems.filter((it) => selIds.has(it.inventory_id));
+    const existingIds = new Set(existing.map((it) => it.inventory_id));
+    const freshIds = [...selIds].filter((id) => !existingIds.has(id));
+
+    let failed = false;
+
+    if (freshIds.length > 0) {
+      /* Sprint 12 §1 — workspace_id required by the canonical RLS WITH CHECK
+         clause from migration 095. */
+      const rows = freshIds.map((inventory_id) => {
+        const row: Record<string, unknown> = {
+          job_id: job.id,
+          inventory_id,
+          quantity: addQty,
+          day_rate_override: override,
+        };
+        if (workspaceId) row.workspace_id = workspaceId;
+        return row;
+      });
+      const { data, error } = await supabase.from('rental_job_items').insert(rows).select();
+      if (error) { showToast('Failed to add: ' + error.message, 'error'); failed = true; }
+      else setJobItems((prev) => [...prev, ...((data ?? []) as RentalJobItem[])]);
     }
-    const { data, error } = await supabase
-      .from('rental_job_items')
-      .insert(insertPayload)
-      .select().single();
+
+    for (const it of existing) {
+      const nextQty = (it.quantity || 1) + addQty;
+      const { error } = await supabase
+        .from('rental_job_items')
+        .update({ quantity: nextQty })
+        .eq('id', it.id);
+      if (error) { showToast('Failed to update quantity: ' + error.message, 'error'); failed = true; continue; }
+      setJobItems((prev) => prev.map((r) => (r.id === it.id ? { ...r, quantity: nextQty } : r)));
+    }
+
     setAdding(false);
-    if (error) { showToast('Failed to add: ' + error.message, 'error'); return; }
-    setJobItems(prev => [...prev, data as RentalJobItem]);
-    setSelInv(''); setQty('1'); setRateOvr('');
+    if (failed) return;
+
+    /* Selection clears only on success — a failed add that also wiped the
+       selection would make the retry a re-pick. */
+    setSelIds(new Set());
+    lastIdxRef.current = null;
+    setQty('1');
+    setRateOvr('');
   }
 
   /* ── Remove item ── */
@@ -244,24 +317,89 @@ export function JobDetail({ job, workspaceId, inventory, artists, tours, onBack,
         {/* ── Left: line items ── */}
         <div className="space-y-4">
 
-          {/* Add item row */}
+          {/* Add items — search, multi-select, one batched add (items 3+4) */}
           <div
-            className="rounded-xl border p-4"
+            className="rounded-xl border p-4 space-y-3"
             style={{ borderColor: 'var(--lp-border)', backgroundColor: 'var(--lp-bg-secondary)' }}
           >
-            <div className="flex flex-wrap gap-3 items-end">
-              <div className="flex-1 min-w-[180px] space-y-1">
-                <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--lp-text-secondary)' }}>Item</label>
-                <StyledSelect
-                  value={selInv}
-                  onChange={setSelInv}
-                  options={invSelectOptions}
-                  placeholder="— select from inventory —"
-                  size="sm"
-                />
-              </div>
+            {/* Search */}
+            <div className="relative">
+              <Search
+                size={14}
+                className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+                style={{ color: 'var(--lp-text-tertiary)' }}
+              />
+              <input
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search inventory — name, category, serial"
+                aria-label="Search inventory"
+                className="w-full rounded-lg border pl-9 pr-8 py-2 text-sm"
+                style={{ borderColor: 'var(--lp-border)', backgroundColor: 'var(--lp-surface)', color: 'var(--lp-text)' }}
+              />
+              {search ? (
+                <button
+                  type="button"
+                  onClick={() => setSearch('')}
+                  aria-label="Clear search"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1"
+                  style={{ color: 'var(--lp-text-tertiary)' }}
+                >
+                  <X size={13} />
+                </button>
+              ) : null}
+            </div>
+
+            {/* Checkbox list. Shift-click extends from the last row you clicked. */}
+            <div
+              className="max-h-56 overflow-y-auto rounded-lg border"
+              style={{ borderColor: 'var(--lp-border)', backgroundColor: 'var(--lp-surface)' }}
+            >
+              {filteredInventory.length === 0 ? (
+                <p className="px-3 py-4 text-sm" style={{ color: 'var(--lp-text-tertiary)' }}>
+                  {inventory.length === 0 ? 'No inventory in this workspace.' : `Nothing matches “${search}”.`}
+                </p>
+              ) : (
+                filteredInventory.map((i, idx) => {
+                  const checked = selIds.has(i.id);
+                  const onJob = jobItems.some((it) => it.inventory_id === i.id);
+                  return (
+                    <label
+                      key={i.id}
+                      className="flex cursor-pointer items-center gap-3 px-3 py-2 text-sm"
+                      style={{ backgroundColor: checked ? 'color-mix(in srgb, var(--lp-orange) 10%, transparent)' : undefined }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={() => { /* click handled below so shift is available */ }}
+                        onClick={(e) => toggleAt(idx, (e as unknown as { shiftKey: boolean }).shiftKey)}
+                        className="h-4 w-4 shrink-0 accent-[#FF4500]"
+                      />
+                      <span className="min-w-0 flex-1 truncate" style={{ color: 'var(--lp-text)' }}>
+                        {i.name}
+                        {i.category ? (
+                          <span style={{ color: 'var(--lp-text-tertiary)' }}> · {i.category}</span>
+                        ) : null}
+                        {onJob ? (
+                          <span className="lp-mono ml-2 text-[10px] uppercase" style={{ color: 'var(--lp-text-tertiary)' }}>
+                            on quote
+                          </span>
+                        ) : null}
+                      </span>
+                      <span className="lp-mono shrink-0 text-xs" style={{ color: 'var(--lp-text-secondary)' }}>
+                        {fmtUSD(effectiveInventoryDayRate(i))}/day
+                      </span>
+                    </label>
+                  );
+                })
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-end gap-3">
               <div className="w-20 space-y-1">
-                <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--lp-text-secondary)' }}>Qty</label>
+                <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--lp-text-secondary)' }}>Qty each</label>
                 <input
                   type="number" value={qty} onChange={e => setQty(e.target.value)}
                   min="1"
@@ -281,14 +419,31 @@ export function JobDetail({ job, workspaceId, inventory, artists, tours, onBack,
                   />
                 </div>
               </div>
+
+              <span className="flex-1 text-xs" style={{ color: 'var(--lp-text-tertiary)' }}>
+                {selIds.size > 0
+                  ? `${selIds.size} selected · qty and rate apply to each`
+                  : 'Select items to add. Shift-click for a range.'}
+              </span>
+
+              {selIds.size > 0 ? (
+                <button
+                  onClick={() => { setSelIds(new Set()); lastIdxRef.current = null; }}
+                  className="rounded-lg px-3 py-2 text-xs font-semibold uppercase tracking-wider"
+                  style={{ color: 'var(--lp-text-secondary)' }}
+                >
+                  Clear
+                </button>
+              ) : null}
+
               <button
-                onClick={handleAdd}
-                disabled={!selInv || adding}
+                onClick={handleAddSelected}
+                disabled={selIds.size === 0 || adding}
                 className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-bold uppercase tracking-wider text-white disabled:opacity-40 transition-colors"
                 style={{ backgroundColor: '#FF4500' }}
               >
                 <Plus size={13} strokeWidth={2.5} />
-                {adding ? 'Adding…' : 'Add'}
+                {adding ? 'Adding…' : selIds.size > 1 ? `Add ${selIds.size}` : 'Add'}
               </button>
             </div>
           </div>
