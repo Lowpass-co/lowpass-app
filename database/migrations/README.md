@@ -78,6 +78,56 @@ Rules:
 9. **Once applied, never edit.** The runner enforces this via checksums. Make a new migration that supersedes the change instead.
 10. **Dry-run before applying to anything you care about.** `npm run db:migrate:dry-run` lists pending without applying.
 
+## Write policies carry a role predicate (P0-C convention)
+
+P0 found this the expensive way: route code did authentication + tenancy and
+left ROLE to RLS, but RLS only encodes role on the nine tables migration 079
+strict-gated. Every table added since was workspace-scoped at both layers and
+role-scoped at neither — so a readonly member created an artist and it
+persisted.
+
+Workspace scoping is not authorization. `get_my_workspace_id()` answers *which
+tenant*, never *may this person write*. A policy that checks only the first is
+a policy that lets every member of the tenant write.
+
+**Any new table's write policies (INSERT / UPDATE / DELETE) must carry a role
+predicate**, not workspace scope alone:
+
+```sql
+-- Wrong — every member of the workspace may write, readonly included.
+CREATE POLICY foo_write ON public.foo FOR ALL
+  USING (workspace_id = public.get_my_workspace_id());
+
+-- Right — tenancy AND role.
+CREATE POLICY foo_write ON public.foo FOR ALL
+  USING (workspace_id = public.get_my_workspace_id() AND public.is_workspace_admin())
+  WITH CHECK (workspace_id = public.get_my_workspace_id() AND public.is_workspace_admin());
+```
+
+`WITH CHECK` as well as `USING` — `USING` alone filters what an UPDATE can see,
+and leaves INSERT wide open.
+
+**The migration header must state who may write**, in words, e.g.:
+
+```sql
+-- WRITE: admin + manager (is_workspace_admin). Readonly members may SELECT only.
+-- WRITE: the owning user only (auth.uid() = user_id) — self-scoped, not role-gated.
+```
+
+Not decoration. `is_workspace_admin()` is used in ~135 places whose intended
+meaning has drifted apart (P0-D exists to reconcile it), and the header is what
+tells the next reader which meaning THIS table wanted.
+
+Where a table is genuinely self-scoped — a profile row, an avatar, a preference
+— say so in the header and predicate on `auth.uid()`. That is a real answer, and
+it is the reason those routes are permanently exempt from the P0-C route
+ratchet (`src/lib/auth/route-guard-coverage.test.tsx`).
+
+**A route guard is not a substitute for a policy.** `requireWrite()` protects
+the endpoint you remembered; RLS protects the table. Anything reachable by a
+service-role client, a second route, or the SQL editor goes around the route
+entirely. Write both.
+
 ## Real-world precedent: don't repeat these mistakes
 
 This repo has hit migration-number collisions twice during the UX overhaul:
