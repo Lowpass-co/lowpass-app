@@ -16,45 +16,26 @@
 
 import { NextResponse } from 'next/server';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
+import { pickRate } from '@/lib/budget/fxVendor';
 
 const CACHE_MAX_AGE = 3600; // 1 hour
 
-/** Fetch a live 1 `from` = rate `to` figure from the vendor (+ fallback). */
+const VENDORS = (from: string, to: string) => [
+  `https://api.exchangerate.host/latest?base=${encodeURIComponent(from)}&symbols=${encodeURIComponent(to)}`,
+  `https://open.er-api.com/v6/latest/${encodeURIComponent(from)}`,
+];
+
+/** Fetch a live 1 `from` = rate `to` figure, trying each vendor in order. */
 async function fetchLiveRate(from: string, to: string): Promise<number | null> {
-  try {
-    const res = await fetch(
-      `https://api.exchangerate.host/latest?base=${encodeURIComponent(from)}&symbols=${encodeURIComponent(to)}`,
-      { next: { revalidate: CACHE_MAX_AGE } }
-    );
-    if (res.ok) {
-      const data = (await res.json()) as { rates?: Record<string, number> };
-      const rate = data?.rates?.[to];
-      if (typeof rate === 'number') return rate;
+  for (const url of VENDORS(from, to)) {
+    try {
+      const res = await fetch(url, { next: { revalidate: CACHE_MAX_AGE } });
+      if (!res.ok) continue;
+      const rate = pickRate(await res.json(), to);
+      if (rate != null) return rate;
+    } catch {
+      /* try the next vendor */
     }
-  } catch {
-    /* fall through to the backup vendor */
-  }
-  try {
-    const res = await fetch(
-      `https://open.er-api.com/v6/latest/${encodeURIComponent(from)}`,
-      { next: { revalidate: CACHE_MAX_AGE } }
-    );
-    if (res.ok) {
-      /* `conversion_rates` is the PAID v6 shape. The free open.er-api.com
-         endpoint this URL actually hits returns `rates`. Reading only the paid
-         key meant vendor 2 silently returned null for every pair — and since
-         vendor 1 (api.exchangerate.host) went key-gated and now answers 200
-         with {success:false} and no `rates`, BOTH legs failed and this route
-         502'd for every currency. Read both shapes. */
-      const data = (await res.json()) as {
-        rates?: Record<string, number>;
-        conversion_rates?: Record<string, number>;
-      };
-      const rate = data?.rates?.[to] ?? data?.conversion_rates?.[to];
-      if (typeof rate === 'number') return rate;
-    }
-  } catch {
-    /* both vendors failed */
   }
   return null;
 }
