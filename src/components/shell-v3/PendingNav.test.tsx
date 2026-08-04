@@ -24,8 +24,11 @@ vi.mock('next/link', async (importOriginal) => {
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
-  useSearchParams: () => new URLSearchParams(),
-  usePathname: () => '/',
+  /* Null on both: the shell prefers the live router URL when a router exists
+     (S-3b highlight fix); null makes it fall back to the mount props, which is
+     what these fixtures drive. */
+  useSearchParams: () => null,
+  usePathname: () => null,
 }));
 
 import { AppShellV3 } from './AppShellV3';

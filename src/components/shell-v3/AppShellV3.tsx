@@ -1,35 +1,51 @@
+'use client';
+
 /* ============================================
-   LOWPASS — <AppShellV3> (S-1)
+   LOWPASS — <AppShellV3> (S-1 · client since S-3b fix)
 
    The canonical shell: top bar + nav rail + content. One component for every
    scope, because the differences between scopes are DATA (ia.ts), not markup.
 
-   SERVER COMPONENT. It resolves scope, mode and active item from the pathname it
-   is handed and passes the result down; only the rail's collapse state and the
-   picker are client. That ordering is the deep-link requirement made structural
-   — the shell cannot depend on ambient client state because, on the server,
-   there isn't any. A cold load of /budget/[id]/settlement renders Money mode
-   with Settlements active in the FIRST response, before React hydrates.
+   CLIENT COMPONENT, deliberately, since the S-3b highlight fix. It began life
+   as a server component fed a pathname by its layout — which was correct for a
+   COLD load and silently wrong for every navigation after it: Next does NOT
+   re-render a layout on soft navigation between pages inside it, so the rail's
+   active item, the mode pill, and even WHICH rail (Tour/Money/Production)
+   froze at whatever URL the layout first mounted on. The smoke items that
+   would have caught it (SHELL-08, -21) sat in the "nobody has checked these"
+   list from S-1 until Adam walked the S-3b build.
 
-   The pathname is passed in rather than read from a hook: server components
-   have no usePathname, and threading it from each layout keeps the resolution
-   honest — every mount states which URL it is rendering.
+   The fix keeps the deep-link contract and adds the live one:
+
+   · SSR / cold load — usePathname()/useSearchParams() resolve on the server
+     for client components, so the FIRST paint still derives everything from
+     the request URL. Nothing ambient, nothing hydrated-in-late.
+   · Soft navigation — the hooks update, the pure resolvers in ia.ts rerun,
+     and the chrome follows the URL. The resolvers are plain functions with no
+     server dependency, so the client importing them directly is exactly as
+     honest as the server calling them was — the RSC serialisation boundary
+     (see ia.ts) exists for DATA CROSSING, and here nothing crosses.
+   · The `pathname`/`search` props remain as the fallback when the hooks
+     return null (jsdom, and any render outside a router). Every mount still
+     states which URL it believes it is rendering.
 
    COEXISTING WITH THE DAY RAIL (R5): `denseRail` starts this rail collapsed on
-   pages that carry a <RoutingRail>. Two full-width rails at 1440 leaves ~950px
-   of content, which is not enough for the routing ledger. The app rail is a
-   glance ("where am I"); the day rail is a working surface. So the glance
-   shrinks and the work keeps its width — and because collapse is user-persisted,
-   anyone who disagrees can expand it and it stays expanded.
+   pages that carry their own rail. Since the fix it is ALSO recomputed live
+   from hasOwnRail(pathname) — riders list → rider editor is a same-layout
+   navigation, so the prop alone would freeze at the list's answer.
    ============================================ */
 
-import { resolveScope, resolveRailView, upFrom, productForPath, SCOPE_LABEL, MODE_LABEL } from '@/lib/nav/ia';
+import { usePathname, useSearchParams } from 'next/navigation';
+import {
+  resolveScope, resolveRailView, upFrom, productForPath, hasOwnRail,
+  SCOPE_LABEL, MODE_LABEL,
+} from '@/lib/nav/ia';
 import { RememberTourProduct } from '@/components/shell-v2/RememberTourProduct';
 import { NavRail } from './NavRail';
 import { TopBarV3 } from './TopBarV3';
 
 export interface AppShellV3Props {
-  /** The URL being rendered. Everything else is derived from it. */
+  /** The URL at mount — SSR/test fallback; the live URL comes from the router. */
   pathname: string;
   /** Query string, for the budget tabs (?tab=). Include the leading '?'. */
   search?: string;
@@ -41,7 +57,8 @@ export interface AppShellV3Props {
   badges?: Record<string, string | number | null | undefined>;
   /** P-1 — resource ids this caller may read. `null`/absent = don't filter. */
   visibleResources?: readonly string[] | null;
-  /** Collapse the nav rail by default (pages with a day rail). */
+  /** Collapse the nav rail by default (pages with a day rail). Live-computed
+   *  from hasOwnRail() as well; this prop forces it on regardless of path. */
   denseRail?: boolean;
   /** Avatar / actions, far right of the top bar. */
   headerRight?: React.ReactNode;
@@ -52,8 +69,8 @@ export interface AppShellV3Props {
 }
 
 export function AppShellV3({
-  pathname,
-  search = '',
+  pathname: pathnameProp,
+  search: searchProp = '',
   workspaceName = 'Workspace',
   switcher,
   artistId,
@@ -64,14 +81,23 @@ export function AppShellV3({
   landing = false,
   children,
 }: AppShellV3Props) {
+  /* THE LIVE URL. On the server render these resolve from the request, so the
+     cold-load contract is unchanged; on the client they follow every soft
+     navigation, which is the whole point of the S-3b fix. Null (no router —
+     jsdom) falls back to the mount props. */
+  const livePathname = usePathname();
+  const liveSearch = useSearchParams();
+  const pathname = livePathname ?? pathnameProp;
+  const search =
+    liveSearch != null
+      ? (liveSearch.toString() ? `?${liveSearch.toString()}` : '')
+      : searchProp;
+
   /* Derived, in this order, from the URL and nothing else. */
   const base = resolveScope(pathname, search);
   const ctx = { ...base, artistId: base.artistId ?? artistId ?? null };
-  /* Resolved HERE, on the server: hrefs built, matchers run, badges read. What
-     crosses to <NavRail> is plain data. The config's hrefs and matchers are
-     FUNCTIONS, and a function cannot cross an RSC boundary — passing the raw
-     entries is what threw "An error occurred in the Server Components render"
-     on the first S-1 deploy, with every local gate green. */
+  /* Hrefs built, matchers run, badges read — on every URL change now, not once
+     per layout mount. resolveRailView returns plain data either way. */
   const entries = resolveRailView(ctx, pathname, search, badges ?? {}, visibleResources);
   const up = upFrom(ctx);
 
@@ -81,11 +107,13 @@ export function AppShellV3({
   const scopeLabel =
     ctx.scope === 'tour' && ctx.mode ? MODE_LABEL[ctx.mode].toUpperCase() : SCOPE_LABEL[ctx.scope].toUpperCase();
 
-  /* S-2a — "open this tour where I left it" is a ProductShell behaviour that
-     would have gone quiet the moment a surface migrated: the workspace Resume
-     card would keep offering the last product you visited on OLD chrome. It
-     costs one zero-render island to keep, so it stays. */
+  /* S-2a — "open this tour where I left it". One zero-render island; now keyed
+     to the live URL so product memory tracks navigation too. */
   const product = ctx.scope === 'tour' && ctx.tourId ? productForPath(pathname) : null;
+
+  /* Collapse where the CURRENT page carries a rail of its own — the prop alone
+     goes stale on same-layout navigation (riders list → rider editor). */
+  const dense = denseRail || hasOwnRail(pathname);
 
   return (
     <div
@@ -112,7 +140,7 @@ export function AppShellV3({
           entries={entries}
           scopeLabel={scopeLabel}
           up={up}
-          defaultCollapsed={denseRail}
+          defaultCollapsed={dense}
         />
         <main style={{ flex: 1, minWidth: 0, minHeight: 0, overflow: 'auto', background: 'var(--lp-bg)' }}>
           {children}

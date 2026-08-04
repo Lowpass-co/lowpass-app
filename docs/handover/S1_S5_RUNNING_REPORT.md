@@ -1257,3 +1257,37 @@ renders inside the shell's `<main>`, above the page body. Every other file in
 the bank was drift-checked by hash against the working base: clean.
 
 **Smoke:** SHELL-60 … SHELL-68 (new, unwalked — need a session).
+
+---
+
+## S-3b fix — the chrome follows navigation now · 2026-08-04 (Cowork)
+
+**Found by Adam on the first walk:** the rail highlight froze at whatever page
+the layout first mounted on. Root cause is structural, not cosmetic, and it was
+latent since S-1: the shell mounted in LAYOUTS, and Next does not re-render a
+layout on soft navigation between its pages — so the server-resolved active
+flags, the mode pill, and even WHICH rail (routing → payroll crosses Tour →
+Money inside one layout) all froze. SHELL-08/-21, which would have caught it,
+sat in the "nobody has checked these" list from S-1 on.
+
+**Fix:** `<AppShellV3>` is a client component now. It derives everything from
+`usePathname()`/`useSearchParams()` — which resolve server-side on a cold load,
+so the deep-link contract is untouched — and falls back to its `pathname`
+prop when the hooks return null (jsdom). The ia.ts resolvers are pure and now
+run on the client per navigation; the RSC serialisation boundary is moot on
+this path because nothing crosses it — the client imports the module. The
+server work in `<ShellV3Mount>` (artist list, profile, workspace name, badges,
+visibleResources) is unchanged and still per-layout.
+
+`denseRail` is live too (`hasOwnRail(pathname)` recomputed per URL — riders
+list → rider editor is a same-layout move), and the rail follows the changing
+default ONLY until the user toggles: an explicit preference stays a preference.
+
+**Tests:** 488 (4 new): highlight moves across same-layout navigation; the
+WHOLE rail + head + pill swap on routing → payroll; a `?tab=` change moves the
+budget highlight; hook-over-prop precedence. Both shell test files' router
+mocks now return null by default so cold-URL fixtures keep driving the props.
+
+**Verification:** tsc clean · 488 vitest green · `next build --webpack`
+compiles, 119/119 pages, no Suspense complaint on `useSearchParams` (every
+shelled route is dynamic via cookies, so no static-prerender bailout exists).

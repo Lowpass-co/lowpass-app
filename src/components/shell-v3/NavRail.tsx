@@ -18,7 +18,7 @@
    in, and the one you work in should not be the one that shrinks.
    ============================================ */
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import * as Icons from 'lucide-react';
 import { PanelLeftClose, PanelLeftOpen } from 'lucide-react';
@@ -68,6 +68,22 @@ export function NavRail({
     }
   });
 
+  /* S-3b fix — the shell is client-side now and `defaultCollapsed` changes on
+     soft navigation (riders list → rider editor is a same-layout move). Follow
+     it ONLY while the user has never toggled: an explicit preference is a
+     preference, and a default must not fight it. The ref, not storage, is read
+     per change — storage is checked once here and updated in toggle(). */
+  const hasUserPref = useRef<boolean>(false);
+  if (typeof window !== 'undefined' && !hasUserPref.current) {
+    try {
+      hasUserPref.current = window.localStorage.getItem(STORAGE_KEY) !== null;
+    } catch { /* storage disabled → behave as no preference */ }
+  }
+  useEffect(() => {
+    if (hasUserPref.current) return;
+    setCollapsed(defaultCollapsed);
+  }, [defaultCollapsed]);
+
   /* A REAL tooltip, not the native `title`.
 
      S-1 shipped `title` and the smoke found nothing on hover, twice. Two reasons:
@@ -87,6 +103,7 @@ export function NavRail({
   }, []);
 
   const toggle = useCallback(() => {
+    hasUserPref.current = true; // an explicit toggle IS the preference
     setCollapsed((prev) => {
       const next = !prev;
       try {
