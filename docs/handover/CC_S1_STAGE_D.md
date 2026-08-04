@@ -10,7 +10,7 @@ Stages A–C landed (migrations 246–250, unified `gear`, Assets surface live, 
 
 ## D-1 — Gear manifest + ATA carnet export (do this first: data already exists, pure read)
 
-Migration 093 put the customs fields on `rental_inventory` and 247 moved them up to `gear`: `country_of_origin`, `customs_hs_code`, `weight_kg`, `value_amount`, `value_currency`, `dimensions_cm`, `serial_number`. Nothing new is needed to produce both documents.
+Migration 093 put the customs fields on `rental_inventory` and 247 moved them up to `gear`: `country_of_origin`, `customs_hs_code`, `purchase_cost`, `day_rate`, `day_rate_manual`, `weight_kg`, `value_amount`, `value_currency`, `dimensions_cm`, `qr_token`, `status`, `last_used_at`, `space_id`, `container_id`. **`serial_number` is NOT among them — it has been on `gear` since `052_gear_canonical.sql:20`** (corrected 2026-08-04; the earlier draft sent readers to the wrong migration). Nothing new is needed to produce both documents.
 
 **Gear manifest** — the internal document. Grouped by space → container → item, with per-container and per-space weight subtotals and a grand total. Columns: item, manufacturer/model, serial, qty, weight, value. Scope selector: whole workspace, one space, or one tour's gear (via `tour_gear`). Through the **shared export shell**, PDF + XLSX.
 
@@ -59,6 +59,12 @@ Smokes: SPD-11 CSV proposes rows, nothing written until accept · SPD-12 duplica
 ---
 
 ## Order and gating
-D-1 → D-2 → D-3 → D-4. D-1 and D-2 need no migration. D-3 may need one (the space→tour assignment) — write it as paste-SQL and stop. D-4 may need a `source` discriminator on the proposals table; check what receipts already added before adding another.
+D-1 → D-2 → D-3 → D-4. D-1 and D-2 need no migration.
+
+**D-3 needs one** (the space→tour assignment) — write it as paste-SQL and keep going on the non-dependent parts.
+
+**D-4 needs one too — corrected 2026-08-04, the earlier draft said "may".** `import_pending_lines.target` carries `CHECK (target IN ('budget_line','income_actual','receipt_txn','receipt_line'))`, so a gear proposal is a new enum value, and per migration 251's own header a CHECK cannot be widened with `IF NOT EXISTS` — it is drop-and-recreate, written conditionally so a re-paste is a no-op.
+
+**Prerequisite before D-1 starts: the applied-migration probe must come back.** `_lp_migrations` is not maintained and CC has no DB access, so "are 246–250 applied?" is unanswerable from the repo. D-1 depends on 247's customs columns existing in production, and **D-2 depends entirely on 250's movement columns, which have zero readers anywhere in `src/`** — nothing would break if they were absent, and nothing would tell you. Do not start on the assumption.
 
 Run the sequence without stopping between slices unless something contradicts the topology map or a money gate moves. Bank and push each slice. Report once at the end with the coverage/harness/deployment evidence, plus screenshots of the carnet list and the scan flow.
