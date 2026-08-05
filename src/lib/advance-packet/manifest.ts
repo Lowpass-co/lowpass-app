@@ -23,6 +23,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { resolveVenue, type RoutingVenueSource } from '@/lib/venues/resolveVenue';
+import { resolveShowDocuments } from '@/lib/rider-packs/attachments';
 
 export interface PacketDoc {
   kind: 'rider' | 'channel_list' | 'rental_job';
@@ -124,6 +125,32 @@ export async function getPacketManifest(
       title: p.title?.trim() || (p.kind === 'rider' ? 'Rider' : 'Channel list'),
       scope: p.scope,
     });
+  }
+
+  /* Decouple phase A (2026-08-05) — the packet is SHOW-AWARE now. If this
+     show (or the tour) has an attached channel-list document version, it
+     REPLACES the tour-wide channel_list packs in the manifest: Saturday's
+     packet shows Saturday's version, not whatever the pack scan found. Same
+     for stage plots when a packet doc type exists for them. Tours with no
+     attachments keep today's behaviour untouched. */
+  try {
+    const attachedByKind = await resolveShowDocuments(supabase, tourId, routingId ?? null);
+    const attachedCl = attachedByKind.channel_list;
+    if (attachedCl) {
+      const kept = docs.filter((d) => d.kind !== 'channel_list');
+      kept.push({
+        kind: 'channel_list',
+        id: attachedCl.document_pack_id,
+        title: attachedCl.version_label
+          ? `${attachedCl.title}`
+          : attachedCl.title || 'Channel list',
+        scope: 'show',
+      });
+      docs.length = 0;
+      docs.push(...kept);
+    }
+  } catch {
+    /* attachments table absent pre-migration — legacy list stands */
   }
 
   /* Rental / hire jobs. Filter to the tour. Routing-scoped

@@ -1416,3 +1416,24 @@ filter out every candidate — the advance was previously untestable, which is
 how "Enter doesn't move" shipped in the first place).
 
 **Verification:** tsc clean · 507 vitest green · build 119/119.
+
+---
+
+## Rider decouple phase A — documents, versions, attachments · 2026-08-05 (Cowork)
+
+Diagnosis: a channel list IS a rider pack (kind='channel_list'); "the tour's
+channel list" = first channel_list section found scanning tour packs; the
+inherited lock is computed in resolve.ts and enforced ONLY by CSS
+(pointer-events-none — every row API writes fine); Override copies fields but
+NOT channel rows (empty-grid trap); the advance packet live-queries tour-wide
+packs, so every show shows the same documents.
+
+Shipped (model agreed with Adam — see docs/handover/RIDER_DECOUPLE_SPEC.md
+for the locked decisions and the phase-B build order): migration 256
+(version lineage + rider_pack_attachments, HAND-PASTE), saveVersion deep copy
+(incl. metadata/kind/stage-plot canvas — which clone/route.ts drops),
+attachments lib + 3 API routes, attachment-first tour channel-list page,
+show-aware advance manifest. Legacy behaviour is the fallback everywhere —
+nothing breaks pre-migration or pre-attachment.
+
+Verification: tsc clean · 507 vitest green · build 120/120.

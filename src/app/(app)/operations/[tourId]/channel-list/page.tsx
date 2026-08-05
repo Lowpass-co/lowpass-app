@@ -15,6 +15,7 @@ import { PageTitle } from '@/components/ui/PageHeader';
 import { createServerSupabaseClient } from '@/lib/supabase-server';
 import { formatResolveError, resolvePack } from '@/lib/rider-packs/resolve';
 import type { RiderPack, ResolvedSection } from '@/lib/rider-packs/types';
+import { resolveShowDocuments } from '@/lib/rider-packs/attachments';
 
 export const dynamic = 'force-dynamic';
 
@@ -46,7 +47,35 @@ export default async function OperationsTourChannelListPage({
   let resolvedPack: RiderPack | null = null;
   let resolveError: string | null = null;
 
-  for (const pack of packs ?? []) {
+  /* Decouple phase A (2026-08-05) — ATTACHMENT-FIRST. If a channel-list
+     document is attached to this tour, it IS the tour's channel list: its own
+     pack, its own sections, no rider inheritance, so the inherited lock can
+     never engage. The scan below survives only as the legacy fallback for
+     tours with nothing attached yet. */
+  const attached = await resolveShowDocuments(supabase, tour.id, null);
+  const attachedDoc = attached.channel_list;
+  if (attachedDoc) {
+    const { data: docPack } = await supabase
+      .from('rider_packs')
+      .select('*')
+      .eq('id', attachedDoc.document_pack_id)
+      .maybeSingle();
+    if (docPack) {
+      try {
+        const resolved = await resolvePack(supabase, docPack as RiderPack);
+        const sec = resolved.sections.find((s) => s.section_type === 'channel_list');
+        if (sec) {
+          resolvedSection = sec;
+          resolvedPackId = docPack.id as string;
+          resolvedPack = docPack as RiderPack;
+        }
+      } catch (e) {
+        resolveError = formatResolveError(e);
+      }
+    }
+  }
+
+  for (const pack of resolvedSection ? [] : packs ?? []) {
     try {
       const resolved = await resolvePack(supabase, pack as RiderPack);
       const sec = resolved.sections.find((s) => s.section_type === 'channel_list');
