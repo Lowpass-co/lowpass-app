@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Lowpass — Session smoke walk · 2026-08-05</title>
+<style>
+:root{--bg:#111214;--panel:#1a1c1f;--surface:#212428;--border:#2e3238;--text:#e8eaed;--sub:#9aa0a8;--dim:#61676f;--orange:#ff6b2c;--green:#3fb950;--red:#f85149}
+*{box-sizing:border-box}body{margin:0;font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--text);padding:0 0 80px}
+header{position:sticky;top:0;z-index:5;background:var(--panel);border-bottom:1px solid var(--border);padding:14px 22px;display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+h1{font-size:16px;margin:0;letter-spacing:.02em}h1 b{color:var(--orange)}
+#bar{flex:1;min-width:160px;height:8px;background:var(--surface);border-radius:99px;overflow:hidden}
+#fill{height:100%;width:0;background:var(--orange);transition:width .2s}
+#stats{font-size:12px;color:var(--sub);white-space:nowrap}
+button{background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:7px 14px;font-size:12.5px;cursor:pointer}
+button:hover{border-color:var(--orange)}
+main{max-width:860px;margin:0 auto;padding:20px 22px}
+.note{background:rgba(255,107,44,.08);border:1px solid rgba(255,107,44,.35);border-radius:10px;padding:10px 14px;font-size:12.5px;color:var(--sub);margin-bottom:18px}
+.note b{color:var(--text)}
+section{margin-bottom:26px}
+h2{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--orange);border-bottom:1px solid var(--border);padding-bottom:6px;margin:0 0 2px}
+.where{font-size:12px;color:var(--dim);margin:4px 0 10px}
+.item{display:flex;gap:12px;padding:10px 12px;border:1px solid transparent;border-radius:10px;align-items:flex-start}
+.item:hover{background:var(--panel)}
+.item.pass{border-color:rgba(63,185,80,.35);background:rgba(63,185,80,.06)}
+.item.fail{border-color:rgba(248,81,73,.4);background:rgba(248,81,73,.07)}
+.ctl{display:flex;gap:6px;flex:0 0 auto;padding-top:2px}
+.ctl button{width:30px;height:26px;padding:0;font-size:13px;border-radius:6px}
+.ctl .p.on{background:var(--green);border-color:var(--green);color:#fff}
+.ctl .f.on{background:var(--red);border-color:var(--red);color:#fff}
+.t{flex:1;min-width:0}
+.t b{font-weight:600}
+.t .exp{color:var(--sub);font-size:12.5px;margin-top:2px}
+.t input{display:none;width:100%;margin-top:6px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:5px 8px;font-size:12px}
+.item.fail input{display:block}
+.id{font-size:10.5px;color:var(--dim);font-family:ui-monospace,monospace;flex:0 0 auto;padding-top:4px}
+#out{position:fixed;left:0;right:0;bottom:0;background:var(--panel);border-top:1px solid var(--border);padding:10px 22px;display:flex;gap:12px;align-items:center;font-size:12px;color:var(--sub)}
+</style>
+</head>
+<body>
+<header>
+  <h1><b>LOWPASS</b> · session smoke walk · 05 Aug 2026</h1>
+  <div id="bar"><div id="fill"></div></div>
+  <div id="stats">0 / 0</div>
+  <button onclick="copyResults()">Copy results for Claude</button>
+</header>
+<main>
+<div class="note"><b>How to use:</b> walk the deployed app top to bottom. ✓ = works, ✕ = broken (a note box appears — say what you saw). State lives in this page only, so finish a section before closing. When done — or when you hit a wall — hit <b>Copy results for Claude</b> and paste it into our chat. Items marked ⚠ need migration 256 pasted into Supabase first.</div>
+<div id="app"></div>
+</main>
+<div id="out">Results preview appears here as you go.</div>
+<script>
+const SECTIONS=[
+{name:"App shell — one nav everywhere (S-3b)",where:"Any page after login",items:[
+["SH-1","Workspace tier has the left rail","/artists shows WORKSPACE rail (Artists · Personnel pool · Equipment & rentals · Venues); old tab strip gone; real workspace name in the top bar."],
+["SH-2","You scope is shelled","/settings, /settings/members, /profile, /bugs each show the YOU rail with the right item lit; Billing dimmed with a 'no page yet' hover."],
+["SH-3","Tourless landings grey the bar, keep the rail","/operations with no tour: workspace rail fully usable, mode pill visible but greyed, picker live, prompt below. Picking a tour brings the pill alive."],
+["SH-4","Workspace switcher on every tier","Top-right, left of the avatar, on a tour page AND on /artists. Single workspace = plain label."],
+["SH-5","Nothing double-renders","Walk /artists → artist → tour → /budget/[tour] → /settings: exactly one top bar + one rail everywhere; ⌘K still opens."]]},
+{name:"Live navigation — the highlight follows you",where:"Any tour",items:[
+["NAV-1","Highlight moves on every click","Routing → Crew → Files: the left rail highlight follows each navigation without a reload."],
+["NAV-2","The whole rail swaps across modes","From Routing click Money: rail becomes the MONEY rail, head says MONEY, pill updates — same when clicking Payroll from the money rail."],
+["NAV-3","Budget tabs move the highlight","Inside /budget/[tour]: Summary → Expenses → Receipts via the rail — the lit item tracks the ?tab= changes."],
+["NAV-4","Deep links still land right","Hard-refresh on /budget/[tour]/settlement: Money mode + Settlements lit on first paint."]]},
+{name:"Budget — one toolbar",where:"/budget/[tourId]",items:[
+["BU-1","Exactly one bar above content","Version selector · burn meter · density · export in ONE sticky row. No empty tab strip, no second burn-bar row."],
+["BU-2","Summary hides the meter","On Summary the meter yields (dashboard owns money display); controls stay. Other tabs show Remaining · fill · vs Committed inline."],
+["BU-3","Conditional layers only when real","FX banner only when a rate is missing; phase strip only when phases tracked; data-health only on Summary."],
+["BU-4","Nothing lost in the merge","Version switching, density toggle and Export all work from the new bar."]]},
+{name:"Speed — the perf pass",where:"Deployed app",items:[
+["PF-1","Navigation feels materially faster","Cold load then click around 5+ pages. Gut check vs yesterday."],
+["PF-2","Auth still solid","Log out/in, expired-tab refresh: no redirect loops, no flash of wrong user."],
+["PF-3","Admin/settings gates intact","/bugs 404s for non-admins; settings admin cards show only for admins."]]},
+{name:"Tour builder — keyboard + search",where:"Routing ledger + tour-create grid",items:[
+["TB-1","Tab never walks a list","Open the day-type popup, click a pill, press Tab: focus lands on the venue cell, not the next pill. Same in the venue dropdown."],
+["TB-2","Enter selects + advances","Type in day-type filter → Enter: type set (replaced, not added), popup closed, focus on venue. Venue: highlight a result → Enter: filled + focus on city."],
+["TB-3","Enter is never dead","Type a made-up venue, hit Enter fast: free text commits, focus advances."],
+["TB-4","Venue search actually searches","Thin library: typing a real venue shows Google rows (labelled) with NO 'create new venue' step. Picking one fills address/city/coords."],
+["TB-5","Library still wins","A venue already in your library shows first with the orange ◆; picking it links (chain icon) without Google billing."],
+["TB-6","Address search on a day off","Day-off row → expand → Venue address: typing searches addresses; picking fills address + city/coords; venue name untouched. Also works in the tour-create grid's Address column."]]},
+{name:"Rider decouple — phase A ⚠ migration 256 first",where:"After pasting database/migrations/256_… into Supabase SQL editor",items:[
+["RD-1","Migration pastes clean","256_document_versions_and_attachments.sql runs without error; re-running it is a no-op."],
+["RD-2","Save a version (API)","POST /api/rider-packs/{channelListPackId}/save-version {\"label\":\"Saturday — with keys\"} returns an id; the new pack has every channel row copied."],
+["RD-3","Attach to the tour","POST /api/rider-pack-attachments {document_pack_id, tour_id}: /operations/[tour]/channel-list now shows THAT version — fully editable, no override wall."],
+["RD-4","Saturday differs","Attach a different version to one show (routing_id): that show's advance packet lists the Saturday version; other shows keep the tour default."],
+["RD-5","Edits hit everywhere","Edit rows on an attached version: every place it's attached shows the change; other versions untouched."],
+["RD-6","Nothing broke pre-attachment","A tour with NO attachments behaves exactly as before (legacy scan)."]]}
+];
+let state={};
+const app=document.getElementById('app');
+SECTIONS.forEach((s,si)=>{
+  const sec=document.createElement('section');
+  sec.innerHTML=`<h2>${s.name}</h2><div class="where">${s.where}</div>`;
+  s.items.forEach(([id,title,exp])=>{
+    state[id]={r:null,note:''};
+    const d=document.createElement('div');d.className='item';d.id='i-'+id;
+    d.innerHTML=`<span class="id">${id}</span><div class="ctl"><button class="p" onclick="mark('${id}','pass')">✓</button><button class="f" onclick="mark('${id}','fail')">✕</button></div><div class="t"><b>${title}</b><div class="exp">${exp}</div><input placeholder="what happened?" oninput="state['${id}'].note=this.value;preview()"></div>`;
+    sec.appendChild(d);
+  });
+  app.appendChild(sec);
+});
+function mark(id,r){
+  state[id].r=state[id].r===r?null:r;
+  const el=document.getElementById('i-'+id);
+  el.className='item'+(state[id].r?' '+state[id].r:'');
+  el.querySelector('.p').className='p'+(state[id].r==='pass'?' on':'');
+  el.querySelector('.f').className='f'+(state[id].r==='fail'?' on':'');
+  preview();
+}
+function summary(){
+  const ids=Object.keys(state);
+  const pass=ids.filter(i=>state[i].r==='pass'),fail=ids.filter(i=>state[i].r==='fail');
+  let txt=`LOWPASS smoke walk 2026-08-05 — ${pass.length} pass / ${fail.length} fail / ${ids.length-pass.length-fail.length} unchecked\n`;
+  if(fail.length){txt+='\nFAILURES:\n'+fail.map(i=>`${i}: ${state[i].note||'(no note)'}`).join('\n');}
+  if(pass.length)txt+=`\nPASSED: ${pass.join(', ')}`;
+  return {txt,pass,fail,total:ids.length};
+}
+function preview(){
+  const {txt,pass,fail,total}=summary();
+  document.getElementById('stats').textContent=`${pass.length+fail.length} / ${total}`;
+  document.getElementById('fill').style.width=((pass.length+fail.length)/total*100)+'%';
+  document.getElementById('fill').style.background=fail.length?'var(--red)':'var(--orange)';
+  document.getElementById('out').textContent=txt.split('\n')[0]+(fail.length?` · ${fail.length} failure${fail.length>1?'s':''} noted`:'');
+}
+function copyResults(){
+  navigator.clipboard.writeText(summary().txt).then(()=>{
+    const b=event.target;b.textContent='Copied — paste to Claude';setTimeout(()=>b.textContent='Copy results for Claude',2000);
+  });
+}
+preview();
+</script>
+</body>
+</html>

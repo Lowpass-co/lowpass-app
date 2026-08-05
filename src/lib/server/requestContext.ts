@@ -15,12 +15,8 @@
      layouts, mounts and pages ask for the user, the profile, the workspace
      name or the visible resources, each is fetched at most once per render.
 
-   · `auth.getClaims()` over `auth.getUser()` — getUser sends a request to the
-     Auth server EVERY call; getClaims verifies the JWT locally against the
-     project's cached JWKS when the project uses asymmetric signing keys, and
-     falls back to the network path (same cost as before, never worse) when it
-     can't. Signature and expiry ARE verified either way — this is not "trust
-     the cookie". RLS at Postgres remains the real enforcement regardless.
+   (A second mechanism — getClaims local verification — shipped here once and
+   was rolled back after the 2026-08-05 incident; see getRequestUser's note.)
 
    RULES: server-only (React cache + next/headers via the supabase client).
    Helpers return plain data. Add new per-request reads HERE, not inline in
@@ -45,22 +41,16 @@ export interface RequestUser {
 /**
  * The authenticated user, verified ONCE per request.
  *
- * Fast path: getClaims — local JWT verification (asymmetric keys), no Auth
- * server round-trip. Fallback: getUser — the network path, which also
- * refreshes an expired session (getClaims rejects expired tokens, so expiry
- * lands in the fallback and refresh still happens exactly as before).
+ * INCIDENT 2026-08-05 (c9affb9 rollback) — this used getClaims() as a
+ * local-verification fast path; production broke on Vercel with all-200s and
+ * zero error logs (silent auth-state divergence on the deployed runtime —
+ * unreproducible via `next start` or the test suite). getUser() is back and
+ * getClaims must not return here without preview-deploy observation. The
+ * cache() dedupe is the part of the perf win that survives: however many
+ * layers ask, ONE auth round-trip per request instead of 3–5.
  */
 export const getRequestUser = cache(async (): Promise<RequestUser | null> => {
   const supabase = await getRequestSupabase();
-  try {
-    const { data, error } = await supabase.auth.getClaims();
-    const claims = data?.claims;
-    if (!error && claims?.sub) {
-      return { id: claims.sub, email: (claims.email as string | undefined) ?? '' };
-    }
-  } catch {
-    /* verification unavailable — take the network path */
-  }
   const {
     data: { user },
   } = await supabase.auth.getUser();

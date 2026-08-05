@@ -46,29 +46,20 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  /* Perf pass 1 (2026-08-04) — verify locally when possible. getUser() sends
-     a round-trip to the Auth server on EVERY page navigation; getClaims()
-     verifies the JWT's signature and expiry against the project's cached JWKS
-     locally (asymmetric signing keys), and this middleware only needs a yes/no
-     on "is this a valid session". Fallbacks keep every old behaviour:
-     · expired token → getClaims rejects → getUser runs → session REFRESH
-       happens exactly as before (that is updateSession's other job);
-     · HS256 / legacy keys → getClaims itself takes the network path — never
-       worse than the old code. */
-  let user: { id: string } | null = null;
-  try {
-    const { data: claimsData, error: claimsError } = await supabase.auth.getClaims();
-    const sub = claimsData?.claims?.sub;
-    if (!claimsError && sub) user = { id: sub };
-  } catch {
-    /* fall through to the network path */
-  }
-  if (!user) {
-    const {
-      data: { user: fetched },
-    } = await supabase.auth.getUser();
-    user = fetched ? { id: fetched.id } : null;
-  }
+  /* INCIDENT 2026-08-05 (c9affb9 rollback) — getClaims() is GONE from this
+     middleware, deliberately. The perf pass swapped getUser() for local JWT
+     verification here; production broke with a signature no local environment
+     reproduces: every request 200, zero error/fatal logs, app unusable —
+     i.e. silent auth-state divergence on Vercel's Edge runtime, not a crash.
+     `next start` and the full test suite pass with getClaims, so this exact
+     swap MUST NOT be re-attempted without a way to observe it on a Vercel
+     preview deployment first. getUser() also proactively refreshes the
+     session cookie on every navigation — behaviour the app has always had.
+     The rest of the perf pass (per-request dedupe + parallel fan-out) is
+     auth-semantics-neutral and stays. */
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
 
   /* P0 — the unauthenticated allow-list now lives in one PURE, TESTABLE module:
      src/lib/auth/publicRoutes.ts. It used to be an inline chain here, which is

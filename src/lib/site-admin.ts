@@ -16,7 +16,7 @@ import { getRequestUser, getRequestProfile } from '@/lib/server/requestContext';
  *  Perf pass 1 (2026-08-04) — reads the per-request cache instead of running
  *  its own auth round-trip + profile SELECT: pages that call this alongside
  *  the shell now share one verification and one profile read. Signature and
- *  expiry are still verified (getClaims / getUser inside the cache), and the
+ *  expiry are still verified (getUser inside the cache), and the
  *  is_site_admin gate is the same profiles column as before. */
 export async function getUserAndAdminStatus(): Promise<{
   user: { id: string } | null;
